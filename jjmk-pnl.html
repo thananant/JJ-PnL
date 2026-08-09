@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JJ P&L — จริงใจหมูกระทะ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --red:#C62127; --red-d:#A31B20; --red-t:#FBEBEB;
+  --ink:#241F1E; --mut:#8B837B; --bg:#F5F2ED; --card:#FFFFFF; --line:#E7E1D8;
+  --ok:#1E8E5A; --ok-t:#E6F4EC; --bad:#D23B3B; --bad-t:#FCE9E8; --gold:#B98A2F; --gold-t:#F7EEDC;
+  --r:14px; --sh:0 1px 2px rgba(35,25,20,.05),0 4px 14px rgba(35,25,20,.06);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;min-height:100dvh}
+h1,h2,h3,.num,.kpi-v{font-family:'Prompt',sans-serif}
+.num,td.n,input[type=number],.kpi-v,.money{font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:15px}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)}
+input[type=number]{text-align:right}
+input,select{background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;outline:none}
+input:focus,select:focus{border-color:var(--red)}
+input::placeholder{color:#C5BEB5}
+::-webkit-scrollbar{height:6px;width:6px}::-webkit-scrollbar-thumb{background:#D8D1C7;border-radius:3px}
+
+/* ---------- Header ---------- */
+header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hrow{display:flex;align-items:center;gap:10px;padding:10px 14px 6px;max-width:1180px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:8px;font-family:'Prompt';font-weight:700;font-size:18px;letter-spacing:.2px}
+.brand .dot{width:12px;height:12px;border-radius:4px;background:var(--red);box-shadow:0 0 0 3px var(--red-t)}
+.brand small{font-weight:500;color:var(--mut);font-size:11px;display:block;line-height:1}
+.seg{display:flex;background:#EDE8E0;border-radius:11px;padding:3px;gap:2px}
+.seg button{padding:7px 13px;border-radius:9px;font-weight:600;color:var(--mut);font-size:14px;white-space:nowrap}
+.seg button.on{background:var(--red);color:#fff;box-shadow:0 2px 6px rgba(198,33,39,.35)}
+#monthPick{width:auto;padding:7px 10px;font-weight:600;font-size:14px;border-radius:10px}
+#syncDot{width:9px;height:9px;border-radius:50%;background:var(--ok);margin-left:auto;flex:none;transition:.2s}
+#syncDot.busy{background:var(--gold);animation:pul 1s infinite}
+#syncDot.err{background:var(--bad)}
+@keyframes pul{50%{opacity:.35}}
+.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px 10px 8px;max-width:1180px;margin:0 auto;scrollbar-width:none}
+.tabbar::-webkit-scrollbar{display:none}
+.tabbar button{flex:none;padding:8px 14px;border-radius:99px;font-weight:600;color:var(--mut);font-size:14px}
+.tabbar button.on{background:var(--ink);color:#fff}
+
+/* ---------- Layout ---------- */
+main{max-width:1180px;margin:0 auto;padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
+.view{display:none}.view.on{display:block;animation:fin .18s ease}
+@keyframes fin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 10px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.card h3 .sp{margin-left:auto;font-family:'Sarabun';font-weight:500;color:var(--mut);font-size:12.5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(min-width:760px){.md2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}.md32{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;align-items:start}}
+.mut{color:var(--mut)}.sm{font-size:12.5px}.xs{font-size:11.5px}
+.b{font-weight:700}.right{text-align:right}
+.btn{background:var(--red);color:#fff;font-weight:600;padding:10px 16px;border-radius:11px;box-shadow:0 2px 8px rgba(198,33,39,.3)}
+.btn:active{transform:scale(.97)}
+.btn.gh{background:#fff;color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
+.btn.dk{background:var(--ink);box-shadow:none}
+.btn.sm2{padding:7px 12px;font-size:13.5px;border-radius:9px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.chip.ok{background:var(--ok-t);color:var(--ok)}
+.chip.bad{background:var(--bad-t);color:var(--bad)}
+.chip.mid{background:#EFEBE4;color:var(--mut)}
+.chip.gold{background:var(--gold-t);color:var(--gold)}
+
+/* ---------- KPI ---------- */
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+@media(min-width:760px){.kpis{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;box-shadow:var(--sh)}
+.kpi .t{font-size:12px;color:var(--mut);font-weight:600}
+.kpi-v{font-size:22px;font-weight:700;margin-top:2px;line-height:1.15}
+.kpi .s{font-size:12px;margin-top:3px}
+.kpi.hero{background:linear-gradient(135deg,var(--red),#8F171C);border:none;color:#fff}
+.kpi.hero .t{color:rgba(255,255,255,.75)}.kpi.hero .s{color:rgba(255,255,255,.8)}
+
+/* ---------- Tables ---------- */
+.twrap{overflow-x:auto;margin:0 -14px;padding:0 14px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{font-size:11.5px;color:var(--mut);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1.5px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid #F0ECE5;vertical-align:middle}
+td.n{text-align:right;white-space:nowrap;font-family:'Prompt';font-weight:500;font-size:13px}
+tr.cat td{background:#F7F4EF;font-weight:700;font-size:12.5px;color:var(--red-d);border-top:1px solid var(--line)}
+tr.tot td{font-weight:700;border-top:2px solid var(--ink);background:#FBFAF7}
+tr:last-child td{border-bottom:none}
+
+/* ---------- Income day cards ---------- */
+.daylist{display:grid;gap:10px}
+@media(min-width:760px){.daylist{grid-template-columns:1fr 1fr}}
+@media(min-width:1080px){.daylist{grid-template-columns:1fr 1fr 1fr}}
+.dayc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px;box-shadow:var(--sh)}
+.dayc.today{border-color:var(--red);box-shadow:0 0 0 3px var(--red-t)}
+.dayc .dh{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+.dayc .dn{font-family:'Prompt';font-weight:700;font-size:17px}
+.dayc .dw{font-size:12px;font-weight:600;color:var(--mut)}
+.dayc .dw.sun{color:var(--bad)}
+.fld{margin-bottom:7px}
+.fld label{display:block;font-size:11px;color:var(--mut);font-weight:600;margin-bottom:3px}
+.fld input{padding:8px 10px}
+.dsum{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-top:1px dashed var(--line);padding-top:8px;margin-top:4px;font-size:12.5px}
+.hintlink{color:var(--red);font-size:11px;font-weight:600;cursor:pointer}
+
+/* ---------- Expense ---------- */
+.daychips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.daychips button{width:38px;height:38px;border-radius:10px;background:#fff;border:1.5px solid var(--line);font-family:'Prompt';font-weight:600;font-size:14px;position:relative}
+.daychips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.daychips button.has::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--red)}
+.daychips button.on.has::after{background:#fff}
+.exrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0ECE5}
+.exrow:last-child{border:none}
+.exrow .nm{flex:1;min-width:0}
+.exrow .nm .t{font-weight:600;font-size:14px}
+.exrow .nm .s{font-size:11px;color:var(--mut)}
+.exrow input{width:118px;flex:none;padding:8px 10px}
+.stickysum{position:sticky;bottom:0;background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;display:flex;gap:14px;align-items:center;font-family:'Prompt';box-shadow:0 -4px 20px rgba(0,0,0,.15);z-index:10}
+.stickysum .v{font-weight:700;font-size:18px}
+.perbar{display:flex;gap:8px;margin-bottom:12px}
+.perbar .pb{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.perbar .pb .t{font-size:11px;color:var(--mut);font-weight:600}
+.perbar .pb .v{font-family:'Prompt';font-weight:700;font-size:16px}
+
+/* ---------- Summary (P&L) ---------- */
+.pl td{padding:6px 8px}
+.pl .ind td:first-child{padding-left:22px}
+.pl input{width:110px;padding:6px 9px;font-size:14px}
+.secbar{background:var(--ink);color:#fff;border-radius:10px;padding:8px 12px;font-family:'Prompt';font-weight:600;font-size:13.5px;display:flex;margin:16px 0 8px}
+.secbar .sp{margin-left:auto;font-weight:700}
+
+/* ---------- Modal / Toast ---------- */
+#modalWrap{position:fixed;inset:0;background:rgba(30,24,20,.45);z-index:100;display:none;align-items:flex-end;justify-content:center}
+@media(min-width:640px){#modalWrap{align-items:center}}
+#modalWrap.on{display:flex}
+.modal{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:560px;max-height:88dvh;overflow-y:auto;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:640px){.modal{border-radius:18px}}
+.modal h3{margin:0 0 14px;font-size:16px}
+#toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;font-weight:600;z-index:200;transition:.25s;opacity:0;white-space:nowrap;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+#toast.on{transform:translateX(-50%);opacity:1}
+#toast.err{background:var(--bad)}
+
+/* ---------- Setup ---------- */
+#setup{max-width:420px;margin:8dvh auto;padding:0 16px}
+#setup .logo{width:56px;height:56px;border-radius:16px;background:var(--red);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Prompt';font-weight:700;font-size:20px;margin-bottom:14px;box-shadow:0 6px 18px rgba(198,33,39,.35)}
+
+/* ---------- Print ---------- */
+#printArea{display:none}
+@media print{
+  body>*{display:none!important}
+  body{background:#fff}
+  #printArea{display:block!important;font-size:12px;color:#000}
+  #printArea table{font-size:11.5px}
+  #printArea th{color:#000;border-bottom:1.5px solid #000}
+  #printArea td{border-bottom:.5px solid #999}
+  .pgbreak{page-break-after:always}
+}
+.spin{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--red);border-radius:50%;animation:sp 0.8s linear infinite;margin:30px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13.5px}
+canvas{max-width:100%}
+</style>
+</head>
+<body>
+
+<!-- ======== หน้าตั้งค่าเริ่มต้น ======== -->
+<div id="setup" style="display:none">
+  <div class="logo">JJ</div>
+  <h1 style="font-size:22px;margin:0 0 4px">JJ P&L</h1>
+  <p class="mut" style="margin:0 0 18px">ระบบรายรับ-รายจ่ายรายสาขา จริงใจหมูกระทะ<br>กรอกข้อมูล Supabase เพื่อเริ่มใช้งาน (ตั้งครั้งเดียว)</p>
+  <div class="fld"><label>Supabase URL</label><input id="suUrl" placeholder="https://xxxx.supabase.co"></div>
+  <div class="fld"><label>Anon / Publishable Key</label><input id="suKey" placeholder="sb_publishable_... หรือ eyJ..."></div>
+  <button class="btn" style="width:100%;margin-top:8px" onclick="saveSetup()">เชื่อมต่อและเริ่มใช้งาน</button>
+  <p class="xs mut" style="margin-top:14px">* รัน <b>jjmk_pnl_setup.sql</b> ใน SQL Editor ของโปรเจกต์ก่อน 1 ครั้ง</p>
+</div>
+
+<!-- ======== แอปหลัก ======== -->
+<div id="app" style="display:none">
+<header>
+  <div class="hrow">
+    <div class="brand"><span class="dot"></span><span>JJ P&L<small>จริงใจหมูกระทะ</small></span></div>
+    <div class="seg" id="brSeg">
+      <button data-br="JJRD" class="on">รัชดา</button>
+      <button data-br="JJLP">ลาดพร้าว</button>
+    </div>
+    <input type="month" id="monthPick">
+    <div id="syncDot" title="สถานะการบันทึก"></div>
+  </div>
+  <nav class="tabbar" id="tabbar">
+    <button data-v="dash" class="on">แดชบอร์ด</button>
+    <button data-v="income">รายรับ</button>
+    <button data-v="exp">รายจ่าย</button>
+    <button data-v="sum">สรุปเดือน</button>
+    <button data-v="pv">ใบสำคัญจ่าย</button>
+    <button data-v="etc">อื่นๆ</button>
+    <button data-v="set">ตั้งค่า</button>
+  </nav>
+</header>
+<main>
+  <section class="view on" id="view-dash"><div class="spin"></div></section>
+  <section class="view" id="view-income"></section>
+  <section class="view" id="view-exp"></section>
+  <section class="view" id="view-sum"></section>
+  <section class="view" id="view-pv"></section>
+  <section class="view" id="view-etc"></section>
+  <section class="view" id="view-set"></section>
+</main>
+</div>
+
+<div id="modalWrap" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
+<div id="toast"></div>
+<div id="printArea"></div>
+
+<script>
+/* ============================================================
+   JJ P&L — จริงใจหมูกระทะ  (Supabase + GitHub Pages)
+   ============================================================ */
+
+/* ---------- CONFIG ---------- */
+const CONFIG = {
+  SUPABASE_URL: '',   // ใส่ค่าตรงนี้ หรือกรอกในหน้าตั้งค่าครั้งแรกก็ได้
+  SUPABASE_KEY: ''
+};
+function cfg(){
+  return {
+    url: (localStorage.getItem('jjpnl_url') || CONFIG.SUPABASE_URL || '').replace(/\/$/,''),
+    key: localStorage.getItem('jjpnl_key') || CONFIG.SUPABASE_KEY || ''
+  };
+}
+const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}catch(e){return d}}, set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)) };
+
+/* ---------- REST helpers ---------- */
+let busyCount = 0;
+function setBusy(b){ busyCount += b?1:-1; if(busyCount<0)busyCount=0;
+  const d=document.getElementById('syncDot'); d.className = busyCount>0?'busy':''; }
+async function api(method, path, body, prefer){
+  const {url,key}=cfg(); setBusy(true);
+  try{
+    const r = await fetch(url+'/rest/v1/'+path, {
+      method,
+      headers:{ 'apikey':key, 'Authorization':'Bearer '+key, 'Content-Type':'application/json',
+                'Prefer': prefer || (method==='GET'?'':'return=representation') },
+      body: body?JSON.stringify(body):undefined
+    });
+    if(!r.ok){ const t=await r.text(); throw new Error(r.status+' '+t.slice(0,180)); }
+    if(r.status===204) return [];
+    const txt = await r.text();
+    return txt?JSON.parse(txt):[];
+  }catch(e){
+    document.getElementById('syncDot').className='err';
+    toast('บันทึกไม่สำเร็จ: '+e.message, true); throw e;
+  }finally{ setBusy(false); }
+}
+const sel  = (t,q)=>api('GET', t+'?'+q);
+const ins  = (t,row)=>api('POST', t, row);
+const ups  = (t,rows,conflict)=>api('POST', t+'?on_conflict='+conflict, rows, 'resolution=merge-duplicates,return=representation');
+const upd  = (t,q,body)=>api('PATCH', t+'?'+q, body);
+const delQ = (t,q)=>api('DELETE', t+'?'+q, null, 'return=minimal');
+
+/* ---------- Utils ---------- */
+const TH_M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const TH_D=['อา','จ','อ','พ','พฤ','ศ','ส'];
+const fmt=(n,dec)=> (n==null||isNaN(n))?'–':Number(n).toLocaleString('th-TH',{minimumFractionDigits:dec??0,maximumFractionDigits:dec??2});
+const fmtI=n=>fmt(n,0);
+const pctF=x=>(x==null||!isFinite(x))?'–':(x*100).toFixed(2)+'%';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function monthDays(m){ const [y,mm]=m.split('-').map(Number); return new Date(y,mm,0).getDate(); }
+function monthLabel(m){ const [y,mm]=m.split('-').map(Number); return TH_M[mm-1]+' '+(y+543); }
+function prevMonth(m){ let [y,mm]=m.split('-').map(Number); mm--; if(mm===0){mm=12;y--;} return y+'-'+String(mm).padStart(2,'0'); }
+function dstr(m,day){ return m+'-'+String(day).padStart(2,'0'); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function thDate(iso){ if(!iso)return'–'; const[y,m,d]=iso.split('-').map(Number); return d+' '+TH_M[m-1]+' '+(y+543); }
+const num=v=>{const n=parseFloat(String(v).replace(/,/g,'')); return isNaN(n)?0:n;};
+function toast(msg,err){ const t=document.getElementById('toast'); t.textContent=msg; t.className='on'+(err?' err':''); clearTimeout(t._t); t._t=setTimeout(()=>t.className='',2600); }
+function openModal(html){ document.getElementById('modalBox').innerHTML=html; document.getElementById('modalWrap').classList.add('on'); }
+function closeModal(){ document.getElementById('modalWrap').classList.remove('on'); }
+function chip(delta,invert){ // ต้นทุน: ต่ำกว่า = ดี
+  if(delta==null||!isFinite(delta)) return '<span class="chip mid">–</span>';
+  const good = invert? delta>0 : delta<0;
+  const sym = delta>0?'▲':delta<0?'▼':'•';
+  return `<span class="chip ${delta===0?'mid':good?'ok':'bad'}">${sym} ${Math.abs(delta*100).toFixed(2)}%</span>`;
+}
+
+/* ---------- Debounced saver ---------- */
+const saveQ = {};
+function debSave(key, fn, ms){ clearTimeout(saveQ[key]); saveQ[key]=setTimeout(fn, ms||600); }
+
+/* ---------- State ---------- */
+const S = {
+  br: LS.get('jjpnl_br','JJRD'),
+  m:  LS.get('jjpnl_m', todayStr().slice(0,7)),
+  core: null,          // {sup, supById, bench, fixed, meats, branches}
+  cache: {},           // key br|m -> month bundle
+  charts: {}
+};
+const BRNAME = {JJRD:'สาขารัชดา', JJLP:'สาขาลาดพร้าว'};
+const CAT_ORDER = ['อาหาร','ของใช้','ของหวาน','น้ำ','ไอศกรีม','Delivery'];
+const CAT_COLOR = {'อาหาร':'#C62127','ของใช้':'#E07B39','ของหวาน':'#B98A2F','น้ำ':'#4E7D8C','ไอศกรีม':'#8B5E83','Delivery':'#7A8B5A','เงินสดหน้าร้าน':'#6B6B6B','Shopee':'#B0413E'};
+</script>
+<script>
+/* ============ โหลดข้อมูล ============ */
+async function loadCore(){
+  const [sup, ben, fix, meats] = await Promise.all([
+    sel('pnl_suppliers','select=*&order=sort'),
+    sel('pnl_benchmarks','select=*'),
+    sel('pnl_fixed_items','select=*&order=grp,sort'),
+    sel('pnl_meat_prices','select=*&order=sort')
+  ]);
+  const bench = {};
+  ben.forEach(r=>{ (bench[r.bkey]??={list:[]}).list.push(Number(r.pct)); });
+  Object.values(bench).forEach(b=>{
+    b.avg = b.list.reduce((a,c)=>a+c,0)/b.list.length;
+    b.min = Math.min(...b.list);
+  });
+  S.core = { sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix, meats };
+}
+function mkey(b,m){ return b+'|'+m; }
+async function loadMonth(b,m,force){
+  const k=mkey(b,m);
+  if(S.cache[k] && !force) return S.cache[k];
+  const from=dstr(m,1), to=dstr(m,monthDays(m));
+  const rng=`d=gte.${from}&d=lte.${to}&branch=eq.${b}`;
+  const [inc,cash,exp,extra,shop,meta,fixm,meatd] = await Promise.all([
+    sel('pnl_income_daily', `select=*&${rng}`),
+    sel('pnl_cash_expenses',`select=*&${rng}&order=d,id`),
+    sel('pnl_expense_daily',`select=*&${rng}`),
+    sel('pnl_extra_expenses',`select=*&${rng}&order=d,id`),
+    sel('pnl_shopee',`select=*&${rng}&order=d,id`),
+    sel('pnl_month_meta',`select=*&branch=eq.${b}&month=eq.${m}`),
+    sel('pnl_fixed_monthly',`select=*&branch=eq.${b}&month=eq.${m}`),
+    sel('pnl_meat_daily',`select=*&${rng}`)
+  ]);
+  const bundle = {
+    inc: Object.fromEntries(inc.map(r=>[r.d,r])),
+    cash, exp: Object.fromEntries(exp.map(r=>[r.d+'|'+r.supplier_id, r])),
+    extra, shop,
+    meta: meta[0] || {branch:b,month:m,grab:0,lineman:0,days_divisor:null,note:''},
+    fixm: Object.fromEntries(fixm.map(r=>[r.item_id, r.amount])),
+    meatd: Object.fromEntries(meatd.map(r=>[r.d+'|'+r.meat_id, r.kg]))
+  };
+  S.cache[k]=bundle; return bundle;
+}
+function calcDay(r){ // จากสูตรชีทรายรับ
+  if(!r) return null;
+  const dep=num(r.deposit), drw=num(r.cash_drawer);
+  const incVat = dep+drw;
+  const exVat  = incVat*100/107;
+  return { incVat, exVat, vat:incVat-exVat };
+}
+async function agg(b,m){
+  const c = await loadMonth(b,m);
+  const days = monthDays(m);
+  let incVat=0, exVat=0, sales_pos=0, daysData=0;
+  const daily=[];
+  for(let d=1;d<=days;d++){
+    const r=c.inc[dstr(m,d)]; const cd=calcDay(r);
+    daily.push(cd?cd.incVat:0);
+    if(r && (num(r.deposit)||num(r.cash_drawer)||num(r.sales_pos))){ daysData++; }
+    if(cd){ incVat+=cd.incVat; exVat+=cd.exVat; sales_pos+=num(r.sales_pos); }
+  }
+  const bySup={}, byCat={};
+  Object.values(c.exp).forEach(r=>{
+    const a=num(r.amount); if(!a)return;
+    bySup[r.supplier_id]=(bySup[r.supplier_id]||0)+a;
+    const s=S.core.supById[r.supplier_id];
+    const cat=s?s.category:'อื่นๆ';
+    byCat[cat]=(byCat[cat]||0)+a;
+  });
+  let cashM=0, cashE=0;
+  c.cash.forEach(r=>{ if(r.shift==='เย็น')cashE+=num(r.amount); else cashM+=num(r.amount); });
+  const shopee = c.shop.reduce((a,r)=>a+num(r.price)*num(r.qty)+num(r.shipping),0);
+  const extraT = c.extra.reduce((a,r)=>a+num(r.amount),0);
+  const supTotal = Object.values(bySup).reduce((a,c2)=>a+c2,0);
+  const vc = supTotal + cashM + cashE + shopee;
+  const grab=num(c.meta.grab), lineman=num(c.meta.lineman);
+  const revenue = exVat + grab + lineman;
+  // fix cost
+  let fixT=0; const fixRows=[];
+  S.core.fixed.filter(f=>f.branch===b && f.active).forEach(f=>{
+    const v = c.fixm[f.id]!=null ? num(c.fixm[f.id]) : (f.default_amount!=null?num(f.default_amount):null);
+    if(v!=null) fixT+=v;
+    fixRows.push({item:f, val:v});
+  });
+  return { b,m,c,days,daysData,daily, incVat,exVat,vat:incVat-exVat,sales_pos,
+           bySup,byCat,cashM,cashE,shopee,extraT,supTotal,vc,grab,lineman,revenue,
+           fixT,fixRows, net: revenue - vc - fixT - extraT };
+}
+
+/* ============ Boot & Navigation ============ */
+const RENDER = {};
+async function show(v){
+  document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
+  S.tab=v;
+  const el=document.getElementById('view-'+v);
+  el.innerHTML='<div class="spin"></div>';
+  try{ await RENDER[v](el); }catch(e){ el.innerHTML='<div class="empty">โหลดไม่สำเร็จ — '+esc(e.message)+'</div>'; }
+}
+async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; await show(S.tab); }
+function saveSetup(){
+  const u=document.getElementById('suUrl').value.trim(), k=document.getElementById('suKey').value.trim();
+  if(!u||!k){ toast('กรอกให้ครบก่อนครับ',true); return; }
+  localStorage.setItem('jjpnl_url',u); localStorage.setItem('jjpnl_key',k); location.reload();
+}
+async function boot(){
+  const {url,key}=cfg();
+  if(!url||!key){ document.getElementById('setup').style.display='block'; return; }
+  document.getElementById('app').style.display='block';
+  document.getElementById('monthPick').value=S.m;
+  document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x.dataset.br===S.br));
+  document.querySelectorAll('#brSeg button').forEach(btn=>btn.onclick=async()=>{
+    S.br=btn.dataset.br; LS.set('jjpnl_br',S.br);
+    document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x===btn));
+    await show(S.tab);
+  });
+  document.getElementById('monthPick').onchange=async e=>{ S.m=e.target.value; LS.set('jjpnl_m',S.m); await show(S.tab); };
+  document.querySelectorAll('.tabbar button').forEach(btn=>btn.onclick=()=>show(btn.dataset.v));
+  try{ await loadCore(); }catch(e){
+    document.getElementById('view-dash').innerHTML='<div class="empty">เชื่อมต่อไม่ได้ — ตรวจ URL/Key ในหน้าตั้งค่า<br><span class="xs">'+esc(e.message)+'</span></div>'; return;
+  }
+  S.tab='dash'; await show('dash');
+}
+
+/* ============ แดชบอร์ด ============ */
+function killChart(id){ if(S.charts[id]){S.charts[id].destroy(); delete S.charts[id];} }
+RENDER.dash = async (el)=>{
+  const A = await agg(S.br,S.m);
+  const P = await agg(S.br,prevMonth(S.m)).catch(()=>null);
+  const other = S.br==='JJRD'?'JJLP':'JJRD';
+  const O = await agg(other,S.m).catch(()=>null);
+  const vcPct = A.revenue? A.vc/A.revenue : null;
+  const avgDay = A.daysData? A.incVat/A.daysData : 0;
+  const benchTot = totalBench();
+  el.innerHTML = `
+  <div class="kpis">
+    <div class="kpi hero"><div class="t">รายได้รวม (ก่อน VAT + Delivery)</div><div class="kpi-v">฿${fmtI(A.revenue)}</div>
+      <div class="s">${monthLabel(S.m)} · ${BRNAME[S.br]}</div></div>
+    <div class="kpi"><div class="t">ยอดขายรวม VAT</div><div class="kpi-v">฿${fmtI(A.incVat)}</div>
+      <div class="s mut">เฉลี่ย ฿${fmtI(avgDay)}/วัน · บันทึก ${A.daysData}/${A.days} วัน</div></div>
+    <div class="kpi"><div class="t">Variable cost</div><div class="kpi-v">฿${fmtI(A.vc)}</div>
+      <div class="s">${pctF(vcPct)} ${benchTot?chip(vcPct!=null?vcPct-benchTot.avg:null):''} <span class="xs mut">เทียบเฉลี่ย ${benchTot?pctF(benchTot.avg):'–'}</span></div></div>
+    <div class="kpi"><div class="t">คงเหลือสุทธิ (หลัง VC + Fix + นอกเหนือ)</div>
+      <div class="kpi-v" style="color:${A.net>=0?'var(--ok)':'var(--bad)'}">฿${fmtI(A.net)}</div>
+      <div class="s mut">Fix ฿${fmtI(A.fixT)} · นอกเหนือ ฿${fmtI(A.extraT)}</div></div>
+  </div>
+  <div class="md32">
+    <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3><canvas id="chLine" height="190"></canvas></div>
+    <div class="card"><h3>สัดส่วนต้นทุน</h3><canvas id="chDou" height="190"></canvas></div>
+  </div>
+  <div class="md2">
+    <div class="card">
+      <h3>ต้นทุนซัพพลายเออร์ vs มาตรฐาน 5 เดือน <span class="sp">Top 12</span></h3>
+      ${supDeltaTable(A)}
+    </div>
+    <div class="card">
+      <h3>เทียบสองสาขา <span class="sp">${monthLabel(S.m)}</span></h3>
+      ${compareTable(A,O)}
+      <h3 style="margin-top:16px">เทียบเดือนก่อน <span class="sp">${monthLabel(prevMonth(S.m))}</span></h3>
+      ${comparePrev(A,P)}
+    </div>
+  </div>`;
+  drawDash(A);
+};
+function totalBench(){
+  const b=S.core.bench; const keys=Object.keys(b); if(!keys.length) return null;
+  const n=Math.max(...keys.map(k=>b[k].list.length));
+  const sums=Array(n).fill(0);
+  keys.forEach(k=>b[k].list.forEach((v,i)=>sums[i]+=v));
+  return { avg:sums.reduce((a,c)=>a+c,0)/n, min:Math.min(...sums) };
+}
+function benchOf(name){ return S.core.bench[name]||null; }
+function supDeltaTable(A){
+  const rows = Object.entries(A.bySup).map(([id,amt])=>{
+    const s=S.core.supById[id]; if(!s)return null;
+    const p = A.revenue? amt/A.revenue : null;
+    const bn = benchOf(s.name);
+    return {name:s.name, amt, p, bn};
+  }).filter(Boolean).sort((a,b)=>b.amt-a.amt).slice(0,12);
+  if(!rows.length) return '<div class="empty">ยังไม่มีข้อมูลรายจ่ายเดือนนี้</div>';
+  return `<div class="twrap"><table><tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th><th class="right">%</th><th class="right">เฉลี่ย</th><th></th></tr>
+  ${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${fmtI(r.amt)}</td><td class="n">${pctF(r.p)}</td>
+    <td class="n mut">${r.bn?pctF(r.bn.avg):'–'}</td><td class="right">${r.bn&&r.p!=null?chip(r.p-r.bn.avg):''}</td></tr>`).join('')}
+  </table></div>`;
+}
+function compareTable(A,O){
+  if(!O) return '<div class="empty">โหลดอีกสาขาไม่ได้</div>';
+  const row=(t,a,o,money)=>`<tr><td>${t}</td><td class="n">${money?'฿':''}${money?fmtI(a):a}</td><td class="n">${money?'฿':''}${money?fmtI(o):o}</td></tr>`;
+  return `<div class="twrap"><table><tr><th></th><th class="right">${BRNAME[A.b].replace('สาขา','')}</th><th class="right">${BRNAME[O.b].replace('สาขา','')}</th></tr>
+  ${row('รายได้รวม',A.revenue,O.revenue,1)}
+  ${row('Variable cost',A.vc,O.vc,1)}
+  ${row('VC %', pctF(A.revenue?A.vc/A.revenue:null), pctF(O.revenue?O.vc/O.revenue:null))}
+  ${row('คงเหลือสุทธิ',A.net,O.net,1)}
+  </table></div>`;
+}
+function comparePrev(A,P){
+  if(!P||!P.revenue) return '<div class="empty xs">ยังไม่มีข้อมูลเดือนก่อน</div>';
+  const d=(a,b)=>b?((a-b)/b):null;
+  const r=(t,a,b)=>{const dd=d(a,b);return `<tr><td>${t}</td><td class="n">฿${fmtI(a)}</td><td class="n mut">฿${fmtI(b)}</td><td class="right">${chip(dd,true)}</td></tr>`;}
+  const rc=(t,a,b)=>{const dd=d(a,b);return `<tr><td>${t}</td><td class="n">฿${fmtI(a)}</td><td class="n mut">฿${fmtI(b)}</td><td class="right">${chip(dd)}</td></tr>`;}
+  return `<div class="twrap"><table><tr><th></th><th class="right">เดือนนี้</th><th class="right">เดือนก่อน</th><th></th></tr>
+  ${r('รายได้รวม',A.revenue,P.revenue)}${rc('Variable cost',A.vc,P.vc)}${r('คงเหลือสุทธิ',A.net,P.net)}</table></div>`;
+}
+function drawDash(A){
+  if(typeof Chart==='undefined'){toast('โหลดกราฟไม่ขึ้น (เช็คเน็ต)',true);return;}
+  killChart('line'); killChart('dou');
+  const lc=document.getElementById('chLine'); if(lc){
+    S.charts.line=new Chart(lc,{type:'bar',data:{labels:A.daily.map((_,i)=>i+1),
+      datasets:[{data:A.daily,backgroundColor:A.daily.map((_,i)=>{const dt=new Date(S.m+'-01');dt.setDate(i+1);const wd=dt.getDay();return (wd===0||wd===6)?'#C62127':'#E5B4B6';}),borderRadius:4}]},
+      options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
+        scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
+  }
+  const dc=document.getElementById('chDou'); if(dc){
+    const parts={...A.byCat}; if(A.cashM+A.cashE)parts['เงินสดหน้าร้าน']=A.cashM+A.cashE; if(A.shopee)parts['Shopee']=A.shopee;
+    const labels=Object.keys(parts);
+    if(!labels.length){ dc.parentElement.insertAdjacentHTML('beforeend','<div class="empty">ยังไม่มีข้อมูล</div>'); dc.remove(); return;}
+    S.charts.dou=new Chart(dc,{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>parts[l]),
+      backgroundColor:labels.map(l=>CAT_COLOR[l]||'#999'),borderWidth:2,borderColor:'#fff'}]},
+      options:{cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.label+': ฿'+fmtI(c.raw)}}}}});
+  }
+}
+</script>
+<script>
+/* ============ รายรับ (บันทึกรายวัน) ============ */
+const INC_FIELDS=[
+  ['sales_pos','ยอดขาย (POS)'],['transfer_total','ยอดเงินโอน'],
+  ['deposit','เงินฝาก'],['cash_drawer','เงินเก๊ะ'],
+  ['reserve_acct','บัญชีสำรอง'],['drawer_open','ยอดเก๊ะเปิด'],
+  ['transfer_pending_prev','โอนคงค้างเมื่อวาน']
+];
+RENDER.income = async (el)=>{
+  const c = await loadMonth(S.br,S.m);
+  const days=monthDays(S.m), today=todayStr();
+  let html=`<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div><div class="b">บันทึกรายรับ · ${monthLabel(S.m)}</div>
+    <div class="xs mut">ยอดก่อน VAT = (เงินฝาก+เงินเก๊ะ) ÷ 1.07 · ขาด/เกิน คำนวณอัตโนมัติ</div></div>
+    <button class="btn gh sm2" style="margin-left:auto" onclick="fillOpenAll()">ดึงเก๊ะเปิดจากเมื่อวานทั้งเดือน</button></div>
+  <div class="daylist">`;
+  for(let d=1;d<=days;d++){
+    const ds=dstr(S.m,d), r=c.inc[ds]||{};
+    const dt=new Date(S.m+'-01'); dt.setDate(d); const wd=dt.getDay();
+    html+=`<div class="dayc ${ds===today?'today':''}" id="dc${d}">
+      <div class="dh"><span class="dn">${d}</span><span class="dw ${wd===0?'sun':''}">${TH_D[wd]}.</span>
+        <span class="xs mut" style="margin-left:auto" id="dchk${d}"></span></div>
+      <div class="grid2">
+        ${INC_FIELDS.map(([f,l])=>`<div class="fld"><label>${l}</label>
+          <input type="number" inputmode="decimal" placeholder="0" value="${r[f]??''}"
+            oninput="incInput(${d},'${f}',this.value)"></div>`).join('')}
+        <div class="fld"><label>&nbsp;</label>
+          <button class="btn gh sm2" style="width:100%" onclick="cashModal('${ds}')">เงินสดจ่าย <span id="cn${d}"></span></button></div>
+      </div>
+      <div class="dsum" id="dsum${d}"></div>
+    </div>`;
+  }
+  html+='</div>';
+  el.innerHTML=html;
+  for(let d=1;d<=days;d++) refreshDay(d);
+};
+function getInc(ds){ const c=S.cache[mkey(S.br,S.m)]; return c.inc[ds]??(c.inc[ds]={branch:S.br,d:ds,sales_pos:0,deposit:0,cash_drawer:0,transfer_total:0,reserve_acct:0,transfer_pending_prev:0,drawer_open:0}); }
+function incInput(day,f,v){
+  const ds=dstr(S.m,day); const r=getInc(ds); r[f]=num(v);
+  refreshDay(day);
+  debSave('inc'+ds, ()=>ups('pnl_income_daily',[{...r}],'branch,d').then(()=>toast('บันทึกวันที่ '+day+' แล้ว')));
+}
+function cashOfDay(ds){ const c=S.cache[mkey(S.br,S.m)]; return c.cash.filter(x=>x.d===ds); }
+function refreshDay(day){
+  const ds=dstr(S.m,day); const c=S.cache[mkey(S.br,S.m)];
+  const r=c.inc[ds]; const list=cashOfDay(ds);
+  const cashT=list.reduce((a,x)=>a+num(x.amount),0);
+  const cn=document.getElementById('cn'+day); if(cn)cn.textContent=list.length?`(${list.length} · ฿${fmtI(cashT)})`:'';
+  const elS=document.getElementById('dsum'+day); if(!elS)return;
+  if(!r){ elS.innerHTML='<span class="mut xs">ยังไม่กรอก</span>'; return; }
+  const cd=calcDay(r);
+  // ขาด/เกิน = (ฝาก+เก๊ะ+โอน+สำรอง+เงินสดจ่าย) − (คงค้างเมื่อวาน+เก๊ะเปิด) − ยอดขายPOS
+  const diff=(num(r.deposit)+num(r.cash_drawer)+num(r.transfer_total)+num(r.reserve_acct)+cashT)
+             -(num(r.transfer_pending_prev)+num(r.drawer_open))-num(r.sales_pos);
+  const cls=Math.abs(diff)<1?'mid':diff>0?'ok':'bad';
+  elS.innerHTML=`<span class="mut">ก่อน VAT</span><span class="num b">฿${fmt(cd.exVat,2)}</span>
+    <span class="chip ${cls}" style="margin-left:auto">${diff>0?'เกิน':diff<0?'ขาด':'ตรง'} ฿${fmt(Math.abs(diff),2)}</span>`;
+  // hint เก๊ะเปิด
+  const prev = day>1 ? c.inc[dstr(S.m,day-1)] : null;
+  const chk=document.getElementById('dchk'+day);
+  if(chk) chk.innerHTML = (prev&&num(prev.cash_drawer)&&!num(r.drawer_open))
+    ? `<span class="hintlink" onclick="incInput(${day},'drawer_open',${num(prev.cash_drawer)});this.remove();document.querySelector('#dc${day} [oninput*=drawer_open]').value=${num(prev.cash_drawer)}">เก๊ะเมื่อวาน ฿${fmtI(prev.cash_drawer)} ↵</span>`:'';
+}
+async function fillOpenAll(){
+  const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m); const rows=[];
+  for(let d=2;d<=days;d++){
+    const prev=c.inc[dstr(S.m,d-1)]; if(!prev||!num(prev.cash_drawer))continue;
+    const r=getInc(dstr(S.m,d));
+    if(!num(r.drawer_open)){ r.drawer_open=num(prev.cash_drawer); rows.push({...r}); }
+  }
+  if(!rows.length){toast('ไม่มีวันที่ต้องเติม');return;}
+  await ups('pnl_income_daily',rows,'branch,d'); toast('เติมเก๊ะเปิด '+rows.length+' วัน'); show('income');
+}
+function cashModal(ds){
+  const list=cashOfDay(ds);
+  openModal(`<h3>เงินสดจ่ายหน้าร้าน · ${thDate(ds)}</h3>
+    <div id="cashList">${list.map(x=>cashRow(x)).join('')||'<div class="empty">ยังไม่มีรายการ</div>'}</div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn gh sm2" onclick="cashAdd('${ds}','เช้า')">+ กะเช้า</button>
+      <button class="btn gh sm2" onclick="cashAdd('${ds}','เย็น')">+ กะเย็น</button>
+      <button class="btn sm2" style="margin-left:auto" onclick="closeModal()">เสร็จ</button></div>`);
+}
+function cashRow(x){
+  return `<div class="exrow" id="cx${x.id}">
+    <select style="width:76px;flex:none;padding:8px 6px" onchange="cashUpd(${x.id},'shift',this.value)">
+      <option ${x.shift==='เช้า'?'selected':''}>เช้า</option><option ${x.shift==='เย็น'?'selected':''}>เย็น</option></select>
+    <input style="flex:1;width:auto;text-align:left" type="text" placeholder="รายการ" value="${esc(x.descr)}" onchange="cashUpd(${x.id},'descr',this.value)">
+    <input type="number" inputmode="decimal" placeholder="0" value="${x.amount||''}" onchange="cashUpd(${x.id},'amount',num(this.value))">
+    <button style="color:var(--bad);font-size:18px;padding:4px" onclick="cashDel(${x.id})">✕</button></div>`;
+}
+async function cashAdd(ds,shift){
+  const r=(await ins('pnl_cash_expenses',{branch:S.br,d:ds,shift,descr:'',amount:0}))[0];
+  S.cache[mkey(S.br,S.m)].cash.push(r);
+  const L=document.getElementById('cashList'); if(L.querySelector('.empty'))L.innerHTML='';
+  L.insertAdjacentHTML('beforeend',cashRow(r));
+  refreshDay(Number(ds.slice(-2)));
+}
+async function cashUpd(id,f,v){
+  const c=S.cache[mkey(S.br,S.m)]; const x=c.cash.find(z=>z.id===id); if(x)x[f]=v;
+  await upd('pnl_cash_expenses','id=eq.'+id,{[f]:v});
+  if(x)refreshDay(Number(x.d.slice(-2)));
+}
+async function cashDel(id){
+  const c=S.cache[mkey(S.br,S.m)]; const x=c.cash.find(z=>z.id===id);
+  await delQ('pnl_cash_expenses','id=eq.'+id);
+  c.cash=c.cash.filter(z=>z.id!==id);
+  document.getElementById('cx'+id)?.remove();
+  if(x)refreshDay(Number(x.d.slice(-2)));
+}
+
+/* ============ รายจ่าย (ซัพพลายเออร์ × วัน) ============ */
+RENDER.exp = async (el)=>{
+  const c=await loadMonth(S.br,S.m);
+  const days=monthDays(S.m);
+  const td=todayStr(); S.expDay = S.expDay && S.expDay<=days ? S.expDay : (td.slice(0,7)===S.m?Number(td.slice(-2)):1);
+  const hasDay={}; Object.values(c.exp).forEach(r=>{ if(num(r.amount))hasDay[Number(r.d.slice(-2))]=1; });
+  const t15=perTotal(c,1,15), t31=perTotal(c,16,days);
+  el.innerHTML=`
+  <div class="perbar">
+    <div class="pb"><div class="t">งวด 1–15</div><div class="v">฿${fmtI(t15)}</div></div>
+    <div class="pb"><div class="t">งวด 16–${days}</div><div class="v">฿${fmtI(t31)}</div></div>
+    <div class="pb" style="border-color:var(--red)"><div class="t">รวมทั้งเดือน</div><div class="v" style="color:var(--red)">฿${fmtI(t15+t31)}</div></div>
+  </div>
+  <div class="card">
+    <h3>เลือกวันที่ <span class="sp"><button class="hintlink" onclick="expTableView()">ดูตารางรวมทั้งเดือน →</button></span></h3>
+    <div class="daychips">${Array.from({length:days},(_,i)=>i+1).map(d=>
+      `<button class="${d===S.expDay?'on':''} ${hasDay[d]?'has':''}" onclick="S.expDay=${d};show('exp')">${d}</button>`).join('')}</div>
+  </div>
+  <div id="expForm">${expFormHTML(c)}</div>
+  <div class="stickysum"><span class="sm" style="opacity:.75">รวมวันที่ ${S.expDay}</span>
+    <span class="v" id="expDayTot"></span>
+    <span class="sm" style="margin-left:auto;opacity:.75">${thDate(dstr(S.m,S.expDay))}</span></div>`;
+  updExpDayTot();
+};
+function perTotal(c,a,b){
+  let t=0; Object.values(c.exp).forEach(r=>{const d=Number(r.d.slice(-2)); if(d>=a&&d<=b)t+=num(r.amount);}); return t;
+}
+function expFormHTML(c){
+  const ds=dstr(S.m,S.expDay);
+  return CAT_ORDER.map(cat=>{
+    const list=S.core.sup.filter(s=>s.category===cat&&s.active);
+    if(!list.length)return'';
+    return `<div class="card"><h3><span style="width:9px;height:9px;border-radius:3px;background:${CAT_COLOR[cat]}"></span>${cat}
+      <span class="sp num" id="catT-${esc(cat)}"></span></h3>
+      ${list.map(s=>{
+        const r=c.exp[ds+'|'+s.id];
+        const isYannah=s.name==='Yannah Beef';
+        return `<div class="exrow"><div class="nm"><div class="t">${esc(s.name)}${isYannah?' <span class="hintlink" onclick="meatModal(\''+ds+'\','+s.id+')">🥩 คิดจากกก.</span>':''}</div>
+          <div class="s">${esc(s.payment_term||'')}${s.payment_term?' · ':''}${esc(s.vat_type)}</div></div>
+          <input type="number" inputmode="decimal" placeholder="0" id="exi${s.id}" value="${r&&num(r.amount)?r.amount:''}"
+            oninput="expInput('${ds}',${s.id},this.value)"></div>`;
+      }).join('')}</div>`;
+  }).join('');
+}
+function expInput(ds,sid,v){
+  const c=S.cache[mkey(S.br,S.m)];
+  const k=ds+'|'+sid;
+  const r=c.exp[k]??(c.exp[k]={branch:S.br,d:ds,supplier_id:sid,amount:0});
+  r.amount=num(v); updExpDayTot();
+  debSave('exp'+k, ()=>ups('pnl_expense_daily',[{branch:S.br,d:ds,supplier_id:sid,amount:num(v)}],'branch,d,supplier_id')
+    .then(()=>toast('บันทึกแล้ว')));
+}
+function updExpDayTot(){
+  const c=S.cache[mkey(S.br,S.m)]; const ds=dstr(S.m,S.expDay);
+  let t=0; const byCat={};
+  Object.values(c.exp).forEach(r=>{ if(r.d===ds){const a=num(r.amount);t+=a;
+    const s=S.core.supById[r.supplier_id]; if(s)byCat[s.category]=(byCat[s.category]||0)+a;}});
+  const el=document.getElementById('expDayTot'); if(el)el.textContent='฿'+fmtI(t);
+  CAT_ORDER.forEach(cat=>{const e=document.getElementById('catT-'+cat); if(e)e.textContent=byCat[cat]?('฿'+fmtI(byCat[cat])):'';});
+}
+function expTableView(){
+  const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m);
+  let rows='';
+  CAT_ORDER.forEach(cat=>{
+    const list=S.core.sup.filter(s=>s.category===cat&&s.active); if(!list.length)return;
+    rows+=`<tr class="cat"><td colspan="5">${cat}</td></tr>`;
+    list.forEach(s=>{
+      let a=0,b=0;
+      Object.values(c.exp).forEach(r=>{ if(r.supplier_id===s.id){const d=Number(r.d.slice(-2)); if(d<=15)a+=num(r.amount);else b+=num(r.amount);}});
+      if(!(a+b))return;
+      rows+=`<tr><td>${esc(s.name)}</td><td class="n">${fmtI(a)}</td><td class="n">${fmtI(b)}</td><td class="n b">${fmtI(a+b)}</td><td class="xs mut">${esc(s.payment_term||'')}</td></tr>`;
+    });
+  });
+  openModal(`<h3>ตารางรายจ่ายรวม · ${monthLabel(S.m)} · ${BRNAME[S.br]}</h3>
+    <div class="twrap"><table><tr><th>ซัพพลายเออร์</th><th class="right">1–15</th><th class="right">16–${days}</th><th class="right">รวม</th><th>เงื่อนไข</th></tr>${rows||'<tr><td colspan=5 class="empty">ไม่มีข้อมูล</td></tr>'}</table></div>
+    <button class="btn dk sm2" style="margin-top:12px" onclick="closeModal()">ปิด</button>`);
+}
+function meatModal(ds,sid){
+  const meats=S.core.meats.filter(m=>m.branch===S.br&&m.active);
+  const c=S.cache[mkey(S.br,S.m)];
+  openModal(`<h3>คิดยอด Yannah จากน้ำหนัก · ${thDate(ds)}</h3>
+    ${meats.map(m=>`<div class="exrow"><div class="nm"><div class="t">${esc(m.name)}</div><div class="s">฿${fmt(m.price_kg)}/กก.</div></div>
+      <input type="number" inputmode="decimal" step="0.1" placeholder="กก." id="mk${m.id}"
+        value="${c.meatd[ds+'|'+m.id]||''}" oninput="meatCalc('${ds}')"></div>`).join('')}
+    <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม</span><span class="num b" id="meatTot" style="font-size:18px">฿0</span></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn sm2" style="margin-left:auto" onclick="meatSave('${ds}',${sid})">บันทึกลงช่อง Yannah</button></div>`);
+  meatCalc(ds);
+}
+function meatCalc(ds){
+  const meats=S.core.meats.filter(m=>m.branch===S.br&&m.active);
+  let t=0; meats.forEach(m=>{const kg=num(document.getElementById('mk'+m.id)?.value); t+=kg*num(m.price_kg);});
+  document.getElementById('meatTot').textContent='฿'+fmt(t,2);
+  return t;
+}
+async function meatSave(ds,sid){
+  const meats=S.core.meats.filter(m=>m.branch===S.br&&m.active);
+  const c=S.cache[mkey(S.br,S.m)]; const rows=[];
+  meats.forEach(m=>{const kg=num(document.getElementById('mk'+m.id)?.value);
+    c.meatd[ds+'|'+m.id]=kg; rows.push({branch:S.br,d:ds,meat_id:m.id,kg});});
+  const total=meatCalc(ds);
+  await ups('pnl_meat_daily',rows,'branch,d,meat_id');
+  const inp=document.getElementById('exi'+sid); if(inp)inp.value=total.toFixed(2);
+  expInput(ds,sid,total);
+  closeModal(); toast('บันทึก Yannah ฿'+fmt(total,2));
+}
+</script>
+<script>
+/* ============ สรุปเดือน (P&L) ============ */
+RENDER.sum = async (el)=>{
+  const A=await agg(S.br,S.m);
+  const P=await agg(S.br,prevMonth(S.m)).catch(()=>null);
+  const rev=A.revenue;
+  const pRev=P?P.revenue:0;
+  const divisor = A.c.meta.days_divisor ?? A.days;
+  const supRow=(s)=>{
+    const amt=A.bySup[s.id]||0;
+    const p=rev?amt/rev:null;
+    const bn=benchOf(s.name);
+    const pAmt=P?(P.bySup[s.id]||0):0;
+    const pp=pRev?pAmt/pRev:null;
+    return `<tr class="ind"><td>${esc(s.name)}</td><td class="n">${amt?fmtI(amt):''}</td>
+      <td class="n">${amt?pctF(p):''}</td>
+      <td class="n mut xs">${bn?pctF(bn.avg):''}</td><td class="n mut xs">${bn?pctF(bn.min):''}</td>
+      <td class="right">${bn&&p!=null&&amt?chip(p-bn.avg):''}</td>
+      <td class="right">${pp!=null&&p!=null&&amt?chip(p-pp):''}</td></tr>`;
+  };
+  const specRow=(label,amt,bkey,pAmt)=>{
+    const p=rev?amt/rev:null; const bn=benchOf(bkey);
+    const pp=pRev&&pAmt!=null?pAmt/pRev:null;
+    return `<tr class="ind"><td>${label}</td><td class="n">${amt?fmtI(amt):''}</td><td class="n">${amt?pctF(p):''}</td>
+      <td class="n mut xs">${bn?pctF(bn.avg):''}</td><td class="n mut xs">${bn?pctF(bn.min):''}</td>
+      <td class="right">${bn&&p!=null&&amt?chip(p-bn.avg):''}</td>
+      <td class="right">${pp!=null&&p!=null&&amt?chip(p-pp):''}</td></tr>`;
+  };
+  let vcRows='';
+  CAT_ORDER.forEach(cat=>{
+    const list=S.core.sup.filter(s=>s.category===cat);
+    const catAmt=A.byCat[cat]||0;
+    vcRows+=`<tr class="cat"><td>${cat}</td><td class="n">${catAmt?fmtI(catAmt):''}</td>
+      <td class="n">${catAmt&&rev?pctF(catAmt/rev):''}</td><td colspan="4"></td></tr>`;
+    list.forEach(s=>{ if(A.bySup[s.id]||benchOf(s.name)) vcRows+=supRow(s); });
+  });
+  vcRows+=`<tr class="cat"><td>เงินสดหน้าร้าน</td><td class="n">${fmtI(A.cashM+A.cashE)}</td>
+    <td class="n">${rev?pctF((A.cashM+A.cashE)/rev):''}</td><td colspan="4"></td></tr>`;
+  vcRows+=specRow('กะเช้า',A.cashM,'กะเช้า',P?P.cashM:null);
+  vcRows+=specRow('กะเย็น',A.cashE,'กะเย็น',P?P.cashE:null);
+  vcRows+=`<tr class="cat"><td>Shopee</td><td colspan="6"></td></tr>`;
+  vcRows+=specRow('Shopee',A.shopee,'Shopee',P?P.shopee:null);
+  const vcPct=rev?A.vc/rev:null;
+  const bt=totalBench();
+
+  const fixGrp={};
+  A.fixRows.forEach(r=>{(fixGrp[r.item.grp]??=[]).push(r);});
+  let fixHtml='';
+  Object.entries(fixGrp).forEach(([g,rows])=>{
+    const sub=rows.reduce((a,r)=>a+(r.val||0),0);
+    fixHtml+=`<tr class="cat"><td>${g}</td><td class="n">${fmtI(sub)}</td><td colspan="2"></td></tr>`;
+    rows.forEach(r=>{
+      fixHtml+=`<tr class="ind"><td>${esc(r.item.name)}</td>
+        <td class="right" colspan="3"><input type="number" inputmode="decimal"
+          placeholder="${r.item.default_amount!=null?fmt(r.item.default_amount):'0'}"
+          value="${A.c.fixm[r.item.id]??''}"
+          onchange="fixInput(${r.item.id},this.value)"></td></tr>`;
+    });
+  });
+
+  el.innerHTML=`
+  <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div><div class="b" style="font-family:'Prompt';font-size:16px">สรุปผลประกอบการ · ${BRNAME[S.br]}</div>
+      <div class="sm mut">${monthLabel(S.m)} · จำนวนวันหาร
+        <input type="number" style="width:64px;padding:4px 8px;display:inline-block" value="${divisor}"
+          onchange="metaInput('days_divisor',parseInt(this.value)||null)"> วัน</div></div>
+    <button class="btn dk sm2" style="margin-left:auto" onclick="printSummary()">🖨 พิมพ์สรุป</button>
+  </div>
+
+  <div class="card pl">
+    <div class="secbar">รายได้ <span class="sp">฿${fmtI(rev)}</span></div>
+    <div class="twrap"><table>
+      <tr><td>ยอดขายก่อน VAT</td><td class="n b">${fmt(A.exVat,2)}</td><td class="n mut xs" colspan="2">เฉลี่ย/วัน ฿${fmtI(divisor?A.exVat/divisor:0)}</td></tr>
+      <tr><td>ยอดขายรวม VAT</td><td class="n">${fmt(A.incVat,2)}</td><td colspan="2"></td></tr>
+      <tr><td>ยอด VAT</td><td class="n">${fmt(A.vat,2)}</td><td colspan="2"></td></tr>
+      <tr><td>Delivery Grab</td><td class="right" colspan="3"><input type="number" inputmode="decimal" placeholder="0" value="${num(A.grab)||''}" onchange="metaInput('grab',num(this.value))"></td></tr>
+      <tr><td>Delivery Lineman</td><td class="right" colspan="3"><input type="number" inputmode="decimal" placeholder="0" value="${num(A.lineman)||''}" onchange="metaInput('lineman',num(this.value))"></td></tr>
+      <tr class="tot"><td>รวมรายได้ (ก่อนหักส่วนลด)</td><td class="n">${fmtI(rev)}</td><td colspan="2"></td></tr>
+    </table></div>
+
+    <div class="secbar">Variable cost <span class="sp">฿${fmtI(A.vc)} · ${pctF(vcPct)} ${bt?chip(vcPct!=null?vcPct-bt.avg:null):''}</span></div>
+    <div class="twrap"><table>
+      <tr><th>รายการ</th><th class="right">จำนวนเงิน</th><th class="right">%</th><th class="right">เฉลี่ย 5 ด.</th><th class="right">ต่ำสุด</th><th class="right">เทียบเฉลี่ย</th><th class="right">เทียบเดือนก่อน</th></tr>
+      ${vcRows}
+      <tr class="tot"><td>ยอดรวม Variable cost</td><td class="n">${fmtI(A.vc)}</td><td class="n">${pctF(vcPct)}</td>
+        <td class="n xs">${bt?pctF(bt.avg):''}</td><td class="n xs">${bt?pctF(bt.min):''}</td>
+        <td class="right">${bt&&vcPct!=null?chip(vcPct-bt.avg):''}</td><td></td></tr>
+      <tr class="tot"><td>คงเหลือหลังหัก Variable cost</td><td class="n" style="color:${rev-A.vc>=0?'var(--ok)':'var(--bad)'}">${fmtI(rev-A.vc)}</td>
+        <td class="n">${rev?pctF((rev-A.vc)/rev):''}</td><td colspan="4"></td></tr>
+    </table></div>
+
+    <div class="secbar">Fix cost <span class="sp">฿${fmtI(A.fixT)}</span></div>
+    <div class="twrap"><table>${fixHtml}
+      <tr class="tot"><td>ยอดรวม Fix cost</td><td class="n">${fmtI(A.fixT)}</td><td colspan="2" class="n">${rev?pctF(A.fixT/rev):''}</td></tr>
+    </table></div>
+
+    <div class="secbar">รายจ่ายนอกเหนือ <span class="sp">฿${fmtI(A.extraT)}</span></div>
+    <div class="twrap"><table>
+      ${A.c.extra.map(x=>`<tr class="ind"><td>${thDate(x.d)} · ${esc(x.descr)}</td><td class="n">${fmtI(x.amount)}</td><td class="mut xs">${esc(x.requester||'')}</td></tr>`).join('')||'<tr><td class="mut xs">— ไม่มี —</td></tr>'}
+    </table></div>
+
+    <div class="secbar" style="background:${A.net>=0?'var(--ok)':'var(--bad)'}">คงเหลือสุทธิ
+      <span class="sp">฿${fmtI(A.net)} · ${rev?pctF(A.net/rev):''}</span></div>
+  </div>`;
+};
+function metaInput(f,v){
+  const c=S.cache[mkey(S.br,S.m)]; c.meta[f]=v; c.meta.branch=S.br; c.meta.month=S.m;
+  debSave('meta',()=>ups('pnl_month_meta',[{...c.meta}],'branch,month').then(()=>{toast('บันทึกแล้ว'); if(S.tab==='sum')show('sum');}));
+}
+function fixInput(itemId,v){
+  const c=S.cache[mkey(S.br,S.m)];
+  if(v===''){ delete c.fixm[itemId];
+    debSave('fx'+itemId,()=>delQ('pnl_fixed_monthly',`branch=eq.${S.br}&month=eq.${S.m}&item_id=eq.${itemId}`).then(()=>show('sum')));
+  } else {
+    c.fixm[itemId]=num(v);
+    debSave('fx'+itemId,()=>ups('pnl_fixed_monthly',[{branch:S.br,month:S.m,item_id:itemId,amount:num(v)}],'branch,month,item_id')
+      .then(()=>{toast('บันทึกแล้ว'); if(S.tab==='sum')show('sum');}));
+  }
+}
+async function printSummary(){
+  const A=await agg(S.br,S.m);
+  const co=companyInfo();
+  let vc='';
+  CAT_ORDER.forEach(cat=>{
+    const catAmt=A.byCat[cat]||0; if(!catAmt)return;
+    vc+=`<tr><td><b>${cat}</b></td><td style="text-align:right"><b>${fmtI(catAmt)}</b></td><td style="text-align:right">${A.revenue?pctF(catAmt/A.revenue):''}</td></tr>`;
+    S.core.sup.filter(s=>s.category===cat&&A.bySup[s.id]).forEach(s=>{
+      vc+=`<tr><td style="padding-left:18px">${esc(s.name)}</td><td style="text-align:right">${fmtI(A.bySup[s.id])}</td><td style="text-align:right">${A.revenue?pctF(A.bySup[s.id]/A.revenue):''}</td></tr>`;});
+  });
+  if(A.cashM+A.cashE)vc+=`<tr><td><b>เงินสดหน้าร้าน</b> (เช้า ${fmtI(A.cashM)} / เย็น ${fmtI(A.cashE)})</td><td style="text-align:right"><b>${fmtI(A.cashM+A.cashE)}</b></td><td style="text-align:right">${A.revenue?pctF((A.cashM+A.cashE)/A.revenue):''}</td></tr>`;
+  if(A.shopee)vc+=`<tr><td><b>Shopee</b></td><td style="text-align:right"><b>${fmtI(A.shopee)}</b></td><td style="text-align:right">${A.revenue?pctF(A.shopee/A.revenue):''}</td></tr>`;
+  let fx=''; A.fixRows.forEach(r=>{ if(r.val!=null)fx+=`<tr><td style="padding-left:18px">${esc(r.item.name)}</td><td style="text-align:right">${fmtI(r.val)}</td><td></td></tr>`;});
+  document.getElementById('printArea').innerHTML=`
+  <div style="font-family:'Sarabun'">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-size:16px;font-weight:700">${esc(co.name)}</div>
+        <div>${esc(co.addr1)} ${esc(co.addr2)}</div><div>เลขผู้เสียภาษี ${esc(co.taxid)}</div></div>
+      <div style="text-align:right"><div style="font-size:15px;font-weight:700">สรุปผลประกอบการ</div>
+        <div>${BRNAME[S.br]} · ${monthLabel(S.m)}</div></div>
+    </div><hr style="border:none;border-top:1.5px solid #000;margin:8px 0">
+    <table style="width:100%">
+      <tr><td><b>ยอดขายก่อน VAT</b></td><td style="text-align:right"><b>${fmt(A.exVat,2)}</b></td><td></td></tr>
+      <tr><td>ยอดขายรวม VAT / ยอด VAT</td><td style="text-align:right">${fmt(A.incVat,2)} / ${fmt(A.vat,2)}</td><td></td></tr>
+      <tr><td>Delivery Grab / Lineman</td><td style="text-align:right">${fmtI(A.grab)} / ${fmtI(A.lineman)}</td><td></td></tr>
+      <tr style="border-top:1px solid #000"><td><b>รวมรายได้</b></td><td style="text-align:right"><b>${fmtI(A.revenue)}</b></td><td>100%</td></tr>
+      ${vc}
+      <tr style="border-top:1px solid #000"><td><b>รวม Variable cost</b></td><td style="text-align:right"><b>${fmtI(A.vc)}</b></td><td style="text-align:right"><b>${A.revenue?pctF(A.vc/A.revenue):''}</b></td></tr>
+      <tr><td><b>คงเหลือหลัง Variable cost</b></td><td style="text-align:right"><b>${fmtI(A.revenue-A.vc)}</b></td><td></td></tr>
+      ${fx}
+      <tr style="border-top:1px solid #000"><td><b>รวม Fix cost</b></td><td style="text-align:right"><b>${fmtI(A.fixT)}</b></td><td></td></tr>
+      <tr><td>รายจ่ายนอกเหนือ</td><td style="text-align:right">${fmtI(A.extraT)}</td><td></td></tr>
+      <tr style="border-top:2px solid #000"><td><b>คงเหลือสุทธิ</b></td><td style="text-align:right;font-size:14px"><b>${fmtI(A.net)}</b></td><td style="text-align:right"><b>${A.revenue?pctF(A.net/A.revenue):''}</b></td></tr>
+    </table>
+    <div style="margin-top:10px;font-size:10px;color:#555">พิมพ์จากระบบ JJ P&L · ${new Date().toLocaleString('th-TH')}</div>
+  </div>`;
+  window.print();
+}
+</script>
+<script>
+/* ============ ใบสำคัญจ่าย (PV) ============ */
+function companyInfo(){
+  return LS.get('jjpnl_co',{
+    name:'บริษัท พากันรวย ฟู้ดส์ คอร์ปอเรชั่น จำกัด',
+    addr1:'244/7 ถนนรัชดาภิเษก แขวงห้วยขวาง',
+    addr2:'เขตห้วยขวาง กรุงเทพมหานคร',
+    taxid:'0105561022627'
+  });
+}
+RENDER.pv = async (el)=>{
+  const list=await sel('pnl_pv',`select=*&branch=eq.${S.br}&order=pv_date.desc,id.desc&limit=60`);
+  el.innerHTML=`
+  <div class="card" style="display:flex;align-items:center;gap:10px">
+    <div><div class="b" style="font-family:'Prompt'">ใบสำคัญจ่าย (PV)</div>
+      <div class="xs mut">รวมยอดค้างจ่ายซัพพลายเออร์ตามงวด แล้วติ๊กตั้งจ่าย/จ่ายสำเร็จ</div></div>
+    <button class="btn sm2" style="margin-left:auto" onclick="pvCreateModal()">+ สร้าง PV</button></div>
+  <div class="card">${list.length?`<div class="twrap"><table>
+    <tr><th>เลขที่</th><th>งวด</th><th>ประเภท</th><th class="right">วันที่</th><th></th></tr>
+    ${list.map(p=>`<tr><td class="b">${esc(p.pv_no)}</td><td class="sm">${thDate(p.d_from)} – ${thDate(p.d_to)}</td>
+      <td><span class="chip ${p.vat_type==='VAT'?'gold':'mid'}">${p.vat_type}</span></td>
+      <td class="n sm">${thDate(p.pv_date)}</td>
+      <td class="right"><button class="hintlink" onclick="pvOpen(${p.id})">เปิด →</button></td></tr>`).join('')}
+    </table></div>`:'<div class="empty">ยังไม่มี PV — กด "+ สร้าง PV"</div>'}</div>`;
+};
+function pvCreateModal(){
+  const days=monthDays(S.m);
+  openModal(`<h3>สร้างใบสำคัญจ่าย · ${BRNAME[S.br]}</h3>
+    <div class="grid2">
+      <div class="fld"><label>เดือนของรายจ่าย</label><input type="month" id="pvM" value="${S.m}"></div>
+      <div class="fld"><label>งวด</label><select id="pvPer"><option value="1">1 – 15</option><option value="2">16 – สิ้นเดือน</option></select></div>
+      <div class="fld"><label>ประเภท</label><select id="pvVat"><option>NON-VAT</option><option>VAT</option></select></div>
+      <div class="fld"><label>วันที่ PV</label><input type="date" id="pvDate" value="${todayStr()}"></div>
+    </div>
+    <p class="xs mut">* ซัพประเภท "VAT / NON-VAT" จะถูกรวมในใบ VAT · แก้ยอดรายตัวได้ก่อนบันทึก</p>
+    <button class="btn" style="width:100%" onclick="pvPreview()">ดึงยอด →</button>
+    <div id="pvPrev"></div>`);
+  document.getElementById('pvVat').value = (new Date().getDate()<=5||new Date().getDate()>=16)?'NON-VAT':'NON-VAT';
+}
+async function pvPreview(){
+  const m=document.getElementById('pvM').value, per=document.getElementById('pvPer').value, vat=document.getElementById('pvVat').value;
+  const days=monthDays(m);
+  const from=per==='1'?dstr(m,1):dstr(m,16), to=per==='1'?dstr(m,15):dstr(m,days);
+  const rows=await sel('pnl_expense_daily',`select=supplier_id,amount&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`);
+  const sums={}; rows.forEach(r=>sums[r.supplier_id]=(sums[r.supplier_id]||0)+num(r.amount));
+  const match=s=> vat==='VAT' ? (s.vat_type==='VAT'||s.vat_type==='VAT / NON-VAT') : s.vat_type==='NON-VAT';
+  const items=S.core.sup.filter(s=>sums[s.id]>0&&match(s)).map(s=>({s,amt:sums[s.id]}));
+  S._pvDraft={m,from,to,vat,items};
+  document.getElementById('pvPrev').innerHTML= items.length?`
+    <div style="margin-top:12px;max-height:40dvh;overflow-y:auto">${items.map((it,i)=>`
+      <div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}</div><div class="s">${esc(it.s.bank||'')} ${esc(it.s.account_no||'')}</div></div>
+      <input type="number" inputmode="decimal" value="${it.amt.toFixed(2)}" onchange="S._pvDraft.items[${i}].amt=num(this.value)"></div>`).join('')}</div>
+    <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม ${items.length} ราย</span></div>
+    <button class="btn dk" style="width:100%;margin-top:6px" onclick="pvSave()">บันทึก PV</button>`
+    :'<div class="empty">ไม่มียอดค้างจ่ายประเภทนี้ในงวดที่เลือก</div>';
+}
+async function pvSave(){
+  const D=S._pvDraft; if(!D||!D.items.length)return;
+  const pvDate=document.getElementById('pvDate').value||todayStr();
+  const [y,mo,dd]=pvDate.split('-');
+  const pv_no=`${S.br}-${dd}${mo}${y}${D.vat==='VAT'?'V':''}`;
+  const pv=(await ins('pnl_pv',{branch:S.br,pv_no,pv_date:pvDate,d_from:D.from,d_to:D.to,vat_type:D.vat}))[0];
+  const items=D.items.filter(it=>it.amt>0).map(it=>({
+    pv_id:pv.id, supplier_id:it.s.id, amount:it.amt,
+    vat_amount: D.vat==='VAT'? +(it.amt*7/107).toFixed(2):0 }));
+  await ins('pnl_pv_items',items);
+  closeModal(); toast('สร้าง '+pv_no+' แล้ว'); show('pv');
+}
+async function pvOpen(id){
+  const [pv]=await sel('pnl_pv','select=*&id=eq.'+id);
+  const items=await sel('pnl_pv_items','select=*&pv_id=eq.'+id+'&order=id');
+  const isVat=pv.vat_type==='VAT';
+  const tot=items.reduce((a,x)=>a+num(x.amount),0);
+  const totV=items.reduce((a,x)=>a+num(x.vat_amount),0);
+  openModal(`<h3>${esc(pv.pv_no)} <span class="chip ${isVat?'gold':'mid'}">${pv.vat_type}</span></h3>
+    <div class="sm mut" style="margin:-8px 0 10px">${BRNAME[pv.branch]} · งวด ${thDate(pv.d_from)} – ${thDate(pv.d_to)} · วันที่ ${thDate(pv.pv_date)}</div>
+    <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
+      <tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th>${isVat?'<th class="right">VAT</th>':''}<th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
+      ${items.map(x=>{const s=S.core.supById[x.supplier_id]||{name:'?'};
+        return `<tr><td><div class="b sm">${esc(s.name)}</div><div class="xs mut">${esc(s.bank||'')} ${esc(s.account_no||'')} ${esc(s.account_name||'')}</div></td>
+        <td class="n">${fmt(x.amount,2)}</td>${isVat?`<td class="n xs">${fmt(x.vat_amount,2)}</td>`:''}
+        <td><input type="checkbox" style="width:20px;height:20px" ${x.scheduled?'checked':''} onchange="upd('pnl_pv_items','id=eq.${x.id}',{scheduled:this.checked})"></td>
+        <td><input type="checkbox" style="width:20px;height:20px" ${x.paid?'checked':''} onchange="upd('pnl_pv_items','id=eq.${x.id}',{paid:this.checked})"></td></tr>`;}).join('')}
+      <tr class="tot"><td>รวม</td><td class="n">${fmt(tot,2)}</td>${isVat?`<td class="n">${fmt(totV,2)}</td>`:''}<td colspan="2"></td></tr>
+    </table></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn gh sm2" style="color:var(--bad)" onclick="pvDel(${pv.id})">ลบ</button>
+      <button class="btn dk sm2" style="margin-left:auto" onclick='pvPrint(${JSON.stringify(pv)})'>🖨 พิมพ์</button>
+      <button class="btn sm2" onclick="closeModal()">ปิด</button></div>`);
+  S._pvItems=items;
+}
+async function pvDel(id){
+  if(!confirm('ลบ PV นี้?'))return;
+  await delQ('pnl_pv','id=eq.'+id); closeModal(); show('pv');
+}
+function pvPrint(pv){
+  const co=companyInfo(); const items=S._pvItems||[]; const isVat=pv.vat_type==='VAT';
+  const tot=items.reduce((a,x)=>a+num(x.amount),0), totV=items.reduce((a,x)=>a+num(x.vat_amount),0);
+  document.getElementById('printArea').innerHTML=`
+  <div style="font-family:'Sarabun'">
+    <div style="display:flex;justify-content:space-between">
+      <div><div style="font-weight:700;font-size:15px">${esc(co.name)}</div>
+        <div>${esc(co.addr1)}<br>${esc(co.addr2)}</div><div>เลขผู้เสียภาษี ${esc(co.taxid)}</div>
+        <div>ร้าน จริงใจหมูกระทะ · ${BRNAME[pv.branch]}</div></div>
+      <div style="text-align:right"><div style="font-size:16px;font-weight:700">Payday Cover (${pv.vat_type})</div>
+        <table style="margin-left:auto"><tr><td>PV No.</td><td style="padding-left:12px;font-weight:700">${esc(pv.pv_no)}</td></tr>
+        <tr><td>PV Date</td><td style="padding-left:12px">${thDate(pv.pv_date)}</td></tr>
+        <tr><td>From</td><td style="padding-left:12px">${thDate(pv.d_from)}</td></tr>
+        <tr><td>To</td><td style="padding-left:12px">${thDate(pv.d_to)}</td></tr></table></div>
+    </div>
+    <table style="width:100%;margin-top:10px;border-collapse:collapse">
+      <tr><th style="text-align:left">ลำดับ</th><th style="text-align:left">ซัพพลายเออร์</th><th style="text-align:left">ธนาคาร</th><th style="text-align:left">เลขที่บัญชี / ชื่อบัญชี</th>
+        <th style="text-align:right">ยอดรวม</th>${isVat?'<th style="text-align:right">VAT</th>':''}<th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
+      ${items.map((x,i)=>{const s=S.core.supById[x.supplier_id]||{};
+        return `<tr><td>${i+1}</td><td>${esc(s.full_name||s.name||'')}</td><td>${esc(s.bank||'')}</td>
+        <td>${esc(s.account_no||'')}<br><span style="font-size:10px">${esc(s.account_name||'')}</span></td>
+        <td style="text-align:right">${fmt(x.amount,2)}</td>${isVat?`<td style="text-align:right">${fmt(x.vat_amount,2)}</td>`:''}
+        <td style="text-align:center">${x.scheduled?'☑':'☐'}</td><td style="text-align:center">${x.paid?'☑':'☐'}</td></tr>`;}).join('')}
+      <tr style="border-top:1.5px solid #000"><td></td><td style="font-weight:700">รวม</td><td></td><td></td>
+        <td style="text-align:right;font-weight:700">${fmt(tot,2)}</td>${isVat?`<td style="text-align:right;font-weight:700">${fmt(totV,2)}</td>`:''}<td></td><td></td></tr>
+    </table>
+    <div style="display:flex;gap:60px;margin-top:44px">
+      <div>ผู้จัดทำ ........................................</div><div>ผู้ตรวจ ........................................</div><div>ผู้อนุมัติ ........................................</div>
+    </div>
+  </div>`;
+  window.print();
+}
+</script>
+<script>
+/* ============ อื่นๆ: รายจ่ายนอกเหนือ + Shopee ============ */
+RENDER.etc = async (el)=>{
+  const c=await loadMonth(S.br,S.m);
+  const shopT=c.shop.reduce((a,r)=>a+num(r.price)*num(r.qty)+num(r.shipping),0);
+  const extraT=c.extra.reduce((a,r)=>a+num(r.amount),0);
+  el.innerHTML=`
+  <div class="md2">
+  <div class="card"><h3>รายจ่ายนอกเหนือ <span class="sp num">฿${fmtI(extraT)}</span></h3>
+    <div id="exList">${c.extra.map(x=>extraRow(x)).join('')||'<div class="empty">ยังไม่มีรายการ</div>'}</div>
+    <button class="btn gh sm2" style="margin-top:10px" onclick="extraAdd()">+ เพิ่มรายการ</button></div>
+  <div class="card"><h3>Shopee <span class="sp num">฿${fmtI(shopT)}</span></h3>
+    <div id="shList">${c.shop.map(x=>shopRow(x)).join('')||'<div class="empty">ยังไม่มีรายการ</div>'}</div>
+    <button class="btn gh sm2" style="margin-top:10px" onclick="shopAdd()">+ เพิ่มรายการ</button></div>
+  </div>`;
+};
+function extraRow(x){
+  return `<div class="exrow" id="ex${x.id}" style="flex-wrap:wrap">
+    <input type="date" style="width:130px;flex:none;padding:7px" value="${x.d}" onchange="rowUpd('pnl_extra_expenses',${x.id},'d',this.value)">
+    <input type="text" style="flex:1;min-width:120px;text-align:left" placeholder="รายการ" value="${esc(x.descr)}" onchange="rowUpd('pnl_extra_expenses',${x.id},'descr',this.value)">
+    <input type="text" style="width:86px;flex:none;text-align:left" placeholder="ผู้เบิก" value="${esc(x.requester||'')}" onchange="rowUpd('pnl_extra_expenses',${x.id},'requester',this.value)">
+    <input type="number" inputmode="decimal" style="width:100px" placeholder="0" value="${x.amount||''}" onchange="rowUpd('pnl_extra_expenses',${x.id},'amount',num(this.value))">
+    <button style="color:var(--bad);font-size:18px" onclick="rowDel('pnl_extra_expenses',${x.id},'ex')">✕</button></div>`;
+}
+function shopRow(x){
+  const tot=num(x.price)*num(x.qty)+num(x.shipping);
+  return `<div class="exrow" id="sh${x.id}" style="flex-wrap:wrap">
+    <input type="date" style="width:130px;flex:none;padding:7px" value="${x.d}" onchange="rowUpd('pnl_shopee',${x.id},'d',this.value)">
+    <input type="text" style="flex:1;min-width:110px;text-align:left" placeholder="สินค้า" value="${esc(x.item)}" onchange="rowUpd('pnl_shopee',${x.id},'item',this.value)">
+    <input type="text" style="width:110px;flex:none;text-align:left" placeholder="ร้าน" value="${esc(x.shop||'')}" onchange="rowUpd('pnl_shopee',${x.id},'shop',this.value)">
+    <input type="number" inputmode="decimal" style="width:84px" placeholder="ราคา" value="${x.price||''}" onchange="rowUpd('pnl_shopee',${x.id},'price',num(this.value))">
+    <input type="number" inputmode="decimal" style="width:60px" placeholder="จน." value="${x.qty||''}" onchange="rowUpd('pnl_shopee',${x.id},'qty',num(this.value))">
+    <input type="number" inputmode="decimal" style="width:74px" placeholder="ส่ง" value="${x.shipping||''}" onchange="rowUpd('pnl_shopee',${x.id},'shipping',num(this.value))">
+    <span class="num b" style="width:86px;text-align:right">฿${fmtI(tot)}</span>
+    <button style="color:var(--bad);font-size:18px" onclick="rowDel('pnl_shopee',${x.id},'sh')">✕</button></div>`;
+}
+async function extraAdd(){
+  const r=(await ins('pnl_extra_expenses',{branch:S.br,d:todayStr().slice(0,7)===S.m?todayStr():dstr(S.m,1),descr:'',amount:0}))[0];
+  S.cache[mkey(S.br,S.m)].extra.push(r);
+  const L=document.getElementById('exList'); if(L.querySelector('.empty'))L.innerHTML='';
+  L.insertAdjacentHTML('beforeend',extraRow(r));
+}
+async function shopAdd(){
+  const r=(await ins('pnl_shopee',{branch:S.br,d:todayStr().slice(0,7)===S.m?todayStr():dstr(S.m,1),item:'',qty:1,price:0,shipping:0,topup:0}))[0];
+  S.cache[mkey(S.br,S.m)].shop.push(r);
+  const L=document.getElementById('shList'); if(L.querySelector('.empty'))L.innerHTML='';
+  L.insertAdjacentHTML('beforeend',shopRow(r));
+}
+async function rowUpd(t,id,f,v){
+  await upd(t,'id=eq.'+id,{[f]:v});
+  const c=S.cache[mkey(S.br,S.m)];
+  const arr=t==='pnl_shopee'?c.shop:c.extra;
+  const x=arr.find(z=>z.id===id); if(x)x[f]=v;
+  if(t==='pnl_shopee'&&x){document.getElementById('sh'+id).outerHTML=shopRow(x);}
+  toast('บันทึกแล้ว');
+}
+async function rowDel(t,id,prefix){
+  await delQ(t,'id=eq.'+id);
+  const c=S.cache[mkey(S.br,S.m)];
+  if(t==='pnl_shopee')c.shop=c.shop.filter(z=>z.id!==id); else c.extra=c.extra.filter(z=>z.id!==id);
+  document.getElementById(prefix+id)?.remove();
+}
+
+/* ============ ตั้งค่า ============ */
+RENDER.set = async (el)=>{
+  const co=companyInfo(); const {url,key}=cfg();
+  el.innerHTML=`
+  <div class="md2">
+  <div>
+    <div class="card"><h3>การเชื่อมต่อ Supabase</h3>
+      <div class="fld"><label>URL</label><input id="stUrl" value="${esc(url)}"></div>
+      <div class="fld"><label>Key</label><input id="stKey" value="${esc(key)}"></div>
+      <div style="display:flex;gap:8px"><button class="btn sm2" onclick="localStorage.setItem('jjpnl_url',document.getElementById('stUrl').value.trim());localStorage.setItem('jjpnl_key',document.getElementById('stKey').value.trim());toast('บันทึกแล้ว รีโหลด...');setTimeout(()=>location.reload(),600)">บันทึก</button></div></div>
+    <div class="card"><h3>ข้อมูลบริษัท (หัวเอกสาร PV)</h3>
+      <div class="fld"><label>ชื่อบริษัท</label><input id="coName" value="${esc(co.name)}"></div>
+      <div class="grid2"><div class="fld"><label>ที่อยู่ 1</label><input id="coA1" value="${esc(co.addr1)}"></div>
+      <div class="fld"><label>ที่อยู่ 2</label><input id="coA2" value="${esc(co.addr2)}"></div></div>
+      <div class="fld"><label>เลขผู้เสียภาษี</label><input id="coTax" value="${esc(co.taxid)}"></div>
+      <button class="btn sm2" onclick="LS.set('jjpnl_co',{name:coName.value,addr1:coA1.value,addr2:coA2.value,taxid:coTax.value});toast('บันทึกแล้ว')">บันทึก</button></div>
+    <div class="card"><h3>สำรองข้อมูล → NAS</h3>
+      <p class="sm mut" style="margin:0 0 10px">ดาวน์โหลดเป็น Excel แล้ววางลงโฟลเดอร์ NAS ได้เลย หรือใช้สคริปต์ <b>nas_backup_jjmk.py</b> ตั้งเวลาสำรองอัตโนมัติทุกคืน (ดูไฟล์ SETUP_NAS.md)</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn dk sm2" onclick="exportMonth()">📥 สำรองเดือนนี้ (.xlsx)</button>
+        <button class="btn gh sm2" onclick="exportAll()">📦 สำรองทั้งหมดทุกตาราง (.xlsx)</button></div></div>
+  </div>
+  <div>
+    <div class="card"><h3>ซัพพลายเออร์ <span class="sp"><button class="hintlink" onclick="supModal(null)">+ เพิ่ม</button></span></h3>
+      <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
+      ${S.core.sup.map(s=>`<tr style="${s.active?'':'opacity:.4'}"><td><div class="b sm">${esc(s.name)}</div>
+        <div class="xs mut">${esc(s.category)} · ${esc(s.payment_term||'-')} · ${esc(s.vat_type)}</div></td>
+        <td class="right"><button class="hintlink" onclick="supModal(${s.id})">แก้ไข</button></td></tr>`).join('')}
+      </table></div></div>
+    <div class="card"><h3>รายการ Fix cost · ${BRNAME[S.br]} <span class="sp"><button class="hintlink" onclick="fixModal(null)">+ เพิ่ม</button></span></h3>
+      <div class="twrap"><table>
+      ${S.core.fixed.filter(f=>f.branch===S.br).map(f=>`<tr style="${f.active?'':'opacity:.4'}"><td><span class="b sm">${esc(f.name)}</span> <span class="xs mut">· ${esc(f.grp)}</span></td>
+        <td class="n">${f.default_amount!=null?fmtI(f.default_amount):'<span class="mut xs">กรอกรายเดือน</span>'}</td>
+        <td class="right"><button class="hintlink" onclick="fixModal(${f.id})">แก้ไข</button></td></tr>`).join('')}
+      </table></div></div>
+    <div class="card"><h3>ราคาเนื้อ Yannah · ${BRNAME[S.br]}</h3>
+      ${S.core.meats.filter(m=>m.branch===S.br).map(m=>`<div class="exrow"><div class="nm"><div class="t">${esc(m.name)}</div><div class="s">บาท/กก.</div></div>
+        <input type="number" inputmode="decimal" value="${m.price_kg}" onchange="meatPriceSave(${m.id},this.value)">
+        </div>`).join('')}</div>
+  </div></div>`;
+};
+function supModal(id){
+  const s=id?S.core.supById[id]:{category:'อาหาร',name:'',payment_term:'',vat_type:'NON-VAT',bank:'',account_no:'',account_name:'',full_name:'',sort:999,active:true};
+  openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}ซัพพลายเออร์</h3>
+    <div class="fld"><label>ชื่อ (ชื่อย่อ)</label><input id="spName" value="${esc(s.name)}"></div>
+    <div class="grid2">
+      <div class="fld"><label>หมวด</label><select id="spCat">${CAT_ORDER.map(c=>`<option ${s.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="fld"><label>ประเภทภาษี</label><select id="spVat"><option ${s.vat_type==='NON-VAT'?'selected':''}>NON-VAT</option><option ${s.vat_type==='VAT'?'selected':''}>VAT</option><option ${s.vat_type==='VAT / NON-VAT'?'selected':''}>VAT / NON-VAT</option></select></div>
+      <div class="fld"><label>เงื่อนไขจ่าย</label><input id="spTerm" value="${esc(s.payment_term||'')}" placeholder="เช่น 15 วัน จ่าย"></div>
+      <div class="fld"><label>ลำดับ</label><input type="number" id="spSort" value="${s.sort}"></div>
+      <div class="fld"><label>ธนาคาร</label><input id="spBank" value="${esc(s.bank||'')}"></div>
+      <div class="fld"><label>เลขที่บัญชี</label><input id="spAcc" value="${esc(s.account_no||'')}"></div>
+    </div>
+    <div class="fld"><label>ชื่อบัญชี</label><input id="spAccN" value="${esc(s.account_name||'')}"></div>
+    <div class="fld"><label>ชื่อเต็มบริษัท (แสดงใน PV)</label><input id="spFull" value="${esc(s.full_name||'')}"></div>
+    <label class="sm" style="display:flex;gap:8px;align-items:center;margin:6px 0 12px"><input type="checkbox" id="spAct" style="width:20px;height:20px" ${s.active?'checked':''}> ใช้งานอยู่</label>
+    <div style="display:flex;gap:8px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn sm2" style="margin-left:auto" onclick="supSave(${id||'null'})">บันทึก</button></div>`);
+}
+async function supSave(id){
+  const body={ name:spName.value.trim(), category:spCat.value, vat_type:spVat.value,
+    payment_term:spTerm.value.trim()||null, sort:num(spSort.value), bank:spBank.value.trim()||null,
+    account_no:spAcc.value.trim()||null, account_name:spAccN.value.trim()||null,
+    full_name:spFull.value.trim()||null, active:spAct.checked };
+  if(!body.name){toast('ใส่ชื่อก่อนครับ',true);return;}
+  if(id) await upd('pnl_suppliers','id=eq.'+id,body); else await ins('pnl_suppliers',body);
+  await loadCore(); closeModal(); toast('บันทึกแล้ว'); show('set');
+}
+function fixModal(id){
+  const f=id?S.core.fixed.find(x=>x.id===id):{grp:'รายเดือน',name:'',default_amount:null,sort:999,active:true};
+  openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}รายการ Fix cost · ${BRNAME[S.br]}</h3>
+    <div class="fld"><label>ชื่อรายการ</label><input id="fxName" value="${esc(f.name)}"></div>
+    <div class="grid2">
+      <div class="fld"><label>กลุ่ม</label><select id="fxGrp">${['รายเดือน','สาธารณูปโภค','พนักงาน'].map(g=>`<option ${f.grp===g?'selected':''}>${g}</option>`).join('')}</select></div>
+      <div class="fld"><label>ยอด default (เว้นว่าง = กรอกรายเดือน)</label><input type="number" id="fxAmt" value="${f.default_amount??''}"></div></div>
+    <label class="sm" style="display:flex;gap:8px;align-items:center;margin:6px 0 12px"><input type="checkbox" id="fxAct" style="width:20px;height:20px" ${f.active?'checked':''}> ใช้งานอยู่</label>
+    <div style="display:flex;gap:8px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn sm2" style="margin-left:auto" onclick="fixSave(${id||'null'})">บันทึก</button></div>`);
+}
+async function fixSave(id){
+  const body={branch:S.br,grp:fxGrp.value,name:fxName.value.trim(),
+    default_amount:fxAmt.value===''?null:num(fxAmt.value),active:fxAct.checked};
+  if(!body.name){toast('ใส่ชื่อก่อนครับ',true);return;}
+  if(id) await upd('pnl_fixed_items','id=eq.'+id,body); else await ins('pnl_fixed_items',body);
+  await loadCore(); closeModal(); toast('บันทึกแล้ว'); show('set');
+}
+
+async function meatPriceSave(id,v){
+  const val=num(v);
+  await upd('pnl_meat_prices','id=eq.'+id,{price_kg:val});
+  const mm=S.core.meats.find(x=>x.id===id); if(mm)mm.price_kg=val;
+  toast('บันทึกแล้ว');
+}
+
+/* ============ Export → NAS ============ */
+const ALL_TABLES=['pnl_branches','pnl_suppliers','pnl_benchmarks','pnl_income_daily','pnl_cash_expenses',
+ 'pnl_expense_daily','pnl_extra_expenses','pnl_shopee','pnl_month_meta','pnl_fixed_items',
+ 'pnl_fixed_monthly','pnl_meat_prices','pnl_meat_daily','pnl_pv','pnl_pv_items'];
+const ORDER_KEY={pnl_branches:'code',pnl_benchmarks:'bkey,period',pnl_income_daily:'branch,d',
+ pnl_expense_daily:'branch,d,supplier_id',pnl_month_meta:'branch,month',
+ pnl_fixed_monthly:'branch,month,item_id',pnl_meat_daily:'branch,d,meat_id'};
+async function fetchAllRows(t){
+  let rows=[],from=0;
+  while(true){
+    const r=await api('GET',`${t}?select=*&order=${ORDER_KEY[t]||'id'}&limit=1000&offset=${from}`);
+    rows=rows.concat(r); if(r.length<1000)break; from+=1000;
+  }
+  return rows;
+}
+async function exportAll(){
+  if(typeof XLSX==='undefined'){toast('โหลดตัวสร้าง Excel ไม่ขึ้น (เช็คเน็ต)',true);return;}
+  toast('กำลังดึงข้อมูลทั้งหมด...');
+  const wb=XLSX.utils.book_new();
+  for(const t of ALL_TABLES){
+    const rows=await fetchAllRows(t);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length?rows:[{}]), t.replace('pnl_','').slice(0,31));
+  }
+  XLSX.writeFile(wb, `JJPNL_backup_${todayStr()}.xlsx`);
+  toast('ดาวน์โหลดแล้ว — วางลง NAS ได้เลย');
+}
+async function exportMonth(){
+  if(typeof XLSX==='undefined'){toast('โหลดตัวสร้าง Excel ไม่ขึ้น (เช็คเน็ต)',true);return;}
+  const A=await agg(S.br,S.m); const c=A.c; const days=A.days;
+  const wb=XLSX.utils.book_new();
+  // รายรับ
+  const incRows=[];
+  for(let d=1;d<=days;d++){ const r=c.inc[dstr(S.m,d)]||{}; const cd=calcDay(r)||{exVat:0,incVat:0};
+    incRows.push({วันที่:dstr(S.m,d),ยอดขายPOS:num(r.sales_pos),เงินฝาก:num(r.deposit),เงินเก๊ะ:num(r.cash_drawer),
+      เงินโอน:num(r.transfer_total),บัญชีสำรอง:num(r.reserve_acct),โอนคงค้าง:num(r.transfer_pending_prev),
+      เก๊ะเปิด:num(r.drawer_open),ยอดก่อนVAT:+cd.exVat.toFixed(2),ยอดรวมVAT:+cd.incVat.toFixed(2)});}
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(incRows),'รายรับ');
+  // รายจ่าย matrix
+  const exRows=S.core.sup.map(s=>{const row={หมวด:s.category,ซัพพลายเออร์:s.name};let t=0;
+    for(let d=1;d<=days;d++){const r=c.exp[dstr(S.m,d)+'|'+s.id];const a=r?num(r.amount):0;row[d]=a||'';t+=a;}
+    row['รวม']=t; row['เงื่อนไข']=s.payment_term||''; return row;}).filter(r=>r['รวม']>0);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(exRows),'รายจ่าย');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(c.cash.map(x=>({วันที่:x.d,กะ:x.shift,รายการ:x.descr,ยอด:num(x.amount)}))),'เงินสดหน้าร้าน');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(c.extra.map(x=>({วันที่:x.d,รายการ:x.descr,ยอด:num(x.amount),ผู้เบิก:x.requester||''}))),'นอกเหนือ');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(c.shop.map(x=>({วันที่:x.d,สินค้า:x.item,ร้าน:x.shop||'',ราคา:num(x.price),จำนวน:num(x.qty),ค่าส่ง:num(x.shipping),รวม:num(x.price)*num(x.qty)+num(x.shipping)}))),'Shopee');
+  // สรุป
+  const sumRows=[
+    {รายการ:'ยอดขายก่อน VAT',จำนวนเงิน:+A.exVat.toFixed(2)},{รายการ:'ยอดขายรวม VAT',จำนวนเงิน:+A.incVat.toFixed(2)},
+    {รายการ:'ยอด VAT',จำนวนเงิน:+A.vat.toFixed(2)},{รายการ:'Delivery Grab',จำนวนเงิน:A.grab},{รายการ:'Delivery Lineman',จำนวนเงิน:A.lineman},
+    {รายการ:'รวมรายได้',จำนวนเงิน:+A.revenue.toFixed(2)},
+    ...Object.entries(A.byCat).map(([k,v])=>({รายการ:'VC: '+k,จำนวนเงิน:v,'%':A.revenue?+(v/A.revenue*100).toFixed(2):''})),
+    {รายการ:'VC: เงินสดหน้าร้าน',จำนวนเงิน:A.cashM+A.cashE},{รายการ:'VC: Shopee',จำนวนเงิน:A.shopee},
+    {รายการ:'รวม Variable cost',จำนวนเงิน:A.vc,'%':A.revenue?+(A.vc/A.revenue*100).toFixed(2):''},
+    {รายการ:'รวม Fix cost',จำนวนเงิน:A.fixT},{รายการ:'รายจ่ายนอกเหนือ',จำนวนเงิน:A.extraT},
+    {รายการ:'คงเหลือสุทธิ',จำนวนเงิน:+A.net.toFixed(2)}];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sumRows),'สรุป');
+  XLSX.writeFile(wb,`JJPNL_${S.br}_${S.m}.xlsx`);
+  toast('ดาวน์โหลดแล้ว — วางลง NAS ได้เลย');
+}
+
+boot();
+</script>
+</body>
+</html>
