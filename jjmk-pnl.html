@@ -403,6 +403,16 @@ const S = {
 const BRNAME = {JJRD:'สาขารัชดา', JJLP:'สาขาลาดพร้าว', ALL:'ทุกสาขา (รวม)'};
 const CAT_ORDER = ['อาหาร','ของใช้','ของหวาน','น้ำ','ไอศกรีม','Delivery'];
 const CAT_COLOR = {'อาหาร':'#C62127','ของใช้':'#E07B39','ของหวาน':'#B98A2F','น้ำ':'#4E7D8C','ไอศกรีม':'#8B5E83','Delivery':'#7A8B5A','เงินสดหน้าร้าน':'#6B6B6B','Shopee':'#B0413E'};
+const CAT_PALETTE = ['#2E7D6B','#A0522D','#5C6BC0','#C2185B','#6D8B3A','#8D6E63','#00838F','#9E7B2F'];
+function catList(){
+  const extras=[...new Set(S.core.sup.map(x=>(x.category||'').trim()))].filter(c=>c&&!CAT_ORDER.includes(c)).sort((a,b)=>a.localeCompare(b,'th'));
+  return [...CAT_ORDER,...extras];
+}
+function catColor(c){
+  if(CAT_COLOR[c])return CAT_COLOR[c];
+  let h=0; for(const ch of c)h=(h*31+ch.charCodeAt(0))>>>0;
+  return CAT_PALETTE[h%CAT_PALETTE.length];
+}
 </script>
 <script>
 /* ============ โหลดข้อมูล ============ */
@@ -782,7 +792,7 @@ function drawDash(A){
     const labels=Object.keys(parts);
     if(!labels.length){ dc.parentElement.insertAdjacentHTML('beforeend','<div class="empty">ยังไม่มีข้อมูล</div>'); dc.remove(); return;}
     S.charts.dou=new Chart(dc,{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>parts[l]),
-      backgroundColor:labels.map(l=>CAT_COLOR[l]||'#999'),borderWidth:2,borderColor:'#fff'}]},
+      backgroundColor:labels.map(l=>catColor(l)),borderWidth:2,borderColor:'#fff'}]},
       options:{cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
         tooltip:{callbacks:{label:c=>c.label+': ฿'+fmtI(c.raw)}}}}});
   }
@@ -1115,10 +1125,10 @@ function perTotal(c,a,b){
 function expFormHTML(c){
   const ds=dstr(S.m,S.expDay);
   const usedIds=new Set(Object.values(c.exp).filter(r=>num(r.amount)>0).map(r=>r.supplier_id));
-  return CAT_ORDER.map(cat=>{
+  return catList().map(cat=>{
     const list=S.core.sup.filter(s=>s.category===cat&&(s.active||usedIds.has(s.id)));
     if(!list.length)return'';
-    return `<div class="card"><h3><span style="width:9px;height:9px;border-radius:3px;background:${CAT_COLOR[cat]}"></span>${cat}
+    return `<div class="card"><h3><span style="width:9px;height:9px;border-radius:3px;background:${catColor(cat)}"></span>${cat}
       <span class="sp num" id="catT-${esc(cat)}"></span></h3>
       ${list.map(s=>{
         const r=c.exp[ds+'|'+s.id];
@@ -1229,12 +1239,12 @@ function updExpDayTot(){
   Object.values(c.exp).forEach(r=>{ if(r.d===ds){const a=num(r.amount);t+=a;
     const s=S.core.supById[r.supplier_id]; if(s)byCat[s.category]=(byCat[s.category]||0)+a;}});
   const el=document.getElementById('expDayTot'); if(el)el.textContent='฿'+fmtI(t);
-  CAT_ORDER.forEach(cat=>{const e=document.getElementById('catT-'+cat); if(e)e.textContent=byCat[cat]?('฿'+fmtI(byCat[cat])):'';});
+  catList().forEach(cat=>{const e=document.getElementById('catT-'+cat); if(e)e.textContent=byCat[cat]?('฿'+fmtI(byCat[cat])):'';});
 }
 function expTableView(){
   const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m);
   let rows='';
-  CAT_ORDER.forEach(cat=>{
+  catList().forEach(cat=>{
     const list=S.core.sup.filter(s=>s.category===cat); if(!list.length)return;
     rows+=`<tr class="cat"><td colspan="5">${cat}</td></tr>`;
     list.forEach(s=>{
@@ -1310,7 +1320,7 @@ RENDER.sum = async (el)=>{
       <td class="right">${pp!=null&&p!=null&&amt?chip(p-pp):''}</td></tr>`;
   };
   let vcRows='';
-  CAT_ORDER.forEach(cat=>{
+  catList().forEach(cat=>{
     const list=S.core.sup.filter(s=>s.category===cat);
     const catAmt=A.byCat[cat]||0;
     vcRows+=`<tr class="cat"><td>${cat}</td><td class="n">${catAmt?fmtI(catAmt):''}</td>
@@ -1407,7 +1417,7 @@ async function printSummary(){
   S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
   const co=companyInfo();
   let vc='';
-  CAT_ORDER.forEach(cat=>{
+  catList().forEach(cat=>{
     const catAmt=A.byCat[cat]||0; if(!catAmt)return;
     vc+=`<tr><td><b>${cat}</b></td><td style="text-align:right"><b>${fmtI(catAmt)}</b></td><td style="text-align:right">${A.revenue?pctF(catAmt/A.revenue):''}</td></tr>`;
     S.core.sup.filter(s=>s.category===cat&&A.bySup[s.id]).forEach(s=>{
@@ -1812,11 +1822,17 @@ RENDER.set = async (el)=>{
   <div>
     <div class="card"><h3>ซัพพลายเออร์ <span class="sp"><button class="hintlink" onclick="supModal(null)">+ เพิ่ม</button></span></h3>
       <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
-      ${S.core.sup.map(s=>`<tr style="${s.active?'':'opacity:.4'}"><td><div class="b sm">${esc(s.name)}</div>
+      ${(()=>{
+        const act=S.core.sup.filter(x=>x.active), inact=S.core.sup.filter(x=>!x.active);
+        const row=s=>`<tr style="${s.active?'':'opacity:.45'}"><td><div class="b sm">${esc(s.name)}</div>
         <div class="xs mut">${esc(s.category)} · ${esc(s.payment_term||'-')} · ${esc(s.vat_type)}</div></td>
         <td class="right" style="white-space:nowrap"><button class="hintlink" onclick="supModal(${s.id})">แก้ไข</button>${s.active
           ?`<button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="supDel(${s.id})">ลบ</button>`
-          :`<button class="hintlink" style="color:var(--ok);margin-left:8px" onclick="supRestore(${s.id})">กู้คืน</button>`}</td></tr>`).join('')}
+          :`<button class="hintlink" style="color:var(--ok);margin-left:8px" onclick="supRestore(${s.id})">กู้คืน</button>
+            <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="supDelHard(${s.id})">ลบถาวร</button>`}</td></tr>`;
+        return act.map(row).join('')
+          +(inact.length?`<tr class="cat"><td colspan="2">🗑 เลิกใช้แล้ว <span class="xs" style="font-weight:500;opacity:.7">· ${inact.length} ราย (เก็บประวัติไว้)</span></td></tr>`+inact.map(row).join(''):'');
+      })()}
       </table></div></div>
     <div class="card"><h3>รายการ Fix cost · ${BRNAME[S.br]} <span class="sp"><button class="hintlink" onclick="fixModal(null)">+ เพิ่ม</button></span></h3>
       <div class="twrap"><table>
@@ -1849,6 +1865,29 @@ async function supDel(id){
     sp.active=false; toast('ลบ "'+sp.name+'" แล้ว (ประวัติยังอยู่ครบ)'); show('set');
   }catch(e){ toast('ลบไม่สำเร็จ: '+e.message,true); }
 }
+async function supDelHard(id){
+  const sp=S.core.supById[id]; if(!sp)return;
+  const [ex,pvi]=await Promise.all([
+    sel('pnl_expense_daily','select=d&supplier_id=eq.'+id+'&limit=1'),
+    sel('pnl_pv_items','select=id&supplier_id=eq.'+id+'&limit=1')
+  ]);
+  const has=ex.length>0||pvi.length>0;
+  const msg=has
+    ? 'ลบถาวร "'+sp.name+'" ?\n\n⚠️ ซัพนี้มีประวัติยอดอยู่ในระบบ — ลบถาวรจะลบประวัติรายจ่ายและรายการในใบสำคัญจ่ายของซัพนี้ทิ้ง "ทุกเดือน" กู้คืนไม่ได้\n\nถ้าอยากเก็บประวัติไว้ ให้ปล่อยเป็นสถานะเลิกใช้แบบนี้ก็พอ'
+    : 'ลบถาวร "'+sp.name+'" ?\n(ซัพนี้ไม่มีประวัติยอด ลบได้สะอาด)';
+  if(!confirm(msg))return;
+  if(has&&!confirm('ยืนยันครั้งสุดท้าย: ลบ "'+sp.name+'" พร้อมประวัติทั้งหมด ถาวร?'))return;
+  try{
+    if(has){
+      await delQ('pnl_pv_items','supplier_id=eq.'+id);
+      await delQ('pnl_expense_daily','supplier_id=eq.'+id);
+    }
+    await delQ('pnl_suppliers','id=eq.'+id);
+    S.core.sup=S.core.sup.filter(x=>x.id!==id); delete S.core.supById[id];
+    S.benchCache={}; Object.keys(S.cache).forEach(k=>delete S.cache[k]);
+    toast('ลบ "'+sp.name+'" ถาวรแล้ว'); show('set');
+  }catch(e){ toast('ลบไม่สำเร็จ: '+e.message,true); }
+}
 async function supRestore(id){
   const sp=S.core.supById[id]; if(!sp)return;
   await upd('pnl_suppliers','id=eq.'+id,{active:true});
@@ -1859,7 +1898,12 @@ function supModal(id){
   openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}ซัพพลายเออร์</h3>
     <div class="fld"><label>ชื่อ (ชื่อย่อ)</label><input id="spName" value="${esc(s.name)}"></div>
     <div class="grid2">
-      <div class="fld"><label>หมวด</label><select id="spCat">${CAT_ORDER.map(c=>`<option ${s.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="fld"><label>หมวด</label>
+        <select id="spCat" onchange="document.getElementById('spCatNewWrap').style.display=this.value==='__new'?'block':'none'">
+          ${catList().map(c=>`<option ${s.category===c?'selected':''}>${esc(c)}</option>`).join('')}
+          <option value="__new">➕ สร้างหมวดใหม่...</option>
+        </select>
+        <div id="spCatNewWrap" style="display:none;margin-top:6px"><input id="spCatNew" placeholder="พิมพ์ชื่อหมวดใหม่ เช่น เครื่องดื่มแอลกอฮอล์"></div></div>
       <div class="fld"><label>ประเภทภาษี</label><select id="spVat"><option ${s.vat_type==='NON-VAT'?'selected':''}>NON-VAT</option><option ${s.vat_type==='VAT'?'selected':''}>VAT</option><option ${s.vat_type==='VAT / NON-VAT'?'selected':''}>VAT / NON-VAT</option></select></div>
       <div class="fld"><label>เงื่อนไขจ่าย</label><input id="spTerm" value="${esc(s.payment_term||'')}" placeholder="เช่น 15 วัน จ่าย"></div>
       <div class="fld"><label>ลำดับ</label><input type="number" step="any" id="spSort" value="${s.sort}"></div>
@@ -1873,7 +1917,8 @@ function supModal(id){
       <button class="btn sm2" style="margin-left:auto" onclick="supSave(${id||'null'})">บันทึก</button></div>`);
 }
 async function supSave(id){
-  const body={ name:spName.value.trim(), category:spCat.value, vat_type:spVat.value,
+  if(document.getElementById('spCat').value==='__new'&&!(document.getElementById('spCatNew').value||'').trim()){toast('พิมพ์ชื่อหมวดใหม่ก่อนครับ',true);return;}
+  const body={ name:spName.value.trim(), category:(spCat.value==='__new'?(document.getElementById('spCatNew').value||'').trim():spCat.value), vat_type:spVat.value,
     payment_term:spTerm.value.trim()||null, sort:num(spSort.value), bank:spBank.value.trim()||null,
     account_no:spAcc.value.trim()||null, account_name:spAccN.value.trim()||null,
     full_name:spFull.value.trim()||null, active:spAct.checked };
