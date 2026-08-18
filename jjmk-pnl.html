@@ -49,6 +49,8 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .shifthead{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;margin:10px 2px 6px;color:var(--ink);font-family:'Prompt'}
 .shifthead .hintwrap{font-weight:500}
 .dayc .shifthead:first-of-type{margin-top:2px}
+.navday{width:34px;height:34px;flex:none;border-radius:10px;border:1.5px solid var(--line);background:#fff;font-size:18px;font-weight:700;color:var(--ink)}
+.navday:disabled{opacity:.3}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -586,35 +588,57 @@ const INC_FIELDS=[
 const SHIFTS=[['am','กะเช้า','🌅','เช้า'],['pm','กะเย็น','🌆','เย็น']];
 RENDER.income = async (el)=>{
   const c = await loadMonth(S.br,S.m);
-  const days=monthDays(S.m), today=todayStr();
-  let html=`<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+  const days=monthDays(S.m); const td=todayStr();
+  S.incDay = S.incDay && S.incDay<=days ? S.incDay : (td.slice(0,7)===S.m?Number(td.slice(-2)):1);
+  el.innerHTML=`
+  <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <div><div class="b">บันทึกรายรับ · ${monthLabel(S.m)}</div>
-    <div class="xs mut">แยกกะเช้า/กะเย็น · ยอดก่อน VAT = POS (เช้า+เย็น) ÷ 1.07 · เก๊ะเปิด = เงินเก๊ะกะก่อนหน้า</div></div>
+    <div class="xs mut">วันละ 2 กะ · ยอดก่อน VAT = POS (เช้า+เย็น) ÷ 1.07 · เก๊ะเปิด = เงินเก๊ะกะก่อนหน้า</div></div>
     <button class="btn gh sm2" style="margin-left:auto" onclick="fillOpenAll()">เติมเก๊ะเปิดต่อเนื่องทั้งเดือน</button></div>
-  <div class="daylist">`;
-  for(let d=1;d<=days;d++){
-    const ds=dstr(S.m,d), r=c.inc[ds]||{};
-    const dt=new Date(S.m+'-01'); dt.setDate(d); const wd=dt.getDay();
-    html+=`<div class="dayc ${ds===today?'today':''}" id="dc${d}">
-      <div class="dh"><span class="dn">${d}</span><span class="dw ${wd===0?'sun':''}">${TH_D[wd]}.</span>
-        <span class="xs mut" style="margin-left:auto" id="dchk${d}"></span></div>`;
-    for(const [sh,lab,ico] of SHIFTS){
-      html+=`<div class="shifthead">${ico} ${lab}<span class="hintwrap xs" id="hint${d}${sh}"></span><span id="sd${d}${sh}" style="margin-left:auto"></span></div>
+  <div class="card">
+    <h3>เลือกวันที่</h3>
+    <div class="daychips" id="incChips">${Array.from({length:days},(_,i)=>i+1).map(d=>
+      `<button data-d="${d}" class="${d===S.incDay?'on':''} ${incHasDay(c,d)?'has':''}" onclick="incPick(${d})">${d}</button>`).join('')}</div>
+  </div>
+  <div id="incDayWrap"></div>`;
+  renderIncDay();
+};
+function incHasDay(c,d){
+  const ds=dstr(S.m,d); const r=c.inc[ds];
+  return !!((r&&hasIncData(r)) || c.cash.some(x=>x.d===ds));
+}
+function incPick(d){
+  S.incDay=d;
+  document.querySelectorAll('#incChips button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));
+  renderIncDay();
+}
+function renderIncDay(){
+  const wrap=document.getElementById('incDayWrap'); if(!wrap)return;
+  const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m);
+  const d=S.incDay, ds=dstr(S.m,d), r=c.inc[ds]||{};
+  const dt=new Date(S.m+'-01'); dt.setDate(d); const wd=dt.getDay();
+  let html=`<div class="dayc ${ds===todayStr()?'today':''}" id="dc${d}" style="max-width:none">
+    <div class="dh">
+      <button class="navday" onclick="incPick(${d-1})" ${d<=1?'disabled':''}>‹</button>
+      <span class="dn">${d}</span><span class="dw ${wd===0?'sun':''}">${TH_D[wd]}.</span>
+      <span class="xs mut">${thDate(ds)}</span>
+      <span class="xs mut" style="margin-left:auto" id="dchk${d}"></span>
+      <button class="navday" onclick="incPick(${d+1})" ${d>=days?'disabled':''}>›</button>
+    </div>`;
+  for(const [sh,lab,ico,th] of SHIFTS){
+    html+=`<div class="shifthead">${ico} ${lab}<span class="hintwrap xs" id="hint${d}${sh}"></span><span id="sd${d}${sh}" style="margin-left:auto"></span></div>
       <div class="grid2">
         ${INC_FIELDS.map(([f,l])=>{const k=f+'_'+sh; return `<div class="fld"><label>${l}</label>
           <input id="in${d}_${k}" type="number" inputmode="decimal" placeholder="0" value="${num(r[k])||''}"
             oninput="incInput(${d},'${k}',this.value)"></div>`;}).join('')}
+        <div class="fld" style="grid-column:1/-1">
+          <button class="btn gh sm2" style="width:100%" onclick="cashModal('${ds}','${th}')">💵 เงินสดจ่าย${lab} <span id="cn${d}${sh}"></span></button></div>
       </div>`;
-    }
-    html+=`<div class="grid2" style="margin-top:8px"><div class="fld" style="grid-column:1/-1">
-        <button class="btn gh sm2" style="width:100%" onclick="cashModal('${ds}')">เงินสดจ่าย <span id="cn${d}"></span></button></div></div>
-      <div class="dsum" id="dsum${d}"></div>
-    </div>`;
   }
-  html+='</div>';
-  el.innerHTML=html;
-  for(let d=1;d<=days;d++) refreshDay(d);
-};
+  html+=`<div class="dsum" id="dsum${d}"></div></div>`;
+  wrap.innerHTML=html;
+  refreshDay(d);
+}
 function getInc(ds){
   const c=S.cache[mkey(S.br,S.m)];
   if(!c.inc[ds]){
@@ -627,7 +651,6 @@ function getInc(ds){
 function incInput(day,f,v){
   const ds=dstr(S.m,day); const r=getInc(ds); r[f]=num(v);
   refreshDay(day);
-  if(f==='cash_drawer_am'||f==='cash_drawer_pm') refreshDay(day+1);
   debSave('inc'+ds, ()=>ups('pnl_income_daily',[{...r}],'branch,d').then(()=>toast('บันทึกวันที่ '+day+' แล้ว')));
 }
 function cashOfDay(ds){ const c=S.cache[mkey(S.br,S.m)]; return c.cash.filter(x=>x.d===ds); }
@@ -640,13 +663,20 @@ function diffChip(diff){
   const cls=Math.abs(diff)<1?'mid':diff>0?'ok':'bad';
   return `<span class="chip ${cls}">${diff>0?'เกิน':diff<0?'ขาด':'ตรง'} ฿${fmt(Math.abs(diff),2)}</span>`;
 }
+function cashShiftTotal(list,th){ return list.filter(x=>th==='เย็น'?x.shift==='เย็น':x.shift!=='เย็น').reduce((a,x)=>a+num(x.amount),0); }
 function refreshDay(day){
-  const ds=dstr(S.m,day); const c=S.cache[mkey(S.br,S.m)]; if(!c)return;
-  const r=c.inc[ds]; const list=cashOfDay(ds);
-  const cashAm=list.filter(x=>x.shift!=='เย็น').reduce((a,x)=>a+num(x.amount),0);
-  const cashPm=list.filter(x=>x.shift==='เย็น').reduce((a,x)=>a+num(x.amount),0);
-  const cn=document.getElementById('cn'+day);
-  if(cn)cn.textContent=list.length?`(เช้า ฿${fmtI(cashAm)} · เย็น ฿${fmtI(cashPm)})`:'';
+  const c=S.cache[mkey(S.br,S.m)]; if(!c)return;
+  const days=monthDays(S.m); if(day<1||day>days)return;
+  const ds=dstr(S.m,day); const r=c.inc[ds];
+  // อัปเดตจุดบน chip (ทำได้ทุกวัน แม้ไม่ได้แสดงอยู่)
+  const chip=document.querySelector(`#incChips button[data-d="${day}"]`);
+  if(chip)chip.classList.toggle('has', incHasDay(c,day));
+  if(day!==S.incDay)return;
+  const list=cashOfDay(ds);
+  const cashAm=cashShiftTotal(list,'เช้า'), cashPm=cashShiftTotal(list,'เย็น');
+  const nAm=list.filter(x=>x.shift!=='เย็น').length, nPm=list.filter(x=>x.shift==='เย็น').length;
+  const cA=document.getElementById('cn'+day+'am'); if(cA)cA.textContent=nAm?`(${nAm} · ฿${fmtI(cashAm)})`:'';
+  const cP=document.getElementById('cn'+day+'pm'); if(cP)cP.textContent=nPm?`(${nPm} · ฿${fmtI(cashPm)})`:'';
   const elS=document.getElementById('dsum'+day); if(!elS)return;
   if(!r||!hasIncData(r)){
     elS.innerHTML='<span class="mut xs">ยังไม่กรอก</span>';
@@ -689,19 +719,17 @@ async function fillOpenAll(){
   const rows=[...changed].map(ds=>({...c.inc[ds]}));
   await ups('pnl_income_daily',rows,'branch,d'); toast('เติมเก๊ะเปิด '+rows.length+' วัน'); show('income');
 }
-function cashModal(ds){
-  const list=cashOfDay(ds);
-  openModal(`<h3>เงินสดจ่ายหน้าร้าน · ${thDate(ds)}</h3>
+function cashModal(ds,th){
+  const list=cashOfDay(ds).filter(x=>th==='เย็น'?x.shift==='เย็น':x.shift!=='เย็น');
+  const ico=th==='เย็น'?'🌆':'🌅';
+  openModal(`<h3>${ico} เงินสดจ่าย กะ${th} · ${thDate(ds)}</h3>
     <div id="cashList">${list.map(x=>cashRow(x)).join('')||'<div class="empty">ยังไม่มีรายการ</div>'}</div>
     <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn gh sm2" onclick="cashAdd('${ds}','เช้า')">+ กะเช้า</button>
-      <button class="btn gh sm2" onclick="cashAdd('${ds}','เย็น')">+ กะเย็น</button>
+      <button class="btn gh sm2" onclick="cashAdd('${ds}','${th}')">+ เพิ่มรายการ</button>
       <button class="btn sm2" style="margin-left:auto" onclick="closeModal()">เสร็จ</button></div>`);
 }
 function cashRow(x){
   return `<div class="exrow" id="cx${x.id}">
-    <select style="width:76px;flex:none;padding:8px 6px" onchange="cashUpd(${x.id},'shift',this.value)">
-      <option ${x.shift==='เช้า'?'selected':''}>เช้า</option><option ${x.shift==='เย็น'?'selected':''}>เย็น</option></select>
     <input style="flex:1;width:auto;text-align:left" type="text" placeholder="รายการ" value="${esc(x.descr)}" onchange="cashUpd(${x.id},'descr',this.value)">
     <input type="number" inputmode="decimal" placeholder="0" value="${x.amount||''}" onchange="cashUpd(${x.id},'amount',num(this.value))">
     <button style="color:var(--bad);font-size:18px;padding:4px" onclick="cashDel(${x.id})">✕</button></div>`;
