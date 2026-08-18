@@ -93,6 +93,10 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .avgc{font-size:12px;color:var(--mut);background:#FAF6EC;border:1.5px solid var(--line);border-radius:99px;padding:4px 11px;display:inline-flex;align-items:center;gap:6px}
 .avgc::before{content:'';width:14px;height:0;border-top:2.5px dashed var(--c)}
 .avgc b{color:var(--c);font-family:'Prompt'}
+.fxgrp{display:grid;grid-template-columns:1fr 130px;gap:6px;align-items:center;background:#FCF3D8;font-weight:700;font-size:12px;font-family:'Prompt';color:#7A5A10;padding:6px 10px;border-bottom:1px solid var(--line)}
+.fxrow{display:grid;grid-template-columns:1fr 130px;gap:6px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
+.fxrow input{width:100%;padding:6px 8px;text-align:right;font-size:13px;border-radius:8px}
+.fxrow input::placeholder{color:#B9AF9E}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -1021,6 +1025,39 @@ async function cashDel(id){
 }
 
 /* ============ รายจ่าย (ซัพพลายเออร์ × วัน) ============ */
+function fixEff(f,c){ return c.fixm[f.id]!=null ? num(c.fixm[f.id]) : (f.default_amount!=null?num(f.default_amount):0); }
+function fixGroups(){
+  const items=S.core.fixed.filter(f=>f.branch===S.br&&f.active).slice().sort((a,b)=>num(a.sort)-num(b.sort));
+  const g={}; items.forEach(f=>(g[f.grp||'อื่นๆ']??=[]).push(f)); return g;
+}
+function fixPanelHTML(){
+  const c=S.cache[mkey(S.br,S.m)]; if(!c)return'';
+  const grps=fixGroups();
+  if(!Object.keys(grps).length) return '<div class="empty" style="padding:20px">ยังไม่มีรายการ Fix cost<br><span class="xs mut">เพิ่มรายการได้ที่หน้าตั้งค่า</span></div>';
+  let html=`<div class="drrow head" style="grid-template-columns:1fr 130px"><span class="dd">🏢 Fix cost · ${monthLabel(S.m)}</span><span class="num">บาท/เดือน</span></div>
+  <div class="xs mut" style="padding:6px 10px;border-bottom:1px solid var(--line)">แก้ยอดจริงของเดือนนี้ได้เลย · ปล่อยว่าง = ใช้ค่าตั้งต้น (ตัวจาง)</div>
+  <div class="drscroll" style="max-height:520px">`;
+  Object.entries(grps).forEach(([g,list],gi)=>{
+    html+=`<div class="fxgrp"><span>${esc(g)}</span><span class="num" id="fxg_${gi}"></span></div>`;
+    list.forEach(f=>{
+      html+=`<div class="fxrow"><span>${esc(f.name)}</span>
+        <input type="number" inputmode="decimal" placeholder="${f.default_amount!=null?fmt(f.default_amount):'0'}"
+          value="${c.fixm[f.id]??''}" onchange="fixInput(${f.id},this.value)"></div>`;
+    });
+  });
+  html+=`</div><div class="drrow tot" style="grid-template-columns:1fr 130px"><span class="dd">ยอดรวม Fix cost</span><span class="num b" id="fxTot" style="color:var(--red)"></span></div>`;
+  return html;
+}
+function refreshFixPanel(){
+  const pn=document.getElementById('fixPanel'); if(!pn)return;
+  const c=S.cache[mkey(S.br,S.m)]; if(!c)return;
+  const grps=fixGroups(); let tot=0;
+  Object.values(grps).forEach((list,gi)=>{
+    let sub=0; list.forEach(f=>sub+=fixEff(f,c)); tot+=sub;
+    const el=document.getElementById('fxg_'+gi); if(el)el.textContent='฿'+fmtI(sub);
+  });
+  const t=document.getElementById('fxTot'); if(t)t.textContent='฿'+fmtI(tot);
+}
 RENDER.exp = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=allNotice('รายจ่าย'); return; }
   const c=await loadMonth(S.br,S.m);
@@ -1036,12 +1073,16 @@ RENDER.exp = async (el)=>{
   </div>
   <div class="card">
     <h3>เลือกวันที่ <span class="sp"><button class="hintlink" onclick="expTableView()">ดูตารางรวมทั้งเดือน →</button></span></h3>
-    ${calHTML(days, S.expDay, d=>!!hasDay[d], 'expPick')}
+    <div class="calwrap">
+      <div>${calHTML(days, S.expDay, d=>!!hasDay[d], 'expPick')}</div>
+      <div class="dayrep" id="fixPanel">${fixPanelHTML()}</div>
+    </div>
   </div>
   <div id="expForm">${expFormHTML(c)}</div>
   <div class="stickysum"><span class="sm" style="opacity:.75">รวมวันที่ ${S.expDay}</span>
     <span class="v" id="expDayTot"></span>
     <span class="sm" style="margin-left:auto;opacity:.75">${thDate(dstr(S.m,S.expDay))}</span></div>`;
+  refreshFixPanel();
   updExpDayTot();
 };
 function perTotal(c,a,b){
@@ -1243,12 +1284,13 @@ function metaInput(f,v){
 function fixInput(itemId,v){
   const c=S.cache[mkey(S.br,S.m)];
   if(v===''){ delete c.fixm[itemId];
-    debSave('fx'+itemId,()=>delQ('pnl_fixed_monthly',`branch=eq.${S.br}&month=eq.${S.m}&item_id=eq.${itemId}`).then(()=>show('sum')));
+    debSave('fx'+itemId,()=>delQ('pnl_fixed_monthly',`branch=eq.${S.br}&month=eq.${S.m}&item_id=eq.${itemId}`).then(()=>{ if(S.tab==='sum')show('sum'); }));
   } else {
     c.fixm[itemId]=num(v);
     debSave('fx'+itemId,()=>ups('pnl_fixed_monthly',[{branch:S.br,month:S.m,item_id:itemId,amount:num(v)}],'branch,month,item_id')
       .then(()=>{toast('บันทึกแล้ว'); if(S.tab==='sum')show('sum');}));
   }
+  refreshFixPanel();
 }
 async function printSummary(){
   const A=await aggFor(S.br,S.m);
