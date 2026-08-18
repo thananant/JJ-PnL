@@ -51,6 +51,28 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .dayc .shifthead:first-of-type{margin-top:2px}
 .navday{width:34px;height:34px;flex:none;border-radius:10px;border:1.5px solid var(--line);background:#fff;font-size:18px;font-weight:700;color:var(--ink)}
 .navday:disabled{opacity:.3}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:430px}
+.calgrid .wd{text-align:center;font-size:11px;font-weight:700;color:var(--mut);padding:2px 0;font-family:'Prompt'}
+.calgrid .wd.sun{color:var(--red)}
+.calgrid button{height:40px;border-radius:10px;background:#fff;border:1.5px solid var(--line);font-family:'Prompt';font-weight:600;font-size:14px;position:relative}
+.calgrid button.sun{color:var(--red)}
+.calgrid button.tdy{border-color:var(--red);border-width:2px}
+.calgrid button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.calgrid button.has::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--red)}
+.calgrid button.on.has::after{background:#fff}
+.shiftwrap{display:grid;gap:12px;margin-top:10px}
+@media(min-width:900px){.shiftwrap{grid-template-columns:1fr 1fr}}
+.shiftbox{border:1.5px solid;border-radius:14px;padding:12px 12px 10px}
+.shiftbox.am{border-color:#EFC97E;background:#FFFCF3}
+.shiftbox.pm{border-color:#BBAFE3;background:#F8F6FD}
+.shiftbox .shead{display:flex;align-items:center;gap:8px;font-family:'Prompt';font-weight:700;font-size:15px;margin-bottom:10px;flex-wrap:wrap}
+.shiftbox.am .shead{color:#8A5A00}
+.shiftbox.pm .shead{color:#4A3894}
+.shiftbox input{background:#fff}
+.posin{font-size:18px!important;font-weight:700}
+.flab{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--mut);margin:10px 2px 5px;font-family:'Prompt'}
+.calcline{margin-top:10px;padding-top:8px;border-top:1.5px dashed rgba(0,0,0,.12);font-size:12.5px;color:var(--mut);display:flex;flex-wrap:wrap;gap:3px 8px;align-items:center}
+.calcline b{color:var(--ink);font-family:'Prompt'}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -579,13 +601,19 @@ function drawDash(A){
 </script>
 <script>
 /* ============ รายรับ (บันทึกรายวัน) ============ */
-const INC_FIELDS=[
-  ['sales_pos','ยอดขาย (POS)'],['transfer_total','ยอดเงินโอน'],
-  ['deposit','เงินฝาก'],['cash_drawer','เงินเก๊ะ'],
-  ['reserve_acct','บัญชีสำรอง'],['drawer_open','ยอดเก๊ะเปิด'],
-  ['transfer_pending_prev','โอนคงค้างเมื่อวาน']
-];
 const SHIFTS=[['am','กะเช้า','🌅','เช้า'],['pm','กะเย็น','🌆','เย็น']];
+function calHTML(days, sel, hasFn, fnName){
+  const first=new Date(S.m+'-01').getDay();
+  const td=todayStr(); const isCurM=td.slice(0,7)===S.m; const tdd=Number(td.slice(-2));
+  let h='<div class="calgrid">'+TH_D.map((w,i)=>`<div class="wd ${i===0?'sun':''}">${w}</div>`).join('');
+  for(let i=0;i<first;i++)h+='<div></div>';
+  for(let d=1;d<=days;d++){
+    const wd=(first+d-1)%7;
+    h+=`<button data-d="${d}" class="${d===sel?'on':''} ${hasFn(d)?'has':''} ${wd===0?'sun':''} ${isCurM&&d===tdd?'tdy':''}" onclick="${fnName}(${d})">${d}</button>`;
+  }
+  return h+'</div>';
+}
+function expPick(d){ S.expDay=d; show('exp'); }
 RENDER.income = async (el)=>{
   const c = await loadMonth(S.br,S.m);
   const days=monthDays(S.m); const td=todayStr();
@@ -597,8 +625,7 @@ RENDER.income = async (el)=>{
     <button class="btn gh sm2" style="margin-left:auto" onclick="fillOpenAll()">เติมเก๊ะเปิดต่อเนื่องทั้งเดือน</button></div>
   <div class="card">
     <h3>เลือกวันที่</h3>
-    <div class="daychips" id="incChips">${Array.from({length:days},(_,i)=>i+1).map(d=>
-      `<button data-d="${d}" class="${d===S.incDay?'on':''} ${incHasDay(c,d)?'has':''}" onclick="incPick(${d})">${d}</button>`).join('')}</div>
+    <div id="incChips">${calHTML(days, S.incDay, d=>incHasDay(c,d), 'incPick')}</div>
   </div>
   <div id="incDayWrap"></div>`;
   renderIncDay();
@@ -617,26 +644,38 @@ function renderIncDay(){
   const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m);
   const d=S.incDay, ds=dstr(S.m,d), r=c.inc[ds]||{};
   const dt=new Date(S.m+'-01'); dt.setDate(d); const wd=dt.getDay();
-  let html=`<div class="dayc ${ds===todayStr()?'today':''}" id="dc${d}" style="max-width:none">
+  const fld=(f,l,sh)=>{const k=f+'_'+sh; return `<div class="fld"><label>${l}</label>
+      <input id="in${d}_${k}" type="number" inputmode="decimal" placeholder="0" value="${num(r[k])||''}" oninput="incInput(${d},'${k}',this.value)"></div>`;};
+  let sboxes='';
+  for(const [sh,lab,ico,th] of SHIFTS){
+    sboxes+=`<div class="shiftbox ${sh}">
+      <div class="shead">${ico} ${lab}<span class="hintwrap xs" id="hint${d}${sh}"></span><span id="sd${d}${sh}" style="margin-left:auto"></span></div>
+      <div class="fld"><label><b>ยอดขาย (POS)</b></label>
+        <input id="in${d}_sales_pos_${sh}" class="posin" type="number" inputmode="decimal" placeholder="0" value="${num(r['sales_pos_'+sh])||''}" oninput="incInput(${d},'sales_pos_${sh}',this.value)"></div>
+      <div class="flab">💰 เงินที่นับได้</div>
+      <div class="grid2">
+        ${fld('deposit','เงินฝาก',sh)}${fld('cash_drawer','เงินเก๊ะ',sh)}
+        ${fld('transfer_total','ยอดเงินโอน',sh)}${fld('reserve_acct','บัญชีสำรอง',sh)}
+      </div>
+      <button class="btn gh sm2" style="width:100%;margin-top:8px" onclick="cashModal('${ds}','${th}')">💵 เงินสดจ่าย${lab} <span id="cn${d}${sh}"></span></button>
+      <div class="flab">↩︎ ยอดยกมา (หักออก)</div>
+      <div class="grid2">
+        ${fld('drawer_open','ยอดเก๊ะเปิด',sh)}${fld('transfer_pending_prev','โอนคงค้างเมื่อวาน',sh)}
+      </div>
+      <div class="calcline" id="cl${d}${sh}"></div>
+    </div>`;
+  }
+  wrap.innerHTML=`<div class="dayc ${ds===todayStr()?'today':''}" id="dc${d}" style="max-width:none">
     <div class="dh">
       <button class="navday" onclick="incPick(${d-1})" ${d<=1?'disabled':''}>‹</button>
       <span class="dn">${d}</span><span class="dw ${wd===0?'sun':''}">${TH_D[wd]}.</span>
       <span class="xs mut">${thDate(ds)}</span>
-      <span class="xs mut" style="margin-left:auto" id="dchk${d}"></span>
+      <span style="flex:1"></span>
       <button class="navday" onclick="incPick(${d+1})" ${d>=days?'disabled':''}>›</button>
-    </div>`;
-  for(const [sh,lab,ico,th] of SHIFTS){
-    html+=`<div class="shifthead">${ico} ${lab}<span class="hintwrap xs" id="hint${d}${sh}"></span><span id="sd${d}${sh}" style="margin-left:auto"></span></div>
-      <div class="grid2">
-        ${INC_FIELDS.map(([f,l])=>{const k=f+'_'+sh; return `<div class="fld"><label>${l}</label>
-          <input id="in${d}_${k}" type="number" inputmode="decimal" placeholder="0" value="${num(r[k])||''}"
-            oninput="incInput(${d},'${k}',this.value)"></div>`;}).join('')}
-        <div class="fld" style="grid-column:1/-1">
-          <button class="btn gh sm2" style="width:100%" onclick="cashModal('${ds}','${th}')">💵 เงินสดจ่าย${lab} <span id="cn${d}${sh}"></span></button></div>
-      </div>`;
-  }
-  html+=`<div class="dsum" id="dsum${d}"></div></div>`;
-  wrap.innerHTML=html;
+    </div>
+    <div class="shiftwrap">${sboxes}</div>
+    <div class="dsum" id="dsum${d}"></div>
+  </div>`;
   refreshDay(d);
 }
 function getInc(ds){
@@ -654,11 +693,6 @@ function incInput(day,f,v){
   debSave('inc'+ds, ()=>ups('pnl_income_daily',[{...r}],'branch,d').then(()=>toast('บันทึกวันที่ '+day+' แล้ว')));
 }
 function cashOfDay(ds){ const c=S.cache[mkey(S.br,S.m)]; return c.cash.filter(x=>x.d===ds); }
-function shiftDiff(r,sh,cashT){
-  // ขาด/เกินรายกะ = (ฝาก+เก๊ะ+โอน+สำรอง+เงินสดจ่ายกะนั้น) − (คงค้างเมื่อวาน+เก๊ะเปิด) − ยอดขายPOS
-  return (num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cashT)
-       -(num(r['transfer_pending_prev_'+sh])+num(r['drawer_open_'+sh]))-num(r['sales_pos_'+sh]);
-}
 function diffChip(diff){
   const cls=Math.abs(diff)<1?'mid':diff>0?'ok':'bad';
   return `<span class="chip ${cls}">${diff>0?'เกิน':diff<0?'ขาด':'ตรง'} ฿${fmt(Math.abs(diff),2)}</span>`;
@@ -668,26 +702,31 @@ function refreshDay(day){
   const c=S.cache[mkey(S.br,S.m)]; if(!c)return;
   const days=monthDays(S.m); if(day<1||day>days)return;
   const ds=dstr(S.m,day); const r=c.inc[ds];
-  // อัปเดตจุดบน chip (ทำได้ทุกวัน แม้ไม่ได้แสดงอยู่)
   const chip=document.querySelector(`#incChips button[data-d="${day}"]`);
   if(chip)chip.classList.toggle('has', incHasDay(c,day));
   if(day!==S.incDay)return;
   const list=cashOfDay(ds);
-  const cashAm=cashShiftTotal(list,'เช้า'), cashPm=cashShiftTotal(list,'เย็น');
-  const nAm=list.filter(x=>x.shift!=='เย็น').length, nPm=list.filter(x=>x.shift==='เย็น').length;
-  const cA=document.getElementById('cn'+day+'am'); if(cA)cA.textContent=nAm?`(${nAm} · ฿${fmtI(cashAm)})`:'';
-  const cP=document.getElementById('cn'+day+'pm'); if(cP)cP.textContent=nPm?`(${nPm} · ฿${fmtI(cashPm)})`:'';
-  const elS=document.getElementById('dsum'+day); if(!elS)return;
-  if(!r||!hasIncData(r)){
-    elS.innerHTML='<span class="mut xs">ยังไม่กรอก</span>';
-    for(const [sh] of SHIFTS){const e=document.getElementById('sd'+day+sh); if(e)e.innerHTML='';}
-  }else{
-    const cd=calcDay(r);
-    const dAm=shiftDiff(r,'am',cashAm), dPm=shiftDiff(r,'pm',cashPm);
-    const eAm=document.getElementById('sd'+day+'am'); if(eAm)eAm.innerHTML=diffChip(dAm);
-    const ePm=document.getElementById('sd'+day+'pm'); if(ePm)ePm.innerHTML=diffChip(dPm);
-    elS.innerHTML=`<span class="mut">ก่อน VAT</span><span class="num b">฿${fmt(cd.exVat,2)}</span>
-      <span style="margin-left:auto">${diffChip(dAm+dPm)}</span>`;
+  const cash={am:cashShiftTotal(list,'เช้า'), pm:cashShiftTotal(list,'เย็น')};
+  const cnt={am:list.filter(x=>x.shift!=='เย็น').length, pm:list.filter(x=>x.shift==='เย็น').length};
+  const any = r && hasIncData(r);
+  let dTot=0;
+  for(const [sh] of SHIFTS){
+    const cn=document.getElementById('cn'+day+sh); if(cn)cn.textContent=cnt[sh]?`(${cnt[sh]} · ฿${fmtI(cash[sh])})`:'';
+    const sd=document.getElementById('sd'+day+sh), cl=document.getElementById('cl'+day+sh);
+    if(!any){ if(sd)sd.innerHTML=''; if(cl)cl.innerHTML='<span class="mut">ยังไม่กรอก</span>'; continue; }
+    const counted=num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cash[sh];
+    const base=num(r['transfer_pending_prev_'+sh])+num(r['drawer_open_'+sh]);
+    const pos=num(r['sales_pos_'+sh]);
+    const diff=counted-base-pos; dTot+=diff;
+    if(sd)sd.innerHTML=diffChip(diff);
+    if(cl)cl.innerHTML=`นับได้ <b>฿${fmt(counted,2)}</b> − ยกมา <b>฿${fmt(base,2)}</b> = <b>฿${fmt(counted-base,2)}</b><span style="margin-left:auto">POS <b>฿${fmt(pos,2)}</b></span>`;
+  }
+  const elS=document.getElementById('dsum'+day);
+  if(elS){
+    if(!any) elS.innerHTML='<span class="mut xs">ยังไม่กรอก</span>';
+    else{ const cd=calcDay(r);
+      elS.innerHTML=`<span class="mut">ก่อน VAT</span><span class="num b">฿${fmt(cd.exVat,2)}</span>
+        <span style="margin-left:auto">${diffChip(dTot)}</span>`; }
   }
   // hint เก๊ะเปิด: เช้า ← เก๊ะกะเย็นเมื่อวาน, เย็น ← เก๊ะกะเช้าวันเดียวกัน
   const prev = day>1 ? c.inc[dstr(S.m,day-1)] : null;
@@ -769,8 +808,7 @@ RENDER.exp = async (el)=>{
   </div>
   <div class="card">
     <h3>เลือกวันที่ <span class="sp"><button class="hintlink" onclick="expTableView()">ดูตารางรวมทั้งเดือน →</button></span></h3>
-    <div class="daychips">${Array.from({length:days},(_,i)=>i+1).map(d=>
-      `<button class="${d===S.expDay?'on':''} ${hasDay[d]?'has':''}" onclick="S.expDay=${d};show('exp')">${d}</button>`).join('')}</div>
+    ${calHTML(days, S.expDay, d=>!!hasDay[d], 'expPick')}
   </div>
   <div id="expForm">${expFormHTML(c)}</div>
   <div class="stickysum"><span class="sm" style="opacity:.75">รวมวันที่ ${S.expDay}</span>
