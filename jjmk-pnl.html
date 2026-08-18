@@ -897,17 +897,17 @@ function renderIncDay(){
   const r=c.inc[ds]||{};
   const dt=new Date(S.m+'-01'); dt.setDate(d); const wd=dt.getDay();
   const fld=(f,l,sh)=>{const k=f+'_'+sh; return `<div class="fld"><label>${l}</label>
-      <input id="in${d}_${k}" type="number" inputmode="decimal" placeholder="0" value="${num(r[k])||''}" oninput="incInput(${d},'${k}',this.value)"></div>`;};
+      <input id="in${d}_${k}" type="number" step="any" inputmode="decimal" placeholder="0" value="${num(r[k])||''}" oninput="incInput(${d},'${k}',this.value)"></div>`;};
   const openFld=(sh,src)=>{const k='drawer_open_'+sh; const locked=src>0;
     const lab = sh==='am' && d===1 && locked ? 'จากสิ้นเดือนก่อน' : 'อัตโนมัติ';
     return `<div class="fld"><label>ยอดเก๊ะเปิด ${locked?`<span class="lk">🔗 ${lab}</span>`:''}</label>
-      <input id="in${d}_${k}" type="number" inputmode="decimal" placeholder="0" value="${num(r[k])||''}" ${locked?'readonly class="auto"':''} oninput="incInput(${d},'${k}',this.value)"></div>`;};
+      <input id="in${d}_${k}" type="number" step="any" inputmode="decimal" placeholder="0" value="${num(r[k])||''}" ${locked?'readonly class="auto"':''} oninput="incInput(${d},'${k}',this.value)"></div>`;};
   let sboxes='';
   for(const [sh,lab,ico,th] of SHIFTS){
     sboxes+=`<div class="shiftbox ${sh}">
       <div class="shead">${ico} ${lab}<span id="sd${d}${sh}" style="margin-left:auto"></span></div>
       <div class="fld"><label><b>ยอดขาย (POS)</b></label>
-        <input id="in${d}_sales_pos_${sh}" class="posin" type="number" inputmode="decimal" placeholder="0" value="${num(r['sales_pos_'+sh])||''}" oninput="incInput(${d},'sales_pos_${sh}',this.value)"></div>
+        <input id="in${d}_sales_pos_${sh}" class="posin" type="number" step="any" inputmode="decimal" placeholder="0" value="${num(r['sales_pos_'+sh])||''}" oninput="incInput(${d},'sales_pos_${sh}',this.value)"></div>
       <div class="flab">💰 เงินที่นับได้</div>
       <div class="grid2">
         ${fld('deposit','เงินฝาก',sh)}${fld('cash_drawer','เงินเก๊ะ',sh)}
@@ -1020,7 +1020,7 @@ function cashModal(ds,th){
 function cashRow(x){
   return `<div class="exrow" id="cx${x.id}">
     <input style="flex:1;width:auto;text-align:left" type="text" placeholder="รายการ" value="${esc(x.descr)}" onchange="cashUpd(${x.id},'descr',this.value)">
-    <input type="number" inputmode="decimal" placeholder="0" value="${x.amount||''}" onchange="cashUpd(${x.id},'amount',num(this.value))">
+    <input type="number" step="any" inputmode="decimal" placeholder="0" value="${x.amount||''}" onchange="cashUpd(${x.id},'amount',num(this.value))">
     <button style="color:var(--bad);font-size:18px;padding:4px" onclick="cashDel(${x.id})">✕</button></div>`;
 }
 async function cashAdd(ds,shift){
@@ -1060,7 +1060,7 @@ function fixPanelHTML(){
     html+=`<div class="fxgrp"><span>${esc(g)}</span><span class="num" id="fxg_${gi}"></span></div>`;
     list.forEach(f=>{
       html+=`<div class="fxrow"><span>${esc(f.name)}</span>
-        <input type="number" inputmode="decimal" placeholder="${f.default_amount!=null?fmt(f.default_amount):'0'}"
+        <input type="number" step="any" inputmode="decimal" placeholder="${f.default_amount!=null?fmt(f.default_amount):'0'}"
           value="${c.fixm[f.id]??''}" onchange="fixInput(${f.id},this.value)"></div>`;
     });
   });
@@ -1122,7 +1122,7 @@ function expFormHTML(c){
         const paid=!!(r&&r.paid), hasSlip=!!(r&&r.slip_url);
         return `<div class="exrow"><div class="nm"><div class="t">${esc(s.name)}${isYannah?' <span class="hintlink" onclick="meatModal(\''+ds+'\','+s.id+')">🥩 คิดจากกก.</span>':''}</div>
           <div class="s">${esc(s.payment_term||'')}${s.payment_term?' · ':''}${esc(s.vat_type)}</div></div>
-          <input type="number" inputmode="decimal" placeholder="0" id="exi${s.id}" value="${r&&num(r.amount)?r.amount:''}"
+          <input type="number" step="any" inputmode="decimal" placeholder="0" id="exi${s.id}" value="${r&&num(r.amount)?r.amount:''}"
             oninput="expInput('${ds}',${s.id},this.value)">
           <div class="exctl">
             <button class="pchip ${paid?'on':''}" id="pd_${s.id}" onclick="paidToggle('${ds}',${s.id})">${paid?'✓ จ่ายแล้ว':'ค้างจ่าย'}</button>
@@ -1249,7 +1249,7 @@ function meatModal(ds,sid){
   const c=S.cache[mkey(S.br,S.m)];
   openModal(`<h3>คิดยอด Yannah จากน้ำหนัก · ${thDate(ds)}</h3>
     ${meats.map(m=>`<div class="exrow"><div class="nm"><div class="t">${esc(m.name)}</div><div class="s">฿${fmt(m.price_kg)}/กก.</div></div>
-      <input type="number" inputmode="decimal" step="0.1" placeholder="กก." id="mk${m.id}"
+      <input type="number" step="any" inputmode="decimal" placeholder="กก." id="mk${m.id}"
         value="${c.meatd[ds+'|'+m.id]||''}" oninput="meatCalc('${ds}')"></div>`).join('')}
     <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม</span><span class="num b" id="meatTot" style="font-size:18px">฿0</span></div>
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -1332,7 +1332,7 @@ RENDER.sum = async (el)=>{
       fixHtml+= RO
         ? `<tr class="ind"><td>${esc(r.item.name)}</td><td class="n" colspan="3">${r.val!=null?fmtI(r.val):''}</td></tr>`
         : `<tr class="ind"><td>${esc(r.item.name)}</td>
-        <td class="right" colspan="3"><input type="number" inputmode="decimal"
+        <td class="right" colspan="3"><input type="number" step="any" inputmode="decimal"
           placeholder="${r.item.default_amount!=null?fmt(r.item.default_amount):'0'}"
           value="${A.c.fixm[r.item.id]??''}"
           onchange="fixInput(${r.item.id},this.value)"></td></tr>`;
@@ -1342,7 +1342,7 @@ RENDER.sum = async (el)=>{
   el.innerHTML=`
   <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <div><div class="b" style="font-family:'Prompt';font-size:16px">สรุปผลประกอบการ · ${BRNAME[S.br]}</div>
-      <div class="sm mut">${monthLabel(S.m)} · จำนวนวันหาร ${RO?`<b>${divisor}</b>`:`<input type="number" style="width:64px;padding:4px 8px;display:inline-block" value="${divisor}"
+      <div class="sm mut">${monthLabel(S.m)} · จำนวนวันหาร ${RO?`<b>${divisor}</b>`:`<input type="number" step="any" style="width:64px;padding:4px 8px;display:inline-block" value="${divisor}"
           onchange="metaInput('days_divisor',parseInt(this.value)||null)">`} วัน${RO?' · <span class="b" style="color:var(--red)">โหมดรวม 2 สาขา (ดูอย่างเดียว)</span>':''}</div></div>
     <button class="btn dk sm2" style="margin-left:auto" onclick="printSummary()">🖨 พิมพ์สรุป</button>
   </div>
@@ -1353,8 +1353,8 @@ RENDER.sum = async (el)=>{
       <tr><td>ยอดขายก่อน VAT</td><td class="n b">${fmt(A.exVat,2)}</td><td class="n mut xs" colspan="2">เฉลี่ย/วัน ฿${fmtI(divisor?A.exVat/divisor:0)}</td></tr>
       <tr><td>ยอดขายรวม VAT</td><td class="n">${fmt(A.incVat,2)}</td><td colspan="2"></td></tr>
       <tr><td>ยอด VAT</td><td class="n">${fmt(A.vat,2)}</td><td colspan="2"></td></tr>
-      <tr><td>Delivery Grab</td>${RO?`<td class="n" colspan="3">${fmtI(A.grab)}</td>`:`<td class="right" colspan="3"><input type="number" inputmode="decimal" placeholder="0" value="${num(A.grab)||''}" onchange="metaInput('grab',num(this.value))"></td>`}</tr>
-      <tr><td>Delivery Lineman</td>${RO?`<td class="n" colspan="3">${fmtI(A.lineman)}</td>`:`<td class="right" colspan="3"><input type="number" inputmode="decimal" placeholder="0" value="${num(A.lineman)||''}" onchange="metaInput('lineman',num(this.value))"></td>`}</tr>
+      <tr><td>Delivery Grab</td>${RO?`<td class="n" colspan="3">${fmtI(A.grab)}</td>`:`<td class="right" colspan="3"><input type="number" step="any" inputmode="decimal" placeholder="0" value="${num(A.grab)||''}" onchange="metaInput('grab',num(this.value))"></td>`}</tr>
+      <tr><td>Delivery Lineman</td>${RO?`<td class="n" colspan="3">${fmtI(A.lineman)}</td>`:`<td class="right" colspan="3"><input type="number" step="any" inputmode="decimal" placeholder="0" value="${num(A.lineman)||''}" onchange="metaInput('lineman',num(this.value))"></td>`}</tr>
       <tr class="tot"><td>รวมรายได้ (ก่อนหักส่วนลด)</td><td class="n">${fmtI(rev)}</td><td colspan="2"></td></tr>
     </table></div>
 
@@ -1490,7 +1490,7 @@ async function pvPreview(){
   document.getElementById('pvPrev').innerHTML= items.length?`
     <div style="margin-top:12px;max-height:40dvh;overflow-y:auto">${items.map((it,i)=>`
       <div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}</div></div>
-      <input type="number" inputmode="decimal" value="${it.amt.toFixed(2)}" onchange="S._pvDraft.items[${i}].amt=num(this.value)"></div>`).join('')}</div>
+      <input type="number" step="any" inputmode="decimal" value="${it.amt.toFixed(2)}" onchange="S._pvDraft.items[${i}].amt=num(this.value)"></div>`).join('')}</div>
     <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม ${items.length} ราย</span></div>
     <button class="btn dk" style="width:100%;margin-top:6px" onclick="pvSave()">บันทึก PV</button>`
     :'<div class="empty">ไม่มียอดค้างจ่ายประเภทนี้ในงวดที่เลือก</div>';
@@ -1591,7 +1591,7 @@ function extraRow(x){
     <input type="date" style="width:130px;flex:none;padding:7px" value="${x.d}" onchange="rowUpd('pnl_extra_expenses',${x.id},'d',this.value)">
     <input type="text" style="flex:1;min-width:120px;text-align:left" placeholder="รายการ" value="${esc(x.descr)}" onchange="rowUpd('pnl_extra_expenses',${x.id},'descr',this.value)">
     <input type="text" style="width:86px;flex:none;text-align:left" placeholder="ผู้เบิก" value="${esc(x.requester||'')}" onchange="rowUpd('pnl_extra_expenses',${x.id},'requester',this.value)">
-    <input type="number" inputmode="decimal" style="width:100px" placeholder="0" value="${x.amount||''}" onchange="rowUpd('pnl_extra_expenses',${x.id},'amount',num(this.value))">
+    <input type="number" step="any" inputmode="decimal" style="width:100px" placeholder="0" value="${x.amount||''}" onchange="rowUpd('pnl_extra_expenses',${x.id},'amount',num(this.value))">
     <button style="color:var(--bad);font-size:18px" onclick="rowDel('pnl_extra_expenses',${x.id},'ex')">✕</button></div>`;
 }
 function shopRow(x){
@@ -1600,9 +1600,9 @@ function shopRow(x){
     <input type="date" style="width:130px;flex:none;padding:7px" value="${x.d}" onchange="rowUpd('pnl_shopee',${x.id},'d',this.value)">
     <input type="text" style="flex:1;min-width:110px;text-align:left" placeholder="สินค้า" value="${esc(x.item)}" onchange="rowUpd('pnl_shopee',${x.id},'item',this.value)">
     <input type="text" style="width:110px;flex:none;text-align:left" placeholder="ร้าน" value="${esc(x.shop||'')}" onchange="rowUpd('pnl_shopee',${x.id},'shop',this.value)">
-    <input type="number" inputmode="decimal" style="width:84px" placeholder="ราคา" value="${x.price||''}" onchange="rowUpd('pnl_shopee',${x.id},'price',num(this.value))">
-    <input type="number" inputmode="decimal" style="width:60px" placeholder="จน." value="${x.qty||''}" onchange="rowUpd('pnl_shopee',${x.id},'qty',num(this.value))">
-    <input type="number" inputmode="decimal" style="width:74px" placeholder="ส่ง" value="${x.shipping||''}" onchange="rowUpd('pnl_shopee',${x.id},'shipping',num(this.value))">
+    <input type="number" step="any" inputmode="decimal" style="width:84px" placeholder="ราคา" value="${x.price||''}" onchange="rowUpd('pnl_shopee',${x.id},'price',num(this.value))">
+    <input type="number" step="any" inputmode="decimal" style="width:60px" placeholder="จน." value="${x.qty||''}" onchange="rowUpd('pnl_shopee',${x.id},'qty',num(this.value))">
+    <input type="number" step="any" inputmode="decimal" style="width:74px" placeholder="ส่ง" value="${x.shipping||''}" onchange="rowUpd('pnl_shopee',${x.id},'shipping',num(this.value))">
     <span class="num b" style="width:86px;text-align:right">฿${fmtI(tot)}</span>
     <button style="color:var(--bad);font-size:18px" onclick="rowDel('pnl_shopee',${x.id},'sh')">✕</button></div>`;
 }
@@ -1784,8 +1784,8 @@ RENDER.set = async (el)=>{
       <div class="grid2">
         <div class="fld"><label>สาขาของไฟล์</label><select id="hiBr"><option value="JJRD">รัชดา</option><option value="JJLP">ลาดพร้าว</option></select></div>
         <div class="fld"><label>เดือนของไฟล์</label><input id="hiM" type="month"></div>
-        <div class="fld"><label>Grab (จากชีทสรุป · ไม่มีใส่ 0)</label><input id="hiGrab" type="number" inputmode="decimal" placeholder="0"></div>
-        <div class="fld"><label>Lineman</label><input id="hiLine" type="number" inputmode="decimal" placeholder="0"></div>
+        <div class="fld"><label>Grab (จากชีทสรุป · ไม่มีใส่ 0)</label><input id="hiGrab" type="number" step="any" inputmode="decimal" placeholder="0"></div>
+        <div class="fld"><label>Lineman</label><input id="hiLine" type="number" step="any" inputmode="decimal" placeholder="0"></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
         <input type="file" id="hiFile" accept=".xlsx,.xls" style="flex:1;min-width:200px">
@@ -1816,11 +1816,12 @@ RENDER.set = async (el)=>{
       <div class="twrap"><table>
       ${S.core.fixed.filter(f=>f.branch===S.br).map(f=>`<tr style="${f.active?'':'opacity:.4'}"><td><span class="b sm">${esc(f.name)}</span> <span class="xs mut">· ${esc(f.grp)}</span></td>
         <td class="n">${f.default_amount!=null?fmtI(f.default_amount):'<span class="mut xs">กรอกรายเดือน</span>'}</td>
-        <td class="right"><button class="hintlink" onclick="fixModal(${f.id})">แก้ไข</button></td></tr>`).join('')}
+        <td class="right" style="white-space:nowrap"><button class="hintlink" onclick="fixModal(${f.id})">แก้ไข</button>
+          <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="fixDel(${f.id})">ลบ</button></td></tr>`).join('')}
       </table></div></div>
     <div class="card"><h3>ราคาเนื้อ Yannah · ${BRNAME[S.br]}</h3>
       ${S.core.meats.filter(m=>m.branch===S.br).map(m=>`<div class="exrow"><div class="nm"><div class="t">${esc(m.name)}</div><div class="s">บาท/กก.</div></div>
-        <input type="number" inputmode="decimal" value="${m.price_kg}" onchange="meatPriceSave(${m.id},this.value)">
+        <input type="number" step="any" inputmode="decimal" value="${m.price_kg}" onchange="meatPriceSave(${m.id},this.value)">
         </div>`).join('')}</div>
   </div></div>`;
   loadHistList();
@@ -1833,7 +1834,7 @@ function supModal(id){
       <div class="fld"><label>หมวด</label><select id="spCat">${CAT_ORDER.map(c=>`<option ${s.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
       <div class="fld"><label>ประเภทภาษี</label><select id="spVat"><option ${s.vat_type==='NON-VAT'?'selected':''}>NON-VAT</option><option ${s.vat_type==='VAT'?'selected':''}>VAT</option><option ${s.vat_type==='VAT / NON-VAT'?'selected':''}>VAT / NON-VAT</option></select></div>
       <div class="fld"><label>เงื่อนไขจ่าย</label><input id="spTerm" value="${esc(s.payment_term||'')}" placeholder="เช่น 15 วัน จ่าย"></div>
-      <div class="fld"><label>ลำดับ</label><input type="number" id="spSort" value="${s.sort}"></div>
+      <div class="fld"><label>ลำดับ</label><input type="number" step="any" id="spSort" value="${s.sort}"></div>
       <div class="fld"><label>ธนาคาร</label><input id="spBank" value="${esc(s.bank||'')}"></div>
       <div class="fld"><label>เลขที่บัญชี</label><input id="spAcc" value="${esc(s.account_no||'')}"></div>
     </div>
@@ -1852,13 +1853,23 @@ async function supSave(id){
   if(id) await upd('pnl_suppliers','id=eq.'+id,body); else await ins('pnl_suppliers',body);
   await loadCore(); closeModal(); toast('บันทึกแล้ว'); show('set');
 }
+async function fixDel(id){
+  const f=S.core.fixed.find(x=>x.id===id); if(!f)return;
+  if(!confirm('ลบ "'+f.name+'" ?\nยอดที่เคยกรอกรายเดือนของรายการนี้จะถูกลบไปด้วยทุกเดือน'))return;
+  try{
+    await delQ('pnl_fixed_items','id=eq.'+id);
+    S.core.fixed=S.core.fixed.filter(x=>x.id!==id);
+    Object.values(S.cache).forEach(c=>{ if(c&&c.fixm) delete c.fixm[id]; });
+    toast('ลบ "'+f.name+'" แล้ว'); show('set');
+  }catch(e){ toast('ลบไม่สำเร็จ: '+e.message,true); }
+}
 function fixModal(id){
   const f=id?S.core.fixed.find(x=>x.id===id):{grp:'รายเดือน',name:'',default_amount:null,sort:999,active:true};
   openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}รายการ Fix cost · ${BRNAME[S.br]}</h3>
     <div class="fld"><label>ชื่อรายการ</label><input id="fxName" value="${esc(f.name)}"></div>
     <div class="grid2">
       <div class="fld"><label>กลุ่ม</label><select id="fxGrp">${['รายเดือน','สาธารณูปโภค','พนักงาน'].map(g=>`<option ${f.grp===g?'selected':''}>${g}</option>`).join('')}</select></div>
-      <div class="fld"><label>ยอด default (เว้นว่าง = กรอกรายเดือน)</label><input type="number" id="fxAmt" value="${f.default_amount??''}"></div></div>
+      <div class="fld"><label>ยอด default (เว้นว่าง = กรอกรายเดือน)</label><input type="number" step="any" id="fxAmt" value="${f.default_amount??''}"></div></div>
     <label class="sm" style="display:flex;gap:8px;align-items:center;margin:6px 0 12px"><input type="checkbox" id="fxAct" style="width:20px;height:20px" ${f.active?'checked':''}> ใช้งานอยู่</label>
     <div style="display:flex;gap:8px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
       <button class="btn sm2" style="margin-left:auto" onclick="fixSave(${id||'null'})">บันทึก</button></div>`);
