@@ -85,6 +85,8 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .drrow.tot{background:#FCF7EC;font-weight:700;cursor:default;border-top:2px solid var(--line);border-bottom:0}
 .drscroll{max-height:378px;overflow-y:auto}
 .drscroll .drrow:last-child{border-bottom:0}
+input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
+.lk{font-size:10px;color:#8A7A50;font-weight:700;background:#F5EDDB;border-radius:6px;padding:1px 6px;margin-left:4px}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -405,7 +407,7 @@ async function loadMonth(b,m,force){
   if(S.cache[k] && !force) return S.cache[k];
   const from=dstr(m,1), to=dstr(m,monthDays(m));
   const rng=`d=gte.${from}&d=lte.${to}&branch=eq.${b}`;
-  const [inc,cash,exp,extra,shop,meta,fixm,meatd] = await Promise.all([
+  const [inc,cash,exp,extra,shop,meta,fixm,meatd,prevRow] = await Promise.all([
     sel('pnl_income_daily', `select=*&${rng}`),
     sel('pnl_cash_expenses',`select=*&${rng}&order=d,id`),
     sel('pnl_expense_daily',`select=*&${rng}`),
@@ -413,7 +415,8 @@ async function loadMonth(b,m,force){
     sel('pnl_shopee',`select=*&${rng}&order=d,id`),
     sel('pnl_month_meta',`select=*&branch=eq.${b}&month=eq.${m}`),
     sel('pnl_fixed_monthly',`select=*&branch=eq.${b}&month=eq.${m}`),
-    sel('pnl_meat_daily',`select=*&${rng}`)
+    sel('pnl_meat_daily',`select=*&${rng}`),
+    sel('pnl_income_daily', `select=d,cash_drawer_pm&branch=eq.${b}&d=lt.${from}&order=d.desc&limit=1`)
   ]);
   const bundle = {
     inc: Object.fromEntries(inc.map(r=>[r.d,r])),
@@ -421,7 +424,9 @@ async function loadMonth(b,m,force){
     extra, shop,
     meta: meta[0] || {branch:b,month:m,grab:0,lineman:0,days_divisor:null,note:''},
     fixm: Object.fromEntries(fixm.map(r=>[r.item_id, r.amount])),
-    meatd: Object.fromEntries(meatd.map(r=>[r.d+'|'+r.meat_id, r.kg]))
+    meatd: Object.fromEntries(meatd.map(r=>[r.d+'|'+r.meat_id, r.kg])),
+    prevPm: prevRow[0]?num(prevRow[0].cash_drawer_pm):0,
+    prevD:  prevRow[0]?prevRow[0].d:null
   };
   S.cache[k]=bundle; return bundle;
 }
@@ -634,6 +639,12 @@ function calHTML(days, sel, hasFn, fnName){
   return h+'</div>';
 }
 function expPick(d){ S.expDay=d; show('exp'); }  // show() จะบันทึกตำแหน่งให้เอง
+function openSrc(c,day,sh){
+  // แหล่งเก๊ะเปิด: เย็น ← เก๊ะเช้าวันเดียวกัน · เช้า ← เก๊ะเย็นเมื่อวาน (วันที่ 1 ← เก๊ะเย็นวันสุดท้ายเดือนก่อน)
+  if(sh==='pm'){ const r=c.inc[dstr(S.m,day)]; return r?num(r.cash_drawer_am):0; }
+  if(day>1){ const p=c.inc[dstr(S.m,day-1)]; return p?num(p.cash_drawer_pm):0; }
+  return num(c.prevPm);
+}
 function incRepHTML(c,days){
   let rows='',tAm=0,tPm=0,n=0;
   for(let d=1;d<=days;d++){
@@ -660,8 +671,8 @@ RENDER.income = async (el)=>{
   el.innerHTML=`
   <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <div><div class="b">บันทึกรายรับ · ${monthLabel(S.m)}</div>
-    <div class="xs mut">วันละ 2 กะ · ยอดก่อน VAT = POS (เช้า+เย็น) ÷ 1.07 · เก๊ะเปิด = เงินเก๊ะกะก่อนหน้า</div></div>
-    <button class="btn gh sm2" style="margin-left:auto" onclick="fillOpenAll()">เติมเก๊ะเปิดต่อเนื่องทั้งเดือน</button></div>
+    <div class="xs mut">วันละ 2 กะ · ยอดก่อน VAT = POS (เช้า+เย็น) ÷ 1.07 · 🔗 เก๊ะเปิดดึงจากกะก่อนหน้าอัตโนมัติ (ข้ามเดือนด้วย)</div></div>
+    <button class="btn gh sm2" style="margin-left:auto" onclick="fillOpenAll()">🔗 ซิงก์เก๊ะเปิดทั้งเดือน</button></div>
   <div class="card">
     <h3>เลือกวันที่</h3>
     <div class="calwrap">
@@ -684,14 +695,25 @@ function incPick(d){
 function renderIncDay(){
   const wrap=document.getElementById('incDayWrap'); if(!wrap)return;
   const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m);
-  const d=S.incDay, ds=dstr(S.m,d), r=c.inc[ds]||{};
+  const d=S.incDay, ds=dstr(S.m,d);
+  // 🔗 ซิงก์เก๊ะเปิดอัตโนมัติจากกะก่อนหน้า (บันทึกให้ด้วยถ้าค่าเปลี่ยน)
+  const srcAm=openSrc(c,d,'am'), srcPm=openSrc(c,d,'pm');
+  let dirty=false;
+  if(srcAm>0){ const r0=getInc(ds); if(num(r0.drawer_open_am)!==srcAm){ r0.drawer_open_am=srcAm; dirty=true; } }
+  if(srcPm>0){ const r0=getInc(ds); if(num(r0.drawer_open_pm)!==srcPm){ r0.drawer_open_pm=srcPm; dirty=true; } }
+  if(dirty){ const r0=c.inc[ds]; debSave('inc'+ds, ()=>ups('pnl_income_daily',[{...r0}],'branch,d')); }
+  const r=c.inc[ds]||{};
   const dt=new Date(S.m+'-01'); dt.setDate(d); const wd=dt.getDay();
   const fld=(f,l,sh)=>{const k=f+'_'+sh; return `<div class="fld"><label>${l}</label>
       <input id="in${d}_${k}" type="number" inputmode="decimal" placeholder="0" value="${num(r[k])||''}" oninput="incInput(${d},'${k}',this.value)"></div>`;};
+  const openFld=(sh,src)=>{const k='drawer_open_'+sh; const locked=src>0;
+    const lab = sh==='am' && d===1 && locked ? 'จากสิ้นเดือนก่อน' : 'อัตโนมัติ';
+    return `<div class="fld"><label>ยอดเก๊ะเปิด ${locked?`<span class="lk">🔗 ${lab}</span>`:''}</label>
+      <input id="in${d}_${k}" type="number" inputmode="decimal" placeholder="0" value="${num(r[k])||''}" ${locked?'readonly class="auto"':''} oninput="incInput(${d},'${k}',this.value)"></div>`;};
   let sboxes='';
   for(const [sh,lab,ico,th] of SHIFTS){
     sboxes+=`<div class="shiftbox ${sh}">
-      <div class="shead">${ico} ${lab}<span class="hintwrap xs" id="hint${d}${sh}"></span><span id="sd${d}${sh}" style="margin-left:auto"></span></div>
+      <div class="shead">${ico} ${lab}<span id="sd${d}${sh}" style="margin-left:auto"></span></div>
       <div class="fld"><label><b>ยอดขาย (POS)</b></label>
         <input id="in${d}_sales_pos_${sh}" class="posin" type="number" inputmode="decimal" placeholder="0" value="${num(r['sales_pos_'+sh])||''}" oninput="incInput(${d},'sales_pos_${sh}',this.value)"></div>
       <div class="flab">💰 เงินที่นับได้</div>
@@ -702,7 +724,7 @@ function renderIncDay(){
       <button class="btn gh sm2" style="width:100%;margin-top:8px" onclick="cashModal('${ds}','${th}')">💵 เงินสดจ่าย${lab} <span id="cn${d}${sh}"></span></button>
       <div class="flab">↩︎ ยอดยกมา (หักออก)</div>
       <div class="grid2">
-        ${fld('drawer_open','ยอดเก๊ะเปิด',sh)}${fld('transfer_pending_prev','โอนคงค้างเมื่อวาน',sh)}
+        ${openFld(sh, sh==='am'?srcAm:srcPm)}${fld('transfer_pending_prev','โอนคงค้างเมื่อวาน',sh)}
       </div>
       <div class="calcline" id="cl${d}${sh}"></div>
     </div>`;
@@ -731,6 +753,13 @@ function getInc(ds){
 }
 function incInput(day,f,v){
   const ds=dstr(S.m,day); const r=getInc(ds); r[f]=num(v);
+  if(f==='cash_drawer_am'){ // 🔗 เก๊ะเปิดกะเย็น = เงินเก๊ะกะเช้า (สดทันที)
+    const src=num(v); r.drawer_open_pm=src;
+    const inp=document.getElementById(`in${day}_drawer_open_pm`);
+    if(inp){ inp.value=src||''; inp.readOnly=src>0; inp.classList.toggle('auto',src>0);
+      const lb=inp.closest('.fld')?.querySelector('label');
+      if(lb)lb.innerHTML='ยอดเก๊ะเปิด '+(src>0?'<span class="lk">🔗 อัตโนมัติ</span>':''); }
+  }
   refreshDay(day);
   debSave('inc'+ds, ()=>ups('pnl_income_daily',[{...r}],'branch,d').then(()=>toast('บันทึกวันที่ '+day+' แล้ว')));
 }
@@ -771,35 +800,21 @@ function refreshDay(day){
       elS.innerHTML=`<span class="mut">ก่อน VAT</span><span class="num b">฿${fmt(cd.exVat,2)}</span>
         <span style="margin-left:auto">${diffChip(dTot)}</span>`; }
   }
-  // hint เก๊ะเปิด: เช้า ← เก๊ะกะเย็นเมื่อวาน, เย็น ← เก๊ะกะเช้าวันเดียวกัน
-  const prev = day>1 ? c.inc[dstr(S.m,day-1)] : null;
-  const hints=[['am', prev?num(prev.cash_drawer_pm):0, 'เก๊ะเย็นเมื่อวาน'],
-               ['pm', r?num(r.cash_drawer_am):0,      'เก๊ะเช้าวันนี้']];
-  for(const [sh,src,lab] of hints){
-    const h=document.getElementById('hint'+day+sh); if(!h)continue;
-    const cur = r?num(r['drawer_open_'+sh]):0;
-    h.innerHTML = (src&&!cur)
-      ? `<span class="hintlink" onclick="applyOpen(${day},'${sh}',${src})">${lab} ฿${fmtI(src)} ↵</span>` : '';
-  }
-}
-function applyOpen(day,sh,val){
-  const inp=document.getElementById(`in${day}_drawer_open_${sh}`); if(inp)inp.value=val;
-  incInput(day,'drawer_open_'+sh,val);
 }
 async function fillOpenAll(){
-  const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m); const changed=new Set();
+  const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m); const rows=[];
   for(let d=1;d<=days;d++){
     const ds=dstr(S.m,d);
-    const prev = d>1 ? c.inc[dstr(S.m,d-1)] : null;
-    const srcAm = prev?num(prev.cash_drawer_pm):0;
-    if(srcAm){ const r=getInc(ds); if(!num(r.drawer_open_am)){ r.drawer_open_am=srcAm; changed.add(ds);} }
-    const r0=c.inc[ds];
-    const srcPm = r0?num(r0.cash_drawer_am):0;
-    if(srcPm){ const r=getInc(ds); if(!num(r.drawer_open_pm)){ r.drawer_open_pm=srcPm; changed.add(ds);} }
+    const sAm=openSrc(c,d,'am');
+    const r0=c.inc[ds]; const sPm=r0?num(r0.cash_drawer_am):0;
+    if(!sAm&&!sPm) continue;
+    const r=getInc(ds); let ch=false;
+    if(sAm>0&&num(r.drawer_open_am)!==sAm){ r.drawer_open_am=sAm; ch=true; }
+    if(sPm>0&&num(r.drawer_open_pm)!==sPm){ r.drawer_open_pm=sPm; ch=true; }
+    if(ch)rows.push({...r});
   }
-  if(!changed.size){toast('ไม่มีช่องที่ต้องเติม');return;}
-  const rows=[...changed].map(ds=>({...c.inc[ds]}));
-  await ups('pnl_income_daily',rows,'branch,d'); toast('เติมเก๊ะเปิด '+rows.length+' วัน'); show('income');
+  if(!rows.length){toast('เก๊ะเปิดตรงครบทุกวันแล้ว');return;}
+  await ups('pnl_income_daily',rows,'branch,d'); toast('ซิงก์เก๊ะเปิด '+rows.length+' วัน'); show('income');
 }
 function cashModal(ds,th){
   const list=cashOfDay(ds).filter(x=>th==='เย็น'?x.shift==='เย็น':x.shift!=='เย็น');
