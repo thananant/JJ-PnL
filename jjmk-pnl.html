@@ -553,6 +553,9 @@ RENDER.dash = async (el)=>{
     <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3><canvas id="chLine" height="190"></canvas></div>
     <div class="card"><h3>สัดส่วนต้นทุน</h3><canvas id="chDou" height="190"></canvas></div>
   </div>
+  <div class="card"><h3>ยอดขายดิบรายวัน (POS แยกกะ) <span class="sp">${monthLabel(S.m)}</span></h3>
+    ${salesRepHTML(A.c, A.days)}
+  </div>
   <div class="md2">
     <div class="card">
       <h3>ต้นทุนซัพพลายเออร์ vs มาตรฐาน 5 เดือน <span class="sp">Top 12</span></h3>
@@ -659,6 +662,26 @@ function drCell(v,extra){
   const cls=Math.abs(v)<1?'':(v>0?'drp':'drn');
   return `<span class="num ${cls} ${extra||''}">${v>0?'+':''}${fmt(v,2)}</span>`;
 }
+function salesRepHTML(c,days){
+  let rows='',tAm=0,tPm=0,n=0;
+  for(let d=1;d<=days;d++){
+    const r=c.inc[dstr(S.m,d)]; if(!r)continue;
+    const a=num(r.sales_pos_am), p=num(r.sales_pos_pm);
+    if(!a&&!p)continue;
+    n++; tAm+=a; tPm+=p;
+    const dt=new Date(S.m+'-01'); dt.setDate(d);
+    rows+=`<div class="drrow" onclick="dashGoDay(${d})">
+      <span class="dd">${d} ${TH_D[dt.getDay()]}.</span>
+      <span class="num">${a?fmt(a,2):'–'}</span>
+      <span class="num">${p?fmt(p,2):'–'}</span>
+      <span class="num b">${fmt(a+p,2)}</span></div>`;
+  }
+  if(!n) return '<div class="empty">ยังไม่มียอดขายเดือนนี้</div>';
+  return `<div class="dayrep"><div class="drrow head"><span class="dd">วันที่</span><span class="num">🌅 กะเช้า</span><span class="num">🌆 กะเย็น</span><span class="num">รวมดิบ</span></div>
+    <div class="drscroll" style="max-height:520px">${rows}</div>
+    <div class="drrow tot"><span class="dd">รวม ${n} วัน</span><span class="num">${fmt(tAm,2)}</span><span class="num">${fmt(tPm,2)}</span><span class="num b" style="color:var(--red)">฿${fmt(tAm+tPm,2)}</span></div></div>`;
+}
+function dashGoDay(d){ S.incDay=d; show('income'); }
 function incRepHTML(c,days){
   let rows='',tAm=0,tPm=0,n=0;
   for(let d=1;d<=days;d++){
