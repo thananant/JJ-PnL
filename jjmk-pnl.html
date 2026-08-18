@@ -89,6 +89,10 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .lk{font-size:10px;color:#8A7A50;font-weight:700;background:#F5EDDB;border-radius:6px;padding:1px 6px;margin-left:4px}
 .drp{color:var(--ok)}
 .drn{color:var(--bad)}
+.avgrow{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
+.avgc{font-size:12px;color:var(--mut);background:#FAF6EC;border:1.5px solid var(--line);border-radius:99px;padding:4px 11px;display:inline-flex;align-items:center;gap:6px}
+.avgc::before{content:'';width:14px;height:0;border-top:2.5px dashed var(--c)}
+.avgc b{color:var(--c);font-family:'Prompt'}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -601,7 +605,8 @@ RENDER.dash = async (el)=>{
       <div class="s mut">Fix ฿${fmtI(A.fixT)} · นอกเหนือ ฿${fmtI(A.extraT)}</div></div>
   </div>
   <div class="md32">
-    <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3><canvas id="chLine" height="190"></canvas></div>
+    <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3>
+      <div class="avgrow" id="avgRow"></div><canvas id="chLine" height="190"></canvas></div>
     <div class="card"><h3>สัดส่วนต้นทุน</h3><canvas id="chDou" height="190"></canvas></div>
   </div>
   <div class="card"><h3>ยอดขายดิบรายวัน (POS แยกกะ) <span class="sp">${monthLabel(S.m)}</span></h3>
@@ -725,9 +730,25 @@ function drawDash(A){
   if(typeof Chart==='undefined'){toast('โหลดกราฟไม่ขึ้น (เช็คเน็ต)',true);return;}
   killChart('line'); killChart('dou');
   const lc=document.getElementById('chLine'); if(lc){
+    // แบ่งกลุ่มวัน: ธรรมดา = จ-พฤ · หนัก = ศ ส อา
+    const isHeavy=i=>{const dt=new Date(S.m+'-01');dt.setDate(i+1);const wd=dt.getDay();return wd===0||wd===5||wd===6;};
+    const avgOf=arr=>{const v=arr.filter(x=>x>0);return v.length?v.reduce((a,c)=>a+c,0)/v.length:0;};
+    const avAll=avgOf(A.daily);
+    const avWk=avgOf(A.daily.filter((_,i)=>!isHeavy(i)));
+    const avHv=avgOf(A.daily.filter((_,i)=>isHeavy(i)));
+    const ar=document.getElementById('avgRow');
+    if(ar)ar.innerHTML = avAll ? `
+      <span class="avgc" style="--c:var(--ink)">เฉลี่ยทั้งเดือน <b>฿${fmtI(avAll)}</b></span>
+      <span class="avgc" style="--c:#D89094">จ–พฤ <b>฿${fmtI(avWk)}</b></span>
+      <span class="avgc" style="--c:var(--red)">ศ–ส–อา <b>฿${fmtI(avHv)}</b></span>` : '';
+    const mkLine=(v,color)=>({type:'line',data:Array(A.daily.length).fill(v||null),borderColor:color,
+      borderDash:[6,4],borderWidth:1.6,pointRadius:0,pointHitRadius:0,fill:false,order:0});
     S.charts.line=new Chart(lc,{type:'bar',data:{labels:A.daily.map((_,i)=>i+1),
-      datasets:[{data:A.daily,backgroundColor:A.daily.map((_,i)=>{const dt=new Date(S.m+'-01');dt.setDate(i+1);const wd=dt.getDay();return (wd===0||wd===6)?'#C62127':'#E5B4B6';}),borderRadius:4}]},
-      options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
+      datasets:[
+        {data:A.daily,backgroundColor:A.daily.map((_,i)=>isHeavy(i)?'#C62127':'#E5B4B6'),borderRadius:4,order:1},
+        mkLine(avAll,'#5B5348'), mkLine(avWk,'#D89094'), mkLine(avHv,'#C62127')
+      ]},
+      options:{plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
         scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
   }
   const dc=document.getElementById('chDou'); if(dc){
