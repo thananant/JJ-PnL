@@ -1516,23 +1516,77 @@ function parseHistoryWB(sheets){
   if(cashPm>0)items['กะเย็น']=(items['กะเย็น']||0)+cashPm;
   return {pos, items};
 }
+function makeHistTemplate(){
+  if(typeof XLSX==='undefined'){toast('ตัวสร้าง Excel โหลดไม่ขึ้น (เช็คเน็ต)',true);return;}
+  const rows=[
+    ['เทมเพลตข้อมูลย้อนหลัง · JJ P&L','กรอกคอลัมน์ B แล้วอัปโหลดกลับที่หน้าตั้งค่า'],
+    [],
+    ['เดือน (พิมพ์แบบ 2026-06)',''],
+    ['สาขา (JJRD หรือ JJLP)','JJRD'],
+    ['ยอดขายดิบรวมทั้งเดือน (รวม VAT)',0],
+    ['Grab (ถ้ามี)',0],
+    ['Lineman (ถ้ามี)',0],
+    [],
+    ['รายการ','ยอดรวมทั้งเดือน (บาท)'],
+  ];
+  const sups=S.core.sup.filter(x=>x.active).slice()
+    .sort((a,b)=>(a.category||'').localeCompare(b.category||'','th')||num(a.sort)-num(b.sort));
+  sups.forEach(x=>rows.push([x.name,0]));
+  rows.push(['กะเช้า',0],['กะเย็น',0],['Shopee',0]);
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:40},{wch:24}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'ข้อมูลย้อนหลัง');
+  XLSX.writeFile(wb,'JJ-PnL-ข้อมูลย้อนหลัง-เทมเพลต.xlsx');
+  toast('โหลดเทมเพลตแล้ว กรอกเสร็จอัปโหลดกลับได้เลย');
+}
+function parseHistTemplate(aoa){
+  let mo=null,br=null,pos=0,grab=0,line=0,inItems=false; const items={};
+  for(const row of aoa){
+    const l=(row[0]??'').toString().trim(); const v=row[1];
+    if(!l)continue;
+    if(l.startsWith('เทมเพลต'))continue;
+    if(l.startsWith('เดือน')){
+      if(typeof v==='string'&&v.trim())mo=v.trim().slice(0,7);
+      else if(typeof v==='number'&&XLSX.SSF){const dd=XLSX.SSF.parse_date_code(v); if(dd)mo=dd.y+'-'+String(dd.m).padStart(2,'0');}
+      continue;}
+    if(l.startsWith('สาขา')){const t=(v??'').toString().trim();
+      br=/LP|ลาดพร้าว/i.test(t)?'JJLP':/RD|รัชดา/i.test(t)?'JJRD':null; continue;}
+    if(l.startsWith('ยอดขายดิบ')){pos=num(v);continue;}
+    if(l.startsWith('Grab')){grab=num(v);continue;}
+    if(l.startsWith('Lineman')){line=num(v);continue;}
+    if(l==='รายการ'){inItems=true;continue;}
+    if(inItems){const a=num(v); if(a>0)items[HIST_NAME_MAP[l]||l]=a;}
+  }
+  return {mo,br,pos,grab,line,items};
+}
 async function importHistory(){
   if(typeof XLSX==='undefined'){toast('ตัวอ่าน Excel โหลดไม่ขึ้น (เช็คเน็ต)',true);return;}
-  const br=document.getElementById('hiBr').value, mo=document.getElementById('hiM').value;
-  const grab=num(document.getElementById('hiGrab').value), line=num(document.getElementById('hiLine').value);
   const f=document.getElementById('hiFile').files[0];
   const st=document.getElementById('hiStatus');
-  if(!mo){st.textContent='เลือกเดือนของไฟล์ก่อน';return;}
   if(!f){st.textContent='เลือกไฟล์ Excel ก่อน';return;}
   st.textContent='กำลังอ่านไฟล์...';
   try{
     const buf=await f.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array'});
-    const pick=n=>{ const nm=wb.SheetNames.find(x=>x.trim()===n); return nm?XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:true}):null; };
-    const sheets={'รายรับ':pick('รายรับ'),'รายจ่าย':pick('รายจ่าย')};
-    if(!sheets['รายรับ']&&!sheets['รายจ่าย']) throw new Error('ไม่พบชีท "รายรับ"/"รายจ่าย" ในไฟล์');
-    const {pos,items}=parseHistoryWB(sheets);
-    if(!pos&&!Object.keys(items).length) throw new Error('อ่านไฟล์ได้ แต่ไม่พบตัวเลข (เช็คว่าเป็นไฟล์แม่แบบเดียวกัน)');
+    const aoaOf=n=>{ const nm=wb.SheetNames.find(x=>x.trim()===n); return nm?XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:true}):null; };
+    let br,mo,grab,line,pos,items,srcLabel;
+    const tpl=aoaOf('ข้อมูลย้อนหลัง');
+    if(tpl){
+      const t=parseHistTemplate(tpl);
+      if(!t.mo) throw new Error('ในเทมเพลตยังไม่ได้กรอกช่อง "เดือน" (พิมพ์แบบ 2026-06)');
+      mo=t.mo; br=t.br||document.getElementById('hiBr').value;
+      grab=t.grab; line=t.line; pos=t.pos; items=t.items; srcLabel='เทมเพลต';
+      if(!pos&&!Object.keys(items).length) throw new Error('เทมเพลตยังไม่มีตัวเลข — กรอกยอดขายหรือรายการซัพก่อน');
+    }else{
+      br=document.getElementById('hiBr').value; mo=document.getElementById('hiM').value;
+      grab=num(document.getElementById('hiGrab').value); line=num(document.getElementById('hiLine').value);
+      if(!mo) throw new Error('เลือก "เดือนของไฟล์" ก่อน (ไฟล์เดิมไม่มีข้อมูลเดือนในตัว)');
+      const sheets={'รายรับ':aoaOf('รายรับ'),'รายจ่าย':aoaOf('รายจ่าย')};
+      if(!sheets['รายรับ']&&!sheets['รายจ่าย']) throw new Error('ไม่พบชีท "รายรับ"/"รายจ่าย" หรือ "ข้อมูลย้อนหลัง" ในไฟล์');
+      const r=parseHistoryWB(sheets); pos=r.pos; items=r.items; srcLabel='ไฟล์เดิม';
+      if(!pos&&!Object.keys(items).length) throw new Error('อ่านไฟล์ได้ แต่ไม่พบตัวเลข (เช็คว่าเป็นไฟล์แม่แบบเดียวกัน)');
+    }
     const revenue=pos/1.07+grab+line;
     st.textContent='กำลังบันทึก...';
     await ups('pnl_history',[{branch:br,month:mo,revenue,note:f.name}],'branch,month');
@@ -1540,7 +1594,7 @@ async function importHistory(){
     const rows=Object.entries(items).map(([name,amount])=>({branch:br,month:mo,name,amount}));
     if(rows.length) await ins('pnl_history_items',rows);
     S.benchCache={};
-    st.innerHTML=`✅ นำเข้าแล้ว: ยอดขายดิบ ฿${fmtI(pos)} · รายได้ฐาน ฿${fmtI(revenue)} · รายการซัพ+เงินสด ${rows.length} รายการ`;
+    st.innerHTML=`✅ นำเข้าจาก${srcLabel}: ${monthLabel(mo)} · ${(BRNAME[br]||br)} · ยอดขายดิบ ฿${fmtI(pos)} · รายได้ฐาน ฿${fmtI(revenue)} · ${rows.length} รายการ`;
     toast('นำเข้า '+mo+' สำเร็จ'); loadHistList();
   }catch(e){ st.textContent='❌ '+e.message; }
 }
@@ -1575,7 +1629,8 @@ RENDER.set = async (el)=>{
       <div class="fld"><label>Key</label><input id="stKey" value="${esc(key)}"></div>
       <div style="display:flex;gap:8px"><button class="btn sm2" onclick="localStorage.setItem('jjpnl_url',document.getElementById('stUrl').value.trim());localStorage.setItem('jjpnl_key',document.getElementById('stKey').value.trim());toast('บันทึกแล้ว รีโหลด...');setTimeout(()=>location.reload(),600)">บันทึก</button></div></div>
     <div class="card"><h3>📥 ข้อมูลย้อนหลัง (ฐานคำนวณค่าเฉลี่ย)</h3>
-      <div class="xs mut" style="margin-bottom:10px">อัปโหลดไฟล์ Excel เดือนเก่า (แม่แบบเดียวกัน) ระบบดึง<b>ยอดขาย + รายจ่ายซัพ + เงินสดหน้าร้าน</b>ให้อัตโนมัติ แล้วคอลัมน์ "เฉลี่ย" จะคำนวณจากข้อมูลจริง 5 เดือนล่าสุดแทนค่าตั้งต้น</div>
+      <div class="xs mut" style="margin-bottom:10px">รับ 2 แบบ: <b>① ไฟล์ Excel เดือนเก่าทั้งไฟล์</b> (แม่แบบเดิม ระบบแกะยอดขาย+รายจ่ายซัพ+เงินสดให้เอง) หรือ <b>② เทมเพลตกรอกเอง</b> — กดโหลดเทมเพลตด้านล่าง กรอกยอดรวมรายเดือน แล้วอัปโหลดกลับ · คอลัมน์ "เฉลี่ย" จะคำนวณจากข้อมูลจริง 5 เดือนล่าสุด</div>
+      <div style="margin-bottom:10px"><button class="btn gh sm2" onclick="makeHistTemplate()">📄 โหลดเทมเพลตกรอกเอง</button></div>
       <div class="grid2">
         <div class="fld"><label>สาขาของไฟล์</label><select id="hiBr"><option value="JJRD">รัชดา</option><option value="JJLP">ลาดพร้าว</option></select></div>
         <div class="fld"><label>เดือนของไฟล์</label><input id="hiM" type="month"></div>
