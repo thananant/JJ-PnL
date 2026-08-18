@@ -468,6 +468,7 @@ async function show(v){
   const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   S.tab=v;
+  LS.set('jjpnl_view',{tab:v, incDay:S.incDay||null, expDay:S.expDay||null, on:todayStr()});
   const el=document.getElementById('view-'+v);
   el.innerHTML='<div class="spin"></div>';
   try{ await RENDER[v](el); }catch(e){ el.innerHTML='<div class="empty">โหลดไม่สำเร็จ — '+esc(e.message)+'</div>'; }
@@ -497,8 +498,15 @@ async function boot(){
   try{ await loadCore(); }catch(e){
     document.getElementById('view-dash').innerHTML='<div class="empty">เชื่อมต่อไม่ได้ — ตรวจ URL/Key ในหน้าตั้งค่า<br><span class="xs">'+esc(e.message)+'</span></div>'; return;
   }
-  S.tab='dash'; await show('dash');
+  const last=LS.get('jjpnl_view',null);
+  const startTab = last && VIEWS.includes(last.tab) ? last.tab : 'dash';
+  if(last && last.on===todayStr()){
+    if(last.incDay) S.incDay=last.incDay;
+    if(last.expDay) S.expDay=last.expDay;
+  }
+  S.tab=startTab; await show(startTab);
 }
+const VIEWS=['dash','income','exp','sum','pv','etc','set'];
 
 /* ============ แดชบอร์ด ============ */
 function killChart(id){ if(S.charts[id]){S.charts[id].destroy(); delete S.charts[id];} }
@@ -613,7 +621,7 @@ function calHTML(days, sel, hasFn, fnName){
   }
   return h+'</div>';
 }
-function expPick(d){ S.expDay=d; show('exp'); }
+function expPick(d){ S.expDay=d; show('exp'); }  // show() จะบันทึกตำแหน่งให้เอง
 RENDER.income = async (el)=>{
   const c = await loadMonth(S.br,S.m);
   const days=monthDays(S.m); const td=todayStr();
@@ -635,7 +643,7 @@ function incHasDay(c,d){
   return !!((r&&hasIncData(r)) || c.cash.some(x=>x.d===ds));
 }
 function incPick(d){
-  S.incDay=d;
+  S.incDay=d; LS.set('jjpnl_view',{tab:S.tab, incDay:d, expDay:S.expDay||null, on:todayStr()});
   document.querySelectorAll('#incChips button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));
   renderIncDay();
 }
