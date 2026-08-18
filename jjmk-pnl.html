@@ -1111,8 +1111,9 @@ function perTotal(c,a,b){
 }
 function expFormHTML(c){
   const ds=dstr(S.m,S.expDay);
+  const usedIds=new Set(Object.values(c.exp).filter(r=>num(r.amount)>0).map(r=>r.supplier_id));
   return CAT_ORDER.map(cat=>{
-    const list=S.core.sup.filter(s=>s.category===cat&&s.active);
+    const list=S.core.sup.filter(s=>s.category===cat&&(s.active||usedIds.has(s.id)));
     if(!list.length)return'';
     return `<div class="card"><h3><span style="width:9px;height:9px;border-radius:3px;background:${CAT_COLOR[cat]}"></span>${cat}
       <span class="sp num" id="catT-${esc(cat)}"></span></h3>
@@ -1120,7 +1121,7 @@ function expFormHTML(c){
         const r=c.exp[ds+'|'+s.id];
         const isYannah=s.name==='Yannah Beef';
         const paid=!!(r&&r.paid), hasSlip=!!(r&&r.slip_url);
-        return `<div class="exrow"><div class="nm"><div class="t">${esc(s.name)}${isYannah?' <span class="hintlink" onclick="meatModal(\''+ds+'\','+s.id+')">🥩 คิดจากกก.</span>':''}</div>
+        return `<div class="exrow"><div class="nm"><div class="t">${esc(s.name)}${s.active?'':' <span class="xs" style="color:var(--bad);font-weight:600">· เลิกใช้แล้ว</span>'}${isYannah?' <span class="hintlink" onclick="meatModal(\''+ds+'\','+s.id+')">🥩 คิดจากกก.</span>':''}</div>
           <div class="s">${esc(s.payment_term||'')}${s.payment_term?' · ':''}${esc(s.vat_type)}</div></div>
           <input type="number" step="any" inputmode="decimal" placeholder="0" id="exi${s.id}" value="${r&&num(r.amount)?r.amount:''}"
             oninput="expInput('${ds}',${s.id},this.value)">
@@ -1231,7 +1232,7 @@ function expTableView(){
   const c=S.cache[mkey(S.br,S.m)]; const days=monthDays(S.m);
   let rows='';
   CAT_ORDER.forEach(cat=>{
-    const list=S.core.sup.filter(s=>s.category===cat&&s.active); if(!list.length)return;
+    const list=S.core.sup.filter(s=>s.category===cat); if(!list.length)return;
     rows+=`<tr class="cat"><td colspan="5">${cat}</td></tr>`;
     list.forEach(s=>{
       let a=0,b=0;
@@ -1311,7 +1312,7 @@ RENDER.sum = async (el)=>{
     const catAmt=A.byCat[cat]||0;
     vcRows+=`<tr class="cat"><td>${cat}</td><td class="n">${catAmt?fmtI(catAmt):''}</td>
       <td class="n">${catAmt&&rev?pctF(catAmt/rev):''}</td><td colspan="4"></td></tr>`;
-    list.forEach(s=>{ if(A.bySup[s.id]||benchOf(s.name)) vcRows+=supRow(s); });
+    list.forEach(s=>{ if(A.bySup[s.id]||(s.active&&benchOf(s.name))) vcRows+=supRow(s); });
   });
   vcRows+=`<tr class="cat"><td>เงินสดหน้าร้าน</td><td class="n">${fmtI(A.cashM+A.cashE)}</td>
     <td class="n">${rev?pctF((A.cashM+A.cashE)/rev):''}</td><td colspan="4"></td></tr>`;
@@ -1810,7 +1811,9 @@ RENDER.set = async (el)=>{
       <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
       ${S.core.sup.map(s=>`<tr style="${s.active?'':'opacity:.4'}"><td><div class="b sm">${esc(s.name)}</div>
         <div class="xs mut">${esc(s.category)} · ${esc(s.payment_term||'-')} · ${esc(s.vat_type)}</div></td>
-        <td class="right"><button class="hintlink" onclick="supModal(${s.id})">แก้ไข</button></td></tr>`).join('')}
+        <td class="right" style="white-space:nowrap"><button class="hintlink" onclick="supModal(${s.id})">แก้ไข</button>${s.active
+          ?`<button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="supDel(${s.id})">ลบ</button>`
+          :`<button class="hintlink" style="color:var(--ok);margin-left:8px" onclick="supRestore(${s.id})">กู้คืน</button>`}</td></tr>`).join('')}
       </table></div></div>
     <div class="card"><h3>รายการ Fix cost · ${BRNAME[S.br]} <span class="sp"><button class="hintlink" onclick="fixModal(null)">+ เพิ่ม</button></span></h3>
       <div class="twrap"><table>
@@ -1826,6 +1829,19 @@ RENDER.set = async (el)=>{
   </div></div>`;
   loadHistList();
 };
+async function supDel(id){
+  const sp=S.core.supById[id]; if(!sp)return;
+  if(!confirm('ลบ "'+sp.name+'" ?\n\n• ข้อมูลเก่าไม่หาย — เดือนที่เคยมียอด เปิดย้อนหลังยังเห็นครบ\n• เดือนใหม่จะไม่ขึ้นในหน้ากรอกอีก\n• กดกู้คืนได้ทุกเมื่อ'))return;
+  try{
+    await upd('pnl_suppliers','id=eq.'+id,{active:false});
+    sp.active=false; toast('ลบ "'+sp.name+'" แล้ว (ประวัติยังอยู่ครบ)'); show('set');
+  }catch(e){ toast('ลบไม่สำเร็จ: '+e.message,true); }
+}
+async function supRestore(id){
+  const sp=S.core.supById[id]; if(!sp)return;
+  await upd('pnl_suppliers','id=eq.'+id,{active:true});
+  sp.active=true; toast('กู้คืน "'+sp.name+'" แล้ว'); show('set');
+}
 function supModal(id){
   const s=id?S.core.supById[id]:{category:'อาหาร',name:'',payment_term:'',vat_type:'NON-VAT',bank:'',account_no:'',account_name:'',full_name:'',sort:999,active:true};
   openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}ซัพพลายเออร์</h3>
