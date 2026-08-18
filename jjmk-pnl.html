@@ -417,11 +417,13 @@ function catColor(c){
 <script>
 /* ============ โหลดข้อมูล ============ */
 async function loadCore(){
-  const [sup, ben, fix, meats] = await Promise.all([
+  const [sup, ben, fix, meats, brs, fgs] = await Promise.all([
     sel('pnl_suppliers','select=*&order=sort'),
     sel('pnl_benchmarks','select=*'),
     sel('pnl_fixed_items','select=*&order=grp,sort'),
-    sel('pnl_meat_prices','select=*&order=sort')
+    sel('pnl_meat_prices','select=*&order=sort'),
+    sel('pnl_branches','select=*&order=sort,code').catch(()=>sel('pnl_branches','select=*&order=code.desc')).catch(()=>[]),
+    sel('pnl_fix_groups','select=*&order=sort,name').catch(()=>[])
   ]);
   const bench = {};
   ben.forEach(r=>{ (bench[r.bkey]??={list:[]}).list.push(Number(r.pct)); });
@@ -429,7 +431,10 @@ async function loadCore(){
     b.avg = b.list.reduce((a,c)=>a+c,0)/b.list.length;
     b.min = Math.min(...b.list);
   });
-  S.core = { sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix, meats };
+  S.core = { sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix, meats,
+    branches:(brs&&brs.length?brs:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]),
+    fixGroups: fgs||[] };
+  S.core.branches.forEach(b=>{ if(b.name) BRNAME[b.code]='สาขา'+b.name; });
 }
 function mkey(b,m){ return b+'|'+m; }
 async function loadMonth(b,m,force){
@@ -508,36 +513,36 @@ async function agg(b,m){
            fixT,fixRows, net: revenue - vc - fixT - extraT };
 }
 async function aggAll(m){
-  const [a,b]=await Promise.all([agg('JJRD',m),agg('JJLP',m)]);
-  const days=a.days;
-  // รวมแถวรายรับต่อวัน (บวกทุกช่องตัวเลข)
+  const parts=await Promise.all(S.core.branches.map(b=>agg(b.code,m)));
+  const days=parts[0].days;
   const inc={};
-  for(const src of [a.c.inc,b.c.inc]){
-    for(const ds in src){
-      const r=src[ds]; const t=inc[ds]??(inc[ds]={branch:'ALL',d:ds});
+  for(const p of parts){
+    for(const ds in p.c.inc){
+      const r=p.c.inc[ds]; const t=inc[ds]??(inc[ds]={branch:'ALL',d:ds});
       for(const k in r){ if(k==='branch'||k==='d'||k==='note')continue; t[k]=num(t[k])+num(r[k]); }
     }
   }
-  const cash=[...a.c.cash,...b.c.cash];
+  const cash=parts.flatMap(p=>p.c.cash);
   let daysData=0; for(let d=1;d<=days;d++){ const r=inc[dstr(m,d)]; if(r&&hasIncData(r))daysData++; }
-  const daily=a.daily.map((v,i)=>v+(b.daily[i]||0));
+  const daily=parts[0].daily.map((_,i)=>parts.reduce((a,p)=>a+(p.daily[i]||0),0));
   const sum2=(x,y)=>{const o={...x}; for(const k in y)o[k]=(o[k]||0)+y[k]; return o;};
-  // Fix cost รวมตามชื่อรายการ (สองสาขาบวกกัน)
+  const bySup=parts.reduce((a,p)=>sum2(a,p.bySup),{});
+  const byCat=parts.reduce((a,p)=>sum2(a,p.byCat),{});
   const fmap={};
-  [...a.fixRows,...b.fixRows].forEach(r=>{
+  parts.flatMap(p=>p.fixRows).forEach(r=>{
     const k=(r.item.grp||'')+'|'+r.item.name;
     const t=fmap[k]??(fmap[k]={item:{...r.item,id:'all'},val:0,has:false});
     if(r.val!=null){ t.val+=r.val; t.has=true; }
   });
   const fixRows=Object.values(fmap).map(t=>({item:t.item, val:t.has?t.val:null}));
-  const c={ inc, cash, exp:{}, extra:[...a.c.extra,...b.c.extra], shop:[...a.c.shop,...b.c.shop],
+  const c={ inc, cash, exp:{}, extra:parts.flatMap(p=>p.c.extra), shop:parts.flatMap(p=>p.c.shop),
             meta:{branch:'ALL',month:m,grab:0,lineman:0,days_divisor:null,note:''}, fixm:{}, meatd:{} };
+  const SUM=k=>parts.reduce((a,p)=>a+num(p[k]),0);
   return { b:'ALL', m, c, days, daysData, daily,
-    incVat:a.incVat+b.incVat, exVat:a.exVat+b.exVat, vat:a.vat+b.vat, sales_pos:a.sales_pos+b.sales_pos,
-    bySup:sum2(a.bySup,b.bySup), byCat:sum2(a.byCat,b.byCat),
-    cashM:a.cashM+b.cashM, cashE:a.cashE+b.cashE, shopee:a.shopee+b.shopee, extraT:a.extraT+b.extraT,
-    supTotal:a.supTotal+b.supTotal, vc:a.vc+b.vc, grab:a.grab+b.grab, lineman:a.lineman+b.lineman,
-    revenue:a.revenue+b.revenue, fixT:a.fixT+b.fixT, fixRows, net:a.net+b.net, pA:a, pB:b };
+    incVat:SUM('incVat'), exVat:SUM('exVat'), vat:SUM('vat'), sales_pos:SUM('sales_pos'),
+    bySup, byCat, cashM:SUM('cashM'), cashE:SUM('cashE'), shopee:SUM('shopee'), extraT:SUM('extraT'),
+    supTotal:SUM('supTotal'), vc:SUM('vc'), grab:SUM('grab'), lineman:SUM('lineman'),
+    revenue:SUM('revenue'), fixT:SUM('fixT'), fixRows, net:SUM('net'), pA:parts[0], pB:parts[1], parts };
 }
 function aggFor(br,m){ return br==='ALL' ? aggAll(m) : agg(br,m); }
 function allNotice(title){
@@ -546,8 +551,37 @@ function allNotice(title){
     <div class="b" style="font-family:'Prompt';font-size:16px;margin:8px 0 4px">โหมดทุกสาขา ดูภาพรวมได้อย่างเดียว</div>
     <div class="sm mut" style="margin-bottom:14px">หน้า${title}ต้องเลือกสาขาก่อน เพื่อบันทึกข้อมูลลงถูกสาขา</div>
     <div style="display:flex;gap:10px;justify-content:center">
-      <button class="btn dk sm2" onclick="pickBranch('JJRD')">สาขารัชดา</button>
-      <button class="btn dk sm2" onclick="pickBranch('JJLP')">สาขาลาดพร้าว</button></div></div>`;
+      ${S.core.branches.map(b=>`<button class="btn dk sm2" onclick="pickBranch('${b.code}')">${esc(BRNAME[b.code]||b.name||b.code)}</button>`).join('')}</div></div>`;
+}
+function brModal(code){
+  const b=code?S.core.branches.find(x=>x.code===code):{code:'',name:''};
+  openModal(`<h3>${code?'แก้ไขสาขา':'เพิ่มสาขาใหม่'}</h3>
+    <div class="fld"><label>รหัสสาขา (อังกฤษ/ตัวเลข 2–10 ตัว เช่น JJBN)</label>
+      <input id="brCode" value="${esc(b.code)}" ${code?'disabled':''} style="text-transform:uppercase" placeholder="JJXX"></div>
+    <div class="fld"><label>ชื่อสาขา</label><input id="brName" value="${esc(b.name||'')}" placeholder="เช่น บางนา"></div>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn sm2" style="margin-left:auto" onclick="brSave(${code?`'${code}'`:'null'})">บันทึก</button></div>`);
+}
+async function brSave(code){
+  const name=(document.getElementById('brName').value||'').trim();
+  if(!name){toast('ใส่ชื่อสาขาก่อนครับ',true);return;}
+  try{
+    if(code){ await upd('pnl_branches','code=eq.'+code,{name}); }
+    else{
+      const c=(document.getElementById('brCode').value||'').trim().toUpperCase();
+      if(!/^[A-Z0-9]{2,10}$/.test(c)){toast('รหัสสาขาใช้ A-Z / 0-9 ยาว 2–10 ตัว',true);return;}
+      if(S.core.branches.some(x=>x.code===c)){toast('รหัส '+c+' มีอยู่แล้ว',true);return;}
+      const srt=(S.core.branches.length?Math.max(...S.core.branches.map(x=>num(x.sort)||0)):0)+1;
+      try{ await ins('pnl_branches',{code:c,name,sort:srt}); }
+      catch(e){ if(String(e.message).includes('sort')) await ins('pnl_branches',{code:c,name}); else throw e; }
+    }
+    await loadCore(); renderBrSeg(); closeModal(); toast('บันทึกสาขาแล้ว'); show('set');
+  }catch(e){ toast('บันทึกไม่สำเร็จ: '+e.message,true); }
+}
+function renderBrSeg(){
+  const seg=document.getElementById('brSeg'); if(!seg||!S.core)return;
+  seg.innerHTML = S.core.branches.map(b=>`<button data-br="${b.code}" class="${S.br===b.code?'on':''}">${esc(b.name||(BRNAME[b.code]||b.code).replace('สาขา',''))}</button>`).join('')
+    + `<button data-br="ALL" class="${S.br==='ALL'?'on':''}">ทุกสาขา</button>`;
 }
 function pickBranch(br){
   S.br=br; LS.set('jjpnl_br',br);
@@ -578,12 +612,12 @@ async function boot(){
   if(!url||!key){ document.getElementById('setup').style.display='block'; return; }
   document.getElementById('app').style.display='block';
   document.getElementById('monthPick').value=S.m;
-  document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x.dataset.br===S.br));
-  document.querySelectorAll('#brSeg button').forEach(btn=>btn.onclick=async()=>{
+  document.getElementById('brSeg').onclick=async e=>{
+    const btn=e.target.closest('button'); if(!btn||!btn.dataset.br)return;
     S.br=btn.dataset.br; LS.set('jjpnl_br',S.br);
     document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x===btn));
     await show(S.tab);
-  });
+  };
   document.getElementById('monthPick').onchange=async e=>{ S.m=e.target.value; LS.set('jjpnl_m',S.m); await show(S.tab); };
   document.querySelectorAll('.tabbar button,.sb-item').forEach(btn=>btn.onclick=()=>show(btn.dataset.v));
   // Enter = เลื่อนไปช่องกรอกถัดไป (Fix cost / รายจ่าย / รายรับ / เงินสดจ่าย / สร้าง PV)
@@ -605,6 +639,8 @@ async function boot(){
   try{ await loadCore(); }catch(e){
     document.getElementById('view-dash').innerHTML='<div class="empty">เชื่อมต่อไม่ได้ — ตรวจ URL/Key ในหน้าตั้งค่า<br><span class="xs">'+esc(e.message)+'</span></div>'; return;
   }
+  if(S.br!=='ALL' && !S.core.branches.some(b=>b.code===S.br)) S.br=(S.core.branches[0]||{}).code||'JJRD';
+  renderBrSeg();
   const last=LS.get('jjpnl_view',null);
   const startTab = last && VIEWS.includes(last.tab) ? last.tab : 'dash';
   if(last && last.on===todayStr()){
@@ -622,9 +658,12 @@ RENDER.dash = async (el)=>{
   S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
   const P = await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
   let cmpHtml;
-  if(S.br==='ALL'){ cmpHtml=compareTable(A.pA,A.pB); }
-  else{ const other = S.br==='JJRD'?'JJLP':'JJRD';
-        const O = await agg(other,S.m).catch(()=>null); cmpHtml=compareTable(A,O); }
+  if(S.br==='ALL'){ cmpHtml=multiCompare(A.parts); }
+  else{
+    const others=S.core.branches.filter(b=>b.code!==S.br);
+    const os=(await Promise.all(others.map(b=>agg(b.code,S.m).catch(()=>null)))).filter(Boolean);
+    cmpHtml=multiCompare([A,...os]);
+  }
   const vcPct = A.revenue? A.vc/A.revenue : null;
   const avgDay = A.daysData? A.incVat/A.daysData : 0;
   const benchTot = totalBench();
@@ -654,7 +693,7 @@ RENDER.dash = async (el)=>{
       ${supDeltaTable(A)}
     </div>
     <div class="card">
-      <h3>เทียบสองสาขา <span class="sp">${monthLabel(S.m)}</span></h3>
+      <h3>เทียบรายสาขา <span class="sp">${monthLabel(S.m)}</span></h3>
       ${cmpHtml}
       <h3 style="margin-top:16px">เทียบเดือนก่อน <span class="sp">${monthLabel(prevMonth(S.m))}</span></h3>
       ${comparePrev(A,P)}
@@ -742,6 +781,18 @@ function supDeltaTable(A){
   <div class="twrap"><table><tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th><th class="right">%</th><th class="right">เฉลี่ย</th><th></th></tr>
   ${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${fmtI(r.amt)}</td><td class="n">${pctF(r.p)}</td>
     <td class="n mut">${r.bn?pctF(r.bn.avg):'–'}</td><td class="right">${r.bn&&r.p!=null?chip(r.p-r.bn.avg):''}</td></tr>`).join('')}
+  </table></div>`;
+}
+function multiCompare(parts){
+  if(!parts||!parts.length) return '<div class="empty">ไม่มีข้อมูล</div>';
+  const cols=parts.map(p=>`<th class="right">${esc((BRNAME[p.b]||p.b).replace('สาขา',''))}</th>`).join('');
+  const row=(t,f,money,pc)=>`<tr><td>${t}</td>${parts.map(p=>{const v=f(p);
+    return `<td class="n">${pc?pctF(v):('฿'+fmtI(v))}</td>`;}).join('')}</tr>`;
+  return `<div class="twrap"><table><tr><th></th>${cols}</tr>
+  ${row('รายได้รวม',p=>p.revenue,1)}
+  ${row('Variable cost',p=>p.vc,1)}
+  ${row('VC %',p=>p.revenue?p.vc/p.revenue:null,0,1)}
+  ${row('คงเหลือสุทธิ',p=>p.net,1)}
   </table></div>`;
 }
 function compareTable(A,O){
@@ -1058,9 +1109,16 @@ async function cashDel(id){
 
 /* ============ รายจ่าย (ซัพพลายเออร์ × วัน) ============ */
 function fixEff(f,c){ return c.fixm[f.id]!=null ? num(c.fixm[f.id]) : (f.default_amount!=null?num(f.default_amount):0); }
+function grpOrder(){ const m={}; (S.core.fixGroups||[]).forEach(g=>m[g.name]=num(g.sort)); return m; }
+function orderGrpNames(names){
+  const o=grpOrder();
+  if(!Object.keys(o).length) return names.slice(); // ยังไม่รัน migration ตารางหมวดกลาง -> คงลำดับเดิม
+  return names.slice().sort((a,b)=>(o[a]??999)-(o[b]??999)||a.localeCompare(b,'th'));
+}
 function fixGroups(){
   const items=S.core.fixed.filter(f=>f.branch===S.br&&f.active).slice().sort((a,b)=>num(a.sort)-num(b.sort));
-  const g={}; items.forEach(f=>(g[f.grp||'อื่นๆ']??=[]).push(f)); return g;
+  const g={}; items.forEach(f=>(g[f.grp||'อื่นๆ']??=[]).push(f));
+  const out={}; orderGrpNames(Object.keys(g)).forEach(n=>out[n]=g[n]); return out;
 }
 function fixPanelHTML(){
   const c=S.cache[mkey(S.br,S.m)]; if(!c)return'';
@@ -1714,8 +1772,9 @@ function parseHistTemplate(aoa){
       if(typeof v==='string'&&v.trim())mo=v.trim().slice(0,7);
       else if(typeof v==='number'&&XLSX.SSF){const dd=XLSX.SSF.parse_date_code(v); if(dd)mo=dd.y+'-'+String(dd.m).padStart(2,'0');}
       continue;}
-    if(l.startsWith('สาขา')){const t=(v??'').toString().trim();
-      br=/LP|ลาดพร้าว/i.test(t)?'JJLP':/RD|รัชดา/i.test(t)?'JJRD':null; continue;}
+    if(l.startsWith('สาขา')){const t=(v??'').toString().trim(); const T=t.toUpperCase();
+      const hit=S.core.branches.find(x=>T.includes(x.code.toUpperCase())||(x.name&&t.includes(x.name)));
+      br=hit?hit.code:null; continue;}
     if(l.startsWith('ยอดขายดิบ')){pos=num(v);continue;}
     if(l.startsWith('Grab')){grab=num(v);continue;}
     if(l.startsWith('Lineman')){line=num(v);continue;}
@@ -1796,7 +1855,7 @@ RENDER.set = async (el)=>{
       <div class="xs mut" style="margin-bottom:10px">รับ 2 แบบ: <b>① ไฟล์ Excel เดือนเก่าทั้งไฟล์</b> (แม่แบบเดิม ระบบแกะยอดขาย+รายจ่ายซัพ+เงินสดให้เอง) หรือ <b>② เทมเพลตกรอกเอง</b> — กดโหลดเทมเพลตด้านล่าง กรอกยอดรวมรายเดือน แล้วอัปโหลดกลับ · คอลัมน์ "เฉลี่ย" จะคำนวณจากข้อมูลจริง 5 เดือนล่าสุด</div>
       <div style="margin-bottom:10px"><button class="btn gh sm2" onclick="makeHistTemplate()">📄 โหลดเทมเพลตกรอกเอง</button></div>
       <div class="grid2">
-        <div class="fld"><label>สาขาของไฟล์</label><select id="hiBr"><option value="JJRD">รัชดา</option><option value="JJLP">ลาดพร้าว</option></select></div>
+        <div class="fld"><label>สาขาของไฟล์</label><select id="hiBr">${S.core.branches.map(b=>`<option value="${b.code}">${esc(b.name||b.code)}</option>`).join('')}</select></div>
         <div class="fld"><label>เดือนของไฟล์</label><input id="hiM" type="month"></div>
         <div class="fld"><label>Grab (จากชีทสรุป · ไม่มีใส่ 0)</label><input id="hiGrab" type="number" step="any" inputmode="decimal" placeholder="0"></div>
         <div class="fld"><label>Lineman</label><input id="hiLine" type="number" step="any" inputmode="decimal" placeholder="0"></div>
@@ -1807,6 +1866,12 @@ RENDER.set = async (el)=>{
       <div id="hiStatus" class="xs mut" style="margin-top:8px"></div>
       <div id="hiList" style="margin-top:10px"></div>
     </div>
+    <div class="card"><h3>สาขา <span class="sp"><button class="hintlink" onclick="brModal(null)">+ เพิ่มสาขา</button></span></h3>
+      <div class="xs mut" style="margin-bottom:8px">เพิ่มสาขาใหม่ได้เลย — ปุ่มเลือกสาขา ทุกหน้า รายงาน และสำรอง NAS รองรับอัตโนมัติ · รหัสใช้ภาษาอังกฤษ (ไปโชว์ในเลข PV และชื่อโฟลเดอร์สำรอง)</div>
+      <div class="twrap"><table>
+      ${S.core.branches.map(b=>`<tr><td><span class="b sm">${esc(b.name||'')}</span> <span class="xs mut">· ${esc(b.code)}</span></td>
+        <td class="right"><button class="hintlink" onclick="brModal('${b.code}')">แก้ไขชื่อ</button></td></tr>`).join('')}
+      </table></div></div>
     <div class="card"><h3>ข้อมูลบริษัท (หัวเอกสาร PV)</h3>
       <div class="fld"><label>ชื่อบริษัท</label><input id="coName" value="${esc(co.name)}"></div>
       <div class="grid2"><div class="fld"><label>ที่อยู่ 1</label><input id="coA1" value="${esc(co.addr1)}"></div>
@@ -1835,19 +1900,23 @@ RENDER.set = async (el)=>{
       })()}
       </table></div></div>
     <div class="card"><h3>รายการ Fix cost · ${BRNAME[S.br]} <span class="sp"><button class="hintlink" onclick="fixModal(null)">+ เพิ่ม</button></span></h3>
+      <div class="xs mut" style="margin:-4px 0 8px">▲▼ ที่หัวหมวด = จัดลำดับหมวด <b>ใช้ร่วมกันทุกสาขา</b> · ▲▼ ในแถว = จัดลำดับรายการเฉพาะสาขานี้</div>
       <div class="twrap"><table>
       ${(()=>{
         const its=S.core.fixed.filter(f=>f.branch===S.br).slice().sort((a,b)=>num(a.sort)-num(b.sort)||num(a.id)-num(b.id));
         const g={}; its.forEach(f=>(g[f.grp||'อื่นๆ']??=[]).push(f));
-        return Object.entries(g).map(([grp,list])=>
-          `<tr class="cat"><td colspan="3">${esc(grp)} <span class="xs" style="font-weight:500;opacity:.7">· ${list.length} รายการ</span></td></tr>`+
+        const names=orderGrpNames(Object.keys(g));
+        return names.map((grp,gi)=>{const list=g[grp];return `<tr class="cat"><td colspan="3"><div style="display:flex;align-items:center;gap:8px">${esc(grp)} <span class="xs" style="font-weight:500;opacity:.7">· ${list.length} รายการ</span>
+            <span style="margin-left:auto" class="xs" style="opacity:.6"></span>
+            <button class="mvbtn" ${gi===0?'disabled':''} data-g="${esc(grp)}" onclick="grpMove(this.dataset.g,-1)">▲</button>
+            <button class="mvbtn" ${gi===names.length-1?'disabled':''} data-g="${esc(grp)}" onclick="grpMove(this.dataset.g,1)">▼</button></div></td></tr>`+
           list.map((f,i)=>`<tr style="${f.active?'':'opacity:.4'}"><td><span class="b sm">${esc(f.name)}</span></td>
           <td class="n">${f.default_amount!=null?fmtI(f.default_amount):'<span class="mut xs">กรอกรายเดือน</span>'}</td>
           <td class="right" style="white-space:nowrap">
             <button class="mvbtn" ${i===0?'disabled':''} onclick="fixMove(${f.id},-1)">▲</button><button class="mvbtn" ${i===list.length-1?'disabled':''} onclick="fixMove(${f.id},1)">▼</button>
             <button class="hintlink" style="margin-left:8px" onclick="fixModal(${f.id})">แก้ไข</button>
-            <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="fixDel(${f.id})">ลบ</button></td></tr>`).join('')
-        ).join('');
+            <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="fixDel(${f.id})">ลบ</button></td></tr>`).join('');
+        }).join('');
       })()}
       </table></div></div>
     <div class="card"><h3>ราคาเนื้อ Yannah · ${BRNAME[S.br]}</h3>
@@ -1926,6 +1995,32 @@ async function supSave(id){
   if(id) await upd('pnl_suppliers','id=eq.'+id,body); else await ins('pnl_suppliers',body);
   await loadCore(); closeModal(); toast('บันทึกแล้ว'); show('set');
 }
+async function grpMove(name,dir){
+  let gs=(S.core.fixGroups||[]).slice();
+  // sync หมวดที่มีในข้อมูลแต่ยังไม่อยู่ในตารางกลาง
+  const present=[...new Set(S.core.fixed.map(f=>f.grp||'อื่นๆ'))];
+  for(const n of present){
+    if(!gs.some(g=>g.name===n)){
+      const row={name:n,sort:(gs.length?Math.max(...gs.map(x=>num(x.sort))):0)+10};
+      try{ await ups('pnl_fix_groups',[row],'name'); }catch(e){ toast('ต้องรัน jjmk_pnl_groups_branches.sql ก่อนครับ',true); return; }
+      gs.push(row);
+    }
+  }
+  gs.sort((a,b)=>num(a.sort)-num(b.sort)||a.name.localeCompare(b.name,'th'));
+  if(gs.some((x,i)=>i>0&&num(x.sort)===num(gs[i-1].sort))){
+    gs.forEach((x,i)=>x.sort=(i+1)*10);
+    await Promise.all(gs.map(x=>ups('pnl_fix_groups',[{name:x.name,sort:x.sort}],'name')));
+  }
+  const i=gs.findIndex(g=>g.name===name), j=i+dir;
+  if(i<0||j<0||j>=gs.length)return;
+  const t=gs[i].sort; gs[i].sort=gs[j].sort; gs[j].sort=t;
+  await Promise.all([
+    ups('pnl_fix_groups',[{name:gs[i].name,sort:gs[i].sort}],'name'),
+    ups('pnl_fix_groups',[{name:gs[j].name,sort:gs[j].sort}],'name')
+  ]);
+  S.core.fixGroups=gs;
+  toast('จัดลำดับหมวดแล้ว (มีผลทุกสาขา)'); show('set');
+}
 async function fixMove(id,dir){
   const f=S.core.fixed.find(x=>x.id===id); if(!f)return;
   const key=x=>x.grp||'อื่นๆ';
@@ -1980,6 +2075,11 @@ async function fixSave(id){
   if(grp==='__new'){
     grp=(document.getElementById('fxGrpNew').value||'').trim();
     if(!grp){toast('พิมพ์ชื่อหมวดใหม่ก่อนครับ',true);return;}
+    const gs=S.core.fixGroups||[];
+    if(!gs.some(x=>x.name===grp)){
+      const srt=(gs.length?Math.max(...gs.map(x=>num(x.sort))):0)+10;
+      await ups('pnl_fix_groups',[{name:grp,sort:srt}],'name').catch(()=>{});
+    }
   }
   const body={branch:S.br,grp,name:fxName.value.trim(),
     default_amount:fxAmt.value===''?null:num(fxAmt.value),active:fxAct.checked};
