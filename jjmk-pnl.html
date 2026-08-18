@@ -73,6 +73,18 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .flab{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--mut);margin:10px 2px 5px;font-family:'Prompt'}
 .calcline{margin-top:10px;padding-top:8px;border-top:1.5px dashed rgba(0,0,0,.12);font-size:12.5px;color:var(--mut);display:flex;flex-wrap:wrap;gap:3px 8px;align-items:center}
 .calcline b{color:var(--ink);font-family:'Prompt'}
+.calwrap{display:grid;gap:14px}
+@media(min-width:900px){.calwrap{grid-template-columns:auto 1fr;align-items:start}}
+.dayrep{border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.drrow{display:grid;grid-template-columns:60px 1fr 1fr 1.15fr;gap:6px;padding:7px 10px;font-size:12.5px;border-bottom:1px solid var(--line);align-items:center;cursor:pointer}
+.drrow .dd{font-weight:600;font-family:'Prompt';white-space:nowrap}
+.drrow .num{text-align:right;font-variant-numeric:tabular-nums}
+.drrow.head{background:#FAF6EC;font-weight:700;color:var(--mut);cursor:default;font-size:11px;font-family:'Prompt'}
+.drrow.on{background:#FFF2EF}
+.drrow:not(.head):not(.tot):hover{background:#FFF8F3}
+.drrow.tot{background:#FCF7EC;font-weight:700;cursor:default;border-top:2px solid var(--line);border-bottom:0}
+.drscroll{max-height:378px;overflow-y:auto}
+.drscroll .drrow:last-child{border-bottom:0}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -622,6 +634,25 @@ function calHTML(days, sel, hasFn, fnName){
   return h+'</div>';
 }
 function expPick(d){ S.expDay=d; show('exp'); }  // show() จะบันทึกตำแหน่งให้เอง
+function incRepHTML(c,days){
+  let rows='',tAm=0,tPm=0,n=0;
+  for(let d=1;d<=days;d++){
+    const r=c.inc[dstr(S.m,d)]; if(!r)continue;
+    const a=num(r.sales_pos_am), p=num(r.sales_pos_pm);
+    if(!a&&!p)continue;
+    n++; tAm+=a; tPm+=p;
+    const dt=new Date(S.m+'-01'); dt.setDate(d);
+    rows+=`<div class="drrow ${d===S.incDay?'on':''}" onclick="incPick(${d})">
+      <span class="dd">${d} ${TH_D[dt.getDay()]}.</span>
+      <span class="num">${a?fmt(a,2):'–'}</span>
+      <span class="num">${p?fmt(p,2):'–'}</span>
+      <span class="num b">${fmt(a+p,2)}</span></div>`;
+  }
+  if(!n) return '<div class="empty" style="padding:24px 10px">ยังไม่มียอดขายเดือนนี้<br><span class="xs mut">กรอกยอด POS แล้วรายงานจะขึ้นตรงนี้</span></div>';
+  return `<div class="drrow head"><span class="dd">วันที่</span><span class="num">🌅 กะเช้า</span><span class="num">🌆 กะเย็น</span><span class="num">รวมดิบ</span></div>
+    <div class="drscroll">${rows}</div>
+    <div class="drrow tot"><span class="dd">รวม ${n} วัน</span><span class="num">${fmt(tAm,2)}</span><span class="num">${fmt(tPm,2)}</span><span class="num" style="color:var(--red)">฿${fmt(tAm+tPm,2)}</span></div>`;
+}
 RENDER.income = async (el)=>{
   const c = await loadMonth(S.br,S.m);
   const days=monthDays(S.m); const td=todayStr();
@@ -633,7 +664,10 @@ RENDER.income = async (el)=>{
     <button class="btn gh sm2" style="margin-left:auto" onclick="fillOpenAll()">เติมเก๊ะเปิดต่อเนื่องทั้งเดือน</button></div>
   <div class="card">
     <h3>เลือกวันที่</h3>
-    <div id="incChips">${calHTML(days, S.incDay, d=>incHasDay(c,d), 'incPick')}</div>
+    <div class="calwrap">
+      <div id="incChips">${calHTML(days, S.incDay, d=>incHasDay(c,d), 'incPick')}</div>
+      <div class="dayrep" id="incRep">${incRepHTML(c,days)}</div>
+    </div>
   </div>
   <div id="incDayWrap"></div>`;
   renderIncDay();
@@ -712,6 +746,7 @@ function refreshDay(day){
   const ds=dstr(S.m,day); const r=c.inc[ds];
   const chip=document.querySelector(`#incChips button[data-d="${day}"]`);
   if(chip)chip.classList.toggle('has', incHasDay(c,day));
+  const rep=document.getElementById('incRep'); if(rep)rep.innerHTML=incRepHTML(c,days);
   if(day!==S.incDay)return;
   const list=cashOfDay(ds);
   const cash={am:cashShiftTotal(list,'เช้า'), pm:cashShiftTotal(list,'เย็น')};
