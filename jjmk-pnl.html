@@ -271,6 +271,7 @@ canvas{max-width:100%}
     <div class="seg" id="brSeg">
       <button data-br="JJRD" class="on">รัชดา</button>
       <button data-br="JJLP">ลาดพร้าว</button>
+      <button data-br="ALL">ทุกสาขา</button>
     </div>
     <input type="month" id="monthPick">
     <div id="syncDot" title="สถานะการบันทึก"></div>
@@ -382,7 +383,7 @@ const S = {
   cache: {},           // key br|m -> month bundle
   charts: {}
 };
-const BRNAME = {JJRD:'สาขารัชดา', JJLP:'สาขาลาดพร้าว'};
+const BRNAME = {JJRD:'สาขารัชดา', JJLP:'สาขาลาดพร้าว', ALL:'ทุกสาขา (รวม)'};
 const CAT_ORDER = ['อาหาร','ของใช้','ของหวาน','น้ำ','ไอศกรีม','Delivery'];
 const CAT_COLOR = {'อาหาร':'#C62127','ของใช้':'#E07B39','ของหวาน':'#B98A2F','น้ำ':'#4E7D8C','ไอศกรีม':'#8B5E83','Delivery':'#7A8B5A','เงินสดหน้าร้าน':'#6B6B6B','Shopee':'#B0413E'};
 </script>
@@ -479,6 +480,53 @@ async function agg(b,m){
            bySup,byCat,cashM,cashE,shopee,extraT,supTotal,vc,grab,lineman,revenue,
            fixT,fixRows, net: revenue - vc - fixT - extraT };
 }
+async function aggAll(m){
+  const [a,b]=await Promise.all([agg('JJRD',m),agg('JJLP',m)]);
+  const days=a.days;
+  // รวมแถวรายรับต่อวัน (บวกทุกช่องตัวเลข)
+  const inc={};
+  for(const src of [a.c.inc,b.c.inc]){
+    for(const ds in src){
+      const r=src[ds]; const t=inc[ds]??(inc[ds]={branch:'ALL',d:ds});
+      for(const k in r){ if(k==='branch'||k==='d'||k==='note')continue; t[k]=num(t[k])+num(r[k]); }
+    }
+  }
+  const cash=[...a.c.cash,...b.c.cash];
+  let daysData=0; for(let d=1;d<=days;d++){ const r=inc[dstr(m,d)]; if(r&&hasIncData(r))daysData++; }
+  const daily=a.daily.map((v,i)=>v+(b.daily[i]||0));
+  const sum2=(x,y)=>{const o={...x}; for(const k in y)o[k]=(o[k]||0)+y[k]; return o;};
+  // Fix cost รวมตามชื่อรายการ (สองสาขาบวกกัน)
+  const fmap={};
+  [...a.fixRows,...b.fixRows].forEach(r=>{
+    const k=(r.item.grp||'')+'|'+r.item.name;
+    const t=fmap[k]??(fmap[k]={item:{...r.item,id:'all'},val:0,has:false});
+    if(r.val!=null){ t.val+=r.val; t.has=true; }
+  });
+  const fixRows=Object.values(fmap).map(t=>({item:t.item, val:t.has?t.val:null}));
+  const c={ inc, cash, exp:{}, extra:[...a.c.extra,...b.c.extra], shop:[...a.c.shop,...b.c.shop],
+            meta:{branch:'ALL',month:m,grab:0,lineman:0,days_divisor:null,note:''}, fixm:{}, meatd:{} };
+  return { b:'ALL', m, c, days, daysData, daily,
+    incVat:a.incVat+b.incVat, exVat:a.exVat+b.exVat, vat:a.vat+b.vat, sales_pos:a.sales_pos+b.sales_pos,
+    bySup:sum2(a.bySup,b.bySup), byCat:sum2(a.byCat,b.byCat),
+    cashM:a.cashM+b.cashM, cashE:a.cashE+b.cashE, shopee:a.shopee+b.shopee, extraT:a.extraT+b.extraT,
+    supTotal:a.supTotal+b.supTotal, vc:a.vc+b.vc, grab:a.grab+b.grab, lineman:a.lineman+b.lineman,
+    revenue:a.revenue+b.revenue, fixT:a.fixT+b.fixT, fixRows, net:a.net+b.net, pA:a, pB:b };
+}
+function aggFor(br,m){ return br==='ALL' ? aggAll(m) : agg(br,m); }
+function allNotice(title){
+  return `<div class="card" style="text-align:center;padding:34px 16px">
+    <div style="font-size:32px">🏪🏪</div>
+    <div class="b" style="font-family:'Prompt';font-size:16px;margin:8px 0 4px">โหมดทุกสาขา ดูภาพรวมได้อย่างเดียว</div>
+    <div class="sm mut" style="margin-bottom:14px">หน้า${title}ต้องเลือกสาขาก่อน เพื่อบันทึกข้อมูลลงถูกสาขา</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn dk sm2" onclick="pickBranch('JJRD')">สาขารัชดา</button>
+      <button class="btn dk sm2" onclick="pickBranch('JJLP')">สาขาลาดพร้าว</button></div></div>`;
+}
+function pickBranch(br){
+  S.br=br; LS.set('jjpnl_br',br);
+  document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x.dataset.br===br));
+  show(S.tab);
+}
 
 /* ============ Boot & Navigation ============ */
 const RENDER = {};
@@ -530,10 +578,12 @@ const VIEWS=['dash','income','exp','sum','pv','etc','set'];
 /* ============ แดชบอร์ด ============ */
 function killChart(id){ if(S.charts[id]){S.charts[id].destroy(); delete S.charts[id];} }
 RENDER.dash = async (el)=>{
-  const A = await agg(S.br,S.m);
-  const P = await agg(S.br,prevMonth(S.m)).catch(()=>null);
-  const other = S.br==='JJRD'?'JJLP':'JJRD';
-  const O = await agg(other,S.m).catch(()=>null);
+  const A = await aggFor(S.br,S.m);
+  const P = await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
+  let cmpHtml;
+  if(S.br==='ALL'){ cmpHtml=compareTable(A.pA,A.pB); }
+  else{ const other = S.br==='JJRD'?'JJLP':'JJRD';
+        const O = await agg(other,S.m).catch(()=>null); cmpHtml=compareTable(A,O); }
   const vcPct = A.revenue? A.vc/A.revenue : null;
   const avgDay = A.daysData? A.incVat/A.daysData : 0;
   const benchTot = totalBench();
@@ -563,7 +613,7 @@ RENDER.dash = async (el)=>{
     </div>
     <div class="card">
       <h3>เทียบสองสาขา <span class="sp">${monthLabel(S.m)}</span></h3>
-      ${compareTable(A,O)}
+      ${cmpHtml}
       <h3 style="margin-top:16px">เทียบเดือนก่อน <span class="sp">${monthLabel(prevMonth(S.m))}</span></h3>
       ${comparePrev(A,P)}
     </div>
@@ -700,6 +750,7 @@ function incRepHTML(c,days){
     <div class="drrow tot"><span class="dd">รวม ${n} วัน</span>${drCell(tAm)}${drCell(tPm)}${drCell(tAm+tPm,'b')}</div>`;
 }
 RENDER.income = async (el)=>{
+  if(S.br==='ALL'){ el.innerHTML=allNotice('รายรับ'); return; }
   const c = await loadMonth(S.br,S.m);
   const days=monthDays(S.m); const td=todayStr();
   S.incDay = S.incDay && S.incDay<=days ? S.incDay : (td.slice(0,7)===S.m?Number(td.slice(-2)):1);
@@ -888,6 +939,7 @@ async function cashDel(id){
 
 /* ============ รายจ่าย (ซัพพลายเออร์ × วัน) ============ */
 RENDER.exp = async (el)=>{
+  if(S.br==='ALL'){ el.innerHTML=allNotice('รายจ่าย'); return; }
   const c=await loadMonth(S.br,S.m);
   const days=monthDays(S.m);
   const td=todayStr(); S.expDay = S.expDay && S.expDay<=days ? S.expDay : (td.slice(0,7)===S.m?Number(td.slice(-2)):1);
@@ -996,8 +1048,9 @@ async function meatSave(ds,sid){
 <script>
 /* ============ สรุปเดือน (P&L) ============ */
 RENDER.sum = async (el)=>{
-  const A=await agg(S.br,S.m);
-  const P=await agg(S.br,prevMonth(S.m)).catch(()=>null);
+  const A=await aggFor(S.br,S.m);
+  const P=await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
+  const RO = S.br==='ALL';
   const rev=A.revenue;
   const pRev=P?P.revenue:0;
   const divisor = A.c.meta.days_divisor ?? A.days;
@@ -1045,7 +1098,9 @@ RENDER.sum = async (el)=>{
     const sub=rows.reduce((a,r)=>a+(r.val||0),0);
     fixHtml+=`<tr class="cat"><td>${g}</td><td class="n">${fmtI(sub)}</td><td colspan="2"></td></tr>`;
     rows.forEach(r=>{
-      fixHtml+=`<tr class="ind"><td>${esc(r.item.name)}</td>
+      fixHtml+= RO
+        ? `<tr class="ind"><td>${esc(r.item.name)}</td><td class="n" colspan="3">${r.val!=null?fmtI(r.val):''}</td></tr>`
+        : `<tr class="ind"><td>${esc(r.item.name)}</td>
         <td class="right" colspan="3"><input type="number" inputmode="decimal"
           placeholder="${r.item.default_amount!=null?fmt(r.item.default_amount):'0'}"
           value="${A.c.fixm[r.item.id]??''}"
@@ -1056,9 +1111,8 @@ RENDER.sum = async (el)=>{
   el.innerHTML=`
   <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <div><div class="b" style="font-family:'Prompt';font-size:16px">สรุปผลประกอบการ · ${BRNAME[S.br]}</div>
-      <div class="sm mut">${monthLabel(S.m)} · จำนวนวันหาร
-        <input type="number" style="width:64px;padding:4px 8px;display:inline-block" value="${divisor}"
-          onchange="metaInput('days_divisor',parseInt(this.value)||null)"> วัน</div></div>
+      <div class="sm mut">${monthLabel(S.m)} · จำนวนวันหาร ${RO?`<b>${divisor}</b>`:`<input type="number" style="width:64px;padding:4px 8px;display:inline-block" value="${divisor}"
+          onchange="metaInput('days_divisor',parseInt(this.value)||null)">`} วัน${RO?' · <span class="b" style="color:var(--red)">โหมดรวม 2 สาขา (ดูอย่างเดียว)</span>':''}</div></div>
     <button class="btn dk sm2" style="margin-left:auto" onclick="printSummary()">🖨 พิมพ์สรุป</button>
   </div>
 
@@ -1068,8 +1122,8 @@ RENDER.sum = async (el)=>{
       <tr><td>ยอดขายก่อน VAT</td><td class="n b">${fmt(A.exVat,2)}</td><td class="n mut xs" colspan="2">เฉลี่ย/วัน ฿${fmtI(divisor?A.exVat/divisor:0)}</td></tr>
       <tr><td>ยอดขายรวม VAT</td><td class="n">${fmt(A.incVat,2)}</td><td colspan="2"></td></tr>
       <tr><td>ยอด VAT</td><td class="n">${fmt(A.vat,2)}</td><td colspan="2"></td></tr>
-      <tr><td>Delivery Grab</td><td class="right" colspan="3"><input type="number" inputmode="decimal" placeholder="0" value="${num(A.grab)||''}" onchange="metaInput('grab',num(this.value))"></td></tr>
-      <tr><td>Delivery Lineman</td><td class="right" colspan="3"><input type="number" inputmode="decimal" placeholder="0" value="${num(A.lineman)||''}" onchange="metaInput('lineman',num(this.value))"></td></tr>
+      <tr><td>Delivery Grab</td>${RO?`<td class="n" colspan="3">${fmtI(A.grab)}</td>`:`<td class="right" colspan="3"><input type="number" inputmode="decimal" placeholder="0" value="${num(A.grab)||''}" onchange="metaInput('grab',num(this.value))"></td>`}</tr>
+      <tr><td>Delivery Lineman</td>${RO?`<td class="n" colspan="3">${fmtI(A.lineman)}</td>`:`<td class="right" colspan="3"><input type="number" inputmode="decimal" placeholder="0" value="${num(A.lineman)||''}" onchange="metaInput('lineman',num(this.value))"></td>`}</tr>
       <tr class="tot"><td>รวมรายได้ (ก่อนหักส่วนลด)</td><td class="n">${fmtI(rev)}</td><td colspan="2"></td></tr>
     </table></div>
 
@@ -1113,7 +1167,7 @@ function fixInput(itemId,v){
   }
 }
 async function printSummary(){
-  const A=await agg(S.br,S.m);
+  const A=await aggFor(S.br,S.m);
   const co=companyInfo();
   let vc='';
   CAT_ORDER.forEach(cat=>{
@@ -1162,6 +1216,7 @@ function companyInfo(){
   });
 }
 RENDER.pv = async (el)=>{
+  if(S.br==='ALL'){ el.innerHTML=allNotice('ใบสำคัญจ่าย'); return; }
   const list=await sel('pnl_pv',`select=*&branch=eq.${S.br}&order=pv_date.desc,id.desc&limit=60`);
   el.innerHTML=`
   <div class="card" style="display:flex;align-items:center;gap:10px">
@@ -1282,6 +1337,7 @@ function pvPrint(pv){
 <script>
 /* ============ อื่นๆ: รายจ่ายนอกเหนือ + Shopee ============ */
 RENDER.etc = async (el)=>{
+  if(S.br==='ALL'){ el.innerHTML=allNotice('อื่นๆ'); return; }
   const c=await loadMonth(S.br,S.m);
   const shopT=c.shop.reduce((a,r)=>a+num(r.price)*num(r.qty)+num(r.shipping),0);
   const extraT=c.extra.reduce((a,r)=>a+num(r.amount),0);
@@ -1344,6 +1400,7 @@ async function rowDel(t,id,prefix){
 
 /* ============ ตั้งค่า ============ */
 RENDER.set = async (el)=>{
+  if(S.br==='ALL'){ el.innerHTML=allNotice('ตั้งค่า'); return; }
   const co=companyInfo(); const {url,key}=cfg();
   el.innerHTML=`
   <div class="md2">
