@@ -540,7 +540,7 @@ async function show(v){
   el.innerHTML='<div class="spin"></div>';
   try{ await RENDER[v](el); }catch(e){ el.innerHTML='<div class="empty">โหลดไม่สำเร็จ — '+esc(e.message)+'</div>'; }
 }
-async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; await show(S.tab); }
+async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; S.benchCache={}; await show(S.tab); }
 function saveSetup(){
   const u=document.getElementById('suUrl').value.trim(), k=document.getElementById('suKey').value.trim();
   if(!u||!k){ toast('กรอกให้ครบก่อนครับ',true); return; }
@@ -579,6 +579,7 @@ const VIEWS=['dash','income','exp','sum','pv','etc','set'];
 function killChart(id){ if(S.charts[id]){S.charts[id].destroy(); delete S.charts[id];} }
 RENDER.dash = async (el)=>{
   const A = await aggFor(S.br,S.m);
+  S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
   const P = await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
   let cmpHtml;
   if(S.br==='ALL'){ cmpHtml=compareTable(A.pA,A.pB); }
@@ -620,14 +621,73 @@ RENDER.dash = async (el)=>{
   </div>`;
   drawDash(A);
 };
-function totalBench(){
+function staticTotalBench(){
   const b=S.core.bench; const keys=Object.keys(b); if(!keys.length) return null;
   const n=Math.max(...keys.map(k=>b[k].list.length));
   const sums=Array(n).fill(0);
   keys.forEach(k=>b[k].list.forEach((v,i)=>sums[i]+=v));
   return { avg:sums.reduce((a,c)=>a+c,0)/n, min:Math.min(...sums) };
 }
-function benchOf(name){ return S.core.bench[name]||null; }
+function totalBench(){
+  const d=S.dynBench; if(d&&d.total&&d.total.n) return d.total;
+  return staticTotalBench();
+}
+function benchOf(name){
+  const d=S.dynBench; if(d&&d.map[name]&&d.map[name].n) return d.map[name];
+  return S.core.bench[name]||null;
+}
+/* คำนวณค่าเฉลี่ยจากข้อมูลจริงย้อนหลัง ≤5 เดือนล่าสุด (จากข้อมูลรายวันในระบบ + ตาราง history ที่นำเข้า) */
+async function loadBenchWindow(br,m){
+  S.benchCache=S.benchCache||{};
+  const key=br+'|'+m; if(S.benchCache[key]) return S.benchCache[key];
+  const mons=[]; let mm=prevMonth(m); for(let i=0;i<8;i++){ mons.push(mm); mm=prevMonth(mm); }
+  const mMin=mons[mons.length-1], mMax=mons[0];
+  const from=mMin+'-01', to=dstr(mMax,monthDays(mMax));
+  const brF = br==='ALL' ? '' : `&branch=eq.${br}`;
+  const [incR,expR,cashR,shopR,metaR,histR,histI]=await Promise.all([
+    sel('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&d=gte.${from}&d=lte.${to}${brF}`),
+    sel('pnl_expense_daily',`select=d,supplier_id,amount&d=gte.${from}&d=lte.${to}${brF}`),
+    sel('pnl_cash_expenses',`select=d,shift,amount&d=gte.${from}&d=lte.${to}${brF}`),
+    sel('pnl_shopee',`select=d,price,qty,shipping&d=gte.${from}&d=lte.${to}${brF}`),
+    sel('pnl_month_meta',`select=month,grab,lineman&month=gte.${mMin}&month=lte.${mMax}${brF}`),
+    sel('pnl_history',`select=*&month=gte.${mMin}&month=lte.${mMax}${brF}`).catch(()=>[]),
+    sel('pnl_history_items',`select=*&month=gte.${mMin}&month=lte.${mMax}${brF}`).catch(()=>[])
+  ]);
+  const M={}; const get=(mo)=>M[mo]??(M[mo]={pos:0,grab:0,lineman:0,items:{},hRev:0,hItems:{},hasH:false});
+  incR.forEach(r=>{ const t=get(r.d.slice(0,7)); t.pos+=num(r.sales_pos_am)+num(r.sales_pos_pm); });
+  metaR.forEach(r=>{ const t=get(r.month); t.grab+=num(r.grab); t.lineman+=num(r.lineman); });
+  expR.forEach(r=>{ const t=get(r.d.slice(0,7)); const nm=(S.core.supById[r.supplier_id]||{}).name; if(!nm)return;
+    t.items[nm]=(t.items[nm]||0)+num(r.amount); });
+  cashR.forEach(r=>{ const t=get(r.d.slice(0,7)); const k=r.shift==='เย็น'?'กะเย็น':'กะเช้า';
+    t.items[k]=(t.items[k]||0)+num(r.amount); });
+  shopR.forEach(r=>{ const t=get(r.d.slice(0,7));
+    t.items['Shopee']=(t.items['Shopee']||0)+num(r.price)*num(r.qty)+num(r.shipping); });
+  histR.forEach(r=>{ const t=get(r.month); t.hRev+=num(r.revenue); t.hasH=true; });
+  histI.forEach(r=>{ const t=get(r.month); t.hItems[r.name]=(t.hItems[r.name]||0)+num(r.amount); });
+  // เลือกแหล่งต่อเดือน: มีข้อมูลจริง (pos>0) ใช้จริง · ไม่มีก็ใช้ history
+  const usable=[];
+  for(const mo of Object.keys(M)){
+    const t=M[mo];
+    if(t.pos>0) usable.push({mo, rev:t.pos/1.07+t.grab+t.lineman, items:t.items});
+    else if(t.hasH&&t.hRev>0) usable.push({mo, rev:t.hRev, items:t.hItems});
+  }
+  usable.sort((a,b)=>b.mo.localeCompare(a.mo));
+  const win=usable.slice(0,5);
+  const map={}; const totList=[];
+  win.forEach(w=>{
+    let vcSum=0;
+    for(const [nm,amt] of Object.entries(w.items)){
+      vcSum+=amt;
+      (map[nm]??={list:[]}).list.push(amt/w.rev);
+    }
+    totList.push(vcSum/w.rev);
+  });
+  for(const nm in map){ const L=map[nm].list;
+    map[nm]={avg:L.reduce((a,c)=>a+c,0)/L.length, min:Math.min(...L), n:L.length, list:L}; }
+  const out={ map, n:win.length, months:win.map(w=>w.mo),
+    total: totList.length?{avg:totList.reduce((a,c)=>a+c,0)/totList.length, min:Math.min(...totList), n:totList.length}:null };
+  S.benchCache[key]=out; return out;
+}
 function supDeltaTable(A){
   const rows = Object.entries(A.bySup).map(([id,amt])=>{
     const s=S.core.supById[id]; if(!s)return null;
@@ -636,7 +696,9 @@ function supDeltaTable(A){
     return {name:s.name, amt, p, bn};
   }).filter(Boolean).sort((a,b)=>b.amt-a.amt).slice(0,12);
   if(!rows.length) return '<div class="empty">ยังไม่มีข้อมูลรายจ่ายเดือนนี้</div>';
-  return `<div class="twrap"><table><tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th><th class="right">%</th><th class="right">เฉลี่ย</th><th></th></tr>
+  const src = S.dynBench&&S.dynBench.n ? `อิงข้อมูลจริง ${S.dynBench.n} เดือนล่าสุด` : 'อิงมาตรฐานตั้งต้น';
+  return `<div class="xs mut" style="margin:-4px 0 8px">${src}</div>
+  <div class="twrap"><table><tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th><th class="right">%</th><th class="right">เฉลี่ย</th><th></th></tr>
   ${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${fmtI(r.amt)}</td><td class="n">${pctF(r.p)}</td>
     <td class="n mut">${r.bn?pctF(r.bn.avg):'–'}</td><td class="right">${r.bn&&r.p!=null?chip(r.p-r.bn.avg):''}</td></tr>`).join('')}
   </table></div>`;
@@ -1049,6 +1111,7 @@ async function meatSave(ds,sid){
 /* ============ สรุปเดือน (P&L) ============ */
 RENDER.sum = async (el)=>{
   const A=await aggFor(S.br,S.m);
+  S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
   const P=await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
   const RO = S.br==='ALL';
   const rev=A.revenue;
@@ -1168,6 +1231,7 @@ function fixInput(itemId,v){
 }
 async function printSummary(){
   const A=await aggFor(S.br,S.m);
+  S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
   const co=companyInfo();
   let vc='';
   CAT_ORDER.forEach(cat=>{
@@ -1399,6 +1463,86 @@ async function rowDel(t,id,prefix){
 }
 
 /* ============ ตั้งค่า ============ */
+/* ============ นำเข้าข้อมูลย้อนหลังจากไฟล์ Excel เดิม ============ */
+const HIST_NAME_MAP={'ธาริกันฟู้ดส์':'AFM ธาริกันฟู้ดส์','ม้าบิน':'TRR (ม้าบิน)','KCG Indoguna เนือ':'KCG Indoguna เนื้อ'};
+function parseHistoryWB(sheets){
+  const numify=v=>typeof v==='number'&&isFinite(v)?v:0;
+  const inc=sheets['รายรับ']||[], exp=sheets['รายจ่าย']||[];
+  let pos=0, cashAm=0, cashPm=0, seenCash=false;
+  for(const row of inc){
+    const label=(row[0]||'').toString().trim();
+    if(label==='ยอดขาย'){ for(let i=1;i<row.length;i++) pos+=numify(row[i]); }
+    if(label==='รายจ่ายเงินสด'&&!seenCash){ seenCash=true;
+      for(let i=1;i<row.length;i++){ const v=numify(row[i]); if(!v)continue;
+        if(i%2===1)cashAm+=v; else cashPm+=v; }
+    }
+  }
+  let dayCols=null;
+  for(const row of exp){
+    const cols=[]; row.forEach((v,i)=>{ if(typeof v==='number'&&v>=1&&v<=31&&Number.isInteger(v)&&i>=2)cols.push(i); });
+    if(cols.length>=10){ dayCols=cols; break; }
+  }
+  const items={};
+  if(dayCols){
+    for(const row of exp){
+      const idx=row[0], name=(row[1]||'').toString().trim();
+      if(typeof idx!=='number'||!name) continue;
+      let t=0; dayCols.forEach(i=>t+=numify(row[i]));
+      if(t>0){ const nm=HIST_NAME_MAP[name]||name; items[nm]=(items[nm]||0)+t; }
+    }
+  }
+  if(cashAm>0)items['กะเช้า']=(items['กะเช้า']||0)+cashAm;
+  if(cashPm>0)items['กะเย็น']=(items['กะเย็น']||0)+cashPm;
+  return {pos, items};
+}
+async function importHistory(){
+  if(typeof XLSX==='undefined'){toast('ตัวอ่าน Excel โหลดไม่ขึ้น (เช็คเน็ต)',true);return;}
+  const br=document.getElementById('hiBr').value, mo=document.getElementById('hiM').value;
+  const grab=num(document.getElementById('hiGrab').value), line=num(document.getElementById('hiLine').value);
+  const f=document.getElementById('hiFile').files[0];
+  const st=document.getElementById('hiStatus');
+  if(!mo){st.textContent='เลือกเดือนของไฟล์ก่อน';return;}
+  if(!f){st.textContent='เลือกไฟล์ Excel ก่อน';return;}
+  st.textContent='กำลังอ่านไฟล์...';
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const pick=n=>{ const nm=wb.SheetNames.find(x=>x.trim()===n); return nm?XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:true}):null; };
+    const sheets={'รายรับ':pick('รายรับ'),'รายจ่าย':pick('รายจ่าย')};
+    if(!sheets['รายรับ']&&!sheets['รายจ่าย']) throw new Error('ไม่พบชีท "รายรับ"/"รายจ่าย" ในไฟล์');
+    const {pos,items}=parseHistoryWB(sheets);
+    if(!pos&&!Object.keys(items).length) throw new Error('อ่านไฟล์ได้ แต่ไม่พบตัวเลข (เช็คว่าเป็นไฟล์แม่แบบเดียวกัน)');
+    const revenue=pos/1.07+grab+line;
+    st.textContent='กำลังบันทึก...';
+    await ups('pnl_history',[{branch:br,month:mo,revenue,note:f.name}],'branch,month');
+    await delQ('pnl_history_items',`branch=eq.${br}&month=eq.${mo}`);
+    const rows=Object.entries(items).map(([name,amount])=>({branch:br,month:mo,name,amount}));
+    if(rows.length) await ins('pnl_history_items',rows);
+    S.benchCache={};
+    st.innerHTML=`✅ นำเข้าแล้ว: ยอดขายดิบ ฿${fmtI(pos)} · รายได้ฐาน ฿${fmtI(revenue)} · รายการซัพ+เงินสด ${rows.length} รายการ`;
+    toast('นำเข้า '+mo+' สำเร็จ'); loadHistList();
+  }catch(e){ st.textContent='❌ '+e.message; }
+}
+async function loadHistList(){
+  const el=document.getElementById('hiList'); if(!el)return;
+  try{
+    const [hs,hi]=await Promise.all([
+      sel('pnl_history','select=*&order=month.desc'),
+      sel('pnl_history_items','select=branch,month')
+    ]);
+    if(!hs.length){el.innerHTML='<div class="xs mut">ยังไม่มีข้อมูลย้อนหลังที่นำเข้า</div>';return;}
+    const cnt={}; hi.forEach(r=>{const k=r.branch+'|'+r.month; cnt[k]=(cnt[k]||0)+1;});
+    el.innerHTML='<div class="twrap"><table><tr><th>เดือน</th><th>สาขา</th><th class="right">รายได้ฐาน</th><th class="right">รายการ</th><th></th></tr>'+
+      hs.map(h=>`<tr><td>${monthLabel(h.month)}</td><td>${(BRNAME[h.branch]||h.branch).replace('สาขา','')}</td>
+        <td class="n">฿${fmtI(h.revenue)}</td><td class="n">${cnt[h.branch+'|'+h.month]||0}</td>
+        <td class="right"><button class="hintlink" onclick="delHist('${h.branch}','${h.month}')">ลบ</button></td></tr>`).join('')+'</table></div>';
+  }catch(e){ el.innerHTML='<div class="xs mut">โหลดรายการไม่ได้ — ต้องรัน jjmk_pnl_history.sql ใน Supabase ก่อน</div>'; }
+}
+async function delHist(br,mo){
+  if(!confirm('ลบข้อมูลย้อนหลัง '+mo+' ('+br+') ?'))return;
+  await delQ('pnl_history',`branch=eq.${br}&month=eq.${mo}`);
+  S.benchCache={}; toast('ลบแล้ว'); loadHistList();
+}
 RENDER.set = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=allNotice('ตั้งค่า'); return; }
   const co=companyInfo(); const {url,key}=cfg();
@@ -1409,6 +1553,20 @@ RENDER.set = async (el)=>{
       <div class="fld"><label>URL</label><input id="stUrl" value="${esc(url)}"></div>
       <div class="fld"><label>Key</label><input id="stKey" value="${esc(key)}"></div>
       <div style="display:flex;gap:8px"><button class="btn sm2" onclick="localStorage.setItem('jjpnl_url',document.getElementById('stUrl').value.trim());localStorage.setItem('jjpnl_key',document.getElementById('stKey').value.trim());toast('บันทึกแล้ว รีโหลด...');setTimeout(()=>location.reload(),600)">บันทึก</button></div></div>
+    <div class="card"><h3>📥 ข้อมูลย้อนหลัง (ฐานคำนวณค่าเฉลี่ย)</h3>
+      <div class="xs mut" style="margin-bottom:10px">อัปโหลดไฟล์ Excel เดือนเก่า (แม่แบบเดียวกัน) ระบบดึง<b>ยอดขาย + รายจ่ายซัพ + เงินสดหน้าร้าน</b>ให้อัตโนมัติ แล้วคอลัมน์ "เฉลี่ย" จะคำนวณจากข้อมูลจริง 5 เดือนล่าสุดแทนค่าตั้งต้น</div>
+      <div class="grid2">
+        <div class="fld"><label>สาขาของไฟล์</label><select id="hiBr"><option value="JJRD">รัชดา</option><option value="JJLP">ลาดพร้าว</option></select></div>
+        <div class="fld"><label>เดือนของไฟล์</label><input id="hiM" type="month"></div>
+        <div class="fld"><label>Grab (จากชีทสรุป · ไม่มีใส่ 0)</label><input id="hiGrab" type="number" inputmode="decimal" placeholder="0"></div>
+        <div class="fld"><label>Lineman</label><input id="hiLine" type="number" inputmode="decimal" placeholder="0"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
+        <input type="file" id="hiFile" accept=".xlsx,.xls" style="flex:1;min-width:200px">
+        <button class="btn sm2" onclick="importHistory()">นำเข้า</button></div>
+      <div id="hiStatus" class="xs mut" style="margin-top:8px"></div>
+      <div id="hiList" style="margin-top:10px"></div>
+    </div>
     <div class="card"><h3>ข้อมูลบริษัท (หัวเอกสาร PV)</h3>
       <div class="fld"><label>ชื่อบริษัท</label><input id="coName" value="${esc(co.name)}"></div>
       <div class="grid2"><div class="fld"><label>ที่อยู่ 1</label><input id="coA1" value="${esc(co.addr1)}"></div>
@@ -1439,6 +1597,7 @@ RENDER.set = async (el)=>{
         <input type="number" inputmode="decimal" value="${m.price_kg}" onchange="meatPriceSave(${m.id},this.value)">
         </div>`).join('')}</div>
   </div></div>`;
+  loadHistList();
 };
 function supModal(id){
   const s=id?S.core.supById[id]:{category:'อาหาร',name:'',payment_term:'',vat_type:'NON-VAT',bank:'',account_no:'',account_name:'',full_name:'',sort:999,active:true};
