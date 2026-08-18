@@ -87,6 +87,8 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .drscroll .drrow:last-child{border-bottom:0}
 input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .lk{font-size:10px;color:#8A7A50;font-weight:700;background:#F5EDDB;border-radius:6px;padding:1px 6px;margin-left:4px}
+.drp{color:var(--ok)}
+.drn{color:var(--bad)}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -645,24 +647,34 @@ function openSrc(c,day,sh){
   if(day>1){ const p=c.inc[dstr(S.m,day-1)]; return p?num(p.cash_drawer_pm):0; }
   return num(c.prevPm);
 }
+function shiftHasData(r,sh){ return ['sales_pos','deposit','cash_drawer','transfer_total','reserve_acct'].some(f=>num(r[f+'_'+sh])); }
+function shiftDiffCalc(c,ds,r,sh){
+  const list=c.cash.filter(x=>x.d===ds);
+  const cashT=cashShiftTotal(list, sh==='am'?'เช้า':'เย็น');
+  return (num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cashT)
+       -(num(r['transfer_pending_prev_'+sh])+num(r['drawer_open_'+sh]))-num(r['sales_pos_'+sh]);
+}
+function drCell(v,extra){
+  if(v==null) return `<span class="num mut ${extra||''}">–</span>`;
+  const cls=Math.abs(v)<1?'':(v>0?'drp':'drn');
+  return `<span class="num ${cls} ${extra||''}">${v>0?'+':''}${fmt(v,2)}</span>`;
+}
 function incRepHTML(c,days){
   let rows='',tAm=0,tPm=0,n=0;
   for(let d=1;d<=days;d++){
-    const r=c.inc[dstr(S.m,d)]; if(!r)continue;
-    const a=num(r.sales_pos_am), p=num(r.sales_pos_pm);
-    if(!a&&!p)continue;
-    n++; tAm+=a; tPm+=p;
+    const ds=dstr(S.m,d), r=c.inc[ds]; if(!r||!hasIncData(r))continue;
+    const a=shiftHasData(r,'am')?shiftDiffCalc(c,ds,r,'am'):null;
+    const p=shiftHasData(r,'pm')?shiftDiffCalc(c,ds,r,'pm'):null;
+    if(a==null&&p==null)continue;
+    n++; tAm+=(a||0); tPm+=(p||0);
     const dt=new Date(S.m+'-01'); dt.setDate(d);
     rows+=`<div class="drrow ${d===S.incDay?'on':''}" onclick="incPick(${d})">
-      <span class="dd">${d} ${TH_D[dt.getDay()]}.</span>
-      <span class="num">${a?fmt(a,2):'–'}</span>
-      <span class="num">${p?fmt(p,2):'–'}</span>
-      <span class="num b">${fmt(a+p,2)}</span></div>`;
+      <span class="dd">${d} ${TH_D[dt.getDay()]}.</span>${drCell(a)}${drCell(p)}${drCell(a==null&&p==null?null:(a||0)+(p||0),'b')}</div>`;
   }
-  if(!n) return '<div class="empty" style="padding:24px 10px">ยังไม่มียอดขายเดือนนี้<br><span class="xs mut">กรอกยอด POS แล้วรายงานจะขึ้นตรงนี้</span></div>';
-  return `<div class="drrow head"><span class="dd">วันที่</span><span class="num">🌅 กะเช้า</span><span class="num">🌆 กะเย็น</span><span class="num">รวมดิบ</span></div>
+  if(!n) return '<div class="empty" style="padding:24px 10px">ยังไม่มีข้อมูลปิดกะเดือนนี้<br><span class="xs mut">กรอกยอดปิดกะแล้ว ยอดขาด/เกิน (ดิบ) จะขึ้นตรงนี้</span></div>';
+  return `<div class="drrow head"><span class="dd">วันที่</span><span class="num">🌅 เช้า</span><span class="num">🌆 เย็น</span><span class="num">รวมดิบ</span></div>
     <div class="drscroll">${rows}</div>
-    <div class="drrow tot"><span class="dd">รวม ${n} วัน</span><span class="num">${fmt(tAm,2)}</span><span class="num">${fmt(tPm,2)}</span><span class="num" style="color:var(--red)">฿${fmt(tAm+tPm,2)}</span></div>`;
+    <div class="drrow tot"><span class="dd">รวม ${n} วัน</span>${drCell(tAm)}${drCell(tPm)}${drCell(tAm+tPm,'b')}</div>`;
 }
 RENDER.income = async (el)=>{
   const c = await loadMonth(S.br,S.m);
