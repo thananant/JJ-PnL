@@ -102,6 +102,9 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .pchip.on{background:var(--ok-t);color:var(--ok);border-color:var(--ok)}
 .sbtn{font-size:14px;line-height:1;padding:3px;border-radius:8px;border:1.5px dashed var(--line);background:#fff}
 .sbtn.has{border-style:solid;border-color:var(--gold);background:var(--gold-t)}
+.mvbtn{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:11px;color:var(--mut)}
+.mvbtn:disabled{opacity:.25}
+.mvbtn:not(:disabled):active{background:var(--ink);color:#fff}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -1817,10 +1820,19 @@ RENDER.set = async (el)=>{
       </table></div></div>
     <div class="card"><h3>รายการ Fix cost · ${BRNAME[S.br]} <span class="sp"><button class="hintlink" onclick="fixModal(null)">+ เพิ่ม</button></span></h3>
       <div class="twrap"><table>
-      ${S.core.fixed.filter(f=>f.branch===S.br).map(f=>`<tr style="${f.active?'':'opacity:.4'}"><td><span class="b sm">${esc(f.name)}</span> <span class="xs mut">· ${esc(f.grp)}</span></td>
-        <td class="n">${f.default_amount!=null?fmtI(f.default_amount):'<span class="mut xs">กรอกรายเดือน</span>'}</td>
-        <td class="right" style="white-space:nowrap"><button class="hintlink" onclick="fixModal(${f.id})">แก้ไข</button>
-          <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="fixDel(${f.id})">ลบ</button></td></tr>`).join('')}
+      ${(()=>{
+        const its=S.core.fixed.filter(f=>f.branch===S.br).slice().sort((a,b)=>num(a.sort)-num(b.sort)||num(a.id)-num(b.id));
+        const g={}; its.forEach(f=>(g[f.grp||'อื่นๆ']??=[]).push(f));
+        return Object.entries(g).map(([grp,list])=>
+          `<tr class="cat"><td colspan="3">${esc(grp)} <span class="xs" style="font-weight:500;opacity:.7">· ${list.length} รายการ</span></td></tr>`+
+          list.map((f,i)=>`<tr style="${f.active?'':'opacity:.4'}"><td><span class="b sm">${esc(f.name)}</span></td>
+          <td class="n">${f.default_amount!=null?fmtI(f.default_amount):'<span class="mut xs">กรอกรายเดือน</span>'}</td>
+          <td class="right" style="white-space:nowrap">
+            <button class="mvbtn" ${i===0?'disabled':''} onclick="fixMove(${f.id},-1)">▲</button><button class="mvbtn" ${i===list.length-1?'disabled':''} onclick="fixMove(${f.id},1)">▼</button>
+            <button class="hintlink" style="margin-left:8px" onclick="fixModal(${f.id})">แก้ไข</button>
+            <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="fixDel(${f.id})">ลบ</button></td></tr>`).join('')
+        ).join('');
+      })()}
       </table></div></div>
     <div class="card"><h3>ราคาเนื้อ Yannah · ${BRNAME[S.br]}</h3>
       ${S.core.meats.filter(m=>m.branch===S.br).map(m=>`<div class="exrow"><div class="nm"><div class="t">${esc(m.name)}</div><div class="s">บาท/กก.</div></div>
@@ -1869,6 +1881,26 @@ async function supSave(id){
   if(id) await upd('pnl_suppliers','id=eq.'+id,body); else await ins('pnl_suppliers',body);
   await loadCore(); closeModal(); toast('บันทึกแล้ว'); show('set');
 }
+async function fixMove(id,dir){
+  const f=S.core.fixed.find(x=>x.id===id); if(!f)return;
+  const key=x=>x.grp||'อื่นๆ';
+  // sort ชนกัน (เช่นข้อมูล seed) -> จัดเลขใหม่ทั้งสาขาก่อน ครั้งเดียวจบ
+  const all=S.core.fixed.filter(x=>x.branch===f.branch).sort((a,b)=>num(a.sort)-num(b.sort)||num(a.id)-num(b.id));
+  const dup=all.some((x,i)=>i>0&&num(x.sort)===num(all[i-1].sort));
+  if(dup){
+    all.forEach((x,i)=>x.sort=(i+1)*10);
+    await Promise.all(all.map(x=>upd('pnl_fixed_items','id=eq.'+x.id,{sort:x.sort})));
+  }
+  const list=all.filter(x=>key(x)===key(f)).sort((a,b)=>num(a.sort)-num(b.sort));
+  const i=list.indexOf(f), j=i+dir;
+  if(j<0||j>=list.length)return;
+  const g=list[j], t=f.sort; f.sort=g.sort; g.sort=t;
+  await Promise.all([
+    upd('pnl_fixed_items','id=eq.'+f.id,{sort:f.sort}),
+    upd('pnl_fixed_items','id=eq.'+g.id,{sort:g.sort})
+  ]);
+  show('set');
+}
 async function fixDel(id){
   const f=S.core.fixed.find(x=>x.id===id); if(!f)return;
   if(!confirm('ลบ "'+f.name+'" ?\nยอดที่เคยกรอกรายเดือนของรายการนี้จะถูกลบไปด้วยทุกเดือน'))return;
@@ -1880,20 +1912,40 @@ async function fixDel(id){
   }catch(e){ toast('ลบไม่สำเร็จ: '+e.message,true); }
 }
 function fixModal(id){
-  const f=id?S.core.fixed.find(x=>x.id===id):{grp:'รายเดือน',name:'',default_amount:null,sort:999,active:true};
+  const f=id?S.core.fixed.find(x=>x.id===id):{grp:'',name:'',default_amount:null,sort:null,active:true};
+  const grps=[...new Set(S.core.fixed.filter(x=>x.branch===S.br).sort((a,b)=>num(a.sort)-num(b.sort)).map(x=>x.grp||'อื่นๆ'))];
+  if(!grps.length)grps.push('รายเดือน');
+  if(f.grp&&!grps.includes(f.grp))grps.unshift(f.grp);
   openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}รายการ Fix cost · ${BRNAME[S.br]}</h3>
     <div class="fld"><label>ชื่อรายการ</label><input id="fxName" value="${esc(f.name)}"></div>
     <div class="grid2">
-      <div class="fld"><label>กลุ่ม</label><select id="fxGrp">${['รายเดือน','สาธารณูปโภค','พนักงาน'].map(g=>`<option ${f.grp===g?'selected':''}>${g}</option>`).join('')}</select></div>
+      <div class="fld"><label>หมวดหมู่</label>
+        <select id="fxGrp" onchange="document.getElementById('fxGrpNewWrap').style.display=this.value==='__new'?'block':'none'">
+          ${grps.map(g=>`<option ${(f.grp||grps[0])===g?'selected':''}>${esc(g)}</option>`).join('')}
+          <option value="__new">➕ สร้างหมวดใหม่...</option>
+        </select>
+        <div id="fxGrpNewWrap" style="display:none;margin-top:6px"><input id="fxGrpNew" placeholder="พิมพ์ชื่อหมวดใหม่ เช่น ค่าการตลาด"></div></div>
       <div class="fld"><label>ยอด default (เว้นว่าง = กรอกรายเดือน)</label><input type="number" step="any" id="fxAmt" value="${f.default_amount??''}"></div></div>
     <label class="sm" style="display:flex;gap:8px;align-items:center;margin:6px 0 12px"><input type="checkbox" id="fxAct" style="width:20px;height:20px" ${f.active?'checked':''}> ใช้งานอยู่</label>
     <div style="display:flex;gap:8px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
       <button class="btn sm2" style="margin-left:auto" onclick="fixSave(${id||'null'})">บันทึก</button></div>`);
 }
 async function fixSave(id){
-  const body={branch:S.br,grp:fxGrp.value,name:fxName.value.trim(),
+  let grp=fxGrp.value;
+  if(grp==='__new'){
+    grp=(document.getElementById('fxGrpNew').value||'').trim();
+    if(!grp){toast('พิมพ์ชื่อหมวดใหม่ก่อนครับ',true);return;}
+  }
+  const body={branch:S.br,grp,name:fxName.value.trim(),
     default_amount:fxAmt.value===''?null:num(fxAmt.value),active:fxAct.checked};
   if(!body.name){toast('ใส่ชื่อก่อนครับ',true);return;}
+  if(!id){
+    // รายการใหม่ต่อท้ายหมวดตัวเอง (หมวดใหม่ = ต่อท้ายสุด)
+    const inGrp=S.core.fixed.filter(x=>x.branch===S.br&&(x.grp||'อื่นๆ')===grp);
+    const base=inGrp.length?Math.max(...inGrp.map(x=>num(x.sort))):
+      (S.core.fixed.filter(x=>x.branch===S.br).length?Math.max(...S.core.fixed.filter(x=>x.branch===S.br).map(x=>num(x.sort))):0);
+    body.sort=base+5;
+  }
   if(id) await upd('pnl_fixed_items','id=eq.'+id,body); else await ins('pnl_fixed_items',body);
   await loadCore(); closeModal(); toast('บันทึกแล้ว'); show('set');
 }
