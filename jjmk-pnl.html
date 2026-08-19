@@ -678,9 +678,11 @@ RENDER.dash = async (el)=>{
       <div class="s mut">เฉลี่ย ฿${fmtI(avgDay)}/วัน · บันทึก ${A.daysData}/${A.days} วัน</div></div>
     <div class="kpi"><div class="t">Variable cost</div><div class="kpi-v">฿${fmtI(A.vc)}</div>
       <div class="s">${pctF(vcPct)} ${benchTot?chip(vcPct!=null?vcPct-benchTot.avg:null):''} <span class="xs mut">เทียบเฉลี่ย ${benchTot?pctF(benchTot.avg):'–'}</span></div></div>
+    <div class="kpi"><div class="t">Fix cost</div><div class="kpi-v">฿${fmtI(A.fixT)}</div>
+      <div class="s mut">${A.revenue?pctF(A.fixT/A.revenue)+' ของรายได้':'–'} · <span class="hintlink" onclick="S.expDay=S.expDay||1;show('exp')">แก้ที่หน้ารายจ่าย →</span></div></div>
     <div class="kpi"><div class="t">คงเหลือสุทธิ (หลัง VC + Fix + นอกเหนือ)</div>
       <div class="kpi-v" style="color:${A.net>=0?'var(--ok)':'var(--bad)'}">฿${fmtI(A.net)}</div>
-      <div class="s mut">Fix ฿${fmtI(A.fixT)} · นอกเหนือ ฿${fmtI(A.extraT)}</div></div>
+      <div class="s mut">VC ฿${fmtI(A.vc)} · Fix ฿${fmtI(A.fixT)} · นอกเหนือ ฿${fmtI(A.extraT)}</div></div>
   </div>
   <div class="md32">
     <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3>
@@ -692,7 +694,7 @@ RENDER.dash = async (el)=>{
   </div>
   <div class="md2">
     <div class="card">
-      <h3>ต้นทุนซัพพลายเออร์ vs มาตรฐาน 5 เดือน <span class="sp">Top 12</span></h3>
+      <h3>ต้นทุนซัพพลายเออร์ vs มาตรฐาน 5 เดือน <span class="sp">ทุกราย · รวมรายหมวด</span></h3>
       ${supDeltaTable(A)}
     </div>
     <div class="card">
@@ -772,19 +774,34 @@ async function loadBenchWindow(br,m){
   S.benchCache[key]=out; return out;
 }
 function supDeltaTable(A){
-  const rows = Object.entries(A.bySup).map(([id,amt])=>{
-    const s=S.core.supById[id]; if(!s)return null;
-    const p = A.revenue? amt/A.revenue : null;
-    const bn = benchOf(s.name);
-    return {name:s.name, amt, p, bn};
-  }).filter(Boolean).sort((a,b)=>b.amt-a.amt).slice(0,12);
-  if(!rows.length) return '<div class="empty">ยังไม่มีข้อมูลรายจ่ายเดือนนี้</div>';
+  if(!Object.keys(A.bySup).length) return '<div class="empty">ยังไม่มีข้อมูลรายจ่ายเดือนนี้</div>';
   const src = S.dynBench&&S.dynBench.n ? `อิงข้อมูลจริง ${S.dynBench.n} เดือนล่าสุด` : 'อิงมาตรฐานตั้งต้น';
-  return `<div class="xs mut" style="margin:-4px 0 8px">${src}</div>
-  <div class="twrap"><table><tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th><th class="right">%</th><th class="right">เฉลี่ย</th><th></th></tr>
-  ${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${fmtI(r.amt)}</td><td class="n">${pctF(r.p)}</td>
-    <td class="n mut">${r.bn?pctF(r.bn.avg):'–'}</td><td class="right">${r.bn&&r.p!=null?chip(r.p-r.bn.avg):''}</td></tr>`).join('')}
-  </table></div>`;
+  const rev=A.revenue||0;
+  let body='', grand=0, n=0;
+  catList().forEach(cat=>{
+    const list=S.core.sup.filter(x=>x.category===cat&&A.bySup[x.id]>0)
+      .map(x=>({name:x.name, amt:A.bySup[x.id]})).sort((a,b)=>b.amt-a.amt);
+    if(!list.length)return;
+    const catAmt=list.reduce((a,x)=>a+x.amt,0); grand+=catAmt; n+=list.length;
+    body+=`<tr class="cat"><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${catColor(cat)};margin-right:6px"></span>${esc(cat)}</td>
+      <td class="n">${fmtI(catAmt)}</td><td class="n">${rev?pctF(catAmt/rev):'–'}</td><td colspan="2"></td></tr>`;
+    body+=list.map(r=>{
+      const pp=rev?r.amt/rev:null; const bn=benchOf(r.name);
+      return `<tr><td style="padding-left:20px">${esc(r.name)}</td><td class="n">${fmtI(r.amt)}</td><td class="n">${pctF(pp)}</td>
+        <td class="n mut">${bn?pctF(bn.avg):'–'}</td><td class="right">${bn&&pp!=null?chip(pp-bn.avg):''}</td></tr>`;
+    }).join('');
+  });
+  const tb=totalBench();
+  const gp=rev?grand/rev:null;
+  body+=`<tr class="cat" style="border-top:2px solid var(--line)"><td><b>รวมซัพทั้งหมด · ${n} ราย</b></td>
+    <td class="n" style="color:var(--red);font-weight:700">${fmtI(grand)}</td>
+    <td class="n" style="font-weight:700">${pctF(gp)}</td>
+    <td class="n mut">${tb?pctF(tb.avg):'–'}</td>
+    <td class="right">${tb&&gp!=null?chip(gp-tb.avg):''}</td></tr>`;
+  return `<div class="xs mut" style="margin:-4px 0 8px">${src} · ครบทุกซัพที่มียอด</div>
+  <div class="twrap" style="max-height:560px;overflow-y:auto"><table>
+  <tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th><th class="right">%</th><th class="right">เฉลี่ย</th><th></th></tr>
+  ${body}</table></div>`;
 }
 function multiCompare(parts){
   if(!parts||!parts.length) return '<div class="empty">ไม่มีข้อมูล</div>';
