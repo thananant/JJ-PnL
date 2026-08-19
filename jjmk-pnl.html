@@ -1231,14 +1231,15 @@ function updUnpaidBar(){
 async function paidToggle(ds,sid){
   const c=S.cache[mkey(S.br,S.m)], k=ds+'|'+sid, r=c.exp[k];
   if(!r||!num(r.amount)){toast('ใส่ยอดก่อน แล้วค่อยติ๊กจ่าย',true);return;}
+  if(!r.paid && !r.slip_url){ // กติกา: ต้องมีสลิปถึงติ๊กจ่ายได้ -> เปิดเลือกรูป ยังไม่ติ๊ก
+    S._slipTarget={ds,sid};
+    document.getElementById('slipFile').click();
+    toast('📎 แนบสลิปก่อน — อัปโหลดเสร็จระบบจะติ๊กจ่ายให้เอง',true);
+    return;
+  }
   r.paid=!r.paid;
   const b=document.getElementById('pd_'+sid);
   if(b){ b.classList.toggle('on',r.paid); b.innerHTML='<span class="ckbx">'+(r.paid?'✓':'')+'</span>จ่ายแล้ว'; }
-  if(r.paid && !r.slip_url){ // ติ๊กจ่าย -> ชวนแนบสลิปทันที (ต้อง click ใน gesture เดียวกัน)
-    S._slipTarget={ds,sid};
-    document.getElementById('slipFile').click();
-    toast('ติ๊กจ่ายแล้ว 📎 เลือกรูปสลิปแนบได้เลย');
-  }
   updUnpaidBar();
   try{ await ups('pnl_expense_daily',[{branch:S.br,d:ds,supplier_id:sid,amount:num(r.amount),paid:r.paid}],'branch,d,supplier_id'); }
   catch(e){ r.paid=!r.paid; updUnpaidBar(); }
@@ -1347,10 +1348,13 @@ function slipViewModal(ds,sid){
 }
 async function slipDel(ds,sid){
   const c=S.cache[mkey(S.br,S.m)], r=c.exp[ds+'|'+sid]; if(!r)return;
-  r.slip_url=null;
-  await ups('pnl_expense_daily',[{branch:S.br,d:ds,supplier_id:sid,amount:num(r.amount),slip_url:null}],'branch,d,supplier_id');
+  r.slip_url=null; r.paid=false; // ไม่มีสลิป = ยังไม่ถือว่าจ่าย
+  await ups('pnl_expense_daily',[{branch:S.br,d:ds,supplier_id:sid,amount:num(r.amount),slip_url:null,paid:false}],'branch,d,supplier_id');
   const b=document.getElementById('sl_'+sid); if(b){b.textContent='📎';b.classList.remove('has');}
-  closeModal(); toast('ลบสลิปแล้ว');
+  const pb=document.getElementById('pd_'+sid);
+  if(pb){ pb.classList.remove('on'); pb.innerHTML='<span class="ckbx"></span>จ่ายแล้ว'; }
+  updUnpaidBar();
+  closeModal(); toast('ลบสลิปแล้ว — ยกเลิกติ๊กจ่ายด้วย (ต้องมีสลิปถึงติ๊กได้)');
 }
 function copyTxt(t){
   const done=()=>toast('คัดลอก '+t+' แล้ว 📋');
