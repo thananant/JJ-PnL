@@ -103,10 +103,14 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .pchip{display:inline-flex;align-items:center;gap:5px}
 .ckbx{width:14px;height:14px;border-radius:4px;border:1.7px solid #B9AF9E;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1;background:#fff;color:#fff;flex:none}
 .pchip.on .ckbx{background:var(--ok);border-color:var(--ok)}
-.pctlist{position:absolute;top:14px;right:16px;text-align:right;font-size:11px;color:var(--mut);display:flex;flex-direction:column;gap:2px;z-index:2}
-.pctlist b{color:var(--ink);font-family:'Prompt'}
-.pctlist .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
-@media(max-width:560px){.pctlist{position:static;flex-direction:row;flex-wrap:wrap;justify-content:flex-end;gap:4px 10px;margin:-4px 0 6px}}
+.douRow{display:flex;gap:16px;align-items:center}
+.douBox{width:132px;height:132px;flex:none}
+.douBox canvas{width:100%!important;height:100%!important}
+.plist{font-size:11.5px;color:var(--mut);display:flex;flex-direction:column;gap:3px;min-width:0}
+.plist b{color:var(--ink);font-family:'Prompt'}
+.plist .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+.zoomc{cursor:zoom-in}
+.zoomc:active{transform:scale(.995)}
 .sbtn{font-size:14px;line-height:1;padding:3px;border-radius:8px;border:1.5px dashed var(--line);background:#fff}
 .sbtn.has{border-style:solid;border-color:var(--gold);background:var(--gold-t)}
 .mvbtn{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:11px;color:var(--mut)}
@@ -688,15 +692,14 @@ RENDER.dash = async (el)=>{
       <div class="kpi-v" style="color:${A.net>=0?'var(--ok)':'var(--bad)'}">฿${fmtI(A.net)}</div>
       <div class="s mut">VC ฿${fmtI(A.vc)} · Fix ฿${fmtI(A.fixT)} · นอกเหนือ ฿${fmtI(A.extraT)}</div></div>
   </div>
-  <div class="md32">
-    <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3>
-      <div class="avgrow" id="avgRow"></div><canvas id="chLine" height="190"></canvas></div>
-    <div class="card" style="position:relative"><h3>สัดส่วนต้นทุน</h3>
-      <div id="douPct" class="pctlist"></div><canvas id="chDou" height="190"></canvas></div>
-  </div>
-  <div class="card"><h3>สัดส่วนรายได้ · รายจ่ายต่างๆ <span class="sp">รายได้ ฿${fmtI(A.revenue)}</span></h3>
-    <div id="revNote" class="xs mut" style="margin:-4px 0 8px"></div>
-    <div style="max-width:430px;margin:0 auto"><canvas id="chRev" height="200"></canvas></div>
+  <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3>
+    <div class="avgrow" id="avgRow"></div><canvas id="chLine" height="190"></canvas></div>
+  <div class="md2">
+    <div class="card zoomc" onclick="douBig('cost')"><h3>สัดส่วนต้นทุน <span class="sp">แตะขยาย ⤢</span></h3>
+      <div class="douRow"><div class="douBox"><canvas id="chDou"></canvas></div><div id="douPct" class="plist"></div></div></div>
+    <div class="card zoomc" onclick="douBig('rev')"><h3>สัดส่วนรายได้ · รายจ่าย <span class="sp">แตะขยาย ⤢</span></h3>
+      <div id="revNote" class="xs mut" style="margin:-2px 0 6px"></div>
+      <div class="douRow"><div class="douBox"><canvas id="chRev"></canvas></div><div id="revPct" class="plist"></div></div></div>
   </div>
   <div class="card"><h3>ยอดขายดิบรายวัน (POS แยกกะ) <span class="sp">${monthLabel(S.m)}</span></h3>
     ${salesRepHTML(A.c, A.days)}
@@ -844,6 +847,7 @@ function comparePrev(A,P){
 }
 function drawDash(A){
   if(typeof Chart==='undefined'){toast('โหลดกราฟไม่ขึ้น (เช็คเน็ต)',true);return;}
+  S._dashA=A;
   killChart('line'); killChart('dou'); killChart('rev');
   const lc=document.getElementById('chLine'); if(lc){
     // แบ่งกลุ่มวัน: ธรรมดา = จ-พฤ · หนัก = ศ ส อา
@@ -867,42 +871,52 @@ function drawDash(A){
       options:{plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
         scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
   }
-  const dc=document.getElementById('chDou'); if(dc){
+  buildDou('cost', document.getElementById('chDou'), false);
+  buildDou('rev', document.getElementById('chRev'), false);
+}
+function douParts(kind,A){
+  if(kind==='cost'){
     const parts={...A.byCat}; if(A.cashM+A.cashE)parts['เงินสดหน้าร้าน']=A.cashM+A.cashE; if(A.shopee)parts['Shopee']=A.shopee;
-    const labels=Object.keys(parts);
-    if(!labels.length){ dc.parentElement.insertAdjacentHTML('beforeend','<div class="empty">ยังไม่มีข้อมูล</div>'); dc.remove(); return;}
-    S.charts.dou=new Chart(dc,{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>parts[l]),
-      backgroundColor:labels.map(l=>catColor(l)),borderWidth:2,borderColor:'#fff'}]},
-      options:{cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
-        tooltip:{callbacks:{label:c=>c.label+': ฿'+fmtI(c.raw)}}}}});
-    // % รายหมวด มุมบนขวา
-    const dp=document.getElementById('douPct');
-    if(dp){ const tot=labels.reduce((a,l)=>a+parts[l],0);
-      dp.innerHTML=labels.map(l=>`<div><span class="dot" style="background:${catColor(l)}"></span>${esc(l)} <b>${tot?pctF(parts[l]/tot):'–'}</b></div>`).join(''); }
+    const L=Object.keys(parts);
+    return {L, D:L.map(l=>parts[l]), C:L.map(l=>catColor(l)), base:L.reduce((a,l)=>a+parts[l],0), note:''};
   }
-  // ---------- สัดส่วนรายได้ · รายจ่ายต่างๆ ----------
-  const rc=document.getElementById('chRev'); if(rc){
-    const rev=A.revenue||0;
-    if(!rev){ rc.parentElement.parentElement.querySelector('#revNote').textContent='ยังไม่มีรายได้เดือนนี้'; rc.remove(); }
-    else{
-      const L=[],D=[],C=[];
-      if(A.vc){L.push('Variable cost');D.push(A.vc);C.push('#C62127');}
-      if(A.fixT){L.push('Fix cost');D.push(A.fixT);C.push('#4E7D8C');}
-      if(A.extraT){L.push('รายจ่ายอื่นๆ');D.push(A.extraT);C.push('#8C8C8C');}
-      const note=document.getElementById('revNote');
-      if(A.net>=0){ L.push('คงเหลือสุทธิ');D.push(A.net);C.push('#1E8E5A');
-        if(note)note.textContent='ทั้งวง = รายได้ 100% · แบ่งเป็นรายจ่ายแต่ละก้อน + คงเหลือสุทธิ'; }
-      else if(note){ note.innerHTML='⚠️ <b style="color:var(--bad)">รายจ่ายเกินรายได้ ฿'+fmtI(-A.net)+'</b> — วงนี้แสดงเฉพาะฝั่งรายจ่าย'; }
-      S.charts.rev=new Chart(rc,{type:'doughnut',data:{labels:L,datasets:[{data:D,backgroundColor:C,borderWidth:2,borderColor:'#fff'}]},
-        options:{cutout:'58%',plugins:{
-          legend:{position:'bottom',labels:{boxWidth:10,font:{size:11},generateLabels:ch=>{
-            const ds=ch.data.datasets[0]; 
-            return ch.data.labels.map((l,i)=>({text:`${l} ${rev?pctF(ds.data[i]/rev):''}`,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:0,index:i}));
-          }}},
-          tooltip:{callbacks:{label:c=>c.label+': ฿'+fmtI(c.raw)+(rev?' ('+pctF(c.raw/rev)+' ของรายได้)':'')}}
-        }}});
-    }
+  const L=[],D=[],C=[]; const rev=A.revenue||0;
+  if(A.vc){L.push('Variable cost');D.push(A.vc);C.push('#C62127');}
+  if(A.fixT){L.push('Fix cost');D.push(A.fixT);C.push('#4E7D8C');}
+  if(A.extraT){L.push('รายจ่ายอื่นๆ');D.push(A.extraT);C.push('#8C8C8C');}
+  let note='ทั้งวง = รายได้ 100%';
+  if(A.net>=0){ L.push('คงเหลือสุทธิ');D.push(A.net);C.push('#1E8E5A'); }
+  else note='⚠️ <b style="color:var(--bad)">รายจ่ายเกินรายได้ ฿'+fmtI(-A.net)+'</b> — แสดงเฉพาะฝั่งรายจ่าย';
+  return {L,D,C, base:rev||D.reduce((a,b)=>a+b,0), note};
+}
+function buildDou(kind,cv,big){
+  const A=S._dashA; if(!A||!cv)return;
+  const P=douParts(kind,A);
+  if(!big){
+    const listEl=document.getElementById(kind==='cost'?'douPct':'revPct');
+    if(kind==='rev'){ const n=document.getElementById('revNote'); if(n)n.innerHTML=P.note; }
+    if(!P.L.length){ if(listEl)listEl.innerHTML='<div class="xs mut">ยังไม่มีข้อมูลเดือนนี้</div>'; cv.style.display='none'; return; }
+    if(listEl)listEl.innerHTML=P.L.map((l,i)=>`<div><span class="dot" style="background:${P.C[i]}"></span>${esc(l)} <b>${P.base?pctF(P.D[i]/P.base):'–'}</b></div>`).join('');
   }
+  const key=big?'big':(kind==='cost'?'dou':'rev');
+  killChart(key);
+  S.charts[key]=new Chart(cv,{type:'doughnut',data:{labels:P.L,datasets:[{data:P.D,backgroundColor:P.C,borderWidth:2,borderColor:'#fff'}]},
+    options:{cutout:big?'58%':'66%',
+      plugins:{
+        legend: big?{position:'bottom',labels:{boxWidth:10,font:{size:11},generateLabels:ch=>{
+            const ds=ch.data.datasets[0];
+            return ch.data.labels.map((l,i)=>({text:`${l} ${P.base?pctF(ds.data[i]/P.base):''}`,fillStyle:ds.backgroundColor[i],strokeStyle:'#fff',lineWidth:0,index:i}));
+          }}}:{display:false},
+        tooltip:{enabled:!!big,callbacks:{label:c=>c.label+': ฿'+fmtI(c.raw)+(P.base?' ('+pctF(c.raw/P.base)+')':'')}}
+      }}});
+}
+function douBig(kind){
+  const A=S._dashA; if(!A)return;
+  const P=douParts(kind,A);
+  openModal(`<h3>${kind==='cost'?'สัดส่วนต้นทุน':'สัดส่วนรายได้ · รายจ่ายต่างๆ'}${kind==='rev'?` <span class="sp">รายได้ ฿${fmtI(A.revenue)}</span>`:''}</h3>
+    ${kind==='rev'?`<div class="xs mut" style="margin:-4px 0 8px">${P.note}</div>`:''}
+    <div style="max-width:420px;margin:0 auto"><canvas id="chBig" height="300"></canvas></div>`);
+  requestAnimationFrame(()=>buildDou(kind, document.getElementById('chBig'), true));
 }
 </script>
 <script>
