@@ -860,28 +860,12 @@ function drawDash(A){
   }
   const dc=document.getElementById('chDou'); if(dc){
     const parts={...A.byCat}; if(A.cashM+A.cashE)parts['เงินสดหน้าร้าน']=A.cashM+A.cashE; if(A.shopee)parts['Shopee']=A.shopee;
-    const catLabels=Object.keys(parts);
-    if(!catLabels.length&&!A.fixT&&!A.extraT){ dc.parentElement.insertAdjacentHTML('beforeend','<div class="empty">ยังไม่มีข้อมูล</div>'); dc.remove(); return;}
-    const FIX_C='#B98A2F', EXT_C='#8C8C8C', VC_C='#C62127';
-    // วงนอก: หมวด VC ละเอียด + Fix + อื่นๆ (มุมตรงกับวงใน)
-    const outL=[...catLabels], outD=catLabels.map(l=>parts[l]), outC=catLabels.map(l=>catColor(l));
-    if(A.fixT){outL.push('Fix cost');outD.push(A.fixT);outC.push(FIX_C);}
-    if(A.extraT){outL.push('รายจ่ายอื่นๆ');outD.push(A.extraT);outC.push(EXT_C);}
-    // วงใน: ภาพรวม 3 ก้อน
-    const inL=[], inD=[], inC=[];
-    if(A.vc){inL.push('Variable cost');inD.push(A.vc);inC.push(VC_C);}
-    if(A.fixT){inL.push('Fix cost');inD.push(A.fixT);inC.push(FIX_C);}
-    if(A.extraT){inL.push('รายจ่ายอื่นๆ');inD.push(A.extraT);inC.push(EXT_C);}
-    S.charts.dou=new Chart(dc,{type:'doughnut',data:{labels:outL,datasets:[
-        {dlabels:outL,data:outD,backgroundColor:outC,borderWidth:2,borderColor:'#fff'},
-        {dlabels:inL,data:inD,backgroundColor:inC,borderWidth:2,borderColor:'#fff',weight:0.72}
-      ]},
-      options:{cutout:'48%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
-        tooltip:{callbacks:{label:c=>{
-          const lb=(c.dataset.dlabels&&c.dataset.dlabels[c.dataIndex])||c.label;
-          const tot=c.dataset.data.reduce((a,x)=>a+x,0);
-          return lb+': ฿'+fmtI(c.raw)+(tot?' ('+pctF(c.raw/tot)+')':'');
-        }}}}}});
+    const labels=Object.keys(parts);
+    if(!labels.length){ dc.parentElement.insertAdjacentHTML('beforeend','<div class="empty">ยังไม่มีข้อมูล</div>'); dc.remove(); return;}
+    S.charts.dou=new Chart(dc,{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>parts[l]),
+      backgroundColor:labels.map(l=>catColor(l)),borderWidth:2,borderColor:'#fff'}]},
+      options:{cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.label+': ฿'+fmtI(c.raw)}}}}});
   }
 }
 </script>
