@@ -100,6 +100,9 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .exctl{display:flex;flex-direction:column;gap:4px;flex:none;align-items:stretch}
 .pchip{font-size:10px;font-weight:700;font-family:'Prompt';padding:3px 8px;border-radius:99px;border:1.5px solid var(--line);color:var(--mut);white-space:nowrap;background:#fff}
 .pchip.on{background:var(--ok-t);color:var(--ok);border-color:var(--ok)}
+.pchip{display:inline-flex;align-items:center;gap:5px}
+.ckbx{width:14px;height:14px;border-radius:4px;border:1.7px solid #B9AF9E;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1;background:#fff;color:#fff;flex:none}
+.pchip.on .ckbx{background:var(--ok);border-color:var(--ok)}
 .sbtn{font-size:14px;line-height:1;padding:3px;border-radius:8px;border:1.5px dashed var(--line);background:#fff}
 .sbtn.has{border-style:solid;border-color:var(--gold);background:var(--gold-t)}
 .mvbtn{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:11px;color:var(--mut)}
@@ -1197,7 +1200,7 @@ function expFormHTML(c){
           <input type="number" step="any" inputmode="decimal" placeholder="0" id="exi${s.id}" value="${r&&num(r.amount)?r.amount:''}"
             oninput="expInput('${ds}',${s.id},this.value)">
           <div class="exctl">
-            <button class="pchip ${paid?'on':''}" id="pd_${s.id}" onclick="paidToggle('${ds}',${s.id})">${paid?'✓ จ่ายแล้ว':'ค้างจ่าย'}</button>
+            <button class="pchip ${paid?'on':''}" id="pd_${s.id}" onclick="paidToggle('${ds}',${s.id})"><span class="ckbx">${paid?'✓':''}</span>จ่ายแล้ว</button>
             <button class="sbtn ${hasSlip?'has':''}" id="sl_${s.id}" title="สลิป" onclick="slipClick('${ds}',${s.id})">${hasSlip?'🧾':'📎'}</button>
           </div></div>`;
       }).join('')}</div>`;
@@ -1213,7 +1216,7 @@ async function paidToggle(ds,sid){
   if(!r||!num(r.amount)){toast('ใส่ยอดก่อน แล้วค่อยติ๊กจ่าย',true);return;}
   r.paid=!r.paid;
   const b=document.getElementById('pd_'+sid);
-  if(b){ b.classList.toggle('on',r.paid); b.textContent=r.paid?'✓ จ่ายแล้ว':'ค้างจ่าย'; }
+  if(b){ b.classList.toggle('on',r.paid); b.innerHTML='<span class="ckbx">'+(r.paid?'✓':'')+'</span>จ่ายแล้ว'; }
   updUnpaidBar();
   try{ await ups('pnl_expense_daily',[{branch:S.br,d:ds,supplier_id:sid,amount:num(r.amount),paid:r.paid}],'branch,d,supplier_id'); }
   catch(e){ r.paid=!r.paid; updUnpaidBar(); }
@@ -1545,7 +1548,7 @@ function pvCreateModal(){
       <div class="fld"><label>ประเภท</label><select id="pvVat"><option>NON-VAT</option><option>VAT</option></select></div>
       <div class="fld"><label>วันที่ PV</label><input type="date" id="pvDate" value="${todayStr()}"></div>
     </div>
-    <p class="xs mut">* ซัพประเภท "VAT / NON-VAT" จะถูกรวมในใบ VAT · แก้ยอดรายตัวได้ก่อนบันทึก</p>
+    <p class="xs mut">* ดึงเฉพาะบิลที่<b>ยังไม่ติ๊กจ่าย</b> (จ่ายแล้วถูกหักออกอัตโนมัติ) · ซัพ "VAT / NON-VAT" รวมในใบ VAT · แก้ยอดรายตัวได้ก่อนบันทึก</p>
     <button class="btn" style="width:100%" onclick="pvPreview()">ดึงยอด →</button>
     <div id="pvPrev"></div>`);
   document.getElementById('pvVat').value = (new Date().getDate()<=5||new Date().getDate()>=16)?'NON-VAT':'NON-VAT';
@@ -1554,18 +1557,25 @@ async function pvPreview(){
   const m=document.getElementById('pvM').value, per=document.getElementById('pvPer').value, vat=document.getElementById('pvVat').value;
   const days=monthDays(m);
   const from=per==='1'?dstr(m,1):dstr(m,16), to=per==='1'?dstr(m,15):dstr(m,days);
-  const rows=await sel('pnl_expense_daily',`select=supplier_id,amount&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`);
-  const sums={}; rows.forEach(r=>sums[r.supplier_id]=(sums[r.supplier_id]||0)+num(r.amount));
+  const rows=await sel('pnl_expense_daily',`select=supplier_id,amount,paid&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`);
+  const sums={}, paidSums={};
+  rows.forEach(r=>{
+    if(r.paid) paidSums[r.supplier_id]=(paidSums[r.supplier_id]||0)+num(r.amount);
+    else sums[r.supplier_id]=(sums[r.supplier_id]||0)+num(r.amount);
+  });
   const match=s=> vat==='VAT' ? (s.vat_type==='VAT'||s.vat_type==='VAT / NON-VAT') : s.vat_type==='NON-VAT';
   const items=S.core.sup.filter(s=>sums[s.id]>0&&match(s)).map(s=>({s,amt:sums[s.id]}));
+  const paidCut=S.core.sup.filter(s=>paidSums[s.id]>0&&match(s)).reduce((a,s)=>a+paidSums[s.id],0);
   S._pvDraft={m,from,to,vat,items};
   document.getElementById('pvPrev').innerHTML= items.length?`
-    <div style="margin-top:12px;max-height:40dvh;overflow-y:auto">${items.map((it,i)=>`
-      <div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}</div></div>
-      <input type="number" step="any" inputmode="decimal" value="${it.amt.toFixed(2)}" onchange="S._pvDraft.items[${i}].amt=num(this.value)"></div>`).join('')}</div>
-    <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม ${items.length} ราย</span></div>
+    <div class="xs" style="margin-top:10px;color:var(--ok);font-weight:600">✓ ดึงเฉพาะบิลที่ยังไม่จ่าย${paidCut?` · หักบิลติ๊กจ่ายแล้วออก ฿${fmtI(paidCut)}`:''}</div>
+    <div style="margin-top:8px;max-height:40dvh;overflow-y:auto">${items.map((it,i)=>{
+      const pd=paidSums[it.s.id]||0;
+      return `<div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}${pd?` · <span style="color:var(--ok)">จ่ายไปแล้ว ฿${fmtI(pd)}</span>`:''}</div></div>
+      <input type="number" step="any" inputmode="decimal" value="${it.amt.toFixed(2)}" onchange="S._pvDraft.items[${i}].amt=num(this.value)"></div>`;}).join('')}</div>
+    <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม ${items.length} ราย · ฿${fmtI(items.reduce((a,x)=>a+x.amt,0))}</span></div>
     <button class="btn dk" style="width:100%;margin-top:6px" onclick="pvSave()">บันทึก PV</button>`
-    :'<div class="empty">ไม่มียอดค้างจ่ายประเภทนี้ในงวดที่เลือก</div>';
+    :`<div class="empty">ไม่มียอดค้างจ่ายประเภทนี้ในงวดที่เลือก${paidCut?`<br><span class="xs" style="color:var(--ok)">บิลงวดนี้ติ๊กจ่ายครบแล้ว ฿${fmtI(paidCut)} 🎉</span>`:''}</div>`;
 }
 async function pvSave(){
   const D=S._pvDraft; if(!D||!D.items.length)return;
