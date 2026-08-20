@@ -1491,7 +1491,8 @@ RENDER.sum = async (el)=>{
   const RO = S.br==='ALL';
   const rev=A.revenue;
   const pRev=P?P.revenue:0;
-  const divisor = A.c.meta.days_divisor ?? A.days;
+  const autoDiv = A.daysData || A.days;                    // อัตโนมัติ: หารตามวันที่มีรายรับจริง
+  const divisor = A.c.meta.days_divisor ?? autoDiv;
   const supRow=(s)=>{
     const amt=A.bySup[s.id]||0;
     const p=rev?amt/rev:null;
@@ -1549,8 +1550,8 @@ RENDER.sum = async (el)=>{
   el.innerHTML=`
   <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <div><div class="b" style="font-family:'Prompt';font-size:16px">สรุปผลประกอบการ · ${BRNAME[S.br]}</div>
-      <div class="sm mut">${monthLabel(S.m)} · จำนวนวันหาร ${RO?`<b>${divisor}</b>`:`<input type="number" step="any" style="width:64px;padding:4px 8px;display:inline-block" value="${divisor}"
-          onchange="metaInput('days_divisor',parseInt(this.value)||null)">`} วัน${RO?' · <span class="b" style="color:var(--red)">โหมดรวม 2 สาขา (ดูอย่างเดียว)</span>':''}</div></div>
+      <div class="sm mut">${monthLabel(S.m)} · จำนวนวันหาร ${RO?`<b>${divisor}</b>`:`<input type="number" step="any" style="width:64px;padding:4px 8px;display:inline-block" value="${A.c.meta.days_divisor??''}" placeholder="${autoDiv}"
+          onchange="metaInput('days_divisor',parseInt(this.value)||null)">`} วัน <span class="xs">(${A.c.meta.days_divisor!=null?'กำหนดเอง · เว้นว่าง = อัตโนมัติ':'อัตโนมัติตามวันที่มีรายรับ '+autoDiv+' วัน'})</span>${RO?' · <span class="b" style="color:var(--red)">โหมดรวม (ดูอย่างเดียว)</span>':''}</div></div>
     <button class="btn dk sm2" style="margin-left:auto" onclick="printSummary()">🖨 พิมพ์สรุป</button>
   </div>
 
