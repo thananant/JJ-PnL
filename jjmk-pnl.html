@@ -2558,6 +2558,7 @@ RENDER.detail = async (el)=>{
   <div class="card"><h3>รายการสินค้าในบิล <span class="sp" id="dtSupName">${S.dtSup?esc((S.core.supById[S.dtSup]||{}).name||''):''}</span></h3>
     <div style="display:flex;gap:8px;align-items:center;margin:0 0 8px;flex-wrap:wrap">
       <button class="btn gh sm2" onclick="document.getElementById('dtOcrFile').click()">📷 สแกนบิล (ถ่ายรูป/เลือกรูป)</button>
+      <span id="dtOcrRetryWrap"></span>
       <span class="xs mut">อ่านรายการ+ยอดจากรูปบิลอัตโนมัติ · ชื่อยึดตามในแอพ ตัวไหนใหม่ให้ผูกครั้งเดียวจำตลอด</span>
       <input type="file" id="dtOcrFile" accept="image/*" capture="environment" style="display:none" onchange="dtOcrPick(this)"></div>
     <div id="dtOcrMap"></div>
@@ -2592,7 +2593,7 @@ RENDER.detail = async (el)=>{
   <div class="card"><h3>รายการบิลของเดือนนี้ · ${monthLabel(S.m)}</h3><div id="dtList"><div class="spin"></div></div></div>
   <datalist id="dtItemsDL"></datalist>
   <datalist id="dtUnitsDL">${unitList().map(u=>`<option value="${esc(u)}">`).join('')}</datalist>`;
-  renderDtLines(); dtMonthList();
+  renderDtLines(); dtMonthList(); renderOcrRetryBtn();
   if(S.dtSup) dtLoad(); else { document.getElementById('dtCur').textContent=''; ocrPendingBanner(); }
 };
 async function dtPickSup(v){
@@ -2834,15 +2835,27 @@ function dtOcrSend(bodyObj){ // ใช้ XHR เพื่อได้ % อั�
 async function dtOcrPick(inp){
   const f=inp.files&&inp.files[0]; inp.value='';
   if(!f)return;
+  try{ S._lastOcrImg=await dtOcrShrink(f); }catch(e){ toast('อ่านรูปไม่ได้: '+e.message,true); return; }
+  await dtOcrRun(S._lastOcrImg);
+  renderOcrRetryBtn();
+}
+async function dtOcrRetry(){ // สแกนรูปเดิมซ้ำ (โมเดล AI ตอบไม่เหมือนกันทุกครั้ง บางทีลองใหม่ก็อ่านผ่าน)
+  if(!S._lastOcrImg){toast('ยังไม่มีรูปให้สแกนซ้ำครับ',true);return;}
+  await dtOcrRun(S._lastOcrImg);
+}
+function renderOcrRetryBtn(){
+  const el=document.getElementById('dtOcrRetryWrap'); if(!el)return;
+  el.innerHTML=S._lastOcrImg?`<button class="hintlink" onclick="dtOcrRetry()">🔁 สแกนรูปเดิมอีกครั้ง</button>`:'';
+}
+async function dtOcrRun(b64){
   ocrProgOpen();
   try{
-    const b64=await dtOcrShrink(f);
     ocrProgSet('⬆️ ส่งรูปขึ้นระบบ...',8,null);
     const known=S.dtSup?dtPoolNames():[];
     const aliases=S.dtSup?(S._dtAlias||[]).map(a=>({alias:a.alias,item:a.item})):[];
     OCRP.timer=setInterval(ocrTick,150);
     const r=await dtOcrSend({image:b64.data,mime:b64.mime,knownItems:known,aliases});
-    if(!r.ok||r.j.error){ ocrProgClose(); toast('อ่านบิลไม่สำเร็จ: '+(r.j.error||r.status),true); return; }
+    if(!r.ok||r.j.error){ ocrProgClose(); toast('อ่านบิลไม่สำเร็จ: '+(r.j.error||r.status)+' — ลองกด "สแกนรูปเดิมอีกครั้ง" ได้ครับ',true); renderOcrRetryBtn(); return; }
     // จำเวลาที่ใช้จริง ไว้ทายรอบหน้าให้แม่นขึ้น (ค่าเฉลี่ยถ่วงน้ำหนัก)
     const used=Date.now()-OCRP.t0;
     LS.set('jj_ocr_ms', Math.round(OCRP.est*0.55 + used*0.45));
@@ -2910,6 +2923,7 @@ function dtOcrApply(j){
   let msg=`📷 อ่านบิลได้ ${lines.length} รายการ`+(unm?` · <b style="color:#8A6200">มี ${unm} ชื่อยังไม่ผูก — เลือกด้านล่างครั้งเดียว จำตลอด</b>`:' · จับคู่ชื่อครบทุกตัว ✅');
   if(bt&&Math.abs(bt-myTot)>1) msg+=` · <b style="color:var(--bad)">⚠ ยอดที่คำนวณ ฿${fmt(myTot,2)} ≠ ยอดบนบิล ฿${fmt(bt,2)} — ตรวจตัวเลขก่อนบันทึก</b>`;
   else if(bt) msg+=` · ยอดตรงกับบิล ฿${fmt(bt,2)} ✅`;
+  msg+=` <span class="xs mut">${j._model?`(อ่านด้วย ${esc(j._model)} — ลองใหม่อาจได้ผลต่างกันเล็กน้อย)`:''}</span>`;
   if(tn)tn.innerHTML=msg;
   toast(unm?`อ่านบิลแล้ว — เหลือผูกชื่อ ${unm} ตัว (ดูแถบเหลืองใต้แต่ละแถว)`:'อ่านบิลสำเร็จ ตรวจแล้วกดบันทึกได้เลย ✅');
 }
