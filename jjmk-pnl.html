@@ -577,11 +577,10 @@ function catColor(c){
 <script>
 /* ============ โหลดข้อมูล ============ */
 async function loadCore(){
-  const [sup, ben, fix, meats, brs, fgs] = await Promise.all([
+  const [sup, ben, fix, brs, fgs] = await Promise.all([
     sel('pnl_suppliers','select=*&order=sort'),
     sel('pnl_benchmarks','select=*'),
     sel('pnl_fixed_items','select=*&order=grp,sort'),
-    sel('pnl_meat_prices','select=*&order=sort'),
     sel('pnl_branches','select=*&order=sort,code').catch(()=>sel('pnl_branches','select=*&order=code.desc')).catch(()=>[]),
     sel('pnl_fix_groups','select=*&order=sort,name').catch(()=>[])
   ]);
@@ -591,7 +590,7 @@ async function loadCore(){
     b.avg = b.list.reduce((a,c)=>a+c,0)/b.list.length;
     b.min = Math.min(...b.list);
   });
-  S.core = { sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix, meats,
+  S.core = { sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix,
     branches:(brs&&brs.length?brs:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]),
     fixGroups: fgs||[] };
   S.core.branches.forEach(b=>{ if(b.name) BRNAME[b.code]='สาขา'+b.name; });
@@ -1599,9 +1598,8 @@ function expFormHTML(c){
       <span class="sp num" id="catT-${esc(cat)}"></span></h3>
       <div class="exgrid">${list.map(s=>{
         const r=c.exp[ds+'|'+s.id];
-        const isYannah=s.name==='Yannah Beef';
         const paid=!!(r&&r.paid), hasSlip=!!(r&&r.slip_url);
-        return `<div class="exrow"><div class="nm"><div class="t">${esc(s.name)}${s.active?'':' <span class="xs" style="color:var(--bad);font-weight:600">· เลิกใช้แล้ว</span>'}${isYannah?' <span class="hintlink" onclick="meatModal(\''+ds+'\','+s.id+')">🥩 คิดจากกก.</span>':''}</div>
+        return `<div class="exrow"><div class="nm"><div class="t">${esc(s.name)}${s.active?'':' <span class="xs" style="color:var(--bad);font-weight:600">· เลิกใช้แล้ว</span>'}</div>
           <div class="s">${esc(s.payment_term||'')}${s.payment_term?' · ':''}${esc(s.vat_type)}</div></div>
           <input type="number" step="any" inputmode="decimal" placeholder="0" id="exi${s.id}" value="${r&&num(r.amount)?r.amount:''}"
             oninput="expInput('${ds}',${s.id},this.value)">
@@ -1929,36 +1927,6 @@ function expTableView(){
   openModal(`<h3>ตารางรายจ่ายรวม · ${monthLabel(S.m)} · ${BRNAME[S.br]}</h3>
     <div class="twrap"><table><tr><th>ซัพพลายเออร์</th><th class="right">1–15</th><th class="right">16–${days}</th><th class="right">รวม</th><th>เงื่อนไข</th></tr>${rows||'<tr><td colspan=5 class="empty">ไม่มีข้อมูล</td></tr>'}</table></div>
     <button class="btn dk sm2" style="margin-top:12px" onclick="closeModal()">ปิด</button>`);
-}
-function meatModal(ds,sid){
-  const meats=S.core.meats.filter(m=>m.branch===S.br&&m.active);
-  const c=S.cache[mkey(S.br,S.m)];
-  openModal(`<h3>คิดยอด Yannah จากน้ำหนัก · ${thDate(ds)}</h3>
-    ${meats.map(m=>`<div class="exrow"><div class="nm"><div class="t">${esc(m.name)}</div><div class="s">฿${fmt(m.price_kg)}/กก.</div></div>
-      <input type="number" step="any" inputmode="decimal" placeholder="กก." id="mk${m.id}"
-        value="${c.meatd[ds+'|'+m.id]||''}" oninput="meatCalc('${ds}')"></div>`).join('')}
-    <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม</span><span class="num b" id="meatTot" style="font-size:18px">฿0</span></div>
-    <div style="display:flex;gap:8px;margin-top:10px">
-      <button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
-      <button class="btn sm2" style="margin-left:auto" onclick="meatSave('${ds}',${sid})">บันทึกลงช่อง Yannah</button></div>`);
-  meatCalc(ds);
-}
-function meatCalc(ds){
-  const meats=S.core.meats.filter(m=>m.branch===S.br&&m.active);
-  let t=0; meats.forEach(m=>{const kg=num(document.getElementById('mk'+m.id)?.value); t+=kg*num(m.price_kg);});
-  document.getElementById('meatTot').textContent='฿'+fmt(t,2);
-  return t;
-}
-async function meatSave(ds,sid){
-  const meats=S.core.meats.filter(m=>m.branch===S.br&&m.active);
-  const c=S.cache[mkey(S.br,S.m)]; const rows=[];
-  meats.forEach(m=>{const kg=num(document.getElementById('mk'+m.id)?.value);
-    c.meatd[ds+'|'+m.id]=kg; rows.push({branch:S.br,d:ds,meat_id:m.id,kg});});
-  const total=meatCalc(ds);
-  await ups('pnl_meat_daily',rows,'branch,d,meat_id');
-  const inp=document.getElementById('exi'+sid); if(inp)inp.value=total.toFixed(2);
-  expInput(ds,sid,total);
-  closeModal(); toast('บันทึก Yannah ฿'+fmt(total,2));
 }
 </script>
 <script>
@@ -2966,10 +2934,6 @@ RENDER.set = async (el)=>{
         }).join('');
       })()}
       </table></div></div>
-    <div class="card"><h3>ราคาเนื้อ Yannah · ${BRNAME[S.br]}</h3>
-      ${S.core.meats.filter(m=>m.branch===S.br).map(m=>`<div class="exrow"><div class="nm"><div class="t">${esc(m.name)}</div><div class="s">บาท/กก.</div></div>
-        <input type="number" step="any" inputmode="decimal" value="${m.price_kg}" onchange="meatPriceSave(${m.id},this.value)">
-        </div>`).join('')}</div>
   </div></div>`;
   loadHistList();
   if(S.user&&S.user.role==='admin'&&!S.user.legacy){ userLoad(); actLoad(); }
@@ -3213,12 +3177,6 @@ async function fixSave(id){
   await loadCore(); closeModal(); toast('บันทึกแล้ว'); show('set');
 }
 
-async function meatPriceSave(id,v){
-  const val=num(v);
-  await upd('pnl_meat_prices','id=eq.'+id,{price_kg:val});
-  const mm=S.core.meats.find(x=>x.id===id); if(mm)mm.price_kg=val;
-  toast('บันทึกแล้ว');
-}
 
 /* ============ Export → NAS ============ */
 const ALL_TABLES=['pnl_branches','pnl_suppliers','pnl_benchmarks','pnl_income_daily','pnl_cash_expenses',
