@@ -124,6 +124,17 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .exgrid .exrow:nth-child(odd){background:#F7F1E3}
 .exgrid .exrow input{width:96px}
 details>summary::-webkit-details-marker{display:none}
+.dthead,.dtrow{display:grid;grid-template-columns:minmax(120px,1.4fr) 76px 82px 100px 96px 30px;gap:7px;align-items:center}
+.dthead{font-size:11px;color:var(--mut);font-weight:700;padding:0 0 6px;border-bottom:1.5px solid var(--line)}
+.dtrow{padding:6px 0;border-bottom:1px solid var(--line)}
+.dtrow input{padding:8px 9px;font-size:13px}
+.dtrow input[type=number]{text-align:right}
+@media(max-width:640px){
+  .dthead{display:none}
+  .dtrow{grid-template-columns:1fr 1fr;gap:6px;background:#FBF7EE;border-radius:12px;padding:9px;margin-bottom:8px;border-bottom:none}
+  .dtrow input:first-child{grid-column:1/-1}
+  .dtrow .num.b{text-align:left}
+}
 .asrow{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13px}
 .asrow:last-child{border-bottom:none}
 .asrow input{width:19px;height:19px;flex:none}
@@ -300,6 +311,7 @@ canvas{max-width:100%}
   <button class="sb-item" data-v="income"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9.5"/><path d="M8.5 9.5 12 13l3.5-3.5"/><path d="M4 15v3a2.5 2.5 0 0 0 2.5 2.5h11A2.5 2.5 0 0 0 20 18v-3"/></svg>รายรับ</button>
   <button class="sb-item" data-v="exp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5H6l2.1 10.3a1.7 1.7 0 0 0 1.7 1.4h6.6a1.7 1.7 0 0 0 1.7-1.3L20 8H7"/><circle cx="10.2" cy="20" r="1.35"/><circle cx="16.8" cy="20" r="1.35"/></svg>รายจ่าย</button>
   <div class="sb-sec">เอกสาร &amp; รายงาน</div>
+  <button class="sb-item" data-v="detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.5h12"/><path d="M8 12h12"/><path d="M8 18.5h12"/><circle cx="4.4" cy="5.5" r="1.15" fill="currentColor" stroke="none"/><circle cx="4.4" cy="12" r="1.15" fill="currentColor" stroke="none"/><circle cx="4.4" cy="18.5" r="1.15" fill="currentColor" stroke="none"/></svg>รายละเอียดบิล</button>
   <button class="sb-item" data-v="sum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20v-7"/><path d="M12 20V5"/><path d="M19 20v-10"/></svg>สรุปเดือน</button>
   <button class="sb-item" data-v="pv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8.5h6"/><path d="M9 12.5h6"/><path d="M9 16.5h3.5"/></svg>ใบสำคัญจ่าย</button>
   <button class="sb-item" data-v="etc"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>อื่นๆ</button>
@@ -321,6 +333,7 @@ canvas{max-width:100%}
     <button data-v="dash" class="on">แดชบอร์ด</button>
     <button data-v="income">รายรับ</button>
     <button data-v="exp">รายจ่าย</button>
+    <button data-v="detail">รายละเอียด</button>
     <button data-v="sum">สรุปเดือน</button>
     <button data-v="pv">ใบสำคัญจ่าย</button>
     <button data-v="etc">อื่นๆ</button>
@@ -331,6 +344,7 @@ canvas{max-width:100%}
   <section class="view on" id="view-dash"><div class="spin"></div></section>
   <section class="view" id="view-income"></section>
   <section class="view" id="view-exp"></section>
+  <section class="view" id="view-detail"></section>
   <section class="view" id="view-sum"></section>
   <section class="view" id="view-pv"></section>
   <section class="view" id="view-etc"></section>
@@ -618,7 +632,7 @@ function pickBranch(br){
 const RENDER = {};
 async function show(v){
   document.querySelectorAll('.tabbar button,.sb-item').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
-  const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
+  const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'รายละเอียดบิล',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   S.tab=v;
   LS.set('jjpnl_view',{tab:v, incDay:S.incDay||null, expDay:S.expDay||null, on:todayStr()});
@@ -650,7 +664,7 @@ async function boot(){
     if(e.key!=='Enter')return;
     const t=e.target;
     if(!t||t.tagName!=='INPUT'||!['number','text'].includes(t.type))return;
-    const box=t.closest('#fixPanel,#expForm,#incDayWrap,#cashList,#pvPrev');
+    const box=t.closest('#fixPanel,#expForm,#incDayWrap,#cashList,#pvPrev,#dtLines');
     if(!box)return;
     e.preventDefault();
     const list=[...box.querySelectorAll('input')].filter(i=>!i.readOnly&&!i.disabled&&['number','text'].includes(i.type));
@@ -674,7 +688,7 @@ async function boot(){
   }
   S.tab=startTab; await show(startTab);
 }
-const VIEWS=['dash','income','exp','sum','pv','etc','set'];
+const VIEWS=['dash','income','exp','detail','sum','pv','etc','set'];
 
 /* ============ แดชบอร์ด ============ */
 function killChart(id){ if(S.charts[id]){S.charts[id].destroy(); delete S.charts[id];} }
@@ -1638,6 +1652,148 @@ async function meatSave(ds,sid){
 </script>
 <script>
 /* ============ สรุปเดือน (P&L) ============ */
+const DT_UNITS=['กก.','ชิ้น','แพ็ค','ลัง','ถุง','ขวด','กระป๋อง','กล่อง','ลิตร','มัด','ตัว','กระสอบ'];
+RENDER.detail = async (el)=>{
+  if(S.br==='ALL'){ el.innerHTML=allNotice('รายละเอียดบิล'); return; }
+  if(!S.dtDate) S.dtDate=todayStr();
+  if(S.dtLines==null) S.dtLines=[{item:'',qty:'',unit:'',price:''}];
+  const sups=S.core.sup.filter(x=>x.active).slice().sort((a,b)=>(a.category||'').localeCompare(b.category||'','th')||a.name.localeCompare(b.name,'th'));
+  const cats={}; sups.forEach(x=>(cats[x.category]??=[]).push(x));
+  el.innerHTML=`
+  <div class="card"><h3>เลือกบิล</h3>
+    <div class="grid2">
+      <div class="fld"><label>ซัพพลายเออร์</label>
+        <select id="dtSup" onchange="dtPickSup(this.value)">
+          <option value="">— เลือกซัพ —</option>
+          ${Object.entries(cats).map(([c2,list])=>`<optgroup label="${esc(c2)}">${list.map(x=>`<option value="${x.id}" ${S.dtSup==x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}
+        </select></div>
+      <div class="fld"><label>ลงบิลเป็นรายจ่ายของวันที่</label>
+        <input type="date" id="dtDate" value="${S.dtDate}" onchange="S.dtDate=this.value;dtLoad()"></div>
+    </div>
+    <div id="dtCur" class="xs mut"></div>
+  </div>
+  <div class="card"><h3>รายการสินค้าในบิล <span class="sp" id="dtSupName">${S.dtSup?esc((S.core.supById[S.dtSup]||{}).name||''):''}</span></h3>
+    <div class="dthead"><span>สินค้า</span><span class="num">จำนวน</span><span>หน่วย</span><span class="num">ราคา/หน่วย</span><span class="num">รวม</span><span></span></div>
+    <div id="dtLines"></div>
+    <button class="btn gh sm2" style="margin-top:8px" onclick="dtAddLine()">➕ เพิ่มรายการ</button>
+    <div class="dsum"><span class="mut">ยอดรวมบิล</span><span class="v" id="dtTot" style="color:var(--red)">฿0</span></div>
+    <button class="btn dk" style="width:100%;margin-top:8px" id="dtSaveBtn" onclick="dtSave()">💾 บันทึกรายละเอียด + ลงยอดรายจ่าย</button>
+    <div class="xs mut" style="margin-top:6px">บันทึกแล้ว ยอดรวมจะไปลงเป็นบิลของซัพนี้ในหน้ารายจ่ายของวันที่เลือกอัตโนมัติ (พิมพ์ชื่อสินค้าที่เคยลง ระบบเติมหน่วย+ราคาเดิมให้)</div>
+  </div>
+  <div class="card"><h3>บิลที่มีรายละเอียดแล้ว · ${monthLabel(S.m)}</h3><div id="dtList"><div class="spin"></div></div></div>
+  <datalist id="dtItemsDL"></datalist>
+  <datalist id="dtUnitsDL">${DT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>`;
+  renderDtLines(); dtMonthList();
+  if(S.dtSup) dtLoad(); else document.getElementById('dtCur').textContent='';
+};
+async function dtPickSup(v){
+  S.dtSup=v?parseInt(v):null;
+  const nm=document.getElementById('dtSupName'); if(nm)nm.textContent=S.dtSup?((S.core.supById[S.dtSup]||{}).name||''):'';
+  if(S.dtSup){ await dtHist(); await dtLoad(); }
+}
+async function dtHist(){
+  // จำชื่อสินค้า + หน่วย + ราคาเดิมของซัพนี้ (ครั้งล่าสุด)
+  try{
+    const rows=await sel('pnl_bill_items',`select=item,unit,price,d&supplier_id=eq.${S.dtSup}&branch=eq.${S.br}&order=d.desc&limit=400`);
+    const m={}; rows.forEach(r=>{ if(!m[r.item]) m[r.item]={unit:r.unit,price:num(r.price)}; });
+    S._dtHist=m;
+    const dl=document.getElementById('dtItemsDL');
+    if(dl)dl.innerHTML=Object.keys(m).map(i=>`<option value="${esc(i)}">`).join('');
+  }catch(e){ S._dtHist={}; }
+}
+async function dtLoad(){
+  if(!S.dtSup){renderDtLines();return;}
+  try{
+    const rows=await sel('pnl_bill_items',`select=*&branch=eq.${S.br}&d=eq.${S.dtDate}&supplier_id=eq.${S.dtSup}&order=sort`);
+    S.dtLines=rows.length?rows.map(r=>({item:r.item,qty:r.qty,unit:r.unit,price:r.price})):[{item:'',qty:'',unit:'',price:''}];
+  }catch(e){ S.dtLines=[{item:'',qty:'',unit:'',price:''}]; }
+  renderDtLines();
+  // โชว์ยอดรายจ่ายปัจจุบันของวันนั้น
+  try{
+    const ex=await sel('pnl_expense_daily',`select=amount,paid&branch=eq.${S.br}&d=eq.${S.dtDate}&supplier_id=eq.${S.dtSup}`);
+    const cur=document.getElementById('dtCur');
+    if(cur)cur.innerHTML=ex.length?`ยอดรายจ่ายปัจจุบันของวันนี้: <b>฿${fmtI(num(ex[0].amount))}</b>${ex[0].paid?' · <span style="color:var(--ok)">ติ๊กจ่ายแล้ว</span>':''} — บันทึกใหม่จะทับยอดนี้`:'วันนี้ยังไม่มีบิลของซัพนี้ในหน้ารายจ่าย';
+  }catch(e){}
+}
+function dtAddLine(){ S.dtLines.push({item:'',qty:'',unit:'',price:''}); renderDtLines(true); }
+function dtDelLine(i){ S.dtLines.splice(i,1); if(!S.dtLines.length)S.dtLines.push({item:'',qty:'',unit:'',price:''}); renderDtLines(); }
+function dtEdit(i,f,v){
+  S.dtLines[i][f]=v;
+  if(f==='item'&&S._dtHist&&S._dtHist[v]){
+    const h=S._dtHist[v];
+    if(!S.dtLines[i].unit){S.dtLines[i].unit=h.unit; const u=document.getElementById('dtu'+i); if(u)u.value=h.unit;}
+    if(!num(S.dtLines[i].price)){S.dtLines[i].price=h.price; const pr=document.getElementById('dtp'+i); if(pr)pr.value=h.price;}
+  }
+  dtTotals();
+}
+function dtTotals(){
+  let tot=0;
+  S.dtLines.forEach((l,i)=>{
+    const t=num(l.qty)*num(l.price); tot+=t;
+    const el=document.getElementById('dtt'+i); if(el)el.textContent=t?('฿'+fmt(t,2)):'–';
+  });
+  const g=document.getElementById('dtTot'); if(g)g.textContent='฿'+fmt(tot,2);
+  const btn=document.getElementById('dtSaveBtn');
+  if(btn)btn.textContent=`💾 บันทึก + ลงรายจ่าย ${thDate(S.dtDate)} · ฿${fmt(tot,2)}`;
+  return tot;
+}
+function renderDtLines(focusLast){
+  const el=document.getElementById('dtLines'); if(!el)return;
+  el.innerHTML=S.dtLines.map((l,i)=>`
+    <div class="dtrow">
+      <input list="dtItemsDL" placeholder="เช่น หมูสามชั้น" value="${esc(l.item||'')}" oninput="dtEdit(${i},'item',this.value)">
+      <input type="number" step="any" inputmode="decimal" placeholder="0" value="${l.qty??''}" oninput="dtEdit(${i},'qty',this.value)">
+      <input list="dtUnitsDL" placeholder="กก." id="dtu${i}" value="${esc(l.unit||'')}" oninput="dtEdit(${i},'unit',this.value)">
+      <input type="number" step="any" inputmode="decimal" placeholder="0.00" id="dtp${i}" value="${l.price??''}" oninput="dtEdit(${i},'price',this.value)">
+      <span class="num b" id="dtt${i}">–</span>
+      <button class="mvbtn" style="color:var(--bad)" onclick="dtDelLine(${i})">✕</button>
+    </div>`).join('');
+  dtTotals();
+  if(focusLast){ const rows=el.querySelectorAll('.dtrow'); const last=rows[rows.length-1]; if(last){const f=last.querySelector('input'); f&&f.focus();} }
+}
+async function dtSave(){
+  if(!S.dtSup){toast('เลือกซัพพลายเออร์ก่อนครับ',true);return;}
+  const lines=S.dtLines.map(l=>({item:(l.item||'').trim(),qty:num(l.qty),unit:(l.unit||'').trim()||'ชิ้น',price:num(l.price)}))
+    .filter(l=>l.item&&l.qty>0);
+  if(!lines.length){toast('ใส่รายการสินค้าอย่างน้อย 1 รายการครับ',true);return;}
+  const total=lines.reduce((a,l)=>a+l.qty*l.price,0);
+  const d=S.dtDate, sid=S.dtSup;
+  try{
+    await delQ('pnl_bill_items',`branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}`);
+    await ins('pnl_bill_items',lines.map((l,i)=>({branch:S.br,d,supplier_id:sid,item:l.item,qty:l.qty,unit:l.unit,price:l.price,sort:i})));
+    await ups('pnl_expense_daily',[{branch:S.br,d,supplier_id:sid,amount:total}],'branch,d,supplier_id');
+    const mo=d.slice(0,7); const c=S.cache[mkey(S.br,mo)];
+    if(c){ const k=d+'|'+sid; const r=c.exp[k]??(c.exp[k]={branch:S.br,d,supplier_id:sid}); r.amount=total; }
+    toast(`✅ บันทึกแล้ว · ลงรายจ่าย ${(S.core.supById[sid]||{}).name||''} ${thDate(d)} ฿${fmtI(total)}`);
+    dtHist(); dtMonthList(); dtLoad();
+  }catch(e){
+    toast(String(e.message||'').includes('pnl_bill_items')||String(e.message||'').includes('404')
+      ?'ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อนครับ':'บันทึกไม่สำเร็จ: '+e.message,true);
+  }
+}
+async function dtMonthList(){
+  const el=document.getElementById('dtList'); if(!el)return;
+  try{
+    const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
+    const rows=await sel('pnl_bill_items',`select=d,supplier_id,qty,price&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`);
+    if(!rows.length){el.innerHTML='<div class="xs mut">ยังไม่มีบิลที่ลงรายละเอียดในเดือนนี้</div>';return;}
+    const g={};
+    rows.forEach(r=>{const k=r.d+'|'+r.supplier_id; const t=g[k]??(g[k]={d:r.d,sid:r.supplier_id,n:0,tot:0}); t.n++; t.tot+=num(r.qty)*num(r.price);});
+    const list=Object.values(g).sort((a,b)=>b.d.localeCompare(a.d));
+    el.innerHTML='<div class="twrap"><table><tr><th>วันที่</th><th>ซัพพลายเออร์</th><th class="right">รายการ</th><th class="right">ยอดรวม</th></tr>'+
+      list.map(x=>`<tr style="cursor:pointer" onclick="dtJump('${x.d}',${x.sid})"><td>${thDate(x.d)}</td>
+        <td>${esc((S.core.supById[x.sid]||{}).name||'?')}</td>
+        <td class="n">${x.n}</td><td class="n">฿${fmtI(x.tot)}</td></tr>`).join('')+'</table></div>';
+  }catch(e){ el.innerHTML='<div class="xs mut">โหลดไม่ได้ — ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อน</div>'; }
+}
+async function dtJump(d,sid){
+  S.dtDate=d; S.dtSup=sid;
+  const di=document.getElementById('dtDate'); if(di)di.value=d;
+  const su=document.getElementById('dtSup'); if(su)su.value=String(sid);
+  const nm=document.getElementById('dtSupName'); if(nm)nm.textContent=(S.core.supById[sid]||{}).name||'';
+  await dtHist(); await dtLoad();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
 RENDER.sum = async (el)=>{
   const A=await aggFor(S.br,S.m);
   S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
