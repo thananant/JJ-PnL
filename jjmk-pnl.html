@@ -166,7 +166,7 @@ details>summary::-webkit-details-marker{display:none}
 .pgrid .ph{font-size:11px;color:var(--mut);font-weight:700;text-align:center}
 .pgrid label{display:flex;justify-content:center;padding:6px 0;cursor:pointer}
 .pgrid .pr{padding:5px 0;border-top:1px solid var(--line)}
-.dthead,.dtrow{display:grid;grid-template-columns:minmax(120px,1.4fr) 76px 82px 100px 96px 30px;gap:7px;align-items:center}
+.dthead,.dtrow{display:grid;grid-template-columns:minmax(110px,1.4fr) 68px 74px 90px 78px 92px 30px;gap:6px;align-items:center}
 .dthead{font-size:11px;color:var(--mut);font-weight:700;padding:0 0 6px;border-bottom:1.5px solid var(--line)}
 .dtrow{padding:6px 0;border-bottom:1px solid var(--line)}
 .dtrow input{padding:8px 9px;font-size:13px}
@@ -1979,7 +1979,8 @@ RENDER.vatrep = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=allNotice('รายละเอียดบิล'); return; }
   const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
   let rows=[];
-  try{ rows=await sel('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`); }
+  try{ rows=await sel('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`)
+    .catch(()=>sel('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`)); }
   catch(e){ el.innerHTML='<div class="empty">โหลดไม่ได้ — ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อนครับ</div>'; return; }
   if(!rows.length){
     el.innerHTML=`<div class="empty">ยังไม่มีบิลที่บันทึกรายละเอียดในเดือนนี้<br>
@@ -1988,15 +1989,17 @@ RENDER.vatrep = async (el)=>{
   const bills={};
   rows.forEach(r=>{
     const k=r.d+'|'+r.supplier_id;
-    const b=bills[k]??(bills[k]={d:r.d,sid:r.supplier_id,sub:0,mode:'none'});
-    b.sub+=num(r.qty)*num(r.price);
+    const b=bills[k]??(bills[k]={d:r.d,sid:r.supplier_id,sub:0,mode:'none',bd:0});
+    b.sub+=num(r.qty)*num(r.price)-num(r.discount);
     if(r.vat_mode) b.mode=r.vat_mode;
+    if(num(r.bill_discount)) b.bd=num(r.bill_discount);
   });
   const M={ none:{lbl:'ไม่มี VAT',chip:'mid',list:[]}, ex:{lbl:'ยังไม่รวม VAT (+7%)',chip:'gold',list:[]}, inc:{lbl:'รวม VAT แล้ว',chip:'gold',list:[]} };
   Object.values(bills).forEach(b=>{
-    if(b.mode==='ex'){ b.pre=b.sub; b.vat=b.sub*0.07; b.net=b.sub*1.07; }
-    else if(b.mode==='inc'){ b.net=b.sub; b.pre=b.sub/1.07; b.vat=b.net-b.pre; }
-    else { b.pre=b.sub; b.vat=0; b.net=b.sub; b.mode='none'; }
+    const base=b.sub-b.bd;
+    if(b.mode==='ex'){ b.pre=base; b.vat=base*0.07; b.net=base*1.07; }
+    else if(b.mode==='inc'){ b.net=base; b.pre=base/1.07; b.vat=b.net-b.pre; }
+    else { b.pre=base; b.vat=0; b.net=base; b.mode='none'; }
     (M[b.mode]||M.none).list.push(b);
   });
   const sum=k=>['pre','vat','net'].reduce((o,f)=>(o[f]=M[k].list.reduce((a,b)=>a+b[f],0),o),{});
@@ -2035,7 +2038,7 @@ RENDER.usage = async (el)=>{
     [rows,prev]=await Promise.all([
       sel('pnl_bill_items',`select=*&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`),
       sel('pnl_bill_items',`select=item,unit,qty,supplier_id&branch=eq.${S.br}&d=gte.${pFrom}&d=lte.${pTo}`)
-    ]);
+    ]); // select=* รวม discount อยู่แล้วถ้ามีคอลัมน์
   }catch(e){
     el.innerHTML='<div class="empty">โหลดไม่ได้ — ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อนครับ</div>'; return;
   }
@@ -2054,7 +2057,7 @@ RENDER.usage = async (el)=>{
   rows.forEach(r=>{
     const k=r.supplier_id+'|'+r.item+'|'+(r.unit||'');
     const t=g[k]??(g[k]={sid:r.supplier_id,item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,lastD:'',lastP:0,hist:[]});
-    const amt=num(r.qty)*num(r.price);
+    const amt=num(r.qty)*num(r.price)-num(r.discount);
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
     t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price)});
     if(r.d>=t.lastD){ t.lastD=r.d; t.lastP=num(r.price); }
@@ -2066,7 +2069,7 @@ RENDER.usage = async (el)=>{
   rows.forEach(r=>{
     const k=r.item+'|'+(r.unit||'');
     const t=gi[k]??(gi[k]={item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,sups:{},hist:[]});
-    const amt=num(r.qty)*num(r.price);
+    const amt=num(r.qty)*num(r.price)-num(r.discount);
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
     t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),sid:r.supplier_id});
     const sp=t.sups[r.supplier_id]??(t.sups[r.supplier_id]={qty:0,baht:0,lastD:'',lastP:0});
@@ -2208,9 +2211,14 @@ RENDER.detail = async (el)=>{
       <button class="vch" data-vm="ex" onclick="dtVatSet('ex')">ยังไม่รวม VAT (+7%)</button>
       <button class="vch" data-vm="inc" onclick="dtVatSet('inc')">รวม VAT แล้ว</button></div>
     <div id="dtTplNote" class="xs" style="color:#8A6A12;margin:-4px 0 8px"></div>
-    <div class="dthead"><span>สินค้า</span><span class="num">จำนวน</span><span>หน่วย</span><span class="num">ราคา/หน่วย</span><span class="num">รวม</span><span></span></div>
+    <div class="dthead"><span>สินค้า</span><span class="num">จำนวน</span><span>หน่วย</span><span class="num">ราคา/หน่วย</span><span class="num">ส่วนลด</span><span class="num">รวม</span><span></span></div>
     <div id="dtLines"></div>
     <button class="btn gh sm2" style="margin-top:8px" onclick="dtAddLine()">➕ เพิ่มรายการ</button>
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:8px">
+      <span class="sm mut">ส่วนลดท้ายบิล</span>
+      <input type="number" step="any" inputmode="decimal" placeholder="0" id="dtBillDisc" style="width:110px;text-align:right;padding:8px 10px"
+        oninput="S.dtBillDisc=num(this.value);dtTotals()">
+      <span class="xs mut">บาท (ไม่จำ — ลงใหม่ทุกบิล)</span></div>
     <div id="dtVatLine" class="xs mut" style="text-align:right;margin-top:6px"></div>
     <div class="dsum"><span class="mut" id="dtTotLbl">ยอดรวมบิล</span><span class="v" id="dtTot" style="color:var(--red)">฿0</span></div>
     <button class="btn dk" style="width:100%;margin-top:8px" id="dtSaveBtn" onclick="dtSave()">💾 บันทึกรายละเอียด + ลงยอดรายจ่าย</button>
@@ -2234,7 +2242,8 @@ async function dtPickSup(v){
 async function dtHist(){
   // เก็บประวัติดิบไว้ แล้วคิดราคา "ณ วันของบิลที่กำลังลง" ตอนใช้จริง (ลงย้อนหลังได้ไม่เพี้ยน)
   try{
-    S._dtRows=await sel('pnl_bill_items',`select=item,unit,price,qty,d,sort&supplier_id=eq.${S.dtSup}&branch=eq.${S.br}&order=d.desc,sort.asc&limit=600`);
+    S._dtRows=await sel('pnl_bill_items',`select=item,unit,price,qty,d,sort,discount&supplier_id=eq.${S.dtSup}&branch=eq.${S.br}&order=d.desc,sort.asc&limit=600`)
+      .catch(()=>sel('pnl_bill_items',`select=item,unit,price,qty,d,sort&supplier_id=eq.${S.dtSup}&branch=eq.${S.br}&order=d.desc,sort.asc&limit=600`));
     S._dtCat=await sel('pnl_sup_items',`select=*&supplier_id=eq.${S.dtSup}&order=sort`).catch(()=>[]);
     // ประวัติทั้งสาขา (ทุกซัพ) — ใช้เทียบราคาข้ามซัพ + รวมชื่อสินค้าให้พิมพ์ตรงกัน
     S._dtAll=await sel('pnl_bill_items',`select=supplier_id,item,unit,price,d&branch=eq.${S.br}&order=d.desc&limit=800`).catch(()=>[]);
@@ -2265,9 +2274,9 @@ function dtCmpFill(i){
     return `<span style="${idx===0?'color:var(--ok);font-weight:700':''}">${idx===0?'✓ ':''}${esc(nm)}${cur?' (ซัพนี้)':''} ฿${fmt(c2.price,2)}</span>`;
   }).join(' · ');
 }
-function dtAsOf(){ // สินค้า -> {unit,price} จากบิลล่าสุด "ก่อนวันที่กำลังลง" (ไม่เอาราคาอนาคต)
+function dtAsOf(){ // สินค้า -> {unit,price,disc} จากบิลล่าสุด "ก่อนวันที่กำลังลง" (ไม่เอาราคาอนาคต)
   const m={};
-  (S._dtRows||[]).forEach(r=>{ if(r.d<S.dtDate && !m[r.item]) m[r.item]={unit:r.unit,price:num(r.price)}; });
+  (S._dtRows||[]).forEach(r=>{ if(r.d<S.dtDate && !m[r.item]) m[r.item]={unit:r.unit,price:num(r.price),disc:num(r.discount)}; });
   return m;
 }
 function dtLastBillBefore(){ // บิลทั้งใบล่าสุดก่อนวันที่กำลังลง (ใช้เป็นแม่แบบ)
@@ -2283,19 +2292,22 @@ async function dtLoad(){
     const rows=await sel('pnl_bill_items',`select=*&branch=eq.${S.br}&d=eq.${S.dtDate}&supplier_id=eq.${S.dtSup}&order=sort`);
     const AM=dtAsOf(), LB=dtLastBillBefore();
     if(rows.length){
-      S.dtLines=rows.map(r=>({item:r.item,qty:r.qty,unit:r.unit,price:r.price}));
+      S.dtLines=rows.map(r=>({item:r.item,qty:r.qty,unit:r.unit,price:r.price,discount:num(r.discount)||''}));
       S._dtExisting=true;
       S.dtVat=rows[0].vat_mode||dtVatDefault();
+      S.dtBillDisc=num(rows[0].bill_discount)||0;
     }else{
       S._dtExisting=false;
       S.dtVat=dtVatDefault();
+      S.dtBillDisc=0; // ส่วนลดท้ายบิล ไม่จำ — เริ่ม 0 ทุกบิลใหม่
       if(S._dtCat&&S._dtCat.length){
-        // วันใหม่: รายการประจำครบทุกตัว · ราคา = บิลล่าสุด "ก่อนวันที่นี้" (ลงย้อนหลังไม่ดึงราคาอนาคต)
+        // วันใหม่: รายการประจำครบทุกตัว · ราคา+ส่วนลดรายตัว = บิลล่าสุด "ก่อนวันที่นี้"
         S.dtLines=S._dtCat.map(c2=>({item:c2.item,qty:'',unit:c2.unit,
-          price:AM[c2.item]?AM[c2.item].price:''}));
+          price:AM[c2.item]?AM[c2.item].price:'',
+          discount:AM[c2.item]&&AM[c2.item].disc?AM[c2.item].disc:''}));
         tplNote=`🧺 ขึ้นรายการสินค้าประจำครบ ${S._dtCat.length} ตัว — ราคาเติมจากบิลล่าสุด<b>ก่อน ${thDate(S.dtDate)}</b> ใส่จำนวนเฉพาะที่ซื้อ (เว้นว่าง = ไม่บันทึก)`;
       }else if(LB){
-        S.dtLines=LB.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price}));
+        S.dtLines=LB.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price,discount:num(r.discount)||''}));
         tplNote=`📌 เติมรายการจากบิลล่าสุดก่อนวันนี้ (${thDate(LB.d)}) — ใส่จำนวนของวันที่ ${thDate(S.dtDate)} ได้เลย รายการไหนไม่มีกด ✕`;
       }else{
         S.dtLines=[{item:'',qty:'',unit:'',price:''}];
@@ -2303,6 +2315,7 @@ async function dtLoad(){
     }
   }catch(e){ S.dtLines=[{item:'',qty:'',unit:'',price:''}]; S._dtExisting=false; }
   renderDtLines(); renderDtVatBtns();
+  const bdi=document.getElementById('dtBillDisc'); if(bdi)bdi.value=S.dtBillDisc||'';
   const tn=document.getElementById('dtTplNote'); if(tn)tn.innerHTML=tplNote;
   const db=document.getElementById('dtDelBtn'); if(db)db.style.display=S._dtExisting?'':'none';
   dtLogLoad();
@@ -2336,25 +2349,31 @@ function dtEdit(i,f,v){
     if(h){
       if(!S.dtLines[i].unit){S.dtLines[i].unit=h.unit; const u=document.getElementById('dtu'+i); if(u)u.value=h.unit;}
       if(!num(S.dtLines[i].price)){S.dtLines[i].price=h.price; const pr=document.getElementById('dtp'+i); if(pr)pr.value=h.price;}
+      if(!num(S.dtLines[i].discount)&&h.disc){S.dtLines[i].discount=h.disc; const dd2=document.getElementById('dtd'+i); if(dd2)dd2.value=h.disc;}
     }
     dtCmpFill(i);
   }
   dtTotals();
 }
 function dtTotals(){
-  let sub=0;
+  let sub=0, ldTot=0;
   S.dtLines.forEach((l,i)=>{
-    const t=num(l.qty)*num(l.price); sub+=t;
-    const el=document.getElementById('dtt'+i); if(el)el.textContent=t?('฿'+fmt(t,2)):'–';
+    const raw=num(l.qty)*num(l.price), dc=num(l.discount), t=raw-dc;
+    sub+=t; if(raw)ldTot+=dc;
+    const el=document.getElementById('dtt'+i); if(el)el.textContent=raw?('฿'+fmt(t,2)):'–';
   });
-  const V=dtNet(sub), m=S.dtVat||'none';
+  const bd=num(S.dtBillDisc), base=sub-bd;
+  const V=dtNet(base), m=S.dtVat||'none';
   const vl=document.getElementById('dtVatLine'), lbl=document.getElementById('dtTotLbl');
-  if(vl) vl.innerHTML = m==='ex'
-      ? `รวมสินค้า (ก่อน VAT) ฿${fmt(sub,2)} · VAT 7% ฿${fmt(V.vat,2)}`
-      : m==='inc'
-      ? `ในยอดนี้เป็น VAT ฿${fmt(V.vat,2)} · ก่อน VAT ฿${fmt(V.pre,2)}`
-      : '';
-  if(lbl) lbl.textContent = m==='none' ? 'ยอดรวมบิล' : 'ยอดสุทธิ (ที่จ่ายจริง)';
+  if(vl){
+    const parts=[];
+    if(ldTot>0) parts.push(`ส่วนลดรายสินค้า −฿${fmt(ldTot,2)}`);
+    if(bd>0) parts.push(`รวมสินค้า ฿${fmt(sub,2)} · ส่วนลดท้ายบิล −฿${fmt(bd,2)}`);
+    if(m==='ex') parts.push(`ก่อน VAT ฿${fmt(base,2)} · VAT 7% ฿${fmt(V.vat,2)}`);
+    else if(m==='inc') parts.push(`ในยอดนี้เป็น VAT ฿${fmt(V.vat,2)} · ก่อน VAT ฿${fmt(V.pre,2)}`);
+    vl.innerHTML=parts.join(' · ');
+  }
+  if(lbl) lbl.textContent = (m==='none'&&!bd&&!ldTot) ? 'ยอดรวมบิล' : 'ยอดสุทธิ (ที่จ่ายจริง)';
   const g=document.getElementById('dtTot'); if(g)g.textContent='฿'+fmt(V.net,2);
   const btn=document.getElementById('dtSaveBtn');
   if(btn)btn.textContent=`💾 บันทึก + ลงรายจ่าย ${thDate(S.dtDate)} · ฿${fmt(V.net,2)}`;
@@ -2368,6 +2387,7 @@ function renderDtLines(focusLast){
       <input type="number" step="any" inputmode="decimal" placeholder="0" value="${l.qty??''}" oninput="dtEdit(${i},'qty',this.value)">
       <input list="dtUnitsDL" placeholder="กก." id="dtu${i}" value="${esc(l.unit||'')}" oninput="dtEdit(${i},'unit',this.value)">
       <input type="number" step="any" inputmode="decimal" placeholder="0.00" id="dtp${i}" value="${l.price??''}" oninput="dtEdit(${i},'price',this.value)">
+      <input type="number" step="any" inputmode="decimal" placeholder="0" id="dtd${i}" value="${l.discount||''}" oninput="dtEdit(${i},'discount',this.value)">
       <span class="num b" id="dtt${i}">–</span>
       <button class="mvbtn" style="color:var(--bad)" onclick="dtDelLine(${i})">✕</button>
     </div><div class="dtcmp" id="dtc${i}" style="display:none"></div>`).join('');
@@ -2393,6 +2413,7 @@ function dtDiff(oldL,newL){
     const ch=[];
     if(num(o.qty)!==num(l.qty)) ch.push(`จำนวน ${fmtI(num(o.qty))}→${fmtI(l.qty)} ${l.unit}`);
     if(num(o.price)!==num(l.price)) ch.push(`ราคา ${fmt(num(o.price),2)}→${fmt(l.price,2)}`);
+    if(num(o.discount)!==num(l.discount)) ch.push(`ส่วนลด ${fmt(num(o.discount),2)}→${fmt(num(l.discount),2)}`);
     if((o.unit||'')!==(l.unit||'')) ch.push(`หน่วย ${o.unit}→${l.unit}`);
     if(ch.length) out.push(`${l.item}: ${ch.join(' · ')}`);
   });
@@ -2417,24 +2438,36 @@ async function dtLogLoad(){
 }
 async function dtSave(){
   if(!S.dtSup){toast('เลือกซัพพลายเออร์ก่อนครับ',true);return;}
-  const lines=S.dtLines.map(l=>({item:(l.item||'').trim(),qty:num(l.qty),unit:(l.unit||'').trim()||'ชิ้น',price:num(l.price)}))
+  const lines=S.dtLines.map(l=>({item:(l.item||'').trim(),qty:num(l.qty),unit:(l.unit||'').trim()||'ชิ้น',price:num(l.price),discount:num(l.discount)}))
     .filter(l=>l.item&&l.qty>0);
   if(!lines.length){
     if(S._dtExisting){ dtDeleteBill(S.dtDate,S.dtSup,null); } // ลงผิด ลบทั้งใบ
     else toast('ใส่รายการสินค้าอย่างน้อย 1 รายการครับ',true);
     return;
   }
-  const sub=lines.reduce((a,l)=>a+l.qty*l.price,0);
-  const total=dtNet(sub).net;
+  const sub=lines.reduce((a,l)=>a+l.qty*l.price-l.discount,0);
+  const bd=num(S.dtBillDisc);
+  const total=dtNet(sub-bd).net;
   const d=S.dtDate, sid=S.dtSup;
   try{
-    const oldRows=await sel('pnl_bill_items',`select=item,qty,unit,price,vat_mode&branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}&order=sort`)
-      .catch(()=>sel('pnl_bill_items',`select=item,qty,unit,price&branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}&order=sort`).catch(()=>[]));
+    const oldRows=await sel('pnl_bill_items',`select=item,qty,unit,price,vat_mode,discount,bill_discount&branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}&order=sort`)
+      .catch(()=>sel('pnl_bill_items',`select=item,qty,unit,price,vat_mode&branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}&order=sort`)
+      .catch(()=>sel('pnl_bill_items',`select=item,qty,unit,price&branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}&order=sort`).catch(()=>[])));
     await delQ('pnl_bill_items',`branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}`);
-    const mk=vm=>lines.map((l,i)=>{const r={branch:S.br,d,supplier_id:sid,item:l.item,qty:l.qty,unit:l.unit,price:l.price,sort:i}; if(vm)r.vat_mode=S.dtVat||'none'; return r;});
-    try{ await ins('pnl_bill_items',mk(true)); }
+    const mk=(vm,dc)=>lines.map((l,i)=>{
+      const r={branch:S.br,d,supplier_id:sid,item:l.item,qty:l.qty,unit:l.unit,price:l.price,sort:i};
+      if(vm)r.vat_mode=S.dtVat||'none';
+      if(dc){r.discount=l.discount; r.bill_discount=bd;}
+      return r;});
+    try{ await ins('pnl_bill_items',mk(true,true)); }
     catch(e){
-      if(String(e.message).includes('vat_mode')){ await ins('pnl_bill_items',mk(false)); toast('บันทึกได้ แต่ยังไม่เก็บโหมด VAT — รัน jjmk_pnl_billvat.sql ใน Supabase',true); }
+      const msg=String(e.message);
+      if(msg.includes('discount')){ 
+        try{ await ins('pnl_bill_items',mk(true,false)); }
+        catch(e2){ if(String(e2.message).includes('vat_mode')){ await ins('pnl_bill_items',mk(false,false)); } else throw e2; }
+        toast('บันทึกได้ แต่ยังไม่เก็บส่วนลด — รัน jjmk_pnl_billdisc.sql ใน Supabase',true);
+      }
+      else if(msg.includes('vat_mode')){ await ins('pnl_bill_items',mk(false,false)); toast('บันทึกได้ แต่ยังไม่เก็บโหมด VAT — รัน jjmk_pnl_billvat.sql ใน Supabase',true); }
       else throw e;
     }
     await ups('pnl_expense_daily',[{branch:S.br,d,supplier_id:sid,amount:total}],'branch,d,supplier_id');
@@ -2455,7 +2488,7 @@ async function dtSave(){
     if(!oldRows.length){
       await dtLogAdd(d,sid,`สร้างบิล · ${lines.length} รายการ · ยอด ฿${fmt(total,2)}`);
     }else{
-      const oldSub=oldRows.reduce((a,l)=>a+num(l.qty)*num(l.price),0);
+      const oldSub=oldRows.reduce((a,l)=>a+num(l.qty)*num(l.price)-num(l.discount),0)-num(oldRows[0]&&oldRows[0].bill_discount);
       const om=(oldRows[0]&&oldRows[0].vat_mode)||'none';
       const oldTot= om==='ex'?oldSub*1.07:oldSub;
       const diffs=dtDiff(oldRows,lines);
