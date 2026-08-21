@@ -195,7 +195,9 @@ details>summary::-webkit-details-marker{display:none}
 .ocrp-h{font-family:'Prompt';font-weight:800;font-size:15px;margin-bottom:4px}
 .ocrp-bar{height:11px;background:#F1E9D8;border-radius:99px;overflow:hidden;margin:10px 0 7px}
 .ocrp-bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--red),#E0B33C);transition:width .18s;border-radius:99px}
-.ocrp-row{display:flex;justify-content:space-between;font-size:12.5px;font-weight:700}
+.ocrp-row{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;font-weight:700}
+#ocrpStage{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#ocrpPct{flex-shrink:0}
 #ptr{position:fixed;top:0;left:50%;transform:translate(-50%,-56px);z-index:320;pointer-events:none;transition:transform .18s}
 #ptr .ptr-c{width:42px;height:42px;border-radius:50%;background:#fff;border:1.5px solid var(--line);box-shadow:0 5px 16px rgba(60,40,20,.16);display:flex;align-items:center;justify-content:center;font-size:21px;color:var(--red);font-weight:800}
 #ptr.rel .ptr-c{background:var(--red);border-color:var(--red);color:#fff}
@@ -2775,10 +2777,12 @@ function dtPoolNames(){ // ชื่อสินค้าที่รู้จ�
   (S.dtLines||[]).forEach(l=>{ if(l.item&&!set.has(l.item))set.set(l.item,{item:l.item,unit:l.unit}); });
   return [...set.values()];
 }
-const OCRP={t0:0,est:12000,timer:null,xhr:null};
+const OCRP_STAGE0='🤖 AI กำลังอ่านรายการ...';
+const OCRP={t0:0,est:12000,timer:null,xhr:null,stage:OCRP_STAGE0};
 function ocrProgOpen(){
   OCRP.est=num(LS.get('jj_ocr_ms',12000))||12000;
   OCRP.t0=Date.now();
+  OCRP.stage=OCRP_STAGE0;
   let el=document.getElementById('ocrProg');
   if(!el){ el=document.createElement('div'); el.id='ocrProg'; document.body.appendChild(el); }
   el.innerHTML=`<div class="ocrp-card">
@@ -2806,8 +2810,15 @@ function ocrTick(){
   let pct=35+60*frac; // ช่วง AI: 35 -> 95 ตามเวลาเฉลี่ยรอบก่อน
   if(elapsed>OCRP.est) pct=Math.min(99, 95+(elapsed-OCRP.est)/2500);
   const remain=OCRP.est-elapsed;
-  ocrProgSet('🤖 AI กำลังอ่านรายการ...', pct,
+  ocrProgSet(OCRP.stage, pct,
     remain>800 ? `เหลือประมาณ ${Math.ceil(remain/1000)} วินาที` : 'อีกแป๊บเดียว ใกล้เสร็จแล้ว...');
+}
+const OCR_MLBL={ 'gemini-3.7-flash':'Gemini 3.7 Flash', 'gemini-3.6-flash':'Gemini 3.6 Flash', 'gemini-flash-latest':'Gemini Flash' };
+function ocrModelLbl(m){ return OCR_MLBL[m]||m||'AI'; }
+function ocrStatusTick(o){ // สถานะสด ๆ จาก worker: กำลังลองโมเดลไหนอยู่จริง ไม่ใช่เดา
+  if(!o||!o.status)return;
+  if(o.status==='trying') OCRP.stage = `🤖 กำลังอ่านด้วย ${ocrModelLbl(o.model)}${o.attempt>1?` (ลองอีกครั้ง)`:''}...`;
+  else if(o.status==='retry') OCRP.stage = `🔁 ${ocrModelLbl(o.model)} ไม่ว่าง กำลังลองใหม่...`;
 }
 function ocrCancel(){
   if(OCRP.xhr){ try{OCRP.xhr.abort();}catch(e){} }
@@ -2817,16 +2828,28 @@ function ocrProgClose(){
   clearInterval(OCRP.timer); OCRP.timer=null; OCRP.xhr=null;
   const el=document.getElementById('ocrProg'); if(el)el.style.display='none';
 }
-function dtOcrSend(bodyObj){ // ใช้ XHR เพื่อได้ % อัปโหลดจริง
+function dtOcrSend(bodyObj){ // ใช้ XHR: % อัปโหลดจริง + อ่านสถานะสด ๆ ระหว่าง AI กำลังทำงาน (NDJSON ทีละบรรทัด)
   return new Promise((res,rej)=>{
     const xhr=new XMLHttpRequest(); OCRP.xhr=xhr;
     xhr.open('POST',DT_OCR_URL);
     xhr.setRequestHeader('Content-Type','application/json');
+    let seenLines=0;
     if(xhr.upload)xhr.upload.onprogress=e=>{
       if(e.lengthComputable) ocrProgSet('⬆️ ส่งรูปขึ้นระบบ...', 8+27*(e.loaded/Math.max(1,e.total)), null);
     };
-    xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
-      res({ok:xhr.status>=200&&xhr.status<300, status:xhr.status, j}); };
+    const readTicks=()=>{
+      const lines=(xhr.responseText||'').split('\n').filter(Boolean);
+      for(;seenLines<lines.length-1;seenLines++){ // เว้นบรรทัดสุดท้ายไว้ เผื่อยังส่งมาไม่ครบ
+        try{ ocrStatusTick(JSON.parse(lines[seenLines])); }catch(e){}
+      }
+    };
+    xhr.onprogress=readTicks;
+    xhr.onreadystatechange=()=>{ if(xhr.readyState===3) readTicks(); };
+    xhr.onload=()=>{
+      const lines=(xhr.responseText||'').split('\n').filter(Boolean);
+      let j={}; try{ j=JSON.parse(lines[lines.length-1]||'{}'); }catch(e){}
+      res({ok:xhr.status>=200&&xhr.status<300&&j.status!=='error'&&!j.error, status:xhr.status, j});
+    };
     xhr.onerror=()=>rej(new Error('เชื่อมต่อ Worker ไม่ได้'));
     xhr.onabort=()=>rej(new Error('__cancel__'));
     xhr.send(JSON.stringify(bodyObj));
