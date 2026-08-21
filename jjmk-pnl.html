@@ -186,6 +186,12 @@ details>summary::-webkit-details-marker{display:none}
 .unitchip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 8px 6px 13px;font-size:13px;font-weight:600}
 .unitchip button{color:var(--bad);font-weight:800;font-size:13px;padding:0 4px;border-radius:50%}
 .unitchip button:hover{background:#FBE7E2}
+#ptr{position:fixed;top:0;left:50%;transform:translate(-50%,-56px);z-index:320;pointer-events:none;transition:transform .18s}
+#ptr .ptr-c{width:42px;height:42px;border-radius:50%;background:#fff;border:1.5px solid var(--line);box-shadow:0 5px 16px rgba(60,40,20,.16);display:flex;align-items:center;justify-content:center;font-size:21px;color:var(--red);font-weight:800}
+#ptr.rel .ptr-c{background:var(--red);border-color:var(--red);color:#fff}
+#ptr.spin .ptr-c{animation:ptrspin .65s linear infinite}
+@keyframes ptrspin{to{transform:rotate(360deg)}}
+html,body{overscroll-behavior-y:contain}
 .ocrmap{background:#FFF6DC;border:1.5px solid #E8CE8E;border-radius:12px;padding:10px 12px;margin:0 0 10px;display:flex;flex-direction:column;gap:9px}
 .ocrrow{border-bottom:1px dashed #E8CE8E;padding-bottom:8px}
 .ocrrow:last-child{border-bottom:none;padding-bottom:0}
@@ -1148,7 +1154,69 @@ function paintUser(){
     👤 <b>${esc(S.user.display_name)}</b> <span style="opacity:.7">· ${S.user.legacy?'โหมดเดิม':S.user.role==='admin'?'ผู้ดูแล':'พนักงาน'}</span>
     ${S.user.legacy?'':`<button class="hintlink" style="color:#F3C74F;margin-left:6px" onclick="logout()">ออก</button>`}</div>`;
 }
+// ── Pull-to-refresh (มือถือ): ลากหน้าจอลงจากบนสุด = ดึงข้อมูลล่าสุด ──
+const PTR={on:false,y0:0,pull:0,lock:false};
+function ptrScrolledInside(el){ // นิ้วอยู่ในกล่องเลื่อนที่ยังไม่สุดบน -> อย่าแย่ง gesture
+  let n=el;
+  while(n&&n!==document.body){
+    if(n.scrollTop>0) return true;
+    n=n.parentElement;
+  }
+  return false;
+}
+function ptrRender(){
+  const el=document.getElementById('ptr'); if(!el)return;
+  el.style.transform=`translate(-50%, ${PTR.pull-56}px)`;
+  el.classList.toggle('rel',PTR.pull>=70);
+  const c=el.querySelector('.ptr-c');
+  if(c&&!el.classList.contains('spin')) c.style.transform=`rotate(${PTR.pull*3}deg)`;
+}
+function ptrStart(e){
+  if(PTR.lock)return;
+  if(window.scrollY>2)return;
+  const mw=document.getElementById('modalWrap');
+  if(mw&&getComputedStyle(mw).display!=='none')return;
+  if(e.target&&ptrScrolledInside(e.target))return;
+  PTR.on=true; PTR.y0=e.touches[0].clientY; PTR.pull=0;
+}
+function ptrMove(e){
+  if(!PTR.on)return;
+  const dy=e.touches[0].clientY-PTR.y0;
+  if(dy<=0){ PTR.pull=0; ptrRender(); return; }
+  if(window.scrollY<=2){
+    PTR.pull=Math.min(120,dy*0.5);
+    if(e.cancelable)e.preventDefault();
+    ptrRender();
+  }
+}
+async function ptrEnd(){
+  if(!PTR.on)return;
+  PTR.on=false;
+  const el=document.getElementById('ptr');
+  if(PTR.pull<70){ PTR.pull=0; ptrRender(); return; }
+  PTR.lock=true;
+  if(el){ el.classList.add('spin'); el.style.transform='translate(-50%, 16px)'; }
+  try{
+    S.cache={}; S.benchCache={};
+    await loadCore();
+    await show(S.tab);
+    toast('อัปเดตข้อมูลล่าสุดแล้ว ✅');
+  }catch(e2){ location.reload(); return; }
+  PTR.pull=0; PTR.lock=false;
+  if(el){ el.classList.remove('spin','rel'); ptrRender(); }
+}
+function initPullRefresh(){
+  if(!('ontouchstart' in window))return; // เฉพาะจอสัมผัส
+  if(document.getElementById('ptr'))return;
+  const el=document.createElement('div');
+  el.id='ptr'; el.innerHTML='<div class="ptr-c">⟳</div>';
+  document.body.appendChild(el);
+  document.addEventListener('touchstart',ptrStart,{passive:true});
+  document.addEventListener('touchmove',ptrMove,{passive:false});
+  document.addEventListener('touchend',ptrEnd,{passive:true});
+}
 async function boot(){
+  initPullRefresh();
   const {url,key}=cfg();
   if(!url||!key){ document.getElementById('setup').style.display='block'; return; }
   if(!S.user){ const ok=await authGate(); if(!ok) return; }
