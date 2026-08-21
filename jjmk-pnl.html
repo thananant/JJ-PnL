@@ -2500,8 +2500,15 @@ async function dtLoad(){
       // ซัพนี้เคยลงหลายบิลต่อวันไหม -> ถ้าเคย ทุกบิล (รวมบิลที่ 1) ใช้รายการตาม "ประเภทบิล" ของตัวเอง ไม่ปนกัน
       const multiType=(S._dtRows||[]).some(r=>(num(r.bill_no)||1)>1);
       if(LBn&&(S.dtBillNo>1||multiType)){
-        S.dtLines=LBn.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price,discount:num(r.discount)||''}));
-        tplNote=`🧾 บิลที่ ${S.dtBillNo}: เติมเฉพาะรายการของบิลประเภทนี้ (ตามบิลล่าสุด ${thDate(LBn.d)}) · โหมด VAT "${DT_VLBL[S.dtVat]||S.dtVat}" จำจากบิลประเภทนี้ครั้งล่าสุด — ถ้าไม่ใช่ กดเปลี่ยนแล้วบันทึก ระบบจะจำแบบใหม่ตลอด`;
+        // รวม "ทุกสินค้า" ที่เคยอยู่ในบิลประเภทนี้ (ไม่ใช่แค่ใบล่าสุด) · ราคา/ส่วนลด = ครั้งล่าสุดก่อนวันบิล
+        const seen=new Set(); const uni=[];
+        (S._dtRows||[]).forEach(r=>{
+          if((num(r.bill_no)||1)!==S.dtBillNo || r.d>=S.dtDate) return;
+          if(seen.has(r.item)) return;
+          seen.add(r.item); uni.push(r); // _dtRows เรียงใหม่->เก่า จึงได้ราคาล่าสุดของแต่ละตัว
+        });
+        S.dtLines=uni.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price,discount:num(r.discount)||''}));
+        tplNote=`🧾 บิลที่ ${S.dtBillNo} (${DT_VLBL[S.dtVat]||S.dtVat}): ขึ้นทุกสินค้าที่เคยอยู่ในบิลประเภทนี้ ${uni.length} ตัว · ราคา/ส่วนลดจากครั้งล่าสุดก่อน ${thDate(S.dtDate)} · ใส่จำนวนเฉพาะที่มา (เว้นว่าง = ไม่บันทึก) — โหมด VAT จำจากบิลประเภทนี้ครั้งล่าสุด เปลี่ยนแล้วบันทึกระบบจะจำใหม่`;
       }
       else if(S.dtBillNo===1&&S._dtCat&&S._dtCat.length){
         // วันใหม่: รายการประจำครบทุกตัว · ราคา+ส่วนลดรายตัว = บิลล่าสุด "ก่อนวันที่นี้"
