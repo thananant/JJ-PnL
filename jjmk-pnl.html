@@ -2878,9 +2878,10 @@ async function dtOcrRun(b64){
     const aliases=S.dtSup?(S._dtAlias||[]).map(a=>({alias:a.alias,item:a.item})):[];
     OCRP.timer=setInterval(ocrTick,150);
     const r=await dtOcrSend({image:b64.data,mime:b64.mime,knownItems:known,aliases});
+    const used=Date.now()-OCRP.t0;
+    ins('pnl_ocr_stats',{branch:S.br||null,model:r.ok?r.j._model||null:null,ok:!!r.ok,ms:used}).catch(()=>{}); // เก็บสถิติ ไม่บล็อกงานหลัก
     if(!r.ok||r.j.error){ ocrProgClose(); toast('อ่านบิลไม่สำเร็จ: '+(r.j.error||r.status)+' — ลองกด "สแกนรูปเดิมอีกครั้ง" ได้ครับ',true); renderOcrRetryBtn(); return; }
     // จำเวลาที่ใช้จริง ไว้ทายรอบหน้าให้แม่นขึ้น (ค่าเฉลี่ยถ่วงน้ำหนัก)
-    const used=Date.now()-OCRP.t0;
     LS.set('jj_ocr_ms', Math.round(OCRP.est*0.55 + used*0.45));
     ocrProgSet('เสร็จแล้ว ✅',100,' ');
     setTimeout(ocrProgClose,350);
@@ -3884,6 +3885,10 @@ RENDER.set = async (el)=>{
         <button class="btn gh sm2" onclick="exportAll()">📦 สำรองทั้งหมดทุกตาราง (.xlsx)</button></div></div>
   </div>
   <div>
+    <div class="card"><h3>📷 สถิติการสแกนบิล (OCR)</h3>
+      <div class="xs mut" style="margin:-4px 0 8px">โมเดล AI ตัวไหนอ่านบิลสำเร็จบ่อยสุด (นับทุกสาขา ทุกครั้งที่กดสแกน/สแกนซ้ำ)</div>
+      <div id="ocrStatsBox"><div class="spin"></div></div>
+    </div>
     <div class="card"><h3>📏 หน่วยสินค้า</h3>
       <div class="xs mut" style="margin:-4px 0 8px">ใช้เป็นตัวเลือกหน่วยในหน้าบันทึกข้อมูลบิล / รายการสินค้าประจำ (ลบแล้วข้อมูลบิลเก่าไม่หาย แค่หายจากตัวเลือก)</div>
       ${S.core.units===null
@@ -3935,9 +3940,34 @@ RENDER.set = async (el)=>{
       })()}
       </table></div></div>
   </div></div>`;
-  loadHistList();
+  loadHistList(); ocrStatsLoad();
   if(S.user&&S.user.role==='admin'&&!S.user.legacy){ userLoad(); actLoad(); }
 };
+async function ocrStatsLoad(){
+  const el=document.getElementById('ocrStatsBox'); if(!el)return;
+  try{
+    const rows=await sel('pnl_ocr_stats','select=model,ok&order=ts.desc&limit=1000');
+    if(!rows.length){ el.innerHTML='<div class="xs mut">ยังไม่มีข้อมูล — ลองสแกนบิลสักใบในหน้าบันทึกข้อมูลบิลก่อนครับ</div>'; return; }
+    const cnt={}; let fail=0;
+    rows.forEach(r=>{ if(r.ok&&r.model) cnt[r.model]=(cnt[r.model]||0)+1; else fail++; });
+    const total=rows.length;
+    const list=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
+    const maxN=Math.max(1,...list.map(x=>x[1]),fail);
+    const bar=(n,color)=>`<div style="height:7px;border-radius:99px;background:#F1E9D8;overflow:hidden;margin:3px 0 10px">
+      <div style="height:100%;width:${(n/maxN*100).toFixed(1)}%;background:${color};border-radius:99px"></div></div>`;
+    el.innerHTML =
+      list.map(([m,n],idx)=>`
+        <div class="xs" style="display:flex;justify-content:space-between;align-items:baseline;font-weight:700">
+          <span>${idx===0?'🏆 ':''}${esc(ocrModelLbl(m))}</span><span class="mut" style="font-weight:600">${fmtI(n)} ครั้ง · ${pctF(n/total)}</span></div>
+        ${bar(n,idx===0?'#1E8A3C':'#8FBFDE')}`).join('') +
+      (fail?`<div class="xs" style="display:flex;justify-content:space-between;align-items:baseline;font-weight:700;color:var(--bad)">
+          <span>ล้มเหลวทั้งหมด (ทุกโมเดล)</span><span style="font-weight:600">${fmtI(fail)} ครั้ง · ${pctF(fail/total)}</span></div>
+        ${bar(fail,'#C62127')}`:'') +
+      `<div class="xs mut" style="margin-top:2px">รวม ${fmtI(total)} ครั้งที่กดสแกน${rows.length>=1000?' (แสดง 1,000 ครั้งล่าสุด)':''}</div>`;
+  }catch(e){
+    el.innerHTML='<div class="xs mut">ยังไม่ได้เปิดระบบเก็บสถิติ — รัน <b>jjmk_pnl_ocrstats.sql</b> ใน Supabase แล้วรีเฟรชครับ</div>';
+  }
+}
 async function unitAdd(){
   const inp=document.getElementById('unitNew');
   const name=(inp.value||'').trim();
