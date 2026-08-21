@@ -149,6 +149,10 @@ details>summary::-webkit-details-marker{display:none}
 .dtsup.on{background:var(--red);border-color:var(--red);color:#fff}
 .dtsup.on .dot{background:#fff!important}
 .dtsup:active{transform:scale(.98)}
+.sihead,.sirow{display:grid;grid-template-columns:1fr 110px 30px;gap:7px;align-items:center}
+.sihead{font-size:11px;color:var(--mut);font-weight:700;padding-bottom:5px;border-bottom:1.5px solid var(--line)}
+.sirow{padding:5px 0;border-bottom:1px solid var(--line)}
+.sirow input{padding:8px 9px;font-size:13px}
 .dthead,.dtrow{display:grid;grid-template-columns:minmax(120px,1.4fr) 76px 82px 100px 96px 30px;gap:7px;align-items:center}
 .dthead{font-size:11px;color:var(--mut);font-weight:700;padding:0 0 6px;border-bottom:1.5px solid var(--line)}
 .dtrow{padding:6px 0;border-bottom:1px solid var(--line)}
@@ -1820,9 +1824,11 @@ async function dtHist(){
     S._dtHist=m;
     const lastD=rows.length?rows[0].d:null;
     S._dtLastBill=lastD?{d:lastD, lines:rows.filter(r=>r.d===lastD)}:null;
+    S._dtCat=await sel('pnl_sup_items',`select=*&supplier_id=eq.${S.dtSup}&order=sort`).catch(()=>[]);
     const dl=document.getElementById('dtItemsDL');
-    if(dl)dl.innerHTML=Object.keys(m).map(i=>`<option value="${esc(i)}">`).join('');
-  }catch(e){ S._dtHist={}; S._dtLastBill=null; }
+    if(dl){ const names=[...new Set([...S._dtCat.map(c2=>c2.item),...Object.keys(m)])];
+      dl.innerHTML=names.map(i=>`<option value="${esc(i)}">`).join(''); }
+  }catch(e){ S._dtHist={}; S._dtLastBill=null; S._dtCat=[]; }
 }
 async function dtLoad(){
   if(!S.dtSup){renderDtLines();return;}
@@ -1830,8 +1836,14 @@ async function dtLoad(){
   try{
     const rows=await sel('pnl_bill_items',`select=*&branch=eq.${S.br}&d=eq.${S.dtDate}&supplier_id=eq.${S.dtSup}&order=sort`);
     if(rows.length){ S.dtLines=rows.map(r=>({item:r.item,qty:r.qty,unit:r.unit,price:r.price})); S._dtExisting=true; }
+    else if(S._dtCat&&S._dtCat.length){
+      // วันใหม่: ขึ้นรายการสินค้าประจำของซัพครบทุกตัว (ราคาเติมจากบิลล่าสุด)
+      S.dtLines=S._dtCat.map(c2=>({item:c2.item,qty:'',unit:c2.unit,
+        price:(S._dtHist&&S._dtHist[c2.item])?S._dtHist[c2.item].price:''}));
+      S._dtExisting=false;
+      tplNote=`🧺 ขึ้นรายการสินค้าประจำครบ ${S._dtCat.length} ตัวแล้ว — ใส่จำนวนเฉพาะที่ซื้อวันนี้ (ตัวไหนไม่ซื้อเว้นว่างไว้ ไม่ถูกบันทึก) · แก้รายการประจำได้ที่ตั้งค่า → แตะชื่อซัพ`;
+    }
     else if(S._dtLastBill&&S._dtLastBill.d!==S.dtDate){
-      // วันใหม่: เติมสินค้าจากบิลล่าสุดของซัพนี้ (จำนวนเว้นว่างให้กรอกใหม่)
       S.dtLines=S._dtLastBill.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price}));
       S._dtExisting=false;
       tplNote=`📌 เติมรายการจากบิลล่าสุด (${thDate(S._dtLastBill.d)}) ให้แล้ว — ใส่จำนวนของวันนี้ได้เลย รายการไหนไม่มีกด ✕`;
@@ -2562,11 +2574,11 @@ RENDER.set = async (el)=>{
   </div>
   <div>
     <div class="card"><h3>ซัพพลายเออร์ <span class="sp"><button class="hintlink" onclick="supModal(null)">+ เพิ่ม</button></span></h3>
-      <div class="xs mut" style="margin:-4px 0 8px">▲▼ จัดลำดับ — มีผลกับหน้ารายจ่าย รายละเอียดบิล และรายงานทุกหน้า</div>
+      <div class="xs mut" style="margin:-4px 0 8px">▲▼ จัดลำดับ — มีผลทุกหน้า · <b>แตะชื่อซัพ = ตั้งรายการสินค้าประจำ</b> (ขึ้นอัตโนมัติตอนลงรายละเอียดบิล)</div>
       <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
       ${(()=>{
         const act=S.core.sup.filter(x=>x.active), inact=S.core.sup.filter(x=>!x.active);
-        const row=(s,i,n)=>`<tr style="${s.active?'':'opacity:.45'}"><td><div class="b sm">${esc(s.name)}</div>
+        const row=(s,i,n)=>`<tr style="${s.active?'':'opacity:.45'}"><td><div class="b sm" style="cursor:pointer" onclick="supItemsModal(${s.id})">${esc(s.name)} <span class="xs" style="color:var(--gold);font-weight:600">🧺</span></div>
         <div class="xs mut">${esc(s.category)} · ${esc(s.payment_term||'-')} · ${esc(s.vat_type)}</div></td>
         <td class="right" style="white-space:nowrap">${s.active
           ?`<button class="mvbtn" ${i===0?'disabled':''} onclick="supMove(${s.id},-1)">▲</button>
@@ -2607,6 +2619,51 @@ RENDER.set = async (el)=>{
   </div></div>`;
   loadHistList();
 };
+async function supItemsModal(id){
+  const sp=S.core.supById[id]; if(!sp)return;
+  let rows=[];
+  try{ rows=await sel('pnl_sup_items',`select=*&supplier_id=eq.${id}&order=sort`); }
+  catch(e){ toast('ต้องรัน jjmk_pnl_supitems.sql ใน Supabase ก่อนครับ',true); return; }
+  S._si={sid:id, rows:rows.length?rows.map(r=>({item:r.item,unit:r.unit})):[{item:'',unit:''}]};
+  openModal(`<h3>🧺 รายการสินค้าประจำ <span class="sp">${esc(sp.name)}</span></h3>
+    <div class="xs mut" style="margin:-6px 0 10px">รายการนี้จะ<b>ขึ้นมาให้ครบทุกตัว</b>อัตโนมัติเวลาเปิดบิลวันใหม่ของซัพนี้ในหน้า "รายละเอียดบิล" — เหลือแค่ใส่จำนวน (ราคาเติมจากบิลล่าสุดให้)</div>
+    <div class="sihead"><span>สินค้า</span><span>หน่วย</span><span></span></div>
+    <div id="siRows" style="max-height:44dvh;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn gh sm2" onclick="siAdd()">➕ เพิ่มรายการ</button>
+      <button class="btn gh sm2" onclick="siPull()">⤵ ดึงจากบิลเก่า</button>
+      <button class="btn dk sm2" style="margin-left:auto" onclick="siSave()">💾 บันทึก</button></div>
+    <datalist id="siUnitsDL">${DT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>`);
+  siRender();
+}
+function siRender(focusLast){
+  const el=document.getElementById('siRows'); if(!el)return;
+  el.innerHTML=S._si.rows.map((r,i)=>`<div class="sirow">
+    <input placeholder="เช่น หมูสามชั้น" value="${esc(r.item||'')}" oninput="S._si.rows[${i}].item=this.value">
+    <input list="siUnitsDL" placeholder="กก." value="${esc(r.unit||'')}" oninput="S._si.rows[${i}].unit=this.value">
+    <button class="mvbtn" style="color:var(--bad)" onclick="S._si.rows.splice(${i},1);siRender()">✕</button></div>`).join('');
+  if(focusLast){ const rs=el.querySelectorAll('.sirow input'); const f=rs[rs.length-2]; f&&f.focus(); }
+}
+function siAdd(){ S._si.rows.push({item:'',unit:''}); siRender(true); }
+async function siPull(){
+  try{
+    const rows=await sel('pnl_bill_items',`select=item,unit,d&supplier_id=eq.${S._si.sid}&order=d.desc&limit=400`);
+    const seen=new Set(S._si.rows.map(r=>r.item.trim()).filter(Boolean));
+    let add=0;
+    rows.forEach(r=>{ if(!seen.has(r.item)){ seen.add(r.item); S._si.rows.push({item:r.item,unit:r.unit}); add++; } });
+    S._si.rows=S._si.rows.filter(r=>r.item.trim()||S._si.rows.length===1);
+    siRender();
+    toast(add?`ดึงมา ${add} รายการจากบิลเก่า`:'ไม่มีรายการใหม่จากบิลเก่า');
+  }catch(e){ toast('ดึงไม่สำเร็จ: '+e.message,true); }
+}
+async function siSave(){
+  const rows=S._si.rows.map(r=>({item:(r.item||'').trim(),unit:(r.unit||'').trim()||'ชิ้น'})).filter(r=>r.item);
+  try{
+    await delQ('pnl_sup_items','supplier_id=eq.'+S._si.sid);
+    if(rows.length) await ins('pnl_sup_items',rows.map((r,i)=>({supplier_id:S._si.sid,item:r.item,unit:r.unit,sort:i})));
+    closeModal(); toast(`บันทึกรายการสินค้าประจำแล้ว · ${rows.length} รายการ`);
+  }catch(e){ toast('บันทึกไม่สำเร็จ: '+e.message,true); }
+}
 async function supMove(id,dir){
   const act=S.core.sup.filter(x=>x.active);
   if(act.some((x,i)=>i>0&&num(x.sort)===num(act[i-1].sort))){ // renorm ถ้าลำดับซ้ำ
