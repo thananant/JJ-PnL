@@ -1465,23 +1465,33 @@ function drawDash(A){
     const avHv=avgOf(A.daily.filter((_,i)=>isHeavy(i)));
     // เส้น Fix cost เฉลี่ย/วัน = Fix ทั้งเดือน ÷ จำนวนวันของเดือน (ตามปฏิทิน)
     const fixDay = A.days ? A.fixT/A.days : 0;
+    // เส้นคุ้มทุน/วัน = Fix/วัน + ต้นทุนผันแปรเฉลี่ยต่อวันที่มีรายรับ
+    const vcDay = A.daysData ? (A.vc||0)/A.daysData : 0;
+    const brk = fixDay&&vcDay ? fixDay+vcDay : 0;
     const ar=document.getElementById('avgRow');
     if(ar)ar.innerHTML = avAll ? `
       <span class="avgc" style="--c:var(--ink)">เฉลี่ยทั้งเดือน <b>฿${fmtI(avAll)}</b></span>
       <span class="avgc" style="--c:#D89094">จ–พฤ <b>฿${fmtI(avWk)}</b></span>
       <span class="avgc" style="--c:var(--red)">ศ–ส–อา <b>฿${fmtI(avHv)}</b></span>
-      ${fixDay?`<span class="avgc" style="--c:#E0B33C" title="Fix cost ฿${fmtI(A.fixT)} ÷ ${A.days} วันของเดือน">Fix/วัน <b>฿${fmtI(fixDay)}</b></span>`:''}` : '';
+      ${fixDay?`<span class="avgc" style="--c:#E0B33C" title="Fix cost ฿${fmtI(A.fixT)} ÷ ${A.days} วันของเดือน">Fix/วัน <b>฿${fmtI(fixDay)}</b></span>`:''}
+      ${brk?`<span class="avgc" style="--c:#8B5A2B" title="Fix/วัน ฿${fmtI(fixDay)} + ต้นทุนผันแปร ฿${fmtI(A.vc)} ÷ วันขาย ${A.daysData} วัน (฿${fmtI(vcDay)}/วัน)">คุ้มทุน/วัน <b>฿${fmtI(brk)}</b></span>`:''}
+      ${brk?`<span class="xs mut" style="align-self:center">ยอดขายเกินเส้นคุ้มทุน = แท่ง<b style="color:#1E8A3C">เขียว</b> · ต่ำกว่า = แดงตามเดิม</span>`:''}` : '';
     const mkLine=(v,color)=>({type:'line',data:Array(A.daily.length).fill(v||null),borderColor:color,
       borderDash:[6,4],borderWidth:1.6,pointRadius:0,pointHitRadius:0,fill:false,order:0});
+    const barBg=A.daily.map((v,i)=>{
+      if(brk&&v>=brk) return isHeavy(i)?'#1E8A3C':'#8FD6A4';
+      return isHeavy(i)?'#C62127':'#E5B4B6';
+    });
     const lineSets=[mkLine(avAll,'#5B5348'), mkLine(avWk,'#D89094'), mkLine(avHv,'#C62127')];
     if(fixDay) lineSets.push(mkLine(fixDay,'#E0B33C'));
+    if(brk) lineSets.push(mkLine(brk,'#8B5A2B'));
     S.charts.line=new Chart(lc,{type:'bar',data:{labels:A.daily.map((_,i)=>i+1),
       datasets:[
-        {data:A.daily,backgroundColor:A.daily.map((_,i)=>isHeavy(i)?'#C62127':'#E5B4B6'),borderRadius:4,order:1},
+        {data:A.daily,backgroundColor:barBg,borderRadius:4,order:1},
         ...lineSets
       ]},
       options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
+        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)+(brk?(c.raw>=brk?' · ✅ เกินคุ้มทุน':' · ต่ำกว่าคุ้มทุน'):'')}}},
         scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
   }
   buildDou('cost', document.getElementById('chDou'), false);
