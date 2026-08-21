@@ -1384,20 +1384,35 @@ function drawDash(A){
     const avAll=avgOf(A.daily);
     const avWk=avgOf(A.daily.filter((_,i)=>!isHeavy(i)));
     const avHv=avgOf(A.daily.filter((_,i)=>isHeavy(i)));
+    // เส้น Fix cost เฉลี่ย/วันขาย + เส้นคุ้มทุน/วัน (Fix/วัน ÷ margin หลังหักต้นทุนผันแปร)
+    const fixDay = A.daysData ? A.fixT/A.daysData : 0;
+    const varRatio = A.revenue>0 ? Math.min(0.95,(A.vc||0)/A.revenue) : 0; // ต้นทุนผันแปร ÷ รายได้ก่อน VAT
+    // จุดคุ้มทุนบนแกนกราฟ (ยอดขายรวม VAT): ex-VAT คุ้มทุน ×1.07
+    const brk = (fixDay>0 && varRatio<1) ? (fixDay/(1-varRatio))*1.07 : 0;
     const ar=document.getElementById('avgRow');
     if(ar)ar.innerHTML = avAll ? `
       <span class="avgc" style="--c:var(--ink)">เฉลี่ยทั้งเดือน <b>฿${fmtI(avAll)}</b></span>
       <span class="avgc" style="--c:#D89094">จ–พฤ <b>฿${fmtI(avWk)}</b></span>
-      <span class="avgc" style="--c:var(--red)">ศ–ส–อา <b>฿${fmtI(avHv)}</b></span>` : '';
+      <span class="avgc" style="--c:var(--red)">ศ–ส–อา <b>฿${fmtI(avHv)}</b></span>
+      ${fixDay?`<span class="avgc" style="--c:#E0B33C" title="Fix cost ฿${fmtI(A.fixT)} ÷ วันขาย ${A.daysData} วัน">Fix/วัน <b>฿${fmtI(fixDay)}</b></span>`:''}
+      ${brk?`<span class="avgc" style="--c:#8B5A2B" title="Fix/วัน ÷ (1−ต้นทุนผันแปร ${pctF(varRatio)}) — ขายเกินเส้นนี้ = วันนั้นมีกำไรจริง">คุ้มทุน/วัน <b>฿${fmtI(brk)}</b></span>`:''}
+      ${brk?`<span class="xs mut" style="align-self:center">แท่ง<b style="color:#1E8A3C">เขียว</b> = ยอดขายเกินจุดคุ้มทุน → ส่วนเกินคือกำไรล้วน</span>`:''}` : '';
     const mkLine=(v,color)=>({type:'line',data:Array(A.daily.length).fill(v||null),borderColor:color,
       borderDash:[6,4],borderWidth:1.6,pointRadius:0,pointHitRadius:0,fill:false,order:0});
+    const barBg=A.daily.map((v,i)=>{
+      if(brk&&v>=brk) return isHeavy(i)?'#1E8A3C':'#8FD6A4';
+      return isHeavy(i)?'#C62127':'#E5B4B6';
+    });
+    const lineSets=[mkLine(avAll,'#5B5348'), mkLine(avWk,'#D89094'), mkLine(avHv,'#C62127')];
+    if(fixDay) lineSets.push(mkLine(fixDay,'#E0B33C'));
+    if(brk) lineSets.push(mkLine(brk,'#8B5A2B'));
     S.charts.line=new Chart(lc,{type:'bar',data:{labels:A.daily.map((_,i)=>i+1),
       datasets:[
-        {data:A.daily,backgroundColor:A.daily.map((_,i)=>isHeavy(i)?'#C62127':'#E5B4B6'),borderRadius:4,order:1},
-        mkLine(avAll,'#5B5348'), mkLine(avWk,'#D89094'), mkLine(avHv,'#C62127')
+        {data:A.daily,backgroundColor:barBg,borderRadius:4,order:1},
+        ...lineSets
       ]},
       options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
+        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)+(brk?(c.raw>=brk?' · ✅ เกินคุ้มทุน':' · ยังไม่ถึงคุ้มทุน'):'')}}},
         scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
   }
   buildDou('cost', document.getElementById('chDou'), false);
