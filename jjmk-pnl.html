@@ -2500,7 +2500,7 @@ async function dtLoad(){
       const multiType=(S._dtRows||[]).some(r=>(num(r.bill_no)||1)>1);
       if(LBn&&(S.dtBillNo>1||multiType)){
         S.dtLines=LBn.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price,discount:num(r.discount)||''}));
-        tplNote=`🧾 บิลที่ ${S.dtBillNo}: เติมเฉพาะรายการของบิลประเภทนี้ (ตามบิลล่าสุด ${thDate(LBn.d)}) — สินค้าแยกตามแบบบิล ใส่จำนวนได้เลย`;
+        tplNote=`🧾 บิลที่ ${S.dtBillNo}: เติมเฉพาะรายการของบิลประเภทนี้ (ตามบิลล่าสุด ${thDate(LBn.d)}) · โหมด VAT "${DT_VLBL[S.dtVat]||S.dtVat}" จำจากบิลประเภทนี้ครั้งล่าสุด — ถ้าไม่ใช่ กดเปลี่ยนแล้วบันทึก ระบบจะจำแบบใหม่ตลอด`;
       }
       else if(S.dtBillNo===1&&S._dtCat&&S._dtCat.length){
         // วันใหม่: รายการประจำครบทุกตัว · ราคา+ส่วนลดรายตัว = บิลล่าสุด "ก่อนวันที่นี้"
@@ -2528,6 +2528,11 @@ async function dtLoad(){
     if(cur)cur.innerHTML=ex.length?`ยอดรายจ่ายปัจจุบันของวันนี้: <b>฿${fmtI(num(ex[0].amount))}</b>${ex[0].paid?' · <span style="color:var(--ok)">ติ๊กจ่ายแล้ว</span>':''} — บันทึกใหม่จะทับยอดนี้`:'วันนี้ยังไม่มีบิลของซัพนี้ในหน้ารายจ่าย';
   }catch(e){}
 }
+const DT_VLBL={none:'ไม่มี VAT',ex:'+7%',inc:'รวม VAT'};
+function dtTypeVat(bn){ // โหมด VAT ล่าสุดของบิลประเภทนี้ (จากประวัติ)
+  const r=(S._dtRows||[]).find(x=>(num(x.bill_no)||1)===bn && x.vat_mode);
+  return r?r.vat_mode:null;
+}
 function dtBillNet(rows){ // สุทธิของบิลย่อยจากแถวดิบ
   if(!rows||!rows.length)return 0;
   const sub=rows.reduce((a,r)=>a+num(r.qty)*num(r.price)-num(r.discount),0)-num(rows[0].bill_discount);
@@ -2542,7 +2547,8 @@ function dtBillTabsRender(){
   const all=[...new Set([...bns,S.dtBillNo])].sort((a,b)=>a-b);
   el.innerHTML=all.map(bn=>{
     const net=dtBillNet(DB[bn]);
-    return `<button class="${bn===S.dtBillNo?'on':''}" onclick="dtBillPick(${bn})">บิลที่ ${bn}${net?` · ฿${fmtI(net)}`:''}</button>`;
+    const vm=(DB[bn]&&DB[bn][0]&&DB[bn][0].vat_mode)||dtTypeVat(bn);
+    return `<button class="${bn===S.dtBillNo?'on':''}" onclick="dtBillPick(${bn})">บิลที่ ${bn}${vm?` · ${DT_VLBL[vm]||vm}`:''}${net?` · ฿${fmtI(net)}`:''}</button>`;
   }).join('')+`<button onclick="dtBillAdd()" title="ซัพนี้ส่งหลายบิลในวันเดียว เช่น บิล VAT + บิลไม่มี VAT">➕ เพิ่มบิลในวันนี้</button>`;
   el.style.display = (all.length>1||bns.length>=1)?'flex':'flex';
 }
