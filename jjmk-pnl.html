@@ -2416,6 +2416,7 @@ RENDER.detail = async (el)=>{
 };
 async function dtPickSup(v){
   S.dtSup=v?parseInt(v):null;
+  S.dtBillNo=1; S._dtWantNew=false; // เปลี่ยนซัพ เริ่มที่บิลแรกเสมอ
   document.querySelectorAll('.dtsup').forEach(b=>b.classList.toggle('on',b.dataset.sid==String(S.dtSup)));
   const nm=document.getElementById('dtSupName'); if(nm)nm.textContent=S.dtSup?((S.core.supById[S.dtSup]||{}).name||''):'';
   if(S.dtSup){ await dtHist(); await dtLoad(); }
@@ -2479,6 +2480,7 @@ async function dtLoad(){
     if(!S.dtBillNo) S.dtBillNo=1;
     const bns=Object.keys(DB).map(Number).sort((a,b)=>a-b);
     if(bns.length&&!DB[S.dtBillNo]&&!S._dtWantNew) S.dtBillNo=bns[0];
+    if(!bns.length&&!S._dtWantNew) S.dtBillNo=1; // วันว่าง (ไม่ได้กดเพิ่มบิล) กลับบิลแรก
     S._dtWantNew=false;
     dtBillTabsRender();
     const rows=DB[S.dtBillNo]||[];
@@ -2494,9 +2496,11 @@ async function dtLoad(){
       S.dtBillDisc=0; // ส่วนลดท้ายบิล ไม่จำ — เริ่ม 0 ทุกบิลใหม่
       const LBn=dtLastBillBefore(S.dtBillNo);
       if(LBn&&LBn.lines[0].vat_mode) S.dtVat=LBn.lines[0].vat_mode; // จำโหมด VAT ตามประเภทบิล
-      if(S.dtBillNo>1&&LBn){
+      // ซัพนี้เคยลงหลายบิลต่อวันไหม -> ถ้าเคย ทุกบิล (รวมบิลที่ 1) ใช้รายการตาม "ประเภทบิล" ของตัวเอง ไม่ปนกัน
+      const multiType=(S._dtRows||[]).some(r=>(num(r.bill_no)||1)>1);
+      if(LBn&&(S.dtBillNo>1||multiType)){
         S.dtLines=LBn.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price,discount:num(r.discount)||''}));
-        tplNote=`📌 บิลที่ ${S.dtBillNo}: เติมรายการจากบิลประเภทเดียวกันครั้งล่าสุด (${thDate(LBn.d)}) — ใส่จำนวนของวันนี้ได้เลย`;
+        tplNote=`🧾 บิลที่ ${S.dtBillNo}: เติมเฉพาะรายการของบิลประเภทนี้ (ตามบิลล่าสุด ${thDate(LBn.d)}) — สินค้าแยกตามแบบบิล ใส่จำนวนได้เลย`;
       }
       else if(S.dtBillNo===1&&S._dtCat&&S._dtCat.length){
         // วันใหม่: รายการประจำครบทุกตัว · ราคา+ส่วนลดรายตัว = บิลล่าสุด "ก่อนวันที่นี้"
