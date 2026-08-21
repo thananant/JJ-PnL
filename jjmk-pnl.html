@@ -767,6 +767,65 @@ async function aggAll(m){
     revenue:SUM('revenue'), fixT:SUM('fixT'), fixRows, net:SUM('net'), pA:parts[0], pB:parts[1], parts };
 }
 function aggFor(br,m){ return br==='ALL' ? aggAll(m) : agg(br,m); }
+async function renderIncomeAll(el){
+  const days=monthDays(S.m), from=S.m+'-01', to=dstr(S.m,days);
+  const brs=S.core.branches.map(b=>b.code);
+  let rows=[];
+  try{ rows=await sel('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}`); }catch(e){}
+  const M={}; rows.forEach(r=>{ const c=calcDay(r); M[r.d+'|'+r.branch]=c?c.incVat:0; });
+  const bt={}; let g=0;
+  let body='';
+  for(let d2=1; d2<=days; d2++){
+    const ds=dstr(S.m,d2); let rowT=0;
+    const tds=brs.map(b=>{ const v=M[ds+'|'+b]||0; rowT+=v; bt[b]=(bt[b]||0)+v;
+      return `<td class="n">${v?fmt(v,2):''}</td>`; }).join('');
+    g+=rowT;
+    if(!rowT) continue;
+    const wd=new Date(ds).getDay();
+    body+=`<tr><td class="${wd===0?'sun':''}" style="font-family:'Prompt';font-weight:700">${d2} <span class="xs mut">${TH_D[wd]}</span></td>${tds}<td class="n b" style="background:#FBF7EE">${fmt(rowT,2)}</td></tr>`;
+  }
+  el.innerHTML=`
+  <div class="perbar">
+    ${brs.map(b=>`<div class="pcell"><div class="l">${esc(BRNAME[b]||b)}</div><div class="v">฿${fmtI(bt[b]||0)}</div></div>`).join('')}
+    <div class="pcell hot"><div class="l">รวมทุกสาขา</div><div class="v">฿${fmtI(g)}</div></div>
+  </div>
+  <div class="card"><h3>ยอดขายรายวัน (รวม VAT) · ทุกสาขา <span class="sp">${monthLabel(S.m)}</span></h3>
+    <div class="xs mut" style="margin:-4px 0 8px">โหมดดูภาพรวม — จะแก้ไขตัวเลข ให้สลับไปสาขานั้นก่อน</div>
+    <div class="twrap" style="max-height:66dvh;overflow-y:auto"><table>
+      <tr><th>วันที่</th>${brs.map(b=>`<th class="right">${esc(BRNAME[b]||b)}</th>`).join('')}<th class="right">รวม/วัน</th></tr>
+      ${body||'<tr><td colspan="9" class="mut" style="text-align:center">ยังไม่มีข้อมูลรายรับเดือนนี้</td></tr>'}
+      <tr class="tot"><td>รวม</td>${brs.map(b=>`<td class="n">${fmt(bt[b]||0,2)}</td>`).join('')}<td class="n" style="color:var(--red)">${fmt(g,2)}</td></tr>
+    </table></div></div>`;
+}
+async function renderExpAll(el){
+  const days=monthDays(S.m), from=S.m+'-01', to=dstr(S.m,days);
+  const brs=S.core.branches.map(b=>b.code);
+  let rows=[];
+  try{ rows=await sel('pnl_expense_daily',`select=branch,d,amount&d=gte.${from}&d=lte.${to}`); }catch(e){}
+  const M={}; rows.forEach(r=>{ M[r.d+'|'+r.branch]=(M[r.d+'|'+r.branch]||0)+num(r.amount); });
+  const bt={}; let g=0; let body='';
+  for(let d2=1; d2<=days; d2++){
+    const ds=dstr(S.m,d2); let rowT=0;
+    const tds=brs.map(b=>{ const v=M[ds+'|'+b]||0; rowT+=v; bt[b]=(bt[b]||0)+v;
+      return `<td class="n">${v?fmt(v,2):''}</td>`; }).join('');
+    g+=rowT;
+    if(!rowT) continue;
+    const wd=new Date(ds).getDay();
+    body+=`<tr><td class="${wd===0?'sun':''}" style="font-family:'Prompt';font-weight:700">${d2} <span class="xs mut">${TH_D[wd]}</span></td>${tds}<td class="n b" style="background:#FBF7EE">${fmt(rowT,2)}</td></tr>`;
+  }
+  el.innerHTML=`
+  <div class="perbar">
+    ${brs.map(b=>`<div class="pcell"><div class="l">${esc(BRNAME[b]||b)}</div><div class="v">฿${fmtI(bt[b]||0)}</div></div>`).join('')}
+    <div class="pcell hot"><div class="l">รวมทุกสาขา</div><div class="v">฿${fmtI(g)}</div></div>
+  </div>
+  <div class="card"><h3>รายจ่ายซัพพลายเออร์รายวัน · ทุกสาขา <span class="sp">${monthLabel(S.m)}</span></h3>
+    <div class="xs mut" style="margin:-4px 0 8px">ยอดบิลซัพรวมต่อวันของแต่ละสาขา (ไม่รวม Fix cost) · โหมดดูภาพรวม — คีย์บิลให้สลับไปสาขานั้นก่อน</div>
+    <div class="twrap" style="max-height:66dvh;overflow-y:auto"><table>
+      <tr><th>วันที่</th>${brs.map(b=>`<th class="right">${esc(BRNAME[b]||b)}</th>`).join('')}<th class="right">รวม/วัน</th></tr>
+      ${body||'<tr><td colspan="9" class="mut" style="text-align:center">ยังไม่มีบิลเดือนนี้</td></tr>'}
+      <tr class="tot"><td>รวม</td>${brs.map(b=>`<td class="n">${fmt(bt[b]||0,2)}</td>`).join('')}<td class="n" style="color:var(--red)">${fmt(g,2)}</td></tr>
+    </table></div></div>`;
+}
 function allNotice(title){
   return `<div class="card" style="text-align:center;padding:34px 16px">
     <div style="font-size:32px">🏪🏪</div>
@@ -1514,7 +1573,7 @@ function incRepHTML(c,days){
     <div class="drrow tot"><span class="dd">รวม ${n} วัน</span>${drCell(tAm)}${drCell(tPm)}${drCell(tAm+tPm,'b')}</div>`;
 }
 RENDER.income = async (el)=>{
-  if(S.br==='ALL'){ el.innerHTML=allNotice('รายรับ'); return; }
+  if(S.br==='ALL'){ await renderIncomeAll(el); return; }
   const c = await loadMonth(S.br,S.m);
   const days=monthDays(S.m); const td=todayStr();
   S.incDay = S.incDay && S.incDay<=days ? S.incDay : (td.slice(0,7)===S.m?Number(td.slice(-2)):1);
@@ -1743,7 +1802,7 @@ function refreshFixPanel(){
   const t=document.getElementById('fxTot'); if(t)t.textContent='฿'+fmtI(tot);
 }
 RENDER.exp = async (el)=>{
-  if(S.br==='ALL'){ el.innerHTML=allNotice('รายจ่าย'); return; }
+  if(S.br==='ALL'){ await renderExpAll(el); return; }
   const c=await loadMonth(S.br,S.m);
   const days=monthDays(S.m);
   const td=todayStr(); S.expDay = S.expDay && S.expDay<=days ? S.expDay : (td.slice(0,7)===S.m?Number(td.slice(-2)):1);
@@ -2210,15 +2269,16 @@ RENDER.vatrep = async (el)=>{
 };
 function vrOpen(d,sid,bn){ S.dtDate=d; S.dtSup=sid; S._dtForceBn=bn||1; show('detail'); }
 RENDER.usage = async (el)=>{
-  if(S.br==='ALL'){ el.innerHTML=allNotice('ข้อมูลการใช้ของ'); return; }
+  const ALL=S.br==='ALL';
+  const brFilter=ALL?'':`&branch=eq.${S.br}`;
   const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
   const pm=prevMonth(S.m);
   const pFrom=pm+'-01', pTo=dstr(pm,monthDays(pm));
   let rows=[], prev=[];
   try{
     [rows,prev]=await Promise.all([
-      sel('pnl_bill_items',`select=*&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`),
-      sel('pnl_bill_items',`select=item,unit,qty,supplier_id&branch=eq.${S.br}&d=gte.${pFrom}&d=lte.${pTo}`)
+      sel('pnl_bill_items',`select=*${brFilter}&d=gte.${from}&d=lte.${to}&order=d`),
+      sel('pnl_bill_items',`select=item,unit,qty,supplier_id${brFilter}&d=gte.${pFrom}&d=lte.${pTo}`)
     ]); // select=* รวม discount อยู่แล้วถ้ามีคอลัมน์
   }catch(e){
     el.innerHTML='<div class="empty">โหลดไม่ได้ — ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อนครับ</div>'; return;
@@ -2229,8 +2289,15 @@ RENDER.usage = async (el)=>{
       <button class="btn dk sm2" style="margin-top:10px" onclick="show('detail')">ไปหน้าบันทึกข้อมูลบิล →</button></div>`;
     return;
   }
-  // ตัวหาร: วันที่มีรายรับจริง (เหมือนสรุปเดือน)
-  let dd=0; try{ const A=await agg(S.br,S.m); dd=A.daysData||0; }catch(e){}
+  // ตัวหาร: วันที่มีรายรับจริง (เหมือนสรุปเดือน) · ทุกสาขา = วันที่มีรายรับอย่างน้อย 1 สาขา
+  let dd=0;
+  if(ALL){
+    try{
+      const inc=await sel('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}`);
+      dd=new Set(inc.filter(r=>hasIncData(r)).map(r=>r.d)).size;
+    }catch(e){}
+  }
+  else try{ const A=await agg(S.br,S.m); dd=A.daysData||0; }catch(e){}
   if(!dd){ const t=new Date(); const cur=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
     dd = S.m===cur ? Math.max(1,t.getDate()) : monthDays(S.m); }
   // รวมต่อสินค้า (แยกหน่วย กันปน กก./แพ็ค)
@@ -2240,7 +2307,7 @@ RENDER.usage = async (el)=>{
     const t=g[k]??(g[k]={sid:r.supplier_id,item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,lastD:'',lastP:0,hist:[]});
     const amt=num(r.qty)*num(r.price)-num(r.discount);
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
-    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price)});
+    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),br:r.branch});
     if(r.d>=t.lastD){ t.lastD=r.d; t.lastP=num(r.price); }
   });
   const pg={};
@@ -2252,7 +2319,7 @@ RENDER.usage = async (el)=>{
     const t=gi[k]??(gi[k]={item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,sups:{},hist:[]});
     const amt=num(r.qty)*num(r.price)-num(r.discount);
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
-    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),sid:r.supplier_id});
+    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),sid:r.supplier_id,br:r.branch});
     const sp=t.sups[r.supplier_id]??(t.sups[r.supplier_id]={qty:0,baht:0,lastD:'',lastP:0});
     sp.qty+=num(r.qty); sp.baht+=amt;
     if(r.d>=sp.lastD){ sp.lastD=r.d; sp.lastP=num(r.price); }
@@ -2311,7 +2378,7 @@ RENDER.usage = async (el)=>{
   });
   el.innerHTML=`
   <div class="card">
-    <h3>การใช้ของรายสินค้า <span class="sp">${monthLabel(S.m)}</span></h3>
+    <h3>การใช้ของรายสินค้า${ALL?' · รวมทุกสาขา':''} <span class="sp">${monthLabel(S.m)}</span></h3>
     <div class="useg">
       <button class="${S.usageMode!=='item'?'on':''}" onclick="usageModeSet('sup')">แยกตามซัพ</button>
       <button class="${S.usageMode==='item'?'on':''}" onclick="usageModeSet('item')">รวมสินค้าเดียวกัน (เทียบราคา)</button>
@@ -2344,9 +2411,9 @@ function usageDetailItem(k){
         <td class="n ${idx===0&&priced.length>1?'b':''}" ${idx===0&&priced.length>1?'style="color:var(--ok)"':''}>${fmt(p2.lastP,2)}</td></tr>`).join('')}
     </table></div>
     <div class="twrap" style="max-height:34dvh;overflow-y:auto;margin-top:10px"><table>
-      <tr><th>วันที่</th><th>ซัพ</th><th class="right">จำนวน</th><th class="right">ราคา</th></tr>
-      ${hist.map(h=>`<tr style="cursor:pointer" onclick="closeModal();S.dtDate='${h.d}';S.dtSup=${h.sid};show('detail')">
-        <td>${thDate(h.d)}</td><td class="xs">${esc((S.core.supById[h.sid]||{}).name||'?')}</td>
+      <tr><th>วันที่</th><th>ซัพ</th>${S.br==='ALL'?'<th>สาขา</th>':''}<th class="right">จำนวน</th><th class="right">ราคา</th></tr>
+      ${hist.map(h=>`<tr style="cursor:pointer" onclick="closeModal();${S.br==='ALL'&&h.br?`pickBranch('${h.br}');`:''}S.dtDate='${h.d}';S.dtSup=${h.sid};show('detail')">
+        <td>${thDate(h.d)}</td><td class="xs">${esc((S.core.supById[h.sid]||{}).name||'?')}</td>${S.br==='ALL'?`<td class="xs mut">${esc(h.br||'')}</td>`:''}
         <td class="n">${fmt(h.qty,Math.abs(h.qty%1)>0.004?2:0)}</td><td class="n">${fmt(h.price,2)}</td></tr>`).join('')}
     </table></div>
     <button class="btn sm2" style="width:100%;margin-top:10px" onclick="closeModal()">ปิด</button>`);
