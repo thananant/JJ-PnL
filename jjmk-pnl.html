@@ -186,6 +186,12 @@ details>summary::-webkit-details-marker{display:none}
 .unitchip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 8px 6px 13px;font-size:13px;font-weight:600}
 .unitchip button{color:var(--bad);font-weight:800;font-size:13px;padding:0 4px;border-radius:50%}
 .unitchip button:hover{background:#FBE7E2}
+#ocrProg{position:fixed;inset:0;background:rgba(40,26,12,.38);display:none;align-items:center;justify-content:center;z-index:340;padding:20px}
+.ocrp-card{background:#fff;border-radius:18px;padding:18px 20px;width:min(330px,88vw);box-shadow:0 16px 44px rgba(40,20,0,.28)}
+.ocrp-h{font-family:'Prompt';font-weight:800;font-size:15px;margin-bottom:4px}
+.ocrp-bar{height:11px;background:#F1E9D8;border-radius:99px;overflow:hidden;margin:10px 0 7px}
+.ocrp-bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--red),#E0B33C);transition:width .18s;border-radius:99px}
+.ocrp-row{display:flex;justify-content:space-between;font-size:12.5px;font-weight:700}
 #ptr{position:fixed;top:0;left:50%;transform:translate(-50%,-56px);z-index:320;pointer-events:none;transition:transform .18s}
 #ptr .ptr-c{width:42px;height:42px;border-radius:50%;background:#fff;border:1.5px solid var(--line);box-shadow:0 5px 16px rgba(60,40,20,.16);display:flex;align-items:center;justify-content:center;font-size:21px;color:var(--red);font-weight:800}
 #ptr.rel .ptr-c{background:var(--red);border-color:var(--red);color:#fff}
@@ -2748,21 +2754,86 @@ function dtPoolNames(){ // ชื่อสินค้าที่รู้จ�
   (S.dtLines||[]).forEach(l=>{ if(l.item&&!set.has(l.item))set.set(l.item,{item:l.item,unit:l.unit}); });
   return [...set.values()];
 }
+const OCRP={t0:0,est:12000,timer:null,xhr:null};
+function ocrProgOpen(){
+  OCRP.est=num(LS.get('jj_ocr_ms',12000))||12000;
+  OCRP.t0=Date.now();
+  let el=document.getElementById('ocrProg');
+  if(!el){ el=document.createElement('div'); el.id='ocrProg'; document.body.appendChild(el); }
+  el.innerHTML=`<div class="ocrp-card">
+    <div class="ocrp-h">📷 กำลังอ่านบิล</div>
+    <div class="ocrp-bar"><i id="ocrpFill"></i></div>
+    <div class="ocrp-row"><span id="ocrpStage">เตรียมรูป...</span><span id="ocrpPct">0%</span></div>
+    <div class="xs mut" id="ocrpEta" style="margin-top:3px;text-align:right"> </div>
+    <button class="btn gh sm2" style="width:100%;margin-top:10px" onclick="ocrCancel()">✕ ยกเลิก</button></div>`;
+  el.style.display='flex';
+  ocrProgSet('เตรียมรูป...',2,null);
+}
+function ocrProgSet(stage,pct,eta){
+  const f=document.getElementById('ocrpFill'), st=document.getElementById('ocrpStage'),
+        pc=document.getElementById('ocrpPct'), et=document.getElementById('ocrpEta');
+  if(f)f.style.width=Math.min(100,pct)+'%';
+  if(st&&stage)st.textContent=stage;
+  if(pc)pc.textContent=Math.round(Math.min(100,pct))+'%';
+  if(et&&eta!==null)et.textContent=eta||' ';
+}
+function ocrTick(){
+  const el=document.getElementById('ocrProg');
+  if(!el||el.style.display==='none'){ clearInterval(OCRP.timer); OCRP.timer=null; return; }
+  const elapsed=Date.now()-OCRP.t0;
+  const frac=Math.min(1, elapsed/OCRP.est);
+  let pct=35+60*frac; // ช่วง AI: 35 -> 95 ตามเวลาเฉลี่ยรอบก่อน
+  if(elapsed>OCRP.est) pct=Math.min(99, 95+(elapsed-OCRP.est)/2500);
+  const remain=OCRP.est-elapsed;
+  ocrProgSet('🤖 AI กำลังอ่านรายการ...', pct,
+    remain>800 ? `เหลือประมาณ ${Math.ceil(remain/1000)} วินาที` : 'อีกแป๊บเดียว ใกล้เสร็จแล้ว...');
+}
+function ocrCancel(){
+  if(OCRP.xhr){ try{OCRP.xhr.abort();}catch(e){} }
+  ocrProgClose(); toast('ยกเลิกการสแกนแล้ว');
+}
+function ocrProgClose(){
+  clearInterval(OCRP.timer); OCRP.timer=null; OCRP.xhr=null;
+  const el=document.getElementById('ocrProg'); if(el)el.style.display='none';
+}
+function dtOcrSend(bodyObj){ // ใช้ XHR เพื่อได้ % อัปโหลดจริง
+  return new Promise((res,rej)=>{
+    const xhr=new XMLHttpRequest(); OCRP.xhr=xhr;
+    xhr.open('POST',DT_OCR_URL);
+    xhr.setRequestHeader('Content-Type','application/json');
+    if(xhr.upload)xhr.upload.onprogress=e=>{
+      if(e.lengthComputable) ocrProgSet('⬆️ ส่งรูปขึ้นระบบ...', 8+27*(e.loaded/Math.max(1,e.total)), null);
+    };
+    xhr.onload=()=>{ let j={}; try{j=JSON.parse(xhr.responseText);}catch(e){}
+      res({ok:xhr.status>=200&&xhr.status<300, status:xhr.status, j}); };
+    xhr.onerror=()=>rej(new Error('เชื่อมต่อ Worker ไม่ได้'));
+    xhr.onabort=()=>rej(new Error('__cancel__'));
+    xhr.send(JSON.stringify(bodyObj));
+  });
+}
 async function dtOcrPick(inp){
   const f=inp.files&&inp.files[0]; inp.value='';
   if(!f)return;
   if(!S.dtSup){toast('เลือกซัพพลายเออร์ก่อนครับ',true);return;}
-  toast('📷 กำลังอ่านบิล... (5–15 วิ)');
+  ocrProgOpen();
   try{
     const b64=await dtOcrShrink(f);
+    ocrProgSet('⬆️ ส่งรูปขึ้นระบบ...',8,null);
     const known=dtPoolNames();
     const aliases=(S._dtAlias||[]).map(a=>({alias:a.alias,item:a.item}));
-    const r=await fetch(DT_OCR_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({image:b64.data,mime:b64.mime,knownItems:known,aliases})});
-    const j=await r.json();
-    if(!r.ok||j.error){toast('อ่านบิลไม่สำเร็จ: '+(j.error||r.status),true);return;}
-    dtOcrApply(j);
-  }catch(e){ toast('สแกนไม่สำเร็จ: '+e.message,true); }
+    OCRP.timer=setInterval(ocrTick,150);
+    const r=await dtOcrSend({image:b64.data,mime:b64.mime,knownItems:known,aliases});
+    if(!r.ok||r.j.error){ ocrProgClose(); toast('อ่านบิลไม่สำเร็จ: '+(r.j.error||r.status),true); return; }
+    // จำเวลาที่ใช้จริง ไว้ทายรอบหน้าให้แม่นขึ้น (ค่าเฉลี่ยถ่วงน้ำหนัก)
+    const used=Date.now()-OCRP.t0;
+    LS.set('jj_ocr_ms', Math.round(OCRP.est*0.55 + used*0.45));
+    ocrProgSet('เสร็จแล้ว ✅',100,' ');
+    setTimeout(ocrProgClose,350);
+    dtOcrApply(r.j);
+  }catch(e){
+    ocrProgClose();
+    if(e.message!=='__cancel__') toast('สแกนไม่สำเร็จ: '+e.message,true);
+  }
 }
 function dtOcrShrink(file){ // ย่อรูปในเครื่องก่อนส่ง (เร็ว+ประหยัด)
   return new Promise((res,rej)=>{
