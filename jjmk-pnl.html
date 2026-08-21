@@ -2241,6 +2241,17 @@ async function dtSave(){
     await ups('pnl_expense_daily',[{branch:S.br,d,supplier_id:sid,amount:total}],'branch,d,supplier_id');
     const mo=d.slice(0,7); const c=S.cache[mkey(S.br,mo)];
     if(c){ const k=d+'|'+sid; const r=c.exp[k]??(c.exp[k]={branch:S.br,d,supplier_id:sid}); r.amount=total; }
+    // สินค้าใหม่ในบิล -> เพิ่มเข้ารายการสินค้าประจำของซัพให้อัตโนมัติ (ตัวที่ยังไม่มี)
+    try{
+      const cat=S._dtCat||[];
+      const have=new Set(cat.map(c2=>c2.item));
+      const newItems=lines.filter(l=>!have.has(l.item));
+      if(newItems.length){
+        const base=cat.length?Math.max(...cat.map(c2=>num(c2.sort)))+1:0;
+        await ins('pnl_sup_items', newItems.map((l,i)=>({supplier_id:sid,item:l.item,unit:l.unit,sort:base+i})));
+        S._dtCat=[...cat, ...newItems.map((l,i)=>({supplier_id:sid,item:l.item,unit:l.unit,sort:base+i}))];
+      }
+    }catch(e){} // ยังไม่รัน jjmk_pnl_supitems.sql ก็ข้ามเงียบๆ
     // ประวัติ: สร้าง/แก้อะไรบ้าง
     if(!oldRows.length){
       await dtLogAdd(d,sid,`สร้างบิล · ${lines.length} รายการ · ยอด ฿${fmt(total,2)}`);
@@ -2925,15 +2936,25 @@ async function supItemsModal(id){
   try{ rows=await sel('pnl_sup_items',`select=*&supplier_id=eq.${id}&order=sort`); }
   catch(e){ toast('ต้องรัน jjmk_pnl_supitems.sql ใน Supabase ก่อนครับ',true); return; }
   S._si={sid:id, rows:rows.length?rows.map(r=>({item:r.item,unit:r.unit})):[{item:'',unit:''}]};
+  let autoPulled=false;
+  if(!rows.length){
+    try{
+      const old2=await sel('pnl_bill_items',`select=item,unit,d&supplier_id=eq.${id}&order=d.desc&limit=400`);
+      const seen=new Set(); const pulled=[];
+      old2.forEach(r=>{ if(!seen.has(r.item)){ seen.add(r.item); pulled.push({item:r.item,unit:r.unit}); } });
+      if(pulled.length){ S._si.rows=pulled; autoPulled=true; }
+    }catch(e){}
+  }
   openModal(`<h3>🧺 รายการสินค้าประจำ <span class="sp">${esc(sp.name)}</span></h3>
-    <div class="xs mut" style="margin:-6px 0 10px">รายการนี้จะ<b>ขึ้นมาให้ครบทุกตัว</b>อัตโนมัติเวลาเปิดบิลวันใหม่ของซัพนี้ในหน้า "รายละเอียดบิล" — เหลือแค่ใส่จำนวน (ราคาเติมจากบิลล่าสุดให้)</div>
+    <div class="xs mut" style="margin:-6px 0 10px">รายการนี้จะ<b>ขึ้นมาให้ครบทุกตัว</b>เวลาเปิดบิลวันใหม่ในหน้า "รายละเอียดบิล" — และสินค้าใหม่ที่ลงในบิลจะ<b>ถูกเพิ่มเข้ามาเองอัตโนมัติ</b> (ลบตัวที่ไม่ใช้ออกได้)</div>
     <div class="sihead"><span>สินค้า</span><span>หน่วย</span><span></span></div>
     <div id="siRows" style="max-height:44dvh;overflow-y:auto"></div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn gh sm2" onclick="siAdd()">➕ เพิ่มรายการ</button>
       <button class="btn gh sm2" onclick="siPull()">⤵ ดึงจากบิลเก่า</button>
       <button class="btn dk sm2" style="margin-left:auto" onclick="siSave()">💾 บันทึก</button></div>
-    <datalist id="siUnitsDL">${DT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>`);
+    <datalist id="siUnitsDL">${DT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>
+    ${autoPulled?`<div class="xs" style="color:#8A6A12;margin-top:8px">⤵ ดึงรายการจากบิลเก่าให้อัตโนมัติแล้ว ${S._si.rows.length} ตัว — ตรวจแล้วกด <b>บันทึก</b> เพื่อเก็บเป็นรายการประจำ</div>`:''}`);
   siRender();
 }
 function siRender(focusLast){
