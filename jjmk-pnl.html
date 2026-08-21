@@ -116,13 +116,10 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .md2.eq .douRow{flex:1;align-items:center}
 .sbtn{font-size:14px;line-height:1;padding:3px;border-radius:8px;border:1.5px dashed var(--line);background:#fff}
 .sbtn.has{border-style:solid;border-color:var(--gold);background:var(--gold-t)}
-.qrow{display:flex;gap:8px;align-items:stretch}
-.qrow input{padding:10px 12px}
-.qsugg{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--line);border-radius:12px;box-shadow:0 10px 26px rgba(40,20,10,.14);z-index:40;overflow:hidden}
-.qs{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:10px 12px;font-size:13.5px;border-bottom:1px solid var(--line);background:#fff}
-.qs:last-child{border-bottom:none}
-.qs:hover,.qs:active{background:#FAF4E7}
-.qsdot{width:9px;height:9px;border-radius:50%;flex:none}
+.exgrid{display:grid;grid-template-columns:1fr;gap:0 22px}
+@media(min-width:860px){.exgrid{grid-template-columns:1fr 1fr}}
+@media(min-width:1230px){.exgrid{grid-template-columns:1fr 1fr 1fr}}
+.exgrid .exrow input{width:96px}
 details>summary::-webkit-details-marker{display:none}
 .asrow{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13px}
 .asrow:last-child{border-bottom:none}
@@ -1254,23 +1251,11 @@ RENDER.exp = async (el)=>{
       <div class="dayrep" id="fixPanel">${fixPanelHTML()}</div>
     </div>
   </div>
-  <div class="card"><h3>⚡ ลงบิลเร็ว <span class="sp">${thDate(dstr(S.m,S.expDay))}</span></h3>
-    <div class="qrow">
-      <div style="flex:1;position:relative;min-width:0">
-        <input id="qSup" placeholder="พิมพ์ชื่อซัพพลายเออร์..." autocomplete="off" oninput="qSugg()" onfocus="qSugg()" onkeydown="qSupKey(event)">
-        <div id="qList" class="qsugg" style="display:none"></div></div>
-      <input id="qAmt" type="number" step="any" inputmode="decimal" placeholder="ยอดบิล" style="width:118px;flex:none" onkeydown="if(event.key==='Enter'){event.preventDefault();qAddBill();}">
-      <button class="btn dk sm2" style="flex:none" onclick="qAddBill()">เพิ่ม</button>
-    </div>
-    <div id="todayBills" style="margin-top:10px"></div>
-  </div>
-  <details class="card"><summary class="b" style="font-family:'Prompt';font-size:14px;cursor:pointer;list-style:none">▸ รายชื่อซัพทั้งหมดตามหมวด <span class="xs mut" style="font-weight:500">เปิดเมื่ออยากไล่ดูทีละหมวด / ดูยอดกับสถานะครบทุกราย</span></summary>
-  <div id="expForm" style="margin-top:10px">${expFormHTML(c)}</div></details>
+  <div id="expForm">${expFormHTML(c)}</div>
   <div class="stickysum"><span class="sm" style="opacity:.75">รวมวันที่ ${S.expDay}</span>
     <span class="v" id="expDayTot"></span>
     <span class="sm" style="margin-left:auto;opacity:.75">${thDate(dstr(S.m,S.expDay))}</span></div>`;
   refreshFixPanel();
-  renderTodayBills();
   updExpDayTot();
 };
 function perTotal(c,a,b){
@@ -1284,7 +1269,7 @@ function expFormHTML(c){
     if(!list.length)return'';
     return `<div class="card"><h3><span style="width:9px;height:9px;border-radius:3px;background:${catColor(cat)}"></span>${cat}
       <span class="sp num" id="catT-${esc(cat)}"></span></h3>
-      ${list.map(s=>{
+      <div class="exgrid">${list.map(s=>{
         const r=c.exp[ds+'|'+s.id];
         const isYannah=s.name==='Yannah Beef';
         const paid=!!(r&&r.paid), hasSlip=!!(r&&r.slip_url);
@@ -1296,7 +1281,7 @@ function expFormHTML(c){
             <button class="pchip ${paid?'on':''}" data-pd="${s.id}" onclick="paidToggle('${ds}',${s.id})"><span class="ckbx">${paid?'✓':''}</span>จ่ายแล้ว</button>
             <button class="sbtn ${hasSlip?'has':''}" data-sl="${s.id}" title="สลิป" onclick="slipClick('${ds}',${s.id})">${hasSlip?'🧾':'📎'}</button>
           </div></div>`;
-      }).join('')}</div>`;
+      }).join('')}</div></div>`;
   }).join('');
 }
 function qSugg(){
