@@ -2093,36 +2093,44 @@ async function dtPickSup(v){
   if(S.dtSup){ await dtHist(); await dtLoad(); }
 }
 async function dtHist(){
-  // จำชื่อสินค้า+หน่วย+ราคาเดิม และเก็บ "บิลล่าสุดทั้งใบ" ไว้เป็นแม่แบบ
+  // เก็บประวัติดิบไว้ แล้วคิดราคา "ณ วันของบิลที่กำลังลง" ตอนใช้จริง (ลงย้อนหลังได้ไม่เพี้ยน)
   try{
-    const rows=await sel('pnl_bill_items',`select=item,unit,price,qty,d,sort&supplier_id=eq.${S.dtSup}&branch=eq.${S.br}&order=d.desc,sort.asc&limit=400`);
-    const m={}; rows.forEach(r=>{ if(!m[r.item]) m[r.item]={unit:r.unit,price:num(r.price)}; });
-    S._dtHist=m;
-    const lastD=rows.length?rows[0].d:null;
-    S._dtLastBill=lastD?{d:lastD, lines:rows.filter(r=>r.d===lastD)}:null;
+    S._dtRows=await sel('pnl_bill_items',`select=item,unit,price,qty,d,sort&supplier_id=eq.${S.dtSup}&branch=eq.${S.br}&order=d.desc,sort.asc&limit=600`);
     S._dtCat=await sel('pnl_sup_items',`select=*&supplier_id=eq.${S.dtSup}&order=sort`).catch(()=>[]);
     const dl=document.getElementById('dtItemsDL');
-    if(dl){ const names=[...new Set([...S._dtCat.map(c2=>c2.item),...Object.keys(m)])];
+    if(dl){ const names=[...new Set([...S._dtCat.map(c2=>c2.item),...S._dtRows.map(r=>r.item)])];
       dl.innerHTML=names.map(i=>`<option value="${esc(i)}">`).join(''); }
-  }catch(e){ S._dtHist={}; S._dtLastBill=null; S._dtCat=[]; }
+  }catch(e){ S._dtRows=[]; S._dtCat=[]; }
+}
+function dtAsOf(){ // สินค้า -> {unit,price} จากบิลล่าสุด "ก่อนวันที่กำลังลง" (ไม่เอาราคาอนาคต)
+  const m={};
+  (S._dtRows||[]).forEach(r=>{ if(r.d<S.dtDate && !m[r.item]) m[r.item]={unit:r.unit,price:num(r.price)}; });
+  return m;
+}
+function dtLastBillBefore(){ // บิลทั้งใบล่าสุดก่อนวันที่กำลังลง (ใช้เป็นแม่แบบ)
+  const rs=(S._dtRows||[]).filter(r=>r.d<S.dtDate);
+  if(!rs.length)return null;
+  const d=rs[0].d;
+  return {d, lines:rs.filter(r=>r.d===d)};
 }
 async function dtLoad(){
   if(!S.dtSup){renderDtLines();return;}
   let tplNote='';
   try{
     const rows=await sel('pnl_bill_items',`select=*&branch=eq.${S.br}&d=eq.${S.dtDate}&supplier_id=eq.${S.dtSup}&order=sort`);
+    const AM=dtAsOf(), LB=dtLastBillBefore();
     if(rows.length){ S.dtLines=rows.map(r=>({item:r.item,qty:r.qty,unit:r.unit,price:r.price})); S._dtExisting=true; }
     else if(S._dtCat&&S._dtCat.length){
-      // วันใหม่: ขึ้นรายการสินค้าประจำของซัพครบทุกตัว (ราคาเติมจากบิลล่าสุด)
+      // วันใหม่: รายการประจำครบทุกตัว · ราคา = บิลล่าสุด "ก่อนวันที่นี้" (ลงย้อนหลังไม่ดึงราคาอนาคต)
       S.dtLines=S._dtCat.map(c2=>({item:c2.item,qty:'',unit:c2.unit,
-        price:(S._dtHist&&S._dtHist[c2.item])?S._dtHist[c2.item].price:''}));
+        price:AM[c2.item]?AM[c2.item].price:''}));
       S._dtExisting=false;
-      tplNote=`🧺 ขึ้นรายการสินค้าประจำครบ ${S._dtCat.length} ตัวแล้ว — ใส่จำนวนเฉพาะที่ซื้อวันนี้ (ตัวไหนไม่ซื้อเว้นว่างไว้ ไม่ถูกบันทึก) · แก้รายการประจำได้ที่ตั้งค่า → แตะชื่อซัพ`;
+      tplNote=`🧺 ขึ้นรายการสินค้าประจำครบ ${S._dtCat.length} ตัว — ราคาเติมจากบิลล่าสุด<b>ก่อน ${thDate(S.dtDate)}</b> ใส่จำนวนเฉพาะที่ซื้อ (เว้นว่าง = ไม่บันทึก)`;
     }
-    else if(S._dtLastBill&&S._dtLastBill.d!==S.dtDate){
-      S.dtLines=S._dtLastBill.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price}));
+    else if(LB){
+      S.dtLines=LB.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price}));
       S._dtExisting=false;
-      tplNote=`📌 เติมรายการจากบิลล่าสุด (${thDate(S._dtLastBill.d)}) ให้แล้ว — ใส่จำนวนของวันนี้ได้เลย รายการไหนไม่มีกด ✕`;
+      tplNote=`📌 เติมรายการจากบิลล่าสุดก่อนวันนี้ (${thDate(LB.d)}) — ใส่จำนวนของวันที่ ${thDate(S.dtDate)} ได้เลย รายการไหนไม่มีกด ✕`;
     }
     else { S.dtLines=[{item:'',qty:'',unit:'',price:''}]; S._dtExisting=false; }
   }catch(e){ S.dtLines=[{item:'',qty:'',unit:'',price:''}]; S._dtExisting=false; }
@@ -2141,10 +2149,12 @@ function dtAddLine(){ S.dtLines.push({item:'',qty:'',unit:'',price:''}); renderD
 function dtDelLine(i){ S.dtLines.splice(i,1); if(!S.dtLines.length)S.dtLines.push({item:'',qty:'',unit:'',price:''}); renderDtLines(); }
 function dtEdit(i,f,v){
   S.dtLines[i][f]=v;
-  if(f==='item'&&S._dtHist&&S._dtHist[v]){
-    const h=S._dtHist[v];
-    if(!S.dtLines[i].unit){S.dtLines[i].unit=h.unit; const u=document.getElementById('dtu'+i); if(u)u.value=h.unit;}
-    if(!num(S.dtLines[i].price)){S.dtLines[i].price=h.price; const pr=document.getElementById('dtp'+i); if(pr)pr.value=h.price;}
+  if(f==='item'){
+    const AM=dtAsOf(), h=AM[v];
+    if(h){
+      if(!S.dtLines[i].unit){S.dtLines[i].unit=h.unit; const u=document.getElementById('dtu'+i); if(u)u.value=h.unit;}
+      if(!num(S.dtLines[i].price)){S.dtLines[i].price=h.price; const pr=document.getElementById('dtp'+i); if(pr)pr.value=h.price;}
+    }
   }
   dtTotals();
 }
@@ -2807,10 +2817,6 @@ RENDER.set = async (el)=>{
   el.innerHTML=`
   <div class="md2">
   <div>
-    <div class="card"><h3>การเชื่อมต่อ Supabase</h3>
-      <div class="fld"><label>URL</label><input id="stUrl" value="${esc(url)}"></div>
-      <div class="fld"><label>Key</label><input id="stKey" value="${esc(key)}"></div>
-      <div style="display:flex;gap:8px"><button class="btn sm2" onclick="localStorage.setItem('jjpnl_url',document.getElementById('stUrl').value.trim());localStorage.setItem('jjpnl_key',document.getElementById('stKey').value.trim());toast('บันทึกแล้ว รีโหลด...');setTimeout(()=>location.reload(),600)">บันทึก</button></div></div>
     ${S.user&&!S.user.legacy?`
     <div class="card"><h3>👤 บัญชีของฉัน</h3>
       <div class="sm"><b>${esc(S.user.display_name)}</b> <span class="mut">· ${esc(S.user.username)} · ${S.user.role==='admin'?'ผู้ดูแลระบบ (ทุกสิทธิ์)':'พนักงาน'}</span></div>
