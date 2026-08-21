@@ -52,6 +52,11 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .navday{width:34px;height:34px;flex:none;border-radius:10px;border:1.5px solid var(--line);background:#fff;font-size:18px;font-weight:700;color:var(--ink)}
 .navday:disabled{opacity:.3}
 .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:430px}
+.calgrid.amt{max-width:580px;gap:6px}
+.calgrid.amt button{height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:15px}
+.calgrid.amt button .ca{font-size:10px;font-weight:700;color:#B04A3A;font-family:'Prompt';letter-spacing:.01em}
+.calgrid.amt button.on .ca{color:#FFD3C9}
+.calgrid.amt button.hasamt::after{display:none}
 .calgrid .wd{text-align:center;font-size:11px;font-weight:700;color:var(--mut);padding:2px 0;font-family:'Prompt'}
 .calgrid .wd.sun{color:var(--red)}
 .calgrid button{height:40px;border-radius:10px;background:#fff;border:1.5px solid var(--line);font-family:'Prompt';font-weight:600;font-size:14px;position:relative}
@@ -74,7 +79,13 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .calcline{margin-top:10px;padding-top:8px;border-top:1.5px dashed rgba(0,0,0,.12);font-size:12.5px;color:var(--mut);display:flex;flex-wrap:wrap;gap:3px 8px;align-items:center}
 .calcline b{color:var(--ink);font-family:'Prompt'}
 .calwrap{display:grid;gap:14px}
-@media(min-width:900px){.calwrap{grid-template-columns:auto 1fr;align-items:start}}
+@media(min-width:900px){.calwrap{grid-template-columns:minmax(320px,1.15fr) minmax(0,1fr);align-items:start}}
+#fixPanel{font-size:12.5px}
+#fixPanel .fxrow{padding:4px 10px}
+#fixPanel .fxrow input{padding:6px 8px;font-size:12.5px;width:106px}
+#fixPanel .fxgrp{padding:5px 10px;font-size:12px}
+#fixPanel .drscroll{max-height:430px!important}
+#fixPanel .drrow{padding:7px 10px}
 .dayrep{border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
 .drrow{display:grid;grid-template-columns:60px 1fr 1fr 1.15fr;gap:6px;padding:7px 10px;font-size:12.5px;border-bottom:1px solid var(--line);align-items:center;cursor:pointer}
 .drrow .dd{font-weight:600;font-family:'Prompt';white-space:nowrap}
@@ -1304,14 +1315,22 @@ function douBig(kind){
 <script>
 /* ============ รายรับ (บันทึกรายวัน) ============ */
 const SHIFTS=[['am','กะเช้า','🌅','เช้า'],['pm','กะเย็น','🌆','เย็น']];
-function calHTML(days, sel, hasFn, fnName){
+function kShort(x){
+  x=num(x);
+  if(x>=1e6) return (x/1e6).toFixed(2).replace(/\.?0+$/,'')+'M';
+  if(x>=1000) return (x/1000).toFixed(1).replace(/\.0$/,'')+'k';
+  return x?fmtI(x):'';
+}
+function calHTML(days, sel, hasFn, fnName, amtFn){
   const first=new Date(S.m+'-01').getDay();
   const td=todayStr(); const isCurM=td.slice(0,7)===S.m; const tdd=Number(td.slice(-2));
-  let h='<div class="calgrid">'+TH_D.map((w,i)=>`<div class="wd ${i===0?'sun':''}">${w}</div>`).join('');
+  let h='<div class="calgrid'+(amtFn?' amt':'')+'">'+TH_D.map((w,i)=>`<div class="wd ${i===0?'sun':''}">${w}</div>`).join('');
   for(let i=0;i<first;i++)h+='<div></div>';
   for(let d=1;d<=days;d++){
     const wd=(first+d-1)%7;
-    h+=`<button data-d="${d}" class="${d===sel?'on':''} ${hasFn(d)?'has':''} ${wd===0?'sun':''} ${isCurM&&d===tdd?'tdy':''}" onclick="${fnName}(${d})">${d}</button>`;
+    const a=amtFn?num(amtFn(d)):0;
+    h+=`<button data-d="${d}" class="${d===sel?'on':''} ${hasFn(d)?'has':''} ${a?'hasamt':''} ${wd===0?'sun':''} ${isCurM&&d===tdd?'tdy':''}" onclick="${fnName}(${d})">
+      <span class="cd">${d}</span>${a?`<span class="ca">${kShort(a)}</span>`:''}</button>`;
   }
   return h+'</div>';
 }
@@ -1576,7 +1595,7 @@ function fixPanelHTML(){
   const c=S.cache[mkey(S.br,S.m)]; if(!c)return'';
   const grps=fixGroups();
   if(!Object.keys(grps).length) return '<div class="empty" style="padding:20px">ยังไม่มีรายการ Fix cost<br><span class="xs mut">เพิ่มรายการได้ที่หน้าตั้งค่า</span></div>';
-  let html=`<div class="drrow head" style="grid-template-columns:1fr 130px"><span class="dd">🏢 Fix cost · ${monthLabel(S.m)}</span><span class="num">บาท/เดือน</span></div>
+  let html=`<div class="drrow head" style="grid-template-columns:1fr 118px"><span class="dd">🏢 Fix cost · ${monthLabel(S.m)}</span><span class="num">บาท/เดือน</span></div>
   <div class="xs mut" style="padding:6px 10px;border-bottom:1px solid var(--line)">แก้ยอดจริงของเดือนนี้ได้เลย · ปล่อยว่าง = ใช้ค่าตั้งต้น (ตัวจาง)</div>
   <div class="drscroll" style="max-height:520px">`;
   Object.entries(grps).forEach(([g,list],gi)=>{
@@ -1587,7 +1606,7 @@ function fixPanelHTML(){
           value="${c.fixm[f.id]??''}" onchange="fixInput(${f.id},this.value)"></div>`;
     });
   });
-  html+=`</div><div class="drrow tot" style="grid-template-columns:1fr 130px"><span class="dd">ยอดรวม Fix cost</span><span class="num b" id="fxTot" style="color:var(--red)"></span></div>`;
+  html+=`</div><div class="drrow tot" style="grid-template-columns:1fr 118px"><span class="dd">ยอดรวม Fix cost</span><span class="num b" id="fxTot" style="color:var(--red)"></span></div>`;
   return html;
 }
 function refreshFixPanel(){
@@ -1605,7 +1624,8 @@ RENDER.exp = async (el)=>{
   const c=await loadMonth(S.br,S.m);
   const days=monthDays(S.m);
   const td=todayStr(); S.expDay = S.expDay && S.expDay<=days ? S.expDay : (td.slice(0,7)===S.m?Number(td.slice(-2)):1);
-  const hasDay={}; Object.values(c.exp).forEach(r=>{ if(num(r.amount))hasDay[Number(r.d.slice(-2))]=1; });
+  const hasDay={}, dayAmt={};
+  Object.values(c.exp).forEach(r=>{ const a=num(r.amount); if(a){ const dn=Number(r.d.slice(-2)); hasDay[dn]=1; dayAmt[dn]=(dayAmt[dn]||0)+a; } });
   const t15=perTotal(c,1,15), t31=perTotal(c,16,days);
   const unpaid=Object.values(c.exp).reduce((a,r)=>a+((num(r.amount)>0&&!r.paid)?num(r.amount):0),0);
   el.innerHTML=`
@@ -1618,7 +1638,7 @@ RENDER.exp = async (el)=>{
   <div class="card">
     <h3>เลือกวันที่ <span class="sp"><button class="hintlink" onclick="expTableView()">ดูตารางรวมทั้งเดือน →</button></span></h3>
     <div class="calwrap">
-      <div>${calHTML(days, S.expDay, d=>!!hasDay[d], 'expPick')}</div>
+      <div>${calHTML(days, S.expDay, d=>!!hasDay[d], 'expPick', d=>dayAmt[d]||0)}</div>
       <div class="dayrep" id="fixPanel">${fixPanelHTML()}</div>
     </div>
   </div>
