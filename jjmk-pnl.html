@@ -177,6 +177,10 @@ details>summary::-webkit-details-marker{display:none}
 .vch{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 12px;font-size:12px;font-weight:700}
 .vch.on{background:var(--ink);border-color:var(--ink);color:#fff}
 .dtrow.unm input{background:#FFF3C9}
+
+.ocrinline{grid-column:1/-1;background:#FFF6DC;border:1.5px solid #E8CE8E;border-top:none;border-radius:0 0 10px 10px;margin:-6px 0 6px;padding:7px 10px;display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.ocrinline select,.ocrinline input{padding:6px 8px;font-size:12.5px}
+.ocrinline select{max-width:200px}
 .dtcmp{grid-column:1/-1;font-size:11px;color:var(--mut);padding:2px 2px 6px;border-bottom:1px solid var(--line);margin-top:-6px}
 .useg{display:flex;gap:6px;margin:-2px 0 10px}
 .useg button{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 13px;font-size:12px;font-weight:700}
@@ -2401,7 +2405,7 @@ RENDER.usage = async (el)=>{
     const t=g[k]??(g[k]={sid:r.supplier_id,item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,lastD:'',lastP:0,hist:[]});
     const amt=num(r.qty)*num(r.price)-num(r.discount);
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
-    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),br:r.branch});
+    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),br:r.branch,bn:num(r.bill_no)||1});
     if(r.d>=t.lastD){ t.lastD=r.d; t.lastP=num(r.price); }
   });
   const pg={};
@@ -2413,7 +2417,7 @@ RENDER.usage = async (el)=>{
     const t=gi[k]??(gi[k]={item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,sups:{},hist:[]});
     const amt=num(r.qty)*num(r.price)-num(r.discount);
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
-    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),sid:r.supplier_id,br:r.branch});
+    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),sid:r.supplier_id,br:r.branch,bn:num(r.bill_no)||1});
     const sp=t.sups[r.supplier_id]??(t.sups[r.supplier_id]={qty:0,baht:0,lastD:'',lastP:0});
     sp.qty+=num(r.qty); sp.baht+=amt;
     if(r.d>=sp.lastD){ sp.lastD=r.d; sp.lastP=num(r.price); }
@@ -2506,10 +2510,11 @@ function usageDetailItem(k){
     </table></div>
     <div class="twrap" style="max-height:34dvh;overflow-y:auto;margin-top:10px"><table>
       <tr><th>วันที่</th><th>ซัพ</th>${S.br==='ALL'?'<th>สาขา</th>':''}<th class="right">จำนวน</th><th class="right">ราคา</th></tr>
-      ${hist.map(h=>`<tr style="cursor:pointer" onclick="closeModal();${S.br==='ALL'&&h.br?`pickBranch('${h.br}');`:''}S.dtDate='${h.d}';S.dtSup=${h.sid};show('detail')">
+      ${hist.map(h=>`<tr style="cursor:pointer" onclick="closeModal();${S.br==='ALL'&&h.br?`pickBranch('${h.br}');`:''}S.dtDate='${h.d}';S.dtSup=${h.sid};S._dtForceBn=${h.bn||1};show('detail')">
         <td>${thDate(h.d)}</td><td class="xs">${esc((S.core.supById[h.sid]||{}).name||'?')}</td>${S.br==='ALL'?`<td class="xs mut">${esc(h.br||'')}</td>`:''}
         <td class="n">${fmt(h.qty,Math.abs(h.qty%1)>0.004?2:0)}</td><td class="n">${fmt(h.price,2)}</td></tr>`).join('')}
     </table></div>
+    <div class="xs mut" style="margin-top:8px">แตะบรรทัดเพื่อเปิดบิลใบนั้น (ตรงเป๊ะแม้วันนั้นมีหลายบิล)</div>
     <button class="btn sm2" style="width:100%;margin-top:10px" onclick="closeModal()">ปิด</button>`);
 }
 function usageDetail(k){
@@ -2521,11 +2526,11 @@ function usageDetail(k){
     <div class="sm mut" style="margin:-6px 0 10px">รวม <b>${fmt(t.qty,Math.abs(t.qty%1)>0.004?2:0)} ${esc(t.unit)}</b> · เฉลี่ย ${fmt(t.qty/U.dd,2)}/วัน · ราคาเฉลี่ย ฿${fmt(avgP,2)}/${esc(t.unit)}</div>
     <div class="twrap" style="max-height:44dvh;overflow-y:auto"><table>
       <tr><th>วันที่</th><th class="right">จำนวน</th><th class="right">ราคา/หน่วย</th><th class="right">รวม</th></tr>
-      ${hist.map(h=>`<tr style="cursor:pointer" onclick="closeModal();S.dtDate='${h.d}';S.dtSup=${t.sid};show('detail')">
+      ${hist.map(h=>`<tr style="cursor:pointer" onclick="closeModal();S.dtDate='${h.d}';S.dtSup=${t.sid};S._dtForceBn=${h.bn||1};show('detail')">
         <td>${thDate(h.d)}</td><td class="n">${fmt(h.qty,Math.abs(h.qty%1)>0.004?2:0)} ${esc(t.unit)}</td>
         <td class="n">${fmt(h.price,2)}</td><td class="n">${fmt(h.qty*h.price,2)}</td></tr>`).join('')}
     </table></div>
-    <div class="xs mut" style="margin-top:8px">แตะบรรทัดเพื่อเปิดบิลวันนั้นในหน้ารายละเอียด</div>
+    <div class="xs mut" style="margin-top:8px">แตะบรรทัดเพื่อเปิดบิลใบนั้น (ตรงเป๊ะแม้วันนั้นมีหลายบิล)</div>
     <button class="btn sm2" style="width:100%;margin-top:10px" onclick="closeModal()">ปิด</button>`);
 }
 const DT_UNITS_DEFAULT=['กก.','ชิ้น','แพ็ค','ลัง','ถุง','ขวด','กระป๋อง','กล่อง','ลิตร','มัด','ตัว','กระสอบ'];
@@ -2890,7 +2895,7 @@ function dtOcrApply(j){
     const pm=poolByNorm.get(ocrNorm(r0.matched_item||''))||poolByNorm.get(ocrNorm(billName));
     if(pm){ lines.push({item:pm.item,qty,unit:pm.unit||bu,price,discount:disc||''}); return; }
     unm++;
-    lines.push({item:billName,qty,unit:bu||'ชิ้น',price,discount:disc||'',_unm:true,_bu:bu});
+    lines.push({item:billName,qty,unit:bu||'ชิ้น',price,discount:disc||'',_unm:true,_bu:bu,_billName:billName});
   });
   S.dtLines=lines;
   if(j.vat_mode&&['none','ex','inc'].includes(j.vat_mode)){ S.dtVat=j.vat_mode; renderDtVatBtns(); }
@@ -2906,8 +2911,7 @@ function dtOcrApply(j){
   if(bt&&Math.abs(bt-myTot)>1) msg+=` · <b style="color:var(--bad)">⚠ ยอดที่คำนวณ ฿${fmt(myTot,2)} ≠ ยอดบนบิล ฿${fmt(bt,2)} — ตรวจตัวเลขก่อนบันทึก</b>`;
   else if(bt) msg+=` · ยอดตรงกับบิล ฿${fmt(bt,2)} ✅`;
   if(tn)tn.innerHTML=msg;
-  dtOcrMapRender();
-  toast(unm?`อ่านบิลแล้ว — เหลือผูกชื่อ ${unm} ตัว`:'อ่านบิลสำเร็จ ตรวจแล้วกดบันทึกได้เลย ✅');
+  toast(unm?`อ่านบิลแล้ว — เหลือผูกชื่อ ${unm} ตัว (ดูแถบเหลืองใต้แต่ละแถว)`:'อ่านบิลสำเร็จ ตรวจแล้วกดบันทึกได้เลย ✅');
 }
 function supGuess(name){ // เรียงซัพตามความคล้ายชื่อบนหัวบิล
   const n=ocrNorm(name).replace(/บริษัท|จำกัด|ห้างหุ้นส่วน|ร้าน/g,'').trim();
@@ -2944,26 +2948,6 @@ function ocrPendingBanner(){
     <button class="hintlink" onclick="ocrSupModal()">เลือกจากรายการ</button>
     <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="S._ocrPending=null;ocrPendingBanner();toast('ทิ้งผลสแกนแล้ว')">✕ ทิ้งผลสแกน</button></div></div>`;
 }
-function dtOcrMapRender(){
-  const el=document.getElementById('dtOcrMap'); if(!el)return;
-  const un=S.dtLines.map((l,i)=>({l,i})).filter(x=>x.l._unm);
-  if(!un.length){ el.innerHTML=''; return; }
-  const pool=dtPoolNames();
-  el.innerHTML=`<div class="ocrmap">${un.map(x=>`
-    <div class="ocrrow" id="omr${x.i}">
-      <div class="xs"><b>ชื่อจากบิล:</b> "${esc(x.l.item)}" · ${fmt(num(x.l.qty),2)} ${esc(x.l._bu||'')} × ฿${fmt(num(x.l.price),2)}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">
-        <select id="oms${x.i}" onchange="dtOcrSelChg(${x.i})" style="max-width:220px">
-          <option value="">— เลือกสินค้าในแอพ —</option>
-          ${pool.map(p2=>`<option value="${esc(p2.item)}" data-unit="${esc(p2.unit||'')}">${esc(p2.item)}${p2.unit?` (${esc(p2.unit)})`:''}</option>`).join('')}
-          <option value="__new__">➕ เก็บเป็นสินค้าใหม่ชื่อนี้</option>
-        </select>
-        <span id="omf${x.i}" style="display:none;align-items:center;gap:5px" class="xs">
-          1 ${esc(x.l._bu||'หน่วยบิล')} = <input type="number" step="any" id="omv${x.i}" value="1" style="width:64px;text-align:right;padding:6px"> <span id="omu${x.i}"></span></span>
-        <button class="btn dk sm2" onclick="dtOcrBind(${x.i})">ผูกชื่อ</button>
-      </div>
-    </div>`).join('')}</div>`;
-}
 function dtOcrSelChg(i){
   const sel2=document.getElementById('oms'+i);
   const opt=sel2.selectedOptions[0];
@@ -2980,9 +2964,9 @@ async function dtOcrBind(i){
   const sel2=document.getElementById('oms'+i);
   const v=sel2.value;
   if(!v){toast('เลือกสินค้าก่อนครับ',true);return;}
-  const billName=l.item, bu=l._bu||l.unit;
+  const billName=l._billName||l.item, bu=l._bu||l.unit; // ยึดชื่อดิบจากบิลจริง แม้จะเผลอแก้ในตารางไปแล้ว
   let item, unit, factor=1;
-  if(v==='__new__'){ item=billName; unit=l.unit; }
+  if(v==='__new__'){ item=l.item||billName; unit=l.unit; }
   else{
     item=v; unit=sel2.selectedOptions[0].dataset.unit||l.unit;
     const fEl=document.getElementById('omv'+i);
@@ -2991,8 +2975,8 @@ async function dtOcrBind(i){
   // แปลงบรรทัด: จำนวน×factor · ราคา÷factor (ยอดบรรทัดเท่าบิลเป๊ะ)
   l.item=item; l.unit=unit;
   if(factor!==1){ l.qty=num(l.qty)*factor; l.price=num(l.price)/factor; }
-  delete l._unm; delete l._bu;
-  renderDtLines(); dtOcrMapRender();
+  delete l._unm; delete l._bu; delete l._billName;
+  renderDtLines();
   try{
     await ins('pnl_item_alias',{supplier_id:S.dtSup,alias:billName,item,unit,bill_unit:bu||null,factor});
     S._dtAlias=[...(S._dtAlias||[]),{supplier_id:S.dtSup,alias:billName,item,unit,bill_unit:bu,factor}];
@@ -3068,6 +3052,21 @@ function dtTotals(){
   if(btn)btn.textContent=`💾 บันทึก + ลงรายจ่าย ${thDate(S.dtDate)} · ฿${fmt(net,2)}`;
   return net;
 }
+function ocrInlineHTML(l,i){ // แถบผูกชื่อ ฝังตรงใต้แถวของมันเอง (ไม่ต้องเหลือบมองกล่องแยกที่อื่น)
+  if(!l._unm)return '';
+  const pool=dtPoolNames();
+  return `<div class="ocrinline" id="omr${i}">
+    <span class="xs"><b>🧾 จากบิล:</b> "${esc(l._billName||l.item)}"</span>
+    <select id="oms${i}" onchange="dtOcrSelChg(${i})">
+      <option value="">— เลือกสินค้าในแอพ —</option>
+      ${pool.map(p2=>`<option value="${esc(p2.item)}" data-unit="${esc(p2.unit||'')}">${esc(p2.item)}${p2.unit?` (${esc(p2.unit)})`:''}</option>`).join('')}
+      <option value="__new__">➕ เก็บเป็นสินค้าใหม่ชื่อนี้</option>
+    </select>
+    <span id="omf${i}" style="display:none;align-items:center;gap:5px" class="xs">
+      1 ${esc(l._bu||'หน่วยบิล')} = <input type="number" step="any" id="omv${i}" value="1" style="width:56px;text-align:right;padding:5px"> <span id="omu${i}"></span></span>
+    <button class="btn dk sm2" onclick="dtOcrBind(${i})">ผูกชื่อ</button>
+  </div>`;
+}
 function renderDtLines(focusLast){
   const el=document.getElementById('dtLines'); if(!el)return;
   el.innerHTML=S.dtLines.map((l,i)=>`
@@ -3079,7 +3078,7 @@ function renderDtLines(focusLast){
       <input type="number" step="any" inputmode="decimal" placeholder="0" id="dtd${i}" value="${l.discount||''}" oninput="dtEdit(${i},'discount',this.value)">
       <span class="num b" id="dtt${i}">–</span>
       <button class="mvbtn" style="color:var(--bad)" onclick="dtDelLine(${i})">✕</button>
-    </div><div class="dtcmp" id="dtc${i}" style="display:none"></div>`).join('');
+    </div><div class="dtcmp" id="dtc${i}" style="display:none"></div>${ocrInlineHTML(l,i)}`).join('');
   dtTotals();
   S.dtLines.forEach((_,i)=>dtCmpFill(i));
   if(focusLast){ const rows=el.querySelectorAll('.dtrow'); const last=rows[rows.length-1]; if(last){const f=last.querySelector('input'); f&&f.focus();} }
