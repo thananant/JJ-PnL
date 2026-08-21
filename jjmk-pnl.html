@@ -2463,17 +2463,22 @@ RENDER.set = async (el)=>{
   </div>
   <div>
     <div class="card"><h3>ซัพพลายเออร์ <span class="sp"><button class="hintlink" onclick="supModal(null)">+ เพิ่ม</button></span></h3>
+      <div class="xs mut" style="margin:-4px 0 8px">▲▼ จัดลำดับ — มีผลกับหน้ารายจ่าย รายละเอียดบิล และรายงานทุกหน้า</div>
       <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
       ${(()=>{
         const act=S.core.sup.filter(x=>x.active), inact=S.core.sup.filter(x=>!x.active);
-        const row=s=>`<tr style="${s.active?'':'opacity:.45'}"><td><div class="b sm">${esc(s.name)}</div>
+        const row=(s,i,n)=>`<tr style="${s.active?'':'opacity:.45'}"><td><div class="b sm">${esc(s.name)}</div>
         <div class="xs mut">${esc(s.category)} · ${esc(s.payment_term||'-')} · ${esc(s.vat_type)}</div></td>
-        <td class="right" style="white-space:nowrap"><button class="hintlink" onclick="supModal(${s.id})">แก้ไข</button>${s.active
-          ?`<button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="supDel(${s.id})">ลบ</button>`
-          :`<button class="hintlink" style="color:var(--ok);margin-left:8px" onclick="supRestore(${s.id})">กู้คืน</button>
+        <td class="right" style="white-space:nowrap">${s.active
+          ?`<button class="mvbtn" ${i===0?'disabled':''} onclick="supMove(${s.id},-1)">▲</button>
+            <button class="mvbtn" ${i===n-1?'disabled':''} onclick="supMove(${s.id},1)">▼</button>
+            <button class="hintlink" style="margin-left:8px" onclick="supModal(${s.id})">แก้ไข</button>
+            <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="supDel(${s.id})">ลบ</button>`
+          :`<button class="hintlink" onclick="supModal(${s.id})">แก้ไข</button>
+            <button class="hintlink" style="color:var(--ok);margin-left:8px" onclick="supRestore(${s.id})">กู้คืน</button>
             <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="supDelHard(${s.id})">ลบถาวร</button>`}</td></tr>`;
-        return act.map(row).join('')
-          +(inact.length?`<tr class="cat"><td colspan="2">🗑 เลิกใช้แล้ว <span class="xs" style="font-weight:500;opacity:.7">· ${inact.length} ราย (เก็บประวัติไว้)</span></td></tr>`+inact.map(row).join(''):'');
+        return act.map((s,i)=>row(s,i,act.length)).join('')
+          +(inact.length?`<tr class="cat"><td colspan="2">🗑 เลิกใช้แล้ว <span class="xs" style="font-weight:500;opacity:.7">· ${inact.length} ราย (เก็บประวัติไว้)</span></td></tr>`+inact.map(s=>row(s,0,0)).join(''):'');
       })()}
       </table></div></div>
     <div class="card"><h3>รายการ Fix cost · ${BRNAME[S.br]} <span class="sp"><button class="hintlink" onclick="fixModal(null)">+ เพิ่ม</button></span></h3>
@@ -2503,6 +2508,21 @@ RENDER.set = async (el)=>{
   </div></div>`;
   loadHistList();
 };
+async function supMove(id,dir){
+  const act=S.core.sup.filter(x=>x.active);
+  if(act.some((x,i)=>i>0&&num(x.sort)===num(act[i-1].sort))){ // renorm ถ้าลำดับซ้ำ
+    act.forEach((x,i)=>x.sort=(i+1)*10);
+    await Promise.all(act.map(x=>upd('pnl_suppliers','id=eq.'+x.id,{sort:x.sort})));
+  }
+  const i=act.findIndex(x=>x.id===id), j=i+dir;
+  if(i<0||j<0||j>=act.length)return;
+  const t=act[i].sort; act[i].sort=act[j].sort; act[j].sort=t;
+  await Promise.all([
+    upd('pnl_suppliers','id=eq.'+act[i].id,{sort:act[i].sort}),
+    upd('pnl_suppliers','id=eq.'+act[j].id,{sort:act[j].sort})
+  ]);
+  await loadCore(); show('set');
+}
 async function supDel(id){
   const sp=S.core.supById[id]; if(!sp)return;
   if(!confirm('ลบ "'+sp.name+'" ?\n\n• ข้อมูลเก่าไม่หาย — เดือนที่เคยมียอด เปิดย้อนหลังยังเห็นครบ\n• เดือนใหม่จะไม่ขึ้นในหน้ากรอกอีก\n• กดกู้คืนได้ทุกเมื่อ'))return;
