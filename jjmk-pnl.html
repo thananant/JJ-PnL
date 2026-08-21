@@ -173,6 +173,10 @@ details>summary::-webkit-details-marker{display:none}
 .useg{display:flex;gap:6px;margin:-2px 0 10px}
 .useg button{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 13px;font-size:12px;font-weight:700}
 .useg button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.unitwrap{display:flex;flex-wrap:wrap;gap:7px}
+.unitchip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 8px 6px 13px;font-size:13px;font-weight:600}
+.unitchip button{color:var(--bad);font-weight:800;font-size:13px;padding:0 4px;border-radius:50%}
+.unitchip button:hover{background:#FBE7E2}
 #loginOv{position:fixed;inset:0;background:linear-gradient(150deg,#2E1414,#5A1E20);display:none;align-items:center;justify-content:center;z-index:999;padding:18px}
 .logincard{background:#FFFDF8;border-radius:20px;padding:26px 24px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
 .pgrid{display:grid;grid-template-columns:1fr 64px 64px 64px;gap:4px;align-items:center;font-size:12.5px}
@@ -610,7 +614,8 @@ async function loadCore(){
     b.avg = b.list.reduce((a,c)=>a+c,0)/b.list.length;
     b.min = Math.min(...b.list);
   });
-  S.core = { sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix,
+  const units=await sel('pnl_units','select=*&order=sort').catch(()=>null);
+  S.core = { units, sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix,
     branches:(brs&&brs.length?brs:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]),
     fixGroups: fgs||[] };
   S.core.branches.forEach(b=>{ if(b.name) BRNAME[b.code]='สาขา'+b.name; });
@@ -2210,7 +2215,10 @@ function usageDetail(k){
     <div class="xs mut" style="margin-top:8px">แตะบรรทัดเพื่อเปิดบิลวันนั้นในหน้ารายละเอียด</div>
     <button class="btn sm2" style="width:100%;margin-top:10px" onclick="closeModal()">ปิด</button>`);
 }
-const DT_UNITS=['กก.','ชิ้น','แพ็ค','ลัง','ถุง','ขวด','กระป๋อง','กล่อง','ลิตร','มัด','ตัว','กระสอบ'];
+const DT_UNITS_DEFAULT=['กก.','ชิ้น','แพ็ค','ลัง','ถุง','ขวด','กระป๋อง','กล่อง','ลิตร','มัด','ตัว','กระสอบ'];
+function unitList(){
+  return (S.core&&S.core.units&&S.core.units.length)?S.core.units.map(u=>u.name):DT_UNITS_DEFAULT;
+}
 RENDER.detail = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=allNotice('บันทึกข้อมูลบิล'); return; }
   if(!S.dtDate) S.dtDate=todayStr();
@@ -2254,7 +2262,7 @@ RENDER.detail = async (el)=>{
   </div>
   <div class="card"><h3>บิลที่มีรายละเอียดแล้ว · ${monthLabel(S.m)}</h3><div id="dtList"><div class="spin"></div></div></div>
   <datalist id="dtItemsDL"></datalist>
-  <datalist id="dtUnitsDL">${DT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>`;
+  <datalist id="dtUnitsDL">${unitList().map(u=>`<option value="${esc(u)}">`).join('')}</datalist>`;
   renderDtLines(); dtMonthList();
   if(S.dtSup) dtLoad(); else document.getElementById('dtCur').textContent='';
 };
@@ -3222,6 +3230,17 @@ RENDER.set = async (el)=>{
         <button class="btn gh sm2" onclick="exportAll()">📦 สำรองทั้งหมดทุกตาราง (.xlsx)</button></div></div>
   </div>
   <div>
+    <div class="card"><h3>📏 หน่วยสินค้า</h3>
+      <div class="xs mut" style="margin:-4px 0 8px">ใช้เป็นตัวเลือกหน่วยในหน้าบันทึกข้อมูลบิล / รายการสินค้าประจำ (ลบแล้วข้อมูลบิลเก่าไม่หาย แค่หายจากตัวเลือก)</div>
+      ${S.core.units===null
+        ?`<div class="xs mut">ยังไม่ได้เปิดระบบหน่วย — รัน <b>jjmk_pnl_units.sql</b> ใน Supabase แล้วรีเฟรช (ตอนนี้ใช้ชุดมาตรฐาน: ${DT_UNITS_DEFAULT.join(' · ')})</div>`
+        :`<div class="unitwrap">${(S.core.units||[]).map(u=>`<span class="unitchip">${esc(u.name)}
+            <button onclick="unitDel(${u.id},'${esc(u.name)}')">✕</button></span>`).join('')}</div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <input id="unitNew" placeholder="เช่น โหล / แผง / กิโล" style="max-width:200px"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();unitAdd();}">
+            <button class="btn dk sm2" onclick="unitAdd()">➕ เพิ่มหน่วย</button></div>`}
+    </div>
     <div class="card"><h3>ซัพพลายเออร์ <span class="sp"><button class="hintlink" onclick="supModal(null)">+ เพิ่ม</button></span></h3>
       <div class="xs mut" style="margin:-4px 0 8px">▲▼ จัดลำดับ — มีผลทุกหน้า · <b>แตะชื่อซัพ = ตั้งรายการสินค้าประจำ</b> (ขึ้นอัตโนมัติตอนบันทึกข้อมูลบิล)</div>
       <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
@@ -3265,6 +3284,28 @@ RENDER.set = async (el)=>{
   loadHistList();
   if(S.user&&S.user.role==='admin'&&!S.user.legacy){ userLoad(); actLoad(); }
 };
+async function unitAdd(){
+  const inp=document.getElementById('unitNew');
+  const name=(inp.value||'').trim();
+  if(!name){toast('พิมพ์ชื่อหน่วยก่อนครับ',true);return;}
+  if(unitList().includes(name)){toast('มีหน่วยนี้อยู่แล้ว',true);return;}
+  try{
+    const mx=(S.core.units||[]).reduce((a,u)=>Math.max(a,num(u.sort)),0);
+    await ins('pnl_units',{name,sort:mx+10});
+    S.core.units=await sel('pnl_units','select=*&order=sort');
+    toast('เพิ่มหน่วย "'+name+'" แล้ว');
+    show('set');
+  }catch(e){ toast('เพิ่มไม่สำเร็จ: '+e.message,true); }
+}
+async function unitDel(id,name){
+  if(!confirm(`ลบหน่วย "${name}" ออกจากตัวเลือก?\n(บิลเก่าที่ใช้หน่วยนี้ไม่หาย)`))return;
+  try{
+    await delQ('pnl_units','id=eq.'+id);
+    S.core.units=await sel('pnl_units','select=*&order=sort');
+    toast('ลบหน่วย "'+name+'" แล้ว');
+    show('set');
+  }catch(e){ toast('ลบไม่สำเร็จ: '+e.message,true); }
+}
 async function supItemsModal(id){
   const sp=S.core.supById[id]; if(!sp)return;
   let rows=[];
@@ -3288,7 +3329,7 @@ async function supItemsModal(id){
       <button class="btn gh sm2" onclick="siAdd()">➕ เพิ่มรายการ</button>
       <button class="btn gh sm2" onclick="siPull()">⤵ ดึงจากบิลเก่า</button>
       <button class="btn dk sm2" style="margin-left:auto" onclick="siSave()">💾 บันทึก</button></div>
-    <datalist id="siUnitsDL">${DT_UNITS.map(u=>`<option value="${u}">`).join('')}</datalist>
+    <datalist id="siUnitsDL">${unitList().map(u=>`<option value="${esc(u)}">`).join('')}</datalist>
     ${autoPulled?`<div class="xs" style="color:#8A6A12;margin-top:8px">⤵ ดึงรายการจากบิลเก่าให้อัตโนมัติแล้ว ${S._si.rows.length} ตัว — ตรวจแล้วกด <b>บันทึก</b> เพื่อเก็บเป็นรายการประจำ</div>`:''}`);
   siRender();
 }
