@@ -380,6 +380,8 @@ tr:last-child td{border-bottom:none}
 @keyframes sp{to{transform:rotate(360deg)}}
 .empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13.5px}
 canvas{max-width:100%}
+.linebox{position:relative;height:clamp(230px,30vh,330px);width:100%}
+.linebox canvas{width:100%!important;height:100%!important}
 </style>
 </head>
 <body>
@@ -888,7 +890,7 @@ function userModal(id){
       <div class="fld"><label>Username</label><input id="umUser" value="${esc(u.username)}" ${id?'disabled':''} placeholder="อังกฤษ/ตัวเลข"></div>
     </div>
     <div class="grid2">
-      <div class="fld"><label>รหัสผ่าน ${id?'(เว้นว่าง = ไม่เปลี่ยน)':''}</label><input id="umPass" type="password" placeholder="${id?'••••••••':'อย่างน้อย 4 ตัว'}"></div>
+      <div class="fld"><label>รหัสผ่าน ${id?'(เว้นว่าง = ไม่เปลี่ยน)':''}</label><input id="umPass" type="password" autocomplete="new-password" data-lpignore="true" placeholder="${id?'••••••••':'อย่างน้อย 4 ตัว'}"></div>
       <div class="fld"><label>บทบาท</label><select id="umRole" onchange="document.getElementById('umPerms').style.opacity=this.value==='admin'?.35:1">
         <option value="staff" ${u.role!=='admin'?'selected':''}>พนักงาน (กำหนดสิทธิ์รายเมนู)</option>
         <option value="admin" ${u.role==='admin'?'selected':''}>ผู้ดูแลระบบ (ทุกสิทธิ์)</option></select></div>
@@ -933,8 +935,8 @@ async function userSave(id){
 }
 function pwModal(){
   openModal(`<h3>🔑 เปลี่ยนรหัสผ่าน</h3>
-    <div class="fld"><label>รหัสผ่านใหม่ (อย่างน้อย 4 ตัว)</label><input id="pw1" type="password"></div>
-    <div class="fld"><label>ยืนยันอีกครั้ง</label><input id="pw2" type="password"></div>
+    <div class="fld"><label>รหัสผ่านใหม่ (อย่างน้อย 4 ตัว)</label><input id="pw1" type="password" autocomplete="new-password" data-lpignore="true"></div>
+    <div class="fld"><label>ยืนยันอีกครั้ง</label><input id="pw2" type="password" autocomplete="new-password" data-lpignore="true"></div>
     <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
       <button class="btn dk sm2" style="margin-left:auto" onclick="pwSave()">บันทึก</button></div>`);
 }
@@ -977,20 +979,49 @@ async function authGate(){
     return true;
   }
   const saved=LS.get('jjpnl_auth',null);
+  const IDLE_MS=30*60*1000; // ไม่ใช้เกิน 30 นาที = ต้องใส่รหัสใหม่
   if(saved&&saved.u){
-    try{
-      const rows=await sel('pnl_users','select=*&username=eq.'+encodeURIComponent(saved.u));
-      const u=rows[0];
-      if(u&&u.active&&u.pass_hash===saved.h){ setUser(u); return true; }
-    }catch(e){}
-    LS.set('jjpnl_auth',null);
+    if(!saved.t || Date.now()-saved.t>IDLE_MS){
+      LS.set('jjpnl_auth',null); // หมดเวลา — เด้งไป login
+    }else{
+      try{
+        const rows=await sel('pnl_users','select=*&username=eq.'+encodeURIComponent(saved.u));
+        const u=rows[0];
+        if(u&&u.active&&u.pass_hash===saved.h){ setUser(u); startIdleWatch(); return true; }
+      }catch(e){}
+      LS.set('jjpnl_auth',null);
+    }
   }
   showLogin(probe.length===0);
   return false;
 }
 function setUser(u){
   S.user={id:u.id,username:u.username,display_name:u.display_name,role:u.role,perms:u.perms||{}};
-  LS.set('jjpnl_auth',{u:u.username,h:u.pass_hash});
+  LS.set('jjpnl_auth',{u:u.username,h:u.pass_hash,t:Date.now()});
+  startIdleWatch();
+}
+function touchAuth(){ // ต่ออายุเมื่อมีการใช้งาน (เขียนไม่ถี่เกิน 30 วิ)
+  if(!S.user||S.user.legacy)return;
+  const now=Date.now();
+  if(S._lastTouch&&now-S._lastTouch<30000)return;
+  S._lastTouch=now;
+  const a=LS.get('jjpnl_auth',null);
+  if(a&&a.u)LS.set('jjpnl_auth',{...a,t:now});
+}
+function idleCheck(){
+  if(!S.user||S.user.legacy)return;
+  const a=LS.get('jjpnl_auth',null);
+  if(!a||!a.t||Date.now()-a.t>30*60*1000){
+    LS.set('jjpnl_auth',null);
+    location.reload(); // กลับสู่หน้า login
+  }
+}
+function startIdleWatch(){
+  if(S._idleInit)return; S._idleInit=true;
+  ['click','keydown','touchstart','pointerdown'].forEach(ev=>
+    document.addEventListener(ev,touchAuth,{passive:true}));
+  setInterval(idleCheck, 60000);
+  touchAuth();
 }
 function showLogin(firstRun){
   let ov=document.getElementById('loginOv');
@@ -998,9 +1029,11 @@ function showLogin(firstRun){
   ov.innerHTML=`<div class="logincard">
     <div style="font-family:'Prompt';font-weight:800;font-size:21px">🏮 JJ P&L</div>
     <div class="sm mut" style="margin:2px 0 14px">${firstRun?'ยังไม่มีผู้ใช้ — สร้างบัญชีผู้ดูแลคนแรก':'เข้าสู่ระบบ จริงใจหมูกระทะ'}</div>
-    ${firstRun?`<div class="fld"><label>ชื่อที่แสดง</label><input id="lgName" placeholder="เช่น แพท"></div>`:''}
-    <div class="fld"><label>Username</label><input id="lgU" autocomplete="username" placeholder="username"></div>
-    <div class="fld"><label>Password</label><input id="lgP" type="password" autocomplete="current-password" placeholder="••••••••"
+    ${firstRun?`<div class="fld"><label>ชื่อที่แสดง</label><input id="lgName" placeholder="เช่น แพท" autocomplete="off"></div>`:''}
+    <div class="fld"><label>Username</label><input id="lgU" autocomplete="off" name="jj_u_${Date.now()%9999}" data-lpignore="true" data-1p-ignore placeholder="username"></div>
+    <div class="fld"><label>Password <span class="xs mut" style="font-weight:500">(พิมพ์เองทุกครั้ง)</span></label>
+      <input id="lgP" type="password" autocomplete="new-password" name="jj_p_${Date.now()%9999}" data-lpignore="true" data-1p-ignore
+      readonly onfocus="this.removeAttribute('readonly')" placeholder="••••••••"
       onkeydown="if(event.key==='Enter')${firstRun?'createAdmin()':'doLogin()'}"></div>
     <button class="btn dk" style="width:100%;margin-top:6px" onclick="${firstRun?'createAdmin()':'doLogin()'}">${firstRun?'สร้างบัญชี admin':'เข้าสู่ระบบ'}</button>
     <div id="lgMsg" class="xs" style="color:var(--bad);margin-top:8px;min-height:14px"></div>
@@ -1135,7 +1168,7 @@ RENDER.dash = async (el)=>{
       <div class="douRow"><div class="douBox"><canvas id="chRev"></canvas></div><div id="revPct" class="plist"></div></div></div>
   </div>
   <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3>
-    <div class="avgrow" id="avgRow"></div><canvas id="chLine" height="190"></canvas></div>
+    <div class="avgrow" id="avgRow"></div><div class="linebox"><canvas id="chLine"></canvas></div></div>
   <div class="card"><h3>ยอดขายดิบรายวัน (POS แยกกะ) <span class="sp">${monthLabel(S.m)}</span></h3>
     ${salesRepHTML(A.c, A.days)}
   </div>
@@ -1303,7 +1336,8 @@ function drawDash(A){
         {data:A.daily,backgroundColor:A.daily.map((_,i)=>isHeavy(i)?'#C62127':'#E5B4B6'),borderRadius:4,order:1},
         mkLine(avAll,'#5B5348'), mkLine(avWk,'#D89094'), mkLine(avHv,'#C62127')
       ]},
-      options:{plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
         scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
   }
   buildDou('cost', document.getElementById('chDou'), false);
