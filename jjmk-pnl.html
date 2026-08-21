@@ -176,6 +176,7 @@ details>summary::-webkit-details-marker{display:none}
 .vatrow{display:flex;gap:6px;align-items:center;margin:-2px 0 10px;flex-wrap:wrap}
 .vch{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 12px;font-size:12px;font-weight:700}
 .vch.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.dtrow.unm input{background:#FFF3C9}
 .dtcmp{grid-column:1/-1;font-size:11px;color:var(--mut);padding:2px 2px 6px;border-bottom:1px solid var(--line);margin-top:-6px}
 .useg{display:flex;gap:6px;margin:-2px 0 10px}
 .useg button{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 13px;font-size:12px;font-weight:700}
@@ -185,6 +186,10 @@ details>summary::-webkit-details-marker{display:none}
 .unitchip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 8px 6px 13px;font-size:13px;font-weight:600}
 .unitchip button{color:var(--bad);font-weight:800;font-size:13px;padding:0 4px;border-radius:50%}
 .unitchip button:hover{background:#FBE7E2}
+.ocrmap{background:#FFF6DC;border:1.5px solid #E8CE8E;border-radius:12px;padding:10px 12px;margin:0 0 10px;display:flex;flex-direction:column;gap:9px}
+.ocrrow{border-bottom:1px dashed #E8CE8E;padding-bottom:8px}
+.ocrrow:last-child{border-bottom:none;padding-bottom:0}
+.ocrmap select,.ocrmap input{padding:7px 9px;font-size:12.5px}
 .cchip{border:1.5px dashed var(--line);background:#fff;border-radius:9px;padding:4px 7px;font-size:12px}
 .cchip.on{background:#FFE9A8;border-style:solid;border-color:#E0B33C}
 .mxlg{font-size:10.5px;padding:3px 9px;border-radius:99px;border:1px solid var(--line);font-weight:600}
@@ -1384,35 +1389,25 @@ function drawDash(A){
     const avAll=avgOf(A.daily);
     const avWk=avgOf(A.daily.filter((_,i)=>!isHeavy(i)));
     const avHv=avgOf(A.daily.filter((_,i)=>isHeavy(i)));
-    // เส้น Fix cost เฉลี่ย/วันขาย + เส้นคุ้มทุน/วัน (Fix/วัน ÷ margin หลังหักต้นทุนผันแปร)
-    const fixDay = A.daysData ? A.fixT/A.daysData : 0;
-    const varRatio = A.revenue>0 ? Math.min(0.95,(A.vc||0)/A.revenue) : 0; // ต้นทุนผันแปร ÷ รายได้ก่อน VAT
-    // จุดคุ้มทุนบนแกนกราฟ (ยอดขายรวม VAT): ex-VAT คุ้มทุน ×1.07
-    const brk = (fixDay>0 && varRatio<1) ? (fixDay/(1-varRatio))*1.07 : 0;
+    // เส้น Fix cost เฉลี่ย/วัน = Fix ทั้งเดือน ÷ จำนวนวันของเดือน (ตามปฏิทิน)
+    const fixDay = A.days ? A.fixT/A.days : 0;
     const ar=document.getElementById('avgRow');
     if(ar)ar.innerHTML = avAll ? `
       <span class="avgc" style="--c:var(--ink)">เฉลี่ยทั้งเดือน <b>฿${fmtI(avAll)}</b></span>
       <span class="avgc" style="--c:#D89094">จ–พฤ <b>฿${fmtI(avWk)}</b></span>
       <span class="avgc" style="--c:var(--red)">ศ–ส–อา <b>฿${fmtI(avHv)}</b></span>
-      ${fixDay?`<span class="avgc" style="--c:#E0B33C" title="Fix cost ฿${fmtI(A.fixT)} ÷ วันขาย ${A.daysData} วัน">Fix/วัน <b>฿${fmtI(fixDay)}</b></span>`:''}
-      ${brk?`<span class="avgc" style="--c:#8B5A2B" title="Fix/วัน ÷ (1−ต้นทุนผันแปร ${pctF(varRatio)}) — ขายเกินเส้นนี้ = วันนั้นมีกำไรจริง">คุ้มทุน/วัน <b>฿${fmtI(brk)}</b></span>`:''}
-      ${brk?`<span class="xs mut" style="align-self:center">แท่ง<b style="color:#1E8A3C">เขียว</b> = ยอดขายเกินจุดคุ้มทุน → ส่วนเกินคือกำไรล้วน</span>`:''}` : '';
+      ${fixDay?`<span class="avgc" style="--c:#E0B33C" title="Fix cost ฿${fmtI(A.fixT)} ÷ ${A.days} วันของเดือน">Fix/วัน <b>฿${fmtI(fixDay)}</b></span>`:''}` : '';
     const mkLine=(v,color)=>({type:'line',data:Array(A.daily.length).fill(v||null),borderColor:color,
       borderDash:[6,4],borderWidth:1.6,pointRadius:0,pointHitRadius:0,fill:false,order:0});
-    const barBg=A.daily.map((v,i)=>{
-      if(brk&&v>=brk) return isHeavy(i)?'#1E8A3C':'#8FD6A4';
-      return isHeavy(i)?'#C62127':'#E5B4B6';
-    });
     const lineSets=[mkLine(avAll,'#5B5348'), mkLine(avWk,'#D89094'), mkLine(avHv,'#C62127')];
     if(fixDay) lineSets.push(mkLine(fixDay,'#E0B33C'));
-    if(brk) lineSets.push(mkLine(brk,'#8B5A2B'));
     S.charts.line=new Chart(lc,{type:'bar',data:{labels:A.daily.map((_,i)=>i+1),
       datasets:[
-        {data:A.daily,backgroundColor:barBg,borderRadius:4,order:1},
+        {data:A.daily,backgroundColor:A.daily.map((_,i)=>isHeavy(i)?'#C62127':'#E5B4B6'),borderRadius:4,order:1},
         ...lineSets
       ]},
       options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)+(brk?(c.raw>=brk?' · ✅ เกินคุ้มทุน':' · ยังไม่ถึงคุ้มทุน'):'')}}},
+        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)}}},
         scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
   }
   buildDou('cost', document.getElementById('chDou'), false);
@@ -2472,6 +2467,11 @@ RENDER.detail = async (el)=>{
     <div id="dtCur" class="xs mut" style="margin-top:8px"></div>
   </div>
   <div class="card"><h3>รายการสินค้าในบิล <span class="sp" id="dtSupName">${S.dtSup?esc((S.core.supById[S.dtSup]||{}).name||''):''}</span></h3>
+    <div style="display:flex;gap:8px;align-items:center;margin:0 0 8px;flex-wrap:wrap">
+      <button class="btn gh sm2" onclick="document.getElementById('dtOcrFile').click()">📷 สแกนบิล (ถ่ายรูป/เลือกรูป)</button>
+      <span class="xs mut">อ่านรายการ+ยอดจากรูปบิลอัตโนมัติ · ชื่อยึดตามในแอพ ตัวไหนใหม่ให้ผูกครั้งเดียวจำตลอด</span>
+      <input type="file" id="dtOcrFile" accept="image/*" capture="environment" style="display:none" onchange="dtOcrPick(this)"></div>
+    <div id="dtOcrMap"></div>
     <div id="dtBillTabs" class="useg" style="margin:0 0 8px"></div>
     <div class="vatrow"><span class="xs mut" style="font-weight:700">VAT:</span>
       <button class="vch" data-vm="none" onclick="dtVatSet('none')">ไม่มี VAT</button>
@@ -2520,6 +2520,7 @@ async function dtHist(){
       .catch(()=>sel('pnl_bill_items',`select=item,unit,price,qty,d,sort,discount&supplier_id=eq.${S.dtSup}&branch=eq.${S.br}&order=d.desc,sort.asc&limit=600`)
       .catch(()=>sel('pnl_bill_items',`select=item,unit,price,qty,d,sort&supplier_id=eq.${S.dtSup}&branch=eq.${S.br}&order=d.desc,sort.asc&limit=600`)));
     S._dtCat=await sel('pnl_sup_items',`select=*&supplier_id=eq.${S.dtSup}&order=sort`).catch(()=>[]);
+    S._dtAlias=await sel('pnl_item_alias',`select=*&supplier_id=eq.${S.dtSup}`).catch(()=>null);
     // ประวัติทั้งสาขา (ทุกซัพ) — ใช้เทียบราคาข้ามซัพ + รวมชื่อสินค้าให้พิมพ์ตรงกัน
     S._dtAll=await sel('pnl_bill_items',`select=supplier_id,item,unit,price,d&branch=eq.${S.br}&order=d.desc&limit=800`).catch(()=>[]);
     const dl=document.getElementById('dtItemsDL');
@@ -2670,6 +2671,144 @@ function dtVatDefault(){
   const sp=S.core.supById[S.dtSup]||{};
   return (sp.vat_type==='VAT'||sp.vat_type==='VAT / NON-VAT')?'ex':'none';
 }
+const DT_OCR_URL='https://jjmk-pnl-ocr.thananantpatt.workers.dev';
+function ocrNorm(x){ return String(x||'').trim().replace(/\s+/g,' ').toLowerCase(); }
+function dtPoolNames(){ // ชื่อสินค้าที่รู้จักของซัพนี้ (ชุดตามโหมด+ประจำ+ประวัติ)
+  const set=new Map();
+  (S._dtCat||[]).forEach(c2=>set.set(c2.item,{item:c2.item,unit:c2.unit}));
+  (S._dtRows||[]).forEach(r=>{ if(!set.has(r.item))set.set(r.item,{item:r.item,unit:r.unit}); });
+  (S.dtLines||[]).forEach(l=>{ if(l.item&&!set.has(l.item))set.set(l.item,{item:l.item,unit:l.unit}); });
+  return [...set.values()];
+}
+async function dtOcrPick(inp){
+  const f=inp.files&&inp.files[0]; inp.value='';
+  if(!f)return;
+  if(!S.dtSup){toast('เลือกซัพพลายเออร์ก่อนครับ',true);return;}
+  toast('📷 กำลังอ่านบิล... (5–15 วิ)');
+  try{
+    const b64=await dtOcrShrink(f);
+    const known=dtPoolNames();
+    const aliases=(S._dtAlias||[]).map(a=>({alias:a.alias,item:a.item}));
+    const r=await fetch(DT_OCR_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:b64.data,mime:b64.mime,knownItems:known,aliases})});
+    const j=await r.json();
+    if(!r.ok||j.error){toast('อ่านบิลไม่สำเร็จ: '+(j.error||r.status),true);return;}
+    dtOcrApply(j);
+  }catch(e){ toast('สแกนไม่สำเร็จ: '+e.message,true); }
+}
+function dtOcrShrink(file){ // ย่อรูปในเครื่องก่อนส่ง (เร็ว+ประหยัด)
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1600; let w=img.width,h=img.height;
+      if(Math.max(w,h)>MAX){const k=MAX/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k);}
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      const url=cv.toDataURL('image/jpeg',0.85);
+      res({data:url.split(',')[1],mime:'image/jpeg'});
+    };
+    img.onerror=()=>rej(new Error('อ่านรูปไม่ได้'));
+    img.src=URL.createObjectURL(file);
+  });
+}
+function dtOcrApply(j){
+  const rows=Array.isArray(j.rows)?j.rows:[];
+  if(!rows.length){toast('ไม่พบรายการสินค้าในรูป ลองถ่ายให้ชัด/เต็มใบ',true);return;}
+  const pool=dtPoolNames();
+  const poolByNorm=new Map(pool.map(p2=>[ocrNorm(p2.item),p2]));
+  const aliasByNorm=new Map((S._dtAlias||[]).map(a=>[ocrNorm(a.alias),a]));
+  const lines=[]; let unm=0;
+  rows.forEach(r0=>{
+    const billName=String(r0.name||'').trim();
+    const qty=num(r0.qty), price=num(r0.price), disc=num(r0.line_discount);
+    const bu=(r0.unit||'').trim();
+    const al=aliasByNorm.get(ocrNorm(billName));
+    if(al){ // เคยผูกไว้ -> ชื่อแอพ + แปลงหน่วยตาม factor
+      const f=num(al.factor)||1;
+      lines.push({item:al.item,qty:qty*f,unit:al.unit||bu,price:f!==1?price/f:price,discount:disc||''});
+      return;
+    }
+    const pm=poolByNorm.get(ocrNorm(r0.matched_item||''))||poolByNorm.get(ocrNorm(billName));
+    if(pm){ lines.push({item:pm.item,qty,unit:pm.unit||bu,price,discount:disc||''}); return; }
+    unm++;
+    lines.push({item:billName,qty,unit:bu||'ชิ้น',price,discount:disc||'',_unm:true,_bu:bu});
+  });
+  S.dtLines=lines;
+  if(j.vat_mode&&['none','ex','inc'].includes(j.vat_mode)){ S.dtVat=j.vat_mode; renderDtVatBtns(); }
+  S.dtBillDisc=num(j.bill_discount)||0; S.dtShip=num(j.ship_fee)||0; S.dtOther=num(j.other_fee)||0;
+  const bdi=document.getElementById('dtBillDisc'); if(bdi)bdi.value=S.dtBillDisc||'';
+  const shi=document.getElementById('dtShip'); if(shi)shi.value=S.dtShip||'';
+  const oti=document.getElementById('dtOther'); if(oti)oti.value=S.dtOther||'';
+  renderDtLines();
+  const myTot=dtTotals();
+  const bt=num(j.total_on_bill);
+  const tn=document.getElementById('dtTplNote');
+  let msg=`📷 อ่านบิลได้ ${lines.length} รายการ`+(unm?` · <b style="color:#8A6200">มี ${unm} ชื่อยังไม่ผูก — เลือกด้านล่างครั้งเดียว จำตลอด</b>`:' · จับคู่ชื่อครบทุกตัว ✅');
+  if(bt&&Math.abs(bt-myTot)>1) msg+=` · <b style="color:var(--bad)">⚠ ยอดที่คำนวณ ฿${fmt(myTot,2)} ≠ ยอดบนบิล ฿${fmt(bt,2)} — ตรวจตัวเลขก่อนบันทึก</b>`;
+  else if(bt) msg+=` · ยอดตรงกับบิล ฿${fmt(bt,2)} ✅`;
+  if(tn)tn.innerHTML=msg;
+  dtOcrMapRender();
+  toast(unm?`อ่านบิลแล้ว — เหลือผูกชื่อ ${unm} ตัว`:'อ่านบิลสำเร็จ ตรวจแล้วกดบันทึกได้เลย ✅');
+}
+function dtOcrMapRender(){
+  const el=document.getElementById('dtOcrMap'); if(!el)return;
+  const un=S.dtLines.map((l,i)=>({l,i})).filter(x=>x.l._unm);
+  if(!un.length){ el.innerHTML=''; return; }
+  const pool=dtPoolNames();
+  el.innerHTML=`<div class="ocrmap">${un.map(x=>`
+    <div class="ocrrow" id="omr${x.i}">
+      <div class="xs"><b>ชื่อจากบิล:</b> "${esc(x.l.item)}" · ${fmt(num(x.l.qty),2)} ${esc(x.l._bu||'')} × ฿${fmt(num(x.l.price),2)}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px">
+        <select id="oms${x.i}" onchange="dtOcrSelChg(${x.i})" style="max-width:220px">
+          <option value="">— เลือกสินค้าในแอพ —</option>
+          ${pool.map(p2=>`<option value="${esc(p2.item)}" data-unit="${esc(p2.unit||'')}">${esc(p2.item)}${p2.unit?` (${esc(p2.unit)})`:''}</option>`).join('')}
+          <option value="__new__">➕ เก็บเป็นสินค้าใหม่ชื่อนี้</option>
+        </select>
+        <span id="omf${x.i}" style="display:none;align-items:center;gap:5px" class="xs">
+          1 ${esc(x.l._bu||'หน่วยบิล')} = <input type="number" step="any" id="omv${x.i}" value="1" style="width:64px;text-align:right;padding:6px"> <span id="omu${x.i}"></span></span>
+        <button class="btn dk sm2" onclick="dtOcrBind(${x.i})">ผูกชื่อ</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+function dtOcrSelChg(i){
+  const sel2=document.getElementById('oms'+i);
+  const opt=sel2.selectedOptions[0];
+  const wrap=document.getElementById('omf'+i);
+  if(!opt||!opt.value||opt.value==='__new__'){ wrap.style.display='none'; return; }
+  const appUnit=opt.dataset.unit||'';
+  const bu=(S.dtLines[i]._bu||'').trim();
+  const diff=appUnit&&bu&&ocrNorm(appUnit)!==ocrNorm(bu);
+  wrap.style.display=diff?'inline-flex':'none';
+  document.getElementById('omu'+i).textContent=appUnit;
+}
+async function dtOcrBind(i){
+  const l=S.dtLines[i]; if(!l)return;
+  const sel2=document.getElementById('oms'+i);
+  const v=sel2.value;
+  if(!v){toast('เลือกสินค้าก่อนครับ',true);return;}
+  const billName=l.item, bu=l._bu||l.unit;
+  let item, unit, factor=1;
+  if(v==='__new__'){ item=billName; unit=l.unit; }
+  else{
+    item=v; unit=sel2.selectedOptions[0].dataset.unit||l.unit;
+    const fEl=document.getElementById('omv'+i);
+    if(fEl&&document.getElementById('omf'+i).style.display!=='none') factor=num(fEl.value)||1;
+  }
+  // แปลงบรรทัด: จำนวน×factor · ราคา÷factor (ยอดบรรทัดเท่าบิลเป๊ะ)
+  l.item=item; l.unit=unit;
+  if(factor!==1){ l.qty=num(l.qty)*factor; l.price=num(l.price)/factor; }
+  delete l._unm; delete l._bu;
+  renderDtLines(); dtOcrMapRender();
+  try{
+    await ins('pnl_item_alias',{supplier_id:S.dtSup,alias:billName,item,unit,bill_unit:bu||null,factor});
+    S._dtAlias=[...(S._dtAlias||[]),{supplier_id:S.dtSup,alias:billName,item,unit,bill_unit:bu,factor}];
+    toast(`ผูก "${billName}" → ${item}${factor!==1?` (1 ${bu} = ${factor} ${unit})`:''} จำให้ตลอดแล้ว ✅`);
+  }catch(e){
+    if(String(e.message).includes('pnl_item_alias')||String(e.message).includes('relation'))
+      toast('ผูกชั่วคราวได้ แต่ยังไม่จำถาวร — รัน jjmk_pnl_alias.sql ใน Supabase ก่อนครับ',true);
+    else toast('บันทึกการผูกไม่สำเร็จ: '+e.message,true);
+  }
+}
 async function dtVatSet(m){
   const prev=S.dtVat;
   if(m===prev){ renderDtVatBtns(); dtTotals(); return; }
@@ -2738,7 +2877,7 @@ function dtTotals(){
 function renderDtLines(focusLast){
   const el=document.getElementById('dtLines'); if(!el)return;
   el.innerHTML=S.dtLines.map((l,i)=>`
-    <div class="dtrow">
+    <div class="dtrow${l._unm?' unm':''}">
       <input list="dtItemsDL" placeholder="เช่น หมูสามชั้น" value="${esc(l.item||'')}" oninput="dtEdit(${i},'item',this.value)">
       <input type="number" step="any" inputmode="decimal" placeholder="0" value="${l.qty??''}" oninput="dtEdit(${i},'qty',this.value)">
       <input list="dtUnitsDL" placeholder="กก." id="dtu${i}" value="${esc(l.unit||'')}" oninput="dtEdit(${i},'unit',this.value)">
