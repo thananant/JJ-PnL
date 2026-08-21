@@ -2588,14 +2588,19 @@ RENDER.detail = async (el)=>{
   <datalist id="dtItemsDL"></datalist>
   <datalist id="dtUnitsDL">${unitList().map(u=>`<option value="${esc(u)}">`).join('')}</datalist>`;
   renderDtLines(); dtMonthList();
-  if(S.dtSup) dtLoad(); else document.getElementById('dtCur').textContent='';
+  if(S.dtSup) dtLoad(); else { document.getElementById('dtCur').textContent=''; ocrPendingBanner(); }
 };
 async function dtPickSup(v){
   S.dtSup=v?parseInt(v):null;
   S.dtBillNo=1; // เปลี่ยนซัพ เริ่มใหม่
+  const pend=S._ocrPending; S._ocrPending=null;
   document.querySelectorAll('.dtsup').forEach(b=>b.classList.toggle('on',b.dataset.sid==String(S.dtSup)));
   const nm=document.getElementById('dtSupName'); if(nm)nm.textContent=S.dtSup?((S.core.supById[S.dtSup]||{}).name||''):'';
-  if(S.dtSup){ await dtHist(); await dtLoad(); }
+  if(S.dtSup){ await dtHist(); await dtLoad();
+  if(pend&&S.dtSup){
+    dtOcrApply(pend);
+    toast('เติมผลสแกนลงบิลของ '+((S.core.supById[S.dtSup]||{}).name||'')+' แล้ว — ตรวจแล้วกดบันทึก');
+  }else ocrPendingBanner(); }
 }
 async function dtHist(){
   // เก็บประวัติดิบไว้ แล้วคิดราคา "ณ วันของบิลที่กำลังลง" ตอนใช้จริง (ลงย้อนหลังได้ไม่เพี้ยน)
@@ -2824,13 +2829,12 @@ function dtOcrSend(bodyObj){ // ใช้ XHR เพื่อได้ % อั�
 async function dtOcrPick(inp){
   const f=inp.files&&inp.files[0]; inp.value='';
   if(!f)return;
-  if(!S.dtSup){toast('เลือกซัพพลายเออร์ก่อนครับ',true);return;}
   ocrProgOpen();
   try{
     const b64=await dtOcrShrink(f);
     ocrProgSet('⬆️ ส่งรูปขึ้นระบบ...',8,null);
-    const known=dtPoolNames();
-    const aliases=(S._dtAlias||[]).map(a=>({alias:a.alias,item:a.item}));
+    const known=S.dtSup?dtPoolNames():[];
+    const aliases=S.dtSup?(S._dtAlias||[]).map(a=>({alias:a.alias,item:a.item})):[];
     OCRP.timer=setInterval(ocrTick,150);
     const r=await dtOcrSend({image:b64.data,mime:b64.mime,knownItems:known,aliases});
     if(!r.ok||r.j.error){ ocrProgClose(); toast('อ่านบิลไม่สำเร็จ: '+(r.j.error||r.status),true); return; }
@@ -2839,6 +2843,12 @@ async function dtOcrPick(inp){
     LS.set('jj_ocr_ms', Math.round(OCRP.est*0.55 + used*0.45));
     ocrProgSet('เสร็จแล้ว ✅',100,' ');
     setTimeout(ocrProgClose,350);
+    if(!S.dtSup){ // สแกนก่อน เลือกซัพทีหลัง
+      S._ocrPending=r.j;
+      ocrPendingBanner();
+      ocrSupModal();
+      return;
+    }
     dtOcrApply(r.j);
   }catch(e){
     ocrProgClose();
@@ -2898,6 +2908,41 @@ function dtOcrApply(j){
   if(tn)tn.innerHTML=msg;
   dtOcrMapRender();
   toast(unm?`อ่านบิลแล้ว — เหลือผูกชื่อ ${unm} ตัว`:'อ่านบิลสำเร็จ ตรวจแล้วกดบันทึกได้เลย ✅');
+}
+function supGuess(name){ // เรียงซัพตามความคล้ายชื่อบนหัวบิล
+  const n=ocrNorm(name).replace(/บริษัท|จำกัด|ห้างหุ้นส่วน|ร้าน/g,'').trim();
+  const score=sp=>{
+    const a=ocrNorm(sp.name);
+    if(!n)return 0;
+    if(a===n)return 100;
+    if(a.includes(n)||n.includes(a))return 60;
+    let hit=0; for(const ch of new Set(a.replace(/\s/g,'')))if(n.includes(ch))hit++;
+    return hit/Math.max(3,a.replace(/\s/g,'').length)*40;
+  };
+  return S.core.sup.filter(x=>x.active).map(sp=>({sp,sc:score(sp)})).sort((a,b)=>b.sc-a.sc);
+}
+function ocrSupModal(){
+  const j=S._ocrPending; if(!j)return;
+  const ranked=supGuess(j.supplier_name||'');
+  const best=ranked[0]&&ranked[0].sc>=30?ranked[0].sp.id:null;
+  openModal(`<h3>📷 อ่านบิลได้ ${Array.isArray(j.rows)?j.rows.length:0} รายการ</h3>
+    <div class="sm mut" style="margin:-6px 0 10px">บิลนี้ของซัพไหนครับ?${j.supplier_name?` · หัวบิลเขียนว่า <b>"${esc(j.supplier_name)}"</b>`:''}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px">
+      ${ranked.map(({sp})=>`<button class="btn ${sp.id===best?'dk':'gh'} sm2" onclick="ocrSupPick(${sp.id})">${sp.id===best?'⭐ ':''}${esc(sp.name)}</button>`).join('')}
+    </div>
+    <button class="btn gh sm2" style="width:100%;margin-top:12px" onclick="closeModal()">ยังไม่เลือกตอนนี้ (ผลสแกนเก็บไว้ให้)</button>`);
+}
+async function ocrSupPick(id){
+  closeModal();
+  await dtPickSup(id); // hook ท้าย dtPickSup จะเทผลสแกนให้เอง
+}
+function ocrPendingBanner(){
+  const el=document.getElementById('dtOcrMap'); if(!el)return;
+  if(!S._ocrPending){ if(el.querySelector('.ocrpend'))el.innerHTML=''; return; }
+  const n=Array.isArray(S._ocrPending.rows)?S._ocrPending.rows.length:0;
+  el.innerHTML=`<div class="ocrmap ocrpend"><div class="xs"><b>🧾 มีผลสแกนรอเลือกซัพ</b> (${n} รายการ${S._ocrPending.supplier_name?` · หัวบิล: "${esc(S._ocrPending.supplier_name)}"`:''}) — แตะชื่อซัพด้านบน หรือ
+    <button class="hintlink" onclick="ocrSupModal()">เลือกจากรายการ</button>
+    <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="S._ocrPending=null;ocrPendingBanner();toast('ทิ้งผลสแกนแล้ว')">✕ ทิ้งผลสแกน</button></div></div>`;
 }
 function dtOcrMapRender(){
   const el=document.getElementById('dtOcrMap'); if(!el)return;
