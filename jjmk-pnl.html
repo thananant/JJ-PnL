@@ -116,6 +116,17 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .md2.eq .douRow{flex:1;align-items:center}
 .sbtn{font-size:14px;line-height:1;padding:3px;border-radius:8px;border:1.5px dashed var(--line);background:#fff}
 .sbtn.has{border-style:solid;border-color:var(--gold);background:var(--gold-t)}
+.qrow{display:flex;gap:8px;align-items:stretch}
+.qrow input{padding:10px 12px}
+.qsugg{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--line);border-radius:12px;box-shadow:0 10px 26px rgba(40,20,10,.14);z-index:40;overflow:hidden}
+.qs{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:10px 12px;font-size:13.5px;border-bottom:1px solid var(--line);background:#fff}
+.qs:last-child{border-bottom:none}
+.qs:hover,.qs:active{background:#FAF4E7}
+.qsdot{width:9px;height:9px;border-radius:50%;flex:none}
+details>summary::-webkit-details-marker{display:none}
+.asrow{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13px}
+.asrow:last-child{border-bottom:none}
+.asrow input{width:19px;height:19px;flex:none}
 .mvbtn{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:11px;color:var(--mut)}
 .mvbtn:disabled{opacity:.25}
 .mvbtn:not(:disabled):active{background:var(--ink);color:#fff}
@@ -1243,11 +1254,23 @@ RENDER.exp = async (el)=>{
       <div class="dayrep" id="fixPanel">${fixPanelHTML()}</div>
     </div>
   </div>
-  <div id="expForm">${expFormHTML(c)}</div>
+  <div class="card"><h3>⚡ ลงบิลเร็ว <span class="sp">${thDate(dstr(S.m,S.expDay))}</span></h3>
+    <div class="qrow">
+      <div style="flex:1;position:relative;min-width:0">
+        <input id="qSup" placeholder="พิมพ์ชื่อซัพพลายเออร์..." autocomplete="off" oninput="qSugg()" onfocus="qSugg()" onkeydown="qSupKey(event)">
+        <div id="qList" class="qsugg" style="display:none"></div></div>
+      <input id="qAmt" type="number" step="any" inputmode="decimal" placeholder="ยอดบิล" style="width:118px;flex:none" onkeydown="if(event.key==='Enter'){event.preventDefault();qAddBill();}">
+      <button class="btn dk sm2" style="flex:none" onclick="qAddBill()">เพิ่ม</button>
+    </div>
+    <div id="todayBills" style="margin-top:10px"></div>
+  </div>
+  <details class="card"><summary class="b" style="font-family:'Prompt';font-size:14px;cursor:pointer;list-style:none">▸ รายชื่อซัพทั้งหมดตามหมวด <span class="xs mut" style="font-weight:500">เปิดเมื่ออยากไล่ดูทีละหมวด / ดูยอดกับสถานะครบทุกราย</span></summary>
+  <div id="expForm" style="margin-top:10px">${expFormHTML(c)}</div></details>
   <div class="stickysum"><span class="sm" style="opacity:.75">รวมวันที่ ${S.expDay}</span>
     <span class="v" id="expDayTot"></span>
     <span class="sm" style="margin-left:auto;opacity:.75">${thDate(dstr(S.m,S.expDay))}</span></div>`;
   refreshFixPanel();
+  renderTodayBills();
   updExpDayTot();
 };
 function perTotal(c,a,b){
@@ -1270,11 +1293,86 @@ function expFormHTML(c){
           <input type="number" step="any" inputmode="decimal" placeholder="0" id="exi${s.id}" value="${r&&num(r.amount)?r.amount:''}"
             oninput="expInput('${ds}',${s.id},this.value)">
           <div class="exctl">
-            <button class="pchip ${paid?'on':''}" id="pd_${s.id}" onclick="paidToggle('${ds}',${s.id})"><span class="ckbx">${paid?'✓':''}</span>จ่ายแล้ว</button>
-            <button class="sbtn ${hasSlip?'has':''}" id="sl_${s.id}" title="สลิป" onclick="slipClick('${ds}',${s.id})">${hasSlip?'🧾':'📎'}</button>
+            <button class="pchip ${paid?'on':''}" data-pd="${s.id}" onclick="paidToggle('${ds}',${s.id})"><span class="ckbx">${paid?'✓':''}</span>จ่ายแล้ว</button>
+            <button class="sbtn ${hasSlip?'has':''}" data-sl="${s.id}" title="สลิป" onclick="slipClick('${ds}',${s.id})">${hasSlip?'🧾':'📎'}</button>
           </div></div>`;
       }).join('')}</div>`;
   }).join('');
+}
+function qSugg(){
+  const inp=document.getElementById('qSup'), el=document.getElementById('qList');
+  if(!inp||!el)return;
+  const q=(inp.value||'').trim().toLowerCase();
+  const list=S.core.sup.filter(x=>x.active&&(!q||x.name.toLowerCase().includes(q))).slice(0,8);
+  el.innerHTML=list.map(x=>`<button class="qs" onclick="qPick(${x.id})">
+    <span class="qsdot" style="background:${catColor(x.category)}"></span>${esc(x.name)}
+    <span class="xs mut" style="margin-left:auto">${esc(x.category)}</span></button>`).join('');
+  el.style.display=list.length?'block':'none';
+  S._qSid=null; S._qList=list;
+}
+function qSupKey(e){
+  if(e.key==='Enter'){ e.preventDefault();
+    if(S._qList&&S._qList.length){ qPick(S._qList[0].id); } }
+  if(e.key==='Escape'){ document.getElementById('qList').style.display='none'; }
+}
+function qPick(id){
+  const x=S.core.supById[id]; if(!x)return;
+  S._qSid=id;
+  document.getElementById('qSup').value=x.name;
+  document.getElementById('qList').style.display='none';
+  const a=document.getElementById('qAmt'); a.focus(); if(a.select)a.select();
+}
+function qAddBill(){
+  const ds=dstr(S.m,S.expDay);
+  let sid=S._qSid;
+  if(!sid){
+    const q=(document.getElementById('qSup').value||'').trim().toLowerCase();
+    const hits=S.core.sup.filter(x=>x.active&&x.name.toLowerCase().includes(q));
+    if(q&&hits.length===1)sid=hits[0].id;
+  }
+  if(!sid){toast('พิมพ์แล้วเลือกซัพจากรายการก่อนครับ',true);return;}
+  const amt=num(document.getElementById('qAmt').value);
+  if(!(amt>0)){toast('ใส่ยอดบิลก่อนครับ',true);document.getElementById('qAmt').focus();return;}
+  const c=S.cache[mkey(S.br,S.m)], k=ds+'|'+sid;
+  const old=c.exp[k]?num(c.exp[k].amount):0, total=old+amt;
+  const mi=document.getElementById('exi'+sid); if(mi)mi.value=total;
+  expInput(ds,sid,String(total));
+  renderTodayBills(); updExpDayTot();
+  const nm=(S.core.supById[sid]||{}).name||'';
+  toast(old?('➕ '+nm+' รวมกับยอดเดิม → ฿'+fmtI(total)):('✓ เพิ่ม '+nm+' ฿'+fmtI(amt)));
+  document.getElementById('qSup').value=''; document.getElementById('qAmt').value='';
+  S._qSid=null; document.getElementById('qSup').focus(); qSugg();
+}
+function syncMainInput(sid,v){ const i=document.getElementById('exi'+sid); if(i)i.value=v; }
+function renderTodayBills(){
+  const el=document.getElementById('todayBills'); if(!el)return;
+  const c=S.cache[mkey(S.br,S.m)]; if(!c)return;
+  const ds=dstr(S.m,S.expDay);
+  const rows=Object.values(c.exp).filter(x=>x.d===ds&&num(x.amount)>0)
+    .map(x=>({x,s:S.core.supById[x.supplier_id]})).filter(r=>r.s)
+    .sort((a,b)=>a.s.name.localeCompare(b.s.name,'th'));
+  if(!rows.length){ el.innerHTML='<div class="xs mut" style="padding:4px 2px">ยังไม่มีบิลวันนี้ — พิมพ์ชื่อซัพด้านบน ใส่ยอด แล้ว Enter ได้เลย</div>'; return; }
+  const tot=rows.reduce((a,r)=>a+num(r.x.amount),0);
+  el.innerHTML=rows.map(({x,s})=>{
+    const paid=!!x.paid, has=!!x.slip_url;
+    return `<div class="exrow"><div class="nm"><div class="t">${esc(s.name)}</div><div class="s">${esc(s.category)}${paid?' · <span style="color:var(--ok)">จ่ายแล้ว</span>':''}</div></div>
+      <input type="number" step="any" inputmode="decimal" value="${x.amount}" oninput="expInput('${ds}',${s.id},this.value);syncMainInput(${s.id},this.value)">
+      <div class="exctl">
+        <button class="pchip ${paid?'on':''}" data-pd="${s.id}" onclick="paidToggle('${ds}',${s.id})"><span class="ckbx">${paid?'✓':''}</span>จ่ายแล้ว</button>
+        <button class="sbtn ${has?'has':''}" data-sl="${s.id}" onclick="slipClick('${ds}',${s.id})">${has?'🧾':'📎'}</button>
+      </div></div>`;}).join('')
+   +`<div class="dsum" style="border:none;justify-content:flex-end;gap:10px"><span class="mut sm">รวมวันนี้ ${rows.length} บิล</span><span class="v">฿${fmtI(tot)}</span></div>`;
+}
+function updPaidUI(sid,paid){
+  document.querySelectorAll('[data-pd="'+sid+'"]').forEach(b=>{
+    b.classList.toggle('on',!!paid);
+    b.innerHTML='<span class="ckbx">'+(paid?'✓':'')+'</span>จ่ายแล้ว';
+  });
+}
+function updSlipUI(sid,has){
+  document.querySelectorAll('[data-sl="'+sid+'"]').forEach(b=>{
+    b.textContent=has?'🧾':'📎'; b.classList.toggle('has',!!has);
+  });
 }
 function updUnpaidBar(){
   const c=S.cache[mkey(S.br,S.m)]; const el=document.getElementById('unpaidT'); if(!c||!el)return;
@@ -1291,9 +1389,8 @@ async function paidToggle(ds,sid){
     return;
   }
   r.paid=!r.paid;
-  const b=document.getElementById('pd_'+sid);
-  if(b){ b.classList.toggle('on',r.paid); b.innerHTML='<span class="ckbx">'+(r.paid?'✓':'')+'</span>จ่ายแล้ว'; }
-  updUnpaidBar();
+  updPaidUI(sid,r.paid);
+  updUnpaidBar(); renderTodayBills&&renderTodayBills();
   try{ await ups('pnl_expense_daily',[{branch:S.br,d:ds,supplier_id:sid,amount:num(r.amount),paid:r.paid}],'branch,d,supplier_id'); }
   catch(e){ r.paid=!r.paid; updUnpaidBar(); }
 }
@@ -1306,23 +1403,94 @@ function slipClick(ds,sid){
 }
 async function slipPicked(inp){
   const f=inp.files[0]; inp.value=''; if(!f||!S._slipTarget)return;
-  const {ds,sid}=S._slipTarget; S._slipTarget=null;
+  const tgt=S._slipTarget; S._slipTarget=null;
+  const sid=tgt.sid, ds=tgt.ds||null;
   toast('กำลังอัปโหลดสลิป...');
   try{
     const blob=await compressImage(f);
-    const path=`${S.br}/${S.m}/${ds}_${sid}_${Date.now()}.jpg`;
+    const path=`${S.br}/${S.m}/${ds||'PV'}_${sid}_${Date.now()}.jpg`;
     const url=await uploadSlip(blob,path,'image/jpeg');
-    const c=S.cache[mkey(S.br,S.m)], r=c.exp[ds+'|'+sid];
+    const c=await loadMonth(S.br,S.m);
+    // บิลค้างจ่ายของซัพนี้ (จำกัดช่วงถ้ามาจาก PV)
+    const pool=Object.values(c.exp).filter(x=>x.supplier_id===sid&&num(x.amount)>0&&!x.paid
+      &&(!tgt.from||(x.d>=tgt.from&&x.d<=tgt.to))).sort((a,b)=>a.d.localeCompare(b.d));
+    const others=pool.filter(x=>x.d!==ds);
+    if(tgt.multi || others.length>0){
+      // สลิปเดียวจ่ายหลายบิล -> ให้เลือกบิลของรอบนี้
+      S._assign={url, blob, sid, tgt, bills:pool, checked:new Set(pool.map(x=>x.d))};
+      assignSlipModal();
+      return;
+    }
+    const r=c.exp[ds+'|'+sid];
     let autoPaid=false;
     if(r){ r.slip_url=url; if(!r.paid){ r.paid=true; autoPaid=true; } }
     await ups('pnl_expense_daily',[{branch:S.br,d:ds,supplier_id:sid,amount:num(r?r.amount:0),slip_url:url,paid:r?!!r.paid:true}],'branch,d,supplier_id');
-    const b=document.getElementById('sl_'+sid); if(b){b.textContent='🧾';b.classList.add('has');}
-    const pb=document.getElementById('pd_'+sid);
-    if(pb&&r){ pb.classList.toggle('on',r.paid); pb.innerHTML='<span class="ckbx">'+(r.paid?'✓':'')+'</span>จ่ายแล้ว'; }
-    updUnpaidBar();
+    updSlipUI(sid,true); updPaidUI(sid,r?r.paid:true);
+    updUnpaidBar(); if(typeof renderTodayBills==='function')renderTodayBills();
     toast(autoPaid?'แนบสลิป + ติ๊กจ่ายแล้ว ✅':'แนบสลิปแล้ว ✅');
-    if(r&&num(r.amount)>0) verifySlipAmount(blob, num(r.amount), ds, sid); // ตรวจยอดเบื้องหลัง ไม่บล็อก
+    if(r&&num(r.amount)>0) verifySlipAmount(blob, num(r.amount), ds, sid);
   }catch(e){ toast('อัปโหลดไม่สำเร็จ: '+e.message,true); }
+}
+function assignSlipModal(){
+  const A=S._assign; if(!A)return;
+  const sp=S.core.supById[A.sid]||{};
+  const rows=A.bills.map(b=>`<label class="asrow">
+    <input type="checkbox" data-abd="${b.d}" ${A.checked.has(b.d)?'checked':''} onchange="assignTick(this)">
+    <span style="flex:1">${thDate(b.d)}</span><b>฿${fmt(num(b.amount),2)}</b></label>`).join('');
+  openModal(`<h3>🧾 สลิปเดียว จ่ายหลายบิล</h3>
+    <div class="sm mut" style="margin:-6px 0 8px">${esc(sp.name||'')}${A.tgt.from?` · งวด ${thDate(A.tgt.from)} – ${thDate(A.tgt.to)}`:''} — ติ๊กบิลที่สลิปใบนี้จ่าย</div>
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <a href="${A.url}" target="_blank" style="flex:none"><img src="${A.url}" style="width:86px;border-radius:10px;border:1.5px solid var(--line)"></a>
+      <div style="flex:1;max-height:40dvh;overflow-y:auto">${rows}</div></div>
+    <div class="dsum" style="border:none;justify-content:space-between;margin-top:8px">
+      <span><button class="hintlink" onclick="assignAll(true)">เลือกทั้งหมด</button> · <button class="hintlink" onclick="assignAll(false)">ล้าง</button></span>
+      <span class="v" id="asTot"></span></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      ${A.tgt.ds?`<button class="btn gh sm2" onclick="assignOnlyToday()">ใช้กับบิลวันนี้บิลเดียว</button>`:''}
+      <button class="btn dk sm2" style="margin-left:auto" id="asBtn" onclick="assignConfirm()"></button>
+      <button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button></div>`);
+  updAssignTot();
+}
+function assignTick(cb){ const A=S._assign; if(!A)return;
+  if(cb.checked)A.checked.add(cb.dataset.abd); else A.checked.delete(cb.dataset.abd);
+  updAssignTot();
+}
+function assignAll(on){ const A=S._assign; if(!A)return;
+  A.checked=new Set(on?A.bills.map(b=>b.d):[]);
+  document.querySelectorAll('[data-abd]').forEach(cb=>cb.checked=on);
+  updAssignTot();
+}
+function updAssignTot(){ const A=S._assign; if(!A)return;
+  const t=A.bills.filter(b=>A.checked.has(b.d)).reduce((a,b)=>a+num(b.amount),0);
+  const el=document.getElementById('asTot'); if(el)el.textContent='฿'+fmt(t,2);
+  const btn=document.getElementById('asBtn'); if(btn)btn.textContent=`ติ๊กจ่าย ${A.checked.size} บิล`;
+}
+async function assignOnlyToday(){ const A=S._assign; if(!A||!A.tgt.ds)return;
+  A.checked=new Set(A.bills.some(b=>b.d===A.tgt.ds)?[A.tgt.ds]:[]);
+  await assignConfirm();
+}
+async function assignConfirm(){
+  const A=S._assign; if(!A)return;
+  const sel2=A.bills.filter(b=>A.checked.has(b.d));
+  if(!sel2.length){toast('เลือกอย่างน้อย 1 บิลครับ',true);return;}
+  const rows=sel2.map(b=>({branch:S.br,d:b.d,supplier_id:A.sid,amount:num(b.amount),paid:true,slip_url:A.url}));
+  try{
+    await ups('pnl_expense_daily',rows,'branch,d,supplier_id');
+    const c=S.cache[mkey(S.br,S.m)];
+    sel2.forEach(b=>{ const r=c&&c.exp[b.d+'|'+A.sid]; if(r){r.paid=true;r.slip_url=A.url;} });
+    updSlipUI(A.sid,true); updPaidUI(A.sid,true);
+    updUnpaidBar(); if(typeof renderTodayBills==='function')renderTodayBills();
+    if(A.tgt.pvItemId){ upd('pnl_pv_items','id=eq.'+A.tgt.pvItemId,{paid:true}).catch(()=>{}); }
+    const tot=sel2.reduce((a,b)=>a+num(b.amount),0);
+    closeModal(); S._assign=null;
+    toast(`✅ สลิปเดียวติ๊กจ่าย ${sel2.length} บิล · ฿${fmtI(tot)}`);
+    verifySlipAmount(A.blob, tot, sel2[sel2.length-1].d, A.sid);
+  }catch(e){ toast('บันทึกไม่สำเร็จ: '+e.message,true); }
+}
+function pvSlipPick(sid,from,to,pvItemId){
+  S._slipTarget={sid, from, to, multi:true, pvItemId};
+  document.getElementById('slipFile').click();
+  toast('เลือกรูปสลิปที่โอนรอบนี้ได้เลย 📎');
 }
 /* ---------- ตรวจยอดในสลิปด้วย OCR (โหลดเมื่อใช้ครั้งแรก) ---------- */
 let _tessP=null;
@@ -1403,10 +1571,8 @@ async function slipDel(ds,sid){
   const c=S.cache[mkey(S.br,S.m)], r=c.exp[ds+'|'+sid]; if(!r)return;
   r.slip_url=null; r.paid=false; // ไม่มีสลิป = ยังไม่ถือว่าจ่าย
   await ups('pnl_expense_daily',[{branch:S.br,d:ds,supplier_id:sid,amount:num(r.amount),slip_url:null,paid:false}],'branch,d,supplier_id');
-  const b=document.getElementById('sl_'+sid); if(b){b.textContent='📎';b.classList.remove('has');}
-  const pb=document.getElementById('pd_'+sid);
-  if(pb){ pb.classList.remove('on'); pb.innerHTML='<span class="ckbx"></span>จ่ายแล้ว'; }
-  updUnpaidBar();
+  updSlipUI(sid,false); updPaidUI(sid,false);
+  updUnpaidBar(); renderTodayBills&&renderTodayBills();
   closeModal(); toast('ลบสลิปแล้ว — ยกเลิกติ๊กจ่ายด้วย (ต้องมีสลิปถึงติ๊กได้)');
 }
 function copyTxt(t){
@@ -1735,7 +1901,8 @@ async function pvOpen(id){
       ${items.map(x=>{const s=S.core.supById[x.supplier_id]||{name:'?'};
         return `<tr><td><div class="b sm">${esc(s.name)}</div>
         <div class="xs" style="margin-top:2px">🏦 ${esc(s.bank||'-')} · <b style="font-size:13px;letter-spacing:.03em">${esc(s.account_no||'-')}</b>${s.account_no?` <button class="hintlink" onclick="copyTxt('${esc(s.account_no)}')">คัดลอก</button>`:''}</div>
-        <div class="xs mut">${esc(s.account_name||'')}</div></td>
+        <div class="xs mut">${esc(s.account_name||'')}</div>
+        <div style="margin-top:4px"><button class="hintlink" onclick="pvSlipPick(${x.supplier_id},'${pv.d_from}','${pv.d_to}',${x.id})">📎 แนบสลิป + ติ๊กบิลรอบนี้</button></div></td>
         <td class="n">${fmt(x.amount,2)}</td>${isVat?`<td class="n xs">${fmt(x.vat_amount,2)}</td>`:''}
         <td><input type="checkbox" style="width:20px;height:20px" ${x.scheduled?'checked':''} onchange="upd('pnl_pv_items','id=eq.${x.id}',{scheduled:this.checked})"></td>
         <td><input type="checkbox" style="width:20px;height:20px" ${x.paid?'checked':''} onchange="upd('pnl_pv_items','id=eq.${x.id}',{paid:this.checked})"></td></tr>`;}).join('')}
