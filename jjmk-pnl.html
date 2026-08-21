@@ -153,6 +153,12 @@ details>summary::-webkit-details-marker{display:none}
 .sihead{font-size:11px;color:var(--mut);font-weight:700;padding-bottom:5px;border-bottom:1.5px solid var(--line)}
 .sirow{padding:5px 0;border-bottom:1px solid var(--line)}
 .sirow input{padding:8px 9px;font-size:13px}
+#loginOv{position:fixed;inset:0;background:linear-gradient(150deg,#2E1414,#5A1E20);display:none;align-items:center;justify-content:center;z-index:999;padding:18px}
+.logincard{background:#FFFDF8;border-radius:20px;padding:26px 24px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.pgrid{display:grid;grid-template-columns:1fr 64px 64px 64px;gap:4px;align-items:center;font-size:12.5px}
+.pgrid .ph{font-size:11px;color:var(--mut);font-weight:700;text-align:center}
+.pgrid label{display:flex;justify-content:center;padding:6px 0;cursor:pointer}
+.pgrid .pr{padding:5px 0;border-top:1px solid var(--line)}
 .dthead,.dtrow{display:grid;grid-template-columns:minmax(120px,1.4fr) 76px 82px 100px 96px 30px;gap:7px;align-items:center}
 .dthead{font-size:11px;color:var(--mut);font-weight:700;padding:0 0 6px;border-bottom:1.5px solid var(--line)}
 .dtrow{padding:6px 0;border-bottom:1px solid var(--line)}
@@ -345,7 +351,7 @@ canvas{max-width:100%}
   <button class="sb-item" data-v="sum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20v-7"/><path d="M12 20V5"/><path d="M19 20v-10"/></svg>สรุปเดือน</button>
   <button class="sb-item" data-v="pv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8.5h6"/><path d="M9 12.5h6"/><path d="M9 16.5h3.5"/></svg>ใบสำคัญจ่าย</button>
   <button class="sb-item" data-v="etc"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>อื่นๆ</button>
-  <div class="sb-foot"><button class="sb-item" data-v="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6.5h8"/><path d="M18.5 6.5H20"/><circle cx="15.5" cy="6.5" r="2.1"/><path d="M4 12h2.5"/><path d="M12 12h8"/><circle cx="9.2" cy="12" r="2.1"/><path d="M4 17.5h10.5"/><path d="M20 17.5h0"/><circle cx="17.3" cy="17.5" r="2.1"/></svg>ตั้งค่า</button></div>
+  <div class="sb-foot"><div id="sbUser"></div><button class="sb-item" data-v="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6.5h8"/><path d="M18.5 6.5H20"/><circle cx="15.5" cy="6.5" r="2.1"/><path d="M4 12h2.5"/><path d="M12 12h8"/><circle cx="9.2" cy="12" r="2.1"/><path d="M4 17.5h10.5"/><path d="M20 17.5h0"/><circle cx="17.3" cy="17.5" r="2.1"/></svg>ตั้งค่า</button></div>
 </aside>
 <header>
   <div class="hrow">
@@ -411,8 +417,87 @@ const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}cat
 let busyCount = 0;
 function setBusy(b){ busyCount += b?1:-1; if(busyCount<0)busyCount=0;
   const d=document.getElementById('syncDot'); d.className = busyCount>0?'busy':''; }
+/* ---------- SHA-256 (pure JS ใช้ได้ทุก context) ---------- */
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const enc=new TextEncoder().encode(str);
+  const l=enc.length, bitLen=l*8;
+  const withOne=l+1, total=(Math.ceil((withOne+8)/64))*64;
+  const M=new Uint8Array(total); M.set(enc); M[l]=0x80;
+  const dv=new DataView(M.buffer);
+  dv.setUint32(total-4, bitLen>>>0); dv.setUint32(total-8, Math.floor(bitLen/4294967296));
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n));
+  const w=new Array(64);
+  for(let i=0;i<total;i+=64){
+    for(let t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+    for(let t=16;t<64;t++){
+      const s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3);
+      const s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);
+      w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;
+    }
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){
+      const S1=rr(e,6)^rr(e,11)^rr(e,25), ch=(e&f)^(~e&g);
+      const t1=(h+S1+ch+K[t]+w[t])>>>0;
+      const S0=rr(a,2)^rr(a,13)^rr(a,22), maj=(a&b)^(a&c)^(b&c);
+      const t2=(S0+maj)>>>0;
+      h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+    }
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+function pwHash(u,p){ return sha256hex(u+'|'+p+'|JJPNL'); }
+
+/* ---------- สิทธิ์ผู้ใช้ ---------- */
+const MENU_LABEL={dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'};
+function permOf(v){
+  const u=S.user; if(!u)return 'edit';
+  if(u.role==='admin')return 'edit';
+  return (u.perms||{})[v]||'none';
+}
+function firstAllowedTab(){ return VIEWS.find(v=>permOf(v)!=='none')||'dash'; }
+function applyPerms(){
+  document.querySelectorAll('.tabbar button[data-v],.sb-item[data-v]').forEach(b=>{
+    b.style.display = permOf(b.dataset.v)==='none' ? 'none' : '';
+  });
+  paintUser();
+}
+/* ---------- log การใช้งานอัตโนมัติ ---------- */
+const LOGN={pnl_income_daily:'รายรับ',pnl_cash_paid:'เงินสดจ่าย',pnl_expense_daily:'รายจ่าย',pnl_bill_items:'รายละเอียดบิล',pnl_sup_items:'สินค้าประจำซัพ',pnl_fixed_monthly:'Fix cost',pnl_fixed_items:'ตั้งค่า Fix cost',pnl_fix_groups:'หมวด Fix cost',pnl_month_meta:'ข้อมูลเดือน',pnl_pv:'ใบสำคัญจ่าย',pnl_pv_items:'ใบสำคัญจ่าย',pnl_extra_expenses:'รายจ่ายอื่นๆ',pnl_shopee_orders:'Shopee',pnl_suppliers:'ตั้งค่าซัพ',pnl_branches:'ตั้งค่าสาขา',pnl_meat_daily:'เนื้อรายวัน',pnl_history:'ข้อมูลย้อนหลัง',pnl_history_items:'ข้อมูลย้อนหลัง',pnl_users:'ผู้ใช้',pnl_benchmarks:'มาตรฐาน'};
+let _alast={};
+function alogAuto(method,path,body){
+  try{
+    const t=path.split('?')[0];
+    if(t==='pnl_activity_log'||t==='pnl_bill_log')return;
+    const verb=method==='DELETE'?'ลบ':'บันทึก';
+    const key=verb+'|'+t;
+    const now=Date.now();
+    if(_alast[key]&&now-_alast[key]<45000)return;
+    _alast[key]=now;
+    let hint='';
+    const b=Array.isArray(body)?body[0]:body;
+    if(b&&typeof b==='object'){
+      hint=['d','month','supplier_id','pv_no','name','item','username','code']
+        .map(k=>b[k]!=null?`${k}=${b[k]}`:null).filter(Boolean).slice(0,3).join(' · ');
+    }
+    if(method==='DELETE') hint=(path.split('?')[1]||'').slice(0,140);
+    api('POST','pnl_activity_log',{username:(S.user&&S.user.username)||'ไม่ระบุ',branch:S.br,
+      action:verb+(LOGN[t]||t), detail:hint.slice(0,180)},'return=minimal').catch(()=>{});
+  }catch(e){}
+}
 async function api(method, path, body, prefer){
-  const {url,key}=cfg(); setBusy(true);
+  const {url,key}=cfg();
+  // สิทธิ์: เขียนได้เฉพาะเมนูที่ได้รับ "แก้ไข" (log/เปลี่ยนรหัสตัวเองยกเว้น)
+  if(method!=='GET' && S.user && !path.startsWith('pnl_activity_log')){
+    const selfPw = S._pwSelf && path.startsWith('pnl_users');
+    if(!selfPw && permOf(S.tab||'dash')!=='edit'){
+      toast('👁 บัญชีของคุณดูหน้านี้ได้อย่างเดียว — แก้ไขไม่ได้',true);
+      throw new Error('view-only');
+    }
+  }
+  setBusy(true);
   try{
     const r = await fetch(url+'/rest/v1/'+path, {
       method,
@@ -421,6 +506,7 @@ async function api(method, path, body, prefer){
       body: body?JSON.stringify(body):undefined
     });
     if(!r.ok){ const t=await r.text(); throw new Error(r.status+' '+t.slice(0,180)); }
+    if(method!=='GET') alogAuto(method,path,body);
     if(r.status===204) return [];
     const txt = await r.text();
     return txt?JSON.parse(txt):[];
@@ -663,6 +749,7 @@ function pickBranch(br){
 /* ============ Boot & Navigation ============ */
 const RENDER = {};
 async function show(v){
+  if(S.user&&permOf(v)==='none') v=firstAllowedTab();
   document.querySelectorAll('.tabbar button,.sb-item').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
   const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
@@ -671,6 +758,9 @@ async function show(v){
   const el=document.getElementById('view-'+v);
   el.innerHTML='<div class="spin"></div>';
   try{ await RENDER[v](el); }catch(e){ el.innerHTML='<div class="empty">โหลดไม่สำเร็จ — '+esc(e.message)+'</div>'; }
+  if(S.user&&permOf(v)==='view'){
+    el.insertAdjacentHTML('afterbegin','<div class="card" style="background:#EEF3F6;border-color:#B8CBD4"><b>👁 ดูอย่างเดียว</b> <span class="sm mut">บัญชีของคุณไม่มีสิทธิ์แก้ไขหน้านี้</span></div>');
+  }
 }
 async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; S.benchCache={}; await show(S.tab); }
 function saveSetup(){
@@ -678,9 +768,193 @@ function saveSetup(){
   if(!u||!k){ toast('กรอกให้ครบก่อนครับ',true); return; }
   localStorage.setItem('jjpnl_url',u); localStorage.setItem('jjpnl_key',k); location.reload();
 }
+/* ---------- จัดการผู้ใช้ / เปลี่ยนรหัส / ประวัติการใช้งาน ---------- */
+async function userLoad(){
+  const el=document.getElementById('userList'); if(!el)return;
+  try{
+    const rows=await sel('pnl_users','select=id,username,display_name,role,active,perms&order=id');
+    S._users=rows;
+    el.innerHTML='<div class="twrap"><table>'+rows.map(u=>`<tr style="${u.active?'':'opacity:.45'}">
+      <td><div class="b sm">${esc(u.display_name)}</div><div class="xs mut">${esc(u.username)} · ${u.role==='admin'?'ผู้ดูแล':'พนักงาน'}${u.active?'':' · ปิดใช้งาน'}</div></td>
+      <td class="right"><button class="hintlink" onclick="userModal(${u.id})">แก้ไข</button></td></tr>`).join('')+'</table></div>';
+  }catch(e){ el.innerHTML='<div class="xs mut">โหลดไม่ได้: '+esc(e.message)+'</div>'; }
+}
+function userModal(id){
+  const u=id?(S._users||[]).find(x=>x.id===id):{username:'',display_name:'',role:'staff',active:true,perms:{}};
+  if(!u)return;
+  const pm=u.perms||{};
+  openModal(`<h3>${id?'แก้ไขผู้ใช้':'เพิ่มผู้ใช้ใหม่'}</h3>
+    <div class="grid2">
+      <div class="fld"><label>ชื่อที่แสดง</label><input id="umName" value="${esc(u.display_name)}" placeholder="เช่น บอย"></div>
+      <div class="fld"><label>Username</label><input id="umUser" value="${esc(u.username)}" ${id?'disabled':''} placeholder="อังกฤษ/ตัวเลข"></div>
+    </div>
+    <div class="grid2">
+      <div class="fld"><label>รหัสผ่าน ${id?'(เว้นว่าง = ไม่เปลี่ยน)':''}</label><input id="umPass" type="password" placeholder="${id?'••••••••':'อย่างน้อย 4 ตัว'}"></div>
+      <div class="fld"><label>บทบาท</label><select id="umRole" onchange="document.getElementById('umPerms').style.opacity=this.value==='admin'?.35:1">
+        <option value="staff" ${u.role!=='admin'?'selected':''}>พนักงาน (กำหนดสิทธิ์รายเมนู)</option>
+        <option value="admin" ${u.role==='admin'?'selected':''}>ผู้ดูแลระบบ (ทุกสิทธิ์)</option></select></div>
+    </div>
+    <label class="sm" style="display:flex;gap:8px;align-items:center;margin:4px 0 10px">
+      <input type="checkbox" id="umActive" ${u.active?'checked':''} style="width:18px;height:18px">เปิดใช้งานบัญชีนี้</label>
+    <div id="umPerms" style="opacity:${u.role==='admin'?.35:1}">
+      <div class="pgrid">
+        <span class="ph" style="text-align:left">เมนู</span><span class="ph">แก้ไข</span><span class="ph">ดูอย่างเดียว</span><span class="ph">ซ่อน</span>
+        ${VIEWS.map(v=>{const cur=pm[v]||'none';
+          return `<span class="pr sm">${MENU_LABEL[v]||v}</span>
+          <label class="pr"><input type="radio" name="pm_${v}" value="edit" ${cur==='edit'?'checked':''}></label>
+          <label class="pr"><input type="radio" name="pm_${v}" value="view" ${cur==='view'?'checked':''}></label>
+          <label class="pr"><input type="radio" name="pm_${v}" value="none" ${cur==='none'?'checked':''}></label>`;}).join('')}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn dk sm2" style="margin-left:auto" onclick="userSave(${id||'null'})">💾 บันทึก</button></div>`);
+}
+async function userSave(id){
+  const name=(document.getElementById('umName').value||'').trim();
+  const uname=(document.getElementById('umUser').value||'').trim();
+  const pass=document.getElementById('umPass').value||'';
+  const role=document.getElementById('umRole').value;
+  const active=document.getElementById('umActive').checked;
+  if(!name||!uname){toast('ใส่ชื่อและ username ก่อนครับ',true);return;}
+  const perms={};
+  VIEWS.forEach(v=>{const r=document.querySelector(`input[name="pm_${v}"]:checked`); perms[v]=r?r.value:'none';});
+  try{
+    if(id){
+      const body={display_name:name,role,active,perms};
+      if(pass){ const u=(S._users||[]).find(x=>x.id===id); body.pass_hash=pwHash(u.username,pass); }
+      await upd('pnl_users','id=eq.'+id,body);
+      if(S.user&&S.user.id===id){ if(pass)LS.set('jjpnl_auth',{u:S.user.username,h:body.pass_hash}); }
+    }else{
+      if(pass.length<4){toast('รหัสผ่านอย่างน้อย 4 ตัวครับ',true);return;}
+      await ins('pnl_users',{username:uname,display_name:name,pass_hash:pwHash(uname,pass),role,active,perms});
+    }
+    closeModal(); toast('บันทึกผู้ใช้แล้ว'); userLoad();
+  }catch(e){ toast('บันทึกไม่สำเร็จ: '+e.message,true); }
+}
+function pwModal(){
+  openModal(`<h3>🔑 เปลี่ยนรหัสผ่าน</h3>
+    <div class="fld"><label>รหัสผ่านใหม่ (อย่างน้อย 4 ตัว)</label><input id="pw1" type="password"></div>
+    <div class="fld"><label>ยืนยันอีกครั้ง</label><input id="pw2" type="password"></div>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn dk sm2" style="margin-left:auto" onclick="pwSave()">บันทึก</button></div>`);
+}
+async function pwSave(){
+  const a=document.getElementById('pw1').value, b=document.getElementById('pw2').value;
+  if(a.length<4){toast('รหัสอย่างน้อย 4 ตัวครับ',true);return;}
+  if(a!==b){toast('รหัสสองช่องไม่ตรงกัน',true);return;}
+  const h=pwHash(S.user.username,a);
+  try{
+    S._pwSelf=true;
+    await upd('pnl_users','id=eq.'+S.user.id,{pass_hash:h});
+    LS.set('jjpnl_auth',{u:S.user.username,h});
+    closeModal(); toast('เปลี่ยนรหัสผ่านแล้ว 🔑');
+  }catch(e){ toast('เปลี่ยนไม่สำเร็จ: '+e.message,true); }
+  finally{ S._pwSelf=false; }
+}
+async function actLoad(){
+  const el=document.getElementById('actList'); if(!el)return;
+  try{
+    const rows=await sel('pnl_activity_log','select=*&order=created_at.desc&limit=100');
+    if(!rows.length){el.innerHTML='<div class="xs mut">ยังไม่มีประวัติ</div>';return;}
+    el.innerHTML='<div class="twrap" style="max-height:380px;overflow-y:auto"><table><tr><th>เวลา</th><th>ผู้ใช้</th><th>ทำอะไร</th></tr>'+
+      rows.map(r=>{const t=new Date(r.created_at);
+        const ts=`${String(t.getDate()).padStart(2,'0')}/${String(t.getMonth()+1).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+        return `<tr><td class="xs mut" style="white-space:nowrap">${ts}</td>
+        <td class="sm b">${esc(r.username)}</td>
+        <td class="sm">${esc(r.action)}${r.branch?` <span class="xs mut">· ${esc(r.branch)}</span>`:''}${r.detail?`<div class="xs mut">${esc(r.detail)}</div>`:''}</td></tr>`;}).join('')+'</table></div>';
+  }catch(e){ el.innerHTML='<div class="xs mut">โหลดไม่ได้: '+esc(e.message)+'</div>'; }
+}
+/* ---------- ระบบเข้าสู่ระบบ ---------- */
+async function authGate(){
+  const {url,key}=cfg();
+  let probe;
+  try{
+    const r=await fetch(url+'/rest/v1/pnl_users?select=id&limit=1',{headers:{apikey:key,Authorization:'Bearer '+key}});
+    if(!r.ok) throw 0;
+    probe=await r.json();
+  }catch(e){ // ยังไม่รัน jjmk_pnl_users.sql -> ใช้แบบเดิม (ทุกคน = admin)
+    S.user={username:'legacy',display_name:LS.get('jjpnl_user','')||'ไม่ระบุ',role:'admin',perms:{},legacy:true};
+    return true;
+  }
+  const saved=LS.get('jjpnl_auth',null);
+  if(saved&&saved.u){
+    try{
+      const rows=await sel('pnl_users','select=*&username=eq.'+encodeURIComponent(saved.u));
+      const u=rows[0];
+      if(u&&u.active&&u.pass_hash===saved.h){ setUser(u); return true; }
+    }catch(e){}
+    LS.set('jjpnl_auth',null);
+  }
+  showLogin(probe.length===0);
+  return false;
+}
+function setUser(u){
+  S.user={id:u.id,username:u.username,display_name:u.display_name,role:u.role,perms:u.perms||{}};
+  LS.set('jjpnl_auth',{u:u.username,h:u.pass_hash});
+}
+function showLogin(firstRun){
+  let ov=document.getElementById('loginOv');
+  if(!ov){ ov=document.createElement('div'); ov.id='loginOv'; document.body.appendChild(ov); }
+  ov.innerHTML=`<div class="logincard">
+    <div style="font-family:'Prompt';font-weight:800;font-size:21px">🏮 JJ P&L</div>
+    <div class="sm mut" style="margin:2px 0 14px">${firstRun?'ยังไม่มีผู้ใช้ — สร้างบัญชีผู้ดูแลคนแรก':'เข้าสู่ระบบ จริงใจหมูกระทะ'}</div>
+    ${firstRun?`<div class="fld"><label>ชื่อที่แสดง</label><input id="lgName" placeholder="เช่น แพท"></div>`:''}
+    <div class="fld"><label>Username</label><input id="lgU" autocomplete="username" placeholder="username"></div>
+    <div class="fld"><label>Password</label><input id="lgP" type="password" autocomplete="current-password" placeholder="••••••••"
+      onkeydown="if(event.key==='Enter')${firstRun?'createAdmin()':'doLogin()'}"></div>
+    <button class="btn dk" style="width:100%;margin-top:6px" onclick="${firstRun?'createAdmin()':'doLogin()'}">${firstRun?'สร้างบัญชี admin':'เข้าสู่ระบบ'}</button>
+    <div id="lgMsg" class="xs" style="color:var(--bad);margin-top:8px;min-height:14px"></div>
+  </div>`;
+  ov.style.display='flex';
+  setTimeout(()=>{const f=document.getElementById(firstRun?'lgName':'lgU'); f&&f.focus();},50);
+}
+async function doLogin(){
+  const u=(document.getElementById('lgU').value||'').trim();
+  const p=document.getElementById('lgP').value||'';
+  const msg=document.getElementById('lgMsg');
+  if(!u||!p){msg.textContent='ใส่ username และ password ก่อนครับ';return;}
+  try{
+    const rows=await sel('pnl_users','select=*&username=eq.'+encodeURIComponent(u));
+    const usr=rows[0];
+    if(!usr||usr.pass_hash!==pwHash(u,p)){msg.textContent='username หรือ password ไม่ถูกต้อง';return;}
+    if(!usr.active){msg.textContent='บัญชีนี้ถูกปิดการใช้งาน';return;}
+    setUser(usr);
+    api('POST','pnl_activity_log',{username:usr.username,branch:S.br,action:'เข้าสู่ระบบ',detail:''},'return=minimal').catch(()=>{});
+    document.getElementById('loginOv').style.display='none';
+    boot();
+  }catch(e){ msg.textContent='เชื่อมต่อไม่ได้: '+e.message; }
+}
+async function createAdmin(){
+  const nm=(document.getElementById('lgName').value||'').trim();
+  const u=(document.getElementById('lgU').value||'').trim();
+  const p=document.getElementById('lgP').value||'';
+  const msg=document.getElementById('lgMsg');
+  if(!nm||!u||p.length<4){msg.textContent='กรอกให้ครบ (รหัสอย่างน้อย 4 ตัว)';return;}
+  try{
+    const rows=await api('POST','pnl_users',{username:u,display_name:nm,pass_hash:pwHash(u,p),role:'admin',perms:{}});
+    setUser(rows[0]||{username:u,display_name:nm,role:'admin',perms:{},pass_hash:pwHash(u,p)});
+    document.getElementById('loginOv').style.display='none';
+    boot();
+  }catch(e){ msg.textContent='สร้างไม่สำเร็จ: '+e.message; }
+}
+function logout(){
+  if(!confirm('ออกจากระบบ?'))return;
+  api('POST','pnl_activity_log',{username:(S.user&&S.user.username)||'?',branch:S.br,action:'ออกจากระบบ',detail:''},'return=minimal').catch(()=>{});
+  LS.set('jjpnl_auth',null); S.user=null;
+  location.reload();
+}
+function paintUser(){
+  const el=document.getElementById('sbUser'); if(!el)return;
+  if(!S.user){el.innerHTML='';return;}
+  el.innerHTML=`<div style="padding:8px 12px;font-size:12px;color:#F2DCDC">
+    👤 <b>${esc(S.user.display_name)}</b> <span style="opacity:.7">· ${S.user.legacy?'โหมดเดิม':S.user.role==='admin'?'ผู้ดูแล':'พนักงาน'}</span>
+    ${S.user.legacy?'':`<button class="hintlink" style="color:#F3C74F;margin-left:6px" onclick="logout()">ออก</button>`}</div>`;
+}
 async function boot(){
   const {url,key}=cfg();
   if(!url||!key){ document.getElementById('setup').style.display='block'; return; }
+  if(!S.user){ const ok=await authGate(); if(!ok) return; }
   document.getElementById('app').style.display='block';
   document.getElementById('monthPick').value=S.m;
   document.getElementById('brSeg').onclick=async e=>{
@@ -713,7 +987,9 @@ async function boot(){
   if(S.br!=='ALL' && !S.core.branches.some(b=>b.code===S.br)) S.br=(S.core.branches[0]||{}).code||'JJRD';
   renderBrSeg();
   const last=LS.get('jjpnl_view',null);
-  const startTab = last && VIEWS.includes(last.tab) ? last.tab : 'dash';
+  let startTab = last && VIEWS.includes(last.tab) ? last.tab : 'dash';
+  if(permOf(startTab)==='none') startTab=firstAllowedTab();
+  applyPerms();
   if(last && last.on===todayStr()){
     if(last.incDay) S.incDay=last.incDay;
     if(last.expDay) S.expDay=last.expDay;
@@ -1898,6 +2174,7 @@ function renderDtLines(focusLast){
   if(focusLast){ const rows=el.querySelectorAll('.dtrow'); const last=rows[rows.length-1]; if(last){const f=last.querySelector('input'); f&&f.focus();} }
 }
 function getEditor(){
+  if(S.user&&!S.user.legacy) return S.user.display_name||S.user.username;
   let u=LS.get('jjpnl_user','')||'';
   if(!u){ u=(prompt('ใส่ชื่อผู้ใช้เครื่องนี้ (ใช้บันทึกประวัติแก้ไขบิล)','')||'').trim();
     if(u)LS.set('jjpnl_user',u); }
@@ -2534,11 +2811,27 @@ RENDER.set = async (el)=>{
       <div class="fld"><label>URL</label><input id="stUrl" value="${esc(url)}"></div>
       <div class="fld"><label>Key</label><input id="stKey" value="${esc(key)}"></div>
       <div style="display:flex;gap:8px"><button class="btn sm2" onclick="localStorage.setItem('jjpnl_url',document.getElementById('stUrl').value.trim());localStorage.setItem('jjpnl_key',document.getElementById('stKey').value.trim());toast('บันทึกแล้ว รีโหลด...');setTimeout(()=>location.reload(),600)">บันทึก</button></div></div>
-    <div class="card"><h3>👤 ผู้ใช้เครื่องนี้</h3>
-      <div class="xs mut" style="margin-bottom:8px">ชื่อนี้จะถูกบันทึกในประวัติการแก้ไขรายละเอียดบิล (ใครแก้ · แก้อะไร)</div>
+    ${S.user&&!S.user.legacy?`
+    <div class="card"><h3>👤 บัญชีของฉัน</h3>
+      <div class="sm"><b>${esc(S.user.display_name)}</b> <span class="mut">· ${esc(S.user.username)} · ${S.user.role==='admin'?'ผู้ดูแลระบบ (ทุกสิทธิ์)':'พนักงาน'}</span></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn gh sm2" onclick="pwModal()">🔑 เปลี่ยนรหัสผ่าน</button>
+        <button class="btn gh sm2" style="color:var(--bad)" onclick="logout()">ออกจากระบบ</button></div>
+    </div>
+    ${S.user.role==='admin'?`
+    <div class="card"><h3>👥 ผู้ใช้และสิทธิ์ <span class="sp"><button class="hintlink" onclick="userModal(null)">+ เพิ่มผู้ใช้</button></span></h3>
+      <div class="xs mut" style="margin:-4px 0 8px">กำหนดรายเมนู: <b>แก้ไข</b> / <b>ดูอย่างเดียว</b> / <b>ซ่อน</b> · admin เห็นและแก้ได้ทุกหน้า</div>
+      <div id="userList"><div class="spin"></div></div>
+    </div>
+    <div class="card"><h3>🕘 ประวัติการใช้งาน <span class="sp"><button class="hintlink" onclick="actLoad()">รีเฟรช</button></span></h3>
+      <div class="xs mut" style="margin:-4px 0 8px">ระบบบันทึกอัตโนมัติว่าใครทำอะไร หน้าไหน เมื่อไหร่ (ล่าสุด 100 รายการ)</div>
+      <div id="actList"><div class="spin"></div></div>
+    </div>`:''}`
+    :`<div class="card"><h3>👤 ผู้ใช้เครื่องนี้ <span class="chip gold">โหมดเดิม</span></h3>
+      <div class="xs mut" style="margin-bottom:8px">อยากเปิดระบบ login + สิทธิ์รายเมนู + ประวัติการใช้งาน → รัน <b>jjmk_pnl_users.sql</b> ใน Supabase แล้วรีเฟรช (ผู้ใช้เริ่มต้น admin / jjmk1234)</div>
       <input id="stUser" placeholder="เช่น แพท / บอย" value="${esc(LS.get('jjpnl_user','')||'')}"
         onchange="LS.set('jjpnl_user',this.value.trim());toast('บันทึกชื่อผู้ใช้แล้ว')" style="max-width:280px">
-    </div>
+    </div>`}
     <div class="card"><h3>📥 ข้อมูลย้อนหลัง (ฐานคำนวณค่าเฉลี่ย)</h3>
       <div class="xs mut" style="margin-bottom:10px">รับ 2 แบบ: <b>① ไฟล์ Excel เดือนเก่าทั้งไฟล์</b> (แม่แบบเดิม ระบบแกะยอดขาย+รายจ่ายซัพ+เงินสดให้เอง) หรือ <b>② เทมเพลตกรอกเอง</b> — กดโหลดเทมเพลตด้านล่าง กรอกยอดรวมรายเดือน แล้วอัปโหลดกลับ · คอลัมน์ "เฉลี่ย" จะคำนวณจากข้อมูลจริง 5 เดือนล่าสุด</div>
       <div style="margin-bottom:10px"><button class="btn gh sm2" onclick="makeHistTemplate()">📄 โหลดเทมเพลตกรอกเอง</button></div>
@@ -2618,6 +2911,7 @@ RENDER.set = async (el)=>{
         </div>`).join('')}</div>
   </div></div>`;
   loadHistList();
+  if(S.user&&S.user.role==='admin'&&!S.user.legacy){ userLoad(); actLoad(); }
 };
 async function supItemsModal(id){
   const sp=S.core.supById[id]; if(!sp)return;
