@@ -180,6 +180,7 @@ details>summary::-webkit-details-marker{display:none}
 .useg{display:flex;gap:6px;margin:-2px 0 10px}
 .useg button{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 13px;font-size:12px;font-weight:700}
 .useg button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.useg button.ghost{border-style:dashed;color:var(--mut);background:#FCFAF4}
 .unitwrap{display:flex;flex-wrap:wrap;gap:7px}
 .unitchip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 8px 6px 13px;font-size:13px;font-weight:600}
 .unitchip button{color:var(--bad);font-weight:800;font-size:13px;padding:0 4px;border-radius:50%}
@@ -2543,16 +2544,19 @@ function dtBillTabsRender(){
   const el=document.getElementById('dtBillTabs'); if(!el)return;
   const DB=S._dtDayBills||{};
   const bns=Object.keys(DB).map(Number).sort((a,b)=>a-b);
-  const showTabs=bns.length>1||(bns.length===1&&S.dtBillNo>bns[0])||S.dtBillNo>1;
-  const all=[...new Set([...bns,S.dtBillNo])].sort((a,b)=>a-b);
+  // บิลที่ "เคยมี" ในประวัติของซัพนี้ (เช่น เคยมีบิลไม่มี VAT 2 ใบ = บิลที่ 1 กับ 3) ขึ้นรอให้กดเลย
+  const histBns=[...new Set((S._dtRows||[]).map(r=>num(r.bill_no)||1))];
+  const all=[...new Set([...bns,...histBns,S.dtBillNo])].sort((a,b)=>a-b);
   el.innerHTML=all.map(bn=>{
     const net=dtBillNet(DB[bn]);
-    const vm=(DB[bn]&&DB[bn][0]&&DB[bn][0].vat_mode)||dtTypeVat(bn);
-    return `<button class="${bn===S.dtBillNo?'on':''}" onclick="dtBillPick(${bn})">บิลที่ ${bn}${vm?` · ${DT_VLBL[vm]||vm}`:''}${net?` · ฿${fmtI(net)}`:''}</button>`;
-  }).join('')+`<button onclick="dtBillAdd()" title="ซัพนี้ส่งหลายบิลในวันเดียว เช่น บิล VAT + บิลไม่มี VAT">➕ เพิ่มบิลในวันนี้</button>`;
-  el.style.display = (all.length>1||bns.length>=1)?'flex':'flex';
+    const today=!!DB[bn];
+    const vm=(today&&DB[bn][0]&&DB[bn][0].vat_mode)||dtTypeVat(bn);
+    return `<button class="${bn===S.dtBillNo?'on':''} ${!today&&bn!==S.dtBillNo?'ghost':''}"
+      onclick="dtBillPick(${bn})" title="${today?'บิลของวันนี้':'บิลประเภทที่เคยมี — กดเพื่อลงของวันนี้'}">บิลที่ ${bn}${vm?` · ${DT_VLBL[vm]||vm}`:''}${net?` · ฿${fmtI(net)}`:''}</button>`;
+  }).join('')+`<button onclick="dtBillAdd()" title="เพิ่มบิลใบใหม่ของวันนี้ (กี่ใบก็ได้ ไม่มี VAT ซ้ำกันหลายใบก็ได้)">➕ เพิ่มบิลในวันนี้</button>`;
+  el.style.display='flex';
 }
-function dtBillPick(bn){ S.dtBillNo=bn; dtLoad(); }
+function dtBillPick(bn){ S.dtBillNo=bn; S._dtWantNew=true; dtLoad(); } // ผู้ใช้เลือกเอง — อย่ารีเซ็ตกลับบิล 1
 function dtBillAdd(){
   const DB=S._dtDayBills||{};
   const bns=Object.keys(DB).map(Number);
