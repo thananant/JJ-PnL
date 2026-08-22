@@ -187,6 +187,9 @@ details>summary::-webkit-details-marker{display:none}
 .useg button{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 13px;font-size:12px;font-weight:700}
 .useg button.on{background:var(--ink);border-color:var(--ink);color:#fff}
 .useg button.ghost{border-style:dashed;color:var(--mut);background:#FCFAF4}
+.usearch{display:flex;gap:8px;align-items:center;margin:0 0 10px}
+.usearch input{flex:1;min-width:0}
+.usearch button{white-space:nowrap}
 .unitwrap{display:flex;flex-wrap:wrap;gap:7px}
 .unitchip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 8px 6px 13px;font-size:13px;font-weight:600}
 .unitchip button{color:var(--bad);font-weight:800;font-size:13px;padding:0 4px;border-radius:50%}
@@ -2512,7 +2515,7 @@ RENDER.usage = async (el)=>{
         const nm=(S.core.supById[p2.sid]||{}).name||('#'+p2.sid);
         return `<span style="white-space:nowrap;${idx===0&&priced.length>1?'color:var(--ok);font-weight:700':''}">${idx===0&&priced.length>1?'✓':''}${esc(nm)} ${fmt(p2.lastP,2)}</span>`;
       }).join('<span class="mut"> · </span>');
-      return `<tr style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+      return `<tr class="urow" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
         <td>${esc(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span></td>
         <td class="n">${fq(perDay)}<span class="xs mut">/วัน</span></td>
@@ -2527,14 +2530,14 @@ RENDER.usage = async (el)=>{
       .sort((a,b)=>b.baht-a.baht);
     if(!items.length)return;
     const sub=items.reduce((a,x)=>a+x.baht,0); grand+=sub;
-    body+=`<tr class="cat"><td colspan="2"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${catColor(sp.category)};margin-right:6px"></span>${esc(sp.name)}</td>
-      <td colspan="3"></td><td class="n">${fmtI(sub)}</td><td></td></tr>`;
+    body+=`<tr class="cat ughead" data-grphead="${sp.id}"><td colspan="2"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${catColor(sp.category)};margin-right:6px"></span>${esc(sp.name)}</td>
+      <td colspan="3"></td><td class="n usub">${fmtI(sub)}</td><td></td></tr>`;
     body+=items.map(x=>{
       const perDay=x.qty/dd;
       const pv=pg[x.k]; let chipHtml='';
       if(pv>0){ const df=(x.qty-pv)/pv;
         chipHtml=`<span class="chip ${df>0.03?'bad':df<-0.03?'ok':'mid'}" title="เทียบเดือนก่อน ${fq(pv)} ${esc(x.unit)}">${df>0?'▲':df<0?'▼':''} ${pctF(Math.abs(df))}</span>`; }
-      return `<tr style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
+      return `<tr class="urow" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
         <td style="padding-left:18px">${esc(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span></td>
         <td class="n">${fq(perDay)}<span class="xs mut">/วัน</span></td>
@@ -2552,17 +2555,43 @@ RENDER.usage = async (el)=>{
       <button class="${S.usageMode==='item'?'on':''}" onclick="usageModeSet('item')">รวมสินค้าเดียวกัน (เทียบราคา)</button>
     </div>
     <div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>
-    <div class="twrap" style="max-height:64dvh;overflow-y:auto"><table>
+    <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
+      <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button></div>
+    <div class="twrap"><table id="useTbl">
       ${S.usageMode==='item'
         ?`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">ซัพ</th><th class="right">ราคาล่าสุดรายซัพ</th><th class="right">มูลค่า ฿</th><th></th></tr>`
         :`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">บิล</th><th class="right">ราคาล่าสุด</th><th class="right">มูลค่า ฿</th><th></th></tr>`}
       ${body}
-      <tr class="cat" style="border-top:2px solid var(--line)"><td colspan="5"><b>รวมมูลค่าของที่ลงรายละเอียด</b></td>
-        <td class="n" style="color:var(--red);font-weight:700">${fmtI(grand)}</td><td></td></tr>
+      <tr id="useNone" style="display:none"><td colspan="7" class="mut" style="text-align:center;padding:18px">ไม่พบสินค้าที่ค้นหา</td></tr>
+      <tr class="cat" id="useTot" data-grand="${grand}" style="border-top:2px solid var(--line)"><td colspan="5"><b id="useTotL">รวมมูลค่าของที่ลงรายละเอียด</b></td>
+        <td class="n" id="useTotV" style="color:var(--red);font-weight:700">${fmtI(grand)}</td><td></td></tr>
     </table></div>
   </div>`;
+  if(S._usageQ) usageFilter(S._usageQ);   // สลับโหมด/เดือนแล้วยังจำคำค้นไว้
 };
 function usageModeSet(m){ S.usageMode=m; LS.set('jj_usemode',m); show('usage'); }
+// กรองตารางการใช้ของตามคำค้น (ไม่โหลดใหม่) — ทุกคำที่พิมพ์ต้องเจอ · ซ่อนหัวกลุ่มซัพที่ไม่มีสินค้าตรง · ยอดรวม/ยอดกลุ่มคิดเฉพาะแถวที่แสดง
+function usageFilter(q){
+  S._usageQ=(q||'').trim();
+  const toks=S._usageQ.toLowerCase().split(/\s+/).filter(Boolean);
+  const tbl=document.getElementById('useTbl'); if(!tbl)return;
+  const grp={}; let shown=0, sum=0;
+  tbl.querySelectorAll('tr.urow').forEach(tr=>{
+    const hay=tr.dataset.s||''; const ok=toks.every(t=>hay.includes(t));
+    tr.style.display=ok?'':'none';
+    const g=grp[tr.dataset.grp]??(grp[tr.dataset.grp]={n:0,sum:0});
+    if(ok){ shown++; const b=num(tr.dataset.baht); sum+=b; g.n++; g.sum+=b; }
+  });
+  tbl.querySelectorAll('tr.ughead').forEach(tr=>{
+    const g=grp[tr.dataset.grphead]||{n:0,sum:0};
+    tr.style.display=g.n?'':'none';
+    const c=tr.querySelector('.usub'); if(c)c.textContent=fmtI(g.sum);
+  });
+  const none=document.getElementById('useNone'); if(none)none.style.display=shown?'none':'';
+  const L=document.getElementById('useTotL'), V=document.getElementById('useTotV');
+  if(L&&V){ L.textContent=toks.length?`รวมที่ค้นพบ (${shown} รายการ)`:'รวมมูลค่าของที่ลงรายละเอียด'; V.textContent=fmtI(sum); }
+  const x=document.getElementById('useQx'); if(x)x.style.display=toks.length?'':'none';
+}
 function usageDetailItem(k){
   const U=S._usage; if(!U||!U.gi||!U.gi[k])return;
   const t=U.gi[k];
