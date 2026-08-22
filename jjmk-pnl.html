@@ -1313,7 +1313,7 @@ RENDER.dash = async (el)=>{
       <div id="revNote" class="xs mut" style="margin:-2px 0 6px"></div>
       <div class="douRow"><div class="douBox"><canvas id="chRev"></canvas></div><div id="revPct" class="plist"></div></div></div>
   </div>
-  <div class="card"><h3>ยอดขายรายวัน (รวม VAT) <span class="sp">${monthLabel(S.m)}</span></h3>
+  <div class="card"><h3>ยอดขายรายวัน (แยก VAT) <span class="sp">${monthLabel(S.m)}</span></h3>
     <div class="avgrow" id="avgRow"></div><div class="linebox"><canvas id="chLine"></canvas></div></div>
   <div class="card"><h3>ยอดขายดิบรายวัน (POS แยกกะ) <span class="sp">${monthLabel(S.m)}</span></h3>
     ${salesRepHTML(A.c, A.days)}
@@ -1482,24 +1482,36 @@ function drawDash(A){
       <span class="avgc" style="--c:var(--red)">ศ–ส–อา <b>฿${fmtI(avHv)}</b></span>
       ${fixDay?`<span class="avgc" style="--c:#E0B33C" title="Fix cost ฿${fmtI(A.fixT)} ÷ ${A.days} วันของเดือน">Fix/วัน <b>฿${fmtI(fixDay)}</b></span>`:''}
       ${brk?`<span class="avgc" style="--c:#8B5A2B" title="Fix/วัน ฿${fmtI(fixDay)} + ต้นทุนผันแปร ฿${fmtI(A.vc)} ÷ วันขาย ${A.daysData} วัน (฿${fmtI(vcDay)}/วัน)">คุ้มทุน/วัน <b>฿${fmtI(brk)}</b></span>`:''}
-      ${brk?`<span class="xs mut" style="align-self:center">ยอดขายเกินเส้นคุ้มทุน = แท่ง<b style="color:#1E8A3C">เขียว</b> · ต่ำกว่า = แดงตามเดิม</span>`:''}` : '';
+      ${brk?`<span class="xs mut" style="align-self:center">ยอดขายเกินเส้นคุ้มทุน = แท่ง<b style="color:#1E8A3C">เขียว</b> · ต่ำกว่า = แดงตามเดิม</span>`:''}
+      <span class="xs mut" style="align-self:center">แท่งล่าง = ยอด<b>ก่อน VAT</b> · <b style="color:#5E8AA3">แท่งบนสีฟ้า</b> = VAT 7% · ซ้อนกัน = ยอดรวม VAT</span>` : '';
     const mkLine=(v,color)=>({type:'line',data:Array(A.daily.length).fill(v||null),borderColor:color,
       borderDash:[6,4],borderWidth:1.6,pointRadius:0,pointHitRadius:0,fill:false,order:0});
+    // สีเขียว/แดงตัดสินจากยอดรวม VAT ทั้งแท่ง (ซ้อนกันแล้ว) เทียบเส้นคุ้มทุน — กติกาเดิม
     const barBg=A.daily.map((v,i)=>{
       if(brk&&v>=brk) return isHeavy(i)?'#1E8A3C':'#8FD6A4';
       return isHeavy(i)?'#C62127':'#E5B4B6';
     });
+    // แยก VAT ออกจากแท่ง: แท่งล่าง = ยอดก่อน VAT (×100/107) · แท่งบน (ฟ้า) = VAT 7% — ซ้อนกันแล้วสูงเท่ายอดรวม VAT เท่าเดิม
+    const exD=A.daily.map(v=>v*100/107);
+    const vatD=A.daily.map((v,i)=>v-exD[i]);
+    const vatBg=A.daily.map((_,i)=>isHeavy(i)?'#7FA3B8':'#BBD0DC');
     const lineSets=[mkLine(avAll,'#5B5348'), mkLine(avWk,'#D89094'), mkLine(avHv,'#C62127')];
     if(fixDay) lineSets.push(mkLine(fixDay,'#E0B33C'));
     if(brk) lineSets.push(mkLine(brk,'#8B5A2B'));
+    const brkTxt=tot=>brk?(tot>=brk?' · ✅ เกินคุ้มทุน':' · ต่ำกว่าคุ้มทุน'):'';
     S.charts.line=new Chart(lc,{type:'bar',data:{labels:A.daily.map((_,i)=>i+1),
       datasets:[
-        {data:A.daily,backgroundColor:barBg,borderRadius:4,order:1},
+        {label:'ก่อน VAT',data:exD,backgroundColor:barBg,borderRadius:4,borderSkipped:'middle',stack:'sales',order:1},
+        {label:'VAT 7%',data:vatD,backgroundColor:vatBg,borderRadius:4,borderSkipped:'middle',stack:'sales',order:1},
         ...lineSets
       ]},
       options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{label:c=>'฿'+fmtI(c.raw)+(brk?(c.raw>=brk?' · ✅ เกินคุ้มทุน':' · ต่ำกว่าคุ้มทุน'):'')}}},
-        scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{display:false},tooltip:{filter:c=>c.dataset.type!=='line',callbacks:{
+          title:items=>items.length?'วันที่ '+items[0].label:'',
+          label:c=>c.dataset.label+' ฿'+fmtI(c.raw),
+          footer:items=>{ if(!items.length)return ''; const tot=A.daily[items[0].dataIndex]||0; return 'รวม VAT ฿'+fmtI(tot)+brkTxt(tot); }}}},
+        scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmt(v/1000,0)+'k',font:{size:10}},grid:{color:'#F0ECE5'}}}}});
   }
   buildDou('cost', document.getElementById('chDou'), false);
   buildDou('rev', document.getElementById('chRev'), false);
