@@ -106,6 +106,7 @@ input.auto{background:#F7F2E7!important;color:#7A6A45;font-weight:700}
 .avgc{font-size:12px;color:var(--mut);background:#FAF6EC;border:1.5px solid var(--line);border-radius:99px;padding:4px 11px;display:inline-flex;align-items:center;gap:6px}
 .avgc::before{content:'';width:14px;height:0;border-top:2.5px dashed var(--c)}
 .avgc b{color:var(--c);font-family:'Prompt'}
+.avgtap{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:#4E7D8C;font-weight:600}
 .fxgrp{display:grid;grid-template-columns:1fr 130px;gap:6px;align-items:center;background:#FCF3D8;font-weight:700;font-size:12px;font-family:'Prompt';color:#7A5A10;padding:6px 10px;border-bottom:1px solid var(--line)}
 .fxrow{display:grid;grid-template-columns:1fr 130px;gap:6px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
 .fxrow input{width:100%;padding:6px 8px;text-align:right;font-size:13px;border-radius:8px}
@@ -671,7 +672,8 @@ async function loadCore(){
     sel('pnl_fix_groups','select=*&order=sort,name').catch(()=>[])
   ]);
   const bench = {};
-  ben.forEach(r=>{ (bench[r.bkey]??={list:[]}).list.push(Number(r.pct)); });
+  ben.slice().sort((a,b)=>String(a.period).localeCompare(String(b.period)))
+    .forEach(r=>{ const b=(bench[r.bkey]??={list:[],per:[]}); b.list.push(Number(r.pct)); b.per.push(r.period); });
   Object.values(bench).forEach(b=>{
     b.avg = b.list.reduce((a,c)=>a+c,0)/b.list.length;
     b.min = Math.min(...b.list);
@@ -1281,7 +1283,8 @@ function killChart(id){ if(S.charts[id]){S.charts[id].destroy(); delete S.charts
 RENDER.dash = async (el)=>{
   const A = await aggFor(S.br,S.m);
   S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
-  const P = await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
+  let P = await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
+  if(!(P&&P.revenue)) P=histPrev(prevMonth(S.m)) || P;   // เดือนก่อนยังไม่มีข้อมูลรายวัน → ใช้ข้อมูลย้อนหลังที่นำเข้า
   let cmpHtml;
   if(S.br==='ALL'){ cmpHtml=multiCompare(A.parts); }
   else{
@@ -1299,7 +1302,7 @@ RENDER.dash = async (el)=>{
     <div class="kpi"><div class="t">ยอดขายรวม VAT</div><div class="kpi-v">฿${fmtI(A.incVat)}</div>
       <div class="s mut">เฉลี่ย ฿${fmtI(avgDay)}/วัน · บันทึก ${A.daysData}/${A.days} วัน</div></div>
     <div class="kpi"><div class="t">Variable cost</div><div class="kpi-v">฿${fmtI(A.vc)}</div>
-      <div class="s">${pctF(vcPct)} ${benchTot?chip(vcPct!=null?vcPct-benchTot.avg:null):''} <span class="xs mut">เทียบเฉลี่ย ${benchTot?pctF(benchTot.avg):'–'}</span></div></div>
+      <div class="s">${pctF(vcPct)} ${benchTot?chip(vcPct!=null?vcPct-benchTot.avg:null):''} <span class="xs mut">เทียบเฉลี่ย ${benchTot?avgTap('__total',pctF(benchTot.avg)):'–'}</span></div></div>
     <div class="kpi"><div class="t">Fix cost</div><div class="kpi-v">฿${fmtI(A.fixT)}</div>
       <div class="s mut">${A.revenue?pctF(A.fixT/A.revenue)+' ของรายได้':'–'} · <span class="hintlink" onclick="S.expDay=S.expDay||1;show('exp')">แก้ที่หน้ารายจ่าย →</span></div></div>
     <div class="kpi"><div class="t">คงเหลือสุทธิ (หลัง VC + Fix + นอกเหนือ)</div>
@@ -1344,8 +1347,51 @@ function totalBench(){
   return staticTotalBench();
 }
 function benchOf(name){
-  const d=S.dynBench; if(d&&d.map[name]&&d.map[name].n) return d.map[name];
+  const d=S.dynBench;
+  if(d&&d.n){ const b=d.map[name]; return b&&b.n ? b : null; } // ช่วงนี้มีข้อมูลจริง → ใช้เฉพาะข้อมูลจริง ไม่เอามาตรฐานตั้งต้น (ชีทลาดพร้าว) มาปนรายซัพ
   return S.core.bench[name]||null;
+}
+function benchHdr(){ const d=S.dynBench; return d&&d.n ? `เฉลี่ย ${d.n} ด.` : 'มาตรฐาน'; }
+function benchMonthsNote(){
+  const d=S.dynBench;
+  if(!(d&&d.n)) return 'ยังไม่มีข้อมูลย้อนหลังในช่วง 8 เดือนก่อน — คอลัมน์ "มาตรฐาน" ใช้ชีทสรุปตั้งต้น';
+  const ms=d.months.slice().sort(); const lbl=ms.length>1?`${monthLabel(ms[0])} – ${monthLabel(ms[ms.length-1])}`:monthLabel(ms[0]);
+  const nh=d.win.filter(w=>w.src==='hist').length;
+  return `เฉลี่ยจาก ${d.n} เดือนล่าสุดที่มีข้อมูล (${lbl}${nh?` · ${nh} เดือนจากข้อมูลย้อนหลัง`:''}) · แตะตัวเลขเฉลี่ยดูแยกรายเดือน`;
+}
+const avgTap=(key,txt)=>`<span class="avgtap" data-k="${esc(key)}" onclick="benchModal(this.dataset.k)">${txt}</span>`;
+// ป๊อปอัพ: ค่าเฉลี่ยคิดจากเดือนไหนบ้าง เดือนละเท่าไร (key = ชื่อซัพ / กะเช้า / กะเย็น / Shopee / __total)
+function benchModal(key){
+  const d=S.dynBench; const isTot=key==='__total'; const title=isTot?'Variable cost รวม':key;
+  const SRC={real:'ข้อมูลในแอพ',hist:'ย้อนหลัง'};
+  if(d&&d.n){
+    const rows=d.win.slice().sort((a,b)=>a.mo.localeCompare(b.mo)).map(w=>{
+      const amt=isTot?Object.values(w.items).reduce((a,c)=>a+c,0):(w.items[key]||0);
+      return {mo:w.mo,src:w.src,rev:w.rev,amt,p:w.rev?amt/w.rev:null};
+    });
+    const used=rows.filter(r=>isTot||r.amt>0);
+    const b=isTot?d.total:d.map[key];
+    openModal(`<h3>📊 ${esc(title)} <span class="sp">เฉลี่ย ${used.length} เดือน</span></h3>
+      <div class="xs mut" style="margin-bottom:8px">ใช้ ${d.n} เดือนล่าสุดที่มีข้อมูล${isTot?'':' · เดือนที่ไม่มียอดของรายการนี้ไม่นับในค่าเฉลี่ย'}</div>
+      <div class="twrap"><table>
+        <tr><th>เดือน</th><th>ที่มา</th><th class="right">จำนวนเงิน</th><th class="right">รายได้ฐาน</th><th class="right">%</th></tr>
+        ${rows.map(r=>`<tr${(isTot||r.amt>0)?'':' class="mut"'}><td>${monthLabel(r.mo)}</td><td class="xs mut">${SRC[r.src]||''}</td>
+          <td class="n">${r.amt?fmtI(r.amt):'–'}</td><td class="n xs mut">${fmtI(r.rev)}</td><td class="n${(isTot||r.amt>0)?' b':''}">${r.amt?pctF(r.p):'–'}</td></tr>`).join('')}
+        ${b?`<tr class="tot"><td colspan="4">เฉลี่ย · ต่ำสุด</td><td class="n">${pctF(b.avg)} · ${pctF(b.min)}</td></tr>`:''}
+      </table></div>
+      <div style="display:flex;margin-top:12px"><button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ปิด</button></div>`);
+    return;
+  }
+  const b=isTot?staticTotalBench():S.core.bench[key];
+  if(!b){ toast('ยังไม่มีข้อมูลเฉลี่ยของรายการนี้',true); return; }
+  const per=isTot?(Object.values(S.core.bench)[0]||{}).per||[]:(b.per||[]);
+  const list=isTot?(()=>{ const ks=Object.keys(S.core.bench); const n=Math.max(...ks.map(k=>S.core.bench[k].list.length)); const sums=Array(n).fill(0); ks.forEach(k=>S.core.bench[k].list.forEach((v,i)=>sums[i]+=v)); return sums; })():b.list;
+  openModal(`<h3>📊 ${esc(title)} <span class="sp">มาตรฐานตั้งต้น</span></h3>
+    <div class="xs mut" style="margin-bottom:8px">ยังไม่มีข้อมูลย้อนหลังในช่วง 8 เดือนก่อนเดือนที่ดู — ตัวเลขนี้มาจากชีทสรุปตั้งต้น (ลาดพร้าว)</div>
+    <div class="twrap"><table><tr><th>เดือน</th><th class="right">%</th></tr>
+      ${list.map((v,i)=>`<tr><td>${/^\d{4}-\d{2}$/.test(per[i]||'')?monthLabel(per[i]):esc(per[i]||'')}</td><td class="n">${pctF(v)}</td></tr>`).join('')}
+      <tr class="tot"><td>เฉลี่ย · ต่ำสุด</td><td class="n">${pctF(b.avg)} · ${pctF(b.min)}</td></tr></table></div>
+    <div style="display:flex;margin-top:12px"><button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ปิด</button></div>`);
 }
 /* คำนวณค่าเฉลี่ยจากข้อมูลจริงย้อนหลัง ≤5 เดือนล่าสุด (จากข้อมูลรายวันในระบบ + ตาราง history ที่นำเข้า) */
 async function loadBenchWindow(br,m){
@@ -1379,8 +1425,8 @@ async function loadBenchWindow(br,m){
   const usable=[];
   for(const mo of Object.keys(M)){
     const t=M[mo];
-    if(t.pos>0) usable.push({mo, rev:t.pos/1.07+t.grab+t.lineman, items:t.items});
-    else if(t.hasH&&t.hRev>0) usable.push({mo, rev:t.hRev, items:t.hItems});
+    if(t.pos>0) usable.push({mo, rev:t.pos/1.07+t.grab+t.lineman, items:t.items, src:'real'});
+    else if(t.hasH&&t.hRev>0) usable.push({mo, rev:t.hRev, items:t.hItems, src:'hist'});
   }
   usable.sort((a,b)=>b.mo.localeCompare(a.mo));
   const win=usable.slice(0,5);
@@ -1395,7 +1441,8 @@ async function loadBenchWindow(br,m){
   });
   for(const nm in map){ const L=map[nm].list;
     map[nm]={avg:L.reduce((a,c)=>a+c,0)/L.length, min:Math.min(...L), n:L.length, list:L}; }
-  const out={ map, n:win.length, months:win.map(w=>w.mo),
+  const out={ map, n:win.length, months:win.map(w=>w.mo), win,
+    byMonth:Object.fromEntries(usable.map(u=>[u.mo,u])),   // ทุกเดือนที่มีข้อมูลในช่วง 8 เดือน (ไว้ใช้ "เทียบเดือนก่อน" เมื่อเดือนก่อนไม่มีข้อมูลรายวัน)
     total: totList.length?{avg:totList.reduce((a,c)=>a+c,0)/totList.length, min:Math.min(...totList), n:totList.length}:null };
   S.benchCache[key]=out; return out;
 }
@@ -1414,7 +1461,7 @@ function supDeltaTable(A){
     body+=list.map(r=>{
       const pp=rev?r.amt/rev:null; const bn=benchOf(r.name);
       return `<tr><td style="padding-left:20px">${esc(r.name)}</td><td class="n">${fmtI(r.amt)}</td><td class="n">${pctF(pp)}</td>
-        <td class="n mut">${bn?pctF(bn.avg):'–'}</td><td class="right">${bn&&pp!=null?chip(pp-bn.avg):''}</td></tr>`;
+        <td class="n mut">${bn?avgTap(r.name,pctF(bn.avg)):'–'}</td><td class="right">${bn&&pp!=null?chip(pp-bn.avg):''}</td></tr>`;
     }).join('');
   });
   const tb=totalBench();
@@ -1422,9 +1469,9 @@ function supDeltaTable(A){
   body+=`<tr class="cat" style="border-top:2px solid var(--line)"><td><b>รวมซัพทั้งหมด · ${n} ราย</b></td>
     <td class="n" style="color:var(--red);font-weight:700">${fmtI(grand)}</td>
     <td class="n" style="font-weight:700">${pctF(gp)}</td>
-    <td class="n mut">${tb?pctF(tb.avg):'–'}</td>
+    <td class="n mut">${tb?avgTap('__total',pctF(tb.avg)):'–'}</td>
     <td class="right">${tb&&gp!=null?chip(gp-tb.avg):''}</td></tr>`;
-  return `<div class="xs mut" style="margin:-4px 0 8px">${src} · ครบทุกซัพที่มียอด</div>
+  return `<div class="xs mut" style="margin:-4px 0 8px">${src} · ครบทุกซัพที่มียอด · แตะตัวเลขเฉลี่ยดูแยกรายเดือน</div>
   <div class="twrap" style="max-height:560px;overflow-y:auto"><table>
   <tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th><th class="right">%</th><th class="right">เฉลี่ย</th><th></th></tr>
   ${body}</table></div>`;
@@ -1451,13 +1498,21 @@ function compareTable(A,O){
   ${row('คงเหลือสุทธิ',A.net,O.net,1)}
   </table></div>`;
 }
+// เดือนก่อนจากข้อมูลย้อนหลัง (pnl_history) — มีแค่รายได้ฐาน + รายการ VC (ไม่มี Fix cost/สุทธิ)
+function histPrev(mo){
+  const d=S.dynBench; const h=d&&d.byMonth&&d.byMonth[mo];
+  if(!h||h.src!=='hist'||!h.rev) return null;
+  const byName=h.items||{};
+  return { revenue:h.rev, vc:Object.values(byName).reduce((a,c)=>a+c,0), net:null, hist:true, byName,
+           bySupName:n=>byName[n]||0, cashM:byName['กะเช้า']||0, cashE:byName['กะเย็น']||0, shopee:byName['Shopee']||0 };
+}
 function comparePrev(A,P){
   if(!P||!P.revenue) return '<div class="empty xs">ยังไม่มีข้อมูลเดือนก่อน</div>';
   const d=(a,b)=>b?((a-b)/b):null;
   const r=(t,a,b)=>{const dd=d(a,b);return `<tr><td>${t}</td><td class="n">฿${fmtI(a)}</td><td class="n mut">฿${fmtI(b)}</td><td class="right">${chip(dd,true)}</td></tr>`;}
   const rc=(t,a,b)=>{const dd=d(a,b);return `<tr><td>${t}</td><td class="n">฿${fmtI(a)}</td><td class="n mut">฿${fmtI(b)}</td><td class="right">${chip(dd)}</td></tr>`;}
   return `<div class="twrap"><table><tr><th></th><th class="right">เดือนนี้</th><th class="right">เดือนก่อน</th><th></th></tr>
-  ${r('รายได้รวม',A.revenue,P.revenue)}${rc('Variable cost',A.vc,P.vc)}${r('คงเหลือสุทธิ',A.net,P.net)}</table></div>`;
+  ${r('รายได้รวม',A.revenue,P.revenue)}${rc('Variable cost',A.vc,P.vc)}${P.hist?'':r('คงเหลือสุทธิ',A.net,P.net)}</table></div>${P.hist?'<div class="xs mut" style="margin-top:4px">เดือนก่อนจากข้อมูลย้อนหลัง (มีเฉพาะรายได้ + Variable cost)</div>':''}`;
 }
 function drawDash(A){
   if(typeof Chart==='undefined'){toast('โหลดกราฟไม่ขึ้น (เช็คเน็ต)',true);return;}
@@ -3357,21 +3412,23 @@ async function dtJump(d,sid,bn){
 RENDER.sum = async (el)=>{
   const A=await aggFor(S.br,S.m);
   S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
-  const P=await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
+  let P=await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
+  if(!(P&&P.revenue)) P=histPrev(prevMonth(S.m)) || P;   // เดือนก่อนยังไม่มีข้อมูลรายวัน → ใช้ข้อมูลย้อนหลังที่นำเข้า
   const RO = S.br==='ALL';
   const rev=A.revenue;
   const pRev=P?P.revenue:0;
+  const pSup=s=>!P?0:(P.hist?P.bySupName(s.name):(P.bySup[s.id]||0));
   const autoDiv = A.daysData || A.days;                    // อัตโนมัติ: หารตามวันที่มีรายรับจริง
   const divisor = A.c.meta.days_divisor ?? autoDiv;
   const supRow=(s)=>{
     const amt=A.bySup[s.id]||0;
     const p=rev?amt/rev:null;
     const bn=benchOf(s.name);
-    const pAmt=P?(P.bySup[s.id]||0):0;
+    const pAmt=pSup(s);
     const pp=pRev?pAmt/pRev:null;
     return `<tr class="ind"><td>${esc(s.name)}</td><td class="n">${amt?fmtI(amt):''}</td>
       <td class="n">${amt?pctF(p):''}</td>
-      <td class="n mut xs">${bn?pctF(bn.avg):''}</td><td class="n mut xs">${bn?pctF(bn.min):''}</td>
+      <td class="n mut xs">${bn?avgTap(s.name,pctF(bn.avg)):''}</td><td class="n mut xs">${bn?pctF(bn.min):''}</td>
       <td class="right">${bn&&p!=null&&amt?chip(p-bn.avg):''}</td>
       <td class="right">${pp!=null&&p!=null&&amt?chip(p-pp):''}</td></tr>`;
   };
@@ -3379,7 +3436,7 @@ RENDER.sum = async (el)=>{
     const p=rev?amt/rev:null; const bn=benchOf(bkey);
     const pp=pRev&&pAmt!=null?pAmt/pRev:null;
     return `<tr class="ind"><td>${label}</td><td class="n">${amt?fmtI(amt):''}</td><td class="n">${amt?pctF(p):''}</td>
-      <td class="n mut xs">${bn?pctF(bn.avg):''}</td><td class="n mut xs">${bn?pctF(bn.min):''}</td>
+      <td class="n mut xs">${bn?avgTap(bkey,pctF(bn.avg)):''}</td><td class="n mut xs">${bn?pctF(bn.min):''}</td>
       <td class="right">${bn&&p!=null&&amt?chip(p-bn.avg):''}</td>
       <td class="right">${pp!=null&&p!=null&&amt?chip(p-pp):''}</td></tr>`;
   };
@@ -3437,12 +3494,13 @@ RENDER.sum = async (el)=>{
     </table></div>
 
     <div class="secbar">Variable cost <span class="sp">฿${fmtI(A.vc)} · ${pctF(vcPct)} ${bt?chip(vcPct!=null?vcPct-bt.avg:null):''}</span></div>
+    <div class="xs mut" style="margin:6px 0 4px">${benchMonthsNote()}${P&&P.hist?' · เดือนก่อน (คอลัมน์ขวาสุด) จากข้อมูลย้อนหลัง':''}</div>
     <div class="twrap"><table>
-      <tr><th>รายการ</th><th class="right">จำนวนเงิน</th><th class="right">%</th><th class="right">เฉลี่ย 5 ด.</th><th class="right">ต่ำสุด</th><th class="right">เทียบเฉลี่ย</th><th class="right">เทียบเดือนก่อน</th></tr>
+      <tr><th>รายการ</th><th class="right">จำนวนเงิน</th><th class="right">%</th><th class="right">${benchHdr()}</th><th class="right">ต่ำสุด</th><th class="right">เทียบเฉลี่ย</th><th class="right">เทียบเดือนก่อน</th></tr>
       ${vcRows}
       <tr class="tot"><td>ยอดรวม Variable cost</td><td class="n">${fmtI(A.vc)}</td><td class="n">${pctF(vcPct)}</td>
-        <td class="n xs">${bt?pctF(bt.avg):''}</td><td class="n xs">${bt?pctF(bt.min):''}</td>
-        <td class="right">${bt&&vcPct!=null?chip(vcPct-bt.avg):''}</td><td></td></tr>
+        <td class="n xs">${bt?avgTap('__total',pctF(bt.avg)):''}</td><td class="n xs">${bt?pctF(bt.min):''}</td>
+        <td class="right">${bt&&vcPct!=null?chip(vcPct-bt.avg):''}</td><td class="right">${pRev&&vcPct!=null?chip(vcPct-P.vc/pRev):''}</td></tr>
       <tr class="tot"><td>คงเหลือหลังหัก Variable cost</td><td class="n" style="color:${rev-A.vc>=0?'var(--ok)':'var(--bad)'}">${fmtI(rev-A.vc)}</td>
         <td class="n">${rev?pctF((rev-A.vc)/rev):''}</td><td colspan="4"></td></tr>
     </table></div>
