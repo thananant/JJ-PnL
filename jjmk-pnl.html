@@ -2849,7 +2849,7 @@ function dtOcrSend(bodyObj){ // ใช้ XHR: % อัปโหลดจริ�
     xhr.onload=()=>{
       const lines=(xhr.responseText||'').split('\n').filter(Boolean);
       let j={}; try{ j=JSON.parse(lines[lines.length-1]||'{}'); }catch(e){}
-      res({ok:xhr.status>=200&&xhr.status<300&&j.status!=='error'&&!j.error, status:xhr.status, j});
+      res({ok:xhr.status>=200&&xhr.status<300&&j.status!=='error'&&j.status!=='quota'&&!j.error, status:xhr.status, j});
     };
     xhr.onerror=()=>rej(new Error('เชื่อมต่อ Worker ไม่ได้'));
     xhr.onabort=()=>rej(new Error('__cancel__'));
@@ -2869,7 +2869,15 @@ async function dtOcrRetry(){ // สแกนรูปเดิมซ้ำ (โ�
 }
 function renderOcrRetryBtn(){
   const el=document.getElementById('dtOcrRetryWrap'); if(!el)return;
-  el.innerHTML=S._lastOcrImg?`<button class="hintlink" onclick="dtOcrRetry()">🔁 สแกนรูปเดิมอีกครั้ง</button>`:'';
+  clearInterval(S._ocrCoolTimer); S._ocrCoolTimer=null;
+  if(!S._lastOcrImg){ el.innerHTML=''; return; }
+  const remain=S._ocrQuotaUntil?Math.ceil((S._ocrQuotaUntil-Date.now())/1000):0;
+  if(remain>0){
+    el.innerHTML=`<span class="xs mut">⏳ Gemini ครบโควตาฟรีชั่วคราว รออีก ${remain} วิ...</span>`;
+    S._ocrCoolTimer=setInterval(renderOcrRetryBtn,1000);
+  }else{
+    el.innerHTML=`<button class="hintlink" onclick="dtOcrRetry()">🔁 สแกนรูปเดิมอีกครั้ง</button>`;
+  }
 }
 async function dtOcrRun(b64){
   ocrProgOpen();
@@ -2881,7 +2889,16 @@ async function dtOcrRun(b64){
     const r=await dtOcrSend({image:b64.data,mime:b64.mime,knownItems:known,aliases});
     const used=Date.now()-OCRP.t0;
     ins('pnl_ocr_stats',{branch:S.br||null,model:r.ok?r.j._model||null:null,ok:!!r.ok,ms:used}).catch(()=>{}); // เก็บสถิติ ไม่บล็อกงานหลัก
+    if(r.j.status==='quota'){
+      ocrProgClose();
+      const wait=num(r.j.retryAfter)||45;
+      S._ocrQuotaUntil=Date.now()+wait*1000;
+      toast(`⏳ Gemini ถึงขีดจำกัดการใช้ฟรีชั่วคราว (โควตา) — ลองใหม่ได้ในอีก ${wait} วินาที`,true);
+      renderOcrRetryBtn();
+      return;
+    }
     if(!r.ok||r.j.error){ ocrProgClose(); toast('อ่านบิลไม่สำเร็จ: '+(r.j.error||r.status)+' — ลองกด "สแกนรูปเดิมอีกครั้ง" ได้ครับ',true); renderOcrRetryBtn(); return; }
+    S._ocrQuotaUntil=null; // สำเร็จแล้ว เลิกล็อกปุ่ม (เผื่อเคยติดโควตาค้างไว้ก่อนหน้า)
     // จำเวลาที่ใช้จริง ไว้ทายรอบหน้าให้แม่นขึ้น (ค่าเฉลี่ยถ่วงน้ำหนัก)
     LS.set('jj_ocr_ms', Math.round(OCRP.est*0.55 + used*0.45));
     ocrProgSet('เสร็จแล้ว ✅',100,' ');
