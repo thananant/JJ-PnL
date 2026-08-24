@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{
   --red:#C62127; --red-d:#A31B20; --red-t:#FBEBEB;
@@ -298,6 +299,7 @@ table.mx td:hover{outline:2px solid #C9A227;outline-offset:-2px;border-radius:4p
 /* ---------- Layout ---------- */
 main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px) calc(30px + env(safe-area-inset-bottom))}
 .view{display:none}.view.on{display:block;animation:fin .18s ease}
+#view-detail{max-width:1024px} /* จอกว้าง: หน้าบันทึกบิลไม่ยืดเต็มจอ ช่องตัวเลขอยู่ใกล้ชื่อสินค้า พิมพ์ง่ายกว่า */
 @keyframes fin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
 .card h3{margin:0 0 10px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
@@ -320,6 +322,7 @@ main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px)
 .dupbox{background:var(--gold-t);border:1.5px solid #E9D9A8;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
 .duprow{padding:6px 0;border-top:1px dashed #E9D9A8;cursor:pointer;line-height:1.6}
 .duprow:first-of-type{border-top:0;margin-top:4px}
+#rtBar{display:none;position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:1200;background:var(--ink);color:#fff;padding:9px 16px;border-radius:99px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
 .chip.gold{background:var(--gold-t);color:var(--gold)}
 
 /* ---------- KPI ---------- */
@@ -953,6 +956,7 @@ async function show(v){
   const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   S.tab=v;
+  const _rb=document.getElementById('rtBar'); if(_rb)_rb.style.display='none';
   LS.set('jjpnl_view',{tab:v, incDay:S.incDay||null, expDay:S.expDay||null, on:todayStr()});
   const el=document.getElementById('view-'+v);
   el.innerHTML='<div class="spin"></div>';
@@ -962,6 +966,72 @@ async function show(v){
   }
 }
 async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; S.benchCache={}; await show(S.tab); }
+/* ---------- อัปเดตสดข้ามเครื่อง (พนักงานหลายคนกรอกพร้อมกัน) ----------
+   หลัก: Supabase Realtime (ต้องรัน jjmk_pnl_realtime.sql เปิดครั้งเดียว) · สำรอง: โพลทุก 90 วิ เฉพาะหน้าดูอย่างเดียว
+   กติกา: หน้าอ่านอย่างเดียว (แดชบอร์ด/สรุป/การใช้ของ/รายละเอียดบิล) รีเฟรชให้เองตอนไม่ได้พิมพ์อยู่
+          หน้ากรอก (รายรับ/รายจ่าย/PV) ขึ้นแถบ "แตะเพื่อโหลดใหม่" ไม่ทับของที่พิมพ์ค้าง
+          หน้าบันทึกบิล รีเฟรชเฉพาะลิสต์ประวัติ/รายการบิล + เตือนถ้าบิลที่เปิดอยู่โดนแก้จากเครื่องอื่น */
+const RT_TABLES=['pnl_bill_items','pnl_expense_daily','pnl_income_daily','pnl_cash_expenses','pnl_shopee','pnl_month_meta','pnl_fixed_monthly'];
+let _rtLive=false,_rtT=null,_rtPend=false;
+function rtBusyForm(){ const a=document.activeElement; return !!(a&&['INPUT','TEXTAREA','SELECT'].includes(a.tagName)); }
+function rtStart(){
+  if(S._rtInit)return; S._rtInit=true;
+  try{
+    if(window.supabase&&window.supabase.createClient){
+      const c=cfg(); const sb=window.supabase.createClient(c.url,c.key);
+      let ch=sb.channel('jjpnl-live');
+      RT_TABLES.forEach(t=>{ ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t},rtEvent); });
+      ch.subscribe(st=>{ _rtLive=(st==='SUBSCRIBED'); });
+    }
+  }catch(e){}
+  setInterval(rtTick,90000);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&_rtPend)rtApply(); });
+  document.addEventListener('focusout',()=>{ if(_rtPend)setTimeout(()=>{ if(_rtPend&&!rtBusyForm()&&!document.hidden)rtApply(); },400); });
+}
+function rtEvent(){ clearTimeout(_rtT); _rtT=setTimeout(rtApply,1200); } // รวมหลายเหตุการณ์ติด ๆ กันเป็นรอบเดียว
+function rtTick(){ // โพลสำรองตอน Realtime ยังไม่เปิด: รีเฟรชเงียบ ๆ เฉพาะหน้าดูอย่างเดียว
+  if(_rtLive||document.hidden||rtBusyForm())return;
+  if(['dash','sum','usage','vatrep'].includes(S.tab)){ S.cache={}; S.benchCache={}; show(S.tab); }
+  else if(S.tab==='detail'){ dtMonthList(); dtHist(); }
+}
+async function rtApply(){
+  _rtPend=false;
+  if(document.hidden){ _rtPend=true; return; }
+  S.cache={}; S.benchCache={};
+  const v=S.tab;
+  if(v==='detail'){
+    dtMonthList(); dtHist();
+    dtStaleCheck();
+    return;
+  }
+  if(['dash','sum','usage','vatrep'].includes(v)){
+    if(rtBusyForm()){ _rtPend=true; rtBanner(); return; }
+    await show(v); return;
+  }
+  if(['income','exp','pv'].includes(v)){ rtBanner(); return; } // หน้ากรอก: ไม่ทับของที่พิมพ์อยู่
+}
+function rtBanner(){
+  let b=document.getElementById('rtBar');
+  if(!b){ b=document.createElement('div'); b.id='rtBar';
+    b.innerHTML='🔄 มีการแก้ไขจากเครื่องอื่น — <b>แตะเพื่อโหลดใหม่</b>';
+    b.onclick=()=>{ b.style.display='none'; _rtPend=false; reloadView(); };
+    document.body.appendChild(b); }
+  b.style.display='block';
+}
+async function dtStaleCheck(){ // บิลที่เปิดอยู่โดนแก้จากเครื่องอื่นหรือเปล่า
+  if(!S.dtSup||!S.dtDate)return;
+  try{
+    const fr=await sel('pnl_bill_items',`select=*&branch=eq.${S.br}&d=eq.${S.dtDate}&supplier_id=eq.${S.dtSup}&order=bill_no,sort`).catch(()=>null);
+    if(!fr)return;
+    const DB={}; fr.forEach(r=>{ const b2=num(r.bill_no)||1; (DB[b2]??=[]).push(r); });
+    if(dtRowsSig(DB[S.dtBillNo])!==dtRowsSig((S._dtDayBills||{})[S.dtBillNo])){
+      const tn=document.getElementById('dtTplNote');
+      if(tn&&!document.getElementById('dtStaleWarn'))
+        tn.insertAdjacentHTML('beforebegin',`<div id="dtStaleWarn" class="ocrwarn" style="cursor:pointer" onclick="this.remove();dtLoad()">⚠ <b>บิลที่เปิดอยู่ถูกแก้จากเครื่องอื่นเมื่อกี้</b> — แตะตรงนี้เพื่อโหลดของล่าสุด (ถ้าฝืนบันทึกเลย ระบบจะถามยืนยันอีกที)</div>`);
+    }
+  }catch(e){}
+}
+function dtRowsSig(rows){ return JSON.stringify((rows||[]).map(r=>[r.item,num(r.qty),num(r.price),num(r.discount),num(r.bill_discount),r.vat_mode||'none',num(r.ship_fee),num(r.other_fee)])); }
 function saveSetup(){
   const u=document.getElementById('suUrl').value.trim(), k=document.getElementById('suKey').value.trim();
   if(!u||!k){ toast('กรอกให้ครบก่อนครับ',true); return; }
@@ -1256,6 +1326,7 @@ async function boot(){
     await show(S.tab);
   };
   document.getElementById('monthPick').onchange=async e=>{ S.m=e.target.value; LS.set('jjpnl_m',S.m); await show(S.tab); };
+  rtStart();
   document.querySelectorAll('.tabbar button,.sb-item').forEach(btn=>btn.onclick=()=>show(btn.dataset.v));
   // Enter = เลื่อนไปช่องกรอกถัดไป (Fix cost / รายจ่าย / รายรับ / เงินสดจ่าย / สร้าง PV)
   document.addEventListener('keydown',e=>{
@@ -3364,6 +3435,18 @@ async function dtSave(){
   try{
     const bq=`&bill_no=eq.${bn}`;
     const oldRows=(S._dtDayBills&&S._dtDayBills[bn])||[];
+    // หลายเครื่องกรอกพร้อมกัน: เช็คกับเซิร์ฟเวอร์สด ๆ ก่อน (ของที่โหลดค้างไว้อาจเก่าแล้ว)
+    let freshDB=S._dtDayBills||{};
+    try{
+      const fr=await sel('pnl_bill_items',`select=*&branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}&order=bill_no,sort`);
+      freshDB={}; fr.forEach(r2=>{ const b3=num(r2.bill_no)||1; (freshDB[b3]??=[]).push(r2); });
+      if(dtRowsSig(freshDB[bn])!==dtRowsSig(oldRows)){
+        if(!confirm(`⚠ บิลนี้ถูกแก้จากเครื่องอื่นหลังจากคุณเปิดหน้า\n\nOK = บันทึกทับด้วยของที่กรอกอยู่\nCancel = ยกเลิก แล้วโหลดของล่าสุดมาดูก่อน`)){
+          const w2=document.getElementById('dtStaleWarn'); if(w2)w2.remove();
+          await dtLoad(); return;
+        }
+      }
+    }catch(e2){}
     await delQ('pnl_bill_items',`branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}${bn>1?bq:''}${bn===1&&S._dtDayBills&&Object.keys(S._dtDayBills).length>1?bq:''}`)
       .catch(async e=>{ // คอลัมน์ bill_no ยังไม่มี
         if(bn>1){ toast('ต้องรัน jjmk_pnl_billno.sql ก่อนถึงจะแยกหลายบิลต่อวันได้ครับ',true); throw e; }
@@ -3396,7 +3479,8 @@ async function dtSave(){
       else throw e;
     }
     let daySum=total;
-    Object.entries(S._dtDayBills||{}).forEach(([b2,rws])=>{ if(Number(b2)!==bn) daySum+=dtBillNet(rws); });
+    Object.entries(freshDB).forEach(([b2,rws])=>{ if(Number(b2)!==bn) daySum+=dtBillNet(rws); }); // ยอดวัน = บิลนี้ + บิลอื่นตามข้อมูลสด (นับของที่เครื่องอื่นเพิ่งลงด้วย)
+    const _sw=document.getElementById('dtStaleWarn'); if(_sw)_sw.remove();
     await ups('pnl_expense_daily',[{branch:S.br,d,supplier_id:sid,amount:daySum}],'branch,d,supplier_id');
     const mo=d.slice(0,7); const c=S.cache[mkey(S.br,mo)];
     if(c){ const k=d+'|'+sid; const r=c.exp[k]??(c.exp[k]={branch:S.br,d,supplier_id:sid}); r.amount=daySum; }
