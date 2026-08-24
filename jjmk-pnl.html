@@ -613,6 +613,10 @@ async function api(method, path, body, prefer){
   }finally{ setBusy(false); }
 }
 const sel  = (t,q)=>api('GET', t+'?'+q);
+async function selAll(t,q,page){ // ดึงครบทุกแถวแม้เกินเพดานต่อคำขอ (ต้องมี order ใน q ให้หน้าคงที่)
+  page=page||1000; const out=[]; let off=0;
+  for(;;){ const r=await sel(t,`${q}&limit=${page}&offset=${off}`); out.push(...r); if(r.length<page) return out; off+=page; }
+}
 const ins  = (t,row)=>api('POST', t, row);
 const ups  = (t,rows,conflict)=>api('POST', t+'?on_conflict='+conflict, rows, 'resolution=merge-duplicates,return=representation');
 const upd  = (t,q,body)=>api('PATCH', t+'?'+q, body);
@@ -1361,10 +1365,10 @@ function benchOf(name){
 function benchHdr(){ const d=S.dynBench; return d&&d.n ? `เฉลี่ย ${d.n} ด.` : 'มาตรฐาน'; }
 function benchMonthsNote(){
   const d=S.dynBench;
-  if(!(d&&d.n)) return 'ยังไม่มีข้อมูลย้อนหลังในช่วง 8 เดือนก่อน — คอลัมน์ "มาตรฐาน" ใช้ชีทสรุปตั้งต้น';
+  if(!(d&&d.n)) return 'ยังไม่มีข้อมูลของเดือนก่อนหน้าเลย — คอลัมน์ "มาตรฐาน" ใช้ชีทสรุปตั้งต้น';
   const ms=d.months.slice().sort(); const lbl=ms.length>1?`${monthLabel(ms[0])} – ${monthLabel(ms[ms.length-1])}`:monthLabel(ms[0]);
   const nh=d.win.filter(w=>w.src==='hist').length;
-  return `เฉลี่ยจาก ${d.n} เดือนล่าสุดที่มีข้อมูล (${lbl}${nh?` · ${nh} เดือนจากข้อมูลย้อนหลัง`:''}) · แตะตัวเลขเฉลี่ยดูแยกรายเดือน`;
+  return `เฉลี่ยจากทุกเดือนที่มีข้อมูล ${d.n} เดือน (${lbl}${nh?` · ${nh} เดือนจากข้อมูลย้อนหลัง`:''}) · แตะตัวเลขเฉลี่ยดูแยกรายเดือน`;
 }
 const avgTap=(key,txt)=>`<span class="avgtap" data-k="${esc(key)}" onclick="benchModal(this.dataset.k)">${txt}</span>`;
 // ป๊อปอัพ: ค่าเฉลี่ยคิดจากเดือนไหนบ้าง เดือนละเท่าไร (key = ชื่อซัพ / กะเช้า / กะเย็น / Shopee / __total)
@@ -1379,7 +1383,7 @@ function benchModal(key){
     const used=rows.filter(r=>isTot||r.amt>0);
     const b=isTot?d.total:d.map[key];
     openModal(`<h3>📊 ${esc(title)} <span class="sp">เฉลี่ย ${used.length} เดือน</span></h3>
-      <div class="xs mut" style="margin-bottom:8px">ใช้ ${d.n} เดือนล่าสุดที่มีข้อมูล${isTot?'':' · เดือนที่ไม่มียอดของรายการนี้ไม่นับในค่าเฉลี่ย'}</div>
+      <div class="xs mut" style="margin-bottom:8px">ใช้ทุกเดือนที่มีข้อมูล ${d.n} เดือน${isTot?'':' · เดือนที่ไม่มียอดของรายการนี้ไม่นับในค่าเฉลี่ย'}</div>
       <div class="twrap"><table>
         <tr><th>เดือน</th><th>ที่มา</th><th class="right">จำนวนเงิน</th><th class="right">รายได้ฐาน</th><th class="right">%</th></tr>
         ${rows.map(r=>`<tr${(isTot||r.amt>0)?'':' class="mut"'}><td>${monthLabel(r.mo)}</td><td class="xs mut">${SRC[r.src]||''}</td>
@@ -1394,7 +1398,7 @@ function benchModal(key){
   const per=isTot?(Object.values(S.core.bench)[0]||{}).per||[]:(b.per||[]);
   const list=isTot?(()=>{ const ks=Object.keys(S.core.bench); const n=Math.max(...ks.map(k=>S.core.bench[k].list.length)); const sums=Array(n).fill(0); ks.forEach(k=>S.core.bench[k].list.forEach((v,i)=>sums[i]+=v)); return sums; })():b.list;
   openModal(`<h3>📊 ${esc(title)} <span class="sp">มาตรฐานตั้งต้น</span></h3>
-    <div class="xs mut" style="margin-bottom:8px">ยังไม่มีข้อมูลย้อนหลังในช่วง 8 เดือนก่อนเดือนที่ดู — ตัวเลขนี้มาจากชีทสรุปตั้งต้น (ลาดพร้าว)</div>
+    <div class="xs mut" style="margin-bottom:8px">ยังไม่มีข้อมูลของเดือนก่อนหน้าเดือนที่ดู — ตัวเลขนี้มาจากชีทสรุปตั้งต้น (ลาดพร้าว)</div>
     <div class="twrap"><table><tr><th>เดือน</th><th class="right">%</th></tr>
       ${list.map((v,i)=>`<tr><td>${/^\d{4}-\d{2}$/.test(per[i]||'')?monthLabel(per[i]):esc(per[i]||'')}</td><td class="n">${pctF(v)}</td></tr>`).join('')}
       <tr class="tot"><td>เฉลี่ย · ต่ำสุด</td><td class="n">${pctF(b.avg)} · ${pctF(b.min)}</td></tr></table></div>
@@ -1404,18 +1408,24 @@ function benchModal(key){
 async function loadBenchWindow(br,m){
   S.benchCache=S.benchCache||{};
   const key=br+'|'+m; if(S.benchCache[key]) return S.benchCache[key];
-  const mons=[]; let mm=prevMonth(m); for(let i=0;i<8;i++){ mons.push(mm); mm=prevMonth(mm); }
-  const mMin=mons[mons.length-1], mMax=mons[0];
-  const from=mMin+'-01', to=dstr(mMax,monthDays(mMax));
   const brF = br==='ALL' ? '' : `&branch=eq.${br}`;
+  // เฉลี่ยใช้ "ทุกเดือนที่มีข้อมูล" ก่อนเดือนที่ดู — หาเดือนแรกสุดที่มีข้อมูล (จริงหรือย้อนหลัง) ก่อน
+  const mMax=prevMonth(m);
+  let mMin=mMax;
+  const [inc1,his1]=await Promise.all([
+    sel('pnl_income_daily',`select=d${brF}&order=d&limit=1`).catch(()=>[]),
+    sel('pnl_history',`select=month${brF}&order=month&limit=1`).catch(()=>[])
+  ]);
+  [inc1[0]&&inc1[0].d.slice(0,7), his1[0]&&his1[0].month].forEach(c=>{ if(c&&c<mMin) mMin=c; });
+  const from=mMin+'-01', to=dstr(mMax,monthDays(mMax));
   const [incR,expR,cashR,shopR,metaR,histR,histI]=await Promise.all([
-    sel('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&d=gte.${from}&d=lte.${to}${brF}`),
-    sel('pnl_expense_daily',`select=d,supplier_id,amount&d=gte.${from}&d=lte.${to}${brF}`),
-    sel('pnl_cash_expenses',`select=d,shift,amount&d=gte.${from}&d=lte.${to}${brF}`),
-    sel('pnl_shopee',`select=d,price,qty,shipping&d=gte.${from}&d=lte.${to}${brF}`),
-    sel('pnl_month_meta',`select=month,grab,lineman&month=gte.${mMin}&month=lte.${mMax}${brF}`),
-    sel('pnl_history',`select=*&month=gte.${mMin}&month=lte.${mMax}${brF}`).catch(()=>[]),
-    sel('pnl_history_items',`select=*&month=gte.${mMin}&month=lte.${mMax}${brF}`).catch(()=>[])
+    selAll('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&d=gte.${from}&d=lte.${to}${brF}&order=d`),
+    selAll('pnl_expense_daily',`select=d,supplier_id,amount&d=gte.${from}&d=lte.${to}${brF}&order=d,supplier_id`),
+    selAll('pnl_cash_expenses',`select=d,shift,amount&d=gte.${from}&d=lte.${to}${brF}&order=d,shift`),
+    selAll('pnl_shopee',`select=d,price,qty,shipping&d=gte.${from}&d=lte.${to}${brF}&order=d,id`),
+    selAll('pnl_month_meta',`select=month,grab,lineman&month=gte.${mMin}&month=lte.${mMax}${brF}&order=month`),
+    selAll('pnl_history',`select=*&month=gte.${mMin}&month=lte.${mMax}${brF}&order=month`).catch(()=>[]),
+    selAll('pnl_history_items',`select=*&month=gte.${mMin}&month=lte.${mMax}${brF}&order=month,name`).catch(()=>[])
   ]);
   const M={}; const get=(mo)=>M[mo]??(M[mo]={pos:0,grab:0,lineman:0,items:{},hRev:0,hItems:{},hasH:false});
   incR.forEach(r=>{ const t=get(r.d.slice(0,7)); t.pos+=num(r.sales_pos_am)+num(r.sales_pos_pm); });
@@ -1436,7 +1446,7 @@ async function loadBenchWindow(br,m){
     else if(t.hasH&&t.hRev>0) usable.push({mo, rev:t.hRev, items:t.hItems, src:'hist'});
   }
   usable.sort((a,b)=>b.mo.localeCompare(a.mo));
-  const win=usable.slice(0,5);
+  const win=usable; // ใช้ทุกเดือนที่มีข้อมูล (ตามสั่ง 24 ส.ค. 69 — ไม่ตัดเหลือ 5 เดือนแล้ว)
   const map={}; const totList=[];
   win.forEach(w=>{
     let vcSum=0;
@@ -1449,13 +1459,13 @@ async function loadBenchWindow(br,m){
   for(const nm in map){ const L=map[nm].list;
     map[nm]={avg:L.reduce((a,c)=>a+c,0)/L.length, min:Math.min(...L), n:L.length, list:L}; }
   const out={ map, n:win.length, months:win.map(w=>w.mo), win,
-    byMonth:Object.fromEntries(usable.map(u=>[u.mo,u])),   // ทุกเดือนที่มีข้อมูลในช่วง 8 เดือน (ไว้ใช้ "เทียบเดือนก่อน" เมื่อเดือนก่อนไม่มีข้อมูลรายวัน)
+    byMonth:Object.fromEntries(usable.map(u=>[u.mo,u])),   // ทุกเดือนที่มีข้อมูล (ไว้ใช้ "เทียบเดือนก่อน" เมื่อเดือนก่อนไม่มีข้อมูลรายวัน)
     total: totList.length?{avg:totList.reduce((a,c)=>a+c,0)/totList.length, min:Math.min(...totList), n:totList.length}:null };
   S.benchCache[key]=out; return out;
 }
 function supDeltaTable(A){
   if(!Object.keys(A.bySup).length) return '<div class="empty">ยังไม่มีข้อมูลรายจ่ายเดือนนี้</div>';
-  const src = S.dynBench&&S.dynBench.n ? `อิงข้อมูลจริง ${S.dynBench.n} เดือนล่าสุด` : 'อิงมาตรฐานตั้งต้น';
+  const src = S.dynBench&&S.dynBench.n ? `อิงข้อมูลจริงทุกเดือนที่มี (${S.dynBench.n} เดือน)` : 'อิงมาตรฐานตั้งต้น';
   const rev=A.revenue||0;
   let body='', grand=0, n=0;
   catList().forEach(cat=>{
