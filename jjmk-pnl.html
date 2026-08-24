@@ -315,6 +315,10 @@ main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px)
 .chip.ok{background:var(--ok-t);color:var(--ok)}
 .chip.bad{background:var(--bad-t);color:var(--bad)}
 .chip.mid{background:#EFEBE4;color:var(--mut)}
+.chip.warn{background:var(--gold-t);color:var(--gold);cursor:pointer}
+.dupbox{background:var(--gold-t);border:1.5px solid #E9D9A8;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
+.duprow{padding:6px 0;border-top:1px dashed #E9D9A8;cursor:pointer;line-height:1.6}
+.duprow:first-of-type{border-top:0;margin-top:4px}
 .chip.gold{background:var(--gold-t);color:var(--gold)}
 
 /* ---------- KPI ---------- */
@@ -2498,7 +2502,7 @@ RENDER.usage = async (el)=>{
   const pgI={};
   prev.forEach(r=>{ const k=r.item+'|'+(r.unit||''); pgI[k]=(pgI[k]||0)+num(r.qty); });
   S._usage={g,gi,dd};
-  if(!S.usageMode) S.usageMode=LS.get('jj_usemode','sup');
+  if(!S.usageMode) S.usageMode=LS.get('jj_usemode2','item');   // ค่าเริ่มต้น = ระดับสินค้า ไม่สนว่ามาจากกี่ซัพ (key ใหม่ให้ทุกเครื่องเริ่มที่โหมดนี้)
   const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
   let body='', grand=0;
   if(S.usageMode==='item'){
@@ -2519,7 +2523,7 @@ RENDER.usage = async (el)=>{
         <td>${esc(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span></td>
         <td class="n">${fq(perDay)}<span class="xs mut">/วัน</span></td>
-        <td class="n mut">${sids.length}</td>
+        <td class="n mut">${sids.length>1?`<span class="chip warn" title="ซื้อจาก ${sids.length} ซัพในเดือนนี้">${sids.length} ซัพ</span>`:sids.length}</td>
         <td class="right xs">${priceCell}</td>
         <td class="n">${fmtI(x.baht)}</td>
         <td class="right">${chipHtml}</td></tr>`;
@@ -2551,10 +2555,10 @@ RENDER.usage = async (el)=>{
   <div class="card">
     <h3>การใช้ของรายสินค้า${ALL?' · รวมทุกสาขา':''} <span class="sp">${monthLabel(S.m)}</span></h3>
     <div class="useg">
+      <button class="${S.usageMode==='item'?'on':''}" onclick="usageModeSet('item')">รายสินค้า (รวมทุกซัพ)</button>
       <button class="${S.usageMode!=='item'?'on':''}" onclick="usageModeSet('sup')">แยกตามซัพ</button>
-      <button class="${S.usageMode==='item'?'on':''}" onclick="usageModeSet('item')">รวมสินค้าเดียวกัน (เทียบราคา)</button>
     </div>
-    <div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>
+    <div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · สินค้าตัวเดียวกันนับรวมทุกซัพ · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
       <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button></div>
     <div class="twrap"><table id="useTbl">
@@ -2569,7 +2573,9 @@ RENDER.usage = async (el)=>{
   </div>`;
   if(S._usageQ) usageFilter(S._usageQ);   // สลับโหมด/เดือนแล้วยังจำคำค้นไว้
 };
-function usageModeSet(m){ S.usageMode=m; LS.set('jj_usemode',m); show('usage'); }
+function usageModeSet(m){ S.usageMode=m; LS.set('jj_usemode2',m); show('usage'); }
+// กระโดดจากหน้าสรุปมาดูการใช้ของสินค้าตัวนั้นรวมทุกซัพ
+function usageJump(item){ S.usageMode='item'; LS.set('jj_usemode2','item'); S._usageQ=item||''; show('usage'); }
 // กรองตารางการใช้ของตามคำค้น (ไม่โหลดใหม่) — ทุกคำที่พิมพ์ต้องเจอ · ซ่อนหัวกลุ่มซัพที่ไม่มีสินค้าตรง · ยอดรวม/ยอดกลุ่มคิดเฉพาะแถวที่แสดง
 function usageFilter(q){
   S._usageQ=(q||'').trim();
@@ -2697,7 +2703,7 @@ RENDER.detail = async (el)=>{
 };
 async function dtPickSup(v){
   S.dtSup=v?parseInt(v):null;
-  S.dtBillNo=1; // เปลี่ยนซัพ เริ่มใหม่
+  S.dtBillNo=1; S._dtIsNew=false; S._dtNewBill=false; // เปลี่ยนซัพ เริ่มใหม่
   const pend=S._ocrPending; S._ocrPending=null;
   document.querySelectorAll('.dtsup').forEach(b=>b.classList.toggle('on',b.dataset.sid==String(S.dtSup)));
   const nm=document.getElementById('dtSupName'); if(nm)nm.textContent=S.dtSup?((S.core.supById[S.dtSup]||{}).name||''):'';
@@ -2770,6 +2776,17 @@ async function dtLoad(){
       if(!(m in modeBn)||Number(bn)<modeBn[m]) modeBn[m]=Number(bn); });
     S._dtModeBn=modeBn;
     const bns=Object.keys(DB).map(Number).sort((a,b)=>a-b);
+    if(S._dtNewBill){
+      // ➕ บิลใหม่: ได้เลขถัดไปของวัน (ประเภท VAT ซ้ำกับใบเดิมได้) · เริ่มว่างเสมอ · ปุ่ม VAT เปลี่ยนแค่ประเภทของบิลนี้
+      S._dtNewBill=false; S._dtForceBn=null; S._dtModeIntent=false; S._dtIsNew=true;
+      S.dtVat=S.dtVat||dtVatDefault();
+      S.dtBillNo=(bns.length?Math.max(...bns):0)+1;
+      S._dtExisting=false; S.dtBillDisc=0; S.dtShip=0; S.dtOther=0;
+      dtBillTabsRender();
+      S.dtLines=[{item:'',qty:'',unit:'',price:''}];
+      tplNote=`🧾 บิลใหม่ใบที่ ${S.dtBillNo} ของวันนี้ · ประเภท "${DT_VLBL[S.dtVat]||S.dtVat}" — พิมพ์รายการเอง หรือกดสแกนบิลได้เลย (ปุ่ม VAT ข้างบน = เปลี่ยนประเภทของบิลใหม่ใบนี้)`;
+    }else{
+    S._dtIsNew=false;
     let mode;
     if(S._dtForceBn!=null&&DB[S._dtForceBn]){ mode=DB[S._dtForceBn][0].vat_mode||'none'; }
     else if(S._dtModeIntent){ mode=S.dtVat||'none'; }
@@ -2811,8 +2828,9 @@ async function dtLoad(){
         S.dtLines=[{item:'',qty:'',unit:'',price:''}];
       }
     }
+    }
   }catch(e){ S.dtLines=[{item:'',qty:'',unit:'',price:''}]; S._dtExisting=false; }
-  renderDtLines(); renderDtVatBtns();
+  renderDtLines(); renderDtVatBtns(); dtBillTabsRender(); // เรนเดอร์แท็บซ้ำหลังรู้สถานะบิลจริง (on-state ถูกใบ)
   const bdi=document.getElementById('dtBillDisc'); if(bdi)bdi.value=S.dtBillDisc||'';
   const shi=document.getElementById('dtShip'); if(shi)shi.value=S.dtShip||'';
   const oti=document.getElementById('dtOther'); if(oti)oti.value=S.dtOther||'';
@@ -2854,12 +2872,25 @@ function dtBillTabsRender(){
   const DB=S._dtDayBills||{};
   const bns=Object.keys(DB).map(Number).sort((a,b)=>a-b);
   if(!bns.length){ el.innerHTML=''; el.style.display='none'; return; }
-  el.style.display='flex';
+  el.style.display='flex'; el.style.flexWrap='wrap';
   el.innerHTML=`<span class="xs mut" style="align-self:center;font-weight:700">วันนี้:</span>`+bns.map(bn=>{
     const m=(DB[bn][0]&&DB[bn][0].vat_mode)||'none';
     const net=dtBillNet(DB[bn]);
-    return `<button class="${m===S.dtVat?'on':''}" onclick="dtVatSet('${m}')" title="เปิดบิล${DT_VLBL[m]}ของวันนี้">${DT_VLBL[m]||m} · ฿${fmtI(net)}</button>`;
-  }).join('');
+    const on=bn===S.dtBillNo&&S._dtExisting;
+    return `<button class="${on?'on':''}" onclick="dtOpenBill(${bn})" title="เปิดบิลใบนี้">${bns.length>1?`บิล ${bn} · `:''}${DT_VLBL[m]||m} · ฿${fmtI(net)}</button>`;
+  }).join('')+`<button class="ghost ${!S._dtExisting?'on':''}" onclick="dtNewBill()" title="เริ่มบิลใหม่อีกใบของวันนี้ (ประเภท VAT ซ้ำกับใบเดิมได้)">➕ บิลใหม่</button>`;
+}
+function dtOpenBill(bn){
+  if(bn===S.dtBillNo&&S._dtExisting){ return; }
+  const hasQty=(S.dtLines||[]).some(l=>num(l.qty));
+  if(hasQty&&!S._dtExisting&&!confirm('สลับบิล — จำนวนที่กรอกค้างไว้ (ยังไม่บันทึก) จะหาย ไปต่อไหม?'))return;
+  S._dtForceBn=bn; dtLoad();
+}
+function dtNewBill(){
+  if(S._dtIsNew&&!S._dtExisting)return; // เปิดบิลใหม่ค้างอยู่แล้ว
+  const hasQty=(S.dtLines||[]).some(l=>num(l.qty));
+  if(hasQty&&!S._dtExisting&&!confirm('เริ่มบิลใหม่ — จำนวนที่กรอกค้างไว้ (ยังไม่บันทึก) จะหาย ไปต่อไหม?'))return;
+  S._dtNewBill=true; dtLoad();
 }
 function dtVatDefault(){
   const sp=S.core.supById[S.dtSup]||{};
@@ -3146,6 +3177,12 @@ async function dtVatSet(m){
   if(!dtMultiMode()){ // ซัพแบบเดียว: ปุ่มเป็นแค่ตัวคำนวณ ไม่แตะรายการ
     S.dtVat=m; renderDtVatBtns(); dtTotals(); return;
   }
+  if(S._dtIsNew&&!S._dtExisting){ // บิลใหม่จากปุ่ม ➕: เปลี่ยนแค่ประเภทของใบนี้
+    S.dtVat=m; renderDtVatBtns(); dtTotals();
+    const tn=document.getElementById('dtTplNote');
+    if(tn&&!(S.dtLines||[]).some(l=>l.item))tn.innerHTML=`🧾 บิลใหม่ใบที่ ${S.dtBillNo} ของวันนี้ · ประเภท "${DT_VLBL[m]||m}" — พิมพ์รายการเอง หรือกดสแกนบิลได้เลย`;
+    return;
+  }
   // ซัพหลายแบบ: ปุ่ม VAT = สลับไปบิลของแบบนั้น (ใบที่บันทึกไว้ หรือเทมเพลตใหม่)
   const hasQty=(S.dtLines||[]).some(l=>num(l.qty));
   const dirty=hasQty&&!S._dtExisting;
@@ -3342,7 +3379,7 @@ async function dtSave(){
     }catch(e){} // ยังไม่รัน jjmk_pnl_supitems.sql ก็ข้ามเงียบๆ
     // ประวัติ: สร้าง/แก้อะไรบ้าง
     const dayMulti=Object.keys(S._dtDayBills||{}).filter(b2=>Number(b2)!==bn).length>0;
-    const bpre=dayMulti?`บิล${DT_VLBL[S.dtVat]||''}: `:'';
+    const bpre=dayMulti?`บิลที่ ${bn} ${DT_VLBL[S.dtVat]||''}: `:'';
     if(!oldRows.length){
       await dtLogAdd(d,sid,`${bpre}สร้างบิล · ${lines.length} รายการ · ยอด ฿${fmt(total,2)}`);
     }else{
@@ -3356,6 +3393,7 @@ async function dtSave(){
       }
     }
     toast(`✅ บันทึกบิล${DT_VLBL[S.dtVat]||''} ฿${fmtI(total)}${dayMulti?` · รวมทั้งวัน ฿${fmtI(daySum)}`:''} → ลงรายจ่าย ${thDate(d)}`);
+    S._dtIsNew=false; S._dtForceBn=bn; // เปิดค้างที่บิลที่เพิ่งบันทึก
     dtHist(); dtMonthList(); dtLoad();
   }catch(e){
     toast(String(e.message||'').includes('pnl_bill_items')||String(e.message||'').includes('404')
@@ -3438,9 +3476,33 @@ async function dtJump(d,sid,bn){
   await dtHist(); await dtLoad();
   window.scrollTo({top:0,behavior:'smooth'});
 }
+// สินค้าเดียวกัน (ชื่อ+หน่วยตามบิล) ที่เดือนนี้ซื้อจากมากกว่า 1 ซัพ — ไว้แจ้งเตือนในหน้าสรุป
+async function sumDupItems(br,m){
+  const from=m+'-01', to=dstr(m,monthDays(m));
+  const brF=br==='ALL'?'':`&branch=eq.${br}`;
+  const rows=await sel('pnl_bill_items',`select=supplier_id,item,unit,qty,price,discount,d${brF}&d=gte.${from}&d=lte.${to}`).catch(()=>[]);
+  const gi={};
+  rows.forEach(r=>{
+    const k=r.item+'|'+(r.unit||''); const t=gi[k]??(gi[k]={item:r.item,unit:r.unit||'',sups:{}});
+    const sp=t.sups[r.supplier_id]??(t.sups[r.supplier_id]={sid:r.supplier_id,qty:0,baht:0,lastD:'',lastP:0});
+    sp.qty+=num(r.qty); sp.baht+=num(r.qty)*num(r.price)-num(r.discount);
+    if(r.d>=sp.lastD){ sp.lastD=r.d; sp.lastP=num(r.price); }
+  });
+  const baht=t=>t.sups.reduce((a,x)=>a+x.baht,0);
+  return Object.values(gi).filter(t=>Object.keys(t.sups).length>1)
+    .map(t=>({item:t.item,unit:t.unit,sups:Object.values(t.sups).sort((a,b)=>a.lastP-b.lastP)}))
+    .sort((a,b)=>baht(b)-baht(a));
+}
 RENDER.sum = async (el)=>{
   const A=await aggFor(S.br,S.m);
   S.dynBench = await loadBenchWindow(S.br,S.m).catch(()=>null);
+  const dup=await sumDupItems(S.br,S.m).catch(()=>[]);
+  const dupBySup={}; dup.forEach(t=>t.sups.forEach(x=>(dupBySup[x.sid]??=[]).push(t.item)));
+  const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
+  const dupTag=sid=>{ const L=dupBySup[sid]; if(!L)return '';
+    return ` <span class="chip warn" data-it="${esc(L[0])}" title="สินค้าที่ซื้อจากหลายซัพเดือนนี้: ${esc(L.join(', '))} · แตะดูการใช้รวมทุกซัพ" onclick="event.stopPropagation();usageJump(this.dataset.it)">⚠ ซ้ำซัพ${L.length>1?' '+L.length+' รายการ':': '+esc(L[0])}</span>`; };
+  const dupHtml=!dup.length?'':`<div class="dupbox"><b>⚠️ สินค้าเดียวกันซื้อจากหลายซัพเดือนนี้ · ${dup.length} รายการ</b> <span class="xs mut">(ตามชื่อสินค้า+หน่วยในบิล · ✓ = ราคาล่าสุดถูกสุด · แตะดูการใช้รวมทุกซัพ)</span>
+    ${dup.map(t=>`<div class="duprow" data-it="${esc(t.item)}" onclick="usageJump(this.dataset.it)"><b>${esc(t.item)}</b> <span class="xs mut">${esc(t.unit)}</span> — ${t.sups.map((x,i)=>`<span style="white-space:nowrap;${i===0?'color:var(--ok);font-weight:700':''}">${i===0?'✓':''}${esc((S.core.supById[x.sid]||{}).name||('#'+x.sid))} ${fq(x.qty)} ${esc(t.unit)} · ฿${fmtI(x.baht)} (ล่าสุด ${fmt(x.lastP,2)})</span>`).join('<span class="mut"> · </span>')}</div>`).join('')}</div>`;
   let P=await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
   if(!(P&&P.revenue)) P=histPrev(prevMonth(S.m)) || P;   // เดือนก่อนยังไม่มีข้อมูลรายวัน → ใช้ข้อมูลย้อนหลังที่นำเข้า
   const RO = S.br==='ALL';
@@ -3455,7 +3517,7 @@ RENDER.sum = async (el)=>{
     const bn=benchOf(s.name);
     const pAmt=pSup(s);
     const pp=pRev?pAmt/pRev:null;
-    return `<tr class="ind"><td>${esc(s.name)}</td><td class="n">${amt?fmtI(amt):''}</td>
+    return `<tr class="ind"><td>${esc(s.name)}${dupTag(s.id)}</td><td class="n">${amt?fmtI(amt):''}</td>
       <td class="n">${amt?pctF(p):''}</td>
       <td class="n mut xs">${bn?avgTap(s.name,pctF(bn.avg)):''}</td><td class="n mut xs">${bn?pctF(bn.min):''}</td>
       <td class="right">${bn&&p!=null&&amt?chip(p-bn.avg):''}</td>
@@ -3524,6 +3586,7 @@ RENDER.sum = async (el)=>{
 
     <div class="secbar">Variable cost <span class="sp">฿${fmtI(A.vc)} · ${pctF(vcPct)} ${bt?chip(vcPct!=null?vcPct-bt.avg:null):''}</span></div>
     <div class="xs mut" style="margin:6px 0 4px">${benchMonthsNote()}${P&&P.hist?' · เดือนก่อน (คอลัมน์ขวาสุด) จากข้อมูลย้อนหลัง':''}</div>
+    ${dupHtml}
     <div class="twrap"><table>
       <tr><th>รายการ</th><th class="right">จำนวนเงิน</th><th class="right">%</th><th class="right">${benchHdr()}</th><th class="right">ต่ำสุด</th><th class="right">เทียบเฉลี่ย</th><th class="right">เทียบเดือนก่อน</th></tr>
       ${vcRows}
