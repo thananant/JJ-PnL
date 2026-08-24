@@ -3073,7 +3073,7 @@ function dtOcrApply(j){
   const pool=dtPoolNames();
   const poolByNorm=new Map(pool.map(p2=>[ocrNorm(p2.item),p2]));
   const aliasByNorm=new Map((S._dtAlias||[]).map(a=>[ocrNorm(a.alias),a]));
-  const lines=[]; let unm=0;
+  const lines=[]; let unm=0, gcnt=0;
   rows.forEach(r0=>{
     const billName=String(r0.name||'').trim();
     const qty=num(r0.qty), price=num(r0.price), disc=num(r0.line_discount);
@@ -3084,10 +3084,13 @@ function dtOcrApply(j){
       lines.push({item:al.item,qty:qty*f,unit:al.unit||bu,price:f!==1?price/f:price,discount:disc||''});
       return;
     }
-    const pm=poolByNorm.get(ocrNorm(r0.matched_item||''))||poolByNorm.get(ocrNorm(billName));
-    if(pm){ lines.push({item:pm.item,qty,unit:pm.unit||bu,price,discount:disc||''}); return; }
-    unm++;
-    lines.push({item:billName,qty,unit:bu||'ชิ้น',price,discount:disc||'',_unm:true,_bu:bu,_billName:billName});
+    const exact=poolByNorm.get(ocrNorm(billName));
+    if(exact){ lines.push({item:exact.item,qty,unit:exact.unit||bu,price,discount:disc||''}); return; }
+    // ชื่อบนบิลสะกดไม่ตรงกับชื่อในแอพ → ต้องผูกครั้งแรกก่อนเสมอ (จะได้ตั้งตัวคูณหน่วย เช่น 1 ลัง = 9 กก. ได้)
+    // Gemini เดาชื่อแอพให้ = ตั้งไว้ในช่องเลือกเลย เหลือแค่กดยืนยันครั้งเดียว จากนั้นจำตลอด
+    const guess=poolByNorm.get(ocrNorm(r0.matched_item||''));
+    unm++; if(guess)gcnt++;
+    lines.push({item:billName,qty,unit:bu||'ชิ้น',price,discount:disc||'',_unm:true,_bu:bu,_billName:billName,_guess:guess?guess.item:''});
   });
   S.dtLines=lines;
   if(j.vat_mode&&['none','ex','inc'].includes(j.vat_mode)){ S.dtVat=j.vat_mode; renderDtVatBtns(); }
@@ -3099,7 +3102,7 @@ function dtOcrApply(j){
   const myTot=dtTotals();
   const bt=num(j.total_on_bill);
   const tn=document.getElementById('dtTplNote');
-  let msg=`📷 อ่านบิลได้ ${lines.length} รายการ`+(unm?` · <b style="color:#8A6200">มี ${unm} ชื่อยังไม่ผูก — เลือกด้านล่างครั้งเดียว จำตลอด</b>`:' · จับคู่ชื่อครบทุกตัว ✅');
+  let msg=`📷 อ่านบิลได้ ${lines.length} รายการ`+(unm?` · <b style="color:#8A6200">มี ${unm} ชื่อยังไม่ผูก${gcnt?` (เดาให้แล้ว ${gcnt} ตัว — เช็คแล้วกดผูก)`:''} — เลือกใต้แถว ครั้งเดียว จำตลอด</b>`:' · จับคู่ชื่อครบทุกตัว ✅');
   if(bt&&Math.abs(bt-myTot)>1) msg+=` · <b style="color:var(--bad)">⚠ ยอดที่คำนวณ ฿${fmt(myTot,2)} ≠ ยอดบนบิล ฿${fmt(bt,2)} — ตรวจตัวเลขก่อนบันทึก</b>`;
   else if(bt) msg+=` · ยอดตรงกับบิล ฿${fmt(bt,2)} ✅`;
   msg+=` <span class="xs mut">${j._model?`(อ่านด้วย ${esc(j._model)} — ลองใหม่อาจได้ผลต่างกันเล็กน้อย)`:''}</span>`;
@@ -3256,10 +3259,10 @@ function ocrInlineHTML(l,i){ // แถบผูกชื่อ ฝังตร�
   if(!l._unm)return '';
   const pool=dtPoolNames();
   return `<div class="ocrinline" id="omr${i}">
-    <span class="xs"><b>🧾 จากบิล:</b> "${esc(l._billName||l.item)}"</span>
+    <span class="xs"><b>🧾 จากบิล:</b> "${esc(l._billName||l.item)}"</span>${l._guess?`<span class="xs" style="color:#8A6200">เดาว่า = <b>${esc(l._guess)}</b></span>`:''}
     <select id="oms${i}" onchange="dtOcrSelChg(${i})">
       <option value="">— เลือกสินค้าในแอพ —</option>
-      ${pool.map(p2=>`<option value="${esc(p2.item)}" data-unit="${esc(p2.unit||'')}">${esc(p2.item)}${p2.unit?` (${esc(p2.unit)})`:''}</option>`).join('')}
+      ${pool.map(p2=>`<option value="${esc(p2.item)}" data-unit="${esc(p2.unit||'')}"${l._guess===p2.item?' selected':''}>${esc(p2.item)}${p2.unit?` (${esc(p2.unit)})`:''}</option>`).join('')}
       <option value="__new__">➕ เก็บเป็นสินค้าใหม่ชื่อนี้</option>
     </select>
     <span id="omf${i}" style="display:none;align-items:center;gap:5px" class="xs">
@@ -3281,6 +3284,7 @@ function renderDtLines(focusLast){
     </div><div class="dtcmp" id="dtc${i}" style="display:none"></div>${ocrInlineHTML(l,i)}`).join('');
   dtTotals();
   S.dtLines.forEach((_,i)=>dtCmpFill(i));
+  S.dtLines.forEach((l,i)=>{ if(l._unm&&l._guess){ const s2=document.getElementById('oms'+i); if(s2&&s2.value)dtOcrSelChg(i); } }); // ตัวที่เดาไว้: โชว์ช่องตัวคูณหน่วยถ้าจำเป็น
   if(focusLast){ const rows=el.querySelectorAll('.dtrow'); const last=rows[rows.length-1]; if(last){const f=last.querySelector('input'); f&&f.focus();} }
 }
 function getEditor(){
