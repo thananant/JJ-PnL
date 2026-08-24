@@ -252,6 +252,7 @@ table.mx td:hover{outline:2px solid #C9A227;outline-offset:-2px;border-radius:4p
 .dtrow{padding:6px 0;border-bottom:1px solid var(--line)}
 .dtrow input{padding:8px 9px;font-size:13px}
 .dtrow input[type=number]{text-align:right}
+.dtrow input.numf{text-align:right;font-variant-numeric:tabular-nums}
 @media(max-width:640px){
   .dthead{display:none}
   .dtrow{grid-template-columns:1fr 1fr;gap:6px;background:#FBF7EE;border-radius:12px;padding:9px;margin-bottom:8px;border-bottom:none}
@@ -3212,6 +3213,25 @@ function dtNet(sub){ // คืน {pre, vat, net} ตามโหมด
   if(m==='inc') return {pre:sub/1.07, vat:sub-sub/1.07, net:sub};
   return {pre:sub, vat:0, net:sub};
 }
+// เดินช่องในตารางบิลด้วยลูกศร (↑↓ = แถวบน/ล่างคอลัมน์เดิม · ←→ = ช่องก่อน/ถัดไปเมื่อเคอร์เซอร์ชนขอบข้อความ)
+// Enter ยังเดินช่องถัดไปทีละช่องเหมือนเดิม (handler กลาง) · ช่องสินค้า/หน่วยมีลิสต์: ↑↓ ปล่อยให้ลิสต์ใช้ ไม่แย่ง (←→ ยังเดินได้)
+function dtNav(e,r,c){
+  const k=e.key;
+  if(k!=='ArrowUp'&&k!=='ArrowDown'&&k!=='ArrowLeft'&&k!=='ArrowRight')return;
+  const el=e.target, hasList=el.hasAttribute('list');
+  if((k==='ArrowUp'||k==='ArrowDown')&&hasList)return;
+  let ss=0, se=0, len=(el.value||'').length;
+  try{ ss=el.selectionStart; se=el.selectionEnd; }catch(err){}
+  let nr=r, nc=c;
+  if(k==='ArrowUp') nr=r-1;
+  else if(k==='ArrowDown') nr=r+1;
+  else if(k==='ArrowLeft'){ if(!(ss===0&&se===0))return; nc=c-1; if(nc<0){nc=4;nr=r-1;} }
+  else { if(!(ss===len&&se===len))return; nc=c+1; if(nc>4){nc=0;nr=r+1;} }
+  if(nr<0||nr>=S.dtLines.length)return;
+  e.preventDefault();
+  const t=document.querySelector(`#dtLines [data-r="${nr}"][data-c="${nc}"]`);
+  if(t){ t.focus(); try{ t.select(); }catch(err){} }
+}
 function dtAddLine(){ S.dtLines.push({item:'',qty:'',unit:'',price:''}); renderDtLines(true); }
 function dtDelLine(i){ S.dtLines.splice(i,1); if(!S.dtLines.length)S.dtLines.push({item:'',qty:'',unit:'',price:''}); renderDtLines(); }
 function dtEdit(i,f,v){
@@ -3274,11 +3294,11 @@ function renderDtLines(focusLast){
   const el=document.getElementById('dtLines'); if(!el)return;
   el.innerHTML=S.dtLines.map((l,i)=>`
     <div class="dtrow${l._unm?' unm':''}">
-      <input list="dtItemsDL" placeholder="เช่น หมูสามชั้น" value="${esc(l.item||'')}" oninput="dtEdit(${i},'item',this.value)">
-      <input type="number" step="any" inputmode="decimal" placeholder="0" value="${l.qty??''}" oninput="dtEdit(${i},'qty',this.value)">
-      <input list="dtUnitsDL" placeholder="กก." id="dtu${i}" value="${esc(l.unit||'')}" oninput="dtEdit(${i},'unit',this.value)">
-      <input type="number" step="any" inputmode="decimal" placeholder="0.00" id="dtp${i}" value="${l.price??''}" oninput="dtEdit(${i},'price',this.value)">
-      <input type="number" step="any" inputmode="decimal" placeholder="0" id="dtd${i}" value="${l.discount||''}" oninput="dtEdit(${i},'discount',this.value)">
+      <input list="dtItemsDL" placeholder="เช่น หมูสามชั้น" value="${esc(l.item||'')}" data-r="${i}" data-c="0" onkeydown="dtNav(event,${i},0)" oninput="dtEdit(${i},'item',this.value)">
+      <input type="text" inputmode="decimal" class="numf" placeholder="0" value="${l.qty??''}" data-r="${i}" data-c="1" onkeydown="dtNav(event,${i},1)" oninput="dtEdit(${i},'qty',this.value)">
+      <input list="dtUnitsDL" placeholder="กก." id="dtu${i}" value="${esc(l.unit||'')}" data-r="${i}" data-c="2" onkeydown="dtNav(event,${i},2)" oninput="dtEdit(${i},'unit',this.value)">
+      <input type="text" inputmode="decimal" class="numf" placeholder="0.00" id="dtp${i}" value="${l.price??''}" data-r="${i}" data-c="3" onkeydown="dtNav(event,${i},3)" oninput="dtEdit(${i},'price',this.value)">
+      <input type="text" inputmode="decimal" class="numf" placeholder="0" id="dtd${i}" value="${l.discount||''}" data-r="${i}" data-c="4" onkeydown="dtNav(event,${i},4)" oninput="dtEdit(${i},'discount',this.value)">
       <span class="num b" id="dtt${i}">–</span>
       <button class="mvbtn" style="color:var(--bad)" onclick="dtDelLine(${i})">✕</button>
     </div><div class="dtcmp" id="dtc${i}" style="display:none"></div>${ocrInlineHTML(l,i)}`).join('');
