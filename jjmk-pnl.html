@@ -290,6 +290,7 @@ table.mx td:hover{outline:2px solid #C9A227;outline-offset:-2px;border-radius:4p
   .sb-item:hover{background:rgba(255,255,255,.09)}
   .sb-item.on{background:var(--red);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.28)}
   .sb-item.on svg{opacity:1}
+  .sbadge{margin-left:auto;background:#fff;color:var(--red);border-radius:99px;font-size:11px;line-height:1;padding:3px 7px;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.25)}
   .sb-foot{margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
   header .brand{display:none}
   .tabbar{display:none}
@@ -995,6 +996,7 @@ async function show(v){
   if(S.user&&permOf(v)==='view'){
     el.insertAdjacentHTML('afterbegin','<div class="card" style="background:#EEF3F6;border-color:#B8CBD4"><b>👁 ดูอย่างเดียว</b> <span class="sm mut">บัญชีของคุณไม่มีสิทธิ์แก้ไขหน้านี้</span></div>');
   }
+  if(v==='dash'&&typeof stkBadge==='function') stkBadge(); // แถบเตือนผูกชื่อบนแดชบอร์ด (แทรกหลังเรนเดอร์)
 }
 async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; S.benchCache={}; await show(S.tab); }
 /* ---------- อัปเดตสดข้ามเครื่อง (พนักงานหลายคนกรอกพร้อมกัน) ----------
@@ -1027,7 +1029,7 @@ function rtStart(){
 function rtEvent(){ clearTimeout(_rtT); _rtT=setTimeout(rtApply,1200); } // รวมหลายเหตุการณ์ติด ๆ กันเป็นรอบเดียว
 function rtTick(){ // โพลสำรองตอน Realtime ยังไม่เปิด: รีเฟรชเงียบ ๆ เฉพาะหน้าดูอย่างเดียว
   if(_rtLive||document.hidden||rtBusyForm())return;
-  if(['dash','sum','usage','vatrep','actual'].includes(S.tab)){ S.cache={}; S.benchCache={}; show(S.tab); }
+  if(['dash','sum','usage','vatrep','actual'].includes(S.tab)){ S.cache={}; S.benchCache={}; show(S.tab); stkBadge(); }
   else if(S.tab==='detail'){ dtMonthList(); dtHist(); }
 }
 async function rtApply(){
@@ -1042,7 +1044,7 @@ async function rtApply(){
   }
   if(['dash','sum','usage','vatrep','actual'].includes(v)){
     if(rtBusyForm()){ _rtPend=true; rtBanner(); return; }
-    await show(v); return;
+    await show(v); stkBadge(); return;
   }
   if(['income','exp','pv'].includes(v)){ rtBanner(); return; } // หน้ากรอก: ไม่ทับของที่พิมพ์อยู่
 }
@@ -1360,9 +1362,11 @@ async function boot(){
     S.br=btn.dataset.br; LS.set('jjpnl_br',S.br);
     document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x===btn));
     await show(S.tab);
+    stkBadge();
   };
-  document.getElementById('monthPick').onchange=async e=>{ S.m=e.target.value; LS.set('jjpnl_m',S.m); await show(S.tab); };
+  document.getElementById('monthPick').onchange=async e=>{ S.m=e.target.value; LS.set('jjpnl_m',S.m); await show(S.tab); stkBadge(); };
   rtStart();
+  stkBadge();
   document.querySelectorAll('.tabbar button,.sb-item').forEach(btn=>btn.onclick=()=>show(btn.dataset.v));
   // Enter = เลื่อนไปช่องกรอกถัดไป (Fix cost / รายจ่าย / รายรับ / เงินสดจ่าย / สร้าง PV)
   document.addEventListener('keydown',e=>{
@@ -2732,6 +2736,32 @@ RENDER.usage = async (el)=>{
    เวลานับ ~17:00 ก่อนเปิดร้าน: นับวัน D = สต๊อกก่อนขายวัน D · บิลลงวันที่ D = เข้าก่อนนับวัน D
    -> ช่วง (P -> C): ซื้อเข้า = บิลที่ P < วันที่ ≤ C · ยอดขายคู่กัน = วัน P ถึง C−1 */
 const STK_MIN='2026-07-31'; // วันแรกที่ใช้ข้อมูลนับสต๊อก — ก่อนหน้านี้เป็นข้อมูลช่วงระบบเก่า ไม่เอามาคิดเลย
+const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'}; // id สาขาในระบบนับ (ใช้กับตัวนับเตือน)
+// สาขาเพิ่มสินค้าใหม่ในแอพนับ -> เตือนให้มาผูกชื่อ ไม่งั้นใช้จริงของตัวนั้นหายเงียบ ๆ
+async function stkBadge(){
+  try{
+    const el=document.querySelector('.sb-item[data-v="actual"]');
+    if(!el)return;
+    let n=0;
+    if(STK_BR[S.br]){
+      const [prods,map]=await Promise.all([
+        selAllQ('products','select=id,branch_id&deleted_at=is.null&order=id').catch(()=>[]),
+        selAllQ('pnl_stock_map','select=product_id&order=id').catch(()=>[])
+      ]);
+      const mapped=new Set((map||[]).map(r=>r.product_id));
+      n=(prods||[]).filter(x=>x.branch_id===STK_BR[S.br]&&!mapped.has(x.id)).length;
+    }
+    S._stkUnb=n;
+    let b=el.querySelector('.sbadge');
+    if(n>0){ if(!b){ b=document.createElement('span'); b.className='sbadge'; el.appendChild(b); } b.textContent=n; b.title=`สินค้าในระบบนับที่ยังไม่ได้ผูกชื่อ ${n} ตัว`; }
+    else if(b) b.remove();
+    // แถบเตือนบนแดชบอร์ด (แทรกเองเมื่อแดชบอร์ดเปิดอยู่)
+    let dn=document.getElementById('stkDashNote');
+    if(!dn){ const vd=document.getElementById('view-dash');
+      if(vd&&vd.classList.contains('on')&&vd.firstElementChild){ vd.insertAdjacentHTML('afterbegin','<div id="stkDashNote"></div>'); dn=document.getElementById('stkDashNote'); } }
+    if(dn) dn.innerHTML=n>0?`<div class="dupbox" style="cursor:pointer;margin-bottom:12px" onclick="show('actual')">🔗 <b>ระบบนับสต๊อกมีสินค้าที่ยังไม่ได้ผูกชื่อ ${n} ตัว</b> <span class="xs mut">— สาขาเพิ่มของใหม่/ยังเก็บตกไม่ครบ แตะเพื่อไปผูก (ผูกครั้งเดียวจำตลอด)</span></div>`:'';
+  }catch(e){}
+}
 function stkAddDays(ds,n){ const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate()+n); const z=x=>String(x).padStart(2,'0'); return t.getFullYear()+'-'+z(t.getMonth()+1)+'-'+z(t.getDate()); }
 function stkRound05(v){ if(!(v>0))return 0; const u=Math.ceil(v); const r=u%5; return r===0?u:(u%10===0?u:u+(5-(u%5))); } // ปัดขึ้นให้ลงท้าย 0/5 (ไว้ใช้เฟส 2)
 async function stkLoad(){
@@ -2751,6 +2781,8 @@ async function stkLoad(){
   if(!want) return {ok:map!==null, permDenied, noStockBranch:true, prods:[], map:{}, C:{}, B:{}, sales:{}, from, to};
   const bn2={}; (counts||[]).forEach(c=>{ if(c.branch_id&&c.branch_name&&!bn2[c.branch_id])bn2[c.branch_id]=c.branch_name; });
   const sbid=Object.keys(bn2).find(id2=>String(bn2[id2]).includes(want)) || (S.br==='JJRD'?'b19f0a17b4472':'b19f0a17b448212'); // สำรอง: id ที่รู้จัก
+  const wantOther=S.br==='JJRD'?'ลาดพร้าว':'รัชดา', brOther=S.br==='JJRD'?'JJLP':'JJRD';
+  const sbidOther=Object.keys(bn2).find(id2=>String(bn2[id2]).includes(wantOther)) || (brOther==='JJRD'?'b19f0a17b4472':'b19f0a17b448212');
   const sales={}; (inc||[]).forEach(r=>{ sales[r.d]=(sales[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
   const P=(prods||[]).filter(x=>x.branch_id===sbid);
   const M={}; (map||[]).forEach(r=>M[r.product_id]=r);
@@ -2760,7 +2792,7 @@ async function stkLoad(){
   });
   // บิลตามชื่อสินค้า: วัน -> qty
   const B={}; (bills||[]).forEach(r=>{ const k=ocrNorm(r.item); ((B[k]??={})[r.d]??=0); B[k][r.d]+=num(r.qty); });
-  return {ok:map!==null, permDenied, sbid, prods:P, map:M, C, B, sales, from, to};
+  return {ok:map!==null, permDenied, sbid, sbidOther, brOther, prods:P, prodsAll:(prods||[]), map:M, C, B, sales, from, to};
 }
 function stkBillNames(){ // ชื่อสินค้าในบิลของสาขานี้ (ไว้ให้เลือกผูก)
   const st=S._stk; if(!st)return [];
@@ -2790,7 +2822,8 @@ RENDER.actual = async (el)=>{
   let names=[];
   try{ const si=await selAllQ('pnl_sup_items','select=item&order=item').catch(()=>[]); names=si.map(x=>x.item); }catch(e){}
   try{ const bi=await sel('pnl_bill_items',`select=item&branch=eq.${S.br}&d=gte.${st.from}&d=lte.${st.to}`); bi.forEach(x=>names.push(x.item)); }catch(e){}
-  names=[...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  const usedN=new Set(Object.values(st.map).filter(r2=>r2.active&&r2.branch===S.br&&r2.pnl_item&&r2.pnl_item!=='-').map(r2=>ocrNorm(r2.pnl_item)));
+  names=[...new Set(names.filter(Boolean))].filter(n2=>!usedN.has(ocrNorm(n2))).sort((a,b)=>a.localeCompare(b,'th')); // ตัดชื่อที่ผูกแล้วออก (1 ชื่อบิล = 1 สินค้านับ)
   S._stkNames=names;
   const mapped=st.prods.filter(x=>st.map[x.id]&&st.map[x.id].active);
   const skipped=st.prods.filter(x=>st.map[x.id]&&!st.map[x.id].active);
@@ -2833,12 +2866,14 @@ RENDER.actual = async (el)=>{
   <div class="card">
     <div class="secbar">ใช้จริงรายวัน (จากการนับสต๊อก) <span class="sp">${monthLabel(S.m)} · ${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}</span></div>
     <div class="xs mut" style="margin:6px 0 10px">อ่านผลนับจากแอพนับสต๊อกโดยตรง (พนักงานนับตามเดิม ไม่ต้องทำอะไรเพิ่ม) · <b>ใช้ข้อมูลนับตั้งแต่ 31 ก.ค. 2569 เป็นต้นไป</b> · <b>ใช้จริง = นับครั้งก่อน + ซื้อเข้า (บิลในแอพนี้ × ตัวคูณหน่วย) − นับครั้งนี้</b> · นับก่อนเปิดร้าน: บิลวันเดียวกันนับเป็นของเข้าก่อนนับ · ยอดขายคู่กับคืนที่ขายจริง · ใช้/หมื่น = ใช้จริง ÷ (ยอดขายรวม VAT ÷ 10,000) · ▲▼ เทียบค่าเฉลี่ยเดือน เกิน ±20% ทาสี</div>
-    ${unbound.length?`<div class="dupbox"><b>🔗 ผูกชื่อครั้งแรก · เหลือ ${unbound.length} ตัว</b> <span class="xs mut">(ผูกครั้งเดียวจำตลอด — ติ๊กหลายตัวแล้วกดผูกทีเดียวได้ · ตัวที่เดาได้ติ๊กรอไว้แล้ว)</span>
+    ${unbound.length?`<div class="dupbox"><b>🔗 ผูกชื่อครั้งแรก · เหลือ ${unbound.length} ตัว</b> <span class="xs mut">(ผูกครั้งเดียวจำตลอด — ติ๊กหลายตัวกดผูกทีเดียวได้ · ผูกสาขานี้แล้ว ตัวชื่อ+หน่วยเดียวกันของอีกสาขาถูกผูกให้อัตโนมัติ)</span>
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 2px">
         <input id="stkQ" placeholder="🔍 กรองรายการ เช่น หมู / ชื่อซัพ..." oninput="stkBindFilter(this.value)" style="max-width:260px">
         <span class="xs"><span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.bindrow:not([style*=none]) .stkck').forEach(c=>c.checked=true);stkBindCnt()">เลือกที่เห็นทั้งหมด</span> · <span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.stkck').forEach(c=>c.checked=false);stkBindCnt()">ไม่เลือกเลย</span></span>
         <button class="btn sm2" id="stkBulkBtn" style="margin-left:auto" onclick="stkBindSel()">ผูกที่เลือก (${unbound.filter(x=>stkGuess(x.name,names)).length})</button>
       </div>
+      ${(()=>{ const n=unbound.filter(x=>Object.values(st.map).some(r=>r.active&&r.branch!==S.br&&ocrNorm(r.product_name)===ocrNorm(x.name)&&String(r.stock_unit||'')===String(x.unit||''))).length;
+        return n?`<div class="xs" style="margin:2px 0 4px">🪄 อีกสาขาผูกชื่อพวกนี้ไว้แล้ว ${n} ตัว — <span style="text-decoration:underline dotted;cursor:pointer;color:var(--red)" onclick="stkCopyFromOther()"><b>ผูกตามอีกสาขาทั้งหมด</b></span> (ใช้ชื่อ+ตัวคูณเดียวกัน)</div>`:''; })()}
       <datalist id="stkNamesDL">${names.map(n2=>`<option value="${esc(n2)}">`).join('')}</datalist>
       ${unbound.map((x,i)=>bindRow(x,i)).join('')}</div>`:''}
     ${rows.length?`<div class="twrap"><table>
@@ -2857,6 +2892,7 @@ RENDER.actual = async (el)=>{
     :`<div class="empty xs">${unbound.length?'ผูกชื่อด้านบนก่อน แล้วตารางใช้จริงจะขึ้นที่นี่':'ยังไม่มีข้อมูลนับสต๊อกของสาขานี้ในช่วงเดือนที่ดู'}</div>`}
     ${skipped.length?`<div class="xs mut" style="margin-top:10px">ข้ามไว้ ${skipped.length} ตัว · <span style="text-decoration:underline dotted;cursor:pointer" onclick="stkUnskipAll()">เอากลับมาทั้งหมด</span></div>`:''}
   </div>`;
+  stkBadge(); // อัปเดตป้ายเตือนตามข้อมูลล่าสุด
 };
 function stkBindCnt(){ const n=document.querySelectorAll('.bindrow .stkck:checked').length; const b=document.getElementById('stkBulkBtn'); if(b)b.textContent=`ผูกที่เลือก (${n})`; }
 function stkBindFilter(q){
@@ -2875,28 +2911,52 @@ function stkRowPayload(row){ // อ่านค่าจากแถวผูก
   const pr=(st&&st.prods.find(x=>x.id===pid))||{};
   return {row:{branch:S.br,product_id:pid,product_name:pr.name||'',pnl_item:item,bill_unit:'',stock_unit:pr.unit||'',factor:f,active:true}};
 }
+function stkMirrorRows(baseRows){ // ผูกที่สาขานี้ -> สร้างแถวผูกของอีกสาขาให้อัตโนมัติ (ชื่อ+หน่วยต้องตรง และยังไม่เคยผูก)
+  const st=S._stk; if(!st)return [];
+  const used={}; const out=[];
+  baseRows.forEach(r=>{
+    const sib=(st.prodsAll||[]).find(x=>x.branch_id===st.sbidOther&&ocrNorm(x.name)===ocrNorm(r.product_name)&&String(x.unit||'')===String(r.stock_unit||'')&&!st.map[x.id]&&!used[x.id]);
+    if(sib){ used[sib.id]=1; out.push({branch:st.brOther,product_id:sib.id,product_name:sib.name||'',pnl_item:r.pnl_item,bill_unit:'',stock_unit:sib.unit||'',factor:r.factor,active:true}); }
+  });
+  return out;
+}
 async function stkBind(i,pid){
   const el=document.getElementById('bnd'+i); if(!el)return;
   const pl=stkRowPayload(el);
   if(pl.err==='empty'){ toast('พิมพ์/เลือกชื่อสินค้าในบิลก่อนครับ',true); return; }
   if(pl.err==='notfound'){ toast(`"${pl.item}" ไม่ตรงกับชื่อในบิล — พิมพ์แล้วเลือกจากรายการที่ขึ้นมา`,true); return; }
   try{
-    await ins('pnl_stock_map',[pl.row]);
-    toast(`✅ ผูก "${pl.row.product_name}" = "${pl.row.pnl_item}" แล้ว จำตลอด`);
+    const mir=stkMirrorRows([pl.row]);
+    await ins('pnl_stock_map',[pl.row,...mir]);
+    toast(`✅ ผูก "${pl.row.product_name}" = "${pl.row.pnl_item}" แล้ว จำตลอด${mir.length?` · ผูกของ${S._stk.brOther==='JJRD'?'รัชดา':'ลาดพร้าว'}ให้ด้วย`:''}`);
     show('actual');
   }catch(e){ toast('ผูกไม่สำเร็จ: '+(e.message||''),true); }
 }
 async function stkBindSel(){ // ผูกทีเดียวทุกแถวที่ติ๊ก (POST เดียว)
   const rows=[...document.querySelectorAll('.bindrow')].filter(r=>{const c=r.querySelector('.stkck');return c&&c.checked&&r.style.display!=='none';});
   if(!rows.length){ toast('ยังไม่ได้ติ๊กเลือกสักตัวครับ',true); return; }
-  const ok=[], bad=[];
-  rows.forEach(r=>{ const pl=stkRowPayload(r); if(pl.row)ok.push(pl.row); else bad.push(r); });
+  const ok=[], bad=[]; const seen={};
+  rows.forEach(r=>{ const pl=stkRowPayload(r);
+    if(pl.row){ const k2=ocrNorm(pl.row.pnl_item); if(seen[k2]){bad.push(r);return;} seen[k2]=1; ok.push(pl.row); } // ชื่อบิลซ้ำกันในชุด = เอาตัวแรกตัวเดียว
+    else bad.push(r); });
   if(!ok.length){ toast('ตัวที่เลือกยังไม่มีชื่อที่ตรงกับบิลเลย — พิมพ์เลือกชื่อก่อนครับ',true); return; }
   try{
-    await ins('pnl_stock_map',ok);
-    toast(`✅ ผูกแล้ว ${ok.length} ตัว${bad.length?` · ข้าม ${bad.length} ตัว (ชื่อว่าง/ไม่ตรงบิล)`:''} — จำตลอด`);
+    const mir=stkMirrorRows(ok);
+    await ins('pnl_stock_map',[...ok,...mir]);
+    toast(`✅ ผูกแล้ว ${ok.length} ตัว${mir.length?` (+${mir.length} ตัวของ${S._stk.brOther==='JJRD'?'รัชดา':'ลาดพร้าว'}ให้อัตโนมัติ)`:''}${bad.length?` · ข้าม ${bad.length} ตัว (ชื่อว่าง/ไม่ตรงบิล)`:''} — จำตลอด`);
     show('actual');
   }catch(e){ toast('ผูกไม่สำเร็จ: '+(e.message||''),true); }
+}
+async function stkCopyFromOther(){ // เก็บตก: ตัวที่อีกสาขาผูกไว้แล้ว (ก่อนมีระบบผูกอัตโนมัติ) เอามาผูกสาขานี้ตาม
+  const st=S._stk; if(!st)return;
+  const rows=[];
+  st.prods.filter(x=>!st.map[x.id]).forEach(x=>{
+    const src=Object.values(st.map).find(r=>r.active&&r.branch!==S.br&&ocrNorm(r.product_name)===ocrNorm(x.name)&&String(r.stock_unit||'')===String(x.unit||''));
+    if(src)rows.push({branch:S.br,product_id:x.id,product_name:x.name||'',pnl_item:src.pnl_item,bill_unit:'',stock_unit:x.unit||'',factor:num(src.factor)||1,active:true});
+  });
+  if(!rows.length){ toast('ไม่มีตัวที่คัดลอกจากอีกสาขาได้',true); return; }
+  try{ await ins('pnl_stock_map',rows); toast(`✅ ผูกตามอีกสาขาแล้ว ${rows.length} ตัว`); show('actual'); }
+  catch(e){ toast('ผูกไม่สำเร็จ: '+(e.message||''),true); }
 }
 async function stkUnbind(pid){
   if(!confirm('เลิกผูกสินค้าตัวนี้? (กลับไปอยู่ในลิสต์ผูกชื่อ ผูกใหม่/แก้ตัวคูณได้)'))return;
