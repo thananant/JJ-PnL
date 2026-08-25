@@ -2609,8 +2609,10 @@ RENDER.usage = async (el)=>{
   if(S.use10k===undefined) S.use10k=!!LS.get('jj_use10k',false);
   const K10=!!S.use10k, salesAll=salesG[0]+salesG[1]+salesG[2];
   const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
-  const p10=(q,sv)=>(sv>0&&q>0)?fq(q/(sv/10000)):'–';           // จำนวนต่อยอดขาย ฿10,000 ของกลุ่มวันนั้น
+  const p10=(q,sv)=>(sv>0&&q>0)?fq(q/(sv/10000)):'–';           // อัตรา: จำนวนต่อยอดขาย ฿10,000 (รวมทุกวัน)
   const b10=(b,sv)=>(sv>0&&b>0)?fmtI(b/(sv/10000)):'–';         // มูลค่า ฿ ต่อยอดขาย ฿10,000
+  const dAvg=gx=>daysG[gx]>0?salesG[gx]/daysG[gx]:0;            // ยอดขายเฉลี่ย/วันของกลุ่ม
+  const pDay=(q,gx)=>(salesAll>0&&q>0&&dAvg(gx)>0)?fq((q/(salesAll/10000))*(dAvg(gx)/10000)):'–'; // คาดการณ์ใช้/วันของกลุ่มวัน
   let body='', grand=0;
   if(S.usageMode==='item'){
     const items=Object.entries(gi).map(([k,t])=>({k,...t})).sort((a,b)=>b.baht-a.baht);
@@ -2628,8 +2630,8 @@ RENDER.usage = async (el)=>{
       }).join('<span class="mut"> · </span>');
       if(K10) return `<tr class="urow" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
         <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span></td>
-        <td class="n">${p10(x.q3[0],salesG[0])}</td><td class="n">${p10(x.q3[1],salesG[1])}</td><td class="n">${p10(x.q3[2],salesG[2])}</td>
         <td class="n b">${p10(x.qty,salesAll)}</td>
+        <td class="n">${pDay(x.qty,0)}</td><td class="n">${pDay(x.qty,1)}</td><td class="n">${pDay(x.qty,2)}</td>
         <td class="n">${b10(x.baht,salesAll)}</td><td></td></tr>`;
       return `<tr class="urow" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
         <td>${esc(x.item)}</td>
@@ -2646,10 +2648,9 @@ RENDER.usage = async (el)=>{
       .sort((a,b)=>b.baht-a.baht);
     if(!items.length)return;
     const sub=items.reduce((a,x)=>a+x.baht,0); grand+=sub;
-    if(K10){ const sb3=[0,1,2].map(gx=>items.reduce((a,x)=>a+x.b3[gx],0));
+    if(K10){
       body+=`<tr class="cat ughead" data-grphead="${sp.id}"><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${catColor(sp.category)};margin-right:6px"></span>${esc(sp.name)} <span class="xs mut">฿/หมื่น</span></td>
-        <td class="n xs">${b10(sb3[0],salesG[0])}</td><td class="n xs">${b10(sb3[1],salesG[1])}</td><td class="n xs">${b10(sb3[2],salesG[2])}</td>
-        <td></td><td class="n usub">${salesAll>0?fmtI(sub/(salesAll/10000)):'–'}</td><td></td></tr>`; }
+        <td colspan="4"></td><td class="n usub">${salesAll>0?fmtI(sub/(salesAll/10000)):'–'}</td><td></td></tr>`; }
     else body+=`<tr class="cat ughead" data-grphead="${sp.id}"><td colspan="2"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${catColor(sp.category)};margin-right:6px"></span>${esc(sp.name)}</td>
       <td colspan="3"></td><td class="n usub">${fmtI(sub)}</td><td></td></tr>`;
     body+=items.map(x=>{
@@ -2659,8 +2660,8 @@ RENDER.usage = async (el)=>{
         chipHtml=`<span class="chip ${df>0.03?'bad':df<-0.03?'ok':'mid'}" title="เทียบเดือนก่อน ${fq(pv)} ${esc(x.unit)}">${df>0?'▲':df<0?'▼':''} ${pctF(Math.abs(df))}</span>`; }
       if(K10) return `<tr class="urow" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
         <td style="padding-left:18px">${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span></td>
-        <td class="n">${p10(x.q3[0],salesG[0])}</td><td class="n">${p10(x.q3[1],salesG[1])}</td><td class="n">${p10(x.q3[2],salesG[2])}</td>
         <td class="n b">${p10(x.qty,salesAll)}</td>
+        <td class="n">${pDay(x.qty,0)}</td><td class="n">${pDay(x.qty,1)}</td><td class="n">${pDay(x.qty,2)}</td>
         <td class="n">${b10(x.baht,salesAll)}</td><td></td></tr>`;
       return `<tr class="urow" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
         <td style="padding-left:18px">${esc(x.item)}</td>
@@ -2680,13 +2681,13 @@ RENDER.usage = async (el)=>{
       <button class="${S.usageMode!=='item'?'on':''}" onclick="usageModeSet('sup')">แยกตามซัพ</button>
       <button class="${K10?'on':''}" onclick="usage10kSet(${K10?'false':'true'})" title="อัตราการใช้ต่อยอดขาย ฿10,000 แยก จ–พฤ / ศ / ส–อา">⚖ ต่อยอดขาย ฿10,000</button>
     </div>
-    ${K10?`<div class="xs mut" style="margin:-4px 0 8px"><b>อัตราใช้ต่อยอดขาย (รวม VAT) ฿10,000</b> = จำนวนที่ใช้ในกลุ่มวัน ÷ (ยอดขายรวมของกลุ่ม ÷ 10,000) · ยอดขายเฉลี่ย/วัน: <b>จ–พฤ</b> ฿${daysG[0]?fmtI(salesG[0]/daysG[0]):'–'} (${daysG[0]} วัน) · <b>ศ</b> ฿${daysG[1]?fmtI(salesG[1]/daysG[1]):'–'} (${daysG[1]} วัน) · <b>ส–อา</b> ฿${daysG[2]?fmtI(salesG[2]/daysG[2]):'–'} (${daysG[2]} วัน) · แตะแถวเพื่อดูประวัติรายวัน</div>`
+    ${K10?`<div class="xs mut" style="margin:-4px 0 8px"><b>อัตรา (ต่อ ฿10,000)</b> = ใช้ทั้งเดือน ÷ (ยอดขายรวมทั้งเดือน ÷ 10,000) · <b>ใช้/วัน รายกลุ่ม</b> = อัตรา × (ยอดขายเฉลี่ย/วันของกลุ่ม ÷ 10,000) — ยอดขายเฉลี่ย/วัน (รวม VAT): <b>จ–พฤ</b> ฿${daysG[0]?fmtI(salesG[0]/daysG[0]):'–'} (${daysG[0]} วัน) · <b>ศ</b> ฿${daysG[1]?fmtI(salesG[1]/daysG[1]):'–'} (${daysG[1]} วัน) · <b>ส–อา</b> ฿${daysG[2]?fmtI(salesG[2]/daysG[2]):'–'} (${daysG[2]} วัน) · แตะแถวเพื่อดูประวัติรายวัน</div>`
     :`<div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · สินค้าตัวเดียวกันนับรวมทุกซัพ · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>`}
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
       <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button></div>
     <div class="twrap"><table id="useTbl">
       ${K10
-        ?`<tr><th>สินค้า</th><th class="right">จ–พฤ</th><th class="right">ศ</th><th class="right">ส–อา</th><th class="right">ทั้งเดือน</th><th class="right">฿/หมื่น</th><th></th></tr>`
+        ?`<tr><th>สินค้า</th><th class="right">ต่อ ฿10,000</th><th class="right">จ–พฤ ใช้/วัน</th><th class="right">ศ ใช้/วัน</th><th class="right">ส–อา ใช้/วัน</th><th class="right">฿/หมื่น</th><th></th></tr>`
         :S.usageMode==='item'
         ?`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">ซัพ</th><th class="right">ราคาล่าสุดรายซัพ</th><th class="right">มูลค่า ฿</th><th></th></tr>`
         :`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">บิล</th><th class="right">ราคาล่าสุด</th><th class="right">มูลค่า ฿</th><th></th></tr>`}
