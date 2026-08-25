@@ -416,6 +416,17 @@ tr:last-child td{border-bottom:none}
   #printArea th{color:#000;border-bottom:1.5px solid #000}
   #printArea td{border-bottom:.5px solid #999}
   .pgbreak{page-break-after:always}
+  @page{size:A4;margin:11mm}
+  .ppage{page-break-after:always;font-size:11.5px}
+  .ppage:last-child{page-break-after:auto}
+  .ppage h2{margin:0 0 2mm;font-size:17px}
+  .ppage .pmeta{color:#333;margin-bottom:3mm}
+  .ppage .pgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3mm;margin:0 0 3mm}
+  .ppage .pbox{border:1px solid #999;border-radius:6px;padding:2.5mm}
+  .ppage .pbox b.h{display:block;margin-bottom:1.5mm;font-size:12.5px}
+  .ppage canvas{width:100%!important;max-height:52mm}
+  .ppage table{width:100%;border-collapse:collapse}
+  .ppage .cols2{column-count:2;column-gap:5mm}
 }
 .spin{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--red);border-radius:50%;animation:sp 0.8s linear infinite;margin:30px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -2588,7 +2599,7 @@ RENDER.usage = async (el)=>{
     const amt=num(r.qty)*num(r.price)-num(r.discount);
     const gx=useGrp(r.d); t.q3[gx]+=num(r.qty); t.b3[gx]+=amt;
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
-    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),br:r.branch,bn:num(r.bill_no)||1});
+    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),discount:num(r.discount),br:r.branch,bn:num(r.bill_no)||1});
     if(r.d>=t.lastD){ t.lastD=r.d; t.lastP=num(r.price); }
   });
   const pg={};
@@ -2601,14 +2612,14 @@ RENDER.usage = async (el)=>{
     const amt=num(r.qty)*num(r.price)-num(r.discount);
     const gx=useGrp(r.d); t.q3[gx]+=num(r.qty); t.b3[gx]+=amt;
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
-    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),sid:r.supplier_id,br:r.branch,bn:num(r.bill_no)||1});
+    t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),discount:num(r.discount),sid:r.supplier_id,br:r.branch,bn:num(r.bill_no)||1});
     const sp=t.sups[r.supplier_id]??(t.sups[r.supplier_id]={qty:0,baht:0,lastD:'',lastP:0});
     sp.qty+=num(r.qty); sp.baht+=amt;
     if(r.d>=sp.lastD){ sp.lastD=r.d; sp.lastP=num(r.price); }
   });
   const pgI={};
   prev.forEach(r=>{ const k=r.item+'|'+(r.unit||''); pgI[k]=(pgI[k]||0)+num(r.qty); });
-  S._usage={g,gi,dd};
+  S._usage={g,gi,dd,salesG,daysG};
   if(!S.usageMode) S.usageMode=LS.get('jj_usemode2','item');   // ค่าเริ่มต้น = ระดับสินค้า ไม่สนว่ามาจากกี่ซัพ (key ใหม่ให้ทุกเครื่องเริ่มที่โหมดนี้)
   if(S.use10k===undefined) S.use10k=!!LS.get('jj_use10k',false);
   const K10=!!S.use10k, salesAll=salesG[0]+salesG[1]+salesG[2];
@@ -2632,12 +2643,12 @@ RENDER.usage = async (el)=>{
         const nm=(S.core.supById[p2.sid]||{}).name||('#'+p2.sid);
         return `<span style="white-space:nowrap;${idx===0&&priced.length>1?'color:var(--ok);font-weight:700':''}">${idx===0&&priced.length>1?'✓':''}${esc(nm)} ${fmt(p2.lastP,2)}</span>`;
       }).join('<span class="mut"> · </span>');
-      if(K10) return `<tr class="urow" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+      if(K10) return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
         <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span></td>
         <td class="n b">${p10(x.qty,salesAll)}</td>
         <td class="n">${pDay(x.qty,0)}</td><td class="n">${pDay(x.qty,1)}</td><td class="n">${pDay(x.qty,2)}</td>
         <td class="n">${b10(x.baht,salesAll)}</td><td></td></tr>`;
-      return `<tr class="urow" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
         <td>${esc(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span></td>
         <td class="n">${fq(perDay)}<span class="xs mut">/วัน</span></td>
@@ -2662,12 +2673,12 @@ RENDER.usage = async (el)=>{
       const pv=pg[x.k]; let chipHtml='';
       if(pv>0){ const df=(x.qty-pv)/pv;
         chipHtml=`<span class="chip ${df>0.03?'bad':df<-0.03?'ok':'mid'}" title="เทียบเดือนก่อน ${fq(pv)} ${esc(x.unit)}">${df>0?'▲':df<0?'▼':''} ${pctF(Math.abs(df))}</span>`; }
-      if(K10) return `<tr class="urow" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
+      if(K10) return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
         <td style="padding-left:18px">${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span></td>
         <td class="n b">${p10(x.qty,salesAll)}</td>
         <td class="n">${pDay(x.qty,0)}</td><td class="n">${pDay(x.qty,1)}</td><td class="n">${pDay(x.qty,2)}</td>
         <td class="n">${b10(x.baht,salesAll)}</td><td></td></tr>`;
-      return `<tr class="urow" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
+      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
         <td style="padding-left:18px">${esc(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span></td>
         <td class="n">${fq(perDay)}<span class="xs mut">/วัน</span></td>
@@ -2688,7 +2699,8 @@ RENDER.usage = async (el)=>{
     ${K10?`<div class="xs mut" style="margin:-4px 0 8px"><b>อัตรา (ต่อ ฿10,000)</b> = ใช้ทั้งเดือน ÷ (ยอดขายรวมทั้งเดือน ÷ 10,000) · <b>ใช้/วัน รายกลุ่ม</b> = อัตรา × (ยอดขายเฉลี่ย/วันของกลุ่ม ÷ 10,000) — ยอดขายเฉลี่ย/วัน (รวม VAT): <b>จ–พฤ</b> ฿${daysG[0]?fmtI(salesG[0]/daysG[0]):'–'} (${daysG[0]} วัน) · <b>ศ</b> ฿${daysG[1]?fmtI(salesG[1]/daysG[1]):'–'} (${daysG[1]} วัน) · <b>ส–อา</b> ฿${daysG[2]?fmtI(salesG[2]/daysG[2]):'–'} (${daysG[2]} วัน) · แตะแถวเพื่อดูประวัติรายวัน</div>`
     :`<div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · สินค้าตัวเดียวกันนับรวมทุกซัพ · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>`}
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
-      <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button></div>
+      <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button>
+      <button class="btn gh sm2" onclick="usagePdf()" title="รายงานสินค้าละ 1 หน้า A4 ตามแถวที่แสดงอยู่ (กรองก่อนได้) — สั่งพิมพ์แล้วเลือก Save as PDF">📄 PDF รายสินค้า</button></div>
     <div class="twrap"><table id="useTbl">
       ${K10
         ?`<tr><th>สินค้า</th><th class="right">ต่อ ฿10,000</th><th class="right">จ–พฤ ใช้/วัน</th><th class="right">ศ ใช้/วัน</th><th class="right">ส–อา ใช้/วัน</th><th class="right">฿/หมื่น</th><th></th></tr>`
@@ -2854,6 +2866,65 @@ function stkDetail(i){
     </table></div>
     <div class="xs mut" style="margin-top:8px">ใช้จริงติดลบ ⚠ = นับเกิน/บิลยังไม่ลง/หน่วยไม่ตรง — เช็คตัวคูณหน่วยหรือบิลวันนั้น</div>
     <div style="display:flex;margin-top:12px"><button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ปิด</button></div>`);
+}
+/* ---------- รายงานรายสินค้า 1 หน้า A4 (พิมพ์/บันทึกเป็น PDF) ----------
+   ใช้แถวที่มองเห็นอยู่ในตาราง (เคารพโหมด + คำค้น) หน้า/สินค้า: การสั่งซื้อ · การใช้ · ราคา · กราฟราคา */
+function usagePdf(){
+  const U=S._usage; if(!U){ toast('เปิดหน้าการใช้ของก่อนครับ',true); return; }
+  (S._pdfCharts||[]).forEach(c=>{try{c.destroy();}catch(e){}}); S._pdfCharts=[];
+  const keys=[...document.querySelectorAll('#useTbl tr.urow')].filter(tr=>tr.style.display!=='none').map(tr=>tr.dataset.k).filter(Boolean);
+  if(!keys.length){ toast('ไม่มีสินค้าที่แสดงอยู่ — ล้างคำค้นหรือเลือกกลุ่มก่อนครับ',true); return; }
+  const item=S.usageMode==='item', src=item?U.gi:U.g;
+  const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
+  const dd=U.dd||0, salesG=U.salesG||[0,0,0], daysG=U.daysG||[0,0,0], salesAll=salesG[0]+salesG[1]+salesG[2];
+  const PAL=['#C62127','#4E7D8C','#C9962B','#5B8C5A','#7A5CA8','#B25B8A'];
+  const cfgs=[];
+  const pages=keys.map((k,pi)=>{
+    const x=src[k]; if(!x)return '';
+    const sups=item?[...new Set((x.hist||[]).map(h2=>h2.sid))].map(sid=>(S.core.supById[sid]||{}).name||('#'+sid))
+                   :[((S.core.supById[x.sid]||{}).name)||''];
+    const hist=(x.hist||[]).slice().sort((a,b)=>a.d.localeCompare(b.d)||((a.sid||0)-(b.sid||0)));
+    const wavg=x.qty>0?(hist.reduce((a,h2)=>a+h2.qty*h2.price,0)/x.qty):0;
+    const pmin=Math.min(...hist.map(h2=>h2.price)), pmax=Math.max(...hist.map(h2=>h2.price));
+    const rate=salesAll>0?x.qty/(salesAll/10000):null;
+    const dAvg=gx=>daysG[gx]>0?salesG[gx]/daysG[gx]:0;
+    const pDay=gx=>(rate!=null&&dAvg(gx)>0)?fq(rate*(dAvg(gx)/10000)):'–';
+    // กราฟ: ราคาต่อวัน (แยกซัพเมื่อรวมโหมดสินค้า)
+    const bySer={}; hist.forEach(h2=>{ const s2=item?((S.core.supById[h2.sid]||{}).name||'ซัพ'):''; (bySer[s2]??=[]).push(h2); });
+    const labels=[...new Set(hist.map(h2=>h2.d))];
+    const dsets=Object.entries(bySer).map(([nm,arr],i2)=>({label:nm||'ราคา',data:labels.map(d2=>{const f=arr.filter(h2=>h2.d===d2); return f.length?f[f.length-1].price:null;}),borderColor:PAL[i2%PAL.length],backgroundColor:PAL[i2%PAL.length],spanGaps:true,tension:.25,pointRadius:3,borderWidth:2}));
+    cfgs.push({id:'pchart'+pi,labels:labels.map(d2=>{const[,m2,dt]=d2.split('-');return Number(dt)+'/'+Number(m2);}),dsets,multi:item&&Object.keys(bySer).length>1});
+    const rows=hist.slice(-26);
+    const more=hist.length-rows.length;
+    return `<section class="ppage">
+      <h2>${esc(x.item)} <span style="font-weight:400;font-size:13px">(${esc(x.unit||'')})</span></h2>
+      <div class="pmeta">${monthLabel(S.m)} · สาขา ${S.br==='ALL'?'รวมทุกสาขา':(S.br==='JJRD'?'รัชดา':'ลาดพร้าว')} · ซัพพลายเออร์: ${sups.filter(Boolean).map(esc).join(', ')||'–'} · จริงใจหมูกระทะ</div>
+      <div class="pgrid">
+        <div class="pbox"><b class="h">📦 การสั่งซื้อเดือนนี้</b>
+          ซื้อรวม <b>${fq(x.qty)} ${esc(x.unit||'')}</b> · ${x.n} ครั้ง<br>มูลค่า <b>฿${fmtI(x.baht)}</b><br>เฉลี่ย ${dd?fq(x.qty/dd):'–'} ${esc(x.unit||'')}/วัน (${dd} วันขาย)</div>
+        <div class="pbox"><b class="h">📈 การใช้ต่อยอดขาย</b>
+          อัตรา <b>${rate!=null?fq(rate):'–'}</b> ${esc(x.unit||'')}/฿10,000<br>ใช้/วัน: จ–พฤ <b>${pDay(0)}</b> · ศ <b>${pDay(1)}</b> · ส–อา <b>${pDay(2)}</b></div>
+        <div class="pbox"><b class="h">💰 ราคา (${esc(x.unit||'')})</b>
+          ล่าสุด <b>${fmt(x.lastP,2)}</b> (${thDate(x.lastD)})<br>ต่ำสุด ${fmt(pmin,2)} · สูงสุด ${fmt(pmax,2)}<br>เฉลี่ยถ่วงน้ำหนัก <b>${fmt(wavg,2)}</b></div>
+      </div>
+      <div class="pbox" style="margin-bottom:3mm"><b class="h">กราฟราคา${cfgs[cfgs.length-1].multi?' (แยกซัพ)':''}</b><canvas id="pchart${pi}" width="700" height="190"></canvas></div>
+      <div class="pbox"><b class="h">รายละเอียดการสั่งซื้อ</b>
+        <div class="${rows.length>13?'cols2':''}"><table>
+          <tr><th style="text-align:left">วันที่</th>${item?'<th style="text-align:left">ซัพ</th>':''}<th style="text-align:right">จำนวน</th><th style="text-align:right">@ราคา</th><th style="text-align:right">รวม</th></tr>
+          ${rows.map(h2=>`<tr><td>${thDate(h2.d)}</td>${item?`<td>${esc(((S.core.supById[h2.sid]||{}).name||'').slice(0,14))}</td>`:''}<td style="text-align:right">${fq(h2.qty)}</td><td style="text-align:right">${fmt(h2.price,2)}</td><td style="text-align:right">${fmtI(h2.qty*h2.price-(h2.discount||0))}</td></tr>`).join('')}
+        </table></div>${more>0?`<div style="color:#666;margin-top:1mm">… และก่อนหน้านี้อีก ${more} รายการ</div>`:''}</div>
+      <div style="color:#777;margin-top:2mm;font-size:10px">JJ P&L · สร้าง ${thDate(todayStr())} · อัตราใช้คิดจากยอดซื้อ ÷ ยอดขายรวม VAT ของเดือน</div>
+    </section>`;
+  }).join('');
+  document.getElementById('printArea').innerHTML=pages;
+  cfgs.forEach(c=>{ const cv=document.getElementById(c.id); if(!cv)return;
+    try{ S._pdfCharts.push(new Chart(cv.getContext('2d'),{type:'line',
+      data:{labels:c.labels,datasets:c.dsets},
+      options:{responsive:false,animation:false,plugins:{legend:{display:!!c.multi,labels:{boxWidth:10,font:{size:10}}}},
+        scales:{y:{ticks:{font:{size:10}}},x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true}}}}})); }catch(e){}
+  });
+  toast(`📄 เตรียม ${keys.length} หน้าแล้ว — ในหน้าปริ้นท์เลือกปลายทาง "Save as PDF" ได้เลย`);
+  setTimeout(()=>{ try{window.print();}catch(e){} },350);
 }
 function usageModeSet(m){ S.usageMode=m; LS.set('jj_usemode2',m); show('usage'); }
 function usage10kSet(v){ S.use10k=!!v; LS.set('jj_use10k',S.use10k); show('usage'); }
