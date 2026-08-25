@@ -325,6 +325,7 @@ main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px)
 .duprow{padding:6px 0;border-top:1px dashed #E9D9A8;cursor:pointer;line-height:1.6}
 .duprow:first-of-type{border-top:0;margin-top:4px}
 .bindrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 0;border-top:1px dashed #E9D9A8}
+.bindrow .stkck{width:17px;height:17px;flex:none}
 .bindrow select{max-width:280px}
 #rtBar{display:none;position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:1200;background:var(--ink);color:#fff;padding:9px 16px;border-radius:99px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
 .chip.gold{background:var(--gold-t);color:var(--gold)}
@@ -2730,10 +2731,12 @@ RENDER.usage = async (el)=>{
    สูตร: ใช้จริงช่วง = นับครั้งก่อน + ซื้อเข้าระหว่างช่วง (บิล P&L × ตัวคูณหน่วย) − นับครั้งนี้
    เวลานับ ~17:00 ก่อนเปิดร้าน: นับวัน D = สต๊อกก่อนขายวัน D · บิลลงวันที่ D = เข้าก่อนนับวัน D
    -> ช่วง (P -> C): ซื้อเข้า = บิลที่ P < วันที่ ≤ C · ยอดขายคู่กัน = วัน P ถึง C−1 */
+const STK_MIN='2026-07-31'; // วันแรกที่ใช้ข้อมูลนับสต๊อก — ก่อนหน้านี้เป็นข้อมูลช่วงระบบเก่า ไม่เอามาคิดเลย
 function stkAddDays(ds,n){ const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate()+n); const z=x=>String(x).padStart(2,'0'); return t.getFullYear()+'-'+z(t.getMonth()+1)+'-'+z(t.getDate()); }
 function stkRound05(v){ if(!(v>0))return 0; const u=Math.ceil(v); const r=u%5; return r===0?u:(u%10===0?u:u+(5-(u%5))); } // ปัดขึ้นให้ลงท้าย 0/5 (ไว้ใช้เฟส 2)
 async function stkLoad(){
-  const m=S.m, from=stkAddDays(m+'-01',-7), to=dstr(m,monthDays(m));
+  const m=S.m; let from=stkAddDays(m+'-01',-7); if(from<STK_MIN)from=STK_MIN; // ตัดข้อมูลก่อนวันเริ่มนับทิ้งตั้งแต่ต้นทาง
+  const to=dstr(m,monthDays(m));
   let permDenied=false;
   const stkSel=(t,q)=>selAllQ(t,q).catch(e=>{ if(/42501|permission denied|401/i.test(String(e.message)))permDenied=true; return []; });
   const [prods,map,counts,bills,inc]=await Promise.all([
@@ -2818,9 +2821,10 @@ RENDER.actual = async (el)=>{
   const cmpChip=(p10,avg)=>{ if(p10==null||avg==null||avg<=0)return ''; const df=(p10-avg)/avg;
     return `<span class="chip ${df>0.2?'bad':df<-0.2?'ok':'mid'}">${df>0?'▲':'▼'} ${Math.abs(df*100).toFixed(0)}%</span>`; };
   const bindRow=(x,i)=>{ const g=stkGuess(x.name,names);
-    return `<div class="bindrow" id="bnd${i}">
-      <span class="xs"><b>${esc(x.name)}</b> <span class="mut">${esc(x.unit||'')} · ${esc(x.sup||'')}</span>${g?` <span class="xs" style="color:#8A6200">เดาว่า = <b>${esc(g)}</b></span>`:''}</span>
-      <select id="bsel${i}"><option value="">— เลือกชื่อในบิล —</option>${names.map(n2=>`<option${g===n2?' selected':''}>${esc(n2)}</option>`).join('')}</select>
+    return `<div class="bindrow" id="bnd${i}" data-pid="${esc(x.id)}" data-s="${esc((x.name+' '+(x.sup||'')).toLowerCase())}">
+      <input type="checkbox" class="stkck" ${g?'checked':''} onchange="stkBindCnt()" title="เลือกไว้ผูกทีเดียวหลายตัว">
+      <span class="xs"><b>${esc(x.name)}</b> <span class="mut">${esc(x.unit||'')} · ${esc(x.sup||'')}</span>${g?` <span class="xs" style="color:#8A6200">เดาว่า</span>`:''}</span>
+      <input id="bsel${i}" class="bsel" list="stkNamesDL" value="${esc(g)}" placeholder="พิมพ์ค้นหาชื่อในบิล..." style="min-width:220px">
       <span class="xs">1 หน่วยบิล = <input id="bf${i}" type="text" inputmode="decimal" value="1" style="width:56px;text-align:right"> ${esc(x.unit||'หน่วยนับ')}</span>
       <button class="btn sm2" onclick="stkBind(${i},'${esc(x.id)}')">ผูก</button>
       <button class="btn gh sm2" onclick="stkSkip('${esc(x.id)}')" title="ตัวนี้ไม่ต้องติดตามใช้จริง (ซ่อนถาวร เปิดคืนได้)">ข้าม</button>
@@ -2828,8 +2832,14 @@ RENDER.actual = async (el)=>{
   el.innerHTML=`
   <div class="card">
     <div class="secbar">ใช้จริงรายวัน (จากการนับสต๊อก) <span class="sp">${monthLabel(S.m)} · ${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}</span></div>
-    <div class="xs mut" style="margin:6px 0 10px">อ่านผลนับจากแอพนับสต๊อกโดยตรง (พนักงานนับตามเดิม ไม่ต้องทำอะไรเพิ่ม) · <b>ใช้จริง = นับครั้งก่อน + ซื้อเข้า (บิลในแอพนี้ × ตัวคูณหน่วย) − นับครั้งนี้</b> · นับก่อนเปิดร้าน: บิลวันเดียวกันนับเป็นของเข้าก่อนนับ · ยอดขายคู่กับคืนที่ขายจริง · ใช้/หมื่น = ใช้จริง ÷ (ยอดขายรวม VAT ÷ 10,000) · ▲▼ เทียบค่าเฉลี่ยเดือน เกิน ±20% ทาสี</div>
-    ${unbound.length?`<div class="dupbox"><b>🔗 ผูกชื่อครั้งแรก · เหลือ ${unbound.length} ตัว</b> <span class="xs mut">(ผูกครั้งเดียวจำตลอด — เริ่มจากตัวท็อปที่อยากตามก่อนก็ได้ ที่เหลือกด "ข้าม")</span>
+    <div class="xs mut" style="margin:6px 0 10px">อ่านผลนับจากแอพนับสต๊อกโดยตรง (พนักงานนับตามเดิม ไม่ต้องทำอะไรเพิ่ม) · <b>ใช้ข้อมูลนับตั้งแต่ 31 ก.ค. 2569 เป็นต้นไป</b> · <b>ใช้จริง = นับครั้งก่อน + ซื้อเข้า (บิลในแอพนี้ × ตัวคูณหน่วย) − นับครั้งนี้</b> · นับก่อนเปิดร้าน: บิลวันเดียวกันนับเป็นของเข้าก่อนนับ · ยอดขายคู่กับคืนที่ขายจริง · ใช้/หมื่น = ใช้จริง ÷ (ยอดขายรวม VAT ÷ 10,000) · ▲▼ เทียบค่าเฉลี่ยเดือน เกิน ±20% ทาสี</div>
+    ${unbound.length?`<div class="dupbox"><b>🔗 ผูกชื่อครั้งแรก · เหลือ ${unbound.length} ตัว</b> <span class="xs mut">(ผูกครั้งเดียวจำตลอด — ติ๊กหลายตัวแล้วกดผูกทีเดียวได้ · ตัวที่เดาได้ติ๊กรอไว้แล้ว)</span>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 2px">
+        <input id="stkQ" placeholder="🔍 กรองรายการ เช่น หมู / ชื่อซัพ..." oninput="stkBindFilter(this.value)" style="max-width:260px">
+        <span class="xs"><span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.bindrow:not([style*=none]) .stkck').forEach(c=>c.checked=true);stkBindCnt()">เลือกที่เห็นทั้งหมด</span> · <span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.stkck').forEach(c=>c.checked=false);stkBindCnt()">ไม่เลือกเลย</span></span>
+        <button class="btn sm2" id="stkBulkBtn" style="margin-left:auto" onclick="stkBindSel()">ผูกที่เลือก (${unbound.filter(x=>stkGuess(x.name,names)).length})</button>
+      </div>
+      <datalist id="stkNamesDL">${names.map(n2=>`<option value="${esc(n2)}">`).join('')}</datalist>
       ${unbound.map((x,i)=>bindRow(x,i)).join('')}</div>`:''}
     ${rows.length?`<div class="twrap"><table>
       <tr><th>สินค้า (หน่วยนับ)</th><th class="right">ช่วงล่าสุด</th><th class="right">ใช้จริง</th><th class="right">ใช้/หมื่น</th><th class="right">เฉลี่ยเดือน /หมื่น</th><th class="right">เทียบ</th><th class="right">คงเหลือล่าสุด</th></tr>
@@ -2848,16 +2858,50 @@ RENDER.actual = async (el)=>{
     ${skipped.length?`<div class="xs mut" style="margin-top:10px">ข้ามไว้ ${skipped.length} ตัว · <span style="text-decoration:underline dotted;cursor:pointer" onclick="stkUnskipAll()">เอากลับมาทั้งหมด</span></div>`:''}
   </div>`;
 };
+function stkBindCnt(){ const n=document.querySelectorAll('.bindrow .stkck:checked').length; const b=document.getElementById('stkBulkBtn'); if(b)b.textContent=`ผูกที่เลือก (${n})`; }
+function stkBindFilter(q){
+  const toks=String(q||'').toLowerCase().split(/\s+/).filter(Boolean);
+  document.querySelectorAll('.bindrow').forEach(r=>{
+    const hit=!toks.length||toks.every(t=>String(r.dataset.s||'').includes(t));
+    r.style.display=hit?'':'none';
+  });
+}
+function stkRowPayload(row){ // อ่านค่าจากแถวผูก -> payload (ชื่อต้องตรงกับที่มีในบิลเป๊ะ)
+  const st=S._stk, pid=row.dataset.pid;
+  const item=((row.querySelector('.bsel')||{}).value||'').trim();
+  const f=num((row.querySelector('input[id^=bf]')||{}).value)||1;
+  if(!item)return {err:'empty'};
+  if(!(S._stkNames||[]).includes(item))return {err:'notfound',item};
+  const pr=(st&&st.prods.find(x=>x.id===pid))||{};
+  return {row:{branch:S.br,product_id:pid,product_name:pr.name||'',pnl_item:item,bill_unit:'',stock_unit:pr.unit||'',factor:f,active:true}};
+}
 async function stkBind(i,pid){
-  const st=S._stk; if(!st)return;
-  const sel2=document.getElementById('bsel'+i), f=num((document.getElementById('bf'+i)||{}).value)||1;
-  const item=sel2&&sel2.value; if(!item){ toast('เลือกชื่อสินค้าในบิลก่อนครับ',true); return; }
-  const pr=st.prods.find(x=>x.id===pid)||{};
+  const el=document.getElementById('bnd'+i); if(!el)return;
+  const pl=stkRowPayload(el);
+  if(pl.err==='empty'){ toast('พิมพ์/เลือกชื่อสินค้าในบิลก่อนครับ',true); return; }
+  if(pl.err==='notfound'){ toast(`"${pl.item}" ไม่ตรงกับชื่อในบิล — พิมพ์แล้วเลือกจากรายการที่ขึ้นมา`,true); return; }
   try{
-    await ins('pnl_stock_map',[{branch:S.br,product_id:pid,product_name:pr.name||'',pnl_item:item,bill_unit:'',stock_unit:pr.unit||'',factor:f,active:true}]);
-    toast(`✅ ผูก "${pr.name}" = "${item}" แล้ว จำตลอด`);
+    await ins('pnl_stock_map',[pl.row]);
+    toast(`✅ ผูก "${pl.row.product_name}" = "${pl.row.pnl_item}" แล้ว จำตลอด`);
     show('actual');
   }catch(e){ toast('ผูกไม่สำเร็จ: '+(e.message||''),true); }
+}
+async function stkBindSel(){ // ผูกทีเดียวทุกแถวที่ติ๊ก (POST เดียว)
+  const rows=[...document.querySelectorAll('.bindrow')].filter(r=>{const c=r.querySelector('.stkck');return c&&c.checked&&r.style.display!=='none';});
+  if(!rows.length){ toast('ยังไม่ได้ติ๊กเลือกสักตัวครับ',true); return; }
+  const ok=[], bad=[];
+  rows.forEach(r=>{ const pl=stkRowPayload(r); if(pl.row)ok.push(pl.row); else bad.push(r); });
+  if(!ok.length){ toast('ตัวที่เลือกยังไม่มีชื่อที่ตรงกับบิลเลย — พิมพ์เลือกชื่อก่อนครับ',true); return; }
+  try{
+    await ins('pnl_stock_map',ok);
+    toast(`✅ ผูกแล้ว ${ok.length} ตัว${bad.length?` · ข้าม ${bad.length} ตัว (ชื่อว่าง/ไม่ตรงบิล)`:''} — จำตลอด`);
+    show('actual');
+  }catch(e){ toast('ผูกไม่สำเร็จ: '+(e.message||''),true); }
+}
+async function stkUnbind(pid){
+  if(!confirm('เลิกผูกสินค้าตัวนี้? (กลับไปอยู่ในลิสต์ผูกชื่อ ผูกใหม่/แก้ตัวคูณได้)'))return;
+  try{ await api('DELETE',`pnl_stock_map?product_id=eq.${encodeURIComponent(pid)}`); closeModal(); show('actual'); }
+  catch(e){ toast('เลิกผูกไม่สำเร็จ',true); }
 }
 async function stkSkip(pid){
   const st=S._stk; const pr=(st&&st.prods.find(x=>x.id===pid))||{};
@@ -2881,7 +2925,7 @@ function stkDetail(i){
       <tr class="tot"><td>รวมเดือน</td><td></td><td></td><td></td><td class="n">${fq(r.totU)}</td><td class="n xs">${fmtI(r.totS)}</td><td class="n">${r.avg10!=null?fq(r.avg10):'–'}</td></tr>
     </table></div>
     <div class="xs mut" style="margin-top:8px">ใช้จริงติดลบ ⚠ = นับเกิน/บิลยังไม่ลง/หน่วยไม่ตรง — เช็คตัวคูณหน่วยหรือบิลวันนั้น</div>
-    <div style="display:flex;margin-top:12px"><button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ปิด</button></div>`);
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gh sm2" onclick="stkUnbind('${esc(r.pr.id)}')" title="ถอดออกจากการติดตาม แล้วผูกใหม่/แก้ตัวคูณได้">🗑 เลิกผูก</button><button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ปิด</button></div>`);
 }
 /* ---------- รายงานรายสินค้า 1 หน้า A4 (พิมพ์/บันทึกเป็น PDF) ----------
    ใช้แถวที่มองเห็นอยู่ในตาราง (เคารพโหมด + คำค้น) หน้า/สินค้า: การสั่งซื้อ · การใช้ · ราคา · กราฟราคา */
