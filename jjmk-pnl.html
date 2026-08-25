@@ -416,17 +416,20 @@ tr:last-child td{border-bottom:none}
   #printArea th{color:#000;border-bottom:1.5px solid #000}
   #printArea td{border-bottom:.5px solid #999}
   .pgbreak{page-break-after:always}
-  @page{size:A4;margin:11mm}
-  .ppage{page-break-after:always;font-size:11.5px}
+  @page{size:A4;margin:14mm}
+  .ppage{page-break-after:always;font-size:12.5px;min-height:248mm;display:flex;flex-direction:column}
   .ppage:last-child{page-break-after:auto}
-  .ppage h2{margin:0 0 2mm;font-size:17px}
-  .ppage .pmeta{color:#333;margin-bottom:3mm}
-  .ppage .pgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3mm;margin:0 0 3mm}
-  .ppage .pbox{border:1px solid #999;border-radius:6px;padding:2.5mm}
-  .ppage .pbox b.h{display:block;margin-bottom:1.5mm;font-size:12.5px}
-  .ppage canvas{width:100%!important;max-height:52mm}
+  .ppage h2{margin:0 0 2mm;font-size:19px}
+  .ppage .pmeta{color:#333;margin-bottom:4mm}
+  .ppage .pgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4mm;margin:0 0 4mm}
+  .ppage .pbox{border:1px solid #999;border-radius:7px;padding:3.5mm;line-height:1.55}
+  .ppage .pbox b.h{display:block;margin-bottom:2mm;font-size:13.5px}
+  .ppage .pfill{flex:1}
+  .ppage canvas{width:100%!important;max-height:68mm}
   .ppage table{width:100%;border-collapse:collapse}
-  .ppage .cols2{column-count:2;column-gap:5mm}
+  .ppage table td,.ppage table th{padding:1.6mm 1mm}
+  .ppage .cols2{column-count:2;column-gap:6mm}
+  .ppage .pfoot{color:#777;margin-top:auto;padding-top:3mm;font-size:10px}
 }
 .spin{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--red);border-radius:50%;animation:sp 0.8s linear infinite;margin:30px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -605,7 +608,7 @@ function alogAuto(method,path,body){
       action:verb+(LOGN[t]||t), detail:hint.slice(0,180)},'return=minimal').catch(()=>{});
   }catch(e){}
 }
-async function api(method, path, body, prefer){
+async function api(method, path, body, prefer, quiet){
   const {url,key}=cfg();
   // สิทธิ์: เขียนได้เฉพาะเมนูที่ได้รับ "แก้ไข" (log/เปลี่ยนรหัสตัวเองยกเว้น)
   if(method!=='GET' && S.user && !path.startsWith('pnl_activity_log')){
@@ -629,11 +632,19 @@ async function api(method, path, body, prefer){
     const txt = await r.text();
     return txt?JSON.parse(txt):[];
   }catch(e){
-    document.getElementById('syncDot').className='err';
-    toast('บันทึกไม่สำเร็จ: '+e.message, true); throw e;
+    if(!quiet){
+      document.getElementById('syncDot').className='err';
+      toast('บันทึกไม่สำเร็จ: '+e.message, true);
+    }
+    throw e;
   }finally{ setBusy(false); }
 }
 const sel  = (t,q)=>api('GET', t+'?'+q);
+const selQ = (t,q)=>api('GET', t+'?'+q, null, null, true); // อ่านเงียบ (จัดการ error เองที่ปลายทาง)
+async function selAllQ(t,q,page){
+  page=page||1000; const out=[]; let off=0;
+  for(;;){ const r=await selQ(t,`${q}&limit=${page}&offset=${off}`); out.push(...r); if(r.length<page) return out; off+=page; }
+}
 async function selAll(t,q,page){ // ดึงครบทุกแถวแม้เกินเพดานต่อคำขอ (ต้องมี order ใน q ให้หน้าคงที่)
   page=page||1000; const out=[]; let off=0;
   for(;;){ const r=await sel(t,`${q}&limit=${page}&offset=${off}`); out.push(...r); if(r.length<page) return out; off+=page; }
@@ -2723,11 +2734,13 @@ function stkAddDays(ds,n){ const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate
 function stkRound05(v){ if(!(v>0))return 0; const u=Math.ceil(v); const r=u%5; return r===0?u:(u%10===0?u:u+(5-(u%5))); } // ปัดขึ้นให้ลงท้าย 0/5 (ไว้ใช้เฟส 2)
 async function stkLoad(){
   const m=S.m, from=stkAddDays(m+'-01',-7), to=dstr(m,monthDays(m));
+  let permDenied=false;
+  const stkSel=(t,q)=>selAllQ(t,q).catch(e=>{ if(/42501|permission denied|401/i.test(String(e.message)))permDenied=true; return []; });
   const [brs,prods,map,counts,bills,inc]=await Promise.all([
-    selAll('branches','select=*&order=id').catch(()=>[]),
-    selAll('products',`select=id,branch_id,name,unit,sup,cat_label,cat_key,sort&deleted_at=is.null&order=id`).catch(()=>[]),
-    selAll('pnl_stock_map','select=*&order=id').catch(()=>null),
-    selAll('stock_counts',`select=branch_id,count_date,product_id,qty,out_of_stock,created_at&count_date=gte.${from}&count_date=lte.${to}&order=count_date,created_at`).catch(()=>[]),
+    stkSel('branches','select=*&order=id'),
+    stkSel('products',`select=id,branch_id,name,unit,sup,cat_label,cat_key,sort&deleted_at=is.null&order=id`),
+    selAllQ('pnl_stock_map','select=*&order=id').catch(()=>null),
+    stkSel('stock_counts',`select=branch_id,count_date,product_id,qty,out_of_stock,created_at&count_date=gte.${from}&count_date=lte.${to}&order=count_date,created_at`),
     selAll('pnl_bill_items',`select=branch,d,item,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[]),
     selAll('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[])
   ]);
@@ -2744,7 +2757,7 @@ async function stkLoad(){
   });
   // บิลตามชื่อสินค้า: วัน -> qty
   const B={}; (bills||[]).forEach(r=>{ const k=ocrNorm(r.item); ((B[k]??={})[r.d]??=0); B[k][r.d]+=num(r.qty); });
-  return {ok:map!==null, sbid, prods:P, map:M, C, B, sales, from, to};
+  return {ok:map!==null, permDenied, sbid, prods:P, map:M, C, B, sales, from, to};
 }
 function stkBillNames(){ // ชื่อสินค้าในบิลของสาขานี้ (ไว้ให้เลือกผูก)
   const st=S._stk; if(!st)return [];
@@ -2760,6 +2773,7 @@ function stkGuess(name,bn){ // เดาชื่อบิลจากชื่�
 RENDER.actual = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=`<div class="card"><div class="empty">หน้านี้ดูรายสาขา — เลือก "สาขารัชดา" หรือ "สาขาลาดพร้าว" ข้างบนก่อนครับ</div></div>`; return; }
   const st=await stkLoad();
+  if(st.permDenied){ el.innerHTML=`<div class="card"><div class="empty">🔒 แอพนี้ยังไม่มีสิทธิ์อ่านตารางระบบนับสต๊อก (permission denied)<br>รัน <b>jjmk_pnl_stockread.sql</b> ใน Supabase SQL Editor ครั้งเดียว (เปิดสิทธิ์อ่านอย่างเดียว ไม่ให้เขียน) แล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
   if(!st.ok){ el.innerHTML=`<div class="card"><div class="empty">⚠ ยังไม่ได้รัน <b>jjmk_pnl_stockmap.sql</b> ใน Supabase — รันครั้งเดียวแล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
   // เก็บชื่อบิลตัวจริง (ไม่ norm) ไว้โชว์
   st._bn={}; (Object.keys(st.B)).forEach(k=>st._bn[k]=k);
@@ -2769,7 +2783,7 @@ RENDER.actual = async (el)=>{
   const bn=[...new Set([...(S._stkRaw||[])])];
   // สร้างลิสต์ชื่อบิลดิบจาก pnl_sup_items + บิลเดือนนี้
   let names=[];
-  try{ const si=await selAll('pnl_sup_items','select=item&order=item').catch(()=>[]); names=si.map(x=>x.item); }catch(e){}
+  try{ const si=await selAllQ('pnl_sup_items','select=item&order=item').catch(()=>[]); names=si.map(x=>x.item); }catch(e){}
   try{ const bi=await sel('pnl_bill_items',`select=item&branch=eq.${S.br}&d=gte.${st.from}&d=lte.${st.to}`); bi.forEach(x=>names.push(x.item)); }catch(e){}
   names=[...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
   S._stkNames=names;
@@ -2869,11 +2883,35 @@ function stkDetail(i){
 }
 /* ---------- รายงานรายสินค้า 1 หน้า A4 (พิมพ์/บันทึกเป็น PDF) ----------
    ใช้แถวที่มองเห็นอยู่ในตาราง (เคารพโหมด + คำค้น) หน้า/สินค้า: การสั่งซื้อ · การใช้ · ราคา · กราฟราคา */
-function usagePdf(){
+function usagePdf(){ // เปิดตัวเลือกสินค้า (ติ๊กเอาเฉพาะที่ต้องการ) — ตั้งต้นจากแถวที่กรองเห็นอยู่
   const U=S._usage; if(!U){ toast('เปิดหน้าการใช้ของก่อนครับ',true); return; }
-  (S._pdfCharts||[]).forEach(c=>{try{c.destroy();}catch(e){}}); S._pdfCharts=[];
   const keys=[...document.querySelectorAll('#useTbl tr.urow')].filter(tr=>tr.style.display!=='none').map(tr=>tr.dataset.k).filter(Boolean);
   if(!keys.length){ toast('ไม่มีสินค้าที่แสดงอยู่ — ล้างคำค้นหรือเลือกกลุ่มก่อนครับ',true); return; }
+  const item=S.usageMode==='item', src=item?U.gi:U.g;
+  S._pdfKeys=keys;
+  openModal(`<h3>📄 เลือกสินค้าที่จะออกรายงาน <span class="sp">หน้า A4 / สินค้า</span></h3>
+    <div class="xs mut" style="margin-bottom:6px"><span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.pdfck').forEach(c=>c.checked=true);usagePdfCnt()">เลือกทั้งหมด</span> · <span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.pdfck').forEach(c=>c.checked=false);usagePdfCnt()">ไม่เลือกเลย</span></div>
+    <div style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">
+      ${keys.map((k,i)=>{ const x=src[k]; if(!x)return ''; const nm=item?'':((S.core.supById[x.sid]||{}).name||'');
+        return `<label style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line);cursor:pointer">
+          <input type="checkbox" class="pdfck" data-k="${esc(k)}" checked onchange="usagePdfCnt()">
+          <span>${esc(x.item)} <span class="xs mut">${esc(x.unit||'')}${nm?' · '+esc(nm):''} · ฿${fmtI(x.baht)}</span></span></label>`; }).join('')}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn sm2" id="pdfGoBtn" onclick="usagePdfGo()">สร้าง PDF (${keys.length} หน้า)</button>
+    </div>`);
+}
+function usagePdfCnt(){ const n=document.querySelectorAll('.pdfck:checked').length; const b=document.getElementById('pdfGoBtn'); if(b)b.textContent=`สร้าง PDF (${n} หน้า)`; }
+function usagePdfGo(){
+  const keys=[...document.querySelectorAll('.pdfck:checked')].map(c=>c.dataset.k);
+  closeModal();
+  if(!keys.length){ toast('ยังไม่ได้เลือกสินค้าเลยครับ',true); return; }
+  usagePdfBuild(keys);
+}
+function usagePdfBuild(keys){
+  const U=S._usage; if(!U)return;
+  (S._pdfCharts||[]).forEach(c=>{try{c.destroy();}catch(e){}}); S._pdfCharts=[];
   const item=S.usageMode==='item', src=item?U.gi:U.g;
   const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
   const dd=U.dd||0, salesG=U.salesG||[0,0,0], daysG=U.daysG||[0,0,0], salesAll=salesG[0]+salesG[1]+salesG[2];
@@ -2907,13 +2945,13 @@ function usagePdf(){
         <div class="pbox"><b class="h">💰 ราคา (${esc(x.unit||'')})</b>
           ล่าสุด <b>${fmt(x.lastP,2)}</b> (${thDate(x.lastD)})<br>ต่ำสุด ${fmt(pmin,2)} · สูงสุด ${fmt(pmax,2)}<br>เฉลี่ยถ่วงน้ำหนัก <b>${fmt(wavg,2)}</b></div>
       </div>
-      <div class="pbox" style="margin-bottom:3mm"><b class="h">กราฟราคา${cfgs[cfgs.length-1].multi?' (แยกซัพ)':''}</b><canvas id="pchart${pi}" width="700" height="190"></canvas></div>
-      <div class="pbox"><b class="h">รายละเอียดการสั่งซื้อ</b>
+      <div class="pbox" style="margin-bottom:3mm"><b class="h">กราฟราคา${cfgs[cfgs.length-1].multi?' (แยกซัพ)':''}</b><canvas id="pchart${pi}" width="700" height="240"></canvas></div>
+      <div class="pbox pfill"><b class="h">รายละเอียดการสั่งซื้อ</b>
         <div class="${rows.length>13?'cols2':''}"><table>
           <tr><th style="text-align:left">วันที่</th>${item?'<th style="text-align:left">ซัพ</th>':''}<th style="text-align:right">จำนวน</th><th style="text-align:right">@ราคา</th><th style="text-align:right">รวม</th></tr>
           ${rows.map(h2=>`<tr><td>${thDate(h2.d)}</td>${item?`<td>${esc(((S.core.supById[h2.sid]||{}).name||'').slice(0,14))}</td>`:''}<td style="text-align:right">${fq(h2.qty)}</td><td style="text-align:right">${fmt(h2.price,2)}</td><td style="text-align:right">${fmtI(h2.qty*h2.price-(h2.discount||0))}</td></tr>`).join('')}
         </table></div>${more>0?`<div style="color:#666;margin-top:1mm">… และก่อนหน้านี้อีก ${more} รายการ</div>`:''}</div>
-      <div style="color:#777;margin-top:2mm;font-size:10px">JJ P&L · สร้าง ${thDate(todayStr())} · อัตราใช้คิดจากยอดซื้อ ÷ ยอดขายรวม VAT ของเดือน</div>
+      <div class="pfoot">JJ P&L · สร้าง ${thDate(todayStr())} · อัตราใช้คิดจากยอดซื้อ ÷ ยอดขายรวม VAT ของเดือน</div>
     </section>`;
   }).join('');
   document.getElementById('printArea').innerHTML=pages;
