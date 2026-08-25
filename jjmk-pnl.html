@@ -2537,6 +2537,8 @@ RENDER.vatrep = async (el)=>{
   ${billSec('ex')}${billSec('inc')}${billSec('none')}`;
 };
 function vrOpen(d,sid,bn){ S.dtDate=d; S.dtSup=sid; S._dtForceBn=bn||1; show('detail'); }
+const USE_GRP_LBL=['จ–พฤ','ศ','ส–อา'];
+function useGrp(d){ const wd=new Date(d+'T00:00:00').getDay(); return wd===5?1:(wd===6||wd===0)?2:0; }
 RENDER.usage = async (el)=>{
   const ALL=S.br==='ALL';
   const brFilter=ALL?'':`&branch=eq.${S.br}`;
@@ -2559,22 +2561,28 @@ RENDER.usage = async (el)=>{
     return;
   }
   // ตัวหาร: วันที่มีรายรับจริง (เหมือนสรุปเดือน) · ทุกสาขา = วันที่มีรายรับอย่างน้อย 1 สาขา
-  let dd=0;
+  // + ยอดขายรวม VAT แยกกลุ่มวัน (จ–พฤ / ศ / ส–อา) ไว้คิดอัตราใช้ต่อยอดขาย ฿10,000
+  let dd=0; const salesG=[0,0,0], daysG=[0,0,0];
   if(ALL){
     try{
       const inc=await sel('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}`);
       dd=new Set(inc.filter(r=>hasIncData(r)).map(r=>r.d)).size;
+      const byD={}; inc.forEach(r=>{ byD[r.d]=(byD[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
+      Object.entries(byD).forEach(([d2,v])=>{ if(v>0){ const gx=useGrp(d2); salesG[gx]+=v; daysG[gx]++; } });
     }catch(e){}
   }
-  else try{ const A=await agg(S.br,S.m); dd=A.daysData||0; }catch(e){}
+  else try{ const A=await agg(S.br,S.m); dd=A.daysData||0;
+    (A.daily||[]).forEach((v,i)=>{ if(v>0){ const gx=useGrp(`${S.m}-${String(i+1).padStart(2,'0')}`); salesG[gx]+=v; daysG[gx]++; } });
+  }catch(e){}
   if(!dd){ const t=new Date(); const cur=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
     dd = S.m===cur ? Math.max(1,t.getDate()) : monthDays(S.m); }
   // รวมต่อสินค้า (แยกหน่วย กันปน กก./แพ็ค)
   const g={};
   rows.forEach(r=>{
     const k=r.supplier_id+'|'+r.item+'|'+(r.unit||'');
-    const t=g[k]??(g[k]={sid:r.supplier_id,item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,lastD:'',lastP:0,hist:[]});
+    const t=g[k]??(g[k]={sid:r.supplier_id,item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,lastD:'',lastP:0,hist:[],q3:[0,0,0],b3:[0,0,0]});
     const amt=num(r.qty)*num(r.price)-num(r.discount);
+    const gx=useGrp(r.d); t.q3[gx]+=num(r.qty); t.b3[gx]+=amt;
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
     t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),br:r.branch,bn:num(r.bill_no)||1});
     if(r.d>=t.lastD){ t.lastD=r.d; t.lastP=num(r.price); }
@@ -2585,8 +2593,9 @@ RENDER.usage = async (el)=>{
   const gi={};
   rows.forEach(r=>{
     const k=r.item+'|'+(r.unit||'');
-    const t=gi[k]??(gi[k]={item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,sups:{},hist:[]});
+    const t=gi[k]??(gi[k]={item:r.item,unit:r.unit||'',qty:0,baht:0,n:0,sups:{},hist:[],q3:[0,0,0],b3:[0,0,0]});
     const amt=num(r.qty)*num(r.price)-num(r.discount);
+    const gx=useGrp(r.d); t.q3[gx]+=num(r.qty); t.b3[gx]+=amt;
     t.qty+=num(r.qty); t.baht+=amt; t.n++;
     t.hist.push({d:r.d,qty:num(r.qty),price:num(r.price),sid:r.supplier_id,br:r.branch,bn:num(r.bill_no)||1});
     const sp=t.sups[r.supplier_id]??(t.sups[r.supplier_id]={qty:0,baht:0,lastD:'',lastP:0});
@@ -2597,7 +2606,11 @@ RENDER.usage = async (el)=>{
   prev.forEach(r=>{ const k=r.item+'|'+(r.unit||''); pgI[k]=(pgI[k]||0)+num(r.qty); });
   S._usage={g,gi,dd};
   if(!S.usageMode) S.usageMode=LS.get('jj_usemode2','item');   // ค่าเริ่มต้น = ระดับสินค้า ไม่สนว่ามาจากกี่ซัพ (key ใหม่ให้ทุกเครื่องเริ่มที่โหมดนี้)
+  if(S.use10k===undefined) S.use10k=!!LS.get('jj_use10k',false);
+  const K10=!!S.use10k, salesAll=salesG[0]+salesG[1]+salesG[2];
   const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
+  const p10=(q,sv)=>(sv>0&&q>0)?fq(q/(sv/10000)):'–';           // จำนวนต่อยอดขาย ฿10,000 ของกลุ่มวันนั้น
+  const b10=(b,sv)=>(sv>0&&b>0)?fmtI(b/(sv/10000)):'–';         // มูลค่า ฿ ต่อยอดขาย ฿10,000
   let body='', grand=0;
   if(S.usageMode==='item'){
     const items=Object.entries(gi).map(([k,t])=>({k,...t})).sort((a,b)=>b.baht-a.baht);
@@ -2613,6 +2626,11 @@ RENDER.usage = async (el)=>{
         const nm=(S.core.supById[p2.sid]||{}).name||('#'+p2.sid);
         return `<span style="white-space:nowrap;${idx===0&&priced.length>1?'color:var(--ok);font-weight:700':''}">${idx===0&&priced.length>1?'✓':''}${esc(nm)} ${fmt(p2.lastP,2)}</span>`;
       }).join('<span class="mut"> · </span>');
+      if(K10) return `<tr class="urow" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+        <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span></td>
+        <td class="n">${p10(x.q3[0],salesG[0])}</td><td class="n">${p10(x.q3[1],salesG[1])}</td><td class="n">${p10(x.q3[2],salesG[2])}</td>
+        <td class="n b">${p10(x.qty,salesAll)}</td>
+        <td class="n">${b10(x.baht,salesAll)}</td><td></td></tr>`;
       return `<tr class="urow" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
         <td>${esc(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span></td>
@@ -2628,13 +2646,22 @@ RENDER.usage = async (el)=>{
       .sort((a,b)=>b.baht-a.baht);
     if(!items.length)return;
     const sub=items.reduce((a,x)=>a+x.baht,0); grand+=sub;
-    body+=`<tr class="cat ughead" data-grphead="${sp.id}"><td colspan="2"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${catColor(sp.category)};margin-right:6px"></span>${esc(sp.name)}</td>
+    if(K10){ const sb3=[0,1,2].map(gx=>items.reduce((a,x)=>a+x.b3[gx],0));
+      body+=`<tr class="cat ughead" data-grphead="${sp.id}"><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${catColor(sp.category)};margin-right:6px"></span>${esc(sp.name)} <span class="xs mut">฿/หมื่น</span></td>
+        <td class="n xs">${b10(sb3[0],salesG[0])}</td><td class="n xs">${b10(sb3[1],salesG[1])}</td><td class="n xs">${b10(sb3[2],salesG[2])}</td>
+        <td></td><td class="n usub">${salesAll>0?fmtI(sub/(salesAll/10000)):'–'}</td><td></td></tr>`; }
+    else body+=`<tr class="cat ughead" data-grphead="${sp.id}"><td colspan="2"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${catColor(sp.category)};margin-right:6px"></span>${esc(sp.name)}</td>
       <td colspan="3"></td><td class="n usub">${fmtI(sub)}</td><td></td></tr>`;
     body+=items.map(x=>{
       const perDay=x.qty/dd;
       const pv=pg[x.k]; let chipHtml='';
       if(pv>0){ const df=(x.qty-pv)/pv;
         chipHtml=`<span class="chip ${df>0.03?'bad':df<-0.03?'ok':'mid'}" title="เทียบเดือนก่อน ${fq(pv)} ${esc(x.unit)}">${df>0?'▲':df<0?'▼':''} ${pctF(Math.abs(df))}</span>`; }
+      if(K10) return `<tr class="urow" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
+        <td style="padding-left:18px">${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span></td>
+        <td class="n">${p10(x.q3[0],salesG[0])}</td><td class="n">${p10(x.q3[1],salesG[1])}</td><td class="n">${p10(x.q3[2],salesG[2])}</td>
+        <td class="n b">${p10(x.qty,salesAll)}</td>
+        <td class="n">${b10(x.baht,salesAll)}</td><td></td></tr>`;
       return `<tr class="urow" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
         <td style="padding-left:18px">${esc(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span></td>
@@ -2651,23 +2678,28 @@ RENDER.usage = async (el)=>{
     <div class="useg">
       <button class="${S.usageMode==='item'?'on':''}" onclick="usageModeSet('item')">รายสินค้า (รวมทุกซัพ)</button>
       <button class="${S.usageMode!=='item'?'on':''}" onclick="usageModeSet('sup')">แยกตามซัพ</button>
+      <button class="${K10?'on':''}" onclick="usage10kSet(${K10?'false':'true'})" title="อัตราการใช้ต่อยอดขาย ฿10,000 แยก จ–พฤ / ศ / ส–อา">⚖ ต่อยอดขาย ฿10,000</button>
     </div>
-    <div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · สินค้าตัวเดียวกันนับรวมทุกซัพ · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>
+    ${K10?`<div class="xs mut" style="margin:-4px 0 8px"><b>อัตราใช้ต่อยอดขาย (รวม VAT) ฿10,000</b> = จำนวนที่ใช้ในกลุ่มวัน ÷ (ยอดขายรวมของกลุ่ม ÷ 10,000) · ยอดขายเฉลี่ย/วัน: <b>จ–พฤ</b> ฿${daysG[0]?fmtI(salesG[0]/daysG[0]):'–'} (${daysG[0]} วัน) · <b>ศ</b> ฿${daysG[1]?fmtI(salesG[1]/daysG[1]):'–'} (${daysG[1]} วัน) · <b>ส–อา</b> ฿${daysG[2]?fmtI(salesG[2]/daysG[2]):'–'} (${daysG[2]} วัน) · แตะแถวเพื่อดูประวัติรายวัน</div>`
+    :`<div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · สินค้าตัวเดียวกันนับรวมทุกซัพ · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>`}
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
       <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button></div>
     <div class="twrap"><table id="useTbl">
-      ${S.usageMode==='item'
+      ${K10
+        ?`<tr><th>สินค้า</th><th class="right">จ–พฤ</th><th class="right">ศ</th><th class="right">ส–อา</th><th class="right">ทั้งเดือน</th><th class="right">฿/หมื่น</th><th></th></tr>`
+        :S.usageMode==='item'
         ?`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">ซัพ</th><th class="right">ราคาล่าสุดรายซัพ</th><th class="right">มูลค่า ฿</th><th></th></tr>`
         :`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">บิล</th><th class="right">ราคาล่าสุด</th><th class="right">มูลค่า ฿</th><th></th></tr>`}
       ${body}
       <tr id="useNone" style="display:none"><td colspan="7" class="mut" style="text-align:center;padding:18px">ไม่พบสินค้าที่ค้นหา</td></tr>
-      <tr class="cat" id="useTot" data-grand="${grand}" style="border-top:2px solid var(--line)"><td colspan="5"><b id="useTotL">รวมมูลค่าของที่ลงรายละเอียด</b></td>
-        <td class="n" id="useTotV" style="color:var(--red);font-weight:700">${fmtI(grand)}</td><td></td></tr>
+      <tr class="cat" id="useTot" data-grand="${K10?(salesAll>0?grand/(salesAll/10000):0):grand}" style="border-top:2px solid var(--line)"><td colspan="5"><b id="useTotL" data-def="${K10?'มูลค่าของรวม ต่อยอดขาย ฿10,000':'รวมมูลค่าของที่ลงรายละเอียด'}">${K10?'มูลค่าของรวม ต่อยอดขาย ฿10,000':'รวมมูลค่าของที่ลงรายละเอียด'}</b></td>
+        <td class="n" id="useTotV" style="color:var(--red);font-weight:700">${K10?(salesAll>0?fmtI(grand/(salesAll/10000)):'–'):fmtI(grand)}</td><td></td></tr>
     </table></div>
   </div>`;
   if(S._usageQ) usageFilter(S._usageQ);   // สลับโหมด/เดือนแล้วยังจำคำค้นไว้
 };
 function usageModeSet(m){ S.usageMode=m; LS.set('jj_usemode2',m); show('usage'); }
+function usage10kSet(v){ S.use10k=!!v; LS.set('jj_use10k',S.use10k); show('usage'); }
 // กระโดดจากหน้าสรุปมาดูการใช้ของสินค้าตัวนั้นรวมทุกซัพ
 function usageJump(item){ S.usageMode='item'; LS.set('jj_usemode2','item'); S._usageQ=item||''; show('usage'); }
 // กรองตารางการใช้ของตามคำค้น (ไม่โหลดใหม่) — ทุกคำที่พิมพ์ต้องเจอ · ซ่อนหัวกลุ่มซัพที่ไม่มีสินค้าตรง · ยอดรวม/ยอดกลุ่มคิดเฉพาะแถวที่แสดง
@@ -2689,7 +2721,7 @@ function usageFilter(q){
   });
   const none=document.getElementById('useNone'); if(none)none.style.display=shown?'none':'';
   const L=document.getElementById('useTotL'), V=document.getElementById('useTotV');
-  if(L&&V){ L.textContent=toks.length?`รวมที่ค้นพบ (${shown} รายการ)`:'รวมมูลค่าของที่ลงรายละเอียด'; V.textContent=fmtI(sum); }
+  if(L&&V){ L.textContent=toks.length?`รวมที่ค้นพบ (${shown} รายการ)`:(L.dataset.def||'รวมมูลค่าของที่ลงรายละเอียด'); V.textContent=fmtI(sum); }
   const x=document.getElementById('useQx'); if(x)x.style.display=toks.length?'':'none';
 }
 function usageDetailItem(k){
