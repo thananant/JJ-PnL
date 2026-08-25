@@ -324,6 +324,8 @@ main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px)
 .dupbox{background:var(--gold-t);border:1.5px solid #E9D9A8;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
 .duprow{padding:6px 0;border-top:1px dashed #E9D9A8;cursor:pointer;line-height:1.6}
 .duprow:first-of-type{border-top:0;margin-top:4px}
+.bindrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 0;border-top:1px dashed #E9D9A8}
+.bindrow select{max-width:280px}
 #rtBar{display:none;position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:1200;background:var(--ink);color:#fff;padding:9px 16px;border-radius:99px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
 .chip.gold{background:var(--gold-t);color:var(--gold)}
 
@@ -449,6 +451,7 @@ canvas{max-width:100%}
   <button class="sb-item" data-v="detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.5h12"/><path d="M8 12h12"/><path d="M8 18.5h12"/><circle cx="4.4" cy="5.5" r="1.15" fill="currentColor" stroke="none"/><circle cx="4.4" cy="12" r="1.15" fill="currentColor" stroke="none"/><circle cx="4.4" cy="18.5" r="1.15" fill="currentColor" stroke="none"/></svg>บันทึกข้อมูลบิล</button>
   <button class="sb-item" data-v="vatrep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21V3Z"/><path d="M9.5 14.5 14.5 8.5"/><circle cx="9.8" cy="9" r="1.1"/><circle cx="14.2" cy="14" r="1.1"/></svg>รายละเอียดบิล</button>
   <button class="sb-item" data-v="usage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7l8 4 8-4-8-4Z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/></svg>ข้อมูลการใช้ของ</button>
+  <button class="sb-item" data-v="actual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9 17l11-11"/><path d="M4 6.5h6"/><path d="M4 19.5h6"/></svg>ใช้จริง (สต๊อก)</button>
   <button class="sb-item" data-v="sum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20v-7"/><path d="M12 20V5"/><path d="M19 20v-10"/></svg>สรุปเดือน</button>
   <button class="sb-item" data-v="pv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8.5h6"/><path d="M9 12.5h6"/><path d="M9 16.5h3.5"/></svg>ใบสำคัญจ่าย</button>
   <button class="sb-item" data-v="etc"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>อื่นๆ</button>
@@ -486,6 +489,7 @@ canvas{max-width:100%}
   <section class="view" id="view-detail"></section>
   <section class="view" id="view-vatrep"></section>
   <section class="view" id="view-usage"></section>
+  <section class="view" id="view-actual"></section>
   <section class="view" id="view-sum"></section>
   <section class="view" id="view-pv"></section>
   <section class="view" id="view-etc"></section>
@@ -1000,7 +1004,7 @@ function rtStart(){
 function rtEvent(){ clearTimeout(_rtT); _rtT=setTimeout(rtApply,1200); } // รวมหลายเหตุการณ์ติด ๆ กันเป็นรอบเดียว
 function rtTick(){ // โพลสำรองตอน Realtime ยังไม่เปิด: รีเฟรชเงียบ ๆ เฉพาะหน้าดูอย่างเดียว
   if(_rtLive||document.hidden||rtBusyForm())return;
-  if(['dash','sum','usage','vatrep'].includes(S.tab)){ S.cache={}; S.benchCache={}; show(S.tab); }
+  if(['dash','sum','usage','vatrep','actual'].includes(S.tab)){ S.cache={}; S.benchCache={}; show(S.tab); }
   else if(S.tab==='detail'){ dtMonthList(); dtHist(); }
 }
 async function rtApply(){
@@ -1013,7 +1017,7 @@ async function rtApply(){
     dtStaleCheck();
     return;
   }
-  if(['dash','sum','usage','vatrep'].includes(v)){
+  if(['dash','sum','usage','vatrep','actual'].includes(v)){
     if(rtBusyForm()){ _rtPend=true; rtBanner(); return; }
     await show(v); return;
   }
@@ -2699,6 +2703,158 @@ RENDER.usage = async (el)=>{
   </div>`;
   if(S._usageQ) usageFilter(S._usageQ);   // สลับโหมด/เดือนแล้วยังจำคำค้นไว้
 };
+/* ================= ใช้จริงรายวัน (เชื่อมระบบนับสต๊อก · เฟส 1) =================
+   สูตร: ใช้จริงช่วง = นับครั้งก่อน + ซื้อเข้าระหว่างช่วง (บิล P&L × ตัวคูณหน่วย) − นับครั้งนี้
+   เวลานับ ~17:00 ก่อนเปิดร้าน: นับวัน D = สต๊อกก่อนขายวัน D · บิลลงวันที่ D = เข้าก่อนนับวัน D
+   -> ช่วง (P -> C): ซื้อเข้า = บิลที่ P < วันที่ ≤ C · ยอดขายคู่กัน = วัน P ถึง C−1 */
+function stkAddDays(ds,n){ const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate()+n); const z=x=>String(x).padStart(2,'0'); return t.getFullYear()+'-'+z(t.getMonth()+1)+'-'+z(t.getDate()); }
+function stkRound05(v){ if(!(v>0))return 0; const u=Math.ceil(v); const r=u%5; return r===0?u:(u%10===0?u:u+(5-(u%5))); } // ปัดขึ้นให้ลงท้าย 0/5 (ไว้ใช้เฟส 2)
+async function stkLoad(){
+  const m=S.m, from=stkAddDays(m+'-01',-7), to=dstr(m,monthDays(m));
+  const [brs,prods,map,counts,bills,inc]=await Promise.all([
+    selAll('branches','select=*&order=id').catch(()=>[]),
+    selAll('products',`select=id,branch_id,name,unit,sup,cat_label,cat_key,sort&deleted_at=is.null&order=id`).catch(()=>[]),
+    selAll('pnl_stock_map','select=*&order=id').catch(()=>null),
+    selAll('stock_counts',`select=branch_id,count_date,product_id,qty,out_of_stock,created_at&count_date=gte.${from}&count_date=lte.${to}&order=count_date,created_at`).catch(()=>[]),
+    selAll('pnl_bill_items',`select=branch,d,item,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[]),
+    selAll('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[])
+  ]);
+  // จับคู่สาขา P&L <-> สาขาในระบบนับ (ตามชื่อ) — รัชดา/ลาดพร้าว
+  const want=S.br==='JJRD'?'รัชดา':'ลาดพร้าว';
+  const sb=(brs||[]).find(b=>String(b.name||b.branch_name||'').includes(want));
+  const sbid=(sb&&(sb.id||sb.branch_id)) || (S.br==='JJRD'?'b19f0a17b4472':'b19f0a17b448212'); // จับคู่ตามชื่อ · ไม่เจอใช้ id ที่รู้จักสำรอง
+  const sales={}; (inc||[]).forEach(r=>{ sales[r.d]=(sales[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
+  const P=(prods||[]).filter(x=>x.branch_id===sbid);
+  const M={}; (map||[]).forEach(r=>M[r.product_id]=r);
+  // นับล่าสุดต่อ (สินค้า,วัน) — วันเดียวนับซ้ำเอาครั้งหลังสุด
+  const C={}; (counts||[]).filter(c=>c.branch_id===sbid).forEach(c=>{
+    const k=c.product_id; (C[k]??={})[c.count_date]={qty:c.out_of_stock?0:num(c.qty),at:c.created_at};
+  });
+  // บิลตามชื่อสินค้า: วัน -> qty
+  const B={}; (bills||[]).forEach(r=>{ const k=ocrNorm(r.item); ((B[k]??={})[r.d]??=0); B[k][r.d]+=num(r.qty); });
+  return {ok:map!==null, sbid, prods:P, map:M, C, B, sales, from, to};
+}
+function stkBillNames(){ // ชื่อสินค้าในบิลของสาขานี้ (ไว้ให้เลือกผูก)
+  const st=S._stk; if(!st)return [];
+  const set=new Set(Object.keys(st.B).map(k=>st._bn[k]||k));
+  return [...set].sort((a,b)=>a.localeCompare(b,'th'));
+}
+function stkGuess(name,bn){ // เดาชื่อบิลจากชื่อในระบบนับ
+  const n=ocrNorm(name).replace(/ก้อน$|สไลด์$/,'').trim();
+  let g=bn.find(x=>ocrNorm(x)===ocrNorm(name)); if(g)return g;
+  g=bn.find(x=>ocrNorm(x)===n); if(g)return g;
+  g=bn.find(x=>ocrNorm(x).includes(n)||n.includes(ocrNorm(x))); return g||'';
+}
+RENDER.actual = async (el)=>{
+  if(S.br==='ALL'){ el.innerHTML=`<div class="card"><div class="empty">หน้านี้ดูรายสาขา — เลือก "สาขารัชดา" หรือ "สาขาลาดพร้าว" ข้างบนก่อนครับ</div></div>`; return; }
+  const st=await stkLoad();
+  if(!st.ok){ el.innerHTML=`<div class="card"><div class="empty">⚠ ยังไม่ได้รัน <b>jjmk_pnl_stockmap.sql</b> ใน Supabase — รันครั้งเดียวแล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
+  // เก็บชื่อบิลตัวจริง (ไม่ norm) ไว้โชว์
+  st._bn={}; (Object.keys(st.B)).forEach(k=>st._bn[k]=k);
+  const rawNames=new Set(); Object.keys(st.B).forEach(k=>rawNames.add(k));
+  // ดึงชื่อจริงจากบิล (B ถูก norm แล้ว) — โหลดชื่อดิบอีกรอบจากรายการเดือน
+  S._stk=st;
+  const bn=[...new Set([...(S._stkRaw||[])])];
+  // สร้างลิสต์ชื่อบิลดิบจาก pnl_sup_items + บิลเดือนนี้
+  let names=[];
+  try{ const si=await selAll('pnl_sup_items','select=item&order=item').catch(()=>[]); names=si.map(x=>x.item); }catch(e){}
+  try{ const bi=await sel('pnl_bill_items',`select=item&branch=eq.${S.br}&d=gte.${st.from}&d=lte.${st.to}`); bi.forEach(x=>names.push(x.item)); }catch(e){}
+  names=[...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  S._stkNames=names;
+  const mapped=st.prods.filter(x=>st.map[x.id]&&st.map[x.id].active);
+  const skipped=st.prods.filter(x=>st.map[x.id]&&!st.map[x.id].active);
+  const unbound=st.prods.filter(x=>!st.map[x.id]);
+  // ---------- คำนวณช่วงใช้จริงต่อสินค้า ----------
+  const mStart=S.m+'-01';
+  const rows=mapped.map(pr=>{
+    const mp=st.map[pr.id];
+    const days=Object.keys(st.C[pr.id]||{}).sort();
+    const per=[];
+    for(let i=1;i<days.length;i++){
+      const Pd=days[i-1], Cd=days[i];
+      if(Cd<mStart) continue; // เอาช่วงที่จบในเดือนที่ดู
+      const q0=st.C[pr.id][Pd].qty, q1=st.C[pr.id][Cd].qty;
+      let buy=0; const bk=ocrNorm(mp.pnl_item);
+      Object.entries(st.B[bk]||{}).forEach(([d2,q])=>{ if(d2>Pd&&d2<=Cd) buy+=q*num(mp.factor||1); });
+      let sale=0,dd=0; for(let d2=Pd; d2<Cd; d2=stkAddDays(d2,1)){ const v=st.sales[d2]||0; if(v>0){sale+=v;dd++;} }
+      const use=q0+buy-q1;
+      per.push({Pd,Cd,q0,q1,buy,use,sale,dd,p10:sale>0?use/(sale/10000):null});
+    }
+    const totU=per.reduce((a,c)=>a+c.use,0), totS=per.reduce((a,c)=>a+c.sale,0);
+    const avg10=totS>0?totU/(totS/10000):null;
+    return {pr,mp,per,totU,totS,avg10,last:per[per.length-1]||null,lastQty:days.length?st.C[pr.id][days[days.length-1]].qty:null,lastD:days[days.length-1]||''};
+  }).filter(r=>r.per.length||r.lastQty!=null);
+  rows.sort((a,b)=>(b.totU*num(b.mp.factor)||0)-(a.totU*num(a.mp.factor)||0));
+  S._stkRows=rows;
+  const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
+  const cmpChip=(p10,avg)=>{ if(p10==null||avg==null||avg<=0)return ''; const df=(p10-avg)/avg;
+    return `<span class="chip ${df>0.2?'bad':df<-0.2?'ok':'mid'}">${df>0?'▲':'▼'} ${Math.abs(df*100).toFixed(0)}%</span>`; };
+  const bindRow=(x,i)=>{ const g=stkGuess(x.name,names);
+    return `<div class="bindrow" id="bnd${i}">
+      <span class="xs"><b>${esc(x.name)}</b> <span class="mut">${esc(x.unit||'')} · ${esc(x.sup||'')}</span>${g?` <span class="xs" style="color:#8A6200">เดาว่า = <b>${esc(g)}</b></span>`:''}</span>
+      <select id="bsel${i}"><option value="">— เลือกชื่อในบิล —</option>${names.map(n2=>`<option${g===n2?' selected':''}>${esc(n2)}</option>`).join('')}</select>
+      <span class="xs">1 หน่วยบิล = <input id="bf${i}" type="text" inputmode="decimal" value="1" style="width:56px;text-align:right"> ${esc(x.unit||'หน่วยนับ')}</span>
+      <button class="btn sm2" onclick="stkBind(${i},'${esc(x.id)}')">ผูก</button>
+      <button class="btn gh sm2" onclick="stkSkip('${esc(x.id)}')" title="ตัวนี้ไม่ต้องติดตามใช้จริง (ซ่อนถาวร เปิดคืนได้)">ข้าม</button>
+    </div>`; };
+  el.innerHTML=`
+  <div class="card">
+    <div class="secbar">ใช้จริงรายวัน (จากการนับสต๊อก) <span class="sp">${monthLabel(S.m)} · ${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}</span></div>
+    <div class="xs mut" style="margin:6px 0 10px">อ่านผลนับจากแอพนับสต๊อกโดยตรง (พนักงานนับตามเดิม ไม่ต้องทำอะไรเพิ่ม) · <b>ใช้จริง = นับครั้งก่อน + ซื้อเข้า (บิลในแอพนี้ × ตัวคูณหน่วย) − นับครั้งนี้</b> · นับก่อนเปิดร้าน: บิลวันเดียวกันนับเป็นของเข้าก่อนนับ · ยอดขายคู่กับคืนที่ขายจริง · ใช้/หมื่น = ใช้จริง ÷ (ยอดขายรวม VAT ÷ 10,000) · ▲▼ เทียบค่าเฉลี่ยเดือน เกิน ±20% ทาสี</div>
+    ${unbound.length?`<div class="dupbox"><b>🔗 ผูกชื่อครั้งแรก · เหลือ ${unbound.length} ตัว</b> <span class="xs mut">(ผูกครั้งเดียวจำตลอด — เริ่มจากตัวท็อปที่อยากตามก่อนก็ได้ ที่เหลือกด "ข้าม")</span>
+      ${unbound.map((x,i)=>bindRow(x,i)).join('')}</div>`:''}
+    ${rows.length?`<div class="twrap"><table>
+      <tr><th>สินค้า (หน่วยนับ)</th><th class="right">ช่วงล่าสุด</th><th class="right">ใช้จริง</th><th class="right">ใช้/หมื่น</th><th class="right">เฉลี่ยเดือน /หมื่น</th><th class="right">เทียบ</th><th class="right">คงเหลือล่าสุด</th></tr>
+      ${rows.map((r,i)=>{ const L=r.last;
+        return `<tr style="cursor:pointer" onclick="stkDetail(${i})">
+          <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span></td>
+          <td class="n xs mut">${L?`${thDate(L.Pd)}→${thDate(L.Cd)}`:'–'}</td>
+          <td class="n b">${L?fq(L.use):'–'}</td>
+          <td class="n">${L&&L.p10!=null?fq(L.p10):'–'}</td>
+          <td class="n mut">${r.avg10!=null?fq(r.avg10):'–'}</td>
+          <td class="right">${L?cmpChip(L.p10,r.avg10):''}</td>
+          <td class="n">${r.lastQty!=null?fq(r.lastQty):'–'} <span class="xs mut">${esc(r.pr.unit||'')}</span></td>
+        </tr>`; }).join('')}
+    </table></div>`
+    :`<div class="empty xs">${unbound.length?'ผูกชื่อด้านบนก่อน แล้วตารางใช้จริงจะขึ้นที่นี่':'ยังไม่มีข้อมูลนับสต๊อกของสาขานี้ในช่วงเดือนที่ดู'}</div>`}
+    ${skipped.length?`<div class="xs mut" style="margin-top:10px">ข้ามไว้ ${skipped.length} ตัว · <span style="text-decoration:underline dotted;cursor:pointer" onclick="stkUnskipAll()">เอากลับมาทั้งหมด</span></div>`:''}
+  </div>`;
+};
+async function stkBind(i,pid){
+  const st=S._stk; if(!st)return;
+  const sel2=document.getElementById('bsel'+i), f=num((document.getElementById('bf'+i)||{}).value)||1;
+  const item=sel2&&sel2.value; if(!item){ toast('เลือกชื่อสินค้าในบิลก่อนครับ',true); return; }
+  const pr=st.prods.find(x=>x.id===pid)||{};
+  try{
+    await ins('pnl_stock_map',[{branch:S.br,product_id:pid,product_name:pr.name||'',pnl_item:item,bill_unit:'',stock_unit:pr.unit||'',factor:f,active:true}]);
+    toast(`✅ ผูก "${pr.name}" = "${item}" แล้ว จำตลอด`);
+    show('actual');
+  }catch(e){ toast('ผูกไม่สำเร็จ: '+(e.message||''),true); }
+}
+async function stkSkip(pid){
+  const st=S._stk; const pr=(st&&st.prods.find(x=>x.id===pid))||{};
+  try{ await ins('pnl_stock_map',[{branch:S.br,product_id:pid,product_name:pr.name||'',pnl_item:'-',bill_unit:'',stock_unit:pr.unit||'',factor:1,active:false}]); show('actual'); }
+  catch(e){ toast('ข้ามไม่สำเร็จ',true); }
+}
+async function stkUnskipAll(){
+  try{ await api('DELETE',`pnl_stock_map?branch=eq.${S.br}&active=eq.false`); show('actual'); }catch(e){}
+}
+function stkDetail(i){
+  const r=(S._stkRows||[])[i]; if(!r)return;
+  const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
+  openModal(`<h3>📦 ${esc(r.pr.name)} <span class="sp">${esc(r.pr.unit||'')} · ตัวคูณบิล ×${num(r.mp.factor)||1}</span></h3>
+    <div class="xs mut" style="margin-bottom:8px">ผูกกับบิล: <b>${esc(r.mp.pnl_item)}</b> · ใช้จริง = นับก่อน + ซื้อเข้า − นับหลัง</div>
+    <div class="twrap"><table>
+      <tr><th>ช่วง</th><th class="right">นับก่อน</th><th class="right">+ซื้อเข้า</th><th class="right">นับหลัง</th><th class="right">ใช้จริง</th><th class="right">ยอดขาย</th><th class="right">ใช้/หมื่น</th></tr>
+      ${r.per.slice().reverse().map(x=>`<tr${x.use<0?' style="color:var(--red)"':''}><td class="xs">${thDate(x.Pd)}→${thDate(x.Cd)}${x.dd>1?` <span class="mut">(${x.dd} วัน)</span>`:''}</td>
+        <td class="n">${fq(x.q0)}</td><td class="n">${x.buy?'+'+fq(x.buy):'–'}</td><td class="n">${fq(x.q1)}</td>
+        <td class="n b">${fq(x.use)}${x.use<0?' ⚠':''}</td><td class="n xs mut">${x.sale?fmtI(x.sale):'–'}</td>
+        <td class="n">${x.p10!=null?fq(x.p10):'–'}</td></tr>`).join('')}
+      <tr class="tot"><td>รวมเดือน</td><td></td><td></td><td></td><td class="n">${fq(r.totU)}</td><td class="n xs">${fmtI(r.totS)}</td><td class="n">${r.avg10!=null?fq(r.avg10):'–'}</td></tr>
+    </table></div>
+    <div class="xs mut" style="margin-top:8px">ใช้จริงติดลบ ⚠ = นับเกิน/บิลยังไม่ลง/หน่วยไม่ตรง — เช็คตัวคูณหน่วยหรือบิลวันนั้น</div>
+    <div style="display:flex;margin-top:12px"><button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ปิด</button></div>`);
+}
 function usageModeSet(m){ S.usageMode=m; LS.set('jj_usemode2',m); show('usage'); }
 function usage10kSet(v){ S.use10k=!!v; LS.set('jj_use10k',S.use10k); show('usage'); }
 // กระโดดจากหน้าสรุปมาดูการใช้ของสินค้าตัวนั้นรวมทุกซัพ
