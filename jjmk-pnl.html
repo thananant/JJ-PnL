@@ -254,6 +254,7 @@ table.mx td:hover{outline:2px solid #C9A227;outline-offset:-2px;border-radius:4p
 .dtrow input{padding:8px 9px;font-size:13px}
 .dtrow input[type=number]{text-align:right}
 .dtrow input.numf{text-align:right;font-variant-numeric:tabular-nums}
+.dtrow input.vbad{border-color:var(--red)!important;background:#FDEDED;box-shadow:0 0 0 2.5px rgba(198,33,39,.18)}
 .dtsup:focus,.vch:focus{outline:2.5px solid var(--red);outline-offset:2px}
 @media(max-width:640px){
   .dthead{display:none}
@@ -2871,15 +2872,13 @@ async function dtLoad(){
       if(!(m in modeBn)||Number(bn)<modeBn[m]) modeBn[m]=Number(bn); });
     S._dtModeBn=modeBn;
     const bns=Object.keys(DB).map(Number).sort((a,b)=>a-b);
+    let useBn=null;
     if(S._dtNewBill){
-      // ➕ บิลใหม่: ได้เลขถัดไปของวัน (ประเภท VAT ซ้ำกับใบเดิมได้) · เริ่มว่างเสมอ · ปุ่ม VAT เปลี่ยนแค่ประเภทของบิลนี้
+      // ➕ บิลใหม่: ได้เลขถัดไปของวัน (ประเภท VAT ซ้ำกับใบเดิมได้) — ขึ้นรายการของประจำเหมือนบิลแรก แล้วค่อยใส่จำนวนเฉพาะที่ซื้อ
       S._dtNewBill=false; S._dtForceBn=null; S._dtModeIntent=false; S._dtIsNew=true;
       S.dtVat=S.dtVat||dtVatDefault();
       S.dtBillNo=(bns.length?Math.max(...bns):0)+1;
-      S._dtExisting=false; S.dtBillDisc=0; S.dtShip=0; S.dtOther=0;
       dtBillTabsRender();
-      S.dtLines=[{item:'',qty:'',unit:'',price:''}];
-      tplNote=`🧾 บิลใหม่ใบที่ ${S.dtBillNo} ของวันนี้ · ประเภท "${DT_VLBL[S.dtVat]||S.dtVat}" — พิมพ์รายการเอง หรือกดสแกนบิลได้เลย (ปุ่ม VAT ข้างบน = เปลี่ยนประเภทของบิลใหม่ใบนี้)`;
     }else{
     S._dtIsNew=false;
     let mode;
@@ -2888,10 +2887,11 @@ async function dtLoad(){
     else if(bns.length){ mode=DB[bns[0]][0].vat_mode||'none'; }
     else { const lastAny=(S._dtRows||[]).find(r=>r.d<S.dtDate); mode=(lastAny&&lastAny.vat_mode)||dtVatDefault(); }
     S.dtVat=mode; S._dtModeIntent=false;
-    const useBn=(S._dtForceBn!=null&&DB[S._dtForceBn])?S._dtForceBn:(mode in modeBn?modeBn[mode]:null);
+    useBn=(S._dtForceBn!=null&&DB[S._dtForceBn])?S._dtForceBn:(mode in modeBn?modeBn[mode]:null);
     S._dtForceBn=null;
     S.dtBillNo = useBn!=null?useBn:((bns.length?Math.max(...bns):0)+1);
     dtBillTabsRender();
+    }
     const rows=useBn!=null?(DB[useBn]||[]):[];
     const AM=dtAsOf(), LB=dtLastBillBefore(1);
     if(rows.length){
@@ -2910,20 +2910,20 @@ async function dtLoad(){
         tplNote=pool.length?dtTypeNote(pool.length,S.dtVat):`🧾 บิลประเภท "${DT_VLBL[S.dtVat]||S.dtVat}": ยังไม่เคยมีบิลแบบนี้ — พิมพ์รายการใหม่ได้เลย ระบบจะจำให้ครั้งหน้า`;
       }
 
-      else if(S.dtBillNo===1&&S._dtCat&&S._dtCat.length){
+      else if((S.dtBillNo===1||S._dtIsNew)&&S._dtCat&&S._dtCat.length){
         // วันใหม่: รายการประจำครบทุกตัว · ราคา+ส่วนลดรายตัว = บิลล่าสุด "ก่อนวันที่นี้"
         S.dtLines=S._dtCat.map(c2=>({item:c2.item,qty:'',unit:c2.unit,
           price:AM[c2.item]?AM[c2.item].price:'',
           discount:AM[c2.item]&&AM[c2.item].disc?AM[c2.item].disc:''}));
         tplNote=`🧺 ขึ้นรายการสินค้าประจำครบ ${S._dtCat.length} ตัว — ราคาเติมจากบิลล่าสุด<b>ก่อน ${thDate(S.dtDate)}</b> ใส่จำนวนเฉพาะที่ซื้อ (เว้นว่าง = ไม่บันทึก)`;
-      }else if(S.dtBillNo===1&&LB){
+      }else if((S.dtBillNo===1||S._dtIsNew)&&LB){
         S.dtLines=LB.lines.map(r=>({item:r.item,qty:'',unit:r.unit,price:r.price,discount:num(r.discount)||''}));
         tplNote=`📌 เติมรายการจากบิลล่าสุดก่อนวันนี้ (${thDate(LB.d)}) — ใส่จำนวนของวันที่ ${thDate(S.dtDate)} ได้เลย รายการไหนไม่มีกด ✕`;
       }else{
         S.dtLines=[{item:'',qty:'',unit:'',price:''}];
       }
     }
-    }
+    if(S._dtIsNew) tplNote=`🧾 <b>บิลใหม่ใบที่ ${S.dtBillNo}</b> ของวันนี้ · ประเภท "${DT_VLBL[S.dtVat]||S.dtVat}" — ${tplNote?tplNote:'พิมพ์รายการเอง หรือกดสแกนบิลได้เลย'} <span class="xs mut">(ปุ่ม VAT ข้างบน = เปลี่ยนประเภทของบิลใหม่ใบนี้)</span>`;
   }catch(e){ S.dtLines=[{item:'',qty:'',unit:'',price:''}]; S._dtExisting=false; }
   renderDtLines(); renderDtVatBtns(); dtBillTabsRender(); // เรนเดอร์แท็บซ้ำหลังรู้สถานะบิลจริง (on-state ถูกใบ)
   const bdi=document.getElementById('dtBillDisc'); if(bdi)bdi.value=S.dtBillDisc||'';
@@ -3275,10 +3275,17 @@ async function dtVatSet(m){
   if(!dtMultiMode()){ // ซัพแบบเดียว: ปุ่มเป็นแค่ตัวคำนวณ ไม่แตะรายการ
     S.dtVat=m; renderDtVatBtns(); dtTotals(); return;
   }
-  if(S._dtIsNew&&!S._dtExisting){ // บิลใหม่จากปุ่ม ➕: เปลี่ยนแค่ประเภทของใบนี้
-    S.dtVat=m; renderDtVatBtns(); dtTotals();
-    const tn=document.getElementById('dtTplNote');
-    if(tn&&!(S.dtLines||[]).some(l=>l.item))tn.innerHTML=`🧾 บิลใหม่ใบที่ ${S.dtBillNo} ของวันนี้ · ประเภท "${DT_VLBL[m]||m}" — พิมพ์รายการเอง หรือกดสแกนบิลได้เลย`;
+  if(S._dtIsNew&&!S._dtExisting){ // บิลใหม่จากปุ่ม ➕: เปลี่ยนประเภทของใบนี้ (ไม่กระโดดไปใบอื่น)
+    const hasQty0=(S.dtLines||[]).some(l=>num(l.qty));
+    S.dtVat=m;
+    if(dtMultiMode()&&!hasQty0){ // ยังไม่ใส่จำนวน: สลับชุดรายการเป็นของโหมดใหม่
+      const pool=dtTypePool(m);
+      S.dtLines=pool.length?pool:[{item:'',qty:'',unit:'',price:''}];
+      renderDtLines();
+      const tn0=document.getElementById('dtTplNote');
+      if(tn0)tn0.innerHTML=`🧾 <b>บิลใหม่ใบที่ ${S.dtBillNo}</b> ของวันนี้ · ประเภท "${DT_VLBL[m]||m}" — ${pool.length?dtTypeNote(pool.length,m):'พิมพ์รายการเอง หรือกดสแกนบิลได้เลย'}`;
+    }
+    renderDtVatBtns(); dtTotals(); dtBillTabsRender();
     return;
   }
   // ซัพหลายแบบ: ปุ่ม VAT = สลับไปบิลของแบบนั้น (ใบที่บันทึกไว้ หรือเทมเพลตใหม่)
@@ -3417,10 +3424,10 @@ function renderDtLines(focusLast){
   const el=document.getElementById('dtLines'); if(!el)return;
   el.innerHTML=S.dtLines.map((l,i)=>`
     <div class="dtrow${l._unm?' unm':''}">
-      <input list="dtItemsDL" placeholder="เช่น หมูสามชั้น" value="${esc(l.item||'')}" data-r="${i}" data-c="0" onkeydown="dtNav(event,${i},0)" oninput="dtEdit(${i},'item',this.value)">
+      <input list="dtItemsDL" placeholder="เช่น หมูสามชั้น" value="${esc(l.item||'')}" data-r="${i}" data-c="0" onkeydown="dtNav(event,${i},0)" oninput="if(this.value.trim())this.classList.remove('vbad');dtEdit(${i},'item',this.value)">
       <input type="text" inputmode="decimal" class="numf" placeholder="0" value="${l.qty??''}" data-r="${i}" data-c="1" onkeydown="dtNav(event,${i},1)" oninput="dtEdit(${i},'qty',this.value)">
-      <input list="dtUnitsDL" placeholder="กก." id="dtu${i}" value="${esc(l.unit||'')}" data-r="${i}" data-c="2" onkeydown="dtNav(event,${i},2)" oninput="dtEdit(${i},'unit',this.value)">
-      <input type="text" inputmode="decimal" class="numf" placeholder="0.00" id="dtp${i}" value="${l.price??''}" data-r="${i}" data-c="3" onkeydown="dtNav(event,${i},3)" oninput="dtEdit(${i},'price',this.value)">
+      <input list="dtUnitsDL" placeholder="กก." id="dtu${i}" value="${esc(l.unit||'')}" data-r="${i}" data-c="2" onkeydown="dtNav(event,${i},2)" oninput="if(this.value.trim())this.classList.remove('vbad');dtEdit(${i},'unit',this.value)">
+      <input type="text" inputmode="decimal" class="numf" placeholder="0.00" id="dtp${i}" value="${l.price??''}" data-r="${i}" data-c="3" onkeydown="dtNav(event,${i},3)" oninput="if(this.value.trim())this.classList.remove('vbad');dtEdit(${i},'price',this.value)">
       <input type="text" inputmode="decimal" class="numf" placeholder="0" id="dtd${i}" value="${l.discount||''}" data-r="${i}" data-c="4" onkeydown="dtNav(event,${i},4)" oninput="dtEdit(${i},'discount',this.value)">
       <span class="num b" id="dtt${i}">–</span>
       <button class="mvbtn" style="color:var(--bad)" onclick="dtDelLine(${i})">✕</button>
@@ -3473,6 +3480,24 @@ async function dtLogLoad(){
 }
 async function dtSave(){
   if(!S.dtSup){toast('เลือกซัพพลายเออร์ก่อนครับ',true);return;}
+  // บรรทัดไหนใส่จำนวนแล้ว ต้องมี ชื่อสินค้า / หน่วย / ราคาต่อหน่วย ครบ — ขาดตรงไหนทาแดงตรงช่องนั้น ไม่ปล่อยผ่านเงียบ ๆ
+  document.querySelectorAll('#dtLines input.vbad').forEach(x=>x.classList.remove('vbad'));
+  const miss=[];
+  (S.dtLines||[]).forEach((l,i)=>{
+    if(!(num(l.qty)>0))return;
+    const cols=[];
+    if(!String(l.item||'').trim())cols.push(0);
+    if(!String(l.unit||'').trim())cols.push(2);
+    if(String(l.price??'').trim()==='')cols.push(3);
+    if(cols.length)miss.push({i,cols});
+  });
+  if(miss.length){
+    miss.forEach(({i,cols})=>cols.forEach(c=>{ const t=document.querySelector(`#dtLines [data-r="${i}"][data-c="${c}"]`); if(t)t.classList.add('vbad'); }));
+    const first=document.querySelector('#dtLines input.vbad');
+    if(first){ first.focus(); try{first.scrollIntoView({block:'center',behavior:'smooth'});}catch(_){} }
+    toast(`⚠ มี ${miss.length} บรรทัดใส่จำนวนแล้ว แต่ยังขาดชื่อ/หน่วย/ราคา — กรอกช่องสีแดงให้ครบก่อนบันทึก`,true);
+    return;
+  }
   const lines=S.dtLines.map(l=>({item:(l.item||'').trim(),qty:num(l.qty),unit:(l.unit||'').trim()||'ชิ้น',price:num(l.price),discount:num(l.discount)}))
     .filter(l=>l.item&&l.qty>0);
   if(!lines.length){
