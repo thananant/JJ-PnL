@@ -2736,18 +2736,18 @@ async function stkLoad(){
   const m=S.m, from=stkAddDays(m+'-01',-7), to=dstr(m,monthDays(m));
   let permDenied=false;
   const stkSel=(t,q)=>selAllQ(t,q).catch(e=>{ if(/42501|permission denied|401/i.test(String(e.message)))permDenied=true; return []; });
-  const [brs,prods,map,counts,bills,inc]=await Promise.all([
-    stkSel('branches','select=*&order=id'),
+  const [prods,map,counts,bills,inc]=await Promise.all([
     stkSel('products',`select=id,branch_id,name,unit,sup,cat_label,cat_key,sort&deleted_at=is.null&order=id`),
     selAllQ('pnl_stock_map','select=*&order=id').catch(()=>null),
-    stkSel('stock_counts',`select=branch_id,count_date,product_id,qty,out_of_stock,created_at&count_date=gte.${from}&count_date=lte.${to}&order=count_date,created_at`),
+    stkSel('stock_counts',`select=branch_id,branch_name,count_date,product_id,qty,out_of_stock,created_at&count_date=gte.${from}&count_date=lte.${to}&order=count_date,created_at`),
     selAll('pnl_bill_items',`select=branch,d,item,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[]),
     selAll('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[])
   ]);
-  // จับคู่สาขา P&L <-> สาขาในระบบนับ (ตามชื่อ) — รัชดา/ลาดพร้าว
-  const want=S.br==='JJRD'?'รัชดา':'ลาดพร้าว';
-  const sb=(brs||[]).find(b=>String(b.name||b.branch_name||'').includes(want));
-  const sbid=(sb&&(sb.id||sb.branch_id)) || (S.br==='JJRD'?'b19f0a17b4472':'b19f0a17b448212'); // จับคู่ตามชื่อ · ไม่เจอใช้ id ที่รู้จักสำรอง
+  // จับคู่สาขาจากข้อมูลนับสต๊อกเอง (แถวนับมี branch_name ติดมา) — ห้ามใช้ตาราง branches เพราะเป็นของระบบเงินเดือน id คนละชุด
+  const want=S.br==='JJRD'?'รัชดา':S.br==='JJLP'?'ลาดพร้าว':null;
+  if(!want) return {ok:map!==null, permDenied, noStockBranch:true, prods:[], map:{}, C:{}, B:{}, sales:{}, from, to};
+  const bn2={}; (counts||[]).forEach(c=>{ if(c.branch_id&&c.branch_name&&!bn2[c.branch_id])bn2[c.branch_id]=c.branch_name; });
+  const sbid=Object.keys(bn2).find(id2=>String(bn2[id2]).includes(want)) || (S.br==='JJRD'?'b19f0a17b4472':'b19f0a17b448212'); // สำรอง: id ที่รู้จัก
   const sales={}; (inc||[]).forEach(r=>{ sales[r.d]=(sales[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
   const P=(prods||[]).filter(x=>x.branch_id===sbid);
   const M={}; (map||[]).forEach(r=>M[r.product_id]=r);
@@ -2774,6 +2774,7 @@ RENDER.actual = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=`<div class="card"><div class="empty">หน้านี้ดูรายสาขา — เลือก "สาขารัชดา" หรือ "สาขาลาดพร้าว" ข้างบนก่อนครับ</div></div>`; return; }
   const st=await stkLoad();
   if(st.permDenied){ el.innerHTML=`<div class="card"><div class="empty">🔒 แอพนี้ยังไม่มีสิทธิ์อ่านตารางระบบนับสต๊อก (permission denied)<br>รัน <b>jjmk_pnl_stockread.sql</b> ใน Supabase SQL Editor ครั้งเดียว (เปิดสิทธิ์อ่านอย่างเดียว ไม่ให้เขียน) แล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
+  if(st.noStockBranch){ el.innerHTML=`<div class="card"><div class="empty">สาขานี้ไม่มีระบบนับสต๊อก — เลือก "สาขารัชดา" หรือ "สาขาลาดพร้าว" ครับ</div></div>`; return; }
   if(!st.ok){ el.innerHTML=`<div class="card"><div class="empty">⚠ ยังไม่ได้รัน <b>jjmk_pnl_stockmap.sql</b> ใน Supabase — รันครั้งเดียวแล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
   // เก็บชื่อบิลตัวจริง (ไม่ norm) ไว้โชว์
   st._bn={}; (Object.keys(st.B)).forEach(k=>st._bn[k]=k);
