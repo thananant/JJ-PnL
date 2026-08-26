@@ -2933,13 +2933,20 @@ RENDER.actual = async (el)=>{
         return n?`<div class="xs" style="margin:2px 0 4px">🪄 อีกสาขาผูกชื่อพวกนี้ไว้แล้ว ${n} ตัว — <span style="text-decoration:underline dotted;cursor:pointer;color:var(--red)" onclick="stkCopyFromOther()"><b>ผูกตามอีกสาขาทั้งหมด</b></span> (ใช้ชื่อ+ตัวคูณเดียวกัน)</div>`:''; })()}
       <datalist id="stkNamesDL">${names.map(n2=>`<option value="${esc(n2)}">`).join('')}</datalist>
       ${unbound.map((x,i)=>bindRow(x,i)).join('')}</div>`:''}
+    ${(()=>{ // นับวันล่าสุดแล้ว แต่บิลวันนั้นยังไม่ถูกลงเลย -> ช่วงล่าสุดจะติดลบ/เกินจริงชั่วคราว
+      const allD=[...new Set(Object.values(st.C||{}).flatMap(m2=>Object.keys(m2)))].sort();
+      const maxD=allD[allD.length-1];
+      if(!maxD) return '';
+      const hasBill=Object.values(st.B||{}).some(m2=>num(m2[maxD])>0);
+      return !hasBill&&rows.length?`<div class="dupbox" style="margin-bottom:10px">⏳ <b>บิลวันที่ ${thDate(maxD)} ยังไม่ถูกลงในระบบ</b> <span class="xs mut">— ช่วงล่าสุดเลยเห็น "ซื้อเข้า = 0" ชั่วคราว ทำให้ใช้จริงบางตัวติดลบหรือสูงเกินจริง (ของเข้าแล้วแต่บิลยังไม่มา) · ลงบิลวันนั้นครบเมื่อไหร่ เลขหน้านี้ปรับใหม่ให้เองทันที</span></div>`:'';
+    })()}
     ${rows.length?`<div class="twrap"><table>
       <tr><th>สินค้า (หน่วยนับ)</th><th class="right">ช่วงล่าสุด</th><th class="right">ใช้จริง</th><th class="right">ใช้/หมื่น</th><th class="right">เฉลี่ยเดือน /หมื่น</th><th class="right">เทียบ</th><th class="right">คงเหลือล่าสุด</th></tr>
       ${rows.map((r,i)=>{ const L=r.last;
         return `<tr style="cursor:pointer" onclick="stkDetail(${i})">
           <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span></td>
           <td class="n xs mut">${L?`${thDate(L.Pd)}→${thDate(L.Cd)}`:'–'}</td>
-          <td class="n b">${L?fq(L.use):'–'}</td>
+          <td class="n b" ${L&&L.use<0?'style="color:var(--red)" title="ติดลบ = มีของเข้าที่ระบบยังไม่รู้ (บิลยังไม่ลง / ของครัวกลาง-โอนสาขาไม่มีบิล) หรือนับ/ผูกพลาด"':''}>${L?fq(L.use):'–'}${L&&L.use<0?' ⚠':''}</td>
           <td class="n">${L&&L.p10!=null?fq(L.p10):'–'}</td>
           <td class="n mut">${r.avg10!=null?fq(r.avg10):'–'}</td>
           <td class="right">${L?cmpChip(L.p10,r.avg10):''}</td>
