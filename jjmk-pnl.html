@@ -2886,6 +2886,9 @@ RENDER.actual = async (el)=>{
   const skipped=st.prods.filter(x=>st.map[x.id]&&!st.map[x.id].active);
   const unbound=st.prods.filter(x=>!st.map[x.id]);
   // ---------- คำนวณช่วงใช้จริงต่อสินค้า ----------
+  if(S._stkBindOpen===undefined) S._stkBindOpen=!!LS.get('jj_stkbind_open',false); // แผงผูกพับไว้เป็นค่าตั้งต้น
+  if(!S.stkView) S.stkView=LS.get('jj_stkview','last');
+  if(!['last','day','range'].includes(S.stkView)) S.stkView='last';
   const mStart=S.m+'-01';
   const rows=mapped.map(pr=>{
     const mp=st.map[pr.id];
@@ -2907,6 +2910,13 @@ RENDER.actual = async (el)=>{
   }).filter(r=>r.per.length||r.lastQty!=null);
   rows.sort((a,b)=>(b.totU*num(b.mp.factor)||0)-(a.totU*num(a.mp.factor)||0));
   S._stkRows=rows;
+  const allD=[...new Set(mapped.flatMap(pr=>Object.keys(st.C[pr.id]||{})))].sort();
+  S._stkAllD=allD;
+  const maxD=allD[allD.length-1]||'';
+  if(!S.stkDay||!allD.includes(S.stkDay)) S.stkDay=maxD;
+  if(!S.stkFrom) S.stkFrom=allD.find(d2=>d2>=mStart)||allD[0]||mStart;
+  if(!S.stkTo) S.stkTo=maxD;
+  const V=S.stkView;
   const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
   const cmpChip=(p10,avg)=>{ if(p10==null||avg==null||avg<=0)return ''; const df=(p10-avg)/avg;
     return `<span class="chip ${df>0.2?'bad':df<-0.2?'ok':'mid'}">${df>0?'▲':'▼'} ${Math.abs(df*100).toFixed(0)}%</span>`; };
@@ -2923,7 +2933,25 @@ RENDER.actual = async (el)=>{
   <div class="card">
     <div class="secbar">ใช้จริงรายวัน (จากการนับสต๊อก) <span class="sp">${monthLabel(S.m)} · ${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}</span></div>
     <div class="xs mut" style="margin:6px 0 10px">อ่านผลนับจากแอพนับสต๊อกโดยตรง (พนักงานนับตามเดิม ไม่ต้องทำอะไรเพิ่ม) · <b>ใช้ข้อมูลนับตั้งแต่ 31 ก.ค. 2569 เป็นต้นไป</b> · <b>ใช้จริง = นับครั้งก่อน + ซื้อเข้า (บิลในแอพนี้ × ตัวคูณหน่วย) − นับครั้งนี้</b> · นับก่อนเปิดร้าน: บิลวันเดียวกันนับเป็นของเข้าก่อนนับ · ยอดขายคู่กับคืนที่ขายจริง · ใช้/หมื่น = ใช้จริง ÷ (ยอดขายรวม VAT ÷ 10,000) · ▲▼ เทียบค่าเฉลี่ยเดือน เกิน ±20% ทาสี</div>
-    ${unbound.length?`<div class="dupbox"><b>🔗 ผูกชื่อครั้งแรก · เหลือ ${unbound.length} ตัว</b> <span class="xs mut">(ผูกครั้งเดียวจำตลอด — ติ๊กหลายตัวกดผูกทีเดียวได้ · ผูกสาขานี้แล้ว ตัวชื่อ+หน่วยเดียวกันของอีกสาขาถูกผูกให้อัตโนมัติ)</span>
+    <div class="useg" style="margin:0 0 10px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+      <button class="${V==='last'?'on':''}" onclick="stkViewSet('last')">ช่วงล่าสุด</button>
+      <button class="${V==='day'?'on':''}" onclick="stkViewSet('day')">📅 รายวัน</button>
+      <button class="${V==='range'?'on':''}" onclick="stkViewSet('range')">↔ ช่วงวันที่</button>
+      ${V==='day'?`<span class="xs" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px">
+        <button class="btn gh sm2" onclick="stkDayStep(-1)" title="วันนับก่อนหน้า">‹</button>
+        <input type="date" value="${S.stkDay||''}" onchange="S.stkDay=this.value;show('actual')" style="width:auto;display:inline-block;padding:6px 8px">
+        <button class="btn gh sm2" onclick="stkDayStep(1)" title="วันนับถัดไป">›</button></span>`:''}
+      ${V==='range'?`<span class="xs" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px">
+        <input type="date" value="${S.stkFrom||''}" onchange="S.stkFrom=this.value;show('actual')" style="width:auto;display:inline-block;padding:6px 8px"> →
+        <input type="date" value="${S.stkTo||''}" onchange="S.stkTo=this.value;show('actual')" style="width:auto;display:inline-block;padding:6px 8px"></span>`:''}
+    </div>
+    ${unbound.length?`<div class="dupbox" style="padding:10px 14px">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none" onclick="S._stkBindOpen=!S._stkBindOpen;LS.set('jj_stkbind_open',S._stkBindOpen);show('actual')">
+        <b>🔗 ผูกชื่อ · เหลือ ${unbound.length} ตัว</b>
+        <span class="xs mut">แตะเพื่อ${S._stkBindOpen?'ซ่อนแผง':'เปิดแผงผูก'}</span>
+        <span style="margin-left:auto;font-size:15px">${S._stkBindOpen?'▾':'▸'}</span>
+      </div>
+      ${S._stkBindOpen?`<div style="margin-top:6px"><span class="xs mut">(ผูกครั้งเดียวจำตลอด — ติ๊กหลายตัวกดผูกทีเดียวได้ · ผูกสาขานี้แล้ว ตัวชื่อ+หน่วยเดียวกันของอีกสาขาถูกผูกให้อัตโนมัติ)</span>
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 2px">
         <input id="stkQ" placeholder="🔍 กรองรายการ เช่น หมู / ชื่อซัพ..." oninput="stkBindFilter(this.value)" style="max-width:260px">
         <span class="xs"><span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.bindrow:not([style*=none]) .stkck').forEach(c=>c.checked=true);stkBindCnt()">เลือกที่เห็นทั้งหมด</span> · <span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.stkck').forEach(c=>c.checked=false);stkBindCnt()">ไม่เลือกเลย</span></span>
@@ -2933,16 +2961,44 @@ RENDER.actual = async (el)=>{
         return n?`<div class="xs" style="margin:2px 0 4px">🪄 อีกสาขาผูกชื่อพวกนี้ไว้แล้ว ${n} ตัว — <span style="text-decoration:underline dotted;cursor:pointer;color:var(--red)" onclick="stkCopyFromOther()"><b>ผูกตามอีกสาขาทั้งหมด</b></span> (ใช้ชื่อ+ตัวคูณเดียวกัน)</div>`:''; })()}
       <datalist id="stkNamesDL">${names.map(n2=>`<option value="${esc(n2)}">`).join('')}</datalist>
       ${unbound.map((x,i)=>bindRow(x,i)).join('')}</div>`:''}
-    ${(()=>{ // นับวันล่าสุดแล้ว แต่บิลวันนั้นยังไม่ถูกลงเลย -> ช่วงล่าสุดจะติดลบ/เกินจริงชั่วคราว
-      const allD=[...new Set(Object.values(st.C||{}).flatMap(m2=>Object.keys(m2)))].sort();
-      const maxD=allD[allD.length-1];
-      if(!maxD) return '';
-      const hasBill=Object.values(st.B||{}).some(m2=>num(m2[maxD])>0);
-      return !hasBill&&rows.length?`<div class="dupbox" style="margin-bottom:10px">⏳ <b>บิลวันที่ ${thDate(maxD)} ยังไม่ถูกลงในระบบ</b> <span class="xs mut">— ช่วงล่าสุดเลยเห็น "ซื้อเข้า = 0" ชั่วคราว ทำให้ใช้จริงบางตัวติดลบหรือสูงเกินจริง (ของเข้าแล้วแต่บิลยังไม่มา) · ลงบิลวันนั้นครบเมื่อไหร่ เลขหน้านี้ปรับใหม่ให้เองทันที</span></div>`:'';
+    </div>`:''}
+    ${(()=>{ // นับวันล่าสุดแล้ว แต่บิลวันนั้นยังไม่ถูกลงเลย -> ช่วงล่าสุดจะติดลบ/เกินจริงชั่วคราว (เฉพาะโหมดช่วงล่าสุด)
+      if(V!=='last') return '';
+      const allD2=S._stkAllD||[]; const maxD2=allD2[allD2.length-1];
+      if(!maxD2) return '';
+      const hasBill=Object.values(st.B||{}).some(m2=>num(m2[maxD2])>0);
+      return !hasBill&&rows.length?`<div class="dupbox" style="margin-bottom:10px">⏳ <b>บิลวันที่ ${thDate(maxD2)} ยังไม่ถูกลงในระบบ</b> <span class="xs mut">— ช่วงล่าสุดเลยเห็น "ซื้อเข้า = 0" ชั่วคราว ทำให้ใช้จริงบางตัวติดลบหรือสูงเกินจริง (ของเข้าแล้วแต่บิลยังไม่มา) · ลงบิลวันนั้นครบเมื่อไหร่ เลขหน้านี้ปรับใหม่ให้เองทันที</span></div>`:'';
     })()}
-    ${rows.length?`<div class="twrap"><table>
-      <tr><th>สินค้า (หน่วยนับ)</th><th class="right">ช่วงล่าสุด</th><th class="right">ใช้จริง</th><th class="right">ใช้/หมื่น</th><th class="right">เฉลี่ยเดือน /หมื่น</th><th class="right">เทียบ</th><th class="right">คงเหลือล่าสุด</th></tr>
-      ${rows.map((r,i)=>{ const L=r.last;
+    ${(()=>{
+      // สร้างรายการแสดงตามโหมด: ช่วงล่าสุด / รายวัน / ช่วงวันที่
+      let disp=[];
+      if(V==='day'){
+        rows.forEach((r,i)=>{ const p2=r.per.find(x=>x.Cd===S.stkDay); if(p2) disp.push({r,i,p:p2}); });
+      }else if(V==='range'){
+        rows.forEach((r,i)=>{
+          const ds=Object.keys(st.C[r.pr.id]||{}).sort();
+          const A=S.stkFrom, Bd=S.stkTo;
+          let P0=[...ds].reverse().find(d2=>d2<=A); if(!P0) P0=ds.find(d2=>d2>=A);
+          const C1=[...ds].reverse().find(d2=>d2<=Bd);
+          if(!P0||!C1||P0>=C1) return;
+          const q0=st.C[r.pr.id][P0].qty, q1=st.C[r.pr.id][C1].qty;
+          let buy=0; const bk=ocrNorm(r.mp.pnl_item);
+          Object.entries(st.B[bk]||{}).forEach(([d2,q])=>{ if(d2>P0&&d2<=C1) buy+=q*num(r.mp.factor||1); });
+          let sale=0; for(let d2=P0; d2<C1; d2=stkAddDays(d2,1)){ const v=st.sales[d2]||0; if(v>0)sale+=v; }
+          const use=q0+buy-q1;
+          disp.push({r,i,p:{Pd:P0,Cd:C1,q0,q1,buy,use,sale,p10:sale>0?use/(sale/10000):null}});
+        });
+      }else{
+        rows.forEach((r,i)=>{ if(r.last||r.lastQty!=null) disp.push({r,i,p:r.last}); });
+      }
+      if(!rows.length) return `<div class="empty xs">${unbound.length?'ผูกชื่อด้านบนก่อน แล้วตารางใช้จริงจะขึ้นที่นี่':'ยังไม่มีข้อมูลนับสต๊อกของสาขานี้ในช่วงเดือนที่ดู'}</div>`;
+      if(!disp.length) return `<div class="empty xs">${V==='day'?'ไม่มีสินค้าที่นับปิดช่วงในวันนั้น — เลื่อนวันด้วยปุ่ม ‹ › ดูครับ':'ช่วงวันที่เลือกยังไม่มีข้อมูลนับครบหัวท้าย'}</div>`;
+      const perLbl=V==='day'?'ช่วงของวันนั้น':V==='range'?'ช่วงที่ใช้คำนวณ':'ช่วงล่าสุด';
+      const qLbl=V==='last'?'คงเหลือล่าสุด':'นับปลายช่วง';
+      return `<div class="twrap"><table>
+      <tr><th>สินค้า (หน่วยนับ)</th><th class="right">${perLbl}</th><th class="right">ใช้จริง</th><th class="right">ใช้/หมื่น</th><th class="right">เฉลี่ยเดือน /หมื่น</th><th class="right">เทียบ</th><th class="right">${qLbl}</th></tr>
+      ${disp.map(({r,i,p:L})=>{
+        const q=V==='last'?r.lastQty:(L?L.q1:null);
         return `<tr style="cursor:pointer" onclick="stkDetail(${i})">
           <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span></td>
           <td class="n xs mut">${L?`${thDate(L.Pd)}→${thDate(L.Cd)}`:'–'}</td>
@@ -2950,14 +3006,21 @@ RENDER.actual = async (el)=>{
           <td class="n">${L&&L.p10!=null?fq(L.p10):'–'}</td>
           <td class="n mut">${r.avg10!=null?fq(r.avg10):'–'}</td>
           <td class="right">${L?cmpChip(L.p10,r.avg10):''}</td>
-          <td class="n">${r.lastQty!=null?fq(r.lastQty):'–'} <span class="xs mut">${esc(r.pr.unit||'')}</span></td>
+          <td class="n">${q!=null?fq(q):'–'} <span class="xs mut">${esc(r.pr.unit||'')}</span></td>
         </tr>`; }).join('')}
-    </table></div>`
-    :`<div class="empty xs">${unbound.length?'ผูกชื่อด้านบนก่อน แล้วตารางใช้จริงจะขึ้นที่นี่':'ยังไม่มีข้อมูลนับสต๊อกของสาขานี้ในช่วงเดือนที่ดู'}</div>`}
+    </table></div>`;
+    })()}
     ${skipped.length?`<div class="xs mut" style="margin-top:10px">ข้ามไว้ ${skipped.length} ตัว · <span style="text-decoration:underline dotted;cursor:pointer" onclick="stkUnskipAll()">เอากลับมาทั้งหมด</span></div>`:''}
   </div>`;
   stkBadge(); // อัปเดตป้ายเตือนตามข้อมูลล่าสุด
 };
+function stkViewSet(v){ S.stkView=v; LS.set('jj_stkview',v); show('actual'); }
+function stkDayStep(dir){
+  const a=S._stkAllD||[]; if(!a.length)return;
+  let ix=a.indexOf(S.stkDay); if(ix<0) ix=a.length-1;
+  ix=Math.min(a.length-1, Math.max(0, ix+dir));
+  S.stkDay=a[ix]; show('actual');
+}
 function stkBindCnt(){ const n=document.querySelectorAll('.bindrow .stkck:checked').length; const b=document.getElementById('stkBulkBtn'); if(b)b.textContent=`ผูกที่เลือก (${n})`; }
 function stkBindFilter(q){
   const toks=String(q||'').toLowerCase().split(/\s+/).filter(Boolean);
