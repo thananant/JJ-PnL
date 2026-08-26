@@ -3245,6 +3245,28 @@ function usageFilter(q){
   if(L&&V){ L.textContent=toks.length?`รวมที่ค้นพบ (${shown} รายการ)`:(L.dataset.def||'รวมมูลค่าของที่ลงรายละเอียด'); V.textContent=fmtI(sum); }
   const x=document.getElementById('useQx'); if(x)x.style.display=toks.length?'':'none';
 }
+function dtlChart(hist,unit,multiSup){ // กราฟจำนวนซื้อ (แท่ง) + ราคา (เส้น) ในโมดัลรายละเอียด
+  try{ if(S._dtlChart){S._dtlChart.destroy(); S._dtlChart=null;} }catch(e){}
+  const cv=document.getElementById('dtlChart'); if(!cv||!window.Chart)return;
+  const days=[...new Set(hist.map(h=>h.d))].sort();
+  const qty=days.map(d2=>hist.filter(h=>h.d===d2).reduce((a,h)=>a+h.qty,0));
+  const PAL=['#C62127','#4E7D8C','#C9962B','#5B8C5A','#7A5CA8','#B25B8A'];
+  const sids=multiSup?[...new Set(hist.map(h=>h.sid))]:[null];
+  const lines=sids.map((sid,i)=>{
+    const nm=sid==null?'ราคา':(((S.core.supById[sid]||{}).name)||'?');
+    return {type:'line',label:nm,yAxisID:'y1',spanGaps:true,tension:.25,borderWidth:2,pointRadius:2.5,
+      borderColor:PAL[i%PAL.length],backgroundColor:PAL[i%PAL.length],
+      data:days.map(d2=>{ const hs=hist.filter(h=>h.d===d2&&(sid==null||h.sid===sid));
+        if(!hs.length)return null; const q=hs.reduce((a,h)=>a+h.qty,0); return q>0?hs.reduce((a,h)=>a+h.qty*h.price,0)/q:hs[0].price; })};
+  });
+  S._dtlChart=new Chart(cv.getContext('2d'),{data:{
+      labels:days.map(d2=>+d2.slice(8,10)),
+      datasets:[{type:'bar',label:'จำนวนซื้อ ('+unit+')',yAxisID:'y',backgroundColor:'rgba(198,33,39,.25)',borderColor:'rgba(198,33,39,.55)',borderWidth:1,data:qty}, ...lines]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:true,labels:{boxWidth:10,font:{size:10}}}},
+      scales:{y:{beginAtZero:true,title:{display:true,text:unit,font:{size:10}}},
+              y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'฿/'+unit,font:{size:10}}}}}});
+}
 function usageDetailItem(k){
   const U=S._usage; if(!U||!U.gi||!U.gi[k])return;
   const t=U.gi[k];
@@ -3253,6 +3275,7 @@ function usageDetailItem(k){
   const priced=Object.entries(t.sups).map(([sid,x])=>({sid:parseInt(sid),...x})).sort((a,b)=>a.lastP-b.lastP);
   openModal(`<h3>${esc(t.item)} <span class="sp">รวม ${priced.length} ซัพ</span></h3>
     <div class="sm mut" style="margin:-6px 0 10px">ใช้รวม <b>${fmt(t.qty,Math.abs(t.qty%1)>0.004?2:0)} ${esc(t.unit)}</b> · เฉลี่ย ${fmt(t.qty/U.dd,2)}/วัน · ราคาเฉลี่ยรวม ฿${fmt(avgP,2)}/${esc(t.unit)}</div>
+    <div style="height:190px;margin-bottom:10px"><canvas id="dtlChart"></canvas></div>
     <div class="twrap"><table>
       <tr><th>ซัพพลายเออร์</th><th class="right">ซื้อไป</th><th class="right">ราคาเฉลี่ย</th><th class="right">ราคาล่าสุด</th></tr>
       ${priced.map((p2,idx)=>`<tr><td>${idx===0&&priced.length>1?'<span style="color:var(--ok);font-weight:700">✓</span> ':''}${esc((S.core.supById[p2.sid]||{}).name||'?')}</td>
@@ -3268,6 +3291,7 @@ function usageDetailItem(k){
     </table></div>
     <div class="xs mut" style="margin-top:8px">แตะบรรทัดเพื่อเปิดบิลใบนั้น (ตรงเป๊ะแม้วันนั้นมีหลายบิล)</div>
     <button class="btn sm2" style="width:100%;margin-top:10px" onclick="closeModal()">ปิด</button>`);
+  dtlChart(t.hist,t.unit,true);
 }
 function usageDetail(k){
   const U=S._usage; if(!U||!U.g[k])return;
@@ -3276,6 +3300,7 @@ function usageDetail(k){
   const avgP=t.qty?t.baht/t.qty:0;
   openModal(`<h3>${esc(t.item)} <span class="sp">${esc(sp.name||'')}</span></h3>
     <div class="sm mut" style="margin:-6px 0 10px">รวม <b>${fmt(t.qty,Math.abs(t.qty%1)>0.004?2:0)} ${esc(t.unit)}</b> · เฉลี่ย ${fmt(t.qty/U.dd,2)}/วัน · ราคาเฉลี่ย ฿${fmt(avgP,2)}/${esc(t.unit)}</div>
+    <div style="height:190px;margin-bottom:10px"><canvas id="dtlChart"></canvas></div>
     <div class="twrap" style="max-height:44dvh;overflow-y:auto"><table>
       <tr><th>วันที่</th><th class="right">จำนวน</th><th class="right">ราคา/หน่วย</th><th class="right">รวม</th></tr>
       ${hist.map(h=>`<tr style="cursor:pointer" onclick="closeModal();S.dtDate='${h.d}';S.dtSup=${t.sid};S._dtForceBn=${h.bn||1};show('detail')">
@@ -3284,6 +3309,7 @@ function usageDetail(k){
     </table></div>
     <div class="xs mut" style="margin-top:8px">แตะบรรทัดเพื่อเปิดบิลใบนั้น (ตรงเป๊ะแม้วันนั้นมีหลายบิล)</div>
     <button class="btn sm2" style="width:100%;margin-top:10px" onclick="closeModal()">ปิด</button>`);
+  dtlChart(t.hist,t.unit,false);
 }
 const DT_UNITS_DEFAULT=['กก.','ชิ้น','แพ็ค','ลัง','ถุง','ขวด','กระป๋อง','กล่อง','ลิตร','มัด','ตัว','กระสอบ'];
 function unitList(){
