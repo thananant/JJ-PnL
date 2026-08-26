@@ -842,7 +842,7 @@ async function renderIncomeAll(el){
   const days=monthDays(S.m), from=S.m+'-01', to=dstr(S.m,days);
   const brs=S.core.branches.map(b=>b.code);
   let rows=[];
-  try{ rows=await sel('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}`); }catch(e){}
+  try{ rows=await selAll('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}&order=d`); }catch(e){}
   const M={}; rows.forEach(r=>{ const c=calcDay(r); M[r.d+'|'+r.branch]=c?c.incVat:0; });
   const bt={}; let g=0;
   let body='';
@@ -872,7 +872,7 @@ async function renderExpAll(el){
   const days=monthDays(S.m), from=S.m+'-01', to=dstr(S.m,days);
   const brs=S.core.branches.map(b=>b.code);
   let rows=[];
-  try{ rows=await sel('pnl_expense_daily',`select=branch,d,amount&d=gte.${from}&d=lte.${to}`); }catch(e){}
+  try{ rows=await selAll('pnl_expense_daily',`select=branch,d,amount&d=gte.${from}&d=lte.${to}&order=d`); }catch(e){}
   const M={}; rows.forEach(r=>{ M[r.d+'|'+r.branch]=(M[r.d+'|'+r.branch]||0)+num(r.amount); });
   const bt={}; let g=0; let body='';
   for(let d2=1; d2<=days; d2++){
@@ -2514,10 +2514,10 @@ RENDER.vatrep = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=allNotice('รายละเอียดบิล'); return; }
   const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
   let rows=[];
-  try{ rows=await sel('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount,bill_no,ship_fee,other_fee&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`)
-    .catch(()=>sel('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount,bill_no&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`))
-    .catch(()=>sel('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`)
-    .catch(()=>sel('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`))); }
+  try{ rows=await selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount,bill_no,ship_fee,other_fee&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)
+    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount,bill_no&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`))
+    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)
+    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`))); }
   catch(e){ el.innerHTML='<div class="empty">โหลดไม่ได้ — ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อนครับ</div>'; return; }
   if(!rows.length){
     el.innerHTML=`<div class="empty">เดือนนี้ยังไม่มีการบันทึกรายละเอียดบิล<br>
@@ -2579,8 +2579,8 @@ RENDER.usage = async (el)=>{
   let rows=[], prev=[];
   try{
     [rows,prev]=await Promise.all([
-      sel('pnl_bill_items',`select=*${brFilter}&d=gte.${from}&d=lte.${to}&order=d`),
-      sel('pnl_bill_items',`select=item,unit,qty,supplier_id${brFilter}&d=gte.${pFrom}&d=lte.${pTo}`)
+      selAll('pnl_bill_items',`select=*${brFilter}&d=gte.${from}&d=lte.${to}&order=d`),
+      selAll('pnl_bill_items',`select=item,unit,qty,supplier_id${brFilter}&d=gte.${pFrom}&d=lte.${pTo}&order=d`)
     ]); // select=* รวม discount อยู่แล้วถ้ามีคอลัมน์
   }catch(e){
     el.innerHTML='<div class="empty">โหลดไม่ได้ — ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อนครับ</div>'; return;
@@ -2596,7 +2596,7 @@ RENDER.usage = async (el)=>{
   let dd=0; const salesG=[0,0,0], daysG=[0,0,0];
   if(ALL){
     try{
-      const inc=await sel('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}`);
+      const inc=await selAll('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}&order=d`);
       dd=new Set(inc.filter(r=>hasIncData(r)).map(r=>r.d)).size;
       const byD={}; inc.forEach(r=>{ byD[r.d]=(byD[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
       Object.entries(byD).forEach(([d2,v])=>{ if(v>0){ const gx=useGrp(d2); salesG[gx]+=v; daysG[gx]++; } });
@@ -2821,7 +2821,7 @@ RENDER.actual = async (el)=>{
   // สร้างลิสต์ชื่อบิลดิบจาก pnl_sup_items + บิลเดือนนี้
   let names=[];
   try{ const si=await selAllQ('pnl_sup_items','select=item&order=item').catch(()=>[]); names=si.map(x=>x.item); }catch(e){}
-  try{ const bi=await sel('pnl_bill_items',`select=item&branch=eq.${S.br}&d=gte.${st.from}&d=lte.${st.to}`); bi.forEach(x=>names.push(x.item)); }catch(e){}
+  try{ const bi=await selAllQ('pnl_bill_items',`select=item&branch=eq.${S.br}&d=gte.${st.from}&d=lte.${st.to}&order=d`); bi.forEach(x=>names.push(x.item)); }catch(e){}
   const usedN=new Set(Object.values(st.map).filter(r2=>r2.active&&r2.branch===S.br&&r2.pnl_item&&r2.pnl_item!=='-').map(r2=>ocrNorm(r2.pnl_item)));
   names=[...new Set(names.filter(Boolean))].filter(n2=>!usedN.has(ocrNorm(n2))).sort((a,b)=>a.localeCompare(b,'th')); // ตัดชื่อที่ผูกแล้วออก (1 ชื่อบิล = 1 สินค้านับ)
   S._stkNames=names;
@@ -4054,9 +4054,9 @@ async function dtMonthList(){
   const el=document.getElementById('dtList'); if(!el)return;
   try{
     const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
-    const rows=await sel('pnl_bill_items',`select=d,supplier_id,qty,price,discount,bill_no,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`)
-      .catch(()=>sel('pnl_bill_items',`select=d,supplier_id,qty,price,discount,bill_no&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`)
-      .catch(()=>sel('pnl_bill_items',`select=d,supplier_id,qty,price&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`)));
+    const rows=await selAll('pnl_bill_items',`select=d,supplier_id,qty,price,discount,bill_no,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)
+      .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,discount,bill_no&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)
+      .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)));
     if(!rows.length){el.innerHTML='<div class="xs mut">เดือนนี้ยังไม่มีการลงรายละเอียดบิล</div>';return;}
     const g={};
     rows.forEach(r=>{const bn=num(r.bill_no)||1; const k=r.d+'|'+r.supplier_id+'|'+bn;
@@ -4312,7 +4312,7 @@ async function pvPreview(){
   const m=document.getElementById('pvM').value, per=document.getElementById('pvPer').value, vat=document.getElementById('pvVat').value;
   const days=monthDays(m);
   const from=per==='1'?dstr(m,1):dstr(m,16), to=per==='1'?dstr(m,15):dstr(m,days);
-  const rows=await sel('pnl_expense_daily',`select=supplier_id,amount,paid&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}`);
+  const rows=await selAll('pnl_expense_daily',`select=supplier_id,amount,paid&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`);
   const sums={}, paidSums={};
   rows.forEach(r=>{
     if(r.paid) paidSums[r.supplier_id]=(paidSums[r.supplier_id]||0)+num(r.amount);
