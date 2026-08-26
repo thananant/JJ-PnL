@@ -3122,12 +3122,24 @@ function usagePdf(){ // เปิดตัวเลือกสินค้า (
   if(!keys.length){ toast('ไม่มีสินค้าที่แสดงอยู่ — ล้างคำค้นหรือเลือกกลุ่มก่อนครับ',true); return; }
   const item=S.usageMode==='item', src=item?U.gi:U.g;
   S._pdfKeys=keys;
+  // ซัพ + หมวด ของแต่ละรายการ (โหมดรายสินค้า = รวมทุกซัพที่เคยส่งตัวนั้น)
+  const kmeta=keys.map(k=>{ const x=src[k]; if(!x)return null;
+    const sids=item?Object.keys(x.sups||{}):[String(x.sid)];
+    const cats=[...new Set(sids.map(sid=>((S.core.supById[sid]||{}).category||'').trim()).filter(Boolean))];
+    return {k,x,sids,cats};
+  }).filter(Boolean);
+  const supOpts=[...new Set(kmeta.flatMap(m=>m.sids))].map(sid=>({sid,name:(S.core.supById[sid]||{}).name||('#'+sid)})).sort((a,b)=>a.name.localeCompare(b.name,'th'));
+  const catOpts=[...new Set(kmeta.flatMap(m=>m.cats))].sort((a,b)=>a.localeCompare(b,'th'));
   openModal(`<h3>📄 เลือกสินค้าที่จะออกรายงาน <span class="sp">หน้า A4 / สินค้า</span></h3>
-    <div class="xs mut" style="margin-bottom:6px"><span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.pdfck').forEach(c=>c.checked=true);usagePdfCnt()">เลือกทั้งหมด</span> · <span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.pdfck').forEach(c=>c.checked=false);usagePdfCnt()">ไม่เลือกเลย</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+      <select id="pdfFsup" onchange="usagePdfFilter()" style="width:auto;padding:6px 10px"><option value="">ทุกซัพ</option>${supOpts.map(o=>`<option value="${esc(o.sid)}">${esc(o.name)}</option>`).join('')}</select>
+      ${catOpts.length?`<select id="pdfFcat" onchange="usagePdfFilter()" style="width:auto;padding:6px 10px"><option value="">ทุกหมวด</option>${catOpts.map(c2=>`<option>${esc(c2)}</option>`).join('')}</select>`:''}
+      <span class="xs mut"><span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.pdfrow').forEach(r=>{if(r.style.display!=='none')r.querySelector('.pdfck').checked=true});usagePdfCnt()">เลือกที่เห็นทั้งหมด</span> · <span style="text-decoration:underline dotted;cursor:pointer" onclick="document.querySelectorAll('.pdfck').forEach(c=>c.checked=false);usagePdfCnt()">ไม่เลือกเลย</span></span>
+    </div>
     <div style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">
-      ${keys.map((k,i)=>{ const x=src[k]; if(!x)return ''; const nm=item?'':((S.core.supById[x.sid]||{}).name||'');
-        return `<label style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line);cursor:pointer">
-          <input type="checkbox" class="pdfck" data-k="${esc(k)}" checked onchange="usagePdfCnt()">
+      ${kmeta.map((m,i)=>{ const x=m.x; const nm=item?'':((S.core.supById[x.sid]||{}).name||'');
+        return `<label class="pdfrow" data-sup="${esc(m.sids.join(' '))}" data-cat="${esc(m.cats.join('|'))}" style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line);cursor:pointer">
+          <input type="checkbox" class="pdfck" data-k="${esc(m.k)}" checked onchange="usagePdfCnt()">
           <span>${esc(x.item)} <span class="xs mut">${esc(x.unit||'')}${nm?' · '+esc(nm):''} · ฿${fmtI(x.baht)}</span></span></label>`; }).join('')}
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -3135,9 +3147,19 @@ function usagePdf(){ // เปิดตัวเลือกสินค้า (
       <button class="btn sm2" id="pdfGoBtn" onclick="usagePdfGo()">สร้าง PDF (${keys.length} หน้า)</button>
     </div>`);
 }
-function usagePdfCnt(){ const n=document.querySelectorAll('.pdfck:checked').length; const b=document.getElementById('pdfGoBtn'); if(b)b.textContent=`สร้าง PDF (${n} หน้า)`; }
+function usagePdfFilter(){
+  const sv=(document.getElementById('pdfFsup')||{}).value||'';
+  const cv=(document.getElementById('pdfFcat')||{}).value||'';
+  document.querySelectorAll('.pdfrow').forEach(r=>{
+    const okS=!sv||String(r.dataset.sup||'').split(' ').includes(sv);
+    const okC=!cv||String(r.dataset.cat||'').split('|').includes(cv);
+    r.style.display=(okS&&okC)?'':'none';
+  });
+  usagePdfCnt();
+}
+function usagePdfCnt(){ const n=[...document.querySelectorAll('.pdfrow')].filter(r=>r.style.display!=='none'&&r.querySelector('.pdfck:checked')).length; const b=document.getElementById('pdfGoBtn'); if(b)b.textContent=`สร้าง PDF (${n} หน้า)`; }
 function usagePdfGo(){
-  const keys=[...document.querySelectorAll('.pdfck:checked')].map(c=>c.dataset.k);
+  const keys=[...document.querySelectorAll('.pdfrow')].filter(r=>r.style.display!=='none'&&r.querySelector('.pdfck:checked')).map(r=>r.querySelector('.pdfck').dataset.k);
   closeModal();
   if(!keys.length){ toast('ยังไม่ได้เลือกสินค้าเลยครับ',true); return; }
   usagePdfBuild(keys);
