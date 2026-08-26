@@ -2593,12 +2593,13 @@ RENDER.usage = async (el)=>{
   }
   // ตัวหาร: วันที่มีรายรับจริง (เหมือนสรุปเดือน) · ทุกสาขา = วันที่มีรายรับอย่างน้อย 1 สาขา
   // + ยอดขายรวม VAT แยกกลุ่มวัน (จ–พฤ / ศ / ส–อา) ไว้คิดอัตราใช้ต่อยอดขาย ฿10,000
-  let dd=0; const salesG=[0,0,0], daysG=[0,0,0];
+  let dd=0; const salesG=[0,0,0], daysG=[0,0,0], salesBr={};
   if(ALL){
     try{
       const inc=await selAll('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}&order=d`);
       dd=new Set(inc.filter(r=>hasIncData(r)).map(r=>r.d)).size;
-      const byD={}; inc.forEach(r=>{ byD[r.d]=(byD[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
+      const byD={}; inc.forEach(r=>{ byD[r.d]=(byD[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm);
+        const v2=num(r.sales_pos_am)+num(r.sales_pos_pm); if(r.branch&&v2>0) salesBr[r.branch]=(salesBr[r.branch]||0)+v2; });
       Object.entries(byD).forEach(([d2,v])=>{ if(v>0){ const gx=useGrp(d2); salesG[gx]+=v; daysG[gx]++; } });
     }catch(e){}
   }
@@ -2635,8 +2636,17 @@ RENDER.usage = async (el)=>{
   });
   const pgI={};
   prev.forEach(r=>{ const k=r.item+'|'+(r.unit||''); pgI[k]=(pgI[k]||0)+num(r.qty); });
-  S._usage={g,gi,dd,salesG,daysG};
+  const gc={}; // แยกรายสาขา (โหมด 🆚 เทียบสาขา)
+  if(ALL) rows.forEach(r=>{
+    const k=r.item+'|'+(r.unit||'');
+    const t=gc[k]??(gc[k]={item:r.item,unit:r.unit||'',br:{}});
+    const b2=t.br[r.branch]??(t.br[r.branch]={qty:0,baht:0});
+    b2.qty+=num(r.qty); b2.baht+=num(r.qty)*num(r.price)-num(r.discount);
+  });
+  S._usage={g,gi,gc,dd,salesG,daysG,salesBr};
   if(!S.usageMode) S.usageMode=LS.get('jj_usemode2','item');   // ค่าเริ่มต้น = ระดับสินค้า ไม่สนว่ามาจากกี่ซัพ (key ใหม่ให้ทุกเครื่องเริ่มที่โหมดนี้)
+  if(S.usageMode==='cmp'&&!ALL) S.usageMode='item';            // โหมดเทียบสาขามีความหมายเฉพาะตอนดู "ทุกสาขา"
+  if(!['item','sup','cmp'].includes(S.usageMode)) S.usageMode='item';
   if(S.use10k===undefined) S.use10k=!!LS.get('jj_use10k',false);
   const K10=!!S.use10k, salesAll=salesG[0]+salesG[1]+salesG[2];
   const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
@@ -2645,7 +2655,30 @@ RENDER.usage = async (el)=>{
   const dAvg=gx=>daysG[gx]>0?salesG[gx]/daysG[gx]:0;            // ยอดขายเฉลี่ย/วันของกลุ่ม
   const pDay=(q,gx)=>(salesAll>0&&q>0&&dAvg(gx)>0)?fq((q/(salesAll/10000))*(dAvg(gx)/10000)):'–'; // คาดการณ์ใช้/วันของกลุ่มวัน
   let body='', grand=0;
-  if(S.usageMode==='item'){
+  if(S.usageMode==='cmp'){
+    const sRD=salesBr['JJRD']||0, sLP=salesBr['JJLP']||0;
+    const items=Object.entries(gc).map(([k,t])=>{
+      const rd=t.br['JJRD']||{qty:0,baht:0}, lp2=t.br['JJLP']||{qty:0,baht:0};
+      const rRD=sRD>0?rd.qty/(sRD/10000):0, rLP=sLP>0?lp2.qty/(sLP/10000):0;
+      const bRD=sRD>0?rd.baht/(sRD/10000):0, bLP=sLP>0?lp2.baht/(sLP/10000):0;
+      return {k,item:t.item,unit:t.unit,rd,lp:lp2,rRD,rLP,bRD,bLP,imp:Math.abs(bRD-bLP)};
+    }).sort((a,b)=>b.imp-a.imp);
+    grand=items.reduce((a,x)=>a+x.rd.baht+x.lp.baht,0);
+    body=items.map(x=>{
+      let chip='';
+      if(x.rRD>0&&x.rLP>0){ const df=(x.rLP-x.rRD)/x.rRD;
+        chip=`<span class="chip ${Math.abs(df)>0.2?'bad':'mid'}" title="อัตราใช้ต่อ ฿10,000 ของลาดพร้าว เทียบรัชดา">${df>0?'▲':'▼'} ${pctF(Math.abs(df))}</span>`; }
+      else chip=`<span class="chip mid">${x.rRD>0?'เฉพาะรัชดา':'เฉพาะลาดพร้าว'}</span>`;
+      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${x.rd.baht+x.lp.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+        <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span></td>
+        <td class="n b">${x.rRD>0?fq(x.rRD):'–'}</td>
+        <td class="n b">${x.rLP>0?fq(x.rLP):'–'}</td>
+        <td class="right">${chip}</td>
+        <td class="n">${x.bRD>0?fmtI(x.bRD):'–'}</td>
+        <td class="n">${x.bLP>0?fmtI(x.bLP):'–'}</td>
+        <td></td></tr>`;
+    }).join('');
+  } else if(S.usageMode==='item'){
     const items=Object.entries(gi).map(([k,t])=>({k,...t})).sort((a,b)=>b.baht-a.baht);
     grand=items.reduce((a,x)=>a+x.baht,0);
     body=items.map(x=>{
@@ -2709,16 +2742,20 @@ RENDER.usage = async (el)=>{
     <h3>การใช้ของรายสินค้า${ALL?' · รวมทุกสาขา':''} <span class="sp">${monthLabel(S.m)}</span></h3>
     <div class="useg">
       <button class="${S.usageMode==='item'?'on':''}" onclick="usageModeSet('item')">รายสินค้า (รวมทุกซัพ)</button>
-      <button class="${S.usageMode!=='item'?'on':''}" onclick="usageModeSet('sup')">แยกตามซัพ</button>
-      <button class="${K10?'on':''}" onclick="usage10kSet(${K10?'false':'true'})" title="อัตราการใช้ต่อยอดขาย ฿10,000 แยก จ–พฤ / ศ / ส–อา">⚖ ต่อยอดขาย ฿10,000</button>
+      <button class="${S.usageMode==='sup'?'on':''}" onclick="usageModeSet('sup')">แยกตามซัพ</button>
+      ${ALL?`<button class="${S.usageMode==='cmp'?'on':''}" onclick="usageModeSet('cmp')" title="เทียบอัตราใช้ต่อยอดขาย ฿10,000 ของสองสาขา รายสินค้า">🆚 เทียบสาขา</button>`:''}
+      ${S.usageMode==='cmp'?'':`<button class="${K10?'on':''}" onclick="usage10kSet(${K10?'false':'true'})" title="อัตราการใช้ต่อยอดขาย ฿10,000 แยก จ–พฤ / ศ / ส–อา">⚖ ต่อยอดขาย ฿10,000</button>`}
     </div>
-    ${K10?`<div class="xs mut" style="margin:-4px 0 8px"><b>อัตรา (ต่อ ฿10,000)</b> = ใช้ทั้งเดือน ÷ (ยอดขายรวมทั้งเดือน ÷ 10,000) · <b>ใช้/วัน รายกลุ่ม</b> = อัตรา × (ยอดขายเฉลี่ย/วันของกลุ่ม ÷ 10,000) — ยอดขายเฉลี่ย/วัน (รวม VAT): <b>จ–พฤ</b> ฿${daysG[0]?fmtI(salesG[0]/daysG[0]):'–'} (${daysG[0]} วัน) · <b>ศ</b> ฿${daysG[1]?fmtI(salesG[1]/daysG[1]):'–'} (${daysG[1]} วัน) · <b>ส–อา</b> ฿${daysG[2]?fmtI(salesG[2]/daysG[2]):'–'} (${daysG[2]} วัน) · แตะแถวเพื่อดูประวัติรายวัน</div>`
+    ${S.usageMode==='cmp'?`<div class="xs mut" style="margin:-4px 0 8px">เทียบ <b>อัตราใช้ต่อยอดขาย ฿10,000</b> ของแต่ละสาขา (ตัดผลร้านขายมาก/น้อยออก เทียบกันแฟร์ ๆ) · ยอดขายรวม VAT: รัชดา ฿${fmtI(salesBr['JJRD']||0)} · ลาดพร้าว ฿${fmtI(salesBr['JJLP']||0)} · ▲ = ลาดพร้าวใช้มากกว่ารัชดา ▼ = น้อยกว่า · เกิน ±20% ทาแดง · เรียงตามผลต่างมูลค่า/หมื่นมากสุด · แตะแถวดูประวัติ</div>`
+    :K10?`<div class="xs mut" style="margin:-4px 0 8px"><b>อัตรา (ต่อ ฿10,000)</b> = ใช้ทั้งเดือน ÷ (ยอดขายรวมทั้งเดือน ÷ 10,000) · <b>ใช้/วัน รายกลุ่ม</b> = อัตรา × (ยอดขายเฉลี่ย/วันของกลุ่ม ÷ 10,000) — ยอดขายเฉลี่ย/วัน (รวม VAT): <b>จ–พฤ</b> ฿${daysG[0]?fmtI(salesG[0]/daysG[0]):'–'} (${daysG[0]} วัน) · <b>ศ</b> ฿${daysG[1]?fmtI(salesG[1]/daysG[1]):'–'} (${daysG[1]} วัน) · <b>ส–อา</b> ฿${daysG[2]?fmtI(salesG[2]/daysG[2]):'–'} (${daysG[2]} วัน) · แตะแถวเพื่อดูประวัติรายวัน</div>`
     :`<div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · สินค้าตัวเดียวกันนับรวมทุกซัพ · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>`}
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
       <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button>
       <button class="btn gh sm2" onclick="usagePdf()" title="รายงานสินค้าละ 1 หน้า A4 ตามแถวที่แสดงอยู่ (กรองก่อนได้) — สั่งพิมพ์แล้วเลือก Save as PDF">📄 PDF รายสินค้า</button></div>
     <div class="twrap"><table id="useTbl">
-      ${K10
+      ${S.usageMode==='cmp'
+        ?`<tr><th>สินค้า</th><th class="right">รัชดา ใช้/หมื่น</th><th class="right">ลาดพร้าว ใช้/หมื่น</th><th class="right">ต่าง (ลพ. vs รด.)</th><th class="right">รัชดา ฿/หมื่น</th><th class="right">ลาดพร้าว ฿/หมื่น</th><th></th></tr>`
+        :K10
         ?`<tr><th>สินค้า</th><th class="right">ต่อ ฿10,000</th><th class="right">จ–พฤ ใช้/วัน</th><th class="right">ศ ใช้/วัน</th><th class="right">ส–อา ใช้/วัน</th><th class="right">฿/หมื่น</th><th></th></tr>`
         :S.usageMode==='item'
         ?`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">ซัพ</th><th class="right">ราคาล่าสุดรายซัพ</th><th class="right">มูลค่า ฿</th><th></th></tr>`
