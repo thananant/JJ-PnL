@@ -418,20 +418,20 @@ tr:last-child td{border-bottom:none}
   #printArea th{color:#000;border-bottom:1.5px solid #000}
   #printArea td{border-bottom:.5px solid #999}
   .pgbreak{page-break-after:always}
-  @page{size:A4;margin:14mm}
-  .ppage{page-break-after:always;font-size:12.5px;min-height:248mm;display:flex;flex-direction:column}
+  @page{size:A4;margin:16mm 15mm}
+  .ppage{page-break-after:always;font-size:12.5px;min-height:236mm;display:flex;flex-direction:column;padding:1.5mm 1mm 0;box-sizing:border-box;overflow:hidden}
   .ppage:last-child{page-break-after:auto}
-  .ppage h2{margin:0 0 2mm;font-size:19px}
-  .ppage .pmeta{color:#333;margin-bottom:4mm}
-  .ppage .pgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4mm;margin:0 0 4mm}
-  .ppage .pbox{border:1px solid #999;border-radius:7px;padding:3.5mm;line-height:1.55}
-  .ppage .pbox b.h{display:block;margin-bottom:2mm;font-size:13.5px}
+  .ppage h2{margin:1mm 0 2mm;font-size:19px}
+  .ppage .pmeta{color:#333;margin-bottom:5mm}
+  .ppage .pgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4.5mm;margin:0 0 5mm}
+  .ppage .pbox{border:1px solid #999;border-radius:8px;padding:4mm 4.5mm;line-height:1.6}
+  .ppage .pbox b.h{display:block;margin-bottom:2.5mm;font-size:13.5px}
   .ppage .pfill{flex:1}
-  .ppage canvas{width:100%!important;max-height:68mm}
+  .ppage canvas{width:100%!important;max-height:62mm}
   .ppage table{width:100%;border-collapse:collapse}
-  .ppage table td,.ppage table th{padding:1.6mm 1mm}
-  .ppage .cols2{column-count:2;column-gap:6mm}
-  .ppage .pfoot{color:#777;margin-top:auto;padding-top:3mm;font-size:10px}
+  .ppage table td,.ppage table th{padding:1.9mm 1.6mm}
+  .ppage .cols2{column-count:2;column-gap:9mm;column-rule:.5px solid #ddd}
+  .ppage .pfoot{color:#777;margin-top:auto;padding-top:3mm;border-top:.5px solid #ccc;font-size:10px}
 }
 .spin{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--red);border-radius:50%;animation:sp 0.8s linear infinite;margin:30px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -2826,7 +2826,7 @@ async function stkLoad(){
   let permDenied=false;
   const stkSel=(t,q)=>selAllQ(t,q).catch(e=>{ if(/42501|permission denied|401/i.test(String(e.message)))permDenied=true; return []; });
   const [prods,map,counts,bills,inc]=await Promise.all([
-    stkSel('products',`select=id,branch_id,name,unit,sup,cat_label,cat_key,sort&deleted_at=is.null&order=id`),
+    stkSel('products',`select=id,branch_id,name,unit,sup,cat_label,cat_key,sort,safety,max&deleted_at=is.null&order=id`),
     selAllQ('pnl_stock_map','select=*&order=id').catch(()=>null),
     stkSel('stock_counts',`select=branch_id,branch_name,count_date,product_id,qty,out_of_stock,created_at&count_date=gte.${from}&count_date=lte.${to}&order=count_date,created_at`),
     selAll('pnl_bill_items',`select=branch,d,item,unit,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>selAll('pnl_bill_items',`select=branch,d,item,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)).catch(()=>[]),
@@ -2888,7 +2888,7 @@ RENDER.actual = async (el)=>{
   // ---------- คำนวณช่วงใช้จริงต่อสินค้า ----------
   if(S._stkBindOpen===undefined) S._stkBindOpen=!!LS.get('jj_stkbind_open',false); // แผงผูกพับไว้เป็นค่าตั้งต้น
   if(!S.stkView) S.stkView=LS.get('jj_stkview','last');
-  if(!['last','day','range'].includes(S.stkView)) S.stkView='last';
+  if(!['last','day','range','auto'].includes(S.stkView)) S.stkView='last';
   const mStart=S.m+'-01';
   const rows=mapped.map(pr=>{
     const mp=st.map[pr.id];
@@ -2937,6 +2937,7 @@ RENDER.actual = async (el)=>{
       <button class="${V==='last'?'on':''}" onclick="stkViewSet('last')">ช่วงล่าสุด</button>
       <button class="${V==='day'?'on':''}" onclick="stkViewSet('day')">📅 รายวัน</button>
       <button class="${V==='range'?'on':''}" onclick="stkViewSet('range')">↔ ช่วงวันที่</button>
+      <button class="${V==='auto'?'on':''}" onclick="stkViewSet('auto')" title="คำนวณ safety/max รายวันจันทร์–อาทิตย์ จากใช้จริง แล้วเขียนกลับเข้าแอพนับ (ยืนยันก่อนเขียนทุกครั้ง)">🤖 ตั้งค่าอัตโนมัติ <span style="font-size:10px;background:#8E1B1B;color:#fff;border-radius:6px;padding:1px 5px">β</span></button>
       ${V==='day'?`<span class="xs" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px">
         <button class="btn gh sm2" onclick="stkDayStep(-1)" title="วันนับก่อนหน้า">‹</button>
         <input type="date" value="${S.stkDay||''}" onchange="S.stkDay=this.value;show('actual')" style="width:auto;display:inline-block;padding:6px 8px">
@@ -2970,6 +2971,7 @@ RENDER.actual = async (el)=>{
       return !hasBill&&rows.length?`<div class="dupbox" style="margin-bottom:10px">⏳ <b>บิลวันที่ ${thDate(maxD2)} ยังไม่ถูกลงในระบบ</b> <span class="xs mut">— ช่วงล่าสุดเลยเห็น "ซื้อเข้า = 0" ชั่วคราว ทำให้ใช้จริงบางตัวติดลบหรือสูงเกินจริง (ของเข้าแล้วแต่บิลยังไม่มา) · ลงบิลวันนั้นครบเมื่อไหร่ เลขหน้านี้ปรับใหม่ให้เองทันที</span></div>`:'';
     })()}
     ${(()=>{
+      if(V==='auto') return stkAutoHtml(rows,st);
       // สร้างรายการแสดงตามโหมด: ช่วงล่าสุด / รายวัน / ช่วงวันที่
       let disp=[];
       if(V==='day'){
@@ -3014,6 +3016,83 @@ RENDER.actual = async (el)=>{
   </div>`;
   stkBadge(); // อัปเดตป้ายเตือนตามข้อมูลล่าสุด
 };
+const TH_D2=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+function stkAutoCalc(rows,st){ // ใช้เฉลี่ยราย จ–อา ต่อสินค้า: ถัวใช้จริงของแต่ละช่วงตามสัดส่วนยอดขายรายวัน
+  return rows.map(r=>{
+    const acc=[0,0,0,0,0,0,0], cnt=[0,0,0,0,0,0,0];
+    r.per.forEach(pp=>{
+      const ds=[]; for(let d2=pp.Pd; d2<pp.Cd; d2=stkAddDays(d2,1)) ds.push(d2);
+      ds.forEach(d2=>{
+        const w=new Date(d2+'T00:00:00').getDay();
+        const share=pp.sale>0?((st.sales[d2]||0)/pp.sale):(1/ds.length);
+        acc[w]+=pp.use*share; cnt[w]++;
+      });
+    });
+    return {r,avg:acc.map((v,i)=>cnt[i]?v/cnt[i]:null),n:cnt};
+  });
+}
+function stkRoundSm(v){ return v<8?Math.ceil(v):stkRound05(v); } // เลขเล็กปัดขึ้นจำนวนเต็ม เลขใหญ่ลงท้าย 0/5
+function stkAutoHtml(rows,st){
+  if(S.autoDay===undefined) S.autoDay=new Date().getDay();
+  if(!S.autoFS) S.autoFS=1.2;
+  if(!S.autoFM) S.autoFM=2;
+  if(S.autoHolF===undefined) S.autoHolF=1.3;
+  const W=stkAutoCalc(rows,st); S._auto=W;
+  const D=S.autoDay, hol=!!S.autoHol;
+  const dayN=Math.max(...W.map(x=>x.n[D]),0);
+  const rowsH=W.map((x,i)=>{
+    const base=x.avg[D];
+    if(base==null) return `<tr class="mut"><td colspan="6" class="xs">— ${esc(x.r.pr.name)} <span class="mut">ยังไม่มีข้อมูลวัน${TH_D2[D]}</span></td></tr>`;
+    const eff=base*(hol?num(S.autoHolF)||1:1);
+    const sf=stkRoundSm(eff*(num(S.autoFS)||1.2));
+    const mx=stkRoundSm(eff*(num(S.autoFS)||1.2)*(num(S.autoFM)||2));
+    const cs=num(x.r.pr.safety), cm=num(x.r.pr.max);
+    const thin=x.n[D]<2;
+    return `<tr>
+      <td><input type="checkbox" class="autock" data-pid="${esc(x.r.pr.id)}" data-sf="${sf}" data-mx="${mx}" ${thin?'':'checked'} onchange="stkAutoCnt()"></td>
+      <td><b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${thin?` <span class="chip mid" title="มีข้อมูลวันนี้แค่ ${x.n[D]} จุด — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}</td>
+      <td class="n">${fmt(base,2)} <span class="xs mut">· ${x.n[D]} จุด</span></td>
+      <td class="n">${cs?fmt(cs,0):'–'} → <b ${sf!==cs?'style="color:var(--red)"':''}>${sf}</b></td>
+      <td class="n">${cm?fmt(cm,0):'–'} → <b ${mx!==cm?'style="color:var(--red)"':''}>${mx}</b></td>
+      <td class="n xs mut">${sf>cs?'▲':sf<cs?'▼':'='}</td></tr>`;
+  }).join('');
+  return `<div class="dupbox" style="margin-bottom:10px">🤖 <b>ตั้งค่า safety/max อัตโนมัติ (beta)</b> <span class="xs mut">— คำนวณจากใช้จริงรายวัน${dayN?` (ข้อมูลวัน${TH_D2[D]} ~${dayN} สัปดาห์)`:''} · <b>ไม่เขียนอะไรจนกว่าจะกดยืนยัน</b> · เขียนแล้วโฟลว์สั่งของในแอพนับใช้เลขใหม่ทันที</span></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px" class="xs">
+    <span>ตั้งค่าสำหรับวัน <select onchange="S.autoDay=+this.value;show('actual')" style="width:auto;display:inline-block;padding:6px 10px">${TH_D2.map((d2,i)=>`<option value="${i}" ${i===D?'selected':''}>${d2}</option>`).join('')}</select></span>
+    <span>safety = ใช้เฉลี่ย × <input type="text" inputmode="decimal" value="${S.autoFS}" onchange="S.autoFS=num(this.value)||1.2;show('actual')" style="width:52px;text-align:right;display:inline-block"></span>
+    <span>max = safety × <input type="text" inputmode="decimal" value="${S.autoFM}" onchange="S.autoFM=num(this.value)||2;show('actual')" style="width:52px;text-align:right;display:inline-block"></span>
+    <label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" ${hol?'checked':''} onchange="S.autoHol=this.checked;show('actual')"> วันหยุดพิเศษ ×<input type="text" inputmode="decimal" value="${S.autoHolF}" onchange="S.autoHolF=num(this.value)||1.3;show('actual')" style="width:48px;text-align:right;display:inline-block"></label>
+    <button class="btn sm2" id="autoGoBtn" style="margin-left:auto" onclick="stkAutoWrite()">เขียนค่าที่เลือกเข้าแอพนับ</button>
+  </div>
+  <div class="twrap"><table>
+    <tr><th></th><th>สินค้า</th><th class="right">ใช้เฉลี่ยวัน${TH_D2[D]}</th><th class="right">safety เดิม → ใหม่</th><th class="right">max เดิม → ใหม่</th><th></th></tr>
+    ${rowsH}
+  </table></div>
+  <div class="xs mut" style="margin-top:8px">ปัดเลข: ต่ำกว่า 8 ปัดขึ้นจำนวนเต็ม · ตั้งแต่ 8 ปัดขึ้นลงท้าย 0/5 · ตัว "ข้อมูลน้อย" ไม่ติ๊กให้อัตโนมัติ · เฟสถัดไปค่อยให้ระบบเขียนเองทุกเช้า</div>`;
+}
+function stkAutoCnt(){ const n=document.querySelectorAll('.autock:checked').length; const b=document.getElementById('autoGoBtn'); if(b)b.textContent=`เขียนค่าที่เลือกเข้าแอพนับ (${n})`; }
+async function stkAutoWrite(){
+  const cks=[...document.querySelectorAll('.autock:checked')];
+  if(!cks.length){ toast('ยังไม่ได้เลือกสักตัวครับ',true); return; }
+  const rows2=cks.map(c=>({id:c.dataset.pid,safety:num(c.dataset.sf),max:num(c.dataset.mx)}));
+  openModal(`<h3>ยืนยันเขียนค่าเข้าแอพนับสต๊อก</h3>
+    <div style="margin:6px 0 12px">จะอัปเดต <b>safety/max ของ ${rows2.length} สินค้า</b> (สาขา${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}) สำหรับวัน<b>${TH_D2[S.autoDay]}</b> — โฟลว์สั่งของใช้เลขใหม่ทันที ค่าเดิมถูกทับ</div>
+    <div style="display:flex;gap:8px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
+    <button class="btn sm2" id="autoOkBtn" style="margin-left:auto" onclick="stkAutoWrite2()">✅ ยืนยันเขียน ${rows2.length} ตัว</button></div>`);
+  S._autoRows=rows2;
+}
+async function stkAutoWrite2(){
+  const rows2=S._autoRows||[]; closeModal();
+  try{
+    await ups('products',rows2,'id');
+    const st=S._stk; rows2.forEach(x=>{ const pr2=st&&st.prods.find(pp=>pp.id===x.id); if(pr2){pr2.safety=x.safety;pr2.max=x.max;} });
+    toast(`✅ เขียน safety/max ${rows2.length} ตัวเข้าแอพนับแล้ว`);
+    show('actual');
+  }catch(e){
+    const m2=String(e.message||'');
+    toast(m2.includes('permission')||m2.includes('42501')?'ยังไม่มีสิทธิ์เขียน — รัน jjmk_pnl_stockwrite.sql ใน Supabase ครั้งเดียวครับ':'เขียนไม่สำเร็จ: '+m2,true);
+  }
+}
 function stkViewSet(v){ S.stkView=v; LS.set('jj_stkview',v); show('actual'); }
 function stkDayStep(dir){
   const a=S._stkAllD||[]; if(!a.length)return;
