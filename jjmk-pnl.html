@@ -418,8 +418,8 @@ tr:last-child td{border-bottom:none}
   #printArea th{color:#000;border-bottom:1.5px solid #000}
   #printArea td{border-bottom:.5px solid #999}
   .pgbreak{page-break-after:always}
-  @page{size:A4;margin:16mm 15mm}
-  .ppage{page-break-after:always;font-size:12.5px;min-height:236mm;display:flex;flex-direction:column;padding:1.5mm 1mm 0;box-sizing:border-box;overflow:hidden}
+  @page{size:A4;margin:25.4mm}
+  .ppage{page-break-after:always;font-size:12px;min-height:212mm;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden}
   .ppage:last-child{page-break-after:auto}
   .ppage h2{margin:1mm 0 2mm;font-size:19px}
   .ppage .pmeta{color:#333;margin-bottom:5mm}
@@ -427,7 +427,7 @@ tr:last-child td{border-bottom:none}
   .ppage .pbox{border:1px solid #999;border-radius:8px;padding:4mm 4.5mm;line-height:1.6}
   .ppage .pbox b.h{display:block;margin-bottom:2.5mm;font-size:13.5px}
   .ppage .pfill{flex:1}
-  .ppage canvas{width:100%!important;max-height:62mm}
+  .ppage canvas{width:100%!important;max-height:56mm}
   .ppage table{width:100%;border-collapse:collapse}
   .ppage table td,.ppage table th{padding:1.9mm 1.6mm}
   .ppage .cols2{column-count:2;column-gap:9mm;column-rule:.5px solid #ddd}
@@ -3260,6 +3260,10 @@ function usagePdfBuild(keys){
     const wavg=x.qty>0?(hist.reduce((a,h2)=>a+h2.qty*h2.price,0)/x.qty):0;
     const pmin=Math.min(...hist.map(h2=>h2.price)), pmax=Math.max(...hist.map(h2=>h2.price));
     const rate=salesAll>0?x.qty/(salesAll/10000):null;
+    const gbr=(S.usageMode==='item'&&U.gc&&U.gc[k])?U.gc[k].br:null; // ยอดแยกสาขา (มีเมื่อดูทุกสาขา)
+    const brLine=gbr
+      ?['JJRD','JJLP'].filter(b2=>gbr[b2]&&gbr[b2].qty>0).map(b2=>`${b2==='JJRD'?'รัชดา':'ลาดพร้าว'} <b>${fq(gbr[b2].qty)} ${esc(x.unit||'')}</b>`).join(' · ')
+      :`${S.br==='JJRD'?'รัชดา':S.br==='JJLP'?'ลาดพร้าว':'รวม'} <b>${fq(x.qty)} ${esc(x.unit||'')}</b>`;
     const dAvg=gx=>daysG[gx]>0?salesG[gx]/daysG[gx]:0;
     const pDay=gx=>(rate!=null&&dAvg(gx)>0)?fq(rate*(dAvg(gx)/10000)):'–';
     // กราฟ: ราคาต่อวัน (แยกซัพเมื่อรวมโหมดสินค้า)
@@ -3275,8 +3279,8 @@ function usagePdfBuild(keys){
       <div class="pgrid">
         <div class="pbox"><b class="h">📦 การสั่งซื้อเดือนนี้</b>
           ซื้อรวม <b>${fq(x.qty)} ${esc(x.unit||'')}</b> · ${x.n} ครั้ง<br>มูลค่า <b>฿${fmtI(x.baht)}</b><br>เฉลี่ย ${dd?fq(x.qty/dd):'–'} ${esc(x.unit||'')}/วัน (${dd} วันขาย)</div>
-        <div class="pbox"><b class="h">📈 การใช้ต่อยอดขาย</b>
-          อัตรา <b>${rate!=null?fq(rate):'–'}</b> ${esc(x.unit||'')}/฿10,000<br>ใช้/วัน: จ–พฤ <b>${pDay(0)}</b> · ศ <b>${pDay(1)}</b> · ส–อา <b>${pDay(2)}</b></div>
+        <div class="pbox"><b class="h">📈 ยอดใช้ของ</b>
+          ${brLine}<br>ใช้/วัน: จ–พฤ <b>${pDay(0)}</b> · ศ <b>${pDay(1)}</b> · ส–อา <b>${pDay(2)}</b></div>
         <div class="pbox"><b class="h">💰 ราคา (${esc(x.unit||'')})</b>
           ล่าสุด <b>${fmt(x.lastP,2)}</b> (${thDate(x.lastD)})<br>ต่ำสุด ${fmt(pmin,2)} · สูงสุด ${fmt(pmax,2)}<br>เฉลี่ยถ่วงน้ำหนัก <b>${fmt(wavg,2)}</b></div>
       </div>
@@ -3286,7 +3290,7 @@ function usagePdfBuild(keys){
           <tr><th style="text-align:left">วันที่</th>${item?'<th style="text-align:left">ซัพ</th>':''}<th style="text-align:right">จำนวน</th><th style="text-align:right">@ราคา</th><th style="text-align:right">รวม</th></tr>
           ${rows.map(h2=>`<tr><td>${thDate(h2.d)}</td>${item?`<td>${esc(((S.core.supById[h2.sid]||{}).name||'').slice(0,14))}</td>`:''}<td style="text-align:right">${fq(h2.qty)}</td><td style="text-align:right">${fmt(h2.price,2)}</td><td style="text-align:right">${fmtI(h2.qty*h2.price-(h2.discount||0))}</td></tr>`).join('')}
         </table></div>${more>0?`<div style="color:#666;margin-top:1mm">… และก่อนหน้านี้อีก ${more} รายการ</div>`:''}</div>
-      <div class="pfoot">JJ P&L · สร้าง ${thDate(todayStr())} · อัตราใช้คิดจากยอดซื้อ ÷ ยอดขายรวม VAT ของเดือน</div>
+      <div class="pfoot">JJ P&L · สร้าง ${thDate(todayStr())} · ยอดใช้คิดจากยอดซื้อในบิลของเดือน · ใช้/วัน = เฉลี่ยตามกลุ่มวัน จ–พฤ / ศ / ส–อา</div>
     </section>`;
   }).join('');
   document.getElementById('printArea').innerHTML=pages;
