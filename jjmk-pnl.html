@@ -2759,6 +2759,7 @@ RENDER.usage = async (el)=>{
     :`<div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · สินค้าตัวเดียวกันนับรวมทุกซัพ · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>`}
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
       <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button>
+      <button class="btn gh sm2" onclick="usageXlsx()" title="ดาวน์โหลดข้อมูลดิบทั้งหมดของเดือนนี้เป็น Excel (รายสินค้า · แยกซัพ · เทียบสาขา)">⬇ Excel</button>
       <button class="btn gh sm2" onclick="usagePdf()" title="รายงานสินค้าละ 1 หน้า A4 ตามแถวที่แสดงอยู่ (กรองก่อนได้) — สั่งพิมพ์แล้วเลือก Save as PDF">📄 PDF รายสินค้า</button></div>
     <div class="twrap"><table id="useTbl">
       ${S.usageMode==='cmp'
@@ -3227,6 +3228,45 @@ function usagePdf(){ // เปิดตัวเลือกสินค้า (
       <button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ยกเลิก</button>
       <button class="btn sm2" id="pdfGoBtn" onclick="usagePdfGo()">สร้าง PDF (${keys.length} หน้า)</button>
     </div>`);
+}
+function usageXlsx(){ // ข้อมูลดิบทั้งเดือน ทุกสินค้า ครบทุกคอลัมน์ที่ระบบคำนวณ
+  const U=S._usage; if(!U||!window.XLSX){ toast('ยังไม่มีข้อมูลให้ส่งออก',true); return; }
+  const salesAll=(U.salesG||[]).reduce((a,b)=>a+b,0);
+  const p10=q=>salesAll>0?+(q/(salesAll/10000)).toFixed(4):null;
+  const pd=(q,i)=>U.daysG&&U.daysG[i]?+(q/U.daysG[i]).toFixed(3):null;
+  const r2=v=>+(+v).toFixed(2);
+  const brName={ALL:'ทุกสาขา',JJRD:'รัชดา',JJLP:'ลาดพร้าว',JJOF:'ออฟฟิศ'}[S.br]||S.br;
+  const rows1=Object.values(U.gi||{}).sort((a,b)=>b.baht-a.baht).map(t=>({
+    'สินค้า':t.item,'หน่วย':t.unit||'','ปริมาณรวม':r2(t.qty),'มูลค่า (บาท)':r2(t.baht),'จำนวนบรรทัดบิล':t.n,
+    'ราคาเฉลี่ย/หน่วย':t.qty?r2(t.baht/t.qty):null,'ต่อ ฿10,000':p10(t.qty),
+    'จ–พฤ ใช้/วัน':pd(t.q3[0],0),'ศ ใช้/วัน':pd(t.q3[1],1),'ส–อา ใช้/วัน':pd(t.q3[2],2),
+    '฿/หมื่น':salesAll>0?r2(t.baht/(salesAll/10000)):null,
+    'จ–พฤ ปริมาณ':r2(t.q3[0]),'ศ ปริมาณ':r2(t.q3[1]),'ส–อา ปริมาณ':r2(t.q3[2]),
+    'ซัพพลายเออร์':Object.keys(t.sups||{}).map(sid=>(S.core.supById[sid]||{}).name||sid).join(' / ')}));
+  const rows2=Object.values(U.g||{}).sort((a,b)=>b.baht-a.baht).map(t=>({
+    'ซัพพลายเออร์':(S.core.supById[t.sid]||{}).name||t.sid,'สินค้า':t.item,'หน่วย':t.unit||'',
+    'ปริมาณรวม':r2(t.qty),'มูลค่า (บาท)':r2(t.baht),'จำนวนบรรทัดบิล':t.n,'ราคาเฉลี่ย/หน่วย':t.qty?r2(t.baht/t.qty):null,
+    'ราคาล่าสุด':r2(t.lastP),'วันที่ซื้อล่าสุด':t.lastD,'ต่อ ฿10,000':p10(t.qty),
+    'จ–พฤ ใช้/วัน':pd(t.q3[0],0),'ศ ใช้/วัน':pd(t.q3[1],1),'ส–อา ใช้/วัน':pd(t.q3[2],2)}));
+  const wb=XLSX.utils.book_new();
+  const add=(rows,name,w)=>{ const ws=XLSX.utils.json_to_sheet(rows); ws['!cols']=w.map(x=>({wch:x})); XLSX.utils.book_append_sheet(wb,ws,name); };
+  add(rows1,'รายสินค้า',[34,8,12,14,10,14,12,12,12,12,12,12,12,12,40]);
+  add(rows2,'แยกตามซัพ',[26,34,8,12,14,10,14,12,14,12,12,12,12]);
+  if(S.br==='ALL'&&U.gc){
+    const sRD=(U.salesBr||{}).JJRD||0, sLP=(U.salesBr||{}).JJLP||0;
+    const rate=(q,s2)=>s2>0?+(q/(s2/10000)).toFixed(4):null;
+    const rows3=Object.values(U.gc).map(t=>{ const rd=t.br.JJRD||{qty:0,baht:0}, lp=t.br.JJLP||{qty:0,baht:0};
+      const a=rate(rd.qty,sRD), b=rate(lp.qty,sLP);
+      return {'สินค้า':t.item,'หน่วย':t.unit||'','รัชดา ปริมาณ':r2(rd.qty),'รัชดา มูลค่า':r2(rd.baht),'รัชดา ต่อ ฿10,000':a,'รัชดา ฿/หมื่น':sRD>0?r2(rd.baht/(sRD/10000)):null,
+        'ลาดพร้าว ปริมาณ':r2(lp.qty),'ลาดพร้าว มูลค่า':r2(lp.baht),'ลาดพร้าว ต่อ ฿10,000':b,'ลาดพร้าว ฿/หมื่น':sLP>0?r2(lp.baht/(sLP/10000)):null,
+        'ต่าง % (ลพ. vs รด.)':a>0&&b!=null?r2((b-a)/a*100):null}; }).sort((x,y)=>(y['รัชดา มูลค่า']+y['ลาดพร้าว มูลค่า'])-(x['รัชดา มูลค่า']+x['ลาดพร้าว มูลค่า']));
+    add(rows3,'เทียบสาขา',[34,8,12,12,14,12,12,12,14,12,14]);
+  }
+  add([{'สาขา':brName,'เดือน':S.m,'ยอดขายรวม VAT ทั้งเดือน':r2(salesAll),'วันขาย':U.dd,
+    'ยอดขาย จ–พฤ':r2(U.salesG[0]),'วัน จ–พฤ':U.daysG[0],'ยอดขาย ศ':r2(U.salesG[1]),'วัน ศ':U.daysG[1],'ยอดขาย ส–อา':r2(U.salesG[2]),'วัน ส–อา':U.daysG[2],
+    'สูตร':'ต่อ ฿10,000 = ปริมาณ ÷ (ยอดขายรวม VAT ÷ 10,000) · ใช้/วัน = ปริมาณกลุ่มวัน ÷ จำนวนวันขายในกลุ่ม · ปริมาณแปลงเป็นหน่วยหลักแล้วถ้าตั้งอัตราแปลงไว้'}],'สรุป',[14,10,22,8,14,8,14,8,14,8,90]);
+  XLSX.writeFile(wb,`JJ-การใช้ของ-${S.br}-${S.m}.xlsx`);
+  toast(`⬇ ดาวน์โหลด Excel แล้ว (${rows1.length} สินค้า)`);
 }
 function usagePdfFilter(){
   const sv=(document.getElementById('pdfFsup')||{}).value||'';
