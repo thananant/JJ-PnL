@@ -1,0 +1,81 @@
+const fs=require('fs');
+const {JSDOM}=require('jsdom');
+const crypto=require('crypto');
+const html=fs.readFileSync('jjmk-pnl.html','utf8');
+const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJPNL').digest('hex');
+const pre=`<script>
+window.Chart=function(){this.destroy=()=>{};this.update=()=>{};};
+window.Chart.defaults={font:{},plugins:{}};
+window.XLSX={utils:{book_new:()=>({}),aoa_to_sheet:()=>({}),book_append_sheet:()=>{},json_to_sheet:r=>({})},writeFile:()=>{}};
+</script>`;
+const patched=html.replace(/<script src="https:\/\/cdnjs[^"]*"><\/script>/g,'').replace('<style>',pre+'<style>');
+const posts=[];
+const users=[
+  {id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',perms:{},active:true},
+  {id:2,username:'boy',pass_hash:H('boy','1234'),display_name:'บอย',role:'staff',active:true,
+   perms:{dash:'view',income:'edit',exp:'edit',detail:'edit',usage:'view',sum:'none',pv:'none',etc:'none',set:'none'}}];
+const inc=[{branch:'JJRD',d:'2026-08-01',sales_pos_am:107000,sales_pos_pm:0,deposit_am:0,deposit_pm:0,cash_drawer_am:0,cash_drawer_pm:0,transfer_total_am:0,transfer_total_pm:0,reserve_acct_am:0,reserve_acct_pm:0,transfer_pending_prev_am:0,transfer_pending_prev_pm:0,drawer_open_am:0,drawer_open_pm:0}];
+const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
+  beforeParse(w){
+    w.localStorage.setItem('jjpnl_m',JSON.stringify('2026-08')); // ล็อกเดือนทดสอบ ไม่ให้ขึ้นกับวันที่จริง
+    w.fetch=async(url,opt)=>{
+      const method=opt&&opt.method||'GET';
+      const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),headers:{get:()=>null},json:async()=>v});
+      if(method==='POST'&&url.includes('pnl_activity_log')){posts.push(JSON.parse(opt.body));return T([]);}
+      if(url.includes('pnl_users')&&method==='GET'){
+        if(url.includes('username=eq.')){const u=decodeURIComponent(url.match(/username=eq\.([^&]+)/)[1]);return T(users.filter(x=>x.username===u));}
+        return T(users);
+      }
+      if(url.includes('pnl_suppliers'))return T([{id:1,name:'FarmFresh',category:'อาหาร',active:true,sort:1,vat_type:'NON-VAT'}]);
+      if(url.includes('pnl_branches'))return T([{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]);
+      if(url.includes('pnl_income_daily')&&url.includes('d=gte.2026-08'))return T(url.includes('JJLP')?[]:inc);
+      if(method==='POST'&&url.includes('pnl_income_daily')){posts.push({inc:JSON.parse(opt.body)});return T([]);}
+      if(method==='POST'&&url.includes('pnl_expense_daily')){posts.push({exp:JSON.parse(opt.body)});return T([]);}
+      return T([]);
+    };
+    w.TextEncoder=TextEncoder; // jsdom ไม่มีใน window — sha256hex ต้องใช้
+    w.matchMedia=()=>({matches:false,addListener(){},removeListener(){}});
+    w.requestAnimationFrame=f=>setTimeout(f,0);
+    w.HTMLCanvasElement.prototype.getContext=()=>({});
+    w.errors=[]; w.addEventListener('error',e=>w.errors.push(e.message));
+  }});
+const w=vc.window,d=w.document;
+setTimeout(async()=>{
+  const out=[];
+  await new Promise(r=>setTimeout(r,350));
+  // 1) ไม่มี session -> ต้องเจอหน้า login, แอปยังไม่โชว์
+  out.push('login shown: '+(d.getElementById('loginOv').style.display==='flex'));
+  out.push('app hidden: '+(d.getElementById('app').style.display!=='block'));
+  // 2) รหัสผิด
+  d.getElementById('lgU').value='boy'; d.getElementById('lgP').value='wrong';
+  await w.doLogin(); await new Promise(r=>setTimeout(r,150));
+  out.push('wrong pass msg: '+d.getElementById('lgMsg').textContent.includes('ไม่ถูกต้อง'));
+  // 3) login พนักงาน boy
+  d.getElementById('lgP').value='1234';
+  await w.doLogin(); await new Promise(r=>setTimeout(r,450));
+  out.push('logged in: '+w.eval("S.user&&S.user.username")+' role='+w.eval("S.user.role"));
+  out.push('login log posted: '+posts.some(p=>p.action==='เข้าสู่ระบบ'&&p.username==='boy'));
+  // 4) เมนูตามสิทธิ์: sum/pv/etc/set ต้องซ่อน
+  const hidden=['sum','pv','etc','set'].every(v=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display==='none');
+  const shown=['dash','income','exp'].every(v=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display!=='none');
+  out.push('nav perms: hidden='+hidden+' shown='+shown);
+  out.push('user chip: '+d.getElementById('sbUser').textContent.includes('บอย'));
+  // 5) dash = view -> มีแบนเนอร์ + เขียนถูกบล็อก
+  out.push('dash banner: '+d.getElementById('view-dash').textContent.includes('ดูอย่างเดียว'));
+  let blocked=false;
+  try{ await w.eval("ups('pnl_expense_daily',[{branch:'JJRD',d:'2026-08-01',supplier_id:1,amount:1}],'branch,d,supplier_id')"); }
+  catch(e){ blocked=String(e.message).includes('view-only'); }
+  out.push('write blocked on view tab: '+blocked+' | no exp post: '+!posts.some(p=>p.exp));
+  // 6) หน้า income = edit -> เขียนได้ + auto log
+  d.querySelector('.sb-item[data-v="income"]').click();
+  await new Promise(r=>setTimeout(r,250));
+  await w.eval("ups('pnl_income_daily',[{branch:'JJRD',d:'2026-08-02',sales_pos_am:5}],'branch,d')");
+  await new Promise(r=>setTimeout(r,150));
+  out.push('income write ok: '+posts.some(p=>p.inc));
+  out.push('auto log บันทึกรายรับ: '+posts.some(p=>p.action==='บันทึกรายรับ'&&p.username==='boy'&&(p.detail||'').includes('2026-08-02')));
+  // 7) พยายามเข้าหน้า set ตรงๆ -> เด้งไปหน้าแรกที่มีสิทธิ์
+  await w.show('set'); await new Promise(r=>setTimeout(r,200));
+  out.push('show(set) redirected: '+w.eval('S.tab')+' (คาด dash)');
+  out.push('errors: '+JSON.stringify(w.errors));
+  console.log(out.join('\n')); process.exit(0);
+},400);
