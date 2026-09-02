@@ -2825,11 +2825,16 @@ async function stkBadge(){
 }
 /* ---------- ให้ P&L รู้จักทั้งสองชื่อ: ชื่อบิล (หลัก) + ชื่อนับ (ตัวเล็กกำกับ) จาก pnl_stock_map ---------- */
 async function loadStkNames(rows){
-  try{ if(!rows) rows=await selAllQ('pnl_stock_map','select=branch,product_id,product_name,pnl_item,active&order=id'); }catch(e){ return; }
+  // แหล่งหลัก = view pnl_stock_names (ชื่อนับ "สด" จาก products ของ jj-stock · jjmk_pnl_stocknames_view.sql)
+  // ยังไม่ได้รัน view -> ตกกลับไปอ่าน pnl_stock_map ตรง (product_name = สำเนา ณ ตอนผูก)
+  if(!rows){
+    try{ rows=(await selAllQ('pnl_stock_names','select=branch,product_id,stock_name,bill_name&order=product_id')).map(r=>({branch:r.branch,product_id:r.product_id,product_name:r.stock_name,pnl_item:r.bill_name,active:true})); S._stkNamesSrc='view'; }
+    catch(e){ try{ rows=await selAllQ('pnl_stock_map','select=branch,product_id,product_name,pnl_item,active&order=id'); S._stkNamesSrc='table'; }catch(e2){ return; } }
+  }
   const m={};
   (rows||[]).forEach(r=>{
     if(!r.active||String(r.product_id||'').startsWith('none:')||!r.pnl_item||r.pnl_item==='-')return;
-    const nm=String(r.product_name||'').trim(); if(!nm)return;
+    const nm=String(r.stock_name||r.product_name||'').trim(); if(!nm)return;
     const a=((m[ocrNorm(r.pnl_item)]??={})[r.branch]??=[]);
     if(!a.includes(nm))a.push(nm);
   });
@@ -2863,7 +2868,7 @@ async function stkLoad(){
     selAll('pnl_bill_items',`select=branch,d,item,unit,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>selAll('pnl_bill_items',`select=branch,d,item,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)).catch(()=>[]),
     selAll('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[])
   ]);
-  if(map) loadStkNames(map);
+  if(map){ const pn={}; (prods||[]).forEach(x=>{ pn[x.id]=x.name; }); loadStkNames(map.map(r=>({...r,stock_name:pn[r.product_id]||r.product_name}))); } // ชื่อนับสดจาก products
   // จับคู่สาขาจากข้อมูลนับสต๊อกเอง (แถวนับมี branch_name ติดมา) — ห้ามใช้ตาราง branches เพราะเป็นของระบบเงินเดือน id คนละชุด
   const want=S.br==='JJRD'?'รัชดา':S.br==='JJLP'?'ลาดพร้าว':null;
   if(!want) return {ok:map!==null, permDenied, noStockBranch:true, prods:[], map:{}, C:{}, B:{}, sales:{}, from, to};

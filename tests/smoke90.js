@@ -1,4 +1,5 @@
-// smoke90: P&L รู้จักทั้งสองชื่อ — ชื่อบิลเป็นหลัก + ชื่อนับ (ระบบนับสต๊อก) ตัวเล็กกำกับ จาก pnl_stock_map
+// smoke90: P&L รู้จักทั้งสองชื่อ — ชื่อบิลเป็นหลัก + ชื่อนับ (ระบบนับสต๊อก) ตัวเล็กกำกับ
+// แหล่งหลัก = view pnl_stock_names (ชื่อนับสด) · ไม่มี view -> ตกกลับ pnl_stock_map (product_name สำเนา)
 // map: หมูสามชั้น(บิล) -> "สามชั้น" (JJRD) / "สามชั้น ลพ" (JJLP) · เห็ด -> "เห็ด" (สะกดเหมือน = ไม่ต้องโชว์)
 //      ปลา -> active=false (ไม่นับ) · น้ำแข็ง -> none:* (จำว่าไม่มีในระบบนับ = ไม่นับ)
 const fs=require('fs');
@@ -14,11 +15,17 @@ const patched=html.replace(/<script src="https:\/\/cdn[^"]*"><\/script>/g,'').re
 const B=(br,d,item,unit,qty,price,sid=1)=>({branch:br,d,supplier_id:sid,item,unit,qty,price,discount:0,bill_discount:0,ship_fee:0,other_fee:0,sort:0,bill_no:1,vat_mode:'none'});
 const bills=[B('JJRD','2026-08-03','หมูสามชั้น','กก.',10,100),B('JJRD','2026-08-03','เห็ด','กก.',5,40),B('JJRD','2026-08-04','ปลา','กก.',2,80),B('JJRD','2026-08-04','น้ำแข็ง','ถุง',3,20)];
 const smap=[
-  {id:1,branch:'JJRD',product_id:'p1',product_name:'สามชั้น',pnl_item:'หมูสามชั้น',bill_unit:'',stock_unit:'กก.',factor:1,active:true},
+  {id:1,branch:'JJRD',product_id:'p1',product_name:'สามชั้น(สำเนาเก่า)',pnl_item:'หมูสามชั้น',bill_unit:'',stock_unit:'กก.',factor:1,active:true},
   {id:2,branch:'JJLP',product_id:'p1L',product_name:'สามชั้น ลพ',pnl_item:'หมูสามชั้น',bill_unit:'',stock_unit:'กก.',factor:1,active:true},
   {id:3,branch:'JJRD',product_id:'p2',product_name:'เห็ด',pnl_item:'เห็ด',bill_unit:'',stock_unit:'กก.',factor:1,active:true},
   {id:4,branch:'JJRD',product_id:'p3',product_name:'ปลาทับทิม',pnl_item:'ปลา',bill_unit:'',stock_unit:'กก.',factor:1,active:false},
   {id:5,branch:'JJRD',product_id:'none:JJRD:น้ำแข็ง',product_name:'(ไม่มีในระบบนับ)',pnl_item:'น้ำแข็ง',bill_unit:'',stock_unit:'',factor:1,active:false}];
+// view = เฉพาะคู่ที่ active และมีในระบบนับจริง · stock_name สดจาก products (p1 เปลี่ยนชื่อแล้ว สำเนาใน map ยังเป็นชื่อเก่า)
+const sview=[
+  {branch:'JJRD',product_id:'p1',stock_name:'สามชั้น',bill_name:'หมูสามชั้น'},
+  {branch:'JJLP',product_id:'p1L',stock_name:'สามชั้น ลพ',bill_name:'หมูสามชั้น'},
+  {branch:'JJRD',product_id:'p2',stock_name:'เห็ด',bill_name:'เห็ด'}];
+let viewDown=false;
 const incRows=[{branch:'JJRD',d:'2026-08-03',sales_pos_am:50000,sales_pos_pm:0}];
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
@@ -28,6 +35,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),headers:{get:()=>null}});
       if(url.includes('pnl_users'))return {ok:false,status:404,text:async()=>'nf',json:async()=>({})};
       if(url.includes('pnl_unit_conv'))return T([]);
+      if(url.includes('pnl_stock_names')){ if(viewDown)return {ok:false,status:404,text:async()=>'relation does not exist',json:async()=>({})}; return T(sview); }
       if(url.includes('pnl_stock_map'))return T(smap);   // ต้องเช็คก่อน products
       if(url.includes('pnl_suppliers'))return T([{id:1,name:'ตลาด',category:'อาหาร',active:true,sort:1,vat_type:'NON-VAT'}]);
       if(url.includes('pnl_branches'))return T([{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]);
@@ -50,12 +58,17 @@ setTimeout(async()=>{
   await sleep(450);
   // 1) แคชชื่อโหลดตอนบูต + helper
   out.push('โหลดแคชตอนบูต: '+(!!w.eval("S.stkNames")&&Object.keys(w.eval("S.stkNames")).length===2));
-  out.push("stkNm สาขาที่ดู (JJRD) = สามชั้น: "+(w.stkNm('หมูสามชั้น')==='สามชั้น'));
+  out.push("อ่านจาก view (ชื่อนับสด ไม่ใช่สำเนาเก่า): "+(w.eval('S._stkNamesSrc')==='view'&&w.stkNm('หมูสามชั้น')==='สามชั้น'));
   out.push("stkNm ALL รวมสองสาขา: "+(w.stkNm('หมูสามชั้น','ALL')==='สามชั้น / สามชั้น ลพ'));
   out.push("ไม่นับ active=false / none:* / ไม่ผูก: "+(w.stkNm('ปลา')===''&&w.stkNm('น้ำแข็ง')===''&&w.stkNm('ไก่')===''));
   out.push("สะกดเหมือนกัน ไม่โชว์ป้าย: "+(w.stkNmHtml('เห็ด')===''&&w.stkNm('เห็ด')==='เห็ด'));
   out.push("ชื่อบิลกลับด้าน (หน้าใช้จริง): "+(w.billNmHtml('หมูสามชั้น','สามชั้น').includes('🧾 หมูสามชั้น')&&w.billNmHtml('เห็ด','เห็ด')===''));
   out.push('ฟัง realtime pnl_stock_map: '+w.eval("RT_TABLES.includes('pnl_stock_map')"));
+  // ยังไม่ได้รัน view -> ตกกลับตาราง pnl_stock_map (ได้ชื่อสำเนา) แล้วกลับมา view ใหม่
+  viewDown=true; await w.loadStkNames();
+  out.push("ไม่มี view -> ตกกลับ pnl_stock_map ได้ชื่อสำเนา: "+(w.eval('S._stkNamesSrc')==='table'&&w.stkNm('หมูสามชั้น')==='สามชั้น(สำเนาเก่า)'&&w.stkNm('ปลา')===''));
+  viewDown=false; await w.loadStkNames();
+  out.push("view กลับมา -> ชื่อสดอีกครั้ง: "+(w.stkNm('หมูสามชั้น')==='สามชั้น'));
   // 2) หน้าการใช้ของ: ป้าย 📦 ข้างชื่อบิล + ค้นหาด้วยชื่อนับได้
   await w.eval("show('usage')"); await sleep(500);
   const rowOf=n=>[...d.querySelectorAll('#useTbl tr.urow')].find(tr=>tr.textContent.includes(n));
