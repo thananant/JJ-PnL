@@ -3233,21 +3233,21 @@ function usageXlsx(){ // ข้อมูลดิบทั้งเดือน 
   const U=S._usage; if(!U||!window.XLSX){ toast('ยังไม่มีข้อมูลให้ส่งออก',true); return; }
   const salesAll=(U.salesG||[]).reduce((a,b)=>a+b,0);
   const p10=q=>salesAll>0?+(q/(salesAll/10000)).toFixed(4):null;
-  const pd=(q,i)=>U.daysG&&U.daysG[i]?+(q/U.daysG[i]).toFixed(3):null;
+  const pd=(q,i)=>(salesAll>0&&U.daysG&&U.daysG[i]>0)?+((q/(salesAll/10000))*((U.salesG[i]/U.daysG[i])/10000)).toFixed(3):null; // ใช้/วันของกลุ่ม = อัตราต่อหมื่น × ยอดขายเฉลี่ย/วันของกลุ่ม (ของใช้ทุกวันตามยอดขาย ไม่อิงวันที่ลงบิล)
   const r2=v=>+(+v).toFixed(2);
   const brName={ALL:'ทุกสาขา',JJRD:'รัชดา',JJLP:'ลาดพร้าว',JJOF:'ออฟฟิศ'}[S.br]||S.br;
   const rows1=Object.values(U.gi||{}).sort((a,b)=>b.baht-a.baht).map(t=>({
     'สินค้า':t.item,'หน่วย':t.unit||'','ปริมาณรวม':r2(t.qty),'มูลค่า (บาท)':r2(t.baht),'จำนวนบรรทัดบิล':t.n,
     'ราคาเฉลี่ย/หน่วย':t.qty?r2(t.baht/t.qty):null,'ต่อ ฿10,000':p10(t.qty),
-    'จ–พฤ ใช้/วัน':pd(t.q3[0],0),'ศ ใช้/วัน':pd(t.q3[1],1),'ส–อา ใช้/วัน':pd(t.q3[2],2),
+    'จ–พฤ ใช้/วัน':pd(t.qty,0),'ศ ใช้/วัน':pd(t.qty,1),'ส–อา ใช้/วัน':pd(t.qty,2),
     '฿/หมื่น':salesAll>0?r2(t.baht/(salesAll/10000)):null,
-    'จ–พฤ ปริมาณ':r2(t.q3[0]),'ศ ปริมาณ':r2(t.q3[1]),'ส–อา ปริมาณ':r2(t.q3[2]),
+    'จ–พฤ ซื้อ (ตามวันบิล)':r2(t.q3[0]),'ศ ซื้อ (ตามวันบิล)':r2(t.q3[1]),'ส–อา ซื้อ (ตามวันบิล)':r2(t.q3[2]),
     'ซัพพลายเออร์':Object.keys(t.sups||{}).map(sid=>(S.core.supById[sid]||{}).name||sid).join(' / ')}));
   const rows2=Object.values(U.g||{}).sort((a,b)=>b.baht-a.baht).map(t=>({
     'ซัพพลายเออร์':(S.core.supById[t.sid]||{}).name||t.sid,'สินค้า':t.item,'หน่วย':t.unit||'',
     'ปริมาณรวม':r2(t.qty),'มูลค่า (บาท)':r2(t.baht),'จำนวนบรรทัดบิล':t.n,'ราคาเฉลี่ย/หน่วย':t.qty?r2(t.baht/t.qty):null,
     'ราคาล่าสุด':r2(t.lastP),'วันที่ซื้อล่าสุด':t.lastD,'ต่อ ฿10,000':p10(t.qty),
-    'จ–พฤ ใช้/วัน':pd(t.q3[0],0),'ศ ใช้/วัน':pd(t.q3[1],1),'ส–อา ใช้/วัน':pd(t.q3[2],2)}));
+    'จ–พฤ ใช้/วัน':pd(t.qty,0),'ศ ใช้/วัน':pd(t.qty,1),'ส–อา ใช้/วัน':pd(t.qty,2)}));
   const wb=XLSX.utils.book_new();
   const add=(rows,name,w)=>{ const ws=XLSX.utils.json_to_sheet(rows); ws['!cols']=w.map(x=>({wch:x})); XLSX.utils.book_append_sheet(wb,ws,name); };
   add(rows1,'รายสินค้า',[34,8,12,14,10,14,12,12,12,12,12,12,12,12,40]);
