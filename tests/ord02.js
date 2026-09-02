@@ -3,10 +3,12 @@
 const fs=require('fs'); const {JSDOM}=require('jsdom');
 const html=fs.readFileSync('jjmk-order.html','utf8').replace(/<link[^>]*fonts[^>]*>/g,'');
 const D='2026-09-02';
-const sups=[{id:5,name:'สมายมีท',sched:{type:'map',map:{'1':3,'3':5,'5':6,'6':1}},lead_ok:true,contact:'',note:'',active:true,sort:1}];
+const sups=[{id:5,name:'สมายมีท',sched:{type:'map',map:{'1':3,'3':5,'5':6,'6':1}},lead_ok:true,contact:'',note:'',active:true,sort:1},
+  {id:6,name:'โค้ก',sched:{type:'days',days:[1],lead:1},lead_ok:true,contact:'',note:'',active:true,sort:2}]; // สั่งได้เฉพาะจันทร์ -> วันพุธยังไม่ถึงรอบ
 const prods=[
  {id:1,branch:'JJRD',name:'หมู',bill_name:'หมูสามชั้น',name_en:'Pork',name_lo:'ໝູ',name_my:'',dept:'ของสด',unit:'ถุง',supplier_id:5,pack_qty:6,pack_unit:'ลัง',order_step:null,order_unit:'',rate:{g0:10,g1:12,g2:15},safety_days:null,max_old:null,active:true,sort:1},
- {id:2,branch:'JJRD',name:'ผัก',bill_name:'ผัก',name_en:'Veg',name_lo:'',name_my:'',dept:'ผัก',unit:'โล',supplier_id:5,pack_qty:null,pack_unit:'',rate:null,max_old:10,active:true,sort:2}];
+ {id:2,branch:'JJRD',name:'ผัก',bill_name:'ผัก',name_en:'Veg',name_lo:'',name_my:'',dept:'ผัก',unit:'โล',supplier_id:5,pack_qty:null,pack_unit:'',rate:null,max_old:10,active:true,sort:2},
+ {id:3,branch:'JJRD',name:'Coke',bill_name:'โค้ก กล่อง',name_en:'Coke',name_lo:'',name_my:'',dept:'บาร์น้ำ',unit:'กล่อง',supplier_id:6,pack_qty:1,pack_unit:'กล่อง',rate:{g0:1,g1:1,g2:1},max_old:null,active:true,sort:3}];
 let counts=[{id:1,branch:'JJRD',product_id:1,d:D,qty:20,out_of_stock:false}];
 let orders=[{id:90,branch:'JJRD',supplier_id:5,order_date:'2026-09-01',deliver_date:'2026-09-03',status:'sent',note:'',ord_order_items:[{id:900,order_id:90,product_id:1,qty:6,packs:1,received_qty:null}]}];
 let nextId=100; const log=[];
@@ -30,14 +32,23 @@ setTimeout(async()=>{
   w.S.D=D; w.S.countD=D; await w.reload(); await w.show('count'); await sleep(200);
   // 1) หน้านับ
   let t=d.getElementById('view').textContent;
-  T('หน้านับ: แผนก + ชื่อ + 🧾 ชื่อบิล + นับแล้ว 1/2',t.includes('ของสด')&&t.includes('หมู')&&t.includes('🧾 หมูสามชั้น')&&t.includes('นับแล้ว 1/2'));
+  T('หน้านับ: แผนก + ชื่อ + 🧾 ชื่อบิล + นับแล้ว 1/3',t.includes('ของสด')&&t.includes('หมู')&&t.includes('🧾 หมูสามชั้น')&&t.includes('นับแล้ว 1/3'));
+  const chips=[...d.querySelectorAll('.dchip')].map(c=>c.textContent.replace(/\s+/g,' ').trim());
+  T('แถบหมวด: ทั้งหมด 3 · ของสด 1 ✓ (นับครบ) · ผัก 1 · บาร์น้ำ 1',chips.some(c=>c.startsWith('ทั้งหมด')&&c.includes('3'))&&chips.some(c=>c.includes('ของสด')&&c.includes('✓'))&&chips.some(c=>c.includes('ผัก'))&&chips.some(c=>c.includes('บาร์น้ำ')));
+  T('Coke ซัพยังไม่ถึงรอบวันนี้ → ซ่อนการ์ด + แจ้ง "1 รายการยังไม่ถึงรอบสั่งวันนี้"',!d.getElementById('cr3')&&t.includes('1 รายการยังไม่ถึงรอบสั่งวันนี้')&&t.includes('โค้ก'));
+  w.S._showND={'บาร์น้ำ':true}; await w.show('count'); T('กด "ดูรายการ" → การ์ด Coke โผล่แบบจาง',!!d.getElementById('cr3')&&d.getElementById('cr3').classList.contains('notdue')); w.S._showND=null; await w.show('count');
+  w.S._dept='ผัก'; await w.show('count'); T('กดหมวดผัก → เห็นเฉพาะผัก',!!d.getElementById('cr2')&&!d.getElementById('cr1')); w.S._dept=null; await w.show('count');
+  w.cntFilter('หมู'); T('ค้นหา "หมู" → ซ่อนผัก โชว์หมู',d.getElementById('cr1').style.display!=='none'&&d.getElementById('cr2').style.display==='none'); w.cntFilter('');
   T('แถวหมูมีค่านับ 20 (saved) · แถวผักว่าง',d.getElementById('cr1').classList.contains('saved')&&d.getElementById('cr1').querySelector('input').value==='20'&&!d.getElementById('cr2').classList.contains('saved'));
   w.S.lang='en'; await w.show('count'); T('สลับภาษา EN: ชื่อ Pork ขึ้น + ชื่อไทยเป็นบรรทัดรอง',d.getElementById('view').textContent.includes('Pork')&&d.getElementById('cr1').querySelector('.sub').textContent.includes('หมู')); w.S.lang='th'; await w.show('count');
   await w.cntSave(2,'4',false); await sleep(50);
   const up=log.find(l=>l.m==='POST'&&l.url.startsWith('ord_counts'));
   T('บันทึกนับผัก 4 → upsert on_conflict=branch,d,product_id',!!up&&up.url.includes('on_conflict=branch,d,product_id')&&up.body[0].product_id===2&&up.body[0].qty===4&&up.body[0].d===D&&up.body[0].branch==='JJRD');
-  T('แถวผักขึ้น saved + นับแล้ว 2/2 โดยไม่ re-render ทั้งหน้า',d.getElementById('cr2').classList.contains('saved')&&d.getElementById('cntProg').textContent.includes('2/2'));
-  await w.cntSave(2,0,true); T('กด "หมด" → out_of_stock true qty 0 · แถวเป็น oos',log.filter(l=>l.url.startsWith('ord_counts')).pop().body[0].out_of_stock===true&&d.getElementById('cr2').classList.contains('oos'));
+  T('การ์ดผักขึ้น saved + คงเหลือ 4 โล + นับแล้ว 2/3 โดยไม่ re-render ทั้งหน้า',d.getElementById('cr2').classList.contains('saved')&&d.getElementById('crl2').textContent.includes('คงเหลือ 4 โล')&&d.getElementById('cntProg').textContent.includes('2/3'));
+  w.cntStep(2,0.5); w.cntStep(2,0.5); await sleep(600);
+  T('ปุ่ม + สองครั้ง (หน่วยโล ทีละ 0.5) → 5 บันทึกครั้งเดียวหลังหยุดกด',log.filter(l=>l.url.startsWith('ord_counts')).pop().body[0].qty===5&&d.getElementById('cr2').querySelector('input').value==='5');
+  w.cntStep(2,-1); await sleep(600); T('ปุ่ม − → 4',d.getElementById('crl2').textContent.includes('คงเหลือ 4 โล'));
+  await w.cntSave(2,0,true); T('กด "หมด" → out_of_stock true qty 0 · แถวเป็น oos',log.filter(l=>l.url.startsWith('ord_counts')).pop().body[0].out_of_stock===true&&d.getElementById('cr2').classList.contains('oos')&&d.getElementById('cr2').querySelector('.stepper .pl').disabled);
   await w.cntSave(2,'4',false);
   // 2) หน้าสั่ง ล็อก PIN
   await w.show('order'); T('หน้าสั่งของล็อก PIN',d.getElementById('view').textContent.includes('PIN'));
