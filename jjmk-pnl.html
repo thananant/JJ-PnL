@@ -2718,7 +2718,10 @@ RENDER.usage = async (el)=>{
         <td class="right">${chipHtml}</td></tr>`;
     }).join('');
   }
-  else S.core.sup.forEach(sp=>{
+  else [...S.core.sup,
+        ...[...new Set(Object.values(g).map(t=>t.sid))].filter(sid=>!S.core.supById[sid])
+           .map(sid=>({id:sid,name:'ซัพ #'+sid+' (ไม่พบในตารางซัพ)',category:''}))
+       ].forEach(sp=>{
     const items=Object.entries(g).filter(([k,t])=>t.sid===sp.id).map(([k,t])=>({k,...t}))
       .sort((a,b)=>b.baht-a.baht);
     if(!items.length)return;
@@ -2750,7 +2753,7 @@ RENDER.usage = async (el)=>{
   });
   el.innerHTML=`
   <div class="card">
-    <h3>การใช้ของรายสินค้า${ALL?' · รวมทุกสาขา':''} <span class="sp">${monthLabel(S.m)}</span></h3>
+    <h3>การใช้ของรายสินค้า${ALL?' · รวมทุกสาขา':''} <span class="sp">${monthLabel(S.m)} · ${S.usageMode==='cmp'?Object.keys(gc).length+' รายการ':S.usageMode==='sup'?new Set(Object.values(g).map(t=>t.sid)).size+' ซัพ · '+Object.keys(g).length+' รายการ':Object.keys(gi).length+' รายการ'} (เฉพาะที่มีบิลเดือนนี้)</span></h3>
     <div class="useg">
       <button class="${S.usageMode==='item'?'on':''}" onclick="usageModeSet('item')">รายสินค้า (รวมทุกซัพ)</button>
       <button class="${S.usageMode==='sup'?'on':''}" onclick="usageModeSet('sup')">แยกตามซัพ</button>
@@ -4166,7 +4169,7 @@ function uconvModal(nk){
     <div class="xs" style="margin-bottom:8px">หน่วยหลัก: <select id="ucPrim" onchange="S._uconvPick=this.value;uconvModal('${nk}')" style="width:auto;display:inline-block;padding:6px 10px">${info.units.map(u=>`<option ${u===prim?'selected':''}>${esc(u)}</option>`).join('')}</select></div>
     ${others.map((u,i)=>{
       const c=(S._uconv||{})[nk+'|'+u];
-      return `<div style="margin:6px 0">1 ${esc(u)} = <input id="ucF${i}" type="text" inputmode="decimal" value="${c&&c.to===prim?c.f:''}" placeholder="เช่น 12" style="width:80px;text-align:right;display:inline-block"> ${esc(prim)}</div>`;
+      return `<div style="margin:6px 0">1 ${esc(u)} = <input id="ucF${i}" type="text" inputmode="decimal" autocomplete="off" name="ucf_${Date.now()%9999}_${i}" value="${c&&c.to===prim?c.f:''}" placeholder="เช่น 12" style="width:80px;text-align:right;display:inline-block"> ${esc(prim)}</div>`;
     }).join('')}
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn sm2" onclick="uconvSave('${nk}')">บันทึก</button>

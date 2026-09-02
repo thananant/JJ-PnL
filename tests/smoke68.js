@@ -53,6 +53,8 @@ setTimeout(async()=>{
   q.value='หมู'; w.usageFilter('หมู');
   out.push('ค้น "หมู" → 3 รายการ เฉพาะกลุ่ม Smilemeat: '+(JSON.stringify(names())===JSON.stringify(['หมูสามชั้น','หมูสันคอ','มันหมู'])&&vis('tr.ughead').length===1&&vis('tr.ughead')[0].textContent.includes('Smilemeat')));
   out.push('ยอดกลุ่ม Smilemeat ยังเต็ม 2,574 · รวมที่ค้นพบ (3 รายการ) 2,574 · ปุ่มล้างโชว์: '+(vis('tr.ughead')[0].querySelector('.usub').textContent==='2,574'&&totL()==='รวมที่ค้นพบ (3 รายการ)'&&tot()==='2,574'&&d.getElementById('useQx').style.display===''));
+  // หัวการ์ดบอกจำนวน: โหมดแยกตามซัพ = X ซัพ · Y รายการ
+  out.push('หัวการ์ดนับจำนวน ซัพ/รายการ: '+/\d+ ซัพ · \d+ รายการ/.test(d.getElementById('view-usage').textContent));
   // หลายคำ: "หมู สาม" → เฉพาะหมูสามชั้น · ยอดกลุ่มคิดเฉพาะที่แสดง 1,500
   w.usageFilter('หมู สาม');
   out.push('ค้น "หมู สาม" → หมูสามชั้น อย่างเดียว · ยอดกลุ่ม 1,500: '+(JSON.stringify(names())===JSON.stringify(['หมูสามชั้น'])&&vis('tr.ughead')[0].querySelector('.usub').textContent==='1,500'&&tot()==='1,500'));
