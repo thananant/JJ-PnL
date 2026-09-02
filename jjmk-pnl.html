@@ -184,6 +184,7 @@ details>summary::-webkit-details-marker{display:none}
 .ocrinline select,.ocrinline input{padding:6px 8px;font-size:12.5px}
 .ocrinline select{max-width:200px}
 .dtcmp{grid-column:1/-1;font-size:11px;color:var(--mut);padding:2px 2px 6px;border-bottom:1px solid var(--line);margin-top:-6px}
+.stknm{white-space:nowrap;margin-left:2px;font-weight:400}
 .useg{display:flex;gap:6px;margin:-2px 0 10px}
 .useg button{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 13px;font-size:12px;font-weight:700}
 .useg button.on{background:var(--ink);border-color:var(--ink);color:#fff}
@@ -725,6 +726,7 @@ async function loadCore(){
     b.min = Math.min(...b.list);
   });
   const units=await sel('pnl_units','select=*&order=sort').catch(()=>null);
+  await loadStkNames(); // ชื่อนับ (ระบบนับสต๊อก) ไว้กำกับข้างชื่อบิลทุกหน้า
   S.core = { units, sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix,
     branches:(brs&&brs.length?brs:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]),
     fixGroups: fgs||[] };
@@ -1005,7 +1007,7 @@ async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; S.benchCache={}; aw
    กติกา: หน้าอ่านอย่างเดียว (แดชบอร์ด/สรุป/การใช้ของ/รายละเอียดบิล) รีเฟรชให้เองตอนไม่ได้พิมพ์อยู่
           หน้ากรอก (รายรับ/รายจ่าย/PV) ขึ้นแถบ "แตะเพื่อโหลดใหม่" ไม่ทับของที่พิมพ์ค้าง
           หน้าบันทึกบิล รีเฟรชเฉพาะลิสต์ประวัติ/รายการบิล + เตือนถ้าบิลที่เปิดอยู่โดนแก้จากเครื่องอื่น */
-const RT_TABLES=['pnl_bill_items','pnl_expense_daily','pnl_income_daily','pnl_cash_expenses','pnl_shopee','pnl_month_meta','pnl_fixed_monthly'];
+const RT_TABLES=['pnl_bill_items','pnl_expense_daily','pnl_income_daily','pnl_cash_expenses','pnl_shopee','pnl_month_meta','pnl_fixed_monthly','pnl_stock_map'];
 let _rtLive=false,_rtT=null,_rtPend=false;
 function rtBusyForm(){
   const a=document.activeElement;
@@ -1030,13 +1032,14 @@ function rtStart(){
 function rtEvent(){ clearTimeout(_rtT); _rtT=setTimeout(rtApply,1200); } // รวมหลายเหตุการณ์ติด ๆ กันเป็นรอบเดียว
 function rtTick(){ // โพลสำรองตอน Realtime ยังไม่เปิด: รีเฟรชเงียบ ๆ เฉพาะหน้าดูอย่างเดียว
   if(_rtLive||document.hidden||rtBusyForm())return;
-  if(['dash','sum','usage','vatrep','actual'].includes(S.tab)){ S.cache={}; S.benchCache={}; show(S.tab); stkBadge(); }
+  if(['dash','sum','usage','vatrep','actual'].includes(S.tab)){ S.cache={}; S.benchCache={}; loadStkNames().then(()=>show(S.tab)); stkBadge(); }
   else if(S.tab==='detail'){ dtMonthList(); dtHist(); }
 }
 async function rtApply(){
   _rtPend=false;
   if(document.hidden){ _rtPend=true; return; }
   S.cache={}; S.benchCache={};
+  await loadStkNames();
   const v=S.tab;
   if(v==='detail'){
     dtMonthList(); dtHist();
@@ -2677,8 +2680,8 @@ RENDER.usage = async (el)=>{
       if(x.rRD>0&&x.rLP>0){ const df=(x.rLP-x.rRD)/x.rRD;
         chip=`<span class="chip ${Math.abs(df)>0.2?'bad':'mid'}" title="อัตราใช้ต่อ ฿10,000 ของลาดพร้าว เทียบรัชดา">${df>0?'▲':'▼'} ${pctF(Math.abs(df))}</span>`; }
       else chip=`<span class="chip mid">${x.rRD>0?'เฉพาะรัชดา':'เฉพาะลาดพร้าว'}</span>`;
-      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${x.rd.baht+x.lp.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
-        <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span>${mixSet.has(ocrNorm(x.item))?`<span class="chip bad" style="cursor:pointer;margin-left:6px" onclick="event.stopPropagation();uconvModal('${ocrNorm(x.item)}')" title="สินค้าเดียวกันลงบิลหลายหน่วย — ตั้งอัตราแปลงครั้งเดียว ระบบจะรวมเป็นบรรทัดเดียวให้">⚠ หน่วยปน</span>`:''}</td>
+      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+stkNm(x.item)).toLowerCase())}" data-grp="all" data-baht="${x.rd.baht+x.lp.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+        <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span>${stkNmHtml(x.item)}${mixSet.has(ocrNorm(x.item))?`<span class="chip bad" style="cursor:pointer;margin-left:6px" onclick="event.stopPropagation();uconvModal('${ocrNorm(x.item)}')" title="สินค้าเดียวกันลงบิลหลายหน่วย — ตั้งอัตราแปลงครั้งเดียว ระบบจะรวมเป็นบรรทัดเดียวให้">⚠ หน่วยปน</span>`:''}</td>
         <td class="n b">${x.rRD>0?fq(x.rRD):'–'}</td>
         <td class="n b">${x.rLP>0?fq(x.rLP):'–'}</td>
         <td class="right">${chip}</td>
@@ -2700,13 +2703,13 @@ RENDER.usage = async (el)=>{
         const nm=(S.core.supById[p2.sid]||{}).name||('#'+p2.sid);
         return `<span style="white-space:nowrap;${idx===0&&priced.length>1?'color:var(--ok);font-weight:700':''}">${idx===0&&priced.length>1?'✓':''}${esc(nm)} ${fmt(p2.lastP,2)}</span>`;
       }).join('<span class="mut"> · </span>');
-      if(K10) return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
-        <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span>${mixSet.has(ocrNorm(x.item))?`<span class="chip bad" style="cursor:pointer;margin-left:6px" onclick="event.stopPropagation();uconvModal('${ocrNorm(x.item)}')" title="สินค้าเดียวกันลงบิลหลายหน่วย — ตั้งอัตราแปลงครั้งเดียว ระบบจะรวมเป็นบรรทัดเดียวให้">⚠ หน่วยปน</span>`:''}</td>
+      if(K10) return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+stkNm(x.item)).toLowerCase())}" data-grp="all" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+        <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span>${stkNmHtml(x.item)}${mixSet.has(ocrNorm(x.item))?`<span class="chip bad" style="cursor:pointer;margin-left:6px" onclick="event.stopPropagation();uconvModal('${ocrNorm(x.item)}')" title="สินค้าเดียวกันลงบิลหลายหน่วย — ตั้งอัตราแปลงครั้งเดียว ระบบจะรวมเป็นบรรทัดเดียวให้">⚠ หน่วยปน</span>`:''}</td>
         <td class="n b">${p10(x.qty,salesAll)}</td>
         <td class="n">${pDay(x.qty,0)}</td><td class="n">${pDay(x.qty,1)}</td><td class="n">${pDay(x.qty,2)}</td>
         <td class="n">${b10(x.baht,salesAll)}</td><td></td></tr>`;
-      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc(x.item.toLowerCase())}" data-grp="all" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
-        <td>${esc(x.item)}</td>
+      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+stkNm(x.item)).toLowerCase())}" data-grp="all" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+        <td>${esc(x.item)}${stkNmHtml(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span>${mixSet.has(ocrNorm(x.item))?`<span class="chip bad" style="cursor:pointer;margin-left:6px" onclick="event.stopPropagation();uconvModal('${ocrNorm(x.item)}')" title="สินค้าเดียวกันลงบิลหลายหน่วย — ตั้งอัตราแปลงครั้งเดียว ระบบจะรวมเป็นบรรทัดเดียวให้">⚠ หน่วยปน</span>`:''}</td>
         <td class="n">${fq(perDay)}<span class="xs mut">/วัน</span></td>
         <td class="n mut">${sids.length>1?`<span class="chip warn" title="ซื้อจาก ${sids.length} ซัพในเดือนนี้">${sids.length} ซัพ</span>`:sids.length}</td>
@@ -2730,13 +2733,13 @@ RENDER.usage = async (el)=>{
       const pv=pg[x.k]; let chipHtml='';
       if(pv>0){ const df=(x.qty-pv)/pv;
         chipHtml=`<span class="chip ${df>0.03?'bad':df<-0.03?'ok':'mid'}" title="เทียบเดือนก่อน ${fq(pv)} ${esc(x.unit)}">${df>0?'▲':df<0?'▼':''} ${pctF(Math.abs(df))}</span>`; }
-      if(K10) return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
-        <td style="padding-left:18px">${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span></td>
+      if(K10) return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+sp.name+' '+stkNm(x.item)).toLowerCase())}" data-grp="${sp.id}" data-baht="${salesAll>0?x.baht/(salesAll/10000):0}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
+        <td style="padding-left:18px">${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span>${stkNmHtml(x.item)}</td>
         <td class="n b">${p10(x.qty,salesAll)}</td>
         <td class="n">${pDay(x.qty,0)}</td><td class="n">${pDay(x.qty,1)}</td><td class="n">${pDay(x.qty,2)}</td>
         <td class="n">${b10(x.baht,salesAll)}</td><td></td></tr>`;
-      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+sp.name).toLowerCase())}" data-grp="${sp.id}" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
-        <td style="padding-left:18px">${esc(x.item)}</td>
+      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+sp.name+' '+stkNm(x.item)).toLowerCase())}" data-grp="${sp.id}" data-baht="${x.baht}" style="cursor:pointer" onclick="usageDetail('${x.k.replace(/'/g,"\\'")}')">
+        <td style="padding-left:18px">${esc(x.item)}${stkNmHtml(x.item)}</td>
         <td class="n b">${fq(x.qty)} <span class="xs mut">${esc(x.unit)}</span></td>
         <td class="n">${fq(perDay)}<span class="xs mut">/วัน</span></td>
         <td class="n mut">${x.n}</td>
@@ -2820,6 +2823,32 @@ async function stkBadge(){
     if(dn) dn.innerHTML=n>0?`<div class="dupbox" style="cursor:pointer;margin-bottom:12px" onclick="show('actual')">🔗 <b>ระบบนับสต๊อกมีสินค้าที่ยังไม่ได้ผูกชื่อ ${n} ตัว</b> <span class="xs mut">— สาขาเพิ่มของใหม่/ยังเก็บตกไม่ครบ แตะเพื่อไปผูก (ผูกครั้งเดียวจำตลอด)</span></div>`:'';
   }catch(e){}
 }
+/* ---------- ให้ P&L รู้จักทั้งสองชื่อ: ชื่อบิล (หลัก) + ชื่อนับ (ตัวเล็กกำกับ) จาก pnl_stock_map ---------- */
+async function loadStkNames(rows){
+  try{ if(!rows) rows=await selAllQ('pnl_stock_map','select=branch,product_id,product_name,pnl_item,active&order=id'); }catch(e){ return; }
+  const m={};
+  (rows||[]).forEach(r=>{
+    if(!r.active||String(r.product_id||'').startsWith('none:')||!r.pnl_item||r.pnl_item==='-')return;
+    const nm=String(r.product_name||'').trim(); if(!nm)return;
+    const a=((m[ocrNorm(r.pnl_item)]??={})[r.branch]??=[]);
+    if(!a.includes(nm))a.push(nm);
+  });
+  S.stkNames=m;
+}
+function stkNm(item,br){ // ชื่อในระบบนับของสินค้าบิลชื่อนี้ (สาขาที่ดูอยู่ · ALL = รวมทั้งสองสาขา) — ว่าง = ยังไม่ผูก
+  const e=(S.stkNames||{})[ocrNorm(item)]; if(!e)return '';
+  const b0=br||S.br; const brs=b0==='ALL'?Object.keys(e):[b0];
+  const out=[]; brs.forEach(b=>(e[b]||[]).forEach(n2=>{ if(!out.includes(n2))out.push(n2); }));
+  return out.join(' / ');
+}
+function stkNmHtml(item,br){ // ป้ายเล็ก 📦 ชื่อนับ — ไม่โชว์ถ้าสะกดเหมือนชื่อบิลอยู่แล้ว
+  const n2=stkNm(item,br); if(!n2||ocrNorm(n2)===ocrNorm(item))return '';
+  return ` <span class="xs mut stknm" title="ชื่อในระบบนับสต๊อก (ผูกไว้ในหน้าใช้จริง)">📦 ${esc(n2)}</span>`;
+}
+function billNmHtml(pnlItem,stockName){ // กลับด้าน: หน้าใช้จริง (ชื่อนับเป็นหลัก) โชว์ชื่อบิลตัวเล็ก
+  if(!pnlItem||pnlItem==='-'||ocrNorm(pnlItem)===ocrNorm(stockName))return '';
+  return ` <span class="xs mut stknm" title="ชื่อในบิล (P&L)">🧾 ${esc(pnlItem)}</span>`;
+}
 function stkAddDays(ds,n){ const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate()+n); const z=x=>String(x).padStart(2,'0'); return t.getFullYear()+'-'+z(t.getMonth()+1)+'-'+z(t.getDate()); }
 function stkRound05(v){ if(!(v>0))return 0; const u=Math.ceil(v); const r=u%5; return r===0?u:(u%10===0?u:u+(5-(u%5))); } // ปัดขึ้นให้ลงท้าย 0/5 (ไว้ใช้เฟส 2)
 async function stkLoad(){
@@ -2834,6 +2863,7 @@ async function stkLoad(){
     selAll('pnl_bill_items',`select=branch,d,item,unit,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>selAll('pnl_bill_items',`select=branch,d,item,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)).catch(()=>[]),
     selAll('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[])
   ]);
+  if(map) loadStkNames(map);
   // จับคู่สาขาจากข้อมูลนับสต๊อกเอง (แถวนับมี branch_name ติดมา) — ห้ามใช้ตาราง branches เพราะเป็นของระบบเงินเดือน id คนละชุด
   const want=S.br==='JJRD'?'รัชดา':S.br==='JJLP'?'ลาดพร้าว':null;
   if(!want) return {ok:map!==null, permDenied, noStockBranch:true, prods:[], map:{}, C:{}, B:{}, sales:{}, from, to};
@@ -3004,7 +3034,7 @@ RENDER.actual = async (el)=>{
       ${disp.map(({r,i,p:L})=>{
         const q=V==='last'?r.lastQty:(L?L.q1:null);
         return `<tr style="cursor:pointer" onclick="stkDetail(${i})">
-          <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span></td>
+          <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span>${billNmHtml(r.mp&&r.mp.pnl_item,r.pr.name)}</td>
           <td class="n xs mut">${L?`${thDate(L.Pd)}→${thDate(L.Cd)}`:'–'}</td>
           <td class="n b" ${L&&L.use<0?'style="color:var(--red)" title="ติดลบ = มีของเข้าที่ระบบยังไม่รู้ (บิลยังไม่ลง / ของครัวกลาง-โอนสาขาไม่มีบิล) หรือนับ/ผูกพลาด"':''}>${L?fq(L.use):'–'}${L&&L.use<0?' ⚠':''}</td>
           <td class="n">${L&&L.p10!=null?fq(L.p10):'–'}</td>
@@ -3052,7 +3082,7 @@ function stkAutoHtml(rows,st){
     const thin=x.n[D]<2;
     return `<tr>
       <td><input type="checkbox" class="autock" data-pid="${esc(x.r.pr.id)}" data-sf="${sf}" data-mx="${mx}" ${thin?'':'checked'} onchange="stkAutoCnt()"></td>
-      <td><b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${thin?` <span class="chip mid" title="มีข้อมูลวันนี้แค่ ${x.n[D]} จุด — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}</td>
+      <td><b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${billNmHtml(x.r.mp&&x.r.mp.pnl_item,x.r.pr.name)}${thin?` <span class="chip mid" title="มีข้อมูลวันนี้แค่ ${x.n[D]} จุด — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}</td>
       <td class="n">${fmt(base,2)} <span class="xs mut">· ${x.n[D]} จุด</span></td>
       <td class="n">${cs?fmt(cs,0):'–'} → <b ${sf!==cs?'style="color:var(--red)"':''}>${sf}</b></td>
       <td class="n">${cm?fmt(cm,0):'–'} → <b ${mx!==cm?'style="color:var(--red)"':''}>${mx}</b></td>
@@ -3237,21 +3267,21 @@ function usageXlsx(){ // ข้อมูลดิบทั้งเดือน 
   const r2=v=>+(+v).toFixed(2);
   const brName={ALL:'ทุกสาขา',JJRD:'รัชดา',JJLP:'ลาดพร้าว',JJOF:'ออฟฟิศ'}[S.br]||S.br;
   const rows1=Object.values(U.gi||{}).sort((a,b)=>b.baht-a.baht).map(t=>({
-    'สินค้า':t.item,'หน่วย':t.unit||'','ปริมาณรวม':r2(t.qty),'มูลค่า (บาท)':r2(t.baht),'จำนวนบรรทัดบิล':t.n,
+    'สินค้า':t.item,'หน่วย':t.unit||'','ชื่อนับ':stkNm(t.item),'ปริมาณรวม':r2(t.qty),'มูลค่า (บาท)':r2(t.baht),'จำนวนบรรทัดบิล':t.n,
     'ราคาเฉลี่ย/หน่วย':t.qty?r2(t.baht/t.qty):null,'ต่อ ฿10,000':p10(t.qty),
     'จ–พฤ ใช้/วัน':pd(t.qty,0),'ศ ใช้/วัน':pd(t.qty,1),'ส–อา ใช้/วัน':pd(t.qty,2),
     '฿/หมื่น':salesAll>0?r2(t.baht/(salesAll/10000)):null,
     'จ–พฤ ซื้อ (ตามวันบิล)':r2(t.q3[0]),'ศ ซื้อ (ตามวันบิล)':r2(t.q3[1]),'ส–อา ซื้อ (ตามวันบิล)':r2(t.q3[2]),
     'ซัพพลายเออร์':Object.keys(t.sups||{}).map(sid=>(S.core.supById[sid]||{}).name||sid).join(' / ')}));
   const rows2=Object.values(U.g||{}).sort((a,b)=>b.baht-a.baht).map(t=>({
-    'ซัพพลายเออร์':(S.core.supById[t.sid]||{}).name||t.sid,'สินค้า':t.item,'หน่วย':t.unit||'',
+    'ซัพพลายเออร์':(S.core.supById[t.sid]||{}).name||t.sid,'สินค้า':t.item,'หน่วย':t.unit||'','ชื่อนับ':stkNm(t.item),
     'ปริมาณรวม':r2(t.qty),'มูลค่า (บาท)':r2(t.baht),'จำนวนบรรทัดบิล':t.n,'ราคาเฉลี่ย/หน่วย':t.qty?r2(t.baht/t.qty):null,
     'ราคาล่าสุด':r2(t.lastP),'วันที่ซื้อล่าสุด':t.lastD,'ต่อ ฿10,000':p10(t.qty),
     'จ–พฤ ใช้/วัน':pd(t.qty,0),'ศ ใช้/วัน':pd(t.qty,1),'ส–อา ใช้/วัน':pd(t.qty,2)}));
   const wb=XLSX.utils.book_new();
   const add=(rows,name,w)=>{ const ws=XLSX.utils.json_to_sheet(rows); ws['!cols']=w.map(x=>({wch:x})); XLSX.utils.book_append_sheet(wb,ws,name); };
-  add(rows1,'รายสินค้า',[34,8,12,14,10,14,12,12,12,12,12,12,12,12,40]);
-  add(rows2,'แยกตามซัพ',[26,34,8,12,14,10,14,12,14,12,12,12,12]);
+  add(rows1,'รายสินค้า',[34,8,24,12,14,10,14,12,12,12,12,12,12,12,12,40]);
+  add(rows2,'แยกตามซัพ',[26,34,8,24,12,14,10,14,12,14,12,12,12,12]);
   if(S.br==='ALL'&&U.gc){
     const sRD=(U.salesBr||{}).JJRD||0, sLP=(U.salesBr||{}).JJLP||0;
     const rate=(q,s2)=>s2>0?+(q/(s2/10000)).toFixed(4):null;
@@ -3316,7 +3346,7 @@ function usagePdfBuild(keys){
     const more=hist.length-rows.length;
     return `<section class="ppage">
       <h2>${esc(x.item)} <span style="font-weight:400;font-size:13px">(${esc(x.unit||'')})</span></h2>
-      <div class="pmeta">${monthLabel(S.m)} · สาขา ${S.br==='ALL'?'รวมทุกสาขา':(S.br==='JJRD'?'รัชดา':'ลาดพร้าว')} · ซัพพลายเออร์: ${sups.filter(Boolean).map(esc).join(', ')||'–'} · จริงใจหมูกระทะ</div>
+      <div class="pmeta">${monthLabel(S.m)} · สาขา ${S.br==='ALL'?'รวมทุกสาขา':(S.br==='JJRD'?'รัชดา':'ลาดพร้าว')} · ซัพพลายเออร์: ${sups.filter(Boolean).map(esc).join(', ')||'–'}${stkNm(x.item)?` · ชื่อในระบบนับ: ${esc(stkNm(x.item))}`:''} · จริงใจหมูกระทะ</div>
       <div class="pgrid">
         <div class="pbox"><b class="h">📦 การสั่งซื้อเดือนนี้</b>
           ซื้อรวม <b>${fq(x.qty)} ${esc(x.unit||'')}</b> · ${x.n} ครั้ง<br>มูลค่า <b>฿${fmtI(x.baht)}</b><br>เฉลี่ย ${dd?fq(x.qty/dd):'–'} ${esc(x.unit||'')}/วัน (${dd} วันขาย)</div>
@@ -3398,7 +3428,7 @@ function usageDetailItem(k){
   const hist=t.hist.slice().sort((a,b)=>b.d.localeCompare(a.d));
   const avgP=t.qty?t.baht/t.qty:0;
   const priced=Object.entries(t.sups).map(([sid,x])=>({sid:parseInt(sid),...x})).sort((a,b)=>a.lastP-b.lastP);
-  openModal(`<h3>${esc(t.item)} <span class="sp">รวม ${priced.length} ซัพ</span></h3>
+  openModal(`<h3>${esc(t.item)}${stkNmHtml(t.item)} <span class="sp">รวม ${priced.length} ซัพ</span></h3>
     <div class="sm mut" style="margin:-6px 0 10px">ใช้รวม <b>${fmt(t.qty,Math.abs(t.qty%1)>0.004?2:0)} ${esc(t.unit)}</b> · เฉลี่ย ${fmt(t.qty/U.dd,2)}/วัน · ราคาเฉลี่ยรวม ฿${fmt(avgP,2)}/${esc(t.unit)}</div>
     <div style="height:190px;margin-bottom:10px"><canvas id="dtlChart"></canvas></div>
     <div class="twrap"><table>
@@ -3423,7 +3453,7 @@ function usageDetail(k){
   const t=U.g[k]; const sp=S.core.supById[t.sid]||{};
   const hist=t.hist.slice().sort((a,b)=>b.d.localeCompare(a.d));
   const avgP=t.qty?t.baht/t.qty:0;
-  openModal(`<h3>${esc(t.item)} <span class="sp">${esc(sp.name||'')}</span></h3>
+  openModal(`<h3>${esc(t.item)}${stkNmHtml(t.item)} <span class="sp">${esc(sp.name||'')}</span></h3>
     <div class="sm mut" style="margin:-6px 0 10px">รวม <b>${fmt(t.qty,Math.abs(t.qty%1)>0.004?2:0)} ${esc(t.unit)}</b> · เฉลี่ย ${fmt(t.qty/U.dd,2)}/วัน · ราคาเฉลี่ย ฿${fmt(avgP,2)}/${esc(t.unit)}</div>
     <div style="height:190px;margin-bottom:10px"><canvas id="dtlChart"></canvas></div>
     <div class="twrap" style="max-height:44dvh;overflow-y:auto"><table>
@@ -3525,7 +3555,7 @@ async function dtHist(){
     S._dtAll=await sel('pnl_bill_items',`select=supplier_id,item,unit,price,d&branch=eq.${S.br}&order=d.desc&limit=800`).catch(()=>[]);
     const dl=document.getElementById('dtItemsDL');
     if(dl){ const names=[...new Set([...S._dtCat.map(c2=>c2.item),...S._dtRows.map(r=>r.item),...S._dtAll.map(r=>r.item)])];
-      dl.innerHTML=names.map(i=>`<option value="${esc(i)}">`).join(''); }
+      dl.innerHTML=names.map(i=>{ const sn=stkNm(i); return `<option value="${esc(i)}"${sn&&ocrNorm(sn)!==ocrNorm(i)?` label="📦 ${esc(sn)}"`:''}>`; }).join(''); }
   }catch(e){ S._dtRows=[]; S._dtCat=[]; S._dtAll=[]; }
 }
 function dtCross(item){ // ราคาล่าสุด "ก่อนวันบิล" ของสินค้าชื่อนี้ แยกรายซัพ (เรียงถูก->แพง)
@@ -3538,17 +3568,21 @@ function dtCross(item){ // ราคาล่าสุด "ก่อนวัน
   });
   return out.sort((a,b)=>a.price-b.price);
 }
-function dtCmpFill(i){
+function dtCmpFill(i){ // แถบเล็กใต้แถว: 📦 ชื่อนับ (ถ้าผูกไว้และสะกดต่าง) + 💡 เทียบราคาข้ามซัพ
   const el=document.getElementById('dtc'+i); if(!el)return;
   const item=(S.dtLines[i]&&S.dtLines[i].item||'').trim();
   const cs=item?dtCross(item):[];
-  if(cs.length<2){ el.innerHTML=''; el.style.display='none'; return; }
-  el.style.display='';
-  el.innerHTML='💡 เทียบราคา: '+cs.map((c2,idx)=>{
+  const sn=item?stkNm(item):'';
+  const parts=[];
+  if(sn&&ocrNorm(sn)!==ocrNorm(item)) parts.push(`📦 ชื่อนับ: <b>${esc(sn)}</b>`);
+  if(cs.length>=2) parts.push('💡 เทียบราคา: '+cs.map((c2,idx)=>{
     const nm=(S.core.supById[c2.sid]||{}).name||('#'+c2.sid);
     const cur=c2.sid===S.dtSup;
     return `<span style="${idx===0?'color:var(--ok);font-weight:700':''}">${idx===0?'✓ ':''}${esc(nm)}${cur?' (ซัพนี้)':''} ฿${fmt(c2.price,2)}</span>`;
-  }).join(' · ');
+  }).join(' · '));
+  if(!parts.length){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='';
+  el.innerHTML=parts.join(' <span class="mut">│</span> ');
 }
 function dtAsOf(){ // สินค้า -> {unit,price,disc} จากบิลล่าสุด "ก่อนวันที่กำลังลง" (ไม่เอาราคาอนาคต)
   const m={};

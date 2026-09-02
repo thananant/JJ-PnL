@@ -1,4 +1,4 @@
-// smoke72: อัปเดตสดหลายเครื่อง — Realtime subscribe 7 ตาราง · เหตุการณ์เข้ามา:
+// smoke72: อัปเดตสดหลายเครื่อง — Realtime subscribe 8 ตาราง (pnl_* + pnl_stock_map) · เหตุการณ์เข้ามา:
 //   หน้าดูอย่างเดียว (usage) ว่างมือ = รีเฟรชเอง · กำลังพิมพ์ = แถบ "แตะเพื่อโหลดใหม่" ไม่ทับฟอร์ม · หน้ากรอก (income) = แถบเสมอ
 //   หน้าบันทึกบิล: ลิสต์รีเฟรช + เตือนถ้าบิลที่เปิดโดนแก้ · dtSave เช็คสด: ถามก่อนทับ + ยอดวันรวมนับบิลที่เครื่องอื่นเพิ่งลง
 const fs=require('fs');
@@ -48,7 +48,7 @@ const fire=()=>w.__rtH[0].h({eventType:'UPDATE'}); // ยิงเหตุก�
 setTimeout(async()=>{
   const out=[];
   await sleep(500);
-  out.push('subscribe ครบ 7 ตาราง + สถานะ live: '+(w.__rtH.length===7&&w.__rtH.some(x=>x.flt.table==='pnl_bill_items')&&w.eval('_rtLive===true')&&w.__sbUrl.includes('supabase.co')));
+  out.push('subscribe ครบ 8 ตาราง (รวม pnl_stock_map) + สถานะ live: '+(w.__rtH.length===8&&w.__rtH.some(x=>x.flt.table==='pnl_bill_items')&&w.__rtH.some(x=>x.flt.table==='pnl_stock_map')&&w.eval('_rtLive===true')&&w.__sbUrl.includes('supabase.co')));
   // 1) หน้าดูอย่างเดียว (usage) ว่างมือ -> เหตุการณ์เข้า = รีเฟรชเอง
   await w.eval("show('usage')"); await sleep(300);
   w.eval("const _ou=RENDER.usage; RENDER.usage=async el=>{window.__usageN=(window.__usageN||0)+1; return _ou(el);}");
