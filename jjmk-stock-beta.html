@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b53 — เพิ่มสินค้าจากตั้งค่าที่เดียว + ล็อกชื่อ/หน่วยตามแม่บท</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b54 — ผูกชื่อนับ↔ชื่อบิลสมบูรณ์ + อัตราแปลงหน่วยบิล→หน่วยนับ + การใช้ของจากบิลจริง</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -2568,16 +2568,17 @@ function openUsage(){
         <select class="u_b">${bOpts}</select>
         <div style="display:flex;gap:6px;align-items:center"><input type="date" class="u_f" value="${iso(from7)}" style="flex:1;min-width:0"><span>→</span><input type="date" class="u_t" value="${iso(today)}" style="flex:1;min-width:0"></div>
         <select class="u_m"><option value="sum">รวมทั้งช่วง (ต่อสินค้า)</option><option value="day">รายวัน</option></select>
+        <select class="u_src"><option value="auto">ของเข้า: บิลจริงก่อน (อัตโนมัติ)</option><option value="rc">ของเข้า: ใบสั่ง/รับจริงเท่านั้น</option><option value="bill">ของเข้า: บิลซัพเท่านั้น</option></select>
       </div>
       <button class="act wide u_go" style="background:var(--red);color:#fff;border:none;margin:8px 0">คำนวณการใช้ของ</button>
-      <p class="hint" style="margin:0 0 6px">สูตร: นับ + ของเข้า − นับครั้งถัดไป · ของเข้า = ยอดที่<b>ส่งใบสั่งไลน์จริง</b> (หรือ<b style="color:#1559c7">รับจริง</b>ถ้ากรอก) เทียบตามวันของถึง · ติดลบ = รับของนอกระบบ/นับเพี้ยน</p>
+      <p class="hint" style="margin:0 0 6px">สูตร: นับ + ของเข้า − นับครั้งถัดไป · ของเข้า = <b style="color:#1a7f37">🧾 บิลซัพจริง</b> (แปลงหน่วยบิล→หน่วยนับให้อัตโนมัติ) ช่วงไหนไม่มีบิลใช้ยอด<b>ส่งใบสั่งไลน์</b> (หรือ<b style="color:#1559c7">รับจริง</b>ถ้ากรอก) · ติดลบ = รับของนอกระบบ/นับเพี้ยน</p>
       <div class="u_out"><div class="rempty">เลือกช่วงวันแล้วกดคำนวณ</div></div>
     </div></div>`;
   document.body.appendChild(ov);
   ov.querySelector('[data-x]').onclick=()=>ov.remove();
   ov.onclick=e=>{if(e.target===ov)ov.remove();};
   ov.querySelector('.u_go').onclick=async()=>{
-    const bf=ov.querySelector('.u_b').value,f=ov.querySelector('.u_f').value,t=ov.querySelector('.u_t').value,mode=ov.querySelector('.u_m').value;
+    const bf=ov.querySelector('.u_b').value,f=ov.querySelector('.u_f').value,t=ov.querySelector('.u_t').value,mode=ov.querySelector('.u_m').value,src=ov.querySelector('.u_src').value;
     const out=ov.querySelector('.u_out');
     if(!f||!t||f>t){out.innerHTML='<div class="rempty">เลือกช่วงวันให้ถูกต้อง</div>';return;}
     out.innerHTML='<div class="rempty">กำลังคำนวณ...</div>';
@@ -2593,7 +2594,7 @@ function openUsage(){
       if(bf)ar=ar.filter(r=>r.branch_id===bf);CNT=CNT.concat(ar);}catch(e){}
     // ของเข้าจริง = stock_receipts (บันทึกตอนส่งไลน์ / รับจริงถ้ากรอก) + คำนวณวันของถึงจากตารางซัพ
     const RIN={};
-    try{const buildRc=()=>{let q=sb.from('stock_receipts').select('branch_id,product_id,order_date,ordered,received,sup')
+    if(src!=='bill')try{const buildRc=()=>{let q=sb.from('stock_receipts').select('branch_id,product_id,order_date,ordered,received,sup')
         .gte('order_date',f).lte('order_date',tPlus);if(bf)q=q.eq('branch_id',bf);return q;};
       const {data:rc}=await sbAll(buildRc,30);
       let RCA=rc||[];
@@ -2613,6 +2614,27 @@ function openUsage(){
         (RIN[x.branch_id+'|'+x.product_id]=RIN[x.branch_id+'|'+x.product_id]||[]).push({deliv,inn,real:x.received!=null});
       });
     }catch(e){}
+    // b54: ของเข้าจากบิลซัพจริง (supplier_bills.lines) — แปลงหน่วยบิล→หน่วยนับด้วยอัตราแปลงที่ผูกไว้
+    const BIN={};let cvSkip=0,nmSkip=0;
+    if(src!=='rc')try{
+      const IX=await linkIndex();
+      const PID={};ROOT.branches.forEach(b3=>b3.data.categories.forEach(c=>c.items.forEach(i=>{PID[b3.id+'|'+(i.name||'').trim()]=i;})));
+      const buildB=()=>{let q=sb.from('supplier_bills').select('branch_id,bill_date,lines').gte('bill_date',f).lte('bill_date',tPlus);if(bf)q=q.eq('branch_id',bf);return q;};
+      const {data:bls}=await sbAll(buildB,30);
+      (bls||[]).forEach(bill=>{const d0=isoFromAny(bill.bill_date);if(!d0)return;
+        (Array.isArray(bill.lines)?bill.lines:[]).forEach(L=>{
+          if(!(+L.qty>0))return;                            // บรรทัดไม่กรอกจำนวน = คิดปริมาณไม่ได้
+          const nm=(L.name||'').trim();
+          const si=IX[nm+'|'+String(L.unit||'').trim()]||IX[nm+'|'];
+          if(!si||!si.stock_name){nmSkip++;return;}          // ยังไม่ผูกชื่อนับ
+          const it=PID[bill.branch_id+'|'+si.stock_name];
+          if(!it){nmSkip++;return;}                          // สาขานี้ไม่มีสินค้านับตัวนี้
+          const f2=si.f>0?si.f:((String(L.unit||'').trim()===String(it.unit||'').trim())?1:0);
+          if(!f2){cvSkip++;return;}                          // หน่วยต่างกันแต่ยังไม่ตั้งอัตราแปลง
+          (BIN[bill.branch_id+'|'+it.id]=BIN[bill.branch_id+'|'+it.id]||[]).push({deliv:d0,inn:(+L.qty)*f2});
+        });
+      });
+    }catch(e){}
     // dedupe: แถวล่าสุดต่อ สาขา|สินค้า|วัน (แถวจาก DB มาก่อน archive → DB ชนะถ้าซ้ำ)
     const seen={},rows=[];
     CNT.forEach(r=>{const d=isoFromAny(r.count_date);const k=r.branch_id+'|'+r.product_id+'|'+d;
@@ -2624,16 +2646,19 @@ function openUsage(){
       for(let i=0;i<list.length-1;i++){const a=list[i],b2=list[i+1];
         if(a.d<f||a.d>t)continue;
         if(a.qty==null||b2.qty==null)continue;
-        const lots=(RIN[a.branch_id+'|'+a.product_id]||[]).filter(x=>x.deliv>a.d&&x.deliv<=b2.d);
+        const rl=(RIN[a.branch_id+'|'+a.product_id]||[]).filter(x=>x.deliv>a.d&&x.deliv<=b2.d);
+        const bl2=(BIN[a.branch_id+'|'+a.product_id]||[]).filter(x=>x.deliv>a.d&&x.deliv<=b2.d);
+        const useBill=src==='bill'||(src==='auto'&&bl2.length>0);   // ช่วงไหนมีบิลจริง ใช้บิลก่อน (กันนับซ้ำกับใบสั่ง)
+        const lots=useBill?bl2:rl;
         const inn=lots.reduce((s,x)=>s+x.inn,0);
         const used=Math.round(((+a.qty)+inn-(+b2.qty))*100)/100;
-        pairs.push({br:a.branch_name||'',cat:a.cat_label||'',name:a.name,unit:a.unit||'',d1:a.d,d2:b2.d,used,rc:lots.some(x=>x.real)});}});
+        pairs.push({br:a.branch_name||'',cat:a.cat_label||'',name:a.name,unit:a.unit||'',d1:a.d,d2:b2.d,used,rc:!useBill&&rl.some(x=>x.real),bl:useBill&&bl2.length>0});}});
     if(!pairs.length){out.innerHTML='<div class="rempty">ไม่มีคู่วันให้คำนวณ (ต้องมีการนับอย่างน้อย 2 วัน)</div>';return;}
-    const line=p=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px dashed var(--line)"><span>${escapeHtml(p.name)} <small style="color:var(--ink-soft)">${escapeHtml(p.cat)}</small>${p.rc?' <small style="color:#1559c7">✓รับจริง'+(p.rcN>1?' '+p.rcN+' วัน':'')+'</small>':''}</span><b style="color:${p.used<0?'#b3261e':'var(--red)'}">${fmt(p.used)} ${escapeHtml(p.unit)}</b></div>`;
+    const line=p=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px dashed var(--line)"><span>${escapeHtml(p.name)} <small style="color:var(--ink-soft)">${escapeHtml(p.cat)}</small>${p.rc?' <small style="color:#1559c7">✓รับจริง'+(p.rcN>1?' '+p.rcN+' วัน':'')+'</small>':''}${p.bl?' <small style="color:#1a7f37">🧾 บิลจริง'+(p.blN>1?' '+p.blN+' ช่วง':'')+'</small>':''}</span><b style="color:${p.used<0?'#b3261e':'var(--red)'}">${fmt(p.used)} ${escapeHtml(p.unit)}</b></div>`;
     let html='';
     if(mode==='sum'){
       const agg={};pairs.forEach(p=>{const k=p.br+'|'+p.name+'|'+p.cat+'|'+p.unit;
-        const a=(agg[k]=agg[k]||{...p,used:0,n:0,rcN:0,rc:false});a.used+=p.used;a.n++;if(p.rc){a.rc=true;a.rcN++;}});
+        const a=(agg[k]=agg[k]||{...p,used:0,n:0,rcN:0,rc:false,blN:0,bl:false});a.used+=p.used;a.n++;if(p.rc){a.rc=true;a.rcN++;}if(p.bl){a.bl=true;a.blN++;}});
       const byBr={};Object.values(agg).forEach(a=>{a.used=Math.round(a.used*100)/100;(byBr[a.br]=byBr[a.br]||[]).push(a);});
       Object.keys(byBr).forEach(br=>{const L=byBr[br].sort((a,b)=>(a.cat+a.name).localeCompare(b.cat+b.name,'th'));
         html+=`<h4 style="margin:12px 0 4px">🏪 ${escapeHtml(br)} <small style="color:var(--ink-soft)">(${escapeHtml(f)} → ${escapeHtml(t)})</small></h4>`+L.map(line).join('');});
@@ -2642,10 +2667,185 @@ function openUsage(){
       Object.keys(byD).sort().forEach(d=>{const L=byD[d].sort((a,b)=>(a.br+a.cat+a.name).localeCompare(b.br+b.cat+b.name,'th'));
         html+=`<h4 style="margin:12px 0 4px">📅 ${fmtDate(d)} → ${fmtDate(L[0].d2)}</h4>`+L.map(p=>`<div style="font-size:.78em;color:var(--ink-soft)">${escapeHtml(p.br)}</div>`+line(p)).join('');});
     }
-    out.innerHTML=html+`<p class="hint" style="margin-top:8px">รวม ${pairs.length} รายการคู่วัน</p>`;
+    const warn=(cvSkip?`<p class="hint" style="color:#b3261e;margin-top:6px">⚖ ข้ามบิล ${cvSkip} บรรทัดที่ยังไม่ตั้งอัตราแปลงหน่วย — ไปตั้งที่ <b>🔗 ผูกชื่อ & แปลงหน่วย</b> (เมนูข้าง) แล้วคำนวณใหม่</p>`:'')
+      +(nmSkip?`<p class="hint" style="color:#8a6200;margin-top:2px">⚠ บิล ${nmSkip} บรรทัดยังไม่ได้ผูกชื่อนับ (ไม่ถูกนำมาคิด) — ผูกได้ที่ <b>🔗 ผูกชื่อ & แปลงหน่วย</b></p>`:'');
+    out.innerHTML=html+`<p class="hint" style="margin-top:8px">รวม ${pairs.length} รายการคู่วัน</p>`+warn;
   };
 }
 $('#usageBtn').onclick=openUsage;
+
+/* ===== 🔗 b54: ผูกชื่อ & แปลงหน่วย — ชื่อบิล (supplier_items) ↔ ชื่อนับ (products) ซิงค์สองทาง + อัตราแปลงหน่วยบิล→หน่วยนับ ===== */
+let LC_NOCONV=false; // true = ยังไม่ได้รัน jjmk-stock-b54.sql (คอลัมน์ conv_factor ยังไม่มี)
+async function loadSupItemsAll(){
+  let r=await sbAll(()=>sb.from('supplier_items').select('id,name,unit,sup_sheet,sup_full,stock_name,conv_factor').eq('active',true).order('sort'),20);
+  if(r.error&&/conv_factor/i.test(String(r.error.message||''))){
+    LC_NOCONV=true;
+    r=await sbAll(()=>sb.from('supplier_items').select('id,name,unit,sup_sheet,sup_full,stock_name').eq('active',true).order('sort'),20);
+  }
+  if(r.error)throw new Error(r.error.message||'โหลดรายการบิลไม่ได้');
+  return r.data||[];
+}
+function lcProducts(){ // ชื่อนับทั้งหมด (ไม่ซ้ำชื่อ) + หน่วยนับ + ชื่อบิลที่ผูกไว้ตอนนี้
+  const m={};
+  ROOT.branches.forEach(b=>b.data.categories.forEach(c=>c.items.forEach(i=>{
+    const k=(i.name||'').trim();if(!k)return;
+    const o=(m[k]=m[k]||{name:k,unit:i.unit||'',sup:i.sup||'',bill:null});
+    if(!o.unit&&i.unit)o.unit=i.unit;
+    if(!o.bill&&i.bill_name)o.bill=String(i.bill_name).trim();
+  })));
+  return m;
+}
+async function linkIndex(){ // "ชื่อบิล|หน่วยบิล" -> {stock_name,f} ไว้แปลงบรรทัดบิลเป็นหน่วยนับ (หน้าการใช้ของ)
+  const rows=await loadSupItemsAll();
+  const ix={};
+  rows.forEach(r=>{
+    const n=(r.name||'').trim();if(!n)return;
+    const v={stock_name:String(r.stock_name||'').trim()||null,f:(+r.conv_factor>0)?+r.conv_factor:0};
+    [n+'|'+String(r.unit||'').trim(),n+'|'].forEach(k=>{ if(!ix[k]||(!ix[k].stock_name&&v.stock_name))ix[k]=v; });
+  });
+  return ix;
+}
+async function openLinkCenter(filterSup){
+  if(!(can('manageSuppliers')||can('manageProducts'))){toast('หน้านี้เฉพาะผู้ดูแลสินค้า/ซัพพลายเออร์');return;}
+  const ov=document.createElement('div');ov.className='overlay pagemode';ov.style.cssText='display:flex;z-index:200';
+  ov.innerHTML=`<div class="sheet" style="max-width:840px">
+    <div class="sheet-head"><h3>🔗 ผูกชื่อ & แปลงหน่วย</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body"><div class="lc_out"><div class="rempty">กำลังโหลด...</div></div></div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('[data-x]').onclick=()=>ov.remove();
+  const out=ov.querySelector('.lc_out');
+  let rows,sm;
+  try{ [rows,sm]=await Promise.all([loadSupItemsAll(),loadSupMap()]); }
+  catch(e){ out.innerHTML='<div class="rempty">โหลดไม่ได้: '+escapeHtml((e&&e.message)||String(e))+'</div>';return; }
+  if(!rows.length){ out.innerHTML='<div class="rempty">ยังไม่มีรายการบิลในระบบ (supplier_items ว่าง) — นำเข้าไฟล์บิลก่อน</div>';return; }
+  const P=lcProducts();
+  const pNames=Object.keys(P).sort((a,b)=>a.localeCompare(b,'th'));
+  const appOf=r=>String((sm&&sm[r.sup_sheet])||r.sup_full||r.sup_sheet||'').trim()||'(ไม่ทราบซัพ)';
+  rows.forEach(r=>{r._app=appOf(r);r._v={sn:String(r.stock_name||'').trim(),f:(+r.conv_factor>0)?String(+r.conv_factor):''};});
+  const apps=[...new Set(rows.map(r=>r._app))].sort((a,b)=>a.localeCompare(b,'th'));
+  const F={sup:(filterSup&&apps.includes(String(filterSup).trim()))?String(filterSup).trim():'',un:false};
+  const okConv=r=>{ if(!r._v.sn)return false; const pu=(P[r._v.sn]||{}).unit||''; return (+String(r._v.f).replace(',','.')>0)||(String(r.unit||'').trim()===String(pu).trim()); };
+  const stats=()=>{
+    const linked=rows.filter(r=>r._v.sn).length, conv=rows.filter(okConv).length;
+    const used=new Set(rows.map(r=>r._v.sn).filter(Boolean));
+    const orphan=pNames.filter(n=>!used.has(n)&&!P[n].bill);
+    return {linked,conv,orphan};
+  };
+  const badge=r=>{ if(!r._v.sn)return '<span class="chip" style="background:#fff3cd;color:#8a6200;border:1px solid #ecd39a">⚠ ยังไม่ผูก</span>';
+    if(!P[r._v.sn])return '<span class="chip" style="background:#fbe9e7;color:#b3261e;border:1px solid #f3c0ba">✗ ชื่อไม่ตรง</span>';
+    if(!okConv(r))return '<span class="chip" style="background:#fbe9e7;color:#b3261e;border:1px solid #f3c0ba">⚖ ขาดอัตราแปลง</span>';
+    return '<span class="chip" style="background:#eefaf1;color:#1a7f37;border:1px solid #bfe6cd">✓ พร้อมใช้</span>'; };
+  function render(){
+    const st=stats();
+    const vis=rows.filter(r=>(!F.sup||r._app===F.sup)&&(!F.un||!okConv(r)));
+    const grp={};vis.forEach(r=>(grp[r._app]=grp[r._app]||[]).push(r));
+    const kpi=(label,val,good)=>`<div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px"><small style="color:var(--ink-soft)">${label}</small><div style="font-family:Prompt;font-weight:700;font-size:1.2rem;color:${good?'#1a7f37':'#b3261e'}">${val}</div></div>`;
+    out.innerHTML=`
+      ${LC_NOCONV?'<div style="background:#fff3cd;border:1px solid #ecd39a;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:.85em;color:#8a6200"><b>⚖ ช่องอัตราแปลงยังไม่เปิด</b> — รันไฟล์ <b>jjmk-stock-b54.sql</b> ใน Supabase SQL Editor ครั้งเดียว แล้วเปิดหน้านี้ใหม่ (ระหว่างนี้ผูกชื่อได้ตามปกติ)</div>':''}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        ${kpi('ผูกชื่อแล้ว',st.linked+' / '+rows.length,st.linked>=rows.length)}
+        ${kpi('แปลงหน่วยพร้อมใช้',st.conv+' / '+st.linked,st.conv>=st.linked&&st.linked>0)}
+        ${kpi('ชื่อนับที่ยังไม่มีบิลผูก',st.orphan.length,!st.orphan.length)}
+      </div>
+      ${st.orphan.length?`<details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:.85em;color:#8a6200">📦 ชื่อนับที่ยังไม่มีชื่อบิลผูก ${st.orphan.length} ตัว (แตะดู)</summary><div style="display:flex;flex-wrap:wrap;gap:5px;padding:8px 0">${st.orphan.map(n=>`<span class="chip" style="background:#fff;border:1px solid var(--line)">${escapeHtml(n)} <small style="color:var(--ink-soft)">${escapeHtml(P[n].unit||'')}</small></span>`).join('')}</div><p class="hint" style="margin:0">ผูกจากฝั่งบิล: หาชื่อบิลของมันในลิสต์ข้างล่างแล้วเลือกชื่อนับตัวนั้น — ถ้าไม่มีในบิลเลย แปลว่ายังไม่เคยลงบิล/ของทำเอง</p></details>`:''}
+      <div class="rfilters" style="margin-bottom:6px">
+        <select class="lc_sup"><option value="">🏭 ทุกซัพ (${rows.length})</option>${apps.map(a=>`<option value="${escapeHtml(a)}" ${F.sup===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>
+        <input class="lc_q" placeholder="🔍 ค้นหาชื่อบิล/ชื่อนับ..." autocomplete="off" style="padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'">
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85em"><input type="checkbox" class="lc_un" ${F.un?'checked':''}> เฉพาะที่ยังไม่ครบ</label>
+      </div>
+      <button class="act wide lc_auto" style="background:#1559c7;color:#fff;border:none;margin-bottom:8px">✨ เดาคู่ที่ยังว่างให้อัตโนมัติ</button>
+      <div class="lc_list">${Object.keys(grp).sort((a,b)=>a.localeCompare(b,'th')).map(app=>`
+        <h4 style="margin:12px 0 4px">🏭 ${escapeHtml(app)} <small style="color:var(--ink-soft)">(${grp[app].length})</small></h4>
+        ${grp[app].map(r=>{const i=rows.indexOf(r);const pu=(P[r._v.sn]||{}).unit||'หน่วยนับ';
+          return `<div class="lc_row" data-i="${i}" data-k="${escapeHtml((r.name+' '+(r._v.sn||'')).toLowerCase())}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:7px 2px;border-bottom:1px dashed var(--line)">
+            <span style="flex:1.1;min-width:150px;font-size:.87em">🧾 ${escapeHtml(r.name)} <small style="color:var(--ink-soft)">${escapeHtml(r.unit||'')}</small></span>
+            <input class="lc_sn" list="lcDL" value="${escapeHtml(r._v.sn)}" placeholder="— เลือกชื่อนับ —" autocomplete="off" style="flex:1;min-width:150px;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-family:'Sarabun';font-size:.85em">
+            ${LC_NOCONV?'':`<span style="display:flex;align-items:center;gap:4px;font-size:.8em;color:var(--ink-soft);white-space:nowrap">1 ${escapeHtml(r.unit||'หน่วยบิล')} = <input class="lc_f" type="text" inputmode="decimal" autocomplete="off" value="${escapeHtml(r._v.f)}" placeholder="${r._v.sn&&String(r.unit||'').trim()===String(pu).trim()?'1':'?'}" style="width:58px;padding:7px;border:1.5px solid var(--line);border-radius:8px;text-align:right"> <span class="lc_pu">${escapeHtml(pu)}</span></span>`}
+            <span class="lc_st">${badge(r)}</span>
+          </div>`;}).join('')}`).join('')||'<div class="rempty">ไม่พบรายการตามตัวกรอง</div>'}
+      </div>
+      <datalist id="lcDL">${pNames.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(P[n].unit?(n+' — '+P[n].unit):n)}</option>`).join('')}</datalist>
+      <button class="act wide lc_save" style="background:var(--red);color:#fff;border:none;margin-top:10px">💾 บันทึกการผูก & อัตราแปลง</button>
+      <p class="hint" style="margin:6px 0 0">บันทึกแล้วซิงค์สองทางให้เลย: ฝั่งบิลจำชื่อนับ + ฝั่งนับจำชื่อบิล (ป้าย 🧾 โชว์ทุกหน้า) · อัตราแปลง = 1 หน่วยบิลเท่ากับกี่หน่วยนับ เช่น 1 ลัง = 9 กก. · หน่วยเดียวกันไม่ต้องกรอก (ระบบคิดเป็น 1 ให้)</p>`;
+    bindEvents();
+  }
+  function bindEvents(){
+    out.querySelector('.lc_sup').onchange=e=>{F.sup=e.target.value;render();};
+    out.querySelector('.lc_un').onchange=e=>{F.un=e.target.checked;render();};
+    out.querySelector('.lc_q').oninput=e=>{const k=e.target.value.trim().toLowerCase();
+      out.querySelectorAll('.lc_row').forEach(el=>{el.style.display=(!k||el.dataset.k.includes(k))?'':'none';});};
+    out.querySelectorAll('.lc_row').forEach(el=>{
+      const r=rows[+el.dataset.i];
+      const sn=el.querySelector('.lc_sn'),ff=el.querySelector('.lc_f');
+      const upd=()=>{
+        r._v.sn=sn.value.trim();
+        if(ff)r._v.f=ff.value.trim();
+        const known=!r._v.sn||!!P[r._v.sn];
+        sn.style.borderColor=known?'var(--line)':'#b3261e';
+        const pu=(P[r._v.sn]||{}).unit||'หน่วยนับ';
+        const puEl=el.querySelector('.lc_pu');if(puEl)puEl.textContent=pu;
+        if(ff)ff.placeholder=(r._v.sn&&String(r.unit||'').trim()===String(pu).trim())?'1':'?';
+        el.querySelector('.lc_st').innerHTML=badge(r);
+        el.dataset.k=(r.name+' '+(r._v.sn||'')).toLowerCase();
+      };
+      sn.oninput=upd;sn.onchange=upd;
+      if(ff){ff.oninput=upd;}
+    });
+    out.querySelector('.lc_auto').onclick=()=>{
+      let n=0;
+      out.querySelectorAll('.lc_row').forEach(el=>{
+        const r=rows[+el.dataset.i];if(r._v.sn)return;
+        let best=null,bs=0;pNames.forEach(p2=>{const s=supSim(r.name,p2);if(s>bs){bs=s;best=p2;}});
+        if(best&&bs>=0.62){const sn=el.querySelector('.lc_sn');sn.value=best;sn.style.background=bs>=0.85?'#eefaf1':'#fff8e1';sn.onchange();n++;}
+      });
+      toast(n?('เดาให้ '+n+' รายการ — เช็คช่องสีเหลืองก่อนกดบันทึก'):'ไม่มีคู่ใหม่ที่เดาได้');
+    };
+    out.querySelector('.lc_save').onclick=async()=>{
+      const btn=out.querySelector('.lc_save');btn.disabled=true;btn.textContent='⏳ กำลังบันทึก...';
+      const done=(m)=>{btn.disabled=false;btn.textContent='💾 บันทึกการผูก & อัตราแปลง';if(m)toast(m);};
+      const ups=[],syncSet={},syncClr={};let bad=0;
+      rows.forEach(r=>{
+        let sn=r._v.sn||null;
+        if(sn&&!P[sn]){bad++;return;}
+        const f=(!LC_NOCONV&&+String(r._v.f).replace(',','.')>0)?+String(r._v.f).replace(',','.'):null;
+        const oldSn=String(r.stock_name||'').trim()||null;
+        const oldF=(+r.conv_factor>0)?+r.conv_factor:null;
+        if(sn===oldSn&&(LC_NOCONV||f===oldF))return;
+        const u={id:r.id,stock_name:sn};if(!LC_NOCONV)u.conv_factor=f;
+        ups.push(u);
+        if(sn)syncSet[sn]=r.name;                        // ชื่อนับตัวนี้ → จำชื่อบิลนี้
+        if(oldSn&&oldSn!==sn)syncClr[oldSn]=r.name;      // เลิกผูกตัวเก่า → ลบป้ายบิลเดิม
+      });
+      if(!ups.length){done(bad?('มี '+bad+' แถวชื่อนับไม่ตรงกับระบบ — เลือกจากลิสต์ก่อน'):'ไม่มีอะไรเปลี่ยน');return;}
+      let fail=0;
+      for(let i=0;i<ups.length;i+=10){
+        const rs=await Promise.all(ups.slice(i,i+10).map(u=>{const v={stock_name:u.stock_name};if('conv_factor' in u)v.conv_factor=u.conv_factor;return sb.from('supplier_items').update(v).eq('id',u.id);}));
+        rs.forEach(x=>{if(x.error)fail++;});
+      }
+      // ซิงค์ฝั่งชื่อนับ: products.bill_name ทุกสาขา (ป้าย 🧾 ใช้ทุกหน้า)
+      const sy=[];
+      Object.entries(syncClr).forEach(([pn,bn])=>{ if(!syncSet[pn])sy.push(()=>sb.from('products').update({bill_name:null}).eq('name',pn).eq('bill_name',bn)); });
+      Object.entries(syncSet).forEach(([pn,bn])=>{ sy.push(()=>sb.from('products').update({bill_name:bn}).eq('name',pn)); });
+      let sfail=0;
+      for(let i=0;i<sy.length;i+=10){
+        const rs=await Promise.all(sy.slice(i,i+10).map(fn=>fn()));
+        rs.forEach(x=>{if(x&&x.error)sfail++;});
+      }
+      // อัปเดตในเครื่องทันที ไม่ต้องรีโหลด
+      rows.forEach(r=>{const u=ups.find(x=>x.id===r.id);if(!u)return;r.stock_name=u.stock_name;if('conv_factor' in u)r.conv_factor=u.conv_factor;});
+      ROOT.branches.forEach(b=>b.data.categories.forEach(c=>c.items.forEach(it=>{
+        const nm=(it.name||'').trim();
+        if(syncSet[nm])it.bill_name=syncSet[nm];
+        else if(syncClr[nm]&&!syncSet[nm]&&it.bill_name===syncClr[nm])it.bill_name=null;
+      })));
+      save();try{renderTabs();renderMain();}catch(e){}
+      if(fail)done('บันทึกไม่ครบ — พลาด '+fail+' รายการ ลองใหม่อีกครั้ง');
+      else done('✅ บันทึก '+ups.length+' รายการ · ซิงค์ป้าย 🧾 สองทางแล้ว'+(sfail?(' (ซิงค์ฝั่งนับพลาด '+sfail+')'):'')+(bad?(' · ข้าม '+bad+' แถวชื่อไม่ตรง'):''));
+      render();
+    };
+  }
+  render();
+}
 
 /* ================= หลังบ้านจริงใจ: โมดูลเต็มหน้า (b15) ================= */
 let CUR_MOD='stock';
@@ -3192,67 +3392,8 @@ async function renderSupBillPage(body){
     [...$x('.sx_s').options].forEach(o=>{if(o.value&&o.value!=='__other'&&has[String(o.value).trim()])o.textContent='🧾 '+o.textContent;});
   }catch(e){}})();
   $x('.sx_map').onclick=()=>openSupMapping(()=>{Object.keys(ITEMS_CACHE).forEach(k=>delete ITEMS_CACHE[k]);loadItems();});
-  // ── 🏷️ จับคู่ชื่อสินค้า: ชื่อตามบิล (supplier_items) ↔ ชื่อนับสต๊อก (products) — b36 ──
-  async function openItemMapping(appName){
-    if(!appName||appName==='__other'){toast('เลือกซัพก่อน');return;}
-    const ov=document.createElement('div');ov.className='overlay';ov.style.cssText='display:flex;z-index:400';
-    ov.innerHTML=`<div class="sheet" style="max-width:720px">
-      <div class="sheet-head"><h3>🏷️ จับคู่ชื่อสินค้า — ${escapeHtml(appName)}</h3><button class="x" data-x>✕</button></div>
-      <div class="sheet-body">
-        <p class="hint" style="margin:0 0 8px">ซ้าย = ชื่อตามบิล · ขวา = ชื่อในระบบนับสต๊อก — จับคู่แล้วชื่อนับจะโชว์ใต้รายการบิล และใช้โยงต้นทุนได้ต่อไป</p>
-        <button class="act wide im_auto" style="background:#1559c7;color:#fff;border:none;margin-bottom:10px">✨ เดาให้อัตโนมัติ</button>
-        <div class="im_out"><div class="rempty">กำลังโหลด...</div></div>
-        <button class="act wide im_save" style="background:var(--red);color:#fff;border:none;margin-top:10px">💾 บันทึกการจับคู่</button>
-      </div></div>`;
-    document.body.appendChild(ov);
-    ov.querySelector('[data-x]').onclick=()=>ov.remove();
-    ov.onclick=e=>{if(e.target===ov)ov.remove();};
-    const out=ov.querySelector('.im_out');
-    const stockNames=[...new Set(Object.values(ITEM_INDEX).map(x=>x.item)
-      .filter(i=>String(i.sup||'').trim()===String(appName).trim()).map(i=>i.name))].sort((a,b)=>a.localeCompare(b,'th'));
-    let rows=[];
-    try{
-      const sh=await sheetsFor(appName);
-      if(!sh.length)throw new Error('ยังไม่ได้จับคู่ชื่อซัพนี้กับไฟล์บิล (กด 🔗 ก่อน)');
-      const {data,error}=await sbAll(()=>sb.from('supplier_items').select('id,name,unit,stock_name').in('sup_sheet',sh).eq('active',true).order('sort'),10);
-      if(error)throw error;rows=data||[];
-      if(!rows.length)throw new Error('ซัพนี้ไม่มีรายการบิล');
-    }catch(e){out.innerHTML='<div class="rempty">'+escapeHtml(e.message||'')+'</div>';return;}
-    const opt=v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`;
-    out.innerHTML=(stockNames.length?'':'<p class="hint" style="color:#b3261e;margin:0 0 6px">ซัพนี้ยังไม่มีสินค้านับสต๊อกผูกอยู่ — ถ้าเพิ่งเปลี่ยนชื่อซัพ (SQL b34) ให้รีเฟรชแอปก่อน</p>')
-      +rows.map(r=>`<div style="display:flex;gap:8px;align-items:center;padding:5px 2px;border-bottom:1px dashed var(--line)">
-        <span style="flex:1.2;min-width:0;font-size:.85em">${escapeHtml(r.name)} <small style="color:var(--ink-soft)">${escapeHtml(r.unit||'')}</small></span>
-        <select class="im_sel" data-id="${r.id}" style="flex:1;min-width:0;padding:7px;border:1px solid var(--line);border-radius:8px;font-family:'Sarabun';font-size:.85em">
-          <option value="">— ไม่ผูกกับของนับ —</option>${stockNames.map(opt).join('')}</select></div>`).join('');
-    const sels=[...out.querySelectorAll('.im_sel')];
-    sels.forEach((sl,i)=>{if(rows[i].stock_name&&stockNames.includes(rows[i].stock_name))sl.value=rows[i].stock_name;});
-    ov.querySelector('.im_auto').onclick=()=>{
-      let n=0;
-      sels.forEach((sl,i)=>{
-        if(sl.value)return;
-        let best=null,bs=0;
-        stockNames.forEach(sn=>{const s=supSim(rows[i].name,sn);if(s>bs){bs=s;best=sn;}});
-        if(best&&bs>=0.62){sl.value=best;sl.style.background=bs>=0.85?'#eefaf1':'#fff8e1';n++;}
-      });
-      toast(n?('เดาให้ '+n+' รายการ — ตรวจช่องสีเหลืองแล้วกดบันทึก'):'ไม่มีคู่ใหม่ที่เดาได้');
-    };
-    ov.querySelector('.im_save').onclick=async()=>{
-      const btn=ov.querySelector('.im_save');btn.disabled=true;
-      const ups=[];
-      sels.forEach((sl,i)=>{const v=sl.value||null;if(v!==(rows[i].stock_name||null))ups.push({id:rows[i].id,stock_name:v});});
-      let fail=0;
-      for(let i=0;i<ups.length;i+=10){
-        const rs=await Promise.all(ups.slice(i,i+10).map(u=>sb.from('supplier_items').update({stock_name:u.stock_name}).eq('id',u.id)));
-        rs.forEach(r=>{if(r.error)fail++;});
-      }
-      btn.disabled=false;
-      if(fail){toast('บันทึกไม่ครบ ('+fail+' พลาด — รัน SQL b36 หรือยัง?)');return;}
-      Object.keys(ITEMS_CACHE).forEach(k=>delete ITEMS_CACHE[k]);
-      toast(ups.length?('บันทึกจับคู่ '+ups.length+' รายการ ✓'):'ไม่มีอะไรเปลี่ยน');
-      ov.remove();loadItems();
-    };
-  }
-  $x('.sx_imap').onclick=()=>openItemMapping($x('.sx_s').value);
+  // ── 🏷️ จับคู่ชื่อสินค้า (b36) → ย้ายไปรวมที่ศูนย์ 🔗 ผูกชื่อ & แปลงหน่วย (b54) — เปิดพร้อมกรองซัพที่เลือกไว้ ──
+  $x('.sx_imap').onclick=()=>{Object.keys(ITEMS_CACHE).forEach(k=>delete ITEMS_CACHE[k]);openLinkCenter($x('.sx_s').value);};
   async function loadBills(){
     const out=$x('.sx_out');
     try{
@@ -3327,8 +3468,10 @@ function goPage(g){
   setSbActive(g);
   if(g==='count')openModule('stock');
   else if(g==='order'){openModule('stock');openSum();}
+  else if(g==='usage'){openModule('stock');openUsage();}
   else if(g==='dispatch'){openModule('stock');openDispatch();}
   else if(g==='central'){openModule('stock');$('#centralBtn').click();}
+  else if(g==='link'){openModule('stock');openLinkCenter();}
   else if(g==='settings'){openModule('stock');$('#gearBtn').click();}
   else return;
   try{localStorage.setItem('jj_last_page',g);}catch(e){}
@@ -3336,8 +3479,9 @@ function goPage(g){
 function restoreLastPage(){
   let last=null;try{last=localStorage.getItem('jj_last_page');}catch(e){}
   if(!last||last==='count')return;
-  const allowed={order:true,
+  const allowed={order:true,usage:true,
     dispatch:can('viewDispatch'),
+    link:can('manageSuppliers')||can('manageProducts'),
     central:can('manageCentral'),settings:canAnyManage()}[last];
   if(allowed)setTimeout(()=>{try{goPage(last);}catch(e){}},150);
 }
@@ -3352,8 +3496,10 @@ function buildSidebar(){
   let sub='';
   sub+=it('📋','นับสต็อก','count');
   sub+=it('🧾','ใบสั่งซื้อ / ส่งไลน์','order');
+  sub+=it('📈','การใช้ของ','usage');
   if(can('viewDispatch'))sub+=it('📦','รายการสั่งของ','dispatch');
   if(can('manageCentral'))sub+=it('🎯','อัตราใช้/วัน & จัดส่ง','central');
+  if(can('manageSuppliers')||can('manageProducts'))sub+=it('🔗','ผูกชื่อ & แปลงหน่วย','link');
   if(canAnyManage())sub+=it('⚙️','ตั้งค่า','settings');
   let m='';
   m+=`<div class="sb_grp open" data-grp="stock">
