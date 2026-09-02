@@ -30,11 +30,6 @@
 - สั่งของอัตโนมัติ = **ใช้โฟลว์เดิมของแอพนับ** (นับ→safety/max→ร่างสั่ง→LINE) เราแค่ทำให้ตัวเลข safety/max ตั้งเอง (โหมด 🤖 β) · ทุกอย่างที่เขียนกลับต้องมีคนกดยืนยันจนกว่าจะสั่งเปิดอัตโนมัติ
 - ห้ามแตะ OCR Worker (`jjmk-pnl-ocr-worker.js` อยู่บน Cloudflare) เว้นแต่ถูกขอ
 
-## แอพสั่งของ (jjmk-order.html) — คนละโปรแกรมกับ P&L
-- ไฟล์เดียวแยกต่างหาก · ตารางชุด `ord_*` (ห้ามปนกับ `pnl_*`) · คู่มือ/สูตร `docs/ORDER-README.md` · เครื่องคำนวณเป็น pure function (`orderPlan/calcOrder/roundQty/learnRates`) มีเทสต์ `tests/ord01.js` เช็คตัวเลขคำนวณมือ · UI `tests/ord02.js`
-- seed สินค้า/ซัพ: `python3 scripts/mk_order_seed.py <xlsx>` → `sql/jjmk_order_seed.sql` (idempotent) · `npm run check` เช็ค syntax ทั้งสองไฟล์
-- state บน `window.S` · เทสต์ต้องตั้ง `S.D` (วันนี้) เองแล้ว `reload()` · mock fetch ต้องตัด prefix `/rest/v1/`
-
 ## SQL
 - อยู่ใน `sql/` ทุกไฟล์ idempotent · จำลองก่อนส่งด้วย PostgreSQL local (`sql/local_test_schema.sql` = สคีมาที่ใช้ทดสอบ; `pnl_suppliers.id` เป็น identity ต้อง `overriding system value` ตอน seed)
 - ตารางใหม่ต้องมี RLS + policy + grant ตามแบบ `sql/jjmk_pnl_unitconv.sql`
