@@ -82,7 +82,8 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .calcline{margin-top:10px;padding-top:8px;border-top:1.5px dashed rgba(0,0,0,.12);font-size:12.5px;color:var(--mut);display:flex;flex-wrap:wrap;gap:3px 8px;align-items:center}
 .calcline b{color:var(--ink);font-family:'Prompt'}
 .calwrap{display:grid;gap:14px}
-@media(min-width:900px){.calwrap{grid-template-columns:minmax(320px,1.15fr) minmax(0,1fr);align-items:start}}
+@media(min-width:900px){.calwrap{grid-template-columns:minmax(320px,1.15fr) minmax(0,1fr);align-items:start}
+.calwrap.c3{grid-template-columns:minmax(320px,1.1fr) minmax(0,.85fr) minmax(0,1fr)}}
 #fixPanel{font-size:12.5px}
 #fixPanel .fxrow{padding:4px 10px}
 #fixPanel .fxrow input{padding:6px 8px;font-size:12.5px;width:106px}
@@ -806,7 +807,8 @@ async function agg(b,m){
   });
   return { b,m,c,days,daysData,daily, incVat,exVat,vat:incVat-exVat,sales_pos,
            bySup,byCat,cashM,cashE,shopee,extraT,supTotal,vc,grab,lineman,revenue,
-           fixT,fixRows, net: revenue - vc - fixT - extraT };
+           fixT,fixRows, net: revenue - vc - fixT - extraT,
+           netVat: (incVat + grab + lineman) - vc - fixT - extraT }; // ตั้งจากยอดขายรวม VAT — VAT ยังอยู่ในนี้ รอนำส่ง
 }
 async function aggAll(m){
   const parts=await Promise.all(S.core.branches.map(b=>agg(b.code,m)));
@@ -838,7 +840,7 @@ async function aggAll(m){
     incVat:SUM('incVat'), exVat:SUM('exVat'), vat:SUM('vat'), sales_pos:SUM('sales_pos'),
     bySup, byCat, cashM:SUM('cashM'), cashE:SUM('cashE'), shopee:SUM('shopee'), extraT:SUM('extraT'),
     supTotal:SUM('supTotal'), vc:SUM('vc'), grab:SUM('grab'), lineman:SUM('lineman'),
-    revenue:SUM('revenue'), fixT:SUM('fixT'), fixRows, net:SUM('net'), pA:parts[0], pB:parts[1], parts };
+    revenue:SUM('revenue'), fixT:SUM('fixT'), fixRows, net:SUM('net'), netVat:SUM('netVat'), pA:parts[0], pB:parts[1], parts };
 }
 function aggFor(br,m){ return br==='ALL' ? aggAll(m) : agg(br,m); }
 async function renderIncomeAll(el){
@@ -1436,7 +1438,8 @@ RENDER.dash = async (el)=>{
     <div class="kpi"><div class="t">Fix cost</div><div class="kpi-v">฿${fmtI(A.fixT)}</div>
       <div class="s mut">${A.revenue?pctF(A.fixT/A.revenue)+' ของรายได้':'–'} · <span class="hintlink" onclick="S.expDay=S.expDay||1;show('exp')">แก้ที่หน้ารายจ่าย →</span></div></div>
     <div class="kpi"><div class="t">คงเหลือสุทธิ (หลัง VC + Fix + นอกเหนือ)</div>
-      <div class="kpi-v" style="color:${A.net>=0?'var(--ok)':'var(--bad)'}">฿${fmtI(A.net)}</div>
+      <div class="kpi-v" style="color:${A.netVat>=0?'var(--ok)':'var(--bad)'}">฿${fmtI(A.netVat)}</div>
+      <div class="s mut">ตั้งจากยอดขายรวม VAT · <b>(ในนี้เป็น VAT รอนำส่ง ฿${fmtI(A.vat)} — หัก VAT แล้วเหลือ ฿${fmtI(A.net)})</b></div>
       <div class="s mut">VC ฿${fmtI(A.vc)} · Fix ฿${fmtI(A.fixT)} · นอกเหนือ ฿${fmtI(A.extraT)}</div></div>
   </div>
   <div class="md2 eq">
@@ -1862,6 +1865,21 @@ function salesRepHTML(c,days){
     <div class="drrow tot"><span class="dd">รวม ${n} วัน</span><span class="num">${fmt(tAm,2)}</span><span class="num">${fmt(tPm,2)}</span><span class="num b" style="color:var(--red)">฿${fmt(tAm+tPm,2)}</span></div></div>`;
 }
 function dashGoDay(d){ S.incDay=d; show('income'); }
+function trfRepHTML(c,days){ // เงินโอนรายวัน: คีย์ = ก่อนหัก -> โชว์ยอดเข้าบัญชีจริง (หลังหัก 0.35%+VAT) + รวมทั้งเดือน
+  let rows='',tPre=0,tNet=0,n=0;
+  for(let d=1;d<=days;d++){
+    const r=c.inc[dstr(S.m,d)]; if(!r)continue;
+    const pre=num(r.transfer_total_am)+num(r.transfer_total_pm); if(!pre)continue;
+    n++; tPre+=pre; const net=trfNet(pre); tNet+=net;
+    const dt=new Date(S.m+'-01'); dt.setDate(d);
+    rows+=`<div class="drrow ${d===S.incDay?'on':''}" onclick="incPick(${d})"><span class="dd">${d} ${TH_D[dt.getDay()]}.</span><span class="num mut">${fmt(pre,2)}</span><span class="num b" style="color:var(--blue)">${fmt(net,2)}</span></div>`;
+  }
+  if(!n) return '<div class="empty" style="padding:24px 10px">ยังไม่มียอดเงินโอนเดือนนี้<br><span class="xs mut">คีย์ยอดเงินโอนแล้ว ยอดเข้าบัญชีจริง (หลังหัก 0.35%+VAT) จะขึ้นตรงนี้</span></div>';
+  return `<div class="drrow head"><span class="dd">💸 เงินโอน</span><span class="num">ก่อนหัก</span><span class="num">เข้าจริง</span></div>
+    <div class="drscroll">${rows}</div>
+    <div class="drrow tot"><span class="dd">รวม ${n} วัน</span><span class="num">${fmt(tPre,2)}</span><span class="num b" style="color:var(--blue)">${fmt(tNet,2)}</span></div>
+    <div class="xs mut" style="margin-top:4px;text-align:right">ค่าธรรมเนียมโอนทั้งเดือน ฿${fmt(tPre-tNet,2)}</div>`;
+}
 function incRepHTML(c,days){
   let rows='',tAm=0,tPm=0,n=0;
   for(let d=1;d<=days;d++){
@@ -1891,8 +1909,9 @@ RENDER.income = async (el)=>{
     <button class="btn gh sm2" style="margin-left:auto" onclick="fillOpenAll()">🔗 ซิงก์เก๊ะเปิดทั้งเดือน</button></div>
   <div class="card">
     <h3>เลือกวันที่</h3>
-    <div class="calwrap">
+    <div class="calwrap c3">
       <div id="incChips">${calHTML(days, S.incDay, d=>incHasDay(c,d), 'incPick', d=>{const r=c.inc[dstr(S.m,d)]; return r?num(r.sales_pos_am)+num(r.sales_pos_pm):0;})}</div>
+      <div class="dayrep" id="trfRep">${trfRepHTML(c,days)}</div>
       <div class="dayrep" id="incRep">${incRepHTML(c,days)}</div>
     </div>
   </div>
@@ -1995,6 +2014,7 @@ function refreshDay(day){
   const chip=document.querySelector(`#incChips button[data-d="${day}"]`);
   if(chip)chip.classList.toggle('has', incHasDay(c,day));
   const rep=document.getElementById('incRep'); if(rep)rep.innerHTML=incRepHTML(c,days);
+  const trp=document.getElementById('trfRep'); if(trp)trp.innerHTML=trfRepHTML(c,days);
   if(day!==S.incDay)return;
   const list=cashOfDay(ds);
   const cash={am:cashShiftTotal(list,'เช้า'), pm:cashShiftTotal(list,'เย็น')};
@@ -4683,8 +4703,8 @@ RENDER.sum = async (el)=>{
       ${A.c.extra.map(x=>`<tr class="ind"><td>${thDate(x.d)} · ${esc(x.descr)}</td><td class="n">${fmtI(x.amount)}</td><td class="mut xs">${esc(x.requester||'')}</td></tr>`).join('')||'<tr><td class="mut xs">— ไม่มี —</td></tr>'}
     </table></div>
 
-    <div class="secbar" style="background:${A.net>=0?'var(--ok)':'var(--bad)'}">คงเหลือสุทธิ
-      <span class="sp">฿${fmtI(A.net)} · ${rev?pctF(A.net/rev):''}</span></div>
+    <div class="secbar" style="background:${A.netVat>=0?'var(--ok)':'var(--bad)'}">คงเหลือสุทธิ (ตั้งจากยอดขายรวม VAT)
+      <span class="sp">฿${fmtI(A.netVat)} · (VAT รอนำส่ง ฿${fmtI(A.vat)} — หลังหักเหลือ ฿${fmtI(A.net)} · ${rev?pctF(A.net/rev):''})</span></div>
   </div>`;
 };
 function metaInput(f,v){
