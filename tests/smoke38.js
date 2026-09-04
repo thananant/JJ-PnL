@@ -71,15 +71,19 @@ setTimeout(async()=>{
   await new Promise(r=>setTimeout(r,250));
   const cb=[...d.querySelectorAll('#incChips button')].find(b=>b.dataset.d==='1');
   out.push('ปฏิทินรายรับโชว์ยอดรายวัน 107k เหมือนรายจ่าย: '+(!!cb&&cb.classList.contains('hasamt')&&cb.textContent.includes('107k')));
-  // ค่าธรรมเนียมเงินโอน 0.35%+VAT: คีย์ยอดเข้าบัญชีจริง 9,962.55 → ระบบบวกกลับเป็น 10,000 ตอนเทียบ POS
+  // เงินโอนคีย์ยอดก่อนหัก 10,000 → โน้ตใต้ช่องบอกเข้าบัญชีจริง 9,962.55 (หัก 37.45) · เทียบ POS ใช้ยอดก่อนหักตรง ๆ
   w.eval("S.incDay=1"); w.renderIncDay();
   const r1=w.eval("S.cache[mkey(S.br,S.m)].inc['2026-08-01']");
-  r1.deposit_am=97000; r1.transfer_total_am=9962.55; w.renderIncDay();
+  r1.deposit_am=97000; r1.transfer_total_am=10000; w.renderIncDay();
   await new Promise(r=>setTimeout(r,100));
+  const tf=d.getElementById('tfee1_am').textContent;
+  out.push('โน้ตยอดเข้าจริง: 9,962.55 หัก 37.45: '+(tf.includes('9,962.55')&&tf.includes('37.45')));
   const clT=d.getElementById('cl1am').textContent, sdT=d.getElementById('sd1am').textContent;
-  out.push('เทียบกะ: นับได้ 107,000 (รวมค่าธรรมเนียมโอน 37.45) ผลต่าง 0: '+(clT.includes('107,000.00')&&clT.includes('37.45')&&/0\.00|ตรง/.test(sdT)));
+  out.push('เทียบกะ: นับได้ 107,000 ตรง POS ผลต่าง 0: '+(clT.includes('107,000.00')&&/ตรง/.test(sdT)));
   const df=w.shiftDiffCalc(w.eval("S.cache[mkey(S.br,S.m)]"),'2026-08-01',r1,'am');
-  out.push('shiftDiffCalc ใช้ยอดโอนก่อนหัก: '+(Math.abs(df)<0.01));
+  out.push('shiftDiffCalc ไม่บวกค่าธรรมเนียม: '+(Math.abs(df)<0.01));
+  w.incInput(1,'transfer_total_am','5000');
+  out.push('พิมพ์ใหม่ 5,000 → โน้ตอัปเดตสด 4,981.28: '+d.getElementById('tfee1_am').textContent.includes('4,981.28'));
   r1.deposit_am=0; r1.transfer_total_am=0; w.renderIncDay();
   await w.eval("ups('pnl_income_daily',[{branch:'JJRD',d:'2026-08-02',sales_pos_am:5}],'branch,d')");
   await new Promise(r=>setTimeout(r,150));
