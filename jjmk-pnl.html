@@ -1827,14 +1827,14 @@ function openSrc(c,day,sh){
   if(day>1){ const p=c.inc[dstr(S.m,day-1)]; return p?num(p.cash_drawer_pm):0; }
   return num(c.prevPm);
 }
-const TRF_FEE=0.0035*1.07; // ค่าธรรมเนียมเงินโอน 0.35% + VAT 7% (ของค่าธรรมเนียม)
-function trfGross(v){ return num(v)>0? num(v)/(1-TRF_FEE) : num(v); } // ยอดโอนก่อนหัก (ไว้เทียบกับ POS)
-function trfFee(v){ return trfGross(v)-num(v); }
+const TRF_FEE=0.0035*1.07; // ค่าธรรมเนียมเงินโอน 0.35% + VAT 7% (ของค่าธรรมเนียม) — หักจากยอดโอนก่อนเข้าบัญชี
+function trfNet(v){ return num(v)*(1-TRF_FEE); } // ยอดที่คีย์ = ก่อนหัก -> ยอดเข้าบัญชีจริง
+function trfNoteHtml(v){ v=num(v); return v>0?`เข้าบัญชีจริง ฿${fmt(trfNet(v),2)} <span class="mut">(หักค่าธรรมเนียม 0.35%+VAT ฿${fmt(v-trfNet(v),2)})</span>`:''; }
 function shiftHasData(r,sh){ return ['sales_pos','deposit','cash_drawer','transfer_total','reserve_acct'].some(f=>num(r[f+'_'+sh])); }
 function shiftDiffCalc(c,ds,r,sh){
   const list=c.cash.filter(x=>x.d===ds);
   const cashT=cashShiftTotal(list, sh==='am'?'เช้า':'เย็น');
-  return (num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+trfGross(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cashT)
+  return (num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cashT)
        -(num(r['transfer_pending_prev_'+sh])+num(r['drawer_open_'+sh]))-num(r['sales_pos_'+sh]);
 }
 function drCell(v,extra){
@@ -1935,7 +1935,9 @@ function renderIncDay(){
       <div class="flab">💰 เงินที่นับได้</div>
       <div class="grid2">
         ${fld('deposit','เงินฝาก',sh)}${fld('cash_drawer','เงินเก๊ะ',sh)}
-        ${fld('transfer_total','ยอดเงินโอน (เข้าบัญชีจริง หลังหักค่าธรรมเนียม)',sh)}${fld('reserve_acct','บัญชีสำรอง',sh)}
+        <div class="fld"><label>ยอดเงินโอน (ยอดก่อนหัก)</label>
+        <input id="in${d}_transfer_total_${sh}" type="number" step="any" inputmode="decimal" placeholder="0" value="${num(r['transfer_total_'+sh])||''}" oninput="incInput(${d},'transfer_total_${sh}',this.value)">
+        <div class="xs" id="tfee${d}_${sh}" style="margin-top:3px;color:var(--blue)">${trfNoteHtml(r['transfer_total_'+sh])}</div></div>${fld('reserve_acct','บัญชีสำรอง',sh)}
       </div>
       <button class="btn gh sm2" style="width:100%;margin-top:8px" onclick="cashModal('${ds}','${th}')">💵 เงินสดจ่าย${lab} <span id="cn${d}${sh}"></span></button>
       <div class="flab">↩︎ ยอดยกมา (หักออก)</div>
@@ -1969,6 +1971,7 @@ function getInc(ds){
 }
 function incInput(day,f,v){
   const ds=dstr(S.m,day); const r=getInc(ds); r[f]=num(v);
+  if(f.startsWith('transfer_total_')){ const el=document.getElementById('tfee'+day+'_'+f.slice(-2)); if(el)el.innerHTML=trfNoteHtml(v); }
   if(f==='cash_drawer_am'){ // 🔗 เก๊ะเปิดกะเย็น = เงินเก๊ะกะเช้า (สดทันที)
     const src=num(v); r.drawer_open_pm=src;
     const inp=document.getElementById(`in${day}_drawer_open_pm`);
@@ -2002,13 +2005,12 @@ function refreshDay(day){
     const cn=document.getElementById('cn'+day+sh); if(cn)cn.textContent=cnt[sh]?`(${cnt[sh]} · ฿${fmtI(cash[sh])})`:'';
     const sd=document.getElementById('sd'+day+sh), cl=document.getElementById('cl'+day+sh);
     if(!any){ if(sd)sd.innerHTML=''; if(cl)cl.innerHTML='<span class="mut">ยังไม่กรอก</span>'; continue; }
-    const fee=trfFee(r['transfer_total_'+sh]); // เงินโอนที่คีย์ = ยอดเข้าบัญชีจริง -> บวกค่าธรรมเนียมกลับตอนเทียบ POS
-    const counted=num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cash[sh]+fee;
+    const counted=num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cash[sh];
     const base=num(r['transfer_pending_prev_'+sh])+num(r['drawer_open_'+sh]);
     const pos=num(r['sales_pos_'+sh]);
     const diff=counted-base-pos; dTot+=diff;
     if(sd)sd.innerHTML=diffChip(diff);
-    if(cl)cl.innerHTML=`นับได้ <b>฿${fmt(counted,2)}</b>${fee>0?` <span class="xs mut" title="เงินโอนคีย์เป็นยอดเข้าบัญชีจริง ระบบบวกค่าธรรมเนียม 0.35%+VAT กลับให้ตอนเทียบ">(รวมค่าธรรมเนียมโอน ฿${fmt(fee,2)})</span>`:''} − ยกมา <b>฿${fmt(base,2)}</b> = <b>฿${fmt(counted-base,2)}</b><span style="margin-left:auto">POS <b>฿${fmt(pos,2)}</b></span>`;
+    if(cl)cl.innerHTML=`นับได้ <b>฿${fmt(counted,2)}</b> − ยกมา <b>฿${fmt(base,2)}</b> = <b>฿${fmt(counted-base,2)}</b><span style="margin-left:auto">POS <b>฿${fmt(pos,2)}</b></span>`;
   }
   const elS=document.getElementById('dsum'+day);
   if(elS){
