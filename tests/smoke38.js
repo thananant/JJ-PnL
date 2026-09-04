@@ -69,6 +69,8 @@ setTimeout(async()=>{
   // 6) หน้า income = edit -> เขียนได้ + auto log
   d.querySelector('.sb-item[data-v="income"]').click();
   await new Promise(r=>setTimeout(r,250));
+  const cb=[...d.querySelectorAll('#incChips button')].find(b=>b.dataset.d==='1');
+  out.push('ปฏิทินรายรับโชว์ยอดรายวัน 107k เหมือนรายจ่าย: '+(!!cb&&cb.classList.contains('hasamt')&&cb.textContent.includes('107k')));
   await w.eval("ups('pnl_income_daily',[{branch:'JJRD',d:'2026-08-02',sales_pos_am:5}],'branch,d')");
   await new Promise(r=>setTimeout(r,150));
   out.push('income write ok: '+posts.some(p=>p.inc));
