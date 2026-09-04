@@ -71,6 +71,16 @@ setTimeout(async()=>{
   await new Promise(r=>setTimeout(r,250));
   const cb=[...d.querySelectorAll('#incChips button')].find(b=>b.dataset.d==='1');
   out.push('ปฏิทินรายรับโชว์ยอดรายวัน 107k เหมือนรายจ่าย: '+(!!cb&&cb.classList.contains('hasamt')&&cb.textContent.includes('107k')));
+  // ค่าธรรมเนียมเงินโอน 0.35%+VAT: คีย์ยอดเข้าบัญชีจริง 9,962.55 → ระบบบวกกลับเป็น 10,000 ตอนเทียบ POS
+  w.eval("S.incDay=1"); w.renderIncDay();
+  const r1=w.eval("S.cache[mkey(S.br,S.m)].inc['2026-08-01']");
+  r1.deposit_am=97000; r1.transfer_total_am=9962.55; w.renderIncDay();
+  await new Promise(r=>setTimeout(r,100));
+  const clT=d.getElementById('cl1am').textContent, sdT=d.getElementById('sd1am').textContent;
+  out.push('เทียบกะ: นับได้ 107,000 (รวมค่าธรรมเนียมโอน 37.45) ผลต่าง 0: '+(clT.includes('107,000.00')&&clT.includes('37.45')&&/0\.00|ตรง/.test(sdT)));
+  const df=w.shiftDiffCalc(w.eval("S.cache[mkey(S.br,S.m)]"),'2026-08-01',r1,'am');
+  out.push('shiftDiffCalc ใช้ยอดโอนก่อนหัก: '+(Math.abs(df)<0.01));
+  r1.deposit_am=0; r1.transfer_total_am=0; w.renderIncDay();
   await w.eval("ups('pnl_income_daily',[{branch:'JJRD',d:'2026-08-02',sales_pos_am:5}],'branch,d')");
   await new Promise(r=>setTimeout(r,150));
   out.push('income write ok: '+posts.some(p=>p.inc));

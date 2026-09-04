@@ -1827,11 +1827,14 @@ function openSrc(c,day,sh){
   if(day>1){ const p=c.inc[dstr(S.m,day-1)]; return p?num(p.cash_drawer_pm):0; }
   return num(c.prevPm);
 }
+const TRF_FEE=0.0035*1.07; // ค่าธรรมเนียมเงินโอน 0.35% + VAT 7% (ของค่าธรรมเนียม)
+function trfGross(v){ return num(v)>0? num(v)/(1-TRF_FEE) : num(v); } // ยอดโอนก่อนหัก (ไว้เทียบกับ POS)
+function trfFee(v){ return trfGross(v)-num(v); }
 function shiftHasData(r,sh){ return ['sales_pos','deposit','cash_drawer','transfer_total','reserve_acct'].some(f=>num(r[f+'_'+sh])); }
 function shiftDiffCalc(c,ds,r,sh){
   const list=c.cash.filter(x=>x.d===ds);
   const cashT=cashShiftTotal(list, sh==='am'?'เช้า':'เย็น');
-  return (num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cashT)
+  return (num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+trfGross(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cashT)
        -(num(r['transfer_pending_prev_'+sh])+num(r['drawer_open_'+sh]))-num(r['sales_pos_'+sh]);
 }
 function drCell(v,extra){
@@ -1932,7 +1935,7 @@ function renderIncDay(){
       <div class="flab">💰 เงินที่นับได้</div>
       <div class="grid2">
         ${fld('deposit','เงินฝาก',sh)}${fld('cash_drawer','เงินเก๊ะ',sh)}
-        ${fld('transfer_total','ยอดเงินโอน',sh)}${fld('reserve_acct','บัญชีสำรอง',sh)}
+        ${fld('transfer_total','ยอดเงินโอน (เข้าบัญชีจริง หลังหักค่าธรรมเนียม)',sh)}${fld('reserve_acct','บัญชีสำรอง',sh)}
       </div>
       <button class="btn gh sm2" style="width:100%;margin-top:8px" onclick="cashModal('${ds}','${th}')">💵 เงินสดจ่าย${lab} <span id="cn${d}${sh}"></span></button>
       <div class="flab">↩︎ ยอดยกมา (หักออก)</div>
@@ -1999,12 +2002,13 @@ function refreshDay(day){
     const cn=document.getElementById('cn'+day+sh); if(cn)cn.textContent=cnt[sh]?`(${cnt[sh]} · ฿${fmtI(cash[sh])})`:'';
     const sd=document.getElementById('sd'+day+sh), cl=document.getElementById('cl'+day+sh);
     if(!any){ if(sd)sd.innerHTML=''; if(cl)cl.innerHTML='<span class="mut">ยังไม่กรอก</span>'; continue; }
-    const counted=num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cash[sh];
+    const fee=trfFee(r['transfer_total_'+sh]); // เงินโอนที่คีย์ = ยอดเข้าบัญชีจริง -> บวกค่าธรรมเนียมกลับตอนเทียบ POS
+    const counted=num(r['deposit_'+sh])+num(r['cash_drawer_'+sh])+num(r['transfer_total_'+sh])+num(r['reserve_acct_'+sh])+cash[sh]+fee;
     const base=num(r['transfer_pending_prev_'+sh])+num(r['drawer_open_'+sh]);
     const pos=num(r['sales_pos_'+sh]);
     const diff=counted-base-pos; dTot+=diff;
     if(sd)sd.innerHTML=diffChip(diff);
-    if(cl)cl.innerHTML=`นับได้ <b>฿${fmt(counted,2)}</b> − ยกมา <b>฿${fmt(base,2)}</b> = <b>฿${fmt(counted-base,2)}</b><span style="margin-left:auto">POS <b>฿${fmt(pos,2)}</b></span>`;
+    if(cl)cl.innerHTML=`นับได้ <b>฿${fmt(counted,2)}</b>${fee>0?` <span class="xs mut" title="เงินโอนคีย์เป็นยอดเข้าบัญชีจริง ระบบบวกค่าธรรมเนียม 0.35%+VAT กลับให้ตอนเทียบ">(รวมค่าธรรมเนียมโอน ฿${fmt(fee,2)})</span>`:''} − ยกมา <b>฿${fmt(base,2)}</b> = <b>฿${fmt(counted-base,2)}</b><span style="margin-left:auto">POS <b>฿${fmt(pos,2)}</b></span>`;
   }
   const elS=document.getElementById('dsum'+day);
   if(elS){
