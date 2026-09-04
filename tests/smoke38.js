@@ -62,6 +62,8 @@ setTimeout(async()=>{
   out.push('user chip: '+d.getElementById('sbUser').textContent.includes('บอย'));
   // 5) dash = view -> มีแบนเนอร์ + เขียนถูกบล็อก
   out.push('dash banner: '+d.getElementById('view-dash').textContent.includes('ดูอย่างเดียว'));
+  const dsh=d.getElementById('view-dash').textContent;
+  out.push('คงเหลือสุทธิตั้งจากรวม VAT: 107,000 · VAT รอนำส่ง 7,000 · หลังหัก 100,000: '+(dsh.includes('฿107,000')&&dsh.includes('VAT รอนำส่ง ฿7,000')&&dsh.includes('เหลือ ฿100,000')));
   let blocked=false;
   try{ await w.eval("ups('pnl_expense_daily',[{branch:'JJRD',d:'2026-08-01',supplier_id:1,amount:1}],'branch,d,supplier_id')"); }
   catch(e){ blocked=String(e.message).includes('view-only'); }
@@ -84,6 +86,8 @@ setTimeout(async()=>{
   out.push('shiftDiffCalc ไม่บวกค่าธรรมเนียม: '+(Math.abs(df)<0.01));
   w.incInput(1,'transfer_total_am','5000');
   out.push('พิมพ์ใหม่ 5,000 → โน้ตอัปเดตสด 4,981.28: '+d.getElementById('tfee1_am').textContent.includes('4,981.28'));
+  const trp=d.getElementById('trfRep').textContent;
+  out.push('แผงเงินโอนรายวัน: วัน 1 ก่อนหัก 5,000.00 เข้าจริง 4,981.28 + รวม 1 วัน + ค่าธรรมเนียมเดือน 18.73: '+(trp.includes('5,000.00')&&trp.includes('4,981.28')&&trp.includes('รวม 1 วัน')&&trp.includes('18.73')));
   r1.deposit_am=0; r1.transfer_total_am=0; w.renderIncDay();
   await w.eval("ups('pnl_income_daily',[{branch:'JJRD',d:'2026-08-02',sales_pos_am:5}],'branch,d')");
   await new Promise(r=>setTimeout(r,150));
