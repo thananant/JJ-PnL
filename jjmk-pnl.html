@@ -5113,7 +5113,7 @@ RENDER.recon = async (el)=>{
     if(r.complete===false)a.part=true;
     if(r.uploaded_at&&r.uploaded_at>upAt)upAt=r.uploaded_at; });
   const accts=[...new Set(beam.map(r=>r.acct))].sort();
-  let rows='',tKey=0,tG=0,tN=0,tFee=0,tPend=0,nOk=0,nBad=0,nDay=0;
+  let rows='',tKey=0,tG=0,tN=0,tFee=0,tPend=0,nOk=0,nBad=0,nDay=0,ovK=0,unK=0;
   for(let d=1;d<=days;d++){
     const ds=dstr(S.m,d),k=key[ds]||0,b=bm[ds];
     if(!k&&!b)continue;
@@ -5124,11 +5124,11 @@ RENDER.recon = async (el)=>{
     if(g==null)st='<span class="mut">– ไม่มีข้อมูลไฟล์</span>';
     else if(b.part)st='<span class="mut">⚠ ไฟล์ไม่ครบวัน</span>';
     else if(Math.abs(diff)<1){st='<span style="color:#1F7A43;font-weight:700">✓ ตรง</span>';nOk++;}
-    else {st='<span style="color:var(--red);font-weight:700">✗ '+(diff>0?'คีย์เกิน/เงินไม่เข้า':'คีย์ขาด/ลืมคีย์')+' ฿'+fmt(Math.abs(diff),2)+'</span>';nBad++;cls=' style="background:#FBF0EC"';}
+    else {st='<span style="color:var(--red);font-weight:700">✗ '+(diff>0?'คีย์เกิน/เงินไม่เข้า':'คีย์ขาด/ลืมคีย์')+' ฿'+fmt(Math.abs(diff),2)+'</span>';nBad++;if(diff>0)ovK+=diff;else unK-=diff;cls=' style="background:#FBF0EC"';}
     rows+='<tr'+cls+'><td>'+d+' '+TH_D[dt.getDay()]+'.</td><td class="right">'+(k?fmt(k,2):'–')+'</td><td class="right">'+(g==null?'–':fmt(g,2))+'</td><td class="right">'+(g==null?'–':fmt(b.net,2))+'</td><td>'+st+(b&&b.pendN?' <span class="xs mut">⏳ รอเข้า ฿'+fmt(b.pend,2)+' ('+b.pendN+' รายการ)</span>':'')+'</td></tr>';
   }
   // ---- ตรวจเงินสด (ปิดกะ) รายสาขา จากข้อมูลที่คีย์อยู่แล้ว ----
-  let cashHtml='';
+  let cashHtml='',cashBadN=0,cashBadSum=0,cashShN=0;
   for(const bc of S.core.branches.map(x=>x.code)){
     const c=await loadMonth(bc,S.m);
     let bad=[],tot=0,nsh=0;
@@ -5139,6 +5139,7 @@ RENDER.recon = async (el)=>{
         if(Math.abs(df)>=1)bad.push({d,sh,df});
       }
     }
+    cashBadN+=bad.length;cashBadSum+=bad.reduce((x,y)=>x+y.df,0);cashShN+=nsh;
     cashHtml+='<div class="pcell" style="min-width:230px;flex:1"><div class="l">'+esc(BRNAME[bc]||bc)+' · '+nsh+' กะ</div>'
       +(nsh===0?'<div class="mut sm">ยังไม่มีข้อมูลปิดกะ</div>'
       : bad.length===0?'<div style="color:#1F7A43;font-weight:700">✓ ปิดกะลงตัวทุกวัน</div>'
@@ -5148,7 +5149,7 @@ RENDER.recon = async (el)=>{
       +'</div>';
   }
   // ---- เงินเข้าบัญชีธนาคาร (จากไฟล์เงินเคลื่อนไหว: PAYOUT = โอนออกจาก Beam เข้าธนาคาร) ----
-  let bank='';
+  let bank='',bankTot=0;
   if(moves.length){
     const mAccts=[...new Set(moves.map(r=>r.acct))].sort();
     const po={},mAdj=[],balLast={};
@@ -5164,6 +5165,7 @@ RENDER.recon = async (el)=>{
       const dt=new Date(dd+'T12:00:00');
       return '<tr><td>'+(+dd.slice(8))+' '+TH_D[dt.getDay()]+'.</td>'+mAccts.map(ac=>'<td class="right">'+(a[ac]?fmt(a[ac],2):'–')+'</td>').join('')+'<td class="right" style="font-weight:700">'+fmt(sum,2)+'</td></tr>';
     }).join('');
+    bankTot=tAll;
     bank='<div class="card"><h3>🏦 เงินเข้าบัญชีธนาคาร (รอบโอนออกจาก Beam)</h3>'
       +(pds.length?'<div class="twrap" style="max-height:48dvh;overflow-y:auto"><table><tr><th>วันที่เงินเข้า</th>'+mAccts.map(ac=>'<th class="right">'+esc(ac)+'</th>').join('')+'<th class="right">รวม</th></tr>'
         +brows
@@ -5174,6 +5176,23 @@ RENDER.recon = async (el)=>{
       +(mAdj.length?'<div class="dupbox" style="margin-top:8px">⚠ Beam ปรับปรุงยอดเอง (ADJUSTMENT): '+mAdj.map(r=>esc(r.d)+' '+(num(r.net)>0?'+':'')+fmt(num(r.net),2)+' บาท').join(' · ')+' — ควรสอบถาม Beam ว่าคือรายการอะไร</div>':'')
       +'</div>';
   }
+  // ---- แถบสรุปในการ์ดหัว: ไม่ตรงเท่าไร อะไรบ้าง ----
+  const chip=(txt,color)=>'<span class="sm" style="font-weight:700;color:'+color+'">'+txt+'</span>';
+  let sumRow='<div style="flex-basis:100%;display:flex;gap:6px 18px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:8px;margin-top:6px">';
+  if(!beam.length&&!moves.length){ sumRow+=chip('ยังไม่ได้อัปโหลดไฟล์ Beam เดือนนี้ — อัปโหลดแล้วผลสรุปจะขึ้นตรงนี้','var(--mut)'); }
+  else{
+    sumRow+=chip(nBad>0
+      ?'💸 เงินโอนไม่ตรง '+nBad+' วัน'+(ovK>0?' · คีย์เกิน/เงินไม่เข้า ฿'+fmt(ovK,2):'')+(unK>0?' · คีย์ขาด/ลืมคีย์ ฿'+fmt(unK,2):'')
+      :(nOk>0?'💸 เงินโอนตรงทุกวันที่เทียบได้ ('+nOk+' วัน)':'💸 เงินโอน: ยังไม่มีวันที่เทียบได้'),
+      nBad>0?'var(--red)':(nOk>0?'#1F7A43':'var(--mut)'));
+    if(tPend>0)sumRow+=chip('⏳ รอเงินเข้าบัญชี ฿'+fmt(tPend,2),'var(--blue)');
+    if(bankTot>0)sumRow+=chip('🏦 เข้าธนาคารแล้วเดือนนี้ ฿'+fmt(bankTot,2),'var(--ink)');
+    sumRow+=chip(cashBadN>0
+      ?'💵 ปิดกะไม่ลงตัว '+cashBadN+' กะ ('+(cashBadSum>0?'เกินรวม':'ขาดรวม')+' ฿'+fmt(Math.abs(cashBadSum),2)+')'
+      :(cashShN>0?'💵 ปิดกะลงตัวทุกกะ ('+cashShN+' กะ)':'💵 ยังไม่มีข้อมูลปิดกะ'),
+      cashBadN>0?'var(--red)':(cashShN>0?'#1F7A43':'var(--mut)'));
+  }
+  sumRow+='</div>';
   el.innerHTML=
   '<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
   +'<div><div class="b">🛡 ตรวจสอบเงิน · '+monthLabel(S.m)+'</div>'
@@ -5182,7 +5201,8 @@ RENDER.recon = async (el)=>{
   +'<input type="file" id="beamFile2" accept=".csv" multiple style="display:none" onchange="beamUpload(this)">'
   +'<div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">'
   +'<button class="btn dk sm2" onclick="document.getElementById(\'beamFile\').click()">📥 ไฟล์รายการ (Transactions)</button>'
-  +'<button class="btn gh sm2" onclick="document.getElementById(\'beamFile2\').click()">🏦 ไฟล์เงินเคลื่อนไหว (Balances)</button></div></div>'
+  +'<button class="btn gh sm2" onclick="document.getElementById(\'beamFile2\').click()">🏦 ไฟล์เงินเคลื่อนไหว (Balances)</button></div>'
+  +sumRow+'</div>'
   +(beamErr?'<div class="card" style="background:#FDF3E7;border-color:#E8C9A0"><b>⚠ ยังไม่ได้สร้างตารางเก็บข้อมูล</b> <span class="sm">รันไฟล์ <code>sql/jjmk_pnl_beam.sql</code> ใน Supabase ครั้งเดียว แล้วอัปโหลดไฟล์ได้เลย</span></div>':'')
   +'<div class="card"><h3>💸 เงินโอน: คีย์ในแอพ vs Beam</h3>'
   +(nDay===0?'<div class="empty">ยังไม่มีทั้งยอดโอนที่คีย์และไฟล์ Beam ของเดือนนี้<br><span class="xs mut">โหลดไฟล์รายการ (Transactions) จากเว็บ Beam ทุกบัญชี แล้วกด "อัปโหลดไฟล์ Beam" เลือกทีเดียวหลายไฟล์ได้</span></div>'
