@@ -315,7 +315,7 @@ main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px)
 @media(min-width:760px){.md2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}.md32{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;align-items:start}}
 .mut{color:var(--mut)}.sm{font-size:12.5px}.xs{font-size:11.5px}
 .b{font-weight:700}.right{text-align:right}
-.btn{background:var(--red);color:#fff;font-weight:600;padding:10px 16px;border-radius:11px;box-shadow:0 2px 8px rgba(198,33,39,.3)}
+.btn{display:inline-block;text-decoration:none;background:var(--red);color:#fff;font-weight:600;padding:10px 16px;border-radius:11px;box-shadow:0 2px 8px rgba(198,33,39,.3)}
 .btn:active{transform:scale(.97)}
 .btn.gh{background:#fff;color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
 .btn.dk{background:var(--ink);box-shadow:none}
@@ -595,9 +595,9 @@ function permOf(v){
   return (u.perms||{})[v]||'none';
 }
 function firstAllowedTab(){ return VIEWS.find(v=>permOf(v)!=='none')||'dash'; }
-function applyPerms(){
+function applyNav(){
   document.querySelectorAll('.tabbar button[data-v],.sb-item[data-v]').forEach(b=>{
-    b.style.display = permOf(b.dataset.v)==='none' ? 'none' : '';
+    b.style.display = (permOf(b.dataset.v)==='none'||(isCen(S.br)&&CEN_HIDE.includes(b.dataset.v))) ? 'none' : '';
   });
   document.querySelectorAll('.sb-sec').forEach(sec=>{ // หัวหมวดโชว์เฉพาะเมื่อมีเมนูให้เห็นอย่างน้อย 1 อัน
     let el=sec.nextElementSibling,any=false;
@@ -607,8 +607,8 @@ function applyPerms(){
     }
     sec.style.display=any?'':'none';
   });
-  paintUser();
 }
+function applyPerms(){ applyNav(); paintUser(); }
 /* ---------- log การใช้งานอัตโนมัติ ---------- */
 const LOGN={pnl_income_daily:'รายรับ',pnl_cash_paid:'เงินสดจ่าย',pnl_expense_daily:'รายจ่าย',pnl_bill_items:'บันทึกข้อมูลบิล',pnl_sup_items:'สินค้าประจำซัพ',pnl_fixed_monthly:'Fix cost',pnl_fixed_items:'ตั้งค่า Fix cost',pnl_fix_groups:'หมวด Fix cost',pnl_month_meta:'ข้อมูลเดือน',pnl_pv:'ใบสำคัญจ่าย',pnl_pv_items:'ใบสำคัญจ่าย',pnl_extra_expenses:'รายจ่ายอื่นๆ',pnl_shopee_orders:'Shopee',pnl_suppliers:'ตั้งค่าซัพ',pnl_branches:'ตั้งค่าสาขา',pnl_meat_daily:'เนื้อรายวัน',pnl_history:'ข้อมูลย้อนหลัง',pnl_history_items:'ข้อมูลย้อนหลัง',pnl_users:'ผู้ใช้',pnl_benchmarks:'มาตรฐาน',pnl_beam_daily:'ตรวจสอบเงิน (ไฟล์ Beam)',pnl_beam_moves:'ตรวจสอบเงิน (เงินเคลื่อนไหว Beam)'};
 let _alast={};
@@ -753,6 +753,9 @@ async function loadCore(){
   S.core.branches.forEach(b=>{ if(b.name) BRNAME[b.code]='สาขา'+b.name; });
 }
 function mkey(b,m){ return b+'|'+m; }
+/* ---------- สาขา "ส่วนกลาง" (ออฟฟิศ) — มีเฉพาะรายจ่าย ---------- */
+function isCen(code){ const b=S.core&&S.core.branches&&S.core.branches.find(x=>x.code===code); return !!(b&&b.is_central); }
+const CEN_HIDE=['income','usage','actual','ck']; // แท็บที่ไม่เกี่ยวกับส่วนกลาง
 async function loadMonth(b,m,force){
   const k=mkey(b,m);
   if(S.cache[k] && !force) return S.cache[k];
@@ -864,7 +867,7 @@ async function aggAll(m){
 function aggFor(br,m){ return br==='ALL' ? aggAll(m) : agg(br,m); }
 async function renderIncomeAll(el){
   const days=monthDays(S.m), from=S.m+'-01', to=dstr(S.m,days);
-  const brs=S.core.branches.map(b=>b.code);
+  const brs=S.core.branches.filter(b=>!b.is_central).map(b=>b.code);
   let rows=[];
   try{ rows=await selAll('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}&order=d`); }catch(e){}
   const M={}; rows.forEach(r=>{ const c=calcDay(r); M[r.d+'|'+r.branch]=c?c.incVat:0; });
@@ -935,6 +938,9 @@ function brModal(code){
     <div class="fld"><label>รหัสสาขา (อังกฤษ/ตัวเลข 2–10 ตัว เช่น JJBN)</label>
       <input id="brCode" value="${esc(b.code)}" ${code?'disabled':''} style="text-transform:uppercase" placeholder="JJXX"></div>
     <div class="fld"><label>ชื่อสาขา</label><input id="brName" value="${esc(b.name||'')}" placeholder="เช่น บางนา"></div>
+    <label class="sm" style="display:flex;gap:8px;align-items:center;margin:4px 0 6px">
+      <input type="checkbox" id="brCen" ${b.is_central?'checked':''} style="width:18px;height:18px">
+      🏢 ส่วนกลาง (เช่น ออฟฟิศ) — ลงได้เฉพาะรายจ่าย ไม่โชว์ในหน้ารายรับ/เทียบสาขา</label>
     <div style="display:flex;gap:8px;margin-top:12px">
       ${code&&S.user&&S.user.role==='admin'?`<button class="btn gh sm2" style="color:var(--bad)" onclick="brDelete('${code}')">🗑 ลบสาขา</button>`:''}
       <button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
@@ -943,15 +949,26 @@ function brModal(code){
 async function brSave(code){
   const name=(document.getElementById('brName').value||'').trim();
   if(!name){toast('ใส่ชื่อสาขาก่อนครับ',true);return;}
+  const cen=!!(document.getElementById('brCen')&&document.getElementById('brCen').checked);
+  const noCenCol=e=>{ toast('ติ๊ก "ส่วนกลาง" ยังไม่ทำงาน — รัน sql/jjmk_pnl_central.sql ใน Supabase ก่อนครับ',true); };
   try{
-    if(code){ await upd('pnl_branches','code=eq.'+code,{name}); }
+    if(code){
+      try{ await upd('pnl_branches','code=eq.'+code,{name,is_central:cen}); }
+      catch(e){ if(/is_central/i.test(String(e.message))){ await upd('pnl_branches','code=eq.'+code,{name}); if(cen)noCenCol(e); } else throw e; }
+    }
     else{
       const c=(document.getElementById('brCode').value||'').trim().toUpperCase();
       if(!/^[A-Z0-9]{2,10}$/.test(c)){toast('รหัสสาขาใช้ A-Z / 0-9 ยาว 2–10 ตัว',true);return;}
       if(S.core.branches.some(x=>x.code===c)){toast('รหัส '+c+' มีอยู่แล้ว',true);return;}
       const srt=(S.core.branches.length?Math.max(...S.core.branches.map(x=>num(x.sort)||0)):0)+1;
-      try{ await ins('pnl_branches',{code:c,name,sort:srt}); }
-      catch(e){ if(String(e.message).includes('sort')) await ins('pnl_branches',{code:c,name}); else throw e; }
+      let body={code:c,name,sort:srt,is_central:cen};
+      for(let i=0;i<3;i++){
+        try{ await ins('pnl_branches',body); break; }
+        catch(e){ const msg=String(e.message);
+          if(/is_central/i.test(msg)&&'is_central' in body){ delete body.is_central; if(cen)noCenCol(e); }
+          else if(msg.includes('sort')&&'sort' in body){ delete body.sort; }
+          else throw e; }
+      }
     }
     await loadCore(); renderBrSeg(); closeModal(); toast('บันทึกสาขาแล้ว'); show('set');
   }catch(e){ toast('บันทึกไม่สำเร็จ: '+e.message,true); }
@@ -995,10 +1012,12 @@ function renderBrSeg(){
   const seg=document.getElementById('brSeg'); if(!seg||!S.core)return;
   seg.innerHTML = S.core.branches.map(b=>`<button data-br="${b.code}" class="${S.br===b.code?'on':''}">${esc(b.name||(BRNAME[b.code]||b.code).replace('สาขา',''))}</button>`).join('')
     + `<button data-br="ALL" class="${S.br==='ALL'?'on':''}">ทุกสาขา</button>`;
+  applyNav();
 }
 function pickBranch(br){
   S.br=br; LS.set('jjpnl_br',br);
   document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x.dataset.br===br));
+  applyNav();
   show(S.tab);
 }
 
@@ -1006,6 +1025,7 @@ function pickBranch(br){
 const RENDER = {};
 async function show(v){
   if(S.user&&permOf(v)==='none') v=firstAllowedTab();
+  if(isCen(S.br)&&CEN_HIDE.includes(v)) v='exp'; // ส่วนกลางมีเฉพาะรายจ่าย
   document.querySelectorAll('.tabbar button,.sb-item').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
   const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',actual:'ใช้จริง (สต๊อก)',ck:'ครัวกลาง',sum:'สรุปเดือน',recon:'ตรวจสอบเงิน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
@@ -1532,9 +1552,14 @@ RENDER.dash = async (el)=>{
   let P = await aggFor(S.br,prevMonth(S.m)).catch(()=>null);
   if(!(P&&P.revenue)) P=histPrev(prevMonth(S.m)) || P;   // เดือนก่อนยังไม่มีข้อมูลรายวัน → ใช้ข้อมูลย้อนหลังที่นำเข้า
   let cmpHtml;
-  if(S.br==='ALL'){ cmpHtml=multiCompare(A.parts); }
+  if(S.br==='ALL'){
+    cmpHtml=multiCompare(A.parts.filter(p=>!isCen(p.b)));
+    const cps=A.parts.filter(p=>isCen(p.b));
+    const cT=cps.reduce((a,p)=>a+p.vc+p.fixT+p.extraT,0);
+    if(cT>0)cmpHtml+='<div class="xs" style="margin-top:6px;color:var(--blue)">🏢 ค่าใช้จ่ายส่วนกลาง (ไม่ใช่สาขา) ฿'+fmt(cT,2)+' — หักรวมอยู่ในตัวเลขทุกสาขาแล้ว</div>';
+  }
   else{
-    const others=S.core.branches.filter(b=>b.code!==S.br);
+    const others=S.core.branches.filter(b=>b.code!==S.br&&!b.is_central);
     const os=(await Promise.all(others.map(b=>agg(b.code,S.m).catch(()=>null)))).filter(Boolean);
     cmpHtml=multiCompare([A,...os]);
   }
@@ -5143,7 +5168,7 @@ RENDER.recon = async (el)=>{
   }
   // ---- ตรวจเงินสด (ปิดกะ) รายสาขา จากข้อมูลที่คีย์อยู่แล้ว ----
   let cashHtml='',cashBadN=0,cashBadSum=0,cashShN=0;
-  for(const bc of S.core.branches.map(x=>x.code)){
+  for(const bc of S.core.branches.filter(x=>!x.is_central).map(x=>x.code)){
     const c=await loadMonth(bc,S.m);
     let bad=[],tot=0,nsh=0;
     for(let d=1;d<=days;d++){
@@ -5476,7 +5501,7 @@ RENDER.set = async (el)=>{
     <div class="card"><h3>สาขา <span class="sp"><button class="hintlink" onclick="brModal(null)">+ เพิ่มสาขา</button></span></h3>
       <div class="xs mut" style="margin-bottom:8px">เพิ่มสาขาใหม่ได้เลย — ปุ่มเลือกสาขา ทุกหน้า รายงาน และสำรอง NAS รองรับอัตโนมัติ · รหัสใช้ภาษาอังกฤษ (ไปโชว์ในเลข PV และชื่อโฟลเดอร์สำรอง)</div>
       <div class="twrap"><table>
-      ${S.core.branches.map(b=>`<tr><td><span class="b sm">${esc(b.name||'')}</span> <span class="xs mut">· ${esc(b.code)}</span></td>
+      ${S.core.branches.map(b=>`<tr><td><span class="b sm">${esc(b.name||'')}</span> <span class="xs mut">· ${esc(b.code)}</span>${b.is_central?' <span class="xs" style="color:var(--blue)">🏢 ส่วนกลาง</span>':''}</td>
         <td class="right"><button class="hintlink" onclick="brModal('${b.code}')">แก้ไขชื่อ</button></td></tr>`).join('')}
       </table></div></div>
     <div class="card"><h3>ข้อมูลบริษัท (หัวเอกสาร PV)</h3>
