@@ -6,11 +6,10 @@
 - `jjmk-stock-beta.html` — ระบบนับสต๊อกสาขา
 - `jjmk-kitchen.html` — ระบบครัวกลาง (JJ Kitchen)
 
-ไฟล์ SQL (รันครั้งเดียวใน Supabase → SQL Editor) เก็บที่ branch
-`claude/food-production-system-ph4g9g` — **ไม่รวมเข้า main**:
+ไฟล์ SQL (รันครั้งเดียวใน Supabase → SQL Editor) เก็บที่ **branch `sql`**
+(https://github.com/thananant/JJ-PnL/tree/sql) — ไม่รวมเข้า main และไม่ merge กับใคร:
 
 - `jjmk_kitchen_setup.sql` — ติดตั้งตารางระบบครัวกลาง
 - `jjmk_kitchen_data.sql` — ข้อมูลตั้งต้นครัวกลาง (วัตถุดิบ/เมนู/สูตร)
 
-⚠️ ตอน merge branch งานเข้า main: ตัดไฟล์ `.sql` ออกก่อน commit
-(`git merge <branch> --no-commit` แล้ว `git rm *.sql`)
+⚠️ อย่าเพิ่มไฟล์ `.sql` ลง main หรือ branch งาน — แก้/เพิ่ม SQL ให้ทำที่ branch `sql` เท่านั้น
