@@ -9,6 +9,10 @@
 
 - `jjmk-stock-b54.sql` — b54: ผูกชื่อนับ↔ชื่อบิล + อัตราแปลงหน่วยบิล→หน่วยนับ (supplier_items)
 
+## หน้าเจ้าของ (jjmk-owner.html)
+
+- `jjmk_owner_setup.sql` — ตารางผ่อนชำระ `pnl_installments` (ระบบติดตามการผ่อนในหน้า Owner)
+
 ## ตารางบำรุงรักษาสาขา (ในแอพนับสต๊อก · เมนูซ่อมบำรุง)
 
 - `jjmk_maint_setup.sql` — ตาราง maint_tasks/maint_logs + สิทธิ์ + bucket รูป `maint-photos`
