@@ -49,13 +49,13 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .tabbar button.on{background:var(--ink);color:#fff}
 main{padding:14px clamp(12px,1.6vw,28px) 60px;max-width:1280px;margin:0 auto}
 .view{display:none}.view.on{display:block}
+aside#sideNav{display:none;position:fixed;left:0;top:0;bottom:0;width:225px;background:#fff;border-right:1px solid var(--line);flex-direction:column;padding:16px 10px 12px;z-index:50;overflow-y:auto}
 @media(min-width:1080px){
   aside#sideNav{display:flex}
   header,main{margin-left:225px}
   .tabbar{display:none}
   main{max-width:1180px}
 }
-aside#sideNav{display:none;position:fixed;left:0;top:0;bottom:0;width:225px;background:#fff;border-right:1px solid var(--line);flex-direction:column;padding:16px 10px 12px;z-index:50;overflow-y:auto}
 .sb-logo{display:flex;gap:9px;align-items:center;padding:2px 8px 14px;font-family:'Prompt'}
 .sb-logo .lg{width:38px;height:38px;border-radius:11px;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;box-shadow:0 3px 8px rgba(198,33,39,.35)}
 .sb-logo b{font-size:15px;display:block;line-height:1.2}
@@ -456,7 +456,11 @@ async function vDash(el){
     </div>
   </div>
   <div class="card"><h3>ล่าสุด <span class="sp">5 รายการ</span></h3>
-    ${rows.slice(0,5).map(r=>miniRow(r)).join('')||'<div class="empty">ยังไม่มีข้อมูล — เชื่อมต่อช่องทาง หรือเพิ่มรีวิวเองที่หน้า “เสียงลูกค้า”</div>'}
+    ${rows.slice(0,5).map(r=>miniRow(r)).join('')||`<div class="empty">ยังไม่มีข้อมูล — เริ่มจากเพิ่มรีวิวทดสอบ หรือเชื่อมต่อช่องทางก่อน
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn sm" onclick="goAddManual()">➕ เพิ่มรีวิวเอง</button>
+        ${isAdmin()?'<button class="btn gh sm" onclick="show(\'ch\')">🔌 เชื่อมต่อช่องทาง</button>':''}
+      </div></div>`}
   </div>`;
 
   // charts
@@ -593,6 +597,7 @@ async function setStatus(id,st){
   await api('PATCH','social_mentions?id=eq.'+id,{reply_status:st});
   S.cache={};show(S.tab);
 }
+async function goAddManual(){await show('feed');addManual()}
 function addManual(){
   openModal(`<h3>➕ เพิ่มรีวิว/เสียงลูกค้าเอง</h3>
     <div class="grid2">
