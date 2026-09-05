@@ -5113,7 +5113,7 @@ RENDER.recon = async (el)=>{
     if(r.complete===false)a.part=true;
     if(r.uploaded_at&&r.uploaded_at>upAt)upAt=r.uploaded_at; });
   const accts=[...new Set(beam.map(r=>r.acct))].sort();
-  let rows='',tKey=0,tG=0,tN=0,tFee=0,tPend=0,nOk=0,nBad=0,nDay=0,ovK=0,unK=0;
+  let rows='',tKey=0,tG=0,tN=0,tFee=0,tPend=0,nOk=0,nBad=0,nDay=0,ovK=0,unK=0,nOv=0,nUn=0;
   for(let d=1;d<=days;d++){
     const ds=dstr(S.m,d),k=key[ds]||0,b=bm[ds];
     if(!k&&!b)continue;
@@ -5124,7 +5124,8 @@ RENDER.recon = async (el)=>{
     if(g==null)st='<span class="mut">– ไม่มีข้อมูลไฟล์</span>';
     else if(b.part)st='<span class="mut">⚠ ไฟล์ไม่ครบวัน</span>';
     else if(Math.abs(diff)<1){st='<span style="color:#1F7A43;font-weight:700">✓ ตรง</span>';nOk++;}
-    else {st='<span style="color:var(--red);font-weight:700">✗ '+(diff>0?'คีย์เกิน/เงินไม่เข้า':'คีย์ขาด/ลืมคีย์')+' ฿'+fmt(Math.abs(diff),2)+'</span>';nBad++;if(diff>0)ovK+=diff;else unK-=diff;cls=' style="background:#FBF0EC"';}
+    else if(diff>0){st='<span style="color:var(--red);font-weight:700">✗ คีย์เกิน/เงินไม่เข้า ฿'+fmt(diff,2)+'</span>';nBad++;ovK+=diff;nOv++;cls=' style="background:#FBF0EC"';}
+    else {st='<span style="color:#A66A00;font-weight:700">✗ คีย์ขาด/ลืมคีย์ ฿'+fmt(-diff,2)+'</span>';nBad++;unK-=diff;nUn++;cls=' style="background:#FFF6DF"';}
     rows+='<tr'+cls+'><td>'+d+' '+TH_D[dt.getDay()]+'.</td><td class="right">'+(k?fmt(k,2):'–')+'</td><td class="right">'+(g==null?'–':fmt(g,2))+'</td><td class="right">'+(g==null?'–':fmt(b.net,2))+'</td><td>'+st+(b&&b.pendN?' <span class="xs mut">⏳ รอเข้า ฿'+fmt(b.pend,2)+' ('+b.pendN+' รายการ)</span>':'')+'</td></tr>';
   }
   // ---- ตรวจเงินสด (ปิดกะ) รายสาขา จากข้อมูลที่คีย์อยู่แล้ว ----
@@ -5181,10 +5182,10 @@ RENDER.recon = async (el)=>{
   let sumRow='<div style="flex-basis:100%;display:flex;gap:6px 18px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:8px;margin-top:6px">';
   if(!beam.length&&!moves.length){ sumRow+=chip('ยังไม่ได้อัปโหลดไฟล์ Beam เดือนนี้ — อัปโหลดแล้วผลสรุปจะขึ้นตรงนี้','var(--mut)'); }
   else{
-    sumRow+=chip(nBad>0
-      ?'💸 เงินโอนไม่ตรง '+nBad+' วัน'+(ovK>0?' · คีย์เกิน/เงินไม่เข้า ฿'+fmt(ovK,2):'')+(unK>0?' · คีย์ขาด/ลืมคีย์ ฿'+fmt(unK,2):'')
-      :(nOk>0?'💸 เงินโอนตรงทุกวันที่เทียบได้ ('+nOk+' วัน)':'💸 เงินโอน: ยังไม่มีวันที่เทียบได้'),
-      nBad>0?'var(--red)':(nOk>0?'#1F7A43':'var(--mut)'));
+    if(nOk>0)sumRow+=chip('💸 เงินโอนตรง '+nOk+' วัน','#1F7A43');
+    if(nOv>0)sumRow+=chip('💸 คีย์เกิน/เงินไม่เข้า '+nOv+' วัน ฿'+fmt(ovK,2),'var(--red)');
+    if(nUn>0)sumRow+=chip('💸 คีย์ขาด/ลืมคีย์ '+nUn+' วัน ฿'+fmt(unK,2)+' (เงินเข้ามากกว่าที่คีย์)','#A66A00');
+    if(!nOk&&!nOv&&!nUn)sumRow+=chip('💸 เงินโอน: ยังไม่มีวันที่เทียบได้','var(--mut)');
     if(tPend>0)sumRow+=chip('⏳ รอเงินเข้าบัญชี ฿'+fmt(tPend,2),'var(--blue)');
     if(bankTot>0)sumRow+=chip('🏦 เข้าธนาคารแล้วเดือนนี้ ฿'+fmt(bankTot,2),'var(--ink)');
     sumRow+=chip(cashBadN>0
