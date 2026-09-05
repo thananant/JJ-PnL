@@ -472,6 +472,7 @@ canvas{max-width:100%}
   <button class="sb-item" data-v="usage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7l8 4 8-4-8-4Z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/></svg>ข้อมูลการใช้ของ</button>
   <button class="sb-item" data-v="actual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9 17l11-11"/><path d="M4 6.5h6"/><path d="M4 19.5h6"/></svg>ใช้จริง (สต๊อก)</button>
   <button class="sb-item" data-v="sum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20v-7"/><path d="M12 20V5"/><path d="M19 20v-10"/></svg>สรุปเดือน</button>
+  <button class="sb-item" data-v="recon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5.2c0 4.5 2.9 8.1 7 9.3 4.1-1.2 7-4.8 7-9.3V6l-7-3Z"/><path d="m9 12 2.2 2.2 4-4.5"/></svg>ตรวจสอบเงิน</button>
   <button class="sb-item" data-v="pv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8.5h6"/><path d="M9 12.5h6"/><path d="M9 16.5h3.5"/></svg>ใบสำคัญจ่าย</button>
   <button class="sb-item" data-v="etc"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>อื่นๆ</button>
   <div class="sb-foot"><div id="sbUser"></div><button class="sb-item" data-v="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6.5h8"/><path d="M18.5 6.5H20"/><circle cx="15.5" cy="6.5" r="2.1"/><path d="M4 12h2.5"/><path d="M12 12h8"/><circle cx="9.2" cy="12" r="2.1"/><path d="M4 17.5h10.5"/><path d="M20 17.5h0"/><circle cx="17.3" cy="17.5" r="2.1"/></svg>ตั้งค่า</button></div>
@@ -496,6 +497,7 @@ canvas{max-width:100%}
     <button data-v="vatrep">รายละเอียด</button>
     <button data-v="usage">การใช้ของ</button>
     <button data-v="sum">สรุปเดือน</button>
+    <button data-v="recon">ตรวจสอบเงิน</button>
     <button data-v="pv">ใบสำคัญจ่าย</button>
     <button data-v="etc">อื่นๆ</button>
     <button data-v="set">ตั้งค่า</button>
@@ -510,6 +512,7 @@ canvas{max-width:100%}
   <section class="view" id="view-usage"></section>
   <section class="view" id="view-actual"></section>
   <section class="view" id="view-sum"></section>
+  <section class="view" id="view-recon"></section>
   <section class="view" id="view-pv"></section>
   <section class="view" id="view-etc"></section>
   <section class="view" id="view-set"></section>
@@ -577,7 +580,7 @@ function sha256hex(str){
 function pwHash(u,p){ return sha256hex(u+'|'+p+'|JJPNL'); }
 
 /* ---------- สิทธิ์ผู้ใช้ ---------- */
-const MENU_LABEL={dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'};
+const MENU_LABEL={dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',recon:'ตรวจสอบเงิน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'};
 function permOf(v){
   const u=S.user; if(!u)return 'edit';
   if(u.role==='admin')return 'edit';
@@ -591,7 +594,7 @@ function applyPerms(){
   paintUser();
 }
 /* ---------- log การใช้งานอัตโนมัติ ---------- */
-const LOGN={pnl_income_daily:'รายรับ',pnl_cash_paid:'เงินสดจ่าย',pnl_expense_daily:'รายจ่าย',pnl_bill_items:'บันทึกข้อมูลบิล',pnl_sup_items:'สินค้าประจำซัพ',pnl_fixed_monthly:'Fix cost',pnl_fixed_items:'ตั้งค่า Fix cost',pnl_fix_groups:'หมวด Fix cost',pnl_month_meta:'ข้อมูลเดือน',pnl_pv:'ใบสำคัญจ่าย',pnl_pv_items:'ใบสำคัญจ่าย',pnl_extra_expenses:'รายจ่ายอื่นๆ',pnl_shopee_orders:'Shopee',pnl_suppliers:'ตั้งค่าซัพ',pnl_branches:'ตั้งค่าสาขา',pnl_meat_daily:'เนื้อรายวัน',pnl_history:'ข้อมูลย้อนหลัง',pnl_history_items:'ข้อมูลย้อนหลัง',pnl_users:'ผู้ใช้',pnl_benchmarks:'มาตรฐาน'};
+const LOGN={pnl_income_daily:'รายรับ',pnl_cash_paid:'เงินสดจ่าย',pnl_expense_daily:'รายจ่าย',pnl_bill_items:'บันทึกข้อมูลบิล',pnl_sup_items:'สินค้าประจำซัพ',pnl_fixed_monthly:'Fix cost',pnl_fixed_items:'ตั้งค่า Fix cost',pnl_fix_groups:'หมวด Fix cost',pnl_month_meta:'ข้อมูลเดือน',pnl_pv:'ใบสำคัญจ่าย',pnl_pv_items:'ใบสำคัญจ่าย',pnl_extra_expenses:'รายจ่ายอื่นๆ',pnl_shopee_orders:'Shopee',pnl_suppliers:'ตั้งค่าซัพ',pnl_branches:'ตั้งค่าสาขา',pnl_meat_daily:'เนื้อรายวัน',pnl_history:'ข้อมูลย้อนหลัง',pnl_history_items:'ข้อมูลย้อนหลัง',pnl_users:'ผู้ใช้',pnl_benchmarks:'มาตรฐาน',pnl_beam_daily:'ตรวจสอบเงิน (ไฟล์ Beam)'};
 let _alast={};
 function alogAuto(method,path,body){
   try{
@@ -988,7 +991,7 @@ const RENDER = {};
 async function show(v){
   if(S.user&&permOf(v)==='none') v=firstAllowedTab();
   document.querySelectorAll('.tabbar button,.sb-item').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
-  const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
+  const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',recon:'ตรวจสอบเงิน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   S.tab=v;
   const _ae=document.activeElement;
@@ -1408,7 +1411,7 @@ async function boot(){
   }
   S.tab=startTab; await show(startTab);
 }
-const VIEWS=['dash','income','exp','detail','vatrep','usage','sum','pv','etc','set'];
+const VIEWS=['dash','income','exp','detail','vatrep','usage','sum','recon','pv','etc','set'];
 
 /* ============ แดชบอร์ด ============ */
 function killChart(id){ if(S.charts[id]){S.charts[id].destroy(); delete S.charts[id];} }
@@ -4903,6 +4906,136 @@ function pvPrint(pv){
 </script>
 <script>
 /* ============ อื่นๆ: รายจ่ายนอกเหนือ + Shopee ============ */
+/* ============ ตรวจสอบเงิน (กระทบยอดไฟล์ Beam + ปิดกะ) ============ */
+// ร้านเปิด 11:00–ตี 3 แต่ Beam ตัดรอบตามปฏิทิน → รายการก่อน 06:00 นับเป็นยอดของวันขายก่อนหน้า
+function beamBizday(d,t){ if((t||'')<'06:00:00'){const x=new Date(d+'T12:00:00');x.setDate(x.getDate()-1);const p=n=>String(n).padStart(2,'0');return x.getFullYear()+'-'+p(x.getMonth()+1)+'-'+p(x.getDate());} return d; }
+function csvParse(text){ // parser เล็ก รองรับช่อง "..." และ BOM
+  text=String(text||'').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n');
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else if(ch==='"')q=true;
+    else if(ch===','){row.push(cur);cur='';}
+    else if(ch==='\n'){row.push(cur);if(row.length>1||row[0]!=='')rows.push(row);row=[];cur='';}
+    else cur+=ch;}
+  row.push(cur); if(row.length>1||row[0]!=='')rows.push(row);
+  return rows;
+}
+function beamAgg(files){ // [{name,text}] -> {rows:[แถว pnl_beam_daily], n, errs} · กันรายการซ้ำด้วย charge_id
+  const seen=new Set(),m={},errs=[],rng={};let n=0;
+  for(const f of files){
+    const rows=csvParse(f.text);
+    const H=(rows[0]||[]).map(x=>String(x).trim());
+    const ix=k=>H.indexOf(k);
+    const iM=ix('merchant_id'),iD=ix('transaction_date'),iT=ix('transaction_time'),iA=ix('transaction_amount'),
+          iF=ix('fee_amount'),iV=ix('vat_amount'),iN=ix('net_amount'),iS=ix('settlement_status'),iC=ix('charge_id');
+    if(iM<0||iD<0||iT<0||iA<0){ errs.push(f.name+': หัวคอลัมน์ไม่ตรงกับไฟล์รายการจาก Beam'); continue; }
+    for(let r=1;r<rows.length;r++){
+      const c=rows[r]; if(!c[iD])continue;
+      const id=(iC>=0&&c[iC])?c[iC]:f.name+'#'+r;
+      if(seen.has(id))continue; seen.add(id);
+      const acct=c[iM]||'?',d=beamBizday(c[iD],c[iT]),k=acct+'|'+d;
+      const a=m[k]||(m[k]={acct,d,gross:0,fee:0,net:0,tx_count:0,pending_net:0,pending_count:0,complete:true});
+      const amt=num(c[iA]),fee=num(iF>=0?c[iF]:0)+num(iV>=0?c[iV]:0),net=iN>=0?num(c[iN]):amt-fee;
+      a.gross+=amt;a.fee+=fee;a.net+=net;a.tx_count++;
+      if(iS<0||c[iS]!=='SETTLED'){a.pending_net+=net;a.pending_count++;}
+      const ts=c[iD]+' '+c[iT],g=rng[acct]||(rng[acct]={min:ts,max:ts});
+      if(ts<g.min)g.min=ts; if(ts>g.max)g.max=ts;
+      n++;
+    }
+  }
+  Object.values(m).forEach(a=>{ // วันหัว/ท้ายช่วงไฟล์อาจไม่ครบวันขาย (Beam ตัดไฟล์ 00:00–23:59)
+    const g=rng[a.acct];
+    if(g){
+      if(a.d===beamBizday(g.min.slice(0,10),g.min.slice(11))&&g.min.slice(11)<'06:00:00')a.complete=false;
+      if(a.d===g.max.slice(0,10))a.complete=false; // ยังไม่เห็นรายการหลังเที่ยงคืนของวันถัดไป
+    }
+    ['gross','fee','net','pending_net'].forEach(f=>a[f]=Math.round(a[f]*100)/100);
+  });
+  return {rows:Object.values(m),n,errs};
+}
+async function beamUpload(inp){
+  const fl=[...(inp.files||[])]; if(!fl.length)return;
+  const files=await Promise.all(fl.map(f=>Promise.resolve(f.text()).then(text=>({name:f.name,text}))));
+  inp.value='';
+  const res=beamAgg(files);
+  res.errs.forEach(e=>toast(e,true));
+  if(!res.rows.length)return;
+  try{
+    await ups('pnl_beam_daily',res.rows,'acct,d');
+    toast('✅ อ่าน '+fmtI(res.n)+' รายการ → บันทึก '+res.rows.length+' วัน·บัญชี');
+    await show('recon');
+  }catch(e){
+    const msg=String(e&&e.message||'');
+    if(msg==='view-only')return;
+    toast(/pnl_beam_daily|42P01|schema cache/i.test(msg)?'ยังไม่ได้สร้างตาราง — รัน sql/jjmk_pnl_beam.sql ใน Supabase ก่อนครับ':'บันทึกไม่สำเร็จ — '+msg,true);
+  }
+}
+RENDER.recon = async (el)=>{
+  const days=monthDays(S.m),from=dstr(S.m,1),to=dstr(S.m,days);
+  let beam=[],beamErr=false;
+  try{ beam=await selAllQ('pnl_beam_daily','select=*&d=gte.'+from+'&d=lte.'+to+'&order=d')||[]; }catch(e){ beamErr=true; }
+  const inc=await selAllQ('pnl_income_daily','select=branch,d,transfer_total_am,transfer_total_pm&d=gte.'+from+'&d=lte.'+to+'&order=d')||[];
+  const key={}; inc.forEach(r=>{ key[r.d]=(key[r.d]||0)+num(r.transfer_total_am)+num(r.transfer_total_pm); });
+  const bm={}; let upAt='';
+  beam.forEach(r=>{ const a=bm[r.d]||(bm[r.d]={gross:0,fee:0,net:0,pend:0,pendN:0,part:false});
+    a.gross+=num(r.gross);a.fee+=num(r.fee);a.net+=num(r.net);a.pend+=num(r.pending_net);a.pendN+=num(r.pending_count);
+    if(r.complete===false)a.part=true;
+    if(r.uploaded_at&&r.uploaded_at>upAt)upAt=r.uploaded_at; });
+  const accts=[...new Set(beam.map(r=>r.acct))].sort();
+  let rows='',tKey=0,tG=0,tN=0,tFee=0,tPend=0,nOk=0,nBad=0,nDay=0;
+  for(let d=1;d<=days;d++){
+    const ds=dstr(S.m,d),k=key[ds]||0,b=bm[ds];
+    if(!k&&!b)continue;
+    nDay++; const dt=new Date(S.m+'-01');dt.setDate(d);
+    const g=b?b.gross:null,diff=g==null?null:k-g;
+    tKey+=k; if(b){tG+=b.gross;tN+=b.net;tFee+=b.fee;tPend+=b.pend;}
+    let st,cls='';
+    if(g==null)st='<span class="mut">– ไม่มีข้อมูลไฟล์</span>';
+    else if(b.part)st='<span class="mut">⚠ ไฟล์ไม่ครบวัน</span>';
+    else if(Math.abs(diff)<1){st='<span style="color:#1F7A43;font-weight:700">✓ ตรง</span>';nOk++;}
+    else {st='<span style="color:var(--red);font-weight:700">✗ '+(diff>0?'คีย์เกิน/เงินไม่เข้า':'คีย์ขาด/ลืมคีย์')+' ฿'+fmt(Math.abs(diff),2)+'</span>';nBad++;cls=' style="background:#FBF0EC"';}
+    rows+='<tr'+cls+'><td>'+d+' '+TH_D[dt.getDay()]+'.</td><td class="right">'+(k?fmt(k,2):'–')+'</td><td class="right">'+(g==null?'–':fmt(g,2))+'</td><td class="right">'+(g==null?'–':fmt(b.net,2))+'</td><td>'+st+(b&&b.pendN?' <span class="xs mut">⏳ รอเข้า ฿'+fmt(b.pend,2)+' ('+b.pendN+' รายการ)</span>':'')+'</td></tr>';
+  }
+  // ---- ตรวจเงินสด (ปิดกะ) รายสาขา จากข้อมูลที่คีย์อยู่แล้ว ----
+  let cashHtml='';
+  for(const bc of S.core.branches.map(x=>x.code)){
+    const c=await loadMonth(bc,S.m);
+    let bad=[],tot=0,nsh=0;
+    for(let d=1;d<=days;d++){
+      const ds=dstr(S.m,d),r=c.inc[ds]; if(!r)continue;
+      for(const sh of ['am','pm']){ if(!shiftHasData(r,sh))continue;
+        const df=shiftDiffCalc(c,ds,r,sh); nsh++; tot+=df;
+        if(Math.abs(df)>=1)bad.push({d,sh,df});
+      }
+    }
+    cashHtml+='<div class="pcell" style="min-width:230px;flex:1"><div class="l">'+esc(BRNAME[bc]||bc)+' · '+nsh+' กะ</div>'
+      +(nsh===0?'<div class="mut sm">ยังไม่มีข้อมูลปิดกะ</div>'
+      : bad.length===0?'<div style="color:#1F7A43;font-weight:700">✓ ปิดกะลงตัวทุกวัน</div>'
+      : '<div style="color:var(--red);font-weight:700">✗ ไม่ลงตัว '+bad.length+' กะ (รวม '+(tot>0?'เกิน':'ขาด')+' ฿'+fmt(Math.abs(tot),2)+')</div><div class="xs mut" style="margin-top:3px">'
+        +bad.slice(0,8).map(x=>'วันที่ '+x.d+' '+(x.sh==='am'?'เช้า':'เย็น')+' '+(x.df>0?'+':'−')+fmt(Math.abs(x.df),2)).join(' · ')
+        +(bad.length>8?' · …อีก '+(bad.length-8)+' กะ':'')+'</div>')
+      +'</div>';
+  }
+  el.innerHTML=
+  '<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+  +'<div><div class="b">🛡 ตรวจสอบเงิน · '+monthLabel(S.m)+'</div>'
+  +'<div class="xs mut">เงินโอน: เทียบยอดที่คีย์ (ทุกสาขารวมกัน) กับไฟล์รายการจาก Beam ต่อวันขายจริง — รายการก่อน 06:00 นับเป็นวันก่อนหน้าให้อัตโนมัติ</div></div>'
+  +'<input type="file" id="beamFile" accept=".csv" multiple style="display:none" onchange="beamUpload(this)">'
+  +'<button class="btn dk sm2" style="margin-left:auto" onclick="document.getElementById(\'beamFile\').click()">📥 อัปโหลดไฟล์ Beam</button></div>'
+  +(beamErr?'<div class="card" style="background:#FDF3E7;border-color:#E8C9A0"><b>⚠ ยังไม่ได้สร้างตารางเก็บข้อมูล</b> <span class="sm">รันไฟล์ <code>sql/jjmk_pnl_beam.sql</code> ใน Supabase ครั้งเดียว แล้วอัปโหลดไฟล์ได้เลย</span></div>':'')
+  +'<div class="card"><h3>💸 เงินโอน: คีย์ในแอพ vs Beam</h3>'
+  +(nDay===0?'<div class="empty">ยังไม่มีทั้งยอดโอนที่คีย์และไฟล์ Beam ของเดือนนี้<br><span class="xs mut">โหลดไฟล์รายการ (Transactions) จากเว็บ Beam ทุกบัญชี แล้วกด "อัปโหลดไฟล์ Beam" เลือกทีเดียวหลายไฟล์ได้</span></div>'
+  :'<div class="twrap" style="max-height:60dvh;overflow-y:auto"><table><tr><th>วันขาย</th><th class="right">คีย์ในแอพ<div class="xs mut">ทุกสาขารวม (ก่อนหัก)</div></th><th class="right">Beam ก่อนหัก'+(accts.length?'<div class="xs mut">'+accts.map(esc).join(' + ')+'</div>':'')+'</th><th class="right">Beam เข้าจริง</th><th>ผล</th></tr>'
+    +rows
+    +'<tr style="font-weight:700;background:#F7F2E6"><td>รวม '+nDay+' วัน</td><td class="right">'+fmt(tKey,2)+'</td><td class="right">'+fmt(tG,2)+'</td><td class="right">'+fmt(tN,2)+'</td><td>'+(nBad===0?(nOk>0?'<span style="color:#1F7A43">✓ ตรง '+nOk+' วัน</span>':''):'<span style="color:var(--red)">✗ ไม่ตรง '+nBad+' วัน</span>')+'</td></tr></table></div>'
+    +'<div class="xs mut" style="margin-top:6px">ค่าธรรมเนียม Beam เดือนนี้ ฿'+fmt(tFee,2)+(tPend>0?' · ⏳ รอเงินเข้าบัญชี ฿'+fmt(tPend,2)+' (รอบโอนของ Beam = วันถัดไป ไม่ใช่เงินหาย)':'')+(upAt?' · อัปโหลดล่าสุด '+esc(upAt.slice(0,16).replace('T',' ')):'')+'</div>')
+  +'</div>'
+  +'<div class="card"><h3>💵 เงินสด: ปิดกะลงตัวไหม (จากข้อมูลที่คีย์อยู่แล้ว)</h3>'
+  +'<div style="display:flex;gap:10px;flex-wrap:wrap">'+cashHtml+'</div>'
+  +'<div class="xs mut" style="margin-top:6px">สูตรเดียวกับหน้ารายรับ: เงินฝาก+เงินเก๊ะ+โอน+บัญชีสำรอง+จ่ายสดจากเก๊ะ − เก๊ะเปิด − โอนคงค้างเมื่อวาน ต้องเท่ายอด POS</div></div>';
+};
+
 RENDER.etc = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=allNotice('อื่นๆ'); return; }
   const c=await loadMonth(S.br,S.m);
