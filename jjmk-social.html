@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JJ Social — จริงใจหมูกระทะ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --red:#C62127; --red-d:#A31B20; --red-t:#FBEBEB;
+  --ink:#241F1E; --mut:#8B837B; --bg:#F5F2ED; --card:#FFFFFF; --line:#E7E1D8;
+  --ok:#1E8E5A; --ok-t:#E6F4EC; --bad:#D23B3B; --bad-t:#FCE9E8; --gold:#B98A2F; --gold-t:#F7EEDC;
+  --blu:#2A6FBB; --blu-t:#E8F1FB;
+  --r:14px; --sh:0 1px 2px rgba(35,25,20,.05),0 4px 14px rgba(35,25,20,.06);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;min-height:100dvh}
+h1,h2,h3,.num,.kpi-v{font-family:'Prompt',sans-serif}
+.num,.kpi-v{font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:15px}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)}
+input,select,textarea{background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--red)}
+input::placeholder,textarea::placeholder{color:#C5BEB5}
+textarea{resize:vertical;min-height:64px;line-height:1.5}
+::-webkit-scrollbar{height:6px;width:6px}::-webkit-scrollbar-thumb{background:#D8D1C7;border-radius:3px}
+
+/* ---------- layout ---------- */
+header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hrow{display:flex;align-items:center;gap:10px;padding:10px clamp(14px,1.6vw,28px) 6px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:8px;font-family:'Prompt';font-weight:700;font-size:18px}
+.brand .dot{width:12px;height:12px;border-radius:4px;background:var(--red);box-shadow:0 0 0 3px var(--red-t)}
+.brand small{font-weight:500;color:var(--mut);font-size:11px;display:block;line-height:1}
+.seg{display:flex;background:#EDE8E0;border-radius:11px;padding:3px;gap:2px}
+.seg button{padding:7px 13px;border-radius:9px;font-weight:600;color:var(--mut);font-size:14px;white-space:nowrap}
+.seg button.on{background:var(--red);color:#fff;box-shadow:0 2px 6px rgba(198,33,39,.35)}
+#daysPick{width:auto;padding:7px 10px;font-weight:600;font-size:14px;border-radius:10px}
+#syncDot{width:9px;height:9px;border-radius:50%;background:var(--ok);margin-left:auto;flex:none;transition:.2s}
+#syncDot.busy{background:var(--gold);animation:pul 1s infinite}
+#syncDot.err{background:var(--bad)}
+@keyframes pul{50%{opacity:.35}}
+.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px 10px 8px;scrollbar-width:none}
+.tabbar::-webkit-scrollbar{display:none}
+.tabbar button{flex:none;padding:8px 14px;border-radius:99px;font-weight:600;color:var(--mut);font-size:14px;position:relative}
+.tabbar button.on{background:var(--ink);color:#fff}
+main{padding:14px clamp(12px,1.6vw,28px) 60px;max-width:1280px;margin:0 auto}
+.view{display:none}.view.on{display:block}
+@media(min-width:1080px){
+  aside#sideNav{display:flex}
+  header,main{margin-left:225px}
+  .tabbar{display:none}
+  main{max-width:1180px}
+}
+aside#sideNav{display:none;position:fixed;left:0;top:0;bottom:0;width:225px;background:#fff;border-right:1px solid var(--line);flex-direction:column;padding:16px 10px 12px;z-index:50;overflow-y:auto}
+.sb-logo{display:flex;gap:9px;align-items:center;padding:2px 8px 14px;font-family:'Prompt'}
+.sb-logo .lg{width:38px;height:38px;border-radius:11px;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;box-shadow:0 3px 8px rgba(198,33,39,.35)}
+.sb-logo b{font-size:15px;display:block;line-height:1.2}
+.sb-logo small{color:var(--mut);font-size:11px;font-weight:500}
+.sb-sec{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--mut);padding:12px 10px 5px;font-family:'Prompt'}
+.sb-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 10px;border-radius:10px;font-weight:600;color:#5B534C;font-size:14px;position:relative}
+.sb-item svg,.sb-item .em{width:19px;text-align:center;flex:none}
+.sb-item:hover{background:#F6F2EA}
+.sb-item.on{background:var(--red-t);color:var(--red)}
+.sb-foot{margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
+#sbUser{font-size:12px;color:var(--mut);padding:4px 10px 8px}
+.badge{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--red);color:#fff;font-size:10.5px;font-weight:700;border-radius:99px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;font-family:'Prompt'}
+.tabbar .badge{position:static;transform:none;margin-left:5px}
+
+/* ---------- components ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px 16px;margin-bottom:14px}
+.card h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 .sp{font-weight:500;color:var(--mut);font-size:12px}
+.grid{display:grid;gap:12px}
+@media(min-width:840px){.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}.g4{grid-template-columns:repeat(4,1fr)}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;box-shadow:var(--sh)}
+.kpi .t{font-size:11.5px;color:var(--mut);font-weight:600}
+.kpi-v{font-size:22px;font-weight:700;margin-top:2px}
+.kpi .s{font-size:11px;color:var(--mut);margin-top:1px}
+.kpi.good .kpi-v{color:var(--ok)}.kpi.warn .kpi-v{color:var(--gold)}.kpi.bad .kpi-v{color:var(--bad)}
+.btn{background:var(--red);color:#fff;border-radius:10px;padding:9px 16px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--red-d)}
+.btn.dk{background:var(--ink)}
+.btn.gh{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn.sm{padding:6px 12px;font-size:13px;border-radius:9px}
+.btn:disabled{opacity:.5;cursor:default}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;border-radius:99px;padding:2.5px 9px;background:#F1ECE3;color:#6B6259;white-space:nowrap}
+.chip.pos{background:var(--ok-t);color:var(--ok)}
+.chip.neg{background:var(--bad-t);color:var(--bad)}
+.chip.neu{background:var(--gold-t);color:var(--gold)}
+.chip.br{background:var(--blu-t);color:var(--blu)}
+.chip.sev3{background:var(--bad);color:#fff}
+.mut{color:var(--mut)} .xs{font-size:11.5px} .sm{font-size:13px} .b{font-weight:700}
+.right{text-align:right}
+.fld{margin-bottom:10px}
+.fld label{display:block;font-size:12px;font-weight:700;color:var(--mut);margin-bottom:4px;font-family:'Prompt'}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.twrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
+th{background:#FAF6EC;text-align:left;font-size:11.5px;color:var(--mut);font-family:'Prompt';padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13.5px}
+.spin{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--red);border-radius:50%;animation:sp .8s linear infinite;margin:30px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+canvas{max-width:100%}
+.chartbox{position:relative;height:240px}
+.chartbox canvas{width:100%!important;height:100%!important}
+
+/* ---------- feed ---------- */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.filters select,.filters input{width:auto;padding:7px 10px;font-size:14px}
+.filters input{flex:1;min-width:140px}
+.mcard{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:13px 15px;margin-bottom:12px}
+.mcard.neg{border-left:4px solid var(--bad)}
+.mcard.pos{border-left:4px solid var(--ok)}
+.mcard.neu{border-left:4px solid var(--gold)}
+.mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+.mhead .who{font-weight:700;font-family:'Prompt';font-size:14px}
+.mhead .when{color:var(--mut);font-size:12px;margin-left:auto}
+.stars{color:#E8A33D;font-size:13px;letter-spacing:1px}
+.mtext{white-space:pre-wrap;line-height:1.55;margin:4px 0 8px}
+.mchips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.aisum{font-size:13px;color:#6B6259;background:#FAF7F0;border-radius:9px;padding:7px 10px;margin-bottom:8px}
+.ilist{font-size:12.5px;margin:0 0 8px;padding-left:0;list-style:none}
+.ilist li{padding:2px 0}
+.replybox{border-top:1.5px dashed var(--line);padding-top:9px;margin-top:4px}
+.replybox textarea{font-size:14px}
+.racts{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
+.sentline{font-size:12.5px;color:var(--ok);background:var(--ok-t);border-radius:9px;padding:7px 10px}
+
+/* ---------- chat ---------- */
+.chatwrap{display:grid;gap:12px}
+@media(min-width:900px){.chatwrap{grid-template-columns:300px 1fr;align-items:start}}
+.threads{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;max-height:70vh;overflow-y:auto}
+.thr{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;gap:8px;align-items:center}
+.thr:hover{background:#FAF7F0}
+.thr.on{background:var(--red-t)}
+.thr .nm{font-weight:700;font-size:13.5px;font-family:'Prompt'}
+.thr .lst{font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.thr .wait{width:9px;height:9px;border-radius:50%;background:var(--red);flex:none;margin-left:auto}
+.convo{background:#fff;border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;max-height:70vh}
+.msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.bub{max-width:82%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.5;white-space:pre-wrap}
+.bub.in{background:#F1ECE3;align-self:flex-start;border-bottom-left-radius:4px}
+.bub.out{background:var(--red);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.bub.draft{background:var(--gold-t);color:#7A5A10;border:1.5px dashed var(--gold);align-self:flex-end}
+.bub .bmeta{display:block;font-size:10.5px;opacity:.75;margin-top:3px}
+.chatin{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.chatin textarea{min-height:42px;max-height:120px}
+
+/* ---------- misc ---------- */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(90px);background:var(--ink);color:#fff;font-size:13.5px;font-weight:600;border-radius:12px;padding:11px 18px;transition:.28s;z-index:99;max-width:88vw;text-align:center}
+#toast.on{transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--bad)}
+#modalWrap{position:fixed;inset:0;background:rgba(30,22,18,.45);z-index:80;display:none;align-items:flex-start;justify-content:center;padding:5vh 14px;overflow-y:auto}
+#modalWrap.on{display:flex}
+.modal{background:#fff;border-radius:16px;padding:18px 18px 16px;width:100%;max-width:520px;box-shadow:0 18px 60px rgba(0,0,0,.25)}
+.modal h3{margin:0 0 12px;font-size:16px}
+#login{max-width:340px;margin:10vh auto;text-align:center;padding:0 16px}
+#login .lg{width:56px;height:56px;border-radius:16px;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;font-family:'Prompt';margin:0 auto 12px;box-shadow:0 6px 16px rgba(198,33,39,.35)}
+.codebx{background:#2A2523;color:#EDE6DC;font-family:ui-monospace,Menlo,monospace;font-size:12px;border-radius:10px;padding:10px 12px;overflow-x:auto;white-space:pre;line-height:1.6}
+.copyline{display:flex;gap:7px;align-items:center;margin:6px 0}
+.copyline input{font-size:12.5px;font-family:ui-monospace,monospace;background:#FAF7F0}
+.hintlink{color:var(--blu);font-weight:600;font-size:13px;text-decoration:underline dotted;text-underline-offset:3px}
+.slotgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.slot{border:1.5px solid var(--line);border-radius:11px;padding:9px 11px;text-align:center}
+.slot .sv{font-family:'Prompt';font-weight:700;font-size:18px}
+.faqrow{display:grid;grid-template-columns:1fr 1fr 34px;gap:7px;margin-bottom:7px}
+.icb{width:34px;height:38px;border-radius:9px;border:1.5px solid var(--line);background:#fff;color:var(--bad);font-size:15px}
+#rtBar{display:none;position:fixed;top:64px;left:50%;transform:translateX(-50%);background:var(--gold-t);color:#7A5A10;border:1.5px solid var(--gold);font-size:13px;font-weight:600;border-radius:99px;padding:8px 16px;z-index:60;cursor:pointer;box-shadow:var(--sh)}
+</style>
+</head>
+<body>
+
+<!-- ======== login ======== -->
+<div id="login" style="display:none">
+  <div class="lg">JJ</div>
+  <h1 style="font-size:21px;margin:0 0 4px">JJ Social</h1>
+  <p class="mut" style="margin:0 0 16px">ระบบฟังเสียงลูกค้า + แชทบอท<br>จริงใจหมูกระทะ · ใช้บัญชีเดียวกับระบบ P&L</p>
+  <div class="fld" style="text-align:left"><label>Username</label><input id="liUser" autocomplete="username"></div>
+  <div class="fld" style="text-align:left"><label>รหัสผ่าน</label><input id="liPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+  <button class="btn dk" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
+  <p class="xs mut" style="margin-top:14px">* ต้องรัน <b>jjmk_social_setup.sql</b> ใน Supabase ก่อน 1 ครั้ง</p>
+</div>
+
+<!-- ======== app ======== -->
+<div id="app" style="display:none">
+<aside id="sideNav">
+  <div class="sb-logo"><div class="lg">JJ</div><div><b>จริงใจหมูกระทะ</b><small>ฟังเสียงลูกค้า · Social</small></div></div>
+  <div class="sb-sec">ภาพรวม</div>
+  <button class="sb-item on" data-v="dash"><span class="em">📊</span>แดชบอร์ด</button>
+  <button class="sb-item" data-v="insight"><span class="em">🧠</span>สรุป &amp; ประเด็น</button>
+  <div class="sb-sec">งานประจำวัน</div>
+  <button class="sb-item" data-v="feed"><span class="em">📣</span>เสียงลูกค้า<span class="badge" id="bdFeed" style="display:none"></span></button>
+  <button class="sb-item" data-v="chat"><span class="em">💬</span>แชทลูกค้า<span class="badge" id="bdChat" style="display:none"></span></button>
+  <div class="sb-sec">ระบบ (ผู้ดูแล)</div>
+  <button class="sb-item" data-v="bot"><span class="em">🤖</span>ตั้งค่าแชทบอท</button>
+  <button class="sb-item" data-v="ch"><span class="em">🔌</span>เชื่อมต่อช่องทาง</button>
+  <button class="sb-item" data-v="set"><span class="em">⚙️</span>ตั้งค่า</button>
+  <div class="sb-foot"><div id="sbUser"></div></div>
+</aside>
+<header>
+  <div class="hrow">
+    <div class="brand"><span class="dot"></span><span>JJ Social<small>จริงใจหมูกระทะ</small></span></div>
+    <div class="seg" id="brSeg"></div>
+    <select id="daysPick" onchange="S.days=+this.value;S.cache={};show(S.tab)">
+      <option value="7">7 วันล่าสุด</option>
+      <option value="30" selected>30 วันล่าสุด</option>
+      <option value="90">90 วันล่าสุด</option>
+      <option value="365">12 เดือน</option>
+    </select>
+    <div id="syncDot" title="สถานะเรียลไทม์"></div>
+  </div>
+  <nav class="tabbar" id="tabbar">
+    <button data-v="dash" class="on">แดชบอร์ด</button>
+    <button data-v="feed">เสียงลูกค้า<span class="badge" id="bdFeed2" style="display:none"></span></button>
+    <button data-v="chat">แชท<span class="badge" id="bdChat2" style="display:none"></span></button>
+    <button data-v="insight">สรุปประเด็น</button>
+    <button data-v="bot">แชทบอท</button>
+    <button data-v="ch">เชื่อมต่อ</button>
+    <button data-v="set">ตั้งค่า</button>
+  </nav>
+</header>
+<main>
+  <section class="view on" id="view-dash"><div class="spin"></div></section>
+  <section class="view" id="view-feed"></section>
+  <section class="view" id="view-chat"></section>
+  <section class="view" id="view-insight"></section>
+  <section class="view" id="view-bot"></section>
+  <section class="view" id="view-ch"></section>
+  <section class="view" id="view-set"></section>
+</main>
+</div>
+
+<div id="modalWrap" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   JJ Social — จริงใจหมูกระทะ (Supabase + Claude + GitHub Pages)
+   ============================================================ */
+const CONFIG = {
+  SUPABASE_URL: 'https://aikyxvluaiubdidqxwnd.supabase.co',
+  SUPABASE_KEY: 'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'
+};
+function cfg(){
+  return {
+    url: (localStorage.getItem('jjpnl_url') || CONFIG.SUPABASE_URL || '').replace(/\/$/,''),
+    key: localStorage.getItem('jjpnl_key') || CONFIG.SUPABASE_KEY || ''
+  };
+}
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+
+const S={user:null,tab:'dash',br:'ALL',days:30,cache:{},branches:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}],
+  settings:{},staff:[],feedFilter:{ch:'',kind:'',sen:'',st:'',q:''},feedLimit:50,chatThread:null,botTest:[]};
+
+const CH_META={
+  line:{name:'LINE OA',em:'💬'}, facebook:{name:'Facebook',em:'📘'}, instagram:{name:'Instagram',em:'📸'},
+  google:{name:'Google Maps',em:'📍'}, tiktok:{name:'TikTok',em:'🎵'}, wongnai:{name:'Wongnai',em:'🍜'},
+  grab:{name:'GrabFood',em:'🛵'}, lineman:{name:'LINE MAN',em:'🛵'}, other:{name:'อื่นๆ',em:'🌐'}
+};
+const KIND_TH={review:'รีวิว',comment:'คอมเมนต์',message:'แชท',mention:'กล่าวถึง'};
+const SEN_TH={pos:'ชม 😊',neu:'กลางๆ 😐',neg:'ตำหนิ 😠'};
+const SLOT_TH={lunch:'มื้อกลางวัน',afternoon:'บ่าย',dinner:'มื้อเย็น',late:'ดึก',unknown:'ไม่ระบุ'};
+const TOPIC_LIST=['รสชาติอาหาร','คุณภาพวัตถุดิบ','ความหลากหลายของอาหาร','บริการพนักงาน','ความรวดเร็ว/การรอคิว','ความสะอาด','ราคา/ความคุ้มค่า','บรรยากาศ/สถานที่','ที่จอดรถ','โปรโมชั่น','อื่นๆ'];
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',3200)}
+function num(x){const n=parseFloat(x);return isNaN(n)?0:n}
+function openModal(html){$('#modalBox').innerHTML=html;$('#modalWrap').classList.add('on')}
+function closeModal(){$('#modalWrap').classList.remove('on')}
+function timeago(iso){
+  const s=(Date.now()-new Date(iso).getTime())/1000;
+  if(s<60)return 'เมื่อกี้'; if(s<3600)return Math.floor(s/60)+' นาทีที่แล้ว';
+  if(s<86400)return Math.floor(s/3600)+' ชม.ที่แล้ว'; if(s<86400*30)return Math.floor(s/86400)+' วันก่อน';
+  return new Date(iso).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
+}
+function stars(r){if(r==null)return '';const n=Math.round(num(r));return '<span class="stars">'+'★'.repeat(n)+'☆'.repeat(Math.max(0,5-n))+'</span>'}
+function brName(c){const b=S.branches.find(x=>x.code===c);return b?b.name:(c||'ไม่ระบุสาขา')}
+let busyCount=0;
+function setBusy(b){busyCount+=b?1:-1;if(busyCount<0)busyCount=0;$('#syncDot').className=busyCount>0?'busy':(_rtLive?'':'')}
+
+/* ---------- REST ---------- */
+async function api(method,path,body,prefer){
+  const {url,key}=cfg(); setBusy(true);
+  try{
+    const r=await fetch(url+'/rest/v1/'+path,{method,
+      headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+key,
+        ...(prefer?{Prefer:prefer}:{})},
+      body:body?JSON.stringify(body):undefined});
+    if(!r.ok)throw new Error(await r.text());
+    const tx=await r.text(); return tx?JSON.parse(tx):null;
+  }finally{setBusy(false)}
+}
+const sel=(t,q)=>api('GET',t+'?'+q);
+async function brain(action,payload){
+  const {url,key}=cfg(); setBusy(true);
+  try{
+    const r=await fetch(url+'/functions/v1/social-brain',{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+key},
+      body:JSON.stringify({action,...payload})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    return d;
+  }finally{setBusy(false)}
+}
+
+/* ---------- login (บัญชีเดียวกับ P&L: ตาราง pnl_users) ---------- */
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const enc=new TextEncoder().encode(str);
+  const l=enc.length,bitLen=l*8,withOne=l+1,total=(Math.ceil((withOne+8)/64))*64;
+  const M=new Uint8Array(total);M.set(enc);M[l]=0x80;
+  const dv=new DataView(M.buffer);
+  dv.setUint32(total-4,bitLen>>>0);dv.setUint32(total-8,Math.floor(bitLen/4294967296));
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n));const w=new Array(64);
+  for(let i=0;i<total;i+=64){
+    for(let t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+    for(let t=16;t<64;t++){const s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3),s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0}
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){const S1=rr(e,6)^rr(e,11)^rr(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[t]+w[t])>>>0,S0=rr(a,2)^rr(a,13)^rr(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0}
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+function pwHash(u,p){return sha256hex(u+'|'+p+'|JJPNL')}
+async function doLogin(){
+  const u=$('#liUser').value.trim(),p=$('#liPass').value;
+  if(!u||!p){toast('กรอกให้ครบก่อนครับ',true);return}
+  try{
+    const rows=await sel('pnl_users',`select=id,username,display_name,role,active,pass_hash&username=eq.${encodeURIComponent(u)}&limit=1`);
+    const usr=rows&&rows[0];
+    if(!usr||usr.pass_hash!==pwHash(u,p)){toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',true);return}
+    if(!usr.active){toast('บัญชีนี้ถูกปิดการใช้งาน',true);return}
+    S.user={username:usr.username,display_name:usr.display_name,role:usr.role};
+    LS.set('jjsocial_sess',S.user);
+    startApp();
+  }catch(e){toast('เชื่อมต่อไม่ได้ — ตรวจว่ารัน SQL ครบหรือยัง',true);console.error(e)}
+}
+function logout(){localStorage.removeItem('jjsocial_sess');location.reload()}
+function isAdmin(){return S.user&&S.user.role==='admin'}
+
+/* ---------- nav ---------- */
+const VIEWS=['dash','feed','chat','insight','bot','ch','set'];
+const ADMIN_VIEWS=['bot','ch','set'];
+function applyPerms(){
+  document.querySelectorAll('[data-v]').forEach(b=>{
+    b.style.display=(!isAdmin()&&ADMIN_VIEWS.includes(b.dataset.v))?'none':'';
+  });
+  document.querySelectorAll('.sb-sec').forEach(sec=>{
+    let el=sec.nextElementSibling,any=false;
+    while(el&&!el.classList.contains('sb-sec')&&!el.classList.contains('sb-foot')){
+      if(el.classList.contains('sb-item')&&el.style.display!=='none')any=true;
+      el=el.nextElementSibling;
+    }
+    sec.style.display=any?'':'none';
+  });
+  $('#sbUser').innerHTML=`👤 ${esc(S.user.display_name)} · ${S.user.role==='admin'?'ผู้ดูแล':'พนักงาน'} · <a class="hintlink" href="javascript:logout()">ออก</a>`;
+}
+async function show(v){
+  if(!isAdmin()&&ADMIN_VIEWS.includes(v))v='dash';
+  S.tab=v;
+  document.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
+  const el=$('#view-'+v);
+  try{
+    if(v==='dash')await vDash(el);
+    else if(v==='feed')await vFeed(el);
+    else if(v==='chat')await vChat(el);
+    else if(v==='insight')await vInsight(el);
+    else if(v==='bot')await vBot(el);
+    else if(v==='ch')await vCh(el);
+    else if(v==='set')await vSet(el);
+  }catch(e){el.innerHTML='<div class="empty">โหลดไม่ได้: '+esc(e.message)+'<br><span class="xs">ถ้ายังไม่ได้ติดตั้ง ให้รัน jjmk_social_setup.sql ใน Supabase ก่อนครับ</span></div>';console.error(e)}
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-v]'); if(b)show(b.dataset.v);
+});
+
+/* ---------- data ---------- */
+function sinceIso(){return new Date(Date.now()-S.days*86400000).toISOString()}
+async function loadMentions(force){
+  const key='m'+S.days;
+  if(!force&&S.cache[key])return S.cache[key];
+  const rows=await sel('social_mentions',`select=*&posted_at=gte.${sinceIso()}&order=posted_at.desc&limit=1000`);
+  S.cache[key]=rows||[]; return S.cache[key];
+}
+function brFilter(rows){return S.br==='ALL'?rows:rows.filter(r=>r.branch===S.br)}
+async function loadSettings(){
+  const rows=await sel('social_settings','select=*');
+  S.settings={};(rows||[]).forEach(r=>S.settings[r.id]=r.val||{});
+  return S.settings;
+}
+async function loadStaff(){S.staff=await sel('social_staff','select=*&order=id')||[];return S.staff}
+async function refreshBadges(){
+  try{
+    const p=await sel('social_mentions',`select=id&reply_status=eq.pending&kind=neq.message&posted_at=gte.${sinceIso()}&limit=100`);
+    const n=(p||[]).length;
+    ['bdFeed','bdFeed2'].forEach(id=>{const b=$('#'+id);if(b){b.style.display=n?'':'none';b.textContent=n>99?'99+':n}});
+    const chats=await loadThreads();
+    const w=chats.filter(t=>t.waiting).length;
+    ['bdChat','bdChat2'].forEach(id=>{const b=$('#'+id);if(b){b.style.display=w?'':'none';b.textContent=w}});
+  }catch(e){}
+}
+
+/* ============ แดชบอร์ด ============ */
+let _charts=[];
+function killCharts(){_charts.forEach(c=>{try{c.destroy()}catch(e){}});_charts=[]}
+async function vDash(el){
+  el.innerHTML='<div class="spin"></div>';
+  const all=brFilter(await loadMentions());
+  const rows=all.filter(r=>r.kind!=='message');
+  const an=rows.filter(r=>r.analyzed_at);
+  const rated=rows.filter(r=>r.rating!=null);
+  const avgStar=rated.length?(rated.reduce((s,r)=>s+num(r.rating),0)/rated.length):null;
+  const avgScore=an.length?Math.round(an.reduce((s,r)=>s+num(r.ai_score),0)/an.length):null;
+  const pos=an.filter(r=>r.sentiment==='pos').length,neg=an.filter(r=>r.sentiment==='neg').length,neu=an.length-pos-neg;
+  const pending=rows.filter(r=>r.reply_status==='pending').length;
+  const urgent=an.filter(r=>(r.issues||[]).some(i=>num(i.severity)>=3));
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayN=rows.filter(r=>new Date(r.posted_at)>=today).length;
+
+  killCharts();
+  el.innerHTML=`
+  <div class="kpis">
+    <div class="kpi"><div class="t">เสียงลูกค้า (${S.days} วัน)</div><div class="kpi-v">${rows.length}</div><div class="s">วันนี้ ${todayN} รายการ</div></div>
+    <div class="kpi ${avgStar!=null?(avgStar>=4?'good':avgStar>=3?'warn':'bad'):''}"><div class="t">คะแนนดาวเฉลี่ย</div><div class="kpi-v">${avgStar!=null?avgStar.toFixed(2)+' ★':'—'}</div><div class="s">จาก ${rated.length} รีวิวที่ให้ดาว</div></div>
+    <div class="kpi ${avgScore!=null?(avgScore>=75?'good':avgScore>=55?'warn':'bad'):''}"><div class="t">ความพึงพอใจ (AI)</div><div class="kpi-v">${avgScore!=null?avgScore+'/100':'—'}</div><div class="s">ชม ${pos} · กลางๆ ${neu} · ตำหนิ ${neg}</div></div>
+    <div class="kpi ${pending?'warn':'good'}"><div class="t">รอตอบกลับ</div><div class="kpi-v">${pending}</div><div class="s"><a class="hintlink" href="javascript:show('feed')">ไปที่ฟีด →</a></div></div>
+    <div class="kpi ${urgent.length?'bad':'good'}"><div class="t">ปัญหาเร่งด่วน</div><div class="kpi-v">${urgent.length}</div><div class="s">ความรุนแรงระดับ 3</div></div>
+  </div>
+  ${urgent.length?`<div class="card" style="border-left:4px solid var(--bad)"><h3>🚨 ต้องดูด่วน</h3>${urgent.slice(0,5).map(r=>`
+    <div style="padding:6px 0;border-bottom:1px dashed var(--line)"><span class="chip neg">${esc((r.issues||[]).filter(i=>num(i.severity)>=3).map(i=>i.topic).join(', '))}</span>
+    <span class="sm">${esc(r.ai_summary||r.text.slice(0,120))}</span> <span class="xs mut">· ${CH_META[r.channel]?.em||''} ${esc(brName(r.branch))} · ${timeago(r.posted_at)}</span></div>`).join('')}</div>`:''}
+  <div class="grid g2">
+    <div class="card"><h3>แนวโน้มรายวัน <span class="sp">จำนวน + ความพึงพอใจ</span></h3><div class="chartbox"><canvas id="cTrend"></canvas></div></div>
+    <div class="card"><h3>แยกตามช่องทาง</h3><div class="chartbox"><canvas id="cChan"></canvas></div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h3>ประเด็นที่ถูกพูดถึง <span class="sp">เขียว=ชม แดง=ตำหนิ</span></h3><div class="chartbox" style="height:${Math.max(200,TOPIC_LIST.length*26)}px"><canvas id="cTopic"></canvas></div></div>
+    <div class="card"><h3>ช่วงเวลาที่ลูกค้ามาใช้บริการ <span class="sp">จากเนื้อหารีวิว (AI)</span></h3>
+      <div class="slotgrid">${['lunch','afternoon','dinner','late'].map(sl=>{
+        const set=an.filter(r=>r.visit_slot===sl);
+        const sc=set.length?Math.round(set.reduce((s,r)=>s+num(r.ai_score),0)/set.length):null;
+        return `<div class="slot"><div class="xs mut b">${SLOT_TH[sl]}</div><div class="sv" style="color:${sc==null?'var(--mut)':sc>=75?'var(--ok)':sc>=55?'var(--gold)':'var(--bad)'}">${sc??'—'}</div><div class="xs mut">${set.length} รายการ</div></div>`;}).join('')}
+      </div>
+      <div class="xs mut" style="margin-top:10px">คะแนน = ความพึงพอใจเฉลี่ย (0-100) ของรีวิวที่ AI ระบุช่วงเวลาได้ · ดูรายพนักงานที่หน้า “สรุป &amp; ประเด็น”</div>
+    </div>
+  </div>
+  <div class="card"><h3>ล่าสุด <span class="sp">5 รายการ</span></h3>
+    ${rows.slice(0,5).map(r=>miniRow(r)).join('')||'<div class="empty">ยังไม่มีข้อมูล — เชื่อมต่อช่องทาง หรือเพิ่มรีวิวเองที่หน้า “เสียงลูกค้า”</div>'}
+  </div>`;
+
+  // charts
+  const days={}; rows.forEach(r=>{const d=r.posted_at.slice(0,10);days[d]=days[d]||{n:0,sc:[],};days[d].n++;if(r.ai_score!=null)days[d].sc.push(num(r.ai_score))});
+  const dkeys=Object.keys(days).sort();
+  _charts.push(new Chart($('#cTrend'),{data:{labels:dkeys.map(d=>d.slice(5)),datasets:[
+    {type:'bar',label:'จำนวน',data:dkeys.map(d=>days[d].n),backgroundColor:'#E7D9C5',yAxisID:'y'},
+    {type:'line',label:'พึงพอใจ',data:dkeys.map(d=>days[d].sc.length?Math.round(days[d].sc.reduce((a,b)=>a+b,0)/days[d].sc.length):null),borderColor:'#C62127',backgroundColor:'#C62127',spanGaps:true,tension:.3,yAxisID:'y2'}]},
+    options:{maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{precision:0}},y2:{position:'right',min:0,max:100,grid:{display:false}}},plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}}}}));
+  const byCh={};rows.forEach(r=>{byCh[r.channel]=byCh[r.channel]||{pos:0,neg:0,neu:0};const s=r.sentiment==='pos'?'pos':r.sentiment==='neg'?'neg':'neu';byCh[r.channel][s]++});
+  const chKeys=Object.keys(byCh);
+  _charts.push(new Chart($('#cChan'),{type:'bar',data:{labels:chKeys.map(c=>(CH_META[c]?.name||c)),datasets:[
+    {label:'ชม',data:chKeys.map(c=>byCh[c].pos),backgroundColor:'#1E8E5A'},
+    {label:'กลางๆ/ยังไม่วิเคราะห์',data:chKeys.map(c=>byCh[c].neu),backgroundColor:'#D8CDBB'},
+    {label:'ตำหนิ',data:chKeys.map(c=>byCh[c].neg),backgroundColor:'#D23B3B'}]},
+    options:{maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}},plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}}}}));
+  const tp={};TOPIC_LIST.forEach(t=>tp[t]={pos:0,neg:0});
+  an.forEach(r=>{
+    (r.praises||[]).forEach(p=>{const t=TOPIC_LIST.includes(p.topic)?p.topic:'อื่นๆ';tp[t].pos++});
+    (r.issues||[]).forEach(i=>{const t=TOPIC_LIST.includes(i.topic)?i.topic:'อื่นๆ';tp[t].neg++});
+  });
+  const tKeys=TOPIC_LIST.filter(t=>tp[t].pos||tp[t].neg);
+  _charts.push(new Chart($('#cTopic'),{type:'bar',data:{labels:tKeys,datasets:[
+    {label:'ชม',data:tKeys.map(t=>tp[t].pos),backgroundColor:'#1E8E5A'},
+    {label:'ตำหนิ',data:tKeys.map(t=>-tp[t].neg),backgroundColor:'#D23B3B'}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>Math.abs(v),precision:0}}},
+      plugins:{legend:{labels:{boxWidth:12,font:{size:11}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+Math.abs(c.raw)}}}}}));
+}
+function miniRow(r){
+  return `<div style="padding:7px 0;border-bottom:1px dashed var(--line);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+    <span>${CH_META[r.channel]?.em||'🌐'}</span>
+    <span class="b sm">${esc(r.author_name||'ไม่ระบุชื่อ')}</span>
+    ${r.rating!=null?stars(r.rating):''}
+    ${r.sentiment?`<span class="chip ${r.sentiment}">${SEN_TH[r.sentiment]}</span>`:'<span class="chip">รอวิเคราะห์</span>'}
+    <span class="sm mut" style="flex:1;min-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.ai_summary||r.text)}</span>
+    <span class="xs mut">${timeago(r.posted_at)}</span></div>`;
+}
+
+/* ============ ฟีดเสียงลูกค้า ============ */
+async function vFeed(el){
+  const f=S.feedFilter;
+  el.innerHTML=`
+  <div class="filters">
+    <select onchange="S.feedFilter.ch=this.value;vFeed($('#view-feed'))">
+      <option value="">ทุกช่องทาง</option>${Object.keys(CH_META).map(c=>`<option value="${c}" ${f.ch===c?'selected':''}>${CH_META[c].em} ${CH_META[c].name}</option>`).join('')}
+    </select>
+    <select onchange="S.feedFilter.sen=this.value;vFeed($('#view-feed'))">
+      <option value="">ทุกอารมณ์</option><option value="pos" ${f.sen==='pos'?'selected':''}>ชม</option><option value="neg" ${f.sen==='neg'?'selected':''}>ตำหนิ</option><option value="neu" ${f.sen==='neu'?'selected':''}>กลางๆ</option>
+    </select>
+    <select onchange="S.feedFilter.st=this.value;vFeed($('#view-feed'))">
+      <option value="">ทุกสถานะ</option><option value="pending" ${f.st==='pending'?'selected':''}>รอตอบ</option><option value="sent" ${f.st==='sent'?'selected':''}>ตอบแล้ว</option><option value="skipped" ${f.st==='skipped'?'selected':''}>ข้าม</option>
+    </select>
+    <input placeholder="ค้นหาข้อความ / ชื่อ / พนักงาน..." value="${esc(f.q)}" onchange="S.feedFilter.q=this.value;vFeed($('#view-feed'))">
+    <button class="btn sm" onclick="addManual()">➕ เพิ่มรีวิวเอง</button>
+    <button class="btn gh sm" onclick="analyzePending()">🧠 วิเคราะห์ที่ค้าง</button>
+  </div>
+  <div id="feedList"><div class="spin"></div></div>`;
+  const list=$('#feedList');
+  let rows=brFilter(await loadMentions()).filter(r=>r.kind!=='message');
+  if(f.ch)rows=rows.filter(r=>r.channel===f.ch);
+  if(f.sen)rows=rows.filter(r=>r.sentiment===f.sen);
+  if(f.st)rows=rows.filter(r=>f.st==='sent'?['sent','auto_sent'].includes(r.reply_status):r.reply_status===f.st);
+  if(f.q){const q=f.q.toLowerCase();rows=rows.filter(r=>(r.text||'').toLowerCase().includes(q)||(r.author_name||'').toLowerCase().includes(q)||JSON.stringify(r.staff||[]).toLowerCase().includes(q)||JSON.stringify(r.topics||[]).toLowerCase().includes(q))}
+  if(!rows.length){list.innerHTML='<div class="empty">ไม่พบรายการ — ลองเปลี่ยนตัวกรอง หรือเพิ่มรีวิวเอง / เชื่อมต่อช่องทางก่อน</div>';return}
+  const shown=rows.slice(0,S.feedLimit);
+  list.innerHTML=shown.map(mentionCard).join('')+
+    (rows.length>shown.length?`<div style="text-align:center"><button class="btn gh" onclick="S.feedLimit+=50;vFeed($('#view-feed'))">โหลดเพิ่ม (${rows.length-shown.length} รายการ)</button></div>`:'');
+}
+function mentionCard(r){
+  const cm=CH_META[r.channel]||CH_META.other;
+  const replied=['sent','auto_sent'].includes(r.reply_status);
+  return `<div class="mcard ${r.sentiment||''}" id="mc${r.id}">
+    <div class="mhead">
+      <span title="${cm.name}">${cm.em}</span>
+      <span class="who">${esc(r.author_name||'ไม่ระบุชื่อ')}</span>
+      ${r.rating!=null?stars(r.rating):''}
+      <span class="chip">${KIND_TH[r.kind]||r.kind}</span>
+      ${r.branch?`<span class="chip br">${esc(brName(r.branch))}</span>`:''}
+      ${r.sentiment?`<span class="chip ${r.sentiment}">${SEN_TH[r.sentiment]} ${r.ai_score!=null?Math.round(r.ai_score):''}</span>`:''}
+      <span class="when">${timeago(r.posted_at)}</span>
+    </div>
+    <div class="mtext">${esc(r.text)}</div>
+    ${r.analyzed_at?`
+      <div class="mchips">${(r.topics||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join('')}
+        ${(r.staff||[]).map(s=>`<span class="chip ${s.sentiment==='pos'?'pos':s.sentiment==='neg'?'neg':''}">👤 ${esc(s.name)}</span>`).join('')}
+        ${r.visit_slot&&r.visit_slot!=='unknown'?`<span class="chip">🕒 ${SLOT_TH[r.visit_slot]}</span>`:''}</div>
+      ${(r.issues||[]).length?`<ul class="ilist">${r.issues.map(i=>`<li>⚠️ <b>${esc(i.topic)}</b>${num(i.severity)>=3?' <span class="chip sev3">ด่วน</span>':''} — ${esc(i.detail)}</li>`).join('')}</ul>`:''}
+      ${(r.praises||[]).length?`<ul class="ilist">${r.praises.map(p=>`<li>💚 <b>${esc(p.topic)}</b> — ${esc(p.detail)}</li>`).join('')}</ul>`:''}
+      ${r.ai_summary?`<div class="aisum">🧠 ${esc(r.ai_summary)}</div>`:''}`
+    :`<div class="aisum">⏳ รอวิเคราะห์ <button class="hintlink" onclick="analyzeOne(${r.id})">วิเคราะห์เลย</button></div>`}
+    <div class="replybox">
+      ${replied?`<div class="sentline">✓ ตอบแล้ว${r.reply_status==='auto_sent'?' (บอทตอบอัตโนมัติ)':''}${r.replied_by?' โดย '+esc(r.replied_by):''}${r.reply_text?': '+esc(r.reply_text):''}</div>`
+      :r.reply_status==='skipped'?`<div class="xs mut">ข้ามรายการนี้ · <a class="hintlink" href="javascript:setStatus(${r.id},'pending')">เอากลับมา</a></div>`
+      :`<textarea id="rp${r.id}" placeholder="พิมพ์คำตอบ หรือกดวิเคราะห์เพื่อให้ AI ร่างให้...">${esc(r.ai_reply||'')}</textarea>
+        <div class="racts">
+          ${(r.channel==='facebook'||r.channel==='instagram')&&r.kind==='comment'?`<button class="btn sm" onclick="replySend(${r.id})">↩︎ ส่งตอบกลับ</button>`:''}
+          <button class="btn gh sm" onclick="copyReply(${r.id})">⧉ คัดลอกคำตอบ</button>
+          ${r.url?`<a class="btn gh sm" style="text-decoration:none" href="${esc(r.url)}" target="_blank">🔗 เปิดต้นทาง</a>`:''}
+          <button class="btn gh sm" onclick="markReplied(${r.id})">✓ ตอบแล้ว (ตอบเองที่แพลตฟอร์ม)</button>
+          <button class="btn gh sm" onclick="setStatus(${r.id},'skipped')">ข้าม</button>
+        </div>`}
+    </div>
+  </div>`;
+}
+async function analyzeOne(id){
+  toast('กำลังวิเคราะห์...');
+  try{await brain('analyze',{ids:[id]});S.cache={};await show(S.tab);toast('วิเคราะห์แล้ว ✓')}
+  catch(e){toast('วิเคราะห์ไม่ได้: '+e.message,true)}
+}
+async function analyzePending(){
+  toast('กำลังวิเคราะห์รายการที่ค้าง...');
+  try{const r=await brain('analyze',{limit:15});S.cache={};await show(S.tab);
+    toast(r.analyzed?`วิเคราะห์แล้ว ${r.analyzed} รายการ ✓`:'ไม่มีรายการค้าง')}
+  catch(e){toast('วิเคราะห์ไม่ได้: '+e.message,true)}
+}
+function copyReply(id){
+  const t=$('#rp'+id); if(!t||!t.value){toast('ยังไม่มีคำตอบให้คัดลอก',true);return}
+  navigator.clipboard.writeText(t.value).then(()=>toast('คัดลอกแล้ว ✓ ไปวางตอบที่แพลตฟอร์มได้เลย'));
+}
+async function replySend(id){
+  const t=$('#rp'+id); if(!t.value.trim()){toast('พิมพ์คำตอบก่อนครับ',true);return}
+  try{
+    const r=await brain('send_reply',{id,text:t.value.trim(),by:S.user.username});
+    if(r.ok){toast('ส่งตอบกลับแล้ว ✓');S.cache={};show(S.tab)}
+    else toast(r.reason||'ส่งไม่ได้',true);
+  }catch(e){toast('ส่งไม่ได้: '+e.message,true)}
+}
+async function markReplied(id){
+  const t=$('#rp'+id);
+  await api('PATCH','social_mentions?id=eq.'+id,{reply_status:'sent',reply_text:(t&&t.value.trim())||null,replied_by:S.user.username,replied_at:new Date().toISOString()});
+  S.cache={};show(S.tab);
+}
+async function setStatus(id,st){
+  await api('PATCH','social_mentions?id=eq.'+id,{reply_status:st});
+  S.cache={};show(S.tab);
+}
+function addManual(){
+  openModal(`<h3>➕ เพิ่มรีวิว/เสียงลูกค้าเอง</h3>
+    <div class="grid2">
+      <div class="fld"><label>ช่องทาง</label><select id="amCh">${Object.keys(CH_META).map(c=>`<option value="${c}">${CH_META[c].em} ${CH_META[c].name}</option>`).join('')}</select></div>
+      <div class="fld"><label>สาขา</label><select id="amBr"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select></div>
+    </div>
+    <div class="grid2">
+      <div class="fld"><label>ชื่อลูกค้า (ถ้ามี)</label><input id="amName"></div>
+      <div class="fld"><label>ดาว (ถ้ามี)</label><select id="amRate"><option value="">ไม่มีดาว</option>${[5,4,3,2,1].map(n=>`<option>${n}</option>`).join('')}</select></div>
+    </div>
+    <div class="fld"><label>ข้อความรีวิว</label><textarea id="amText" style="min-height:110px" placeholder="วางข้อความรีวิวจาก Wongnai / Grab / TikTok ฯลฯ"></textarea></div>
+    <div class="fld"><label>ลิงก์ต้นทาง (ถ้ามี)</label><input id="amUrl" placeholder="https://..."></div>
+    <button class="btn" style="width:100%" onclick="saveManual()">บันทึกและวิเคราะห์</button>`);
+}
+async function saveManual(){
+  const text=$('#amText').value.trim(); if(!text){toast('ใส่ข้อความก่อนครับ',true);return}
+  const row={channel:$('#amCh').value,kind:'review',branch:$('#amBr').value||null,
+    author_name:$('#amName').value.trim()||null,rating:$('#amRate').value?+$('#amRate').value:null,
+    text,url:$('#amUrl').value.trim()||null,posted_at:new Date().toISOString()};
+  const ins=await api('POST','social_mentions',row,'return=representation');
+  closeModal();toast('บันทึกแล้ว — กำลังวิเคราะห์...');S.cache={};
+  try{await brain('analyze',{ids:[ins[0].id]})}catch(e){}
+  S.cache={};show('feed');
+}
+
+/* ============ แชทลูกค้า ============ */
+async function loadThreads(){
+  const rows=await sel('social_chat_log','select=*&order=created_at.desc&limit=600')||[];
+  const map={};
+  rows.forEach(r=>{
+    const k=r.channel+'|'+r.thread_id;
+    if(!map[k])map[k]={channel:r.channel,thread_id:r.thread_id,name:null,last:r,msgs:[]};
+    map[k].msgs.unshift(r);
+    if(!map[k].name&&r.direction==='in'&&r.author)map[k].name=r.author;
+  });
+  const list=Object.values(map);
+  list.forEach(t=>{
+    const last=t.msgs[t.msgs.length-1];
+    const lastReal=[...t.msgs].reverse().find(m=>!(m.meta&&m.meta.draft));
+    t.waiting=(lastReal&&lastReal.direction==='in')||(last.meta&&last.meta.draft);
+    t.lastAt=t.msgs[t.msgs.length-1].created_at;
+  });
+  list.sort((a,b)=>b.lastAt.localeCompare(a.lastAt));
+  S._threads=list; return list;
+}
+async function vChat(el){
+  el.innerHTML='<div class="spin"></div>';
+  const threads=await loadThreads();
+  if(!threads.length){el.innerHTML=`<div class="empty">ยังไม่มีแชทเข้ามา<br><span class="xs">เชื่อมต่อ LINE OA / Facebook ที่หน้า “เชื่อมต่อช่องทาง” แล้วข้อความลูกค้าจะเด้งมาที่นี่แบบเรียลไทม์<br>ตั้งโหมดบอท (ร่างให้ตรวจ/ตอบอัตโนมัติ) ได้ที่หน้า “ตั้งค่าแชทบอท”</span></div>`;return}
+  if(!S.chatThread||!threads.find(t=>t.channel+'|'+t.thread_id===S.chatThread))S.chatThread=threads[0].channel+'|'+threads[0].thread_id;
+  el.innerHTML=`<div class="chatwrap">
+    <div class="threads">${threads.map(t=>{
+      const k=t.channel+'|'+t.thread_id;
+      return `<div class="thr ${k===S.chatThread?'on':''}" onclick="S.chatThread='${esc(k)}';vChat($('#view-chat'))">
+        <span>${CH_META[t.channel]?.em||'💬'}</span>
+        <div style="min-width:0"><div class="nm">${esc(t.name||t.thread_id.slice(0,10)+'…')}</div>
+        <div class="lst">${esc(t.msgs[t.msgs.length-1].text)}</div></div>
+        ${t.waiting?'<span class="wait" title="รอตอบ"></span>':''}</div>`}).join('')}
+    </div>
+    <div class="convo">
+      <div class="msgs" id="msgs"></div>
+      <div class="chatin">
+        <textarea id="chatText" placeholder="พิมพ์ตอบลูกค้า..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend()}"></textarea>
+        <button class="btn" onclick="chatSend()">ส่ง</button>
+      </div>
+    </div>
+  </div>`;
+  renderConvo();
+}
+function renderConvo(){
+  const t=(S._threads||[]).find(x=>x.channel+'|'+x.thread_id===S.chatThread); if(!t)return;
+  $('#msgs').innerHTML=t.msgs.map(m=>{
+    const draft=m.meta&&m.meta.draft;
+    return `<div class="bub ${m.direction==='in'?'in':draft?'draft':'out'}">${esc(m.text)}
+      <span class="bmeta">${draft?'🤖 ร่างจากบอท — ยังไม่ส่ง · ':''}${m.direction==='out'&&!draft?(m.meta&&m.meta.auto?'🤖 บอท':'👤 '+esc(m.author||'แอดมิน'))+' · ':''}${new Date(m.created_at).toLocaleString('th-TH',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+      ${draft?`<a class="hintlink" href="javascript:useDraft(${m.id})">ใช้ร่างนี้</a>`:''}</span></div>`;
+  }).join('');
+  const box=$('#msgs');box.scrollTop=box.scrollHeight;
+  const lastDraft=[...t.msgs].reverse().find(m=>m.meta&&m.meta.draft);
+  if(lastDraft&&!$('#chatText').value)$('#chatText').value=lastDraft.text;
+}
+function useDraft(id){
+  const t=(S._threads||[]).find(x=>x.channel+'|'+x.thread_id===S.chatThread);
+  const m=t&&t.msgs.find(x=>x.id===id); if(m){$('#chatText').value=m.text;$('#chatText').focus()}
+}
+async function chatSend(){
+  const txt=$('#chatText').value.trim(); if(!txt)return;
+  const t=(S._threads||[]).find(x=>x.channel+'|'+x.thread_id===S.chatThread); if(!t)return;
+  try{
+    const r=await brain('send_chat',{channel:t.channel,thread_id:t.thread_id,text:txt,by:S.user.username});
+    if(r.ok){$('#chatText').value='';await vChat($('#view-chat'));refreshBadges()}
+    else toast(r.reason||'ส่งไม่ได้ — ตรวจ token ของช่องทางนี้',true);
+  }catch(e){toast('ส่งไม่ได้: '+e.message,true)}
+}
+
+/* ============ สรุป & ประเด็น ============ */
+async function vInsight(el){
+  el.innerHTML='<div class="spin"></div>';
+  const rows=brFilter(await loadMentions()).filter(r=>r.kind!=='message'&&r.analyzed_at);
+  // ดึงสรุป AI ล่าสุด
+  let digest=null;
+  try{
+    const ds=await sel('social_daily',`select=*&branch=eq.${S.br}&order=d.desc&limit=1`);
+    digest=ds&&ds[0];
+  }catch(e){}
+
+  // aggregate ฝั่ง client
+  const issueAgg={},praiseAgg={},staffAgg={};
+  rows.forEach(r=>{
+    (r.issues||[]).forEach(i=>{const k=i.topic||'อื่นๆ';issueAgg[k]=issueAgg[k]||{n:0,sev:0,ex:[]};issueAgg[k].n++;issueAgg[k].sev=Math.max(issueAgg[k].sev,num(i.severity));if(issueAgg[k].ex.length<3)issueAgg[k].ex.push(i.detail)});
+    (r.praises||[]).forEach(p=>{const k=p.topic||'อื่นๆ';praiseAgg[k]=praiseAgg[k]||{n:0,ex:[]};praiseAgg[k].n++;if(praiseAgg[k].ex.length<3)praiseAgg[k].ex.push(p.detail)});
+    (r.staff||[]).forEach(s=>{const k=s.name;staffAgg[k]=staffAgg[k]||{pos:0,neg:0,ex:[]};if(s.sentiment==='neg')staffAgg[k].neg++;else if(s.sentiment==='pos')staffAgg[k].pos++;if(staffAgg[k].ex.length<3)staffAgg[k].ex.push((s.sentiment==='neg'?'⚠️ ':'💚 ')+s.detail)});
+  });
+  const issues=Object.entries(issueAgg).sort((a,b)=>b[1].n-a[1].n);
+  const praises=Object.entries(praiseAgg).sort((a,b)=>b[1].n-a[1].n);
+  const staffArr=Object.entries(staffAgg).sort((a,b)=>(b[1].pos-b[1].neg)-(a[1].pos-a[1].neg));
+
+  const slotRows=['lunch','afternoon','dinner','late','unknown'].map(sl=>{
+    const set=rows.filter(r=>r.visit_slot===sl);
+    if(!set.length)return null;
+    const sc=Math.round(set.reduce((s,r)=>s+num(r.ai_score),0)/set.length);
+    const ng=set.filter(r=>r.sentiment==='neg').length;
+    return {sl,n:set.length,sc,ng};
+  }).filter(Boolean);
+
+  el.innerHTML=`
+  <div class="card">
+    <h3>🧠 สรุปโดย AI <span class="sp">${digest?('ข้อมูลวันที่ '+new Date(digest.d).toLocaleDateString('th-TH',{day:'numeric',month:'long'})+(digest.kind==='weekly'?' (รอบสัปดาห์)':'')):'ยังไม่มีสรุป'}</span>
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn gh sm" onclick="genDigest('daily')">สรุปวันนี้</button>
+        <button class="btn sm" onclick="genDigest('weekly')">สรุปรอบ 7 วัน</button>
+      </span></h3>
+    <div id="digestBox">${digest?digestHtml(digest.data):'<div class="empty">กด "สรุปรอบ 7 วัน" เพื่อให้ AI สรุปว่ามีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี</div>'}</div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h3>⚠️ ปัญหาที่ถูกพูดถึงบ่อย <span class="sp">${S.days} วัน</span></h3>
+      ${issues.length?`<div class="twrap"><table><tr><th>ประเด็น</th><th class="right">ครั้ง</th><th>ตัวอย่าง</th></tr>
+        ${issues.slice(0,10).map(([t,v])=>`<tr><td><b>${esc(t)}</b>${v.sev>=3?' <span class="chip sev3">ด่วน</span>':''}</td><td class="right num">${v.n}</td><td class="xs mut">${esc(v.ex[0]||'')}</td></tr>`).join('')}</table></div>`
+      :'<div class="empty">ไม่พบปัญหาในช่วงนี้ 🎉</div>'}
+    </div>
+    <div class="card"><h3>💚 สิ่งที่ลูกค้าชม</h3>
+      ${praises.length?`<div class="twrap"><table><tr><th>ประเด็น</th><th class="right">ครั้ง</th><th>ตัวอย่าง</th></tr>
+        ${praises.slice(0,10).map(([t,v])=>`<tr><td><b>${esc(t)}</b></td><td class="right num">${v.n}</td><td class="xs mut">${esc(v.ex[0]||'')}</td></tr>`).join('')}</table></div>`
+      :'<div class="empty">ยังไม่มีข้อมูล</div>'}
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h3>👥 พนักงานที่ถูกเอ่ยถึง <span class="sp">จากรีวิวลูกค้า</span></h3>
+      ${staffArr.length?`<div class="twrap"><table><tr><th>ชื่อ</th><th class="right">ถูกชม</th><th class="right">ถูกตำหนิ</th><th>รายละเอียด</th></tr>
+        ${staffArr.map(([n,v])=>`<tr><td class="b">${esc(n)}</td><td class="right" style="color:var(--ok)">${v.pos||''}</td><td class="right" style="color:var(--bad)">${v.neg||''}</td><td class="xs mut">${v.ex.map(esc).join('<br>')}</td></tr>`).join('')}</table></div>
+      <div class="xs mut" style="margin-top:8px">เพิ่มรายชื่อ/ชื่อเล่นพนักงานที่หน้า “ตั้งค่า” เพื่อให้ AI จับชื่อแม่นขึ้น</div>`
+      :'<div class="empty">ยังไม่มีรีวิวที่เอ่ยถึงพนักงาน</div>'}
+    </div>
+    <div class="card"><h3>🕒 คุณภาพรายช่วงเวลา</h3>
+      ${slotRows.length?`<div class="twrap"><table><tr><th>ช่วงเวลา</th><th class="right">รีวิว</th><th class="right">พึงพอใจ</th><th class="right">ตำหนิ</th></tr>
+        ${slotRows.map(s=>`<tr><td>${SLOT_TH[s.sl]}</td><td class="right num">${s.n}</td><td class="right num" style="color:${s.sc>=75?'var(--ok)':s.sc>=55?'var(--gold)':'var(--bad)'}">${s.sc}</td><td class="right num">${s.ng||''}</td></tr>`).join('')}</table></div>
+      <div class="xs mut" style="margin-top:8px">ใช้ดูว่ากะ/ช่วงเวลาไหนบริการดี ช่วงไหนมีปัญหา (AI อ่านจากเนื้อหารีวิว)</div>`
+      :'<div class="empty">ยังไม่มีข้อมูล</div>'}
+    </div>
+  </div>`;
+}
+function digestHtml(d){
+  if(!d)return '';
+  return `<p style="margin:4px 0 10px;font-size:15px"><b>${esc(d.headline||'')}</b></p>
+  ${(d.stat?`<div class="mchips"><span class="chip">${d.stat.count} รายการ</span>${d.stat.avg_rating?`<span class="chip">เฉลี่ย ${d.stat.avg_rating}★</span>`:''}${d.stat.avg_score?`<span class="chip">พึงพอใจ ${Math.round(d.stat.avg_score)}/100</span>`:''}<span class="chip pos">ชม ${d.stat.pos}</span><span class="chip neg">ตำหนิ ${d.stat.neg}</span></div>`:'')}
+  ${(d.problems||[]).length?`<div class="sm b" style="margin:8px 0 4px">ปัญหาที่ต้องแก้</div><ul class="ilist">${d.problems.map(p=>`<li>⚠️ <b>${esc(p.topic)}</b> (${p.count} ครั้ง)${num(p.severity)>=3?' <span class="chip sev3">ด่วน</span>':''} — ${esc(p.detail)}<br><span class="xs" style="color:var(--blu)">→ ${esc(p.action)}</span></li>`).join('')}</ul>`:''}
+  ${(d.praises||[]).length?`<div class="sm b" style="margin:8px 0 4px">จุดแข็งที่ลูกค้าชม</div><ul class="ilist">${d.praises.map(p=>`<li>💚 <b>${esc(p.topic)}</b> (${p.count}) — ${esc(p.detail)}</li>`).join('')}</ul>`:''}
+  ${(d.staff_good||[]).length?`<div class="sm b" style="margin:8px 0 4px">พนักงานที่ทำดี 👏</div><ul class="ilist">${d.staff_good.map(s=>`<li>🌟 <b>${esc(s.name)}</b> — ${esc(s.detail)}</li>`).join('')}</ul>`:''}
+  ${(d.staff_fix||[]).length?`<div class="sm b" style="margin:8px 0 4px">พนักงานที่ควรคุย/พัฒนา</div><ul class="ilist">${d.staff_fix.map(s=>`<li>🔧 <b>${esc(s.name)}</b> — ${esc(s.detail)}</li>`).join('')}</ul>`:''}
+  ${(d.time_slots||[]).length?`<div class="sm b" style="margin:8px 0 4px">รายช่วงเวลา</div><ul class="ilist">${d.time_slots.map(s=>`<li>🕒 <b>${esc(SLOT_TH[s.slot]||s.slot)}</b> — ${esc(s.verdict)}</li>`).join('')}</ul>`:''}
+  ${(d.actions||[]).length?`<div class="sm b" style="margin:8px 0 4px">ควรทำต่อ</div><ol style="margin:0;padding-left:20px;font-size:13.5px">${d.actions.map(a=>`<li>${esc(a)}</li>`).join('')}</ol>`:''}`;
+}
+async function genDigest(span){
+  $('#digestBox').innerHTML='<div class="spin"></div>';
+  try{
+    const today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+    const r=await brain('summary',{date:today,span});
+    if(!r.ok){$('#digestBox').innerHTML='<div class="empty">'+esc(r.reason||'สรุปไม่ได้')+'</div>';return}
+    await vInsight($('#view-insight'));toast('สรุปเสร็จแล้ว ✓');
+  }catch(e){$('#digestBox').innerHTML='<div class="empty">สรุปไม่ได้: '+esc(e.message)+'</div>'}
+}
+
+/* ============ ตั้งค่าแชทบอท ============ */
+async function vBot(el){
+  el.innerHTML='<div class="spin"></div>';
+  await loadSettings();
+  const bot=S.settings.bot||{},shop=S.settings.shop||{};
+  const mode=bot.mode||{};
+  const modeSel=(chn)=>`<select id="bm_${chn}">
+    <option value="off" ${(mode[chn]||'off')==='off'?'selected':''}>ปิด — ไม่ตอบ</option>
+    <option value="draft" ${mode[chn]==='draft'?'selected':''}>ร่างให้ตรวจ — บอทร่าง คนกดส่ง</option>
+    <option value="auto" ${mode[chn]==='auto'?'selected':''}>ตอบอัตโนมัติ</option></select>`;
+  el.innerHTML=`
+  <div class="grid g2">
+    <div class="card"><h3>🤖 โหมดตอบอัตโนมัติรายช่องทาง</h3>
+      <div class="fld"><label>💬 LINE OA</label>${modeSel('line')}</div>
+      <div class="fld"><label>📘 Facebook Messenger</label>${modeSel('facebook')}</div>
+      <div class="fld"><label>📸 Instagram DM</label>${modeSel('instagram')}</div>
+      <div class="xs mut">โหมด “ตอบอัตโนมัติ”: ถ้าเจอเรื่องร้องเรียนรุนแรง/ไม่แน่ใจ บอทจะไม่ตอบเอง แต่ส่งข้อความขอเวลา แล้วเด้งให้คนมาตอบที่หน้า “แชทลูกค้า”</div>
+      <div class="fld" style="margin-top:10px"><label>ข้อความขอเวลา (ตอนส่งต่อให้คน)</label><input id="btFallback" value="${esc(bot.fallback_text||'')}"></div>
+      <div class="fld"><label>คำที่ต้องส่งต่อให้คนเสมอ (คั่นด้วย ,)</label><input id="btEsc" value="${esc((bot.escalate_keywords||[]).join(', '))}"></div>
+    </div>
+    <div class="card"><h3>🗣️ บุคลิกบอท & ข้อมูลร้าน</h3>
+      <div class="fld"><label>บุคลิก/วิธีพูดของบอท</label><textarea id="btPersona" style="min-height:70px">${esc(bot.persona||'')}</textarea></div>
+      <div class="fld"><label>ข้อมูลร้าน (บอทใช้ตอบ)</label><textarea id="shInfo" style="min-height:70px">${esc(shop.info||'')}</textarea></div>
+      <div class="fld"><label>เวลาเปิด-ปิด</label><input id="shHours" value="${esc(shop.hours||'')}"></div>
+    </div>
+  </div>
+  <div class="card"><h3>❓ คำถามพบบ่อย (FAQ) <span class="sp">บอทจะตอบตามนี้ก่อนเสมอ</span></h3>
+    <div id="faqList">${(shop.faq||[]).map((f,i)=>faqRow(f,i)).join('')}</div>
+    <button class="btn gh sm" onclick="addFaq()">➕ เพิ่มคำถาม</button>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <button class="btn" onclick="saveBot()">💾 บันทึกการตั้งค่าบอท</button>
+  </div>
+  <div class="card"><h3>🧪 ทดสอบบอท <span class="sp">คุยกับบอทตามการตั้งค่าล่าสุดที่บันทึกไว้</span></h3>
+    <div class="msgs" id="btMsgs" style="max-height:260px;min-height:60px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px"></div>
+    <div class="chatin" style="border:0;padding:0">
+      <textarea id="btIn" placeholder="ลองพิมพ์แบบลูกค้า เช่น เปิดกี่โมง / มีโปรไหม" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();botTestSend()}"></textarea>
+      <button class="btn" onclick="botTestSend()">ส่ง</button>
+    </div>
+  </div>`;
+  renderBotTest();
+}
+function faqRow(f,i){return `<div class="faqrow"><input placeholder="คำถาม เช่น มีที่จอดรถไหม" value="${esc(f.q||'')}" data-fq="${i}"><input placeholder="คำตอบ" value="${esc(f.a||'')}" data-fa="${i}"><button class="icb" onclick="this.parentElement.remove()">✕</button></div>`}
+function addFaq(){$('#faqList').insertAdjacentHTML('beforeend',faqRow({},Date.now()))}
+async function saveBot(){
+  const bot={
+    mode:{line:$('#bm_line').value,facebook:$('#bm_facebook').value,instagram:$('#bm_instagram').value},
+    persona:$('#btPersona').value.trim(),
+    fallback_text:$('#btFallback').value.trim(),
+    escalate_keywords:$('#btEsc').value.split(',').map(x=>x.trim()).filter(Boolean)
+  };
+  const shopOld=S.settings.shop||{};
+  const shop={...shopOld,info:$('#shInfo').value.trim(),hours:$('#shHours').value.trim(),
+    faq:[...document.querySelectorAll('#faqList .faqrow')].map(r=>({q:r.children[0].value.trim(),a:r.children[1].value.trim()})).filter(f=>f.q&&f.a)};
+  await api('POST','social_settings',[{id:'bot',val:bot,updated_at:new Date().toISOString()},{id:'shop',val:shop,updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
+  S.settings.bot=bot;S.settings.shop=shop;
+  toast('บันทึกแล้ว ✓ มีผลกับข้อความถัดไปทันที');
+}
+function renderBotTest(){
+  const b=$('#btMsgs'); if(!b)return;
+  b.innerHTML=S.botTest.map(m=>`<div class="bub ${m.role==='user'?'out':'in'}">${esc(m.text)}${m.needs_human?'<span class="bmeta">⚠️ บอทจะส่งต่อให้คน (needs_human)</span>':''}</div>`).join('')||'<div class="empty xs">ยังไม่มีบทสนทนา — พิมพ์ทดสอบด้านล่าง</div>';
+  b.scrollTop=b.scrollHeight;
+}
+async function botTestSend(){
+  const t=$('#btIn').value.trim(); if(!t)return;
+  S.botTest.push({role:'user',text:t});$('#btIn').value='';renderBotTest();
+  try{
+    const r=await brain('chat_test',{history:S.botTest.map(m=>({role:m.role==='user'?'user':'assistant',text:m.text}))});
+    S.botTest.push({role:'bot',text:r.reply||'(บอทเลือกไม่ตอบ)',needs_human:r.needs_human});
+  }catch(e){S.botTest.push({role:'bot',text:'ทดสอบไม่ได้: '+e.message})}
+  renderBotTest();
+}
+
+/* ============ เชื่อมต่อช่องทาง ============ */
+function hookUrl(ch){return cfg().url+'/functions/v1/social-webhook?ch='+ch}
+function copyTxt(v){navigator.clipboard.writeText(v).then(()=>toast('คัดลอกแล้ว ✓'))}
+async function vCh(el){
+  el.innerHTML='<div class="spin"></div>';
+  await loadSettings();
+  const chs=S.settings.channels||{};
+  const gp=chs.google_places||[];
+  const gstat=chs.google_stat||{};
+  el.innerHTML=`
+  <div class="card" style="border-left:4px solid var(--blu)"><h3>ℹ️ ภาพรวมการเชื่อมต่อ</h3>
+    <div class="sm">ระบบรับข้อมูล 2 ทาง: <b>Webhook</b> (LINE / Facebook / Instagram — เด้งเข้าทันที) และ <b>ดึงอัตโนมัติ</b> (Google Maps — ทุก 15 นาที)
+    ช่องทางที่ยังไม่เชื่อม (Wongnai, Grab, LINE MAN, TikTok) ใช้ปุ่ม “เพิ่มรีวิวเอง” ในหน้าเสียงลูกค้า หรือยิงเข้า Generic Webhook ได้</div>
+    <div class="xs mut" style="margin-top:6px">Token/Secret ทั้งหมดเก็บใน Supabase Edge Function Secrets (ไม่เก็บในหน้าเว็บ) — ตั้งตามคู่มือ README-SOCIAL.md</div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h3>💬 LINE Official Account</h3>
+      <div class="xs b mut">Webhook URL (วางใน LINE Developers → Messaging API)</div>
+      <div class="copyline"><input readonly value="${esc(hookUrl('line'))}"><button class="btn gh sm" onclick="copyTxt('${esc(hookUrl('line'))}')">⧉</button></div>
+      <div class="xs mut">1) สร้าง Messaging API channel ของ OA ร้าน<br>2) เปิด Use webhook + ปิด Auto-reply เดิมของ LINE<br>3) ตั้ง secrets: <b>LINE_CHANNEL_SECRET</b>, <b>LINE_CHANNEL_ACCESS_TOKEN</b><br>4) ทดสอบทักแชทหาร้าน — ข้อความจะเด้งในหน้า “แชทลูกค้า”</div>
+    </div>
+    <div class="card"><h3>📘 Facebook เพจ + Messenger</h3>
+      <div class="xs b mut">Webhook URL (Meta for Developers → Webhooks → Page)</div>
+      <div class="copyline"><input readonly value="${esc(hookUrl('facebook'))}"><button class="btn gh sm" onclick="copyTxt('${esc(hookUrl('facebook'))}')">⧉</button></div>
+      <div class="xs mut">Subscribe fields: <b>messages, feed, ratings</b> · Verify token ต้องตรงกับ secret <b>FB_VERIFY_TOKEN</b><br>ตั้ง secrets: <b>FB_APP_SECRET</b>, <b>FB_PAGE_TOKEN</b> (Page access token)<br>ได้ทั้งแชท Messenger + คอมเมนต์โพสต์ + รีวิวเพจ</div>
+    </div>
+    <div class="card"><h3>📸 Instagram</h3>
+      <div class="copyline"><input readonly value="${esc(hookUrl('instagram'))}"><button class="btn gh sm" onclick="copyTxt('${esc(hookUrl('instagram'))}')">⧉</button></div>
+      <div class="xs mut">ใช้แอป Meta เดียวกับ Facebook · Subscribe: <b>messages, comments</b> (บัญชีต้องเป็น Business และผูกกับเพจ)</div>
+    </div>
+    <div class="card"><h3>📍 Google Maps รีวิว</h3>
+      <div id="gpList">${gp.map((p,i)=>`<div class="copyline">
+        <input value="${esc(p.place_id)}" placeholder="Place ID" data-gpid="${i}">
+        <select data-gpbr="${i}" style="width:130px">${S.branches.map(b=>`<option value="${b.code}" ${p.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+        <button class="icb" onclick="this.parentElement.remove()">✕</button></div>
+        ${gstat[p.place_id]?`<div class="xs mut" style="margin:-2px 0 6px">คะแนนรวม ${gstat[p.place_id].rating}★ จาก ${gstat[p.place_id].count} รีวิว · ดึงล่าสุด ${timeago(gstat[p.place_id].at)}</div>`:''}`).join('')}
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:6px">
+        <button class="btn gh sm" onclick="addGp()">➕ เพิ่มสาขา</button>
+        <button class="btn gh sm" onclick="saveGp()">💾 บันทึก</button>
+        <button class="btn sm" onclick="pollGoogleNow()">⟳ ดึงรีวิวตอนนี้</button>
+      </div>
+      <div class="xs mut" style="margin-top:8px">หา Place ID: <a class="hintlink" href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank">Place ID Finder</a> · ตั้ง secret <b>GOOGLE_API_KEY</b> (เปิด Places API) · Places API ให้รีวิวล่าสุด ~5 รายการต่อรอบ ระบบจะสะสมให้เรื่อยๆ</div>
+    </div>
+  </div>
+  <div class="card"><h3>🌐 Generic Webhook <span class="sp">สำหรับ Wongnai / Grab / TikTok / ระบบอื่น</span></h3>
+    <div class="copyline"><input readonly value="${esc(hookUrl('generic'))}"><button class="btn gh sm" onclick="copyTxt('${esc(hookUrl('generic'))}')">⧉</button></div>
+    <div class="codebx">curl -X POST '${esc(hookUrl('generic'))}' \\
+  -H 'x-webhook-key: &lt;WEBHOOK_SHARED_KEY&gt;' -H 'Content-Type: application/json' \\
+  -d '{"channel":"wongnai","kind":"review","author_name":"คุณเอ","rating":4,
+       "text":"หมูนุ่ม น้ำจิ้มแจ่วอร่อย แต่รอคิวนาน","branch":"JJRD"}'</div>
+    <div class="xs mut" style="margin-top:6px">ตั้ง secret <b>WEBHOOK_SHARED_KEY</b> เป็นรหัสลับอะไรก็ได้ แล้วใช้ยิงรีวิวจากระบบอื่นเข้ามา</div>
+  </div>`;
+}
+function addGp(){
+  $('#gpList').insertAdjacentHTML('beforeend',`<div class="copyline">
+    <input placeholder="Place ID (ChIJ...)"><select style="width:130px">${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select>
+    <button class="icb" onclick="this.parentElement.remove()">✕</button></div>`);
+}
+async function saveGp(){
+  const rows=[...document.querySelectorAll('#gpList .copyline')].map(r=>({
+    place_id:r.children[0].value.trim(),branch:r.children[1].value})).filter(p=>p.place_id);
+  const chs={...(S.settings.channels||{}),google_places:rows};
+  await api('POST','social_settings',[{id:'channels',val:chs,updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
+  S.settings.channels=chs;toast('บันทึกแล้ว ✓');
+}
+async function pollGoogleNow(){
+  toast('กำลังดึงรีวิว Google...');
+  try{
+    const r=await brain('poll_google',{});
+    if(r.ok){toast(`ดึงแล้ว — รีวิวใหม่ ${r.added} รายการ`);S.cache={};show('ch')}
+    else toast(r.reason||'ดึงไม่ได้',true);
+  }catch(e){toast('ดึงไม่ได้: '+e.message,true)}
+}
+
+/* ============ ตั้งค่า ============ */
+async function vSet(el){
+  el.innerHTML='<div class="spin"></div>';
+  await loadStaff();
+  el.innerHTML=`
+  <div class="card"><h3>👥 รายชื่อพนักงาน <span class="sp">ช่วยให้ AI จับชื่อในรีวิวได้แม่น + ใช้สรุปใครทำดี</span></h3>
+    <div class="twrap"><table><tr><th>ชื่อ</th><th>ชื่อเล่น/สะกดอื่น</th><th>สาขา</th><th>กะ</th><th></th></tr>
+      ${S.staff.map(s=>`<tr style="${s.active?'':'opacity:.45'}">
+        <td class="b">${esc(s.name)}</td><td class="xs">${esc((s.aliases||[]).join(', '))}</td>
+        <td>${s.branch?esc(brName(s.branch)):'ทุกสาขา'}</td><td>${s.shift==='am'?'เช้า':s.shift==='pm'?'เย็น':'ทุกกะ'}</td>
+        <td class="right"><button class="hintlink" onclick="staffModal(${s.id})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="5" class="empty">ยังไม่มีรายชื่อ</td></tr>'}
+    </table></div>
+    <button class="btn gh sm" style="margin-top:8px" onclick="staffModal()">➕ เพิ่มพนักงาน</button>
+  </div>
+  <div class="card"><h3>🔧 เครื่องมือ</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn gh sm" onclick="analyzePending()">🧠 วิเคราะห์รายการที่ค้าง</button>
+      <button class="btn gh sm" onclick="genDigest('weekly')">📋 สรุปรอบ 7 วันตอนนี้</button>
+    </div>
+    <div class="xs mut" style="margin-top:8px">ปกติระบบวิเคราะห์อัตโนมัติทันทีที่มีรีวิวเข้า และสรุปรายวันเวลา 06:10 (ถ้าเปิด pg_cron ตามคู่มือ)</div>
+  </div>
+  <div class="card"><h3>🔗 ระบบอื่นของร้าน</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn dk sm" style="text-decoration:none" href="jjmk-pnl.html" target="_blank">📒 ระบบบัญชี P&L</a>
+      <a class="btn dk sm" style="text-decoration:none" href="jjmk-stock-beta.html" target="_blank">📦 นับสต๊อก</a>
+      <a class="btn dk sm" style="text-decoration:none" href="jjmk-kitchen.html" target="_blank">🍳 ครัวกลาง</a>
+    </div>
+  </div>`;
+}
+function staffModal(id){
+  const s=id?S.staff.find(x=>x.id===id):{name:'',aliases:[],branch:'',shift:'all',active:true};
+  openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}พนักงาน</h3>
+    <div class="fld"><label>ชื่อ</label><input id="stName" value="${esc(s.name)}" placeholder="เช่น พี่หน่อย"></div>
+    <div class="fld"><label>ชื่อเล่น/สะกดอื่น (คั่นด้วย ,)</label><input id="stAlias" value="${esc((s.aliases||[]).join(', '))}"></div>
+    <div class="grid2">
+      <div class="fld"><label>สาขา</label><select id="stBr"><option value="">ทุกสาขา</option>${S.branches.map(b=>`<option value="${b.code}" ${s.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label>กะ</label><select id="stShift">
+        <option value="all" ${s.shift==='all'?'selected':''}>ทุกกะ</option>
+        <option value="am" ${s.shift==='am'?'selected':''}>เช้า</option>
+        <option value="pm" ${s.shift==='pm'?'selected':''}>เย็น</option></select></div>
+    </div>
+    ${id?`<div class="fld"><label><input type="checkbox" id="stActive" ${s.active?'checked':''} style="width:auto;margin-right:6px">ยังทำงานอยู่</label></div>`:''}
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="flex:1" onclick="saveStaff(${id||'null'})">บันทึก</button>
+      ${id?`<button class="btn gh" onclick="delStaff(${id})">ลบ</button>`:''}
+    </div>`);
+}
+async function saveStaff(id){
+  const row={name:$('#stName').value.trim(),
+    aliases:$('#stAlias').value.split(',').map(x=>x.trim()).filter(Boolean),
+    branch:$('#stBr').value||null,shift:$('#stShift').value,
+    active:id?$('#stActive').checked:true};
+  if(!row.name){toast('ใส่ชื่อก่อนครับ',true);return}
+  if(id)await api('PATCH','social_staff?id=eq.'+id,row);
+  else await api('POST','social_staff',row);
+  closeModal();show('set');
+}
+async function delStaff(id){
+  if(!confirm('ลบรายชื่อนี้?'))return;
+  await api('DELETE','social_staff?id=eq.'+id);closeModal();show('set');
+}
+
+/* ---------- realtime ---------- */
+let _rtLive=false,_rtT=null;
+function rtStart(){
+  try{
+    if(window.supabase&&window.supabase.createClient){
+      const c=cfg();const sb=window.supabase.createClient(c.url,c.key);
+      sb.channel('jjsocial-live')
+        .on('postgres_changes',{event:'*',schema:'public',table:'social_mentions'},rtEvent)
+        .on('postgres_changes',{event:'*',schema:'public',table:'social_chat_log'},rtEvent)
+        .subscribe(st=>{_rtLive=(st==='SUBSCRIBED')});
+    }
+  }catch(e){}
+  setInterval(()=>{if(!_rtLive&&!document.hidden)rtApply()},90000); // โพลสำรอง
+}
+function rtEvent(){clearTimeout(_rtT);_rtT=setTimeout(rtApply,1200)}
+async function rtApply(){
+  if(document.hidden)return;
+  const a=document.activeElement;
+  if(a&&['TEXTAREA','INPUT'].includes(a.tagName)&&a.value){rtBanner();return} // ไม่ทับของที่พิมพ์ค้าง
+  S.cache={};
+  refreshBadges();
+  if(['dash','feed','chat','insight'].includes(S.tab))await show(S.tab);
+}
+function rtBanner(){
+  let b=document.getElementById('rtBar');
+  if(!b){b=document.createElement('div');b.id='rtBar';
+    b.innerHTML='🔄 มีข้อมูลใหม่เข้ามา — <b>แตะเพื่อโหลด</b>';
+    b.onclick=()=>{b.style.display='none';S.cache={};refreshBadges();show(S.tab)};
+    document.body.appendChild(b)}
+  b.style.display='block';
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){S.cache={};refreshBadges();if(['dash','feed','chat'].includes(S.tab))show(S.tab)}});
+
+/* ---------- boot ---------- */
+async function loadBranches(){
+  try{
+    const rows=await sel('pnl_branches','select=*');
+    const bs=(rows||[]).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code})).filter(b=>b.code);
+    if(bs.length)S.branches=bs;
+  }catch(e){}
+  $('#brSeg').innerHTML=[...S.branches.map(b=>`<button data-br="${esc(b.code)}">${esc(b.name.replace('สาขา',''))}</button>`),`<button data-br="ALL" class="on">ทุกสาขา</button>`].join('');
+  $('#brSeg').addEventListener('click',e=>{
+    const b=e.target.closest('[data-br]');if(!b)return;
+    S.br=b.dataset.br;
+    document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x===b));
+    show(S.tab);
+  });
+}
+async function startApp(){
+  $('#login').style.display='none';$('#app').style.display='block';
+  applyPerms();
+  await loadBranches();
+  rtStart();refreshBadges();
+  show('dash');
+}
+(function init(){
+  const sess=LS.get('jjsocial_sess',null);
+  if(sess&&sess.username){S.user=sess;startApp()}
+  else $('#login').style.display='block';
+})();
+</script>
+</body>
+</html>
