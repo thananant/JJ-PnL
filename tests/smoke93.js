@@ -53,7 +53,7 @@ setTimeout(async()=>{
   const it=d.getElementById('view-income').textContent;
   out.push('รายรับทุกสาขา ไม่มีคอลัมน์ออฟฟิศ: '+(it.includes('รัชดา')&&!it.includes('ออฟฟิศ')));
   // 3) เลือกออฟฟิศ → แท็บที่ไม่เกี่ยวถูกซ่อน + เด้งจากรายรับไปรายจ่าย
-  w.pickBranch('OFC'); await sleep(350);
+  d.querySelector('#brSeg button[data-br="OFC"]').click(); await sleep(350); // กดปุ่มหัวจริง ไม่ใช่ pickBranch
   out.push('เลือกออฟฟิศจากแท็บรายรับ → เด้งไปรายจ่าย: '+(w.eval('S.tab')==='exp'));
   const hid=['income','usage','actual','ck'].every(v=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display==='none');
   const shw=['exp','sum','recon','pv'].every(v=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display!=='none');
