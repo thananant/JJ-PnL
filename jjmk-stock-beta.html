@@ -331,6 +331,31 @@
   @media(min-width:560px){.hm_grid{grid-template-columns:1fr 1fr 1fr}}
   .hm_card{border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;background:#fff;transition:box-shadow .15s}
   .hm_card:active{box-shadow:0 0 0 3px rgba(139,26,26,.15)}
+  /* ===== 🛠 ตารางบำรุงรักษาสาขา ===== */
+  .mtsum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .mtsum .mchip{font-family:Prompt;font-weight:600;font-size:.82rem;padding:5px 12px;border-radius:999px;background:#f3ece0;color:#6b5f52}
+  .mtsum .mchip.over{background:#fdeaea;color:#c62127}
+  .mtsum .mchip.soon{background:#fff6dd;color:#9a6700}
+  .mtsum .mchip.ok{background:#e8f7ec;color:#1a7f37}
+  .mtcard{border:1px solid var(--line);border-left-width:5px;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff}
+  .mtcard.over{border-left-color:#c62127}.mtcard.soon{border-left-color:#c9a227}.mtcard.ok{border-left-color:#1a7f37}
+  .mtrow1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .mtrow1 b{font-family:Prompt;font-weight:600}
+  .mtfreq{flex:none;font-size:.75rem;color:#7a6a58;background:#f6efe3;border-radius:999px;padding:3px 10px}
+  .mtdetail{font-size:.82rem;color:var(--ink-soft,#6b5f52);margin-top:2px}
+  .mtstat{font-size:.85rem;font-weight:600;margin-top:6px}
+  .mtstat.over{color:#c62127}.mtstat.soon{color:#9a6700}.mtstat.ok{color:#1a7f37}
+  .mtlast{font-size:.78rem;color:#8a7f74;margin-top:2px}
+  .mtthumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .mtthumbs img{width:64px;height:64px;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer;background:#f4f0e8}
+  .mtbtns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .mtbtns .act{flex:1;min-width:150px}
+  .mtlog{border-top:1px dashed rgba(0,0,0,.12);padding:10px 0}
+  .mtlog:first-child{border-top:none;padding-top:2px}
+  .mmrow{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px dashed rgba(0,0,0,.1)}
+  .mmrow .mmn{flex:1;min-width:0}
+  .mmrow .mmn small{display:block;color:#8a7f74}
+  .mmrow button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
   .hm_ic{font-size:1.6rem}
   .hm_t{font-family:Prompt;font-weight:600;margin:4px 0 2px}
   .hm_d{font-size:.78rem;color:var(--ink-soft);line-height:1.45}
@@ -2653,7 +2678,7 @@ function closeModPages(){document.querySelectorAll('.modpage').forEach(e=>e.remo
 function openModule(name){
   closeModPages();hideAll();CUR_MOD=name;setSbActive(name==='stock'?'count':name);
   if(name==='stock')return;                       // สต็อก = แอปฐานข้างใต้
-  const meta={sales:['💵','รายรับ (ใบปะหน้า)'],supbill:['💸','รายจ่าย Supplier'],cost:['🧮','ข้อมูล Food Cost']}[name];
+  const meta={sales:['💵','รายรับ (ใบปะหน้า)'],supbill:['💸','รายจ่าย Supplier'],cost:['🧮','ข้อมูล Food Cost'],maint:['🛠','ตารางบำรุงรักษาสาขา']}[name];
   const pg=document.createElement('div');pg.className='modpage';pg.dataset.mod=name;
   pg.innerHTML=`<div class="mp_head"><button class="mp_menu">☰</button><span class="mp_t">${meta[0]} ${meta[1]}</span><span class="mp_shop">${escapeHtml(cfg().shop||'จริงใจหมูกระทะ')}</span></div><div class="mp_body"></div>`;
   document.body.appendChild(pg);
@@ -2661,6 +2686,7 @@ function openModule(name){
   const body=pg.querySelector('.mp_body');
   if(name==='sales')renderSalesPage(body);
   else if(name==='supbill')renderSupBillPage(body);
+  else if(name==='maint')renderMaintPage(body);
   else renderCostPage(body);
 }
 function showHome(){openModule('stock');}
@@ -3322,6 +3348,236 @@ async function renderCostPage(body){
     body.querySelector('#ccRv').textContent=new Set((data||[]).map(x=>String(x.rev_date).slice(0,10))).size+' วัน';}catch(e){body.querySelector('#ccRv').textContent='—';}
 }
 
+/* ===== 🛠 ตารางบำรุงรักษาสาขา (maint) =====
+   งานประจำต่อสาขา (maint_tasks) + บันทึกการทำพร้อมรูปถ่าย (maint_logs · bucket maint-photos)
+   พนักงานกด "ทำแล้ว" แนบรูป · เจ้าของ/ผู้ดูแลแตะรูปหรือประวัติเพื่อดูย้อนหลังได้ทุกสาขา
+   ต้องรัน jjmk_maint_setup.sql ใน Supabase ก่อนใช้ครั้งแรก */
+const MAINT_FREQ=[[1,'ทุกวัน'],[7,'ทุกสัปดาห์'],[14,'ทุก 2 สัปดาห์'],[30,'ทุกเดือน'],[60,'ทุก 2 เดือน'],[90,'ทุก 3 เดือน'],[180,'ทุก 6 เดือน'],[365,'ทุกปี']];
+function maintFreqLabel(n){n=+n||0;const f=MAINT_FREQ.find(x=>x[0]===n);return f?f[1]:'ทุก '+n+' วัน';}
+function addDaysISO(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+(+n||0));const p=x=>String(x).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function diffDaysISO(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
+let MAINT_B=null,MAINT_TASKS=[],MAINT_LOGS={},MAINT_BODY=null;
+function maintStat(t){
+  const lg=(MAINT_LOGS[t.id]||[])[0];
+  if(!lg)return{cls:'over',lg:null,last:null,due:null,left:null,txt:'ยังไม่เคยบันทึก — เริ่มทำรอบแรกได้เลย'};
+  const last=isoFromAny(lg.done_date),due=addDaysISO(last,t.freq_days),left=diffDaysISO(bizTodayISO(),due);
+  const soonTh=t.freq_days>=14?3:(t.freq_days>=7?2:0);
+  const cls=left<0?'over':(left<=soonTh?'soon':'ok');
+  const txt=left<0?('เกินกำหนดมา '+(-left)+' วัน (ครบกำหนด '+fmtDate(due)+')')
+    :left===0?'ครบกำหนดวันนี้'
+    :('ครบกำหนด '+fmtDate(due)+' (อีก '+left+' วัน)');
+  return{cls,lg,last,due,left,txt};
+}
+async function renderMaintPage(body){
+  MAINT_BODY=body;
+  if(!MAINT_B||!accessibleBranches().some(b=>b.id===MAINT_B))MAINT_B=currentBranchId;
+  const bOpts=accessibleBranches().map(b=>`<option value="${b.id}" ${b.id===MAINT_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
+  body.innerHTML=`<div class="mp_card">
+      <div class="rfilters" style="grid-template-columns:${isAdmin()?'1fr auto':'1fr'}">
+        <select class="mt_b">${bOpts}</select>
+        ${isAdmin()?'<button class="act ghost mt_mng">⚙️ จัดการงาน</button>':''}
+      </div>
+      <div class="mtsum"></div>
+      <div class="mtlist"><div class="rempty">กำลังโหลด...</div></div>
+      <p class="hint" style="margin-top:10px">ทำเสร็จแล้วกด “✅ ทำแล้ว” พร้อมถ่ายรูปแนบ · แตะรูปหรือ “🕘 ประวัติ” เพื่อเปิดดูรูปย้อนหลังได้ทุกครั้งที่เคยทำ</p>
+    </div>`;
+  body.querySelector('.mt_b').onchange=e=>{MAINT_B=e.target.value;maintLoad();};
+  const mng=body.querySelector('.mt_mng');if(mng)mng.onclick=maintManageOverlay;
+  maintLoad();
+}
+async function maintLoad(){
+  const box=MAINT_BODY&&MAINT_BODY.querySelector('.mtlist');if(!box)return;
+  box.innerHTML='<div class="rempty">กำลังโหลด...</div>';
+  const [tk,lgs]=await Promise.all([
+    sb.from('maint_tasks').select('*').eq('branch_id',MAINT_B).is('deleted_at',null).order('sort'),
+    sb.from('maint_logs').select('*').eq('branch_id',MAINT_B).order('done_date',{ascending:false}).order('created_at',{ascending:false}).limit(600)]);
+  if(tk.error){box.innerHTML='<div class="rempty">โหลดไม่ได้: '+escapeHtml(tk.error.message)+' (ยังไม่ได้รัน SQL jjmk_maint_setup?)</div>';return;}
+  MAINT_TASKS=tk.data||[];MAINT_LOGS={};
+  ((lgs&&lgs.data)||[]).forEach(r=>{(MAINT_LOGS[r.task_id]=MAINT_LOGS[r.task_id]||[]).push(r);});
+  maintRenderList();
+}
+function maintPhotos(lg){return (lg&&Array.isArray(lg.photos))?lg.photos.filter(u=>typeof u==='string'):[];}
+function maintRenderList(){
+  const box=MAINT_BODY&&MAINT_BODY.querySelector('.mtlist');if(!box)return;
+  const sum=MAINT_BODY.querySelector('.mtsum');
+  if(!MAINT_TASKS.length){sum.innerHTML='';box.innerHTML='<div class="rempty">ยังไม่มีงานของสาขานี้'+(isAdmin()?' — กด ⚙️ จัดการงาน เพื่อเพิ่ม':' — ให้ผู้ดูแลเพิ่มงานก่อน')+'</div>';return;}
+  const rank={over:0,soon:1,ok:2};
+  const arr=MAINT_TASKS.map(t=>({t,st:maintStat(t)}))
+    .sort((a,b)=>rank[a.st.cls]-rank[b.st.cls]||((a.st.left==null?-9999:a.st.left)-(b.st.left==null?-9999:b.st.left))||((a.t.sort||0)-(b.t.sort||0)));
+  const n={over:0,soon:0,ok:0};arr.forEach(x=>n[x.st.cls]++);
+  sum.innerHTML=(n.over?`<span class="mchip over">🔴 เกินกำหนด ${n.over}</span>`:'')
+    +(n.soon?`<span class="mchip soon">🟡 ใกล้ถึงกำหนด ${n.soon}</span>`:'')
+    +`<span class="mchip ok">🟢 เรียบร้อย ${n.ok}</span>`;
+  box.innerHTML=arr.map(({t,st})=>{
+    const ph=maintPhotos(st.lg).slice(0,4),cnt=(MAINT_LOGS[t.id]||[]).length;
+    return `<div class="mtcard ${st.cls}">
+      <div class="mtrow1"><b>${escapeHtml(t.name)}</b><span class="mtfreq">${escapeHtml(maintFreqLabel(t.freq_days))}</span></div>
+      ${t.detail?`<div class="mtdetail">${escapeHtml(t.detail)}</div>`:''}
+      <div class="mtstat ${st.cls}">${st.cls==='over'?'🔴':st.cls==='soon'?'🟡':'🟢'} ${escapeHtml(st.txt)}</div>
+      ${st.lg?`<div class="mtlast">ทำล่าสุด ${fmtDate(st.last)} · 👤 ${escapeHtml(st.lg.by_name||'—')}${st.lg.note?' · '+escapeHtml(st.lg.note):''}</div>`:''}
+      ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:''}
+      <div class="mtbtns">
+        <button class="act send" data-done="${t.id}">✅ ทำแล้ว — ถ่ายรูปแนบ</button>
+        <button class="act ghost" data-hist="${t.id}">🕘 ประวัติ${cnt?' ('+cnt+')':''}</button>
+      </div>
+    </div>`;}).join('');
+  box.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
+  box.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(x=>x.id===b.dataset.done);if(t)maintDoneOverlay(t);});
+  box.querySelectorAll('[data-hist]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(x=>x.id===b.dataset.hist);if(t)maintHistOverlay(t);});
+}
+function maintLightbox(url){
+  const ov=document.createElement('div');ov.className='overlay';
+  ov.style.cssText='display:flex;z-index:460;background:rgba(12,7,5,.9)';
+  ov.innerHTML=`<img src="${escapeHtml(url)}" style="max-width:96vw;max-height:92vh;margin:auto;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5)" alt="">`;
+  ov.onclick=()=>ov.remove();document.body.appendChild(ov);
+}
+async function maintUploadPhoto(dataUrl,taskId){
+  const blob=await (await fetch(dataUrl)).blob();
+  const path='m/'+MAINT_B+'/'+taskId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
+  const up=await sb.storage.from('maint-photos').upload(path,blob,{contentType:'image/jpeg'});
+  if(up.error)throw up.error;
+  return sb.storage.from('maint-photos').getPublicUrl(path).data.publicUrl;
+}
+function maintDoneOverlay(t){
+  const ov=document.createElement('div');ov.className='overlay';ov.style.cssText='display:flex;z-index:360';
+  ov.innerHTML=`<div class="sheet" style="max-width:520px">
+    <div class="sheet-head"><h3>✅ ${escapeHtml(t.name)}</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <div class="field"><label>วันที่ทำ</label><input type="date" class="md_d" value="${bizTodayISO()}"></div>
+      <div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input class="md_n" placeholder="เช่น จ้างช่างมาล้าง / เปลี่ยนไส้กรองใหม่"></div>
+      <div class="field"><label>รูปถ่ายหลังทำ (อย่างน้อย 1 รูป)</label>
+        <input type="file" class="md_f" accept="image/*" multiple style="display:none">
+        <div class="mtthumbs md_prev"></div>
+        <button class="act ghost wide md_add" style="margin-top:6px">📸 ถ่ายรูป / เลือกรูป</button>
+      </div>
+      <div class="actions"><button class="act send wide md_save">💾 บันทึกงาน + รูป</button></div>
+      <p class="hint">บันทึกแล้วรูปจะขึ้นในตารางและประวัติทันที ให้เจ้าของ/ผู้ดูแลเปิดดูได้ทุกเครื่อง</p>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  const fin=ov.querySelector('.md_f'),prev=ov.querySelector('.md_prev'),save=ov.querySelector('.md_save');
+  const imgs=[];   // dataURL ที่ย่อแล้ว
+  function renderPrev(){prev.innerHTML=imgs.map((d,i)=>`<img src="${d}" data-i="${i}" title="แตะเพื่อลบรูปนี้" alt="">`).join('');
+    prev.querySelectorAll('img').forEach(im=>im.onclick=()=>{imgs.splice(+im.dataset.i,1);renderPrev();});}
+  ov.querySelector('.md_add').onclick=()=>fin.click();
+  fin.onchange=()=>{[...fin.files].forEach(f=>processImage(f,d=>{if(d){imgs.push(d);renderPrev();}else toast('อ่านรูปไม่สำเร็จ 1 รูป');}));fin.value='';};
+  save.onclick=async()=>{
+    const d=ov.querySelector('.md_d').value||bizTodayISO(),note=ov.querySelector('.md_n').value.trim();
+    if(!imgs.length){toast('แนบรูปถ่ายอย่างน้อย 1 รูปก่อนบันทึก');return;}
+    save.disabled=true;save.textContent='⏳ กำลังอัปโหลดรูป...';
+    try{
+      const urls=[];
+      for(const im of imgs){urls.push(await maintUploadPhoto(im,t.id));save.textContent='⏳ อัปโหลดรูป '+urls.length+'/'+imgs.length+'...';}
+      const {error}=await sb.from('maint_logs').insert({id:uid('ml'),task_id:t.id,branch_id:MAINT_B,
+        done_date:d,by_name:(currentUser&&currentUser.name)||'',note:note||null,photos:urls});
+      if(error)throw error;
+      toast('บันทึก “'+t.name+'” แล้ว ✓');x();maintLoad();
+    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e)+' (ยังไม่ได้รัน SQL jjmk_maint_setup?)');
+      save.disabled=false;save.textContent='💾 บันทึกงาน + รูป';}
+  };
+}
+function maintHistOverlay(t){
+  const logs=MAINT_LOGS[t.id]||[];
+  const ov=document.createElement('div');ov.className='overlay';ov.style.cssText='display:flex;z-index:360';
+  const rows=logs.length?logs.map(lg=>{
+    const ph=maintPhotos(lg);
+    return `<div class="mtlog">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+        <b>📅 ${fmtDate(isoFromAny(lg.done_date))}</b>
+        <span style="font-size:.8rem;color:#8a7f74">👤 ${escapeHtml(lg.by_name||'—')}${isAdmin()?` <button data-del="${lg.id}" title="ลบบันทึกนี้" style="border:none;background:none;cursor:pointer">🗑</button>`:''}</span>
+      </div>
+      ${lg.note?`<div class="mtdetail">${escapeHtml(lg.note)}</div>`:''}
+      ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:'<div class="mtlast">ไม่มีรูปแนบ</div>'}
+    </div>`;}).join(''):'<div class="rempty">ยังไม่เคยบันทึกงานนี้</div>';
+  ov.innerHTML=`<div class="sheet" style="max-width:560px">
+    <div class="sheet-head"><h3>🕘 ${escapeHtml(t.name)}</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <p class="hint" style="margin:0 0 8px">${escapeHtml(maintFreqLabel(t.freq_days))} · ทำไปแล้ว ${logs.length} ครั้ง · แตะรูปเพื่อขยายเต็มจอ</p>
+      ${rows}
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  ov.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
+  ov.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('ลบบันทึกนี้? (รูปในประวัติครั้งนี้จะหายจากตาราง)'))return;
+    const {error}=await sb.from('maint_logs').delete().eq('id',b.dataset.del);
+    if(error){toast('ลบไม่ได้: '+error.message);return;}
+    toast('ลบบันทึกแล้ว');x();await maintLoad();
+    const nt=MAINT_TASKS.find(z=>z.id===t.id);if(nt)maintHistOverlay(nt);
+  });
+}
+function maintManageOverlay(){
+  if(!isAdmin()){toast('เฉพาะเจ้าของ/ผู้ดูแล');return;}
+  const bname=(accessibleBranches().find(b=>b.id===MAINT_B)||{}).name||'';
+  const ov=document.createElement('div');ov.className='overlay';ov.style.cssText='display:flex;z-index:360';
+  const bChecks=accessibleBranches().map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${b.id}" ${b.id===MAINT_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  ov.innerHTML=`<div class="sheet" style="max-width:560px">
+    <div class="sheet-head"><h3>⚙️ จัดการงานบำรุงรักษา</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <div class="sub-title" style="margin-top:0"><span class="mm_mode">➕ เพิ่มงานใหม่</span></div>
+      <div class="field"><label>ชื่องาน</label><input class="mm_n" placeholder="เช่น ล้างฟิลเตอร์แอร์"></div>
+      <div class="field"><label>รายละเอียด (ไม่บังคับ)</label><input class="mm_d" placeholder="เช่น ถอดฟิลเตอร์ทุกตัวมาล้าง ผึ่งให้แห้ง"></div>
+      <div class="field"><label>ความถี่</label><select class="mm_f">${MAINT_FREQ.map(f=>`<option value="${f[0]}" ${f[0]===30?'selected':''}>${f[1]}</option>`).join('')}<option value="custom">กำหนดเอง…</option></select></div>
+      <div class="field mm_brwrap"><label>ใช้กับสาขา</label><div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 2px">${bChecks}</div></div>
+      <div class="actions"><button class="act send wide mm_save">➕ เพิ่มงาน</button></div>
+      <div class="sub-title">🛠 งานของ ${escapeHtml(bname)}</div>
+      <div class="mm_list"></div>
+      <p class="hint">🗑 ลบงาน = ซ่อนจากตาราง (ประวัติและรูปเก่ายังอยู่)</p>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  const fN=ov.querySelector('.mm_n'),fD=ov.querySelector('.mm_d'),fF=ov.querySelector('.mm_f'),
+    saveBtn=ov.querySelector('.mm_save'),modeEl=ov.querySelector('.mm_mode'),brWrap=ov.querySelector('.mm_brwrap');
+  let editId=null;
+  function ensureFreqOpt(v){if(![...fF.options].some(o=>o.value===String(v))){
+    const o=document.createElement('option');o.value=v;o.textContent=maintFreqLabel(v);fF.insertBefore(o,fF.lastElementChild);}fF.value=String(v);}
+  fF.onchange=()=>{if(fF.value!=='custom')return;
+    const v=parseInt(prompt('ทำทุกกี่วัน? (เช่น 45)'),10);
+    if(v>0)ensureFreqOpt(v);else fF.value='30';};
+  function resetForm(){editId=null;fN.value='';fD.value='';fF.value='30';brWrap.style.display='';
+    modeEl.textContent='➕ เพิ่มงานใหม่';saveBtn.textContent='➕ เพิ่มงาน';}
+  function renderList(){
+    const wrap=ov.querySelector('.mm_list');
+    wrap.innerHTML=MAINT_TASKS.length?MAINT_TASKS.map(t=>`<div class="mmrow">
+        <div class="mmn"><b>${escapeHtml(t.name)}</b><small>${escapeHtml(maintFreqLabel(t.freq_days))}${t.detail?' · '+escapeHtml(t.detail):''}</small></div>
+        <button data-ed="${t.id}">✏️</button><button data-rm="${t.id}">🗑</button>
+      </div>`).join(''):'<div class="rempty">ยังไม่มีงานของสาขานี้</div>';
+    wrap.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(z=>z.id===b.dataset.ed);if(!t)return;
+      editId=t.id;fN.value=t.name;fD.value=t.detail||'';ensureFreqOpt(t.freq_days);brWrap.style.display='none';
+      modeEl.textContent='✏️ แก้ไข: '+t.name;saveBtn.textContent='💾 บันทึกการแก้ไข';fN.focus();});
+    wrap.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{const t=MAINT_TASKS.find(z=>z.id===b.dataset.rm);if(!t)return;
+      if(!confirm('ลบงาน “'+t.name+'” ออกจากสาขานี้?'))return;
+      const {error}=await sb.from('maint_tasks').update({deleted_at:new Date().toISOString()}).eq('id',t.id);
+      if(error){toast('ลบไม่ได้: '+error.message);return;}
+      toast('ลบงานแล้ว');await maintLoad();renderList();if(editId===t.id)resetForm();});
+  }
+  saveBtn.onclick=async()=>{
+    const name=fN.value.trim(),detail=fD.value.trim(),freq=parseInt(fF.value,10);
+    if(!name){toast('กรอกชื่องานก่อน');fN.focus();return;}
+    if(!(freq>0)){toast('เลือกความถี่ก่อน');return;}
+    saveBtn.disabled=true;
+    try{
+      if(editId){
+        const {error}=await sb.from('maint_tasks').update({name,detail:detail||null,freq_days:freq}).eq('id',editId);
+        if(error)throw error;toast('บันทึกการแก้ไขแล้ว ✓');
+      }else{
+        const bids=[...ov.querySelectorAll('.mm_br:checked')].map(c=>c.value);
+        if(!bids.length){toast('เลือกอย่างน้อย 1 สาขา');saveBtn.disabled=false;return;}
+        const base=Math.max(0,...MAINT_TASKS.map(t=>t.sort||0));
+        const rows=bids.map((bid,i)=>({id:uid('mt'),branch_id:bid,name,detail:detail||null,freq_days:freq,sort:base+10+i}));
+        const {error}=await sb.from('maint_tasks').insert(rows);
+        if(error)throw error;toast('เพิ่มงานแล้ว ✓ ('+bids.length+' สาขา)');
+      }
+      resetForm();await maintLoad();renderList();
+    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e));}
+    finally{saveBtn.disabled=false;}
+  };
+  renderList();
+}
+
 /* ----- นำทางกลาง (b30): ทุกการเปิดหน้าจำไว้ → รีเฟรชแล้วกลับหน้าเดิม ----- */
 function goPage(g){
   setSbActive(g);
@@ -3330,13 +3586,15 @@ function goPage(g){
   else if(g==='dispatch'){openModule('stock');openDispatch();}
   else if(g==='central'){openModule('stock');$('#centralBtn').click();}
   else if(g==='settings'){openModule('stock');$('#gearBtn').click();}
+  else if(g==='maint')openModule('maint');
   else return;
   try{localStorage.setItem('jj_last_page',g);}catch(e){}
 }
 function restoreLastPage(){
+  if(location.hash==='#maint'){setTimeout(()=>{try{goPage('maint')}catch(e){}},150);return;}   // ลิงก์ตรงเข้าตารางบำรุงรักษา
   let last=null;try{last=localStorage.getItem('jj_last_page');}catch(e){}
   if(!last||last==='count')return;
-  const allowed={order:true,
+  const allowed={order:true,maint:true,
     dispatch:can('viewDispatch'),
     central:can('manageCentral'),settings:canAnyManage()}[last];
   if(allowed)setTimeout(()=>{try{goPage(last);}catch(e){}},150);
@@ -3359,6 +3617,10 @@ function buildSidebar(){
   m+=`<div class="sb_grp open" data-grp="stock">
         <button class="sb_it sb_parent" data-toggle="stock"><span class="ic">📦</span>ข้อมูลสต็อก<span class="cv">▾</span></button>
         <div class="sb_sub">${sub}</div>
+      </div>`;
+  m+=`<div class="sb_grp open" data-grp="maint">
+        <button class="sb_it sb_parent" data-toggle="maint"><span class="ic">🛠</span>ซ่อมบำรุง<span class="cv">▾</span></button>
+        <div class="sb_sub">${it('🗓','ตารางบำรุงรักษา','maint')}</div>
       </div>`;
   w.innerHTML=`<div id="sbBack"></div>
     <nav id="sideBar">
