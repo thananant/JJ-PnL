@@ -17,7 +17,7 @@
 1. แพตช์ด้วย Python: `assert s.count(old)==1` ทุก anchor · ถ้าซ้ำให้ขยาย context · anchor ที่มี backslash/escape ให้ **slice จากไฟล์จริง** แทนการพิมพ์ (ดูตัวอย่างใน HANDOFF §6)
 2. หลังแพตช์รัน `npm run check` (parse ทุก script block) ต้อง `bad: 0`
 3. ฟีเจอร์ใหม่ = เพิ่ม `tests/smokeNN.js` (jsdom + mock fetch) ที่เช็คตัวเลขกับที่คำนวณมือ แล้วเพิ่มเลขเข้า `run-tests.sh`
-4. **ก่อนส่งทุกครั้ง** `npm test` ต้อง `FAIL=0` ครบทุกไฟล์ (53 ชุด ณ 6 ก.ย. 2569)
+4. **ก่อนส่งทุกครั้ง** `npm test` ต้อง `FAIL=0` ครบทุกไฟล์ (54 ชุด ณ 6 ก.ย. 2569)
 5. สำรอง `cp jjmk-pnl.html jjmk-pnl.html.bakNN` ก่อนแพตช์ใหญ่
 
 ## กับดักเทสต์ที่เคยเจอ
