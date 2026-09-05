@@ -5,6 +5,10 @@
 1. `jjmk_kitchen_setup.sql` — สร้างตาราง ck_* + สิทธิ์ + ฟังก์ชัน
 2. `jjmk_kitchen_data.sql` — ข้อมูลตั้งต้น (ซัพ 7 · วัตถุดิบ 42 · เมนู 17 · สูตร)
 
+## แอพนับสต๊อกสาขา
+
+- `jjmk-stock-b54.sql` — b54: ผูกชื่อนับ↔ชื่อบิล + อัตราแปลงหน่วยบิล→หน่วยนับ (supplier_items)
+
 ## ตารางบำรุงรักษาสาขา (ในแอพนับสต๊อก · เมนูซ่อมบำรุง)
 
 - `jjmk_maint_setup.sql` — ตาราง maint_tasks/maint_logs + สิทธิ์ + bucket รูป `maint-photos`
