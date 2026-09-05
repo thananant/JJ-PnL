@@ -594,7 +594,7 @@ function applyPerms(){
   paintUser();
 }
 /* ---------- log การใช้งานอัตโนมัติ ---------- */
-const LOGN={pnl_income_daily:'รายรับ',pnl_cash_paid:'เงินสดจ่าย',pnl_expense_daily:'รายจ่าย',pnl_bill_items:'บันทึกข้อมูลบิล',pnl_sup_items:'สินค้าประจำซัพ',pnl_fixed_monthly:'Fix cost',pnl_fixed_items:'ตั้งค่า Fix cost',pnl_fix_groups:'หมวด Fix cost',pnl_month_meta:'ข้อมูลเดือน',pnl_pv:'ใบสำคัญจ่าย',pnl_pv_items:'ใบสำคัญจ่าย',pnl_extra_expenses:'รายจ่ายอื่นๆ',pnl_shopee_orders:'Shopee',pnl_suppliers:'ตั้งค่าซัพ',pnl_branches:'ตั้งค่าสาขา',pnl_meat_daily:'เนื้อรายวัน',pnl_history:'ข้อมูลย้อนหลัง',pnl_history_items:'ข้อมูลย้อนหลัง',pnl_users:'ผู้ใช้',pnl_benchmarks:'มาตรฐาน',pnl_beam_daily:'ตรวจสอบเงิน (ไฟล์ Beam)'};
+const LOGN={pnl_income_daily:'รายรับ',pnl_cash_paid:'เงินสดจ่าย',pnl_expense_daily:'รายจ่าย',pnl_bill_items:'บันทึกข้อมูลบิล',pnl_sup_items:'สินค้าประจำซัพ',pnl_fixed_monthly:'Fix cost',pnl_fixed_items:'ตั้งค่า Fix cost',pnl_fix_groups:'หมวด Fix cost',pnl_month_meta:'ข้อมูลเดือน',pnl_pv:'ใบสำคัญจ่าย',pnl_pv_items:'ใบสำคัญจ่าย',pnl_extra_expenses:'รายจ่ายอื่นๆ',pnl_shopee_orders:'Shopee',pnl_suppliers:'ตั้งค่าซัพ',pnl_branches:'ตั้งค่าสาขา',pnl_meat_daily:'เนื้อรายวัน',pnl_history:'ข้อมูลย้อนหลัง',pnl_history_items:'ข้อมูลย้อนหลัง',pnl_users:'ผู้ใช้',pnl_benchmarks:'มาตรฐาน',pnl_beam_daily:'ตรวจสอบเงิน (ไฟล์ Beam)',pnl_beam_moves:'ตรวจสอบเงิน (เงินเคลื่อนไหว Beam)'};
 let _alast={};
 function alogAuto(method,path,body){
   try{
@@ -4954,27 +4954,59 @@ function beamAgg(files){ // [{name,text}] -> {rows:[แถว pnl_beam_daily], n
   });
   return {rows:Object.values(m),n,errs};
 }
+function beamAcct(name){ // ไฟล์ balances ไม่มีคอลัมน์ merchant — เอาชื่อบัญชีจากชื่อไฟล์ (เช่น jingjaimookt-balances_...csv)
+  const b=String(name||'').toLowerCase().replace(/^.*[\/\\]/,'').split('balance')[0].replace(/[^a-z0-9]+$/,'');
+  return b||'?';
+}
+function beamMoves(files){ // ไฟล์เงินเคลื่อนไหว -> แถว pnl_beam_moves (เก็บรายแถว แถวต่อวันมีน้อย)
+  const seen=new Set(),out=[],errs=[];
+  for(const f of files){
+    const rows=csvParse(f.text); const H=(rows[0]||[]).map(x=>String(x).trim());
+    const ix=k=>H.indexOf(k);
+    const iT=ix('created_at'),iB=ix('balance_type'),iG=ix('gross_amount'),iF=ix('fee_amount'),iV=ix('vat_amount'),iN=ix('net_amount'),iA=ix('accumulated_amount');
+    if(iT<0||iB<0||iN<0){ errs.push(f.name+': หัวคอลัมน์ไม่ตรงกับไฟล์เงินเคลื่อนไหวจาก Beam'); continue; }
+    const acct=beamAcct(f.name);
+    for(let r=1;r<rows.length;r++){
+      const c=rows[r]; if(!c[iT])continue;
+      const k=acct+'|'+c[iT]+'|'+c[iB];
+      if(seen.has(k))continue; seen.add(k);
+      out.push({acct,ts:c[iT],d:c[iT].slice(0,10),btype:c[iB],gross:num(c[iG]),
+        fee:num(iF>=0?c[iF]:0)+num(iV>=0?c[iV]:0),net:num(c[iN]),bal:num(iA>=0?c[iA]:0)});
+    }
+  }
+  return {rows:out,errs};
+}
 async function beamUpload(inp){
   const fl=[...(inp.files||[])]; if(!fl.length)return;
   const files=await Promise.all(fl.map(f=>Promise.resolve(f.text()).then(text=>({name:f.name,text}))));
   inp.value='';
-  const res=beamAgg(files);
-  res.errs.forEach(e=>toast(e,true));
-  if(!res.rows.length)return;
+  const tx=[],bal=[],errs=[]; // แยกชนิดไฟล์จากหัวคอลัมน์ — เลือกปนกัน/สลับช่องได้
+  files.forEach(f=>{
+    const H=(csvParse(f.text)[0]||[]).map(x=>String(x).trim());
+    if(H.includes('balance_type')&&H.includes('created_at'))bal.push(f);
+    else if(H.includes('merchant_id')&&H.includes('transaction_date'))tx.push(f);
+    else errs.push(f.name+': ไม่ใช่ไฟล์จาก Beam (รายการ/เงินเคลื่อนไหว)');
+  });
+  const rtx=tx.length?beamAgg(tx):{rows:[],n:0,errs:[]};
+  const rmv=bal.length?beamMoves(bal):{rows:[],errs:[]};
+  [...errs,...rtx.errs,...rmv.errs].forEach(e=>toast(e,true));
+  if(!rtx.rows.length&&!rmv.rows.length)return;
   try{
-    await ups('pnl_beam_daily',res.rows,'acct,d');
-    toast('✅ อ่าน '+fmtI(res.n)+' รายการ → บันทึก '+res.rows.length+' วัน·บัญชี');
+    if(rtx.rows.length)await ups('pnl_beam_daily',rtx.rows,'acct,d');
+    if(rmv.rows.length)await ups('pnl_beam_moves',rmv.rows,'acct,ts,btype');
+    toast('✅ บันทึกแล้ว'+(rtx.rows.length?' · รายการ '+fmtI(rtx.n)+' → '+rtx.rows.length+' วัน·บัญชี':'')+(rmv.rows.length?' · เงินเคลื่อนไหว '+rmv.rows.length+' แถว':''));
     await show('recon');
   }catch(e){
     const msg=String(e&&e.message||'');
     if(msg==='view-only')return;
-    toast(/pnl_beam_daily|42P01|schema cache/i.test(msg)?'ยังไม่ได้สร้างตาราง — รัน sql/jjmk_pnl_beam.sql ใน Supabase ก่อนครับ':'บันทึกไม่สำเร็จ — '+msg,true);
+    toast(/pnl_beam|42P01|schema cache/i.test(msg)?'ยังไม่ได้สร้างตาราง — รัน sql/jjmk_pnl_beam.sql ใน Supabase ก่อนครับ (รันซ้ำได้)':'บันทึกไม่สำเร็จ — '+msg,true);
   }
 }
 RENDER.recon = async (el)=>{
   const days=monthDays(S.m),from=dstr(S.m,1),to=dstr(S.m,days);
   let beam=[],beamErr=false;
   try{ beam=await selAllQ('pnl_beam_daily','select=*&d=gte.'+from+'&d=lte.'+to+'&order=d')||[]; }catch(e){ beamErr=true; }
+  let moves=[]; try{ moves=await selAllQ('pnl_beam_moves','select=*&d=gte.'+from+'&d=lte.'+to+'&order=ts')||[]; }catch(e){ beamErr=true; }
   const inc=await selAllQ('pnl_income_daily','select=branch,d,transfer_total_am,transfer_total_pm&d=gte.'+from+'&d=lte.'+to+'&order=d')||[];
   const key={}; inc.forEach(r=>{ key[r.d]=(key[r.d]||0)+num(r.transfer_total_am)+num(r.transfer_total_pm); });
   const bm={}; let upAt='';
@@ -5017,12 +5049,42 @@ RENDER.recon = async (el)=>{
         +(bad.length>8?' · …อีก '+(bad.length-8)+' กะ':'')+'</div>')
       +'</div>';
   }
+  // ---- เงินเข้าบัญชีธนาคาร (จากไฟล์เงินเคลื่อนไหว: PAYOUT = โอนออกจาก Beam เข้าธนาคาร) ----
+  let bank='';
+  if(moves.length){
+    const mAccts=[...new Set(moves.map(r=>r.acct))].sort();
+    const po={},mAdj=[],balLast={};
+    moves.forEach(r=>{
+      if(r.btype==='PAYOUT'){ const a=po[r.d]||(po[r.d]={}); a[r.acct]=(a[r.acct]||0)+(-num(r.net)); }
+      else if(r.btype==='ADJUSTMENT')mAdj.push(r);
+      const L=balLast[r.acct]; if(!L||r.ts>L.ts)balLast[r.acct]=r;
+    });
+    const pds=Object.keys(po).sort(); const tot={}; let tAll=0;
+    const brows=pds.map(dd=>{
+      const a=po[dd]; const sum=mAccts.reduce((x,ac)=>x+(a[ac]||0),0); tAll+=sum;
+      mAccts.forEach(ac=>tot[ac]=(tot[ac]||0)+(a[ac]||0));
+      const dt=new Date(dd+'T12:00:00');
+      return '<tr><td>'+(+dd.slice(8))+' '+TH_D[dt.getDay()]+'.</td>'+mAccts.map(ac=>'<td class="right">'+(a[ac]?fmt(a[ac],2):'–')+'</td>').join('')+'<td class="right" style="font-weight:700">'+fmt(sum,2)+'</td></tr>';
+    }).join('');
+    bank='<div class="card"><h3>🏦 เงินเข้าบัญชีธนาคาร (รอบโอนออกจาก Beam)</h3>'
+      +(pds.length?'<div class="twrap" style="max-height:48dvh;overflow-y:auto"><table><tr><th>วันที่เงินเข้า</th>'+mAccts.map(ac=>'<th class="right">'+esc(ac)+'</th>').join('')+'<th class="right">รวม</th></tr>'
+        +brows
+        +'<tr style="font-weight:700;background:#F7F2E6"><td>รวมเดือนนี้</td>'+mAccts.map(ac=>'<td class="right">'+fmt(tot[ac]||0,2)+'</td>').join('')+'<td class="right">'+fmt(tAll,2)+'</td></tr></table></div>'
+       :'<div class="empty" style="padding:18px 10px">เดือนนี้ยังไม่มีรอบโอนเข้าธนาคารในไฟล์</div>')
+      +'<div class="xs mut" style="margin-top:6px">ตัวเลขชุดนี้ต้องตรงกับรายการเงินเข้าในสมุดบัญชีธนาคาร · เสาร์–อาทิตย์ธนาคารไม่มีรอบโอน ยอดสะสมใน Beam แล้วเข้าวันจันทร์'
+      +mAccts.map(ac=>{const L=balLast[ac];return L&&num(L.bal)>0?' · คงค้างใน '+esc(ac)+' ณ '+esc(L.d)+' ฿'+fmt(num(L.bal),2):'';}).join('')+'</div>'
+      +(mAdj.length?'<div class="dupbox" style="margin-top:8px">⚠ Beam ปรับปรุงยอดเอง (ADJUSTMENT): '+mAdj.map(r=>esc(r.d)+' '+(num(r.net)>0?'+':'')+fmt(num(r.net),2)+' บาท').join(' · ')+' — ควรสอบถาม Beam ว่าคือรายการอะไร</div>':'')
+      +'</div>';
+  }
   el.innerHTML=
   '<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
   +'<div><div class="b">🛡 ตรวจสอบเงิน · '+monthLabel(S.m)+'</div>'
   +'<div class="xs mut">เงินโอน: เทียบยอดที่คีย์ (ทุกสาขารวมกัน) กับไฟล์รายการจาก Beam ต่อวันขายจริง — รายการก่อน 06:00 นับเป็นวันก่อนหน้าให้อัตโนมัติ</div></div>'
   +'<input type="file" id="beamFile" accept=".csv" multiple style="display:none" onchange="beamUpload(this)">'
-  +'<button class="btn dk sm2" style="margin-left:auto" onclick="document.getElementById(\'beamFile\').click()">📥 อัปโหลดไฟล์ Beam</button></div>'
+  +'<input type="file" id="beamFile2" accept=".csv" multiple style="display:none" onchange="beamUpload(this)">'
+  +'<div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">'
+  +'<button class="btn dk sm2" onclick="document.getElementById(\'beamFile\').click()">📥 ไฟล์รายการ (Transactions)</button>'
+  +'<button class="btn gh sm2" onclick="document.getElementById(\'beamFile2\').click()">🏦 ไฟล์เงินเคลื่อนไหว (Balances)</button></div></div>'
   +(beamErr?'<div class="card" style="background:#FDF3E7;border-color:#E8C9A0"><b>⚠ ยังไม่ได้สร้างตารางเก็บข้อมูล</b> <span class="sm">รันไฟล์ <code>sql/jjmk_pnl_beam.sql</code> ใน Supabase ครั้งเดียว แล้วอัปโหลดไฟล์ได้เลย</span></div>':'')
   +'<div class="card"><h3>💸 เงินโอน: คีย์ในแอพ vs Beam</h3>'
   +(nDay===0?'<div class="empty">ยังไม่มีทั้งยอดโอนที่คีย์และไฟล์ Beam ของเดือนนี้<br><span class="xs mut">โหลดไฟล์รายการ (Transactions) จากเว็บ Beam ทุกบัญชี แล้วกด "อัปโหลดไฟล์ Beam" เลือกทีเดียวหลายไฟล์ได้</span></div>'
@@ -5031,6 +5093,7 @@ RENDER.recon = async (el)=>{
     +'<tr style="font-weight:700;background:#F7F2E6"><td>รวม '+nDay+' วัน</td><td class="right">'+fmt(tKey,2)+'</td><td class="right">'+fmt(tG,2)+'</td><td class="right">'+fmt(tN,2)+'</td><td>'+(nBad===0?(nOk>0?'<span style="color:#1F7A43">✓ ตรง '+nOk+' วัน</span>':''):'<span style="color:var(--red)">✗ ไม่ตรง '+nBad+' วัน</span>')+'</td></tr></table></div>'
     +'<div class="xs mut" style="margin-top:6px">ค่าธรรมเนียม Beam เดือนนี้ ฿'+fmt(tFee,2)+(tPend>0?' · ⏳ รอเงินเข้าบัญชี ฿'+fmt(tPend,2)+' (รอบโอนของ Beam = วันถัดไป ไม่ใช่เงินหาย)':'')+(upAt?' · อัปโหลดล่าสุด '+esc(upAt.slice(0,16).replace('T',' ')):'')+'</div>')
   +'</div>'
+  +bank
   +'<div class="card"><h3>💵 เงินสด: ปิดกะลงตัวไหม (จากข้อมูลที่คีย์อยู่แล้ว)</h3>'
   +'<div style="display:flex;gap:10px;flex-wrap:wrap">'+cashHtml+'</div>'
   +'<div class="xs mut" style="margin-top:6px">สูตรเดียวกับหน้ารายรับ: เงินฝาก+เงินเก๊ะ+โอน+บัญชีสำรอง+จ่ายสดจากเก๊ะ − เก๊ะเปิด − โอนคงค้างเมื่อวาน ต้องเท่ายอด POS</div></div>';
