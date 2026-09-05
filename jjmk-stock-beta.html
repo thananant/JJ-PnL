@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b54 — ผูกชื่อนับ↔ชื่อบิลสมบูรณ์ + อัตราแปลงหน่วยบิล→หน่วยนับ + การใช้ของจากบิลจริง</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b55 — จับคู่ชื่อนับ↔ชื่อบิลผ่านไฟล์ Excel (ส่งออก→เช็ค→นำเข้า ตรวจ 100% ก่อนบันทึก)</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -2735,6 +2735,17 @@ async function openLinkCenter(filterSup){
     if(!P[r._v.sn])return '<span class="chip" style="background:#fbe9e7;color:#b3261e;border:1px solid #f3c0ba">✗ ชื่อไม่ตรง</span>';
     if(!okConv(r))return '<span class="chip" style="background:#fbe9e7;color:#b3261e;border:1px solid #f3c0ba">⚖ ขาดอัตราแปลง</span>';
     return '<span class="chip" style="background:#eefaf1;color:#1a7f37;border:1px solid #bfe6cd">✓ พร้อมใช้</span>'; };
+  const bestGuess=q=>{let best='',bs=0;pNames.forEach(p2=>{const s=supSim(q,p2);if(s>bs){bs=s;best=p2;}});return {best,bs};};
+  function lcConfirm(title,html,onOk){ // กล่องพรีวิว/รายงานผลตรวจ — ไม่เขียนอะไรจนกว่าจะกดยืนยัน
+    const cv=document.createElement('div');cv.className='overlay';cv.style.cssText='display:flex;z-index:500';
+    cv.innerHTML=`<div class="sheet" style="max-width:660px"><div class="sheet-head"><h3>${title}</h3><button class="x" data-x>✕</button></div><div class="sheet-body">${html}
+      ${onOk?'<div style="display:flex;gap:8px;margin-top:12px"><button class="act lc_ok" style="flex:1.4;background:var(--red);color:#fff;border:none">✅ ยืนยันบันทึก (สำรองไฟล์ให้ก่อน)</button><button class="act lc_no" style="flex:1;background:#fff">ยกเลิก</button></div>':'<div style="margin-top:12px"><button class="act wide lc_no" style="background:#fff">ปิด</button></div>'}
+    </div></div>`;
+    document.body.appendChild(cv);
+    const close=()=>cv.remove();
+    cv.querySelector('[data-x]').onclick=close;cv.querySelector('.lc_no').onclick=close;
+    if(onOk)cv.querySelector('.lc_ok').onclick=()=>{close();onOk();};
+  }
   function render(){
     const st=stats();
     const vis=rows.filter(r=>(!F.sup||r._app===F.sup)&&(!F.un||!okConv(r)));
@@ -2753,7 +2764,12 @@ async function openLinkCenter(filterSup){
         <input class="lc_q" placeholder="🔍 ค้นหาชื่อบิล/ชื่อนับ..." autocomplete="off" style="padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'">
         <label style="display:flex;align-items:center;gap:6px;font-size:.85em"><input type="checkbox" class="lc_un" ${F.un?'checked':''}> เฉพาะที่ยังไม่ครบ</label>
       </div>
-      <button class="act wide lc_auto" style="background:#1559c7;color:#fff;border:none;margin-bottom:8px">✨ เดาคู่ที่ยังว่างให้อัตโนมัติ</button>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <button class="act lc_auto" style="flex:1;min-width:170px;background:#1559c7;color:#fff;border:none">✨ เดาคู่ที่ยังว่างให้</button>
+        <button class="act lc_exp" style="flex:1;min-width:170px;background:#1a7f37;color:#fff;border:none">📤 ส่งออก Excel จับคู่</button>
+        <button class="act lc_imp" style="flex:1;min-width:170px;background:#8a6200;color:#fff;border:none">📥 นำเข้า Excel ที่แก้แล้ว</button>
+        <input type="file" class="lc_impfile" accept=".xlsx,.xls" style="display:none">
+      </div>
       <div class="lc_list">${Object.keys(grp).sort((a,b)=>a.localeCompare(b,'th')).map(app=>`
         <h4 style="margin:12px 0 4px">🏭 ${escapeHtml(app)} <small style="color:var(--ink-soft)">(${grp[app].length})</small></h4>
         ${grp[app].map(r=>{const i=rows.indexOf(r);const pu=(P[r._v.sn]||{}).unit||'หน่วยนับ';
@@ -2766,7 +2782,7 @@ async function openLinkCenter(filterSup){
       </div>
       <datalist id="lcDL">${pNames.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(P[n].unit?(n+' — '+P[n].unit):n)}</option>`).join('')}</datalist>
       <button class="act wide lc_save" style="background:var(--red);color:#fff;border:none;margin-top:10px">💾 บันทึกการผูก & อัตราแปลง</button>
-      <p class="hint" style="margin:6px 0 0">บันทึกแล้วซิงค์สองทางให้เลย: ฝั่งบิลจำชื่อนับ + ฝั่งนับจำชื่อบิล (ป้าย 🧾 โชว์ทุกหน้า) · อัตราแปลง = 1 หน่วยบิลเท่ากับกี่หน่วยนับ เช่น 1 ลัง = 9 กก. · หน่วยเดียวกันไม่ต้องกรอก (ระบบคิดเป็น 1 ให้)</p>`;
+      <p class="hint" style="margin:6px 0 0">บันทึกแล้วซิงค์สองทางให้เลย: ฝั่งบิลจำชื่อนับ + ฝั่งนับจำชื่อบิล (ป้าย 🧾 โชว์ทุกหน้า) · อัตราแปลง = 1 หน่วยบิลเท่ากับกี่หน่วยนับ เช่น 1 ลัง = 9 กก. · หน่วยเดียวกันไม่ต้องกรอก (ระบบคิดเป็น 1 ให้)<br>ทำเป็นชุดใหญ่ให้ชัวร์: <b>📤 ส่งออก Excel</b> → ทีมเช็คในไฟล์ → <b>📥 นำเข้า</b> — ระบบตรวจทุกแถวก่อน (ผิดแม้แถวเดียวไม่บันทึก) โชว์สรุปให้ยืนยัน และสำรองข้อมูลเดิมเป็นไฟล์ให้อัตโนมัติ</p>`;
     bindEvents();
   }
   function bindEvents(){
@@ -2799,6 +2815,97 @@ async function openLinkCenter(filterSup){
         if(best&&bs>=0.62){const sn=el.querySelector('.lc_sn');sn.value=best;sn.style.background=bs>=0.85?'#eefaf1':'#fff8e1';sn.onchange();n++;}
       });
       toast(n?('เดาให้ '+n+' รายการ — เช็คช่องสีเหลืองก่อนกดบันทึก'):'ไม่มีคู่ใหม่ที่เดาได้');
+    };
+    // ── 📤 ส่งออกกระดาษทำงาน Excel: 1 แถวต่อชื่อบิล เติมคู่เดิม/คู่ที่เดาไว้ให้ แก้เฉพาะ 2 คอลัมน์ ──
+    out.querySelector('.lc_exp').onclick=()=>{
+      const head=['id (ห้ามแก้)','ซัพพลายเออร์','ชื่อบิล (ห้ามแก้)','หน่วยบิล','ชื่อนับ (แก้ช่องนี้ — เว้นว่าง = ไม่มีในระบบนับ)','อัตราแปลง (1 หน่วยบิล = กี่หน่วยนับ · หน่วยเดียวกันเว้นว่าง)','หน่วยนับ','สถานะตอนส่งออก'];
+      const data=rows.map(r=>{
+        let sn=r._v.sn,st2=sn?'ผูกไว้แล้ว':'';
+        if(!sn){const g=bestGuess(r.name);if(g.bs>=0.62){sn=g.best;st2='ระบบเดาให้ — ตรวจด้วย';}else st2='ยังไม่ผูก';}
+        return [r.id,r._app,r.name,r.unit||'',sn,r._v.f||'',(P[sn]||{}).unit||'',st2];
+      });
+      const ws=XLSX.utils.aoa_to_sheet([head,...data]);
+      ws['!cols']=[{wch:10},{wch:18},{wch:34},{wch:10},{wch:40},{wch:34},{wch:10},{wch:20}];
+      const ws2=XLSX.utils.aoa_to_sheet([['ชื่อนับ (ก๊อปไปวางในชีทแรกได้เลย)','หน่วยนับ','ซัพในระบบ','ชื่อบิลที่ผูกอยู่ตอนนี้'],
+        ...pNames.map(n2=>[n2,P[n2].unit||'',P[n2].sup||'',P[n2].bill||''])]);
+      ws2['!cols']=[{wch:40},{wch:10},{wch:18},{wch:34}];
+      const ws3=XLSX.utils.aoa_to_sheet([
+        ['วิธีใช้ไฟล์นี้ (แก้เฉพาะชีท "จับคู่ชื่อ" คอลัมน์ E กับ F)'],
+        ['1. คอลัมน์ E "ชื่อนับ": ก๊อปชื่อจากชีท "ชื่อนับทั้งหมด" มาวาง — ต้องสะกดตรงเป๊ะ (ระบบตรวจให้ตอนนำเข้า ผิดแม้ตัวเดียวจะฟ้องและไม่บันทึก)'],
+        ['2. ชื่อบิลตัวไหนไม่มีของนับจริง → เว้นคอลัมน์ E ว่างไว้'],
+        ['3. คอลัมน์ F "อัตราแปลง": 1 หน่วยบิลเท่ากับกี่หน่วยนับ เช่น บิลเป็นลัง นับเป็นกก. 1 ลัง = 9 กก. → ใส่ 9 · ถ้าหน่วยเดียวกันเว้นว่าง (ระบบคิดเป็น 1)'],
+        ['4. ห้ามแก้คอลัมน์ A (id) และ C (ชื่อบิล) — ใช้ตรวจกันแถวสลับ · ลบแถวที่ไม่อยากยุ่งออกได้ (แถวที่หายไปจะไม่ถูกแตะ)'],
+        ['5. เสร็จแล้วกลับมาที่หน้า 🔗 ผูกชื่อ & แปลงหน่วย กด "📥 นำเข้า Excel ที่แก้แล้ว" — ระบบตรวจทุกแถว โชว์สรุปให้ดูก่อน แล้วสำรองข้อมูลเดิมเป็นไฟล์ให้อัตโนมัติก่อนบันทึก']]);
+      ws3['!cols']=[{wch:120}];
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,ws,'จับคู่ชื่อ');
+      XLSX.utils.book_append_sheet(wb,ws2,'ชื่อนับทั้งหมด');
+      XLSX.utils.book_append_sheet(wb,ws3,'วิธีใช้');
+      XLSX.writeFile(wb,'jjmk-จับคู่ชื่อ-'+bizTodayISO()+'.xlsx');
+      toast('📤 ส่งออกแล้ว '+rows.length+' รายการ — แก้เฉพาะคอลัมน์ "ชื่อนับ" กับ "อัตราแปลง" เสร็จแล้วกด 📥 นำเข้า');
+    };
+    // ── 📥 นำเข้า: ตรวจ 100% ทุกแถวก่อน มีผิดแม้แถวเดียว = ไม่เขียนอะไรเลย ──
+    out.querySelector('.lc_imp').onclick=()=>out.querySelector('.lc_impfile').click();
+    out.querySelector('.lc_impfile').onchange=async e=>{
+      const file=e.target.files[0];if(!file)return;e.target.value='';
+      let wb;try{wb=XLSX.read(await file.arrayBuffer());}catch(err){toast('อ่านไฟล์ไม่ได้ — ใช้ไฟล์ .xlsx จากปุ่ม 📤 ส่งออก');return;}
+      const ws=wb.Sheets['จับคู่ชื่อ']||wb.Sheets[wb.SheetNames[0]];
+      if(!ws){toast('ไม่พบชีท "จับคู่ชื่อ" ในไฟล์');return;}
+      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      const hi=aoa.findIndex(r0=>String(r0[0]||'').trim().startsWith('id'));
+      if(hi<0){toast('หัวตารางไม่ตรงแบบฟอร์ม — ห้ามลบแถวหัว/คอลัมน์ id');return;}
+      const byId={};rows.forEach(r=>byId[String(r.id)]=r);
+      const S2=v=>String(v==null?'':v).trim();
+      const errs=[],plan=[],seen={};
+      for(let n2=hi+1;n2<aoa.length;n2++){
+        const row=aoa[n2],rowNo=n2+1;
+        if(row.every(c=>S2(c)===''))continue;
+        const id=S2(row[0]);
+        if(!id){errs.push('แถว '+rowNo+': ช่อง id ว่าง (ห้ามลบคอลัมน์ id)');continue;}
+        const r=byId[id];
+        if(!r){errs.push('แถว '+rowNo+': id "'+id+'" ไม่มีในระบบ (อย่าแก้คอลัมน์ id)');continue;}
+        if(seen[id]){errs.push('แถว '+rowNo+': "'+r.name+'" ซ้ำกับแถวก่อนหน้า');continue;}
+        seen[id]=1;
+        const bn=S2(row[2]);
+        if(bn&&bn!==r.name){errs.push('แถว '+rowNo+': ชื่อบิล "'+bn+'" ไม่ตรงกับ id (ในระบบคือ "'+r.name+'") — แถวอาจถูกสลับ');continue;}
+        const sn=S2(row[4]);
+        if(sn&&!P[sn]){const g=bestGuess(sn);
+          errs.push('แถว '+rowNo+': ชื่อนับ "'+sn+'" ไม่มีในระบบ'+(g.bs>=0.5?(' — ใกล้เคียงสุด: "'+g.best+'"'):' (ก๊อปจากชีท "ชื่อนับทั้งหมด")'));continue;}
+        const fs=S2(row[5]).replace(',','.');
+        if(fs&&!(+fs>0)){errs.push('แถว '+rowNo+': อัตราแปลง "'+S2(row[5])+'" ต้องเป็นตัวเลขมากกว่า 0 หรือเว้นว่าง');continue;}
+        plan.push({r,sn:sn,f:(+fs>0)?String(+fs):''});
+      }
+      if(!plan.length&&!errs.length){toast('ไฟล์ว่าง — ไม่มีแถวข้อมูล');return;}
+      if(errs.length){
+        lcConfirm('⛔ พบข้อผิดพลาด — ยังไม่บันทึก',
+          '<p style="color:#b3261e;font-weight:700;margin:0 0 8px">พบ '+errs.length+' จุด — ระบบไม่เขียนอะไรทั้งสิ้นจนกว่าไฟล์จะถูกต้อง 100% แก้ในไฟล์แล้วนำเข้าใหม่</p><div style="max-height:300px;overflow:auto;font-size:.85em">'+errs.map(s2=>'<div style="padding:4px 0;border-bottom:1px dashed var(--line)">'+escapeHtml(s2)+'</div>').join('')+'</div>',null);
+        return;
+      }
+      let add=0,chg=0,rm=0,fset=0,same=0;const det=[];
+      plan.forEach(p2=>{
+        const cur=p2.r._v.sn,curF=String(p2.r._v.f||'');
+        if(p2.sn&&!cur){add++;det.push('🔗 ผูกใหม่: '+p2.r.name+' → '+p2.sn);}
+        else if(p2.sn&&cur&&p2.sn!==cur){chg++;det.push('✏️ เปลี่ยนคู่: '+p2.r.name+' → '+p2.sn+' (เดิม: '+cur+')');}
+        else if(!p2.sn&&cur){rm++;det.push('🗑 เลิกผูก: '+p2.r.name+' (เดิม: '+cur+')');}
+        else same++;
+        if(p2.f!==curF&&(p2.f||curF)){fset++;if(p2.sn&&p2.sn===cur)det.push('⚖ อัตราแปลง: '+p2.r.name+' = '+(p2.f||'(ว่าง=1)')); }
+      });
+      if(!add&&!chg&&!rm&&!fset){toast('ตรวจแล้วถูกต้อง — แต่ไม่มีอะไรเปลี่ยนจากที่ผูกอยู่');return;}
+      lcConfirm('📥 ตรวจผ่าน — ยืนยันก่อนบันทึก',
+        `<p style="margin:0 0 8px">ตรวจ ${plan.length} แถวแล้ว <b style="color:#1a7f37">ไม่มีข้อผิดพลาด</b> — จะเปลี่ยนตามนี้:</p>
+        <div style="font-size:.9em;margin-bottom:8px">🔗 ผูกใหม่ <b>${add}</b> · ✏️ เปลี่ยนคู่ <b>${chg}</b> · 🗑 เลิกผูก <b>${rm}</b> · ⚖ อัตราแปลงเปลี่ยน <b>${fset}</b> · เหมือนเดิม ${same}</div>
+        <div style="max-height:280px;overflow:auto;font-size:.83em">${det.map(s2=>'<div style="padding:3px 0;border-bottom:1px dashed var(--line)">'+escapeHtml(s2)+'</div>').join('')||'<i>เปลี่ยนเฉพาะอัตราแปลง</i>'}</div>`,
+        ()=>{
+          try{ // สำรองสภาพเดิมเป็นไฟล์ ก่อนเขียนทับ (เอาไว้ย้อนกลับได้เสมอ)
+            const bws=XLSX.utils.aoa_to_sheet([['id','ซัพ','ชื่อบิล','หน่วยบิล','ชื่อนับ (ก่อนแก้)','อัตราแปลง (ก่อนแก้)'],
+              ...rows.map(r=>[r.id,r._app,r.name,r.unit||'',String(r.stock_name||''),(+r.conv_factor>0)?+r.conv_factor:''])]);
+            bws['!cols']=[{wch:10},{wch:18},{wch:34},{wch:10},{wch:40},{wch:14}];
+            const bwb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(bwb,bws,'สำรองก่อนนำเข้า');
+            XLSX.writeFile(bwb,'jjmk-สำรองจับคู่-'+bizTodayISO()+'.xlsx');
+          }catch(e2){}
+          plan.forEach(p2=>{p2.r._v.sn=p2.sn;p2.r._v.f=p2.f;});
+          out.querySelector('.lc_save').onclick(); // ใช้เส้นทางบันทึก+ซิงค์สองทางเดียวกับปุ่มบันทึกปกติ
+        });
     };
     out.querySelector('.lc_save').onclick=async()=>{
       const btn=out.querySelector('.lc_save');btn.disabled=true;btn.textContent='⏳ กำลังบันทึก...';
