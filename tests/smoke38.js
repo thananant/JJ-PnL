@@ -59,6 +59,11 @@ setTimeout(async()=>{
   const hidden=['sum','pv','etc','set'].every(v=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display==='none');
   const shown=['dash','income','exp'].every(v=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display!=='none');
   out.push('nav perms: hidden='+hidden+' shown='+shown);
+  // หมวด "ตรวจสอบ & เอกสาร" ของ boy ถูกซ่อนทั้งหมวด (ทุกเมนูข้างในไม่มีสิทธิ์) แต่หมวดอื่นยังโชว์
+  const secs=[...d.querySelectorAll('.sb-sec')];
+  const secShown=t=>{const x=secs.find(e=>e.textContent.includes(t));return x?x.style.display!=='none':null;};
+  out.push('หัวหมวดตามสิทธิ์: ตรวจสอบ&เอกสาร ซ่อน · ภาพรวม/งานประจำวัน/สต๊อก โชว์: '
+    +(secShown('ตรวจสอบ')===false&&secShown('ภาพรวม')===true&&secShown('งานประจำวัน')===true&&secShown('สต๊อก')===true));
   out.push('user chip: '+d.getElementById('sbUser').textContent.includes('บอย'));
   // 5) dash = view -> มีแบนเนอร์ + เขียนถูกบล็อก
   out.push('dash banner: '+d.getElementById('view-dash').textContent.includes('ดูอย่างเดียว'));
