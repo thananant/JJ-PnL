@@ -1,0 +1,2205 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JJ Kitchen — ครัวกลาง จริงใจหมูกระทะ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&family=Noto+Sans+Lao+Looped:wght@400;500;600;700&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --fh:'Prompt','Noto Sans Lao Looped','Noto Sans Myanmar',sans-serif;
+  --red:#C62127; --red-d:#A31B20; --red-t:#FBEBEB;
+  --ink:#241F1E; --mut:#8B837B; --bg:#F5F2ED; --card:#FFFFFF; --line:#E7E1D8;
+  --ok:#1E8E5A; --ok-t:#E6F4EC; --bad:#D23B3B; --bad-t:#FCE9E8; --gold:#B98A2F; --gold-t:#F7EEDC;
+  --blue:#3D6E8C; --blue-t:#E7F0F5;
+  --r:14px; --sh:0 1px 2px rgba(35,25,20,.05),0 4px 14px rgba(35,25,20,.06);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+html,body{overscroll-behavior-y:contain}
+body{font-family:'Sarabun','Noto Sans Lao Looped','Noto Sans Myanmar',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;min-height:100dvh}
+h1,h2,h3,.num,.kpi-v{font-family:var(--fh)}
+body[data-lang="lo"]{--fh:'Noto Sans Lao Looped','Prompt',sans-serif;font-family:'Noto Sans Lao Looped','Sarabun',sans-serif}
+body[data-lang="my"]{--fh:'Noto Sans Myanmar','Prompt',sans-serif;font-family:'Noto Sans Myanmar','Sarabun',sans-serif}
+.num,td.n,input[type=number],.kpi-v,.money{font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:15px;color:var(--ink)}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)}
+input[type=number]{text-align:right}
+input,select,textarea{background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--red)}
+input::placeholder{color:#C5BEB5}
+::-webkit-scrollbar{height:6px;width:6px}::-webkit-scrollbar-thumb{background:#D8D1C7;border-radius:3px}
+
+/* ---------- Header ---------- */
+header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hrow{display:flex;align-items:center;gap:10px;padding:10px clamp(14px,1.6vw,28px) 6px;max-width:none;margin:0 auto}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--fh);font-weight:700;font-size:18px;letter-spacing:.2px}
+.brand .hlogo{width:26px;height:26px;border-radius:8px;border:1.5px solid #E9B44C;background:var(--red);object-fit:cover;flex:none}
+.brand small{font-weight:500;color:var(--mut);font-size:11px;display:block;line-height:1}
+.ptitle{display:none}
+.hbtn{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px solid var(--line);border-radius:99px;padding:6px 12px;font-weight:600;font-size:13px;white-space:nowrap}
+.hbtn:active{transform:scale(.96)}
+#syncDot{width:9px;height:9px;border-radius:50%;background:var(--ok);margin-left:auto;flex:none;transition:.2s}
+#syncDot.busy{background:var(--gold);animation:pul 1s infinite}
+#syncDot.err{background:var(--bad)}
+@keyframes pul{50%{opacity:.35}}
+.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px 10px 8px;max-width:none;margin:0 auto;scrollbar-width:none}
+.tabbar::-webkit-scrollbar{display:none}
+.tabbar button{flex:none;padding:8px 14px;border-radius:99px;font-weight:600;color:var(--mut);font-size:14px;display:inline-flex;align-items:center;gap:5px}
+.tabbar button.on{background:var(--ink);color:#fff}
+
+/* ---------- Sidebar (desktop) ---------- */
+#sideNav{display:none}
+@media(min-width:900px){
+  #app{padding-left:236px}
+  #sideNav{display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;width:236px;z-index:60;
+    background:linear-gradient(180deg,#7E1013 0%,#690C0F 100%);padding:18px 13px calc(14px + env(safe-area-inset-bottom));overflow-y:auto}
+  #sideNav::-webkit-scrollbar{width:0}
+  .sb-logo{display:flex;align-items:center;gap:10px;margin:2px 4px 14px}
+  .sb-logo img{width:47px;height:47px;border-radius:13px;border:2px solid #E9B44C;box-shadow:0 2px 10px rgba(0,0,0,.35);object-fit:cover;flex:none}
+  .sb-logo b{display:block;color:#fff;font-family:var(--fh);font-size:15px;line-height:1.2}
+  .sb-logo small{color:#EFC6C6;font-size:11px;font-weight:500}
+  .sb-note{display:flex;align-items:center;gap:7px;background:rgba(0,0,0,.24);border:1px solid rgba(233,180,76,.55);color:#F1D6A2;font-size:12px;font-weight:600;border-radius:11px;padding:8px 11px;margin:0 2px 14px}
+  .sb-note b{color:#FFCF6E;font-weight:700}
+  .sb-sec{color:rgba(255,255,255,.42);font-size:10.5px;letter-spacing:.2em;font-weight:700;margin:12px 8px 6px;font-family:var(--fh)}
+  .sb-item{display:flex;align-items:center;gap:11px;width:100%;text-align:left;color:#F2DCDC;font-weight:600;font-size:14.5px;padding:10px 12px;border-radius:11px;margin-bottom:2px;transition:background .12s}
+  .sb-item .ic{width:22px;text-align:center;flex:none;font-size:16px}
+  .sb-item:hover{background:rgba(255,255,255,.09)}
+  .sb-item.on{background:var(--red);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.28)}
+  .sbadge{margin-left:auto;background:#fff;color:var(--red);border-radius:99px;font-size:11px;line-height:1;padding:3px 7px;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+  .sb-foot{margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
+  #sbUser{color:#F2DCDC;font-size:12.5px;padding:4px 8px 8px}
+  #sbUser a{color:#F3C74F;font-weight:700;cursor:pointer;margin-left:6px}
+  header .brand{display:none}
+  .tabbar{display:none}
+  .hrow{padding:13px 18px 11px}
+  .ptitle{display:block;font-family:inherit;font-weight:700;font-size:20px;margin-right:auto}
+  #syncDot{margin-left:0}
+}
+
+/* ---------- Layout ---------- */
+main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px) calc(30px + env(safe-area-inset-bottom))}
+.view{display:none}.view.on{display:block;animation:fin .18s ease}
+@keyframes fin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 10px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 .sp{margin-left:auto;font-weight:500;color:var(--mut);font-size:12.5px}
+.mut{color:var(--mut)}.sm{font-size:12.5px}.xs{font-size:11.5px}
+.b{font-weight:700}.right{text-align:right}
+.btn{background:var(--red);color:#fff;font-weight:600;padding:10px 16px;border-radius:11px;box-shadow:0 2px 8px rgba(198,33,39,.3);display:inline-flex;align-items:center;gap:6px;justify-content:center}
+.btn:active{transform:scale(.97)}
+.btn.gh{background:#fff;color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
+.btn.dk{background:var(--ink);box-shadow:none;color:#fff}
+.btn.ok{background:var(--ok);box-shadow:0 2px 8px rgba(30,142,90,.3)}
+.btn.sm2{padding:7px 12px;font-size:13.5px;border-radius:9px}
+.btn.big{width:100%;padding:14px 16px;font-size:17px;border-radius:14px}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.chip.ok{background:var(--ok-t);color:var(--ok)}
+.chip.bad{background:var(--bad-t);color:var(--bad)}
+.chip.mid{background:#EFEBE4;color:var(--mut)}
+.chip.warn{background:var(--gold-t);color:var(--gold)}
+.chip.gold{background:var(--gold-t);color:var(--gold)}
+.chip.blue{background:var(--blue-t);color:var(--blue)}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+@media(min-width:760px){.kpis{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;box-shadow:var(--sh)}
+.kpi .t{font-size:12px;color:var(--mut);font-weight:600}
+.kpi-v{font-size:22px;font-weight:700;margin-top:2px;line-height:1.15}
+.kpi .s{font-size:12px;margin-top:3px}
+.kpi.hero{background:linear-gradient(135deg,var(--red),#8F171C);border:none;color:#fff}
+.kpi.hero .t{color:rgba(255,255,255,.75)}.kpi.hero .s{color:rgba(255,255,255,.8)}
+.kpi.tap{cursor:pointer}
+#modalWrap{position:fixed;inset:0;background:rgba(30,24,20,.45);z-index:100;display:none;align-items:flex-end;justify-content:center}
+@media(min-width:640px){#modalWrap{align-items:center}}
+#modalWrap.on{display:flex}
+.modal{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:560px;max-height:88dvh;overflow-y:auto;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:640px){.modal{border-radius:18px}}
+.modal.wide{max-width:760px}
+.modal h3{margin:0 0 14px;font-size:16px}
+#toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;font-weight:600;z-index:200;transition:.25s;opacity:0;white-space:nowrap;box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+#toast.on{transform:translateX(-50%);opacity:1}
+#toast.err{background:var(--bad)}
+.spin{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--red);border-radius:50%;animation:sp .8s linear infinite;margin:30px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13.5px}
+.fld{margin-bottom:9px}
+.fld label{display:block;font-size:11.5px;color:var(--mut);font-weight:600;margin-bottom:3px}
+.md2{display:block}
+@media(min-width:760px){.md2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stickysum{position:sticky;bottom:0;background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;display:flex;gap:14px;align-items:center;font-family:var(--fh);box-shadow:0 -4px 20px rgba(0,0,0,.15);z-index:10;flex-wrap:wrap}
+.stickysum .v{font-weight:700;font-size:18px}
+.secbar{background:var(--ink);color:#fff;border-radius:10px;padding:8px 12px;font-family:var(--fh);font-weight:600;font-size:13.5px;display:flex;margin:16px 0 8px;align-items:center;gap:8px}
+.secbar .sp{margin-left:auto;font-weight:700}
+.twrap{overflow-x:auto;margin:0 -14px;padding:0 14px}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th{font-size:11.5px;color:var(--mut);font-weight:700;text-align:left;padding:6px 8px;border-bottom:1.5px solid var(--line);white-space:nowrap;font-family:var(--fh)}
+table.t td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.t td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.t tr.tot{border-top:2px solid var(--ink);background:#FBFAF7;font-weight:700}
+table.t tr.tap{cursor:pointer}
+table.t tr.tap:hover{background:#FFF8F3}
+
+/* ---------- Item / photo cards ---------- */
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
+@media(max-width:430px){.igrid{grid-template-columns:1fr 1fr}}
+.icard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:8px;position:relative}
+.icard.low{border-color:var(--bad);background:#FFF7F6}
+.icard .ithumb{width:100%;height:92px;border-radius:11px;background:#F3ECE0;display:flex;align-items:center;justify-content:center;font-size:34px;overflow:hidden;cursor:pointer}
+.icard .ithumb img{width:100%;height:100%;object-fit:cover}
+.icard .iname{font-weight:700;font-size:14px;line-height:1.25;min-height:2.2em}
+.icard .isub{font-size:11.5px;color:var(--mut)}
+.icard .iqty{font-family:var(--fh);font-weight:700;font-size:16px}
+.icard .edit-dot{position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;background:#fff;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:var(--sh);z-index:2}
+.pickgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px}
+.pick{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;align-items:center;cursor:pointer;text-align:center}
+.pick.on{border-color:var(--red);background:var(--red-t);box-shadow:0 0 0 2px var(--red-t)}
+.pick .pthumb{width:100%;height:74px;border-radius:9px;background:#F3ECE0;display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden}
+.pick .pthumb img{width:100%;height:100%;object-fit:cover}
+.pick .pname{font-size:12.5px;font-weight:700;line-height:1.2}
+.stepper{display:flex;align-items:center;gap:6px;justify-content:center}
+.stepper button{width:44px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font-size:22px;font-weight:700;color:var(--red);flex:none}
+.stepper button.plus{background:var(--red);color:#fff;border-color:var(--red)}
+.stepper input{width:76px;height:44px;text-align:center;font-family:var(--fh);font-weight:700;font-size:17px;border-radius:12px;padding:4px}
+.catbar{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.catbar::-webkit-scrollbar{display:none}
+.catbar button{flex:none;padding:7px 13px;border-radius:99px;font-weight:600;font-size:13px;background:#fff;border:1.5px solid var(--line);color:var(--mut);display:inline-flex;gap:5px;align-items:center}
+.catbar button.on{background:var(--red);border-color:var(--red);color:#fff}
+
+/* ---------- Status pills / step wizard ---------- */
+.stpill{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:99px;font-size:12.5px;font-weight:700}
+.st-draft{background:#EFEBE4;color:var(--mut)}
+.st-ordered{background:var(--gold-t);color:var(--gold)}
+.st-received{background:var(--ok-t);color:var(--ok)}
+.st-plan{background:var(--blue-t);color:var(--blue)}
+.st-done{background:var(--ok-t);color:var(--ok)}
+.st-new{background:var(--red-t);color:var(--red)}
+.st-prep{background:var(--gold-t);color:var(--gold)}
+.st-sent{background:var(--blue-t);color:var(--blue)}
+.st-cancel{background:#EFEBE4;color:var(--mut);text-decoration:line-through}
+.steps{display:flex;gap:6px;margin-bottom:14px}
+.steps .st{flex:1;text-align:center;font-size:12px;font-weight:700;color:var(--mut);padding:8px 4px;border-radius:10px;background:#EFEBE4;font-family:var(--fh)}
+.steps .st.on{background:var(--red);color:#fff}
+.steps .st.ok{background:var(--ok-t);color:var(--ok)}
+
+/* ---------- Calendar ---------- */
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;max-width:430px;background:var(--line);border:1.5px solid var(--line);border-radius:14px;overflow:hidden}
+.calgrid .wd{text-align:center;font-size:11px;font-weight:700;color:var(--mut);padding:7px 0 6px;font-family:var(--fh);background:#F6EFDF}
+.calgrid .wd.sun{color:var(--red)}
+.calgrid button{height:46px;border:none;border-radius:0;background:#fff;font-family:var(--fh);font-weight:600;font-size:14px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.calgrid button.sun{color:var(--red)}
+.calgrid button.tdy{box-shadow:inset 0 0 0 2px var(--red)}
+.calgrid button.on{background:var(--ink);color:#fff}
+.calgrid button.has::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--red)}
+.calgrid button.on.has::after{background:#fff}
+
+/* ---------- Language switch ---------- */
+.langrow{display:flex;gap:6px;flex-wrap:wrap}
+.langrow button{flex:1;min-width:110px;padding:13px 10px;border-radius:13px;border:1.5px solid var(--line);background:#fff;font-weight:700;font-size:15px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.langrow button .fl{font-size:24px}
+.langrow button.on{border-color:var(--red);background:var(--red-t);color:var(--red-d)}
+.langsw{display:flex;gap:4px}
+.langsw button{padding:5px 10px;border-radius:99px;border:1.5px solid rgba(255,255,255,.4);color:#fff;font-size:12px;font-weight:700}
+.langsw button.on{background:#fff;color:var(--red-d);border-color:#fff}
+
+/* ---------- Login ---------- */
+#loginOv{position:fixed;inset:0;background:linear-gradient(150deg,#2E1414,#5A1E20);display:none;align-items:center;justify-content:center;z-index:999;padding:18px}
+#loginOv.on{display:flex}
+.logincard{background:#FFFDF8;border-radius:20px;padding:26px 24px;width:100%;max-width:380px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.logincard .lseal{width:74px;height:74px;border-radius:20px;border:2.5px solid #E9B44C;object-fit:cover;display:block;margin:0 auto 10px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.logincard h1{font-size:20px;margin:0;text-align:center}
+.logincard .lsub{text-align:center;color:var(--mut);font-size:12.5px;margin:2px 0 14px}
+#lgMsg{font-size:12px;color:var(--bad);margin-top:8px;min-height:16px;text-align:center;white-space:pre-wrap}
+.loginlang{display:flex;gap:5px;justify-content:center;margin-top:12px}
+.loginlang button{padding:6px 12px;border-radius:99px;border:1.5px solid var(--line);font-size:12.5px;font-weight:700;color:var(--mut);background:#fff}
+.loginlang button.on{background:var(--red);border-color:var(--red);color:#fff}
+
+/* ---------- Setup (missing tables) ---------- */
+#setupCard textarea{font-family:ui-monospace,monospace;font-size:11px;height:200px;white-space:pre}
+
+/* ---------- Print ---------- */
+#printArea{display:none}
+@media print{
+  body>*{display:none!important}
+  #printArea{display:block!important;font-family:'Sarabun',sans-serif;color:#000}
+  #printArea .ph{display:flex;align-items:center;gap:10px;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}
+  #printArea .ph img{width:52px;height:52px;border-radius:10px}
+  #printArea table{width:100%;border-collapse:collapse;font-size:13px}
+  #printArea th,#printArea td{border:1px solid #999;padding:5px 8px;text-align:left}
+  #printArea td.n{text-align:right}
+  #printArea .sigs{display:flex;gap:16px;margin-top:34px}
+  #printArea .sigs div{flex:1;text-align:center;border-top:1px dashed #666;padding-top:6px;font-size:12px}
+}
+.imgzoom{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px}
+.imgzoom img{max-width:96vw;max-height:88vh;border-radius:14px}
+.hintbox{background:var(--gold-t);border:1.5px solid #E9D9A8;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
+.okbox{background:var(--ok-t);border:1.5px solid #BFE3CE;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
+.badbox{background:var(--bad-t);border:1.5px solid #F2C4C2;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
+.rowline{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.rowline:last-child{border-bottom:0}
+.rowline .grow{flex:1;min-width:120px}
+.mthumb{width:44px;height:44px;border-radius:10px;background:#F3ECE0;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;flex:none;cursor:pointer}
+.mthumb img{width:100%;height:100%;object-fit:cover}
+</style>
+</head>
+<body>
+
+<aside id="sideNav">
+  <div class="sb-logo"><img id="sbLogo" alt="จริงใจ"><div><b>จริงใจหมูกระทะ</b><small id="sbSub">ครัวกลาง · Central Kitchen</small></div></div>
+  <div class="sb-note">🍳 <span id="sbNote">ผลิต–คิดต้นทุน–ส่งสาขา</span></div>
+  <div class="sb-sec" id="sbSec1">งานประจำวัน</div>
+  <button class="sb-item on" data-v="dash"><span class="ic">🏠</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="plan"><span class="ic">📅</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="buy"><span class="ic">🛒</span><span class="lb"></span><span class="sbadge" id="bdBuy" style="display:none"></span></button>
+  <button class="sb-item" data-v="produce"><span class="ic">🍳</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="orders"><span class="ic">🚚</span><span class="lb"></span><span class="sbadge" id="bdOrd" style="display:none"></span></button>
+  <div class="sb-sec" id="sbSec2">ข้อมูล & รายงาน</div>
+  <button class="sb-item" data-v="stock"><span class="ic">📦</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="menus"><span class="ic">📖</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="items"><span class="ic">🥬</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="stats"><span class="ic">📈</span><span class="lb"></span></button>
+  <div class="sb-foot">
+    <div id="sbUser"></div>
+    <button class="sb-item" data-v="set"><span class="ic">⚙️</span><span class="lb"></span></button>
+  </div>
+</aside>
+
+<header>
+  <div class="hrow">
+    <div class="brand"><img class="hlogo" id="hdLogo" alt=""><span>JJ Kitchen<small id="hdSub">ครัวกลาง จริงใจหมูกระทะ</small></span></div>
+    <div class="ptitle" id="pageTitle"></div>
+    <button class="hbtn" id="langBtn" onclick="langModal()">🌐 <span id="langCur">ไทย</span></button>
+    <button class="hbtn" id="refreshBtn" onclick="reloadAll()" title="โหลดข้อมูลใหม่">⟳</button>
+    <div id="syncDot" title="สถานะการบันทึก"></div>
+  </div>
+  <nav class="tabbar" id="tabbar">
+    <button data-v="dash" class="on">🏠 <span class="lb"></span></button>
+    <button data-v="plan">📅 <span class="lb"></span></button>
+    <button data-v="buy">🛒 <span class="lb"></span></button>
+    <button data-v="produce">🍳 <span class="lb"></span></button>
+    <button data-v="orders">🚚 <span class="lb"></span></button>
+    <button data-v="stock">📦 <span class="lb"></span></button>
+    <button data-v="menus">📖 <span class="lb"></span></button>
+    <button data-v="items">🥬 <span class="lb"></span></button>
+    <button data-v="stats">📈 <span class="lb"></span></button>
+    <button data-v="set">⚙️ <span class="lb"></span></button>
+  </nav>
+</header>
+
+<main id="app">
+  <section class="view on" id="view-dash"></section>
+  <section class="view" id="view-plan"></section>
+  <section class="view" id="view-buy"></section>
+  <section class="view" id="view-produce"></section>
+  <section class="view" id="view-orders"></section>
+  <section class="view" id="view-stock"></section>
+  <section class="view" id="view-menus"></section>
+  <section class="view" id="view-items"></section>
+  <section class="view" id="view-stats"></section>
+  <section class="view" id="view-set"></section>
+</main>
+
+<div id="loginOv">
+  <div class="logincard">
+    <img class="lseal" id="lgLogo" alt="">
+    <h1>🍳 JJ Kitchen</h1>
+    <div class="lsub" id="lgSub">ครัวกลาง จริงใจหมูกระทะ</div>
+    <div class="fld" id="lgNameFld" style="display:none"><label id="lgNameLb">ชื่อ-สกุล (เฉพาะสมัครใหม่)</label><input id="lgName" autocomplete="off"></div>
+    <div class="fld"><label id="lgULb">Username</label><input id="lgU" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('lgP').focus()"></div>
+    <div class="fld"><label id="lgPLb">Password</label><input id="lgP" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn big" id="lgGo" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <button class="btn gh big" id="lgSignBtn" style="margin-top:8px" onclick="toggleSignup()">สมัครพนักงานใหม่</button>
+    <div id="lgMsg"></div>
+    <div class="loginlang" id="loginLang"></div>
+  </div>
+</div>
+
+<div id="modalWrap" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
+<div id="toast"></div>
+<div id="printArea"></div>
+<input type="file" id="imgFile" accept="image/*" style="display:none">
+<script>
+/* ============================================================
+   JJ Kitchen — ครัวกลาง จริงใจหมูกระทะ  (Supabase + GitHub Pages)
+   ผลิตอาหารส่งสาขา · สูตร/BOM · แผนผลิต · สั่งซื้อ · ต้นทุน/หน่วย · สถิติการใช้
+   ใช้ล็อกอินเดียวกับแอพนับสต๊อก (Supabase Auth + app_users)
+   ตาราง ck_* — รัน jjmk_kitchen_setup.sql ใน SQL Editor ครั้งเดียวก่อนใช้
+   ============================================================ */
+
+/* ---------- Supabase (โปรเจกต์เดียวกับแอพนับสต๊อก) ---------- */
+const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
+const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
+const EMAIL_DOMAIN='@jjmk.local';
+const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
+const APP_VER='CK b1';
+
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+/* ============================================================
+   i18n — ไทย / English / ລາວ / မြန်မာ (ทั้งระบบ)
+   ============================================================ */
+const I18N={
+th:{lang_name:'ไทย',
+  nav_dash:'หน้าหลัก',nav_plan:'แผนผลิต',nav_buy:'สั่งซื้อของ',nav_produce:'ผลิต',nav_orders:'ออเดอร์สาขา',nav_stock:'สต๊อกครัว',nav_menus:'เมนู & สูตร',nav_items:'วัตถุดิบ',nav_stats:'สถิติ',nav_set:'ตั้งค่า',
+  app_sub:'ครัวกลาง จริงใจหมูกระทะ',sb_note:'ผลิต–คิดต้นทุน–ส่งสาขา',sec_daily:'งานประจำวัน',sec_data:'ข้อมูล & รายงาน',
+  save:'บันทึก',cancel:'ยกเลิก',close:'ปิด',add:'เพิ่ม',edit:'แก้ไข',del:'ลบ',confirm:'ยืนยัน',search:'ค้นหา...',all:'ทั้งหมด',today:'วันนี้',back:'ย้อนกลับ',next:'ถัดไป',done:'เสร็จแล้ว',print:'พิมพ์',name:'ชื่อ',photo:'รูป',note:'หมายเหตุ',status:'สถานะ',date:'วันที่',total:'รวม',price:'ราคา',qty:'จำนวน',unit:'หน่วย',cost:'ต้นทุน',loading:'กำลังโหลด...',baht:'บาท',per_day:'/วัน',per_month:'/เดือน',items_n:'รายการ',pick_photo:'📷 เลือก/ถ่ายรูป',del_photo:'ลบรูป',no_data:'ยังไม่มีข้อมูล',confirm_del:'ลบรายการนี้?',need_name:'กรุณาใส่ชื่อ',need_qty:'กรุณาใส่จำนวน',sv_ok:'บันทึกแล้ว ✅',sv_err:'บันทึกไม่สำเร็จ: ',view_only:'👁 บัญชีของคุณดูได้อย่างเดียว',
+  lg_login:'เข้าสู่ระบบ',lg_signup:'สมัครพนักงานใหม่',lg_name:'ชื่อ-สกุล (เฉพาะสมัครใหม่)',lg_have:'มีบัญชีแล้ว? เข้าสู่ระบบ',lg_wait:'สมัครแล้ว ✅ รอผู้ดูแลอนุมัติในแอพนับสต๊อก',lg_pending:'บัญชีนี้รอผู้ดูแลอนุมัติ',lg_hint:'ใช้บัญชีเดียวกับแอพนับสต๊อกได้เลย',logout:'ออกจากระบบ',
+  da_produce_today:'ผลิตวันนี้',da_low:'ของใกล้หมด',da_orders_open:'ออเดอร์ค้างส่ง',da_stock_value:'มูลค่าสต๊อกวัตถุดิบ',da_plans:'แผนผลิต วันนี้–พรุ่งนี้',da_po_due:'ของที่ต้องเข้าวันนี้',da_recent:'ออเดอร์สาขาล่าสุด',da_none_plan:'ยังไม่มีแผนผลิต — แตะ 📅 เพื่อวางแผน',da_all_good:'✅ ของครบ ไม่มีอะไรใกล้หมด',da_go_receive:'รับของ',da_low_title:'วัตถุดิบใกล้หมด (ต่ำกว่าขั้นต่ำ)',da_order_now:'สั่งซื้อ',
+  pl_add:'➕ เพิ่มแผนผลิต',pl_menu:'เมนูที่จะผลิต',pl_qty:'จำนวนที่จะผลิต',pl_date:'วันที่ผลิต',pl_calc:'🧮 คำนวณของที่ต้องสั่ง',pl_step1:'1. เลือกเมนู',pl_step2:'2. ของที่ต้องสั่ง',pl_step3:'3. สร้างใบสั่งซื้อ',pl_need:'ต้องใช้',pl_have:'มีในสต๊อก',pl_incoming:'กำลังมา',pl_short:'ต้องสั่งเพิ่ม',pl_order_by:'สั่งภายใน',pl_produce_on:'ผลิตวันที่',pl_create_po:'สร้างใบสั่งซื้อ',pl_no_short:'✅ ของพอ ไม่ต้องสั่งเพิ่ม',pl_pick:'แตะเลือกเมนู',pl_produce_now:'🍳 ผลิตตามแผนนี้',pl_range:'คำนวณแผนช่วง',pl_created_po:'สร้างใบสั่งซื้อแล้ว',pl_lead_info:'เผื่อเวลาสั่งของ (วัน)',pl_none:'เดือนนี้ยังไม่มีแผนผลิต',
+  st_draft:'ร่าง',st_ordered:'สั่งแล้ว รอของเข้า',st_received:'รับของแล้ว',po_new:'➕ ใบสั่งซื้อใหม่',po_sup:'ซัพพลายเออร์',po_d_order:'วันที่สั่ง',po_d_due:'ของเข้าวันที่',po_add_item:'➕ เพิ่มวัตถุดิบ',po_mark_ordered:'📤 สั่งแล้ว',po_receive:'🚚 รับของ',po_recv_title:'รับของเข้าครัว',po_recv_qty:'รับจริง',po_price_now:'ราคา/หน่วยซื้อ',po_none:'ยังไม่มีใบสั่งซื้อ',po_recv_ok:'รับของเข้าสต๊อกแล้ว ✅',po_no:'เลขที่',po_open:'ค้างรับ',po_del_confirm:'ลบใบสั่งซื้อนี้?',
+  pr_new:'➕ บันทึกการผลิต',pr_pick:'เลือกเมนูที่ผลิต',pr_out:'ผลิตได้ (จำนวน)',pr_use:'วัตถุดิบที่ใช้ (แก้ตัวเลขได้)',pr_cost_mat:'ค่าวัตถุดิบ',pr_cost_extra:'ค่าแรง/แก๊ส ฯลฯ',pr_cost_total:'ต้นทุนรวม',pr_cost_unit:'ต้นทุนต่อหน่วย',pr_hist:'ประวัติการผลิต',pr_none:'ยังไม่มีการผลิต',pr_stock_warn:'⚠ วัตถุดิบไม่พอ (ติดลบ)',pr_ok:'บันทึกการผลิตแล้ว ✅',pr_from_plan:'จากแผน',
+  or_new:'➕ ออเดอร์ใหม่',or_branch:'สาขา',or_d:'วันที่ส่ง',or_add_menu:'➕ เพิ่มเมนู',or_prep:'👨‍🍳 กำลังจัด',or_send:'🚚 ส่งแล้ว',or_done:'✅ สาขารับแล้ว',or_print:'🖨 ใบส่งของ',or_none:'ยังไม่มีออเดอร์',or_send_confirm:'ยืนยันส่งของ? ระบบจะตัดสต๊อกและคิดต้นทุน',or_sent_ok:'ส่งของแล้ว — ตัดสต๊อกเรียบร้อย ✅',or_st_new:'ใหม่',or_st_prep:'กำลังจัด',or_st_sent:'ส่งแล้ว',or_st_done:'รับแล้ว',or_st_cancel:'ยกเลิก',or_value:'มูลค่า (ต้นทุน)',or_deliver_note:'ใบส่งของครัวกลาง',or_sig_pack:'ผู้จัดของ',or_sig_check:'ผู้ตรวจ',or_sig_send:'ผู้ส่ง',or_sig_recv:'ผู้รับ (สาขา)',or_stock_short:'⚠ ของผลิตไม่พอ',
+  sk_items:'วัตถุดิบ',sk_menus:'ของที่ผลิตแล้ว',sk_adjust:'ปรับสต๊อก',sk_min:'ขั้นต่ำ',sk_now:'คงเหลือ',sk_val:'มูลค่า',sk_adj_title:'ปรับยอดสต๊อก',sk_adj_note:'เหตุผล (เช่น นับจริง/ของเสีย)',sk_new_qty:'ยอดใหม่',
+  mn_new:'➕ เพิ่มเมนู/สูตร',mn_yield:'1 สูตรได้',mn_bom:'สูตร (วัตถุดิบต่อ 1 สูตร)',mn_add_ing:'➕ เพิ่มวัตถุดิบในสูตร',mn_cost_per:'ต้นทุน/หน่วย',mn_calc:'🧮 ลองคำนวณ',mn_extra:'ค่าแรง/แก๊ส ต่อสูตร',mn_calc_title:'คำนวณสูตร',mn_calc_q:'ถ้าจะผลิต...',mn_calc_need:'ต้องใช้วัตถุดิบ',mn_make_plan:'📅 ทำเป็นแผนผลิต',mn_no_bom:'ยังไม่ได้ใส่สูตร — แตะแก้ไขเพื่อเพิ่มวัตถุดิบ',mn_none:'ยังไม่มีเมนู — เพิ่มเมนูแรกเลย',mn_cat:'หมวดเมนู',
+  it_new:'➕ เพิ่มวัตถุดิบ',it_buy_unit:'หน่วยสั่งซื้อ',it_conv:'1 หน่วยซื้อ = กี่หน่วยใช้',it_sup:'ซัพพลายเออร์',it_lead:'สั่งล่วงหน้า (วัน)',it_min:'สต๊อกขั้นต่ำ',it_price:'ราคา/หน่วยซื้อ',it_cat:'หมวด',it_unit_use:'หน่วยใช้/สต๊อก',it_cost_unit:'ต้นทุน/หน่วยใช้',it_none:'ยังไม่มีวัตถุดิบ — เพิ่มรายการแรกเลย',it_price_hist:'ประวัติราคา',it_sup_new:'➕ เพิ่มซัพ',it_sup_title:'ซัพพลายเออร์',it_phone:'เบอร์โทร',
+  stt_use_day:'ใช้ต่อวัน (เฉลี่ย)',stt_use_month:'ใช้เดือนนี้',stt_avg7:'เฉลี่ย 7 วัน',stt_avg30:'เฉลี่ย 30 วัน',stt_produced:'ผลิตทั้งเดือน',stt_sent:'ส่งสาขาทั้งเดือน',stt_by_item:'การใช้วัตถุดิบ',stt_by_menu:'การผลิต & ส่งตามเมนู',stt_chart:'มูลค่าผลิตรายวัน',stt_hist:'ประวัติรายวัน',stt_prev:'เดือนก่อน',stt_value:'มูลค่า',stt_use:'ใช้ไป',stt_made:'ผลิต',stt_send:'ส่งสาขา',stt_none:'เดือนนี้ยังไม่มีข้อมูล',
+  se_lang:'ภาษา / Language',se_sql:'ติดตั้งฐานข้อมูล (ครั้งเดียว)',se_sql_hint:'คัดลอก SQL นี้ไปรันใน Supabase → SQL Editor ครั้งเดียว แล้วกดโหลดใหม่',se_copy_sql:'📋 คัดลอก SQL',se_recalc:'🔄 คำนวณสต๊อกใหม่จากประวัติ',se_recalc_done:'คำนวณสต๊อกใหม่แล้ว ✅',se_backfill:'🌐 เติมคำแปลชื่อที่ขาด',se_backfill_done:'เติมคำแปลแล้ว',se_user:'ผู้ใช้',se_role:'สิทธิ์',se_conn:'การเชื่อมต่อ',se_about:'เกี่ยวกับ',se_about_txt:'JJ Kitchen — ระบบครัวกลาง เชื่อมกับระบบ P&L และระบบนับสต๊อกสาขา ใช้บัญชีผู้ใช้เดียวกับแอพนับสต๊อก',se_copied:'คัดลอกแล้ว ✅',
+  setup_title:'ยังไม่ได้ติดตั้งฐานข้อมูลครัวกลาง',setup_txt:'รัน jjmk_kitchen_setup.sql ใน Supabase → SQL Editor ครั้งเดียว (คัดลอกด้านล่าง) แล้วกดโหลดใหม่',setup_retry:'⟳ โหลดใหม่',
+  lg_user:'ชื่อผู้ใช้ (username)',lg_pass:'รหัสผ่าน (password)',lg_noprofile:'ไม่พบข้อมูลผู้ใช้ — ให้ผู้ดูแลเพิ่ม/อนุมัติในแอพนับสต๊อกก่อน',lg_lib:'โหลดไลบรารีไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วรีเฟรชอีกครั้ง',name_th:'ชื่อ (ภาษาไทย — ระบบจะแปลให้อัตโนมัติ)',img_fail:'อ่านรูปไม่สำเร็จ',last45:'แสดงย้อนหลัง 45 วัน — ดูรายเดือนที่หน้า 📈 สถิติ',undo_recv:'↩ ยกเลิกรับของ (คืนสต๊อก)',undo_send:'↩ ยกเลิกส่ง (คืนสต๊อก)',undo_confirm:'ยกเลิกรายการนี้และคืนสต๊อกให้เหมือนเดิม?',no_price_warn:'⚠ บางรายการยังไม่ตั้งราคา — ต้นทุนที่คำนวณจะต่ำกว่าจริง',menu_deleted:'เมนูถูกลบไปแล้ว',wd:['อา','จ','อ','พ','พฤ','ศ','ส'],mo:['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']},
+en:{lang_name:'English',
+  nav_dash:'Home',nav_plan:'Plan',nav_buy:'Purchasing',nav_produce:'Produce',nav_orders:'Branch Orders',nav_stock:'Stock',nav_menus:'Menus & Recipes',nav_items:'Ingredients',nav_stats:'Stats',nav_set:'Settings',
+  app_sub:'Central Kitchen · Jing Jai Mookata',sb_note:'Produce – Cost – Deliver',sec_daily:'Daily work',sec_data:'Data & reports',
+  save:'Save',cancel:'Cancel',close:'Close',add:'Add',edit:'Edit',del:'Delete',confirm:'Confirm',search:'Search...',all:'All',today:'Today',back:'Back',next:'Next',done:'Done',print:'Print',name:'Name',photo:'Photo',note:'Note',status:'Status',date:'Date',total:'Total',price:'Price',qty:'Qty',unit:'Unit',cost:'Cost',loading:'Loading...',baht:'THB',per_day:'/day',per_month:'/month',items_n:'items',pick_photo:'📷 Choose/take photo',del_photo:'Remove photo',no_data:'No data yet',confirm_del:'Delete this?',need_name:'Please enter a name',need_qty:'Please enter a quantity',sv_ok:'Saved ✅',sv_err:'Save failed: ',view_only:'👁 Your account is view-only',
+  lg_login:'Sign in',lg_signup:'Register new staff',lg_name:'Full name (sign-up only)',lg_have:'Have an account? Sign in',lg_wait:'Registered ✅ Waiting for admin approval in the stock app',lg_pending:'This account is waiting for approval',lg_hint:'Use the same account as the stock app',logout:'Log out',
+  da_produce_today:'Produced today',da_low:'Low stock',da_orders_open:'Open orders',da_stock_value:'Ingredient stock value',da_plans:'Plans today–tomorrow',da_po_due:'Deliveries due today',da_recent:'Recent branch orders',da_none_plan:'No production plan yet — tap 📅 to plan',da_all_good:'✅ All stocked, nothing running low',da_go_receive:'Receive',da_low_title:'Ingredients below minimum',da_order_now:'Order',
+  pl_add:'➕ Add plan',pl_menu:'Menu to produce',pl_qty:'Quantity to produce',pl_date:'Production date',pl_calc:'🧮 Calculate what to order',pl_step1:'1. Pick menus',pl_step2:'2. What to order',pl_step3:'3. Create POs',pl_need:'Needed',pl_have:'In stock',pl_incoming:'Incoming',pl_short:'To order',pl_order_by:'Order by',pl_produce_on:'Produce on',pl_create_po:'Create purchase order',pl_no_short:'✅ Enough stock, nothing to order',pl_pick:'Tap to pick a menu',pl_produce_now:'🍳 Produce this plan',pl_range:'Calculate plans in range',pl_created_po:'Purchase orders created',pl_lead_info:'Order lead time (days)',pl_none:'No plans this month',
+  st_draft:'Draft',st_ordered:'Ordered — awaiting delivery',st_received:'Received',po_new:'➕ New purchase order',po_sup:'Supplier',po_d_order:'Order date',po_d_due:'Due date',po_add_item:'➕ Add ingredient',po_mark_ordered:'📤 Mark ordered',po_receive:'🚚 Receive',po_recv_title:'Receive goods',po_recv_qty:'Received',po_price_now:'Price/buy unit',po_none:'No purchase orders yet',po_recv_ok:'Received into stock ✅',po_no:'No.',po_open:'Awaiting delivery',po_del_confirm:'Delete this PO?',
+  pr_new:'➕ Record production',pr_pick:'Pick the menu produced',pr_out:'Output quantity',pr_use:'Ingredients used (editable)',pr_cost_mat:'Ingredient cost',pr_cost_extra:'Labor/gas etc.',pr_cost_total:'Total cost',pr_cost_unit:'Cost per unit',pr_hist:'Production history',pr_none:'No production yet',pr_stock_warn:'⚠ Not enough ingredients (negative)',pr_ok:'Production saved ✅',pr_from_plan:'From plan',
+  or_new:'➕ New order',or_branch:'Branch',or_d:'Delivery date',or_add_menu:'➕ Add menu',or_prep:'👨‍🍳 Preparing',or_send:'🚚 Sent',or_done:'✅ Received',or_print:'🖨 Delivery note',or_none:'No orders yet',or_send_confirm:'Confirm delivery? Stock will be deducted and costed',or_sent_ok:'Delivered — stock deducted ✅',or_st_new:'New',or_st_prep:'Preparing',or_st_sent:'Sent',or_st_done:'Received',or_st_cancel:'Cancelled',or_value:'Value (cost)',or_deliver_note:'Central kitchen delivery note',or_sig_pack:'Packed by',or_sig_check:'Checked by',or_sig_send:'Sent by',or_sig_recv:'Received by (branch)',or_stock_short:'⚠ Not enough produced stock',
+  sk_items:'Ingredients',sk_menus:'Produced goods',sk_adjust:'Adjust',sk_min:'Min',sk_now:'On hand',sk_val:'Value',sk_adj_title:'Adjust stock',sk_adj_note:'Reason (e.g. recount/waste)',sk_new_qty:'New quantity',
+  mn_new:'➕ Add menu/recipe',mn_yield:'One batch yields',mn_bom:'Recipe (per 1 batch)',mn_add_ing:'➕ Add ingredient',mn_cost_per:'Cost/unit',mn_calc:'🧮 Calculator',mn_extra:'Labor/gas per batch',mn_calc_title:'Recipe calculator',mn_calc_q:'If producing...',mn_calc_need:'Ingredients needed',mn_make_plan:'📅 Make a plan',mn_no_bom:'No recipe yet — tap edit to add ingredients',mn_none:'No menus yet — add your first one',mn_cat:'Menu group',
+  it_new:'➕ Add ingredient',it_buy_unit:'Buying unit',it_conv:'1 buying unit = how many use units',it_sup:'Supplier',it_lead:'Lead time (days)',it_min:'Minimum stock',it_price:'Price/buy unit',it_cat:'Category',it_unit_use:'Use/stock unit',it_cost_unit:'Cost/use unit',it_none:'No ingredients yet — add your first one',it_price_hist:'Price history',it_sup_new:'➕ Add supplier',it_sup_title:'Suppliers',it_phone:'Phone',
+  stt_use_day:'Use per day (avg)',stt_use_month:'Used this month',stt_avg7:'7-day avg',stt_avg30:'30-day avg',stt_produced:'Produced this month',stt_sent:'Delivered this month',stt_by_item:'Ingredient usage',stt_by_menu:'Production & deliveries by menu',stt_chart:'Daily production value',stt_hist:'Daily history',stt_prev:'Last month',stt_value:'Value',stt_use:'Used',stt_made:'Produced',stt_send:'Delivered',stt_none:'No data this month',
+  se_lang:'Language',se_sql:'Database setup (one time)',se_sql_hint:'Copy this SQL and run once in Supabase → SQL Editor, then reload',se_copy_sql:'📋 Copy SQL',se_recalc:'🔄 Recalculate stock from history',se_recalc_done:'Stock recalculated ✅',se_backfill:'🌐 Fill missing name translations',se_backfill_done:'Translations filled',se_user:'User',se_role:'Role',se_conn:'Connection',se_about:'About',se_about_txt:'JJ Kitchen — central kitchen system linked to the P&L and branch stock apps. Uses the same user accounts as the stock app.',se_copied:'Copied ✅',
+  setup_title:'Kitchen database not installed yet',setup_txt:'Run jjmk_kitchen_setup.sql once in Supabase → SQL Editor (copy below), then reload',setup_retry:'⟳ Reload',
+  lg_user:'Username',lg_pass:'Password',lg_noprofile:'No user profile found — ask an admin to add/approve you in the stock app first',lg_lib:'Could not load libraries — check your internet and refresh',name_th:'Name (in Thai — translated automatically)',img_fail:'Could not read the image',last45:'Showing last 45 days — see monthly history in 📈 Stats',undo_recv:'↩ Undo receive (restock)',undo_send:'↩ Undo delivery (restock)',undo_confirm:'Undo this record and restore stock?',no_price_warn:'⚠ Some items have no price yet — the computed cost is lower than real',menu_deleted:'Menu was deleted',wd:['Su','Mo','Tu','We','Th','Fr','Sa'],mo:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']},
+lo:{lang_name:'ລາວ',
+  nav_dash:'ໜ້າຫຼັກ',nav_plan:'ແຜນຜະລິດ',nav_buy:'ສັ່ງຊື້ເຄື່ອງ',nav_produce:'ຜະລິດ',nav_orders:'ອໍເດີສາຂາ',nav_stock:'ສະຕັອກຄົວ',nav_menus:'ເມນູ & ສູດ',nav_items:'ວັດຖຸດິບ',nav_stats:'ສະຖິຕິ',nav_set:'ຕັ້ງຄ່າ',
+  app_sub:'ຄົວກາງ ຈິງໃຈໝູກະທະ',sb_note:'ຜະລິດ–ຄິດຕົ້ນທຶນ–ສົ່ງສາຂາ',sec_daily:'ວຽກປະຈຳວັນ',sec_data:'ຂໍ້ມູນ & ລາຍງານ',
+  save:'ບັນທຶກ',cancel:'ຍົກເລີກ',close:'ປິດ',add:'ເພີ່ມ',edit:'ແກ້ໄຂ',del:'ລຶບ',confirm:'ຢືນຢັນ',search:'ຄົ້ນຫາ...',all:'ທັງໝົດ',today:'ມື້ນີ້',back:'ກັບຄືນ',next:'ຕໍ່ໄປ',done:'ສຳເລັດ',print:'ພິມ',name:'ຊື່',photo:'ຮູບ',note:'ໝາຍເຫດ',status:'ສະຖານະ',date:'ວັນທີ',total:'ລວມ',price:'ລາຄາ',qty:'ຈຳນວນ',unit:'ຫົວໜ່ວຍ',cost:'ຕົ້ນທຶນ',loading:'ກຳລັງໂຫຼດ...',baht:'ບາດ',per_day:'/ວັນ',per_month:'/ເດືອນ',items_n:'ລາຍການ',pick_photo:'📷 ເລືອກ/ຖ່າຍຮູບ',del_photo:'ລຶບຮູບ',no_data:'ຍັງບໍ່ມີຂໍ້ມູນ',confirm_del:'ລຶບລາຍການນີ້?',need_name:'ກະລຸນາໃສ່ຊື່',need_qty:'ກະລຸນາໃສ່ຈຳນວນ',sv_ok:'ບັນທຶກແລ້ວ ✅',sv_err:'ບັນທຶກບໍ່ສຳເລັດ: ',view_only:'👁 ບັນຊີຂອງທ່ານເບິ່ງໄດ້ຢ່າງດຽວ',
+  lg_login:'ເຂົ້າສູ່ລະບົບ',lg_signup:'ສະໝັກພະນັກງານໃໝ່',lg_name:'ຊື່-ນາມສະກຸນ (ສະເພາະສະໝັກໃໝ່)',lg_have:'ມີບັນຊີແລ້ວ? ເຂົ້າສູ່ລະບົບ',lg_wait:'ສະໝັກແລ້ວ ✅ ລໍຖ້າຜູ້ດູແລອະນຸມັດໃນແອັບນັບສະຕັອກ',lg_pending:'ບັນຊີນີ້ລໍຖ້າຜູ້ດູແລອະນຸມັດ',lg_hint:'ໃຊ້ບັນຊີດຽວກັບແອັບນັບສະຕັອກໄດ້ເລີຍ',logout:'ອອກຈາກລະບົບ',
+  da_produce_today:'ຜະລິດມື້ນີ້',da_low:'ເຄື່ອງໃກ້ໝົດ',da_orders_open:'ອໍເດີຄ້າງສົ່ງ',da_stock_value:'ມູນຄ່າສະຕັອກວັດຖຸດິບ',da_plans:'ແຜນຜະລິດ ມື້ນີ້–ມື້ອື່ນ',da_po_due:'ເຄື່ອງທີ່ຈະເຂົ້າມື້ນີ້',da_recent:'ອໍເດີສາຂາຫຼ້າສຸດ',da_none_plan:'ຍັງບໍ່ມີແຜນຜະລິດ — ແຕະ 📅 ເພື່ອວາງແຜນ',da_all_good:'✅ ເຄື່ອງຄົບ ບໍ່ມີຫຍັງໃກ້ໝົດ',da_go_receive:'ຮັບເຄື່ອງ',da_low_title:'ວັດຖຸດິບຕ່ຳກວ່າຂັ້ນຕ່ຳ',da_order_now:'ສັ່ງຊື້',
+  pl_add:'➕ ເພີ່ມແຜນຜະລິດ',pl_menu:'ເມນູທີ່ຈະຜະລິດ',pl_qty:'ຈຳນວນທີ່ຈະຜະລິດ',pl_date:'ວັນທີຜະລິດ',pl_calc:'🧮 ຄິດໄລ່ເຄື່ອງທີ່ຕ້ອງສັ່ງ',pl_step1:'1. ເລືອກເມນູ',pl_step2:'2. ເຄື່ອງທີ່ຕ້ອງສັ່ງ',pl_step3:'3. ສ້າງໃບສັ່ງຊື້',pl_need:'ຕ້ອງໃຊ້',pl_have:'ມີໃນສະຕັອກ',pl_incoming:'ກຳລັງມາ',pl_short:'ຕ້ອງສັ່ງເພີ່ມ',pl_order_by:'ສັ່ງພາຍໃນ',pl_produce_on:'ຜະລິດວັນທີ',pl_create_po:'ສ້າງໃບສັ່ງຊື້',pl_no_short:'✅ ເຄື່ອງພໍ ບໍ່ຕ້ອງສັ່ງເພີ່ມ',pl_pick:'ແຕະເລືອກເມນູ',pl_produce_now:'🍳 ຜະລິດຕາມແຜນນີ້',pl_range:'ຄິດໄລ່ແຜນຊ່ວງ',pl_created_po:'ສ້າງໃບສັ່ງຊື້ແລ້ວ',pl_lead_info:'ເຜື່ອເວລາສັ່ງເຄື່ອງ (ວັນ)',pl_none:'ເດືອນນີ້ຍັງບໍ່ມີແຜນຜະລິດ',
+  st_draft:'ຮ່າງ',st_ordered:'ສັ່ງແລ້ວ ລໍຖ້າເຄື່ອງເຂົ້າ',st_received:'ຮັບເຄື່ອງແລ້ວ',po_new:'➕ ໃບສັ່ງຊື້ໃໝ່',po_sup:'ຜູ້ສະໜອງ',po_d_order:'ວັນທີສັ່ງ',po_d_due:'ເຄື່ອງເຂົ້າວັນທີ',po_add_item:'➕ ເພີ່ມວັດຖຸດິບ',po_mark_ordered:'📤 ສັ່ງແລ້ວ',po_receive:'🚚 ຮັບເຄື່ອງ',po_recv_title:'ຮັບເຄື່ອງເຂົ້າຄົວ',po_recv_qty:'ຮັບຈິງ',po_price_now:'ລາຄາ/ຫົວໜ່ວຍຊື້',po_none:'ຍັງບໍ່ມີໃບສັ່ງຊື້',po_recv_ok:'ຮັບເຄື່ອງເຂົ້າສະຕັອກແລ້ວ ✅',po_no:'ເລກທີ',po_open:'ຄ້າງຮັບ',po_del_confirm:'ລຶບໃບສັ່ງຊື້ນີ້?',
+  pr_new:'➕ ບັນທຶກການຜະລິດ',pr_pick:'ເລືອກເມນູທີ່ຜະລິດ',pr_out:'ຜະລິດໄດ້ (ຈຳນວນ)',pr_use:'ວັດຖຸດິບທີ່ໃຊ້ (ແກ້ຕົວເລກໄດ້)',pr_cost_mat:'ຄ່າວັດຖຸດິບ',pr_cost_extra:'ຄ່າແຮງ/ແກັສ ฯລฯ',pr_cost_total:'ຕົ້ນທຶນລວມ',pr_cost_unit:'ຕົ້ນທຶນຕໍ່ຫົວໜ່ວຍ',pr_hist:'ປະຫວັດການຜະລິດ',pr_none:'ຍັງບໍ່ມີການຜະລິດ',pr_stock_warn:'⚠ ວັດຖຸດິບບໍ່ພໍ (ຕິດລົບ)',pr_ok:'ບັນທຶກການຜະລິດແລ້ວ ✅',pr_from_plan:'ຈາກແຜນ',
+  or_new:'➕ ອໍເດີໃໝ່',or_branch:'ສາຂາ',or_d:'ວັນທີສົ່ງ',or_add_menu:'➕ ເພີ່ມເມນູ',or_prep:'👨‍🍳 ກຳລັງຈັດ',or_send:'🚚 ສົ່ງແລ້ວ',or_done:'✅ ສາຂາຮັບແລ້ວ',or_print:'🖨 ໃບສົ່ງເຄື່ອງ',or_none:'ຍັງບໍ່ມີອໍເດີ',or_send_confirm:'ຢືນຢັນສົ່ງເຄື່ອງ? ລະບົບຈະຕັດສະຕັອກ ແລະ ຄິດຕົ້ນທຶນ',or_sent_ok:'ສົ່ງເຄື່ອງແລ້ວ — ຕັດສະຕັອກຮຽບຮ້ອຍ ✅',or_st_new:'ໃໝ່',or_st_prep:'ກຳລັງຈັດ',or_st_sent:'ສົ່ງແລ້ວ',or_st_done:'ຮັບແລ້ວ',or_st_cancel:'ຍົກເລີກ',or_value:'ມູນຄ່າ (ຕົ້ນທຶນ)',or_deliver_note:'ໃບສົ່ງເຄື່ອງຄົວກາງ',or_sig_pack:'ຜູ້ຈັດເຄື່ອງ',or_sig_check:'ຜູ້ກວດ',or_sig_send:'ຜູ້ສົ່ງ',or_sig_recv:'ຜູ້ຮັບ (ສາຂາ)',or_stock_short:'⚠ ເຄື່ອງຜະລິດບໍ່ພໍ',
+  sk_items:'ວັດຖຸດິບ',sk_menus:'ເຄື່ອງທີ່ຜະລິດແລ້ວ',sk_adjust:'ປັບສະຕັອກ',sk_min:'ຂັ້ນຕ່ຳ',sk_now:'ຄົງເຫຼືອ',sk_val:'ມູນຄ່າ',sk_adj_title:'ປັບຍອດສະຕັອກ',sk_adj_note:'ເຫດຜົນ (ເຊັ່ນ ນັບຈິງ/ເຄື່ອງເສຍ)',sk_new_qty:'ຍອດໃໝ່',
+  mn_new:'➕ ເພີ່ມເມນູ/ສູດ',mn_yield:'1 ສູດໄດ້',mn_bom:'ສູດ (ວັດຖຸດິບຕໍ່ 1 ສູດ)',mn_add_ing:'➕ ເພີ່ມວັດຖຸດິບໃນສູດ',mn_cost_per:'ຕົ້ນທຶນ/ຫົວໜ່ວຍ',mn_calc:'🧮 ລອງຄິດໄລ່',mn_extra:'ຄ່າແຮງ/ແກັສ ຕໍ່ສູດ',mn_calc_title:'ຄິດໄລ່ສູດ',mn_calc_q:'ຖ້າຈະຜະລິດ...',mn_calc_need:'ຕ້ອງໃຊ້ວັດຖຸດິບ',mn_make_plan:'📅 ເຮັດເປັນແຜນຜະລິດ',mn_no_bom:'ຍັງບໍ່ໄດ້ໃສ່ສູດ — ແຕະແກ້ໄຂເພື່ອເພີ່ມວັດຖຸດິບ',mn_none:'ຍັງບໍ່ມີເມນູ — ເພີ່ມເມນູທຳອິດເລີຍ',mn_cat:'ໝວດເມນູ',
+  it_new:'➕ ເພີ່ມວັດຖຸດິບ',it_buy_unit:'ຫົວໜ່ວຍສັ່ງຊື້',it_conv:'1 ຫົວໜ່ວຍຊື້ = ຈັກຫົວໜ່ວຍໃຊ້',it_sup:'ຜູ້ສະໜອງ',it_lead:'ສັ່ງລ່ວງໜ້າ (ວັນ)',it_min:'ສະຕັອກຂັ້ນຕ່ຳ',it_price:'ລາຄາ/ຫົວໜ່ວຍຊື້',it_cat:'ໝວດ',it_unit_use:'ຫົວໜ່ວຍໃຊ້/ສະຕັອກ',it_cost_unit:'ຕົ້ນທຶນ/ຫົວໜ່ວຍໃຊ້',it_none:'ຍັງບໍ່ມີວັດຖຸດິບ — ເພີ່ມລາຍການທຳອິດເລີຍ',it_price_hist:'ປະຫວັດລາຄາ',it_sup_new:'➕ ເພີ່ມຜູ້ສະໜອງ',it_sup_title:'ຜູ້ສະໜອງ',it_phone:'ເບີໂທ',
+  stt_use_day:'ໃຊ້ຕໍ່ວັນ (ສະເລ່ຍ)',stt_use_month:'ໃຊ້ເດືອນນີ້',stt_avg7:'ສະເລ່ຍ 7 ວັນ',stt_avg30:'ສະເລ່ຍ 30 ວັນ',stt_produced:'ຜະລິດທັງເດືອນ',stt_sent:'ສົ່ງສາຂາທັງເດືອນ',stt_by_item:'ການໃຊ້ວັດຖຸດິບ',stt_by_menu:'ການຜະລິດ & ສົ່ງຕາມເມນູ',stt_chart:'ມູນຄ່າຜະລິດລາຍວັນ',stt_hist:'ປະຫວັດລາຍວັນ',stt_prev:'ເດືອນກ່ອນ',stt_value:'ມູນຄ່າ',stt_use:'ໃຊ້ໄປ',stt_made:'ຜະລິດ',stt_send:'ສົ່ງສາຂາ',stt_none:'ເດືອນນີ້ຍັງບໍ່ມີຂໍ້ມູນ',
+  se_lang:'ພາສາ / Language',se_sql:'ຕິດຕັ້ງຖານຂໍ້ມູນ (ຄັ້ງດຽວ)',se_sql_hint:'ຄັດລອກ SQL ນີ້ໄປແລ່ນໃນ Supabase → SQL Editor ຄັ້ງດຽວ ແລ້ວກົດໂຫຼດໃໝ່',se_copy_sql:'📋 ຄັດລອກ SQL',se_recalc:'🔄 ຄິດໄລ່ສະຕັອກໃໝ່ຈາກປະຫວັດ',se_recalc_done:'ຄິດໄລ່ສະຕັອກໃໝ່ແລ້ວ ✅',se_backfill:'🌐 ເຕີມຄຳແປຊື່ທີ່ຂາດ',se_backfill_done:'ເຕີມຄຳແປແລ້ວ',se_user:'ຜູ້ໃຊ້',se_role:'ສິດ',se_conn:'ການເຊື່ອມຕໍ່',se_about:'ກ່ຽວກັບ',se_about_txt:'JJ Kitchen — ລະບົບຄົວກາງ ເຊື່ອມກັບລະບົບ P&L ແລະ ລະບົບນັບສະຕັອກສາຂາ ໃຊ້ບັນຊີດຽວກັບແອັບນັບສະຕັອກ',se_copied:'ຄັດລອກແລ້ວ ✅',
+  setup_title:'ຍັງບໍ່ໄດ້ຕິດຕັ້ງຖານຂໍ້ມູນຄົວກາງ',setup_txt:'ແລ່ນ jjmk_kitchen_setup.sql ໃນ Supabase → SQL Editor ຄັ້ງດຽວ (ຄັດລອກຂ້າງລຸ່ມ) ແລ້ວກົດໂຫຼດໃໝ່',setup_retry:'⟳ ໂຫຼດໃໝ່',
+  lg_user:'ຊື່ຜູ້ໃຊ້ (username)',lg_pass:'ລະຫັດຜ່ານ (password)',lg_noprofile:'ບໍ່ພົບຂໍ້ມູນຜູ້ໃຊ້ — ໃຫ້ຜູ້ດູແລເພີ່ມ/ອະນຸມັດໃນແອັບນັບສະຕັອກກ່ອນ',lg_lib:'ໂຫຼດໄລບຣາຣີບໍ່ສຳເລັດ — ກວດອິນເຕີເນັດ ແລ້ວໂຫຼດໃໝ່',name_th:'ຊື່ (ພາສາໄທ — ລະບົບຈະແປໃຫ້ອັດຕະໂນມັດ)',img_fail:'ອ່ານຮູບບໍ່ສຳເລັດ',last45:'ສະແດງຍ້ອນຫຼັງ 45 ວັນ — ເບິ່ງລາຍເດືອນທີ່ໜ້າ 📈 ສະຖິຕິ',undo_recv:'↩ ຍົກເລີກຮັບເຄື່ອງ (ຄືນສະຕັອກ)',undo_send:'↩ ຍົກເລີກສົ່ງ (ຄືນສະຕັອກ)',undo_confirm:'ຍົກເລີກລາຍການນີ້ ແລະ ຄືນສະຕັອກຄືເກົ່າ?',no_price_warn:'⚠ ບາງລາຍການຍັງບໍ່ຕັ້ງລາຄາ — ຕົ້ນທຶນທີ່ຄິດໄລ່ຈະຕ່ຳກວ່າຄວາມຈິງ',menu_deleted:'ເມນູຖືກລຶບແລ້ວ',wd:['ອາ','ຈ','ອັງ','ພຸ','ພະ','ສຸ','ເສົາ'],mo:['ມ.ກ.','ກ.ພ.','ມີ.ນ.','ເມ.ສ.','ພ.ພ.','ມິ.ຖ.','ກ.ລ.','ສ.ຫ.','ກ.ຍ.','ຕ.ລ.','ພ.ຈ.','ທ.ວ.']},
+my:{lang_name:'မြန်မာ',
+  nav_dash:'ပင်မ',nav_plan:'ထုတ်လုပ်မှုအစီအစဉ်',nav_buy:'ကုန်ဝယ်ရန်',nav_produce:'ထုတ်လုပ်ရန်',nav_orders:'ဆိုင်ခွဲအော်ဒါ',nav_stock:'မီးဖိုချောင်စတော့',nav_menus:'မီနူး & ဖော်မြူလာ',nav_items:'ကုန်ကြမ်း',nav_stats:'စာရင်းအင်း',nav_set:'ဆက်တင်',
+  app_sub:'ဗဟိုမီးဖိုချောင် · Jing Jai Mookata',sb_note:'ထုတ်လုပ်–ကုန်ကျစရိတ်–ပို့ဆောင်',sec_daily:'နေ့စဉ်အလုပ်',sec_data:'ဒေတာ & အစီရင်ခံစာ',
+  save:'သိမ်းရန်',cancel:'ပယ်ဖျက်',close:'ပိတ်ရန်',add:'ထည့်ရန်',edit:'ပြင်ရန်',del:'ဖျက်ရန်',confirm:'အတည်ပြု',search:'ရှာရန်...',all:'အားလုံး',today:'ယနေ့',back:'နောက်သို့',next:'ရှေ့သို့',done:'ပြီးပြီ',print:'ပရင့်ထုတ်',name:'အမည်',photo:'ဓာတ်ပုံ',note:'မှတ်ချက်',status:'အခြေအနေ',date:'ရက်စွဲ',total:'စုစုပေါင်း',price:'ဈေးနှုန်း',qty:'အရေအတွက်',unit:'ယူနစ်',cost:'ကုန်ကျစရိတ်',loading:'ဖွင့်နေသည်...',baht:'ဘတ်',per_day:'/ရက်',per_month:'/လ',items_n:'ခု',pick_photo:'📷 ဓာတ်ပုံရွေး/ရိုက်ရန်',del_photo:'ဓာတ်ပုံဖျက်ရန်',no_data:'ဒေတာမရှိသေးပါ',confirm_del:'ဤအရာကို ဖျက်မလား?',need_name:'အမည်ထည့်ပါ',need_qty:'အရေအတွက်ထည့်ပါ',sv_ok:'သိမ်းပြီးပါပြီ ✅',sv_err:'သိမ်းမရပါ: ',view_only:'👁 သင့်အကောင့်သည် ကြည့်ရုံသာရသည်',
+  lg_login:'ဝင်ရန်',lg_signup:'ဝန်ထမ်းအသစ် စာရင်းသွင်းရန်',lg_name:'အမည်အပြည့်အစုံ (စာရင်းသွင်းချိန်သာ)',lg_have:'အကောင့်ရှိပြီးလား? ဝင်ရန်',lg_wait:'စာရင်းသွင်းပြီး ✅ စတော့အက်ပ်တွင် အက်ဒမင်အတည်ပြုချက် စောင့်ပါ',lg_pending:'ဤအကောင့်သည် အတည်ပြုချက်စောင့်နေသည်',lg_hint:'စတော့ရေတွက်အက်ပ်နှင့် အကောင့်တူသုံးနိုင်သည်',logout:'ထွက်ရန်',
+  da_produce_today:'ယနေ့ထုတ်လုပ်မှု',da_low:'ကုန်ခါနီး',da_orders_open:'မပို့ရသေးသောအော်ဒါ',da_stock_value:'ကုန်ကြမ်းစတော့တန်ဖိုး',da_plans:'ယနေ့–မနက်ဖြန် အစီအစဉ်',da_po_due:'ယနေ့ရောက်မည့်ပစ္စည်း',da_recent:'နောက်ဆုံးဆိုင်ခွဲအော်ဒါ',da_none_plan:'အစီအစဉ်မရှိသေး — 📅 ကိုနှိပ်၍ စီစဉ်ပါ',da_all_good:'✅ ပစ္စည်းစုံ ဘာမှမကုန်ခါနီးပါ',da_go_receive:'လက်ခံရန်',da_low_title:'အနိမ့်ဆုံးအောက် ကုန်ကြမ်းများ',da_order_now:'မှာယူရန်',
+  pl_add:'➕ အစီအစဉ်ထည့်ရန်',pl_menu:'ထုတ်လုပ်မည့်မီနူး',pl_qty:'ထုတ်လုပ်မည့်အရေအတွက်',pl_date:'ထုတ်လုပ်မည့်ရက်',pl_calc:'🧮 မှာယူရမည့်ပစ္စည်း တွက်ရန်',pl_step1:'1. မီနူးရွေး',pl_step2:'2. မှာယူရမည့်ပစ္စည်း',pl_step3:'3. ဝယ်ယူမှုအမှာစာ ဖန်တီး',pl_need:'လိုအပ်',pl_have:'စတော့ရှိ',pl_incoming:'ရောက်လာမည်',pl_short:'ထပ်မှာရန်',pl_order_by:'မှာရမည့်နောက်ဆုံးရက်',pl_produce_on:'ထုတ်လုပ်မည့်ရက်',pl_create_po:'ဝယ်ယူမှုအမှာစာ ဖန်တီးရန်',pl_no_short:'✅ ပစ္စည်းလုံလောက် ထပ်မှာစရာမလို',pl_pick:'မီနူးရွေးရန် နှိပ်ပါ',pl_produce_now:'🍳 ဤအစီအစဉ်အတိုင်း ထုတ်လုပ်ရန်',pl_range:'ကာလအတွင်း အစီအစဉ်တွက်ရန်',pl_created_po:'ဝယ်ယူမှုအမှာစာ ဖန်တီးပြီး',pl_lead_info:'ကြိုတင်မှာယူချိန် (ရက်)',pl_none:'ဤလတွင် အစီအစဉ်မရှိသေးပါ',
+  st_draft:'မူကြမ်း',st_ordered:'မှာပြီး — ရောက်ရန်စောင့်ဆိုင်း',st_received:'လက်ခံပြီး',po_new:'➕ ဝယ်ယူမှုအမှာစာအသစ်',po_sup:'ကုန်သွင်းသူ',po_d_order:'မှာသည့်ရက်',po_d_due:'ရောက်မည့်ရက်',po_add_item:'➕ ကုန်ကြမ်းထည့်ရန်',po_mark_ordered:'📤 မှာပြီး',po_receive:'🚚 လက်ခံရန်',po_recv_title:'ပစ္စည်းလက်ခံရန်',po_recv_qty:'အမှန်လက်ခံ',po_price_now:'ဈေး/ဝယ်ယူနစ်',po_none:'ဝယ်ယူမှုအမှာစာ မရှိသေးပါ',po_recv_ok:'စတော့ထဲ လက်ခံပြီး ✅',po_no:'အမှတ်',po_open:'လက်ခံရန်ကျန်',po_del_confirm:'ဤအမှာစာကို ဖျက်မလား?',
+  pr_new:'➕ ထုတ်လုပ်မှု မှတ်တမ်းတင်ရန်',pr_pick:'ထုတ်လုပ်သည့်မီနူးရွေးပါ',pr_out:'ထုတ်လုပ်ရရှိ (အရေအတွက်)',pr_use:'သုံးသည့်ကုန်ကြမ်း (ပြင်နိုင်သည်)',pr_cost_mat:'ကုန်ကြမ်းစရိတ်',pr_cost_extra:'လုပ်အားခ/ဂက်စ် စသည်',pr_cost_total:'စုစုပေါင်းကုန်ကျ',pr_cost_unit:'တစ်ယူနစ်ကုန်ကျ',pr_hist:'ထုတ်လုပ်မှုမှတ်တမ်း',pr_none:'ထုတ်လုပ်မှု မရှိသေးပါ',pr_stock_warn:'⚠ ကုန်ကြမ်းမလုံလောက် (အနုတ်)',pr_ok:'ထုတ်လုပ်မှု သိမ်းပြီး ✅',pr_from_plan:'အစီအစဉ်မှ',
+  or_new:'➕ အော်ဒါအသစ်',or_branch:'ဆိုင်ခွဲ',or_d:'ပို့မည့်ရက်',or_add_menu:'➕ မီနူးထည့်ရန်',or_prep:'👨‍🍳 ပြင်ဆင်နေ',or_send:'🚚 ပို့ပြီး',or_done:'✅ ဆိုင်ခွဲလက်ခံပြီး',or_print:'🖨 ပို့ဆောင်လွှာ',or_none:'အော်ဒါမရှိသေးပါ',or_send_confirm:'ပို့ဆောင်မှု အတည်ပြုမလား? စတော့နုတ်ပြီး ကုန်ကျစရိတ်တွက်ပါမည်',or_sent_ok:'ပို့ပြီး — စတော့နုတ်ပြီးပါပြီ ✅',or_st_new:'အသစ်',or_st_prep:'ပြင်ဆင်နေ',or_st_sent:'ပို့ပြီး',or_st_done:'လက်ခံပြီး',or_st_cancel:'ပယ်ဖျက်',or_value:'တန်ဖိုး (ကုန်ကျ)',or_deliver_note:'ဗဟိုမီးဖိုချောင် ပို့ဆောင်လွှာ',or_sig_pack:'ထုပ်ပိုးသူ',or_sig_check:'စစ်ဆေးသူ',or_sig_send:'ပို့သူ',or_sig_recv:'လက်ခံသူ (ဆိုင်ခွဲ)',or_stock_short:'⚠ ထုတ်လုပ်ပြီးပစ္စည်း မလုံလောက်ပါ',
+  sk_items:'ကုန်ကြမ်း',sk_menus:'ထုတ်လုပ်ပြီးပစ္စည်း',sk_adjust:'ပြင်ဆင်ရန်',sk_min:'အနိမ့်ဆုံး',sk_now:'လက်ကျန်',sk_val:'တန်ဖိုး',sk_adj_title:'စတော့ပြင်ဆင်ရန်',sk_adj_note:'အကြောင်းရင်း (ဥပမာ ပြန်ရေတွက်/ပျက်စီး)',sk_new_qty:'အသစ်အရေအတွက်',
+  mn_new:'➕ မီနူး/ဖော်မြူလာ ထည့်ရန်',mn_yield:'1 ဆက် ထွက်ရှိ',mn_bom:'ဖော်မြူလာ (1 ဆက်အတွက်)',mn_add_ing:'➕ ကုန်ကြမ်းထည့်ရန်',mn_cost_per:'ကုန်ကျ/ယူနစ်',mn_calc:'🧮 တွက်ကြည့်ရန်',mn_extra:'လုပ်အားခ/ဂက်စ် (1 ဆက်)',mn_calc_title:'ဖော်မြူလာတွက်ရန်',mn_calc_q:'ထုတ်လုပ်မည်ဆိုလျှင်...',mn_calc_need:'လိုအပ်သောကုန်ကြမ်း',mn_make_plan:'📅 အစီအစဉ်အဖြစ်လုပ်ရန်',mn_no_bom:'ဖော်မြူလာမရှိသေး — ပြင်ရန်နှိပ်၍ ကုန်ကြမ်းထည့်ပါ',mn_none:'မီနူးမရှိသေး — ပထမဆုံးထည့်ပါ',mn_cat:'မီနူးအုပ်စု',
+  it_new:'➕ ကုန်ကြမ်းထည့်ရန်',it_buy_unit:'ဝယ်ယူယူနစ်',it_conv:'ဝယ်ယူနစ် 1 = သုံးယူနစ် ဘယ်နှခု',it_sup:'ကုန်သွင်းသူ',it_lead:'ကြိုမှာချိန် (ရက်)',it_min:'အနိမ့်ဆုံးစတော့',it_price:'ဈေး/ဝယ်ယူနစ်',it_cat:'အမျိုးအစား',it_unit_use:'သုံး/စတော့ယူနစ်',it_cost_unit:'ကုန်ကျ/သုံးယူနစ်',it_none:'ကုန်ကြမ်းမရှိသေး — ပထမဆုံးထည့်ပါ',it_price_hist:'ဈေးနှုန်းမှတ်တမ်း',it_sup_new:'➕ ကုန်သွင်းသူထည့်ရန်',it_sup_title:'ကုန်သွင်းသူများ',it_phone:'ဖုန်း',
+  stt_use_day:'တစ်ရက်သုံး (ပျမ်းမျှ)',stt_use_month:'ဤလသုံးပြီး',stt_avg7:'7 ရက်ပျမ်းမျှ',stt_avg30:'30 ရက်ပျမ်းမျှ',stt_produced:'ဤလထုတ်လုပ်မှု',stt_sent:'ဤလပို့ဆောင်မှု',stt_by_item:'ကုန်ကြမ်းသုံးစွဲမှု',stt_by_menu:'မီနူးအလိုက် ထုတ်လုပ်/ပို့ဆောင်',stt_chart:'နေ့စဉ်ထုတ်လုပ်မှုတန်ဖိုး',stt_hist:'နေ့စဉ်မှတ်တမ်း',stt_prev:'ယခင်လ',stt_value:'တန်ဖိုး',stt_use:'သုံးပြီး',stt_made:'ထုတ်လုပ်',stt_send:'ပို့ဆောင်',stt_none:'ဤလတွင် ဒေတာမရှိသေးပါ',
+  se_lang:'ဘာသာစကား / Language',se_sql:'ဒေတာဘေ့စ် တပ်ဆင်ခြင်း (တစ်ကြိမ်သာ)',se_sql_hint:'ဤ SQL ကိုကူး၍ Supabase → SQL Editor တွင် တစ်ကြိမ်ရန် ပြီးလျှင် ပြန်ဖွင့်ပါ',se_copy_sql:'📋 SQL ကူးရန်',se_recalc:'🔄 မှတ်တမ်းမှ စတော့ပြန်တွက်ရန်',se_recalc_done:'စတော့ပြန်တွက်ပြီး ✅',se_backfill:'🌐 ဘာသာပြန်လွတ်နေသည်များ ဖြည့်ရန်',se_backfill_done:'ဘာသာပြန်ဖြည့်ပြီး',se_user:'အသုံးပြုသူ',se_role:'ရာထူး',se_conn:'ချိတ်ဆက်မှု',se_about:'အကြောင်း',se_about_txt:'JJ Kitchen — ဗဟိုမီးဖိုချောင်စနစ် P&L နှင့် ဆိုင်ခွဲစတော့စနစ်နှင့် ချိတ်ဆက်ထားသည် စတော့အက်ပ်နှင့် အကောင့်တူသုံးသည်',se_copied:'ကူးပြီးပါပြီ ✅',
+  setup_title:'မီးဖိုချောင်ဒေတာဘေ့စ် မတပ်ဆင်ရသေးပါ',setup_txt:'jjmk_kitchen_setup.sql ကို Supabase → SQL Editor တွင် တစ်ကြိမ်ရန် (အောက်တွင်ကူးပါ) ပြီးလျှင် ပြန်ဖွင့်ပါ',setup_retry:'⟳ ပြန်ဖွင့်ရန်',
+  lg_user:'အသုံးပြုသူအမည် (username)',lg_pass:'စကားဝှက် (password)',lg_noprofile:'အသုံးပြုသူမတွေ့ပါ — စတော့အက်ပ်တွင် အက်ဒမင်က ထည့်/အတည်ပြုပေးရန်လိုသည်',lg_lib:'ဆော့ဖ်ဝဲအစိတ်အပိုင်း မဖွင့်နိုင်ပါ — အင်တာနက်စစ်ပြီး ပြန်ဖွင့်ပါ',name_th:'အမည် (ထိုင်းဘာသာ — အလိုအလျောက် ဘာသာပြန်ပေးမည်)',img_fail:'ဓာတ်ပုံဖတ်မရပါ',last45:'နောက်ဆုံး 45 ရက်ပြသည် — လအလိုက်ကို 📈 စာရင်းအင်းတွင်ကြည့်ပါ',undo_recv:'↩ လက်ခံမှုပြန်ဖျက် (စတော့ပြန်ထည့်)',undo_send:'↩ ပို့ဆောင်မှုပြန်ဖျက် (စတော့ပြန်ထည့်)',undo_confirm:'ဤမှတ်တမ်းကိုဖျက်ပြီး စတော့ပြန်ထည့်မလား?',no_price_warn:'⚠ အချို့ပစ္စည်း ဈေးမသတ်မှတ်ရသေး — တွက်ထားသောကုန်ကျမှာ အမှန်ထက်နည်းနေမည်',menu_deleted:'မီနူးဖျက်ပြီးပါပြီ',wd:['နွေ','လာ','ဂါ','ဟူး','တေး','ကြာ','နေ'],mo:['ဇန်','ဖေ','မတ်','ဧပြီ','မေ','ဇွန်','ဇူ','ဩ','စက်','အောက်','နို','ဒီ']}
+};
+let LANG=(function(){try{const s=localStorage.getItem('jjck_lang')||localStorage.getItem('jjmk_lang');if(s&&I18N[s])return s;
+  const n=(navigator.language||'th').slice(0,2);if(I18N[n])return n;}catch(e){}return 'th';})();
+function t(k,vars){let s=(I18N[LANG]&&I18N[LANG][k])??I18N.th[k]??k;
+  if(vars&&typeof s==='string')Object.keys(vars).forEach(x=>{s=s.split('{'+x+'}').join(vars[x]);});return s;}
+function setLang(l){if(!I18N[l])return;LANG=l;try{localStorage.setItem('jjck_lang',l)}catch(e){}
+  document.body.setAttribute('data-lang',l);document.documentElement.lang=l;applyChrome();
+  const cur=document.getElementById('langCur');if(cur)cur.textContent=I18N[l].lang_name;
+  if(S.user)show(S.tab); paintLogin();}
+async function gtx(text,to){ // th -> en/lo/my ผ่าน Google translate (endpoint สาธารณะ ฟรี)
+  try{const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=th&tl='+to+'&dt=t&q='+encodeURIComponent(text));
+    const j=await r.json();return (j&&j[0]&&j[0].map(x=>x[0]).join(''))||null;}catch(e){return null;}}
+async function autoI18n(name,cur){ // เติมเฉพาะช่องที่ว่าง
+  const o={en:(cur&&cur.en)||null,lo:(cur&&cur.lo)||null,my:(cur&&cur.my)||null};
+  for(const L of ['en','lo','my']){if(!o[L]){o[L]=await gtx(name,L);await new Promise(r=>setTimeout(r,120));}}
+  return (o.en||o.lo||o.my)?o:null;}
+function dispName(o){ // ชื่อสินค้า/เมนูตามภาษาที่เลือก (แปลออโต้จาก i18n)
+  if(!o)return '';
+  if(LANG!=='th'&&o.i18n&&o.i18n[LANG])return o.i18n[LANG];
+  return o.name||'';}
+
+/* ---------- Utils ---------- */
+const fmt=(n,dec)=>(n==null||isNaN(n))?'–':Number(n).toLocaleString('th-TH',{minimumFractionDigits:dec??0,maximumFractionDigits:dec??2});
+const fmtI=n=>{const x=Number(n)||0;return Math.round(x*100)%100===0?fmt(x,0):fmt(x,2);};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num=v=>{const n=parseFloat(String(v??'').replace(/,/g,''));return isNaN(n)?0:n;};
+const rnd2=v=>Math.round((Number(v)||0)*100)/100;
+let uidN=0;const uid=p=>(p||'k')+Date.now().toString(36)+(uidN++);
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function addDays(iso,n){const[y,m,d]=iso.split('-').map(Number);const dt=new Date(y,m-1,d+n);
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
+function monthDays(m){const[y,mm]=m.split('-').map(Number);return new Date(y,mm,0).getDate();}
+function dstr(m,day){return m+'-'+String(day).padStart(2,'0');}
+function prevMonth(m){let[y,mm]=m.split('-').map(Number);mm--;if(mm===0){mm=12;y--;}return y+'-'+String(mm).padStart(2,'0');}
+function nextMonth(m){let[y,mm]=m.split('-').map(Number);mm++;if(mm===13){mm=1;y++;}return y+'-'+String(mm).padStart(2,'0');}
+function dispDate(iso){if(!iso)return '–';const[y,m,d]=String(iso).slice(0,10).split('-').map(Number);
+  const mo=t('mo');const yy=LANG==='th'?(y+543):y;return d+' '+mo[m-1]+' '+yy;}
+function dispMonth(m){const[y,mm]=m.split('-').map(Number);const yy=LANG==='th'?(y+543):y;return t('mo')[mm-1]+' '+yy;}
+function toast(msg,err){const el=document.getElementById('toast');el.textContent=msg;el.className='on'+(err?' err':'');
+  clearTimeout(el._t);el._t=setTimeout(()=>el.className='',2800);}
+function openModal(html,wide){const b=document.getElementById('modalBox');b.className='modal'+(wide?' wide':'');
+  b.innerHTML=html;document.getElementById('modalWrap').classList.add('on');}
+let MODAL_BACK=null; // picker เปิดทับฟอร์ม — ปิด picker แล้วกลับไปฟอร์มเดิม ไม่ทิ้งข้อมูลที่กรอกค้าง
+function closeModal(){
+  if(MODAL_BACK){const f=MODAL_BACK;MODAL_BACK=null;try{f();return;}catch(e){}}
+  document.getElementById('modalWrap').classList.remove('on');}
+let busyCount=0;
+function setBusy(b){busyCount+=b?1:-1;if(busyCount<0)busyCount=0;
+  const d=document.getElementById('syncDot');if(d)d.className=busyCount>0?'busy':'';}
+function zoomImg(url){const w=document.createElement('div');w.className='imgzoom';w.onclick=()=>w.remove();
+  w.innerHTML='<img src="'+esc(url)+'">';document.body.appendChild(w);}
+
+/* ---------- Supabase helpers ---------- */
+async function sbAll(build,maxPages){maxPages=maxPages||25;let out=[];
+  for(let p=0;p<maxPages;p++){const {data,error}=await build().range(p*1000,p*1000+999);
+    if(error)throw error;out=out.concat(data||[]);if(!data||data.length<1000)break;}
+  return out;}
+let INFLIGHT=false;
+async function once(fn){ // กันกดซ้ำระหว่างบันทึก — ห้ามรันงานเขียนซ้อนกัน
+  if(INFLIGHT)return;INFLIGHT=true;
+  try{await fn();}finally{INFLIGHT=false;}}
+async function dbi(fn){ // wrapper: busy dot + error toast
+  setBusy(true);
+  try{const r=await fn();
+    if(r&&r.error)throw r.error;
+    return r&&('data' in r)?r.data:r;}
+  catch(e){const d=document.getElementById('syncDot');if(d)d.className='err';
+    toast(t('sv_err')+((e&&e.message)||e),true);throw e;}
+  finally{setBusy(false);}}
+
+/* ---------- Auth (บัญชีเดียวกับแอพนับสต๊อก) ---------- */
+const uname2email=u=>u.toLowerCase().trim()+EMAIL_DOMAIN;
+let SIGNUP=false;
+function paintLogin(){
+  document.getElementById('lgSub').textContent=t('app_sub');
+  document.getElementById('lgNameLb').textContent=t('lg_name');
+  document.getElementById('lgULb').textContent=t('lg_user');
+  document.getElementById('lgPLb').textContent=t('lg_pass');
+  document.getElementById('lgNameFld').style.display=SIGNUP?'':'none';
+  document.getElementById('lgGo').textContent=SIGNUP?t('lg_signup'):t('lg_login');
+  document.getElementById('lgSignBtn').textContent=SIGNUP?t('lg_have'):t('lg_signup');
+  const box=document.getElementById('loginLang');box.innerHTML='';
+  ['th','en','lo','my'].forEach(l=>{const b=document.createElement('button');b.textContent=I18N[l].lang_name;
+    if(l===LANG)b.classList.add('on');b.onclick=()=>setLang(l);box.appendChild(b);});
+}
+function toggleSignup(){SIGNUP=!SIGNUP;paintLogin();document.getElementById('lgMsg').textContent=SIGNUP?t('lg_hint'):'';}
+function showLogin(){document.getElementById('loginOv').classList.add('on');paintLogin();
+  setTimeout(()=>{const f=document.getElementById('lgU');f&&f.focus();},60);}
+function hideLogin(){document.getElementById('loginOv').classList.remove('on');}
+const CLOCK_SKEW=e=>{const c=(e&&e.code)||'',m=(e&&e.message)||String(e||'');return c==='PGRST303'||/issued at future/i.test(m);};
+async function sbProfile(){
+  const g=await sb.auth.getUser();const user=g&&g.data&&g.data.user;
+  if(!user)return null;
+  for(let i=0;i<10;i++){
+    const {data,error}=await sb.from('app_users').select('*').eq('auth_uid',user.id).maybeSingle();
+    if(!error)return data||null;
+    if(CLOCK_SKEW(error)&&i<9){await new Promise(r=>setTimeout(r,3000));continue;}
+    return null;}
+  return null;}
+async function doLogin(){
+  const u=document.getElementById('lgU').value.trim(),p=document.getElementById('lgP').value;
+  const msg=document.getElementById('lgMsg');msg.textContent='';
+  if(!u||!p){msg.textContent=t('need_name');return;}
+  try{
+    if(SIGNUP){
+      const nm=document.getElementById('lgName').value.trim()||u;
+      const {error}=await sb.auth.signUp({email:uname2email(u),password:p,options:{data:{name:nm}}});
+      if(error)throw error;
+      await sb.auth.signOut();
+      msg.textContent=t('lg_wait');SIGNUP=false;paintLogin();return;
+    }
+    const {error}=await sb.auth.signInWithPassword({email:uname2email(u),password:p});
+    if(error)throw error;
+    const prof=await sbProfile();
+    if(!prof){await sb.auth.signOut();msg.textContent=t('lg_noprofile');return;}
+    if(prof.status!=='active'){await sb.auth.signOut();msg.textContent=t('lg_pending');return;}
+    await enterApp(prof);
+  }catch(e){msg.textContent=(e&&e.message)||String(e);}
+}
+async function doLogout(){try{await sb.auth.signOut();}catch(e){}location.reload();}
+
+/* ---------- สิทธิ์ ---------- */
+function isAdminish(){const r=S.prof&&S.prof.role;return r==='owner'||r==='admin'||r==='manager'||!!(S.prof&&S.prof.perms&&S.prof.perms.manageCentral);}
+function canKitchen(){const r=S.prof&&S.prof.role;return isAdminish()||r==='supervisor'||r==='warehouse';}
+function myBranches(){return (S.prof&&S.prof.branch_ids)||[];}
+</script>
+<script>
+/* ============================================================
+   State + Data layer
+   ============================================================ */
+const S={user:null,prof:null,tab:'dash',setupNeeded:false,
+  items:[],sups:[],recipes:[],boms:{},pos:[],poItems:{},plans:[],prods:[],orders:[],orderItems:{},branches:[],
+  statsM:todayStr().slice(0,7),charts:{}};
+
+const CK_TABLES=['ck_items','ck_sups','ck_recipes','ck_recipe_items','ck_plans','ck_pos','ck_po_items',
+  'ck_productions','ck_prod_items','ck_orders','ck_order_items','ck_moves','ck_price_log','ck_settings'];
+const MISSING_TBL=e=>{const c=(e&&e.code)||'',m=String((e&&e.message)||e||'');
+  return c==='42P01'||c==='PGRST205'||c==='PGRST204'||c==='42501'||/does not exist|not find the table|permission denied/i.test(m);};
+
+async function loadAll(){
+  setBusy(true);
+  try{
+    const probe=await sb.from('ck_items').select('id').limit(1);
+    if(probe.error){if(MISSING_TBL(probe.error)){S.setupNeeded=true;return;}throw probe.error;}
+    S.setupNeeded=false;
+    const from90=addDays(todayStr(),-45);
+    const [it,sp,rc,bm,pl,po,poi,pr,od,odi,br]=await Promise.all([
+      sbAll(()=>sb.from('ck_items').select('*').is('deleted_at',null).order('sort').order('name').order('id')),
+      sbAll(()=>sb.from('ck_sups').select('*').order('sort').order('name').order('id')),
+      sbAll(()=>sb.from('ck_recipes').select('*').is('deleted_at',null).order('sort').order('name').order('id')),
+      sbAll(()=>sb.from('ck_recipe_items').select('*').order('sort').order('id')),
+      sbAll(()=>sb.from('ck_plans').select('*').or('status.eq.plan,d.gte.'+from90).order('d').order('id')),
+      sbAll(()=>sb.from('ck_pos').select('*').neq('status','cancel').order('created_at',{ascending:false}).order('id')),
+      sbAll(()=>sb.from('ck_po_items').select('*').order('sort').order('id')),
+      sbAll(()=>sb.from('ck_productions').select('*').gte('d',from90).order('d',{ascending:false}).order('id')),
+      sbAll(()=>sb.from('ck_orders').select('*').or('status.in.(new,prep,sent),d.gte.'+from90).order('d',{ascending:false}).order('id')),
+      sbAll(()=>sb.from('ck_order_items').select('*').order('sort').order('id')),
+      sb.from('pnl_branches').select('*').order('sort').then(r=>r.data||[]).catch(()=>[])
+    ]);
+    S.items=it;S.sups=sp;S.recipes=rc;S.plans=pl;S.pos=po;S.prods=pr;S.orders=od;
+    S.boms={};bm.forEach(l=>{(S.boms[l.recipe_id]=S.boms[l.recipe_id]||[]).push(l);});
+    S.poItems={};poi.forEach(l=>{(S.poItems[l.po_id]=S.poItems[l.po_id]||[]).push(l);});
+    S.orderItems={};odi.forEach(l=>{(S.orderItems[l.order_id]=S.orderItems[l.order_id]||[]).push(l);});
+    S.branches=(br&&br.length)?br:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}];
+  }finally{setBusy(false);}
+}
+async function reloadAll(){await loadAll();applyChrome();show(S.tab);toast('⟳ '+t('done'));}
+
+function itemById(id){return S.items.find(x=>x.id===id)||null;}
+function recipeById(id){return S.recipes.find(x=>x.id===id)||null;}
+function supByName(n){return S.sups.find(x=>x.name===(n||''))||null;}
+function branchName(code){const b=S.branches.find(x=>x.code===code);return b?b.name:code;}
+
+/* ---------- ต้นทุน ---------- */
+function unitCost(it){ // ต้นทุนต่อหน่วยใช้ (ราคา/หน่วยซื้อ ÷ อัตราแปลง)
+  if(!it||it.price==null)return null;
+  const bq=num(it.buy_qty)||1;return num(it.price)/bq;}
+function bomOf(r){return (S.boms[r.id]||[]).filter(l=>itemById(l.item_id));}
+function recipeCostCalc(r){ // ต้นทุนตามสูตร (จากราคาวัตถุดิบล่าสุด) ต่อ 1 สูตร และต่อหน่วย
+  const bom=bomOf(r);let mat=0,missing=false;
+  bom.forEach(l=>{const c=unitCost(itemById(l.item_id));if(c==null){missing=true;return;}mat+=num(l.qty)*c;});
+  const total=mat+num(r.extra_cost);
+  const y=num(r.yield_qty)||1;
+  return {mat,total,perUnit:total/y,missing,hasBom:bom.length>0};}
+function recipeUnitCost(r){ // ใช้ต้นทุนผลิตล่าสุดก่อน ถ้าไม่มีใช้คำนวณจากสูตร
+  if(r.unit_cost!=null)return num(r.unit_cost);
+  const c=recipeCostCalc(r);return c.hasBom&&!c.missing?c.perUnit:null;}
+
+/* ---------- เคลื่อนไหวสต๊อก (ledger + ยอดคงเหลือ) ---------- */
+async function addQty(kind,id,delta){ // บวก/ลบยอดแบบ atomic ผ่าน RPC (กันหลายเครื่องเขียนชนกัน)
+  try{
+    const {data,error}=await sb.rpc('ck_add_qty',{p_kind:kind,p_id:id,p_delta:delta});
+    if(error)throw error;
+    return data==null?null:+data;
+  }catch(e){ // RPC ยังไม่ติดตั้ง — อ่านยอดล่าสุดจาก DB ก่อนแล้วค่อยเขียนทับ
+    const tbl=kind==='item'?'ck_items':'ck_recipes';
+    const cur=await dbi(()=>sb.from(tbl).select('qty').eq('id',id).maybeSingle());
+    const v=rnd2(num(cur&&cur.qty)+delta);
+    await dbi(()=>sb.from(tbl).update({qty:v}).eq('id',id));
+    return v;
+  }
+}
+async function pushMoves(moves){ // moves: [{d,kind,item_kind,ref_id,name,qty,cost,ref,note,branch}]
+  if(!moves.length)return;
+  const by=S.user&&S.user.name;
+  await dbi(()=>sb.from('ck_moves').insert(moves.map(m=>Object.assign({by_name:by},m))));
+  // รวม delta ต่อชิ้น แล้วอัพเดทยอดคงเหลือ (ยอดจริงจากเซิร์ฟเวอร์)
+  const agg={};
+  moves.forEach(m=>{const k=m.item_kind+'|'+m.ref_id;agg[k]=(agg[k]||0)+num(m.qty);});
+  for(const k of Object.keys(agg)){
+    const [kind,id]=k.split('|');
+    const o=kind==='item'?itemById(id):recipeById(id);
+    if(!o)continue;
+    const v=await addQty(kind,id,agg[k]);
+    o.qty=v!=null?v:rnd2(num(o.qty)+agg[k]);
+  }
+}
+async function recalcStock(){ // คำนวณยอดคงเหลือใหม่จาก ledger ทั้งหมด
+  const all=await dbi(()=>sbAll(()=>sb.from('ck_moves').select('item_kind,ref_id,qty').order('id'),500).then(data=>({data})));
+  const agg={};all.forEach(m=>{const k=m.item_kind+'|'+m.ref_id;agg[k]=(agg[k]||0)+num(m.qty);});
+  for(const it of S.items){const v=rnd2(agg['item|'+it.id]||0);
+    if(v!==num(it.qty)){it.qty=v;await dbi(()=>sb.from('ck_items').update({qty:v}).eq('id',it.id));}}
+  for(const r of S.recipes){const v=rnd2(agg['recipe|'+r.id]||0);
+    if(v!==num(r.qty)){r.qty=v;await dbi(()=>sb.from('ck_recipes').update({qty:v}).eq('id',r.id));}}
+  toast(t('se_recalc_done'));
+}
+
+/* ---------- รูปสินค้า (bucket เดียวกับแอพนับสต๊อก) ---------- */
+const QUALITY={sm:{max:240,qual:.6},md:{max:480,qual:.72},lg:{max:640,qual:.8}};
+function processImage(file,cb){const reader=new FileReader();
+  reader.onload=()=>{const im=new Image();
+    im.onload=()=>{const q=QUALITY.md;let w=im.width,h=im.height;
+      const sc=Math.min(1,q.max/Math.max(w,h));w=Math.max(1,Math.round(w*sc));h=Math.max(1,Math.round(h*sc));
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(im,0,0,w,h);
+      try{cb(cv.toDataURL('image/jpeg',q.qual))}catch(e){cb(null)}};
+    im.onerror=()=>cb(null);im.src=reader.result};
+  reader.onerror=()=>cb(null);reader.readAsDataURL(file)}
+function pickImage(kind,id,after){ // kind: 'item'|'recipe'
+  const inp=document.getElementById('imgFile');
+  inp.onchange=async()=>{
+    const f=inp.files&&inp.files[0];inp.value='';if(!f)return;
+    let url=null;
+    try{
+      const dataUrl=await new Promise(res=>processImage(f,res));
+      if(!dataUrl)throw new Error(t('img_fail'));
+      const blob=await (await fetch(dataUrl)).blob();
+      const path='ck/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
+      const up=await sb.storage.from('product-images').upload(path,blob,{contentType:'image/jpeg',upsert:true});
+      if(up.error)throw up.error;
+      url=sb.storage.from('product-images').getPublicUrl(path).data.publicUrl;
+      const tbl=kind==='item'?'ck_items':'ck_recipes';
+      await dbi(()=>sb.from(tbl).update({image_url:url}).eq('id',id));
+      const o=kind==='item'?itemById(id):recipeById(id);if(o)o.image_url=url;
+      toast(t('sv_ok'));
+    }catch(e){toast(t('sv_err')+((e&&e.message)||e),true);return;}
+    if(after)try{after(url)}catch(e){}
+  };
+  inp.click();
+}
+function thumbHtml(o,ic,cls){ // รูปย่อ + emoji fallback
+  const inner=o&&o.image_url?'<img src="'+esc(o.image_url)+'" loading="lazy">':(ic||'🍳');
+  return '<div class="'+(cls||'mthumb')+'" '+(o&&o.image_url?'onclick="zoomImg(\''+esc(o.image_url)+'\');event.stopPropagation()"':'')+'>'+inner+'</div>';}
+
+/* ---------- เลขที่ใบสั่งซื้อ ---------- */
+function nextPoNo(){const d=todayStr().replace(/-/g,'').slice(2);
+  const n=S.pos.filter(p=>(p.po_no||'').startsWith('PO'+d)).length+1;
+  return 'PO'+d+'-'+String(n).padStart(2,'0');}
+
+/* ---------- หมวดเริ่มต้น ---------- */
+const ITEM_CATS=['เนื้อสัตว์','ผัก','ของแห้ง','เครื่องปรุง','บรรจุภัณฑ์','อื่นๆ'];
+const ITEM_CAT_IC={'เนื้อสัตว์':'🥩','ผัก':'🥬','ของแห้ง':'🍚','เครื่องปรุง':'🧂','บรรจุภัณฑ์':'📦','อื่นๆ':'🧺'};
+const MENU_CATS=['น้ำจิ้ม','ของหมัก','น้ำซุป','ของหวาน','อื่นๆ'];
+const MENU_CAT_IC={'น้ำจิ้ม':'🥣','ของหมัก':'🥩','น้ำซุป':'🍲','ของหวาน':'🍮','อื่นๆ':'🍱'};
+const CAT_I18N={
+ 'เนื้อสัตว์':{en:'Meat',lo:'ຊີ້ນສັດ',my:'အသား'},
+ 'ผัก':{en:'Vegetables',lo:'ຜັກ',my:'ဟင်းသီးဟင်းရွက်'},
+ 'ของแห้ง':{en:'Dry goods',lo:'ເຄື່ອງແຫ້ງ',my:'ခြောက်သွေ့ကုန်'},
+ 'เครื่องปรุง':{en:'Seasoning',lo:'ເຄື່ອງປຸງ',my:'ဟင်းခတ်အမွှေး'},
+ 'บรรจุภัณฑ์':{en:'Packaging',lo:'ບັນຈຸພັນ',my:'ထုပ်ပိုးပစ္စည်း'},
+ 'อื่นๆ':{en:'Others',lo:'ອື່ນໆ',my:'အခြား'},
+ 'น้ำจิ้ม':{en:'Dipping sauce',lo:'ນ້ຳຈິ້ມ',my:'နှစ်စရာဆော့စ်'},
+ 'ของหมัก':{en:'Marinated',lo:'ຂອງໝັກ',my:'နှပ်ထားသောအသား'},
+ 'น้ำซุป':{en:'Soup',lo:'ນ້ຳຊຸບ',my:'ဟင်းရည်'},
+ 'ของหวาน':{en:'Dessert',lo:'ຂອງຫວານ',my:'အချိုပွဲ'},
+ 'ทั่วไป':{en:'General',lo:'ທົ່ວໄປ',my:'အထွေထွေ'},
+ 'เมนูหลัก':{en:'Main',lo:'ເມນູຫຼັກ',my:'ပင်မမီနူး'}};
+function trCat(label){const m=CAT_I18N[(label||'').trim()];return (m&&LANG!=='th'&&m[LANG])||label||'';}
+const UNITS=['กก.','ขีด','กรัม','ลิตร','ขวด','แพ็ค','ถุง','กล่อง','ลัง','ถัง','ถาด','กระสอบ','โหล','ชิ้น','อัน','มัด','กระป๋อง','ห่อ'];
+const UNIT_I18N={
+ 'กก.':{en:'kg',lo:'ກກ.',my:'ကီလို'},'ขีด':{en:'100 g',lo:'ຂີດ',my:'ဆယ်သားလုံး'},
+ 'กรัม':{en:'g',lo:'ກຣາມ',my:'ဂရမ်'},'ลิตร':{en:'L',lo:'ລິດ',my:'လီတာ'},
+ 'ขวด':{en:'bottle',lo:'ແກ້ວ',my:'ပုလင်း'},'แพ็ค':{en:'pack',lo:'ແພັກ',my:'ထုပ်'},
+ 'ถุง':{en:'bag',lo:'ຖົງ',my:'အိတ်'},'กล่อง':{en:'box',lo:'ກ່ອງ',my:'ဘူး'},
+ 'ลัง':{en:'case',lo:'ລັງ',my:'သေတ္တာ'},'ถัง':{en:'bucket',lo:'ຖັງ',my:'ပုံး'},
+ 'ถาด':{en:'tray',lo:'ຖາດ',my:'ဗန်း'},'กระสอบ':{en:'sack',lo:'ກະສອບ',my:'ဂုန်နီအိတ်'},
+ 'โหล':{en:'dozen',lo:'ໂຫຼ',my:'ဒါဇင်'},'ชิ้น':{en:'pc',lo:'ຊິ້ນ',my:'ခု'},
+ 'อัน':{en:'pc',lo:'ອັນ',my:'ခု'},'มัด':{en:'bundle',lo:'ມັດ',my:'စည်း'},
+ 'กระป๋อง':{en:'can',lo:'ກະປ໋ອງ',my:'သံဗူး'},'ห่อ':{en:'wrap',lo:'ຫໍ່',my:'ထုပ်ငယ်'}};
+function trUnit(u){const m=UNIT_I18N[(u||'').trim()];return (m&&LANG!=='th'&&m[LANG])||u||'';}
+function unitOptions(sel){return UNITS.map(u=>'<option value="'+u+'" '+(u===sel?'selected':'')+'>'+esc(trUnit(u))+'</option>').join('')
+  +(sel&&!UNITS.includes(sel)?'<option selected>'+esc(trUnit(sel))+'</option>':'');}
+
+/* ---------- SQL ติดตั้ง (ฝังไว้ให้คัดลอก — เหมือน jjmk_kitchen_setup.sql ในรีโป) ---------- */
+const KITCHEN_SQL=[
+'-- jjmk_kitchen_setup.sql — ติดตั้งระบบครัวกลาง JJ Kitchen (รันครั้งเดียวใน Supabase SQL Editor)',
+'-- ตาราง ck_* ทั้งหมด + RLS (ล็อกอินแล้วทำได้ทุกอย่าง / anon อ่านได้อย่างเดียว เพื่อให้แอพ P&L ดึงข้อมูลได้)',
+'create table if not exists ck_items (',
+'  id text primary key, name text not null, i18n jsonb, cat text default \'อื่นๆ\',',
+'  unit text default \'กก.\', buy_unit text, buy_qty numeric default 1, price numeric,',
+'  sup text default \'\', lead_days integer default 1, min_qty numeric, qty numeric default 0,',
+'  image_url text, sort integer default 0, active boolean default true,',
+'  deleted_at timestamptz, created_at timestamptz default now());',
+'create table if not exists ck_sups (',
+'  id text primary key, name text not null, phone text, lead_days integer default 1,',
+'  note text, sort integer default 0, active boolean default true);',
+'create table if not exists ck_recipes (',
+'  id text primary key, name text not null, i18n jsonb, cat text default \'อื่นๆ\',',
+'  yield_qty numeric default 1, yield_unit text default \'กก.\', extra_cost numeric default 0,',
+'  qty numeric default 0, unit_cost numeric, stock_name text, image_url text, note text,',
+'  sort integer default 0, active boolean default true, deleted_at timestamptz, created_at timestamptz default now());',
+'create table if not exists ck_recipe_items (',
+'  id bigserial primary key, recipe_id text not null, item_id text not null,',
+'  qty numeric not null default 0, sort integer default 0);',
+'create index if not exists ck_recipe_items_r on ck_recipe_items(recipe_id);',
+'create table if not exists ck_plans (',
+'  id text primary key, d date not null, recipe_id text not null, qty numeric not null,',
+'  status text default \'plan\', note text, by_name text, created_at timestamptz default now());',
+'create index if not exists ck_plans_d on ck_plans(d);',
+'create table if not exists ck_pos (',
+'  id text primary key, po_no text, sup text default \'\', d_order date, d_due date, order_by date,',
+'  status text default \'draft\', total numeric, note text, by_name text, created_at timestamptz default now());',
+'alter table ck_pos add column if not exists order_by date;',
+'create table if not exists ck_po_items (',
+'  id bigserial primary key, po_id text not null, item_id text, name text, unit text,',
+'  qty numeric default 0, price numeric, received_qty numeric, sort integer default 0);',
+'create index if not exists ck_po_items_po on ck_po_items(po_id);',
+'create table if not exists ck_productions (',
+'  id text primary key, d date not null, recipe_id text, name text, qty numeric not null,',
+'  cost_mat numeric, cost_extra numeric, cost_total numeric, cost_unit numeric,',
+'  note text, by_name text, plan_id text, created_at timestamptz default now());',
+'create index if not exists ck_productions_d on ck_productions(d);',
+'create table if not exists ck_prod_items (',
+'  id bigserial primary key, prod_id text not null, item_id text, name text, unit text,',
+'  qty numeric default 0, cost numeric default 0);',
+'create index if not exists ck_prod_items_p on ck_prod_items(prod_id);',
+'create table if not exists ck_orders (',
+'  id text primary key, branch text default \'\', branch_name text default \'\', d date not null,',
+'  status text default \'new\', total numeric, note text, by_name text, created_at timestamptz default now());',
+'create index if not exists ck_orders_d on ck_orders(d);',
+'create table if not exists ck_order_items (',
+'  id bigserial primary key, order_id text not null, recipe_id text, name text, unit text,',
+'  qty numeric default 0, cost_unit numeric, amount numeric, sort integer default 0);',
+'create index if not exists ck_order_items_o on ck_order_items(order_id);',
+'create table if not exists ck_moves (',
+'  id bigserial primary key, d date not null, kind text not null,',
+'  item_kind text not null default \'item\', ref_id text not null, name text,',
+'  qty numeric not null, cost numeric, ref text, note text, branch text,',
+'  by_name text, created_at timestamptz default now());',
+'create index if not exists ck_moves_d on ck_moves(d);',
+'create index if not exists ck_moves_ref on ck_moves(ref_id);',
+'create table if not exists ck_price_log (',
+'  id bigserial primary key, item_id text not null, d date not null, price numeric,',
+'  buy_unit text, source text default \'po\', created_at timestamptz default now());',
+'create index if not exists ck_price_log_i on ck_price_log(item_id);',
+'create table if not exists ck_settings (key text primary key, value jsonb);',
+'',
+'-- ฟังก์ชันบวก/ลบยอดสต๊อกแบบ atomic (กันหลายเครื่องกดพร้อมกันแล้วยอดเพี้ยน)',
+'create or replace function ck_add_qty(p_kind text, p_id text, p_delta numeric)',
+'returns numeric language plpgsql security definer set search_path = public as $fn$',
+'declare v numeric;',
+'begin',
+'  if p_kind = \'item\' then',
+'    update ck_items set qty = round(coalesce(qty,0) + p_delta, 2) where id = p_id returning qty into v;',
+'  else',
+'    update ck_recipes set qty = round(coalesce(qty,0) + p_delta, 2) where id = p_id returning qty into v;',
+'  end if;',
+'  return v;',
+'end $fn$;',
+'revoke execute on function ck_add_qty(text,text,numeric) from public, anon;',
+'grant execute on function ck_add_qty(text,text,numeric) to authenticated;',
+'',
+'-- สิทธิ์: ผู้ใช้ที่ล็อกอินและถูกอนุมัติ (app_users.status=active) ทำได้ทุกอย่าง / anon อ่านอย่างเดียว',
+'do $$ declare tb text; begin',
+'  foreach tb in array array[\'ck_items\',\'ck_sups\',\'ck_recipes\',\'ck_recipe_items\',\'ck_plans\',\'ck_pos\',\'ck_po_items\',\'ck_productions\',\'ck_prod_items\',\'ck_orders\',\'ck_order_items\',\'ck_moves\',\'ck_price_log\',\'ck_settings\'] loop',
+'    execute format(\'alter table %I enable row level security\', tb);',
+'    if not exists (select 1 from pg_policies where tablename=tb and policyname=\'ck_auth_all\') then',
+'      execute format(\'create policy ck_auth_all on %I for all to authenticated using (true) with check (exists (select 1 from app_users au where au.auth_uid = auth.uid() and au.status = \'\'active\'\'))\', tb);',
+'    end if;',
+'    if not exists (select 1 from pg_policies where tablename=tb and policyname=\'ck_anon_read\') then',
+'      execute format(\'create policy ck_anon_read on %I for select to anon using (true)\', tb);',
+'    end if;',
+'    execute format(\'grant select on %I to anon\', tb);',
+'    execute format(\'grant select, insert, update, delete on %I to authenticated\', tb);',
+'  end loop;',
+'end $$;',
+'grant usage, select on all sequences in schema public to authenticated;',
+'',
+'-- รูปภาพ: ใช้ bucket product-images เดิมของแอพนับสต๊อก (มีอยู่แล้ว) — ถ้ายังไม่มีให้สร้าง',
+'insert into storage.buckets (id, name, public) values (\'product-images\',\'product-images\',true)',
+'on conflict (id) do nothing;',
+'do $$ begin',
+'  if not exists (select 1 from pg_policies where schemaname=\'storage\' and tablename=\'objects\' and policyname=\'ck_img_up\') then',
+'    create policy ck_img_up on storage.objects for insert to authenticated',
+'      with check (bucket_id = \'product-images\');',
+'  end if;',
+'  if not exists (select 1 from pg_policies where schemaname=\'storage\' and tablename=\'objects\' and policyname=\'ck_img_read\') then',
+'    create policy ck_img_read on storage.objects for select to anon, authenticated',
+'      using (bucket_id = \'product-images\');',
+'  end if;',
+'end $$;'
+].join('\n');
+</script>
+<script>
+/* ============================================================
+   Shell: nav + chrome
+   ============================================================ */
+const VIEWS=['dash','plan','buy','produce','orders','stock','menus','items','stats','set'];
+function applyChrome(){
+  document.body.setAttribute('data-lang',LANG);
+  document.querySelectorAll('[data-v]').forEach(b=>{
+    const lb=b.querySelector('.lb');if(lb)lb.textContent=t('nav_'+b.dataset.v);});
+  const el=id=>document.getElementById(id);
+  if(el('hdSub'))el('hdSub').textContent=t('app_sub');
+  if(el('sbSub'))el('sbSub').textContent=t('app_sub');
+  if(el('sbNote'))el('sbNote').textContent=t('sb_note');
+  if(el('sbSec1'))el('sbSec1').textContent=t('sec_daily');
+  if(el('sbSec2'))el('sbSec2').textContent=t('sec_data');
+  if(el('langCur'))el('langCur').textContent=I18N[LANG].lang_name;
+  if(el('pageTitle'))el('pageTitle').textContent=t('nav_'+S.tab);
+  if(S.user&&el('sbUser'))el('sbUser').innerHTML='👤 <b>'+esc(S.user.name)+'</b> · '+esc(S.prof.role||'')+
+    '<a onclick="doLogout()">'+t('logout')+'</a>';
+  // badge: ใบสั่งซื้อค้างรับ / ออเดอร์ค้าง
+  const nbuy=S.pos.filter(p=>p.status==='ordered').length;
+  const nord=S.orders.filter(o=>o.status==='new'||o.status==='prep').length;
+  const bb=el('bdBuy'),bo=el('bdOrd');
+  if(bb){bb.style.display=nbuy?'':'none';bb.textContent=nbuy;}
+  if(bo){bo.style.display=nord?'':'none';bo.textContent=nord;}
+}
+function show(v){
+  if(!VIEWS.includes(v))v='dash';
+  S.tab=v;LS.set('jjck_tab',v);
+  document.querySelectorAll('.tabbar button,.sb-item').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
+  const el=document.getElementById('view-'+v);
+  document.getElementById('pageTitle').textContent=t('nav_'+v);
+  if(S.setupNeeded){renderSetup(el);return;}
+  el.innerHTML='<div class="spin"></div>';
+  try{RENDER[v](el);}catch(e){el.innerHTML='<div class="card empty">⚠ '+esc((e&&e.message)||e)+'</div>';console.error(e);}
+}
+function langModal(){
+  openModal('<h3>🌐 '+t('se_lang')+'</h3><div class="langrow">'+
+    ['th','en','lo','my'].map(l=>'<button class="'+(l===LANG?'on':'')+'" onclick="setLang(\''+l+'\');closeModal()">'+
+      '<span class="fl">'+({th:'🇹🇭',en:'🇬🇧',lo:'🇱🇦',my:'🇲🇲'}[l])+'</span>'+I18N[l].lang_name+'</button>').join('')+'</div>');
+}
+function renderSetup(el){
+  el.innerHTML='<div class="card" id="setupCard"><h3>🛠 '+t('setup_title')+'</h3>'+
+    '<div class="hintbox">'+t('setup_txt')+'</div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'+
+    '<button class="btn" onclick="copySql()">'+t('se_copy_sql')+'</button>'+
+    '<button class="btn gh" onclick="location.reload()">'+t('setup_retry')+'</button></div>'+
+    '<textarea readonly id="sqlBox"></textarea></div>';
+  document.getElementById('sqlBox').value=KITCHEN_SQL;
+}
+function copySql(){
+  const ta=document.getElementById('sqlBox');
+  if(ta){ta.select();}
+  (navigator.clipboard?navigator.clipboard.writeText(KITCHEN_SQL):Promise.reject())
+    .then(()=>toast(t('se_copied'))).catch(()=>{try{document.execCommand('copy');toast(t('se_copied'));}catch(e){}});
+}
+const RENDER={};
+
+/* ============================================================
+   🏠 หน้าหลัก
+   ============================================================ */
+RENDER.dash=function(el){
+  const today=todayStr(),tomorrow=addDays(today,1);
+  const prToday=S.prods.filter(p=>p.d===today);
+  const prVal=prToday.reduce((s,p)=>s+num(p.cost_total),0);
+  const low=S.items.filter(i=>i.min_qty!=null&&num(i.qty)<=num(i.min_qty));
+  const openOrd=S.orders.filter(o=>o.status==='new'||o.status==='prep');
+  const stockVal=S.items.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
+  const plans=S.plans.filter(p=>p.status==='plan'&&(p.d===today||p.d===tomorrow));
+  const poDue=S.pos.filter(p=>p.status==='ordered'&&p.d_due&&p.d_due<=today);
+  const poOrderNow=S.pos.filter(p=>p.status==='draft'&&p.order_by&&p.order_by<=today);
+  let h='<div class="kpis">'+
+    '<div class="kpi hero"><div class="t">🍳 '+t('da_produce_today')+'</div><div class="kpi-v">฿'+fmt(prVal)+'</div><div class="s">'+prToday.length+' '+t('items_n')+'</div></div>'+
+    '<div class="kpi tap" onclick="show(\'items\')"><div class="t">⚠ '+t('da_low')+'</div><div class="kpi-v" style="color:'+(low.length?'var(--bad)':'var(--ok)')+'">'+low.length+'</div><div class="s mut">'+t('items_n')+'</div></div>'+
+    '<div class="kpi tap" onclick="show(\'orders\')"><div class="t">🚚 '+t('da_orders_open')+'</div><div class="kpi-v">'+openOrd.length+'</div><div class="s mut">'+t('items_n')+'</div></div>'+
+    '<div class="kpi tap" onclick="show(\'stock\')"><div class="t">📦 '+t('da_stock_value')+'</div><div class="kpi-v">฿'+fmt(stockVal)+'</div><div class="s mut">'+S.items.length+' '+t('items_n')+'</div></div></div>';
+  // แผนผลิตวันนี้-พรุ่งนี้
+  h+='<div class="card"><h3>📅 '+t('da_plans')+'<span class="sp"><button class="btn sm2" onclick="planModal()">'+t('pl_add')+'</button></span></h3>';
+  if(!plans.length)h+='<div class="empty">'+t('da_none_plan')+'</div>';
+  else plans.forEach(p=>{const r=recipeById(p.recipe_id);if(!r)return;
+    h+='<div class="rowline">'+thumbHtml(r,'🍲')+
+      '<div class="grow"><b>'+esc(dispName(r))+'</b><div class="xs mut">'+dispDate(p.d)+' · '+fmtI(p.qty)+' '+esc(r.yield_unit||'')+'</div></div>'+
+      (canKitchen()?'<button class="btn sm2" onclick="produceFromPlan(\''+p.id+'\')">'+t('pl_produce_now')+'</button>':'')+'</div>';});
+  h+='</div>';
+  // ใบสั่งซื้อร่างที่ถึงกำหนดต้องสั่ง
+  if(poOrderNow.length){
+    h+='<div class="card"><h3>⏰ '+t('pl_order_by')+' — '+t('today')+'</h3>';
+    poOrderNow.forEach(p=>{h+='<div class="rowline"><div class="grow"><b>'+esc(p.po_no||'')+'</b> · '+esc(p.sup||'–')+
+      '<div class="xs mut">'+t('pl_order_by')+' '+dispDate(p.order_by)+'</div></div>'+
+      (canKitchen()?'<button class="btn sm2" onclick="poMarkOrdered(\''+p.id+'\')">'+t('po_mark_ordered')+'</button>':'')+'</div>';});
+    h+='</div>';}
+  // ของที่ต้องเข้าวันนี้
+  if(poDue.length){
+    h+='<div class="card"><h3>🚚 '+t('da_po_due')+'</h3>';
+    poDue.forEach(p=>{h+='<div class="rowline"><div class="grow"><b>'+esc(p.po_no||'')+'</b> · '+esc(p.sup||'–')+
+      '<div class="xs mut">'+t('po_d_due')+' '+dispDate(p.d_due)+'</div></div>'+
+      (canKitchen()?'<button class="btn ok sm2" onclick="poReceiveModal(\''+p.id+'\')">'+t('po_receive')+'</button>':'')+'</div>';});
+    h+='</div>';}
+  // ของใกล้หมด
+  h+='<div class="card"><h3>⚠ '+t('da_low_title')+'</h3>';
+  if(!low.length)h+='<div class="okbox">'+t('da_all_good')+'</div>';
+  else{low.slice(0,10).forEach(i=>{
+    h+='<div class="rowline">'+thumbHtml(i,ITEM_CAT_IC[i.cat]||'🥬')+
+      '<div class="grow"><b>'+esc(dispName(i))+'</b><div class="xs mut">'+t('sk_now')+' '+fmtI(i.qty)+' '+esc(i.unit||'')+' · '+t('sk_min')+' '+fmtI(i.min_qty)+'</div></div>'+
+      '<span class="chip bad">'+fmtI(i.qty)+' '+esc(i.unit||'')+'</span></div>';});
+    if(canKitchen())h+='<button class="btn big" style="margin-top:10px" onclick="quickPoLow()">🛒 '+t('da_order_now')+' ('+low.length+')</button>';}
+  h+='</div>';
+  // ออเดอร์ล่าสุด
+  h+='<div class="card"><h3>🚚 '+t('da_recent')+'<span class="sp"><button class="btn sm2" onclick="orderModal()">'+t('or_new')+'</button></span></h3>';
+  const rec=S.orders.slice(0,6);
+  if(!rec.length)h+='<div class="empty">'+t('or_none')+'</div>';
+  else rec.forEach(o=>{h+=orderRow(o);});
+  h+='</div>';
+  el.innerHTML=h;
+};
+
+/* ============================================================
+   📅 แผนผลิต
+   ============================================================ */
+let PLAN_M=todayStr().slice(0,7);
+RENDER.plan=function(el){
+  const m=PLAN_M,dim=monthDays(m),today=todayStr();
+  const plansM=S.plans.filter(p=>p.d.slice(0,7)===m&&p.status!=='cancel');
+  const hasDay={};plansM.forEach(p=>hasDay[p.d]=1);
+  const first=new Date(+m.slice(0,4),+m.slice(5,7)-1,1).getDay();
+  let cal='<div class="calgrid">'+t('wd').map((w,i)=>'<div class="wd'+(i===0?' sun':'')+'">'+w+'</div>').join('');
+  for(let i=0;i<first;i++)cal+='<div></div>';
+  for(let d=1;d<=dim;d++){const iso=dstr(m,d);
+    cal+='<button class="'+((first+d-1)%7===0?'sun ':'')+(iso===today?'tdy ':'')+(hasDay[iso]?'has':'')+'" onclick="planModal(null,\''+iso+'\')">'+d+'</button>';}
+  cal+='</div>';
+  let h='<div class="card"><h3>📅 '+t('nav_plan')+
+    '<span class="sp"><button class="btn gh sm2" onclick="PLAN_M=prevMonth(PLAN_M);show(\'plan\')">‹</button> <b>'+dispMonth(m)+'</b> <button class="btn gh sm2" onclick="PLAN_M=nextMonth(PLAN_M);show(\'plan\')">›</button></span></h3>'+
+    '<div class="md2"><div>'+cal+'<div class="xs mut" style="margin-top:6px">'+t('pl_pick')+' · '+t('pl_date')+'</div></div><div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+    (canKitchen()?'<button class="btn" onclick="planModal()">'+t('pl_add')+'</button>'+
+    '<button class="btn dk" onclick="bomWizard()">'+t('pl_calc')+'</button>':'')+'</div>';
+  if(!plansM.length)h+='<div class="empty">'+t('pl_none')+'</div>';
+  else{
+    const byD={};plansM.forEach(p=>{(byD[p.d]=byD[p.d]||[]).push(p);});
+    Object.keys(byD).sort().forEach(d=>{
+      h+='<div class="secbar">'+dispDate(d)+(d===today?' · '+t('today'):'')+'<span class="sp">'+byD[d].length+' '+t('items_n')+'</span></div>';
+      byD[d].forEach(p=>{const r=recipeById(p.recipe_id);
+        if(!r){ // เมนูถูกลบ — ให้ลบแผนทิ้งได้ ไม่ค้างเป็นผี
+          h+='<div class="rowline"><div class="mthumb">🗑</div><div class="grow"><b class="mut">'+t('menu_deleted')+'</b>'+
+            '<div class="xs mut">'+fmtI(p.qty)+'</div></div>'+
+            (canKitchen()?'<button class="btn gh sm2" onclick="planDel(\''+p.id+'\')">🗑 '+t('del')+'</button>':'')+'</div>';
+          return;}
+        h+='<div class="rowline">'+thumbHtml(r,'🍲')+
+          '<div class="grow"><b>'+esc(dispName(r))+'</b><div class="xs mut">'+fmtI(p.qty)+' '+esc(trUnit(r.yield_unit||''))+(p.note?' · '+esc(p.note):'')+'</div></div>'+
+          '<span class="stpill st-'+(p.status==='done'?'done':'plan')+'">'+(p.status==='done'?t('done'):t('nav_plan'))+'</span>'+
+          (canKitchen()&&p.status==='plan'?'<button class="btn sm2" onclick="produceFromPlan(\''+p.id+'\')">🍳</button>'+
+          '<button class="btn gh sm2" onclick="planModal(\''+p.id+'\')">✎</button>':'')+'</div>';});
+    });
+  }
+  h+='</div></div></div>';
+  el.innerHTML=h;
+};
+let PL_DRAFT=null;
+function planModal(id,dPre,ridPre,qtyPre){
+  if(!canKitchen())return;
+  const p=id?S.plans.find(x=>x.id===id):null;
+  PL_DRAFT=p?{id:p.id,d:p.d,rid:p.recipe_id,qty:num(p.qty),note:p.note||''}
+    :{id:null,d:dPre||todayStr(),rid:ridPre||null,qty:qtyPre||null,note:''};
+  if(PL_DRAFT.rid&&!num(PL_DRAFT.qty)){const r=recipeById(PL_DRAFT.rid);PL_DRAFT.qty=num(r&&r.yield_qty)||1;}
+  paintPlanModal();
+}
+function paintPlanModal(){
+  const d=PL_DRAFT;if(!d)return;
+  const r=d.rid?recipeById(d.rid):null;
+  openModal('<h3>📅 '+(d.id?'✎ '+t('edit'):t('pl_add'))+'</h3>'+
+    '<div class="fld"><label>'+t('pl_date')+'</label><input type="date" id="plD" value="'+esc(d.d)+'" onchange="PL_DRAFT.d=this.value"></div>'+
+    '<div class="fld"><label>'+t('pl_menu')+'</label>'+
+    '<button class="btn gh" style="width:100%;justify-content:flex-start" onclick="plPick()">'+
+    (r?thumbHtml(r,'🍲')+' <b>'+esc(dispName(r))+'</b>':t('pl_pick'))+'</button></div>'+
+    '<div class="fld"><label>'+t('pl_qty')+' '+(r?'<span class="mut">('+esc(trUnit(r.yield_unit||''))+')</span>':'')+'</label>'+
+    '<div class="stepper"><button onclick="stepQty(\'plQ\',-1);PL_DRAFT.qty=num(document.getElementById(\'plQ\').value)">−</button>'+
+    '<input id="plQ" inputmode="decimal" value="'+(num(d.qty)?fmtI(d.qty):'')+'" onchange="PL_DRAFT.qty=num(this.value)">'+
+    '<button class="plus" onclick="stepQty(\'plQ\',1);PL_DRAFT.qty=num(document.getElementById(\'plQ\').value)">＋</button></div></div>'+
+    '<div class="fld"><label>'+t('note')+'</label><input id="plNote" value="'+esc(d.note)+'" onchange="PL_DRAFT.note=this.value"></div>'+
+    '<div style="display:flex;gap:8px;margin-top:12px">'+
+    (d.id?'<button class="btn gh" onclick="planDel(\''+d.id+'\')">🗑 '+t('del')+'</button>':'')+
+    '<button class="btn big" style="flex:1" onclick="planSave()">'+t('save')+'</button></div>');
+}
+function plPick(){
+  pickRecipe(rid=>{PL_DRAFT.rid=rid;const r=recipeById(rid);
+    if(!num(PL_DRAFT.qty))PL_DRAFT.qty=num(r&&r.yield_qty)||1;
+    paintPlanModal();},paintPlanModal);
+}
+function stepQty(id,dir){const inp=document.getElementById(id);let v=num(inp.value);
+  const step=v>=100?10:1;v=Math.max(0,v+dir*step);inp.value=fmtI(v);}
+async function planSave(){await once(async()=>{
+  const d=PL_DRAFT;if(!d)return;
+  if(!d.rid){toast(t('pl_pick'),true);return;}
+  if(!num(d.qty)){toast(t('need_qty'),true);return;}
+  const row={d:d.d,recipe_id:d.rid,qty:num(d.qty),note:(d.note||'').trim()||null};
+  if(d.id){await dbi(()=>sb.from('ck_plans').update(row).eq('id',d.id));
+    Object.assign(S.plans.find(x=>x.id===d.id),row);}
+  else{row.id=uid('pl');row.status='plan';row.by_name=S.user.name;
+    await dbi(()=>sb.from('ck_plans').insert(row));S.plans.push(row);}
+  S.plans.sort((a,b)=>a.d<b.d?-1:1);
+  PL_DRAFT=null;closeModal();toast(t('sv_ok'));show(S.tab);
+});}
+async function planDel(id){if(!confirm(t('confirm_del')))return;
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_plans').delete().eq('id',id));
+    S.plans=S.plans.filter(x=>x.id!==id);PL_DRAFT=null;closeModal();show(S.tab);});}
+
+/* ---------- ตัวเลือกเมนู/วัตถุดิบ (photo grid picker) ---------- */
+function pickRecipe(cb,back){
+  window._pickCb=cb;MODAL_BACK=back||null;
+  openModal('<h3>🍲 '+t('pl_pick')+(back?'<span class="sp"><button class="btn gh sm2" onclick="closeModal()">← '+t('back')+'</button></span>':'')+'</h3>'+
+    '<input id="pkQ" placeholder="'+t('search')+'" oninput="paintPickR()" style="margin-bottom:10px"><div id="pkGrid" class="pickgrid"></div>',true);
+  paintPickR();
+}
+function paintPickR(){
+  const q=(document.getElementById('pkQ').value||'').toLowerCase();
+  const list=S.recipes.filter(r=>r.active!==false&&(!q||(r.name||'').toLowerCase().includes(q)||dispName(r).toLowerCase().includes(q)));
+  document.getElementById('pkGrid').innerHTML=list.map(r=>'<div class="pick" onclick="pickedR(\''+r.id+'\')">'+
+    thumbHtml(r,'🍲','pthumb')+'<div class="pname">'+esc(dispName(r))+'</div></div>').join('')||'<div class="empty">'+t('mn_none')+'</div>';
+}
+function pickedR(id){const cb=window._pickCb;window._pickCb=null;MODAL_BACK=null;
+  if(cb)cb(id);else closeModal();}
+function pickItem(cb,back){
+  window._pickCb=cb;MODAL_BACK=back||null;
+  openModal('<h3>🥬 '+t('nav_items')+(back?'<span class="sp"><button class="btn gh sm2" onclick="closeModal()">← '+t('back')+'</button></span>':'')+'</h3>'+
+    '<input id="pkQ" placeholder="'+t('search')+'" oninput="paintPickI()" style="margin-bottom:10px"><div id="pkGrid" class="pickgrid"></div>',true);
+  paintPickI();
+}
+function paintPickI(){
+  const q=(document.getElementById('pkQ').value||'').toLowerCase();
+  const list=S.items.filter(i=>i.active!==false&&(!q||(i.name||'').toLowerCase().includes(q)||dispName(i).toLowerCase().includes(q)));
+  document.getElementById('pkGrid').innerHTML=list.map(i=>'<div class="pick" onclick="pickedR(\''+i.id+'\')">'+
+    thumbHtml(i,ITEM_CAT_IC[i.cat]||'🥬','pthumb')+'<div class="pname">'+esc(dispName(i))+'</div>'+
+    '<div class="xs mut">'+fmtI(i.qty)+' '+esc(i.unit||'')+'</div></div>').join('')||'<div class="empty">'+t('it_none')+'</div>';
+}
+
+/* ============================================================
+   🧮 บอมสูตร — คำนวณของที่ต้องสั่งจากแผนผลิต (BOM explosion)
+   ============================================================ */
+function bomWizard(){
+  const today=todayStr();
+  const from=today,to=addDays(today,7);
+  openModal('<h3>'+t('pl_calc')+'</h3>'+
+    '<div class="steps"><div class="st on">'+t('pl_step1')+'</div><div class="st">'+t('pl_step2')+'</div><div class="st">'+t('pl_step3')+'</div></div>'+
+    '<div class="fld"><label>'+t('pl_range')+'</label><div class="grid2">'+
+    '<input type="date" id="bwFrom" value="'+from+'"><input type="date" id="bwTo" value="'+to+'"></div></div>'+
+    '<div id="bwPlans"></div>'+
+    '<button class="btn big" style="margin-top:12px" onclick="bomExplode()">'+t('next')+' →</button>',true);
+  document.getElementById('bwFrom').onchange=paintBwPlans;
+  document.getElementById('bwTo').onchange=paintBwPlans;
+  paintBwPlans();
+}
+function paintBwPlans(){
+  const f=document.getElementById('bwFrom').value,to=document.getElementById('bwTo').value;
+  const list=S.plans.filter(p=>p.status==='plan'&&p.d>=f&&p.d<=to);
+  window._bwPlans=list.map(p=>p.id);
+  document.getElementById('bwPlans').innerHTML=list.length?list.map(p=>{
+    const r=recipeById(p.recipe_id);if(!r)return '';
+    return '<div class="rowline">'+thumbHtml(r,'🍲')+'<div class="grow"><b>'+esc(dispName(r))+'</b>'+
+      '<div class="xs mut">'+dispDate(p.d)+' · '+fmtI(p.qty)+' '+esc(r.yield_unit||'')+'</div></div>'+
+      '<label class="xs"><input type="checkbox" checked data-pid="'+p.id+'" style="width:20px;height:20px"></label></div>';
+  }).join(''):'<div class="empty">'+t('pl_none')+' — '+t('pl_add')+'</div>';
+}
+function bomExplode(){
+  const picked=[...document.querySelectorAll('#bwPlans input[data-pid]:checked')].map(x=>x.dataset.pid);
+  const plans=S.plans.filter(p=>picked.includes(p.id));
+  if(!plans.length){toast(t('pl_pick'),true);return;}
+  // ต้องใช้ต่อวัตถุดิบ + วันผลิตแรกที่ใช้ของตัวนั้น
+  const need={},firstD={};
+  plans.forEach(p=>{const r=recipeById(p.recipe_id);if(!r)return;
+    const batches=num(p.qty)/(num(r.yield_qty)||1);
+    bomOf(r).forEach(l=>{
+      need[l.item_id]=(need[l.item_id]||0)+batches*num(l.qty);
+      if(!firstD[l.item_id]||p.d<firstD[l.item_id])firstD[l.item_id]=p.d;});});
+  // ของกำลังมา (ใบสั่งซื้อที่สั่งแล้ว/ร่างที่สร้างไว้) — นับเฉพาะที่จะเข้าทันวันผลิต
+  const incoming={};
+  S.pos.filter(p=>(p.status==='ordered'||p.status==='draft')&&p.d_due).forEach(p=>{(S.poItems[p.id]||[]).forEach(l=>{
+    const it=itemById(l.item_id);if(!it)return;
+    if(firstD[l.item_id]&&p.d_due>firstD[l.item_id])return; // ของเข้าหลังวันผลิต — ใช้ไม่ทัน
+    incoming[l.item_id]=(incoming[l.item_id]||0)+num(l.qty)*(num(it.buy_qty)||1);});});
+  const rows=Object.keys(need).map(iid=>{
+    const it=itemById(iid);if(!it)return null;
+    const have=Math.max(0,num(it.qty)),inc=incoming[iid]||0;
+    const short=Math.max(0,need[iid]-have-inc);
+    const bq=num(it.buy_qty)||1;
+    const buyN=Math.ceil(short/bq-1e-9);
+    const lead=num(it.lead_days)||((supByName(it.sup)||{}).lead_days)||1;
+    const orderBy=addDays(firstD[iid],-lead);
+    return {it,need:need[iid],have,inc,short,buyN,orderBy,produceD:firstD[iid]};
+  }).filter(Boolean).sort((a,b)=>(a.it.sup||'')<(b.it.sup||'')?-1:1);
+  window._bwRows=rows;
+  let h='<h3>'+t('pl_calc')+'</h3>'+
+    '<div class="steps"><div class="st ok">'+t('pl_step1')+'</div><div class="st on">'+t('pl_step2')+'</div><div class="st">'+t('pl_step3')+'</div></div>'+
+    '<div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('pl_need')+'</th><th class="right">'+t('pl_have')+'</th><th class="right">'+t('pl_incoming')+'</th><th class="right">'+t('pl_short')+'</th></tr>';
+  rows.forEach(r=>{h+='<tr><td>'+esc(dispName(r.it))+' <span class="xs mut">'+esc(r.it.unit||'')+'</span></td>'+
+    '<td class="n">'+fmtI(r.need)+'</td><td class="n">'+fmtI(r.have)+'</td><td class="n">'+(r.inc?fmtI(r.inc):'–')+'</td>'+
+    '<td class="n">'+(r.short>0?'<b style="color:var(--bad)">'+fmtI(r.short)+'</b>':'<span class="chip ok">✓</span>')+'</td></tr>';});
+  h+='</table></div>';
+  const shorts=rows.filter(r=>r.short>0);
+  if(!shorts.length)h+='<div class="okbox" style="margin-top:10px">'+t('pl_no_short')+'</div>';
+  else h+='<button class="btn big" style="margin-top:12px" onclick="bomPoStep()">'+t('next')+' →</button>';
+  openModal(h,true);
+}
+function bomPoStep(){
+  const shorts=(window._bwRows||[]).filter(r=>r.short>0);
+  const bySup={};shorts.forEach(r=>{(bySup[r.it.sup||'']=bySup[r.it.sup||'']||[]).push(r);});
+  let h='<h3>'+t('pl_step3')+'</h3>'+
+    '<div class="steps"><div class="st ok">'+t('pl_step1')+'</div><div class="st ok">'+t('pl_step2')+'</div><div class="st on">'+t('pl_step3')+'</div></div>';
+  Object.keys(bySup).sort().forEach(sup=>{
+    const rows=bySup[sup];
+    const orderBy=rows.map(r=>r.orderBy).sort()[0];
+    h+='<div class="card" style="margin-bottom:10px"><h3>🛒 '+(sup?esc(sup):'–')+
+      '<span class="sp chip '+(orderBy<=todayStr()?'bad':'warn')+'">'+t('pl_order_by')+' '+dispDate(orderBy)+'</span></h3>';
+    rows.forEach(r=>{h+='<div class="rowline"><div class="grow">'+esc(dispName(r.it))+
+      '<div class="xs mut">'+t('pl_short')+' '+fmtI(r.short)+' '+esc(r.it.unit||'')+' · '+t('pl_produce_on')+' '+dispDate(r.produceD)+'</div></div>'+
+      '<b>'+r.buyN+' '+esc(r.it.buy_unit||r.it.unit||'')+'</b></div>';});
+    h+='</div>';});
+  h+='<button class="btn big" onclick="bomCreatePos()">📝 '+t('pl_create_po')+' ('+Object.keys(bySup).length+')</button>';
+  openModal(h,true);
+}
+async function bomCreatePos(){await once(async()=>{
+  const shorts=(window._bwRows||[]).filter(r=>r.short>0);
+  const bySup={};shorts.forEach(r=>{(bySup[r.it.sup||'']=bySup[r.it.sup||'']||[]).push(r);});
+  for(const sup of Object.keys(bySup)){
+    const rows=bySup[sup];
+    const po={id:uid('po'),po_no:nextPoNo(),sup,d_order:todayStr(),
+      d_due:rows.map(r=>r.produceD).sort()[0],order_by:rows.map(r=>r.orderBy).sort()[0],
+      status:'draft',by_name:S.user.name,note:t('pr_from_plan')};
+    try{await dbi(()=>sb.from('ck_pos').insert(po));}
+    catch(e){ // DB เก่ายังไม่มีคอลัมน์ order_by — รัน jjmk_kitchen_setup.sql รอบใหม่จะได้ครบ
+      if(!/order_by/.test(String((e&&e.message)||e)))throw e;
+      delete po.order_by;await dbi(()=>sb.from('ck_pos').insert(po));}
+    const lines=rows.map((r,i)=>({po_id:po.id,item_id:r.it.id,name:r.it.name,
+      unit:r.it.buy_unit||r.it.unit||'',qty:r.buyN,price:r.it.price,sort:i}));
+    const ins=await dbi(()=>sb.from('ck_po_items').insert(lines).select());
+    S.pos.unshift(po);S.poItems[po.id]=ins;
+  }
+  closeModal();toast(t('pl_created_po')+' ✅');show('buy');
+});}
+function quickPoLow(){ // สั่งของใกล้หมดทั้งหมดแบบเร็ว (หักของที่สั่งค้างไว้แล้ว)
+  const incoming={};
+  S.pos.filter(p=>p.status==='ordered'||p.status==='draft').forEach(p=>{(S.poItems[p.id]||[]).forEach(l=>{
+    const it=itemById(l.item_id);if(!it)return;
+    incoming[l.item_id]=(incoming[l.item_id]||0)+num(l.qty)*(num(it.buy_qty)||1);});});
+  const low=S.items.filter(i=>i.min_qty!=null&&num(i.qty)<=num(i.min_qty));
+  window._bwRows=low.map(it=>{
+    const inc=incoming[it.id]||0;
+    const short=Math.max(0,num(it.min_qty)*2-Math.max(0,num(it.qty))-inc);
+    if(short<=0)return null;
+    const bq=num(it.buy_qty)||1;
+    return {it,need:short,have:Math.max(0,num(it.qty)),inc,short,
+      buyN:Math.ceil(short/bq-1e-9),orderBy:todayStr(),produceD:addDays(todayStr(),num(it.lead_days)||1)};
+  }).filter(Boolean);
+  if(!window._bwRows.length){toast(t('pl_no_short'));return;}
+  bomPoStep();
+}
+</script>
+<script>
+/* ============================================================
+   🛒 สั่งซื้อของ (ใบสั่งซื้อ + รับของ)
+   ============================================================ */
+RENDER.buy=function(el){
+  let h='';
+  if(canKitchen())h+='<div style="margin-bottom:12px"><button class="btn" onclick="poModal()">'+t('po_new')+'</button></div>';
+  const open=S.pos.filter(p=>p.status==='draft'||p.status==='ordered');
+  const done=S.pos.filter(p=>p.status==='received').slice(0,20);
+  if(!S.pos.length)h+='<div class="card empty">'+t('po_none')+'</div>';
+  if(open.length){h+='<div class="secbar">🛒 '+t('po_open')+'<span class="sp">'+open.length+'</span></div>';
+    open.forEach(p=>h+=poCard(p));}
+  if(done.length){h+='<div class="secbar">✅ '+t('po_receive')+'<span class="sp">'+done.length+'</span></div>';
+    done.forEach(p=>h+=poCard(p));}
+  el.innerHTML=h;
+};
+function poTotal(p){return (S.poItems[p.id]||[]).reduce((s,l)=>s+num(l.qty)*num(l.price),0);}
+function poCard(p){
+  const lines=S.poItems[p.id]||[];
+  const stMap={draft:['st-draft','📝 '+t('st_draft')],ordered:['st-ordered','📤 '+t('st_ordered')],received:['st-received','✅ '+t('st_received')]};
+  const stm=stMap[p.status]||['st-draft',esc(p.status)];
+  const late=p.order_by&&p.status==='draft'&&p.order_by<=todayStr();
+  let h='<div class="card"><h3>'+esc(p.po_no||'')+' · '+esc(p.sup||'–')+
+    '<span class="sp">'+(p.order_by&&p.status==='draft'?'<span class="chip '+(late?'bad':'warn')+'">⏰ '+t('pl_order_by')+' '+dispDate(p.order_by)+'</span> ':'')+
+    '<span class="stpill '+stm[0]+'">'+stm[1]+'</span></span></h3>'+
+    '<div class="xs mut" style="margin-bottom:8px">'+t('po_d_order')+' '+dispDate(p.d_order)+' · '+t('po_d_due')+' '+dispDate(p.d_due)+
+    (p.note?' · '+esc(p.note):'')+'</div>';
+  h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('qty')+'</th><th class="right">'+t('price')+'</th><th class="right">'+t('total')+'</th></tr>';
+  lines.forEach(l=>{h+='<tr><td>'+esc(l.name||'')+'</td><td class="n">'+fmtI(p.status==='received'?(l.received_qty??l.qty):l.qty)+' '+esc(trUnit(l.unit||''))+'</td>'+
+    '<td class="n">'+fmt(l.price,2)+'</td><td class="n">'+fmt(num(p.status==='received'?(l.received_qty??l.qty):l.qty)*num(l.price),2)+'</td></tr>';});
+  h+='<tr class="tot"><td colspan="3">'+t('total')+'</td><td class="n">฿'+fmt(p.status==='received'?num(p.total):poTotal(p),2)+'</td></tr></table></div>';
+  if(canKitchen()){
+    h+='<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">';
+    if(p.status==='draft')h+='<button class="btn gh sm2" onclick="poModal(\''+p.id+'\')">✎ '+t('edit')+'</button>'+
+      '<button class="btn sm2" onclick="poMarkOrdered(\''+p.id+'\')">'+t('po_mark_ordered')+'</button>'+
+      '<button class="btn gh sm2" onclick="poDel(\''+p.id+'\')">🗑</button>';
+    if(p.status==='ordered')h+='<button class="btn ok sm2" onclick="poReceiveModal(\''+p.id+'\')">'+t('po_receive')+'</button>'+
+      '<button class="btn gh sm2" onclick="poModal(\''+p.id+'\')">✎ '+t('edit')+'</button>';
+    if(p.status==='received')h+='<button class="btn gh sm2" onclick="poUnreceive(\''+p.id+'\')">'+t('undo_recv')+'</button>';
+    h+='</div>';}
+  return h+'</div>';
+}
+let PO_DRAFT=null;
+function poModal(id){
+  if(!canKitchen())return;
+  const p=id?S.pos.find(x=>x.id===id):null;
+  PO_DRAFT=p?{id:p.id,po_no:p.po_no,sup:p.sup||'',d_order:p.d_order,d_due:p.d_due,note:p.note||'',status:p.status,
+      lines:(S.poItems[p.id]||[]).map(l=>({item_id:l.item_id,name:l.name,unit:l.unit,qty:num(l.qty),price:l.price==null?null:num(l.price)}))}
+    :{id:null,po_no:nextPoNo(),sup:'',d_order:todayStr(),d_due:addDays(todayStr(),1),note:'',status:'draft',lines:[]};
+  paintPoModal();
+}
+function paintPoModal(){
+  const d=PO_DRAFT;
+  const supOpts='<option value=""></option>'+S.sups.filter(s=>s.active!==false).map(s=>'<option '+(s.name===d.sup?'selected':'')+'>'+esc(s.name)+'</option>').join('')
+    +(d.sup&&!S.sups.some(s=>s.name===d.sup)?'<option selected>'+esc(d.sup)+'</option>':'');
+  let h='<h3>🛒 '+esc(d.po_no)+'</h3>'+
+    '<div class="grid2"><div class="fld"><label>'+t('po_sup')+'</label><select id="poSup" onchange="PO_DRAFT.sup=this.value">'+supOpts+'</select></div>'+
+    '<div class="fld"><label>'+t('po_d_due')+'</label><input type="date" id="poDue" value="'+esc(d.d_due||'')+'" onchange="PO_DRAFT.d_due=this.value"></div></div>'+
+    '<div class="fld"><label>'+t('note')+'</label><input id="poNote" value="'+esc(d.note)+'" onchange="PO_DRAFT.note=this.value"></div>'+
+    '<div class="secbar">'+t('nav_items')+'<span class="sp">'+d.lines.length+'</span></div>';
+  d.lines.forEach((l,i)=>{
+    h+='<div class="rowline"><div class="grow"><b>'+esc(l.name)+'</b><div class="xs mut">'+esc(l.unit||'')+'</div></div>'+
+      '<input style="width:76px" inputmode="decimal" value="'+fmtI(l.qty)+'" onchange="PO_DRAFT.lines['+i+'].qty=num(this.value)">'+
+      '<input style="width:90px" inputmode="decimal" placeholder="'+t('price')+'" value="'+(l.price==null?'':l.price)+'" onchange="PO_DRAFT.lines['+i+'].price=this.value===\'\'?null:num(this.value)">'+
+      '<button class="btn gh sm2" onclick="PO_DRAFT.lines.splice('+i+',1);paintPoModal()">🗑</button></div>';});
+  h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="poAddItem()">'+t('po_add_item')+'</button>'+
+    '<button class="btn big" style="margin-top:12px" onclick="poSave()">'+t('save')+'</button>';
+  openModal(h,true);
+}
+function poAddItem(){
+  pickItem(iid=>{const it=itemById(iid);if(!it)return;
+    PO_DRAFT.lines.push({item_id:it.id,name:it.name,unit:it.buy_unit||it.unit||'',qty:1,price:it.price==null?null:num(it.price)});
+    if(!PO_DRAFT.sup&&it.sup)PO_DRAFT.sup=it.sup;
+    paintPoModal();});
+}
+async function poSave(){await once(async()=>{
+  const d=PO_DRAFT;if(!d)return;
+  if(!d.lines.length){toast(t('po_add_item'),true);return;}
+  const row={po_no:d.po_no,sup:d.sup,d_order:d.d_order,d_due:d.d_due||null,note:d.note||null,status:d.status};
+  let pid=d.id;
+  let oldIds=[];
+  if(pid){await dbi(()=>sb.from('ck_pos').update(row).eq('id',pid));
+    Object.assign(S.pos.find(x=>x.id===pid),row);
+    oldIds=(S.poItems[pid]||[]).map(l=>l.id).filter(x=>x!=null);}
+  else{pid=uid('po');row.id=pid;row.by_name=S.user.name;
+    await dbi(()=>sb.from('ck_pos').insert(row));S.pos.unshift(row);}
+  // ใส่ไลน์ใหม่ก่อน แล้วค่อยลบของเก่า — ถ้าพลาดกลางทางข้อมูลไม่หาย
+  const lines=d.lines.map((l,i)=>({po_id:pid,item_id:l.item_id,name:l.name,unit:l.unit,qty:l.qty,price:l.price,sort:i}));
+  const ins=await dbi(()=>sb.from('ck_po_items').insert(lines).select());
+  if(oldIds.length)await dbi(()=>sb.from('ck_po_items').delete().in('id',oldIds));
+  S.poItems[pid]=ins;
+  PO_DRAFT=null;closeModal();toast(t('sv_ok'));show('buy');
+});}
+async function poMarkOrdered(id){await once(async()=>{
+  await dbi(()=>sb.from('ck_pos').update({status:'ordered'}).eq('id',id));
+  S.pos.find(x=>x.id===id).status='ordered';applyChrome();show('buy');toast(t('sv_ok'));
+});}
+async function poDel(id){if(!confirm(t('po_del_confirm')))return;
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_po_items').delete().eq('po_id',id));
+    await dbi(()=>sb.from('ck_pos').delete().eq('id',id));
+    S.pos=S.pos.filter(x=>x.id!==id);delete S.poItems[id];applyChrome();show('buy');});}
+function poReceiveModal(id){
+  if(!canKitchen())return;
+  const p=S.pos.find(x=>x.id===id);if(!p)return;
+  const lines=S.poItems[id]||[];
+  let h='<h3>'+t('po_recv_title')+' · '+esc(p.po_no||'')+'</h3>'+
+    '<div class="xs mut" style="margin-bottom:8px">'+esc(p.sup||'')+'</div>';
+  lines.forEach((l,i)=>{
+    h+='<div class="rowline"><div class="grow"><b>'+esc(l.name)+'</b><div class="xs mut">'+t('qty')+' '+fmtI(l.qty)+' '+esc(trUnit(l.unit||''))+'</div></div>'+
+      '<div><div class="xs mut">'+t('po_recv_qty')+'</div><input style="width:76px" inputmode="decimal" id="rcQ'+i+'" value="'+fmtI(l.qty)+'"></div>'+
+      '<div><div class="xs mut">'+t('po_price_now')+'</div><input style="width:90px" inputmode="decimal" id="rcP'+i+'" value="'+(l.price==null?'':l.price)+'"></div></div>';});
+  h+='<button class="btn ok big" style="margin-top:12px" onclick="poReceive(\''+id+'\')">'+t('po_receive')+'</button>';
+  openModal(h,true);
+}
+async function poReceive(id){await once(async()=>{
+  const p=S.pos.find(x=>x.id===id);if(!p||p.status!=='ordered')return;
+  const lines=S.poItems[id]||[];
+  const today=todayStr();const moves=[];let total=0;
+  for(let i=0;i<lines.length;i++){
+    const l=lines[i];
+    const rq=num(document.getElementById('rcQ'+i).value);
+    const pv=document.getElementById('rcP'+i).value;
+    const price=pv===''?null:num(pv);
+    l.received_qty=rq;l.price=price;
+    await dbi(()=>sb.from('ck_po_items').update({received_qty:rq,price}).eq('id',l.id));
+    const it=itemById(l.item_id);
+    if(it&&rq>0){
+      const stockIn=rq*(num(it.buy_qty)||1);
+      moves.push({d:today,kind:'buy',item_kind:'item',ref_id:it.id,name:it.name,qty:stockIn,
+        cost:price!=null?rq*price:null,ref:p.id});
+      if(price!=null&&num(price)!==num(it.price)){
+        it.price=price;
+        await dbi(()=>sb.from('ck_items').update({price}).eq('id',it.id));
+        await dbi(()=>sb.from('ck_price_log').insert({item_id:it.id,d:today,price,buy_unit:l.unit||it.buy_unit,source:'po'}));
+      }else if(price!=null){
+        await dbi(()=>sb.from('ck_price_log').insert({item_id:it.id,d:today,price,buy_unit:l.unit||it.buy_unit,source:'po'}));
+      }
+    }
+    total+=rq*num(price);
+  }
+  await pushMoves(moves);
+  p.status='received';p.total=rnd2(total);
+  await dbi(()=>sb.from('ck_pos').update({status:'received',total:p.total}).eq('id',id));
+  closeModal();applyChrome();toast(t('po_recv_ok'));show(S.tab);
+});}
+async function poUnreceive(id){ // รับของผิด — คืนสต๊อกแล้วกลับเป็นสถานะสั่งแล้ว
+  if(!canKitchen())return;
+  if(!confirm(t('undo_confirm')))return;
+  await once(async()=>{
+    const p=S.pos.find(x=>x.id===id);if(!p||p.status!=='received')return;
+    const mv=await dbi(()=>sb.from('ck_moves').select('*').eq('ref',id).eq('kind','buy'));
+    await dbi(()=>sb.from('ck_moves').delete().eq('ref',id).eq('kind','buy'));
+    for(const m of (mv||[])){
+      const o=itemById(m.ref_id);
+      const v=await addQty('item',m.ref_id,-num(m.qty));
+      if(o)o.qty=v!=null?v:rnd2(num(o.qty)-num(m.qty));
+    }
+    for(const l of (S.poItems[id]||[])){
+      l.received_qty=null;
+      await dbi(()=>sb.from('ck_po_items').update({received_qty:null}).eq('id',l.id));
+    }
+    p.status='ordered';p.total=null;
+    await dbi(()=>sb.from('ck_pos').update({status:'ordered',total:null}).eq('id',id));
+    applyChrome();toast(t('sv_ok'));show(S.tab);
+  });}
+
+/* ============================================================
+   🍳 ผลิต
+   ============================================================ */
+RENDER.produce=function(el){
+  let h='';
+  if(canKitchen())h+='<div style="margin-bottom:12px"><button class="btn" onclick="produceModal()">'+t('pr_new')+'</button></div>';
+  h+='<div class="card"><h3>🍳 '+t('pr_hist')+'<span class="sp xs mut">'+t('last45')+'</span></h3>';
+  const list=S.prods.slice(0,40);
+  if(!list.length)h+='<div class="empty">'+t('pr_none')+'</div>';
+  else{h+='<div class="twrap"><table class="t"><tr><th>'+t('date')+'</th><th>'+t('nav_menus')+'</th><th class="right">'+t('qty')+'</th><th class="right">'+t('pr_cost_total')+'</th><th class="right">'+t('pr_cost_unit')+'</th></tr>';
+    list.forEach(p=>{const r=recipeById(p.recipe_id);
+      h+='<tr class="tap" onclick="prodDetail(\''+p.id+'\')"><td>'+dispDate(p.d)+'</td><td>'+esc(r?dispName(r):p.name||'')+'</td><td class="n">'+fmtI(p.qty)+' '+esc(trUnit(r?r.yield_unit||'':''))+'</td>'+
+        '<td class="n">฿'+fmt(p.cost_total,2)+'</td><td class="n"><b>฿'+fmt(p.cost_unit,2)+'</b></td></tr>';});
+    h+='</table></div>';}
+  h+='</div>';
+  el.innerHTML=h;
+};
+let PR_DRAFT=null;
+function produceFromPlan(planId){
+  const p=S.plans.find(x=>x.id===planId);if(!p)return;
+  produceModal(p.recipe_id,num(p.qty),planId,p.d);
+}
+function produceModal(rid,qtyPre,planId,dPre){
+  if(!canKitchen())return;
+  PR_DRAFT={rid:rid||null,qty:qtyPre||null,planId:planId||null,d:dPre||todayStr(),lines:null};
+  if(rid)prBuildLines();
+  paintProduceModal();
+}
+function prBuildLines(){
+  const d=PR_DRAFT;const r=recipeById(d.rid);if(!r)return;
+  if(d.qty==null)d.qty=num(r.yield_qty)||1;
+  const batches=num(d.qty)/(num(r.yield_qty)||1);
+  const old={};(d.lines||[]).forEach(l=>{if(l.touched)old[l.item_id]=l;});
+  d.lines=bomOf(r).map(l=>{const it=itemById(l.item_id);
+    if(old[l.item_id])return old[l.item_id]; // เก็บไลน์ที่ผู้ใช้แก้มือไว้ ไม่ทับ
+    return {item_id:l.item_id,name:it.name,unit:it.unit||'',qty:rnd2(batches*num(l.qty))};});
+}
+function paintProduceModal(){
+  const d=PR_DRAFT;const r=d.rid?recipeById(d.rid):null;
+  let h='<h3>🍳 '+t('pr_new')+'</h3>'+
+    '<div class="fld"><label>'+t('date')+'</label><input type="date" id="prD" value="'+d.d+'" onchange="PR_DRAFT.d=this.value"></div>'+
+    '<div class="fld"><label>'+t('pr_pick')+'</label>'+
+    '<button class="btn gh" style="width:100%;justify-content:flex-start" onclick="pickRecipe(rid=>{PR_DRAFT.rid=rid;PR_DRAFT.qty=null;PR_DRAFT.lines=null;prBuildLines();paintProduceModal();},paintProduceModal)">'+
+    (r?thumbHtml(r,'🍲')+' <b>'+esc(dispName(r))+'</b>':t('pl_pick'))+'</button></div>';
+  if(r){
+    h+='<div class="fld"><label>'+t('pr_out')+' ('+esc(r.yield_unit||'')+')</label>'+
+      '<div class="stepper"><button onclick="prStep(-1)">−</button><input id="prQ" inputmode="decimal" value="'+fmtI(d.qty)+'" onchange="prQtyChanged()"><button class="plus" onclick="prStep(1)">＋</button></div></div>';
+    if(d.lines){
+      let mat=0,shortWarn=false,noPrice=false;
+      h+='<div class="secbar">'+t('pr_use')+'</div>';
+      d.lines.forEach((l,i)=>{
+        const it=itemById(l.item_id);const c=unitCost(it);
+        const cost=c!=null?num(l.qty)*c:null;if(cost!=null)mat+=cost;else noPrice=true;
+        if(it&&num(l.qty)>num(it.qty))shortWarn=true;
+        h+='<div class="rowline"><div class="grow">'+esc(it?dispName(it):l.name)+
+          '<div class="xs mut">'+t('pl_have')+' '+fmtI(it?it.qty:0)+' '+esc(l.unit)+(cost!=null?' · ฿'+fmt(cost,2):'')+'</div></div>'+
+          '<input style="width:86px" inputmode="decimal" value="'+fmtI(l.qty)+'" onchange="PR_DRAFT.lines['+i+'].qty=num(this.value);PR_DRAFT.lines['+i+'].touched=true;paintProduceModal()">'+
+          '<span class="xs mut">'+esc(trUnit(l.unit))+'</span></div>';});
+      const extra=num(r.extra_cost)*(num(d.qty)/(num(r.yield_qty)||1));
+      const total=mat+extra;
+      h+=(shortWarn?'<div class="badbox">'+t('pr_stock_warn')+'</div>':'')+
+        (noPrice?'<div class="hintbox">'+t('no_price_warn')+'</div>':'')+
+        '<div class="okbox"><div style="display:flex;justify-content:space-between"><span>'+t('pr_cost_mat')+'</span><b>฿'+fmt(mat,2)+'</b></div>'+
+        '<div style="display:flex;justify-content:space-between"><span>'+t('pr_cost_extra')+'</span><b>฿'+fmt(extra,2)+'</b></div>'+
+        '<div style="display:flex;justify-content:space-between"><span>'+t('pr_cost_total')+'</span><b>฿'+fmt(total,2)+'</b></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:16px"><span><b>'+t('pr_cost_unit')+'</b></span><b style="color:var(--red)">฿'+fmt(num(d.qty)?total/num(d.qty):0,2)+' / '+esc(r.yield_unit||'')+'</b></div></div>'+
+        '<button class="btn big" onclick="produceSave()">'+t('save')+'</button>';
+    }
+  }
+  openModal(h,true);
+}
+function prStep(dir){const inp=document.getElementById('prQ');let v=num(inp.value);
+  const r=recipeById(PR_DRAFT.rid);const step=num(r&&r.yield_qty)||1;
+  v=Math.max(0,rnd2(v+dir*step));inp.value=fmtI(v);prQtyChanged();}
+function prQtyChanged(){PR_DRAFT.qty=num(document.getElementById('prQ').value);
+  PR_DRAFT.lines=null;prBuildLines();paintProduceModal();}
+async function produceSave(){await once(async()=>{
+  const d=PR_DRAFT;if(!d)return;const r=recipeById(d.rid);
+  if(!r||!num(d.qty)){toast(t('need_qty'),true);return;}
+  const today=d.d||todayStr();
+  const prodId=uid('pr');
+  let mat=0;const prodLines=[];const moves=[];
+  d.lines.forEach(l=>{
+    const it=itemById(l.item_id);if(!it||!num(l.qty))return;
+    const c=unitCost(it);const cost=c!=null?rnd2(num(l.qty)*c):0;
+    mat+=cost;
+    prodLines.push({item_id:it.id,name:it.name,unit:it.unit||'',qty:num(l.qty),cost});
+    moves.push({d:today,kind:'use',item_kind:'item',ref_id:it.id,name:it.name,qty:-num(l.qty),cost,ref:prodId});
+  });
+  const extra=rnd2(num(r.extra_cost)*(num(d.qty)/(num(r.yield_qty)||1)));
+  const total=rnd2(mat+extra);
+  const perUnit=rnd2(total/num(d.qty));
+  const prod={id:prodId,d:today,recipe_id:r.id,name:r.name,qty:num(d.qty),
+    cost_mat:rnd2(mat),cost_extra:extra,cost_total:total,cost_unit:perUnit,
+    plan_id:d.planId||null,by_name:S.user.name};
+  await dbi(()=>sb.from('ck_productions').insert(prod));
+  if(prodLines.length)await dbi(()=>sb.from('ck_prod_items').insert(prodLines.map(l=>Object.assign({prod_id:prod.id},l))));
+  moves.push({d:today,kind:'made',item_kind:'recipe',ref_id:r.id,name:r.name,qty:num(d.qty),cost:total,ref:prod.id});
+  await pushMoves(moves);
+  r.unit_cost=perUnit;
+  await dbi(()=>sb.from('ck_recipes').update({unit_cost:perUnit}).eq('id',r.id));
+  if(d.planId){await dbi(()=>sb.from('ck_plans').update({status:'done'}).eq('id',d.planId));
+    const p=S.plans.find(x=>x.id===d.planId);if(p)p.status='done';}
+  S.prods.unshift(prod);
+  PR_DRAFT=null;closeModal();toast(t('pr_ok'));show(S.tab);
+});}
+async function prodDetail(id){ // รายละเอียดการผลิต + ลบ/ย้อนได้
+  const p=S.prods.find(x=>x.id===id);if(!p)return;
+  const r=recipeById(p.recipe_id);
+  let lines=[];
+  try{lines=await dbi(()=>sb.from('ck_prod_items').select('*').eq('prod_id',id).order('id'));}catch(e){}
+  let h='<h3>🍳 '+esc(r?dispName(r):p.name||'')+' · '+dispDate(p.d)+'</h3>'+
+    '<div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('qty')+'</th><th class="right">'+t('cost')+'</th></tr>';
+  (lines||[]).forEach(l=>{h+='<tr><td>'+esc(l.name||'')+'</td><td class="n">'+fmtI(l.qty)+' '+esc(trUnit(l.unit||''))+'</td>'+
+    '<td class="n">฿'+fmt(l.cost,2)+'</td></tr>';});
+  h+='<tr class="tot"><td>'+t('pr_out')+'</td><td class="n">'+fmtI(p.qty)+' '+esc(trUnit(r?r.yield_unit||'':''))+'</td><td class="n">฿'+fmt(p.cost_total,2)+'</td></tr>'+
+    '<tr class="tot"><td><b>'+t('pr_cost_unit')+'</b></td><td></td><td class="n"><b style="color:var(--red)">฿'+fmt(p.cost_unit,2)+'</b></td></tr></table></div>'+
+    (p.by_name?'<div class="xs mut" style="margin-top:6px">👤 '+esc(p.by_name)+'</div>':'')+
+    (canKitchen()?'<button class="btn gh" style="margin-top:12px" onclick="prodDel(\''+id+'\')">🗑 '+t('del')+' ('+t('undo_send').replace('↩ ','')+')</button>':'');
+  openModal(h,true);
+}
+async function prodDel(id){ // ลบการผลิต — คืนวัตถุดิบ ตัดของที่ผลิตออก
+  if(!canKitchen())return;
+  if(!confirm(t('undo_confirm')))return;
+  await once(async()=>{
+    const p=S.prods.find(x=>x.id===id);if(!p)return;
+    const mv=await dbi(()=>sb.from('ck_moves').select('*').eq('ref',id));
+    await dbi(()=>sb.from('ck_moves').delete().eq('ref',id));
+    for(const m of (mv||[])){
+      const o=m.item_kind==='item'?itemById(m.ref_id):recipeById(m.ref_id);
+      const v=await addQty(m.item_kind,m.ref_id,-num(m.qty));
+      if(o)o.qty=v!=null?v:rnd2(num(o.qty)-num(m.qty));
+    }
+    await dbi(()=>sb.from('ck_prod_items').delete().eq('prod_id',id));
+    await dbi(()=>sb.from('ck_productions').delete().eq('id',id));
+    if(p.plan_id){try{await dbi(()=>sb.from('ck_plans').update({status:'plan'}).eq('id',p.plan_id));
+      const pl=S.plans.find(x=>x.id===p.plan_id);if(pl)pl.status='plan';}catch(e){}}
+    S.prods=S.prods.filter(x=>x.id!==id);
+    closeModal();toast(t('sv_ok'));show(S.tab);
+  });}
+
+/* ============================================================
+   🚚 ออเดอร์สาขา
+   ============================================================ */
+function orderRow(o){
+  const lines=S.orderItems[o.id]||[];
+  const stCls={new:'st-new',prep:'st-prep',sent:'st-sent',done:'st-done',cancel:'st-cancel'};
+  const stLb={new:t('or_st_new'),prep:t('or_st_prep'),sent:t('or_st_sent'),done:t('or_st_done'),cancel:t('or_st_cancel')};
+  return '<div class="rowline" style="cursor:pointer" onclick="orderDetail(\''+o.id+'\')">'+
+    '<div class="grow"><b>🏪 '+esc(o.branch_name||branchName(o.branch))+'</b>'+
+    '<div class="xs mut">'+dispDate(o.d)+' · '+lines.length+' '+t('items_n')+(o.total!=null?' · ฿'+fmt(o.total,2):'')+'</div></div>'+
+    '<span class="stpill '+(stCls[o.status]||'st-draft')+'">'+esc(stLb[o.status]||o.status)+'</span></div>';
+}
+RENDER.orders=function(el){
+  let h='<div style="margin-bottom:12px"><button class="btn" onclick="orderModal()">'+t('or_new')+'</button></div>';
+  const open=S.orders.filter(o=>o.status==='new'||o.status==='prep');
+  const sent=S.orders.filter(o=>o.status==='sent');
+  const rest=S.orders.filter(o=>o.status==='done'||o.status==='cancel').slice(0,20);
+  if(!S.orders.length)h+='<div class="card empty">'+t('or_none')+'</div>';
+  if(open.length){h+='<div class="secbar">🔔 '+t('da_orders_open')+'<span class="sp">'+open.length+'</span></div><div class="card">';
+    open.forEach(o=>h+=orderRow(o));h+='</div>';}
+  if(sent.length){h+='<div class="secbar">🚚 '+t('or_st_sent')+'<span class="sp">'+sent.length+'</span></div><div class="card">';
+    sent.forEach(o=>h+=orderRow(o));h+='</div>';}
+  if(rest.length){h+='<div class="secbar">📁 '+t('all')+'<span class="sp xs">'+t('last45')+'</span></div><div class="card">';
+    rest.forEach(o=>h+=orderRow(o));h+='</div>';}
+  el.innerHTML=h;
+};
+let OR_DRAFT=null;
+function orderModal(id){
+  const o=id?S.orders.find(x=>x.id===id):null;
+  const mine=myBranches();
+  let defBranch=(o&&o.branch)||'';
+  if(!defBranch&&S.branches.length){
+    defBranch=S.branches[0].code;
+    // ถ้าผู้ใช้ผูกกับสาขาในระบบนับ ใช้ชื่อจับคู่แบบง่าย (id คนละชุด — ให้เลือกเอง)
+  }
+  OR_DRAFT=o?{id:o.id,branch:o.branch,d:o.d,note:o.note||'',status:o.status,
+      lines:(S.orderItems[o.id]||[]).map(l=>({recipe_id:l.recipe_id,name:l.name,unit:l.unit,qty:num(l.qty)}))}
+    :{id:null,branch:defBranch,d:addDays(todayStr(),1),note:'',status:'new',lines:[]};
+  paintOrderModal();
+}
+function paintOrderModal(){
+  const d=OR_DRAFT;
+  let h='<h3>🚚 '+(d.id?t('edit'):t('or_new'))+'</h3>'+
+    '<div class="grid2"><div class="fld"><label>'+t('or_branch')+'</label><select id="orBr" onchange="OR_DRAFT.branch=this.value">'+
+    S.branches.map(b=>'<option value="'+esc(b.code)+'" '+(b.code===d.branch?'selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></div>'+
+    '<div class="fld"><label>'+t('or_d')+'</label><input type="date" value="'+d.d+'" onchange="OR_DRAFT.d=this.value"></div></div>'+
+    '<div class="fld"><label>'+t('note')+'</label><input value="'+esc(d.note)+'" onchange="OR_DRAFT.note=this.value"></div>'+
+    '<div class="secbar">'+t('nav_menus')+'<span class="sp">'+d.lines.length+'</span></div>';
+  d.lines.forEach((l,i)=>{
+    const r=recipeById(l.recipe_id);
+    h+='<div class="rowline">'+thumbHtml(r,'🍲')+'<div class="grow"><b>'+esc(r?dispName(r):l.name)+'</b>'+
+      '<div class="xs mut">'+t('pl_have')+' '+fmtI(r?r.qty:0)+' '+esc(trUnit(l.unit||''))+'</div></div>'+
+      '<div class="stepper"><button onclick="orStep('+i+',-1)">−</button>'+
+      '<input inputmode="decimal" id="orQ'+i+'" value="'+fmtI(l.qty)+'" onchange="OR_DRAFT.lines['+i+'].qty=num(this.value)">'+
+      '<button class="plus" onclick="orStep('+i+',1)">＋</button></div>'+
+      '<button class="btn gh sm2" onclick="OR_DRAFT.lines.splice('+i+',1);paintOrderModal()">🗑</button></div>';});
+  h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="orAddMenu()">'+t('or_add_menu')+'</button>'+
+    '<button class="btn big" style="margin-top:12px" onclick="orderSave()">'+t('save')+'</button>';
+  openModal(h,true);
+}
+function orStep(i,dir){const l=OR_DRAFT.lines[i];l.qty=Math.max(0,rnd2(num(l.qty)+dir));
+  document.getElementById('orQ'+i).value=fmtI(l.qty);}
+function orAddMenu(){
+  pickRecipe(rid=>{const r=recipeById(rid);if(!r)return;
+    const ex=OR_DRAFT.lines.find(l=>l.recipe_id===rid);
+    if(ex)ex.qty=num(ex.qty)+1;
+    else OR_DRAFT.lines.push({recipe_id:r.id,name:r.name,unit:r.yield_unit||'',qty:1});
+    paintOrderModal();},paintOrderModal);
+}
+async function orderSave(){await once(async()=>{
+  const d=OR_DRAFT;if(!d)return;
+  d.lines=d.lines.filter(l=>num(l.qty)>0);
+  if(!d.lines.length){toast(t('or_add_menu'),true);return;}
+  const bn=branchName(d.branch);
+  const row={branch:d.branch,branch_name:bn,d:d.d,note:d.note||null,status:d.status};
+  let oid=d.id;let oldIds=[];
+  if(oid){await dbi(()=>sb.from('ck_orders').update(row).eq('id',oid));
+    Object.assign(S.orders.find(x=>x.id===oid),row);
+    oldIds=(S.orderItems[oid]||[]).map(l=>l.id).filter(x=>x!=null);}
+  else{oid=uid('or');row.id=oid;row.by_name=S.user.name;
+    await dbi(()=>sb.from('ck_orders').insert(row));S.orders.unshift(row);}
+  // ใส่ไลน์ใหม่ก่อนลบของเก่า — พลาดกลางทางข้อมูลไม่หาย
+  const lines=d.lines.map((l,i)=>({order_id:oid,recipe_id:l.recipe_id,name:l.name,unit:l.unit,qty:l.qty,sort:i}));
+  const ins=await dbi(()=>sb.from('ck_order_items').insert(lines).select());
+  if(oldIds.length)await dbi(()=>sb.from('ck_order_items').delete().in('id',oldIds));
+  S.orderItems[oid]=ins;
+  OR_DRAFT=null;closeModal();applyChrome();toast(t('sv_ok'));show(S.tab);
+});}
+function orderDetail(id){
+  const o=S.orders.find(x=>x.id===id);if(!o)return;
+  const lines=S.orderItems[id]||[];
+  const stLb={new:t('or_st_new'),prep:t('or_st_prep'),sent:t('or_st_sent'),done:t('or_st_done'),cancel:t('or_st_cancel')};
+  const stKnown=['new','prep','sent','done','cancel'].includes(o.status)?o.status:'new';
+  let h='<h3>🚚 '+esc(o.branch_name||branchName(o.branch))+' · '+dispDate(o.d)+
+    ' <span class="stpill st-'+stKnown+'">'+esc(stLb[o.status]||o.status)+'</span></h3>';
+  if(o.note)h+='<div class="xs mut" style="margin-bottom:8px">'+esc(o.note)+'</div>';
+  h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_menus')+'</th><th class="right">'+t('qty')+'</th>'+
+    (o.status==='sent'||o.status==='done'?'<th class="right">'+t('cost')+'/'+t('unit')+'</th><th class="right">'+t('total')+'</th>':'')+'</tr>';
+  let tot=0;
+  lines.forEach(l=>{
+    h+='<tr><td>'+esc(l.name)+'</td><td class="n">'+fmtI(l.qty)+' '+esc(trUnit(l.unit||''))+'</td>';
+    if(o.status==='sent'||o.status==='done'){h+='<td class="n">'+fmt(l.cost_unit,2)+'</td><td class="n">'+fmt(l.amount,2)+'</td>';tot+=num(l.amount);}
+    h+='</tr>';});
+  if(o.status==='sent'||o.status==='done')h+='<tr class="tot"><td colspan="3">'+t('or_value')+'</td><td class="n">฿'+fmt(o.total!=null?o.total:tot,2)+'</td></tr>';
+  h+='</table></div><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">';
+  if(canKitchen()){
+    if(o.status==='new')h+='<button class="btn sm2" onclick="orderStatus(\''+id+'\',\'prep\')">'+t('or_prep')+'</button>'+
+      '<button class="btn gh sm2" onclick="closeModal();orderModal(\''+id+'\')">✎ '+t('edit')+'</button>';
+    if(o.status==='prep')h+='<button class="btn ok sm2" onclick="orderSend(\''+id+'\')">'+t('or_send')+'</button>';
+    if(o.status==='new')h+='<button class="btn gh sm2" onclick="orderStatus(\''+id+'\',\'cancel\')">🗑 '+t('or_st_cancel')+'</button>';
+  }
+  if(o.status==='sent')h+='<button class="btn sm2" onclick="orderStatus(\''+id+'\',\'done\')">'+t('or_done')+'</button>'+
+    (canKitchen()?'<button class="btn gh sm2" onclick="orderUnsend(\''+id+'\')">'+t('undo_send')+'</button>':'');
+  if(o.status!=='new'&&o.status!=='cancel')h+='<button class="btn dk sm2" onclick="orderPrint(\''+id+'\')">'+t('or_print')+'</button>';
+  h+='</div>';
+  openModal(h,true);
+}
+async function orderStatus(id,st){
+  if(st!=='done'&&!canKitchen())return; // สาขากดยืนยัน 'รับแล้ว' ได้อย่างเดียว
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_orders').update({status:st}).eq('id',id));
+    S.orders.find(x=>x.id===id).status=st;
+    closeModal();applyChrome();show(S.tab);
+  });}
+async function orderSend(id){
+  if(!canKitchen())return;
+  const o=S.orders.find(x=>x.id===id);const lines=S.orderItems[id]||[];
+  if(!o||o.status!=='prep')return;
+  // เช็คของพอ/ยืนยัน ก่อนเขียนข้อมูลใดๆ
+  const short=lines.some(l=>{const r=recipeById(l.recipe_id);return r&&num(l.qty)>num(r.qty);});
+  if(!confirm(t('or_send_confirm')+(short?'\n'+t('or_stock_short'):'')))return;
+  await once(async()=>{
+  const today=todayStr();const moves=[];let total=0;
+  for(const l of lines){
+    const r=recipeById(l.recipe_id);if(!r)continue;
+    const cu=recipeUnitCost(r);
+    const amount=cu!=null?rnd2(num(l.qty)*cu):null;
+    l.cost_unit=cu;l.amount=amount;if(amount!=null)total+=amount;
+    await dbi(()=>sb.from('ck_order_items').update({cost_unit:cu,amount}).eq('id',l.id));
+    moves.push({d:today,kind:'send',item_kind:'recipe',ref_id:r.id,name:r.name,qty:-num(l.qty),
+      cost:amount,ref:o.id,branch:o.branch});
+  }
+  await pushMoves(moves);
+  o.status='sent';o.total=rnd2(total);
+  await dbi(()=>sb.from('ck_orders').update({status:'sent',total:o.total}).eq('id',id));
+  closeModal();applyChrome();toast(t('or_sent_ok'));show(S.tab);
+  });}
+async function orderUnsend(id){ // ส่งผิด — คืนสต๊อกของที่ผลิตแล้ว กลับสถานะกำลังจัด
+  if(!canKitchen())return;
+  if(!confirm(t('undo_confirm')))return;
+  await once(async()=>{
+    const o=S.orders.find(x=>x.id===id);if(!o||o.status!=='sent')return;
+    const mv=await dbi(()=>sb.from('ck_moves').select('*').eq('ref',id).eq('kind','send'));
+    await dbi(()=>sb.from('ck_moves').delete().eq('ref',id).eq('kind','send'));
+    for(const m of (mv||[])){
+      const r=recipeById(m.ref_id);
+      const v=await addQty('recipe',m.ref_id,-num(m.qty)); // qty ของ move เป็นลบ — ลบลบ = บวกคืน
+      if(r)r.qty=v!=null?v:rnd2(num(r.qty)-num(m.qty));
+    }
+    o.status='prep';o.total=null;
+    await dbi(()=>sb.from('ck_orders').update({status:'prep',total:null}).eq('id',id));
+    closeModal();applyChrome();toast(t('sv_ok'));show(S.tab);
+  });}
+function orderPrint(id){
+  const o=S.orders.find(x=>x.id===id);const lines=S.orderItems[id]||[];
+  let rows='';let tot=0;
+  lines.forEach((l,i)=>{rows+='<tr><td>'+(i+1)+'</td><td>'+esc(l.name)+'</td><td class="n">'+fmtI(l.qty)+' '+esc(trUnit(l.unit||''))+'</td>'+
+    '<td class="n">'+(l.cost_unit!=null?fmt(l.cost_unit,2):'')+'</td><td class="n">'+(l.amount!=null?fmt(l.amount,2):'')+'</td></tr>';
+    tot+=num(l.amount);});
+  document.getElementById('printArea').innerHTML=
+    '<div class="ph"><img src="'+LOGO_B64+'"><div><div style="font-size:18px;font-weight:700">'+t('or_deliver_note')+'</div>'+
+    '<div style="font-size:13px">จริงใจหมูกระทะ — JJ Kitchen</div></div>'+
+    '<div style="margin-left:auto;text-align:right;font-size:13px">'+t('or_branch')+': <b>'+esc(o.branch_name||branchName(o.branch))+'</b><br>'+t('date')+': '+dispDate(o.d)+'</div></div>'+
+    '<table><tr><th style="width:30px">#</th><th>'+t('nav_menus')+'</th><th class="n">'+t('qty')+'</th><th class="n">'+t('cost')+'/'+t('unit')+'</th><th class="n">'+t('total')+'</th></tr>'+rows+
+    '<tr><td colspan="4" style="text-align:right;font-weight:700">'+t('or_value')+'</td><td class="n" style="font-weight:700">'+fmt(o.total!=null?o.total:tot,2)+'</td></tr></table>'+
+    (o.note?'<div style="margin-top:8px;font-size:13px">📝 '+esc(o.note)+'</div>':'')+
+    '<div class="sigs"><div>'+t('or_sig_pack')+'</div><div>'+t('or_sig_check')+'</div><div>'+t('or_sig_send')+'</div><div>'+t('or_sig_recv')+'</div></div>';
+  window.print();
+}
+</script>
+<script>
+/* ============================================================
+   📦 สต๊อกครัวกลาง
+   ============================================================ */
+RENDER.stock=function(el){
+  let h='<div class="card"><h3>🥬 '+t('sk_items')+'<span class="sp">'+S.items.length+' '+t('items_n')+'</span></h3>';
+  if(!S.items.length)h+='<div class="empty">'+t('it_none')+'</div>';
+  else{h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('sk_now')+'</th><th class="right">'+t('sk_min')+'</th><th class="right">'+t('sk_val')+'</th><th></th></tr>';
+    S.items.forEach(i=>{const c=unitCost(i);const low=i.min_qty!=null&&num(i.qty)<=num(i.min_qty);
+      h+='<tr><td>'+esc(dispName(i))+'</td>'+
+        '<td class="n"'+(low?' style="color:var(--bad);font-weight:700"':'')+'>'+fmtI(i.qty)+' '+esc(trUnit(i.unit||''))+'</td>'+
+        '<td class="n">'+(i.min_qty!=null?fmtI(i.min_qty):'–')+'</td>'+
+        '<td class="n">'+(c!=null?'฿'+fmt(num(i.qty)*c,2):'–')+'</td>'+
+        '<td class="right">'+(canKitchen()?'<button class="btn gh sm2" onclick="adjModal(\'item\',\''+i.id+'\')">'+t('sk_adjust')+'</button>':'')+'</td></tr>';});
+    const val=S.items.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
+    h+='<tr class="tot"><td>'+t('total')+'</td><td></td><td></td><td class="n">฿'+fmt(val,2)+'</td><td></td></tr></table></div>';}
+  h+='</div>';
+  h+='<div class="card"><h3>🍲 '+t('sk_menus')+'<span class="sp">'+S.recipes.length+' '+t('items_n')+'</span></h3>';
+  if(!S.recipes.length)h+='<div class="empty">'+t('mn_none')+'</div>';
+  else{h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_menus')+'</th><th class="right">'+t('sk_now')+'</th><th class="right">'+t('pr_cost_unit')+'</th><th class="right">'+t('sk_val')+'</th><th></th></tr>';
+    S.recipes.forEach(r=>{const c=recipeUnitCost(r);
+      h+='<tr><td>'+esc(dispName(r))+'</td><td class="n">'+fmtI(r.qty)+' '+esc(trUnit(r.yield_unit||''))+'</td>'+
+        '<td class="n">'+(c!=null?'฿'+fmt(c,2):'–')+'</td>'+
+        '<td class="n">'+(c!=null?'฿'+fmt(num(r.qty)*c,2):'–')+'</td>'+
+        '<td class="right">'+(canKitchen()?'<button class="btn gh sm2" onclick="adjModal(\'recipe\',\''+r.id+'\')">'+t('sk_adjust')+'</button>':'')+'</td></tr>';});
+    h+='</table></div>';}
+  h+='</div>';
+  el.innerHTML=h;
+};
+function adjModal(kind,id){
+  const o=kind==='item'?itemById(id):recipeById(id);if(!o)return;
+  openModal('<h3>'+t('sk_adj_title')+' · '+esc(dispName(o))+'</h3>'+
+    '<div class="fld"><label>'+t('sk_now')+'</label><div class="b" style="font-size:18px">'+fmtI(o.qty)+' '+esc(trUnit((kind==='item'?o.unit:o.yield_unit)||''))+'</div></div>'+
+    '<div class="fld"><label>'+t('sk_new_qty')+'</label><input id="adjQ" inputmode="decimal" value="'+fmtI(o.qty)+'"></div>'+
+    '<div class="fld"><label>'+t('sk_adj_note')+'</label><input id="adjN"></div>'+
+    '<button class="btn big" onclick="adjSave(\''+kind+'\',\''+id+'\')">'+t('save')+'</button>');
+}
+async function adjSave(kind,id){await once(async()=>{
+  const o=kind==='item'?itemById(id):recipeById(id);if(!o)return;
+  const nv=num(document.getElementById('adjQ').value);
+  const delta=rnd2(nv-num(o.qty));
+  if(delta!==0){
+    await pushMoves([{d:todayStr(),kind:'adjust',item_kind:kind,ref_id:id,name:o.name,qty:delta,
+      note:document.getElementById('adjN').value.trim()||null}]);
+  }
+  closeModal();toast(t('sv_ok'));show(S.tab);
+});}
+
+/* ============================================================
+   📖 เมนู & สูตร
+   ============================================================ */
+let MN_CAT='';
+RENDER.menus=function(el){
+  let h='';
+  if(canKitchen())h+='<div style="margin-bottom:10px"><button class="btn" onclick="menuEdit()">'+t('mn_new')+'</button></div>';
+  const cats=[...new Set(S.recipes.map(r=>r.cat||'อื่นๆ'))];
+  h+='<div class="catbar" onclick="const b=event.target.closest(\'button\');if(b){MN_CAT=b.dataset.cat||\'\';show(\'menus\')}">'+
+    '<button data-cat="" class="'+(MN_CAT===''?'on':'')+'">'+t('all')+'</button>'+
+    cats.map(c=>'<button data-cat="'+esc(c)+'" class="'+(MN_CAT===c?'on':'')+'">'+(MENU_CAT_IC[c]||'🍱')+' '+esc(trCat(c))+'</button>').join('')+'</div>';
+  const list=S.recipes.filter(r=>!MN_CAT||(r.cat||'อื่นๆ')===MN_CAT);
+  if(!list.length){h+='<div class="card empty">'+t('mn_none')+'</div>';el.innerHTML=h;return;}
+  h+='<div class="igrid">';
+  list.forEach(r=>{
+    const c=recipeCostCalc(r);const cu=recipeUnitCost(r);
+    h+='<div class="icard" onclick="menuDetail(\''+r.id+'\')" style="cursor:pointer">'+
+      '<div class="ithumb">'+(r.image_url?'<img src="'+esc(r.image_url)+'" loading="lazy">':'🍲')+'</div>'+
+      '<div class="iname">'+esc(dispName(r))+'</div>'+
+      '<div class="isub">'+t('mn_yield')+' '+fmtI(r.yield_qty)+' '+esc(trUnit(r.yield_unit||''))+'</div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center">'+
+      '<span class="chip '+(cu!=null?'gold':'mid')+'">'+(cu!=null?'฿'+fmt(cu,2)+'/'+esc(trUnit(r.yield_unit||'')):'⚠')+'</span>'+
+      '<span class="iqty">'+fmtI(r.qty)+'</span></div></div>';});
+  h+='</div>';
+  el.innerHTML=h;
+};
+function menuDetail(id){
+  const r=recipeById(id);if(!r)return;
+  const bom=bomOf(r);const c=recipeCostCalc(r);
+  let h='<h3>'+thumbHtml(r,'🍲')+' '+esc(dispName(r))+'</h3>'+
+    '<div class="sm mut" style="margin-bottom:8px">'+esc(trCat(r.cat||''))+' · '+t('mn_yield')+' <b>'+fmtI(r.yield_qty)+' '+esc(trUnit(r.yield_unit||''))+'</b>'+
+    ' · '+t('sk_now')+' <b>'+fmtI(r.qty)+'</b>'+(r.note?'<br>📝 '+esc(r.note):'')+'</div>';
+  if(!bom.length)h+='<div class="hintbox">'+t('mn_no_bom')+'</div>';
+  else{
+    h+='<div class="secbar">'+t('mn_bom')+'</div><div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('qty')+'</th><th class="right">'+t('cost')+'</th></tr>';
+    bom.forEach(l=>{const it=itemById(l.item_id);const uc=unitCost(it);
+      h+='<tr><td>'+esc(dispName(it))+'</td><td class="n">'+fmtI(l.qty)+' '+esc(trUnit(it.unit||''))+'</td>'+
+        '<td class="n">'+(uc!=null?'฿'+fmt(num(l.qty)*uc,2):'–')+'</td></tr>';});
+    h+='<tr class="tot"><td>'+t('pr_cost_total')+(num(r.extra_cost)?' <span class="xs mut">(+'+t('mn_extra')+' ฿'+fmt(r.extra_cost,2)+')</span>':'')+'</td><td></td>'+
+      '<td class="n">฿'+fmt(c.total,2)+'</td></tr>'+
+      '<tr class="tot"><td><b>'+t('mn_cost_per')+'</b></td><td></td><td class="n"><b style="color:var(--red)">฿'+fmt(c.perUnit,2)+' / '+esc(trUnit(r.yield_unit||''))+'</b></td></tr></table></div>';
+    if(c.missing)h+='<div class="hintbox">⚠ '+t('it_price')+' — '+t('no_data')+'</div>';
+  }
+  h+='<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'+
+    '<button class="btn dk sm2" onclick="menuCalc(\''+id+'\')">'+t('mn_calc')+'</button>'+
+    (canKitchen()?'<button class="btn gh sm2" onclick="menuEdit(\''+id+'\')">✎ '+t('edit')+'</button>'+
+    '<button class="btn sm2" onclick="closeModal();produceModal(\''+id+'\')">🍳 '+t('nav_produce')+'</button>':'')+'</div>';
+  openModal(h,true);
+}
+function menuCalc(id){
+  const r=recipeById(id);if(!r)return;
+  openModal('<h3>'+t('mn_calc_title')+' · '+esc(dispName(r))+'</h3>'+
+    '<div class="fld"><label>'+t('mn_calc_q')+' ('+esc(trUnit(r.yield_unit||''))+')</label>'+
+    '<div class="stepper"><button onclick="stepQty(\'mcQ\',-1);menuCalcPaint(\''+id+'\')">−</button>'+
+    '<input id="mcQ" inputmode="decimal" value="'+fmtI(r.yield_qty)+'" oninput="menuCalcPaint(\''+id+'\')">'+
+    '<button class="plus" onclick="stepQty(\'mcQ\',1);menuCalcPaint(\''+id+'\')">＋</button></div></div>'+
+    '<div id="mcOut"></div>'+
+    '<div style="display:flex;gap:8px;margin-top:12px">'+
+    (canKitchen()?'<button class="btn big" style="flex:1" onclick="menuCalcPlan(\''+id+'\')">'+t('mn_make_plan')+'</button>':'')+'</div>',true);
+  menuCalcPaint(id);
+}
+function menuCalcPaint(id){
+  const r=recipeById(id);const q=num(document.getElementById('mcQ').value);
+  const batches=q/(num(r.yield_qty)||1);
+  let mat=0,h='<div class="secbar">'+t('mn_calc_need')+'</div><div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('qty')+'</th><th class="right">'+t('pl_have')+'</th><th class="right">'+t('cost')+'</th></tr>';
+  bomOf(r).forEach(l=>{const it=itemById(l.item_id);const need=rnd2(batches*num(l.qty));const uc=unitCost(it);
+    const enough=num(it.qty)>=need;
+    if(uc!=null)mat+=need*uc;
+    h+='<tr><td>'+esc(dispName(it))+'</td><td class="n">'+fmtI(need)+' '+esc(trUnit(it.unit||''))+'</td>'+
+      '<td class="n">'+(enough?'<span class="chip ok">'+fmtI(it.qty)+'</span>':'<span class="chip bad">'+fmtI(it.qty)+'</span>')+'</td>'+
+      '<td class="n">'+(uc!=null?'฿'+fmt(need*uc,2):'–')+'</td></tr>';});
+  const total=mat+num(r.extra_cost)*batches;
+  h+='<tr class="tot"><td>'+t('pr_cost_total')+'</td><td></td><td></td><td class="n">฿'+fmt(total,2)+'</td></tr>'+
+    '<tr class="tot"><td><b>'+t('mn_cost_per')+'</b></td><td></td><td></td><td class="n"><b style="color:var(--red)">฿'+fmt(q?total/q:0,2)+'</b></td></tr></table></div>';
+  document.getElementById('mcOut').innerHTML=h;
+}
+function menuCalcPlan(id){
+  const q=num(document.getElementById('mcQ').value);
+  MODAL_BACK=null;planModal(null,null,id,q||null);
+}
+let MN_DRAFT=null;
+function menuEdit(id){
+  if(!canKitchen())return;
+  const r=id?recipeById(id):null;
+  MN_DRAFT=r?{id:r.id,name:r.name,cat:r.cat||'อื่นๆ',yield_qty:num(r.yield_qty)||1,yield_unit:r.yield_unit||'กก.',
+      extra_cost:num(r.extra_cost)||0,note:r.note||'',image_url:r.image_url,
+      bom:bomOf(r).map(l=>({item_id:l.item_id,qty:num(l.qty)}))}
+    :{id:null,name:'',cat:'อื่นๆ',yield_qty:1,yield_unit:'กก.',extra_cost:0,note:'',image_url:null,bom:[]};
+  paintMenuEdit();
+}
+function paintMenuEdit(){
+  const d=MN_DRAFT;
+  let h='<h3>'+(d.id?'✎ '+t('edit'):t('mn_new'))+'</h3>'+
+    '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'+
+    '<div class="mthumb" style="width:64px;height:64px;font-size:28px">'+(d.image_url?'<img src="'+esc(d.image_url)+'">':'🍲')+'</div>'+
+    (d.id?'<button class="btn gh sm2" onclick="pickImage(\'recipe\',\''+d.id+'\',url=>{MN_DRAFT.image_url=url;paintMenuEdit()})">'+t('pick_photo')+'</button>':'<span class="xs mut">'+t('save')+' → '+t('pick_photo')+'</span>')+'</div>'+
+    '<div class="fld"><label>'+t('name_th')+'</label><input id="mnName" value="'+esc(d.name)+'" onchange="MN_DRAFT.name=this.value"></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('mn_cat')+'</label><select onchange="MN_DRAFT.cat=this.value">'+
+    MENU_CATS.map(c=>'<option value="'+esc(c)+'" '+(c===d.cat?'selected':'')+'>'+(MENU_CAT_IC[c]||'')+' '+esc(trCat(c))+'</option>').join('')+
+    (MENU_CATS.includes(d.cat)?'':'<option selected>'+esc(d.cat)+'</option>')+'</select></div>'+
+    '<div class="fld"><label>'+t('mn_extra')+'</label><input inputmode="decimal" value="'+d.extra_cost+'" onchange="MN_DRAFT.extra_cost=num(this.value)"></div></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('mn_yield')+'</label><input inputmode="decimal" value="'+d.yield_qty+'" onchange="MN_DRAFT.yield_qty=num(this.value)"></div>'+
+    '<div class="fld"><label>'+t('unit')+'</label><select onchange="MN_DRAFT.yield_unit=this.value">'+unitOptions(d.yield_unit)+'</select></div></div>'+
+    '<div class="fld"><label>'+t('note')+'</label><input value="'+esc(d.note)+'" onchange="MN_DRAFT.note=this.value"></div>'+
+    '<div class="secbar">'+t('mn_bom')+'<span class="sp">'+d.bom.length+'</span></div>';
+  d.bom.forEach((l,i)=>{const it=itemById(l.item_id);
+    h+='<div class="rowline"><div class="grow">'+esc(it?dispName(it):'?')+' <span class="xs mut">'+esc(trUnit(it?it.unit||'':''))+'</span></div>'+
+      '<input style="width:86px" inputmode="decimal" value="'+fmtI(l.qty)+'" onchange="MN_DRAFT.bom['+i+'].qty=num(this.value)">'+
+      '<button class="btn gh sm2" onclick="MN_DRAFT.bom.splice('+i+',1);paintMenuEdit()">🗑</button></div>';});
+  h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="mnAddIng()">'+t('mn_add_ing')+'</button>'+
+    '<div style="display:flex;gap:8px;margin-top:12px">'+
+    (d.id?'<button class="btn gh" onclick="menuDel(\''+d.id+'\')">🗑</button>':'')+
+    '<button class="btn big" style="flex:1" onclick="menuSave()">'+t('save')+'</button></div>';
+  openModal(h,true);
+}
+function mnAddIng(){
+  pickItem(iid=>{if(!MN_DRAFT.bom.some(l=>l.item_id===iid))MN_DRAFT.bom.push({item_id:iid,qty:1});
+    paintMenuEdit();},paintMenuEdit);
+}
+async function menuSave(){await once(async()=>{
+  const d=MN_DRAFT;if(!d)return;
+  d.name=(document.getElementById('mnName').value||'').trim();
+  if(!d.name){toast(t('need_name'),true);return;}
+  const row={name:d.name,cat:d.cat,yield_qty:d.yield_qty||1,yield_unit:d.yield_unit,
+    extra_cost:d.extra_cost||0,note:d.note||null};
+  let rid=d.id;let renamed=false;
+  if(rid){const old=recipeById(rid);renamed=old&&old.name!==d.name;
+    if(renamed)row.i18n=null; // เปลี่ยนชื่อ — ล้างคำแปลเก่าแล้วแปลใหม่
+    await dbi(()=>sb.from('ck_recipes').update(row).eq('id',rid));
+    Object.assign(recipeById(rid),row);
+    const oldIds=(S.boms[rid]||[]).map(l=>l.id).filter(x=>x!=null);
+    const lines=d.bom.filter(l=>num(l.qty)>0).map((l,i)=>({recipe_id:rid,item_id:l.item_id,qty:l.qty,sort:i}));
+    const ins=lines.length?await dbi(()=>sb.from('ck_recipe_items').insert(lines).select()):[];
+    if(oldIds.length)await dbi(()=>sb.from('ck_recipe_items').delete().in('id',oldIds));
+    S.boms[rid]=ins;}
+  else{rid=uid('rc');row.id=rid;row.qty=0;
+    await dbi(()=>sb.from('ck_recipes').insert(row));S.recipes.push(row);
+    const lines=d.bom.filter(l=>num(l.qty)>0).map((l,i)=>({recipe_id:rid,item_id:l.item_id,qty:l.qty,sort:i}));
+    const ins=lines.length?await dbi(()=>sb.from('ck_recipe_items').insert(lines).select()):[];
+    S.boms[rid]=ins;}
+  MN_DRAFT=null;closeModal();toast(t('sv_ok'));show('menus');
+  // แปลชื่ออัตโนมัติ (พื้นหลัง — เติมเฉพาะช่องว่าง)
+  const r=recipeById(rid);
+  autoI18n(row.name,renamed?null:(r&&r.i18n)).then(o=>{if(o&&r){r.i18n=o;
+    sb.from('ck_recipes').update({i18n:o}).eq('id',rid).then(()=>{},()=>{});}}).catch(()=>{});
+});}
+async function menuDel(id){if(!confirm(t('confirm_del')))return;
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_recipes').update({deleted_at:new Date().toISOString()}).eq('id',id));
+    S.recipes=S.recipes.filter(x=>x.id!==id);MN_DRAFT=null;MODAL_BACK=null;closeModal();show('menus');});}
+
+/* ============================================================
+   🥬 วัตถุดิบ + ซัพพลายเออร์
+   ============================================================ */
+let IT_CAT='',IT_Q='';
+RENDER.items=function(el){
+  let h='';
+  if(canKitchen())h+='<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+    '<button class="btn" onclick="itemEdit()">'+t('it_new')+'</button>'+
+    '<button class="btn gh" onclick="supsModal()">🚛 '+t('it_sup_title')+'</button></div>';
+  const cats=[...new Set(S.items.map(i=>i.cat||'อื่นๆ'))];
+  h+='<div class="catbar" onclick="const b=event.target.closest(\'button\');if(b){IT_CAT=b.dataset.cat||\'\';show(\'items\')}">'+
+    '<button data-cat="" class="'+(IT_CAT===''?'on':'')+'">'+t('all')+'</button>'+
+    cats.map(c=>'<button data-cat="'+esc(c)+'" class="'+(IT_CAT===c?'on':'')+'">'+(ITEM_CAT_IC[c]||'🧺')+' '+esc(trCat(c))+'</button>').join('')+'</div>'+
+    '<input placeholder="'+t('search')+'" value="'+esc(IT_Q)+'" oninput="IT_Q=this.value;paintItemGrid()" style="margin-bottom:10px">'+
+    '<div id="itGrid" class="igrid"></div>';
+  el.innerHTML=h;
+  paintItemGrid();
+};
+function paintItemGrid(){
+  const box=document.getElementById('itGrid');if(!box)return;
+  const q=IT_Q.toLowerCase();
+  const list=S.items.filter(i=>(!IT_CAT||(i.cat||'อื่นๆ')===IT_CAT)&&
+    (!q||(i.name||'').toLowerCase().includes(q)||dispName(i).toLowerCase().includes(q)));
+  if(!list.length){box.innerHTML='<div class="empty" style="grid-column:1/-1">'+t('it_none')+'</div>';return;}
+  box.innerHTML=list.map(i=>{
+    const uc=unitCost(i);const low=i.min_qty!=null&&num(i.qty)<=num(i.min_qty);
+    return '<div class="icard'+(low?' low':'')+'">'+
+      (canKitchen()?'<button class="edit-dot" onclick="itemEdit(\''+i.id+'\')">✎</button>':'')+
+      '<div class="ithumb" '+(i.image_url?'onclick="zoomImg(\''+esc(i.image_url)+'\')"':(canKitchen()?'onclick="pickImage(\'item\',\''+i.id+'\',()=>paintItemGrid())"':''))+'>'+
+      (i.image_url?'<img src="'+esc(i.image_url)+'" loading="lazy">':(ITEM_CAT_IC[i.cat]||'🥬'))+'</div>'+
+      '<div class="iname">'+esc(dispName(i))+'</div>'+
+      '<div class="isub">'+(i.price!=null?'฿'+fmt(i.price,2)+'/'+esc(trUnit(i.buy_unit||i.unit||'')):'– '+t('it_price'))+
+      (uc!=null?' · ฿'+fmt(uc,2)+'/'+esc(trUnit(i.unit||'')):'')+'</div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center">'+
+      '<span class="chip '+(low?'bad':'mid')+'">'+fmtI(i.qty)+' '+esc(trUnit(i.unit||''))+'</span>'+
+      '<span class="xs mut">'+esc(i.sup||'')+'</span></div></div>';}).join('');
+}
+let IT_DRAFT=null;
+function itemEdit(id){
+  if(!canKitchen())return;
+  const i=id?itemById(id):null;
+  IT_DRAFT=i?{id:i.id,name:i.name,cat:i.cat||'อื่นๆ',unit:i.unit||'กก.',buy_unit:i.buy_unit||'',
+      buy_qty:num(i.buy_qty)||1,price:i.price==null?null:num(i.price),sup:i.sup||'',
+      lead_days:num(i.lead_days)||1,min_qty:i.min_qty==null?null:num(i.min_qty),image_url:i.image_url}
+    :{id:null,name:'',cat:IT_CAT||'อื่นๆ',unit:'กก.',buy_unit:'',buy_qty:1,price:null,sup:'',lead_days:1,min_qty:null,image_url:null};
+  paintItemEdit();
+}
+function paintItemEdit(){
+  const d=IT_DRAFT;
+  const supOpts='<option value=""></option>'+S.sups.map(s=>'<option '+(s.name===d.sup?'selected':'')+'>'+esc(s.name)+'</option>').join('')
+    +(d.sup&&!S.sups.some(s=>s.name===d.sup)?'<option selected>'+esc(d.sup)+'</option>':'');
+  let h='<h3>'+(d.id?'✎ '+t('edit'):t('it_new'))+'</h3>'+
+    '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'+
+    '<div class="mthumb" style="width:64px;height:64px;font-size:28px">'+(d.image_url?'<img src="'+esc(d.image_url)+'">':(ITEM_CAT_IC[d.cat]||'🥬'))+'</div>'+
+    (d.id?'<button class="btn gh sm2" onclick="pickImage(\'item\',\''+d.id+'\',url=>{IT_DRAFT.image_url=url;paintItemEdit()})">'+t('pick_photo')+'</button>':'<span class="xs mut">'+t('save')+' → '+t('pick_photo')+'</span>')+'</div>'+
+    '<div class="fld"><label>'+t('name_th')+'</label><input id="itName" value="'+esc(d.name)+'" onchange="IT_DRAFT.name=this.value"></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('it_cat')+'</label><select onchange="IT_DRAFT.cat=this.value">'+
+    ITEM_CATS.map(c=>'<option value="'+esc(c)+'" '+(c===d.cat?'selected':'')+'>'+(ITEM_CAT_IC[c]||'')+' '+esc(trCat(c))+'</option>').join('')+
+    (ITEM_CATS.includes(d.cat)?'':'<option selected>'+esc(d.cat)+'</option>')+'</select></div>'+
+    '<div class="fld"><label>'+t('it_sup')+'</label><select onchange="IT_DRAFT.sup=this.value">'+supOpts+'</select></div></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('it_unit_use')+'</label><select onchange="IT_DRAFT.unit=this.value">'+unitOptions(d.unit)+'</select></div>'+
+    '<div class="fld"><label>'+t('it_buy_unit')+'</label><select onchange="IT_DRAFT.buy_unit=this.value"><option value=""></option>'+unitOptions(d.buy_unit)+'</select></div></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('it_conv')+'</label><input inputmode="decimal" value="'+d.buy_qty+'" onchange="IT_DRAFT.buy_qty=num(this.value)||1"></div>'+
+    '<div class="fld"><label>'+t('it_price')+'</label><input inputmode="decimal" value="'+(d.price==null?'':d.price)+'" onchange="IT_DRAFT.price=this.value===\'\'?null:num(this.value)"></div></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('it_lead')+'</label><input inputmode="decimal" value="'+d.lead_days+'" onchange="IT_DRAFT.lead_days=num(this.value)||1"></div>'+
+    '<div class="fld"><label>'+t('it_min')+'</label><input inputmode="decimal" value="'+(d.min_qty==null?'':d.min_qty)+'" onchange="IT_DRAFT.min_qty=this.value===\'\'?null:num(this.value)"></div></div>';
+  if(d.id)h+='<button class="btn gh sm2" onclick="priceHist(\''+d.id+'\')">📉 '+t('it_price_hist')+'</button>';
+  h+='<div style="display:flex;gap:8px;margin-top:12px">'+
+    (d.id?'<button class="btn gh" onclick="itemDel(\''+d.id+'\')">🗑</button>':'')+
+    '<button class="btn big" style="flex:1" onclick="itemSave()">'+t('save')+'</button></div>';
+  openModal(h,true);
+}
+async function itemSave(){await once(async()=>{
+  const d=IT_DRAFT;if(!d)return;
+  d.name=(document.getElementById('itName').value||'').trim();
+  if(!d.name){toast(t('need_name'),true);return;}
+  const row={name:d.name,cat:d.cat,unit:d.unit,buy_unit:d.buy_unit||null,buy_qty:d.buy_qty||1,
+    price:d.price,sup:d.sup||'',lead_days:d.lead_days||1,min_qty:d.min_qty};
+  let iid=d.id;let renamed=false;
+  const oldPrice=iid?num(itemById(iid).price):null;
+  if(iid){const old=itemById(iid);renamed=old&&old.name!==d.name;
+    if(renamed)row.i18n=null; // เปลี่ยนชื่อ — ล้างคำแปลเก่าแล้วแปลใหม่
+    await dbi(()=>sb.from('ck_items').update(row).eq('id',iid));
+    Object.assign(itemById(iid),row);
+    if(d.price!=null&&num(d.price)!==oldPrice)
+      await dbi(()=>sb.from('ck_price_log').insert({item_id:iid,d:todayStr(),price:d.price,buy_unit:d.buy_unit||d.unit,source:'manual'}));}
+  else{iid=uid('it');row.id=iid;row.qty=0;
+    await dbi(()=>sb.from('ck_items').insert(row));S.items.push(row);
+    if(d.price!=null)await dbi(()=>sb.from('ck_price_log').insert({item_id:iid,d:todayStr(),price:d.price,buy_unit:d.buy_unit||d.unit,source:'manual'}));}
+  IT_DRAFT=null;closeModal();toast(t('sv_ok'));show('items');
+  const it=itemById(iid);
+  autoI18n(row.name,renamed?null:(it&&it.i18n)).then(o=>{if(o&&it){it.i18n=o;
+    sb.from('ck_items').update({i18n:o}).eq('id',iid).then(()=>{},()=>{});}}).catch(()=>{});
+});}
+async function itemDel(id){if(!confirm(t('confirm_del')))return;
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_items').update({deleted_at:new Date().toISOString()}).eq('id',id));
+    S.items=S.items.filter(x=>x.id!==id);IT_DRAFT=null;MODAL_BACK=null;closeModal();show('items');});}
+async function priceHist(id){
+  const it=itemById(id);
+  const logs=await dbi(()=>sb.from('ck_price_log').select('*').eq('item_id',id).order('created_at',{ascending:false}).limit(30));
+  openModal('<h3>📉 '+t('it_price_hist')+' · '+esc(dispName(it))+'</h3>'+
+    (logs.length?'<div class="twrap"><table class="t"><tr><th>'+t('date')+'</th><th class="right">'+t('price')+'</th><th></th></tr>'+
+    logs.map(l=>'<tr><td>'+dispDate(l.d)+'</td><td class="n">฿'+fmt(l.price,2)+'/'+esc(trUnit(l.buy_unit||''))+'</td><td class="xs mut">'+esc(l.source||'')+'</td></tr>').join('')+
+    '</table></div>':'<div class="empty">'+t('no_data')+'</div>'));
+}
+function supsModal(){
+  let h='<h3>🚛 '+t('it_sup_title')+'</h3>';
+  S.sups.forEach(s=>{h+='<div class="rowline"><div class="grow"><b>'+esc(s.name)+'</b>'+
+    '<div class="xs mut">'+(s.phone?'📞 '+esc(s.phone)+' · ':'')+t('it_lead')+' '+(s.lead_days||1)+'</div></div>'+
+    '<button class="btn gh sm2" onclick="supEdit(\''+s.id+'\')">✎</button></div>';});
+  h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="supEdit()">'+t('it_sup_new')+'</button>';
+  openModal(h);
+}
+function supEdit(id){
+  if(!canKitchen())return;
+  const s=id?S.sups.find(x=>x.id===id):null;
+  openModal('<h3>🚛 '+(s?t('edit'):t('it_sup_new'))+'</h3>'+
+    '<div class="fld"><label>'+t('name')+'</label><input id="spName" value="'+esc(s?s.name:'')+'"></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('it_phone')+'</label><input id="spPhone" value="'+esc(s?s.phone||'':'')+'"></div>'+
+    '<div class="fld"><label>'+t('it_lead')+'</label><input id="spLead" inputmode="decimal" value="'+(s?s.lead_days||1:1)+'"></div></div>'+
+    '<div class="fld"><label>'+t('note')+'</label><input id="spNote" value="'+esc(s?s.note||'':'')+'"></div>'+
+    '<div style="display:flex;gap:8px;margin-top:10px">'+
+    (s?'<button class="btn gh" onclick="supDel(\''+s.id+'\')">🗑</button>':'')+
+    '<button class="btn big" style="flex:1" onclick="supSave(\''+(s?s.id:'')+'\')">'+t('save')+'</button></div>');
+}
+async function supSave(id){
+  if(!canKitchen())return;
+  await once(async()=>{
+    const name=(document.getElementById('spName').value||'').trim();
+    if(!name){toast(t('need_name'),true);return;}
+    const row={name,phone:document.getElementById('spPhone').value.trim()||null,
+      lead_days:num(document.getElementById('spLead').value)||1,
+      note:document.getElementById('spNote').value.trim()||null};
+    if(id){await dbi(()=>sb.from('ck_sups').update(row).eq('id',id));
+      Object.assign(S.sups.find(x=>x.id===id),row);}
+    else{row.id=uid('sp');await dbi(()=>sb.from('ck_sups').insert(row));S.sups.push(row);}
+    S.sups.sort((a,b)=>(a.name||'')<(b.name||'')?-1:1);
+    closeModal();toast(t('sv_ok'));supsModal();
+  });}
+async function supDel(id){
+  if(!canKitchen())return;
+  if(!confirm(t('confirm_del')))return;
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_sups').delete().eq('id',id));
+    S.sups=S.sups.filter(x=>x.id!==id);closeModal();supsModal();});}
+</script>
+<script>
+/* ============================================================
+   📈 สถิติการใช้ / ผลิต / ส่ง
+   ============================================================ */
+async function loadMoves(m){ // เดือน YYYY-MM
+  return await dbi(()=>sbAll(()=>sb.from('ck_moves').select('*')
+    .gte('d',m+'-01').lte('d',dstr(m,monthDays(m))).order('d').order('id'),100).then(data=>({data})));
+}
+let STATS_TOK=0;
+RENDER.stats=async function(el){
+  const m=S.statsM;
+  const tok=++STATS_TOK; // กันผลเดือนเก่าที่มาช้าทับเดือนที่เลือกล่าสุด
+  el.innerHTML='<div class="spin"></div>';
+  let moves=[],prev=[];
+  try{[moves,prev]=await Promise.all([loadMoves(m),loadMoves(prevMonth(m))]);}
+  catch(e){if(tok===STATS_TOK)el.innerHTML='<div class="card empty">⚠ '+esc((e&&e.message)||e)+'</div>';return;}
+  if(tok!==STATS_TOK)return;
+  S._mv=moves;
+  const useMv=moves.filter(x=>x.kind==='use');
+  const madeMv=moves.filter(x=>x.kind==='made');
+  const sendMv=moves.filter(x=>x.kind==='send');
+  const useVal=useMv.reduce((s,x)=>s+num(x.cost),0);
+  const madeVal=madeMv.reduce((s,x)=>s+num(x.cost),0);
+  const sendVal=sendMv.reduce((s,x)=>s+Math.abs(num(x.cost)),0);
+  const days=[...new Set(useMv.map(x=>x.d))].length||1; // นับเฉพาะวันที่มีการใช้ของจริง
+  let h='<div class="card"><h3>📈 '+t('nav_stats')+
+    '<span class="sp"><button class="btn gh sm2" onclick="S.statsM=prevMonth(S.statsM);show(\'stats\')">‹</button> <b>'+dispMonth(m)+'</b> <button class="btn gh sm2" onclick="S.statsM=nextMonth(S.statsM);show(\'stats\')">›</button></span></h3></div>';
+  h+='<div class="kpis">'+
+    '<div class="kpi hero"><div class="t">🍳 '+t('stt_produced')+'</div><div class="kpi-v">฿'+fmt(madeVal)+'</div><div class="s">'+fmt(madeMv.reduce((s,x)=>s+num(x.qty),0))+' '+t('unit')+'</div></div>'+
+    '<div class="kpi"><div class="t">🥬 '+t('stt_use_month')+'</div><div class="kpi-v">฿'+fmt(useVal)+'</div><div class="s mut">฿'+fmt(useVal/days)+' '+t('per_day')+'</div></div>'+
+    '<div class="kpi"><div class="t">🚚 '+t('stt_sent')+'</div><div class="kpi-v">฿'+fmt(sendVal)+'</div><div class="s mut">'+sendMv.length+' '+t('items_n')+'</div></div>'+
+    '<div class="kpi"><div class="t">📅 '+t('stt_use_day')+'</div><div class="kpi-v">฿'+fmt(useVal/days)+'</div><div class="s mut">'+days+' 📆</div></div></div>';
+  if(!moves.length){h+='<div class="card empty">'+t('stt_none')+'</div>';el.innerHTML=h;return;}
+  // กราฟมูลค่าผลิตรายวัน
+  h+='<div class="card"><h3>📊 '+t('stt_chart')+'</h3><div style="height:210px"><canvas id="stChart"></canvas></div></div>';
+  // การใช้วัตถุดิบ
+  const byItem={};
+  useMv.forEach(x=>{const k=x.ref_id;
+    if(!byItem[k])byItem[k]={name:x.name,qty:0,val:0,days:{}};
+    byItem[k].qty+=Math.abs(num(x.qty));byItem[k].val+=num(x.cost);byItem[k].days[x.d]=1;});
+  const prevByItem={};
+  prev.filter(x=>x.kind==='use').forEach(x=>{prevByItem[x.ref_id]=(prevByItem[x.ref_id]||0)+Math.abs(num(x.qty));});
+  h+='<div class="card"><h3>🥬 '+t('stt_by_item')+'</h3><div class="twrap"><table class="t">'+
+    '<tr><th>'+t('nav_items')+'</th><th class="right">'+t('stt_use_month')+'</th><th class="right">'+t('stt_use_day')+'</th><th class="right">'+t('stt_prev')+'</th><th class="right">'+t('stt_value')+'</th></tr>';
+  Object.keys(byItem).sort((a,b)=>byItem[b].val-byItem[a].val).forEach(k=>{
+    const v=byItem[k];const it=itemById(k);const pq=prevByItem[k];
+    h+='<tr class="tap" onclick="statHist(\''+k+'\',\'use\')"><td>'+esc(it?dispName(it):v.name||'')+'</td>'+
+      '<td class="n">'+fmtI(v.qty)+' '+esc(trUnit(it?it.unit||'':''))+'</td>'+
+      '<td class="n">'+fmtI(v.qty/(Object.keys(v.days).length||1))+'</td>'+
+      '<td class="n">'+(pq!=null?fmtI(pq):'–')+'</td>'+
+      '<td class="n">฿'+fmt(v.val,2)+'</td></tr>';});
+  h+='</table></div></div>';
+  // ผลิต & ส่งตามเมนู
+  const byMenu={};
+  madeMv.forEach(x=>{const k=x.ref_id;
+    if(!byMenu[k])byMenu[k]={name:x.name,made:0,sent:0,val:0};
+    byMenu[k].made+=num(x.qty);byMenu[k].val+=num(x.cost);});
+  sendMv.forEach(x=>{const k=x.ref_id;
+    if(!byMenu[k])byMenu[k]={name:x.name,made:0,sent:0,val:0};
+    byMenu[k].sent+=Math.abs(num(x.qty));});
+  h+='<div class="card"><h3>🍲 '+t('stt_by_menu')+'</h3><div class="twrap"><table class="t">'+
+    '<tr><th>'+t('nav_menus')+'</th><th class="right">'+t('stt_made')+'</th><th class="right">'+t('stt_send')+'</th><th class="right">'+t('stt_value')+'</th></tr>';
+  Object.keys(byMenu).sort((a,b)=>byMenu[b].val-byMenu[a].val).forEach(k=>{
+    const v=byMenu[k];const r=recipeById(k);
+    h+='<tr class="tap" onclick="statHist(\''+k+'\',\'made\')"><td>'+esc(r?dispName(r):v.name||'')+'</td>'+
+      '<td class="n">'+fmtI(v.made)+' '+esc(trUnit(r?r.yield_unit||'':''))+'</td>'+
+      '<td class="n">'+fmtI(v.sent)+'</td><td class="n">฿'+fmt(v.val,2)+'</td></tr>';});
+  h+='</table></div></div>';
+  el.innerHTML=h;
+  // วาดกราฟ
+  const dim=monthDays(m);const labels=[],vals=[];
+  for(let d=1;d<=dim;d++){labels.push(d);
+    vals.push(rnd2(madeMv.filter(x=>x.d===dstr(m,d)).reduce((s,x)=>s+num(x.cost),0)));}
+  if(S.charts.st)S.charts.st.destroy();
+  const cv=document.getElementById('stChart');
+  if(cv&&window.Chart)S.charts.st=new Chart(cv,{type:'bar',
+    data:{labels,datasets:[{data:vals,backgroundColor:'#C62127',borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>'฿'+fmt(v)}}}}});
+};
+function statHist(refId,kind){
+  const list=(S._mv||[]).filter(x=>x.ref_id===refId&&x.kind===kind);
+  if(!list.length)return;
+  const o=kind==='use'?itemById(refId):recipeById(refId);
+  const byD={};list.forEach(x=>{if(!byD[x.d])byD[x.d]={qty:0,val:0};
+    byD[x.d].qty+=Math.abs(num(x.qty));byD[x.d].val+=Math.abs(num(x.cost));});
+  let h='<h3>📅 '+t('stt_hist')+' · '+esc(o?dispName(o):list[0].name||'')+'</h3>'+
+    '<div class="twrap"><table class="t"><tr><th>'+t('date')+'</th><th class="right">'+t('qty')+'</th><th class="right">'+t('stt_value')+'</th></tr>';
+  Object.keys(byD).sort().forEach(d=>{
+    h+='<tr><td>'+dispDate(d)+'</td><td class="n">'+fmtI(byD[d].qty)+'</td><td class="n">฿'+fmt(byD[d].val,2)+'</td></tr>';});
+  h+='</table></div>';
+  openModal(h);
+}
+
+/* ============================================================
+   ⚙️ ตั้งค่า
+   ============================================================ */
+RENDER.set=function(el){
+  let h='<div class="card"><h3>🌐 '+t('se_lang')+'</h3><div class="langrow">'+
+    ['th','en','lo','my'].map(l=>'<button class="'+(l===LANG?'on':'')+'" onclick="setLang(\''+l+'\')">'+
+      '<span class="fl">'+({th:'🇹🇭',en:'🇬🇧',lo:'🇱🇦',my:'🇲🇲'}[l])+'</span>'+I18N[l].lang_name+'</button>').join('')+'</div></div>';
+  h+='<div class="card"><h3>👤 '+t('se_user')+'</h3>'+
+    '<div class="rowline"><div class="grow"><b>'+esc(S.user.name)+'</b><div class="xs mut">@'+esc(S.prof.username||'')+' · '+t('se_role')+': '+esc(S.prof.role||'')+'</div></div>'+
+    '<button class="btn gh sm2" onclick="doLogout()">🚪 '+t('logout')+'</button></div></div>';
+  if(isAdminish()){
+    h+='<div class="card"><h3>🛠 '+t('se_sql')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('se_sql_hint')+'</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'+
+      '<button class="btn sm2" onclick="copySql()">'+t('se_copy_sql')+'</button>'+
+      '<button class="btn gh sm2" onclick="toggleSqlBox()">SQL ▾</button></div>'+
+      '<textarea readonly id="sqlBox" style="display:none;font-family:ui-monospace,monospace;font-size:11px;height:180px;white-space:pre"></textarea></div>';
+    h+='<div class="card"><h3>🧰 Tools</h3><div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button class="btn gh sm2" onclick="recalcStock()">'+t('se_recalc')+'</button>'+
+      '<button class="btn gh sm2" onclick="backfillI18n()">'+t('se_backfill')+'</button></div></div>';
+  }
+  h+='<div class="card"><h3>ℹ️ '+t('se_about')+'</h3><div class="sm mut">'+t('se_about_txt')+'</div>'+
+    '<div class="xs mut" style="margin-top:8px">'+APP_VER+' · '+t('se_conn')+': '+esc(SB_URL.replace('https://',''))+'</div></div>';
+  el.innerHTML=h;
+  const ta=document.getElementById('sqlBox');if(ta)ta.value=KITCHEN_SQL;
+};
+function toggleSqlBox(){const ta=document.getElementById('sqlBox');
+  if(ta)ta.style.display=ta.style.display==='none'?'':'none';}
+async function backfillI18n(){ // เติมคำแปลที่ขาดให้ทุกชื่อ
+  let n=0;
+  for(const it of S.items){
+    if(it.i18n&&it.i18n.en&&it.i18n.lo&&it.i18n.my)continue;
+    const o=await autoI18n(it.name,it.i18n);
+    if(o){it.i18n=o;await sb.from('ck_items').update({i18n:o}).eq('id',it.id);n++;}
+  }
+  for(const r of S.recipes){
+    if(r.i18n&&r.i18n.en&&r.i18n.lo&&r.i18n.my)continue;
+    const o=await autoI18n(r.name,r.i18n);
+    if(o){r.i18n=o;await sb.from('ck_recipes').update({i18n:o}).eq('id',r.id);n++;}
+  }
+  toast(t('se_backfill_done')+' ('+n+')');
+}
+</script>
+<script>
+/* ============================================================
+   โลโก้ (CI เดียวกับ JJ P&L — ฝังไว้ในไฟล์)
+   ============================================================ */
+const LOGO_B64='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAMAAAAKE/YAAAAAkFBMVEX/xkP/wkL/wUL/wEH/vkD+vD/+u0D9uUH+uT79uT79uj38uT/9uEH9uD79uDz8tz37tz77tj75sEDxpD7plDregDbVczLVZDDNWC3ORSq5SCbJLijJIyjHIyjIIijGKCfGIie4LCLAIybHISfGISjGISfGISbCISbGICfFHSbDGiXCFyS5HSS8FyKbFxqTDxiMpFPlAAAO20lEQVR42u2bCZOiPBPHOXVFAblvBILcwvf/dm93EEc8pnbc95lxqshUua4c+Rk63f/uROb4CxuzQC/QC/QCvUAv0Av0Ar1AL9AL9AK9QC/QC/QCvUAv0Av0Ar1AL9AL9AK9QP8S6DiKorg4JhG8qYrfAR3VbdvWJKngnyZOfgV03AS2ZQdNnTmW5TXkN0CTxtNZjt15mcmyLG838ftDJ9XB4DVN4w2LUVVVYd0menvoqHU5bStv5dVa2Ww2Gmf+Cmib1TYbVd4o+CKLRlnlvwJaFllR3mxYQZYFo8zfGpok4KLBPFRRt4zVRjMNUWOtU0jyKDom7wmdFE3VxFVqCDr4PEOAF1MU/FPblO2/+BDmP/UbpZu5ZXByGctkdF02GN1mzD5wTBP8df6O0MnxZDm2Y3tBb5qmsBU34la39NTRWZ7nWKsmxftB543tjC1ITYtHDyIYFoy5oO5lVWGcNno76KTxHJf+Oc6Q2rqkbjXOti2wa0EFf82bJXk7aFJ7vuPa8Gf5rp+6nKQylu+YhgHUsqSA66uStxvp2jN9F5lTMJOud9eMNTg7TmQNm4NR58H1vZ9Nh6eUUvto2lY2+O7gstv9RrMNUZb5Xdq8n3kcSdQhte+Os9HrB28NcXyjaiIEczPtwuoNvUfYpL7lp2cX4jUnbyfhFNRXsrwy/Nd1038IHbVgFb7lphYg293JsTqfE9XdHieiLHBeE72j93At+LOd1LadLrN51uh9nRMZw2ZVdHmnN/TTdYDjbLsw3J6fWqyisabvWCZ1eRtVNLLqHUeaMoPvsAff0rcgpzkLGignyAb2vPlyjvsNIw324WEY3+LoYhjn1b2qKYzfRvnbTUTw09Sm/bQ3TFNci5Kg6PbO9w0W8lzB6cM3FExV2KVu7/ZdD3rUYgxjM0rTofdBWKdDRt7Q5eVAfer6rgl0SbNt2+DxReLdvh+Goc9eT2//08yliktSRo3L7Vc7UxeltakLKm/WUdadmrYm+TtCgwuBYN7a3H4j8aK6keEFsvEsLwLbcg6Qib15CWGvyLKkylvIxrPqYDAQaoKavC00mAcojo26WSkgl2g23lmCBqGm/E7ohFQP2rOz485kVVVlTJtRNU3i/QaU1E6SlbXXJN8FXeRVed+y7JnXBc8Hnpk10t6Cf9ZuH8JHFgdD/WqW+AI0hDrjUXum2oqwB8/s9303QP5F/XN4clkNgnrzfdCNyYjCbRPZp1IT/DU45i6JO3DQPRoyafy1rEGWSL4FmhQgkzlVvmvq6hN9HEZJFOIqRpKEpMIyTmqIu5Ue1Mm3jHRcB7qiqfdt/amoH4e0OE5DmxmCuvk26LwEmcbeN475BHryLZd/SWkKqrR70X18GboKXP9xS/++jEEAmkfo//dIJ7P2YR4lyp1HrQs/ucUd9L15POnwK9AQP+pLg8cah5M5JhFteZHP2hHOmyPn1dUNkvnND4aoStfQVXHVH14QRU/Jn0HH1SE4BFM7HDJQZdFsPsLxWYOzgmRe6f24QRBVN65ek+ZZIqmvzoZ7FW1bJdWXoJP6YOjXzTCdoI2vBIWn37WddV0pxxj0cWge/OByQQGR2sVPb2hYbvlsZj+GzqPWYiTxqgkcpzuXOhYA6fzm+rgoiYKeXpto1Lrsn+ngTcRG5aeqrH2p5pGqNC5njx2ynOG1cfH30EnrCfub4KGt2GndEmzD4G8DjMb5s4oifG9Om47xc2jqPBTOnT6sopPDgt6edajw6Przv4VOKvD9e2lz3SRQxPzoihPSmKA2t7PjGmf14SwqZ4a4x9odylJuBo0P6o8sfTyZuBkrZvOmiU+iD/OkoIVrrFPb789d82aJQ01ai730MJ0ECLOKYgJmi5LkETTcn1XlK5MmJ1O86lA73x0M6KEOfARNGu8m3Innu2j4zUkD4mMa5hUzBUSQnBMzSaj2N0z4ewSN8VBWWWcyp6hxGG7W4YYOE645/q1NJ7Vjz5qli/KWDjVYYULFx26EWRnTOU5PpicZ1TWoorgbIO32x6xlBg0PYQW5l5Ze0q3Ivulwt0Jq+Yk6YR7nGjfBrjdwvRUel0Oh14wgU5ORFc2ZzsmmZx02HnYVl13XndwH0HFj8eA7rA9zSm6jrD8OyhN18hC6gjxk1noXc9MR+kgy3zZXrITYyh/GDE54SpmchVzUBDu7hQdP4jhsHkCT2tspssJfOZvipr9sGGfNdv330KANZg36pvcYoVF9QCqisTJYNngz3W3jiJBjcR7nQGfHCVsUdIn5FjrEeawKRkeed3iyx6n+Feg7t33ue4wRSZRBDtLbKwGGX9ZWvF1eQjyMsy5cUtZH0BDdYYqorPvJOlE0+aevQMMYTQ0TjUsVgEKDkidxmMEkgywbw4DCmkEbFQWdY8CsXVzVI2j4jMeSzVzJJlN/VCW9BJ3jFqmxNaDfMCJfjfQ4mwC7tznqm1Re91rcBUZAb8Dwg6s6VM+gY4xMewzhHyG6SupLh+guXoM+OFNDnf4IuspjyFddQULqvbiyixxXls3xRGGMnQ+g0WNKirz2r2ngy146DGiHX4eOLtGFZ0zo7RE0nVLZ4At4762scHh7ComrbpzVPoHGj5S9ANGwmIXIcw7H0yXzl6Bbmx9zV00wn4z0+KijYaQ6e9Qcs2wFPKFoHOr8CTTw7K8E3rkqIZw75K0XoeMa0s4xkIr6oUqeQlckGiBQIPR4e/RVe7hMHRXcPXSSYEoLTrolcwG1uegbkJIvQGNeIUqSQkcQ5cZTaKR0mSvoqPFxpOFM6wl0FYDDE++kN6dIknSWG9Ur0HCPta5rVJrSKfUJNBVsH9BYbcSNEfKY/z2AhnCI+z66eO6WocPdFvTveOEr5lGlfd/7ujh19wQ6JvfQWKX7OPUBdOOJ80SLeg/aIafCONHA9JJNd3CP3hDk83N+CJ3kkHneQSd1qqO4mmzzFhocExVLp/iuw3Qny2cl+ZKfjsMoHF0u7fwhNCmdQx3dQmMVl07FaTLcQwsAbc43i5EwDOODgXp0zzovQh+rIho1C50YDyNiazNmWYe30PHJpymCOnZ+Cw2J1QpH4nbloigInQ3SnrNehb5MfJwY1UXlXbtbSF94M2jO0BeNlMcdtSvIpprwXpqO6SF1pHdrpQgqqYJZhofmDL37GjTMmDWOmCJ6p+bkzUcaNSckH6A5XJpGb9RLDpqH4yeyIrh44W1wiSFnhgvvq5XTdZKetc1ZmsqrL0KjRsD+RBN380CWuFXgi4+PFbdErxQ8yJn4UOXN2p9KeaROtT849qJOL8SgcbX/GAdUg+G8W82n6g8NbYX7Q6jjVHEl7Et6mmAZAVSFLOBKNpVFU2UDJbFAHx+MGfUxnN8nV8+Z9q78mS5UGbsPLyLPF+StwtunOJpX0cCD/6HxDFWIoIClrPT0oeh+Dh2fTB7cwFbZoybYbrZgHENEzqVTB9KtLcaw/f4PmI07HaHQMBWhe0lRVBUTYo21PjJIDD/8XpEFu2yreFZsSfXVFh8u9LiHb63gUIRfK/WCjTHaR+VE1hhrKOOpijX4a16lgR6/jX05ggZPOhTVlwbztb8qA4N7WeE+at50D83tTNSuKkQwFH1EvlhUBx/EwFe+VLag6/jDdobUZEVVHePPkF0p+iLs/LWgTWU1TTD6WRkn7EGuyPJe4HW7ToorQZzuQFxeymKMPTxm/gwawpTJsfy0eDXrOieQbrkGy0sYKfqbenrY456O85X8Lu3CvLgu1fQ2I6k7VWNny1vFeNm0XMaYfRZ/ffki6gbfNs3zMqHfz/bREchbet/UV5zR360BRKAkrPFK07g1zCrOBheMS9P4eWCsxsuM8TKzf7px7xPoPKcLfwMtpED2Hc638lcxfCng9h/cvPgo98CFSXFT+ozRuFasxN7s3CTRdBluCeniZz8+Yj7frxFl3dTuy/J5GKHQeTAgBbm6Mr83TLAQeIgGxKqbZ3TdYfTy6lZC4nN7WGqIY5A6T6bE1B5MJpD5WDlJ0/t935fL4teX5Kpx9Q/X/5JH9ZHik9XO53sTqmMVYsWne7RN5fM9Dd+z3+O5S43DF3/MsPwecYH+j6CjcdWImiddi6GyjURxTKuIRRKR89tzORfrjMnPQldNU5ZxjUIZ3oLurZsaAlLdQKtjFNYNfUsup1dh3dav7mv7v0BXB887VG3gtccqwLeV5wVV3MB7eNNgpdqjb2v01Ak9vQ3cAFIRQn4IGtMxzms8Y+ckkELugroxGauBfAel/86pMbkRWAayvLIEt1sHO851dozmNAl8kFfVD0DjeiVkcCYPmW/rCvoI3QYGb4BSEnfBQWdVwzIhiTSsrDzUgaZojGGy+iEwDa9LouqnoE++rqWn2uMn6NIEGTz44tpLHAD0h751GMHQTXgEouEOPqcFAcfouLmM/AT0emubjLAyD80FGtJoxuwgCVh7p2FwV4yd1SmKTf8EduMPnSdowck2DN3u4p8ZaY1Z27awA/MA6IpCNxaWcDyArg8gx7eM0+AiaN/jvgUPjgB0g9KzL8nPQIsWLsmCTdORLifohkI3MWl7VJ+HNO26EqBh3jYIXQfwQfcPv9T/J/MQ0h6eN52Ia6c8WfORbgInMxjn5KwNL/AKHOkROtB3TuC9uL3tn0d669W1J+JIr1TGcGEOTtC7vdccDM7SwbYdhoeEr4GJiNAiQK8Zjnt1p9i/QrMMUjArGGlGt1cMY/XhaYRmWIC2eIbzT3FqW5aVtoHAuHg6By4HPnBPPzARIVrYdlDj66EJbHfoXWs4hbVruyU9VJWDb/l9NKaLHTlMpwf1+JuAH7DpI+kQBZFKTMxtO+1ttwkxkcUPu7jAjKokVY4r9Elc4mfjEbpfgPxAcIFWlmCVeVbSmK4zbkoXHeH/5Jhl8AJZagJoJIGEr8rzMgPVkeDpxyep43dAj7oHX4vw5ONvWaw2IfTTsyQij09/jySgSJrUMgzTr8nxG9r/CfpI93UPfZz/HmiUqlhfKZPfBQ3TDiZX/sugl2x8gV6gF+gFeoFeoBfoBXqBXqAX6AV6gV6gF+gFeoFeoBfoBXqBXqAX6AV6gV6gF+gfbP8DBg4FJx3FuCkAAAAASUVORK5CYII=';
+(function(){
+  for(const id of ['sbLogo','hdLogo','lgLogo']){const el=document.getElementById(id);if(el)el.src=LOGO_B64;}
+  for(const rel of ['icon','apple-touch-icon']){const l=document.createElement('link');l.rel=rel;l.href=LOGO_B64;document.head.appendChild(l);}
+})();
+
+/* ============================================================
+   Boot + events
+   ============================================================ */
+async function enterApp(prof){
+  S.prof=prof;
+  S.user={id:prof.auth_uid,name:prof.name||prof.username||'?'};
+  hideLogin();
+  try{await loadAll();}
+  catch(e){ // โหลดข้อมูลพลาด (เน็ตหลุด ฯลฯ) — ไม่เด้งกลับหน้า login ให้กดลองใหม่
+    document.getElementById('view-dash').innerHTML=
+      '<div class="card"><div class="empty">⚠ '+esc((e&&e.message)||e)+'</div>'+
+      '<button class="btn big" onclick="location.reload()">'+t('setup_retry')+'</button></div>';
+    applyChrome();return;}
+  applyChrome();
+  const savedTab=LS.get('jjck_tab','dash');
+  show(VIEWS.includes(savedTab)?savedTab:'dash');
+}
+async function boot(){
+  document.body.setAttribute('data-lang',LANG);
+  document.documentElement.lang=LANG;
+  applyChrome();paintLogin();
+  if(!sb){showLogin();document.getElementById('lgMsg').textContent=t('lg_lib');return;}
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session){showLogin();return;}
+    const prof=await sbProfile();
+    if(!prof){await sb.auth.signOut();showLogin();return;}
+    if(prof.status!=='active'){await sb.auth.signOut();showLogin();
+      document.getElementById('lgMsg').textContent=t('lg_pending');return;}
+    await enterApp(prof);
+  }catch(e){showLogin();
+    document.getElementById('lgMsg').textContent=(e&&e.message)||String(e);}
+}
+// nav: แถบบน (มือถือ) + sidebar (จอใหญ่)
+document.querySelectorAll('.tabbar button[data-v],.sb-item[data-v]').forEach(b=>{
+  b.addEventListener('click',()=>show(b.dataset.v));
+});
+boot();
+</script>
+</body>
+</html>
