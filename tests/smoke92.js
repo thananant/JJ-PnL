@@ -84,7 +84,7 @@ setTimeout(async()=>{
   out.push('คงค้าง mookt ณ 2026-09-02 ฿38,853.95: '+t.includes('คงค้างใน jingjaimookt ณ 2026-09-02 ฿38,853.95'));
   out.push('เตือน ADJUSTMENT +1,298.98: '+(t.includes('ADJUSTMENT')&&t.includes('+1,298.98')));
   out.push('มีปุ่ม 2 ช่อง (รายการ/เงินเคลื่อนไหว): '+(!!d.getElementById('beamFile')&&!!d.getElementById('beamFile2')&&t.includes('ไฟล์เงินเคลื่อนไหว')));
-  out.push('สรุปหัว: เข้าธนาคารแล้วเดือนนี้ 338,726.70: '+t.includes('เข้าธนาคารแล้วเดือนนี้ ฿338,726.70'));
+  out.push('กล่อง: เข้าธนาคารแล้ว ฿338,726.70: '+[...d.querySelectorAll('#view-recon .pcell')].some(x=>x.textContent.includes('เข้าธนาคารแล้ว')&&x.textContent.includes('฿338,726.70')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },400);

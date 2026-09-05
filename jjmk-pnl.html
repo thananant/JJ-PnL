@@ -5178,20 +5178,22 @@ RENDER.recon = async (el)=>{
       +'</div>';
   }
   // ---- แถบสรุปในการ์ดหัว: ไม่ตรงเท่าไร อะไรบ้าง ----
-  const chip=(txt,color)=>'<span class="sm" style="font-weight:700;color:'+color+'">'+txt+'</span>';
-  let sumRow='<div style="flex-basis:100%;display:flex;gap:6px 18px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:8px;margin-top:6px">';
-  if(!beam.length&&!moves.length){ sumRow+=chip('ยังไม่ได้อัปโหลดไฟล์ Beam เดือนนี้ — อัปโหลดแล้วผลสรุปจะขึ้นตรงนี้','var(--mut)'); }
+  // ---- กล่องสรุปในการ์ดหัว: ตรง/เกิน/ขาด/สุทธิ/รอเข้า/เข้าธนาคาร/ปิดกะ ----
+  const box=(l,v,sub,color)=>'<div class="pcell" style="min-width:150px;flex:1"><div class="l">'+l+'</div><div class="v" style="color:'+color+'">'+v+'</div><div class="xs mut">'+(sub||'')+'</div></div>';
+  let sumRow='<div style="flex-basis:100%;display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">';
+  if(!beam.length&&!moves.length){ sumRow+='<span class="sm mut">ยังไม่ได้อัปโหลดไฟล์ Beam เดือนนี้ — อัปโหลดแล้วผลสรุปจะขึ้นตรงนี้</span>'; }
   else{
-    if(nOk>0)sumRow+=chip('💸 เงินโอนตรง '+nOk+' วัน','#1F7A43');
-    if(nOv>0)sumRow+=chip('💸 คีย์เกิน/เงินไม่เข้า '+nOv+' วัน ฿'+fmt(ovK,2),'var(--red)');
-    if(nUn>0)sumRow+=chip('💸 คีย์ขาด/ลืมคีย์ '+nUn+' วัน ฿'+fmt(unK,2)+' (เงินเข้ามากกว่าที่คีย์)','#A66A00');
-    if(!nOk&&!nOv&&!nUn)sumRow+=chip('💸 เงินโอน: ยังไม่มีวันที่เทียบได้','var(--mut)');
-    if(tPend>0)sumRow+=chip('⏳ รอเงินเข้าบัญชี ฿'+fmt(tPend,2),'var(--blue)');
-    if(bankTot>0)sumRow+=chip('🏦 เข้าธนาคารแล้วเดือนนี้ ฿'+fmt(bankTot,2),'var(--ink)');
-    sumRow+=chip(cashBadN>0
-      ?'💵 ปิดกะไม่ลงตัว '+cashBadN+' กะ ('+(cashBadSum>0?'เกินรวม':'ขาดรวม')+' ฿'+fmt(Math.abs(cashBadSum),2)+')'
-      :(cashShN>0?'💵 ปิดกะลงตัวทุกกะ ('+cashShN+' กะ)':'💵 ยังไม่มีข้อมูลปิดกะ'),
-      cashBadN>0?'var(--red)':(cashShN>0?'#1F7A43':'var(--mut)'));
+    sumRow+=box('✓ เงินโอนตรง',(nOk>0?nOk+' วัน':'—'),(nOk||nOv||nUn)?'จาก '+(nOk+nOv+nUn)+' วันที่เทียบได้':'ยังไม่มีวันที่เทียบได้','#1F7A43');
+    if(nOv>0)sumRow+=box('✗ คีย์เกิน/เงินไม่เข้า','฿'+fmt(ovK,2),nOv+' วัน — ต้องไล่เช็คสลิป','var(--red)');
+    if(nUn>0)sumRow+=box('△ คีย์ขาด/ลืมคีย์','฿'+fmt(unK,2),nUn+' วัน — เงินเข้ามากกว่าที่คีย์','#A66A00');
+    if(nOv>0||nUn>0){ const netD=unK-ovK;
+      sumRow+=box('สุทธิ +/− จากยอดที่คีย์',(netD>=0?'+':'−')+'฿'+fmt(Math.abs(netD),2),netD>=0?'รวมแล้วเงินเข้าจริงมากกว่าที่คีย์':'รวมแล้วเงินเข้าจริงน้อยกว่าที่คีย์',netD>=0?'#1F7A43':'var(--red)');
+    }
+    if(tPend>0)sumRow+=box('⏳ รอเงินเข้าบัญชี','฿'+fmt(tPend,2),'รอบโอนถัดไปของ Beam ไม่ใช่เงินหาย','var(--blue)');
+    if(bankTot>0)sumRow+=box('🏦 เข้าธนาคารแล้ว','฿'+fmt(bankTot,2),'รวมเดือนนี้ (จากไฟล์เงินเคลื่อนไหว)','var(--ink)');
+    sumRow+=box('💵 ปิดกะ',cashBadN>0?cashBadN+' กะไม่ลงตัว':(cashShN>0?'ลงตัวทุกกะ':'—'),
+      cashBadN>0?((cashBadSum>0?'เกินรวม ฿':'ขาดรวม ฿')+fmt(Math.abs(cashBadSum),2)):(cashShN>0?cashShN+' กะที่กรอกแล้ว':'ยังไม่มีข้อมูลปิดกะ'),
+      cashBadN>0?'var(--red)':'#1F7A43');
   }
   sumRow+='</div>';
   el.innerHTML=
