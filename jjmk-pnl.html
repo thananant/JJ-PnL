@@ -471,6 +471,7 @@ canvas{max-width:100%}
   <button class="sb-item" data-v="vatrep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21V3Z"/><path d="M9.5 14.5 14.5 8.5"/><circle cx="9.8" cy="9" r="1.1"/><circle cx="14.2" cy="14" r="1.1"/></svg>รายละเอียดบิล</button>
   <button class="sb-item" data-v="usage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7l8 4 8-4-8-4Z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/></svg>ข้อมูลการใช้ของ</button>
   <button class="sb-item" data-v="actual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9 17l11-11"/><path d="M4 6.5h6"/><path d="M4 19.5h6"/></svg>ใช้จริง (สต๊อก)</button>
+  <button class="sb-item" data-v="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16v3.5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V11Z"/><path d="M2.8 11h18.4"/><path d="M9 7.5c0-.9-.9-1-.9-1.9 0-.5.3-.9.9-1.1"/><path d="M15 7.5c0-.9-.9-1-.9-1.9 0-.5.3-.9.9-1.1"/></svg>ครัวกลาง</button>
   <button class="sb-item" data-v="sum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20v-7"/><path d="M12 20V5"/><path d="M19 20v-10"/></svg>สรุปเดือน</button>
   <button class="sb-item" data-v="pv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8.5h6"/><path d="M9 12.5h6"/><path d="M9 16.5h3.5"/></svg>ใบสำคัญจ่าย</button>
   <button class="sb-item" data-v="etc"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>อื่นๆ</button>
@@ -495,6 +496,7 @@ canvas{max-width:100%}
     <button data-v="detail">บันทึกบิล</button>
     <button data-v="vatrep">รายละเอียด</button>
     <button data-v="usage">การใช้ของ</button>
+    <button data-v="ck">ครัวกลาง</button>
     <button data-v="sum">สรุปเดือน</button>
     <button data-v="pv">ใบสำคัญจ่าย</button>
     <button data-v="etc">อื่นๆ</button>
@@ -509,6 +511,7 @@ canvas{max-width:100%}
   <section class="view" id="view-vatrep"></section>
   <section class="view" id="view-usage"></section>
   <section class="view" id="view-actual"></section>
+  <section class="view" id="view-ck"></section>
   <section class="view" id="view-sum"></section>
   <section class="view" id="view-pv"></section>
   <section class="view" id="view-etc"></section>
@@ -577,7 +580,7 @@ function sha256hex(str){
 function pwHash(u,p){ return sha256hex(u+'|'+p+'|JJPNL'); }
 
 /* ---------- สิทธิ์ผู้ใช้ ---------- */
-const MENU_LABEL={dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'};
+const MENU_LABEL={dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',ck:'ครัวกลาง',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'};
 function permOf(v){
   const u=S.user; if(!u)return 'edit';
   if(u.role==='admin')return 'edit';
@@ -988,7 +991,7 @@ const RENDER = {};
 async function show(v){
   if(S.user&&permOf(v)==='none') v=firstAllowedTab();
   document.querySelectorAll('.tabbar button,.sb-item').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
-  const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
+  const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',actual:'ใช้จริง (สต๊อก)',ck:'ครัวกลาง',sum:'สรุปเดือน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   S.tab=v;
   const _ae=document.activeElement;
@@ -1408,7 +1411,102 @@ async function boot(){
   }
   S.tab=startTab; await show(startTab);
 }
-const VIEWS=['dash','income','exp','detail','vatrep','usage','sum','pv','etc','set'];
+const VIEWS=['dash','income','exp','detail','vatrep','usage','ck','sum','pv','etc','set'];
+
+/* ============ ครัวกลาง (JJ Kitchen) ============
+   ดึงต้นทุนจากระบบครัวกลาง (ตาราง ck_* — เปิดสิทธิ์อ่านใน jjmk_kitchen_setup.sql)
+   ตัวเลขเป็นต้นทุนโอนภายใน ไม่ถูกนำไปรวมเป็นรายจ่ายในกำไร/ขาดทุน (กันซ้ำกับบิลซัพ) */
+RENDER.ck = async (el)=>{
+  const F=S.m+'-01', T=dstr(S.m,monthDays(S.m));
+  const pmm=prevMonth(S.m), PF=pmm+'-01', PT=dstr(pmm,monthDays(pmm));
+  const brQ = S.br!=='ALL' ? '&branch=eq.'+S.br : '';
+  let ords=[],pords=[],recipes=[],openOrds=[],items=[];
+  try{
+    [ords,pords,recipes,openOrds]=await Promise.all([
+      selAllQ('ck_orders',`select=*&status=in.(sent,done)&d=gte.${F}&d=lte.${T}${brQ}&order=d,id`),
+      selAllQ('ck_orders',`select=id,total&status=in.(sent,done)&d=gte.${PF}&d=lte.${PT}${brQ}&order=id`),
+      selAllQ('ck_recipes',`select=id,name,cat,yield_unit,unit_cost,image_url,qty&deleted_at=is.null&order=sort,name`),
+      selAllQ('ck_orders',`select=*&status=in.(new,prep)${brQ}&order=d,id`)
+    ]);
+    const ids=ords.map(o=>o.id);
+    for(let i=0;i<ids.length;i+=80){
+      items.push(...await selAllQ('ck_order_items',`select=*&order_id=in.(${ids.slice(i,i+80).join(',')})&order=id`));
+    }
+  }catch(e){
+    el.innerHTML='<div class="card"><div class="empty">🍳 อ่านข้อมูลครัวกลางไม่ได้ — '+esc(e.message)+
+      '<br>ถ้ายังไม่ได้ติดตั้งระบบครัวกลาง ให้รัน <b>jjmk_kitchen_setup.sql</b> ใน Supabase SQL Editor ครั้งเดียว แล้วเปิดหน้านี้ใหม่ครับ</div>'+
+      '<div style="text-align:center"><a class="btn dk sm2" style="text-decoration:none" href="jjmk-kitchen.html" target="_blank">🍳 เปิดระบบครัวกลาง</a></div></div>';
+    return;
+  }
+  const oMap={};ords.forEach(o=>oMap[o.id]=o);
+  const val=ords.reduce((s,o)=>s+num(o.total),0);
+  const pval=pords.reduce((s,o)=>s+num(o.total),0);
+  // รวมตามเมนู
+  const byMenu={};
+  items.forEach(l=>{if(!oMap[l.order_id])return;
+    const k=l.recipe_id||l.name;
+    if(!byMenu[k]) byMenu[k]={rid:l.recipe_id,name:l.name,unit:l.unit||'',qty:0,amt:0};
+    byMenu[k].qty+=num(l.qty); byMenu[k].amt+=num(l.amount);});
+  // รวมตามสาขา (โหมดทุกสาขา)
+  const byBr={};
+  ords.forEach(o=>{const k=o.branch||o.branch_name||'?';
+    if(!byBr[k]) byBr[k]={name:o.branch_name||BRNAME[o.branch]||o.branch,n:0,amt:0};
+    byBr[k].n++; byBr[k].amt+=num(o.total);});
+  const ckThumb=r=>(r&&r.image_url)
+    ? '<img src="'+esc(r.image_url)+'" loading="lazy" style="width:34px;height:34px;border-radius:9px;object-fit:cover;vertical-align:middle;margin-right:7px">'
+    : '<span style="display:inline-flex;width:34px;height:34px;border-radius:9px;background:#F3ECE0;align-items:center;justify-content:center;margin-right:7px;vertical-align:middle">🍲</span>';
+
+  let h='<div class="card"><h3>🍳 ครัวกลาง — ต้นทุนของที่ส่งให้สาขา<span class="sp">'+monthLabel(S.m)+' · '+(S.br==='ALL'?'ทุกสาขา':esc(BRNAME[S.br]||S.br))+'</span></h3>'+
+    '<div class="sm mut">ดึงสดจากระบบครัวกลาง (JJ Kitchen) — เป็นต้นทุนโอนภายใน ไม่ถูกนับซ้ำเป็นรายจ่ายในกำไร/ขาดทุน</div>'+
+    '<a class="btn dk sm2" style="margin-top:10px;text-decoration:none" href="jjmk-kitchen.html" target="_blank">🍳 เปิดระบบครัวกลาง →</a></div>';
+  const dpc=pval>0?((val-pval)/pval*100):null;
+  h+='<div class="kpis">'+
+    '<div class="kpi hero"><div class="t">รับจากครัวกลางเดือนนี้</div><div class="kpi-v">฿'+fmt(val,2)+'</div><div class="s">'+ords.length+' ครั้ง</div></div>'+
+    '<div class="kpi"><div class="t">เดือนก่อน ('+monthLabel(pmm)+')</div><div class="kpi-v">฿'+fmt(pval,2)+'</div><div class="s '+(dpc==null?'mut':(dpc>0?'drn':'drp'))+'">'+(dpc==null?'–':(dpc>0?'▲ +':'▼ ')+fmt(Math.abs(dpc),1)+'%')+'</div></div>'+
+    '<div class="kpi"><div class="t">ออเดอร์ค้างส่ง</div><div class="kpi-v">'+openOrds.length+'</div><div class="s mut">รายการ</div></div>'+
+    '<div class="kpi"><div class="t">เมนูครัวกลาง</div><div class="kpi-v">'+recipes.length+'</div><div class="s mut">เมนู</div></div></div>';
+  // ตามเมนู
+  h+='<div class="card"><h3>🍲 รับตามเมนู <span class="sp">จำนวน · ต้นทุน/หน่วยเฉลี่ย · มูลค่า</span></h3>';
+  const mks=Object.keys(byMenu).sort((a,b)=>byMenu[b].amt-byMenu[a].amt);
+  if(!mks.length) h+='<div class="empty">เดือนนี้ยังไม่มีของส่งจากครัวกลาง'+(S.br!=='ALL'?' มาที่สาขานี้':'')+'</div>';
+  else{
+    h+='<div class="twrap"><table><tr><th>เมนู</th><th class="right">จำนวน</th><th class="right">ต้นทุน/หน่วย</th><th class="right">มูลค่า ฿</th></tr>';
+    mks.forEach(k=>{const v=byMenu[k];const r=v.rid?recipes.find(x=>x.id===v.rid):null;
+      const avg=v.qty>0&&v.amt>0?v.amt/v.qty:null;
+      h+='<tr><td>'+ckThumb(r)+esc(v.name)+'</td><td class="n">'+fmtI(v.qty)+' '+esc(v.unit)+'</td>'+
+        '<td class="n">'+(avg!=null?fmt(avg,2):'–')+'</td><td class="n">'+fmt(v.amt,2)+'</td></tr>';});
+    h+='<tr class="tot"><td>รวม</td><td></td><td></td><td class="n">฿'+fmt(val,2)+'</td></tr></table></div>';
+  }
+  h+='</div>';
+  // ทุกสาขา: แยกตามสาขา
+  if(S.br==='ALL'&&Object.keys(byBr).length){
+    h+='<div class="card"><h3>🏪 แยกตามสาขา</h3><div class="twrap"><table><tr><th>สาขา</th><th class="right">ครั้ง</th><th class="right">มูลค่า ฿</th></tr>';
+    Object.keys(byBr).sort((a,b)=>byBr[b].amt-byBr[a].amt).forEach(k=>{const v=byBr[k];
+      h+='<tr><td>'+esc(v.name)+'</td><td class="n">'+v.n+'</td><td class="n">'+fmt(v.amt,2)+'</td></tr>';});
+    h+='</table></div></div>';
+  }
+  // รายวัน
+  if(ords.length){
+    h+='<div class="card"><h3>📅 รายวัน</h3><div class="twrap"><table><tr><th>วันที่</th>'+(S.br==='ALL'?'<th>สาขา</th>':'')+'<th class="right">รายการ</th><th class="right">มูลค่า ฿</th></tr>';
+    ords.forEach(o=>{const n=items.filter(l=>l.order_id===o.id).length;
+      h+='<tr><td>'+thDate(o.d)+'</td>'+(S.br==='ALL'?'<td>'+esc(o.branch_name||BRNAME[o.branch]||o.branch||'')+'</td>':'')+
+        '<td class="n">'+n+'</td><td class="n">'+fmt(o.total,2)+'</td></tr>';});
+    h+='</table></div></div>';
+  }
+  // ต้นทุนต่อหน่วยปัจจุบันของทุกเมนู
+  h+='<div class="card"><h3>💰 ต้นทุนต่อหน่วยปัจจุบัน (จากการผลิตล่าสุด)</h3>';
+  if(!recipes.length) h+='<div class="empty">ยังไม่มีเมนูในระบบครัวกลาง</div>';
+  else{
+    h+='<div class="twrap"><table><tr><th>เมนู</th><th>หมวด</th><th class="right">คงเหลือที่ครัว</th><th class="right">ต้นทุน/หน่วย</th></tr>';
+    recipes.forEach(r=>{
+      h+='<tr><td>'+ckThumb(r)+esc(r.name)+'</td><td class="sm mut">'+esc(r.cat||'')+'</td>'+
+        '<td class="n">'+fmtI(r.qty)+' '+esc(r.yield_unit||'')+'</td>'+
+        '<td class="n">'+(r.unit_cost!=null?'<b>฿'+fmt(r.unit_cost,2)+'</b> / '+esc(r.yield_unit||''):'<span class="chip mid">ยังไม่เคยผลิต</span>')+'</td></tr>';});
+    h+='</table></div>';
+  }
+  h+='</div>';
+  el.innerHTML=h;
+};
 
 /* ============ แดชบอร์ด ============ */
 function killChart(id){ if(S.charts[id]){S.charts[id].destroy(); delete S.charts[id];} }
