@@ -472,7 +472,7 @@ async function loadCore(){
   const [sup,fix,brs]=await Promise.all([
     selAll('pnl_suppliers','select=id,name,category&order=sort'),
     selAll('pnl_fixed_items','select=id,branch,grp,name,default_amount,active&order=grp,sort'),
-    selQ('pnl_branches','select=code,name&order=sort,code').catch(()=>[])
+    selQ('pnl_branches','select=*&order=sort,code').catch(()=>[])
   ]);
   S.sup=sup;
   S.supById=Object.fromEntries(sup.map(x=>[x.id,x]));
@@ -522,6 +522,9 @@ async function loadInstallments(){
 
 /* ============ คำนวณรายเดือน (สูตรเดียวกับหน้า P&L) ============ */
 function keepBr(b){ return S.br==='ALL'||b===S.br; }
+/* สาขา "ส่วนกลาง" (ออฟฟิศ) — มีเฉพาะรายจ่าย: รวมต้นทุนในยอดรวม แต่ไม่โชว์เป็นสาขาให้เลือก/เทียบ */
+function isCen(code){ const b=S.branches.find(x=>x.code===code); return !!(b&&b.is_central); }
+function realBranches(){ return S.branches.filter(b=>!b.is_central); }
 function buildMonths(y,bundle){
   const M={};
   const get=mo=>M[mo]??(M[mo]={pos:0,grab:0,lineman:0,vcSup:0,cash:0,shopee:0,extra:0,byCat:{},fixByBr:{},hRev:0,hasH:false,hItems:{}});
@@ -591,10 +594,10 @@ function buildMonths(y,bundle){
   }
   return out;
 }
-/* รายได้แยกสาขา (ไว้วาดกราฟเทียบสาขา) */
+/* รายได้แยกสาขา (ไว้วาดกราฟเทียบสาขา — ไม่รวมส่วนกลางที่ไม่มีรายรับ) */
 function buildBranchSeries(y,bundle){
   const res={};
-  S.branches.forEach(b=>res[b.code]=new Array(12).fill(0));
+  realBranches().forEach(b=>res[b.code]=new Array(12).fill(0));
   bundle.inc.forEach(r=>{
     const m=Number(r.d.slice(5,7))-1;
     if(res[r.branch])res[r.branch][m]+=(num(r.sales_pos_am)+num(r.sales_pos_pm))*100/107;
@@ -656,7 +659,8 @@ function paintCtrls(){
   document.getElementById('yearLab').innerHTML=`พ.ศ. ${S.y+543}<small>ค.ศ. ${S.y}</small>`;
   document.getElementById('yNext').disabled=S.y>=new Date().getFullYear()+1;
   const seg=document.getElementById('brSeg');
-  const brs=[{code:'ALL',name:''},...S.branches];
+  if(S.br!=='ALL'&&isCen(S.br))S.br='ALL'; // สาขาส่วนกลางไม่มีรายรับ — ดูแยกไม่ได้
+  const brs=[{code:'ALL',name:''},...realBranches()];
   seg.innerHTML=brs.map(b=>`<button class="${S.br===b.code?'on':''}" onclick="chBr('${b.code}')">${esc(BRNAME[b.code]||b.code)}</button>`).join('');
   const u=document.getElementById('uName');
   if(u&&S.user)u.innerHTML=`👑 <b>${esc(S.user.display_name||S.user.username)}</b>`;
@@ -687,7 +691,7 @@ function heroHTML(rows,prev){
   return `
   <section id="secHero">
     <div class="sec-h"><h2 class="gold-txt">ภาพรวมทั้งปี ${S.y+543}</h2><span class="en">Annual Overview</span></div>
-    <p class="sec-sub">${esc(BRNAME[S.br]||S.br)} · มีข้อมูล ${has.length} เดือน${histN?` (จากข้อมูลย้อนหลัง ${histN} เดือน)`:''}</p>
+    <p class="sec-sub">${esc(BRNAME[S.br]||S.br)} · มีข้อมูล ${has.length} เดือน${histN?` (จากข้อมูลย้อนหลัง ${histN} เดือน)`:''}${S.br==='ALL'&&S.branches.some(b=>b.is_central)?' · รวมค่าใช้จ่ายส่วนกลาง (ออฟฟิศ) แล้ว':''}</p>
     <div class="hero">
       <div class="card gold kpi">
         <div class="lab"><span class="ic">🏮</span>ยอดขายรวมทั้งปี</div>
@@ -997,7 +1001,7 @@ function drawCharts(rows,brSeries){
   if(cb){
     const cols=['#C62127','#E9B44C','#5E96A8','#8AA05E'];
     S.charts.br=new Chart(cb,{type:'bar',
-      data:{labels,datasets:S.branches.map((b,i)=>({label:BRNAME[b.code]||b.code,
+      data:{labels,datasets:realBranches().map((b,i)=>({label:BRNAME[b.code]||b.code,
         data:(brSeries[b.code]||[]).map(v=>v||null),backgroundColor:cols[i%cols.length],borderRadius:6,maxBarThickness:26}))},
       options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{labels:{usePointStyle:true,boxWidth:8}},
