@@ -623,7 +623,8 @@ async function analyzeOne(id){
 async function analyzePending(){
   toast('กำลังวิเคราะห์รายการที่ค้าง...');
   try{const r=await brain('analyze',{limit:15});S.cache={};await show(S.tab);
-    toast(r.analyzed?`วิเคราะห์แล้ว ${r.analyzed} รายการ ✓`:'ไม่มีรายการค้าง')}
+    if(r.errors&&r.errors.length){toast('⚠️ วิเคราะห์สะดุด: '+r.errors[0],true);console.error(r.errors)}
+    else toast(r.analyzed?`วิเคราะห์แล้ว ${r.analyzed} รายการ ✓`:'ไม่มีรายการค้าง')}
   catch(e){toast('วิเคราะห์ไม่ได้: '+e.message,true)}
 }
 function copyReply(id){
@@ -776,17 +777,20 @@ async function analyzeAllPending(){
     <p class="sm" id="aapTxt">ค้างอยู่ ${total} รายการ · กำลังเริ่ม...</p>
     <p class="xs mut">ทำทีละชุด ชุดละ ~10 รายการ เปิดหน้านี้ทิ้งไว้ได้เลย · ถ้าปิดไป cron ก็จะไล่วิเคราะห์ต่อให้เองทุก 15 นาที</p>
     <button class="btn gh" style="width:100%" onclick="_aapStop=true;closeModal()">หยุดก่อน (ที่วิเคราะห์แล้วไม่หาย)</button>`);
-  let doneN=0;
+  let doneN=0,lastErr=null;
   while(!_aapStop){
     let r;
     try{r=await brain('analyze',{limit:10})}
-    catch(e){toast('สะดุด: '+e.message+' — เดี๋ยว cron วิเคราะห์ต่อให้เอง',true);break}
+    catch(e){lastErr=e.message;break}
     doneN+=r.analyzed||0;
+    if(r.errors&&r.errors.length)lastErr=r.errors[0];
     const t=document.getElementById('aapTxt');
     if(t)t.textContent=`วิเคราะห์แล้ว ${doneN}/${total} รายการ...`;
     if(!r.analyzed)break;
   }
-  if(!_aapStop){closeModal();toast(`วิเคราะห์เสร็จ ${doneN} รายการ ✓`);S.cache={};show(S.tab)}
+  if(!_aapStop){closeModal();S.cache={};show(S.tab);
+    if(lastErr&&doneN<total)toast(`⚠️ วิเคราะห์ได้ ${doneN}/${total} — ติดที่: ${lastErr}`,true);
+    else toast(`วิเคราะห์เสร็จ ${doneN} รายการ ✓`)}
 }
 
 /* ============ แชทลูกค้า ============ */
