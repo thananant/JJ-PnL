@@ -169,6 +169,7 @@ tr:last-child td{border-bottom:0}
 .edit-row.staff{grid-template-columns:90px 1fr 1.4fr 1fr auto auto}
 @media (max-width:760px){.edit-row.staff{grid-template-columns:90px 1fr 1fr;grid-auto-rows:auto}.edit-row.staff .f-pos{grid-column:1/3}}
 .edit-row input,.edit-row select{width:100%;min-width:0}
+.edit-row.synced input:disabled,.edit-row.synced select:disabled{opacity:.55}
 .chk{display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap}
 .chk input{width:20px;height:20px;min-height:0;padding:0}
 .arrows{display:flex;gap:2px}
@@ -335,6 +336,8 @@ async function fetchAll(mk) {
 }
 function bf(q, branch) { return branch === ALL ? q : q.eq('branch', branch); }
 async function loadMeta() {
+  /* ซิงก์รายชื่อพนักงานจากระบบเงินเดือน (payroll) ก่อน — พลาดได้ (ยังไม่รัน SQL/เน็ตสะดุด) ใช้รายชื่อเดิมต่อ */
+  try { const rs = await sb.rpc('kpi_sync_staff', { p_branches: Object.keys(CONFIG.BRANCHES) }); S.syncOk = !rs.error; } catch (e) { S.syncOk = false; }
   const r = await Promise.all([
     sb.from('kpi_departments').select('*').order('sort_order').order('id'),
     sb.from('kpi_staff').select('*').order('branch').order('sort_order').order('id')
@@ -382,6 +385,7 @@ const S = {
   depts: [], staff: [],
   staffPeriod: 'month', staffFrom: null, staffTo: null,
   setBranch: ALL,
+  syncOk: true,
   token: 0
 };
 const app = $('#app');
@@ -439,13 +443,13 @@ function deptCardsHTML(byDept, prevByDept, prevLabel) {
 }
 function leaderboardHTML(votes, total, limit) {
   const arr = Object.keys(votes).map(id => ({ id: Number(id), v: votes[id] })).sort((a, b) => b.v - a.v);
-  if (!arr.length) return '<div class="empty">ยังไม่มีการเลือกพนักงาน</div>';
+  if (!arr.length) return '<div class="empty">ยังไม่มีลูกค้าชมพนักงาน</div>';
   const max = arr[0].v; const sum = arr.reduce((s, x) => s + x.v, 0);
   return arr.slice(0, limit || 10).map((x, i) => {
     const st = staffById(x.id);
     const sub = st ? [staffFull(st), S.branch === ALL ? st.branch : '', st.active ? '' : '(ปิดใช้)'].filter(Boolean).join(' · ') : '';
     return '<div class="lb-row"><div class="lb-rank' + (i === 0 ? ' top' : '') + '">' + (i === 0 ? '★' : i + 1) + '</div><div><div class="lb-name">' + esc(st ? (st.nickname || st.name) : '#' + x.id) + (sub ? ' <small>' + esc(sub) + '</small>' : '') + '</div><div class="lb-bar"><i style="width:' + Math.round(x.v / max * 100) + '%"></i></div></div><div class="lb-v num">' + x.v + ' <small>' + Math.round(x.v / sum * 100) + '%</small></div></div>';
-  }).join('') + '<div class="hint">ลูกค้าเลือกพนักงาน ' + sum.toLocaleString('en-US') + ' จาก ' + total.toLocaleString('en-US') + ' ครั้ง' + (total ? ' (' + Math.round(sum / total * 100) + '%)' : '') + '</div>';
+  }).join('') + '<div class="hint">ลูกค้าชมพนักงาน ' + sum.toLocaleString('en-US') + ' จาก ' + total.toLocaleString('en-US') + ' ครั้ง' + (total ? ' (' + Math.round(sum / total * 100) + '%)' : '') + '</div>';
 }
 function branchTableHTML(getter) {
   const depts = activeDepts();
@@ -593,7 +597,7 @@ async function renderStaff() {
   const periods = [['today', 'วันนี้'], ['week', '7 วันล่าสุด'], ['month', 'เดือนนี้'], ['prevMonth', 'เดือนก่อน'], ['custom', 'กำหนดเอง']];
   setMain('<div class="toolbar">' + periods.map(p => '<button class="btn ghost sm pill' + (S.staffPeriod === p[0] ? ' on' : '') + '" data-act="period" data-p="' + p[0] + '">' + p[1] + '</button>').join('') + '</div>' +
     (S.staffPeriod === 'custom' ? '<div class="toolbar"><input type="date" id="staffFrom" value="' + rg[0] + '"> <span class="mute">ถึง</span> <input type="date" id="staffTo" value="' + rg[1] + '"></div>' : '') +
-    '<div class="card"><h3>อันดับพนักงานที่ลูกค้าเลือก · ' + thDate(rg[0], true) + (rg[0] !== rg[1] ? ' – ' + thDate(rg[1], true) : '') + '</h3><div id="staff-body"><div class="loading">กำลังโหลด…</div></div></div>');
+    '<div class="card"><h3>อันดับพนักงานที่ลูกค้าชม · ' + thDate(rg[0], true) + (rg[0] !== rg[1] ? ' – ' + thDate(rg[1], true) : '') + '</h3><div id="staff-body"><div class="loading">กำลังโหลด…</div></div></div>');
   try {
     const r = await Promise.all([loadStaffDaily(S.branch, rg[0], rg[1]), loadDailyResponses(S.branch, rg[0], rg[1])]);
     if (token !== S.token) return;
@@ -608,13 +612,15 @@ function deptRowHTML(d) {
   return '<div class="edit-row" data-id="' + (d.id || '') + '"><input class="f-icon" value="' + esc(d.icon || '⭐') + '" maxlength="4" title="ไอคอน (อีโมจิ)" aria-label="ไอคอน"><input class="f-name" value="' + esc(d.name || '') + '" placeholder="ชื่อแผนก" aria-label="ชื่อแผนก"><label class="chk"><input type="checkbox" class="f-active"' + (d.active === false ? '' : ' checked') + '> ใช้</label><div class="arrows"><button data-act="rowUp" title="เลื่อนขึ้น">▲</button><button data-act="rowDown" title="เลื่อนลง">▼</button></div></div>';
 }
 function staffRowHTML(s) {
-  return '<div class="edit-row staff" data-id="' + (s.id || '') + '"><select class="f-branch" aria-label="สาขา">' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (s.branch === b ? ' selected' : '') + '>' + b + '</option>').join('') + '</select><input class="f-nick" value="' + esc(s.nickname || '') + '" placeholder="ชื่อเล่น (โชว์ให้ลูกค้า)"><input class="f-name" value="' + esc(s.name || '') + '" placeholder="ชื่อ-นามสกุล"><input class="f-pos" value="' + esc(s.position || '') + '" placeholder="ตำแหน่ง"><label class="chk"><input type="checkbox" class="f-active"' + (s.active === false ? '' : ' checked') + '> ใช้</label><div class="arrows"><button data-act="rowUp" title="เลื่อนขึ้น">▲</button><button data-act="rowDown" title="เลื่อนลง">▼</button></div></div>';
+  /* แถวที่ผูกกับระบบเงินเดือน (employee_id) ล็อกชื่อ/สาขา — ซิงก์ทับตอน loadMeta อยู่แล้ว ให้แก้ที่แอป Payroll */
+  const dis = s.employee_id ? ' disabled title="ดึงจากระบบเงินเดือน — แก้ชื่อ/ตำแหน่ง/สาขาที่แอป Payroll"' : '';
+  return '<div class="edit-row staff' + (s.employee_id ? ' synced' : '') + '" data-id="' + (s.id || '') + '"><select class="f-branch" aria-label="สาขา"' + dis + '>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (s.branch === b ? ' selected' : '') + '>' + b + '</option>').join('') + '</select><input class="f-nick" value="' + esc(s.nickname || '') + '" placeholder="ชื่อเล่น (โชว์ให้ลูกค้า)"' + dis + '><input class="f-name" value="' + esc(s.name || '') + '" placeholder="ชื่อ-นามสกุล"' + dis + '><input class="f-pos" value="' + esc(s.position || '') + '" placeholder="ตำแหน่ง"' + dis + '><label class="chk"><input type="checkbox" class="f-active"' + (s.active === false ? '' : ' checked') + '> ใช้</label><div class="arrows"><button data-act="rowUp" title="เลื่อนขึ้น">▲</button><button data-act="rowDown" title="เลื่อนลง">▼</button></div></div>';
 }
 function renderSettings() {
   const staff = S.staff.filter(s => S.setBranch === ALL || s.branch === S.setBranch);
   setMain(
     '<div class="card"><h3>แผนกที่ให้ลูกค้าประเมิน <small>(ใช้ร่วมกันทุกสาขา · ลำดับ = ลำดับหน้าจอ)</small></h3><div id="deptList">' + S.depts.map(deptRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addDept">+ เพิ่มแผนก</button><span class="grow"></span><button class="btn sm" data-act="saveDepts">บันทึกแผนก</button></div><div class="hint">ปิด "ใช้" แทนการลบ เพื่อเก็บประวัติคะแนนเดิมไว้</div></div>' +
-    '<div class="card"><h3>พนักงานให้ลูกค้าเลือก <small>(แสดงเฉพาะสาขาของตัวเอง)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><div id="staffList">' + staff.map(staffRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addStaff">+ เพิ่มพนักงาน</button><span class="grow"></span><button class="btn sm" data-act="saveStaff">บันทึกพนักงาน</button></div><div class="hint">ชื่อเล่นคือชื่อที่ลูกค้าเห็นบนหน้าจอ · พนักงานลาออกให้ปิด "ใช้"</div></div>' +
+    '<div class="card"><h3>พนักงานให้ลูกค้าเลือก <small>(แสดงเฉพาะสาขาของตัวเอง)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><div id="staffList">' + staff.map(staffRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addStaff">+ เพิ่มพนักงาน</button><span class="grow"></span><button class="btn sm" data-act="saveStaff">บันทึกพนักงาน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ (ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดใน Supabase แล้ว) — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'รายชื่อดึงอัตโนมัติจากระบบเงินเดือน — แถวที่จางให้แก้ชื่อ/ตำแหน่งที่แอป Payroll · พนักงานลาออกระบบปิด "ใช้" ให้เอง · ไม่อยากโชว์บางคนก็ปิด "ใช้" ได้ · ชื่อเล่นคือชื่อที่ลูกค้าเห็นบนหน้าจอ</div></div>' +
     '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
     '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' +
     '<div class="card"><h3>ค่าตั้งระบบ <small>(แก้ใน CONFIG ต้นไฟล์)</small></h3><div class="kv"><b>วันทำการเริ่ม</b><span>' + pad2(CONFIG.CUTOFF_HOUR) + ':00 (ก่อนเวลานี้นับเป็นวันก่อนหน้า)</span><b>เป้าคะแนน</b><span>' + CONFIG.TARGET.toFixed(2) + ' (ทอง ≥ ' + CONFIG.TARGET.toFixed(1) + ' · ส้ม ≥ ' + (CONFIG.TARGET - 0.5).toFixed(1) + ' · แดง ต่ำกว่านั้น)</span><b>PIN ออก Kiosk</b><span>' + '•'.repeat(CONFIG.KIOSK_PIN.length) + '</span><b>รีเซ็ตเมื่อไม่แตะ</b><span>' + CONFIG.KIOSK_IDLE_SEC + ' วินาที</span><b>ฐานข้อมูล</b><span><code>' + esc(CONFIG.SUPABASE_URL) + '</code> · ตาราง kpi_*</span></div></div>');
@@ -741,7 +747,7 @@ function renderKiosk() {
       '<div class="k-faces">' + FACES.map(f => '<button class="k-face' + (K.scores[d.id] === f.s ? ' sel' : '') + '" data-act="kScore" data-s="' + f.s + '"><span class="e">' + f.e + '</span><span class="t">' + f.t + '</span></button>').join('') + '</div>' +
       '<div class="k-nav"><button data-act="kBack">‹ ย้อนกลับ</button><button data-act="kSkip">ข้ามข้อนี้ ›</button></div></div>';
   } else if (K.step === 'staff') {
-    html = '<div class="k-screen">' + top(true) + '<div class="k-dept"><div class="k-icon">🌟</div><div class="k-name">พนักงานที่ประทับใจ</div><div class="k-q">มีพนักงานคนไหนดูแลท่านดีเป็นพิเศษไหมคะ? (เลือกได้ 1 คน)</div></div>' +
+    html = '<div class="k-screen">' + top(true) + '<div class="k-dept"><div class="k-icon">💖</div><div class="k-name">ชมพนักงาน</div><div class="k-q">อยากชมพนักงานคนไหนเป็นพิเศษไหมคะ? (เลือกได้ 1 คน)</div></div>' +
       '<div class="k-staff-grid">' + kStaff().map(s => '<button class="k-chip" data-act="kStaff" data-id="' + s.id + '"><span class="n">' + esc(s.nickname || s.name) + '</span><span class="f">' + esc(s.position || (s.nickname ? s.name : '')) + '</span></button>').join('') + '</div>' +
       '<div class="k-nav"><button data-act="kBack">‹ ย้อนกลับ</button><button data-act="kNoStaff">ไม่ระบุ · ส่งคะแนน ›</button></div></div>';
   } else {

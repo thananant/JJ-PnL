@@ -65,6 +65,8 @@
 - `sso_entries` — ประกันสังคม override รายงวด: unique(employee_id, period) · employees เพิ่ม sso_on, sso_id · payroll_settings เพิ่ม sso_rate/sso_min/sso_max/sso_account
 - `tips` — ทิปรวมต่อสาขาต่องวด: period, branch, amount, member_ids (csv เลือกคนเอง · ว่าง = อัตโนมัติ), unique(period, branch)
 - ทุกตาราง RLS เปิดแบบ allow-all + อยู่ใน publication `supabase_realtime`
+- **ระบบ JJ KPI อ่านตาราง `employees`** (RPC `kpi_sync_staff` — อ่านอย่างเดียว: id, branch, nick, full_name, position, active)
+  เพื่อซิงก์รายชื่อพนักงานให้ลูกค้ากดชมที่ kiosk — เปลี่ยนโครง/ชื่อคอลัมน์เหล่านี้ต้องแก้ `jjmk-kpi.sql` ด้วย (ดู `kpi/CLAUDE.md`)
 
 ## โครงหน้า (hash routing: #today #emp #detail #payroll #cal #adv #loan #dep #sso #mou #shifts #holi #settings)
 

@@ -11,7 +11,7 @@ function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures+
 /* ---------- fake database ---------- */
 function makeDb(opts) {
   opts = opts || {};
-  const db = { departments: [], staff: [], responses: [], scores: [], nextId: 1 };
+  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], nextId: 1 };
   if (!opts.empty) {
     db.departments = [
       { id: 1, name: 'อาหาร', icon: '🍖', sort_order: 1, active: true },
@@ -64,6 +64,26 @@ function makeDb(opts) {
   };
   db.rpc = (name, args) => {
     if (opts.rpcFail) return { data: null, error: { message: 'network down' } };
+    if (name === 'kpi_sync_staff') {
+      if (opts.syncFail) return { data: null, error: { message: 'function kpi_sync_staff does not exist' } };
+      // จำลอง SQL: link ตามชื่อ → insert ใหม่ → update ชื่อ → ปิดใช้คนพ้นสภาพ/นอกสาขา
+      const brs = args.p_branches || [];
+      const act = db.employees.filter(e => e.active && brs.includes(e.branch));
+      for (const e of act) {
+        if (db.staff.some(k => k.employee_id === e.id)) continue;
+        const k = db.staff.find(x => !x.employee_id && x.branch === e.branch && (x.name === e.full_name || x.name === e.nick || x.nickname === e.nick));
+        if (k) k.employee_id = e.id;
+      }
+      for (const e of act) if (!db.staff.some(k => k.employee_id === e.id))
+        db.staff.push({ id: db.nextId++, branch: e.branch, name: e.full_name || e.nick, nickname: e.nick || null, position: e.position || null, sort_order: 0, active: true, employee_id: e.id });
+      for (const k of db.staff) {
+        if (!k.employee_id) continue;
+        const e = act.find(x => x.id === k.employee_id);
+        if (e) { k.branch = e.branch; k.name = e.full_name || e.nick; k.nickname = e.nick || null; k.position = e.position || null; }
+        else k.active = false;
+      }
+      return { data: { linked: 0 }, error: null };
+    }
     if (name !== 'kpi_submit') return { data: null, error: { message: 'no fn' } };
     const id = db.nextId++;
     db.responses.push({ id, branch: args.p_branch, biz_date: args.p_biz_date, staff_id: args.p_staff_id, device: args.p_device, created_at: args.p_created_at });
