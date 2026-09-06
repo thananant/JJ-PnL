@@ -206,18 +206,38 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
       continue;
     }
     const d = await r.json();
-    const revs = d.reviews ?? [];
+    // รวมรีวิวจาก 2 แหล่ง: (New) = 5 อันเด่น + Legacy sort=newest = 5 อันล่าสุด
+    // external_id สร้างจาก เวลา+ชื่อผู้เขียน เพื่อกันซ้ำข้ามทั้งสองแหล่ง
+    const revs: { epoch: number | null; author: string; text: string; rating: number | null; raw: unknown }[] =
+      (d.reviews ?? []).map((rv: any) => ({
+        epoch: rv.publishTime ? Math.floor(Date.parse(rv.publishTime) / 1000) : null,
+        author: rv.authorAttribution?.displayName ?? "",
+        text: rv.text?.text ?? rv.originalText?.text ?? "",
+        rating: rv.rating ?? null, raw: rv,
+      }));
+    let newestApi = 0;
+    try {
+      const lr = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${p.place_id}&fields=reviews&reviews_sort=newest&language=th&key=${GOOGLE_KEY}`);
+      const ld = lr.ok ? await lr.json() : null;
+      if (ld?.status === "OK") {
+        for (const rv of ld.result?.reviews ?? []) {
+          revs.push({ epoch: rv.time ?? null, author: rv.author_name ?? "", text: rv.text ?? "", rating: rv.rating ?? null, raw: rv });
+          newestApi++;
+        }
+      } else if (ld?.status) console.error("legacy places", p.place_id, ld.status);
+    } catch (e) { console.error("legacy places", e); } // ไม่ได้เปิด Legacy Places API ก็ข้ามไป
     let inserted = 0, dup = 0, insErr = "";
     for (const rv of revs) {
       const { data, error } = await sb.from("social_mentions").upsert({
-        channel: "google", kind: "review", external_id: rv.name,
+        channel: "google", kind: "review",
+        external_id: `g_${p.place_id}_${rv.epoch ?? "x"}_${rv.author.slice(0, 40)}`,
         branch: p.branch || null,
-        author_name: rv.authorAttribution?.displayName ?? null,
-        text: rv.text?.text ?? rv.originalText?.text ?? "",
-        rating: rv.rating ?? null,
+        author_name: rv.author || null,
+        text: rv.text,
+        rating: rv.rating,
         url: `https://www.google.com/maps/place/?q=place_id:${p.place_id}`,
-        posted_at: rv.publishTime ?? new Date().toISOString(),
-        raw: rv,
+        posted_at: rv.epoch ? new Date(rv.epoch * 1000).toISOString() : new Date().toISOString(),
+        raw: rv.raw,
       }, { onConflict: "channel,external_id", ignoreDuplicates: true }).select("id");
       if (error) { insErr = error.message; console.error("insert", error); }
       else if ((data ?? []).length) inserted++;
@@ -227,7 +247,7 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
     diag.push({
       branch: p.branch, http: 200,
       place_rating: d.rating ?? null, place_review_count: d.userRatingCount ?? null,
-      reviews_from_google: revs.length, inserted, duplicated: dup,
+      reviews_from_google: revs.length, newest_api: newestApi, inserted, duplicated: dup,
       insert_error: insErr || undefined,
     });
     // เก็บคะแนนรวมไว้โชว์ในหน้าเชื่อมต่อ
@@ -335,7 +355,7 @@ Deno.serve(async (req) => {
       case "summary":     out = await makeSummary(b.date, b.span ?? "daily"); break;
       case "poll_google": {
         const g: any = await pollGoogle(b.places);
-        if (g.added) g.analyze = await analyzeMentions(undefined, 12); // วิเคราะห์ต่อทันที ไม่ต้องรอ cron
+        if (g.added) g.analyze = await analyzeMentions(undefined, 20); // วิเคราะห์ต่อทันที ไม่ต้องรอ cron
         out = g;
         break;
       }
