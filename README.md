@@ -11,7 +11,7 @@
 
 ## หน้าเจ้าของ (jjmk-owner.html)
 
-- `jjmk_owner_setup.sql` — ตารางผ่อนชำระ `pnl_installments` (ระบบติดตามการผ่อนในหน้า Owner)
+- `jjmk_owner_setup.sql` — ตารางผ่อนชำระ `pnl_installments` + ยอดขาย/กำไรใส่เองรายเดือน `pnl_owner_monthly` (รันซ้ำได้)
 
 ## ตารางบำรุงรักษาสาขา (ในแอพนับสต๊อก · เมนูซ่อมบำรุง)
 
