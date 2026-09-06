@@ -19,3 +19,10 @@
   + งานตั้งต้น 9 งานให้ทุกสาขา (รันซ้ำได้ ไม่เพิ่มซ้ำ)
 
 branch นี้เก็บเฉพาะไฟล์ SQL — ไม่รวมเข้า main และไม่ merge กับ branch อื่น
+
+## ระบบเงินเดือน (JJ-Payroll — โค้ดอยู่ `payroll/` บน main)
+
+- `payroll/*.sql` — migration ทั้งหมดที่เคยรันใน Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd` (15 ไฟล์ เรียงตามชื่อ รันซ้ำได้)
+  ย้ายมาจาก repo `thananant/JJ-Payroll` (2026-09-06) — รายละเอียดแต่ละไฟล์ดู `payroll/CLAUDE.md` บน main
+- ⚠️ Supabase SQL Editor ต้อง **Ctrl+A ก่อน Run** (editor รันเฉพาะส่วนที่ไฮไลต์)
+- งานค้าง: `payroll/jj_tips.sql` เวอร์ชันล่าสุด (มี member_ids) ถ้ายังไม่ได้รันให้รัน · เติมรหัสเครื่องสแกน 17 คนใน `payroll/jj_info_fix.sql` ส่วน 4
