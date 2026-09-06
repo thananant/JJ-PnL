@@ -4,8 +4,8 @@
 
 - `jjmk-pnl.html` — ระบบบัญชีรายรับ–รายจ่าย (P&L)
 - `jjmk-owner.html` — หน้าเจ้าของ (Owner Executive): ยอดขายทั้งปี กำไรสะสม งบรายเดือน การผ่อนชำระ (เข้าได้เฉพาะบัญชี admin)
-- `jjmk-stock-beta.html` — ระบบนับสต๊อกสาขา + 🛠 ตารางบำรุงรักษาสาขา
-  (เมนูข้าง → ซ่อมบำรุง หรือเปิดตรง `jjmk-stock-beta.html#maint`)
+- `jjmk-stock-beta.html` — ระบบนับสต๊อกสาขา
+- `jjmk-maint.html` — 🛠 ระบบซ่อมบำรุงสาขา (ตารางบำรุงรักษา · พนักงานบันทึกงาน+รูปถ่าย · ใช้บัญชีเดียวกับแอพนับสต๊อก)
 - `jjmk-kitchen.html` — ระบบครัวกลาง (JJ Kitchen)
 
 ไฟล์ SQL (รันครั้งเดียวใน Supabase → SQL Editor) เก็บที่ **branch `sql`**

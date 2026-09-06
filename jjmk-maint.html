@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ซ่อมบำรุงสาขา — จริงใจหมูกระทะ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--red:#C62127;--red-deep:#611014;--gold:#F1B61C;--gold-line:#C99106;
+    --paper:#F6EFE3;--card:#FFF;--ink:#2B1B17;--ink-soft:#8A7565;--line:#E7DAC4;
+    --shadow:0 1px 2px rgba(63,8,11,.06),0 6px 18px -8px rgba(63,8,11,.14)}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{font-family:'Sarabun',sans-serif;background:var(--paper);color:var(--ink);line-height:1.45}
+  header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;padding:10px 14px;
+    background:linear-gradient(170deg,#611014,#3F080B 85%);color:#fbeee0;box-shadow:0 2px 14px rgba(63,8,11,.28)}
+  header .hlogo{width:38px;height:38px;border-radius:50%;object-fit:cover;background:#fff;border:2px solid var(--gold-line);flex:none}
+  header .htit{font-family:Prompt;font-weight:600;font-size:1.02rem;line-height:1.15}
+  header .htit small{display:block;font-family:Sarabun;font-weight:400;font-size:.68rem;opacity:.75}
+  header .hsp{flex:1}
+  header select{max-width:44vw;padding:7px 9px;border-radius:10px;border:1px solid rgba(255,255,255,.3);
+    background:rgba(255,255,255,.1);color:#fbeee0;font-family:Prompt;font-weight:600;font-size:.85rem}
+  header select option{color:#222;background:#fff}
+  header .hbtn{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;
+    border-radius:10px;padding:7px 11px;font-family:Sarabun;font-weight:600;font-size:.85rem;cursor:pointer}
+  main{max-width:760px;margin:0 auto;padding:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+  .hint{font-size:.78rem;color:var(--ink-soft)}
+  .rempty{text-align:center;color:var(--ink-soft);padding:26px 10px}
+  /* ปุ่ม */
+  .act{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:Prompt;font-weight:600;
+    font-size:.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--ink);transition:.13s}
+  .act:active{transform:scale(.985)}
+  .act.send{background:var(--gold);color:var(--red-deep);border-color:var(--gold-line)}
+  .act.ghost{background:#fff}
+  .act.wide{width:100%}
+  .field{margin-bottom:10px}
+  .field label{display:block;font-size:.8rem;color:var(--ink-soft);margin-bottom:4px;font-weight:600}
+  .field input,.field select{width:100%;padding:11px;border:1.5px solid var(--line);border-radius:10px;font-family:Sarabun;font-size:.95rem;background:#fff}
+  /* overlay + sheet */
+  .overlay{position:fixed;inset:0;z-index:100;background:rgba(42,23,19,.55);display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
+  .overlay.on{display:flex}
+  .sheet{background:#fff;width:100%;max-width:560px;max-height:92vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden}
+  @media(min-width:600px){.overlay{align-items:center}.sheet{border-radius:18px}}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .sheet-head h3{margin:0;font-family:Prompt;font-weight:600;font-size:1.02rem}
+  .sheet-head .x{border:none;background:#f4ede0;border-radius:9px;width:32px;height:32px;font-size:1rem;cursor:pointer}
+  .sheet-body{padding:14px 16px;overflow-y:auto}
+  .sub-title{font-family:Prompt;font-weight:600;font-size:.92rem;margin:14px 0 8px;color:var(--red-deep)}
+  /* สรุป + การ์ดงาน */
+  .mtsum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .mtsum .mchip{font-family:Prompt;font-weight:600;font-size:.82rem;padding:5px 12px;border-radius:999px;background:#f3ece0;color:#6b5f52}
+  .mtsum .mchip.over{background:#fdeaea;color:#c62127}
+  .mtsum .mchip.soon{background:#fff6dd;color:#9a6700}
+  .mtsum .mchip.ok{background:#e8f7ec;color:#1a7f37}
+  .mtcard{border:1px solid var(--line);border-left-width:5px;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff}
+  .mtcard.over{border-left-color:#c62127}.mtcard.soon{border-left-color:#c9a227}.mtcard.ok{border-left-color:#1a7f37}
+  .mtrow1{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .mtrow1 b{font-family:Prompt;font-weight:600}
+  .mtfreq{flex:none;font-size:.75rem;color:#7a6a58;background:#f6efe3;border-radius:999px;padding:3px 10px}
+  .mtdetail{font-size:.82rem;color:var(--ink-soft);margin-top:2px}
+  .mtstat{font-size:.85rem;font-weight:600;margin-top:6px}
+  .mtstat.over{color:#c62127}.mtstat.soon{color:#9a6700}.mtstat.ok{color:#1a7f37}
+  .mtlast{font-size:.78rem;color:#8a7f74;margin-top:2px}
+  .mtthumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .mtthumbs img{width:64px;height:64px;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer;background:#f4f0e8}
+  .mtbtns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .mtbtns .act{flex:1;min-width:150px}
+  .mtlog{border-top:1px dashed rgba(0,0,0,.12);padding:10px 0}
+  .mtlog:first-child{border-top:none;padding-top:2px}
+  .mmrow{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px dashed rgba(0,0,0,.1)}
+  .mmrow .mmn{flex:1;min-width:0}
+  .mmrow .mmn small{display:block;color:#8a7f74}
+  .mmrow button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+  /* login */
+  #login{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;
+    background:linear-gradient(170deg,#611014,#3F080B 85%);padding:20px}
+  #login.on{display:flex}
+  #login .lcard{background:#fff;border-radius:18px;padding:26px 22px;width:100%;max-width:360px;text-align:center;box-shadow:0 14px 44px -10px rgba(0,0,0,.4)}
+  #login .llogo{width:74px;height:74px;border-radius:50%;object-fit:cover;border:3px solid var(--gold-line);margin-bottom:8px}
+  #login h2{margin:0;font-family:Prompt;font-weight:600;font-size:1.15rem;color:var(--red-deep)}
+  #login .lsub{font-size:.8rem;color:var(--ink-soft);margin:2px 0 16px}
+  #login input{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:11px;font-family:Sarabun;font-size:.95rem;margin-bottom:9px;text-align:center}
+  #login .lmsg{min-height:18px;font-size:.8rem;color:#c62127;margin:4px 0 8px}
+  #login.err .lcard{animation:shake .4s}
+  @keyframes shake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+  /* toast */
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#2B1B17;color:#fff;
+    padding:11px 18px;border-radius:12px;font-size:.88rem;opacity:0;pointer-events:none;transition:.22s;z-index:500;max-width:88vw;text-align:center}
+  #toast.show{opacity:1;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+
+<header id="hdr" style="display:none">
+  <img class="hlogo" id="hLogo" alt="">
+  <div class="htit">🛠 ซ่อมบำรุงสาขา<small id="hUser">—</small></div>
+  <div class="hsp"></div>
+  <select id="hBranch" style="display:none"></select>
+  <button class="hbtn" id="hMng" style="display:none">⚙️</button>
+  <button class="hbtn" id="hOut">ออก</button>
+</header>
+
+<main id="main" style="display:none">
+  <div class="card">
+    <div class="mtsum" id="mtSum"></div>
+    <div id="mtList"><div class="rempty">กำลังโหลด...</div></div>
+    <p class="hint" style="margin:10px 0 0">ทำเสร็จแล้วกด “✅ ทำแล้ว” พร้อมถ่ายรูปแนบ · แตะรูปหรือ “🕘 ประวัติ” เพื่อเปิดดูรูปย้อนหลังได้ทุกครั้งที่เคยทำ</p>
+  </div>
+</main>
+
+<div id="login">
+  <div class="lcard">
+    <img class="llogo" id="lLogo" alt="">
+    <h2>ซ่อมบำรุงสาขา</h2>
+    <div class="lsub">จริงใจหมูกระทะ · ตารางบำรุงรักษาประจำสาขา</div>
+    <input id="lUser" placeholder="ชื่อผู้ใช้ (username)" autocomplete="username">
+    <input id="lPass" type="password" placeholder="รหัสผ่าน (password)" autocomplete="current-password">
+    <div class="lmsg" id="lMsg"></div>
+    <button class="act send wide" id="lBtn">เข้าสู่ระบบ</button>
+    <p class="hint" style="margin:12px 0 0">ใช้บัญชีเดียวกับแอพนับสต๊อก — พนักงานใหม่ให้สมัครที่แอพนับสต๊อกและรอผู้ดูแลอนุมัติก่อน</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================= จริงใจหมูกระทะ — ซ่อมบำรุงสาขา =================
+   แอพแยกของตัวเอง · ใช้ Supabase โปรเจกต์เดียวกับแอพนับสต๊อก
+   (บัญชี app_users + สาขา branches ชุดเดิม · ตาราง maint_* จาก jjmk_maint_setup.sql ที่ branch sql) */
+const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
+const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
+const EMAIL_DOMAIN='@jjmk.local';
+const sb=window.supabase.createClient(SB_URL,SB_ANON);
+const LOGO=
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPDg4MD"
++ "Q0PERYTDxAVEQ0NExoTFRcYGRkZDxIbHRsYHRYYGRj/2wBDAQQEBAYFBgsGBgsYEA0QGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYG"
++ "BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBj/wAARCAEAAQADASIAAhEBAxEB/8QAHAABAAEFAQEAAAAAAAAAAAAAAAYBAgUHCAQD/"
++ "8QAUBAAAQMDAgQDAwYGDgcJAAAAAQACAwQFEQYhBxIxQRNRYRQicRUygZGh0QgWMzZCsRcjJFJicnOCkpOUsrPBN0NGU1V00idFY"
++ "6KjwuHw8f/EABsBAQACAwEBAAAAAAAAAAAAAAAFBgEDBAII/8QALBEAAgICAQQBAwMEAwAAAAAAAAECAwQRBRIhMUETIlFhBhRxF"
++ "SM0QiSh8P/aAAwDAQACEQMRAD8A1aiIql5PpD8BERZAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREARE"
++ "QBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQ"
++ "BERAEREAREQBERAEREAREQBERAEREAREQBERAEREAT17Dcp3Um0BY6TUOv6Ohr289MwPmkj7SBo2b8M4Wu2xVwc36Nd1nxwc/sRj"
++ "IABO2dgTsD8D3+Cr+ly/pAbjHRdUV1jtNytD7dW2+nkpXMLOQRgcoIxkbbHyPovnYtO2nT9lht1voomRsaGue5oc6R2N3OdjclV5"
++ "/qKPTvp7kF/XlrtE5bxsD2KKb8VLBQ2PXLH2+EQRV0BqXQt+a14dykjyB2OPPKhCn8e5XVqxLyTePcrq42L2ERFuNwREQBERAERE"
++ "AREQBERAEREAREQBERAEREAREQBERAEREBl7VY5a+mfVTytpqfD2xPftzvaMknyjYN3u7AgDchZWiorppbUNNfrQJao0snNJSPaY"
++ "5pIuXL2ludnlmX8nVjSzmwXYXj01Xh7/YHA0r42h7Kzl5oi0OBImzs1zScsefcD+XnBABGfgliqHSUk8DYWRjw6qllmj5w7PM6J7"
++ "ZiHFocQ90v+teS75oaFwXTb3GXhlby8y75JVf6m1bRVUmqqme80F3qXQAwyULqaQtZ4JYDks6Oc48zXZB5eXAxhei8xCgq4rr7dO"
++ "2okqo2CN8rjEIv0oxGNsAAuzjOd89lp35QqtHXhuotO1FKyIZFVa5qiBsMzfKNkeSHE783n1CnOjpqziNVTakvz2wW+klNNQ2WGb"
++ "m8M4HNJO4YJeewwMKu5OB8O7NroXoh7ceVff0eeq0JVa+1VWaivN1db6HAgo7fByvnjiaTgyHcMc45dy7kZxsdlGdbcKnacszr1a"
++ "rhNWUkLc1EM4aHsGccwLQAR5hbd+SKeLUVJUUbKSjETHl7Yfckmz7oaWgYLR1ycnOAMKM8WtSvs+jHWqCjqHzXMeD7T4ZMMLeruZ"
++ "3TnwMBvXdZxc66V8IQf0v0b8LNuhOMU+32NB4wUQABoA6AY3RXBF1CIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiImgERVA2QFEV2AmA"
++ "gLUVT1VEBLtNSsdZRFA1peybDxFIGSczvmtcX+6x53DHHMb9434JBXsrKqnoKR1eZmQeGwsgkIkY3AOAwxZDywOPK6EnngeRjmYQ"
++ "oK4HmPI4t5o3RP5SR4kbvnMd5tKl3Dehp7rxSoZbtJJVvha6pa6V3O6R7G4bknqQMDf96OuFxXpQjKcu5AZmDKMpXOXYnejtGT3G"
++ "7C86ribJWURYG24vdLDSylodj3icu5eUu3IDunRSC9WAWvUMeqbBM+gq6gtpquGNoMVSHH3C9hwOYO2zkHcjKz8lrEl1fWRV9XTs"
++ "lcySop4i0Nmc3GCSRluQMHHUAKstrdUXQVE9xq3U/itn9iJHIZANj0zjO/L0zuqdPNlZZ1OX0v19vwV2y6dnlmNskz9Q1sF2dXW6"
++ "UURkh8OiD/F8T5j2Sh28eMZLN98HOwXk4oVluouGdwjuRb+6WCKCM7ufJn3eUeY6k9lrXi3Si0cTIbvZq2qoK6vp2vqJKSUxue9p"
++ "5OZ2NiTsMnyK8dz4Z67bQOvdxqjd6hkeTFJVOmmiZjJ5c+6T58p37KTo4+lThdKeo+vud+LiKLhZKWtkJ379UVB6dFVWvafguSCI"
++ "iAIiIAiIgCIiAIiIAiIiW/A1vwEVrnsb1cBtnqFTxo/37frC8ucV22eetJ62XorPGi7ysH85Va9rhlpDh5g5ynWjKkn2Rdt+kQB5"
++ "k4AWxdJcK5tQ6Zjutwr5rd455oI/CDi6Ps456ZOSPTC17FI2KojlfC2cMcHGJx5Q/BzgnyKnUXGjWccTY2WLT4a0ANAMmAB0A3XF"
++ "nLIlFLHI7kJ5GkqESUcD6Q/7S1P9naqngdS5/OWp/s7VGv2cNZBu9o080+RfJ96t/Zx1l/wrTv9OT71D/FyTe+tEP8AJn78kmPA6"
++ "lx+ctV/Z2/etXaitbbDqyvszJ3TtpZOQSubyl2wPTspUeOOssb2vTv9ZJ96htzu01+vlVd6tkDampf4kjYDljT0wO+Nu6kMCOVCb"
++ "/cPaJDjrMmVn959jzZyiDHZFLk0XL70NfcLTc4bpaZxDW07w+Jzhlp82uHdpGQR6ryuliYcPka0+RKCogz+Wj+ta59DTjI1zcJJw"
++ "kzZVZxvvtRZjSUOmoaKukZyuq5KkSRxZ2LmtwCT5Z+lfGzcZ75Z7HFbrnZDepYmCOKtbOInuAGB4rSOuOrgtetfG7JY9rvgcqpIy"
++ "uP+nYzjroI1cRj62ke+93q4ak1BUXe9OY+aowzw4tmQxdBGzPUYzknckk91vfhjc5rrw1oH1DzJNSF1E9zjku8M4aT8W8vx6rnjK"
++ "3nwZY9mgaqR3zZK6Tl38mtB+1cXOQUcX6fTWjm5bHhXjx6V4ZqPVlCy265u1FEOWOOqdyDyadwPtWHUp4kPY/ireizGBK1p+IY1R"
++ "ZSuI26YN/Yl8SXVVFv7BFa57W9XNHxKeJH/ALxn9ILd1Lwb9rwXIrfEZ+/b9aqHNc3LSCPQ5WU0wpJ9kVREWTIREQBERAEIdsGMc"
++ "9ziGtY3q4k7Aevb6UX1paqpoayOro5fCqIjzxS8odyO7OAO2QvMt67eTzNtRfT5OhdC6LpdN6Vjjr6WCa41GJql0jA7kdjAYM9A0"
++ "bepBKk3sFv/AOH0n9U37lzb+P3EM7fjlW/1MX/Sq/j3xEx+edX/AFMX/Sqzfw2VbNzVnkq8+My5Nyl5Okfk+3OODbqMjyMDfuUc1"
++ "Jw607f6OUxUMNBXcp8OppowzftzNGxC1XpPiDraPWNtguV9NzpKmobBLBURNaQHbczS0ZBHVdBuOC4H4KLyaMjAnHc9nDZXdjT1J"
++ "6OSq+jqLbcp6CrZyTQPMbx/CBwfoUi0Po6fWF6MZ54bdTHNVPjr5RsP7532DKrxJa1nFO68ox77Dt5lgUh0ZxVs2mtP01ludkr44"
++ "oc89dTtErXuJ6lgIP8AmrTk3WzxeqmPd6LFkZNzxYzqXdm4qez2mnpIqaG2UbIo2hjWiJpwB9G/xX0+TrZnHsFJn+Rb9y81kv1m1"
++ "Dam3KyXGCtpjsXROyWnycOrT6FYTWll1dX0vtujtT1Vuq4270bmsdFNjyJaS13ruPPHVU6MbHb8dkul/nZVVObetkl+TraDkW+kP"
++ "oIG/ctFcUdRU9y1MbHaI6eO30Di2aSFjQZqgbOGQPms6fHPksJWaz4m0tRNRV+q7lTTs92SF9NGx7Ps+o9D2UfY1rWBgycdS45JP"
++ "ck9ySScq0cdx06X8k57+xYONwJxsVtj7egdyqYHmsvp7Tdz1Re2222s5RjnmqXDLIGeZ9T2Hc+WFfq2wu0zrGrs/M58LA10Mjur2"
++ "FowTjvnKlfnh1/Fv6iZeTX8nxb+o3Vwz07HS8Nre+qoY5JqrmqXmWIFwDnEt6jpjH0FSt1vtx/7vpP6lv3LlE1l3EJbHqG9RsA91"
++ "kddI1oGegGegXXByWNPmB0+CqPL41lE1Z1+dlVz6LarNzfk0Rxiggp9bUTKeGOJvsIJbG0NBPiOHZa8WxuNP590RHehb/iOWuVZu"
++ "MfVjQbLHxsv+NEZA3ONhnddLaEtgsfDi2UtQ0MkEJnmzthzzzuz/wDey0ZoWw/jFrejopW81NG7x6j+I09D8TgfWtzcTb98h8Pap"
++ "kWI6qvIoaYdwXj3iP4rAVF8xJ3WQxoeWRnL2OyyOPE0FeLg67akuNzcc+01Uko/i8xDfsAXjJxjIO5AGO5PQD19FRoDWBoGwGAvr"
++ "BNUU1RHU0svhTxO545C0O5HDocHbb1U9GDhBRj6JuEPjgkvRv7h5oyksOmWzXGlgluFZ+2zCVrXeGP0Yxnpgbn13Uv9gt2dqCj+A"
++ "gb9y5tGvuIgaM60q9v/AAIvuVfx94iH/bSs+mCP7lXL+HyrZuXyFbs43LnNy2dIm3W97CDb6Mjy8Bn3KP6h4f6Z1BRyc1uho6rlx"
++ "HU0rBG5p7ZA2cPiFqDT3EfXFLqeh+UNQG5Uss7IZaaphYA5rnYJBaMhwzkfBdFOYBt1x5qKyqMjj5x6p7bOK6u/En9T7nKFzttVa"
++ "LvU2yuaG1FPIY38vR3kR6HqvEppxVa2PinWhoxmKJx9TyqFq64lrspjJ+S4Ys3OqMmERF0G8IiIAga97g2Npc4nAA80X3o6r2G40"
++ "9d7K2q9nkbMIHnla8tIIBI7ZA+peZN6+nyeLG1FuPk21BwSp3UrJJr/ADNkLQXMEAOCRkjruvBqHhHFZ9MV12gvs8z6WEy+E6AAO"
++ "A675Wd0JxPuWq9WutFytFJQtMDpY3wzueXOaRsQR5Kf3ml9u09XUeM+NA9mPPLTj7VULs3Lx8hQselsqn73Jqt6bH7OZtOfnjZv+"
++ "ei/vLqd35R3xK5W0uSdY2drjuK6LP0PXVJOXuPqU/UL3KDN3NvU4fwc38S/9Kd1+Mf+GFFP0VK+Ju3FS6/GP/DCig7BWbB748X+C"
++ "ewVrHh/B9bdVV1lvDLtY6yS31zeskZ92UfvJG9Ht9D9GF0BoDXkGsbdLHUxR0t2pQPaaZp2LT0kjz1YfrB6rn8QVDqKWsZTyupoX"
++ "NbLMG+5GXfNDj2zhTrg+B+yceYbtt8w9QC5m32Lh5bHquonKXlEbyeLVKDuh5RtbVmirRq2iaKpns9XE0iGriA52jHzXZ+c30P0F"
++ "c1D5xDTnBIz9i657H4H9S5Ej6v/AIzv1lcfAXznGUZvwa+ClJqUWzozhrDam8O6Gos8fIJwXVHMcvdMDh3MfQj6sKKcarOw01tv8"
++ "DPfa80sxA7H3m5+nP1r4cE71yVdz05K8++322DPphrwP/IfpWytVWVmoNHXK0OaC6eI+HntIPeYf6QA+lcF054uenJ/+ZHOcsbLc"
++ "pfc5bf+Sd8F10fmM+A/UuRXteIXNkYWPGQQeoPTB8t8rro/k2j+CD9i7P1H9Sr1+Tu5qScofwzRnGf8+aLy9hb/AIjlrlbG40fnx"
++ "Rf8i0f+o5a5HVTHFdsWBKcX/jQNz8E7UI7Jcr29gBqJvZ43dTyMGXEfFzjt6KL8XL0656/Fta4+z2mPwgAf9c8Bzz6kDkb9B81s7"
++ "hbDFHwqs/htx4wfI74ukdn9S0PqaofVa0u88nz31sxd9DyB9gCisH+9nWWS8oisNfPmynL0YsDZUceVpI3PYFXL6QTez1cVT4DZ/"
++ "CkbJ4TjgPwQcH02VjlvWkWOW+ltG1qLgvDPbaeepvc8M8kbXPjbCCGkgHG53x5r43ng/BbdO1txivU8z6aB8wjMIAdygnHX0WS0P"
++ "xSvGpdZQ2W52SioopopHskhmLzzNHMBgjuM/UtmVkDKq3TUzxlsrHMI88jH+aqGRnZmPeo2vsVKeZl1WKM3o5Ws+HagtxHQ1MRH9"
++ "Nq6wds4j1XKNqY6HUdFC8e9HWRsPxEgC6tPzyPVe/1A9us3c1LqnCT+xz1xX/0pVn8jF/dUKU14rj/tUrf5CL+6oUrFx/8AjwJ3B"
++ "/x4BERdh1hERAFUdVREBJ+HlWKHihZ5SDh8joHY/hNxhdK42wQD5/5rkaKWaCojnp5nQzRuEkcjerXA5B+sLcNm452V1DFHqi31l"
++ "vrWtAkkp4jNDK7u5pG7fgeirfM4Nttkba1vRXOYxbJWK2C7HnpOD91odYw3KG60LqOGuFQ1vK4O8Pn5sfEDZbdlljhilqJntiiY0"
++ "yPe84DGjcknsMbrX443cPunt9cfX2KT7lBeInEqHV9JHZNPmZlnyH1c8jTG+pd2h5TvyDqT3O3QHPBHDy8y2MbVpL2R7ryMqcYyR"
++ "G9ZXmi1Frm4Xi3l5pZXgROcMF7Wjl5seRxkehBWPtdvfdr1S2uOoip3VMgiE0pw1hPc/wCQ7nAXmwCrJIY54zHI3maeozhWyFShW"
++ "oR9ItcKXXT0RfhHUFo0laLPpT5AZSsnpXtIqGzNB8dzvnOf5k/ZtjosHp3hvT6Y1y+9W2tc6hfTvi9llbl8Zc4EBru7dj13+K15p"
++ "Xi5e9P08Nvv9PLe6Fg5GVDHfuqJvbmztJ8dj6lT08Z9AC3PqI7pM+oDCWUZp3tme7GzACMZJ28lVsjCzq5yhHbjIqltWTXJp77mb"
++ "1nq6h0bp59dVNM1XJllLRtOHTvx28mjYuceg9dlzQGlpdvnJJO2N85P61kL5fblqXUE17urx48g5I4GnMdNHnaNg+O5Pc57YWOyV"
++ "O8bx6xK0vb8k7xeFKiDlLyzJ2G8v07qm331gLm0k3PI0HHNERiQH+bk/EBdSseyRjXxPa+NwDmPG4IO4I+xckjfbY/FbF0TxXbpu"
++ "zRWLUVvqaijpmhlLXUo53tZnAZIz07OHYYXJzPHzvSsrXdHPy+JKTVlaMrqXg/X3HUtbX2e40kUNS8zeDOHZY8/OG3UZyQfVbeA+"
++ "a3OTgNwAVr48auH7djXVv00Un3KM614v0l1sL7VoypqGyVGW1Na6F0ToIjsWx56vdnHN+iM91EPFzMtxqtjpIiJRyL+mEk+xgeKt"
++ "7tl7184Wuo9oZRR+yyyN3YZA4lwaf0sZwT5gqFDborWMYyJscbAxjWhrWgYwArlbselVVquPotmJS6aowZvjg5d4qzQklrEmKi3V"
++ "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"
++ "REQBERAf//Z";
+
+/* ================= helpers ================= */
+const $=s=>document.querySelector(s);
+function escapeHtml(s){return(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2100)}
+let uidN=0;const uid=p=>(p||'i')+Date.now().toString(36)+(uidN++);
+function todayISO(){const d=new Date();const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function isoFromAny(d){return String(d||'').slice(0,10);}
+function fmtDate(d){const s=isoFromAny(d),p=s.split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+(+p[0]+543)):s;}
+function addDaysISO(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+(+n||0));const p=x=>String(x).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function diffDaysISO(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
+function processImage(file,cb){const reader=new FileReader();
+  reader.onload=()=>{const im=new Image();
+    im.onload=()=>{let w=im.width,h=im.height;const sc=Math.min(1,1280/Math.max(w,h));
+      w=Math.max(1,Math.round(w*sc));h=Math.max(1,Math.round(h*sc));
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(im,0,0,w,h);
+      try{cb(cv.toDataURL('image/jpeg',.78))}catch(e){cb(null)}};
+    im.onerror=()=>cb(null);im.src=reader.result};
+  reader.onerror=()=>cb(null);reader.readAsDataURL(file)}
+
+/* ================= login (บัญชีชุดเดียวกับแอพนับสต๊อก) ================= */
+let PROF=null,BRANCHES=[],CUR_B=null;
+const isAdmin=()=>!!(PROF&&(PROF.role==='admin'||PROF.role==='owner'));
+const CLOCK_SKEW=e=>{const c=(e&&e.code)||'',m=(e&&e.message)||String(e||'');return c==='PGRST303'||/issued at future/i.test(m);};
+async function getProfile(onWait){
+  const g=await sb.auth.getUser();const user=g&&g.data&&g.data.user;
+  if(!user)return null;
+  for(let i=0;i<8;i++){
+    const {data,error}=await sb.from('app_users').select('*').eq('auth_uid',user.id).maybeSingle();
+    if(!error)return data||null;
+    if(CLOCK_SKEW(error)&&i<7){if(onWait)onWait(i+1,8);await new Promise(r=>setTimeout(r,3000));continue;}
+    console.error('getProfile',error);return null;}
+  return null;}
+function loginErr(m){$('#lMsg').textContent=m;$('#login').classList.add('err');setTimeout(()=>$('#login').classList.remove('err'),450)}
+function authMsg(e){const s=((e&&e.message)||String(e)).toLowerCase();
+  if(s.indexOf('invalid login')>-1)return'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+  if(s.indexOf('network')>-1||s.indexOf('failed to fetch')>-1)return'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่';
+  return (e&&e.message)||'เกิดข้อผิดพลาด';}
+async function doLogin(){
+  const u=$('#lUser').value.trim(),p=$('#lPass').value.trim();
+  if(!u||!p){loginErr('กรอกชื่อผู้ใช้และรหัสผ่าน');return;}
+  const btn=$('#lBtn');btn.disabled=true;btn.textContent='⏳ เข้าสู่ระบบ...';
+  try{
+    const {error}=await sb.auth.signInWithPassword({email:u.toLowerCase()+EMAIL_DOMAIN,password:p});
+    if(error)throw error;
+    const prof=await getProfile((n,t)=>{btn.textContent='⏳ รอเซิร์ฟเวอร์... ('+n+'/'+t+')'});
+    if(!prof){await sb.auth.signOut();loginErr('ไม่พบโปรไฟล์ในระบบ');return;}
+    if(prof.status!=='active'){await sb.auth.signOut();loginErr('บัญชีนี้รอผู้ดูแลอนุมัติก่อนใช้งาน');return;}
+    await enterApp(prof);
+  }catch(e){loginErr(authMsg(e));}
+  finally{btn.disabled=false;btn.textContent='เข้าสู่ระบบ';}
+}
+async function doLogout(){try{await sb.auth.signOut()}catch(e){}
+  PROF=null;$('#hdr').style.display='none';$('#main').style.display='none';$('#login').classList.add('on');}
+$('#lBtn').onclick=doLogin;
+$('#lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+$('#hOut').onclick=doLogout;
+
+/* ================= เข้าแอพ + สาขา ================= */
+function accessibleBranches(){
+  if(isAdmin())return BRANCHES;
+  const ids=(PROF&&PROF.branch_ids)||[];if(!ids.length)return BRANCHES;
+  const r=BRANCHES.filter(b=>ids.indexOf(b.id)>-1);return r.length?r:BRANCHES;}
+async function enterApp(prof){
+  PROF=prof;
+  const {data,error}=await sb.from('branches').select('*').order('sort');
+  if(error){loginErr('โหลดสาขาไม่ได้: '+error.message);return;}
+  BRANCHES=data||[];
+  const acc=accessibleBranches();
+  let saved=null;try{saved=localStorage.getItem('jjmt_branch')}catch(e){}
+  CUR_B=(saved&&acc.some(b=>b.id===saved))?saved
+    :((prof.branch_ids&&prof.branch_ids[0]&&acc.some(b=>b.id===prof.branch_ids[0]))?prof.branch_ids[0]:(acc[0]&&acc[0].id));
+  if(!CUR_B){loginErr('ยังไม่มีสาขาในระบบ');return;}
+  $('#login').classList.remove('on');
+  $('#hdr').style.display='flex';$('#main').style.display='block';
+  $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(prof.role||'staff');
+  const sel=$('#hBranch');
+  if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
+    sel.onchange=()=>{CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}maintLoad();};}
+  else{sel.style.display='none';}
+  $('#hMng').style.display=isAdmin()?'':'none';
+  $('#hMng').onclick=maintManageOverlay;
+  maintLoad();
+}
+async function boot(){
+  $('#hLogo').src=LOGO;$('#lLogo').src=LOGO;
+  const s=await sb.auth.getSession().catch(()=>null);
+  if(s&&s.data&&s.data.session){
+    const prof=await getProfile();
+    if(prof&&prof.status==='active'){await enterApp(prof);return;}
+    try{await sb.auth.signOut()}catch(e){}
+  }
+  $('#login').classList.add('on');setTimeout(()=>$('#lUser').focus(),200);
+}
+
+/* ================= ตารางบำรุงรักษา ================= */
+const MAINT_FREQ=[[1,'ทุกวัน'],[7,'ทุกสัปดาห์'],[14,'ทุก 2 สัปดาห์'],[30,'ทุกเดือน'],[60,'ทุก 2 เดือน'],[90,'ทุก 3 เดือน'],[180,'ทุก 6 เดือน'],[365,'ทุกปี']];
+function maintFreqLabel(n){n=+n||0;const f=MAINT_FREQ.find(x=>x[0]===n);return f?f[1]:'ทุก '+n+' วัน';}
+let MAINT_TASKS=[],MAINT_LOGS={};
+function maintPhotos(lg){return (lg&&Array.isArray(lg.photos))?lg.photos.filter(u=>typeof u==='string'):[];}
+function maintStat(t){
+  const lg=(MAINT_LOGS[t.id]||[])[0];
+  if(!lg)return{cls:'over',lg:null,last:null,due:null,left:null,txt:'ยังไม่เคยบันทึก — เริ่มทำรอบแรกได้เลย'};
+  const last=isoFromAny(lg.done_date),due=addDaysISO(last,t.freq_days),left=diffDaysISO(todayISO(),due);
+  const soonTh=t.freq_days>=14?3:(t.freq_days>=7?2:0);
+  const cls=left<0?'over':(left<=soonTh?'soon':'ok');
+  const txt=left<0?('เกินกำหนดมา '+(-left)+' วัน (ครบกำหนด '+fmtDate(due)+')')
+    :left===0?'ครบกำหนดวันนี้'
+    :('ครบกำหนด '+fmtDate(due)+' (อีก '+left+' วัน)');
+  return{cls,lg,last,due,left,txt};
+}
+async function maintLoad(){
+  const box=$('#mtList');box.innerHTML='<div class="rempty">กำลังโหลด...</div>';
+  const [tk,lgs]=await Promise.all([
+    sb.from('maint_tasks').select('*').eq('branch_id',CUR_B).is('deleted_at',null).order('sort'),
+    sb.from('maint_logs').select('*').eq('branch_id',CUR_B).order('done_date',{ascending:false}).order('created_at',{ascending:false}).limit(600)]);
+  if(tk.error){box.innerHTML='<div class="rempty">โหลดไม่ได้: '+escapeHtml(tk.error.message)+' (ยังไม่ได้รัน SQL jjmk_maint_setup?)</div>';return;}
+  MAINT_TASKS=tk.data||[];MAINT_LOGS={};
+  ((lgs&&lgs.data)||[]).forEach(r=>{(MAINT_LOGS[r.task_id]=MAINT_LOGS[r.task_id]||[]).push(r);});
+  maintRenderList();
+}
+function maintRenderList(){
+  const box=$('#mtList'),sum=$('#mtSum');
+  if(!MAINT_TASKS.length){sum.innerHTML='';box.innerHTML='<div class="rempty">ยังไม่มีงานของสาขานี้'+(isAdmin()?' — กด ⚙️ เพื่อเพิ่มงาน':' — ให้ผู้ดูแลเพิ่มงานก่อน')+'</div>';return;}
+  const rank={over:0,soon:1,ok:2};
+  const arr=MAINT_TASKS.map(t=>({t,st:maintStat(t)}))
+    .sort((a,b)=>rank[a.st.cls]-rank[b.st.cls]||((a.st.left==null?-9999:a.st.left)-(b.st.left==null?-9999:b.st.left))||((a.t.sort||0)-(b.t.sort||0)));
+  const n={over:0,soon:0,ok:0};arr.forEach(x=>n[x.st.cls]++);
+  sum.innerHTML=(n.over?`<span class="mchip over">🔴 เกินกำหนด ${n.over}</span>`:'')
+    +(n.soon?`<span class="mchip soon">🟡 ใกล้ถึงกำหนด ${n.soon}</span>`:'')
+    +`<span class="mchip ok">🟢 เรียบร้อย ${n.ok}</span>`;
+  box.innerHTML=arr.map(({t,st})=>{
+    const ph=maintPhotos(st.lg).slice(0,4),cnt=(MAINT_LOGS[t.id]||[]).length;
+    return `<div class="mtcard ${st.cls}">
+      <div class="mtrow1"><b>${escapeHtml(t.name)}</b><span class="mtfreq">${escapeHtml(maintFreqLabel(t.freq_days))}</span></div>
+      ${t.detail?`<div class="mtdetail">${escapeHtml(t.detail)}</div>`:''}
+      <div class="mtstat ${st.cls}">${st.cls==='over'?'🔴':st.cls==='soon'?'🟡':'🟢'} ${escapeHtml(st.txt)}</div>
+      ${st.lg?`<div class="mtlast">ทำล่าสุด ${fmtDate(st.last)} · 👤 ${escapeHtml(st.lg.by_name||'—')}${st.lg.note?' · '+escapeHtml(st.lg.note):''}</div>`:''}
+      ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:''}
+      <div class="mtbtns">
+        <button class="act send" data-done="${t.id}">✅ ทำแล้ว — ถ่ายรูปแนบ</button>
+        <button class="act ghost" data-hist="${t.id}">🕘 ประวัติ${cnt?' ('+cnt+')':''}</button>
+      </div>
+    </div>`;}).join('');
+  box.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
+  box.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(x=>x.id===b.dataset.done);if(t)maintDoneOverlay(t);});
+  box.querySelectorAll('[data-hist]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(x=>x.id===b.dataset.hist);if(t)maintHistOverlay(t);});
+}
+function maintLightbox(url){
+  const ov=document.createElement('div');ov.className='overlay on';
+  ov.style.cssText='z-index:300;background:rgba(12,7,5,.9);align-items:center';
+  ov.innerHTML=`<img src="${escapeHtml(url)}" style="max-width:96vw;max-height:92vh;margin:auto;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5)" alt="">`;
+  ov.onclick=()=>ov.remove();document.body.appendChild(ov);
+}
+async function maintUploadPhoto(dataUrl,taskId){
+  const blob=await (await fetch(dataUrl)).blob();
+  const path='m/'+CUR_B+'/'+taskId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
+  const up=await sb.storage.from('maint-photos').upload(path,blob,{contentType:'image/jpeg'});
+  if(up.error)throw up.error;
+  return sb.storage.from('maint-photos').getPublicUrl(path).data.publicUrl;
+}
+function maintDoneOverlay(t){
+  const ov=document.createElement('div');ov.className='overlay on';
+  ov.innerHTML=`<div class="sheet">
+    <div class="sheet-head"><h3>✅ ${escapeHtml(t.name)}</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <div class="field"><label>วันที่ทำ</label><input type="date" class="md_d" value="${todayISO()}"></div>
+      <div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input class="md_n" placeholder="เช่น จ้างช่างมาล้าง / เปลี่ยนไส้กรองใหม่"></div>
+      <div class="field"><label>รูปถ่ายหลังทำ (อย่างน้อย 1 รูป)</label>
+        <input type="file" class="md_f" accept="image/*" multiple style="display:none">
+        <div class="mtthumbs md_prev"></div>
+        <button class="act ghost wide md_add" style="margin-top:6px">📸 ถ่ายรูป / เลือกรูป</button>
+      </div>
+      <button class="act send wide md_save" style="margin-top:6px">💾 บันทึกงาน + รูป</button>
+      <p class="hint" style="margin:8px 0 0">บันทึกแล้วรูปจะขึ้นในตารางและประวัติทันที ให้เจ้าของ/ผู้ดูแลเปิดดูได้ทุกเครื่อง</p>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  const fin=ov.querySelector('.md_f'),prev=ov.querySelector('.md_prev'),save=ov.querySelector('.md_save');
+  const imgs=[];
+  function renderPrev(){prev.innerHTML=imgs.map((d,i)=>`<img src="${d}" data-i="${i}" title="แตะเพื่อลบรูปนี้" alt="">`).join('');
+    prev.querySelectorAll('img').forEach(im=>im.onclick=()=>{imgs.splice(+im.dataset.i,1);renderPrev();});}
+  ov.querySelector('.md_add').onclick=()=>fin.click();
+  fin.onchange=()=>{[...fin.files].forEach(f=>processImage(f,d=>{if(d){imgs.push(d);renderPrev();}else toast('อ่านรูปไม่สำเร็จ 1 รูป');}));fin.value='';};
+  save.onclick=async()=>{
+    const d=ov.querySelector('.md_d').value||todayISO(),note=ov.querySelector('.md_n').value.trim();
+    if(!imgs.length){toast('แนบรูปถ่ายอย่างน้อย 1 รูปก่อนบันทึก');return;}
+    save.disabled=true;save.textContent='⏳ กำลังอัปโหลดรูป...';
+    try{
+      const urls=[];
+      for(const im of imgs){urls.push(await maintUploadPhoto(im,t.id));save.textContent='⏳ อัปโหลดรูป '+urls.length+'/'+imgs.length+'...';}
+      const {error}=await sb.from('maint_logs').insert({id:uid('ml'),task_id:t.id,branch_id:CUR_B,
+        done_date:d,by_name:(PROF&&(PROF.name||PROF.username))||'',note:note||null,photos:urls});
+      if(error)throw error;
+      toast('บันทึก “'+t.name+'” แล้ว ✓');x();maintLoad();
+    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e)+' (ยังไม่ได้รัน SQL jjmk_maint_setup?)');
+      save.disabled=false;save.textContent='💾 บันทึกงาน + รูป';}
+  };
+}
+function maintHistOverlay(t){
+  const logs=MAINT_LOGS[t.id]||[];
+  const ov=document.createElement('div');ov.className='overlay on';
+  const rows=logs.length?logs.map(lg=>{
+    const ph=maintPhotos(lg);
+    return `<div class="mtlog">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+        <b>📅 ${fmtDate(isoFromAny(lg.done_date))}</b>
+        <span style="font-size:.8rem;color:#8a7f74">👤 ${escapeHtml(lg.by_name||'—')}${isAdmin()?` <button data-del="${lg.id}" title="ลบบันทึกนี้" style="border:none;background:none;cursor:pointer">🗑</button>`:''}</span>
+      </div>
+      ${lg.note?`<div class="mtdetail">${escapeHtml(lg.note)}</div>`:''}
+      ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:'<div class="mtlast">ไม่มีรูปแนบ</div>'}
+    </div>`;}).join(''):'<div class="rempty">ยังไม่เคยบันทึกงานนี้</div>';
+  ov.innerHTML=`<div class="sheet">
+    <div class="sheet-head"><h3>🕘 ${escapeHtml(t.name)}</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <p class="hint" style="margin:0 0 8px">${escapeHtml(maintFreqLabel(t.freq_days))} · ทำไปแล้ว ${logs.length} ครั้ง · แตะรูปเพื่อขยายเต็มจอ</p>
+      ${rows}
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  ov.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
+  ov.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('ลบบันทึกนี้? (รูปในประวัติครั้งนี้จะหายจากตาราง)'))return;
+    const {error}=await sb.from('maint_logs').delete().eq('id',b.dataset.del);
+    if(error){toast('ลบไม่ได้: '+error.message);return;}
+    toast('ลบบันทึกแล้ว');x();await maintLoad();
+    const nt=MAINT_TASKS.find(z=>z.id===t.id);if(nt)maintHistOverlay(nt);
+  });
+}
+function maintManageOverlay(){
+  if(!isAdmin()){toast('เฉพาะเจ้าของ/ผู้ดูแล');return;}
+  const acc=accessibleBranches();
+  const bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
+  const ov=document.createElement('div');ov.className='overlay on';
+  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  ov.innerHTML=`<div class="sheet">
+    <div class="sheet-head"><h3>⚙️ จัดการงานบำรุงรักษา</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <div class="sub-title" style="margin-top:0"><span class="mm_mode">➕ เพิ่มงานใหม่</span></div>
+      <div class="field"><label>ชื่องาน</label><input class="mm_n" placeholder="เช่น ล้างฟิลเตอร์แอร์"></div>
+      <div class="field"><label>รายละเอียด (ไม่บังคับ)</label><input class="mm_d" placeholder="เช่น ถอดฟิลเตอร์ทุกตัวมาล้าง ผึ่งให้แห้ง"></div>
+      <div class="field"><label>ความถี่</label><select class="mm_f">${MAINT_FREQ.map(f=>`<option value="${f[0]}" ${f[0]===30?'selected':''}>${f[1]}</option>`).join('')}<option value="custom">กำหนดเอง…</option></select></div>
+      <div class="field mm_brwrap"><label>ใช้กับสาขา</label><div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 2px">${bChecks}</div></div>
+      <button class="act send wide mm_save">➕ เพิ่มงาน</button>
+      <div class="sub-title">🛠 งานของ ${escapeHtml(bname)}</div>
+      <div class="mm_list"></div>
+      <p class="hint">🗑 ลบงาน = ซ่อนจากตาราง (ประวัติและรูปเก่ายังอยู่)</p>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  const fN=ov.querySelector('.mm_n'),fD=ov.querySelector('.mm_d'),fF=ov.querySelector('.mm_f'),
+    saveBtn=ov.querySelector('.mm_save'),modeEl=ov.querySelector('.mm_mode'),brWrap=ov.querySelector('.mm_brwrap');
+  let editId=null;
+  function ensureFreqOpt(v){if(![...fF.options].some(o=>o.value===String(v))){
+    const o=document.createElement('option');o.value=v;o.textContent=maintFreqLabel(v);fF.insertBefore(o,fF.lastElementChild);}fF.value=String(v);}
+  fF.onchange=()=>{if(fF.value!=='custom')return;
+    const v=parseInt(prompt('ทำทุกกี่วัน? (เช่น 45)'),10);
+    if(v>0)ensureFreqOpt(v);else fF.value='30';};
+  function resetForm(){editId=null;fN.value='';fD.value='';fF.value='30';brWrap.style.display='';
+    modeEl.textContent='➕ เพิ่มงานใหม่';saveBtn.textContent='➕ เพิ่มงาน';}
+  function renderList(){
+    const wrap=ov.querySelector('.mm_list');
+    wrap.innerHTML=MAINT_TASKS.length?MAINT_TASKS.map(t=>`<div class="mmrow">
+        <div class="mmn"><b>${escapeHtml(t.name)}</b><small>${escapeHtml(maintFreqLabel(t.freq_days))}${t.detail?' · '+escapeHtml(t.detail):''}</small></div>
+        <button data-ed="${t.id}">✏️</button><button data-rm="${t.id}">🗑</button>
+      </div>`).join(''):'<div class="rempty">ยังไม่มีงานของสาขานี้</div>';
+    wrap.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(z=>z.id===b.dataset.ed);if(!t)return;
+      editId=t.id;fN.value=t.name;fD.value=t.detail||'';ensureFreqOpt(t.freq_days);brWrap.style.display='none';
+      modeEl.textContent='✏️ แก้ไข: '+t.name;saveBtn.textContent='💾 บันทึกการแก้ไข';fN.focus();});
+    wrap.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{const t=MAINT_TASKS.find(z=>z.id===b.dataset.rm);if(!t)return;
+      if(!confirm('ลบงาน “'+t.name+'” ออกจากสาขานี้?'))return;
+      const {error}=await sb.from('maint_tasks').update({deleted_at:new Date().toISOString()}).eq('id',t.id);
+      if(error){toast('ลบไม่ได้: '+error.message);return;}
+      toast('ลบงานแล้ว');await maintLoad();renderList();if(editId===t.id)resetForm();});
+  }
+  saveBtn.onclick=async()=>{
+    const name=fN.value.trim(),detail=fD.value.trim(),freq=parseInt(fF.value,10);
+    if(!name){toast('กรอกชื่องานก่อน');fN.focus();return;}
+    if(!(freq>0)){toast('เลือกความถี่ก่อน');return;}
+    saveBtn.disabled=true;
+    try{
+      if(editId){
+        const {error}=await sb.from('maint_tasks').update({name,detail:detail||null,freq_days:freq}).eq('id',editId);
+        if(error)throw error;toast('บันทึกการแก้ไขแล้ว ✓');
+      }else{
+        const bids=[...ov.querySelectorAll('.mm_br:checked')].map(c=>c.value);
+        if(!bids.length){toast('เลือกอย่างน้อย 1 สาขา');saveBtn.disabled=false;return;}
+        const base=Math.max(0,...MAINT_TASKS.map(t=>t.sort||0));
+        const rows=bids.map((bid,i)=>({id:uid('mt'),branch_id:bid,name,detail:detail||null,freq_days:freq,sort:base+10+i}));
+        const {error}=await sb.from('maint_tasks').insert(rows);
+        if(error)throw error;toast('เพิ่มงานแล้ว ✓ ('+bids.length+' สาขา)');
+      }
+      resetForm();await maintLoad();renderList();
+    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e));}
+    finally{saveBtn.disabled=false;}
+  };
+  renderList();
+}
+
+boot();
+</script>
+</body>
+</html>
