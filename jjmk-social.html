@@ -516,6 +516,7 @@ async function vFeed(el){
     </select>
     <input placeholder="ค้นหาข้อความ / ชื่อ / พนักงาน..." value="${esc(f.q)}" onchange="S.feedFilter.q=this.value;vFeed($('#view-feed'))">
     <button class="btn sm" onclick="addManual()">➕ เพิ่มรีวิวเอง</button>
+    <button class="btn gh sm" onclick="importModal()">📥 นำเข้าไฟล์</button>
     <button class="btn gh sm" onclick="analyzePending()">🧠 วิเคราะห์ที่ค้าง</button>
   </div>
   <div id="feedList"><div class="spin"></div></div>`;
@@ -622,6 +623,122 @@ async function saveManual(){
   closeModal();toast('บันทึกแล้ว — กำลังวิเคราะห์...');S.cache={};
   try{await brain('analyze',{ids:[ins[0].id]})}catch(e){}
   S.cache={};show('feed');
+}
+
+/* ---------- นำเข้ารีวิวจากไฟล์ (CSV/JSON — เช่น export จาก Outscraper/SerpApi) ---------- */
+function importModal(){
+  S._imp=null;
+  openModal(`<h3>📥 นำเข้ารีวิวจากไฟล์ (CSV / JSON)</h3>
+    <p class="xs mut" style="margin:0 0 10px">ใช้กับไฟล์รีวิวที่ส่งออกจากบริการอย่าง Outscraper / SerpApi หรือตารางทั่วไปที่มีคอลัมน์ ข้อความรีวิว / ชื่อผู้เขียน / ดาว / วันที่ — ระบบจับคอลัมน์ให้อัตโนมัติ</p>
+    <div class="grid2">
+      <div class="fld"><label>ช่องทาง</label><select id="impCh">${Object.keys(CH_META).map(c=>`<option value="${c}" ${c==='google'?'selected':''}>${CH_META[c].em} ${CH_META[c].name}</option>`).join('')}</select></div>
+      <div class="fld"><label>สาขา</label><select id="impBr"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select></div>
+    </div>
+    <div class="fld"><label>ไฟล์</label><input type="file" id="impFile" accept=".csv,.json,.txt" onchange="impParse(this)"></div>
+    <div id="impPrev" class="sm mut" style="margin-bottom:10px">ยังไม่ได้เลือกไฟล์</div>
+    <button class="btn" style="width:100%" id="impGo" disabled onclick="impDoImport()">นำเข้า</button>`);
+}
+function djb2(s){let h=5381;for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36)}
+function parseCSV(txt){
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<txt.length;i++){
+    const c=txt[i];
+    if(q){ if(c==='"'){ if(txt[i+1]==='"'){cur+='"';i++} else q=false } else cur+=c }
+    else if(c==='"')q=true;
+    else if(c===','){row.push(cur);cur=''}
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&txt[i+1]==='\n')i++;
+      row.push(cur);cur=''; if(row.length>1||row[0].trim()!=='')rows.push(row); row=[] }
+    else cur+=c;
+  }
+  if(cur!==''||row.length){row.push(cur);if(row.length>1||row[0].trim()!=='')rows.push(row)}
+  return rows;
+}
+function impPick(o,keys){
+  const lk={};Object.keys(o).forEach(k=>lk[k.toLowerCase().trim()]=o[k]);
+  for(const k of keys){const v=lk[k];if(v!=null&&String(v).trim()!=='')return v}
+  return null;
+}
+function impNorm(o){
+  const author=impPick(o,['author_title','author_name','reviewer','user_name','username','display_name','author'])??(o.user&&o.user.name)??impPick(o,['name']);
+  const text=impPick(o,['review_text','text','snippet','review','comment','content','body']);
+  let rating=impPick(o,['review_rating','rating','stars','score','star_rating']);
+  rating=rating!=null?parseFloat(String(rating).replace(/[^\d.]/g,'')):null;
+  if(rating!=null&&(isNaN(rating)||rating<0||rating>5))rating=null;
+  const dt=impPick(o,['review_datetime_utc','review_timestamp','iso_date','datetime','published_at','publishedatdate','created_at','date','time']);
+  let posted=null;
+  if(dt!=null){const s=String(dt).trim();
+    if(/^\d{13}$/.test(s))posted=new Date(+s);
+    else if(/^\d{10}$/.test(s))posted=new Date(+s*1000);
+    else{const d=new Date(s);if(!isNaN(d))posted=d}}
+  const url=impPick(o,['review_link','link','url']);
+  const rid=impPick(o,['review_id','id'])||url;
+  if(!text&&rating==null)return null;
+  return {author:author?String(author):null,text:text?String(text):'',rating,
+    posted:posted?posted.toISOString():null,url:url?String(url):null,rid:rid?String(rid):null,raw:o};
+}
+async function impParse(inp){
+  const f=inp.files&&inp.files[0]; if(!f)return;
+  const txt=await f.text(); let objs=[];
+  try{
+    if(/^\s*[\[{]/.test(txt)){const j=JSON.parse(txt);objs=Array.isArray(j)?j:(j.reviews||j.data||j.results||[])}
+    else{const rows=parseCSV(txt);const head=(rows.shift()||[]).map(h=>String(h).trim());
+      objs=rows.map(r=>{const o={};head.forEach((h,i)=>o[h]=r[i]);return o})}
+  }catch(e){$('#impPrev').textContent='อ่านไฟล์ไม่ได้: '+e.message;return}
+  const mapped=objs.map(impNorm).filter(Boolean);
+  const noDate=mapped.filter(m=>!m.posted).length;
+  S._imp=mapped;
+  $('#impPrev').innerHTML=mapped.length
+    ?`พบ <b>${mapped.length}</b> รายการ · ตัวอย่าง: "${esc((mapped[0].text||'').slice(0,60))}" ${mapped[0].rating!=null?mapped[0].rating+'★':''} ${mapped[0].author?'โดย '+esc(mapped[0].author):''}${noDate?`<br>⚠️ ${noDate} รายการไม่มีวันที่ — จะบันทึกเป็นวันนี้`:''}`
+    :'ไม่พบรีวิวในไฟล์ — เช็คว่ามีคอลัมน์ข้อความรีวิว (review_text / text / snippet)';
+  $('#impGo').disabled=!mapped.length;
+}
+async function impDoImport(){
+  const ch=$('#impCh').value,br=$('#impBr').value||null,list=S._imp||[];
+  if(!list.length)return;
+  const btn=$('#impGo');btn.disabled=true;
+  const seen=new Set();
+  const rows=list.map(m=>{
+    const ext='imp_'+(m.rid?djb2(String(m.rid)):djb2((m.author||'')+'|'+(m.posted||'')+'|'+(m.text||'').slice(0,80)));
+    if(seen.has(ext))return null;seen.add(ext);
+    return {channel:ch,kind:'review',external_id:ext,branch:br,author_name:m.author,text:m.text,
+      rating:m.rating,url:m.url,posted_at:m.posted||new Date().toISOString(),raw:m.raw};
+  }).filter(Boolean);
+  let done=0,inserted=0;
+  try{
+    for(let i=0;i<rows.length;i+=100){
+      const batch=rows.slice(i,i+100);
+      const res=await api('POST','social_mentions?on_conflict=channel,external_id',batch,'resolution=ignore-duplicates,return=representation');
+      inserted+=(res||[]).length;done+=batch.length;
+      btn.textContent=`นำเข้าแล้ว ${done}/${rows.length}...`;
+    }
+  }catch(e){toast('นำเข้าไม่สำเร็จ: '+e.message,true);btn.disabled=false;btn.textContent='นำเข้า';return}
+  closeModal();S.cache={};refreshBadges();
+  toast(`นำเข้าสำเร็จ ${inserted} รายการใหม่${rows.length-inserted?` (ข้ามที่ซ้ำ ${rows.length-inserted})`:''}`);
+  await show('feed');
+  if(inserted&&confirm(`ให้ AI เริ่มไล่วิเคราะห์ ${inserted} รายการเลยไหม? (ทำทีละชุด เปิดหน้าจอทิ้งไว้ได้)`))analyzeAllPending();
+}
+/* ---------- วิเคราะห์ทั้งหมดที่ค้าง (วนทีละชุดจนหมด) ---------- */
+let _aapStop=false;
+async function analyzeAllPending(){
+  const pend=await sel('social_mentions','select=id&analyzed_at=is.null&limit=1000');
+  const total=(pend||[]).length;
+  if(!total){toast('ไม่มีรายการค้างวิเคราะห์ ✓');return}
+  _aapStop=false;
+  openModal(`<h3>🧠 กำลังวิเคราะห์ทั้งหมด</h3>
+    <p class="sm" id="aapTxt">ค้างอยู่ ${total} รายการ · กำลังเริ่ม...</p>
+    <p class="xs mut">ทำทีละชุด ชุดละ ~10 รายการ เปิดหน้านี้ทิ้งไว้ได้เลย · ถ้าปิดไป cron ก็จะไล่วิเคราะห์ต่อให้เองทุก 15 นาที</p>
+    <button class="btn gh" style="width:100%" onclick="_aapStop=true;closeModal()">หยุดก่อน (ที่วิเคราะห์แล้วไม่หาย)</button>`);
+  let doneN=0;
+  while(!_aapStop){
+    let r;
+    try{r=await brain('analyze',{limit:10})}
+    catch(e){toast('สะดุด: '+e.message+' — เดี๋ยว cron วิเคราะห์ต่อให้เอง',true);break}
+    doneN+=r.analyzed||0;
+    const t=document.getElementById('aapTxt');
+    if(t)t.textContent=`วิเคราะห์แล้ว ${doneN}/${total} รายการ...`;
+    if(!r.analyzed)break;
+  }
+  if(!_aapStop){closeModal();toast(`วิเคราะห์เสร็จ ${doneN} รายการ ✓`);S.cache={};show(S.tab)}
 }
 
 /* ============ แชทลูกค้า ============ */
@@ -970,8 +1087,9 @@ async function vSet(el){
   </div>
   <div class="card"><h3>🔧 เครื่องมือ</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn gh sm" onclick="analyzePending()">🧠 วิเคราะห์รายการที่ค้าง</button>
+      <button class="btn gh sm" onclick="analyzeAllPending()">🧠 วิเคราะห์ทั้งหมดที่ค้าง (วนจนหมด)</button>
       <button class="btn gh sm" onclick="genDigest('weekly')">📋 สรุปรอบ 7 วันตอนนี้</button>
+      <button class="btn gh sm" onclick="importModal()">📥 นำเข้ารีวิวจากไฟล์</button>
     </div>
     <div class="xs mut" style="margin-top:8px">ปกติระบบวิเคราะห์อัตโนมัติทันทีที่มีรีวิวเข้า และสรุปรายวันเวลา 06:10 (ถ้าเปิด pg_cron ตามคู่มือ)</div>
   </div>
