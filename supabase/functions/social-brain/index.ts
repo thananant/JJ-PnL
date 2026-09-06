@@ -11,7 +11,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? "";
+const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 const LINE_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
 const FB_PAGE_TOKEN = Deno.env.get("FB_PAGE_TOKEN") ?? "";
 
@@ -184,7 +184,7 @@ function avg(a: number[]) { return a.length ? Math.round(a.reduce((s, x) => s + 
 
 // ---------- ดึงรีวิว Google (Places API) ----------
 async function pollGoogle() {
-  if (!GOOGLE_KEY) return { ok: false, reason: "ยังไม่ได้ตั้ง GOOGLE_API_KEY" };
+  if (!GOOGLE_KEY) return { ok: false, reason: "ยังไม่ได้ตั้ง secret GOOGLE_API_KEY (หรือ GOOGLE_MAPS_API_KEY)" };
   const settings = await getSettings();
   const places: { place_id: string; branch: string }[] = settings.channels?.google_places ?? [];
   if (!places.length) return { ok: false, reason: "ยังไม่ได้ใส่ place_id ในหน้าเชื่อมต่อ" };
