@@ -27,6 +27,15 @@ const ChatReply = z.object({
   reason: z.string(),
 });
 
+// อ่านผลลัพธ์ structured output: ใช้ parsed_output ก่อน ถ้าไม่มีให้ parse จาก text block
+function parsedOf<T>(res: any): T | null {
+  if (res?.parsed_output) return res.parsed_output as T;
+  try {
+    const t = (res?.content ?? []).find((b: any) => b.type === "text");
+    return t?.text ? JSON.parse(t.text) as T : null;
+  } catch { return null; }
+}
+
 function bg(p: Promise<unknown>) {
   // @ts-ignore: EdgeRuntime มีเฉพาะบน Supabase Edge Runtime
   if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(p.catch((e) => console.error(e)));
@@ -100,7 +109,7 @@ ${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
 - ห้ามแต่งข้อมูลที่ไม่รู้ (ราคา/โปรโมชั่น/วันหยุด) ถ้าไม่มีในข้อมูลร้าน ให้บอกว่าเดี๋ยวแอดมินมายืนยันอีกที และตั้ง needs_human = true
 - ถ้าลูกค้าร้องเรียนรุนแรง เจ็บป่วย ขอเงินคืน หรือพูดถึงคำเหล่านี้: ${kw.join(", ")} ให้ตั้ง needs_human = true`;
 
-  const res = await anthropic.messages.create({
+  const res = await anthropic.messages.parse({
     model: "claude-opus-5",
     max_tokens: 1024,
     output_config: { effort: "low", format: zodOutputFormat(ChatReply) },
@@ -108,7 +117,7 @@ ${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
     messages,
   });
   if (res.stop_reason === "refusal") return { reply: "", needs_human: true, reason: "refusal" };
-  return (res as any).parsed_output as z.infer<typeof ChatReply> | null;
+  return parsedOf<z.infer<typeof ChatReply>>(res);
 }
 
 async function sendLine(replyToken: string | null, userId: string, text: string) {

@@ -51,6 +51,15 @@ const ChatReply = z.object({
   reason: z.string(),
 });
 
+// อ่านผลลัพธ์ structured output: ใช้ parsed_output ก่อน ถ้าไม่มีให้ parse จาก text block
+function parsedOf<T>(res: any): T | null {
+  if (res?.parsed_output) return res.parsed_output as T;
+  try {
+    const t = (res?.content ?? []).find((b: any) => b.type === "text");
+    return t?.text ? JSON.parse(t.text) as T : null;
+  } catch { return null; }
+}
+
 async function getSettings() {
   const { data } = await sb.from("social_settings").select("id,val");
   const m: Record<string, any> = {};
@@ -102,6 +111,7 @@ staff: ใส่เฉพาะที่มีการเอ่ยถึงพ�
 reply: ร่างคำตอบภาษาไทยสุภาพในนามร้าน ขอบคุณ/ขอโทษตามเนื้อหา ไม่แก้ตัว ไม่สัญญาสิ่งที่ไม่แน่ใจ ถ้าเป็นรีวิวลบให้เชิญติดต่อร้านโดยตรง`;
 
   let n = 0;
+  const errs: string[] = [];
   for (const r of rows) {
     const user = `ช่องทาง: ${r.channel} (${r.kind})${r.rating != null ? ` · ให้ดาว ${r.rating}/5` : ""}${r.branch ? ` · สาขาที่ระบบระบุ: ${r.branch}` : ""}
 โพสต์เมื่อ: ${r.posted_at}
@@ -109,15 +119,15 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
 ข้อความ:
 """${(r.text ?? "").slice(0, 4000)}"""`;
     try {
-      const res = await anthropic.messages.create({
+      const res = await anthropic.messages.parse({
         model: "claude-opus-5",
         max_tokens: 3000,
         output_config: { effort: "low", format: zodOutputFormat(Analysis) },
         system, messages: [{ role: "user", content: user }],
       });
-      if (res.stop_reason === "refusal") { continue; }
-      const a = (res as any).parsed_output as z.infer<typeof Analysis> | null;
-      if (!a) continue;
+      if (res.stop_reason === "refusal") { errs.push(`#${r.id}: AI ปฏิเสธ`); continue; }
+      const a = parsedOf<z.infer<typeof Analysis>>(res);
+      if (!a) { errs.push(`#${r.id}: อ่านผลวิเคราะห์ไม่ได้`); continue; }
       const branchCodes = branches.map((b) => b.code);
       await sb.from("social_mentions").update({
         sentiment: a.sentiment,
@@ -129,9 +139,12 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
         analyzed_at: new Date().toISOString(),
       }).eq("id", r.id);
       n++;
-    } catch (e) { console.error("analyze", r.id, e); }
+    } catch (e) {
+      console.error("analyze", r.id, e);
+      errs.push(`#${r.id}: ${String((e as any)?.message ?? e).slice(0, 180)}`);
+    }
   }
-  return { analyzed: n, total: rows.length };
+  return { analyzed: n, total: rows.length, errors: errs.length ? errs.slice(0, 3) : undefined };
 }
 
 // ---------- สรุปรายวัน/รายสัปดาห์ ----------
@@ -156,14 +169,14 @@ async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily")
     if (!set.length) continue;
     const lines = set.map((r: any) =>
       `[${r.channel}${r.branch ? "/" + r.branch : ""}${r.rating != null ? ` ${r.rating}★` : ""} ${r.sentiment ?? ""} slot=${r.visit_slot ?? "?"}] ${r.ai_summary ?? (r.text ?? "").slice(0, 160)}${r.staff?.length ? " · พนักงาน: " + r.staff.map((s: any) => `${s.name}(${s.sentiment})`).join(",") : ""}${r.issues?.length ? " · ปัญหา: " + r.issues.map((i: any) => i.topic + (i.severity >= 3 ? "!!" : "")).join(",") : ""}`);
-    const res = await anthropic.messages.create({
+    const res = await anthropic.messages.parse({
       model: "claude-opus-5",
       max_tokens: 6000,
       output_config: { effort: "medium", format: zodOutputFormat(Digest) },
       system: `คุณคือผู้ช่วยผู้บริหารร้านหมูกระทะ สรุปเสียงลูกค้า${span === "weekly" ? "รอบ 7 วัน" : "รายวัน"}เป็นภาษาไทย ให้เจ้าของร้านอ่านแล้วรู้ทันทีว่า มีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี/มีปัญหา และควรทำอะไรต่อ อ้างอิงเฉพาะข้อมูลที่ให้ อย่าแต่งเพิ่ม นับ count จากจำนวนรีวิวที่พูดถึงเรื่องนั้นจริง`,
       messages: [{ role: "user", content: `ข้อมูล ${set.length} รายการ (${br === "ALL" ? "ทุกสาขา" : "สาขา " + br}):\n` + lines.join("\n") }],
     });
-    const d = (res as any).parsed_output as z.infer<typeof Digest> | null;
+    const d = parsedOf<z.infer<typeof Digest>>(res);
     if (!d) continue;
     const stat = {
       count: set.length,
@@ -280,13 +293,13 @@ ${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
   const messages: Anthropic.MessageParam[] = history.slice(-12).map((h) => ({
     role: h.role === "user" ? "user" as const : "assistant" as const, content: h.text,
   }));
-  const res = await anthropic.messages.create({
+  const res = await anthropic.messages.parse({
     model: "claude-opus-5", max_tokens: 1024,
     output_config: { effort: "low", format: zodOutputFormat(ChatReply) },
     system, messages,
   });
   if (res.stop_reason === "refusal") return { reply: "", needs_human: true, reason: "refusal" };
-  return (res as any).parsed_output;
+  return parsedOf<z.infer<typeof ChatReply>>(res);
 }
 
 // ---------- ส่งข้อความแชท (แอดมินกดส่งร่าง) ----------
