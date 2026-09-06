@@ -17,7 +17,7 @@
 
 - `jjmk_kitchen_setup.sql` — ติดตั้งตารางระบบครัวกลาง
 - `jjmk_kitchen_data.sql` — ข้อมูลตั้งต้นครัวกลาง (วัตถุดิบ/เมนู/สูตร)
-- `jjmk_owner_setup.sql` — ตารางผ่อนชำระ `pnl_installments` (หน้า Owner)
+- `jjmk_owner_setup.sql` — ตารางหน้า Owner: ผ่อนชำระ `pnl_installments` + ยอดขาย/กำไรใส่เอง `pnl_owner_monthly`
 - `jjmk_maint_setup.sql` — ติดตั้งตารางบำรุงรักษาสาขา + งานตั้งต้น 9 งานให้ทุกสาขา
 - `payroll/*.sql` — migration ทั้งหมดของระบบเงินเดือน (15 ไฟล์ รันซ้ำได้ · Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`)
 

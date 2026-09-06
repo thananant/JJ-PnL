@@ -320,8 +320,9 @@ async function api(method,path,body,prefer,quiet){
     });
     if(!r.ok){ const t=await r.text(); throw new Error(r.status+' '+t.slice(0,180)); }
     if(method!=='GET'){
+      const what=String(path).startsWith('pnl_owner_monthly')?'ยอดใส่เอง (Owner)':'ผ่อนชำระ (Owner)';
       api('POST','pnl_activity_log',{username:(S.user&&S.user.username)||'ไม่ระบุ',branch:'OWNER',
-        action:(method==='DELETE'?'ลบ':'บันทึก')+'ผ่อนชำระ (Owner)',detail:String(path).slice(0,150)},'return=minimal',true).catch(()=>{});
+        action:(method==='DELETE'?'ลบ':'บันทึก')+what,detail:String(path).slice(0,150)},'return=minimal',true).catch(()=>{});
     }
     if(r.status===204) return [];
     const txt=await r.text();
@@ -338,6 +339,7 @@ async function selAll(t,q,page){ // ดึงครบทุกแถวแม�
   for(;;){ const r=await sel(t,`${q}&limit=${page}&offset=${off}`); out.push(...r); if(r.length<page)return out; off+=page; }
 }
 const ins =(t,row)=>api('POST',t,row);
+const ups =(t,rows,conflict)=>api('POST',t+'?on_conflict='+conflict,rows,'resolution=merge-duplicates,return=representation');
 const upd =(t,q,body)=>api('PATCH',t+'?'+q,body);
 const delQ=(t,q)=>api('DELETE',t+'?'+q,null,'return=minimal');
 
@@ -363,7 +365,7 @@ const S={
   branches:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}],
   sup:[], supById:{}, supByName:{}, fixed:[],
   yearCache:{}, prevCache:{},
-  inst:null, instMissing:false,
+  inst:null, instMissing:false, manMissing:false,
   charts:{}
 };
 const BRNAME={JJRD:'สาขารัชดา',JJLP:'สาขาลาดพร้าว',ALL:'ทุกสาขา'};
@@ -485,7 +487,7 @@ async function loadCore(){
 async function loadYear(y,force){
   if(S.yearCache[y]&&!force)return S.yearCache[y];
   const from=y+'-01-01', to=y+'-12-31', mF=`month=gte.${y}-01&month=lte.${y}-12`;
-  const [inc,exp,cash,shop,extra,meta,fixm,hist,histI]=await Promise.all([
+  const [inc,exp,cash,shop,extra,meta,fixm,hist,histI,man]=await Promise.all([
     selAll('pnl_income_daily',`select=d,branch,sales_pos_am,sales_pos_pm&d=gte.${from}&d=lte.${to}&order=d,branch`),
     selAll('pnl_expense_daily',`select=d,branch,supplier_id,amount&d=gte.${from}&d=lte.${to}&order=d,supplier_id`),
     selAll('pnl_cash_expenses',`select=d,branch,amount&d=gte.${from}&d=lte.${to}&order=d,id`),
@@ -494,9 +496,11 @@ async function loadYear(y,force){
     selAll('pnl_month_meta',`select=branch,month,grab,lineman&${mF}&order=month`),
     selAll('pnl_fixed_monthly',`select=branch,month,item_id,amount&${mF}&order=month,item_id`),
     selAll('pnl_history',`select=branch,month,revenue&${mF}&order=month`).catch(()=>[]),
-    selAll('pnl_history_items',`select=branch,month,name,amount&${mF}&order=month,name`).catch(()=>[])
+    selAll('pnl_history_items',`select=branch,month,name,amount&${mF}&order=month,name`).catch(()=>[]),
+    selAll('pnl_owner_monthly',`select=*&${mF}&order=month`).catch(()=>null)
   ]);
-  const bundle={inc,exp,cash,shop,extra,meta,fixm,hist,histI};
+  S.manMissing = man===null; // ยังไม่รัน jjmk_owner_setup.sql
+  const bundle={inc,exp,cash,shop,extra,meta,fixm,hist,histI,manual:man||[]};
   S.yearCache[y]=bundle;
   return bundle;
 }
@@ -505,12 +509,13 @@ async function loadPrevYear(y){
   const py=y-1;
   if(S.prevCache[py])return S.prevCache[py];
   const from=py+'-01-01',to=py+'-12-31',mF=`month=gte.${py}-01&month=lte.${py}-12`;
-  const [inc,meta,hist]=await Promise.all([
+  const [inc,meta,hist,man]=await Promise.all([
     selAll('pnl_income_daily',`select=d,branch,sales_pos_am,sales_pos_pm&d=gte.${from}&d=lte.${to}&order=d,branch`),
     selAll('pnl_month_meta',`select=branch,month,grab,lineman&${mF}&order=month`),
-    selAll('pnl_history',`select=branch,month,revenue&${mF}&order=month`).catch(()=>[])
+    selAll('pnl_history',`select=branch,month,revenue&${mF}&order=month`).catch(()=>[]),
+    selAll('pnl_owner_monthly',`select=*&month=gte.${py}-01&month=lte.${py}-12&order=month`).catch(()=>[])
   ]);
-  S.prevCache[py]={inc,meta,hist};
+  S.prevCache[py]={inc,meta,hist,manual:man};
   return S.prevCache[py];
 }
 async function loadInstallments(){
@@ -525,6 +530,23 @@ function keepBr(b){ return S.br==='ALL'||b===S.br; }
 /* สาขา "ส่วนกลาง" (ออฟฟิศ) — มีเฉพาะรายจ่าย: รวมต้นทุนในยอดรวม แต่ไม่โชว์เป็นสาขาให้เลือก/เทียบ */
 function isCen(code){ const b=S.branches.find(x=>x.code===code); return !!(b&&b.is_central); }
 function realBranches(){ return S.branches.filter(b=>!b.is_central); }
+/* ยอดใส่เอง (pnl_owner_monthly): เดือนไหนเจ้าของคีย์มือ ตัวเลขมือชนะค่าคำนวณ
+   มุมมองทุกสาขา → ใช้แถว branch='ALL' ก่อน ไม่มีก็รวมแถวรายสาขา · มุมมองสาขา → เฉพาะแถวสาขานั้น */
+function pickManual(list,mo){
+  const rs=(list||[]).filter(r=>r.month===mo&&(r.sales!=null||r.profit!=null));
+  if(!rs.length)return null;
+  const V=(r,k)=>r[k]!=null?num(r[k]):null;
+  if(S.br!=='ALL'){
+    const r=rs.find(x=>x.branch===S.br);
+    return r?{sales:V(r,'sales'),profit:V(r,'profit')}:null;
+  }
+  const all=rs.find(x=>x.branch==='ALL');
+  if(all)return {sales:V(all,'sales'),profit:V(all,'profit')};
+  const br=rs.filter(x=>x.branch!=='ALL');
+  if(!br.length)return null;
+  const sum=k=>br.some(x=>x[k]!=null)?br.reduce((a,x)=>a+(x[k]!=null?num(x[k]):0),0):null;
+  return {sales:sum('sales'),profit:sum('profit')};
+}
 function buildMonths(y,bundle){
   const M={};
   const get=mo=>M[mo]??(M[mo]={pos:0,grab:0,lineman:0,vcSup:0,cash:0,shopee:0,extra:0,byCat:{},fixByBr:{},hRev:0,hasH:false,hItems:{}});
@@ -590,6 +612,14 @@ function buildMonths(y,bundle){
       }
       row.byCat=cats;
     }
+    // ยอดใส่เอง ชนะค่าคำนวณ (ใส่เฉพาะช่องที่คีย์ — ช่องว่างใช้ค่าระบบ)
+    const man=pickManual(bundle.manual,mo);
+    if(man){
+      row.manual=true;
+      if(man.sales!=null){ row.incVat=man.sales; row.revenue=man.sales; }
+      if(man.profit!=null) row.net=man.profit;
+      if(!row.src) row.src='manual';
+    }
     out.push(row);
   }
   return out;
@@ -612,7 +642,7 @@ function buildBranchSeries(y,bundle){
   });
   return res;
 }
-/* สรุปปีก่อน (รายได้รวม เทียบ YoY) */
+/* สรุปปีก่อน (รายได้รวม เทียบ YoY — ยอดใส่เองของปีก่อนก็ชนะค่าคำนวณเช่นกัน) */
 function prevYearTotals(py,pb){
   let rev=0,inc=0;
   const per={}; // month->pos
@@ -625,6 +655,8 @@ function prevYearTotals(py,pb){
   pb.hist.forEach(r=>{ if(!keepBr(r.branch))return; histPer[r.month]=(histPer[r.month]||0)+num(r.revenue); });
   for(let m=1;m<=12;m++){
     const mo=py+'-'+String(m).padStart(2,'0');
+    const man=pickManual(pb.manual,mo);
+    if(man&&man.sales!=null){ rev+=man.sales; inc+=man.sales; continue; }
     const pos=per[mo]||0, dl=meta[mo]||0;
     if(pos>0){ rev+=pos*100/107+dl; inc+=pos+dl; }
     else if(histPer[mo]){ rev+=histPer[mo]; inc+=histPer[mo]; }
@@ -644,6 +676,7 @@ async function render(){
     if(S.inst===null&&!S.instMissing)await loadInstallments();
     if(seq!==_seq)return; // มีการกดเปลี่ยนปี/สาขาแทรก
     const rows=buildMonths(S.y,bundle);
+    S._rows=rows; // ไว้โชว์ค่าระบบในฟอร์มใส่ยอดเอง
     const brSeries=buildBranchSeries(S.y,bundle);
     const prev=pb?prevYearTotals(S.y-1,pb):null;
     el.innerHTML=heroHTML(rows,prev)+chartsHTML()+plHTML(rows)+structureHTML(rows)+instHTML();
@@ -677,21 +710,23 @@ function yoyChip(cur,prv,label){
 function heroHTML(rows,prev){
   const real=rows.filter(r=>r.src==='real');
   const has=rows.filter(r=>r.src);
-  const salesVat=rows.reduce((a,r)=>a+(r.src==='real'?r.incVat:r.src==='hist'?r.revenue:0),0);
+  const salesVat=rows.reduce((a,r)=>a+(r.src?(r.incVat||r.revenue):0),0);
   const revenue=rows.reduce((a,r)=>a+r.revenue,0);
-  const net=real.reduce((a,r)=>a+r.net,0);
+  const netRows=rows.filter(r=>r.net!=null);
+  const net=netRows.reduce((a,r)=>a+r.net,0);
   const vcT=real.reduce((a,r)=>a+r.vc,0), fixT=real.reduce((a,r)=>a+r.fix,0), exT=real.reduce((a,r)=>a+r.extra,0);
-  const margin=(()=>{const rv=real.reduce((a,r)=>a+r.revenue,0); return rv?net/rv:null;})();
+  const margin=(()=>{const rv=netRows.reduce((a,r)=>a+(r.revenue||r.incVat||0),0); return rv?net/rv:null;})();
   const best=has.length?has.reduce((a,r)=>r.revenue>a.revenue?r:a):null;
   const avg=has.length?revenue/has.length:0;
   // ภาระผ่อน
   let burden=0,remain=0,nAct=0;
   (S.inst||[]).forEach(r=>{ if(!r.active)return; const c=instCalc(r); if(c.done)return; burden+=c.monthly; remain+=c.remain; nAct++; });
   const histN=rows.filter(r=>r.src==='hist').length;
+  const manN=rows.filter(r=>r.manual).length;
   return `
   <section id="secHero">
     <div class="sec-h"><h2 class="gold-txt">ภาพรวมทั้งปี ${S.y+543}</h2><span class="en">Annual Overview</span></div>
-    <p class="sec-sub">${esc(BRNAME[S.br]||S.br)} · มีข้อมูล ${has.length} เดือน${histN?` (จากข้อมูลย้อนหลัง ${histN} เดือน)`:''}${S.br==='ALL'&&S.branches.some(b=>b.is_central)?' · รวมค่าใช้จ่ายส่วนกลาง (ออฟฟิศ) แล้ว':''}</p>
+    <p class="sec-sub">${esc(BRNAME[S.br]||S.br)} · มีข้อมูล ${has.length} เดือน${histN?` (จากข้อมูลย้อนหลัง ${histN} เดือน)`:''}${manN?` · ✍️ ใส่ยอดเอง ${manN} เดือน`:''}${S.br==='ALL'&&S.branches.some(b=>b.is_central)?' · รวมค่าใช้จ่ายส่วนกลาง (ออฟฟิศ) แล้ว':''}</p>
     <div class="hero">
       <div class="card gold kpi">
         <div class="lab"><span class="ic">🏮</span>ยอดขายรวมทั้งปี</div>
@@ -706,7 +741,7 @@ function heroHTML(rows,prev){
       <div class="card gold kpi">
         <div class="lab"><span class="ic">👑</span>กำไรสะสมทั้งปี</div>
         <div class="v ${net<0?'neg':''} ${net>=0?'gold-txt':''}"><span class="cu" data-v="${net}">0</span></div>
-        <div class="foot"><span class="chip gd">Margin ${pctF(margin)}</span><span>จาก ${real.length} เดือนที่มีข้อมูลครบ</span></div>
+        <div class="foot"><span class="chip gd">Margin ${pctF(margin)}</span><span>จาก ${netRows.length} เดือนที่มีตัวเลขกำไร</span></div>
       </div>
       <div class="card gold kpi">
         <div class="lab"><span class="ic">📜</span>ภาระผ่อนชำระ/เดือน</div>
@@ -720,6 +755,7 @@ function heroHTML(rows,prev){
       <div class="stat">ต้นทุนผันแปรรวม<b>฿${fmtI(vcT)} <span style="color:var(--mut);font-size:12px">(${pctF(real.reduce((a,r)=>a+r.revenue,0)?vcT/real.reduce((a,r)=>a+r.revenue,0):null)})</span></b></div>
       <div class="stat">Fix cost รวม<b>฿${fmtI(fixT)}</b></div>
       <div class="stat">รายจ่ายอื่นๆ รวม<b>฿${fmtI(exT)}</b></div>
+      <button class="ghost" style="font-size:12.5px;padding:9px 16px;align-self:center" onclick="manualForm()">✍️ ใส่ยอดขาย/กำไรเอง</button>
     </div>
   </section>`;
 }
@@ -743,45 +779,58 @@ function plHTML(rows){
       const future=r.mo>cur;
       return `<tr class="dim"><td>${TH_M_FULL[r.mIdx]}</td><td class="n" colspan="8" style="text-align:center;color:var(--mut)">${future?'ยังมาไม่ถึง':'ไม่มีข้อมูล'}</td><td class="n">–</td></tr>`;
     }
-    if(r.src==='hist'){
-      return `<tr class="dim"><td>${TH_M_FULL[r.mIdx]}<span class="tag">ย้อนหลัง</span></td>
-        <td class="n">–</td><td class="n">${fmtI(r.revenue)}</td><td class="n">${fmtI(r.vc)}</td>
-        <td class="n">${pctF(r.revenue?r.vc/r.revenue:null)}</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>`;
+    const cumCell=r.net!=null
+      ? (cum+=r.net, `<td class="n ${cum>=0?'pos':'neg'}" style="font-family:'Prompt';font-weight:700">${fmtI(cum)}</td>`)
+      : `<td class="n">–</td>`;
+    const tags=(r.src==='hist'?'<span class="tag">ย้อนหลัง</span>':'')+(r.manual?'<span class="tag">✍️ ใส่เอง</span>':'');
+    const netCell=`<td class="n ${r.net!=null?(r.net>=0?'pos':'neg'):''}" style="font-weight:700">${r.net!=null?fmtI(r.net):'–'}</td>`;
+    if(r.src==='hist'||r.src==='manual'){ // เดือนย้อนหลัง/ใส่เอง — มีเฉพาะตัวเลขที่รู้จริง
+      const sales=r.incVat||null;
+      const mg=r.net!=null&&(r.revenue||sales)?r.net/(r.revenue||sales):null;
+      return `<tr class="${r.net==null?'dim':''}"><td>${TH_M_FULL[r.mIdx]}${tags}</td>
+        <td class="n">${sales?fmtI(sales):'–'}</td>
+        <td class="n">${r.src==='hist'?fmtI(r.revenue):'–'}</td>
+        <td class="n">${r.src==='hist'?fmtI(r.vc):'–'}</td>
+        <td class="n">${r.src==='hist'?pctF(r.revenue?r.vc/r.revenue:null):'–'}</td>
+        <td class="n">–</td><td class="n">–</td>${netCell}
+        <td class="n" style="color:var(--mut)">${pctF(mg)}</td>${cumCell}</tr>`;
     }
-    cum+=r.net;
     const mg=r.revenue?r.net/r.revenue:null;
-    return `<tr><td style="font-family:'Prompt';font-weight:600">${TH_M_FULL[r.mIdx]}</td>
+    return `<tr><td style="font-family:'Prompt';font-weight:600">${TH_M_FULL[r.mIdx]}${tags}</td>
       <td class="n">${fmtI(r.incVat)}</td>
       <td class="n">${fmtI(r.revenue)}</td>
       <td class="n">${fmtI(r.vc)}</td>
       <td class="n" style="color:var(--mut)">${pctF(r.revenue?r.vc/r.revenue:null)}</td>
       <td class="n">${fmtI(r.fix)}</td>
-      <td class="n">${fmtI(r.extra)}</td>
-      <td class="n ${r.net>=0?'pos':'neg'}" style="font-weight:700">${fmtI(r.net)}</td>
-      <td class="n" style="color:var(--mut)">${pctF(mg)}</td>
-      <td class="n ${cum>=0?'pos':'neg'}" style="font-family:'Prompt';font-weight:700">${fmtI(cum)}</td></tr>`;
+      <td class="n">${fmtI(r.extra)}</td>${netCell}
+      <td class="n" style="color:var(--mut)">${pctF(mg)}</td>${cumCell}</tr>`;
   }).join('');
   const real=rows.filter(r=>r.src==='real');
   const T=k=>real.reduce((a,r)=>a+(r[k]||0),0);
-  const rev=T('revenue'),net=T('net');
+  const salesT=rows.reduce((a,r)=>a+(r.src?(r.incVat||r.revenue):0),0);
+  const revT=rows.filter(r=>r.src==='real'||r.src==='hist').reduce((a,r)=>a+r.revenue,0);
+  const netRows=rows.filter(r=>r.net!=null);
+  const net=netRows.reduce((a,r)=>a+r.net,0);
+  const netRev=netRows.reduce((a,r)=>a+(r.revenue||r.incVat||0),0);
   return `
   <section id="secPL">
-    <div class="sec-h"><h2 class="gold-txt">งบกำไรขาดทุนรายเดือน</h2><span class="en">Monthly P&amp;L Statement</span></div>
-    <p class="sec-sub">หน่วย: บาท · สูตรเดียวกับหน้า "สรุปเดือน" ของระบบ P&amp;L (กำไร = รายได้ก่อน VAT − ต้นทุนผันแปร − Fix cost − รายจ่ายอื่นๆ)</p>
+    <div class="sec-h"><h2 class="gold-txt">งบกำไรขาดทุนรายเดือน</h2><span class="en">Monthly P&amp;L Statement</span>
+      <button class="ghost" style="margin-left:auto;font-size:12.5px;padding:8px 15px" onclick="manualForm()">✍️ ใส่ยอดเอง</button></div>
+    <p class="sec-sub">หน่วย: บาท · สูตรเดียวกับหน้า "สรุปเดือน" ของระบบ P&amp;L (กำไร = รายได้ก่อน VAT − ต้นทุนผันแปร − Fix cost − รายจ่ายอื่นๆ) · เดือนที่ ✍️ ใส่เอง ใช้ตัวเลขที่เจ้าของคีย์แทนค่าคำนวณ</p>
     <div class="card gold" style="padding:10px">
     <div class="twrap" style="border:none"><table>
       <tr><th>เดือน</th><th class="right">ยอดขาย (รวม VAT)</th><th class="right">รายได้</th><th class="right">ต้นทุนผันแปร</th>
       <th class="right">VC%</th><th class="right">Fix cost</th><th class="right">อื่นๆ</th><th class="right">กำไรสุทธิ</th><th class="right">Margin</th><th class="right">กำไรสะสม</th></tr>
       <tbody>${body}</tbody>
       <tr class="tot"><td>รวมทั้งปี</td>
-        <td class="n gold-txt">${fmtI(rows.reduce((a,r)=>a+(r.src==='real'?r.incVat:0),0))}</td>
-        <td class="n">${fmtI(rev)}</td>
+        <td class="n gold-txt">${fmtI(salesT)}</td>
+        <td class="n">${fmtI(revT)}</td>
         <td class="n">${fmtI(T('vc'))}</td>
-        <td class="n">${pctF(rev?T('vc')/rev:null)}</td>
+        <td class="n">${pctF(revT?T('vc')/revT:null)}</td>
         <td class="n">${fmtI(T('fix'))}</td>
         <td class="n">${fmtI(T('extra'))}</td>
         <td class="n ${net>=0?'pos':'neg'}">${fmtI(net)}</td>
-        <td class="n">${pctF(rev?net/rev:null)}</td>
+        <td class="n">${pctF(netRev?net/netRev:null)}</td>
         <td class="n gold-txt">${fmtI(net)}</td></tr>
     </table></div></div>
   </section>`;
@@ -810,6 +859,59 @@ function structureHTML(rows){
       <tr class="tot"><td>รวมรายจ่ายทั้งหมด</td><td class="n">${fmtI(tot)}</td><td class="n">${pctF(rev?tot/rev:null)}</td></tr>
     </table></div></div>
   </section>`;
+}
+
+/* ============ ใส่ยอดขาย/กำไรเอง (รายเดือน) ============ */
+function manualForm(){
+  if(S.manMissing){
+    openModal(`<h3 class="gold-txt">✍️ ใส่ยอดขาย/กำไรเอง</h3>
+      <div class="empty" style="padding:14px 4px">ยังไม่ได้ติดตั้งตารางยอดใส่เอง<br>
+      <span style="font-size:12.5px">รันไฟล์ <b style="color:var(--gold-soft)">jjmk_owner_setup.sql</b> (branch <b>sql</b>) ใน Supabase → SQL Editor หนึ่งครั้ง แล้วรีเฟรชหน้านี้</span></div>
+      <div class="mbtns"><button class="ghost" style="flex:1" onclick="closeModal()">ปิด</button></div>`);
+    return;
+  }
+  const bundle=S.yearCache[S.y]||{manual:[]};
+  const mine=Object.fromEntries((bundle.manual||[]).filter(r=>r.branch===S.br).map(r=>[r.month,r]));
+  const sysRows=S._rows||[];
+  const rowsHtml=Array.from({length:12},(_,i)=>{
+    const mo=S.y+'-'+String(i+1).padStart(2,'0');
+    const r=mine[mo]||{};
+    const sys=sysRows[i];
+    const hint=sys&&sys.src&&!sys.manual?`฿${fmtI(sys.incVat||sys.revenue)}${sys.net!=null?' / ฿'+fmtI(sys.net):''}`:'';
+    return `<div style="font-family:'Prompt';font-weight:600;font-size:13.5px">${TH_M[i]}<div style="font-size:9.5px;font-weight:500;color:#6E625A;white-space:nowrap">${hint}</div></div>
+      <input id="mS${i+1}" inputmode="decimal" placeholder="—" value="${r.sales!=null?r.sales:''}" style="padding:8px 10px;font-size:14px;text-align:right">
+      <input id="mP${i+1}" inputmode="decimal" placeholder="—" value="${r.profit!=null?r.profit:''}" style="padding:8px 10px;font-size:14px;text-align:right">`;
+  }).join('');
+  openModal(`<h3 class="gold-txt">✍️ ใส่ยอดขาย/กำไรเอง — ${esc(BRNAME[S.br]||S.br)} · ปี ${S.y+543}</h3>
+    <div style="font-size:12px;color:var(--mut);margin:-8px 0 14px">ช่องที่ใส่ตัวเลข = ใช้ตัวเลขนี้แทนค่าคำนวณ · ปล่อยว่าง = ใช้ค่าจากระบบ P&amp;L อัตโนมัติ<br>ตัวเล็กใต้เดือน = ค่าที่ระบบคำนวณได้ (ยอดขาย / กำไร)</div>
+    <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:7px 10px;align-items:center">
+      <div></div>
+      <label style="font-size:11.5px;font-weight:700;color:var(--gold-soft);font-family:'Prompt';text-align:right">ยอดขาย (บาท)</label>
+      <label style="font-size:11.5px;font-weight:700;color:var(--gold-soft);font-family:'Prompt';text-align:right">กำไรสุทธิ (บาท)</label>
+      ${rowsHtml}
+    </div>
+    <div class="mbtns">
+      <button class="ghost" onclick="closeModal()">ยกเลิก</button>
+      <button class="addbtn" onclick="manualSave()">บันทึก</button>
+    </div>`);
+}
+async function manualSave(){
+  const bundle=S.yearCache[S.y]||{manual:[]};
+  const mine=Object.fromEntries((bundle.manual||[]).filter(r=>r.branch===S.br).map(r=>[r.month,r]));
+  const upRows=[],dels=[];
+  for(let m=1;m<=12;m++){
+    const mo=S.y+'-'+String(m).padStart(2,'0');
+    const s=(document.getElementById('mS'+m).value||'').trim();
+    const p=(document.getElementById('mP'+m).value||'').trim();
+    if(s===''&&p===''){ if(mine[mo])dels.push(mo); continue; }
+    upRows.push({branch:S.br,month:mo,sales:s===''?null:num(s),profit:p===''?null:num(p)});
+  }
+  try{
+    if(dels.length)await delQ('pnl_owner_monthly',`branch=eq.${encodeURIComponent(S.br)}&month=in.(${dels.join(',')})`);
+    if(upRows.length)await ups('pnl_owner_monthly',upRows,'branch,month');
+    closeModal(); toast('บันทึกยอดใส่เองแล้ว ✓');
+    await loadYear(S.y,true); render();
+  }catch(e){}
 }
 
 /* ============ ผ่อนชำระ ============ */
@@ -974,7 +1076,7 @@ function drawCharts(rows,brSeries){
   const cm=document.getElementById('chMain');
   if(cm){
     const revD=rows.map(r=>r.src?r.revenue:null);
-    let cum=0; const cumD=rows.map(r=>{ if(r.src==='real'){cum+=r.net;return cum;} return r.src?cum:null; });
+    let cum=0; const cumD=rows.map(r=>{ if(r.net!=null){cum+=r.net;return cum;} return r.src?cum:null; });
     const ctx=cm.getContext('2d');
     const grad=ctx.createLinearGradient(0,0,0,360);
     grad.addColorStop(0,'rgba(198,33,39,.95)');grad.addColorStop(1,'rgba(105,12,15,.75)');
