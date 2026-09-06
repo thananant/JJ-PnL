@@ -252,12 +252,12 @@ canvas{max-width:100%}
   <div class="hrow">
     <div class="brand"><img class="hlogo" id="hdLogo" alt=""><span>JJ Social<small>จริงใจหมูกระทะ</small></span></div>
     <div class="seg" id="brSeg"></div>
-    <select id="daysPick" onchange="S.days=+this.value;S.cache={};show(S.tab)">
+    <select id="daysPick" onchange="S.days=+this.value;localStorage.setItem('jjsocial_days',this.value);S.cache={};show(S.tab)">
       <option value="7">7 วันล่าสุด</option>
-      <option value="30" selected>30 วันล่าสุด</option>
+      <option value="30">30 วันล่าสุด</option>
       <option value="90">90 วันล่าสุด</option>
       <option value="365">12 เดือน</option>
-      <option value="3650">ทั้งหมด</option>
+      <option value="3650" selected>ทั้งหมด</option>
     </select>
     <div id="syncDot" title="สถานะเรียลไทม์"></div>
   </div>
@@ -301,7 +301,10 @@ function cfg(){
 }
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
 
-const S={user:null,tab:'dash',br:'ALL',days:30,cache:{},branches:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}],
+const S={user:null,tab:'dash',
+  br:localStorage.getItem('jjsocial_br')||'ALL',
+  days:+(localStorage.getItem('jjsocial_days')||3650), // จำค่าที่เลือกไว้ · เริ่มต้น = ทั้งหมด
+  cache:{},branches:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}],
   settings:{},staff:[],feedFilter:{ch:'',kind:'',sen:'',st:'',q:''},feedLimit:50,chatThread:null,botTest:[]};
 
 const CH_META={
@@ -329,6 +332,7 @@ function timeago(iso){
 }
 function stars(r){if(r==null)return '';const n=Math.round(num(r));return '<span class="stars">'+'★'.repeat(n)+'☆'.repeat(Math.max(0,5-n))+'</span>'}
 function brName(c){const b=S.branches.find(x=>x.code===c);return b?b.name:(c||'ไม่ระบุสาขา')}
+function daysLabel(){return S.days>=3650?'ทั้งหมด':S.days+' วัน'}
 let busyCount=0;
 function setBusy(b){busyCount+=b?1:-1;if(busyCount<0)busyCount=0;$('#syncDot').className=busyCount>0?'busy':(_rtLive?'':'')}
 
@@ -476,7 +480,7 @@ async function vDash(el){
   killCharts();
   el.innerHTML=`
   <div class="kpis">
-    <div class="kpi"><div class="t">เสียงลูกค้า (${S.days} วัน)</div><div class="kpi-v">${rows.length}</div><div class="s">วันนี้ ${todayN} รายการ</div></div>
+    <div class="kpi"><div class="t">เสียงลูกค้า (${daysLabel()})</div><div class="kpi-v">${rows.length}</div><div class="s">วันนี้ ${todayN} รายการ</div></div>
     <div class="kpi ${avgStar!=null?(avgStar>=4?'good':avgStar>=3?'warn':'bad'):''}"><div class="t">คะแนนดาวเฉลี่ย</div><div class="kpi-v">${avgStar!=null?avgStar.toFixed(2)+' ★':'—'}</div><div class="s">จาก ${rated.length} รีวิวที่ให้ดาว</div></div>
     <div class="kpi ${avgScore!=null?(avgScore>=75?'good':avgScore>=55?'warn':'bad'):''}"><div class="t">ความพึงพอใจ (AI)</div><div class="kpi-v">${avgScore!=null?avgScore+'/100':'—'}</div><div class="s">ชม ${pos} · กลางๆ ${neu} · ตำหนิ ${neg}</div></div>
     <div class="kpi ${pending?'warn':'good'}"><div class="t">รอตอบกลับ</div><div class="kpi-v">${pending}</div><div class="s"><a class="hintlink" href="javascript:show('feed')">ไปที่ฟีด →</a></div></div>
@@ -895,7 +899,7 @@ async function vInsight(el){
     <div id="digestBox">${digest?digestHtml(digest.data):'<div class="empty">กด "สรุปรอบ 7 วัน" เพื่อให้ AI สรุปว่ามีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี</div>'}</div>
   </div>
   <div class="grid g2">
-    <div class="card"><h3>⚠️ ปัญหาที่ถูกพูดถึงบ่อย <span class="sp">${S.days} วัน</span></h3>
+    <div class="card"><h3>⚠️ ปัญหาที่ถูกพูดถึงบ่อย <span class="sp">${daysLabel()}</span></h3>
       ${issues.length?`<div class="twrap"><table><tr><th>ประเด็น</th><th class="right">ครั้ง</th><th>ตัวอย่าง</th></tr>
         ${issues.slice(0,10).map(([t,v])=>`<tr><td><b>${esc(t)}</b>${v.sev>=3?' <span class="chip sev3">ด่วน</span>':''}</td><td class="right num">${v.n}</td><td class="xs mut">${esc(v.ex[0]||'')}</td></tr>`).join('')}</table></div>`
       :'<div class="empty">ไม่พบปัญหาในช่วงนี้ 🎉</div>'}
@@ -1212,16 +1216,18 @@ async function loadBranches(){
     const bs=(rows||[]).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code})).filter(b=>b.code);
     if(bs.length)S.branches=bs;
   }catch(e){}
-  $('#brSeg').innerHTML=[...S.branches.map(b=>`<button data-br="${esc(b.code)}">${esc(b.name.replace('สาขา',''))}</button>`),`<button data-br="ALL" class="on">ทุกสาขา</button>`].join('');
+  if(S.br!=='ALL'&&!S.branches.find(b=>b.code===S.br))S.br='ALL';
+  $('#brSeg').innerHTML=[...S.branches.map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}>${esc(b.name.replace('สาขา',''))}</button>`),`<button data-br="ALL" ${S.br==='ALL'?'class="on"':''}>ทุกสาขา</button>`].join('');
   $('#brSeg').addEventListener('click',e=>{
     const b=e.target.closest('[data-br]');if(!b)return;
-    S.br=b.dataset.br;
+    S.br=b.dataset.br;localStorage.setItem('jjsocial_br',S.br);
     document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x===b));
     show(S.tab);
   });
 }
 async function startApp(){
   $('#login').style.display='none';$('#app').style.display='block';
+  $('#daysPick').value=String(S.days);
   applyPerms();
   await loadBranches();
   rtStart();refreshBadges();
