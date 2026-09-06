@@ -9,6 +9,9 @@
 - `jjmk-maint.html` — 🛠 ระบบซ่อมบำรุงสาขา (ตารางบำรุงรักษา · พนักงานบันทึกงาน+รูปถ่าย · ใช้บัญชีเดียวกับแอพนับสต๊อก)
 - `jjmk-kitchen.html` — ระบบครัวกลาง (JJ Kitchen)
 - `jjmk-social.html` — ระบบฟังเสียงลูกค้า + แชทบอท (JJ Social)
+- `jjmk-kpi.html` — 📊 ระบบวัดความพึงพอใจลูกค้า (JJ KPI): ลูกค้ากดหน้าร้านผ่านแท็บเล็ต
+  (`?kiosk=JJRD` / `?kiosk=JJLP`) · ไม่มี param = แดชบอร์ดเจ้าของ · ย้ายมาจาก repo `thananant/JJ-KPI` (2026-09-06)
+  อ่าน `kpi/CLAUDE.md` ก่อนแก้ทุกครั้ง · เทสอยู่ `kpi/test/`
 - `payroll/` — 💰 **ระบบเงินเดือน (JJ-Payroll)** ย้ายมาจาก repo `thananant/JJ-Payroll` (2026-09-06):
   เปิดที่ https://thananant.github.io/JJ-PnL/payroll/ · อ่าน `payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง
 
@@ -19,6 +22,7 @@
 - `jjmk_kitchen_data.sql` — ข้อมูลตั้งต้นครัวกลาง (วัตถุดิบ/เมนู/สูตร)
 - `jjmk_owner_setup.sql` — ตารางผ่อนชำระ `pnl_installments` (หน้า Owner)
 - `jjmk_maint_setup.sql` — ติดตั้งตารางบำรุงรักษาสาขา + งานตั้งต้น 9 งานให้ทุกสาขา
+- `jjmk-kpi.sql` — ติดตั้งตารางระบบวัดความพึงพอใจลูกค้า (JJ KPI, ตาราง prefix `kpi_`)
 - `payroll/*.sql` — migration ทั้งหมดของระบบเงินเดือน (15 ไฟล์ รันซ้ำได้ · Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`)
 
 ไฟล์ติดตั้งระบบ JJ Social (`jjmk_social_setup.sql`, Edge Functions ใน `supabase/`,
