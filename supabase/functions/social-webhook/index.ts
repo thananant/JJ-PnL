@@ -18,8 +18,37 @@ const FB_VERIFY = Deno.env.get("FB_VERIFY_TOKEN") ?? "jjmk-social";
 const FB_PAGE_TOKEN = Deno.env.get("FB_PAGE_TOKEN") ?? "";
 const GENERIC_KEY = Deno.env.get("WEBHOOK_SHARED_KEY") ?? "";
 
+const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const sb = createClient(SB_URL, SB_SERVICE);
 const anthropic = new Anthropic(); // อ่าน ANTHROPIC_API_KEY จาก secrets
+
+// AI 2 ชั้น: Claude (ถ้ามีเครดิต) → Gemini (โควต้าฟรี) → ข้อความสำรอง
+let claudeDownUntil = 0;
+function markClaudeDown(e: unknown) {
+  const msg = String((e as any)?.message ?? e);
+  if (/credit|billing|api.?key|authentication|401|invalid_request_error/i.test(msg)) claudeDownUntil = Date.now() + 10 * 60000;
+  console.error("claude", msg.slice(0, 160));
+}
+async function geminiJson(system: string, user: string, maxTokens = 800): Promise<any | null> {
+  if (!GEMINI_KEY) return null;
+  for (const model of ["gemini-2.5-flash", "gemini-2.0-flash"]) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: "user", parts: [{ text: user }] }],
+          generationConfig: { responseMimeType: "application/json", maxOutputTokens: maxTokens, temperature: 0.4 },
+        }),
+      });
+      if (!r.ok) { console.error("gemini", model, r.status); continue; }
+      const d = await r.json();
+      const t = (d.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
+      try { return JSON.parse(t); } catch { continue; }
+    } catch (e) { console.error("gemini", e); }
+  }
+  return null;
+}
 
 const ChatReply = z.object({
   reply: z.string(),        // ข้อความตอบลูกค้า (ภาษาเดียวกับลูกค้า)
@@ -109,15 +138,27 @@ ${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
 - ห้ามแต่งข้อมูลที่ไม่รู้ (ราคา/โปรโมชั่น/วันหยุด) ถ้าไม่มีในข้อมูลร้าน ให้บอกว่าเดี๋ยวแอดมินมายืนยันอีกที และตั้ง needs_human = true
 - ถ้าลูกค้าร้องเรียนรุนแรง เจ็บป่วย ขอเงินคืน หรือพูดถึงคำเหล่านี้: ${kw.join(", ")} ให้ตั้ง needs_human = true`;
 
-  const res = await anthropic.messages.parse({
-    model: "claude-opus-5",
-    max_tokens: 1024,
-    output_config: { effort: "low", format: zodOutputFormat(ChatReply) },
-    system,
-    messages,
-  });
-  if (res.stop_reason === "refusal") return { reply: "", needs_human: true, reason: "refusal" };
-  return parsedOf<z.infer<typeof ChatReply>>(res);
+  let out: z.infer<typeof ChatReply> | null = null;
+  if (Date.now() > claudeDownUntil) {
+    try {
+      const res = await anthropic.messages.parse({
+        model: "claude-opus-5",
+        max_tokens: 1024,
+        output_config: { effort: "low", format: zodOutputFormat(ChatReply) },
+        system,
+        messages,
+      });
+      if (res.stop_reason === "refusal") return { reply: "", needs_human: true, reason: "refusal" };
+      out = parsedOf<z.infer<typeof ChatReply>>(res);
+    } catch (e) { markClaudeDown(e); }
+  }
+  if (!out && GEMINI_KEY) {
+    const hist = messages.map((m) => `${m.role === "user" ? "ลูกค้า" : "ร้าน"}: ${m.content}`).join("\n");
+    const j = await geminiJson(system + `\n\nตอบเป็น JSON ล้วน: {"reply":"ข้อความตอบลูกค้า","needs_human":true/false,"reason":"เหตุผลสั้นๆ"}`, hist);
+    if (j && typeof j.reply === "string") out = { reply: j.reply, needs_human: !!j.needs_human, reason: String(j.reason ?? "") };
+  }
+  // AI ใช้ไม่ได้ทั้งคู่ → ส่งต่อให้คน (โหมดร่าง/ออโต้จะใช้ข้อความสำรองเอง)
+  return out ?? { reply: "", needs_human: true, reason: "ai-unavailable" };
 }
 
 async function sendLine(replyToken: string | null, userId: string, text: string) {

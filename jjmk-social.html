@@ -624,7 +624,7 @@ async function analyzePending(){
   toast('กำลังวิเคราะห์รายการที่ค้าง...');
   try{const r=await brain('analyze',{limit:15});S.cache={};await show(S.tab);
     if(r.errors&&r.errors.length){toast('⚠️ วิเคราะห์สะดุด: '+r.errors[0],true);console.error(r.errors)}
-    else toast(r.analyzed?`วิเคราะห์แล้ว ${r.analyzed} รายการ ✓`:'ไม่มีรายการค้าง')}
+    else toast(r.analyzed?`วิเคราะห์แล้ว ${r.analyzed} รายการ ✓${provTxt(r.providers)}`:'ไม่มีรายการค้าง')}
   catch(e){toast('วิเคราะห์ไม่ได้: '+e.message,true)}
 }
 function copyReply(id){
@@ -767,6 +767,11 @@ async function impDoImport(){
   if(inserted&&confirm(`ให้ AI เริ่มไล่วิเคราะห์ ${inserted} รายการเลยไหม? (ทำทีละชุด เปิดหน้าจอทิ้งไว้ได้)`))analyzeAllPending();
 }
 /* ---------- วิเคราะห์ทั้งหมดที่ค้าง (วนทีละชุดจนหมด) ---------- */
+function provTxt(p){
+  if(!p)return '';
+  const parts=[p.claude?`Claude ${p.claude}`:null,p.gemini?`Gemini ฟรี ${p.gemini}`:null,p.rules?`เบื้องต้น ${p.rules}`:null].filter(Boolean);
+  return parts.length?' ('+parts.join(' · ')+')':'';
+}
 let _aapStop=false;
 async function analyzeAllPending(){
   const pend=await sel('social_mentions','select=id&analyzed_at=is.null&limit=1000');
@@ -777,20 +782,21 @@ async function analyzeAllPending(){
     <p class="sm" id="aapTxt">ค้างอยู่ ${total} รายการ · กำลังเริ่ม...</p>
     <p class="xs mut">ทำทีละชุด ชุดละ ~10 รายการ เปิดหน้านี้ทิ้งไว้ได้เลย · ถ้าปิดไป cron ก็จะไล่วิเคราะห์ต่อให้เองทุก 15 นาที</p>
     <button class="btn gh" style="width:100%" onclick="_aapStop=true;closeModal()">หยุดก่อน (ที่วิเคราะห์แล้วไม่หาย)</button>`);
-  let doneN=0,lastErr=null;
+  let doneN=0,lastErr=null;const prov={claude:0,gemini:0,rules:0};
   while(!_aapStop){
     let r;
     try{r=await brain('analyze',{limit:10})}
     catch(e){lastErr=e.message;break}
     doneN+=r.analyzed||0;
+    if(r.providers){prov.claude+=r.providers.claude||0;prov.gemini+=r.providers.gemini||0;prov.rules+=r.providers.rules||0}
     if(r.errors&&r.errors.length)lastErr=r.errors[0];
     const t=document.getElementById('aapTxt');
-    if(t)t.textContent=`วิเคราะห์แล้ว ${doneN}/${total} รายการ...`;
+    if(t)t.textContent=`วิเคราะห์แล้ว ${doneN}/${total} รายการ...${provTxt(prov)}`;
     if(!r.analyzed)break;
   }
   if(!_aapStop){closeModal();S.cache={};show(S.tab);
     if(lastErr&&doneN<total)toast(`⚠️ วิเคราะห์ได้ ${doneN}/${total} — ติดที่: ${lastErr}`,true);
-    else toast(`วิเคราะห์เสร็จ ${doneN} รายการ ✓`)}
+    else toast(`วิเคราะห์เสร็จ ${doneN} รายการ ✓${provTxt(prov)}`)}
 }
 
 /* ============ แชทลูกค้า ============ */
@@ -1143,7 +1149,8 @@ async function vSet(el){
       <button class="btn gh sm" onclick="genDigest('weekly')">📋 สรุปรอบ 7 วันตอนนี้</button>
       <button class="btn gh sm" onclick="importModal()">📥 นำเข้ารีวิวจากไฟล์</button>
     </div>
-    <div class="xs mut" style="margin-top:8px">ปกติระบบวิเคราะห์อัตโนมัติทันทีที่มีรีวิวเข้า และสรุปรายวันเวลา 06:10 (ถ้าเปิด pg_cron ตามคู่มือ)</div>
+    <div class="xs mut" style="margin-top:8px">ปกติระบบวิเคราะห์อัตโนมัติทันทีที่มีรีวิวเข้า และสรุปรายวันเวลา 06:10 (ถ้าเปิด pg_cron ตามคู่มือ)<br>
+    🧠 โหมด AI เลือกเองอัตโนมัติ: <b>Claude</b> (ถ้ามีเครดิต) → <b>Gemini</b> (โควต้าฟรีรายวัน) → <b>วิเคราะห์เบื้องต้นจากคำสำคัญ</b> (ฟรี ไม่จำกัด — ผลจะขึ้นป้าย [เบื้องต้น])</div>
   </div>
   `;
 }
