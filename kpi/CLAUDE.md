@@ -7,6 +7,7 @@
   ด้วย URL เดิม (`…/JJ-KPI/jjmk-kpi.html`) จะไม่ได้อัพเดตจาก repo นี้ ต้องเปลี่ยนมาใช้ URL ใหม่
 - Backend: Supabase project `aikyxvluaiubdidqxwnd` (ใช้ร่วมกับระบบ JJ อื่น ๆ: payroll, pnl, stockcheck)
   ตารางของระบบนี้ใช้ prefix `kpi_` ทั้งหมด — **ห้ามแตะตารางที่ไม่ใช่ `kpi_*`**
+  (ยกเว้นเดียว: RPC `kpi_sync_staff` **อ่าน** ตาราง `employees` ของ payroll — ห้ามเขียน/แก้ employees เด็ดขาด)
 - Schema: `jjmk-kpi.sql` อยู่ที่ **branch `sql`** ของ repo นี้ (ตามกติกา repo — ห้ามมี `.sql` บน main)
   — idempotent รันซ้ำได้เสมอใน Supabase SQL Editor
 - 2 โหมดจาก URL เดียว
@@ -31,7 +32,8 @@ FACES: 1😡แย่มาก 2🙁ไม่พอใจ 3😐เฉยๆ 4�
 ## Database (`jjmk-kpi.sql` — branch `sql`)
 ตาราง
 - `kpi_departments(id, name, icon, sort_order, active)` — ใช้ร่วมทุกสาขา; seed 4 แผนก (อาหาร🍖 บริการ🙋 ความสะอาด🧹 ต้อนรับ/แคชเชียร์🧾) เฉพาะตอนตารางว่าง
-- `kpi_staff(id, branch, name, nickname, position, sort_order, active)` — ลูกค้าเห็น nickname (fallback name)
+- `kpi_staff(id, branch, name, nickname, position, sort_order, active, employee_id)` — ลูกค้าเห็น nickname (fallback name)
+  · `employee_id` ผูกกับ `employees.id` ของ payroll (unique เมื่อไม่ null) — null = แถวกรอกมือ
 - `kpi_responses(id, branch, biz_date, staff_id, device, created_at)`
 - `kpi_scores(response_id, department_id, score 1–5)`
 
@@ -44,13 +46,22 @@ Views (แดชบอร์ดอ่านจาก views เป็นหลั
 RPC `kpi_submit(p_branch, p_biz_date, p_staff_id, p_device, p_created_at, p_scores jsonb)`
 security definer — insert response + scores ใน transaction เดียว
 
+RPC `kpi_sync_staff(p_branches text[])` security definer — ซิงก์รายชื่อจาก `employees` (payroll) ลง `kpi_staff`
+(แอปเรียกตอน loadMeta: เปิดแดชบอร์ด/kiosk + ทุก 5 นาทีตอน kiosk ว่าง · p_branches = Object.keys(BRANCHES))
+กติกาซิงก์: ① แถวกรอกมือที่ชื่อ/ชื่อเล่นตรงกับพนักงาน payroll สาขาเดียวกัน → ผูก employee_id (กันแถวซ้ำ)
+② พนักงาน active ที่ยังไม่มี → insert ③ แถวที่ผูกแล้ว payroll เป็นต้นทางของ ชื่อ/ชื่อเล่น/ตำแหน่ง/สาขา
+④ พ้นสภาพ/ย้ายนอกสาขา kiosk → active=false อัตโนมัติ · **ไม่เปิด active กลับให้เอง** (เจ้าของปิดซ่อนใครไว้ ซิงก์ไม่เปิดทับ
+— คนกลับเข้าทำงานใหม่ต้องไปติ๊ก "ใช้" เองในตั้งค่า) · แถวกรอกมือไม่ถูกแตะ · ซิงก์ล้ม (ยังไม่รัน SQL/เน็ตล่ม) → แอปใช้รายชื่อเดิม + เตือนในหน้าตั้งค่า
+หน้าตั้งค่า: แถวที่ผูกแล้ว (class `synced`) ล็อกช่องชื่อ/ชื่อเล่น/ตำแหน่ง/สาขา — แก้ที่แอป Payroll · ติ๊ก "ใช้" กับลำดับยังแก้ได้
+
 RLS: permissive สำหรับ anon (แบบเดียวกับระบบ JJ อื่น) — ตั้งใจ ไม่ต้อง "แก้"
 ท้ายไฟล์มี `notify pgrst, 'reload schema'`
 ปิดใช้ (active=false) แทนการลบ เพราะ responses อ้างถึง
 
 ## Kiosk flow
 idle (แตะเพื่อเริ่ม, เข้าเต็มจอ) → ทีละแผนก 5 หน้ายิ้ม (ย้อนกลับ/ข้าม, progress dots)
-→ เลือกพนักงาน 1 คนของสาขานั้น หรือ "ไม่ระบุ" (ข้ามขั้นนี้ถ้าสาขาไม่มีพนักงาน active)
+→ คำถามสุดท้าย "ชมพนักงาน 💖 อยากชมพนักงานคนไหนเป็นพิเศษไหมคะ?" — เลือกพนักงาน 1 คนของสาขานั้น
+  (รายชื่อซิงก์จาก payroll) หรือ "ไม่ระบุ" (ข้ามขั้นนี้ถ้าสาขาไม่มีพนักงาน active)
 → ขอบคุณ → รีเซ็ต
 - ส่งไม่สำเร็จ → คิวใน localStorage `kpi_queue`, flush ทุก 30 วิ (offline-safe)
 - device id ใน localStorage `kpi_device`; สาขาที่เลือกในแดชบอร์ด `kpi_branch`
@@ -72,15 +83,16 @@ cd kpi/test && npm install
 npm run check   # syntax ของ inline JS (อ่านแอปจาก ../../jjmk-kpi.html)
 npm test        # jsdom smoke test (จำลอง Supabase) — ต้อง ALL PASSED
 ```
-`harness.js` = fake Supabase client + DB 45 วัน 2 สาขา, `smoke.js` = 6 กลุ่มเทส
-(dashboard ทุกแท็บ, ตารางหาย→hint, kiosk full flow + idle/PIN/offline, สาขาไม่มีพนักงาน, chooser, helpers)
+`harness.js` = fake Supabase client + DB 45 วัน 2 สาขา (+ตาราง employees จำลอง), `smoke.js` = 8 กลุ่มเทส
+(dashboard ทุกแท็บ, ตารางหาย→hint, kiosk full flow + idle/PIN/offline, สาขาไม่มีพนักงาน, chooser,
+payroll sync, settings แถวซิงก์/ซิงก์ล้ม, helpers)
 หมายเหตุ: fake DB สร้างวันจากเวลาเครื่อง ให้รันด้วย `TZ=Asia/Bangkok` (ใน npm test ใส่ไว้แล้ว)
 ข้อความ jsdom "Not implemented: navigation" ตอนเทส PIN เป็นพฤติกรรมปกติของ jsdom
 
 ## Deploy
-1. รัน `jjmk-kpi.sql` (branch `sql`) ใน Supabase SQL Editor (ครั้งแรก และทุกครั้งที่แก้ schema)
+1. รัน `jjmk-kpi.sql` (branch `sql`) ใน Supabase SQL Editor (ครั้งแรก และทุกครั้งที่แก้ schema — **Ctrl+A ก่อน Run**)
 2. push `jjmk-kpi.html` ขึ้น branch `main` ของ repo นี้ (GitHub Pages เสิร์ฟจาก root)
-3. แดชบอร์ด → ตั้งค่า → ใส่พนักงานแต่ละสาขา
+3. รายชื่อพนักงานซิงก์จาก payroll อัตโนมัติ — เข้าตั้งค่าเฉพาะถ้าจะซ่อนบางคน/เพิ่มคนที่ไม่อยู่ใน payroll
 4. แท็บเล็ตเปิด `?kiosk=JJRD` / `?kiosk=JJLP` → Add to Home Screen หรือ Fully Kiosk Browser
 
 ## ลิงก์

@@ -90,10 +90,10 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     await click(w, d, '[data-act=kSkip]');
     ok(txt(d, '.k-name') === 'ความสะอาด', 'skip → dept 3');
     await click(w, d, '.k-face[data-s="2"]'); await sleep(350);
-    ok(txt(d, '.k-name') === 'พนักงานที่ประทับใจ' && d.querySelectorAll('.k-chip').length === 2, 'staff screen shows 2 active JJRD staff');
+    ok(txt(d, '.k-name') === 'ชมพนักงาน' && d.querySelectorAll('.k-chip').length === 2, 'staff screen shows 2 active JJRD staff');
     await click(w, d, '.k-chip[data-id="2"]'); await sleep(320);
     ok(!!d.querySelector('.k-check'), 'thank-you screen');
-    const rpc = client._calls.filter(c => c.op === 'rpc');
+    const rpc = client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_submit');
     ok(rpc.length === 1, 'one rpc submit');
     const a = rpc[0].args;
     ok(a.p_branch === 'JJRD' && a.p_staff_id === 2 && /^\d{4}-\d{2}-\d{2}$/.test(a.p_biz_date), 'payload branch/staff/biz_date');
@@ -108,12 +108,12 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     ok(txt(d, '.k-name') === 'บริการ', 'moved to dept 2 while waiting');
     await sleep(520);
     ok(!!d.querySelector('.k-check'), 'idle timeout mid-flow → submits partial');
-    ok(client._calls.filter(c => c.op === 'rpc').length === 2 && client._calls.filter(c => c.op === 'rpc')[1].args.p_scores.length === 1, 'partial submit has 1 score');
+    ok(client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_submit').length === 2 && client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_submit')[1].args.p_scores.length === 1, 'partial submit has 1 score');
     await sleep(500);
     ok(!!d.querySelector('.k-start'), 'back to idle after thank-you');
     // idle timeout with no scores → back to idle silently
     await click(w, d, '.k-start'); await sleep(600);
-    ok(!!d.querySelector('.k-start') && client._calls.filter(c => c.op === 'rpc').length === 2, 'idle timeout with nothing → idle, no submit');
+    ok(!!d.querySelector('.k-start') && client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_submit').length === 2, 'idle timeout with nothing → idle, no submit');
     // restart button
     await click(w, d, '.k-start'); await click(w, d, '[data-act=kRestart]');
     ok(!!d.querySelector('.k-start'), '✕ restart → idle');
@@ -152,7 +152,60 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     ok(d.querySelectorAll('a.k-chip').length === 2, 'branch chooser shows 2 links');
   }
 
-  console.log('\n[6] pure helpers');
+  console.log('\n[6] payroll sync — รายชื่อพนักงานจากระบบเงินเดือน');
+  {
+    const employees = [
+      { id: 101, branch: 'JJRD', nick: 'ชาย', full_name: 'สมชาย ใจดี', position: 'เสิร์ฟ', active: true },  // ตรงแถวเดิม → link ไม่เพิ่มซ้ำ
+      { id: 102, branch: 'JJRD', nick: 'บอย', full_name: 'บอย มาใหม่', position: 'ครัว', active: true },    // คนใหม่ → เพิ่ม
+      { id: 103, branch: 'JJLP', nick: 'นี', full_name: 'มานี มีนา', position: 'เสิร์ฟ', active: true },     // link ผ่านชื่อเล่น + อัพเดตชื่อจริง
+      { id: 104, branch: 'JJCK', nick: 'กลาง', full_name: 'ครัว กลาง', position: null, active: true },      // นอกสาขา kiosk → ไม่เพิ่ม
+      { id: 105, branch: 'JJRD', nick: 'เก่า', full_name: 'คน ลาออก', position: null, active: false }       // พ้นสภาพ → ไม่เพิ่ม
+    ];
+    const db = makeDb({ employees });
+    db.staff.find(s => s.id === 2).employee_id = 999; // เคยผูกกับพนักงานที่ไม่อยู่แล้ว → ต้องถูกปิดใช้
+    const { w, d, client, errors } = boot('https://x.test/a.html?kiosk=JJRD', db);
+    await sleep(80);
+    ok(db.staff.find(s => s.id === 1).employee_id === 101, 'existing row linked to payroll by name');
+    ok(db.staff.filter(s => s.name === 'สมชาย ใจดี').length === 1, 'linked staff not duplicated');
+    const boy = db.staff.find(s => s.employee_id === 102);
+    ok(!!boy && boy.branch === 'JJRD' && boy.active === true && boy.nickname === 'บอย', 'new payroll employee added');
+    ok(db.staff.find(s => s.id === 4).employee_id === 103 && db.staff.find(s => s.id === 4).name === 'มานี มีนา', 'nickname-linked row got full name from payroll');
+    ok(!db.staff.some(s => s.employee_id === 104) && !db.staff.some(s => s.employee_id === 105), 'JJCK / resigned employees not added');
+    ok(db.staff.find(s => s.id === 2).active === false, 'row of departed employee auto-hidden');
+    await click(w, d, '.k-start');
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    ok(txt(d, '.k-name') === 'ชมพนักงาน' && (txt(d, '.k-q') || '').includes('อยากชมพนักงานคนไหนเป็นพิเศษ'), 'question 5: อยากชมพนักงาน…');
+    const chips = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent);
+    ok(chips.includes('ชาย') && chips.includes('บอย') && !chips.includes('หญิง'), 'choices from payroll (hidden one gone): ' + chips.join(','));
+    await click(w, d, '[data-act=kNoStaff]'); await sleep(320);
+    ok(!!d.querySelector('.k-check'), 'submit with ไม่ระบุ still works');
+    ok(errors.length === 0, 'no jsdom errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
+  }
+
+  console.log('\n[7] settings — แถวซิงก์ล็อกชื่อ + ซิงก์ล้มไม่พังแอป');
+  {
+    const employees = [{ id: 101, branch: 'JJRD', nick: 'ชาย', full_name: 'สมชาย ใจดี', position: 'เสิร์ฟ', active: true }];
+    const db = makeDb({ employees });
+    const { w, d } = boot('https://x.test/a.html', db);
+    await sleep(80);
+    await click(w, d, '[data-tab=settings]');
+    const row = d.querySelector('#staffList .edit-row.synced');
+    ok(!!row && row.querySelector('.f-name').disabled && row.querySelector('.f-branch').disabled && !row.querySelector('.f-active').disabled, 'synced row: name/branch locked, "ใช้" editable');
+    ok(d.querySelectorAll('#staffList .edit-row:not(.synced)').length >= 1, 'manual rows still editable');
+    ok(d.body.textContent.includes('รายชื่อดึงอัตโนมัติจากระบบเงินเดือน'), 'payroll hint shown');
+  }
+  {
+    const db = makeDb({ syncFail: true });
+    const { w, d } = boot('https://x.test/a.html', db);
+    await sleep(80);
+    await click(w, d, '[data-tab=settings]');
+    ok(d.body.textContent.includes('ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ'), 'sync fail → warning shown');
+    ok(d.querySelectorAll('#staffList .edit-row').length === 5, 'old staff list still usable');
+  }
+
+  console.log('\n[8] pure helpers');
   {
     const db = makeDb(); const { w } = boot('https://x.test/a.html', db);
     await sleep(60);

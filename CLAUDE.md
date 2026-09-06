@@ -14,6 +14,7 @@
 - แอปคือ `jjmk-kpi.html` ที่ root (ย้ายมาจาก repo `thananant/JJ-KPI` เมื่อ 2026-09-06) — **อ่าน `kpi/CLAUDE.md` ก่อนแก้ทุกครั้ง**
 - ลูกค้ากดหน้าร้านผ่านแท็บเล็ต (`?kiosk=JJRD` / `?kiosk=JJLP`) · ไม่มี param = แดชบอร์ดเจ้าของ
 - ตาราง Supabase ใช้ prefix `kpi_` ทั้งหมด (โปรเจกต์เดียวกับระบบอื่น) — **ห้ามแตะตารางที่ไม่ใช่ `kpi_*`**
+- รายชื่อพนักงานให้ลูกค้าชม ซิงก์อัตโนมัติจากตาราง `employees` ของ payroll (RPC `kpi_sync_staff` — อ่านอย่างเดียว)
 - เทสอยู่ `kpi/test/` (`npm run check` + `npm test` ต้อง ALL PASSED ก่อนส่ง)
 - แท็บเล็ตที่ยังชี้ URL เดิมของ repo JJ-KPI จะไม่ได้อัพเดตจาก repo นี้ — ต้องเปลี่ยนมาใช้ URL ใหม่
 
