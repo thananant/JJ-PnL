@@ -213,6 +213,7 @@ canvas{max-width:100%}
       <option value="30" selected>30 วันล่าสุด</option>
       <option value="90">90 วันล่าสุด</option>
       <option value="365">12 เดือน</option>
+      <option value="3650">ทั้งหมด</option>
     </select>
     <div id="syncDot" title="สถานะเรียลไทม์"></div>
   </div>
@@ -930,19 +931,26 @@ async function pollGoogleNow(){
   try{
     const r=await brain('poll_google',{places:rows});
     if(!r.ok){toast(r.reason||'ดึงไม่ได้',true);return}
-    if(r.added>0){toast(`ดึงแล้ว — รีวิวใหม่ ${r.added} รายการ · AI วิเคราะห์แล้ว ดูที่ฟีดได้เลย`);S.cache={};refreshBadges();show('ch');return}
+    S.cache={};refreshBadges();
     if(!r.diag){ // ฟังก์ชันเวอร์ชันเก่าจะไม่ส่ง diag กลับมา
       toast('ฟังก์ชัน social-brain ในเซิร์ฟเวอร์ยังเป็นเวอร์ชันเก่า — วางโค้ดล่าสุดแล้วกด Deploy อีกครั้งครับ',true);return}
-    openModal(`<h3>🔎 ผลการดึงรีวิว (0 รายการใหม่)</h3>`+r.diag.map(d=>`
+    openModal(`<h3>🔎 ผลการดึงรีวิว Google</h3>
+      <p class="sm" style="margin:0 0 10px">รีวิวใหม่เข้าระบบ <b style="font-size:17px">${r.added}</b> รายการ</p>`
+      +r.diag.map(d=>`
       <div class="card" style="margin-bottom:10px">
         <div class="b">${esc(brName(d.branch))}</div>
         ${d.http!==200?`<div class="sm" style="color:var(--bad)">Google ตอบ HTTP ${d.http}<br><span class="xs">${esc(d.error||'')}</span></div>`
         :`<div class="sm">Google เห็นร้านนี้: คะแนนรวม <b>${d.place_rating??'—'}★</b> จาก <b>${d.place_review_count??'—'}</b> รีวิว</div>
-          <div class="sm">ส่งรีวิวมา <b>${d.reviews_from_google}</b> รายการ · ใหม่ ${d.inserted} · ซ้ำของเดิม ${d.duplicated}</div>
+          <div class="sm">รอบนี้ Google ส่งมา <b>${d.reviews_from_google}</b> รายการ${d.newest_api?` (มีชุดล่าสุด ${d.newest_api})`:' (ยังไม่ได้ชุด "ล่าสุด" — เปิด Legacy Places API ใน Google Cloud จะได้เพิ่ม)'}
+          · ใหม่ ${d.inserted} · ซ้ำของเดิม ${d.duplicated}</div>
           ${d.insert_error?`<div class="sm" style="color:var(--bad)">บันทึกลงฐานข้อมูลไม่ได้: ${esc(d.insert_error)}</div>`:''}
-          ${d.reviews_from_google===0?`<div class="xs mut" style="margin-top:4px">Google ไม่ส่งรีวิวมาเลยทั้งที่ร้านมีรีวิว — ส่วนใหญ่คือ Place ID นี้ชี้ไปที่อื่น (ลองเช็คใน Place ID Finder ว่าใช่ร้านเราไหม)</div>`:''}`}
-      </div>`).join('')+
-      `<button class="btn gh" style="width:100%" onclick="closeModal()">ปิด</button>`);
+          ${d.reviews_from_google===0?`<div class="xs mut" style="margin-top:4px">Google ไม่ส่งรีวิวมาเลย — ส่วนใหญ่คือ Place ID ชี้ผิดที่ (เช็คใน Place ID Finder)</div>`:''}`}
+      </div>`).join('')
+      +`<div class="xs mut" style="margin:2px 0 10px">💡 API สาธารณะของ Google ให้รีวิวรอบละไม่เกิน 5+5 ต่อสาขา — ระบบดึงซ้ำทุก 15 นาทีและสะสมเพิ่มเอง · รีวิวที่ได้มามักเป็นของเก่าหลายเดือน/ปี จึงไม่โผล่ในมุมมอง "30 วันล่าสุด" ให้เปลี่ยนช่วงเวลาเป็น "ทั้งหมด"</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" style="flex:1" onclick="closeModal();S.days=3650;document.getElementById('daysPick').value='3650';S.cache={};show('feed')">ดูรีวิวทั้งหมดในฟีด →</button>
+        <button class="btn gh" onclick="closeModal()">ปิด</button>
+      </div>`);
   }catch(e){toast('ดึงไม่ได้: '+e.message,true)}
 }
 
