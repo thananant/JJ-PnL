@@ -929,9 +929,20 @@ async function pollGoogleNow(){
   toast('กำลังดึงรีวิว Google...');
   try{
     const r=await brain('poll_google',{places:rows});
-    if(r.ok&&r.errors&&r.errors.length){toast('⚠️ '+r.errors[0],true);console.error(r.errors)}
-    else if(r.ok){toast(`ดึงแล้ว — รีวิวใหม่ ${r.added} รายการ`+(r.added?' · AI วิเคราะห์แล้ว ดูที่ฟีดได้เลย':' (ไม่มีรีวิวใหม่เพิ่ม)'));S.cache={};refreshBadges();show('ch')}
-    else toast(r.reason||'ดึงไม่ได้',true);
+    if(!r.ok){toast(r.reason||'ดึงไม่ได้',true);return}
+    if(r.added>0){toast(`ดึงแล้ว — รีวิวใหม่ ${r.added} รายการ · AI วิเคราะห์แล้ว ดูที่ฟีดได้เลย`);S.cache={};refreshBadges();show('ch');return}
+    if(!r.diag){ // ฟังก์ชันเวอร์ชันเก่าจะไม่ส่ง diag กลับมา
+      toast('ฟังก์ชัน social-brain ในเซิร์ฟเวอร์ยังเป็นเวอร์ชันเก่า — วางโค้ดล่าสุดแล้วกด Deploy อีกครั้งครับ',true);return}
+    openModal(`<h3>🔎 ผลการดึงรีวิว (0 รายการใหม่)</h3>`+r.diag.map(d=>`
+      <div class="card" style="margin-bottom:10px">
+        <div class="b">${esc(brName(d.branch))}</div>
+        ${d.http!==200?`<div class="sm" style="color:var(--bad)">Google ตอบ HTTP ${d.http}<br><span class="xs">${esc(d.error||'')}</span></div>`
+        :`<div class="sm">Google เห็นร้านนี้: คะแนนรวม <b>${d.place_rating??'—'}★</b> จาก <b>${d.place_review_count??'—'}</b> รีวิว</div>
+          <div class="sm">ส่งรีวิวมา <b>${d.reviews_from_google}</b> รายการ · ใหม่ ${d.inserted} · ซ้ำของเดิม ${d.duplicated}</div>
+          ${d.insert_error?`<div class="sm" style="color:var(--bad)">บันทึกลงฐานข้อมูลไม่ได้: ${esc(d.insert_error)}</div>`:''}
+          ${d.reviews_from_google===0?`<div class="xs mut" style="margin-top:4px">Google ไม่ส่งรีวิวมาเลยทั้งที่ร้านมีรีวิว — ส่วนใหญ่คือ Place ID นี้ชี้ไปที่อื่น (ลองเช็คใน Place ID Finder ว่าใช่ร้านเราไหม)</div>`:''}`}
+      </div>`).join('')+
+      `<button class="btn gh" style="width:100%" onclick="closeModal()">ปิด</button>`);
   }catch(e){toast('ดึงไม่ได้: '+e.message,true)}
 }
 

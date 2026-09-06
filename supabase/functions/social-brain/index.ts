@@ -193,6 +193,7 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
   settings.channels = { ...(settings.channels ?? {}), google_places: places };
   let added = 0;
   const errors: string[] = [];
+  const diag: any[] = []; // รายงานละเอียดต่อสาขา ให้หน้าแอปโชว์ตอนแก้ปัญหา
   for (const p of places) {
     const r = await fetch(`https://places.googleapis.com/v1/places/${p.place_id}?languageCode=th`, {
       headers: { "X-Goog-Api-Key": GOOGLE_KEY, "X-Goog-FieldMask": "reviews,rating,userRatingCount" },
@@ -201,11 +202,14 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
       const t = await r.text();
       console.error("places", p.place_id, r.status, t);
       errors.push(`${p.branch}: Google ตอบ ${r.status} — ${t.slice(0, 220)}`);
+      diag.push({ branch: p.branch, http: r.status, error: t.slice(0, 220) });
       continue;
     }
     const d = await r.json();
-    for (const rv of d.reviews ?? []) {
-      const { data } = await sb.from("social_mentions").upsert({
+    const revs = d.reviews ?? [];
+    let inserted = 0, dup = 0, insErr = "";
+    for (const rv of revs) {
+      const { data, error } = await sb.from("social_mentions").upsert({
         channel: "google", kind: "review", external_id: rv.name,
         branch: p.branch || null,
         author_name: rv.authorAttribution?.displayName ?? null,
@@ -215,8 +219,17 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
         posted_at: rv.publishTime ?? new Date().toISOString(),
         raw: rv,
       }, { onConflict: "channel,external_id", ignoreDuplicates: true }).select("id");
-      added += (data ?? []).length;
+      if (error) { insErr = error.message; console.error("insert", error); }
+      else if ((data ?? []).length) inserted++;
+      else dup++;
     }
+    added += inserted;
+    diag.push({
+      branch: p.branch, http: 200,
+      place_rating: d.rating ?? null, place_review_count: d.userRatingCount ?? null,
+      reviews_from_google: revs.length, inserted, duplicated: dup,
+      insert_error: insErr || undefined,
+    });
     // เก็บคะแนนรวมไว้โชว์ในหน้าเชื่อมต่อ
     settings.channels.google_stat = settings.channels.google_stat ?? {};
     settings.channels.google_stat[p.place_id] = {
@@ -224,7 +237,7 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
     };
   }
   await sb.from("social_settings").upsert({ id: "channels", val: settings.channels, updated_at: new Date().toISOString() });
-  return { ok: true, added, errors: errors.length ? errors : undefined };
+  return { ok: true, added, diag, errors: errors.length ? errors : undefined };
 }
 
 // ---------- ทดสอบแชทบอทจากหน้าแอป ----------
