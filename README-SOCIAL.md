@@ -49,9 +49,17 @@ supabase secrets set WEBHOOK_SHARED_KEY=...              # รหัสลับ
 - **Wongnai/Grab/อื่นๆ**: ใช้ปุ่ม "เพิ่มรีวิวเอง" ในหน้าเสียงลูกค้า หรือยิง Generic Webhook (`?ch=generic` + header `x-webhook-key`)
 
 ### 5) งานอัตโนมัติ (แนะนำ)
-เปิดคอมเมนต์ท้ายไฟล์ `jjmk_social_setup.sql` (ส่วน pg_cron) แล้วแก้ `<PROJECT_REF>` / `<SERVICE_ROLE_KEY>` ก่อนรัน:
+รัน `jjmk_social_cron.sql` ใน SQL Editor (แก้ `<SERVICE_ROLE_KEY>` ก่อน —
+คัดลอกจาก Project Settings → API Keys → `service_role`):
 - ทุก 15 นาที: ดึงรีวิว Google + วิเคราะห์รายการค้าง
 - ทุกวัน 06:10: AI สรุปเมื่อวาน (ปัญหา/คนทำดี/ช่วงเวลา) ไว้ที่หน้า "สรุป & ประเด็น"
+
+### ทางลัดไม่ใช้ CLI (ทำผ่านเว็บทั้งหมด)
+ข้อ 2-3 ทำผ่าน Supabase Dashboard แทนได้:
+- **Edge Functions → Deploy a new function (via Editor)** — สร้าง `social-brain` และ
+  `social-webhook` (ชื่อต้องตรงเป๊ะ) วางโค้ดจาก `supabase/functions/*/index.ts`
+  แล้วกด Deploy · ที่ `social-webhook` ให้ **ปิด Verify JWT** ในหน้า Details
+- **Edge Functions → Secrets** — ใส่คีย์ต่างๆ แทนคำสั่ง `supabase secrets set`
 
 ## สถาปัตยกรรม
 
