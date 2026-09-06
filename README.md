@@ -2,6 +2,7 @@
 
 แอพทั้งหมดรันจาก branch `main` (GitHub Pages: https://thananant.github.io/JJ-PnL/):
 
+- `index.html` — 🏠 ศูนย์รวมแอพ (หน้าแรก): รวมไอคอนทุกแอพ กดเข้าใช้งานได้เลย
 - `jjmk-pnl.html` — ระบบบัญชีรายรับ–รายจ่าย (P&L)
 - `jjmk-owner.html` — หน้าเจ้าของ (Owner Executive): ยอดขายทั้งปี กำไรสะสม งบรายเดือน การผ่อนชำระ (เข้าได้เฉพาะบัญชี admin)
 - `jjmk-stock-beta.html` — ระบบนับสต๊อกสาขา
