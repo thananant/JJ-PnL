@@ -149,7 +149,7 @@ async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily")
     .not("analyzed_at", "is", null).order("posted_at");
   if (!rows?.length) return { ok: false, reason: "ไม่มีข้อมูลช่วงนี้" };
 
-  const branches: string[] = ["ALL", ...new Set(rows.map((r: any) => String(r.branch ?? "")).filter(Boolean))];
+  const branches: string[] = ["ALL", ...new Set<string>(rows.map((r: any) => String(r.branch ?? "")).filter((x: string) => !!x))];
   const results: Record<string, unknown> = {};
   for (const br of branches) {
     const set = br === "ALL" ? rows : rows.filter((r: any) => r.branch === br);
