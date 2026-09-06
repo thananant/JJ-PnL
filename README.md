@@ -20,7 +20,8 @@
 
 ## ระบบวัดความพึงพอใจลูกค้า (JJ KPI — แอพ `jjmk-kpi.html` บน main)
 
-- `jjmk-kpi.sql` — ตาราง `kpi_*` + views + RPC `kpi_submit` (รันซ้ำได้)
+- `jjmk-kpi.sql` — ตาราง `kpi_*` + views + RPC `kpi_submit` + RPC `kpi_sync_staff`
+  (ซิงก์รายชื่อพนักงานจากตาราง `employees` ของ payroll — อ่านอย่างเดียว · รันซ้ำได้)
   ย้ายมาจาก repo `thananant/JJ-KPI` (2026-09-06) — รายละเอียดดู `kpi/CLAUDE.md` บน main
 
 branch นี้เก็บเฉพาะไฟล์ SQL — ไม่รวมเข้า main และไม่ merge กับ branch อื่น
