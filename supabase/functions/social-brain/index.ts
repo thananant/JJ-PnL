@@ -183,17 +183,26 @@ async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily")
 function avg(a: number[]) { return a.length ? Math.round(a.reduce((s, x) => s + Number(x), 0) / a.length * 100) / 100 : null; }
 
 // ---------- ดึงรีวิว Google (Places API) ----------
-async function pollGoogle() {
+// placesIn: ส่งรายการ place มากับคำสั่งได้เลย (ปุ่มในแอป) — ฟังก์ชันจะบันทึกลง settings ให้เอง
+async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
   if (!GOOGLE_KEY) return { ok: false, reason: "ยังไม่ได้ตั้ง secret GOOGLE_API_KEY (หรือ GOOGLE_MAPS_API_KEY)" };
   const settings = await getSettings();
-  const places: { place_id: string; branch: string }[] = settings.channels?.google_places ?? [];
+  const places: { place_id: string; branch: string }[] =
+    (placesIn?.length ? placesIn : settings.channels?.google_places) ?? [];
   if (!places.length) return { ok: false, reason: "ยังไม่ได้ใส่ place_id ในหน้าเชื่อมต่อ" };
+  settings.channels = { ...(settings.channels ?? {}), google_places: places };
   let added = 0;
+  const errors: string[] = [];
   for (const p of places) {
     const r = await fetch(`https://places.googleapis.com/v1/places/${p.place_id}?languageCode=th`, {
       headers: { "X-Goog-Api-Key": GOOGLE_KEY, "X-Goog-FieldMask": "reviews,rating,userRatingCount" },
     });
-    if (!r.ok) { console.error("places", p.place_id, r.status, await r.text()); continue; }
+    if (!r.ok) {
+      const t = await r.text();
+      console.error("places", p.place_id, r.status, t);
+      errors.push(`${p.branch}: Google ตอบ ${r.status} — ${t.slice(0, 220)}`);
+      continue;
+    }
     const d = await r.json();
     for (const rv of d.reviews ?? []) {
       const { data } = await sb.from("social_mentions").upsert({
@@ -215,7 +224,7 @@ async function pollGoogle() {
     };
   }
   await sb.from("social_settings").upsert({ id: "channels", val: settings.channels, updated_at: new Date().toISOString() });
-  return { ok: true, added };
+  return { ok: true, added, errors: errors.length ? errors : undefined };
 }
 
 // ---------- ทดสอบแชทบอทจากหน้าแอป ----------
@@ -312,7 +321,7 @@ Deno.serve(async (req) => {
       case "analyze":     out = await analyzeMentions(b.ids, b.limit ?? 8); break;
       case "summary":     out = await makeSummary(b.date, b.span ?? "daily"); break;
       case "poll_google": {
-        const g: any = await pollGoogle();
+        const g: any = await pollGoogle(b.places);
         if (g.added) g.analyze = await analyzeMentions(undefined, 12); // วิเคราะห์ต่อทันที ไม่ต้องรอ cron
         out = g;
         break;
