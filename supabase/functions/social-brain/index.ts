@@ -311,7 +311,12 @@ Deno.serve(async (req) => {
     switch (b.action) {
       case "analyze":     out = await analyzeMentions(b.ids, b.limit ?? 8); break;
       case "summary":     out = await makeSummary(b.date, b.span ?? "daily"); break;
-      case "poll_google": out = await pollGoogle(); break;
+      case "poll_google": {
+        const g: any = await pollGoogle();
+        if (g.added) g.analyze = await analyzeMentions(undefined, 12); // วิเคราะห์ต่อทันที ไม่ต้องรอ cron
+        out = g;
+        break;
+      }
       case "chat_test":   out = await chatTest(b.history ?? []); break;
       case "send_chat":   out = await sendChat(b.channel, b.thread_id, b.text, b.by ?? "admin"); break;
       case "send_reply":  out = await sendReply(b.id, b.text, b.by ?? "admin"); break;

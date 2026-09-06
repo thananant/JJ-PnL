@@ -912,18 +912,22 @@ function addGp(){
     <input placeholder="Place ID (ChIJ...)"><select style="width:130px">${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select>
     <button class="icb" onclick="this.parentElement.remove()">✕</button></div>`);
 }
-async function saveGp(){
+async function saveGp(silent){
   const rows=[...document.querySelectorAll('#gpList .copyline')].map(r=>({
     place_id:r.children[0].value.trim(),branch:r.children[1].value})).filter(p=>p.place_id);
   const chs={...(S.settings.channels||{}),google_places:rows};
   await api('POST','social_settings',[{id:'channels',val:chs,updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
-  S.settings.channels=chs;toast('บันทึกแล้ว ✓');
+  S.settings.channels=chs;if(!silent)toast('บันทึกแล้ว ✓');
+  return rows;
 }
 async function pollGoogleNow(){
-  toast('กำลังดึงรีวิว Google...');
+  let rows;
+  try{rows=await saveGp(true)}catch(e){toast('บันทึกไม่สำเร็จ: '+e.message,true);return}
+  if(!rows.length){toast('ใส่ Place ID อย่างน้อย 1 สาขาก่อนครับ',true);return}
+  toast('บันทึกแล้ว ✓ กำลังดึงรีวิว Google...');
   try{
     const r=await brain('poll_google',{});
-    if(r.ok){toast(`ดึงแล้ว — รีวิวใหม่ ${r.added} รายการ`);S.cache={};show('ch')}
+    if(r.ok){toast(`ดึงแล้ว — รีวิวใหม่ ${r.added} รายการ`+(r.added?' · AI กำลังวิเคราะห์ต่อ':''));S.cache={};show('ch')}
     else toast(r.reason||'ดึงไม่ได้',true);
   }catch(e){toast('ดึงไม่ได้: '+e.message,true)}
 }
