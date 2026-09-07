@@ -6,7 +6,7 @@
 
 ## กติกา repo
 
-- **ห้ามเพิ่มไฟล์ `.sql` ลง main หรือ branch งาน** — SQL ทั้งหมดอยู่ branch `sql` เท่านั้น (ไม่รวมเข้า main และไม่ merge กับใคร) · SQL ของระบบเงินเดือนอยู่ในโฟลเดอร์ `payroll/` ของ branch นั้น · SQL ระบบ KPI คือ `jjmk-kpi.sql` ที่ root ของ branch นั้น
+- **ห้ามเพิ่มไฟล์ `.sql` ลง main หรือ branch งาน** — SQL ทั้งหมดอยู่ branch `sql` เท่านั้น (ไม่รวมเข้า main และไม่ merge กับใคร) · SQL ของระบบเงินเดือนอยู่ในโฟลเดอร์ `jjmk-payroll/` ของ branch นั้น · SQL ระบบ KPI คือ `jjmk-kpi.sql` ที่ root ของ branch นั้น
 - กติกาเจ้าของ (2026-08-04): แก้เสร็จ+ตรวจผ่านแล้ว → เปิด PR + merge เข้า main อัตโนมัติ ไม่ต้องถามยืนยัน (ยกเว้นงานที่เสี่ยงลบ/แก้ข้อมูลจริงใน Supabase — ถามก่อน)
 
 ## ระบบวัดความพึงพอใจลูกค้า (JJ KPI)
@@ -20,8 +20,8 @@
 
 ## ระบบเงินเดือน (JJ-Payroll)
 
-- โค้ดอยู่ที่ `payroll/` (ย้ายมาจาก repo `thananant/JJ-Payroll` เมื่อ 2026-09-06) — **อ่าน `payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง** (กฎเงินเดือนห้ามเปลี่ยนโดยไม่ถาม)
-- แอปเปิดที่ https://thananant.github.io/JJ-PnL/payroll/
-- ฐานข้อมูล Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd` (ตาราง employees/punches/adjustments/advances/... ดู `payroll/docs/JJ-Payroll-Summary.md`)
-- **งวดเงินเดือน = 26 เดือนก่อน → 25 เดือนนี้ (ไม่ตรงเดือนปฏิทิน)** — เวลาเอาค่าแรงเข้า PnL ต้องตกลงวิธีแบ่งก่อน · จุดเชื่อม Payroll↔PnL ดูข้อ 8 ใน `payroll/docs/JJ-Payroll-Summary.md`
-- `payroll/worker.js` deploy ผ่าน Cloudflare dashboard (ไม่ใช่ GitHub) — เครื่องสแกน/รายงาน LINE ชี้ที่ Worker เดิม ไม่เกี่ยวกับการย้าย repo
+- โค้ดอยู่ที่ `jjmk-payroll/` (ย้ายมาจาก repo `thananant/JJ-Payroll` 2026-09-06 · เปลี่ยนชื่อโฟลเดอร์จาก `payroll/` 2026-09-07) — **อ่าน `jjmk-payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง** (กฎเงินเดือนห้ามเปลี่ยนโดยไม่ถาม)
+- แอปเปิดที่ https://thananant.github.io/JJ-PnL/jjmk-payroll/
+- ฐานข้อมูล Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd` (ตาราง employees/punches/adjustments/advances/... ดู `jjmk-payroll/docs/JJ-Payroll-Summary.md`)
+- **งวดเงินเดือน = 26 เดือนก่อน → 25 เดือนนี้ (ไม่ตรงเดือนปฏิทิน)** — เวลาเอาค่าแรงเข้า PnL ต้องตกลงวิธีแบ่งก่อน · จุดเชื่อม Payroll↔PnL ดูข้อ 8 ใน `jjmk-payroll/docs/JJ-Payroll-Summary.md`
+- `jjmk-payroll/worker.js` deploy ผ่าน Cloudflare dashboard (ไม่ใช่ GitHub) — เครื่องสแกน/รายงาน LINE ชี้ที่ Worker เดิม ไม่เกี่ยวกับการย้าย repo
