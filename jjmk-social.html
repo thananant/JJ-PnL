@@ -872,7 +872,20 @@ async function chatSend(){
 /* ============ สรุป & ประเด็น ============ */
 async function vInsight(el){
   el.innerHTML='<div class="spin"></div>';
-  const rows=brFilter(await loadMentions()).filter(r=>r.kind!=='message'&&r.analyzed_at);
+  const allMen=brFilter(await loadMentions());
+  const rows=allMen.filter(r=>r.kind!=='message'&&r.analyzed_at);
+  // สถิติคอมเมนต์รายโพสต์ (FB/IG)
+  const posts={};
+  allMen.filter(r=>r.kind==='comment'&&(r.channel==='facebook'||r.channel==='instagram')).forEach(r=>{
+    const pid=r.thread_id||(r.raw&&r.raw.post_id)||'ไม่ทราบโพสต์';
+    const p=posts[pid]=posts[pid]||{n:0,ans:0,neg:0,url:null,last:r.posted_at};
+    p.n++;
+    if(['sent','auto_sent'].includes(r.reply_status))p.ans++;
+    if(r.sentiment==='neg')p.neg++;
+    if(!p.url&&r.url)p.url=r.url;
+    if(r.posted_at>p.last)p.last=r.posted_at;
+  });
+  const postArr=Object.entries(posts).sort((a,b)=>b[1].n-a[1].n);
   // ดึงสรุป AI ล่าสุด
   let digest=null;
   try{
@@ -933,7 +946,17 @@ async function vInsight(el){
       <div class="xs mut" style="margin-top:8px">ใช้ดูว่ากะ/ช่วงเวลาไหนบริการดี ช่วงไหนมีปัญหา (AI อ่านจากเนื้อหารีวิว)</div>`
       :'<div class="empty">ยังไม่มีข้อมูล</div>'}
     </div>
-  </div>`;
+  </div>
+  ${postArr.length?`<div class="card"><h3>📘 อัตราการตอบคอมเมนต์รายโพสต์ <span class="sp">Facebook / Instagram · ${daysLabel()}</span></h3>
+    <div class="twrap"><table><tr><th>โพสต์</th><th class="right">คอมเมนต์</th><th class="right">ตอบแล้ว</th><th class="right">อัตราตอบ</th><th class="right">ตำหนิ</th><th>ล่าสุด</th></tr>
+    ${postArr.slice(0,12).map(([pid,p])=>{const rate=Math.round(p.ans/p.n*100);
+      return `<tr><td class="xs">${p.url?`<a class="hintlink" target="_blank" href="${esc(p.url)}">🔗 โพสต์ …${esc(String(pid).slice(-10))}</a>`:'โพสต์ …'+esc(String(pid).slice(-10))}</td>
+      <td class="right num">${p.n}</td><td class="right num">${p.ans}</td>
+      <td class="right num b" style="color:${rate>=80?'var(--ok)':rate>=50?'var(--gold)':'var(--bad)'}">${rate}%</td>
+      <td class="right num" style="color:${p.neg?'var(--bad)':'inherit'}">${p.neg||''}</td>
+      <td class="xs mut">${timeago(p.last)}</td></tr>`}).join('')}</table></div>
+    <div class="xs mut" style="margin-top:8px">"ตอบแล้ว" = ส่งตอบผ่านระบบ หรือกดทำเครื่องหมายว่าตอบแล้ว · ใช้เช็คว่าแอดมินตอบคอมเมนต์ทั่วถึงไหมทีละโพสต์</div>
+  </div>`:''}`;
 }
 function digestHtml(d){
   if(!d)return '';
@@ -965,14 +988,15 @@ async function vBot(el){
   const modeSel=(chn)=>`<select id="bm_${chn}">
     <option value="off" ${(mode[chn]||'off')==='off'?'selected':''}>ปิด — ไม่ตอบ</option>
     <option value="draft" ${mode[chn]==='draft'?'selected':''}>ร่างให้ตรวจ — บอทร่าง คนกดส่ง</option>
-    <option value="auto" ${mode[chn]==='auto'?'selected':''}>ตอบอัตโนมัติ</option></select>`;
+    <option value="faq" ${mode[chn]==='faq'?'selected':''}>ตอบออโต้เฉพาะคำถามพบบ่อย — ที่เหลือส่งให้คน</option>
+    <option value="auto" ${mode[chn]==='auto'?'selected':''}>ตอบอัตโนมัติทุกเรื่อง</option></select>`;
   el.innerHTML=`
   <div class="grid g2">
     <div class="card"><h3>🤖 โหมดตอบอัตโนมัติรายช่องทาง</h3>
       <div class="fld"><label>💬 LINE OA</label>${modeSel('line')}</div>
       <div class="fld"><label>📘 Facebook Messenger</label>${modeSel('facebook')}</div>
       <div class="fld"><label>📸 Instagram DM</label>${modeSel('instagram')}</div>
-      <div class="xs mut">โหมด “ตอบอัตโนมัติ”: ถ้าเจอเรื่องร้องเรียนรุนแรง/ไม่แน่ใจ บอทจะไม่ตอบเอง แต่ส่งข้อความขอเวลา แล้วเด้งให้คนมาตอบที่หน้า “แชทลูกค้า”</div>
+      <div class="xs mut">แนะนำเส้นทางใช้งาน: เริ่มที่ <b>“ร่างให้ตรวจ”</b> (คนตอบ บอทช่วยร่าง) → พอ FAQ สะสมมากพอ เปลี่ยนเป็น <b>“ตอบออโต้เฉพาะคำถามพบบ่อย”</b> (บอทตอบเองเฉพาะแนวคำถามซ้ำๆ ที่อนุมัติแล้ว คำถามใหม่/เรื่องร้องเรียนส่งให้คนเสมอ)</div>
       <div class="fld" style="margin-top:10px"><label>ข้อความขอเวลา (ตอนส่งต่อให้คน)</label><input id="btFallback" value="${esc(bot.fallback_text||'')}"></div>
       <div class="fld"><label>คำที่ต้องส่งต่อให้คนเสมอ (คั่นด้วย ,)</label><input id="btEsc" value="${esc((bot.escalate_keywords||[]).join(', '))}"></div>
     </div>
@@ -986,6 +1010,10 @@ async function vBot(el){
     <div id="faqList">${(shop.faq||[]).map((f,i)=>faqRow(f,i)).join('')}</div>
     <button class="btn gh sm" onclick="addFaq()">➕ เพิ่มคำถาม</button>
   </div>
+  <div class="card"><h3>💡 คำถามที่ลูกค้าถามซ้ำบ่อย <span class="sp">AI สกัดจากแชทจริง — กดเพิ่มเข้า FAQ แล้วโหมด “ตอบเฉพาะคำถามพบบ่อย” จะตอบเองได้</span>
+    <button class="btn gh sm" style="margin-left:auto" onclick="learnFaqNow()">🔄 วิเคราะห์ตอนนี้</button></h3>
+    <div id="faqCand"></div>
+  </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
     <button class="btn" onclick="saveBot()">💾 บันทึกการตั้งค่าบอท</button>
   </div>
@@ -996,7 +1024,42 @@ async function vBot(el){
       <button class="btn" onclick="botTestSend()">ส่ง</button>
     </div>
   </div>`;
-  renderBotTest();
+  renderBotTest();renderCands();
+}
+function candRow(c,i){return `<div style="border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin-bottom:8px">
+  <div class="sm"><span class="chip">${num(c.count)||1}×</span> <b>${esc(c.q)}</b></div>
+  <div class="xs mut" style="margin:3px 0 7px">${esc(c.a)}</div>
+  <div style="display:flex;gap:6px">
+    <button class="btn sm" onclick="candMut(${i},true)">➕ เพิ่มเข้า FAQ</button>
+    <button class="btn gh sm" onclick="candMut(${i},false)">ซ่อน</button>
+  </div></div>`}
+function renderCands(){
+  const el=document.getElementById('faqCand');if(!el)return;
+  const items=(S.settings.faq_candidates&&S.settings.faq_candidates.items)||[];
+  el.innerHTML=items.map((c,i)=>candRow(c,i)).join('')
+    ||'<div class="empty xs">ยังไม่มีข้อมูล — ระบบวิเคราะห์ให้เองทุกเช้า 06:10 หรือกด "วิเคราะห์ตอนนี้" (ต้องมีแชทลูกค้าสะสมก่อน)</div>';
+}
+async function learnFaqNow(){
+  toast('กำลังวิเคราะห์คำถามซ้ำจากแชทลูกค้า...');
+  try{
+    const r=await brain('learn_faq',{});
+    if(!r.ok){toast(r.reason||'วิเคราะห์ไม่ได้',true);return}
+    await loadSettings();renderCands();
+    toast(`พบ ${r.count} คำถามที่ถูกถามบ่อย ✓`);
+  }catch(e){toast(e.message,true)}
+}
+async function candMut(i,add){
+  const items=[...((S.settings.faq_candidates&&S.settings.faq_candidates.items)||[])];
+  const c=items[i];if(!c)return;
+  if(add){
+    $('#faqList').insertAdjacentHTML('beforeend',
+      faqRow({q:c.q,a:/^\(ร้านยังไม่เคยตอบ/.test(c.a)?'':c.a},Date.now()));
+    toast('เพิ่มเข้า FAQ ด้านบนแล้ว — ตรวจ/แก้คำตอบ แล้วอย่าลืมกด "บันทึกการตั้งค่าบอท"');
+  }
+  items.splice(i,1);
+  await api('POST','social_settings',[{id:'faq_candidates',val:{items,updated_at:new Date().toISOString()},updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
+  S.settings.faq_candidates={items};
+  renderCands();
 }
 function faqRow(f,i){return `<div class="faqrow"><input placeholder="คำถาม เช่น มีที่จอดรถไหม" value="${esc(f.q||'')}" data-fq="${i}"><input placeholder="คำตอบ" value="${esc(f.a||'')}" data-fa="${i}"><button class="icb" onclick="this.parentElement.remove()">✕</button></div>`}
 function addFaq(){$('#faqList').insertAdjacentHTML('beforeend',faqRow({},Date.now()))}
