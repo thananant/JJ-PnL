@@ -11,7 +11,7 @@ function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures+
 /* ---------- fake database ---------- */
 function makeDb(opts) {
   opts = opts || {};
-  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], punches: opts.punches || [], nextId: 1 };
+  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], punches: opts.punches || [], settings: opts.settings || [], nextId: 1 };
   if (!opts.empty) {
     db.departments = [
       { id: 1, name: 'อาหาร', icon: '🍖', sort_order: 1, active: true },
@@ -51,6 +51,7 @@ function makeDb(opts) {
     switch (t) {
       case 'kpi_departments': return db.departments;
       case 'kpi_staff': return db.staff;
+      case 'kpi_settings': return db.settings;
       case 'kpi_responses': return db.responses.map(r => Object.assign({}, r, { kpi_scores: db.scores.filter(s => s.response_id === r.id).map(s => ({ department_id: s.department_id, score: s.score })) }));
       case 'kpi_daily': {
         const joined = db.scores.map(s => { const r = db.responses.find(x => x.id === s.response_id); return { branch: r.branch, biz_date: r.biz_date, department_id: s.department_id, score: s.score }; });
@@ -101,7 +102,7 @@ function makeDb(opts) {
     for (const s of args.p_scores) db.scores.push({ response_id: id, department_id: s.department_id, score: s.score });
     return { data: id, error: null };
   };
-  db.tableOf = t => ({ kpi_departments: db.departments, kpi_staff: db.staff }[t]);
+  db.tableOf = t => ({ kpi_departments: db.departments, kpi_staff: db.staff, kpi_settings: db.settings }[t]);
   return db;
 }
 function makeClient(db) {
@@ -124,8 +125,9 @@ function makeClient(db) {
           return { data: rows, error: null };
         }
         const arr = db.tableOf(table); if (!arr) throw new Error('write to ' + table);
+        const keyF = table === 'kpi_settings' ? 'key' : 'id'; // kpi_settings ใช้ key เป็น primary key
         for (const row of st.payload) {
-          if (st.op === 'upsert' && row.id) { const i = arr.findIndex(x => x.id === row.id); if (i >= 0) arr[i] = Object.assign({}, arr[i], row); else arr.push(row); }
+          if (st.op === 'upsert' && row[keyF] != null) { const i = arr.findIndex(x => x[keyF] === row[keyF]); if (i >= 0) arr[i] = Object.assign({}, arr[i], row); else arr.push(row); }
           else arr.push(Object.assign({ id: db.nextId++ }, row));
         }
         return { data: null, error: null };
