@@ -1,6 +1,6 @@
 # ย้าย JJ-Payroll ไปรวมกับ JJ-PnL — เช็กลิสต์ครบชุด
 
-> ✅ **ย้ายเสร็จแล้ว 2026-09-06 แบบ B** — โค้ดอยู่ `payroll/` ใน repo JJ-PnL · SQL อยู่ branch `sql` โฟลเดอร์ `payroll/` · ไฟล์นี้เก็บไว้เป็นบันทึกว่าบัญชี/secret ภายนอก (Supabase, Cloudflare, LINE, เครื่องสแกน) อยู่ที่ไหนบ้าง
+> ✅ **ย้ายเสร็จแล้ว 2026-09-06 แบบ B** — โค้ดอยู่ `jjmk-payroll/` ใน repo JJ-PnL (เดิม `payroll/` เปลี่ยนชื่อ 2026-09-07) · SQL อยู่ branch `sql` โฟลเดอร์ `jjmk-payroll/` · ไฟล์นี้เก็บไว้เป็นบันทึกว่าบัญชี/secret ภายนอก (Supabase, Cloudflare, LINE, เครื่องสแกน) อยู่ที่ไหนบ้าง
 
 แพ็กนี้ = ไฟล์ทั้งหมดจาก repo `thananant/JJ-Payroll` (main ล่าสุด 2026-09-06) + เอกสารสรุป
 

@@ -2,11 +2,11 @@
 
 คู่มือบริบทสำหรับ Claude Code — อ่านไฟล์นี้ก่อนแก้อะไรทุกครั้ง
 
-> **ย้ายบ้านแล้ว (2026-09-06)**: โค้ดทั้งหมดย้ายจาก repo `thananant/JJ-Payroll` มาอยู่ที่ `payroll/` ใน repo `thananant/JJ-PnL` · ไฟล์ SQL อยู่ที่ **branch `sql` โฟลเดอร์ `payroll/`** (กติกา JJ-PnL: ห้ามมี `.sql` บน main) · ฐานข้อมูล Supabase / Cloudflare Worker / เครื่องสแกน ใช้ของเดิมทั้งหมด ไม่ต้องย้าย
+> **ย้ายบ้านแล้ว (2026-09-06)**: โค้ดทั้งหมดย้ายจาก repo `thananant/JJ-Payroll` มาอยู่ที่ `jjmk-payroll/` ใน repo `thananant/JJ-PnL` (เดิมชื่อโฟลเดอร์ `payroll/` — เปลี่ยนเป็น `jjmk-payroll/` 2026-09-07 ให้เข้าชุดชื่อแอปอื่น) · ไฟล์ SQL อยู่ที่ **branch `sql` โฟลเดอร์ `jjmk-payroll/`** (กติกา JJ-PnL: ห้ามมี `.sql` บน main) · ฐานข้อมูล Supabase / Cloudflare Worker / เครื่องสแกน ใช้ของเดิมทั้งหมด ไม่ต้องย้าย
 
 ## ภาพรวมระบบ
 
-- **แอปหลัก**: `payroll/index.html` ไฟล์เดียวจบ (HTML + CSS + JS inline ~380KB) — deploy บน **GitHub Pages** ของ repo `JJ-PnL`: `https://thananant.github.io/JJ-PnL/payroll/` (URL เดิม `thananant.github.io/JJ-Payroll` ยังใช้ได้จนกว่าเจ้าของจะปิด repo เก่า — ถ้าปิดต้องแจ้งผู้จัดการเปลี่ยน bookmark/ไอคอนหน้าจอ)
+- **แอปหลัก**: `jjmk-payroll/index.html` ไฟล์เดียวจบ (HTML + CSS + JS inline ~380KB) — deploy บน **GitHub Pages** ของ repo `JJ-PnL`: `https://thananant.github.io/JJ-PnL/jjmk-payroll/` (URL เดิม `thananant.github.io/JJ-Payroll` ยังใช้ได้จนกว่าเจ้าของจะปิด repo เก่า — ถ้าปิดต้องแจ้งผู้จัดการเปลี่ยน bookmark/ไอคอนหน้าจอ)
 - **ฐานข้อมูล**: Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`
   - URL: `https://aikyxvluaiubdidqxwnd.supabase.co`
   - Publishable key (ฝังใน frontend ได้): `sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm`
@@ -90,17 +90,17 @@
 ## กติกาการแก้โค้ด (สำคัญ)
 
 1. **แก้เสร็จต้องตรวจ**: แยก `<script>` ออกมา `node --check` เสมอ (มี `tools/check.sh` ให้)
-2. SQL ทุกไฟล์ตรวจด้วย `pglast` (`pip install pglast`) — Supabase SQL Editor ผู้ใช้ต้อง **Ctrl+A ก่อน Run** (editor รันเฉพาะส่วนที่ไฮไลต์) → เขียน SQL ให้แต่ละ statement ยืนเองได้ หรือยัด VALUES ใน CTE เป็นคำสั่งเดียว · **ไฟล์ SQL ของ payroll เก็บที่ branch `sql` โฟลเดอร์ `payroll/` เท่านั้น** (กติกา JJ-PnL: ห้ามเพิ่ม `.sql` ลง main หรือ branch งาน)
+2. SQL ทุกไฟล์ตรวจด้วย `pglast` (`pip install pglast`) — Supabase SQL Editor ผู้ใช้ต้อง **Ctrl+A ก่อน Run** (editor รันเฉพาะส่วนที่ไฮไลต์) → เขียน SQL ให้แต่ละ statement ยืนเองได้ หรือยัด VALUES ใน CTE เป็นคำสั่งเดียว · **ไฟล์ SQL ของ payroll เก็บที่ branch `sql` โฟลเดอร์ `jjmk-payroll/` เท่านั้น** (กติกา JJ-PnL: ห้ามเพิ่ม `.sql` ลง main หรือ branch งาน)
 3. ตัวเลขจาก Supabase ห่อ `Number(x)||0` เสมอ
 4. iOS: input font ≥16px กันซูม · ห้ามใช้ `<select size=N>` (แสดงเพี้ยน) ใช้ลิสต์ `.emp-pick` แตะเลือก · การ์ด grid ใช้ `minmax(min(420px,100%),1fr)`
 5. เพิ่มตารางใหม่ต้องมี: RLS policy allow-all + ADD TABLE เข้า supabase_realtime + listener ใน startRealtime + flag `xxReady` กัน error ก่อนรัน SQL
 6. ผู้ใช้สื่อสารภาษาไทย — UI/comment/คำตอบเป็นไทย · ส่งไฟล์สมบูรณ์พร้อม deploy ไม่ใช่แค่ diff
-7. Deploy = merge เข้า `main` ของ repo JJ-PnL → GitHub Pages อัปเดต `payroll/index.html` เอง → Ctrl+Shift+R (cache ~5-10 นาที)
+7. Deploy = merge เข้า `main` ของ repo JJ-PnL → GitHub Pages อัปเดต `jjmk-payroll/index.html` เอง → Ctrl+Shift+R (cache ~5-10 นาที)
 8. **เจ้าของสั่งไว้ (2026-08-04): แก้เสร็จ+ตรวจผ่านแล้ว ให้เปิด PR และ merge เข้า main อัตโนมัติเลย ไม่ต้องถามยืนยัน** (ยกเว้นงานที่เสี่ยงลบ/แก้ข้อมูลจริงใน Supabase — อันนั้นถามก่อน)
 
 ## งานค้าง (ทำต่อได้เลย)
 
-1. **เติมรหัส 17 คนใน `payroll/jj_info_fix.sql` (branch `sql`) ส่วน 4** (นำเข้าข้อมูลจาก Excel เสร็จ 128/145 คน):
+1. **เติมรหัส 17 คนใน `jjmk-payroll/jj_info_fix.sql` (branch `sql`) ส่วน 4** (นำเข้าข้อมูลจาก Excel เสร็จ 128/145 คน):
    ลิลลี่ แถว23 (น่าจะ = KESONE SINAPHA code 4119126353 JJLP) · ลิลลี่ แถว85 (NAN LIN LIN KHAING = อีกคนที่ JJRD) · น้ำฝน แถว42,59 · เล็ก แถว50 · เมา แถว57 · พะแสง แถว60 · หนุ่ม แถว69 · ฟ้า แถว84 · วี แถว93 · ต้น แถว95 · Savana แถว99 · หอม แถว100 · น้อย แถว102 (NANG PUT ซ้ำ 3) · โซ แถว114 · แตงโม แถว140 · วิน แถว144
    → รัน "ส่วน 1" ของไฟล์เพื่อดูผู้สมัคร+รหัส แล้วเติมใน "ส่วน 4"
 2. **วันเกิดรอแก้ต้นทาง 4 คน** (ตอนนี้เว้น NULL ไว้): โน๊ต 3537777921 (ไฟล์เขียน 1452) · เอ 3341077509 (1461) · จอม 4235352505 (2026) · เลย์ 2147833848 (2026)
@@ -110,17 +110,17 @@
 ## โครงไฟล์ (ใน repo JJ-PnL)
 
 ```
-payroll/index.html        <- แอปทั้งหมด (source of truth)
-payroll/worker.js         <- Cloudflare Worker (deploy ผ่าน CF dashboard ไม่ใช่ GitHub)
-payroll/logo.png          <- โลโก้ร้าน (แอป/สลิป/ไอคอน iPhone — ต้องอยู่ข้าง index.html)
-payroll/tools/split.py    <- แยก JS ออกจาก index.html -> app.js (ไว้แก้สะดวก)
-payroll/tools/build.py    <- ประกอบ app.js กลับเข้า index.html + ตรวจ syntax
-payroll/tools/check.sh    <- node --check เร็วๆ กับ script ใน index.html
-payroll/docs/             <- สรุประบบ + คู่มือ PDF + สไลด์นำเสนอ
-payroll/CLAUDE.md         <- ไฟล์นี้
-payroll/MOVE-CHECKLIST.md <- เช็กลิสต์ตอนย้าย repo (บัญชี/secret ภายนอกอยู่ที่ไหนบ้าง)
+jjmk-payroll/index.html        <- แอปทั้งหมด (source of truth)
+jjmk-payroll/worker.js         <- Cloudflare Worker (deploy ผ่าน CF dashboard ไม่ใช่ GitHub)
+jjmk-payroll/logo.png          <- โลโก้ร้าน (แอป/สลิป/ไอคอน iPhone — ต้องอยู่ข้าง index.html)
+jjmk-payroll/tools/split.py    <- แยก JS ออกจาก index.html -> app.js (ไว้แก้สะดวก)
+jjmk-payroll/tools/build.py    <- ประกอบ app.js กลับเข้า index.html + ตรวจ syntax
+jjmk-payroll/tools/check.sh    <- node --check เร็วๆ กับ script ใน index.html
+jjmk-payroll/docs/             <- สรุประบบ + คู่มือ PDF + สไลด์นำเสนอ
+jjmk-payroll/CLAUDE.md         <- ไฟล์นี้
+jjmk-payroll/MOVE-CHECKLIST.md <- เช็กลิสต์ตอนย้าย repo (บัญชี/secret ภายนอกอยู่ที่ไหนบ้าง)
 
-branch `sql` → payroll/*.sql  <- migration ทุกไฟล์ที่เคยรันใน Supabase (รันซ้ำได้)
+branch `sql` → jjmk-payroll/*.sql  <- migration ทุกไฟล์ที่เคยรันใน Supabase (รันซ้ำได้)
 ```
 
-tools ทั้งสามตัวอ้าง path จากโฟลเดอร์ตัวเอง — รันจากที่ไหนก็ได้ เช่น `python3 payroll/tools/split.py`
+tools ทั้งสามตัวอ้าง path จากโฟลเดอร์ตัวเอง — รันจากที่ไหนก็ได้ เช่น `python3 jjmk-payroll/tools/split.py`
