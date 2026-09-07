@@ -77,13 +77,14 @@ async function encryptRT(rt: string): Promise<string> {
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aesKey(), new TextEncoder().encode(rt)));
   return btoa(String.fromCharCode(...iv)) + "." + btoa(String.fromCharCode(...ct));
 }
+const APP_URL = "https://thananant.github.io/JJ-PnL/jjmk-social.html";
 function gbpPage(ok: boolean, msg: string): Response {
-  return new Response(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JJ Social</title></head>
-<body style="font-family:sans-serif;background:#0C0A09;color:#F4EFE8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
-<div style="text-align:center;max-width:460px;padding:24px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:16px">
-<h2 style="margin:0 0 10px">${ok ? "✅ เชื่อมต่อ Google Business สำเร็จ" : "❌ เชื่อมต่อไม่สำเร็จ"}</h2>
-<p style="line-height:1.6;color:#CFC6BB">${msg}</p></div></body></html>`,
-    { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  // เด้งกลับเข้าแอปพร้อมผลลัพธ์ — แอปจะโชว์ข้อความแจ้งเอง
+  const clean = msg.replace(/<[^>]*>/g, " ").slice(0, 160);
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `${APP_URL}#gbp=${ok ? "ok" : "err:" + encodeURIComponent(clean)}` },
+  });
 }
 async function gbpOauth(u: URL): Promise<Response> {
   try {

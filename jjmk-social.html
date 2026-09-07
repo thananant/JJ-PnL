@@ -1288,6 +1288,11 @@ async function startApp(){
   applyPerms();
   await loadBranches();
   rtStart();refreshBadges();
+  if(S._gbpResult){
+    const g=S._gbpResult;S._gbpResult=null;
+    if(g.ok){toast('✅ เชื่อมต่อ Google Business สำเร็จ — กด "ซิงค์รีวิวทั้งหมด" ได้เลย');await loadSettings();show('ch');return}
+    toast('เชื่อมต่อ Google ไม่สำเร็จ: '+g.msg,true);
+  }
   show('dash');
 }
 /* ---------- โลโก้ (CI เดียวกับระบบ P&L) + ธีมกราฟมืด ---------- */
@@ -1296,6 +1301,12 @@ const LOGO_B64='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAMAAAAKE/
   ['sbLogo','hdLogo','liLogo'].forEach(id=>{const el=document.getElementById(id);if(el)el.src=LOGO_B64});
   ['icon','apple-touch-icon'].forEach(rel=>{const l=document.createElement('link');l.rel=rel;l.href=LOGO_B64;document.head.appendChild(l)});
   if(window.Chart){Chart.defaults.color='#A89E93';Chart.defaults.borderColor='rgba(255,255,255,.08)';Chart.defaults.font.family="'Prompt','Sarabun',sans-serif"}
+})();
+(function(){ // ผลเด้งกลับจากการเชื่อมต่อ Google Business
+  const m=location.hash.match(/^#gbp=(ok|err:(.*))$/);
+  if(!m)return;
+  history.replaceState(null,'',location.pathname+location.search);
+  S._gbpResult=m[1]==='ok'?{ok:true}:{ok:false,msg:decodeURIComponent(m[2]||'')};
 })();
 (function init(){
   const sess=LS.get('jjsocial_sess',null);
