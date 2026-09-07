@@ -554,6 +554,59 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
   return { ok: true, added, diag, errors: errors.length ? errors : undefined };
 }
 
+// ---------- เรียนรู้คำถามที่ลูกค้าถามซ้ำ → เสนอเป็น FAQ ให้คนอนุมัติ ----------
+const LearnFaq = z.object({
+  items: z.array(z.object({ q: z.string(), a: z.string(), count: z.number() })),
+});
+async function learnFaq() {
+  const since = new Date(Date.now() - 14 * 86400000).toISOString();
+  const { data: rows } = await sb.from("social_chat_log")
+    .select("channel,thread_id,direction,text,meta,created_at")
+    .gte("created_at", since).order("created_at").limit(1500);
+  if (!rows?.length) return { ok: false, reason: "ยังไม่มีบทสนทนาให้เรียนรู้" };
+  const settings = await getSettings();
+  const faq = settings.shop?.faq ?? [];
+  // จับคู่ คำถามลูกค้า + คำตอบจริงของร้าน (ถ้ามี)
+  const lines: string[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r: any = rows[i];
+    if (r.direction !== "in") continue;
+    const nxt: any = rows.slice(i + 1, i + 5).find((x: any) =>
+      x.thread_id === r.thread_id && x.direction === "out" && !x.meta?.draft);
+    lines.push(`ถาม: ${String(r.text).slice(0, 150)}${nxt ? `\nตอบ(โดยร้าน): ${String(nxt.text).slice(0, 200)}` : ""}`);
+  }
+  if (!lines.length) return { ok: false, reason: "ยังไม่มีคำถามจากลูกค้า" };
+  const sys = `คุณคือผู้ช่วยจัดคลังคำถามที่พบบ่อย (FAQ) ของร้านอาหาร
+วิเคราะห์บทสนทนา แล้วจับกลุ่มคำถามที่ถูกถามซ้ำๆ (ความหมายเดียวกันนับรวมเป็นข้อเดียว) เสนอเป็น FAQ ใหม่ พร้อมร่างคำตอบ
+- อิงคำตอบที่ร้านเคยตอบจริงเป็นหลัก ถ้าไม่เคยตอบให้ใส่ a = "(ร้านยังไม่เคยตอบ — เติมคำตอบก่อนใช้)"
+- เรียงตามความถี่ count มาก→น้อย เอาเฉพาะที่ถูกถามอย่างน้อย 2 ครั้ง สูงสุด 12 ข้อ
+- อย่าเสนอซ้ำกับ FAQ ที่มีอยู่แล้ว: ${faq.map((f: any) => f.q).join(" | ") || "—"}`;
+  const userTxt = lines.slice(-400).join("\n---\n");
+  let items: { q: string; a: string; count: number }[] | null = null;
+  if (Date.now() > claudeDownUntil) {
+    try {
+      const res = await anthropic.messages.parse({
+        model: "claude-opus-5", max_tokens: 4000,
+        output_config: { effort: "low", format: zodOutputFormat(LearnFaq) },
+        system: sys, messages: [{ role: "user", content: userTxt }],
+      });
+      const p = parsedOf<z.infer<typeof LearnFaq>>(res);
+      if (p) items = p.items;
+    } catch (e) { markClaudeDown(e); }
+  }
+  if (!items && GEMINI_KEY) {
+    const j = await geminiJson(sys + `\n\nตอบเป็น JSON ล้วน: {"items":[{"q":"...","a":"...","count":2}]}`, userTxt, 3000);
+    if (j?.items && Array.isArray(j.items))
+      items = j.items.map((x: any) => ({ q: String(x?.q ?? ""), a: String(x?.a ?? ""), count: Number(x?.count) || 1 })).filter((x: any) => x.q);
+  }
+  if (!items) return { ok: false, reason: "AI ไม่พร้อมใช้งานตอนนี้ — ลองใหม่ภายหลัง" };
+  await sb.from("social_settings").upsert({
+    id: "faq_candidates", val: { items, updated_at: new Date().toISOString() },
+    updated_at: new Date().toISOString(),
+  });
+  return { ok: true, count: items.length };
+}
+
 // ---------- ทดสอบแชทบอทจากหน้าแอป ----------
 async function chatTest(history: { role: string; text: string }[]) {
   const settings = await getSettings();
@@ -670,7 +723,12 @@ Deno.serve(async (req) => {
     let out: unknown;
     switch (b.action) {
       case "analyze":     out = await analyzeMentions(b.ids, b.limit ?? 8); break;
-      case "summary":     out = await makeSummary(b.date, b.span ?? "daily"); break;
+      case "summary": {
+        out = await makeSummary(b.date, b.span ?? "daily");
+        await learnFaq().catch(() => null); // อัพเดตคลังคำถามซ้ำไปพร้อมสรุปรายวัน
+        break;
+      }
+      case "learn_faq":   out = await learnFaq(); break;
       case "poll_google": {
         const g: any = await pollGoogle(b.places);
         if (g.added) g.analyze = await analyzeMentions(undefined, 20); // วิเคราะห์ต่อทันที ไม่ต้องรอ cron

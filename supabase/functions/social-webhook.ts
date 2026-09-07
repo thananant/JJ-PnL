@@ -153,7 +153,8 @@ async function saveMention(row: Record<string, unknown>) {
 }
 
 // ---------- แชทบอท ----------
-async function botAnswer(channel: string, threadId: string, settings: Record<string, any>) {
+// strictFaq = โหมด "ตอบออโต้เฉพาะคำถามพบบ่อย": ตอบเองเฉพาะที่มีคำตอบใน FAQ/ข้อมูลร้าน นอกนั้นส่งให้คน
+async function botAnswer(channel: string, threadId: string, settings: Record<string, any>, strictFaq = false) {
   const bot = settings.bot ?? {}, shop = settings.shop ?? {};
   const { data: hist } = await sb.from("social_chat_log")
     .select("direction,text,meta").eq("channel", channel).eq("thread_id", threadId)
@@ -180,7 +181,8 @@ ${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
 กติกา:
 - ตอบเฉพาะเรื่องของร้านเท่านั้น ไม่ตอบเรื่องอื่น
 - ห้ามแต่งข้อมูลที่ไม่รู้ (ราคา/โปรโมชั่น/วันหยุด) ถ้าไม่มีในข้อมูลร้าน ให้บอกว่าเดี๋ยวแอดมินมายืนยันอีกที และตั้ง needs_human = true
-- ถ้าลูกค้าร้องเรียนรุนแรง เจ็บป่วย ขอเงินคืน หรือพูดถึงคำเหล่านี้: ${kw.join(", ")} ให้ตั้ง needs_human = true`;
+- ถ้าลูกค้าร้องเรียนรุนแรง เจ็บป่วย ขอเงินคืน หรือพูดถึงคำเหล่านี้: ${kw.join(", ")} ให้ตั้ง needs_human = true${strictFaq ? `
+- โหมดเข้มงวด: ตอบอัตโนมัติเฉพาะคำถามที่ตรงหรือใกล้เคียงกับ "คำถามที่พบบ่อย" หรือข้อมูลร้านข้างต้นเท่านั้น — คำถามอื่นทุกกรณี (รวมถึงจอง/สั่งอาหาร/เรื่องเฉพาะบุคคล) ให้ตั้ง needs_human = true` : ""}`;
 
   let out: z.infer<typeof ChatReply> | null = null;
   if (Date.now() > claudeDownUntil) {
@@ -241,10 +243,11 @@ async function handleChat(opts: {
     author: opts.authorName ?? null, text, meta: opts.externalId ? { external_id: opts.externalId } : null,
   });
   const settings = await getSettings();
-  const mode = settings.bot?.mode?.[channel] ?? "off";
+  const mode = settings.bot?.mode?.[channel] ?? "off"; // off | draft | faq | auto
   if (mode === "off") return;
+  const autoLike = mode === "auto" || mode === "faq";
 
-  const out = await botAnswer(channel, threadId, settings).catch((e) => {
+  const out = await botAnswer(channel, threadId, settings, mode === "faq").catch((e) => {
     console.error("botAnswer", e); return null;
   });
   if (!out) return;
@@ -256,7 +259,7 @@ async function handleChat(opts: {
       text: out.reply || (settings.bot?.fallback_text ?? ""),
       meta: { draft: true, needs_human: out.needs_human, reason: out.reason },
     });
-    if (mode === "auto" && out.needs_human && settings.bot?.fallback_text) {
+    if (autoLike && out.needs_human && settings.bot?.fallback_text) {
       // โหมดออโต้แต่ต้องส่งต่อคน: ตอบขอเวลาไว้ก่อน
       const ok = channel === "line"
         ? await sendLine(opts.replyToken ?? null, threadId, settings.bot.fallback_text)
@@ -268,7 +271,7 @@ async function handleChat(opts: {
     }
     return;
   }
-  // mode === 'auto'
+  // โหมด auto / faq: ส่งเอง
   const ok = channel === "line"
     ? await sendLine(opts.replyToken ?? null, threadId, out.reply)
     : await sendMessenger(threadId, out.reply);
@@ -321,6 +324,7 @@ async function handleMeta(body: string) {
         if (v.from?.id && String(v.from.id) === String(entry.id)) continue; // คอมเมนต์ของเพจเอง
         await saveMention({
           channel, kind: "comment", external_id: v.comment_id,
+          thread_id: v.post_id ?? null, // เก็บ post id ไว้ทำสถิติอัตราตอบรายโพสต์
           author_name: v.from?.name ?? null, author_id: v.from?.id ?? null,
           text: v.message ?? "", url: v.permalink_url ?? null,
           posted_at: v.created_time ? new Date(v.created_time * 1000).toISOString() : new Date().toISOString(),
@@ -341,6 +345,7 @@ async function handleMeta(body: string) {
       if (isIG && ch.field === "comments" && v.id) {
         await saveMention({
           channel: "instagram", kind: "comment", external_id: v.id,
+          thread_id: v.media?.id ?? null,
           author_name: v.from?.username ?? null, author_id: v.from?.id ?? null,
           text: v.text ?? "", raw: v,
         });
