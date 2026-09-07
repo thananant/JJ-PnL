@@ -251,6 +251,37 @@ $$;
 
 grant execute on function public.kpi_sync_staff(text[]) to anon, authenticated;
 
+-- ---------- RPC: พนักงานที่กำลังเข้างานอยู่ตอนนี้ (อ่านตาราง punches + employees — อ่านอย่างเดียว) ----------
+-- นับสแกนของวันทำการปัจจุบัน (ตัดวัน 06:00 เวลาไทย แบบเดียวกับ payroll): จำนวนสแกนคี่ = ยังอยู่ในร้าน
+-- หน้าจอลูกค้าใช้กรองรายชื่อ "ชมพนักงาน" — ได้ลิสต์ว่าง/เรียกล้ม แอปจะโชว์ทั้งหมดแทน (กันเครื่องสแกนล่มแล้วหน้าจอว่าง)
+-- punch_date/punch_time ใน punches เป็นวันที่+เวลาไทยตามจริง (worker ไม่ปรับ cutoff ตอนบันทึก)
+create or replace function public.kpi_on_duty(p_branch text)
+returns bigint[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with tnow as (
+    select (now() at time zone 'Asia/Bangkok') as t
+  ), d as (
+    select case when t::time < time '06:00' then t::date - 1 else t::date end as biz from tnow
+  ), c as (
+    select e.id, count(*) as n
+      from employees e
+      join punches p on p.emp_code = e.code
+      cross join d
+     where e.active
+       and e.branch = p_branch
+       and ((p.punch_date::date = d.biz     and p.punch_time::time >= time '06:00')
+         or (p.punch_date::date = d.biz + 1 and p.punch_time::time <  time '06:00'))
+     group by e.id
+  )
+  select coalesce(array_agg(id order by id), '{}'::bigint[]) from c where n % 2 = 1;
+$$;
+
+grant execute on function public.kpi_on_duty(text) to anon, authenticated;
+
 -- ---------- ข้อมูลเริ่มต้น: แผนก (ใส่ให้เฉพาะตอนตารางว่าง แก้ได้ในหน้า "ตั้งค่า") ----------
 insert into public.kpi_departments (name, icon, sort_order)
 select d.name, d.icon, d.sort_order
