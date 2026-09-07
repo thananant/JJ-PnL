@@ -282,6 +282,22 @@ $$;
 
 grant execute on function public.kpi_on_duty(text) to anon, authenticated;
 
+-- ---------- ตั้งค่าระบบ (key/value) ----------
+-- ตอนนี้ใช้ key เดียว: 'kiosk_hide_pos' = ตำแหน่งที่ซ่อนจากหน้าชมพนักงาน (jsonb array ของชื่อตำแหน่งตรงตัว)
+-- เจ้าของติ๊กเลือกในหน้าตั้งค่า — ยังไม่มีแถวนี้ แอปใช้ค่าเริ่มต้นจาก CONFIG.KIOSK_HIDE_POS แทน
+create table if not exists public.kpi_settings (
+  key         text        primary key,
+  value       jsonb       not null,
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.kpi_settings enable row level security;
+
+drop policy if exists kpi_settings_all on public.kpi_settings;
+create policy kpi_settings_all on public.kpi_settings for all using (true) with check (true);
+
+grant select, insert, update, delete on public.kpi_settings to anon, authenticated;
+
 -- ---------- ข้อมูลเริ่มต้น: แผนก (ใส่ให้เฉพาะตอนตารางว่าง แก้ได้ในหน้า "ตั้งค่า") ----------
 insert into public.kpi_departments (name, icon, sort_order)
 select d.name, d.icon, d.sort_order
