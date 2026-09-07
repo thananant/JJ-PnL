@@ -12,7 +12,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
-const LINE_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
+const LINE_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? Deno.env.get("LINE_TOKEN") ?? "";
 const FB_PAGE_TOKEN = Deno.env.get("FB_PAGE_TOKEN") ?? "";
 
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
