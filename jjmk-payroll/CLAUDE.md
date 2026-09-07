@@ -2,11 +2,11 @@
 
 คู่มือบริบทสำหรับ Claude Code — อ่านไฟล์นี้ก่อนแก้อะไรทุกครั้ง
 
-> **ย้ายบ้านแล้ว (2026-09-06)**: โค้ดทั้งหมดย้ายจาก repo `thananant/JJ-Payroll` มาอยู่ที่ `jjmk-payroll/` ใน repo `thananant/JJ-PnL` (เดิมชื่อโฟลเดอร์ `payroll/` — เปลี่ยนเป็น `jjmk-payroll/` 2026-09-07 ให้เข้าชุดชื่อแอปอื่น) · ไฟล์ SQL อยู่ที่ **branch `sql` โฟลเดอร์ `jjmk-payroll/`** (กติกา JJ-PnL: ห้ามมี `.sql` บน main) · ฐานข้อมูล Supabase / Cloudflare Worker / เครื่องสแกน ใช้ของเดิมทั้งหมด ไม่ต้องย้าย
+> **ย้ายบ้านแล้ว (2026-09-06)**: โค้ดทั้งหมดย้ายจาก repo `thananant/JJ-Payroll` มาอยู่ใน repo `thananant/JJ-PnL` — ตัวแอปคือ **`jjmk-payroll.html` ที่ root** เหมือนแอปอื่น (2026-09-07 เจ้าของสั่งเปลี่ยนจาก `payroll/index.html`) · ไฟล์ประกอบ (worker/tools/docs/logo) อยู่โฟลเดอร์ `jjmk-payroll/` · ไฟล์ SQL อยู่ที่ **branch `sql` โฟลเดอร์ `jjmk-payroll/`** (กติกา JJ-PnL: ห้ามมี `.sql` บน main) · ฐานข้อมูล Supabase / Cloudflare Worker / เครื่องสแกน ใช้ของเดิมทั้งหมด ไม่ต้องย้าย
 
 ## ภาพรวมระบบ
 
-- **แอปหลัก**: `jjmk-payroll/index.html` ไฟล์เดียวจบ (HTML + CSS + JS inline ~380KB) — deploy บน **GitHub Pages** ของ repo `JJ-PnL`: `https://thananant.github.io/JJ-PnL/jjmk-payroll/` (URL เดิม `thananant.github.io/JJ-Payroll` ยังใช้ได้จนกว่าเจ้าของจะปิด repo เก่า — ถ้าปิดต้องแจ้งผู้จัดการเปลี่ยน bookmark/ไอคอนหน้าจอ)
+- **แอปหลัก**: `jjmk-payroll.html` ที่ root ของ repo ไฟล์เดียวจบ (HTML + CSS + JS inline ~380KB) — deploy บน **GitHub Pages** ของ repo `JJ-PnL`: `https://thananant.github.io/JJ-PnL/jjmk-payroll.html` (เข้าจากหน้าศูนย์รวมแอพกดไอคอน 💰 ได้ · URL เดิม `thananant.github.io/JJ-Payroll` ยังใช้ได้จนกว่าเจ้าของจะปิด repo เก่า — ถ้าปิดต้องแจ้งผู้จัดการเปลี่ยน bookmark/ไอคอนหน้าจอ)
 - **ฐานข้อมูล**: Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`
   - URL: `https://aikyxvluaiubdidqxwnd.supabase.co`
   - Publishable key (ฝังใน frontend ได้): `sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm`
@@ -97,7 +97,7 @@
 4. iOS: input font ≥16px กันซูม · ห้ามใช้ `<select size=N>` (แสดงเพี้ยน) ใช้ลิสต์ `.emp-pick` แตะเลือก · การ์ด grid ใช้ `minmax(min(420px,100%),1fr)`
 5. เพิ่มตารางใหม่ต้องมี: RLS policy allow-all + ADD TABLE เข้า supabase_realtime + listener ใน startRealtime + flag `xxReady` กัน error ก่อนรัน SQL
 6. ผู้ใช้สื่อสารภาษาไทย — UI/comment/คำตอบเป็นไทย · ส่งไฟล์สมบูรณ์พร้อม deploy ไม่ใช่แค่ diff
-7. Deploy = merge เข้า `main` ของ repo JJ-PnL → GitHub Pages อัปเดต `jjmk-payroll/index.html` เอง → Ctrl+Shift+R (cache ~5-10 นาที)
+7. Deploy = merge เข้า `main` ของ repo JJ-PnL → GitHub Pages อัปเดต `jjmk-payroll.html` เอง → Ctrl+Shift+R (cache ~5-10 นาที)
 8. **เจ้าของสั่งไว้ (2026-08-04): แก้เสร็จ+ตรวจผ่านแล้ว ให้เปิด PR และ merge เข้า main อัตโนมัติเลย ไม่ต้องถามยืนยัน** (ยกเว้นงานที่เสี่ยงลบ/แก้ข้อมูลจริงใน Supabase — อันนั้นถามก่อน)
 
 ## งานค้าง (ทำต่อได้เลย)
@@ -112,12 +112,12 @@
 ## โครงไฟล์ (ใน repo JJ-PnL)
 
 ```
-jjmk-payroll/index.html        <- แอปทั้งหมด (source of truth)
+jjmk-payroll.html              <- แอปทั้งหมด ที่ root ของ repo (source of truth)
 jjmk-payroll/worker.js         <- Cloudflare Worker (deploy ผ่าน CF dashboard ไม่ใช่ GitHub)
-jjmk-payroll/logo.png          <- โลโก้ร้าน (แอป/สลิป/ไอคอน iPhone — ต้องอยู่ข้าง index.html)
-jjmk-payroll/tools/split.py    <- แยก JS ออกจาก index.html -> app.js (ไว้แก้สะดวก)
-jjmk-payroll/tools/build.py    <- ประกอบ app.js กลับเข้า index.html + ตรวจ syntax
-jjmk-payroll/tools/check.sh    <- node --check เร็วๆ กับ script ใน index.html
+jjmk-payroll/logo.png          <- โลโก้ร้าน (แอปอ้างเป็น `jjmk-payroll/logo.png` — อย่าย้าย/เปลี่ยนชื่อ)
+jjmk-payroll/tools/split.py    <- แยก JS ออกจาก jjmk-payroll.html -> jjmk-payroll/app.js (ไว้แก้สะดวก)
+jjmk-payroll/tools/build.py    <- ประกอบ app.js กลับเข้า jjmk-payroll.html + ตรวจ syntax
+jjmk-payroll/tools/check.sh    <- node --check เร็วๆ กับ script ใน jjmk-payroll.html
 jjmk-payroll/docs/             <- สรุประบบ + คู่มือ PDF + สไลด์นำเสนอ
 jjmk-payroll/CLAUDE.md         <- ไฟล์นี้
 jjmk-payroll/MOVE-CHECKLIST.md <- เช็กลิสต์ตอนย้าย repo (บัญชี/secret ภายนอกอยู่ที่ไหนบ้าง)
@@ -125,4 +125,4 @@ jjmk-payroll/MOVE-CHECKLIST.md <- เช็กลิสต์ตอนย้า�
 branch `sql` → jjmk-payroll/*.sql  <- migration ทุกไฟล์ที่เคยรันใน Supabase (รันซ้ำได้)
 ```
 
-tools ทั้งสามตัวอ้าง path จากโฟลเดอร์ตัวเอง — รันจากที่ไหนก็ได้ เช่น `python3 jjmk-payroll/tools/split.py`
+tools ทั้งสามตัวหา `jjmk-payroll.html` จาก path ของตัวเอง — รันจากที่ไหนก็ได้ เช่น `python3 jjmk-payroll/tools/split.py`

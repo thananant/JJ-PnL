@@ -12,8 +12,9 @@
 - `jjmk-kpi.html` — 📊 ระบบวัดความพึงพอใจลูกค้า (JJ KPI): ลูกค้ากดหน้าร้านผ่านแท็บเล็ต
   (`?kiosk=JJRD` / `?kiosk=JJLP`) · ไม่มี param = แดชบอร์ดเจ้าของ · ย้ายมาจาก repo `thananant/JJ-KPI` (2026-09-06)
   อ่าน `kpi/CLAUDE.md` ก่อนแก้ทุกครั้ง · เทสอยู่ `kpi/test/`
-- `jjmk-payroll/` — 💰 **ระบบเงินเดือน (JJ-Payroll)** ย้ายมาจาก repo `thananant/JJ-Payroll` (2026-09-06):
-  เปิดที่ https://thananant.github.io/JJ-PnL/jjmk-payroll/ · อ่าน `jjmk-payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง
+- `jjmk-payroll.html` — 💰 **ระบบเงินเดือน (JJ Payroll)** ย้ายมาจาก repo `thananant/JJ-Payroll` (2026-09-06):
+  เปิดที่ https://thananant.github.io/JJ-PnL/jjmk-payroll.html · ไฟล์ประกอบ (worker/tools/docs/logo)
+  อยู่โฟลเดอร์ `jjmk-payroll/` · อ่าน `jjmk-payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง
 
 ไฟล์ SQL (รันครั้งเดียวใน Supabase → SQL Editor) เก็บที่ **branch `sql`**
 (https://github.com/thananant/JJ-PnL/tree/sql) — ไม่รวมเข้า main และไม่ merge กับใคร:

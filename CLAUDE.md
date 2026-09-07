@@ -20,8 +20,8 @@
 
 ## ระบบเงินเดือน (JJ-Payroll)
 
-- โค้ดอยู่ที่ `jjmk-payroll/` (ย้ายมาจาก repo `thananant/JJ-Payroll` 2026-09-06 · เปลี่ยนชื่อโฟลเดอร์จาก `payroll/` 2026-09-07) — **อ่าน `jjmk-payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง** (กฎเงินเดือนห้ามเปลี่ยนโดยไม่ถาม)
-- แอปเปิดที่ https://thananant.github.io/JJ-PnL/jjmk-payroll/
+- แอปคือ `jjmk-payroll.html` ที่ root เหมือนแอปอื่น (ย้ายมาจาก repo `thananant/JJ-Payroll` 2026-09-06) · ไฟล์ประกอบ (worker/tools/docs/logo) อยู่โฟลเดอร์ `jjmk-payroll/` — **อ่าน `jjmk-payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง** (กฎเงินเดือนห้ามเปลี่ยนโดยไม่ถาม)
+- แอปเปิดที่ https://thananant.github.io/JJ-PnL/jjmk-payroll.html
 - ฐานข้อมูล Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd` (ตาราง employees/punches/adjustments/advances/... ดู `jjmk-payroll/docs/JJ-Payroll-Summary.md`)
 - **งวดเงินเดือน = 26 เดือนก่อน → 25 เดือนนี้ (ไม่ตรงเดือนปฏิทิน)** — เวลาเอาค่าแรงเข้า PnL ต้องตกลงวิธีแบ่งก่อน · จุดเชื่อม Payroll↔PnL ดูข้อ 8 ใน `jjmk-payroll/docs/JJ-Payroll-Summary.md`
 - `jjmk-payroll/worker.js` deploy ผ่าน Cloudflare dashboard (ไม่ใช่ GitHub) — เครื่องสแกน/รายงาน LINE ชี้ที่ Worker เดิม ไม่เกี่ยวกับการย้าย repo
