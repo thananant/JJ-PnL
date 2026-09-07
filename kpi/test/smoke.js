@@ -220,6 +220,27 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     ok(!!row && row.querySelector('.f-name').disabled && row.querySelector('.f-branch').disabled && !row.querySelector('.f-active').disabled, 'synced row: name/branch locked, "ใช้" editable');
     ok(d.querySelectorAll('#staffList .edit-row:not(.synced)').length >= 1, 'manual rows still editable');
     ok(d.body.textContent.includes('รายชื่อดึงอัตโนมัติจากระบบเงินเดือน'), 'payroll hint shown');
+    // การ์ดเลือกตำแหน่ง: ค่าเริ่มต้นตาม CONFIG (ครัว ซ่อน, เสิร์ฟ โชว์) → ติ๊ก เสิร์ฟ ออก แล้วบันทึกลง kpi_settings
+    const cbServe = d.querySelector('#posList input[data-pos="เสิร์ฟ"]'), cbKitchen = d.querySelector('#posList input[data-pos="ครัว"]');
+    ok(!!cbServe && cbServe.checked && !!cbKitchen && !cbKitchen.checked, 'position card: default from CONFIG (เสิร์ฟ shown, ครัว hidden)');
+    cbServe.checked = false;
+    await click(w, d, '[data-act=saveHidePos]'); await sleep(80);
+    const st = db.settings.find(x => x.key === 'kiosk_hide_pos');
+    ok(!!st && st.value.includes('เสิร์ฟ') && st.value.includes('ครัว'), 'hidden positions saved to kpi_settings: ' + JSON.stringify(st && st.value));
+    ok(!d.querySelector('#posList input[data-pos="เสิร์ฟ"]').checked, 'position card re-rendered from saved setting');
+  }
+  {
+    // ตั้งค่าจากฐานข้อมูลทับ fallback: ซ่อนเฉพาะ "เสิร์ฟ" → ครัว (ที่ CONFIG เคยซ่อน) กลับมาโชว์
+    const db = makeDb({ settings: [{ key: 'kiosk_hide_pos', value: ['เสิร์ฟ'] }] });
+    const { w, d, client } = boot('https://x.test/a.html?kiosk=JJLP', db);
+    await sleep(80);
+    await click(w, d, '.k-start');
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    const chips = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent);
+    ok(chips.length === 1 && chips[0] === 'มานะ', 'saved setting overrides CONFIG (เสิร์ฟ hidden, ครัว back): ' + chips.join(','));
+    ok(client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_on_duty').length >= 2, 'on-duty refreshed again when customer taps start');
   }
   {
     const db = makeDb({ syncFail: true });

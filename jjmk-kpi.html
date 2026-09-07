@@ -170,6 +170,8 @@ tr:last-child td{border-bottom:0}
 @media (max-width:760px){.edit-row.staff{grid-template-columns:90px 1fr 1fr;grid-auto-rows:auto}.edit-row.staff .f-pos{grid-column:1/3}}
 .edit-row input,.edit-row select{width:100%;min-width:0}
 .edit-row.synced input:disabled,.edit-row.synced select:disabled{opacity:.55}
+#posList{display:flex;flex-wrap:wrap;gap:8px 18px;padding:4px 0}
+.pos-chk{white-space:nowrap}
 .chk{display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap}
 .chk input{width:20px;height:20px;min-height:0;padding:0}
 .arrows{display:flex;gap:2px}
@@ -249,7 +251,7 @@ const CONFIG = {
   KIOSK_PIN: '2468',   // PIN ออกจากหน้าจอลูกค้า (กดค้างชื่อสาขามุมซ้ายบน 2.5 วิ)
   KIOSK_IDLE_SEC: 25,  // ไม่มีการแตะกลางทาง → รีเซ็ต (ส่งคะแนนที่กดไปแล้วให้)
   KIOSK_DONE_SEC: 3,   // หน้าขอบคุณค้างกี่วินาที
-  KIOSK_HIDE_POS: ['สไลด์', 'ล้างจาน', 'ครัว'] // ตำแหน่งหลังร้าน ไม่ออกมาเจอลูกค้า → ไม่โชว์ในหน้าชมพนักงาน (เทียบแบบ "มีคำนี้ในตำแหน่ง")
+  KIOSK_HIDE_POS: ['สไลด์', 'ล้างจาน', 'ครัว'] // ค่าเริ่มต้นตำแหน่งหลังร้านที่ซ่อนจากหน้าชมพนักงาน (เทียบแบบ "มีคำนี้") — พอเจ้าของกดบันทึกในตั้งค่า จะใช้รายการจาก kpi_settings แทนอันนี้
 };
 const FACES = [
   { s: 1, e: '😡', t: 'แย่มาก' },
@@ -344,6 +346,8 @@ function bf(q, branch) { return branch === ALL ? q : q.eq('branch', branch); }
 async function loadMeta() {
   /* ซิงก์รายชื่อพนักงานจากระบบเงินเดือน (payroll) ก่อน — พลาดได้ (ยังไม่รัน SQL/เน็ตสะดุด) ใช้รายชื่อเดิมต่อ */
   try { const rs = await sb.rpc('kpi_sync_staff', { p_branches: Object.keys(CONFIG.BRANCHES) }); S.syncOk = !rs.error; } catch (e) { S.syncOk = false; }
+  /* ตำแหน่งที่ซ่อนจากหน้าชมพนักงาน (เจ้าของติ๊กในตั้งค่า เก็บใน kpi_settings) — ตารางยังไม่มี/อ่านล้ม → null = ใช้ CONFIG.KIOSK_HIDE_POS แทน */
+  try { const rp = await sb.from('kpi_settings').select('*').eq('key', 'kiosk_hide_pos'); S.hidePos = (!rp.error && rp.data && rp.data[0] && Array.isArray(rp.data[0].value)) ? rp.data[0].value : null; } catch (e) { S.hidePos = null; }
   const r = await Promise.all([
     sb.from('kpi_departments').select('*').order('sort_order').order('id'),
     sb.from('kpi_staff').select('*').order('branch').order('sort_order').order('id')
@@ -392,6 +396,7 @@ const S = {
   staffPeriod: 'month', staffFrom: null, staffTo: null,
   setBranch: ALL,
   syncOk: true,
+  hidePos: null,
   token: 0
 };
 const app = $('#app');
@@ -622,11 +627,29 @@ function staffRowHTML(s) {
   const dis = s.employee_id ? ' disabled title="ดึงจากระบบเงินเดือน — แก้ชื่อ/ตำแหน่ง/สาขาที่แอป Payroll"' : '';
   return '<div class="edit-row staff' + (s.employee_id ? ' synced' : '') + '" data-id="' + (s.id || '') + '"><select class="f-branch" aria-label="สาขา"' + dis + '>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (s.branch === b ? ' selected' : '') + '>' + b + '</option>').join('') + '</select><input class="f-nick" value="' + esc(s.nickname || '') + '" placeholder="ชื่อเล่น (โชว์ให้ลูกค้า)"' + dis + '><input class="f-name" value="' + esc(s.name || '') + '" placeholder="ชื่อ-นามสกุล"' + dis + '><input class="f-pos" value="' + esc(s.position || '') + '" placeholder="ตำแหน่ง"' + dis + '><label class="chk"><input type="checkbox" class="f-active"' + (s.active === false ? '' : ' checked') + '> ใช้</label><div class="arrows"><button data-act="rowUp" title="เลื่อนขึ้น">▲</button><button data-act="rowDown" title="เลื่อนลง">▼</button></div></div>';
 }
+function posListHTML() {
+  /* ตำแหน่งทั้งหมดจากพนักงาน active ทุกสาขา + ตำแหน่งที่เคยติ๊กซ่อนไว้ (เผื่อช่วงนั้นไม่มีคนในตำแหน่ง) */
+  const posAll = [];
+  for (const s of S.staff) { const p = (s.position || '').trim(); if (s.active && p && posAll.indexOf(p) < 0) posAll.push(p); }
+  if (S.hidePos) for (const p of S.hidePos) if (posAll.indexOf(p) < 0) posAll.push(p);
+  posAll.sort();
+  if (!posAll.length) return '<div class="empty">ยังไม่มีข้อมูลตำแหน่ง (รอซิงก์จากระบบเงินเดือน)</div>';
+  return posAll.map(p => { const n = S.staff.filter(s => s.active && (s.position || '').trim() === p).length; return '<label class="chk pos-chk"><input type="checkbox" data-pos="' + esc(p) + '"' + (kHidePos(p) ? '' : ' checked') + '> ' + esc(p) + ' <small>(' + n + ' คน)</small></label>'; }).join('');
+}
+async function saveHidePos() {
+  const hidden = $$('#posList input[type=checkbox]').filter(c => !c.checked).map(c => c.dataset.pos);
+  try {
+    const r = await sb.from('kpi_settings').upsert([{ key: 'kiosk_hide_pos', value: hidden }]);
+    if (r.error) throw r.error;
+    await loadMeta(); renderSettings(); toast('บันทึกตำแหน่งแล้ว');
+  } catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e) + ' — ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดแล้ว', 4500); }
+}
 function renderSettings() {
   const staff = S.staff.filter(s => S.setBranch === ALL || s.branch === S.setBranch);
   setMain(
     '<div class="card"><h3>แผนกที่ให้ลูกค้าประเมิน <small>(ใช้ร่วมกันทุกสาขา · ลำดับ = ลำดับหน้าจอ)</small></h3><div id="deptList">' + S.depts.map(deptRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addDept">+ เพิ่มแผนก</button><span class="grow"></span><button class="btn sm" data-act="saveDepts">บันทึกแผนก</button></div><div class="hint">ปิด "ใช้" แทนการลบ เพื่อเก็บประวัติคะแนนเดิมไว้</div></div>' +
-    '<div class="card"><h3>พนักงานให้ลูกค้าเลือก <small>(แสดงเฉพาะสาขาของตัวเอง)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><div id="staffList">' + staff.map(staffRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addStaff">+ เพิ่มพนักงาน</button><span class="grow"></span><button class="btn sm" data-act="saveStaff">บันทึกพนักงาน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ (ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดใน Supabase แล้ว) — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'รายชื่อดึงอัตโนมัติจากระบบเงินเดือน — แถวที่จางให้แก้ชื่อ/ตำแหน่งที่แอป Payroll · พนักงานลาออกระบบปิด "ใช้" ให้เอง · ไม่อยากโชว์บางคนก็ปิด "ใช้" ได้ · ชื่อเล่นคือชื่อที่ลูกค้าเห็นบนหน้าจอ<br>หน้าจอลูกค้าจัดกลุ่มตามตำแหน่ง · โชว์เฉพาะคนที่กำลังเข้างานตามเครื่องสแกน (ไม่มีข้อมูลสแกน = โชว์ทั้งหมด) · ซ่อนตำแหน่งหลังร้าน: ' + CONFIG.KIOSK_HIDE_POS.join(' / ') + ' (แก้ใน CONFIG.KIOSK_HIDE_POS)</div></div>' +
+    '<div class="card"><h3>พนักงานให้ลูกค้าเลือก <small>(แสดงเฉพาะสาขาของตัวเอง)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><div id="staffList">' + staff.map(staffRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addStaff">+ เพิ่มพนักงาน</button><span class="grow"></span><button class="btn sm" data-act="saveStaff">บันทึกพนักงาน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ (ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดใน Supabase แล้ว) — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'รายชื่อดึงอัตโนมัติจากระบบเงินเดือน — แถวที่จางให้แก้ชื่อ/ตำแหน่งที่แอป Payroll · พนักงานลาออกระบบปิด "ใช้" ให้เอง · ไม่อยากโชว์บางคนก็ปิด "ใช้" ได้ · ชื่อเล่นคือชื่อที่ลูกค้าเห็นบนหน้าจอ<br>หน้าจอลูกค้าจัดกลุ่มตามตำแหน่ง · โชว์เฉพาะคนที่กำลังเข้างานตามเครื่องสแกน (ไม่มีข้อมูลสแกน = โชว์ทั้งหมด) · ซ่อนทั้งตำแหน่งเลือกได้ที่การ์ดถัดไป</div></div>' +
+    '<div class="card"><h3>ตำแหน่งที่โชว์ในหน้าชมพนักงาน <small>(ติ๊กออก = ทั้งตำแหน่งไม่ขึ้นจอลูกค้า · มีผลทุกสาขา)</small></h3><div id="posList">' + posListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn sm" data-act="saveHidePos">บันทึกตำแหน่ง</button></div><div class="hint">เลือกครั้งเดียวจบ — เก็บในฐานข้อมูล ใช้กับแท็บเล็ตทุกเครื่องทันทีรอบรีเฟรชถัดไป · ตำแหน่งใหม่ที่เพิ่งมีใน payroll จะโชว์อัตโนมัติจนกว่าจะติ๊กออก · อยากซ่อนรายคนใช้ติ๊ก "ใช้" ในรายชื่อด้านบน</div></div>' +
     '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
     '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' +
     '<div class="card"><h3>ค่าตั้งระบบ <small>(แก้ใน CONFIG ต้นไฟล์)</small></h3><div class="kv"><b>วันทำการเริ่ม</b><span>' + pad2(CONFIG.CUTOFF_HOUR) + ':00 (ก่อนเวลานี้นับเป็นวันก่อนหน้า)</span><b>เป้าคะแนน</b><span>' + CONFIG.TARGET.toFixed(2) + ' (ทอง ≥ ' + CONFIG.TARGET.toFixed(1) + ' · ส้ม ≥ ' + (CONFIG.TARGET - 0.5).toFixed(1) + ' · แดง ต่ำกว่านั้น)</span><b>PIN ออก Kiosk</b><span>' + '•'.repeat(CONFIG.KIOSK_PIN.length) + '</span><b>รีเซ็ตเมื่อไม่แตะ</b><span>' + CONFIG.KIOSK_IDLE_SEC + ' วินาที</span><b>ฐานข้อมูล</b><span><code>' + esc(CONFIG.SUPABASE_URL) + '</code> · ตาราง kpi_*</span></div></div>');
@@ -666,6 +689,7 @@ function onDashClick(e) {
   else if (a === 'addStaff') { $('#staffList').insertAdjacentHTML('beforeend', staffRowHTML({ branch: CONFIG.BRANCHES[S.setBranch] ? S.setBranch : Object.keys(CONFIG.BRANCHES)[0] })); const inp = $('#staffList .edit-row:last-child .f-nick'); if (inp) inp.focus(); }
   else if (a === 'saveDepts') saveDepts();
   else if (a === 'saveStaff') saveStaff();
+  else if (a === 'saveHidePos') saveHidePos();
   else if (a === 'rowUp' || a === 'rowDown') moveRow(t.closest('.edit-row'), a === 'rowUp' ? -1 : 1);
 }
 function onDashChange(e) {
@@ -689,7 +713,11 @@ async function dashInit() {
 /* ===================== KIOSK (หน้าจอลูกค้า) ===================== */
 const K = { branch: null, step: 'idle', i: 0, scores: {}, staffId: null, idleT: null, doneT: null, holdT: null, busy: false, device: null, onDuty: null };
 function kDepts() { return activeDepts(); }
-function kHidePos(p) { return !!p && CONFIG.KIOSK_HIDE_POS.some(x => p.includes(x)); }
+function kHidePos(p) {
+  const pos = (p || '').trim(); if (!pos) return false;
+  if (S.hidePos) return S.hidePos.indexOf(pos) >= 0;          // เจ้าของเลือกเองในตั้งค่า (เทียบตรงตัว)
+  return CONFIG.KIOSK_HIDE_POS.some(x => pos.includes(x));    // ยังไม่เคยบันทึก → ค่าเริ่มต้นจาก CONFIG
+}
 function kStaff() {
   let list = S.staff.filter(s => s.active && s.branch === K.branch && !kHidePos(s.position));
   /* แสดงเฉพาะคนที่กำลังเข้างาน (จากเครื่องสแกน) — แถวกรอกมือไม่มีรหัสสแกนให้โชว์เสมอ · ไม่มีใครสแกน/RPC ล้ม → โชว์ทั้งหมด */
@@ -714,6 +742,7 @@ function kTouch() { clearTimeout(K.idleT); if (K.step === 'rate' || K.step === '
 function kIdleTimeout() { if (Object.keys(K.scores).length) kFinish(); else kReset(); }
 function kReset() { clearTimeout(K.idleT); clearTimeout(K.doneT); K.step = 'idle'; K.i = 0; K.scores = {}; K.staffId = null; renderKiosk(); }
 function kStart() {
+  kLoadDuty(); // รีเฟรชรายชื่อคนเข้างานทันทีที่ลูกค้าเริ่มกด — ไม่ await ให้หน้าแรกขึ้นไว โหลดเสร็จก่อนถึงหน้าชมพนักงาน
   K.step = 'rate'; K.i = 0; K.scores = {}; K.staffId = null;
   if (!kDepts().length) K.step = kStaff().length ? 'staff' : 'rate';
   kTouch(); renderKiosk();
