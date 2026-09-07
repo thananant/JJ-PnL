@@ -11,8 +11,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LINE_SECRET = Deno.env.get("LINE_CHANNEL_SECRET") ?? Deno.env.get("LINE_SECRET") ?? "";
-const LINE_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? Deno.env.get("LINE_TOKEN") ?? "";
+// ใช้ชื่อเฉพาะของ JJ Social — อย่าสับสนกับ LINE_SECRET/LINE_TOKEN ซึ่งเป็นของ OA ระบบอื่น
+const LINE_SECRET = Deno.env.get("LINE_CHANNEL_SECRET") ?? "";
+const LINE_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
 const FB_APP_SECRET = Deno.env.get("FB_APP_SECRET") ?? "";
 const FB_VERIFY = Deno.env.get("FB_VERIFY_TOKEN") ?? "jjmk-social";
 const FB_PAGE_TOKEN = Deno.env.get("FB_PAGE_TOKEN") ?? "";
