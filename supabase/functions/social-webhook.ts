@@ -65,6 +65,49 @@ function parsedOf<T>(res: any): T | null {
   } catch { return null; }
 }
 
+// ===== Google Business Profile OAuth (ปุ่มเชื่อมต่อบัญชีร้าน) =====
+const GBP_CLIENT_ID = Deno.env.get("GBP_CLIENT_ID") ?? "";
+const GBP_CLIENT_SECRET = Deno.env.get("GBP_CLIENT_SECRET") ?? "";
+async function aesKey() {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SB_SERVICE));
+  return crypto.subtle.importKey("raw", h, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+async function encryptRT(rt: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aesKey(), new TextEncoder().encode(rt)));
+  return btoa(String.fromCharCode(...iv)) + "." + btoa(String.fromCharCode(...ct));
+}
+function gbpPage(ok: boolean, msg: string): Response {
+  return new Response(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JJ Social</title></head>
+<body style="font-family:sans-serif;background:#0C0A09;color:#F4EFE8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
+<div style="text-align:center;max-width:460px;padding:24px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:16px">
+<h2 style="margin:0 0 10px">${ok ? "✅ เชื่อมต่อ Google Business สำเร็จ" : "❌ เชื่อมต่อไม่สำเร็จ"}</h2>
+<p style="line-height:1.6;color:#CFC6BB">${msg}</p></div></body></html>`,
+    { headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+async function gbpOauth(u: URL): Promise<Response> {
+  try {
+    const code = u.searchParams.get("code") ?? "";
+    const r = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code, client_id: GBP_CLIENT_ID, client_secret: GBP_CLIENT_SECRET,
+        redirect_uri: `${SB_URL}/functions/v1/social-webhook`, grant_type: "authorization_code",
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.refresh_token)
+      return gbpPage(false, "Google ตอบกลับ: " + JSON.stringify(d).slice(0, 280) + "<br>ลองกดเชื่อมต่อจากแอปใหม่อีกครั้ง");
+    const enc = await encryptRT(d.refresh_token);
+    const { data: cur } = await sb.from("social_settings").select("val").eq("id", "channels").maybeSingle();
+    const val = { ...(cur?.val ?? {}), gbp: { ...((cur?.val ?? {}).gbp ?? {}), rt_enc: enc, connected: true, connected_at: new Date().toISOString(), account: null, locations: null } };
+    await sb.from("social_settings").upsert({ id: "channels", val, updated_at: new Date().toISOString() });
+    return gbpPage(true, "ปิดหน้านี้ได้เลย แล้วกลับไปที่แอป JJ Social → หน้า \"เชื่อมต่อช่องทาง\" → กด \"⟳ ซิงค์รีวิวทั้งหมด\"");
+  } catch (e) {
+    return gbpPage(false, String(e).slice(0, 300));
+  }
+}
+
 function bg(p: Promise<unknown>) {
   // @ts-ignore: EdgeRuntime มีเฉพาะบน Supabase Edge Runtime
   if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(p.catch((e) => console.error(e)));
@@ -325,6 +368,8 @@ Deno.serve(async (req) => {
   const ch = u.searchParams.get("ch") ?? "";
 
   if (req.method === "GET") {
+    // ปลายทาง OAuth ของ Google Business Profile
+    if (u.searchParams.get("state") === "jjgbp" && u.searchParams.get("code")) return gbpOauth(u);
     // Meta webhook verification
     if (u.searchParams.get("hub.mode") === "subscribe") {
       if (u.searchParams.get("hub.verify_token") === FB_VERIFY)

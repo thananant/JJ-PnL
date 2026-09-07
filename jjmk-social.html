@@ -606,7 +606,7 @@ function mentionCard(r){
       :r.reply_status==='skipped'?`<div class="xs mut">ข้ามรายการนี้ · <a class="hintlink" href="javascript:setStatus(${r.id},'pending')">เอากลับมา</a></div>`
       :`<textarea id="rp${r.id}" placeholder="พิมพ์คำตอบ หรือกดวิเคราะห์เพื่อให้ AI ร่างให้...">${esc(r.ai_reply||'')}</textarea>
         <div class="racts">
-          ${(r.channel==='facebook'||r.channel==='instagram')&&r.kind==='comment'?`<button class="btn sm" onclick="replySend(${r.id})">↩︎ ส่งตอบกลับ</button>`:''}
+          ${((r.channel==='facebook'||r.channel==='instagram')&&r.kind==='comment')||(r.channel==='google'&&String(r.external_id||'').startsWith('gbp_'))?`<button class="btn sm" onclick="replySend(${r.id})">↩︎ ส่งตอบกลับ</button>`:''}
           <button class="btn gh sm" onclick="copyReply(${r.id})">⧉ คัดลอกคำตอบ</button>
           ${r.url?`<a class="btn gh sm" style="text-decoration:none" href="${esc(r.url)}" target="_blank">🔗 เปิดต้นทาง</a>`:''}
           <button class="btn gh sm" onclick="markReplied(${r.id})">✓ ตอบแล้ว (ตอบเองที่แพลตฟอร์ม)</button>
@@ -1038,6 +1038,7 @@ async function vCh(el){
   const chs=S.settings.channels||{};
   const gp=chs.google_places||[];
   const gstat=chs.google_stat||{};
+  const gbp=chs.gbp||{};
   el.innerHTML=`
   <div class="card" style="border-left:4px solid var(--blu)"><h3>ℹ️ ภาพรวมการเชื่อมต่อ</h3>
     <div class="sm">ระบบรับข้อมูล 2 ทาง: <b>Webhook</b> (LINE / Facebook / Instagram — เด้งเข้าทันที) และ <b>ดึงอัตโนมัติ</b> (Google Maps — ทุก 15 นาที)
@@ -1060,6 +1061,24 @@ async function vCh(el){
       <div class="xs mut">ใช้แอป Meta เดียวกับ Facebook · Subscribe: <b>messages, comments</b> (บัญชีต้องเป็น Business และผูกกับเพจ)</div>
     </div>
     <div class="card"><h3>📍 Google Maps รีวิว</h3>
+      <div class="sm b" style="margin-bottom:6px">วิธีที่ 1 (แนะนำ): บัญชี Google Business ของร้าน — ได้รีวิว<b>ครบทุกอัน</b> + <b>ตอบกลับจากระบบได้</b> ฟรี</div>
+      ${gbp.rt_enc?`
+        <div class="sm" style="color:var(--ok)">✓ เชื่อมต่อบัญชีแล้ว${gbp.last_sync?` · ซิงค์ล่าสุด ${timeago(gbp.last_sync)}`:' · ยังไม่เคยซิงค์'}</div>
+        ${(gbp.locations||[]).map((l,i)=>`<div class="copyline">
+          <input readonly value="${esc(l.title||l.id)}">
+          <select data-gbpbr="${i}" style="width:130px"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}" ${l.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+        </div>`).join('')}
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 4px">
+          <button class="btn sm" onclick="gbpSync(true)">⟳ ซิงค์รีวิวทั้งหมด</button>
+          <button class="btn gh sm" onclick="gbpSync(false)">ซิงค์เฉพาะล่าสุด</button>
+          ${(gbp.locations||[]).length?`<button class="btn gh sm" onclick="gbpSaveMap()">💾 บันทึกสาขา</button>`:''}
+          <button class="btn gh sm" onclick="gbpConnect()">เชื่อมต่อใหม่</button>
+        </div>
+        <div class="xs mut">ซิงค์ครั้งแรกอาจใช้เวลา 1-3 นาที (ดึงย้อนหลังทุกหน้า) · หลังจากนั้น cron ซิงค์รีวิวใหม่ให้เองทุก 15 นาที</div>`
+      :`<button class="btn sm" onclick="gbpConnect()">🔗 เชื่อมต่อบัญชี Google Business ของร้าน</button>
+        <div class="xs mut" style="margin-top:6px">ต้องเตรียมใน Google Cloud ครั้งเดียวก่อนกด: ①ขอสิทธิ์ใช้ Business Profile API (มีแบบฟอร์ม รออนุมัติ) ②เปิด API 3 ตัว ③สร้าง OAuth Client แล้วตั้ง secrets <b>GBP_CLIENT_ID / GBP_CLIENT_SECRET</b> — ขั้นตอนละเอียดอยู่ใน README-SOCIAL.md</div>`}
+      <div style="border-top:1.5px dashed var(--line);margin:12px 0"></div>
+      <div class="sm b" style="margin-bottom:6px">วิธีที่ 2: Place ID — ง่ายกว่า แต่ได้เฉพาะรีวิวล่าสุด ~5-10 อัน/รอบ และตอบจากระบบไม่ได้</div>
       <div id="gpList">${gp.map((p,i)=>`<div class="copyline">
         <input value="${esc(p.place_id)}" placeholder="Place ID" data-gpid="${i}">
         <select data-gpbr="${i}" style="width:130px">${S.branches.map(b=>`<option value="${b.code}" ${p.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
@@ -1082,6 +1101,33 @@ async function vCh(el){
        "text":"หมูนุ่ม น้ำจิ้มแจ่วอร่อย แต่รอคิวนาน","branch":"JJRD"}'</div>
     <div class="xs mut" style="margin-top:6px">ตั้ง secret <b>WEBHOOK_SHARED_KEY</b> เป็นรหัสลับอะไรก็ได้ แล้วใช้ยิงรีวิวจากระบบอื่นเข้ามา</div>
   </div>`;
+}
+async function gbpConnect(){
+  try{
+    const r=await brain('gbp_auth_url',{});
+    if(r.ok){toast('เปิดหน้าล็อกอิน Google — เลือกบัญชีที่ดูแลเพจร้าน');window.open(r.url,'_blank')}
+    else toast(r.reason||'ยังตั้งค่าไม่ครบ',true);
+  }catch(e){toast(e.message,true)}
+}
+async function gbpSync(full){
+  toast(full?'กำลังซิงค์รีวิวทั้งหมด — อาจใช้เวลา 1-3 นาที...':'กำลังซิงค์รีวิวล่าสุด...');
+  try{
+    const r=await brain('gbp_sync',{full});
+    if(!r.ok){toast('⚠️ '+(r.reason||'ซิงค์ไม่ได้'),true);return}
+    S.cache={};refreshBadges();await loadSettings();show('ch');
+    toast(`ซิงค์แล้ว ✓ รีวิวใหม่ ${r.added}${r.upgraded?` · รวมกับของเดิม ${r.upgraded}`:''} · เห็นทั้งหมด ${r.seen}`);
+    if(r.added&&confirm(`ให้ AI เริ่มไล่วิเคราะห์ ${r.added} รายการเลยไหม? (เปิดหน้าจอทิ้งไว้ได้)`))analyzeAllPending();
+  }catch(e){toast('ซิงค์ไม่ได้: '+e.message,true)}
+}
+async function gbpSaveMap(){
+  const chs={...(S.settings.channels||{})};const gbp={...(chs.gbp||{})};
+  document.querySelectorAll('[data-gbpbr]').forEach(sel=>{
+    const i=+sel.dataset.gbpbr;
+    if(gbp.locations&&gbp.locations[i])gbp.locations[i].branch=sel.value||null;
+  });
+  chs.gbp=gbp;
+  await api('POST','social_settings',[{id:'channels',val:chs,updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
+  S.settings.channels=chs;toast('บันทึกสาขาแล้ว ✓');
 }
 function addGp(){
   $('#gpList').insertAdjacentHTML('beforeend',`<div class="copyline">

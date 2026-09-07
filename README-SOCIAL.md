@@ -16,14 +16,14 @@
 ### 1) ฐานข้อมูล
 รัน `jjmk_social_setup.sql` ใน Supabase → SQL Editor
 
-### 2) Edge Functions
-ต้องมี [Supabase CLI](https://supabase.com/docs/guides/cli) แล้วรันจากโฟลเดอร์โปรเจกต์นี้:
+### 2) Edge Functions (2 ตัว)
+วิธีที่ใช้อยู่: **Supabase Dashboard → Edge Functions → Deploy a new function (via Editor)**
+- สร้างฟังก์ชันชื่อ `social-brain` → วางโค้ดจากไฟล์ `supabase/functions/social-brain.ts` → Deploy
+- สร้างฟังก์ชันชื่อ `social-webhook` → วางโค้ดจาก `supabase/functions/social-webhook.ts` → Deploy
+  แล้วเข้า Details ของตัวนี้ → **ปิด Verify JWT** (จำเป็น — LINE/Facebook/Google ยิงเข้ามาตรงๆ)
 
-```bash
-supabase link --project-ref aikyxvluaiubdidqxwnd
-supabase functions deploy social-webhook --no-verify-jwt
-supabase functions deploy social-brain
-```
+(ทางเลือก CLI: คัดลอกไฟล์ไปไว้เป็น `supabase/functions/<ชื่อ>/index.ts` แล้ว
+`supabase functions deploy social-webhook --no-verify-jwt && supabase functions deploy social-brain`)
 
 ### 3) Secrets (token ทั้งหมดเก็บที่นี่ ไม่อยู่ในหน้าเว็บ)
 
@@ -34,9 +34,15 @@ supabase secrets set LINE_CHANNEL_ACCESS_TOKEN=...
 supabase secrets set FB_APP_SECRET=...                   # Meta for Developers → App settings
 supabase secrets set FB_VERIFY_TOKEN=jjmk-social         # ตั้งเองให้ตรงกับที่กรอกใน Meta Webhooks
 supabase secrets set FB_PAGE_TOKEN=...                   # Page access token (สิทธิ์ pages_messaging, pages_read_engagement, pages_manage_engagement)
-supabase secrets set GOOGLE_API_KEY=...                  # Google Cloud → เปิด Places API (New)
+supabase secrets set GOOGLE_API_KEY=...                  # Google Cloud → เปิด Places API (New) — ใช้ชื่อ GOOGLE_MAPS_API_KEY แทนก็ได้
+supabase secrets set GEMINI_API_KEY=...                  # (ทางเลือก) โควต้าฟรีรายวัน — ใช้เมื่อไม่มีเครดิต Anthropic
+supabase secrets set GBP_CLIENT_ID=...                   # (ทางเลือก) Google Business Profile — ดูหัวข้อด้านล่าง
+supabase secrets set GBP_CLIENT_SECRET=...
 supabase secrets set WEBHOOK_SHARED_KEY=...              # รหัสลับสำหรับ Generic Webhook (ตั้งเอง)
 ```
+
+โหมด AI เลือกเองอัตโนมัติ: **Claude** (ถ้ามีเครดิต) → **Gemini** (โควต้าฟรี ~250 ครั้ง/วัน) →
+**วิเคราะห์เบื้องต้นจากคำสำคัญไทย** (ฟรี ไม่จำกัด — ผลติดป้าย `[เบื้องต้น]`)
 
 ตั้งเฉพาะช่องทางที่ใช้ก็ได้ — ช่องทางที่ไม่ตั้ง secret จะยังใช้งานส่วนอื่นได้ปกติ
 
@@ -70,6 +76,25 @@ Google Maps     ──pg_cron──►  social-brain  ──► (Realtime ─►
                                    └── Claude API: วิเคราะห์ / ร่างตอบ / บอทแชท / สรุปรายวัน
 jjmk-social.html (GitHub Pages) ◄── Supabase REST + Realtime · เรียก social-brain ตอนกดปุ่ม
 ```
+
+## Google Business Profile — รีวิวครบทุกอัน + ตอบกลับจากระบบ (ฟรี, ทางการ)
+
+ต้องเป็นเจ้าของ listing ที่ยืนยันแล้วใน business.google.com (ทำครั้งเดียว):
+
+1. **ขอสิทธิ์ใช้ API**: ทำตาม https://developers.google.com/my-business/content/prereqs
+   → กรอกแบบฟอร์มขอ access โดยใช้บัญชี Google เดียวกับที่ดูแล Business Profile
+   และเลือกโปรเจกต์ Cloud เดียวกับที่มี API key อยู่ · รออนุมัติ (มักไม่เกิน 2 สัปดาห์)
+2. **เปิด API 3 ตัว** ในโปรเจกต์นั้น (APIs & Services → Library):
+   `Google My Business API` · `My Business Account Management API` · `My Business Business Information API`
+3. **OAuth consent screen**: ประเภท External → เพิ่มบัญชีตัวเองเป็น Test user
+4. **สร้าง OAuth Client** (Credentials → Create credentials → OAuth client ID → Web application)
+   → Authorized redirect URI ใส่: `https://aikyxvluaiubdidqxwnd.supabase.co/functions/v1/social-webhook`
+5. ตั้ง secrets `GBP_CLIENT_ID` / `GBP_CLIENT_SECRET` แล้ว Deploy ฟังก์ชันเวอร์ชันล่าสุดทั้ง 2 ตัว
+6. ในแอป → หน้า **เชื่อมต่อช่องทาง** → กด **"เชื่อมต่อบัญชี Google Business ของร้าน"**
+   → ล็อกอิน/กดยินยอม → กลับมากด **"⟳ ซิงค์รีวิวทั้งหมด"**
+
+ได้อะไร: รีวิวย้อนหลังทุกอันของทุกสาขา (รวมคำตอบเดิมที่เคยตอบไว้), cron ซิงค์รีวิวใหม่ทุก 15 นาที,
+และปุ่ม "ส่งตอบกลับ" บนรีวิว Google ใช้งานได้จริง · token ถูกเก็บแบบเข้ารหัส (AES-GCM ด้วย service key)
 
 ## ข้อจำกัดที่ควรรู้
 

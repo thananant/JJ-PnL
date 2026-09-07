@@ -164,6 +164,115 @@ function markClaudeDown(e: unknown) {
   console.error("claude", msg.slice(0, 160));
 }
 
+// ===== Google Business Profile — รีวิวครบทุกอัน + ตอบกลับจากระบบ =====
+const GBP_CLIENT_ID = Deno.env.get("GBP_CLIENT_ID") ?? "";
+const GBP_CLIENT_SECRET = Deno.env.get("GBP_CLIENT_SECRET") ?? "";
+// refresh token เก็บแบบเข้ารหัส AES-GCM (กุญแจมาจาก service key) — คนที่มีแค่ anon key อ่านไม่ได้
+async function aesKey() {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SB_SERVICE));
+  return crypto.subtle.importKey("raw", h, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+async function decryptRT(enc: string): Promise<string | null> {
+  try {
+    const [ivb, ctb] = enc.split(".");
+    const iv = Uint8Array.from(atob(ivb), (c) => c.charCodeAt(0));
+    const ct = Uint8Array.from(atob(ctb), (c) => c.charCodeAt(0));
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, await aesKey(), ct);
+    return new TextDecoder().decode(pt);
+  } catch { return null; }
+}
+async function gbpAccessToken(): Promise<{ token?: string; reason?: string }> {
+  if (!GBP_CLIENT_ID || !GBP_CLIENT_SECRET) return { reason: "ยังไม่ได้ตั้ง secrets GBP_CLIENT_ID / GBP_CLIENT_SECRET" };
+  const settings = await getSettings();
+  const enc = settings.channels?.gbp?.rt_enc;
+  if (!enc) return { reason: "ยังไม่ได้เชื่อมต่อบัญชี Google ของร้าน — กดปุ่มเชื่อมต่อในหน้าเชื่อมต่อช่องทาง" };
+  const rt = await decryptRT(enc);
+  if (!rt) return { reason: "อ่าน token ไม่ได้ — กดเชื่อมต่อบัญชีใหม่อีกครั้ง" };
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: GBP_CLIENT_ID, client_secret: GBP_CLIENT_SECRET, refresh_token: rt, grant_type: "refresh_token" }),
+  });
+  const d = await r.json();
+  if (!r.ok || !d.access_token) return { reason: "ขอสิทธิ์เข้าถึงไม่ได้: " + JSON.stringify(d).slice(0, 180) };
+  return { token: d.access_token };
+}
+const STAR: Record<string, number | null> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+
+async function gbpSync(full = false) {
+  const at = await gbpAccessToken();
+  if (!at.token) return { ok: false, reason: at.reason };
+  const H = { Authorization: `Bearer ${at.token}` };
+  const settings = await getSettings();
+  const gbp = settings.channels?.gbp ?? {};
+  // ครั้งแรก: หา account + สาขา แล้วจับคู่สาขาอัตโนมัติจากชื่อ
+  if (!gbp.account) {
+    const ar = await fetch("https://mybusinessaccountmanagement.googleapis.com/v1/accounts", { headers: H });
+    const ad = await ar.json();
+    if (!ar.ok || !ad.accounts?.length) return { ok: false, reason: "หาบัญชีธุรกิจไม่เจอ: " + JSON.stringify(ad).slice(0, 200) + " — ถ้าเพิ่งขอสิทธิ์ Business Profile API อาจยังไม่ได้รับอนุมัติ" };
+    gbp.account = ad.accounts[0].name; // accounts/123
+  }
+  if (!gbp.locations?.length) {
+    const branchesArr = await getBranches();
+    const lr = await fetch(`https://mybusinessbusinessinformation.googleapis.com/v1/${gbp.account}/locations?readMask=name,title&pageSize=100`, { headers: H });
+    const ld = await lr.json();
+    if (!lr.ok || !ld.locations?.length) return { ok: false, reason: "หาสาขาไม่เจอ: " + JSON.stringify(ld).slice(0, 200) };
+    gbp.locations = ld.locations.map((l: any) => {
+      const hit = branchesArr.find((b) => l.title?.includes(String(b.name).replace("สาขา", "")) || l.title?.includes(b.name));
+      return { id: l.name, title: l.title, branch: hit?.code ?? null }; // id = locations/456
+    });
+  }
+  let added = 0, upgraded = 0, seen = 0;
+  for (const loc of gbp.locations) {
+    const locPath = `${gbp.account}/${loc.id}`;
+    let pageToken = "";
+    for (let page = 0; page < (full ? 40 : 1); page++) {
+      const rr = await fetch(`https://mybusiness.googleapis.com/v4/${locPath}/reviews?pageSize=50${pageToken ? "&pageToken=" + pageToken : ""}`, { headers: H });
+      const rd = await rr.json();
+      if (!rr.ok) return { ok: false, reason: "ดึงรีวิวไม่ได้: " + JSON.stringify(rd).slice(0, 200) };
+      const reviews = rd.reviews ?? [];
+      seen += reviews.length;
+      for (const rv of reviews) {
+        const ext = "gbp_" + rv.reviewId;
+        const author = rv.reviewer?.displayName ?? "";
+        const epoch = rv.createTime ? Math.floor(Date.parse(rv.createTime) / 1000) : null;
+        // รวมกับแถวเดิมที่เคยดึงผ่าน Places (กันซ้ำข้ามแหล่ง — เก็บผลวิเคราะห์/การตอบเดิมไว้)
+        let old: any = null;
+        if (epoch && author) {
+          const { data } = await sb.from("social_mentions").select("id")
+            .eq("channel", "google").like("external_id", "g\\_%")
+            .eq("author_name", author)
+            .gte("posted_at", new Date((epoch - 43200) * 1000).toISOString())
+            .lte("posted_at", new Date((epoch + 43200) * 1000).toISOString()).limit(1);
+          old = data?.[0] ?? null;
+        }
+        if (old) {
+          await sb.from("social_mentions").update({ external_id: ext, raw: { gbp: locPath, review: rv } }).eq("id", old.id);
+          upgraded++;
+        } else {
+          const ins: any = {
+            channel: "google", kind: "review", external_id: ext,
+            branch: loc.branch ?? null, author_name: author || null,
+            text: rv.comment ?? "", rating: STAR[rv.starRating ?? ""] ?? null,
+            posted_at: rv.createTime ?? new Date().toISOString(),
+            raw: { gbp: locPath, review: rv },
+          };
+          if (rv.reviewReply?.comment) { ins.reply_status = "sent"; ins.reply_text = rv.reviewReply.comment; ins.replied_by = "ร้าน (เคยตอบไว้แล้ว)"; }
+          const { data, error } = await sb.from("social_mentions")
+            .upsert(ins, { onConflict: "channel,external_id", ignoreDuplicates: true }).select("id");
+          if (error) return { ok: false, reason: "บันทึกไม่ได้: " + error.message };
+          added += (data ?? []).length;
+        }
+      }
+      pageToken = rd.nextPageToken ?? "";
+      if (!pageToken) break;
+    }
+  }
+  gbp.connected = true; gbp.last_sync = new Date().toISOString();
+  settings.channels = { ...(settings.channels ?? {}), gbp };
+  await sb.from("social_settings").upsert({ id: "channels", val: settings.channels, updated_at: new Date().toISOString() });
+  return { ok: true, added, upgraded, seen, locations: gbp.locations };
+}
+
 const TOPICS = ["รสชาติอาหาร", "คุณภาพวัตถุดิบ", "ความหลากหลายของอาหาร", "บริการพนักงาน",
   "ความรวดเร็ว/การรอคิว", "ความสะอาด", "ราคา/ความคุ้มค่า", "บรรยากาศ/สถานที่",
   "ที่จอดรถ", "โปรโมชั่น", "อื่นๆ"];
@@ -525,6 +634,19 @@ async function sendReply(id: number, text: string, by: string) {
       body: JSON.stringify({ message: text }),
     });
     ok = r.ok; if (!ok) reason = await r.text();
+  } else if (m.channel === "google" && String(m.external_id ?? "").startsWith("gbp_")) {
+    // ตอบรีวิว Google ผ่าน Business Profile API
+    const at = await gbpAccessToken();
+    if (!at.token) return { ok: false, reason: at.reason };
+    const locPath = m.raw?.gbp;
+    if (!locPath) return { ok: false, reason: "ไม่พบข้อมูลสาขาของรีวิวนี้ — กด 'ซิงค์รีวิวทั้งหมด' อีกครั้งก่อน" };
+    const rid = String(m.external_id).slice(4);
+    const r = await fetch(`https://mybusiness.googleapis.com/v4/${locPath}/reviews/${rid}/reply`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${at.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ comment: text }),
+    });
+    ok = r.ok; if (!ok) reason = await r.text();
   } else {
     return { ok: false, reason: "ช่องทางนี้ต้องไปตอบที่แพลตฟอร์มโดยตรง (กดคัดลอกคำตอบ แล้วเปิดลิงก์ต้นทาง)" };
   }
@@ -558,8 +680,26 @@ Deno.serve(async (req) => {
       case "chat_test":   out = await chatTest(b.history ?? []); break;
       case "send_chat":   out = await sendChat(b.channel, b.thread_id, b.text, b.by ?? "admin"); break;
       case "send_reply":  out = await sendReply(b.id, b.text, b.by ?? "admin"); break;
+      case "gbp_auth_url": {
+        if (!GBP_CLIENT_ID || !GBP_CLIENT_SECRET) {
+          out = { ok: false, reason: "ต้องตั้ง secrets GBP_CLIENT_ID และ GBP_CLIENT_SECRET ก่อน (ดูขั้นตอนใน README-SOCIAL.md)" };
+          break;
+        }
+        out = { ok: true, url: "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
+          client_id: GBP_CLIENT_ID,
+          redirect_uri: `${SB_URL}/functions/v1/social-webhook`,
+          response_type: "code",
+          scope: "https://www.googleapis.com/auth/business.manage",
+          access_type: "offline", prompt: "consent", state: "jjgbp",
+        }).toString() };
+        break;
+      }
+      case "gbp_sync": out = await gbpSync(!!b.full); break;
       case "cron": {
-        const g = await pollGoogle().catch((e) => ({ ok: false, reason: String(e) }));
+        const st = await getSettings();
+        const g = st.channels?.gbp?.rt_enc
+          ? await gbpSync(false).catch((e) => ({ ok: false, reason: String(e) }))
+          : await pollGoogle().catch((e) => ({ ok: false, reason: String(e) }));
         const a = await analyzeMentions(undefined, 20);
         out = { google: g, analyze: a };
         break;
