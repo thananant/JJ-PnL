@@ -11,7 +11,7 @@ function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures+
 /* ---------- fake database ---------- */
 function makeDb(opts) {
   opts = opts || {};
-  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], nextId: 1 };
+  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], punches: opts.punches || [], nextId: 1 };
   if (!opts.empty) {
     db.departments = [
       { id: 1, name: 'อาหาร', icon: '🍖', sort_order: 1, active: true },
@@ -83,6 +83,17 @@ function makeDb(opts) {
         else k.active = false;
       }
       return { data: { linked: 0 }, error: null };
+    }
+    if (name === 'kpi_on_duty') {
+      // จำลอง SQL: นับสแกนวันทำการปัจจุบัน (ตัด 06:00) — จำนวนคี่ = กำลังเข้างาน (รัน TZ=Asia/Bangkok)
+      const now = new Date(); const biz = new Date(now); if (now.getHours() < 6) biz.setDate(biz.getDate() - 1);
+      const start = new Date(biz.getFullYear(), biz.getMonth(), biz.getDate(), 6);
+      const end = new Date(start.getTime() + 24 * 3600000);
+      const ids = db.employees
+        .filter(e => e.active && e.branch === args.p_branch)
+        .filter(e => db.punches.filter(p => p.emp_code === e.code && p.ts >= start && p.ts < end).length % 2 === 1)
+        .map(e => e.id);
+      return { data: ids, error: null };
     }
     if (name !== 'kpi_submit') return { data: null, error: { message: 'no fn' } };
     const id = db.nextId++;

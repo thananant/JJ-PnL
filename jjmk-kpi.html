@@ -214,6 +214,10 @@ body.kiosk{overflow:hidden;height:100vh;overscroll-behavior:none;user-select:non
 .k-nav button{font-family:var(--fd);color:var(--goldDim);font-size:clamp(15px,2.6vh,21px);padding:12px 18px;border-radius:12px}
 .k-nav button:active{background:var(--bg2)}
 .k-staff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(120px,18vw,180px),1fr));gap:10px;width:100%;max-width:960px;max-height:58vh;overflow:auto;padding:6px}
+.k-staff-wrap{width:100%;max-width:960px;max-height:58vh;overflow:auto;padding:6px}
+.k-staff-wrap .k-staff-grid{max-height:none;overflow:visible;padding:0;width:auto}
+.k-pos-h{font-family:var(--fd);font-weight:600;color:var(--gold2);font-size:clamp(14px,2.4vh,20px);text-align:left;margin:12px 4px 8px;opacity:.85}
+.k-pos-h:first-child{margin-top:0}
 .k-chip{background:var(--card);border:2px solid var(--line2);border-radius:18px;padding:clamp(10px,2vh,18px) 8px;display:flex;flex-direction:column;align-items:center;gap:2px;transition:transform .15s,border-color .15s}
 .k-chip .n{font-family:var(--fd);font-weight:600;font-size:clamp(18px,3.2vh,28px);color:var(--gold2);line-height:1.15}
 .k-chip .f{font-size:clamp(12px,2vh,15px);color:var(--mute)}
@@ -244,15 +248,17 @@ const CONFIG = {
   TARGET: 4.5,         // เป้าคะแนนเฉลี่ย (KPI)
   KIOSK_PIN: '2468',   // PIN ออกจากหน้าจอลูกค้า (กดค้างชื่อสาขามุมซ้ายบน 2.5 วิ)
   KIOSK_IDLE_SEC: 25,  // ไม่มีการแตะกลางทาง → รีเซ็ต (ส่งคะแนนที่กดไปแล้วให้)
-  KIOSK_DONE_SEC: 3    // หน้าขอบคุณค้างกี่วินาที
+  KIOSK_DONE_SEC: 3,   // หน้าขอบคุณค้างกี่วินาที
+  KIOSK_HIDE_POS: ['สไลด์', 'ล้างจาน', 'ครัว'] // ตำแหน่งหลังร้าน ไม่ออกมาเจอลูกค้า → ไม่โชว์ในหน้าชมพนักงาน (เทียบแบบ "มีคำนี้ในตำแหน่ง")
 };
 const FACES = [
   { s: 1, e: '😡', t: 'แย่มาก' },
   { s: 2, e: '🙁', t: 'ไม่พอใจ' },
-  { s: 3, e: '😐', t: 'เฉยๆ' },
+  { s: 3, e: '😐', t: 'เฉยๆ', hide: true }, // เลิกให้ลูกค้ากดตั้งแต่ 2026-09-07 (เหลือ 4 ระดับ) — คงไว้ให้แดชบอร์ดแสดงคะแนน 3 ของข้อมูลเก่า
   { s: 4, e: '🙂', t: 'พอใจ' },
   { s: 5, e: '😍', t: 'ประทับใจ' }
 ];
+const KFACES = FACES.filter(f => !f.hide); // ตัวเลือกบนหน้าจอลูกค้า — สเกลเก็บจริงยังเป็น 1–5
 const ALL = 'ALL';
 const TABS = [
   { id: 'daily', label: 'รายวัน' },
@@ -620,7 +626,7 @@ function renderSettings() {
   const staff = S.staff.filter(s => S.setBranch === ALL || s.branch === S.setBranch);
   setMain(
     '<div class="card"><h3>แผนกที่ให้ลูกค้าประเมิน <small>(ใช้ร่วมกันทุกสาขา · ลำดับ = ลำดับหน้าจอ)</small></h3><div id="deptList">' + S.depts.map(deptRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addDept">+ เพิ่มแผนก</button><span class="grow"></span><button class="btn sm" data-act="saveDepts">บันทึกแผนก</button></div><div class="hint">ปิด "ใช้" แทนการลบ เพื่อเก็บประวัติคะแนนเดิมไว้</div></div>' +
-    '<div class="card"><h3>พนักงานให้ลูกค้าเลือก <small>(แสดงเฉพาะสาขาของตัวเอง)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><div id="staffList">' + staff.map(staffRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addStaff">+ เพิ่มพนักงาน</button><span class="grow"></span><button class="btn sm" data-act="saveStaff">บันทึกพนักงาน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ (ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดใน Supabase แล้ว) — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'รายชื่อดึงอัตโนมัติจากระบบเงินเดือน — แถวที่จางให้แก้ชื่อ/ตำแหน่งที่แอป Payroll · พนักงานลาออกระบบปิด "ใช้" ให้เอง · ไม่อยากโชว์บางคนก็ปิด "ใช้" ได้ · ชื่อเล่นคือชื่อที่ลูกค้าเห็นบนหน้าจอ</div></div>' +
+    '<div class="card"><h3>พนักงานให้ลูกค้าเลือก <small>(แสดงเฉพาะสาขาของตัวเอง)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><div id="staffList">' + staff.map(staffRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addStaff">+ เพิ่มพนักงาน</button><span class="grow"></span><button class="btn sm" data-act="saveStaff">บันทึกพนักงาน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ (ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดใน Supabase แล้ว) — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'รายชื่อดึงอัตโนมัติจากระบบเงินเดือน — แถวที่จางให้แก้ชื่อ/ตำแหน่งที่แอป Payroll · พนักงานลาออกระบบปิด "ใช้" ให้เอง · ไม่อยากโชว์บางคนก็ปิด "ใช้" ได้ · ชื่อเล่นคือชื่อที่ลูกค้าเห็นบนหน้าจอ<br>หน้าจอลูกค้าจัดกลุ่มตามตำแหน่ง · โชว์เฉพาะคนที่กำลังเข้างานตามเครื่องสแกน (ไม่มีข้อมูลสแกน = โชว์ทั้งหมด) · ซ่อนตำแหน่งหลังร้าน: ' + CONFIG.KIOSK_HIDE_POS.join(' / ') + ' (แก้ใน CONFIG.KIOSK_HIDE_POS)</div></div>' +
     '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
     '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' +
     '<div class="card"><h3>ค่าตั้งระบบ <small>(แก้ใน CONFIG ต้นไฟล์)</small></h3><div class="kv"><b>วันทำการเริ่ม</b><span>' + pad2(CONFIG.CUTOFF_HOUR) + ':00 (ก่อนเวลานี้นับเป็นวันก่อนหน้า)</span><b>เป้าคะแนน</b><span>' + CONFIG.TARGET.toFixed(2) + ' (ทอง ≥ ' + CONFIG.TARGET.toFixed(1) + ' · ส้ม ≥ ' + (CONFIG.TARGET - 0.5).toFixed(1) + ' · แดง ต่ำกว่านั้น)</span><b>PIN ออก Kiosk</b><span>' + '•'.repeat(CONFIG.KIOSK_PIN.length) + '</span><b>รีเซ็ตเมื่อไม่แตะ</b><span>' + CONFIG.KIOSK_IDLE_SEC + ' วินาที</span><b>ฐานข้อมูล</b><span><code>' + esc(CONFIG.SUPABASE_URL) + '</code> · ตาราง kpi_*</span></div></div>');
@@ -681,9 +687,28 @@ async function dashInit() {
 }
 
 /* ===================== KIOSK (หน้าจอลูกค้า) ===================== */
-const K = { branch: null, step: 'idle', i: 0, scores: {}, staffId: null, idleT: null, doneT: null, holdT: null, busy: false, device: null };
+const K = { branch: null, step: 'idle', i: 0, scores: {}, staffId: null, idleT: null, doneT: null, holdT: null, busy: false, device: null, onDuty: null };
 function kDepts() { return activeDepts(); }
-function kStaff() { return S.staff.filter(s => s.active && s.branch === K.branch); }
+function kHidePos(p) { return !!p && CONFIG.KIOSK_HIDE_POS.some(x => p.includes(x)); }
+function kStaff() {
+  let list = S.staff.filter(s => s.active && s.branch === K.branch && !kHidePos(s.position));
+  /* แสดงเฉพาะคนที่กำลังเข้างาน (จากเครื่องสแกน) — แถวกรอกมือไม่มีรหัสสแกนให้โชว์เสมอ · ไม่มีใครสแกน/RPC ล้ม → โชว์ทั้งหมด */
+  if (K.onDuty && K.onDuty.size) {
+    const f = list.filter(s => !s.employee_id || K.onDuty.has(Number(s.employee_id)));
+    if (f.length) list = f;
+  }
+  return list;
+}
+function kStaffGroups() {
+  const g = {};
+  for (const s of kStaff()) { const p = (s.position || '').trim() || 'อื่นๆ'; (g[p] = g[p] || []).push(s); }
+  return Object.keys(g).map(p => ({ pos: p, staff: g[p] }))
+    .sort((a, b) => b.staff.length - a.staff.length || (a.pos < b.pos ? -1 : 1));
+}
+async function kLoadDuty() {
+  try { const r = await sb.rpc('kpi_on_duty', { p_branch: K.branch }); K.onDuty = r.error ? null : new Set((r.data || []).map(Number)); }
+  catch (e) { K.onDuty = null; }
+}
 function getDevice(b) { let d = lsGet('kpi_device'); if (!d) { d = b + '-' + Math.random().toString(36).slice(2, 8); lsSet('kpi_device', d); } return d; }
 function kTouch() { clearTimeout(K.idleT); if (K.step === 'rate' || K.step === 'staff') K.idleT = setTimeout(kIdleTimeout, CONFIG.KIOSK_IDLE_SEC * 1000); }
 function kIdleTimeout() { if (Object.keys(K.scores).length) kFinish(); else kReset(); }
@@ -739,16 +764,17 @@ function renderKiosk() {
   let html;
   if (K.step === 'idle') {
     html = '<div class="k-screen" data-act="kStart">' + top(false) + '<div class="k-seal">JJ</div><div class="k-title">จริงใจหมูกระทะ</div><div class="k-sub">สาขา' + esc(bname) + '</div>' +
-      '<div class="k-ask">วันนี้ร้านเราเป็นอย่างไรบ้างคะ?<br>ช่วยให้คะแนนหน่อยนะคะ ใช้เวลาไม่ถึงนาที</div><div class="k-preview">' + FACES.map(f => f.e).join('') + '</div><button class="k-start" data-act="kStart">แตะเพื่อเริ่มให้คะแนน</button></div>';
+      '<div class="k-ask">วันนี้ร้านเราเป็นอย่างไรบ้างคะ?<br>ช่วยให้คะแนนหน่อยนะคะ ใช้เวลาไม่ถึงนาที</div><div class="k-preview">' + KFACES.map(f => f.e).join('') + '</div><button class="k-start" data-act="kStart">แตะเพื่อเริ่มให้คะแนน</button></div>';
   } else if (K.step === 'rate') {
     const d = kDepts()[K.i];
     if (!d) { html = '<div class="k-screen">' + top(false) + '<div class="k-msg">ยังไม่ได้ตั้งค่าแผนก — เพิ่มได้ที่แดชบอร์ด › ตั้งค่า</div></div>'; }
     else html = '<div class="k-screen">' + top(true) + '<div class="k-dept"><div class="k-icon">' + esc(d.icon) + '</div><div class="k-name">' + esc(d.name) + '</div><div class="k-q">ท่านพอใจมากแค่ไหนคะ?</div></div>' +
-      '<div class="k-faces">' + FACES.map(f => '<button class="k-face' + (K.scores[d.id] === f.s ? ' sel' : '') + '" data-act="kScore" data-s="' + f.s + '"><span class="e">' + f.e + '</span><span class="t">' + f.t + '</span></button>').join('') + '</div>' +
+      '<div class="k-faces">' + KFACES.map(f => '<button class="k-face' + (K.scores[d.id] === f.s ? ' sel' : '') + '" data-act="kScore" data-s="' + f.s + '"><span class="e">' + f.e + '</span><span class="t">' + f.t + '</span></button>').join('') + '</div>' +
       '<div class="k-nav"><button data-act="kBack">‹ ย้อนกลับ</button><button data-act="kSkip">ข้ามข้อนี้ ›</button></div></div>';
   } else if (K.step === 'staff') {
     html = '<div class="k-screen">' + top(true) + '<div class="k-dept"><div class="k-icon">💖</div><div class="k-name">ชมพนักงาน</div><div class="k-q">อยากชมพนักงานคนไหนเป็นพิเศษไหมคะ? (เลือกได้ 1 คน)</div></div>' +
-      '<div class="k-staff-grid">' + kStaff().map(s => '<button class="k-chip" data-act="kStaff" data-id="' + s.id + '"><span class="n">' + esc(s.nickname || s.name) + '</span><span class="f">' + esc(s.position || (s.nickname ? s.name : '')) + '</span></button>').join('') + '</div>' +
+      '<div class="k-staff-wrap">' + kStaffGroups().map(gr =>
+        '<div class="k-pos-h">' + esc(gr.pos) + '</div><div class="k-staff-grid">' + gr.staff.map(s => '<button class="k-chip" data-act="kStaff" data-id="' + s.id + '"><span class="n">' + esc(s.nickname || s.name) + '</span><span class="f">' + esc(s.nickname ? s.name : '') + '</span></button>').join('') + '</div>').join('') + '</div>' +
       '<div class="k-nav"><button data-act="kBack">‹ ย้อนกลับ</button><button data-act="kNoStaff">ไม่ระบุ · ส่งคะแนน ›</button></div></div>';
   } else {
     html = '<div class="k-screen"><div class="k-check">✓</div><div class="k-thanks">ขอบคุณค่ะ</div><div class="k-sub">คะแนนของท่านช่วยให้เราพัฒนาต่อไป 🙏</div></div>';
@@ -775,11 +801,11 @@ async function kioskInit(branch) {
   app.addEventListener('click', onKioskClick);
   app.addEventListener('pointerdown', e => { kTouch(); if (e.target.closest('[data-hold]')) { clearTimeout(K.holdT); K.holdT = setTimeout(kExit, 2500); } });
   ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => app.addEventListener(ev, () => clearTimeout(K.holdT)));
-  try { sbInit(); await loadMeta(); }
+  try { sbInit(); await loadMeta(); await kLoadDuty(); }
   catch (e) { app.innerHTML = '<div class="k-screen">' + '<div class="k-msg">เชื่อมต่อฐานข้อมูลไม่ได้ · จะลองใหม่อัตโนมัติ<code>' + esc(e.message || e) + '</code></div></div>'; setTimeout(() => location.reload(), 15000); return; }
   K.step = 'idle'; renderKiosk();
   flushQueue(); setInterval(flushQueue, 30000);
-  setInterval(async () => { if (K.step === 'idle') { try { await loadMeta(); renderKiosk(); } catch (e) {} } }, 5 * 60000);
+  setInterval(async () => { if (K.step === 'idle') { try { await loadMeta(); await kLoadDuty(); renderKiosk(); } catch (e) {} } }, 5 * 60000);
 }
 
 /* ===================== boot ===================== */

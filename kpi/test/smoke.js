@@ -11,6 +11,7 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     ok(d.querySelectorAll('.dept').length === 3, 'daily shows 3 active departments (inactive one without data hidden)');
     ok(/\d\.\d\d/.test(txt(d, '.gauge-num')), 'gauge shows average ' + txt(d, '.gauge-num'));
     ok(!!d.querySelector('.hours') && d.querySelectorAll('.hour-col').length === 18, 'hourly chart 11:00 → 04:00 = 18 columns');
+    ok(d.querySelector('.hist') && d.querySelector('.hist').children.length === 5, 'histogram keeps 5 buckets (old 😐 data still shown)');
     ok(d.querySelectorAll('.lb-row').length >= 1, 'staff leaderboard (today) has rows');
     ok(!!d.querySelector('table') && d.querySelectorAll('tbody tr').length <= 15, 'recent list (≤15 rows)');
     ok(d.querySelector('#app').textContent.includes('วันนี้'), 'today label');
@@ -80,7 +81,8 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     ok(d.querySelector('meta[name=viewport]').content.includes('user-scalable=no'), 'zoom locked');
     ok(!!d.querySelector('.k-start'), 'idle screen');
     await click(w, d, '.k-start');
-    ok(txt(d, '.k-name') === 'อาหาร' && d.querySelectorAll('.k-face').length === 5, 'first dept + 5 faces');
+    ok(txt(d, '.k-name') === 'อาหาร' && d.querySelectorAll('.k-face').length === 4, 'first dept + 4 faces');
+    ok(!d.querySelector('.k-face[data-s="3"]'), 'no เฉยๆ (score 3) choice');
     ok(d.querySelectorAll('.k-dot').length === 4 && d.querySelector('.k-dot.cur'), '4 dots (3 depts + staff)');
     await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
     ok(txt(d, '.k-name') === 'บริการ', 'advanced to dept 2');
@@ -104,7 +106,7 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     await sleep(3100);
     ok(!!d.querySelector('.k-start'), 'auto back to idle');
     // idle timeout with partial scores → submitted   (t=0 start, t≈40 tap, kNext t≈360 → idle fires t≈860, done until ≈1260)
-    await click(w, d, '.k-start'); await click(w, d, '.k-face[data-s="3"]'); await sleep(350);
+    await click(w, d, '.k-start'); await click(w, d, '.k-face[data-s="2"]'); await sleep(350);
     ok(txt(d, '.k-name') === 'บริการ', 'moved to dept 2 while waiting');
     await sleep(520);
     ok(!!d.querySelector('.k-check'), 'idle timeout mid-flow → submits partial');
@@ -152,16 +154,18 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     ok(d.querySelectorAll('a.k-chip').length === 2, 'branch chooser shows 2 links');
   }
 
-  console.log('\n[6] payroll sync — รายชื่อพนักงานจากระบบเงินเดือน');
+  console.log('\n[6] payroll sync — รายชื่อพนักงานจากระบบเงินเดือน + กรองตำแหน่ง/คนเข้างาน');
+  const EMPLOYEES = [
+    { id: 101, code: 'C101', branch: 'JJRD', nick: 'ชาย', full_name: 'สมชาย ใจดี', position: 'เสิร์ฟ', active: true },   // ตรงแถวเดิม → link ไม่เพิ่มซ้ำ
+    { id: 102, code: 'C102', branch: 'JJRD', nick: 'บอย', full_name: 'บอย มาใหม่', position: 'เซอร์วิส', active: true }, // คนใหม่ → เพิ่ม
+    { id: 103, code: 'C103', branch: 'JJLP', nick: 'นี', full_name: 'มานี มีนา', position: 'เสิร์ฟ', active: true },      // link ผ่านชื่อเล่น + อัพเดตชื่อจริง
+    { id: 104, code: 'C104', branch: 'JJCK', nick: 'กลาง', full_name: 'ครัว กลาง', position: null, active: true },       // นอกสาขา kiosk → ไม่เพิ่ม
+    { id: 105, code: 'C105', branch: 'JJRD', nick: 'เก่า', full_name: 'คน ลาออก', position: null, active: false },       // พ้นสภาพ → ไม่เพิ่ม
+    { id: 106, code: 'C106', branch: 'JJRD', nick: 'สา', full_name: 'สา สไลด์', position: 'สไลด์หมู', active: true },     // หลังร้าน → sync แต่ไม่โชว์หน้าลูกค้า
+    { id: 107, code: 'C107', branch: 'JJRD', nick: 'มีน', full_name: 'มีน ล้าง', position: 'ล้างจาน', active: true }      // หลังร้าน → sync แต่ไม่โชว์หน้าลูกค้า
+  ];
   {
-    const employees = [
-      { id: 101, branch: 'JJRD', nick: 'ชาย', full_name: 'สมชาย ใจดี', position: 'เสิร์ฟ', active: true },  // ตรงแถวเดิม → link ไม่เพิ่มซ้ำ
-      { id: 102, branch: 'JJRD', nick: 'บอย', full_name: 'บอย มาใหม่', position: 'ครัว', active: true },    // คนใหม่ → เพิ่ม
-      { id: 103, branch: 'JJLP', nick: 'นี', full_name: 'มานี มีนา', position: 'เสิร์ฟ', active: true },     // link ผ่านชื่อเล่น + อัพเดตชื่อจริง
-      { id: 104, branch: 'JJCK', nick: 'กลาง', full_name: 'ครัว กลาง', position: null, active: true },      // นอกสาขา kiosk → ไม่เพิ่ม
-      { id: 105, branch: 'JJRD', nick: 'เก่า', full_name: 'คน ลาออก', position: null, active: false }       // พ้นสภาพ → ไม่เพิ่ม
-    ];
-    const db = makeDb({ employees });
+    const db = makeDb({ employees: EMPLOYEES });
     db.staff.find(s => s.id === 2).employee_id = 999; // เคยผูกกับพนักงานที่ไม่อยู่แล้ว → ต้องถูกปิดใช้
     const { w, d, client, errors } = boot('https://x.test/a.html?kiosk=JJRD', db);
     await sleep(80);
@@ -172,15 +176,36 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     ok(db.staff.find(s => s.id === 4).employee_id === 103 && db.staff.find(s => s.id === 4).name === 'มานี มีนา', 'nickname-linked row got full name from payroll');
     ok(!db.staff.some(s => s.employee_id === 104) && !db.staff.some(s => s.employee_id === 105), 'JJCK / resigned employees not added');
     ok(db.staff.find(s => s.id === 2).active === false, 'row of departed employee auto-hidden');
+    ok(!!db.staff.find(s => s.employee_id === 106) && !!db.staff.find(s => s.employee_id === 107), 'back-of-house staff still synced to DB');
     await click(w, d, '.k-start');
     await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
     await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
     await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
     ok(txt(d, '.k-name') === 'ชมพนักงาน' && (txt(d, '.k-q') || '').includes('อยากชมพนักงานคนไหนเป็นพิเศษ'), 'question 5: อยากชมพนักงาน…');
     const chips = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent);
-    ok(chips.includes('ชาย') && chips.includes('บอย') && !chips.includes('หญิง'), 'choices from payroll (hidden one gone): ' + chips.join(','));
+    ok(chips.includes('ชาย') && chips.includes('บอย') && !chips.includes('หญิง'), 'choices from payroll (departed gone): ' + chips.join(','));
+    ok(!chips.includes('สา') && !chips.includes('มีน'), 'สไลด์/ล้างจาน hidden from customers (no punches → show all front-of-house)');
+    const heads = Array.from(d.querySelectorAll('.k-pos-h')).map(x => x.textContent);
+    ok(heads.includes('เสิร์ฟ') && heads.includes('เซอร์วิส') && !heads.some(h => h.includes('สไลด์')), 'grouped by position: ' + heads.join(','));
     await click(w, d, '[data-act=kNoStaff]'); await sleep(320);
     ok(!!d.querySelector('.k-check'), 'submit with ไม่ระบุ still works');
+    ok(errors.length === 0, 'no jsdom errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
+  }
+  {
+    // มีข้อมูลสแกน: ชาย สแกนเข้า (คี่=อยู่) · บอย เข้า-ออกแล้ว (คู่=กลับ) → โชว์เฉพาะ ชาย
+    const db = makeDb({ employees: EMPLOYEES });
+    db.staff.find(s => s.id === 2).employee_id = 999;
+    const now = new Date(); const biz = new Date(now); if (now.getHours() < 6) biz.setDate(biz.getDate() - 1);
+    const at = (hh, mm) => new Date(biz.getFullYear(), biz.getMonth(), biz.getDate(), hh, mm);
+    db.punches.push({ emp_code: 'C101', ts: at(11, 0) }, { emp_code: 'C102', ts: at(11, 0) }, { emp_code: 'C102', ts: at(11, 30) });
+    const { w, d, errors } = boot('https://x.test/a.html?kiosk=JJRD', db);
+    await sleep(80);
+    await click(w, d, '.k-start');
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
+    const chips = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent);
+    ok(chips.length === 1 && chips[0] === 'ชาย', 'only on-duty staff shown: ' + chips.join(','));
     ok(errors.length === 0, 'no jsdom errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   }
 
