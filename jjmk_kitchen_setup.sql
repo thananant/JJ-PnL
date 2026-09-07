@@ -14,6 +14,7 @@ create table if not exists ck_recipes (
   yield_qty numeric default 1, yield_unit text default 'กก.', extra_cost numeric default 0,
   qty numeric default 0, unit_cost numeric, stock_name text, image_url text, note text,
   sort integer default 0, active boolean default true, deleted_at timestamptz, created_at timestamptz default now());
+alter table ck_recipes add column if not exists sell_price numeric; -- ราคาขายสาขา/หน่วย
 create table if not exists ck_recipe_items (
   id bigserial primary key, recipe_id text not null, item_id text not null,
   qty numeric not null default 0, sort integer default 0);
@@ -47,6 +48,9 @@ create table if not exists ck_order_items (
   id bigserial primary key, order_id text not null, recipe_id text, name text, unit text,
   qty numeric default 0, cost_unit numeric, amount numeric, sort integer default 0);
 create index if not exists ck_order_items_o on ck_order_items(order_id);
+alter table ck_order_items add column if not exists sell_unit numeric;
+alter table ck_order_items add column if not exists amount_sell numeric;
+alter table ck_orders add column if not exists total_sell numeric;
 create table if not exists ck_moves (
   id bigserial primary key, d date not null, kind text not null,
   item_kind text not null default 'item', ref_id text not null, name text,
@@ -59,6 +63,10 @@ create table if not exists ck_price_log (
   buy_unit text, source text default 'po', created_at timestamptz default now());
 create index if not exists ck_price_log_i on ck_price_log(item_id);
 create table if not exists ck_settings (key text primary key, value jsonb);
+create table if not exists ck_expenses ( -- ค่าใช้จ่ายครัวกลาง: ค่าแรง ไฟ น้ำ แก๊ส ฯลฯ
+  id text primary key, d date not null, cat text default 'อื่นๆ', name text,
+  amount numeric not null default 0, note text, by_name text, created_at timestamptz default now());
+create index if not exists ck_expenses_d on ck_expenses(d);
 
 -- ฟังก์ชันบวก/ลบยอดสต๊อกแบบ atomic (กันหลายเครื่องกดพร้อมกันแล้วยอดเพี้ยน)
 create or replace function ck_add_qty(p_kind text, p_id text, p_delta numeric)
@@ -77,7 +85,7 @@ grant execute on function ck_add_qty(text,text,numeric) to authenticated;
 
 -- สิทธิ์: ผู้ใช้ที่ล็อกอินและถูกอนุมัติ (app_users.status=active) ทำได้ทุกอย่าง / anon อ่านอย่างเดียว
 do $$ declare tb text; begin
-  foreach tb in array array['ck_items','ck_sups','ck_recipes','ck_recipe_items','ck_plans','ck_pos','ck_po_items','ck_productions','ck_prod_items','ck_orders','ck_order_items','ck_moves','ck_price_log','ck_settings'] loop
+  foreach tb in array array['ck_items','ck_sups','ck_recipes','ck_recipe_items','ck_plans','ck_pos','ck_po_items','ck_productions','ck_prod_items','ck_orders','ck_order_items','ck_moves','ck_price_log','ck_settings','ck_expenses'] loop
     execute format('alter table %I enable row level security', tb);
     if not exists (select 1 from pg_policies where tablename=tb and policyname='ck_auth_all') then
       execute format('create policy ck_auth_all on %I for all to authenticated using (true) with check (exists (select 1 from app_users au where au.auth_uid = auth.uid() and au.status = ''active''))', tb);
