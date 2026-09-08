@@ -84,6 +84,8 @@
   .inv .amt{font-family:"Mitr";font-size:16px;white-space:nowrap;}
   .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;}
   .b-ok{background:var(--ok-bg);color:var(--ok);}
+  .b-send{background:var(--warn-bg);color:var(--warn);}
+  .b-bad{background:var(--bad-bg);color:var(--bad);}
   .b-cancel{background:#ece9e3;color:#8a8378;}
   .detail{font-size:12px;color:var(--muted);margin-top:6px;}
   .actions{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);
@@ -173,6 +175,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="new">ออกบิลใหม่</button>
     <button class="tab" data-tab="list">รายการบิล<span class="pill zero" id="listCount">0</span></button>
+    <button class="tab" data-tab="failed">⚠ ส่งไม่สำเร็จ<span class="pill zero" id="failedCount">0</span></button>
     <button class="tab" data-tab="cancelled">ยกเลิก<span class="pill zero" id="cancelCount">0</span></button>
     <button class="tab" data-tab="settings">⚙ ตั้งค่า</button>
   </div>
@@ -267,9 +270,10 @@
       </div>
     </div>
 
-    <button class="btn btn-primary" id="issueBtn" style="width:100%">ออกบิล + บันทึก PDF ลง NAS</button>
+    <button class="btn btn-primary" id="issueBtn" style="width:100%">ออกบิล + PDF ลง NAS + ส่งอีเมล</button>
     <div class="detail" style="text-align:center;margin-top:8px">
-      ข้อมูลบิลเก็บใน Supabase (เฉพาะตัวหนังสือ) · ไฟล์ PDF เก็บลงโฟลเดอร์ NAS เท่านั้น ไม่อัพโหลดไฟล์ใดๆ ขึ้น Supabase
+      ข้อมูลบิลเก็บใน Supabase (เฉพาะตัวหนังสือ) · ไฟล์ PDF เก็บลงโฟลเดอร์ NAS เท่านั้น ไม่อัพโหลดไฟล์ใดๆ ขึ้น Supabase<br>
+      ใส่อีเมลลูกค้าไว้ = ระบบส่ง PDF ต้นฉบับให้ทันที แล้วตรวจว่าอีเมลถึงปลายทางภายใน 30 นาที
     </div>
   </section>
 
@@ -284,6 +288,13 @@
     </div>
     <div class="detail" id="listInfo" style="margin-bottom:8px">กำลังโหลด...</div>
     <div id="listBox"></div>
+  </section>
+
+  <!-- ===== อีเมลส่งไม่สำเร็จ ===== -->
+  <section class="panel" id="panel-failed">
+    <div class="okbox" id="failEmpty" style="display:none">✓ ไม่มีอีเมลที่ส่งไม่สำเร็จ — ทุกใบส่งถึงปลายทางหรือกำลังตรวจอยู่</div>
+    <div id="failNote" class="alert" style="display:none"></div>
+    <div id="failBox"></div>
   </section>
 
   <!-- ===== ยกเลิก ===== -->
@@ -316,6 +327,24 @@
     </div>
 
     <div class="card">
+      <h2>✉️ ส่งอีเมลหาลูกค้าอัตโนมัติ + ตรวจการตีกลับ</h2>
+      <div class="detail" style="margin-bottom:10px;line-height:1.7">
+        ระบบส่งผ่าน <b>Google Apps Script ของบัญชี Gmail ร้าน</b> (โค้ดส่งให้ในแชท Claude):
+        วางโค้ด → รัน <code>setup()</code> ครั้งเดียว → Deploy เป็น Web app (สิทธิ์ Anyone)
+        → เอา URL ลงท้าย <code>/exec</code> มาใส่ช่องนี้<br>
+        เมื่อกดออกบิล ระบบจะแนบ PDF ส่งหาลูกค้าทันที และ Apps Script จะตรวจอีเมลตีกลับทุก 5 นาที
+        แล้วอัพเดตสถานะเป็น <b>ส่งถึงแล้ว / ส่งไม่สำเร็จ</b> ให้อัตโนมัติ
+      </div>
+      <label>Apps Script Web App URL (ตัวส่งอีเมล)</label>
+      <input id="gasEndpoint" placeholder="https://script.google.com/macros/s/…/exec">
+      <div class="actions" style="border:none;padding-top:8px">
+        <button class="btn btn-primary btn-sm" id="saveGasBtn">บันทึก URL</button>
+        <button class="btn btn-ghost btn-sm" id="testGasBtn">ทดสอบส่งอีเมล</button>
+      </div>
+      <div class="detail" id="gasStatus" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
       <h2>✒️ ลายเซ็นผู้รับเงิน (แปะท้ายบิล)</h2>
       <div class="detail" style="margin-bottom:10px">
         อัพโหลดรูปลายเซ็น (PNG พื้นโปร่งใสจะสวยที่สุด) — เก็บไว้<b>ในเครื่องนี้เท่านั้น</b> ไม่อัพขึ้น Supabase
@@ -342,6 +371,7 @@
         • ข้อมูลบิล (ชื่อลูกค้า รายการ ยอดเงิน) → ตาราง <code>inv_invoices</code> ใน Supabase (ตัวหนังสือล้วน)<br>
         • ไฟล์ PDF ใบกำกับภาษี → โฟลเดอร์ NAS ที่เลือกไว้ (แยกโฟลเดอร์รายเดือน)<br>
         • <b>ไม่มีไฟล์รูป/PDF ใดๆ ถูกอัพโหลดขึ้น Supabase ทั้งสิ้น</b><br>
+        • อีเมลหาลูกค้าส่งจาก Gmail ร้านผ่าน Apps Script (แนบ PDF ต้นฉบับ) + ตรวจการตีกลับอัตโนมัติ<br>
         • เปิดดู/พิมพ์บิลย้อนหลังได้ตลอด — ระบบสร้าง PDF สดจากข้อมูลในตาราง
       </div>
     </div>
@@ -377,8 +407,10 @@ var ZIP_URLS = [
   'https://raw.githubusercontent.com/thailand-geography-data/thailand-geography-json/main/src/geography.json',
 ];
 var STATUS = { ISSUED: 'ออกแล้ว', CANCELLED: 'ยกเลิก' };
+var EMAIL_STATUS = { SENDING:'กำลังส่ง', DELIVERED:'ส่งถึงแล้ว', FAILED:'ส่งไม่สำเร็จ', ERROR:'ผิดพลาด' };
+var ASSUME_DELIVERED_AFTER_MIN = 30; // ให้ตรงกับค่าในสคริปต์ Apps Script ตัวส่งอีเมล
 
-var sb = null, dbReady = false, rpcMissing = false;
+var sb = null, dbReady = false, rpcMissing = false, settings = {};
 var invoices = [], editingBillNo = null;
 var zipDb = null, zipLoading = null, zipResults = [];
 var nasHandle = null, sigDataUrl = null;
@@ -606,13 +638,13 @@ function ensureFonts(){
   return Promise.all(loads).then(function(){ return document.fonts.ready; }).catch(function(){});
 }
 
-async function buildInvoicePdf(inv){
+async function buildInvoicePdf(inv, originalOnly){
   if(!window.html2canvas || !window.jspdf){ throw new Error('โหลดไลบรารีสร้าง PDF ไม่สำเร็จ (เช็คอินเทอร์เน็ต)'); }
   await ensureFonts();
   var jsPDFCtor=window.jspdf.jsPDF;
   var pdf=new jsPDFCtor({unit:'mm',format:'a4',orientation:'portrait',compress:true});
   var copies=['ต้นฉบับ'];
-  if(localStorage.getItem('jjmk_inv_withcopy')==='1') copies.push('สำเนา');
+  if(!originalOnly && localStorage.getItem('jjmk_inv_withcopy')==='1') copies.push('สำเนา');
   var stage=$('pdfStage');
   for(var i=0;i<copies.length;i++){
     var node=buildSheetNode(inv,copies[i]);
@@ -640,6 +672,93 @@ async function openPdfPreview(inv, el){
     setTimeout(function(){ URL.revokeObjectURL(url); },60000);
   }catch(e){ toast('สร้าง PDF ไม่สำเร็จ: '+e.message,'err'); }
   if(el) el.textContent=orig;
+}
+
+// ================= ส่งอีเมลผ่าน Apps Script (Gmail ร้าน) =================
+function blobToBase64(blob){ return new Promise(function(res,rej){
+  var r=new FileReader();
+  r.onload=function(){ res(String(r.result).split(',')[1]); };
+  r.onerror=function(){ rej(r.error||new Error('อ่านไฟล์ไม่สำเร็จ')); };
+  r.readAsDataURL(blob);
+}); }
+// POST แบบ text/plain เพื่อเลี่ยง CORS preflight (Apps Script ไม่รองรับ OPTIONS)
+async function gasSend(payload){
+  var res=await fetch(settings.gas_endpoint,{method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(payload)});
+  var text=await res.text();
+  try{ return JSON.parse(text); }
+  catch(e){ return {ok:false,message:'ตอบกลับไม่ใช่ JSON — เช็คว่า URL ลงท้าย /exec และ Deploy สิทธิ์ Anyone'}; }
+}
+function mailContent(inv){
+  return {
+    subject:'ใบเสร็จรับเงิน/ใบกำกับภาษี เลขที่ '+inv.bill_no+' - '+CONFIG.SHOP.senderName,
+    body:'เรียน '+(inv.customer_name||'ลูกค้า')+'\n\n'+
+      'แนบใบเสร็จรับเงิน/ใบกำกับภาษีเลขที่ '+inv.bill_no+
+      ' ยอดรวมทั้งสิ้น '+fmt(inv.grand_total)+' บาท (รวม VAT 7%)\n\n'+
+      'ขอบคุณที่ใช้บริการ\n'+CONFIG.SHOP.senderName+
+      (CONFIG.SHOP.phone?('\nโทร '+CONFIG.SHOP.phone):''),
+  };
+}
+// ส่งบิลทางอีเมล — blob ส่ง null ได้ (จะสร้าง PDF ต้นฉบับให้เอง) · opts:{resend,edited}
+async function sendInvoiceEmail(inv, blob, opts){
+  opts=opts||{};
+  if(!settings.gas_endpoint){ toast('ยังไม่ได้ตั้งค่า URL ตัวส่งอีเมล (หน้าตั้งค่า)','err'); return false; }
+  if(!inv.email){ toast('บิลนี้ไม่มีอีเมลลูกค้า','err'); return false; }
+  try{
+    var mailBlob=blob;
+    // อีเมลลูกค้าแนบเฉพาะหน้า "ต้นฉบับ" เสมอ
+    if(!mailBlob || localStorage.getItem('jjmk_inv_withcopy')==='1'){
+      mailBlob=await buildInvoicePdf(inv,true);
+    }
+    var m=mailContent(inv);
+    var res=await gasSend({action:'send',billNo:inv.bill_no,email:inv.email,
+      subject:m.subject,body:m.body,filename:inv.bill_no+'.pdf',
+      pdfBase64:await blobToBase64(mailBlob)});
+    var patch={updated_at:new Date().toISOString()};
+    var rc=Number(inv.resend_count||0);
+    if(res.ok){
+      if(opts.resend){ rc++; patch.resend_count=rc; }
+      patch.email_status=EMAIL_STATUS.SENDING;
+      patch.email_status_detail=opts.resend?('ส่งซ้ำแล้ว (ครั้งที่ '+rc+') รอตรวจการตีกลับ')
+        :(opts.edited?'แก้ไขแล้ว ส่งใหม่ รอตรวจการตีกลับ':'ส่งแล้ว รอตรวจการตีกลับ');
+      patch.email_sent_at=new Date().toISOString();
+      toast('ส่งอีเมลไปที่ '+inv.email+' แล้ว — ระบบจะตรวจว่าถึงปลายทางภายใน '+ASSUME_DELIVERED_AFTER_MIN+' นาที','ok');
+    }else{
+      patch.email_status=EMAIL_STATUS.ERROR;
+      patch.email_status_detail='ส่งไม่ออก: '+(res.message||'ไม่ทราบสาเหตุ');
+      toast('ส่งอีเมลไม่สำเร็จ: '+(res.message||''),'err');
+    }
+    await sb.from('inv_invoices').update(patch).eq('bill_no',inv.bill_no);
+    return !!res.ok;
+  }catch(e){
+    try{ await sb.from('inv_invoices').update({email_status:EMAIL_STATUS.ERROR,
+      email_status_detail:'ส่งไม่ออก: '+e.message,updated_at:new Date().toISOString()})
+      .eq('bill_no',inv.bill_no); }catch(e2){}
+    toast('ส่งอีเมลไม่สำเร็จ: '+e.message,'err');
+    return false;
+  }
+}
+
+// ================= ตั้งค่าที่แชร์ทุกเครื่อง (ตาราง inv_settings) =================
+function renderGasStatus(){
+  $('gasStatus').innerHTML=settings.gas_endpoint
+    ?'✅ ตั้งค่าแล้ว — กดออกบิลแล้วระบบจะส่งอีเมลหาลูกค้าทันที และตรวจการตีกลับให้ทุก 5 นาที'
+    :'ยังไม่ได้ตั้งค่า — บิลจะยังไม่ถูกส่งอีเมลอัตโนมัติจนกว่าจะใส่ URL';
+}
+async function loadSettings(){
+  if(!dbReady) return;
+  try{
+    var r=await sb.from('inv_settings').select('*');
+    if(!r.error)(r.data||[]).forEach(function(x){ settings[x.key]=x.value; });
+  }catch(e){}
+  $('gasEndpoint').value=settings.gas_endpoint||'';
+  renderGasStatus();
+}
+async function saveSetting(key,value){
+  var r=await sb.from('inv_settings').upsert({key:key,value:value});
+  if(r.error){ toast('บันทึกไม่สำเร็จ: '+r.error.message+' (รัน SQL เวอร์ชันล่าสุดหรือยัง?)','err'); return false; }
+  settings[key]=value; return true;
 }
 
 // ================= Supabase =================
@@ -691,6 +810,11 @@ async function loadInvoices(){
   invoices=r.data||[];
   renderMonthFilter();
   renderList();
+  // ระหว่างมีอีเมล "กำลังส่ง" ให้รีเฟรชสถานะเองทุก 1 นาที (รอผลตรวจการตีกลับ)
+  clearTimeout(loadInvoices._t);
+  if(invoices.some(function(v){ return v.email_status===EMAIL_STATUS.SENDING; })){
+    loadInvoices._t=setTimeout(loadInvoices,60000);
+  }
 }
 
 // ================= ฟอร์มออกบิล =================
@@ -826,7 +950,7 @@ async function issueOrUpdate(){
   var payload=validateForm();
   if(!payload) return;
   var btn=$('issueBtn'), editing=editingBillNo;
-  var label=editing?'บันทึกการแก้ไข + สร้าง PDF ใหม่':'ออกบิล + บันทึก PDF ลง NAS';
+  var label=editing?'บันทึกการแก้ไข + สร้าง PDF ใหม่':'ออกบิล + PDF ลง NAS + ส่งอีเมล';
   btn.disabled=true;
   btn.innerHTML='<span class="spin"></span> '+(editing?'กำลังบันทึก...':'กำลังออกบิล...');
   try{
@@ -860,8 +984,9 @@ async function issueOrUpdate(){
     }
     // สร้าง PDF + เก็บลง NAS (บิลถูกบันทึกในฐานข้อมูลแล้ว ต่อให้ขั้นนี้พลาดก็กดบันทึกซ้ำจากรายการได้)
     btn.innerHTML='<span class="spin"></span> กำลังสร้าง PDF...';
+    var blob=null;
     try{
-      var blob=await buildInvoicePdf(inv);
+      blob=await buildInvoicePdf(inv);
       var path=await storePdf(inv.bill_no, blob, inv.issued_at);
       if(path){
         await sb.from('inv_invoices').update({nas_path:path,updated_at:new Date().toISOString()})
@@ -870,6 +995,11 @@ async function issueOrUpdate(){
       }
     }catch(e){
       toast('บิลบันทึกแล้ว แต่สร้าง/เก็บ PDF ไม่สำเร็จ: '+e.message,'err');
+    }
+    // ส่งอีเมลหาลูกค้าอัตโนมัติ (ถ้ามีอีเมล + ตั้งค่าตัวส่งไว้)
+    if(inv.email && settings.gas_endpoint){
+      btn.innerHTML='<span class="spin"></span> กำลังส่งอีเมลหาลูกค้า...';
+      await sendInvoiceEmail(inv, blob, {edited: !!editing});
     }
     if(editing) exitEdit(); else resetForm();
     loadInvoices();
@@ -907,7 +1037,7 @@ function startEdit(billNo){
 function exitEdit(){
   editingBillNo=null;
   $('editBanner').style.display='none';
-  $('issueBtn').textContent='ออกบิล + บันทึก PDF ลง NAS';
+  $('issueBtn').textContent='ออกบิล + PDF ลง NAS + ส่งอีเมล';
   resetForm();
 }
 
@@ -924,24 +1054,39 @@ function badge(s){
   if(s===STATUS.CANCELLED)return '<span class="badge b-cancel">ยกเลิก</span>';
   return '<span class="badge b-ok">ออกแล้ว</span>';
 }
-function invCard(v){
+function emailBadge(v){
+  if(!v.email) return '';
+  var s=v.email_status;
+  if(s===EMAIL_STATUS.DELIVERED)return '<span class="badge b-ok">✉ ส่งถึงแล้ว</span> ';
+  if(s===EMAIL_STATUS.FAILED||s===EMAIL_STATUS.ERROR)return '<span class="badge b-bad">✉ '+esc(s)+'</span> ';
+  if(s===EMAIL_STATUS.SENDING)return '<span class="badge b-send">✉ กำลังส่ง</span> ';
+  return '<span class="badge b-cancel">✉ ยังไม่ส่ง</span> ';
+}
+function invCard(v, withResend){
   var cancelled=(v.status===STATUS.CANCELLED);
+  var detail=v.email_status_detail||v.status_detail||'';
   var h='<div class="inv"><div class="top"><div><div class="no">'+esc(v.bill_no)+'</div>'+
     '<div class="meta">'+esc(v.customer_name||'-')+(v.email?' • '+esc(v.email):'')+'<br>'+
     fmtDT(v.issued_at)+'</div></div>'+
     '<div style="text-align:right"><div class="amt">'+fmt(v.grand_total)+' ฿</div>'+
     '<div style="margin-top:6px">'+badge(v.status)+'</div></div></div>'+
-    '<div class="detail">'+esc(v.status_detail||'')+
-    (v.nas_path?(' • 📁 '+esc(v.nas_path)):' • ยังไม่ได้เก็บไฟล์ลง NAS')+'</div>'+
+    '<div class="detail">'+emailBadge(v)+esc(detail)+
+    (v.nas_path?(' • 📁 '+esc(v.nas_path)):' • ยังไม่ได้เก็บไฟล์ลง NAS')+
+    (Number(v.resend_count)?(' • ส่งซ้ำ '+v.resend_count+' ครั้ง'):'')+'</div>'+
     '<div class="actions">'+
       '<button class="btn btn-ghost btn-sm a-pdf" data-no="'+esc(v.bill_no)+'">📄 ดู / พิมพ์</button>'+
       '<button class="btn btn-gold btn-sm a-nas" data-no="'+esc(v.bill_no)+'">💾 บันทึกลง NAS</button>'+
-      (v.email?'<button class="btn btn-ghost btn-sm a-mail" data-no="'+esc(v.bill_no)+'">✉ เขียนอีเมล</button>':'')+
+      (v.email&&!withResend?'<button class="btn btn-ghost btn-sm a-send" data-no="'+esc(v.bill_no)+'">✉ '+(v.email_status?'ส่งอีเมลซ้ำ':'ส่งอีเมล')+'</button>':'')+
       (cancelled
         ?'<button class="btn btn-ghost btn-sm a-restore" data-no="'+esc(v.bill_no)+'" style="color:var(--brand)">↩ เรียกคืนบิล</button>'
         :'<button class="btn btn-ghost btn-sm a-edit" data-no="'+esc(v.bill_no)+'">✎ แก้ไข</button>'+
          '<button class="btn btn-ghost btn-sm a-cancel" data-no="'+esc(v.bill_no)+'" style="color:var(--bad)">⛔ ยกเลิกบิล</button>')+
-    '</div></div>';
+    '</div>'+
+    (withResend?('<div class="actions" style="align-items:flex-end">'+
+      '<div style="flex:1;min-width:200px"><label>แก้อีเมลใหม่แล้วส่งซ้ำ</label>'+
+      '<input class="re-email" value="'+esc(v.email||'')+'"></div>'+
+      '<button class="btn btn-gold btn-sm re-btn" data-no="'+esc(v.bill_no)+'">ส่งซ้ำ</button></div>'):'')+
+    '</div>';
   return h;
 }
 function bindCards(scope){
@@ -960,17 +1105,37 @@ function bindCards(scope){
     }catch(e){ toast('ผิดพลาด: '+e.message,'err'); }
     b.disabled=false; b.textContent='💾 บันทึกลง NAS';
   }; });
-  scope.querySelectorAll('.a-mail').forEach(function(b){ b.onclick=function(){
+  scope.querySelectorAll('.a-send').forEach(function(b){ b.onclick=async function(){
     var v=findInv(b.dataset.no); if(!v)return;
-    var subject='ใบเสร็จรับเงิน/ใบกำกับภาษี เลขที่ '+v.bill_no+' - '+CONFIG.SHOP.senderName;
-    var body='เรียน '+(v.customer_name||'ลูกค้า')+'\n\n'+
-      'แนบใบเสร็จรับเงิน/ใบกำกับภาษีเลขที่ '+v.bill_no+
-      ' ยอดรวมทั้งสิ้น '+fmt(v.grand_total)+' บาท (รวม VAT 7%)\n\n'+
-      'ขอบคุณที่ใช้บริการ\n'+CONFIG.SHOP.senderName+
-      (CONFIG.SHOP.phone?('\nโทร '+CONFIG.SHOP.phone):'');
-    location.href='mailto:'+encodeURIComponent(v.email)+
-      '?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-    toast('เปิดหน้าต่างอีเมลแล้ว — อย่าลืมแนบไฟล์ PDF จาก NAS ('+(v.nas_path||v.bill_no+'.pdf')+')');
+    if(!settings.gas_endpoint){
+      // ยังไม่ได้ตั้งตัวส่งอัตโนมัติ → เปิดร่างอีเมลให้แนบไฟล์เอง
+      var m=mailContent(v);
+      location.href='mailto:'+encodeURIComponent(v.email)+
+        '?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body);
+      toast('ยังไม่ได้ตั้งตัวส่งอัตโนมัติ (หน้าตั้งค่า) — เปิดร่างอีเมลให้แล้ว อย่าลืมแนบ PDF จาก NAS');
+      return;
+    }
+    b.disabled=true; var o=b.textContent; b.innerHTML='<span class="spin"></span> กำลังส่ง...';
+    await sendInvoiceEmail(v,null,{resend:!!v.email_status});
+    b.disabled=false; b.textContent=o;
+    loadInvoices();
+  }; });
+  scope.querySelectorAll('.re-btn').forEach(function(btn){ btn.onclick=async function(){
+    var v=findInv(btn.dataset.no); if(!v)return;
+    var email=btn.closest('.inv').querySelector('.re-email').value.trim();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('รูปแบบอีเมลใหม่ไม่ถูกต้อง','err'); return; }
+    if(!settings.gas_endpoint){ toast('ตั้งค่า URL ตัวส่งอีเมลในหน้าตั้งค่าก่อน','err'); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+    if(email!==v.email){
+      var r=await sb.from('inv_invoices').update({email:email,updated_at:new Date().toISOString()})
+        .eq('bill_no',v.bill_no);
+      if(r.error){ toast('ผิดพลาด: '+r.error.message,'err');
+        btn.disabled=false; btn.textContent='ส่งซ้ำ'; return; }
+      v.email=email;
+    }
+    await sendInvoiceEmail(v,null,{resend:true});
+    btn.disabled=false; btn.textContent='ส่งซ้ำ';
+    loadInvoices();
   }; });
   scope.querySelectorAll('.a-edit').forEach(function(b){ b.onclick=function(){ startEdit(b.dataset.no); }; });
   scope.querySelectorAll('.a-cancel').forEach(function(b){ b.onclick=async function(){
@@ -1005,17 +1170,31 @@ function renderList(){
   var cancelled=rows.filter(function(v){ return v.status===STATUS.CANCELLED; });
 
   var box=$('listBox');
-  box.innerHTML=active.length?active.map(invCard).join(''):'<div class="empty">ยังไม่มีบิล</div>';
+  box.innerHTML=active.length?active.map(function(v){ return invCard(v); }).join(''):'<div class="empty">ยังไม่มีบิล</div>';
   $('listInfo').textContent='แสดง '+active.length+' ใบ (ยกเลิก '+cancelled.length+' ใบอยู่แท็บยกเลิก)';
   bindCards(box);
 
   var cbox=$('cancelBox');
-  cbox.innerHTML=cancelled.map(invCard).join('');
+  cbox.innerHTML=cancelled.map(function(v){ return invCard(v); }).join('');
   $('cancelEmpty').style.display=cancelled.length?'none':'block';
   bindCards(cbox);
 
+  // แท็บอีเมลส่งไม่สำเร็จ (ดูจากทุกใบ ไม่สนตัวกรองค้นหา)
+  var failed=invoices.filter(function(v){ return v.status!==STATUS.CANCELLED &&
+    (v.email_status===EMAIL_STATUS.FAILED||v.email_status===EMAIL_STATUS.ERROR); });
+  var fbox=$('failBox');
+  fbox.innerHTML=failed.map(function(v){ return invCard(v,true); }).join('');
+  $('failEmpty').style.display=failed.length?'none':'block';
+  var fn=$('failNote');
+  if(failed.length){ fn.style.display='block';
+    fn.innerHTML='⚠ มี '+failed.length+' ใบที่อีเมลส่งไม่ถึงปลายทาง — แก้อีเมลแล้วกดส่งซ้ำได้'; }
+  else fn.style.display='none';
+  bindCards(fbox);
+
   var lp=$('listCount'); lp.textContent=active.length;
   lp.className='pill'+(active.length?'':' zero'); lp.style.background='#1f7a4d';
+  var fp=$('failedCount'); fp.textContent=failed.length;
+  fp.className='pill'+(failed.length?'':' zero'); fp.style.background='var(--bad)';
   var cp=$('cancelCount'); cp.textContent=cancelled.length;
   cp.className='pill'+(cancelled.length?'':' zero');
 }
@@ -1053,7 +1232,7 @@ document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
   document.querySelectorAll('.panel').forEach(function(x){ x.classList.remove('active'); });
   t.classList.add('active');
   $('panel-'+t.dataset.tab).classList.add('active');
-  if(t.dataset.tab==='list'||t.dataset.tab==='cancelled')loadInvoices();
+  if(t.dataset.tab==='list'||t.dataset.tab==='cancelled'||t.dataset.tab==='failed')loadInvoices();
   if(t.dataset.tab==='settings')loadCounters();
 }; });
 
@@ -1122,6 +1301,28 @@ $('clearNasBtn').onclick=async function(){
 $('optCopy').onchange=function(){
   localStorage.setItem('jjmk_inv_withcopy',this.checked?'1':'0');
 };
+$('saveGasBtn').onclick=async function(){
+  var u=val('gasEndpoint');
+  if(u && !/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(u)){
+    toast('URL ต้องเป็นของ Google Apps Script (ลงท้าย /exec)','err'); return; }
+  if(await saveSetting('gas_endpoint',u)){
+    toast(u?'บันทึก URL ตัวส่งอีเมลแล้ว — ใช้ได้ทุกเครื่อง':'ปิดการส่งอีเมลอัตโนมัติแล้ว','ok');
+    renderGasStatus();
+  }
+};
+$('testGasBtn').onclick=async function(){
+  if(!settings.gas_endpoint){ toast('ใส่ URL แล้วกด "บันทึก URL" ก่อน','err'); return; }
+  var to=prompt('ส่งอีเมลทดสอบไปที่อีเมลไหน? (แนะนำอีเมลตัวเอง)','');
+  if(!to||!to.trim())return;
+  var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span> กำลังส่ง...';
+  try{
+    var r=await gasSend({action:'send',billNo:'TEST',email:to.trim(),
+      subject:'ทดสอบระบบส่งอีเมล - '+CONFIG.SHOP.senderName,
+      body:'อีเมลทดสอบจากระบบออกใบกำกับภาษี '+fmtDT(null)+'\nถ้าได้รับฉบับนี้ แปลว่าตัวส่งอีเมลพร้อมใช้งานแล้ว'});
+    toast(r.ok?('ส่งทดสอบไปที่ '+to.trim()+' แล้ว — เช็คกล่องจดหมาย'):('ไม่สำเร็จ: '+(r.message||'')),r.ok?'ok':'err');
+  }catch(e){ toast('ไม่สำเร็จ: '+e.message,'err'); }
+  b.disabled=false; b.textContent='ทดสอบส่งอีเมล';
+};
 $('sigUploadBtn').onclick=function(){ $('sigFile').click(); };
 $('sigFile').onchange=function(){ handleSigFile(this.files[0]); this.value=''; };
 $('sigRemoveBtn').onclick=async function(){
@@ -1143,7 +1344,7 @@ $('sigRemoveBtn').onclick=async function(){
   try{ sigDataUrl=await idbGet('sigDataUrl')||null; }catch(e){}
   renderNasStatus(); renderSig();
 
-  if(await checkDb()){ loadInvoices(); }
+  if(await checkDb()){ loadSettings(); loadInvoices(); }
   // โหลดฐานรหัสไปรษณีย์ล่วงหน้าแบบเงียบๆ
   getZipDb().catch(function(){});
 })();
