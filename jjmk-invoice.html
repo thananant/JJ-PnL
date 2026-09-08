@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ออกใบกำกับภาษี — จริงใจหมูกระทะ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23BC2B30'/%3E%3Ctext x='50' y='70' font-size='52' text-anchor='middle'%3E%F0%9F%A7%BE%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mitr:wght@500;600&family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --brand:#BC2B30; --brand-soft:#a02428; --accent:#EBAE44; --accent-dark:#d99a2e;
+    --cream:#faf6ef; --ink:#241f1c; --muted:#6b6258; --line:#e7ddcf;
+    --ok:#1f7a4d; --ok-bg:#e6f4ec; --warn:#b45309; --warn-bg:#fdf0dd;
+    --bad:#9b1c1c; --bad-bg:#fbe4e4;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--cream);color:var(--ink);
+    font-family:"Sarabun",sans-serif;font-size:15px;line-height:1.5;}
+  .wrap{max-width:900px;margin:0 auto;padding:0 16px 48px;}
+  header{background:var(--brand);color:#fff;padding:14px 0;box-shadow:0 2px 0 var(--accent);}
+  header .wrap{display:flex;align-items:center;gap:12px;padding-bottom:0;}
+  header .mark{width:46px;height:46px;border-radius:50%;background:#fff;padding:3px;
+    box-shadow:0 1px 4px rgba(0,0,0,.2);flex:0 0 auto;}
+  header .mark img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;}
+  header h1{font-family:"Mitr",sans-serif;font-weight:600;font-size:19px;margin:0;}
+  header .sub{font-size:12px;opacity:.85;}
+  .naschip{margin-left:auto;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);
+    color:#fff;border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap;
+    max-width:40%;overflow:hidden;text-overflow:ellipsis;}
+  .naschip.on{background:#1f7a4d;border-color:#2f9a63;}
+
+  .tabs{display:flex;gap:4px;margin-top:18px;border-bottom:2px solid var(--line);
+    overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{padding:10px 14px;cursor:pointer;border:none;background:none;white-space:nowrap;flex:0 0 auto;
+    font-family:"Mitr",sans-serif;font-size:14px;color:var(--muted);
+    border-bottom:3px solid transparent;margin-bottom:-2px;}
+  .tab.active{color:var(--brand);border-bottom-color:var(--brand);}
+  .tab .pill{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;
+    background:#8a8378;color:#fff;border-radius:10px;font-size:12px;font-weight:700;}
+  .tab .pill.zero{display:none;}
+  .panel{display:none;padding-top:20px;}
+  .panel.active{display:block;}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:18px;margin-bottom:14px;}
+  .card h2{font-family:"Mitr";font-size:15px;color:var(--brand);margin:0 0 14px;}
+
+  label{display:block;font-size:13px;color:var(--muted);margin:0 0 4px;font-weight:600;}
+  input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line);
+    border-radius:8px;font-family:"Sarabun";font-size:15px;background:#fff;color:var(--ink);}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(184,134,11,.15);}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+  @media(max-width:560px){.row{grid-template-columns:1fr;}}
+
+  .items{width:100%;}
+  .items th{text-align:left;font-size:12px;color:var(--muted);padding:6px;}
+  .items input{padding:7px 9px;}
+  .btn{font-family:"Mitr";font-size:14px;border:none;border-radius:8px;padding:10px 18px;cursor:pointer;}
+  .btn-primary{background:var(--brand);color:#fff;}
+  .btn-primary:hover{background:var(--brand-soft);}
+  .btn-gold{background:var(--accent);color:#fff;}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-sm{padding:6px 12px;font-size:13px;}
+
+  .totals{margin-top:8px;border-top:1px dashed var(--line);padding-top:10px;}
+  .totals .line{display:flex;justify-content:space-between;padding:3px 0;color:var(--muted);font-size:14px;}
+  .totals .grand{color:var(--brand);font-weight:700;font-size:18px;font-family:"Mitr";
+    border-top:2px solid var(--brand);margin-top:6px;padding-top:8px;}
+  .baht{text-align:center;background:var(--cream);border:1px solid var(--line);
+    border-radius:8px;padding:8px;margin-top:10px;font-weight:600;color:var(--brand);font-size:13px;}
+
+  .inv{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:10px;background:#fff;}
+  .inv .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .inv .no{font-family:"Mitr";color:var(--brand);font-size:15px;}
+  .inv .meta{font-size:13px;color:var(--muted);margin-top:2px;word-break:break-word;}
+  .inv .amt{font-family:"Mitr";font-size:16px;white-space:nowrap;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;}
+  .b-ok{background:var(--ok-bg);color:var(--ok);}
+  .b-cancel{background:#ece9e3;color:#8a8378;}
+  .detail{font-size:12px;color:var(--muted);margin-top:6px;}
+  .actions{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);
+    display:flex;gap:6px;flex-wrap:wrap;}
+  .alert{background:var(--bad-bg);border:1px solid #f0c0c0;border-radius:10px;
+    padding:12px 14px;color:var(--bad);font-size:14px;margin:14px 0;}
+  .notice{background:var(--warn-bg);border:1px solid #efd3a5;border-radius:10px;
+    padding:12px 14px;color:var(--warn);font-size:13.5px;margin:14px 0;}
+  .okbox{background:var(--ok-bg);border:1px solid #bfe3cf;border-radius:10px;
+    padding:12px 14px;color:var(--ok);font-size:13.5px;margin-bottom:12px;}
+  .empty{text-align:center;color:var(--muted);padding:36px 0;}
+  .editbar{background:#fff7e6;border:1px solid var(--accent);border-radius:10px;
+    padding:11px 14px;color:#8a5a00;font-size:13.5px;margin-bottom:14px;
+    display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:12px 20px;border-radius:24px;font-size:14px;
+    opacity:0;transition:.25s;pointer-events:none;z-index:99;max-width:90%;}
+  .toast.show{opacity:1;}
+  .toast.ok{background:var(--ok);}.toast.err{background:var(--bad);}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid #fff6;
+    border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;
+    border-bottom:1px dashed var(--line);font-size:14px;align-items:center;flex-wrap:wrap;}
+  .kv:last-child{border-bottom:none;}
+  .switch{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;}
+  .sigprev{max-height:70px;max-width:220px;border:1px dashed var(--line);border-radius:8px;padding:4px;background:#fff;}
+
+  /* ===== เอกสารบิล (สำหรับเรนเดอร์เป็น PDF) ===== */
+  #pdfStage{position:absolute;left:-12000px;top:0;}
+  .iv-sheet{width:794px;background:#fff;color:#1a1a1a;font-family:"Prompt","Sarabun",sans-serif;
+    font-size:12.5px;padding:24px;position:relative;}
+  .iv-box{border:1px solid #333;position:relative;overflow:hidden;}
+  .iv-pad{padding:10px 14px;}
+  .iv-orig{float:right;border:1px solid #333;padding:4px 16px;font-weight:700;margin:-2px 0 6px 12px;}
+  .iv-cname{font-weight:700;font-size:15px;color:#BC2B30;}
+  .iv-lbl{color:#BC2B30;font-weight:700;}
+  .iv-muted{color:#444;line-height:1.55;}
+  .iv-hrow{display:table;width:100%;}
+  .iv-hL{display:table-cell;vertical-align:top;}
+  .iv-hR{display:table-cell;vertical-align:top;text-align:right;width:170px;white-space:nowrap;}
+  .iv-title{background:#BC2B30;color:#fff;border-top:1px solid #8a2024;border-bottom:1px solid #8a2024;
+    text-align:center;font-weight:700;font-size:15px;padding:8px;letter-spacing:.5px;}
+  .iv-cust{padding:8px 14px;border-bottom:1px solid #333;line-height:1.7;}
+  table.iv-items{width:100%;border-collapse:collapse;}
+  table.iv-items th{background:#f7e7c4;border:1px solid #333;padding:6px;font-size:12px;color:#7a1f22;}
+  table.iv-items td{border-left:1px solid #333;border-right:1px solid #333;padding:6px 8px;}
+  table.iv-items tbody tr:last-child td{border-bottom:1px solid #333;}
+  .iv-c{text-align:center;}.iv-r{text-align:right;}
+  .iv-sum{display:table;width:100%;}
+  .iv-sumL{display:table-cell;vertical-align:top;width:55%;padding:8px 14px;}
+  .iv-sumR{display:table-cell;vertical-align:top;width:45%;}
+  table.iv-tot{width:100%;border-collapse:collapse;}
+  table.iv-tot td{border:1px solid #333;padding:5px 10px;}
+  table.iv-tot td.iv-k{font-weight:600;background:#fdf4e1;}
+  table.iv-tot td.iv-v{text-align:right;width:110px;}
+  table.iv-tot tr.iv-grand td{font-weight:700;background:#BC2B30;color:#fff;}
+  .iv-bahtbox{border:1px solid #BC2B30;background:#fdf4e1;text-align:center;font-weight:600;color:#7a1f22;padding:7px;margin-bottom:8px;}
+  .iv-pay{padding:2px 0;}
+  .iv-chk{display:inline-block;border:1px solid #333;width:14px;height:14px;text-align:center;line-height:13px;margin-right:4px;}
+  .iv-note{color:#555;font-size:11px;margin-top:6px;}
+  .iv-foot{display:table;width:100%;border-top:1px solid #333;}
+  .iv-footL{display:table-cell;width:62%;padding:8px 14px;font-size:10.5px;color:#444;vertical-align:bottom;}
+  .iv-footR{display:table-cell;width:38%;padding:8px 14px;text-align:center;vertical-align:bottom;}
+  .iv-sigwrap{height:52px;text-align:center;overflow:hidden;}
+  .iv-sigwrap img{max-height:58px;max-width:96%;margin-bottom:-6px;}
+  .iv-sigline{border-top:1px solid #333;margin-top:0;padding-top:4px;}
+  .iv-void{position:absolute;left:0;right:0;top:42%;text-align:center;
+    transform:rotate(-18deg);font-size:72px;font-weight:700;color:rgba(155,28,28,.28);
+    letter-spacing:8px;pointer-events:none;}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="mark"><img src="jjmk-payroll/logo.png" alt="โลโก้จริงใจหมูกระทะ"></div>
+  <div><h1>ออกใบกำกับภาษี</h1><div class="sub" id="shopName">จริงใจหมูกระทะ</div></div>
+  <button class="naschip" id="nasChip" title="สถานะโฟลเดอร์ NAS">📁 ยังไม่ได้ตั้งโฟลเดอร์ NAS</button>
+</div></header>
+
+<div class="wrap">
+  <div id="setupBox" class="alert" style="display:none">
+    ⚠ <b>ยังไม่ได้ติดตั้งตารางในฐานข้อมูล</b> — ให้รันไฟล์ SQL ของระบบใบกำกับภาษี
+    (ตาราง <code>inv_invoices</code> / <code>inv_counters</code>) ใน Supabase → SQL Editor ก่อน แล้วรีเฟรชหน้านี้
+  </div>
+  <div id="offlineBox" class="alert" style="display:none"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="new">ออกบิลใหม่</button>
+    <button class="tab" data-tab="list">รายการบิล<span class="pill zero" id="listCount">0</span></button>
+    <button class="tab" data-tab="cancelled">ยกเลิก<span class="pill zero" id="cancelCount">0</span></button>
+    <button class="tab" data-tab="settings">⚙ ตั้งค่า</button>
+  </div>
+
+  <!-- ===== ออกบิลใหม่ ===== -->
+  <section class="panel active" id="panel-new">
+    <div id="editBanner" class="editbar" style="display:none">
+      <span>✎ กำลังแก้ไขบิล <b id="editBillNo"></b> — บันทึกแล้วระบบจะสร้าง PDF ฉบับแก้ไขให้ใหม่</span>
+      <button type="button" id="cancelEditBtn" class="btn btn-ghost btn-sm">ยกเลิกการแก้ไข</button>
+    </div>
+
+    <div class="card">
+      <h2>ข้อมูลบิล</h2>
+      <div class="row">
+        <div><label>สาขาที่ออกบิล</label><select id="fBranch"></select></div>
+        <div><label>อีเมลลูกค้า (ถ้ามี — ใช้บันทึก/แนบส่ง)</label><input id="cEmail" type="email" placeholder="name@email.com"></div>
+      </div>
+      <div>
+        <label>ชื่อลูกค้า / บริษัท</label>
+        <div style="display:flex;gap:8px">
+          <select id="cPrefix" style="flex:0 0 42%">
+            <option value="">(คำนำหน้า)</option>
+            <option>นาย</option><option>นาง</option><option>นางสาว</option>
+            <option>บริษัท</option><option>ห้างหุ้นส่วนจำกัด</option>
+          </select>
+          <input id="cName" style="flex:1" placeholder="ชื่อ / ชื่อบริษัท">
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div><label>คำต่อท้าย</label>
+          <select id="cSuffix"><option value="">(ไม่มี)</option>
+            <option>จำกัด</option><option>จำกัด (มหาชน)</option></select></div>
+        <div><label>สำนักงาน</label>
+          <select id="cOffice"><option value="">(ไม่ระบุ)</option>
+            <option>สำนักงานใหญ่</option><option value="สาขา">สาขาที่...</option></select></div>
+      </div>
+      <div id="cBranchNoWrap" style="display:none;margin-bottom:12px">
+        <label>เลขที่สาขา</label>
+        <input id="cBranchNo" inputmode="numeric" maxlength="5" placeholder="เช่น 00001"></div>
+      <div class="row">
+        <div><label>เลขประจำตัวผู้เสียภาษีอากร *</label>
+          <input id="cTax" inputmode="numeric" maxlength="13" placeholder="ตัวเลข 13 หลัก"></div>
+        <div><label>เบอร์โทรศัพท์ลูกค้า *</label>
+          <input id="cPhone" inputmode="numeric" maxlength="10" placeholder="9-10 หลัก"></div>
+      </div>
+      <div style="margin-bottom:12px"><label>ที่อยู่ (บ้านเลขที่ / ถนน / อาคาร)</label>
+        <input id="cAddrLine" placeholder="เช่น 66/142 ถ.ทวีวัฒนา"></div>
+      <div class="row">
+        <div><label>รหัสไปรษณีย์</label>
+          <input id="cZip" inputmode="numeric" maxlength="5" placeholder="พิมพ์ 5 หลักเพื่อเติมอัตโนมัติ"></div>
+        <div><label>จังหวัด</label><input id="cProvince" placeholder="กรอกเองได้"></div>
+      </div>
+      <div id="cZipPickWrap" style="display:none;margin-bottom:12px">
+        <label>พบหลายแขวง/ตำบล — เลือกให้ตรง</label>
+        <select id="cZipPick"></select></div>
+      <div class="row">
+        <div><label id="lbTambon">แขวง / ตำบล</label><input id="cTambon" placeholder="กรอกเองได้"></div>
+        <div><label id="lbAmphoe">เขต / อำเภอ</label><input id="cAmphoe" placeholder="กรอกเองได้"></div>
+      </div>
+      <div class="detail" id="zipNote"></div>
+    </div>
+
+    <div class="card">
+      <h2>รายการ</h2>
+      <div class="detail" style="margin:-6px 0 10px">ราคาที่กรอก = <b>ราคารวม VAT แล้ว</b> ระบบจะถอด VAT 7% ออกให้ตอนสรุป</div>
+      <table class="items"><thead><tr>
+        <th>รายการ</th><th style="width:80px">จำนวน</th>
+        <th style="width:120px">ราคา (รวม VAT)</th><th style="width:36px"></th>
+      </tr></thead><tbody id="itemRows"></tbody></table>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="addFood">+ อาหารและเครื่องดื่ม</button>
+        <button class="btn btn-ghost btn-sm" id="addItem">+ รายการอื่น</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>การชำระเงิน</h2>
+      <div class="row">
+        <div><label>ส่วนลด (บาท) — ถ้ามี</label>
+          <input id="cDiscount" type="number" min="0" step="0.01" placeholder="0.00"></div>
+        <div><label>ชำระโดย</label>
+          <input id="cPay" value="เงินสด / QR Payment"></div>
+      </div>
+      <div class="totals">
+        <div class="line"><span>รวมทั้งสิ้น (รวม VAT)</span><span id="tGross">0.00</span></div>
+        <div class="line"><span>ส่วนลด</span><span id="tDisc">0.00</span></div>
+        <div class="line"><span>คงเหลือ</span><span id="tRemain">0.00</span></div>
+        <div class="line"><span>มูลค่าสุทธิ (ก่อน VAT)</span><span id="tNet">0.00</span></div>
+        <div class="line"><span>ภาษีมูลค่าเพิ่ม Vat 7 %</span><span id="tVat">0.00</span></div>
+        <div class="line grand"><span>รวมเป็นเงินทั้งสิ้น</span><span id="tGrand">0.00 ฿</span></div>
+        <div class="baht" id="tBaht">—</div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="issueBtn" style="width:100%">ออกบิล + บันทึก PDF ลง NAS</button>
+    <div class="detail" style="text-align:center;margin-top:8px">
+      ข้อมูลบิลเก็บใน Supabase (เฉพาะตัวหนังสือ) · ไฟล์ PDF เก็บลงโฟลเดอร์ NAS เท่านั้น ไม่อัพโหลดไฟล์ใดๆ ขึ้น Supabase
+    </div>
+  </section>
+
+  <!-- ===== รายการบิล ===== -->
+  <section class="panel" id="panel-list">
+    <div class="row" style="margin-bottom:8px">
+      <div><input id="qSearch" placeholder="🔍 ค้นหา เลขบิล / ชื่อลูกค้า / เลขภาษี / อีเมล"></div>
+      <div style="display:flex;gap:8px">
+        <select id="qMonth" style="flex:1"><option value="">ทุกเดือน</option></select>
+        <button class="btn btn-ghost btn-sm" id="refreshList">รีเฟรช</button>
+      </div>
+    </div>
+    <div class="detail" id="listInfo" style="margin-bottom:8px">กำลังโหลด...</div>
+    <div id="listBox"></div>
+  </section>
+
+  <!-- ===== ยกเลิก ===== -->
+  <section class="panel" id="panel-cancelled">
+    <div class="empty" id="cancelEmpty" style="display:none">ยังไม่มีบิลที่ยกเลิก</div>
+    <div id="cancelBox"></div>
+  </section>
+
+  <!-- ===== ตั้งค่า ===== -->
+  <section class="panel" id="panel-settings">
+    <div class="card">
+      <h2>📁 โฟลเดอร์ NAS สำหรับเก็บไฟล์ PDF</h2>
+      <div class="detail" style="margin-bottom:10px">
+        แนะนำให้ mount/map ไดรฟ์ NAS ไว้ในเครื่องก่อน (เช่น SMB drive ของ Synology)
+        แล้วกดเลือกโฟลเดอร์นั้น — ไฟล์บิลจะถูกบันทึกอัตโนมัติแยกโฟลเดอร์รายเดือน เช่น <code>2026-09/JJRD1006.pdf</code>
+      </div>
+      <div id="nasUnsupported" class="notice" style="display:none">
+        ⚠ เบราว์เซอร์นี้ไม่รองรับการบันทึกไฟล์ลงโฟลเดอร์โดยตรง (ต้องใช้ Chrome / Edge บนคอมพิวเตอร์)
+        — ระบบจะดาวน์โหลดไฟล์ PDF ให้แทน แล้วค่อยย้ายไฟล์ไปเก็บใน NAS เอง
+      </div>
+      <div class="kv"><span>โฟลเดอร์ที่เลือก</span><b id="nasName">— ยังไม่ได้เลือก —</b></div>
+      <div class="actions" style="border:none;padding-top:4px">
+        <button class="btn btn-primary btn-sm" id="pickNasBtn">เลือกโฟลเดอร์ NAS</button>
+        <button class="btn btn-ghost btn-sm" id="testNasBtn">ทดสอบเขียนไฟล์</button>
+        <button class="btn btn-ghost btn-sm" id="clearNasBtn" style="color:var(--bad)">ล้างการตั้งค่า</button>
+      </div>
+      <div style="margin-top:12px">
+        <label class="switch"><input type="checkbox" id="optCopy" style="width:auto"> แนบหน้า “สำเนา” ต่อท้ายในไฟล์ PDF (หน้าแรกเป็นต้นฉบับเสมอ)</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>✒️ ลายเซ็นผู้รับเงิน (แปะท้ายบิล)</h2>
+      <div class="detail" style="margin-bottom:10px">
+        อัพโหลดรูปลายเซ็น (PNG พื้นโปร่งใสจะสวยที่สุด) — เก็บไว้<b>ในเครื่องนี้เท่านั้น</b> ไม่อัพขึ้น Supabase
+        · ถ้าไม่ใส่ บิลจะเว้นช่องว่างให้เซ็นเอง
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <img id="sigPreview" class="sigprev" alt="ลายเซ็น" style="display:none">
+        <span id="sigNone" class="detail">ยังไม่มีลายเซ็น</span>
+        <input type="file" id="sigFile" accept="image/png,image/jpeg" style="display:none">
+        <button class="btn btn-ghost btn-sm" id="sigUploadBtn">อัพโหลดลายเซ็น</button>
+        <button class="btn btn-ghost btn-sm" id="sigRemoveBtn" style="color:var(--bad);display:none">ลบลายเซ็น</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔢 เลขที่บิลปัจจุบัน</h2>
+      <div class="detail" style="margin-bottom:8px">เลขบิลรันต่อจากระบบเดิมอัตโนมัติ — แก้เฉพาะเมื่อต้องการข้าม/ตั้งเลขใหม่</div>
+      <div id="counterBox"><div class="detail">กำลังโหลด...</div></div>
+    </div>
+
+    <div class="card">
+      <h2>ℹ️ วิธีเก็บข้อมูลของระบบนี้</h2>
+      <div class="detail" style="line-height:1.8">
+        • ข้อมูลบิล (ชื่อลูกค้า รายการ ยอดเงิน) → ตาราง <code>inv_invoices</code> ใน Supabase (ตัวหนังสือล้วน)<br>
+        • ไฟล์ PDF ใบกำกับภาษี → โฟลเดอร์ NAS ที่เลือกไว้ (แยกโฟลเดอร์รายเดือน)<br>
+        • <b>ไม่มีไฟล์รูป/PDF ใดๆ ถูกอัพโหลดขึ้น Supabase ทั้งสิ้น</b><br>
+        • เปิดดู/พิมพ์บิลย้อนหลังได้ตลอด — ระบบสร้าง PDF สดจากข้อมูลในตาราง
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="pdfStage"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+// ================= CONFIG =================
+var CONFIG = {
+  SHOP: {
+    name: 'บริษัท พากันรวย ฟู้ด คอร์ปอเรชั่น จำกัด',
+    taxBranch: 'สำนักงานใหญ่',
+    taxId: '0105566172139',
+    address: '244/7 ถนนรัชดาภิเษก แขวงห้วยขวาง เขตห้วยขวาง กรุงเทพมหานคร 10310',
+    phone: '',
+    senderName: 'จริงใจหมูกระทะ',
+  },
+  VAT_RATE: 0.07,
+  // start = เลขบิลใบแรกที่จะออก (ต่อจากระบบเดิม)
+  BRANCHES: [
+    { label: 'รัชดา',    prefix: 'JJRD', start: 1006 },
+    { label: 'ลาดพร้าว', prefix: 'JJLP', start: 1001 },
+  ],
+};
+var SB_URL  = 'https://aikyxvluaiubdidqxwnd.supabase.co';
+var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
+var ZIP_URLS = [
+  'https://cdn.jsdelivr.net/gh/thailand-geography-data/thailand-geography-json@main/src/geography.json',
+  'https://raw.githubusercontent.com/thailand-geography-data/thailand-geography-json/main/src/geography.json',
+];
+var STATUS = { ISSUED: 'ออกแล้ว', CANCELLED: 'ยกเลิก' };
+
+var sb = null, dbReady = false, rpcMissing = false;
+var invoices = [], editingBillNo = null;
+var zipDb = null, zipLoading = null, zipResults = [];
+var nasHandle = null, sigDataUrl = null;
+var nasSupported = ('showDirectoryPicker' in window);
+
+// ================= helpers =================
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmt(n){ return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function round2(n){ return Math.round((Number(n)+Number.EPSILON)*100)/100; }
+function pad2(n){ return (n<10?'0':'')+n; }
+function toast(m,t){ var e=$('toast'); e.textContent=m; e.className='toast show '+(t||'');
+  clearTimeout(toast._t); toast._t=setTimeout(function(){ e.className='toast'; },3500); }
+
+function bkkParts(iso){
+  var d = iso ? new Date(iso) : new Date();
+  var p = new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',
+    day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})
+    .formatToParts(d).reduce(function(a,x){ a[x.type]=x.value; return a; },{});
+  return p;
+}
+function fmtDate(iso){ var p=bkkParts(iso); return p.day+'/'+p.month+'/'+p.year; }
+function fmtDT(iso){ var p=bkkParts(iso); return p.day+'/'+p.month+'/'+p.year+' '+p.hour+':'+p.minute; }
+function ymOf(iso){ var p=bkkParts(iso); return p.year+'-'+p.month; }
+
+// ---- อ่านจำนวนเงินเป็นตัวอักษรไทย ----
+function readSix(s){ var d=['','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
+  var p=['','สิบ','ร้อย','พัน','หมื่น','แสน']; s=String(Number(s)); var len=s.length,r='';
+  for(var i=0;i<len;i++){ var dig=Number(s.charAt(i)),place=len-i-1; if(dig===0)continue;
+    if(place===1){ r+=(dig===1)?'สิบ':(dig===2)?'ยี่สิบ':d[dig]+'สิบ'; }
+    else if(place===0){ r+=(dig===1&&len>1)?'เอ็ด':d[dig]; } else { r+=d[dig]+p[place]; } }
+  return r; }
+function readThai(n){ n=Math.floor(Math.abs(n)); if(n===0)return'ศูนย์'; var s=String(n);
+  if(s.length>6){ return readThai(Number(s.slice(0,s.length-6)))+'ล้าน'+readSix(s.slice(s.length-6)); }
+  return readSix(s); }
+function bahtText(num){ num=round2(num); var b=Math.floor(num),sa=Math.round((num-b)*100);
+  if(b===0&&sa===0)return'ศูนย์บาทถ้วน'; var t=''; if(b>0)t+=readThai(b)+'บาท';
+  t+=(sa>0)?(readThai(sa)+'สตางค์'):'ถ้วน'; return t; }
+
+// ---- คำนวณยอด (ราคาในรายการ = รวม VAT แล้ว) ----
+function computeTotals(items, discount){
+  var gross=0;
+  items.forEach(function(it){
+    var amt=(it.qty&&Number(it.qty)>0)?Number(it.qty)*Number(it.price):Number(it.price);
+    gross+=amt;
+  });
+  gross=round2(gross);
+  var disc=round2(Number(discount)||0);
+  var after=round2(gross-disc);
+  var net=round2(after/(1+CONFIG.VAT_RATE));
+  var vat=round2(after-net);
+  return { gross:gross, discount:disc, net:net, vat:vat, total:after };
+}
+
+// ================= IndexedDB (เก็บ handle โฟลเดอร์ NAS / ลายเซ็น / ฐานรหัสไปรษณีย์) =================
+function idbOpen(){ return new Promise(function(res,rej){
+  var r=indexedDB.open('jjmk-invoice',1);
+  r.onupgradeneeded=function(){ r.result.createObjectStore('kv'); };
+  r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
+});}
+function idbGet(k){ return idbOpen().then(function(db){ return new Promise(function(res,rej){
+  var t=db.transaction('kv','readonly').objectStore('kv').get(k);
+  t.onsuccess=function(){ res(t.result); }; t.onerror=function(){ rej(t.error); }; }); }); }
+function idbSet(k,v){ return idbOpen().then(function(db){ return new Promise(function(res,rej){
+  var t=db.transaction('kv','readwrite').objectStore('kv').put(v,k);
+  t.onsuccess=function(){ res(); }; t.onerror=function(){ rej(t.error); }; }); }); }
+function idbDel(k){ return idbOpen().then(function(db){ return new Promise(function(res,rej){
+  var t=db.transaction('kv','readwrite').objectStore('kv').delete(k);
+  t.onsuccess=function(){ res(); }; t.onerror=function(){ rej(t.error); }; }); }); }
+
+// ================= NAS (File System Access API) =================
+function renderNasStatus(){
+  var chip=$('nasChip'), name=$('nasName');
+  if(!nasSupported){ $('nasUnsupported').style.display='block'; }
+  if(nasHandle){
+    chip.className='naschip on';
+    chip.textContent='📁 NAS: '+nasHandle.name;
+    name.textContent=nasHandle.name;
+  }else{
+    chip.className='naschip';
+    chip.textContent=nasSupported?'📁 ยังไม่ได้ตั้งโฟลเดอร์ NAS':'📥 โหมดดาวน์โหลดไฟล์';
+    name.textContent='— ยังไม่ได้เลือก —';
+  }
+}
+async function pickNas(){
+  if(!nasSupported){ toast('เบราว์เซอร์นี้ไม่รองรับ — ใช้ Chrome/Edge บนคอมพิวเตอร์','err'); return; }
+  try{
+    var h=await window.showDirectoryPicker({mode:'readwrite',id:'jjmk-invoice-nas'});
+    nasHandle=h; await idbSet('nasDir',h); renderNasStatus();
+    toast('ตั้งโฟลเดอร์ NAS: '+h.name+' เรียบร้อย','ok');
+  }catch(e){ if(e && e.name!=='AbortError') toast('เลือกโฟลเดอร์ไม่สำเร็จ: '+e.message,'err'); }
+}
+async function ensureNasPermission(){
+  if(!nasHandle) return false;
+  try{
+    var p=await nasHandle.queryPermission({mode:'readwrite'});
+    if(p==='granted') return true;
+    p=await nasHandle.requestPermission({mode:'readwrite'});
+    return p==='granted';
+  }catch(e){ return false; }
+}
+async function saveToNas(filename, blob, iso){
+  var ym=ymOf(iso);
+  var dir=await nasHandle.getDirectoryHandle(ym,{create:true});
+  var fh=await dir.getFileHandle(filename,{create:true});
+  var w=await fh.createWritable();
+  await w.write(blob); await w.close();
+  return ym+'/'+filename;
+}
+function downloadBlob(filename, blob){
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); },60000);
+}
+// บันทึกไฟล์บิล: ลง NAS ถ้าตั้งไว้ ไม่งั้นดาวน์โหลด — คืน path หรือ null
+async function storePdf(billNo, blob, iso){
+  if(nasHandle){
+    var ok=await ensureNasPermission();
+    if(!ok){ toast('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์ NAS — ดาวน์โหลดไฟล์ให้แทน','err');
+      downloadBlob(billNo+'.pdf', blob); return null; }
+    try{
+      var path=await saveToNas(billNo+'.pdf', blob, iso);
+      return path;
+    }catch(e){
+      toast('เขียนไฟล์ลง NAS ไม่สำเร็จ ('+e.message+') — ดาวน์โหลดให้แทน','err');
+      downloadBlob(billNo+'.pdf', blob); return null;
+    }
+  }
+  downloadBlob(billNo+'.pdf', blob);
+  return null;
+}
+
+// ================= ลายเซ็น (เก็บในเครื่องเท่านั้น) =================
+function renderSig(){
+  var img=$('sigPreview');
+  if(sigDataUrl){ img.src=sigDataUrl; img.style.display='block';
+    $('sigNone').style.display='none'; $('sigRemoveBtn').style.display='inline-block'; }
+  else{ img.style.display='none'; $('sigNone').style.display='inline';
+    $('sigRemoveBtn').style.display='none'; }
+}
+function handleSigFile(file){
+  if(!file) return;
+  if(file.size>1024*1024){ toast('ไฟล์ใหญ่เกิน 1MB — ย่อรูปก่อนอัพโหลด','err'); return; }
+  var r=new FileReader();
+  r.onload=function(){ sigDataUrl=r.result; idbSet('sigDataUrl',sigDataUrl); renderSig();
+    toast('บันทึกลายเซ็นแล้ว (เก็บในเครื่องนี้เท่านั้น)','ok'); };
+  r.readAsDataURL(file);
+}
+
+// ================= สร้างเอกสารบิล + PDF =================
+function buildSheetNode(inv, copyLabel){
+  var itemRows=(inv.items||[]).map(function(it,i){
+    var hasQty=it.qty&&Number(it.qty)>0;
+    var amt=hasQty?Number(it.qty)*Number(it.price):Number(it.price);
+    return '<tr>'+
+      '<td class="iv-c">'+(i+1)+'</td>'+
+      '<td>'+esc(it.name)+'</td>'+
+      '<td class="iv-c">'+(hasQty?esc(it.qty):'')+'</td>'+
+      '<td class="iv-r">'+fmt(it.price)+'</td>'+
+      '<td class="iv-r">'+fmt(round2(amt))+'</td>'+
+      '</tr>';
+  }).join('');
+  var blanks='';
+  for(var b=(inv.items||[]).length;b<6;b++){
+    blanks+='<tr><td class="iv-c">&nbsp;</td><td></td><td></td><td></td><td></td></tr>';
+  }
+  var addrHtml=esc(inv.address||'-').replace(/\r?\n/g,'<br>');
+  var sigImg=sigDataUrl?('<img src="'+sigDataUrl+'" alt="ลายเซ็น">'):'';
+  var voidMark=(inv.status===STATUS.CANCELLED)?'<div class="iv-void">ยกเลิก</div>':'';
+
+  var el=document.createElement('div');
+  el.className='iv-sheet';
+  el.innerHTML=
+  '<div class="iv-box">'+voidMark+
+    '<div class="iv-pad"><div class="iv-orig">'+esc(copyLabel)+'</div>'+
+      '<div class="iv-hrow"><div class="iv-hL">'+
+        '<div class="iv-cname">'+esc(CONFIG.SHOP.name)+' ('+esc(CONFIG.SHOP.taxBranch)+')</div>'+
+        '<div class="iv-muted">ที่อยู่ : '+esc(CONFIG.SHOP.address)+'<br>'+
+        'เลขประจำตัวผู้เสียภาษีอากร : '+esc(CONFIG.SHOP.taxId)+'</div>'+
+      '</div><div class="iv-hR iv-muted">'+
+        '<div><span class="iv-lbl">เลขที่บิล</span><br>'+esc(inv.bill_no)+'</div>'+
+        '<div style="margin-top:6px"><span class="iv-lbl">วันที่</span><br>'+fmtDate(inv.issued_at)+'</div>'+
+      '</div></div>'+
+    '</div>'+
+    '<div class="iv-title">ใบเสร็จรับเงิน / ใบกำกับภาษี</div>'+
+    '<div class="iv-cust">'+
+      '<span class="iv-lbl">ลูกค้า :</span> '+esc(inv.customer_name||'-')+'<br>'+
+      (inv.phone?('<span class="iv-lbl">เบอร์โทร :</span> '+esc(inv.phone)+'<br>'):'')+
+      '<span class="iv-lbl">ที่อยู่ :</span> '+addrHtml+'<br>'+
+      '<span class="iv-lbl">เลขประจำตัวผู้เสียภาษีอากร :</span> '+esc(inv.tax_id||'-')+
+    '</div>'+
+    '<table class="iv-items"><thead><tr>'+
+      '<th style="width:9%">ลำดับ</th><th>รายการ</th><th style="width:13%">จำนวน</th>'+
+      '<th style="width:17%">ราคา</th><th style="width:19%">จำนวนเงิน</th>'+
+    '</tr></thead><tbody>'+itemRows+blanks+'</tbody></table>'+
+    '<div class="iv-sum"><div class="iv-sumL">'+
+      '<div class="iv-bahtbox">'+esc(bahtText(inv.grand_total))+'</div>'+
+      '<div class="iv-pay"><b>ชำระโดย</b> <span class="iv-chk">&#10003;</span> '+esc(inv.payment_method||'เงินสด / QR Payment')+'</div>'+
+      '<div class="iv-note">(ใบเสร็จรับเงินฉบับนี้จะสมบูรณ์ต่อเมื่อได้รับการชำระเงินเรียบร้อยแล้วเท่านั้น)</div>'+
+    '</div><div class="iv-sumR"><table class="iv-tot">'+
+      '<tr><td class="iv-k">รวมทั้งสิ้น</td><td class="iv-v">'+fmt(inv.gross)+'</td></tr>'+
+      '<tr><td class="iv-k">ส่วนลด</td><td class="iv-v">'+fmt(inv.discount)+'</td></tr>'+
+      '<tr><td class="iv-k">คงเหลือ</td><td class="iv-v">'+fmt(round2(inv.gross-inv.discount))+'</td></tr>'+
+      '<tr><td class="iv-k">มูลค่าสุทธิ</td><td class="iv-v">'+fmt(inv.net)+'</td></tr>'+
+      '<tr><td class="iv-k">ภาษีมูลค่าเพิ่ม Vat 7 %</td><td class="iv-v">'+fmt(inv.vat)+'</td></tr>'+
+      '<tr class="iv-grand"><td class="iv-k">รวมเป็นเงินทั้งสิ้น</td><td class="iv-v">'+fmt(inv.grand_total)+'</td></tr>'+
+    '</table></div></div>'+
+    '<div class="iv-foot"><div class="iv-footL">'+
+      'หากต้องการแก้ไขใบเสร็จรับเงินหรือใบกำกับภาษี กรุณาติดต่อทางบริษัทฯ ภายใน 1 วันทำการ '+
+      'นับจากวันได้รับเอกสาร หากพ้นกำหนด ทางบริษัทฯ จะไม่รับผิดชอบใดๆทั้งสิ้น'+
+    '</div><div class="iv-footR">'+
+      '<div class="iv-sigwrap">'+sigImg+'</div>'+
+      '<div class="iv-sigline">ผู้รับเงิน / Collecter</div>'+
+    '</div></div>'+
+  '</div>';
+  return el;
+}
+
+function ensureFonts(){
+  var loads=[
+    '400 12.5px Prompt','500 12.5px Prompt','600 12.5px Prompt','700 15px Prompt',
+    '400 12.5px Sarabun','700 12.5px Sarabun'
+  ].map(function(f){ try{ return document.fonts.load(f,'ทดสอบ ABC 012'); }catch(e){ return Promise.resolve(); } });
+  return Promise.all(loads).then(function(){ return document.fonts.ready; }).catch(function(){});
+}
+
+async function buildInvoicePdf(inv){
+  if(!window.html2canvas || !window.jspdf){ throw new Error('โหลดไลบรารีสร้าง PDF ไม่สำเร็จ (เช็คอินเทอร์เน็ต)'); }
+  await ensureFonts();
+  var jsPDFCtor=window.jspdf.jsPDF;
+  var pdf=new jsPDFCtor({unit:'mm',format:'a4',orientation:'portrait',compress:true});
+  var copies=['ต้นฉบับ'];
+  if(localStorage.getItem('jjmk_inv_withcopy')==='1') copies.push('สำเนา');
+  var stage=$('pdfStage');
+  for(var i=0;i<copies.length;i++){
+    var node=buildSheetNode(inv,copies[i]);
+    stage.appendChild(node);
+    var canvas;
+    try{
+      canvas=await window.html2canvas(node,{scale:2,backgroundColor:'#ffffff',logging:false});
+    } finally { node.remove(); }
+    var img=canvas.toDataURL('image/jpeg',0.92);
+    if(i>0) pdf.addPage();
+    var wmm=200, hmm=canvas.height*wmm/canvas.width;
+    pdf.addImage(img,'JPEG',5,5,wmm,Math.min(hmm,287));
+  }
+  return pdf.output('blob');
+}
+
+async function openPdfPreview(inv, el){
+  var orig=el?el.textContent:null;
+  if(el) el.textContent='⏳ กำลังสร้าง PDF...';
+  try{
+    var blob=await buildInvoicePdf(inv);
+    var url=URL.createObjectURL(blob);
+    var w=window.open(url,'_blank');
+    if(!w) downloadBlob(inv.bill_no+'.pdf', blob);
+    setTimeout(function(){ URL.revokeObjectURL(url); },60000);
+  }catch(e){ toast('สร้าง PDF ไม่สำเร็จ: '+e.message,'err'); }
+  if(el) el.textContent=orig;
+}
+
+// ================= Supabase =================
+function showOffline(msg){
+  var b=$('offlineBox');
+  b.style.display='block';
+  b.innerHTML='⚠ เชื่อมต่อฐานข้อมูลไม่ได้: '+esc(msg||'')+' — เช็คอินเทอร์เน็ตแล้วรีเฟรชหน้า';
+}
+async function checkDb(){
+  if(!window.supabase){ showOffline('โหลดไลบรารี Supabase ไม่สำเร็จ'); return false; }
+  sb=window.supabase.createClient(SB_URL,SB_ANON);
+  try{
+    var r=await sb.from('inv_invoices').select('id').limit(1);
+    if(r.error){
+      if(r.error.code==='42P01'||/does not exist|schema cache/i.test(r.error.message||'')){
+        $('setupBox').style.display='block';
+        $('issueBtn').disabled=true;
+      }else{ showOffline(r.error.message); }
+      return false;
+    }
+    dbReady=true;
+    return true;
+  }catch(e){ showOffline(e.message); return false; }
+}
+
+async function nextBillNo(branch){
+  // ทางหลัก: RPC atomic กันเลขซ้ำ
+  var r=await sb.rpc('inv_next_bill_no',{p_prefix:branch.prefix,p_start:branch.start});
+  if(!r.error && r.data) return { billNo:r.data, viaRpc:true };
+  rpcMissing=true;
+  // สำรอง: อ่านเลขสูงสุดจากตารางแล้ว +1
+  var q=await sb.from('inv_invoices').select('bill_no')
+    .eq('branch_prefix',branch.prefix).order('bill_no',{ascending:false}).limit(1);
+  var next=branch.start;
+  if(!q.error && q.data && q.data.length){
+    var m=String(q.data[0].bill_no).replace(branch.prefix,'');
+    var n=parseInt(m,10);
+    if(!isNaN(n)) next=Math.max(n+1,branch.start);
+  }
+  var s=String(next); while(s.length<4)s='0'+s;
+  return { billNo:branch.prefix+s, viaRpc:false, seq:next, prefix:branch.prefix };
+}
+
+async function loadInvoices(){
+  if(!dbReady) return;
+  $('listInfo').textContent='กำลังโหลด...';
+  var r=await sb.from('inv_invoices').select('*').order('issued_at',{ascending:false}).limit(1000);
+  if(r.error){ $('listInfo').textContent='โหลดไม่สำเร็จ: '+r.error.message; return; }
+  invoices=r.data||[];
+  renderMonthFilter();
+  renderList();
+}
+
+// ================= ฟอร์มออกบิล =================
+function itemRow(name,qty,price){
+  var tr=document.createElement('tr');
+  tr.innerHTML='<td><input class="i-name" value="'+esc(name||'')+'" placeholder="ชื่อรายการ"></td>'+
+    '<td><input class="i-qty" type="number" min="0" placeholder="-" value="'+esc(qty||'')+'"></td>'+
+    '<td><input class="i-price" type="number" min="0" step="0.01" value="'+esc(price||'')+'"></td>'+
+    '<td><button class="btn btn-ghost btn-sm i-del" type="button">✕</button></td>';
+  tr.querySelector('.i-del').onclick=function(){ tr.remove(); recalc(); };
+  tr.querySelectorAll('input').forEach(function(i){ i.oninput=recalc; });
+  $('itemRows').appendChild(tr);
+  recalc();
+}
+function getItems(){ var a=[];
+  document.querySelectorAll('#itemRows tr').forEach(function(tr){
+    var name=tr.querySelector('.i-name').value.trim();
+    var qty=tr.querySelector('.i-qty').value.trim();
+    var price=Number(tr.querySelector('.i-price').value);
+    if(name&&price>=0)a.push({name:name,qty:qty?Number(qty):'',price:price});
+  });
+  return a; }
+function recalc(){
+  var t=computeTotals(getItems(), $('cDiscount').value);
+  $('tGross').textContent=fmt(t.gross);
+  $('tDisc').textContent=fmt(t.discount);
+  $('tRemain').textContent=fmt(t.total);
+  $('tNet').textContent=fmt(t.net);
+  $('tVat').textContent=fmt(t.vat);
+  $('tGrand').textContent=fmt(t.total)+' ฿';
+  $('tBaht').textContent=t.total>0?bahtText(t.total):'—';
+}
+
+function buildCustomerName(){
+  var pre=$('cPrefix').value.trim(), nm=$('cName').value.trim(),
+      suf=$('cSuffix').value.trim(), off=$('cOffice').value;
+  var parts=[]; if(pre)parts.push(pre); if(nm)parts.push(nm); if(suf)parts.push(suf);
+  var name=parts.join(' ');
+  var officeText='';
+  if(off==='สาขา'){ var bn=$('cBranchNo').value.trim(); officeText=bn?('สาขาที่ '+bn):''; }
+  else if(off) officeText=off;
+  if(name&&officeText)name+=' ('+officeText+')';
+  return name;
+}
+function resetCustomerName(){
+  $('cPrefix').value=''; $('cName').value=''; $('cSuffix').value='';
+  $('cOffice').value=''; $('cBranchNo').value=''; $('cBranchNoWrap').style.display='none';
+}
+function val(id){ return $(id).value.trim(); }
+function setVal(id,v){ $(id).value=v; }
+function isBKK(p){ return (p||'').indexOf('กรุงเทพ')!==-1; }
+function setAreaLabels(p){
+  $('lbTambon').textContent=isBKK(p)?'แขวง':'ตำบล';
+  $('lbAmphoe').textContent=isBKK(p)?'เขต':'อำเภอ';
+}
+function buildAddress(){
+  var line=val('cAddrLine'),zip=val('cZip'),t=val('cTambon'),a=val('cAmphoe'),p=val('cProvince');
+  var bkk=isBKK(p),parts=[],l2=[];
+  if(line)parts.push(line);
+  if(t)l2.push((bkk?'แขวง':'ตำบล')+t);
+  if(a)l2.push((bkk?'เขต':'อำเภอ')+a);
+  if(p)l2.push(bkk?p:('จังหวัด'+p));
+  if(zip)l2.push(zip);
+  if(l2.length)parts.push(l2.join(' '));
+  return parts.join('\n');
+}
+function clearAddress(){
+  ['cAddrLine','cZip','cTambon','cAmphoe','cProvince'].forEach(function(id){ setVal(id,''); });
+  $('cZipPickWrap').style.display='none';
+  $('zipNote').textContent='';
+}
+function resetForm(){
+  ['cTax','cPhone','cEmail','cDiscount'].forEach(function(id){ $(id).value=''; });
+  resetCustomerName(); clearAddress();
+  $('itemRows').innerHTML=''; itemRow('อาหารและเครื่องดื่ม','','');
+  $('cPay').value='เงินสด / QR Payment';
+  recalc();
+}
+
+// ================= ฐานข้อมูลรหัสไปรษณีย์ (โหลดครั้งเดียวจาก CDN + cache ในเครื่อง) =================
+async function getZipDb(){
+  if(zipDb) return zipDb;
+  if(zipLoading) return zipLoading;
+  zipLoading=(async function(){
+    try{ var c=await idbGet('zipdb_v1'); if(c){ zipDb=c; return c; } }catch(e){}
+    var rows=null;
+    for(var i=0;i<ZIP_URLS.length && !rows;i++){
+      try{ var r=await fetch(ZIP_URLS[i]); if(r.ok) rows=await r.json(); }catch(e){}
+    }
+    if(!rows||!rows.length) throw new Error('โหลดฐานข้อมูลที่อยู่ไม่สำเร็จ');
+    var provinces=[],pIdx={},z={};
+    rows.forEach(function(x){
+      var pi=pIdx[x.provinceNameTh];
+      if(pi===undefined){ pi=provinces.length; provinces.push(x.provinceNameTh); pIdx[x.provinceNameTh]=pi; }
+      var zip=String(x.postalCode);
+      (z[zip]=z[zip]||[]).push([x.subdistrictNameTh,x.districtNameTh,pi]);
+    });
+    zipDb={p:provinces,z:z};
+    try{ await idbSet('zipdb_v1',zipDb); }catch(e){}
+    return zipDb;
+  })();
+  try{ return await zipLoading; } finally { zipLoading=null; }
+}
+async function lookupZip(zip){
+  var db=await getZipDb();
+  var arr=db.z[zip]||[];
+  return arr.map(function(x){ return { tambon:x[0], amphoe:x[1], province:db.p[x[2]] }; });
+}
+
+// ================= ออกบิล / แก้ไข =================
+function validateForm(){
+  var tax=val('cTax'), phone=val('cPhone'), email=val('cEmail'), items=getItems();
+  if(tax.length!==13){ toast('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก','err'); $('cTax').focus(); return null; }
+  if(phone.length<9||phone.length>10){ toast('เบอร์โทรศัพท์ต้องมี 9-10 หลัก','err'); $('cPhone').focus(); return null; }
+  if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('รูปแบบอีเมลไม่ถูกต้อง','err'); $('cEmail').focus(); return null; }
+  if(!items.length){ toast('กรุณาเพิ่มอย่างน้อย 1 รายการ','err'); return null; }
+  var totals=computeTotals(items, $('cDiscount').value);
+  if(totals.total<0){ toast('ส่วนลดมากกว่ายอดรวม','err'); return null; }
+  return {
+    branch_prefix: $('fBranch').value,
+    customer_name: buildCustomerName()||'-',
+    tax_id: tax, phone: phone, email: email||null,
+    address: buildAddress()||'-',
+    items: items,
+    gross: totals.gross, discount: totals.discount, net: totals.net,
+    vat: totals.vat, grand_total: totals.total,
+    payment_method: val('cPay')||'เงินสด / QR Payment',
+  };
+}
+
+async function issueOrUpdate(){
+  if(!dbReady){ toast('ยังเชื่อมต่อฐานข้อมูลไม่ได้','err'); return; }
+  var payload=validateForm();
+  if(!payload) return;
+  var btn=$('issueBtn'), editing=editingBillNo;
+  var label=editing?'บันทึกการแก้ไข + สร้าง PDF ใหม่':'ออกบิล + บันทึก PDF ลง NAS';
+  btn.disabled=true;
+  btn.innerHTML='<span class="spin"></span> '+(editing?'กำลังบันทึก...':'กำลังออกบิล...');
+  try{
+    var inv=null;
+    if(editing){
+      payload.status_detail='แก้ไขล่าสุด '+fmtDT(null);
+      payload.updated_at=new Date().toISOString();
+      var u=await sb.from('inv_invoices').update(payload).eq('bill_no',editing).select().single();
+      if(u.error) throw new Error(u.error.message);
+      inv=u.data;
+      toast('บันทึกการแก้ไขบิล '+editing+' แล้ว','ok');
+    }else{
+      var branch=CONFIG.BRANCHES.filter(function(b){ return b.prefix===payload.branch_prefix; })[0]||CONFIG.BRANCHES[0];
+      var tries=0, ins=null;
+      var nb=await nextBillNo(branch);
+      while(tries<5){
+        payload.bill_no=nb.billNo;
+        payload.status=STATUS.ISSUED;
+        payload.status_detail='ออกบิลเมื่อ '+fmtDT(null);
+        ins=await sb.from('inv_invoices').insert(payload).select().single();
+        if(!ins.error) break;
+        if(ins.error.code==='23505' && !nb.viaRpc){
+          nb.seq++; var s=String(nb.seq); while(s.length<4)s='0'+s; nb.billNo=nb.prefix+s;
+          tries++; continue;
+        }
+        throw new Error(ins.error.message);
+      }
+      if(!ins||ins.error) throw new Error('ออกเลขบิลไม่สำเร็จ');
+      inv=ins.data;
+      toast('ออกบิล '+inv.bill_no+' แล้ว — กำลังสร้าง PDF...','ok');
+    }
+    // สร้าง PDF + เก็บลง NAS (บิลถูกบันทึกในฐานข้อมูลแล้ว ต่อให้ขั้นนี้พลาดก็กดบันทึกซ้ำจากรายการได้)
+    btn.innerHTML='<span class="spin"></span> กำลังสร้าง PDF...';
+    try{
+      var blob=await buildInvoicePdf(inv);
+      var path=await storePdf(inv.bill_no, blob, inv.issued_at);
+      if(path){
+        await sb.from('inv_invoices').update({nas_path:path,updated_at:new Date().toISOString()})
+          .eq('bill_no',inv.bill_no);
+        toast('บันทึก '+path+' ลง NAS เรียบร้อย','ok');
+      }
+    }catch(e){
+      toast('บิลบันทึกแล้ว แต่สร้าง/เก็บ PDF ไม่สำเร็จ: '+e.message,'err');
+    }
+    if(editing) exitEdit(); else resetForm();
+    loadInvoices();
+  }catch(e){
+    toast('ผิดพลาด: '+e.message,'err');
+  }
+  btn.disabled=false; btn.textContent=label;
+}
+
+function startEdit(billNo){
+  var v=invoices.filter(function(x){ return x.bill_no===billNo; })[0];
+  if(!v){ toast('ไม่พบบิล','err'); return; }
+  editingBillNo=billNo;
+  document.querySelector('.tab[data-tab="new"]').click();
+  if(v.branch_prefix)$('fBranch').value=v.branch_prefix;
+  resetCustomerName();
+  $('cName').value=(v.customer_name==='-'?'':v.customer_name)||'';
+  $('cTax').value=(v.tax_id==='-'?'':v.tax_id)||'';
+  $('cPhone').value=v.phone||'';
+  $('cEmail').value=v.email||'';
+  clearAddress();
+  $('cAddrLine').value=String(v.address==='-'?'':(v.address||'')).replace(/\r?\n/g,' ');
+  $('cDiscount').value=v.discount?v.discount:'';
+  $('cPay').value=v.payment_method||'เงินสด / QR Payment';
+  $('itemRows').innerHTML='';
+  (v.items||[]).forEach(function(it){ itemRow(it.name,it.qty||'',it.price); });
+  if(!v.items||!v.items.length)itemRow('','','');
+  recalc();
+  $('editBillNo').textContent=billNo;
+  $('editBanner').style.display='flex';
+  $('issueBtn').textContent='บันทึกการแก้ไข + สร้าง PDF ใหม่';
+  window.scrollTo(0,0);
+  toast('โหลดบิล '+billNo+' มาแก้ไขแล้ว','ok');
+}
+function exitEdit(){
+  editingBillNo=null;
+  $('editBanner').style.display='none';
+  $('issueBtn').textContent='ออกบิล + บันทึก PDF ลง NAS';
+  resetForm();
+}
+
+async function setStatus(billNo,status,detail){
+  var r=await sb.from('inv_invoices')
+    .update({status:status,status_detail:detail,updated_at:new Date().toISOString()})
+    .eq('bill_no',billNo);
+  if(r.error){ toast('ผิดพลาด: '+r.error.message,'err'); return false; }
+  return true;
+}
+
+// ================= รายการบิล =================
+function badge(s){
+  if(s===STATUS.CANCELLED)return '<span class="badge b-cancel">ยกเลิก</span>';
+  return '<span class="badge b-ok">ออกแล้ว</span>';
+}
+function invCard(v){
+  var cancelled=(v.status===STATUS.CANCELLED);
+  var h='<div class="inv"><div class="top"><div><div class="no">'+esc(v.bill_no)+'</div>'+
+    '<div class="meta">'+esc(v.customer_name||'-')+(v.email?' • '+esc(v.email):'')+'<br>'+
+    fmtDT(v.issued_at)+'</div></div>'+
+    '<div style="text-align:right"><div class="amt">'+fmt(v.grand_total)+' ฿</div>'+
+    '<div style="margin-top:6px">'+badge(v.status)+'</div></div></div>'+
+    '<div class="detail">'+esc(v.status_detail||'')+
+    (v.nas_path?(' • 📁 '+esc(v.nas_path)):' • ยังไม่ได้เก็บไฟล์ลง NAS')+'</div>'+
+    '<div class="actions">'+
+      '<button class="btn btn-ghost btn-sm a-pdf" data-no="'+esc(v.bill_no)+'">📄 ดู / พิมพ์</button>'+
+      '<button class="btn btn-gold btn-sm a-nas" data-no="'+esc(v.bill_no)+'">💾 บันทึกลง NAS</button>'+
+      (v.email?'<button class="btn btn-ghost btn-sm a-mail" data-no="'+esc(v.bill_no)+'">✉ เขียนอีเมล</button>':'')+
+      (cancelled
+        ?'<button class="btn btn-ghost btn-sm a-restore" data-no="'+esc(v.bill_no)+'" style="color:var(--brand)">↩ เรียกคืนบิล</button>'
+        :'<button class="btn btn-ghost btn-sm a-edit" data-no="'+esc(v.bill_no)+'">✎ แก้ไข</button>'+
+         '<button class="btn btn-ghost btn-sm a-cancel" data-no="'+esc(v.bill_no)+'" style="color:var(--bad)">⛔ ยกเลิกบิล</button>')+
+    '</div></div>';
+  return h;
+}
+function bindCards(scope){
+  scope.querySelectorAll('.a-pdf').forEach(function(b){ b.onclick=function(){
+    var v=findInv(b.dataset.no); if(v) openPdfPreview(v,b); }; });
+  scope.querySelectorAll('.a-nas').forEach(function(b){ b.onclick=async function(){
+    var v=findInv(b.dataset.no); if(!v)return;
+    b.disabled=true; b.innerHTML='<span class="spin"></span>';
+    try{
+      var blob=await buildInvoicePdf(v);
+      var path=await storePdf(v.bill_no, blob, v.issued_at);
+      if(path){
+        await sb.from('inv_invoices').update({nas_path:path,updated_at:new Date().toISOString()}).eq('bill_no',v.bill_no);
+        toast('บันทึก '+path+' แล้ว','ok'); loadInvoices();
+      }
+    }catch(e){ toast('ผิดพลาด: '+e.message,'err'); }
+    b.disabled=false; b.textContent='💾 บันทึกลง NAS';
+  }; });
+  scope.querySelectorAll('.a-mail').forEach(function(b){ b.onclick=function(){
+    var v=findInv(b.dataset.no); if(!v)return;
+    var subject='ใบเสร็จรับเงิน/ใบกำกับภาษี เลขที่ '+v.bill_no+' - '+CONFIG.SHOP.senderName;
+    var body='เรียน '+(v.customer_name||'ลูกค้า')+'\n\n'+
+      'แนบใบเสร็จรับเงิน/ใบกำกับภาษีเลขที่ '+v.bill_no+
+      ' ยอดรวมทั้งสิ้น '+fmt(v.grand_total)+' บาท (รวม VAT 7%)\n\n'+
+      'ขอบคุณที่ใช้บริการ\n'+CONFIG.SHOP.senderName+
+      (CONFIG.SHOP.phone?('\nโทร '+CONFIG.SHOP.phone):'');
+    location.href='mailto:'+encodeURIComponent(v.email)+
+      '?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+    toast('เปิดหน้าต่างอีเมลแล้ว — อย่าลืมแนบไฟล์ PDF จาก NAS ('+(v.nas_path||v.bill_no+'.pdf')+')');
+  }; });
+  scope.querySelectorAll('.a-edit').forEach(function(b){ b.onclick=function(){ startEdit(b.dataset.no); }; });
+  scope.querySelectorAll('.a-cancel').forEach(function(b){ b.onclick=async function(){
+    if(!confirm('ยกเลิกบิล '+b.dataset.no+' ?\nบิลจะถูกทำเครื่องหมาย "ยกเลิก" และย้ายไปแท็บยกเลิก'))return;
+    if(await setStatus(b.dataset.no,STATUS.CANCELLED,'ยกเลิกเมื่อ '+fmtDT(null)))
+      { toast('ยกเลิกบิล '+b.dataset.no+' แล้ว','ok'); loadInvoices(); }
+  }; });
+  scope.querySelectorAll('.a-restore').forEach(function(b){ b.onclick=async function(){
+    if(await setStatus(b.dataset.no,STATUS.ISSUED,'เรียกคืนบิลเมื่อ '+fmtDT(null)))
+      { toast('เรียกคืนบิล '+b.dataset.no+' แล้ว','ok'); loadInvoices(); }
+  }; });
+}
+function findInv(no){ return invoices.filter(function(x){ return x.bill_no===no; })[0]||null; }
+
+function renderMonthFilter(){
+  var sel=$('qMonth'), cur=sel.value;
+  var months={};
+  invoices.forEach(function(v){ months[ymOf(v.issued_at)]=1; });
+  var keys=Object.keys(months).sort().reverse();
+  sel.innerHTML='<option value="">ทุกเดือน</option>'+
+    keys.map(function(k){ return '<option value="'+k+'">'+k+'</option>'; }).join('');
+  if(keys.indexOf(cur)!==-1)sel.value=cur;
+}
+function renderList(){
+  var q=val('qSearch').toLowerCase(), m=$('qMonth').value;
+  var rows=invoices.filter(function(v){
+    if(m && ymOf(v.issued_at)!==m)return false;
+    if(!q)return true;
+    return [v.bill_no,v.customer_name,v.tax_id,v.email,v.phone].join(' ').toLowerCase().indexOf(q)!==-1;
+  });
+  var active=rows.filter(function(v){ return v.status!==STATUS.CANCELLED; });
+  var cancelled=rows.filter(function(v){ return v.status===STATUS.CANCELLED; });
+
+  var box=$('listBox');
+  box.innerHTML=active.length?active.map(invCard).join(''):'<div class="empty">ยังไม่มีบิล</div>';
+  $('listInfo').textContent='แสดง '+active.length+' ใบ (ยกเลิก '+cancelled.length+' ใบอยู่แท็บยกเลิก)';
+  bindCards(box);
+
+  var cbox=$('cancelBox');
+  cbox.innerHTML=cancelled.map(invCard).join('');
+  $('cancelEmpty').style.display=cancelled.length?'none':'block';
+  bindCards(cbox);
+
+  var lp=$('listCount'); lp.textContent=active.length;
+  lp.className='pill'+(active.length?'':' zero'); lp.style.background='#1f7a4d';
+  var cp=$('cancelCount'); cp.textContent=cancelled.length;
+  cp.className='pill'+(cancelled.length?'':' zero');
+}
+
+// ================= ตั้งค่า: เลขบิล =================
+async function loadCounters(){
+  if(!dbReady) return;
+  var box=$('counterBox');
+  var r=await sb.from('inv_counters').select('*');
+  var data=(r.error?[]:(r.data||[]));
+  box.innerHTML=CONFIG.BRANCHES.map(function(b){
+    var row=data.filter(function(x){ return x.prefix===b.prefix; })[0];
+    var last=row?row.last_no:(b.start-1);
+    var next=String(last+1); while(next.length<4)next='0'+next;
+    return '<div class="kv"><span>'+esc(b.label)+' ('+b.prefix+') — เลขล่าสุดที่ใช้: <b>'+last+'</b>'+
+      ' · ใบต่อไป <b>'+b.prefix+next+'</b></span>'+
+      '<button class="btn btn-ghost btn-sm set-counter" data-prefix="'+b.prefix+'" data-last="'+last+'">ตั้งเลข</button></div>';
+  }).join('');
+  box.querySelectorAll('.set-counter').forEach(function(btn){ btn.onclick=async function(){
+    var p=btn.dataset.prefix;
+    var v=prompt('ตั้ง "เลขล่าสุดที่ใช้แล้ว" ของ '+p+' (ใบต่อไปจะเป็นเลขนี้ +1)',btn.dataset.last);
+    if(v===null)return;
+    var n=parseInt(v,10);
+    if(isNaN(n)||n<0){ toast('ต้องเป็นตัวเลข','err'); return; }
+    var r2=await sb.from('inv_counters').upsert({prefix:p,last_no:n});
+    if(r2.error){ toast('ผิดพลาด: '+r2.error.message,'err'); return; }
+    toast('ตั้งเลขล่าสุดของ '+p+' = '+n+' แล้ว','ok');
+    loadCounters();
+  }; });
+}
+
+// ================= events =================
+document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
+  document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
+  document.querySelectorAll('.panel').forEach(function(x){ x.classList.remove('active'); });
+  t.classList.add('active');
+  $('panel-'+t.dataset.tab).classList.add('active');
+  if(t.dataset.tab==='list'||t.dataset.tab==='cancelled')loadInvoices();
+  if(t.dataset.tab==='settings')loadCounters();
+}; });
+
+$('cPhone').addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,10); });
+$('cTax').addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,13); });
+$('cBranchNo').addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,5); });
+$('cOffice').addEventListener('change',function(){
+  $('cBranchNoWrap').style.display=(this.value==='สาขา')?'block':'none'; });
+
+$('cZip').addEventListener('input',async function(){
+  this.value=this.value.replace(/\D/g,'').slice(0,5);
+  var zip=this.value, note=$('zipNote'), wrap=$('cZipPickWrap'), sel=$('cZipPick');
+  if(zip.length<5){ wrap.style.display='none'; note.textContent=''; return; }
+  note.textContent='กำลังค้นหา...';
+  try{
+    zipResults=await lookupZip(zip);
+    if(!zipResults.length){ wrap.style.display='none';
+      note.textContent='ไม่พบรหัสนี้ — กรอกแขวง/เขต/จังหวัดเองได้เลย'; return; }
+    var provs=zipResults.map(function(r){ return r.province; });
+    var amphoes=zipResults.map(function(r){ return r.amphoe; });
+    setVal('cProvince',provs[0]);
+    setAreaLabels(provs[0]);
+    var sameAmphoe=amphoes.every(function(a){ return a===amphoes[0]; });
+    setVal('cAmphoe',sameAmphoe?amphoes[0]:'');
+    if(zipResults.length===1){
+      setVal('cTambon',zipResults[0].tambon); wrap.style.display='none';
+      note.textContent='เติมที่อยู่จากรหัส '+zip+' แล้ว (แก้ได้)';
+    }else{
+      sel.innerHTML='<option value="">— เลือก '+(isBKK(provs[0])?'แขวง':'ตำบล')+' —</option>'+
+        zipResults.map(function(r,i){ return '<option value="'+i+'">'+esc(r.tambon)+' ('+esc(r.amphoe)+')</option>'; }).join('');
+      setVal('cTambon',''); wrap.style.display='block';
+      note.textContent='พบ '+zipResults.length+' แขวง/ตำบล — เลือกให้ตรง หรือกรอกเอง';
+    }
+  }catch(e){ note.textContent='ค้นหาไม่สำเร็จ ('+e.message+') — กรอกเองได้เลย'; }
+});
+$('cZipPick').addEventListener('change',function(){
+  if(this.value==='')return;
+  var r=zipResults[Number(this.value)]; if(!r)return;
+  setVal('cTambon',r.tambon); setVal('cAmphoe',r.amphoe); setVal('cProvince',r.province);
+  setAreaLabels(r.province);
+});
+
+$('addFood').onclick=function(){ itemRow('อาหารและเครื่องดื่ม','',''); };
+$('addItem').onclick=function(){ itemRow('','',''); };
+$('cDiscount').oninput=recalc;
+$('issueBtn').onclick=issueOrUpdate;
+$('cancelEditBtn').onclick=exitEdit;
+$('refreshList').onclick=loadInvoices;
+$('qSearch').oninput=renderList;
+$('qMonth').onchange=renderList;
+
+$('nasChip').onclick=function(){ document.querySelector('.tab[data-tab="settings"]').click(); };
+$('pickNasBtn').onclick=pickNas;
+$('testNasBtn').onclick=async function(){
+  if(!nasHandle){ toast('ยังไม่ได้เลือกโฟลเดอร์ NAS','err'); return; }
+  if(!(await ensureNasPermission())){ toast('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์','err'); return; }
+  try{
+    var blob=new Blob(['ทดสอบเขียนไฟล์จากระบบใบกำกับภาษี '+fmtDT(null)],{type:'text/plain'});
+    var path=await saveToNas('_test-jjmk-invoice.txt',blob,new Date().toISOString());
+    toast('เขียนไฟล์ทดสอบสำเร็จ: '+path,'ok');
+  }catch(e){ toast('เขียนไม่สำเร็จ: '+e.message,'err'); }
+};
+$('clearNasBtn').onclick=async function(){
+  nasHandle=null; await idbDel('nasDir'); renderNasStatus(); toast('ล้างการตั้งค่า NAS แล้ว');
+};
+$('optCopy').onchange=function(){
+  localStorage.setItem('jjmk_inv_withcopy',this.checked?'1':'0');
+};
+$('sigUploadBtn').onclick=function(){ $('sigFile').click(); };
+$('sigFile').onchange=function(){ handleSigFile(this.files[0]); this.value=''; };
+$('sigRemoveBtn').onclick=async function(){
+  sigDataUrl=null; await idbDel('sigDataUrl'); renderSig(); toast('ลบลายเซ็นแล้ว');
+};
+
+// ================= init =================
+(async function init(){
+  $('shopName').textContent=CONFIG.SHOP.senderName+' · '+CONFIG.SHOP.name;
+  var sel=$('fBranch');
+  CONFIG.BRANCHES.forEach(function(b){
+    var o=document.createElement('option');
+    o.value=b.prefix; o.textContent=b.label+' ('+b.prefix+')'; sel.appendChild(o);
+  });
+  itemRow('อาหารและเครื่องดื่ม','','');
+  $('optCopy').checked=(localStorage.getItem('jjmk_inv_withcopy')==='1');
+
+  try{ nasHandle=await idbGet('nasDir')||null; }catch(e){}
+  try{ sigDataUrl=await idbGet('sigDataUrl')||null; }catch(e){}
+  renderNasStatus(); renderSig();
+
+  if(await checkDb()){ loadInvoices(); }
+  // โหลดฐานรหัสไปรษณีย์ล่วงหน้าแบบเงียบๆ
+  getZipDb().catch(function(){});
+})();
+</script>
+</body>
+</html>

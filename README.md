@@ -15,6 +15,11 @@
 - `jjmk-payroll.html` — 💰 **ระบบเงินเดือน (JJ Payroll)** ย้ายมาจาก repo `thananant/JJ-Payroll` (2026-09-06):
   เปิดที่ https://thananant.github.io/JJ-PnL/jjmk-payroll.html · ไฟล์ประกอบ (worker/tools/docs/logo)
   อยู่โฟลเดอร์ `jjmk-payroll/` · อ่าน `jjmk-payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง
+- `jjmk-invoice.html` — 🧾 **ระบบออกใบกำกับภาษี (JJ Invoice)** พอร์ตจาก Google Apps Script (2026-09-08):
+  ออกใบเสร็จรับเงิน/ใบกำกับภาษีตามฟอร์มบิล JJRD · ข้อมูลบิลเก็บใน Supabase (ตาราง prefix `inv_`
+  ตัวหนังสือล้วน **ไม่เก็บไฟล์รูป/PDF ใดๆ ใน Supabase**) · ไฟล์ PDF บันทึกลงโฟลเดอร์ NAS
+  ที่เลือกไว้ผ่านเบราว์เซอร์ (File System Access API, แยกโฟลเดอร์รายเดือน) · เลขบิลรันต่อสาขา
+  ผ่าน RPC `inv_next_bill_no` · ลายเซ็นผู้รับเงินอัพโหลดครั้งเดียวในหน้าตั้งค่า (เก็บในเครื่อง)
 
 ไฟล์ SQL (รันครั้งเดียวใน Supabase → SQL Editor) เก็บที่ **branch `sql`**
 (https://github.com/thananant/JJ-PnL/tree/sql) — ไม่รวมเข้า main และไม่ merge กับใคร:
