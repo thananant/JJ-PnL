@@ -25,3 +25,15 @@
 - ฐานข้อมูล Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd` (ตาราง employees/punches/adjustments/advances/... ดู `jjmk-payroll/docs/JJ-Payroll-Summary.md`)
 - **งวดเงินเดือน = 26 เดือนก่อน → 25 เดือนนี้ (ไม่ตรงเดือนปฏิทิน)** — เวลาเอาค่าแรงเข้า PnL ต้องตกลงวิธีแบ่งก่อน · จุดเชื่อม Payroll↔PnL ดูข้อ 8 ใน `jjmk-payroll/docs/JJ-Payroll-Summary.md`
 - `jjmk-payroll/worker.js` deploy ผ่าน Cloudflare dashboard (ไม่ใช่ GitHub) — เครื่องสแกน/รายงาน LINE ชี้ที่ Worker เดิม ไม่เกี่ยวกับการย้าย repo
+
+## ระบบฟังเสียงลูกค้า (JJ Social)
+
+- แอปคือ `jjmk-social.html` ที่ root · ไฟล์ติดตั้ง (SQL + `supabase/functions/social-brain.ts`, `social-webhook.ts` + `README-SOCIAL.md`) อยู่ branch `claude/social-listening-system-342kax`
+- ตาราง Supabase ใช้ prefix `social_` · ล็อกอินใช้ `pnl_users` ร่วมกับ P&L · สาขาอ่านจาก `pnl_branches`
+- Edge Functions deploy โดยวางโค้ดใน Dashboard (ชื่อฟังก์ชัน `social-brain` / `social-webhook` — ตัวหลังปิด Verify JWT)
+- secrets ฝั่ง LINE ของระบบนี้คือ `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` (OA หน้าร้าน) — **คนละตัวกับ `LINE_SECRET`/`LINE_TOKEN` ซึ่งเป็นของระบบอื่น ห้ามใช้ปน**
+
+## กติกาการส่งงาน (เจ้าของสั่ง 2026-09-08)
+
+- ไฟล์ที่ต้องรัน/วางบน **Supabase** (SQL, โค้ด Edge Functions) → **ส่งเป็นไฟล์ในแชททันที** ไม่ให้ผู้ใช้ไปตามหาจากที่อื่น
+- ไฟล์ที่ขึ้น **GitHub** (แอป HTML ฯลฯ) → **push ขึ้น main ให้เองเลย** ไม่ต้องส่งในแชท ไม่ต้องถามยืนยัน
