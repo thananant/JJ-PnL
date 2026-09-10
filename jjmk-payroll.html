@@ -289,9 +289,11 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
     <button data-page="mou" onclick="go('mou')">📄 เอกสาร MOU</button>
     <button data-page="shift" onclick="go('shift')">🕐 กะการทำงาน</button>
     <button data-page="holi" onclick="go('holi')">🎌 วันหยุดพิเศษ</button>
+    <button data-page="audit" onclick="go('audit')">🕘 ประวัติการทำรายการ</button>
     <button data-page="settings" onclick="go('settings')">⚙️ ตั้งค่า</button>
   </nav>
   <div class="side-foot">
+    <div id="whoBox" style="font-size:12px;color:#d8cfc4;padding:0 4px 6px"></div>
     <div style="font-size:11.5px;color:#8a8076;padding:0 4px 2px"><span class="dot" id="connDot"></span><span id="connTxt">เชื่อมต่อแล้ว</span></div>
     <button class="btn btn-ghost" title="ล้างแคชในเครื่อง แล้วโหลดใหม่ทั้งหมดจากฐานข้อมูล" onclick="refreshAll()">🔄 รีเฟรชข้อมูล</button>
     <button class="btn btn-ghost" onclick="saveJSON()">💾 ดาวน์โหลดสำรอง</button>
@@ -721,6 +723,29 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
 </div>
 </div>
 
+<!-- ============ AUDIT — ประวัติการทำรายการ ============ -->
+<div class="page" id="page-audit">
+  <div class="card" style="margin-bottom:14px">
+    <h2 class="font-display" style="font-size:18px;margin-bottom:6px">🕘 ประวัติการทำรายการ</h2>
+    <p class="muted" style="margin-bottom:14px">ระบบจดอัตโนมัติว่า<b>ใคร</b> เพิ่ม/แก้ไข/ลบ อะไร เมื่อไหร่ — ทุกคนต้องล็อกอินก่อนใช้แอป จึงระบุคนทำได้เสมอ</p>
+    <div class="toolbar">
+      <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">ผู้ใช้:
+        <select id="audUser" onchange="renderAudit()" style="width:auto;min-width:120px"><option value="">ทุกคน</option></select>
+      </label>
+      <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">การกระทำ:
+        <select id="audAct" onchange="renderAudit()" style="width:auto;min-width:120px">
+          <option value="">ทั้งหมด</option><option value="insert">เพิ่ม</option><option value="update">แก้ไข</option>
+          <option value="upsert">บันทึก</option><option value="delete">ลบ</option><option value="login">เข้าสู่ระบบ</option>
+        </select>
+      </label>
+      <input id="audQ" placeholder="ค้นหา ชื่อพนักงาน/รายละเอียด…" style="width:220px;font-size:16px" oninput="clearTimeout(this._h);this._h=setTimeout(renderAudit,300)">
+      <span style="flex:1"></span>
+      <button class="btn btn-light btn-sm" onclick="renderAudit()">🔄 โหลดใหม่</button>
+    </div>
+  </div>
+  <div id="auditBody"></div>
+</div>
+
 <!-- ============ EMPLOYEE FORM ============ -->
 <div class="modal-bg" id="formBg" onclick="if(event.target===this)closeModal('formBg')">
   <div class="modal">
@@ -1136,6 +1161,22 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
   </div>
 </div>
 
+<div id="loginBg" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:300;align-items:center;justify-content:center;padding:20px">
+  <form class="card" style="width:min(360px,100%);margin:0;text-align:center" onsubmit="event.preventDefault();doLogin()">
+    <img src="jjmk-payroll/logo.png" alt="" style="width:72px;height:72px;border-radius:18px;margin-bottom:10px" onerror="this.remove()">
+    <h2 class="font-display" style="font-size:20px;margin-bottom:2px">JJMK Payroll</h2>
+    <p class="muted" style="margin-bottom:16px;font-size:13px">เข้าสู่ระบบด้วยบัญชีเดียวกับแอป P&amp;L</p>
+    <label style="text-align:left">ชื่อผู้ใช้
+      <input id="liUser" autocomplete="username" autocapitalize="none" style="font-size:16px">
+    </label>
+    <label style="text-align:left;margin-top:10px;display:block">รหัสผ่าน
+      <input id="liPass" type="password" autocomplete="current-password" style="font-size:16px">
+    </label>
+    <div id="liErr" style="color:var(--red);font-size:13px;min-height:18px;margin-top:8px"></div>
+    <button id="liBtn" type="submit" class="btn btn-ember" style="width:100%;margin-top:6px">เข้าสู่ระบบ</button>
+  </form>
+</div>
+
 <div id="loadOv"><div class="spin"></div><div id="loadTxt">กำลังเชื่อมต่อฐานข้อมูล…</div></div>
 <div class="toast" id="toast"></div>
 
@@ -1144,6 +1185,106 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
 const SUPABASE_URL = 'https://aikyxvluaiubdidqxwnd.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ================= LOGIN (บัญชีเดียวกับ P&L/JJ Social: ตาราง pnl_users) ================= */
+let AUTH = null;           // {username, display_name, role}
+let auditReady = false;    // true เมื่อรัน jj_audit.sql แล้ว (ตาราง payroll_audit)
+try{ AUTH = JSON.parse(localStorage.getItem('jjpay_sess')||'null'); }catch(_){ AUTH = null; }
+
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const enc=new TextEncoder().encode(str);
+  const l=enc.length,bitLen=l*8,withOne=l+1,total=(Math.ceil((withOne+8)/64))*64;
+  const M=new Uint8Array(total);M.set(enc);M[l]=0x80;
+  const dv=new DataView(M.buffer);
+  dv.setUint32(total-4,bitLen>>>0);dv.setUint32(total-8,Math.floor(bitLen/4294967296));
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n));const w=new Array(64);
+  for(let i=0;i<total;i+=64){
+    for(let t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+    for(let t=16;t<64;t++){const s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3),s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0}
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){const S1=rr(e,6)^rr(e,11)^rr(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[t]+w[t])>>>0,S0=rr(a,2)^rr(a,13)^rr(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0}
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+function pwHash(u,p){ return sha256hex(u+'|'+p+'|JJPNL'); } // สูตรเดียวกับ P&L/JJ Social ห้ามเปลี่ยน
+
+async function doLogin(){
+  const u = document.getElementById('liUser').value.trim();
+  const p = document.getElementById('liPass').value;
+  const errEl = document.getElementById('liErr');
+  if(!u || !p){ errEl.textContent = 'กรอกชื่อผู้ใช้และรหัสผ่านให้ครบก่อนครับ'; return; }
+  errEl.textContent = ''; document.getElementById('liBtn').disabled = true;
+  try{
+    const { data, error } = await db.from('pnl_users')
+      .select('id,username,display_name,role,active,pass_hash')
+      .eq('username', u).limit(1);
+    if(error) throw error;
+    const usr = (data||[])[0];
+    if(!usr || usr.pass_hash !== pwHash(u,p)){ errEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
+    if(!usr.active){ errEl.textContent = 'บัญชีนี้ถูกปิดการใช้งาน'; return; }
+    AUTH = { username:usr.username, display_name:usr.display_name||usr.username, role:usr.role||'' };
+    try{ localStorage.setItem('jjpay_sess', JSON.stringify(AUTH)); }catch(_){}
+    auditWrite('login','','เข้าสู่ระบบ');
+    document.getElementById('loginBg').style.display = 'none';
+    renderWho();
+    startApp();
+  }catch(e){
+    errEl.textContent = 'เชื่อมต่อไม่ได้ — ลองใหม่อีกครั้ง (บัญชีชุดเดียวกับแอป P&L)';
+    console.error(e);
+  }finally{ document.getElementById('liBtn').disabled = false; }
+}
+function logout(){
+  auditWrite('logout','','ออกจากระบบ');
+  try{ localStorage.removeItem('jjpay_sess'); }catch(_){}
+  setTimeout(()=>location.reload(), 150);
+}
+function renderWho(){
+  const el = document.getElementById('whoBox'); if(!el) return;
+  el.innerHTML = AUTH ? `👤 ${AUTH.display_name}${AUTH.role==='admin'?' · ผู้ดูแล':''} <a href="javascript:logout()" style="color:#b8aa98">ออก</a>` : '';
+}
+
+/* ================= AUDIT — จดทุกการเขียนข้อมูลว่าใครทำ (ตาราง payroll_audit) =================
+   ดักที่ db.from() จุดเดียว: ทุก insert/update/upsert/delete ที่สำเร็จ ถูกจดอัตโนมัติ
+   ไม่ต้องแก้จุดบันทึกทีละที่ · ถ้ายังไม่รัน jj_audit.sql แอปทำงานปกติ แค่ไม่จด */
+const AUDIT_SKIP = new Set(['payroll_audit','pnl_users']);
+const _dbFrom = db.from.bind(db);
+function auditWrite(action, tbl, detail){
+  if(!auditReady || !AUTH) return;
+  try{
+    _dbFrom('payroll_audit').insert({
+      username: AUTH.username, display_name: AUTH.display_name||'',
+      action, tbl, detail: String(detail||'').slice(0,800),
+      page: (location.hash||'').slice(0,40),
+    }).then(()=>{});
+  }catch(_){ /* จดไม่ได้ไม่ต้องล้มงานหลัก */ }
+}
+function auditDetailOf(op, args, q){
+  let d = '';
+  try{ if(args && args[0] !== undefined) d = JSON.stringify(args[0]); }catch(_){}
+  try{ const s = q && q.url && q.url.search; if(s) d += (d?' ':'') + 'where' + decodeURIComponent(s); }catch(_){}
+  return d;
+}
+db.from = (table) => {
+  const b = _dbFrom(table);
+  if(AUDIT_SKIP.has(table)) return b;
+  for(const op of ['insert','update','upsert','delete']){
+    if(typeof b[op] !== 'function') continue;
+    const orig = b[op].bind(b);
+    b[op] = (...args) => {
+      const q = orig(...args);
+      const origThen = q.then.bind(q);
+      q.then = (onOk, onErr) => origThen((res)=>{
+        try{ if(res && !res.error) auditWrite(op, table, auditDetailOf(op, args, q)); }catch(_){}
+        return onOk ? onOk(res) : res;
+      }, onErr);
+      return q;
+    };
+  }
+  return b;
+};
 
 /* ================= STATE ================= */
 let settings = { cutoff:6, defaultWage:400, minFine:0, lateFine:0, loadMonths:8,
@@ -1308,6 +1449,10 @@ async function loadAll(){
       const tp = await db.from('tips').select('*');
       if(!tp.error){ tips = (tp.data||[]).map(fromDbTip); tipReady = true; }
     }catch(_){ tipReady = false; /* ยังไม่รัน jj_tips.sql */ }
+    try{
+      const au = await db.from('payroll_audit').select('id').limit(1);
+      auditReady = !au.error;
+    }catch(_){ auditReady = false; /* ยังไม่รัน jj_audit.sql */ }
     devBranch = {}; (dv.data||[]).forEach(d=>{ if(d.branch) devBranch[d.sn] = d.branch; });
 
     shiftDefs = (sh.data||[]).map(fromDbShift);
@@ -1459,8 +1604,8 @@ function go(p){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   document.querySelectorAll('aside nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));
-  document.querySelector('main').style.maxWidth = (p==='cal'||p==='today'||p==='mou'||p==='dep'||p==='loan'||p==='sso') ? 'none' : '';
-  if(p==='emp')renderEmp(); if(p==='payroll')renderPayroll(); if(p==='cal')renderCalendar(); if(p==='adv')renderAdv(); if(p==='dep')renderDeposit(); if(p==='mou')renderMou(); if(p==='loan')renderLoan(); if(p==='sso')renderSso(); if(p==='holi')renderHoli();
+  document.querySelector('main').style.maxWidth = (p==='cal'||p==='today'||p==='mou'||p==='dep'||p==='loan'||p==='sso'||p==='audit') ? 'none' : '';
+  if(p==='emp')renderEmp(); if(p==='payroll')renderPayroll(); if(p==='cal')renderCalendar(); if(p==='adv')renderAdv(); if(p==='dep')renderDeposit(); if(p==='mou')renderMou(); if(p==='loan')renderLoan(); if(p==='sso')renderSso(); if(p==='holi')renderHoli(); if(p==='audit')renderAudit();
   if(p==='detail'){renderDetailSelector();renderDetail();} if(p==='shift')renderShifts(); if(p==='today')renderToday(); if(p==='settings')renderOrg();
   window.scrollTo(0,0);
 }
@@ -4982,6 +5127,11 @@ function startRealtime(){
       const i = employees.findIndex(e=>e.id===payload.new.id);
       if(i>=0){ employees[i] = fromDbEmp(payload.new); rtQueue++; scheduleRtRefresh(); }
     })
+    // ประวัติการทำรายการ — รีเฟรชหน้า audit ถ้าเปิดค้างอยู่
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'payroll_audit' }, ()=>{
+      const pg = document.getElementById('page-audit');
+      if(pg && pg.classList.contains('active')) renderAudit();
+    })
     .on('postgres_changes', { event:'*', schema:'public', table:'advances' }, async ()=>{
       const { data } = await db.from('advances').select('*');
       if(data){ advances = data.map(fromDbAdv); rtQueue++; scheduleRtRefresh(); }
@@ -5059,16 +5209,95 @@ function updPeriodHint(){
   el.innerHTML = `ตัวอย่าง <b>${periodLabel(p)}</b> = ${dayLabel(r.from)} ถึง ${dayLabel(r.to)} · เบิกได้ ${dayLabel(r.adv)} · จ่าย ${dayLabel(r.pay)}`;
 }
 
+/* ================= ประวัติการทำรายการ (หน้า #audit) ================= */
+const AUD_TBL_TH = { employees:'ข้อมูลพนักงาน', punches:'เวลาสแกน', adjustments:'เพิ่ม/หักเงิน', advances:'เบิกกลางเดือน',
+  holidays:'วันหยุดพิเศษ', payroll_settings:'ตั้งค่า', deposit_entries:'เงินประกัน', mou_loans:'เงินยืม MOU',
+  mou_entries:'หัก MOU รายงวด', doc_borrows:'สมุดยืมเอกสาร', fine_entries:'แก้รายการหักอัตโนมัติ', loans:'พนักงานยืมเงิน',
+  loan_entries:'ผ่อนเงินยืมรายงวด', sso_entries:'ประกันสังคม', tips:'ทิปประจำงวด', shifts:'กะการทำงาน',
+  devices:'เครื่องสแกน', org_positions:'แผนก/ตำแหน่ง' };
+const AUD_ACT_TH = { insert:'➕ เพิ่ม', update:'✏️ แก้ไข', upsert:'💾 บันทึก', delete:'🗑️ ลบ', login:'🔓 เข้าสู่ระบบ', logout:'🔒 ออกจากระบบ' };
+const audEsc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function audEmpNames(detail){
+  const names = new Set();
+  try{
+    for(const m of String(detail).matchAll(/"(?:employee_id|empId)"\s*:\s*(\d+)|employee_id=eq\.(\d+)|id=eq\.(\d+)/g)){
+      const id = +(m[1]||m[2]||m[3]);
+      const e = employees.find(x=>x.id===id); if(e) names.add(e.nick||e.full||('#'+id));
+    }
+    for(const m of String(detail).matchAll(/"(?:emp_code|code)"\s*:\s*"([^"]+)"|emp_code=eq\.([^&\s"]+)/g)){
+      const code = m[1]||m[2];
+      const e = employees.find(x=>x.code===code); if(e) names.add(e.nick||e.full||code);
+    }
+  }catch(_){}
+  return [...names].join(', ');
+}
+function audTime(iso){
+  const d = new Date(iso); if(isNaN(d)) return '';
+  return d.toLocaleString('th-TH', { day:'numeric', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+async function renderAudit(){
+  const box = document.getElementById('auditBody'); if(!box) return;
+  if(!auditReady){
+    box.innerHTML = `<div class="card">ยังไม่ได้ติดตั้งตารางประวัติ — รันไฟล์ <b>jj_audit.sql</b> ใน Supabase SQL Editor ก่อน (Ctrl+A ก่อน Run) แล้วกด 🔄 รีเฟรชข้อมูล</div>`;
+    return;
+  }
+  const { data, error } = await _dbFrom('payroll_audit').select('*').order('id', { ascending:false }).limit(400);
+  if(error){ box.innerHTML = `<div class="card">โหลดประวัติไม่ได้: ${audEsc(error.message)}</div>`; return; }
+  const rows = data||[];
+  const fu = document.getElementById('audUser').value, fa = document.getElementById('audAct').value,
+        fq = document.getElementById('audQ').value.trim().toLowerCase();
+  const users = [...new Set(rows.map(r=>r.username))].sort();
+  const sel = document.getElementById('audUser');
+  if(sel.options.length-1 !== users.length){
+    sel.innerHTML = `<option value="">ทุกคน</option>` + users.map(u=>`<option value="${audEsc(u)}" ${u===fu?'selected':''}>${audEsc(u)}</option>`).join('');
+  }
+  const shown = rows.filter(r=>{
+    if(fu && r.username!==fu) return false;
+    if(fa && r.action!==fa) return false;
+    if(fq){
+      const emp = audEmpNames(r.detail);
+      const hay = (r.username+' '+(r.display_name||'')+' '+(AUD_TBL_TH[r.tbl]||r.tbl)+' '+r.detail+' '+emp).toLowerCase();
+      if(!hay.includes(fq)) return false;
+    }
+    return true;
+  });
+  box.innerHTML = `<div class="card" style="padding:0"><div class="tbl-wrap"><table>
+    <tr><th style="white-space:nowrap">เวลา</th><th>ผู้ใช้</th><th style="white-space:nowrap">การกระทำ</th><th style="white-space:nowrap">ส่วน</th><th>พนักงานที่เกี่ยวข้อง</th><th>รายละเอียด</th></tr>
+    ${shown.map(r=>{
+      const emp = audEmpNames(r.detail);
+      return `<tr>
+        <td style="white-space:nowrap">${audTime(r.at)}</td>
+        <td style="white-space:nowrap">${audEsc(r.display_name||r.username)}</td>
+        <td style="white-space:nowrap">${AUD_ACT_TH[r.action]||audEsc(r.action)}</td>
+        <td style="white-space:nowrap">${audEsc(AUD_TBL_TH[r.tbl]||r.tbl||'—')}</td>
+        <td>${audEsc(emp)}</td>
+        <td style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--ink-soft)" title="${audEsc(r.detail)}">${audEsc(r.detail)}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--ink-soft)">ยังไม่มีรายการ${fu||fa||fq?'ตามเงื่อนไขที่กรอง':''}</td></tr>`}
+  </table></div></div>
+  <div style="font-size:12px;color:var(--ink-soft);margin-top:8px">แสดง ${shown.length} จาก ${rows.length} รายการล่าสุด (เก็บสูงสุด 400 รายการต่อการแสดงผล · ระบบจดอัตโนมัติทุกการบันทึก/แก้ไข/ลบ)</div>`;
+}
+
 /* ================= BOOT ================= */
 window.addEventListener('hashchange', ()=>{
   const p = location.hash.replace('#','');
   if(p && document.getElementById('page-'+p) && !document.getElementById('page-'+p).classList.contains('active')) go(p);
 });
-loadAll().then(()=>{
-  startRealtime(); updPeriodHint(); renderOrg(); renderMwDays();
-  const p0 = location.hash.replace('#','');
-  if(p0 && p0 !== 'today' && document.getElementById('page-'+p0)) go(p0);
-});
+function startApp(){
+  loadAll().then(()=>{
+    startRealtime(); updPeriodHint(); renderOrg(); renderMwDays();
+    const p0 = location.hash.replace('#','');
+    if(p0 && p0 !== 'today' && document.getElementById('page-'+p0)) go(p0);
+  });
+}
+if(AUTH){
+  renderWho();
+  startApp();
+}else{
+  busy(false);
+  document.getElementById('loginBg').style.display = 'flex';
+  setTimeout(()=>{ const el = document.getElementById('liUser'); if(el) el.focus(); }, 60);
+}
 
 </script>
 </body>
