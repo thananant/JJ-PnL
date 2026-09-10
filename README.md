@@ -23,6 +23,9 @@
   · ส่งอีเมลแนบ PDF หาลูกค้าอัตโนมัติผ่าน Apps Script ของ Gmail ร้าน (ใส่ URL ในหน้าตั้งค่า,
   เก็บใน `inv_settings`) + Apps Script ตรวจอีเมลตีกลับทุก 5 นาทีแล้วอัพเดตสถานะ
   ส่งถึงแล้ว/ส่งไม่สำเร็จ กลับเข้า Supabase · โค้ด Apps Script ส่งให้เจ้าของทางแชท
+  · ล็อกอินด้วยบัญชีเดียวกับ P&L (`pnl_users`) — บันทึกผู้ทำรายการทุกครั้ง
+  (`created_by`/`updated_by` + ตารางประวัติ `inv_activity` ดูได้ที่แท็บ 📜 ประวัติ)
+  · SQL ติดตั้ง: `jjmk-invoice.sql` ที่ branch `sql`
 
 ไฟล์ SQL (รันครั้งเดียวใน Supabase → SQL Editor) เก็บที่ **branch `sql`**
 (https://github.com/thananant/JJ-PnL/tree/sql) — ไม่รวมเข้า main และไม่ merge กับใคร:

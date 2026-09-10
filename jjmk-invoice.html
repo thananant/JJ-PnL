@@ -108,6 +108,20 @@
   .spin{display:inline-block;width:14px;height:14px;border:2px solid #fff6;
     border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;}
   @keyframes sp{to{transform:rotate(360deg);}}
+  #loginWrap{position:fixed;inset:0;background:var(--cream);z-index:50;overflow:auto;}
+  .logincard{max-width:380px;margin:9vh auto 0;background:#fff;border:1px solid var(--line);
+    border-radius:14px;padding:26px 24px;box-shadow:0 8px 30px rgba(0,0,0,.08);}
+  .logincard .mark{width:64px;height:64px;border-radius:50%;background:#fff;padding:3px;
+    border:2px solid var(--brand);margin:0 auto 10px;display:block;}
+  .logincard .mark img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;}
+  .logincard h1{font-family:"Mitr";font-size:19px;color:var(--brand);text-align:center;margin:0 0 2px;}
+  .logincard .sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:18px;}
+  .userchip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);
+    color:#fff;border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap;}
+  .hrow2{display:flex;flex-direction:column;gap:2px;align-items:flex-end;margin-left:auto;}
+  .logrow{border-bottom:1px dashed var(--line);padding:8px 2px;font-size:13.5px;}
+  .logrow .t{color:var(--muted);font-size:12px;}
+  .logrow b{color:var(--brand);}
   .kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;
     border-bottom:1px dashed var(--line);font-size:14px;align-items:center;flex-wrap:wrap;}
   .kv:last-child{border-bottom:none;}
@@ -159,10 +173,28 @@
 </style>
 </head>
 <body>
+<!-- ===== หน้า login (บัญชีเดียวกับระบบ P&L) ===== -->
+<div id="loginWrap" style="display:none">
+  <div class="logincard">
+    <span class="mark"><img src="jjmk-payroll/logo.png" alt="โลโก้จริงใจหมูกระทะ"></span>
+    <h1>🧾 ออกใบกำกับภาษี</h1>
+    <div class="sub">เข้าสู่ระบบด้วยบัญชีเดียวกับระบบ P&amp;L</div>
+    <label>ชื่อผู้ใช้</label>
+    <input id="liUser" autocomplete="username" style="margin-bottom:12px">
+    <label>รหัสผ่าน</label>
+    <input id="liPass" type="password" autocomplete="current-password" style="margin-bottom:16px">
+    <button class="btn btn-primary" id="liBtn" style="width:100%">เข้าสู่ระบบ</button>
+    <div class="detail" id="liMsg" style="margin-top:10px;text-align:center"></div>
+  </div>
+</div>
+
 <header><div class="wrap">
   <div class="mark"><img src="jjmk-payroll/logo.png" alt="โลโก้จริงใจหมูกระทะ"></div>
   <div><h1>ออกใบกำกับภาษี</h1><div class="sub" id="shopName">จริงใจหมูกระทะ</div></div>
-  <button class="naschip" id="nasChip" title="สถานะโฟลเดอร์ NAS">📁 ยังไม่ได้ตั้งโฟลเดอร์ NAS</button>
+  <div class="hrow2">
+    <button class="userchip" id="userChip" title="ผู้ใช้ที่ล็อกอิน" style="display:none"></button>
+    <button class="naschip" id="nasChip" title="สถานะโฟลเดอร์ NAS">📁 ยังไม่ได้ตั้งโฟลเดอร์ NAS</button>
+  </div>
 </div></header>
 
 <div class="wrap">
@@ -177,6 +209,7 @@
     <button class="tab" data-tab="list">รายการบิล<span class="pill zero" id="listCount">0</span></button>
     <button class="tab" data-tab="failed">⚠ ส่งไม่สำเร็จ<span class="pill zero" id="failedCount">0</span></button>
     <button class="tab" data-tab="cancelled">ยกเลิก<span class="pill zero" id="cancelCount">0</span></button>
+    <button class="tab" data-tab="history">📜 ประวัติ</button>
     <button class="tab" data-tab="settings">⚙ ตั้งค่า</button>
   </div>
 
@@ -303,6 +336,18 @@
     <div id="cancelBox"></div>
   </section>
 
+  <!-- ===== ประวัติการใช้งาน ===== -->
+  <section class="panel" id="panel-history">
+    <div class="row" style="margin-bottom:8px">
+      <div><input id="hSearch" placeholder="🔍 กรอง ชื่อคน / เลขบิล / การกระทำ"></div>
+      <div><button class="btn btn-ghost btn-sm" id="refreshHistory">รีเฟรช</button></div>
+    </div>
+    <div class="card">
+      <h2>ใครทำอะไรบ้าง (ล่าสุด 300 รายการ)</h2>
+      <div id="historyBox"><div class="detail">กำลังโหลด...</div></div>
+    </div>
+  </section>
+
   <!-- ===== ตั้งค่า ===== -->
   <section class="panel" id="panel-settings">
     <div class="card">
@@ -410,7 +455,9 @@ var STATUS = { ISSUED: 'ออกแล้ว', CANCELLED: 'ยกเลิก' 
 var EMAIL_STATUS = { SENDING:'กำลังส่ง', DELIVERED:'ส่งถึงแล้ว', FAILED:'ส่งไม่สำเร็จ', ERROR:'ผิดพลาด' };
 var ASSUME_DELIVERED_AFTER_MIN = 30; // ให้ตรงกับค่าในสคริปต์ Apps Script ตัวส่งอีเมล
 
-var sb = null, dbReady = false, rpcMissing = false, settings = {};
+var SESS_KEY = 'jjmk_inv_sess';
+var sb = null, dbReady = false, rpcMissing = false, settings = {}, currentUser = null;
+var activityRows = [];
 var invoices = [], editingBillNo = null;
 var zipDb = null, zipLoading = null, zipResults = [];
 var nasHandle = null, sigDataUrl = null;
@@ -674,6 +721,118 @@ async function openPdfPreview(inv, el){
   if(el) el.textContent=orig;
 }
 
+// ================= ล็อกอิน (บัญชีเดียวกับระบบ P&L: ตาราง pnl_users) =================
+function sha256hex(str){
+  var K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  var H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  var enc=new TextEncoder().encode(str);
+  var l=enc.length,bitLen=l*8,withOne=l+1,total=(Math.ceil((withOne+8)/64))*64;
+  var M=new Uint8Array(total);M.set(enc);M[l]=0x80;
+  var dv=new DataView(M.buffer);
+  dv.setUint32(total-4,bitLen>>>0);dv.setUint32(total-8,Math.floor(bitLen/4294967296));
+  var rr=function(x,n){return (x>>>n)|(x<<(32-n));};var w=new Array(64);
+  for(var i=0;i<total;i+=64){
+    for(var t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+    for(t=16;t<64;t++){var s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3),s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;}
+    var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+    for(t=0;t<64;t++){var S1=rr(e,6)^rr(e,11)^rr(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[t]+w[t])>>>0,S0=rr(a,2)^rr(a,13)^rr(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(function(x){return x.toString(16).padStart(8,'0');}).join('');
+}
+function pwHash(u,p){ return sha256hex(u+'|'+p+'|JJPNL'); }
+function userName(){ return currentUser?(currentUser.display_name||currentUser.username):''; }
+function showLogin(msg){
+  $('loginWrap').style.display='block';
+  $('liMsg').textContent=msg||'';
+}
+function renderUserChip(){
+  var c=$('userChip');
+  if(currentUser){ c.style.display='inline-block';
+    c.innerHTML='👤 '+esc(userName())+' · ออกจากระบบ'; }
+  else c.style.display='none';
+}
+async function fetchUser(username){
+  var r=await sb.from('pnl_users')
+    .select('id,username,display_name,role,active,pass_hash')
+    .eq('username',username).limit(1);
+  if(r.error) throw new Error(r.error.code==='42P01'?'ยังไม่ได้ติดตั้งตารางผู้ใช้ (pnl_users ของระบบ P&L)':r.error.message);
+  return (r.data&&r.data[0])||null;
+}
+async function doLogin(){
+  var u=val('liUser'), p=$('liPass').value;
+  if(!u||!p){ $('liMsg').textContent='กรอกชื่อผู้ใช้และรหัสผ่านให้ครบก่อนครับ'; return; }
+  var btn=$('liBtn'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> กำลังตรวจสอบ...';
+  try{
+    var usr=await fetchUser(u);
+    if(!usr||usr.pass_hash!==pwHash(u,p)){ $('liMsg').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; }
+    else if(!usr.active){ $('liMsg').textContent='บัญชีนี้ถูกปิดการใช้งาน'; }
+    else{
+      currentUser={username:usr.username,display_name:usr.display_name,role:usr.role};
+      try{ localStorage.setItem(SESS_KEY,JSON.stringify(currentUser)); }catch(e){}
+      $('loginWrap').style.display='none';
+      $('liPass').value='';
+      renderUserChip();
+      logActivity('เข้าสู่ระบบ','', '');
+      startApp();
+    }
+  }catch(e){ $('liMsg').textContent='เข้าสู่ระบบไม่ได้: '+e.message; }
+  btn.disabled=false; btn.textContent='เข้าสู่ระบบ';
+}
+function logout(){
+  logActivity('ออกจากระบบ','','');
+  try{ localStorage.removeItem(SESS_KEY); }catch(e){}
+  currentUser=null;
+  setTimeout(function(){ location.reload(); },150);
+}
+// พยายามกู้ session เดิม + เช็คว่าบัญชียังใช้ได้อยู่
+async function restoreSession(){
+  var saved=null;
+  try{ saved=JSON.parse(localStorage.getItem(SESS_KEY)||'null'); }catch(e){}
+  if(!saved||!saved.username) return false;
+  try{
+    var usr=await fetchUser(saved.username);
+    if(!usr||!usr.active) return false;
+    currentUser={username:usr.username,display_name:usr.display_name,role:usr.role};
+    return true;
+  }catch(e){ return false; }
+}
+
+// ================= บันทึกประวัติว่าใครทำอะไร (ตาราง inv_activity) =================
+function logActivity(action,billNo,detail){
+  if(!dbReady) return;
+  try{
+    sb.from('inv_activity').insert({
+      user_name:userName()||'-', action:action, bill_no:billNo||null, detail:detail||null
+    }).then(function(){},function(){});
+  }catch(e){}
+}
+async function loadHistory(){
+  if(!dbReady) return;
+  var box=$('historyBox');
+  var r=await sb.from('inv_activity').select('*').order('at',{ascending:false}).limit(300);
+  if(r.error){
+    box.innerHTML='<div class="detail">โหลดไม่สำเร็จ: '+esc(r.error.message)+
+      (r.error.code==='42P01'?' — รัน SQL เวอร์ชันล่าสุดก่อน':'')+'</div>';
+    return;
+  }
+  activityRows=r.data||[];
+  renderHistory();
+}
+function renderHistory(){
+  var q=val('hSearch').toLowerCase();
+  var rows=activityRows.filter(function(x){
+    if(!q)return true;
+    return [x.user_name,x.action,x.bill_no,x.detail].join(' ').toLowerCase().indexOf(q)!==-1;
+  });
+  $('historyBox').innerHTML=rows.length?rows.map(function(x){
+    return '<div class="logrow"><span class="t">'+fmtDT(x.at)+'</span> · '+
+      '<b>'+esc(x.user_name||'-')+'</b> '+esc(x.action)+
+      (x.bill_no?(' <b>'+esc(x.bill_no)+'</b>'):'')+
+      (x.detail?(' — '+esc(x.detail)):'')+'</div>';
+  }).join(''):'<div class="empty">ยังไม่มีประวัติ</div>';
+}
+
 // ================= ส่งอีเมลผ่าน Apps Script (Gmail ร้าน) =================
 function blobToBase64(blob){ return new Promise(function(res,rej){
   var r=new FileReader();
@@ -715,18 +874,20 @@ async function sendInvoiceEmail(inv, blob, opts){
     var res=await gasSend({action:'send',billNo:inv.bill_no,email:inv.email,
       subject:m.subject,body:m.body,filename:inv.bill_no+'.pdf',
       pdfBase64:await blobToBase64(mailBlob)});
-    var patch={updated_at:new Date().toISOString()};
+    var patch={updated_at:new Date().toISOString(),updated_by:userName()};
     var rc=Number(inv.resend_count||0);
     if(res.ok){
       if(opts.resend){ rc++; patch.resend_count=rc; }
       patch.email_status=EMAIL_STATUS.SENDING;
-      patch.email_status_detail=opts.resend?('ส่งซ้ำแล้ว (ครั้งที่ '+rc+') รอตรวจการตีกลับ')
-        :(opts.edited?'แก้ไขแล้ว ส่งใหม่ รอตรวจการตีกลับ':'ส่งแล้ว รอตรวจการตีกลับ');
+      patch.email_status_detail=(opts.resend?('ส่งซ้ำแล้ว (ครั้งที่ '+rc+') รอตรวจการตีกลับ')
+        :(opts.edited?'แก้ไขแล้ว ส่งใหม่ รอตรวจการตีกลับ':'ส่งแล้ว รอตรวจการตีกลับ'))+' โดย '+userName();
       patch.email_sent_at=new Date().toISOString();
+      logActivity(opts.resend?'ส่งอีเมลซ้ำ':'ส่งอีเมล',inv.bill_no,'ไปที่ '+inv.email);
       toast('ส่งอีเมลไปที่ '+inv.email+' แล้ว — ระบบจะตรวจว่าถึงปลายทางภายใน '+ASSUME_DELIVERED_AFTER_MIN+' นาที','ok');
     }else{
       patch.email_status=EMAIL_STATUS.ERROR;
       patch.email_status_detail='ส่งไม่ออก: '+(res.message||'ไม่ทราบสาเหตุ');
+      logActivity('ส่งอีเมลไม่ออก',inv.bill_no,'ไปที่ '+inv.email+' — '+(res.message||''));
       toast('ส่งอีเมลไม่สำเร็จ: '+(res.message||''),'err');
     }
     await sb.from('inv_invoices').update(patch).eq('bill_no',inv.bill_no);
@@ -947,6 +1108,7 @@ function validateForm(){
 
 async function issueOrUpdate(){
   if(!dbReady){ toast('ยังเชื่อมต่อฐานข้อมูลไม่ได้','err'); return; }
+  if(!currentUser){ showLogin('เข้าสู่ระบบก่อนทำรายการครับ'); return; }
   var payload=validateForm();
   if(!payload) return;
   var btn=$('issueBtn'), editing=editingBillNo;
@@ -956,11 +1118,13 @@ async function issueOrUpdate(){
   try{
     var inv=null;
     if(editing){
-      payload.status_detail='แก้ไขล่าสุด '+fmtDT(null);
+      payload.status_detail='แก้ไขล่าสุด '+fmtDT(null)+' โดย '+userName();
+      payload.updated_by=userName();
       payload.updated_at=new Date().toISOString();
       var u=await sb.from('inv_invoices').update(payload).eq('bill_no',editing).select().single();
       if(u.error) throw new Error(u.error.message);
       inv=u.data;
+      logActivity('แก้ไขบิล',editing,'ยอดรวม '+fmt(inv.grand_total)+' บาท');
       toast('บันทึกการแก้ไขบิล '+editing+' แล้ว','ok');
     }else{
       var branch=CONFIG.BRANCHES.filter(function(b){ return b.prefix===payload.branch_prefix; })[0]||CONFIG.BRANCHES[0];
@@ -969,7 +1133,8 @@ async function issueOrUpdate(){
       while(tries<5){
         payload.bill_no=nb.billNo;
         payload.status=STATUS.ISSUED;
-        payload.status_detail='ออกบิลเมื่อ '+fmtDT(null);
+        payload.status_detail='ออกบิลเมื่อ '+fmtDT(null)+' โดย '+userName();
+        payload.created_by=userName();
         ins=await sb.from('inv_invoices').insert(payload).select().single();
         if(!ins.error) break;
         if(ins.error.code==='23505' && !nb.viaRpc){
@@ -980,6 +1145,7 @@ async function issueOrUpdate(){
       }
       if(!ins||ins.error) throw new Error('ออกเลขบิลไม่สำเร็จ');
       inv=ins.data;
+      logActivity('ออกบิล',inv.bill_no,(inv.customer_name||'-')+' · ยอดรวม '+fmt(inv.grand_total)+' บาท');
       toast('ออกบิล '+inv.bill_no+' แล้ว — กำลังสร้าง PDF...','ok');
     }
     // สร้าง PDF + เก็บลง NAS (บิลถูกบันทึกในฐานข้อมูลแล้ว ต่อให้ขั้นนี้พลาดก็กดบันทึกซ้ำจากรายการได้)
@@ -1043,9 +1209,11 @@ function exitEdit(){
 
 async function setStatus(billNo,status,detail){
   var r=await sb.from('inv_invoices')
-    .update({status:status,status_detail:detail,updated_at:new Date().toISOString()})
+    .update({status:status,status_detail:detail,updated_by:userName(),
+      updated_at:new Date().toISOString()})
     .eq('bill_no',billNo);
   if(r.error){ toast('ผิดพลาด: '+r.error.message,'err'); return false; }
+  logActivity(status===STATUS.CANCELLED?'ยกเลิกบิล':'เรียกคืนบิล',billNo,'');
   return true;
 }
 
@@ -1067,7 +1235,7 @@ function invCard(v, withResend){
   var detail=v.email_status_detail||v.status_detail||'';
   var h='<div class="inv"><div class="top"><div><div class="no">'+esc(v.bill_no)+'</div>'+
     '<div class="meta">'+esc(v.customer_name||'-')+(v.email?' • '+esc(v.email):'')+'<br>'+
-    fmtDT(v.issued_at)+'</div></div>'+
+    fmtDT(v.issued_at)+(v.created_by?(' • ออกโดย '+esc(v.created_by)):'')+'</div></div>'+
     '<div style="text-align:right"><div class="amt">'+fmt(v.grand_total)+' ฿</div>'+
     '<div style="margin-top:6px">'+badge(v.status)+'</div></div></div>'+
     '<div class="detail">'+emailBadge(v)+esc(detail)+
@@ -1099,7 +1267,9 @@ function bindCards(scope){
       var blob=await buildInvoicePdf(v);
       var path=await storePdf(v.bill_no, blob, v.issued_at);
       if(path){
-        await sb.from('inv_invoices').update({nas_path:path,updated_at:new Date().toISOString()}).eq('bill_no',v.bill_no);
+        await sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
+          updated_at:new Date().toISOString()}).eq('bill_no',v.bill_no);
+        logActivity('บันทึก PDF ลง NAS',v.bill_no,path);
         toast('บันทึก '+path+' แล้ว','ok'); loadInvoices();
       }
     }catch(e){ toast('ผิดพลาด: '+e.message,'err'); }
@@ -1221,6 +1391,7 @@ async function loadCounters(){
     if(isNaN(n)||n<0){ toast('ต้องเป็นตัวเลข','err'); return; }
     var r2=await sb.from('inv_counters').upsert({prefix:p,last_no:n});
     if(r2.error){ toast('ผิดพลาด: '+r2.error.message,'err'); return; }
+    logActivity('ตั้งเลขบิล','', p+' = '+n+' (ใบต่อไป '+(n+1)+')');
     toast('ตั้งเลขล่าสุดของ '+p+' = '+n+' แล้ว','ok');
     loadCounters();
   }; });
@@ -1233,8 +1404,18 @@ document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
   t.classList.add('active');
   $('panel-'+t.dataset.tab).classList.add('active');
   if(t.dataset.tab==='list'||t.dataset.tab==='cancelled'||t.dataset.tab==='failed')loadInvoices();
+  if(t.dataset.tab==='history')loadHistory();
   if(t.dataset.tab==='settings')loadCounters();
 }; });
+
+$('liBtn').onclick=doLogin;
+$('liPass').addEventListener('keydown',function(e){ if(e.key==='Enter')doLogin(); });
+$('liUser').addEventListener('keydown',function(e){ if(e.key==='Enter')$('liPass').focus(); });
+$('userChip').onclick=function(){
+  if(confirm('ออกจากระบบ ('+userName()+') ?'))logout();
+};
+$('refreshHistory').onclick=loadHistory;
+$('hSearch').oninput=renderHistory;
 
 $('cPhone').addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,10); });
 $('cTax').addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,13); });
@@ -1306,6 +1487,7 @@ $('saveGasBtn').onclick=async function(){
   if(u && !/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(u)){
     toast('URL ต้องเป็นของ Google Apps Script (ลงท้าย /exec)','err'); return; }
   if(await saveSetting('gas_endpoint',u)){
+    logActivity('ตั้งค่าตัวส่งอีเมล','', u?'ตั้ง URL ใหม่':'ปิดการส่งอัตโนมัติ');
     toast(u?'บันทึก URL ตัวส่งอีเมลแล้ว — ใช้ได้ทุกเครื่อง':'ปิดการส่งอีเมลอัตโนมัติแล้ว','ok');
     renderGasStatus();
   }
@@ -1330,6 +1512,11 @@ $('sigRemoveBtn').onclick=async function(){
 };
 
 // ================= init =================
+function startApp(){
+  renderUserChip();
+  loadSettings();
+  loadInvoices();
+}
 (async function init(){
   $('shopName').textContent=CONFIG.SHOP.senderName+' · '+CONFIG.SHOP.name;
   var sel=$('fBranch');
@@ -1344,7 +1531,10 @@ $('sigRemoveBtn').onclick=async function(){
   try{ sigDataUrl=await idbGet('sigDataUrl')||null; }catch(e){}
   renderNasStatus(); renderSig();
 
-  if(await checkDb()){ loadSettings(); loadInvoices(); }
+  if(await checkDb()){
+    if(await restoreSession()){ startApp(); }
+    else showLogin('');
+  }
   // โหลดฐานรหัสไปรษณีย์ล่วงหน้าแบบเงียบๆ
   getZipDb().catch(function(){});
 })();
