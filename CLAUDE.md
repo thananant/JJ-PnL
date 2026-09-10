@@ -34,6 +34,15 @@
 - Edge Functions deploy โดยวางโค้ดใน Dashboard (ชื่อฟังก์ชัน `social-brain` / `social-webhook` — ตัวหลังปิด Verify JWT)
 - secrets ฝั่ง LINE ของระบบนี้คือ `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` (OA หน้าร้าน) — **คนละตัวกับ `LINE_SECRET`/`LINE_TOKEN` ซึ่งเป็นของระบบอื่น ห้ามใช้ปน**
 
+## ระบบปฏิทินองค์กร (JJ Calendar)
+
+- แอปคือ `jjmk-calendar.html` ที่ root (สร้าง 2026-09-10) — ปฏิทินนัดหมายภายในองค์กร: สร้างนัด ระบุผู้สร้าง/ผู้เข้าร่วม มุมมองเดือน+รายการนัด
+- ตาราง Supabase ใช้ prefix `cal_` (`cal_events`/`cal_attendees`/`cal_settings`) · ล็อกอินใช้ `pnl_users` ร่วมกับ P&L · สาขาอ่านจาก `pnl_branches` (+ JJCK/OFFICE เพิ่มในแอป)
+- SQL ติดตั้งคือ `jjmk-calendar.sql` ที่ root ของ branch `sql`
+- เพิ่มนัดลงมือถือได้ 2 ทาง: ดาวน์โหลด `.ics` ต่อนัด (มี VALARM เตือนตาม `reminder_min`) / subscribe ฟีดทั้งปฏิทินผ่าน Edge Function **`cal-feed`** (deploy ผ่าน Dashboard · **ปิด Verify JWT** · URL ต้องมี `?token=` ตรงกับ `cal_settings` id=`feed` · `&user=` = กรองเฉพาะนัดของคนนั้น)
+- นัดทั้งวันเก็บ `start_at`/`end_at` เป็น 00:00 เวลาไทยของวันแรก/วันสุดท้าย (นับรวม) — ฝั่ง ICS แปลง DTEND เป็น exclusive (+1 วัน) ให้แล้ว
+- ยกเลิกนัด = `cancelled=true` (soft delete) → หายจากแอปและฟีดมือถือตอนรีเฟรช
+
 ## กติกาการส่งงาน (เจ้าของสั่ง 2026-09-08)
 
 - ไฟล์ที่ต้องรัน/วางบน **Supabase** (SQL, โค้ด Edge Functions) → **ส่งเป็นไฟล์ในแชททันที** ไม่ให้ผู้ใช้ไปตามหาจากที่อื่น
