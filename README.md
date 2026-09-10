@@ -18,6 +18,13 @@
 - `jjmk_maint_setup.sql` — ตาราง maint_tasks/maint_logs + สิทธิ์ + bucket รูป `maint-photos`
   + งานตั้งต้น 9 งานให้ทุกสาขา (รันซ้ำได้ ไม่เพิ่มซ้ำ)
 
+## ระบบออกใบกำกับภาษี (JJ Invoice — แอพ `jjmk-invoice.html` บน main)
+
+- `jjmk-invoice.sql` — ตาราง `inv_*` (บิล `inv_invoices` · เลขบิล `inv_counters` ·
+  ตั้งค่า `inv_settings` · ประวัติผู้ทำรายการ `inv_activity`) + RPC `inv_next_bill_no`
+  (รันซ้ำได้ · เก็บเฉพาะตัวหนังสือ — ไฟล์ PDF เก็บลง NAS ไม่ขึ้น Supabase ·
+  ล็อกอินใช้ `pnl_users` ร่วมกับ P&L — ต้องมี `jjmk_pnl_users.sql` ก่อน)
+
 ## ระบบวัดความพึงพอใจลูกค้า (JJ KPI — แอพ `jjmk-kpi.html` บน main)
 
 - `jjmk-kpi.sql` — ตาราง `kpi_*` (รวม `kpi_settings` เก็บตำแหน่งที่ซ่อนจากหน้าชมพนักงาน) + views
