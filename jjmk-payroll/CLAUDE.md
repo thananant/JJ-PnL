@@ -16,6 +16,8 @@
   - ทดสอบมือ: `GET /report/daily?send=1`
   - Secrets อยู่ใน CF dashboard: SUPABASE_URL, SUPABASE_KEY, LINE_TOKEN, LINE_GROUP_ID
 - **ผู้ใช้**: เจ้าของร้าน + ผู้จัดการ เปิดจากคอมและ iPhone — ทุกฟีเจอร์ต้องรองรับมือถือ
+- **ล็อกอิน (2026-09-10)**: ต้องล็อกอินก่อนใช้แอป ด้วย**บัญชีเดียวกับแอป P&L/JJ Social** (ตาราง `pnl_users` · สูตร `pwHash = sha256hex(user+'|'+pass+'|JJPNL')` แชร์กัน 3 แอป — **ห้ามเปลี่ยน**) · session เก็บ localStorage `jjpay_sess` · เพิ่ม/ปิดบัญชีทำที่หน้า "ผู้ใช้" ในแอป P&L · แอปนี้อ่าน `pnl_users` อย่างเดียว ไม่เขียน
+- **ประวัติการทำรายการ (audit — 2026-09-10)**: ตาราง `payroll_audit` + หน้า 🕘 `#audit` · ดักที่ **wrapper ของ `db.from()` จุดเดียว** — ทุก insert/update/upsert/delete ที่สำเร็จถูกจดอัตโนมัติ (ใคร/ทำอะไร/ตารางไหน/รายละเอียด≤800ตัว/หน้าไหน/เมื่อไหร่) → โค้ดบันทึกใหม่ในอนาคต**ไม่ต้องทำอะไรเพิ่ม** · `AUDIT_SKIP` กันจดตัวเองและ pnl_users · flag `auditReady` — ยังไม่รัน `jj_audit.sql` แอปทำงานปกติแค่ไม่จด · login/logout ก็ถูกจด · หน้า audit โยงชื่อพนักงานจาก employee_id/emp_code ใน detail ให้อ่านง่าย
 
 ## ธุรกิจ / กฎเงินเดือน (สำคัญมาก — อย่าเปลี่ยนโดยไม่ถาม)
 
@@ -64,6 +66,7 @@
 - `loans` — พนักงานยืมเงิน unique ต่อคน: amount, monthly, deduct_on(mid/payroll), start_period, opening, loan_date, note · `loan_entries` — override ผ่อนรายงวด unique(employee_id, period)
 - `sso_entries` — ประกันสังคม override รายงวด: unique(employee_id, period) · employees เพิ่ม sso_on, sso_id · payroll_settings เพิ่ม sso_rate/sso_min/sso_max/sso_account
 - `tips` — ทิปรวมต่อสาขาต่องวด: period, branch, amount, member_ids (csv เลือกคนเอง · ว่าง = อัตโนมัติ), unique(period, branch)
+- `payroll_audit` — ประวัติการทำรายการ: username, display_name, action(insert/update/upsert/delete/login/logout), tbl, detail, page, at · (`pnl_users` เป็นของแอป P&L — payroll อ่านตอนล็อกอินเท่านั้น)
 - ทุกตาราง RLS เปิดแบบ allow-all + อยู่ใน publication `supabase_realtime`
 - **ระบบ JJ KPI อ่านตาราง `employees` + `punches`** (อ่านอย่างเดียว 2 RPC: `kpi_sync_staff` ใช้ employees
   id, branch, nick, full_name, position, active · `kpi_on_duty` ใช้ punches emp_code, punch_date, punch_time เทียบ employees.code
@@ -102,6 +105,7 @@
 
 ## งานค้าง (ทำต่อได้เลย)
 
+0. **รอเจ้าของรัน `jj_audit.sql` ใน Supabase** (ส่งไฟล์ในแชทแล้ว 2026-09-10) — ก่อนรัน แอปใช้ได้ปกติแต่ยังไม่จดประวัติ
 1. **เติมรหัส 17 คนใน `jjmk-payroll/jj_info_fix.sql` (branch `sql`) ส่วน 4** (นำเข้าข้อมูลจาก Excel เสร็จ 128/145 คน):
    ลิลลี่ แถว23 (น่าจะ = KESONE SINAPHA code 4119126353 JJLP) · ลิลลี่ แถว85 (NAN LIN LIN KHAING = อีกคนที่ JJRD) · น้ำฝน แถว42,59 · เล็ก แถว50 · เมา แถว57 · พะแสง แถว60 · หนุ่ม แถว69 · ฟ้า แถว84 · วี แถว93 · ต้น แถว95 · Savana แถว99 · หอม แถว100 · น้อย แถว102 (NANG PUT ซ้ำ 3) · โซ แถว114 · แตงโม แถว140 · วิน แถว144
    → รัน "ส่วน 1" ของไฟล์เพื่อดูผู้สมัคร+รหัส แล้วเติมใน "ส่วน 4"
