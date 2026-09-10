@@ -32,6 +32,12 @@
   (ซิงก์รายชื่อพนักงานจาก `employees` + เช็คคนกำลังเข้างานจาก `punches` ของ payroll — อ่านอย่างเดียว · รันซ้ำได้)
   ย้ายมาจาก repo `thananant/JJ-KPI` (2026-09-06) — รายละเอียดดู `kpi/CLAUDE.md` บน main
 
+## ระบบปฏิทินองค์กร (JJ Calendar — แอพ `jjmk-calendar.html` บน main)
+
+- `jjmk-calendar.sql` — ตาราง `cal_events`/`cal_attendees`/`cal_settings` + สิทธิ์ + token ฟีด (รันซ้ำได้)
+  คู่กับ Edge Function `cal-feed` (ฟีด ICS สำหรับ subscribe ลงมือถือ — deploy ผ่าน Dashboard, ปิด Verify JWT
+  · โค้ดส่งให้เจ้าของในแชท 2026-09-10)
+
 branch นี้เก็บเฉพาะไฟล์ SQL — ไม่รวมเข้า main และไม่ merge กับ branch อื่น
 
 ## ระบบเงินเดือน (JJ-Payroll — โค้ดอยู่ `jjmk-payroll/` บน main)
