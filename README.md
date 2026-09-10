@@ -15,6 +15,10 @@
 - `jjmk-payroll.html` — 💰 **ระบบเงินเดือน (JJ Payroll)** ย้ายมาจาก repo `thananant/JJ-Payroll` (2026-09-06):
   เปิดที่ https://thananant.github.io/JJ-PnL/jjmk-payroll.html · ไฟล์ประกอบ (worker/tools/docs/logo)
   อยู่โฟลเดอร์ `jjmk-payroll/` · อ่าน `jjmk-payroll/CLAUDE.md` ก่อนแก้ทุกครั้ง
+- `jjmk-calendar.html` — 📅 **ปฏิทินองค์กร (JJ Calendar)** (2026-09-10): นัดหมายภายใน 4 สาขา
+  สร้างนัดระบุผู้สร้าง/ผู้เข้าร่วม · เพิ่มลงแอปปฏิทิน iOS/Android ได้ (.ics ต่อนัด + subscribe ฟีด
+  ผ่าน Edge Function `cal-feed`) · แจ้งเตือนล่วงหน้าตามที่ตั้งในนัด · ตาราง Supabase prefix `cal_`
+  · ล็อกอินใช้ `pnl_users` ร่วมกับ P&L · SQL ติดตั้งคือ `jjmk-calendar.sql` ที่ branch `sql`
 - `jjmk-invoice.html` — 🧾 **ระบบออกใบกำกับภาษี (JJ Invoice)** พอร์ตจาก Google Apps Script (2026-09-08):
   ออกใบเสร็จรับเงิน/ใบกำกับภาษีตามฟอร์มบิล JJRD · ข้อมูลบิลเก็บใน Supabase (ตาราง prefix `inv_`
   ตัวหนังสือล้วน **ไม่เก็บไฟล์รูป/PDF ใดๆ ใน Supabase**) · ไฟล์ PDF บันทึกลงโฟลเดอร์ NAS
@@ -35,6 +39,8 @@
 - `jjmk_owner_setup.sql` — ตารางหน้า Owner: ผ่อนชำระ `pnl_installments` + ยอดขาย/กำไรใส่เอง `pnl_owner_monthly`
 - `jjmk_maint_setup.sql` — ติดตั้งตารางบำรุงรักษาสาขา + งานตั้งต้น 9 งานให้ทุกสาขา
 - `jjmk-kpi.sql` — ติดตั้งตารางระบบวัดความพึงพอใจลูกค้า (JJ KPI, ตาราง prefix `kpi_`)
+- `jjmk-calendar.sql` — ติดตั้งตารางปฏิทินองค์กร (JJ Calendar, ตาราง prefix `cal_`)
+  · คู่กับ Edge Function `cal-feed` (ฟีด ICS สำหรับ subscribe ลงมือถือ — deploy ผ่าน Dashboard, ปิด Verify JWT)
 - `jjmk-payroll/*.sql` — migration ทั้งหมดของระบบเงินเดือน (15 ไฟล์ รันซ้ำได้ · Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`)
 
 ไฟล์ติดตั้งระบบ JJ Social (`jjmk_social_setup.sql`, Edge Functions ใน `supabase/`,
