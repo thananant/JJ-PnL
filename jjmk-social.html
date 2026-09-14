@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JJ Social — จริงใจหมูกระทะ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --red:#FF4046; --red-d:#C62127; --red-t:rgba(255,64,70,.15);
+  --gold:#FFC643; --gold-t:rgba(255,198,67,.13);
+  --ink:#F4EFE8; --mut:#A89E93; --bg:#0C0A09; --card:rgba(255,255,255,.035); --line:rgba(255,255,255,.10);
+  --ok:#2FE08A; --ok-t:rgba(47,224,138,.13); --bad:#FF5C5C; --bad-t:rgba(255,92,92,.13);
+  --blu:#58B0FF; --blu-t:rgba(88,176,255,.13);
+  --r:16px; --sh:0 2px 20px rgba(0,0,0,.35); --glow:0 0 18px rgba(255,64,70,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;min-height:100dvh;overflow-x:hidden}
+::selection{background:rgba(255,64,70,.4)}
+/* ---------- พื้นหลัง: ออโรร่าแดง-ทอง + เส้นกริดจางๆ ---------- */
+body::before{content:'';position:fixed;inset:-20%;z-index:-2;pointer-events:none;
+  background:radial-gradient(38% 30% at 12% 8%,rgba(198,33,39,.25),transparent 60%),
+             radial-gradient(30% 26% at 88% 12%,rgba(255,198,67,.11),transparent 60%),
+             radial-gradient(42% 36% at 78% 92%,rgba(198,33,39,.16),transparent 60%);
+  animation:aur 26s ease-in-out infinite alternate}
+body::after{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.55;
+  background:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(75% 65% at 50% 28%,#000 0%,transparent 100%);
+  mask-image:radial-gradient(75% 65% at 50% 28%,#000 0%,transparent 100%)}
+@keyframes aur{to{transform:translate3d(3%,4%,0) scale(1.07)}}
+h1,h2,h3,.num,.kpi-v{font-family:'Prompt',sans-serif}
+.num,.kpi-v{font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:15px;color:inherit}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)}
+input,select,textarea{background:rgba(255,255,255,.05);border:1.5px solid var(--line);border-radius:12px;padding:9px 11px;width:100%;outline:none;transition:border-color .18s,box-shadow .18s}
+input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(255,64,70,.14)}
+input::placeholder,textarea::placeholder{color:#6E655C}
+select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mut) 50%),linear-gradient(135deg,var(--mut) 50%,transparent 50%);background-position:calc(100% - 17px) 55%,calc(100% - 12px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
+select option{background:#1A1512;color:var(--ink)}
+textarea{resize:vertical;min-height:64px;line-height:1.5}
+::-webkit-scrollbar{height:7px;width:7px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,64,70,.45)}
+
+/* ---------- layout ---------- */
+header{position:sticky;top:0;z-index:40;background:rgba(14,11,10,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+header::after{content:'';display:block;height:2px;margin-top:-1px;
+  background:linear-gradient(90deg,transparent,var(--red) 18%,var(--gold) 50%,var(--red) 82%,transparent);
+  background-size:220% 100%;animation:scan 6s linear infinite;opacity:.85}
+@keyframes scan{to{background-position:-220% 0}}
+.hrow{display:flex;align-items:center;gap:10px;padding:10px clamp(14px,1.6vw,28px) 8px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-family:'Prompt';font-weight:700;font-size:18px}
+.brand .hlogo{width:34px;height:34px;border-radius:10px;box-shadow:0 0 14px rgba(255,198,67,.35)}
+.brand>span{background:linear-gradient(90deg,#FFF3E0 0%,var(--gold) 45%,#FFF3E0 90%);background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 7s linear infinite}
+.brand small{font-weight:500;font-size:11px;display:block;line-height:1;-webkit-text-fill-color:var(--mut);color:var(--mut)}
+@keyframes shine{to{background-position:-200% 0}}
+.seg{display:flex;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px}
+.seg button{padding:7px 13px;border-radius:9px;font-weight:600;color:var(--mut);font-size:14px;white-space:nowrap;transition:.15s}
+.seg button.on{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;box-shadow:var(--glow)}
+#daysPick{width:auto;padding:7px 30px 7px 10px;font-weight:600;font-size:14px}
+#syncDot{width:10px;height:10px;border-radius:50%;background:var(--ok);margin-left:auto;flex:none;position:relative}
+#syncDot::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ok);animation:ping 1.8s ease-out infinite}
+#syncDot.busy{background:var(--gold)}#syncDot.busy::after{border-color:var(--gold)}
+#syncDot.err{background:var(--bad)}#syncDot.err::after{border-color:var(--bad)}
+@keyframes ping{0%{transform:scale(.55);opacity:.9}80%,100%{transform:scale(1.9);opacity:0}}
+.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px 10px 9px;scrollbar-width:none}
+.tabbar::-webkit-scrollbar{display:none}
+.tabbar button{flex:none;padding:8px 14px;border-radius:99px;font-weight:600;color:var(--mut);font-size:14px;position:relative;border:1px solid transparent}
+.tabbar button.on{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;box-shadow:var(--glow)}
+main{padding:16px clamp(12px,1.6vw,28px) 60px;max-width:1280px;margin:0 auto;position:relative}
+.view{display:none}.view.on{display:block;animation:vin .3s ease}
+@keyframes vin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+aside#sideNav{display:none;position:fixed;left:0;top:0;bottom:0;width:225px;background:rgba(17,13,11,.85);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-right:1px solid var(--line);flex-direction:column;padding:16px 10px 12px;z-index:50;overflow-y:auto}
+@media(min-width:1080px){
+  aside#sideNav{display:flex}
+  header,main{margin-left:225px}
+  .tabbar{display:none}
+  main{max-width:1180px}
+}
+.sb-logo{display:flex;gap:10px;align-items:center;padding:2px 8px 14px;font-family:'Prompt'}
+.sb-logo img{width:42px;height:42px;border-radius:12px;animation:logoglow 3.5s ease-in-out infinite alternate}
+@keyframes logoglow{from{box-shadow:0 0 8px rgba(255,198,67,.25)}to{box-shadow:0 0 22px rgba(255,198,67,.55)}}
+.sb-logo b{font-size:15px;display:block;line-height:1.2}
+.sb-logo small{color:var(--mut);font-size:11px;font-weight:500}
+.sb-sec{font-size:10.5px;font-weight:700;letter-spacing:.12em;color:#6E655C;padding:13px 10px 5px;font-family:'Prompt';text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 10px;border-radius:11px;font-weight:600;color:#C9BFB4;font-size:14px;position:relative;transition:.15s}
+.sb-item svg,.sb-item .em{width:19px;text-align:center;flex:none}
+.sb-item:hover{background:rgba(255,255,255,.06);transform:translateX(2px)}
+.sb-item.on{background:var(--red-t);color:var(--red);box-shadow:inset 0 0 0 1px rgba(255,64,70,.32),0 0 16px rgba(255,64,70,.12)}
+.sb-foot{margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
+#sbUser{font-size:12px;color:var(--mut);padding:4px 10px 8px}
+.badge{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--red);color:#fff;font-size:10.5px;font-weight:700;border-radius:99px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;font-family:'Prompt';box-shadow:0 0 10px rgba(255,64,70,.6)}
+.tabbar .badge{position:static;transform:none;margin-left:5px}
+
+/* ---------- components ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px 16px;margin-bottom:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:border-color .2s}
+.card:hover{border-color:rgba(255,255,255,.18)}
+.card h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 .sp{font-weight:500;color:var(--mut);font-size:12px}
+.grid{display:grid;gap:12px}
+@media(min-width:840px){.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}.g4{grid-template-columns:repeat(4,1fr)}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--sh);position:relative;overflow:hidden;backdrop-filter:blur(8px);transition:.2s}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red),var(--gold));opacity:.8}
+.kpi:hover{transform:translateY(-2px);border-color:rgba(255,64,70,.4);box-shadow:0 6px 24px rgba(0,0,0,.5)}
+.kpi .t{font-size:11.5px;color:var(--mut);font-weight:600}
+.kpi-v{font-size:24px;font-weight:700;margin-top:2px;text-shadow:0 0 18px rgba(255,244,230,.25)}
+.kpi .s{font-size:11px;color:var(--mut);margin-top:1px}
+.kpi.good .kpi-v{color:var(--ok);text-shadow:0 0 16px rgba(47,224,138,.55)}
+.kpi.warn .kpi-v{color:var(--gold);text-shadow:0 0 16px rgba(255,198,67,.5)}
+.kpi.bad .kpi-v{color:var(--bad);text-shadow:0 0 16px rgba(255,92,92,.55)}
+.btn{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;border-radius:11px;padding:9px 16px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 14px rgba(255,64,70,.3);transition:.18s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 24px rgba(255,64,70,.5)}
+.btn.dk{background:linear-gradient(135deg,#2B2420,#3C312B);box-shadow:0 2px 12px rgba(0,0,0,.45)}
+.btn.gh{background:rgba(255,255,255,.05);color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
+.btn.gh:hover{border-color:rgba(255,64,70,.5);box-shadow:0 0 14px rgba(255,64,70,.18)}
+.btn.sm{padding:6px 12px;font-size:13px;border-radius:9px}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;border-radius:99px;padding:2.5px 9px;background:rgba(255,255,255,.07);color:#CFC6BB;border:1px solid rgba(255,255,255,.08);white-space:nowrap}
+.chip.pos{background:var(--ok-t);color:var(--ok);border-color:rgba(47,224,138,.35)}
+.chip.neg{background:var(--bad-t);color:var(--bad);border-color:rgba(255,92,92,.35)}
+.chip.neu{background:var(--gold-t);color:var(--gold);border-color:rgba(255,198,67,.35)}
+.chip.br{background:var(--blu-t);color:var(--blu);border-color:rgba(88,176,255,.35)}
+.chip.sev3{background:var(--bad);color:#fff;border-color:transparent;box-shadow:0 0 12px rgba(255,92,92,.65);animation:blink 1.4s ease-in-out infinite}
+@keyframes blink{50%{opacity:.6}}
+.mut{color:var(--mut)} .xs{font-size:11.5px} .sm{font-size:13px} .b{font-weight:700}
+.right{text-align:right}
+.fld{margin-bottom:10px}
+.fld label{display:block;font-size:12px;font-weight:700;color:var(--mut);margin-bottom:4px;font-family:'Prompt'}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.twrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.2)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:transparent}
+th{background:rgba(255,255,255,.05);text-align:left;font-size:11.5px;color:var(--mut);font-family:'Prompt';padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}
+tr:last-child td{border-bottom:0}
+tbody tr{transition:background .15s}
+tr:hover td{background:rgba(255,255,255,.025)}
+.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13.5px}
+.spin{width:24px;height:24px;border:3px solid rgba(255,255,255,.08);border-top-color:var(--red);border-radius:50%;animation:sp .7s linear infinite;margin:30px auto;box-shadow:0 0 18px rgba(255,64,70,.25)}
+@keyframes sp{to{transform:rotate(360deg)}}
+canvas{max-width:100%}
+.chartbox{position:relative;height:240px}
+.chartbox canvas{width:100%!important;height:100%!important}
+
+/* ---------- feed ---------- */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.filters select,.filters input{width:auto;padding:7px 10px;font-size:14px}
+.filters select{padding-right:30px}
+.filters input{flex:1;min-width:140px}
+.mcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:13px 15px;margin-bottom:12px;backdrop-filter:blur(8px);transition:.2s}
+.mcard:hover{border-color:rgba(255,255,255,.2);transform:translateY(-1px)}
+.mcard.neg{border-left:3px solid var(--bad);box-shadow:-8px 0 22px -10px rgba(255,92,92,.55),var(--sh)}
+.mcard.pos{border-left:3px solid var(--ok);box-shadow:-8px 0 22px -10px rgba(47,224,138,.5),var(--sh)}
+.mcard.neu{border-left:3px solid var(--gold);box-shadow:-8px 0 22px -10px rgba(255,198,67,.45),var(--sh)}
+.mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+.mhead .who{font-weight:700;font-family:'Prompt';font-size:14px}
+.mhead .when{color:var(--mut);font-size:12px;margin-left:auto}
+.stars{color:var(--gold);font-size:13px;letter-spacing:1px;text-shadow:0 0 10px rgba(255,198,67,.55)}
+.mtext{white-space:pre-wrap;line-height:1.55;margin:4px 0 8px;color:#E6DFD5}
+.mchips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.aisum{font-size:13px;color:#DCD3C7;background:linear-gradient(135deg,rgba(255,64,70,.09),rgba(255,198,67,.06));border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:7px 10px;margin-bottom:8px}
+.ilist{font-size:12.5px;margin:0 0 8px;padding-left:0;list-style:none}
+.ilist li{padding:2px 0}
+.replybox{border-top:1.5px dashed rgba(255,255,255,.15);padding-top:9px;margin-top:4px}
+.replybox textarea{font-size:14px}
+.racts{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
+.sentline{font-size:12.5px;color:var(--ok);background:var(--ok-t);border:1px solid rgba(47,224,138,.3);border-radius:10px;padding:7px 10px}
+
+/* ---------- chat ---------- */
+.chatwrap{display:grid;gap:12px}
+@media(min-width:900px){.chatwrap{grid-template-columns:300px 1fr;align-items:start}}
+.threads{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;max-height:70vh;overflow-y:auto;backdrop-filter:blur(8px)}
+.thr{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;display:flex;gap:8px;align-items:center;transition:.15s}
+.thr:hover{background:rgba(255,255,255,.05)}
+.thr.on{background:var(--red-t);box-shadow:inset 3px 0 0 var(--red)}
+.thr .nm{font-weight:700;font-size:13.5px;font-family:'Prompt'}
+.thr .lst{font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.thr .wait{width:9px;height:9px;border-radius:50%;background:var(--red);flex:none;margin-left:auto;box-shadow:0 0 8px rgba(255,64,70,.8);animation:blink 1.4s ease-in-out infinite}
+.convo{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;max-height:70vh;backdrop-filter:blur(8px)}
+.msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.bub{max-width:82%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.5;white-space:pre-wrap}
+.bub.in{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.07);align-self:flex-start;border-bottom-left-radius:4px}
+.bub.out{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;align-self:flex-end;border-bottom-right-radius:4px;box-shadow:0 2px 14px rgba(255,64,70,.3)}
+.bub.draft{background:var(--gold-t);color:var(--gold);border:1.5px dashed rgba(255,198,67,.55);align-self:flex-end}
+.bub .bmeta{display:block;font-size:10.5px;opacity:.8;margin-top:3px}
+.chatin{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.chatin textarea{min-height:42px;max-height:120px}
+
+/* ---------- misc ---------- */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(90px);background:rgba(24,19,16,.92);backdrop-filter:blur(10px);border:1px solid rgba(255,64,70,.4);color:#fff;font-size:13.5px;font-weight:600;border-radius:13px;padding:11px 18px;transition:.28s;z-index:99;max-width:88vw;text-align:center;box-shadow:0 6px 30px rgba(0,0,0,.5),0 0 20px rgba(255,64,70,.15)}
+#toast.on{transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:var(--bad);box-shadow:0 6px 30px rgba(0,0,0,.5),0 0 24px rgba(255,92,92,.35)}
+#modalWrap{position:fixed;inset:0;background:rgba(5,3,2,.7);backdrop-filter:blur(6px);z-index:80;display:none;align-items:flex-start;justify-content:center;padding:5vh 14px;overflow-y:auto}
+#modalWrap.on{display:flex}
+.modal{background:#181310;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:18px 18px 16px;width:100%;max-width:520px;box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 40px rgba(255,64,70,.08);animation:vin .25s ease}
+.modal h3{margin:0 0 12px;font-size:16px}
+.modal .card{background:rgba(255,255,255,.04)}
+#login{max-width:340px;margin:9vh auto;text-align:center;padding:0 16px;position:relative}
+#login .lg,#login .loginlogo{width:76px;height:76px;border-radius:20px;margin:0 auto 14px;display:block;animation:logoglow 3.5s ease-in-out infinite alternate}
+#login .lg{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;font-family:'Prompt'}
+#login h1{background:linear-gradient(90deg,#FFF3E0,var(--gold) 50%,#FFF3E0);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 7s linear infinite}
+.codebx{background:#14100D;border:1px solid rgba(255,255,255,.09);color:#E8DFD3;font-family:ui-monospace,Menlo,monospace;font-size:12px;border-radius:10px;padding:10px 12px;overflow-x:auto;white-space:pre;line-height:1.6}
+.copyline{display:flex;gap:7px;align-items:center;margin:6px 0}
+.copyline input{font-size:12.5px;font-family:ui-monospace,monospace;background:rgba(0,0,0,.28)}
+.hintlink{color:var(--blu);font-weight:600;font-size:13px;text-decoration:underline dotted;text-underline-offset:3px}
+.slotgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.slot{border:1px solid var(--line);border-radius:12px;padding:9px 11px;text-align:center;background:rgba(255,255,255,.03);transition:.2s}
+.slot:hover{border-color:rgba(255,198,67,.4);transform:translateY(-2px)}
+.slot .sv{font-family:'Prompt';font-weight:700;font-size:19px;text-shadow:0 0 14px currentColor}
+.faqrow{display:grid;grid-template-columns:1fr 1fr 34px;gap:7px;margin-bottom:7px}
+.icb{width:34px;height:38px;border-radius:9px;border:1.5px solid var(--line);background:rgba(255,255,255,.04);color:var(--bad);font-size:15px}
+.icb:hover{border-color:var(--bad);box-shadow:0 0 10px rgba(255,92,92,.3)}
+#rtBar{display:none;position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(30,24,15,.92);color:var(--gold);border:1.5px solid rgba(255,198,67,.5);font-size:13px;font-weight:600;border-radius:99px;padding:8px 16px;z-index:60;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,.5),0 0 18px rgba(255,198,67,.2);backdrop-filter:blur(8px)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ======== login ======== -->
+<div id="login" style="display:none">
+  <img class="loginlogo" id="liLogo" alt="จริงใจหมูกระทะ">
+  <h1 style="font-size:21px;margin:0 0 4px">JJ Social</h1>
+  <p class="mut" style="margin:0 0 16px">ระบบฟังเสียงลูกค้า + แชทบอท<br>จริงใจหมูกระทะ · ใช้บัญชีเดียวกับระบบ P&L</p>
+  <div class="fld" style="text-align:left"><label>Username</label><input id="liUser" autocomplete="username"></div>
+  <div class="fld" style="text-align:left"><label>รหัสผ่าน</label><input id="liPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+  <button class="btn dk" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
+  <p class="xs mut" style="margin-top:14px">* ต้องรัน <b>jjmk_social_setup.sql</b> ใน Supabase ก่อน 1 ครั้ง</p>
+</div>
+
+<!-- ======== app ======== -->
+<div id="app" style="display:none">
+<aside id="sideNav">
+  <div class="sb-logo"><img id="sbLogo" alt="จริงใจ"><div><b>จริงใจหมูกระทะ</b><small>ฟังเสียงลูกค้า · Social</small></div></div>
+  <div class="sb-sec">ภาพรวม</div>
+  <button class="sb-item on" data-v="dash"><span class="em">📊</span>แดชบอร์ด</button>
+  <button class="sb-item" data-v="insight"><span class="em">🧠</span>สรุป &amp; ประเด็น</button>
+  <div class="sb-sec">งานประจำวัน</div>
+  <button class="sb-item" data-v="feed"><span class="em">📣</span>เสียงลูกค้า<span class="badge" id="bdFeed" style="display:none"></span></button>
+  <button class="sb-item" data-v="chat"><span class="em">💬</span>แชทลูกค้า<span class="badge" id="bdChat" style="display:none"></span></button>
+  <div class="sb-sec">ระบบ (ผู้ดูแล)</div>
+  <button class="sb-item" data-v="bot"><span class="em">🤖</span>ตั้งค่าแชทบอท</button>
+  <button class="sb-item" data-v="ch"><span class="em">🔌</span>เชื่อมต่อช่องทาง</button>
+  <button class="sb-item" data-v="set"><span class="em">⚙️</span>ตั้งค่า</button>
+  <div class="sb-foot"><div id="sbUser"></div></div>
+</aside>
+<header>
+  <div class="hrow">
+    <div class="brand"><img class="hlogo" id="hdLogo" alt=""><span>JJ Social<small>จริงใจหมูกระทะ</small></span></div>
+    <div class="seg" id="brSeg"></div>
+    <select id="daysPick" onchange="S.days=+this.value;localStorage.setItem('jjsocial_days',this.value);S.cache={};show(S.tab)">
+      <option value="7">7 วันล่าสุด</option>
+      <option value="30">30 วันล่าสุด</option>
+      <option value="90">90 วันล่าสุด</option>
+      <option value="365">12 เดือน</option>
+      <option value="3650" selected>ทั้งหมด</option>
+    </select>
+    <div id="syncDot" title="สถานะเรียลไทม์"></div>
+  </div>
+  <nav class="tabbar" id="tabbar">
+    <button data-v="dash" class="on">แดชบอร์ด</button>
+    <button data-v="feed">เสียงลูกค้า<span class="badge" id="bdFeed2" style="display:none"></span></button>
+    <button data-v="chat">แชท<span class="badge" id="bdChat2" style="display:none"></span></button>
+    <button data-v="insight">สรุปประเด็น</button>
+    <button data-v="bot">แชทบอท</button>
+    <button data-v="ch">เชื่อมต่อ</button>
+    <button data-v="set">ตั้งค่า</button>
+  </nav>
+</header>
+<main>
+  <section class="view on" id="view-dash"><div class="spin"></div></section>
+  <section class="view" id="view-feed"></section>
+  <section class="view" id="view-chat"></section>
+  <section class="view" id="view-insight"></section>
+  <section class="view" id="view-bot"></section>
+  <section class="view" id="view-ch"></section>
+  <section class="view" id="view-set"></section>
+</main>
+</div>
+
+<div id="modalWrap" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   JJ Social — จริงใจหมูกระทะ (Supabase + Claude + GitHub Pages)
+   ============================================================ */
+const CONFIG = {
+  SUPABASE_URL: 'https://aikyxvluaiubdidqxwnd.supabase.co',
+  SUPABASE_KEY: 'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'
+};
+function cfg(){
+  return {
+    url: (localStorage.getItem('jjpnl_url') || CONFIG.SUPABASE_URL || '').replace(/\/$/,''),
+    key: localStorage.getItem('jjpnl_key') || CONFIG.SUPABASE_KEY || ''
+  };
+}
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+
+const S={user:null,tab:'dash',
+  br:localStorage.getItem('jjsocial_br')||'ALL',
+  days:+(localStorage.getItem('jjsocial_days')||3650), // จำค่าที่เลือกไว้ · เริ่มต้น = ทั้งหมด
+  cache:{},branches:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}],
+  settings:{},staff:[],feedFilter:{ch:'',kind:'',sen:'',st:'',q:''},feedLimit:50,chatThread:null,botTest:[]};
+
+const CH_META={
+  line:{name:'LINE OA',em:'💬'}, facebook:{name:'Facebook',em:'📘'}, instagram:{name:'Instagram',em:'📸'},
+  google:{name:'Google Maps',em:'📍'}, tiktok:{name:'TikTok',em:'🎵'}, wongnai:{name:'Wongnai',em:'🍜'},
+  grab:{name:'GrabFood',em:'🛵'}, lineman:{name:'LINE MAN',em:'🛵'}, other:{name:'อื่นๆ',em:'🌐'}
+};
+const KIND_TH={review:'รีวิว',comment:'คอมเมนต์',message:'แชท',mention:'กล่าวถึง'};
+const SEN_TH={pos:'ชม 😊',neu:'กลางๆ 😐',neg:'ตำหนิ 😠'};
+const SLOT_TH={lunch:'มื้อกลางวัน',afternoon:'บ่าย',dinner:'มื้อเย็น',late:'ดึก',unknown:'ไม่ระบุ'};
+const TOPIC_LIST=['รสชาติอาหาร','คุณภาพวัตถุดิบ','ความหลากหลายของอาหาร','บริการพนักงาน','ความรวดเร็ว/การรอคิว','ความสะอาด','ราคา/ความคุ้มค่า','บรรยากาศ/สถานที่','ที่จอดรถ','โปรโมชั่น','อื่นๆ'];
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',3200)}
+function num(x){const n=parseFloat(x);return isNaN(n)?0:n}
+function openModal(html){$('#modalBox').innerHTML=html;$('#modalWrap').classList.add('on')}
+function closeModal(){$('#modalWrap').classList.remove('on')}
+function timeago(iso){
+  const s=(Date.now()-new Date(iso).getTime())/1000;
+  if(s<60)return 'เมื่อกี้'; if(s<3600)return Math.floor(s/60)+' นาทีที่แล้ว';
+  if(s<86400)return Math.floor(s/3600)+' ชม.ที่แล้ว'; if(s<86400*30)return Math.floor(s/86400)+' วันก่อน';
+  return new Date(iso).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
+}
+function stars(r){if(r==null)return '';const n=Math.round(num(r));return '<span class="stars">'+'★'.repeat(n)+'☆'.repeat(Math.max(0,5-n))+'</span>'}
+function brName(c){const b=S.branches.find(x=>x.code===c);return b?b.name:(c||'ไม่ระบุสาขา')}
+function daysLabel(){return S.days>=3650?'ทั้งหมด':S.days+' วัน'}
+let busyCount=0;
+function setBusy(b){busyCount+=b?1:-1;if(busyCount<0)busyCount=0;$('#syncDot').className=busyCount>0?'busy':(_rtLive?'':'')}
+
+/* ---------- REST ---------- */
+async function api(method,path,body,prefer){
+  const {url,key}=cfg(); setBusy(true);
+  try{
+    const r=await fetch(url+'/rest/v1/'+path,{method,
+      headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+key,
+        ...(prefer?{Prefer:prefer}:{})},
+      body:body?JSON.stringify(body):undefined});
+    if(!r.ok)throw new Error(await r.text());
+    const tx=await r.text(); return tx?JSON.parse(tx):null;
+  }finally{setBusy(false)}
+}
+const sel=(t,q)=>api('GET',t+'?'+q);
+async function brain(action,payload){
+  const {url,key}=cfg(); setBusy(true);
+  try{
+    const r=await fetch(url+'/functions/v1/social-brain',{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+key},
+      body:JSON.stringify({action,...payload})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    return d;
+  }finally{setBusy(false)}
+}
+
+/* ---------- login (บัญชีเดียวกับ P&L: ตาราง pnl_users) ---------- */
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const enc=new TextEncoder().encode(str);
+  const l=enc.length,bitLen=l*8,withOne=l+1,total=(Math.ceil((withOne+8)/64))*64;
+  const M=new Uint8Array(total);M.set(enc);M[l]=0x80;
+  const dv=new DataView(M.buffer);
+  dv.setUint32(total-4,bitLen>>>0);dv.setUint32(total-8,Math.floor(bitLen/4294967296));
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n));const w=new Array(64);
+  for(let i=0;i<total;i+=64){
+    for(let t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+    for(let t=16;t<64;t++){const s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3),s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0}
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){const S1=rr(e,6)^rr(e,11)^rr(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[t]+w[t])>>>0,S0=rr(a,2)^rr(a,13)^rr(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0}
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+function pwHash(u,p){return sha256hex(u+'|'+p+'|JJPNL')}
+async function doLogin(){
+  const u=$('#liUser').value.trim(),p=$('#liPass').value;
+  if(!u||!p){toast('กรอกให้ครบก่อนครับ',true);return}
+  try{
+    const rows=await sel('pnl_users',`select=id,username,display_name,role,active,pass_hash&username=eq.${encodeURIComponent(u)}&limit=1`);
+    const usr=rows&&rows[0];
+    if(!usr||usr.pass_hash!==pwHash(u,p)){toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',true);return}
+    if(!usr.active){toast('บัญชีนี้ถูกปิดการใช้งาน',true);return}
+    S.user={username:usr.username,display_name:usr.display_name,role:usr.role};
+    LS.set('jjsocial_sess',S.user);
+    startApp();
+  }catch(e){toast('เชื่อมต่อไม่ได้ — ตรวจว่ารัน SQL ครบหรือยัง',true);console.error(e)}
+}
+function logout(){localStorage.removeItem('jjsocial_sess');location.reload()}
+function isAdmin(){return S.user&&S.user.role==='admin'}
+
+/* ---------- nav ---------- */
+const VIEWS=['dash','feed','chat','insight','bot','ch','set'];
+const ADMIN_VIEWS=['bot','ch','set'];
+function applyPerms(){
+  document.querySelectorAll('[data-v]').forEach(b=>{
+    b.style.display=(!isAdmin()&&ADMIN_VIEWS.includes(b.dataset.v))?'none':'';
+  });
+  document.querySelectorAll('.sb-sec').forEach(sec=>{
+    let el=sec.nextElementSibling,any=false;
+    while(el&&!el.classList.contains('sb-sec')&&!el.classList.contains('sb-foot')){
+      if(el.classList.contains('sb-item')&&el.style.display!=='none')any=true;
+      el=el.nextElementSibling;
+    }
+    sec.style.display=any?'':'none';
+  });
+  $('#sbUser').innerHTML=`👤 ${esc(S.user.display_name)} · ${S.user.role==='admin'?'ผู้ดูแล':'พนักงาน'} · <a class="hintlink" href="javascript:logout()">ออก</a>`;
+}
+async function show(v){
+  if(!isAdmin()&&ADMIN_VIEWS.includes(v))v='dash';
+  S.tab=v;
+  document.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
+  const el=$('#view-'+v);
+  try{
+    if(v==='dash')await vDash(el);
+    else if(v==='feed')await vFeed(el);
+    else if(v==='chat')await vChat(el);
+    else if(v==='insight')await vInsight(el);
+    else if(v==='bot')await vBot(el);
+    else if(v==='ch')await vCh(el);
+    else if(v==='set')await vSet(el);
+  }catch(e){el.innerHTML='<div class="empty">โหลดไม่ได้: '+esc(e.message)+'<br><span class="xs">ถ้ายังไม่ได้ติดตั้ง ให้รัน jjmk_social_setup.sql ใน Supabase ก่อนครับ</span></div>';console.error(e)}
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-v]'); if(b)show(b.dataset.v);
+});
+
+/* ---------- data ---------- */
+function sinceIso(){return new Date(Date.now()-S.days*86400000).toISOString()}
+async function loadMentions(force){
+  const key='m'+S.days;
+  if(!force&&S.cache[key])return S.cache[key];
+  const rows=await sel('social_mentions',`select=*&posted_at=gte.${sinceIso()}&order=posted_at.desc&limit=1000`);
+  S.cache[key]=rows||[]; return S.cache[key];
+}
+function brFilter(rows){return S.br==='ALL'?rows:rows.filter(r=>r.branch===S.br)}
+async function loadSettings(){
+  const rows=await sel('social_settings','select=*');
+  S.settings={};(rows||[]).forEach(r=>S.settings[r.id]=r.val||{});
+  return S.settings;
+}
+async function loadStaff(){S.staff=await sel('social_staff','select=*&order=id')||[];return S.staff}
+async function refreshBadges(){
+  try{
+    const p=await sel('social_mentions',`select=id&reply_status=eq.pending&kind=neq.message&posted_at=gte.${sinceIso()}&limit=100`);
+    const n=(p||[]).length;
+    ['bdFeed','bdFeed2'].forEach(id=>{const b=$('#'+id);if(b){b.style.display=n?'':'none';b.textContent=n>99?'99+':n}});
+    const chats=await loadThreads();
+    const w=chats.filter(t=>t.waiting).length;
+    ['bdChat','bdChat2'].forEach(id=>{const b=$('#'+id);if(b){b.style.display=w?'':'none';b.textContent=w}});
+  }catch(e){}
+}
+
+/* ============ แดชบอร์ด ============ */
+let _charts=[];
+function killCharts(){_charts.forEach(c=>{try{c.destroy()}catch(e){}});_charts=[]}
+async function vDash(el){
+  el.innerHTML='<div class="spin"></div>';
+  const all=brFilter(await loadMentions());
+  const rows=all.filter(r=>r.kind!=='message');
+  const an=rows.filter(r=>r.analyzed_at);
+  const rated=rows.filter(r=>r.rating!=null);
+  const avgStar=rated.length?(rated.reduce((s,r)=>s+num(r.rating),0)/rated.length):null;
+  const avgScore=an.length?Math.round(an.reduce((s,r)=>s+num(r.ai_score),0)/an.length):null;
+  const pos=an.filter(r=>r.sentiment==='pos').length,neg=an.filter(r=>r.sentiment==='neg').length,neu=an.length-pos-neg;
+  const pending=rows.filter(r=>r.reply_status==='pending').length;
+  const urgent=an.filter(r=>(r.issues||[]).some(i=>num(i.severity)>=3));
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayN=rows.filter(r=>new Date(r.posted_at)>=today).length;
+
+  killCharts();
+  el.innerHTML=`
+  <div class="kpis">
+    <div class="kpi"><div class="t">เสียงลูกค้า (${daysLabel()})</div><div class="kpi-v">${rows.length}</div><div class="s">วันนี้ ${todayN} รายการ</div></div>
+    <div class="kpi ${avgStar!=null?(avgStar>=4?'good':avgStar>=3?'warn':'bad'):''}"><div class="t">คะแนนดาวเฉลี่ย</div><div class="kpi-v">${avgStar!=null?avgStar.toFixed(2)+' ★':'—'}</div><div class="s">จาก ${rated.length} รีวิวที่ให้ดาว</div></div>
+    <div class="kpi ${avgScore!=null?(avgScore>=75?'good':avgScore>=55?'warn':'bad'):''}"><div class="t">ความพึงพอใจ (AI)</div><div class="kpi-v">${avgScore!=null?avgScore+'/100':'—'}</div><div class="s">ชม ${pos} · กลางๆ ${neu} · ตำหนิ ${neg}</div></div>
+    <div class="kpi ${pending?'warn':'good'}"><div class="t">รอตอบกลับ</div><div class="kpi-v">${pending}</div><div class="s"><a class="hintlink" href="javascript:show('feed')">ไปที่ฟีด →</a></div></div>
+    <div class="kpi ${urgent.length?'bad':'good'}"><div class="t">ปัญหาเร่งด่วน</div><div class="kpi-v">${urgent.length}</div><div class="s">ความรุนแรงระดับ 3</div></div>
+  </div>
+  ${urgent.length?`<div class="card" style="border-left:4px solid var(--bad)"><h3>🚨 ต้องดูด่วน</h3>${urgent.slice(0,5).map(r=>`
+    <div style="padding:6px 0;border-bottom:1px dashed var(--line)"><span class="chip neg">${esc((r.issues||[]).filter(i=>num(i.severity)>=3).map(i=>i.topic).join(', '))}</span>
+    <span class="sm">${esc(r.ai_summary||r.text.slice(0,120))}</span> <span class="xs mut">· ${CH_META[r.channel]?.em||''} ${esc(brName(r.branch))} · ${timeago(r.posted_at)}</span></div>`).join('')}</div>`:''}
+  <div class="grid g2">
+    <div class="card"><h3>แนวโน้มรายวัน <span class="sp">จำนวน + ความพึงพอใจ</span></h3><div class="chartbox"><canvas id="cTrend"></canvas></div></div>
+    <div class="card"><h3>แยกตามช่องทาง</h3><div class="chartbox"><canvas id="cChan"></canvas></div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h3>ประเด็นที่ถูกพูดถึง <span class="sp">เขียว=ชม แดง=ตำหนิ</span></h3><div class="chartbox" style="height:${Math.max(200,TOPIC_LIST.length*26)}px"><canvas id="cTopic"></canvas></div></div>
+    <div class="card"><h3>ช่วงเวลาที่ลูกค้ามาใช้บริการ <span class="sp">จากเนื้อหารีวิว (AI)</span></h3>
+      <div class="slotgrid">${['lunch','afternoon','dinner','late'].map(sl=>{
+        const set=an.filter(r=>r.visit_slot===sl);
+        const sc=set.length?Math.round(set.reduce((s,r)=>s+num(r.ai_score),0)/set.length):null;
+        return `<div class="slot"><div class="xs mut b">${SLOT_TH[sl]}</div><div class="sv" style="color:${sc==null?'var(--mut)':sc>=75?'var(--ok)':sc>=55?'var(--gold)':'var(--bad)'}">${sc??'—'}</div><div class="xs mut">${set.length} รายการ</div></div>`;}).join('')}
+      </div>
+      <div class="xs mut" style="margin-top:10px">คะแนน = ความพึงพอใจเฉลี่ย (0-100) ของรีวิวที่ AI ระบุช่วงเวลาได้ · ดูรายพนักงานที่หน้า “สรุป &amp; ประเด็น”</div>
+    </div>
+  </div>
+  <div class="card"><h3>ล่าสุด <span class="sp">5 รายการ</span></h3>
+    ${rows.slice(0,5).map(r=>miniRow(r)).join('')||`<div class="empty">ยังไม่มีข้อมูล — เริ่มจากเพิ่มรีวิวทดสอบ หรือเชื่อมต่อช่องทางก่อน
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn sm" onclick="goAddManual()">➕ เพิ่มรีวิวเอง</button>
+        ${isAdmin()?'<button class="btn gh sm" onclick="show(\'ch\')">🔌 เชื่อมต่อช่องทาง</button>':''}
+      </div></div>`}
+  </div>`;
+
+  // charts
+  const days={}; rows.forEach(r=>{const d=r.posted_at.slice(0,10);days[d]=days[d]||{n:0,sc:[],};days[d].n++;if(r.ai_score!=null)days[d].sc.push(num(r.ai_score))});
+  const dkeys=Object.keys(days).sort();
+  _charts.push(new Chart($('#cTrend'),{data:{labels:dkeys.map(d=>d.slice(5)),datasets:[
+    {type:'bar',label:'จำนวน',data:dkeys.map(d=>days[d].n),backgroundColor:'rgba(255,198,67,.35)',borderRadius:4,yAxisID:'y'},
+    {type:'line',label:'พึงพอใจ',data:dkeys.map(d=>days[d].sc.length?Math.round(days[d].sc.reduce((a,b)=>a+b,0)/days[d].sc.length):null),borderColor:'#FF4046',backgroundColor:'#FF4046',pointRadius:3,spanGaps:true,tension:.3,yAxisID:'y2'}]},
+    options:{maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{precision:0}},y2:{position:'right',min:0,max:100,grid:{display:false}}},plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}}}}));
+  const byCh={};rows.forEach(r=>{byCh[r.channel]=byCh[r.channel]||{pos:0,neg:0,neu:0};const s=r.sentiment==='pos'?'pos':r.sentiment==='neg'?'neg':'neu';byCh[r.channel][s]++});
+  const chKeys=Object.keys(byCh);
+  _charts.push(new Chart($('#cChan'),{type:'bar',data:{labels:chKeys.map(c=>(CH_META[c]?.name||c)),datasets:[
+    {label:'ชม',data:chKeys.map(c=>byCh[c].pos),backgroundColor:'#2FE08A',borderRadius:3},
+    {label:'กลางๆ/ยังไม่วิเคราะห์',data:chKeys.map(c=>byCh[c].neu),backgroundColor:'rgba(255,255,255,.22)',borderRadius:3},
+    {label:'ตำหนิ',data:chKeys.map(c=>byCh[c].neg),backgroundColor:'#FF5C5C',borderRadius:3}]},
+    options:{maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}},plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}}}}));
+  const tp={};TOPIC_LIST.forEach(t=>tp[t]={pos:0,neg:0});
+  an.forEach(r=>{
+    (r.praises||[]).forEach(p=>{const t=TOPIC_LIST.includes(p.topic)?p.topic:'อื่นๆ';tp[t].pos++});
+    (r.issues||[]).forEach(i=>{const t=TOPIC_LIST.includes(i.topic)?i.topic:'อื่นๆ';tp[t].neg++});
+  });
+  const tKeys=TOPIC_LIST.filter(t=>tp[t].pos||tp[t].neg);
+  _charts.push(new Chart($('#cTopic'),{type:'bar',data:{labels:tKeys,datasets:[
+    {label:'ชม',data:tKeys.map(t=>tp[t].pos),backgroundColor:'#2FE08A',borderRadius:3},
+    {label:'ตำหนิ',data:tKeys.map(t=>-tp[t].neg),backgroundColor:'#FF5C5C',borderRadius:3}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>Math.abs(v),precision:0}}},
+      plugins:{legend:{labels:{boxWidth:12,font:{size:11}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+Math.abs(c.raw)}}}}}));
+}
+function miniRow(r){
+  return `<div style="padding:7px 0;border-bottom:1px dashed var(--line);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+    <span>${CH_META[r.channel]?.em||'🌐'}</span>
+    <span class="b sm">${esc(r.author_name||'ไม่ระบุชื่อ')}</span>
+    ${r.rating!=null?stars(r.rating):''}
+    ${r.sentiment?`<span class="chip ${r.sentiment}">${SEN_TH[r.sentiment]}</span>`:'<span class="chip">รอวิเคราะห์</span>'}
+    <span class="sm mut" style="flex:1;min-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.ai_summary||r.text)}</span>
+    <span class="xs mut">${timeago(r.posted_at)}</span></div>`;
+}
+
+/* ============ ฟีดเสียงลูกค้า ============ */
+async function vFeed(el){
+  const f=S.feedFilter;
+  el.innerHTML=`
+  <div class="filters">
+    <select onchange="S.feedFilter.ch=this.value;vFeed($('#view-feed'))">
+      <option value="">ทุกช่องทาง</option>${Object.keys(CH_META).map(c=>`<option value="${c}" ${f.ch===c?'selected':''}>${CH_META[c].em} ${CH_META[c].name}</option>`).join('')}
+    </select>
+    <select onchange="S.feedFilter.sen=this.value;vFeed($('#view-feed'))">
+      <option value="">ทุกอารมณ์</option><option value="pos" ${f.sen==='pos'?'selected':''}>ชม</option><option value="neg" ${f.sen==='neg'?'selected':''}>ตำหนิ</option><option value="neu" ${f.sen==='neu'?'selected':''}>กลางๆ</option>
+    </select>
+    <select onchange="S.feedFilter.st=this.value;vFeed($('#view-feed'))">
+      <option value="">ทุกสถานะ</option><option value="pending" ${f.st==='pending'?'selected':''}>รอตอบ</option><option value="sent" ${f.st==='sent'?'selected':''}>ตอบแล้ว</option><option value="skipped" ${f.st==='skipped'?'selected':''}>ข้าม</option>
+    </select>
+    <input placeholder="ค้นหาข้อความ / ชื่อ / พนักงาน..." value="${esc(f.q)}" onchange="S.feedFilter.q=this.value;vFeed($('#view-feed'))">
+    <button class="btn sm" onclick="addManual()">➕ เพิ่มรีวิวเอง</button>
+    <button class="btn gh sm" onclick="importModal()">📥 นำเข้าไฟล์</button>
+    <button class="btn gh sm" onclick="analyzePending()">🧠 วิเคราะห์ที่ค้าง</button>
+  </div>
+  <div id="feedList"><div class="spin"></div></div>`;
+  const list=$('#feedList');
+  let rows=brFilter(await loadMentions()).filter(r=>r.kind!=='message');
+  if(f.ch)rows=rows.filter(r=>r.channel===f.ch);
+  if(f.sen)rows=rows.filter(r=>r.sentiment===f.sen);
+  if(f.st)rows=rows.filter(r=>f.st==='sent'?['sent','auto_sent'].includes(r.reply_status):r.reply_status===f.st);
+  if(f.q){const q=f.q.toLowerCase();rows=rows.filter(r=>(r.text||'').toLowerCase().includes(q)||(r.author_name||'').toLowerCase().includes(q)||JSON.stringify(r.staff||[]).toLowerCase().includes(q)||JSON.stringify(r.topics||[]).toLowerCase().includes(q))}
+  if(!rows.length){list.innerHTML='<div class="empty">ไม่พบรายการ — ลองเปลี่ยนตัวกรอง หรือเพิ่มรีวิวเอง / เชื่อมต่อช่องทางก่อน</div>';return}
+  const shown=rows.slice(0,S.feedLimit);
+  list.innerHTML=shown.map(mentionCard).join('')+
+    (rows.length>shown.length?`<div style="text-align:center"><button class="btn gh" onclick="S.feedLimit+=50;vFeed($('#view-feed'))">โหลดเพิ่ม (${rows.length-shown.length} รายการ)</button></div>`:'');
+}
+function mentionCard(r){
+  const cm=CH_META[r.channel]||CH_META.other;
+  const replied=['sent','auto_sent'].includes(r.reply_status);
+  return `<div class="mcard ${r.sentiment||''}" id="mc${r.id}">
+    <div class="mhead">
+      <span title="${cm.name}">${cm.em}</span>
+      <span class="who">${esc(r.author_name||'ไม่ระบุชื่อ')}</span>
+      ${r.rating!=null?stars(r.rating):''}
+      <span class="chip">${KIND_TH[r.kind]||r.kind}</span>
+      ${r.branch?`<span class="chip br">${esc(brName(r.branch))}</span>`:''}
+      ${r.sentiment?`<span class="chip ${r.sentiment}">${SEN_TH[r.sentiment]} ${r.ai_score!=null?Math.round(r.ai_score):''}</span>`:''}
+      <span class="when">${timeago(r.posted_at)}</span>
+    </div>
+    <div class="mtext">${esc(r.text)}</div>
+    ${r.analyzed_at?`
+      <div class="mchips">${(r.topics||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join('')}
+        ${(r.staff||[]).map(s=>`<span class="chip ${s.sentiment==='pos'?'pos':s.sentiment==='neg'?'neg':''}">👤 ${esc(s.name)}</span>`).join('')}
+        ${r.visit_slot&&r.visit_slot!=='unknown'?`<span class="chip">🕒 ${SLOT_TH[r.visit_slot]}</span>`:''}</div>
+      ${(r.issues||[]).length?`<ul class="ilist">${r.issues.map(i=>`<li>⚠️ <b>${esc(i.topic)}</b>${num(i.severity)>=3?' <span class="chip sev3">ด่วน</span>':''} — ${esc(i.detail)}</li>`).join('')}</ul>`:''}
+      ${(r.praises||[]).length?`<ul class="ilist">${r.praises.map(p=>`<li>💚 <b>${esc(p.topic)}</b> — ${esc(p.detail)}</li>`).join('')}</ul>`:''}
+      ${r.ai_summary?`<div class="aisum">🧠 ${esc(r.ai_summary)}</div>`:''}`
+    :`<div class="aisum">⏳ รอวิเคราะห์ <button class="hintlink" onclick="analyzeOne(${r.id})">วิเคราะห์เลย</button></div>`}
+    <div class="replybox">
+      ${replied?`<div class="sentline">✓ ตอบแล้ว${r.reply_status==='auto_sent'?' (บอทตอบอัตโนมัติ)':''}${r.replied_by?' โดย '+esc(r.replied_by):''}${r.reply_text?': '+esc(r.reply_text):''}</div>`
+      :r.reply_status==='skipped'?`<div class="xs mut">ข้ามรายการนี้ · <a class="hintlink" href="javascript:setStatus(${r.id},'pending')">เอากลับมา</a></div>`
+      :`<textarea id="rp${r.id}" placeholder="พิมพ์คำตอบ หรือกดวิเคราะห์เพื่อให้ AI ร่างให้...">${esc(r.ai_reply||'')}</textarea>
+        <div class="racts">
+          ${((r.channel==='facebook'||r.channel==='instagram')&&r.kind==='comment')||(r.channel==='google'&&String(r.external_id||'').startsWith('gbp_'))?`<button class="btn sm" onclick="replySend(${r.id})">↩︎ ส่งตอบกลับ</button>`:''}
+          <button class="btn gh sm" onclick="copyReply(${r.id})">⧉ คัดลอกคำตอบ</button>
+          ${r.url?`<a class="btn gh sm" style="text-decoration:none" href="${esc(r.url)}" target="_blank">🔗 เปิดต้นทาง</a>`:''}
+          <button class="btn gh sm" onclick="markReplied(${r.id})">✓ ตอบแล้ว (ตอบเองที่แพลตฟอร์ม)</button>
+          <button class="btn gh sm" onclick="setStatus(${r.id},'skipped')">ข้าม</button>
+        </div>`}
+    </div>
+  </div>`;
+}
+async function analyzeOne(id){
+  toast('กำลังวิเคราะห์...');
+  try{await brain('analyze',{ids:[id]});S.cache={};await show(S.tab);toast('วิเคราะห์แล้ว ✓')}
+  catch(e){toast('วิเคราะห์ไม่ได้: '+e.message,true)}
+}
+async function analyzePending(){
+  toast('กำลังวิเคราะห์รายการที่ค้าง...');
+  try{const r=await brain('analyze',{limit:15});S.cache={};await show(S.tab);
+    if(r.errors&&r.errors.length){toast('⚠️ วิเคราะห์สะดุด: '+r.errors[0],true);console.error(r.errors)}
+    else toast(r.analyzed?`วิเคราะห์แล้ว ${r.analyzed} รายการ ✓${provTxt(r.providers)}`:'ไม่มีรายการค้าง')}
+  catch(e){toast('วิเคราะห์ไม่ได้: '+e.message,true)}
+}
+function copyReply(id){
+  const t=$('#rp'+id); if(!t||!t.value){toast('ยังไม่มีคำตอบให้คัดลอก',true);return}
+  navigator.clipboard.writeText(t.value).then(()=>toast('คัดลอกแล้ว ✓ ไปวางตอบที่แพลตฟอร์มได้เลย'));
+}
+async function replySend(id){
+  const t=$('#rp'+id); if(!t.value.trim()){toast('พิมพ์คำตอบก่อนครับ',true);return}
+  try{
+    const r=await brain('send_reply',{id,text:t.value.trim(),by:S.user.username});
+    if(r.ok){toast('ส่งตอบกลับแล้ว ✓');S.cache={};show(S.tab)}
+    else toast(r.reason||'ส่งไม่ได้',true);
+  }catch(e){toast('ส่งไม่ได้: '+e.message,true)}
+}
+async function markReplied(id){
+  const t=$('#rp'+id);
+  await api('PATCH','social_mentions?id=eq.'+id,{reply_status:'sent',reply_text:(t&&t.value.trim())||null,replied_by:S.user.username,replied_at:new Date().toISOString()});
+  S.cache={};show(S.tab);
+}
+async function setStatus(id,st){
+  await api('PATCH','social_mentions?id=eq.'+id,{reply_status:st});
+  S.cache={};show(S.tab);
+}
+async function goAddManual(){await show('feed');addManual()}
+function addManual(){
+  openModal(`<h3>➕ เพิ่มรีวิว/เสียงลูกค้าเอง</h3>
+    <div class="grid2">
+      <div class="fld"><label>ช่องทาง</label><select id="amCh">${Object.keys(CH_META).map(c=>`<option value="${c}">${CH_META[c].em} ${CH_META[c].name}</option>`).join('')}</select></div>
+      <div class="fld"><label>สาขา</label><select id="amBr"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select></div>
+    </div>
+    <div class="grid2">
+      <div class="fld"><label>ชื่อลูกค้า (ถ้ามี)</label><input id="amName"></div>
+      <div class="fld"><label>ดาว (ถ้ามี)</label><select id="amRate"><option value="">ไม่มีดาว</option>${[5,4,3,2,1].map(n=>`<option>${n}</option>`).join('')}</select></div>
+    </div>
+    <div class="fld"><label>ข้อความรีวิว</label><textarea id="amText" style="min-height:110px" placeholder="วางข้อความรีวิวจาก Wongnai / Grab / TikTok ฯลฯ"></textarea></div>
+    <div class="fld"><label>ลิงก์ต้นทาง (ถ้ามี)</label><input id="amUrl" placeholder="https://..."></div>
+    <button class="btn" style="width:100%" onclick="saveManual()">บันทึกและวิเคราะห์</button>`);
+}
+async function saveManual(){
+  const text=$('#amText').value.trim(); if(!text){toast('ใส่ข้อความก่อนครับ',true);return}
+  const row={channel:$('#amCh').value,kind:'review',branch:$('#amBr').value||null,
+    author_name:$('#amName').value.trim()||null,rating:$('#amRate').value?+$('#amRate').value:null,
+    text,url:$('#amUrl').value.trim()||null,posted_at:new Date().toISOString()};
+  const ins=await api('POST','social_mentions',row,'return=representation');
+  closeModal();toast('บันทึกแล้ว — กำลังวิเคราะห์...');S.cache={};
+  try{await brain('analyze',{ids:[ins[0].id]})}catch(e){}
+  S.cache={};show('feed');
+}
+
+/* ---------- นำเข้ารีวิวจากไฟล์ (CSV/JSON — เช่น export จาก Outscraper/SerpApi) ---------- */
+function importModal(){
+  S._imp=null;
+  openModal(`<h3>📥 นำเข้ารีวิวจากไฟล์ (CSV / JSON)</h3>
+    <p class="xs mut" style="margin:0 0 10px">ใช้กับไฟล์รีวิวที่ส่งออกจากบริการอย่าง Outscraper / SerpApi หรือตารางทั่วไปที่มีคอลัมน์ ข้อความรีวิว / ชื่อผู้เขียน / ดาว / วันที่ — ระบบจับคอลัมน์ให้อัตโนมัติ</p>
+    <div class="grid2">
+      <div class="fld"><label>ช่องทาง</label><select id="impCh">${Object.keys(CH_META).map(c=>`<option value="${c}" ${c==='google'?'selected':''}>${CH_META[c].em} ${CH_META[c].name}</option>`).join('')}</select></div>
+      <div class="fld"><label>สาขา</label><select id="impBr"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select></div>
+    </div>
+    <div class="fld"><label>ไฟล์</label><input type="file" id="impFile" accept=".csv,.json,.txt" onchange="impParse(this)"></div>
+    <div id="impPrev" class="sm mut" style="margin-bottom:10px">ยังไม่ได้เลือกไฟล์</div>
+    <button class="btn" style="width:100%" id="impGo" disabled onclick="impDoImport()">นำเข้า</button>`);
+}
+function djb2(s){let h=5381;for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36)}
+function parseCSV(txt){
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<txt.length;i++){
+    const c=txt[i];
+    if(q){ if(c==='"'){ if(txt[i+1]==='"'){cur+='"';i++} else q=false } else cur+=c }
+    else if(c==='"')q=true;
+    else if(c===','){row.push(cur);cur=''}
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&txt[i+1]==='\n')i++;
+      row.push(cur);cur=''; if(row.length>1||row[0].trim()!=='')rows.push(row); row=[] }
+    else cur+=c;
+  }
+  if(cur!==''||row.length){row.push(cur);if(row.length>1||row[0].trim()!=='')rows.push(row)}
+  return rows;
+}
+function impPick(o,keys){
+  const lk={};Object.keys(o).forEach(k=>lk[k.toLowerCase().trim()]=o[k]);
+  for(const k of keys){const v=lk[k];if(v!=null&&String(v).trim()!=='')return v}
+  return null;
+}
+function impNorm(o){
+  const author=impPick(o,['author_title','author_name','reviewer','user_name','username','display_name','author'])??(o.user&&o.user.name)??impPick(o,['name']);
+  const text=impPick(o,['review_text','text','snippet','review','comment','content','body']);
+  let rating=impPick(o,['review_rating','rating','stars','score','star_rating']);
+  rating=rating!=null?parseFloat(String(rating).replace(/[^\d.]/g,'')):null;
+  if(rating!=null&&(isNaN(rating)||rating<0||rating>5))rating=null;
+  const dt=impPick(o,['review_datetime_utc','review_timestamp','iso_date','datetime','published_at','publishedatdate','created_at','date','time']);
+  let posted=null;
+  if(dt!=null){const s=String(dt).trim();
+    if(/^\d{13}$/.test(s))posted=new Date(+s);
+    else if(/^\d{10}$/.test(s))posted=new Date(+s*1000);
+    else{const d=new Date(s);if(!isNaN(d))posted=d}}
+  const url=impPick(o,['review_link','link','url']);
+  const rid=impPick(o,['review_id','id'])||url;
+  if(!text&&rating==null)return null;
+  return {author:author?String(author):null,text:text?String(text):'',rating,
+    posted:posted?posted.toISOString():null,url:url?String(url):null,rid:rid?String(rid):null,raw:o};
+}
+async function impParse(inp){
+  const f=inp.files&&inp.files[0]; if(!f)return;
+  const txt=await f.text(); let objs=[];
+  try{
+    if(/^\s*[\[{]/.test(txt)){const j=JSON.parse(txt);objs=Array.isArray(j)?j:(j.reviews||j.data||j.results||[])}
+    else{const rows=parseCSV(txt);const head=(rows.shift()||[]).map(h=>String(h).trim());
+      objs=rows.map(r=>{const o={};head.forEach((h,i)=>o[h]=r[i]);return o})}
+  }catch(e){$('#impPrev').textContent='อ่านไฟล์ไม่ได้: '+e.message;return}
+  const mapped=objs.map(impNorm).filter(Boolean);
+  const noDate=mapped.filter(m=>!m.posted).length;
+  S._imp=mapped;
+  $('#impPrev').innerHTML=mapped.length
+    ?`พบ <b>${mapped.length}</b> รายการ · ตัวอย่าง: "${esc((mapped[0].text||'').slice(0,60))}" ${mapped[0].rating!=null?mapped[0].rating+'★':''} ${mapped[0].author?'โดย '+esc(mapped[0].author):''}${noDate?`<br>⚠️ ${noDate} รายการไม่มีวันที่ — จะบันทึกเป็นวันนี้`:''}`
+    :'ไม่พบรีวิวในไฟล์ — เช็คว่ามีคอลัมน์ข้อความรีวิว (review_text / text / snippet)';
+  $('#impGo').disabled=!mapped.length;
+}
+async function impDoImport(){
+  const ch=$('#impCh').value,br=$('#impBr').value||null,list=S._imp||[];
+  if(!list.length)return;
+  const btn=$('#impGo');btn.disabled=true;
+  const seen=new Set();
+  const rows=list.map(m=>{
+    const ext='imp_'+(m.rid?djb2(String(m.rid)):djb2((m.author||'')+'|'+(m.posted||'')+'|'+(m.text||'').slice(0,80)));
+    if(seen.has(ext))return null;seen.add(ext);
+    return {channel:ch,kind:'review',external_id:ext,branch:br,author_name:m.author,text:m.text,
+      rating:m.rating,url:m.url,posted_at:m.posted||new Date().toISOString(),raw:m.raw};
+  }).filter(Boolean);
+  let done=0,inserted=0;
+  try{
+    for(let i=0;i<rows.length;i+=100){
+      const batch=rows.slice(i,i+100);
+      const res=await api('POST','social_mentions?on_conflict=channel,external_id',batch,'resolution=ignore-duplicates,return=representation');
+      inserted+=(res||[]).length;done+=batch.length;
+      btn.textContent=`นำเข้าแล้ว ${done}/${rows.length}...`;
+    }
+  }catch(e){toast('นำเข้าไม่สำเร็จ: '+e.message,true);btn.disabled=false;btn.textContent='นำเข้า';return}
+  closeModal();S.cache={};refreshBadges();
+  toast(`นำเข้าสำเร็จ ${inserted} รายการใหม่${rows.length-inserted?` (ข้ามที่ซ้ำ ${rows.length-inserted})`:''}`);
+  await show('feed');
+  if(inserted&&confirm(`ให้ AI เริ่มไล่วิเคราะห์ ${inserted} รายการเลยไหม? (ทำทีละชุด เปิดหน้าจอทิ้งไว้ได้)`))analyzeAllPending();
+}
+/* ---------- วิเคราะห์ทั้งหมดที่ค้าง (วนทีละชุดจนหมด) ---------- */
+function provTxt(p){
+  if(!p)return '';
+  const parts=[p.claude?`Claude ${p.claude}`:null,p.gemini?`Gemini ฟรี ${p.gemini}`:null,p.rules?`เบื้องต้น ${p.rules}`:null].filter(Boolean);
+  return parts.length?' ('+parts.join(' · ')+')':'';
+}
+let _aapStop=false;
+async function analyzeAllPending(){
+  const pend=await sel('social_mentions','select=id&analyzed_at=is.null&limit=1000');
+  const total=(pend||[]).length;
+  if(!total){toast('ไม่มีรายการค้างวิเคราะห์ ✓');return}
+  _aapStop=false;
+  openModal(`<h3>🧠 กำลังวิเคราะห์ทั้งหมด</h3>
+    <p class="sm" id="aapTxt">ค้างอยู่ ${total} รายการ · กำลังเริ่ม...</p>
+    <p class="xs mut">ทำทีละชุด ชุดละ ~10 รายการ เปิดหน้านี้ทิ้งไว้ได้เลย · ถ้าปิดไป cron ก็จะไล่วิเคราะห์ต่อให้เองทุก 15 นาที</p>
+    <button class="btn gh" style="width:100%" onclick="_aapStop=true;closeModal()">หยุดก่อน (ที่วิเคราะห์แล้วไม่หาย)</button>`);
+  let doneN=0,lastErr=null;const prov={claude:0,gemini:0,rules:0};
+  while(!_aapStop){
+    let r;
+    try{r=await brain('analyze',{limit:10})}
+    catch(e){lastErr=e.message;break}
+    doneN+=r.analyzed||0;
+    if(r.providers){prov.claude+=r.providers.claude||0;prov.gemini+=r.providers.gemini||0;prov.rules+=r.providers.rules||0}
+    if(r.errors&&r.errors.length)lastErr=r.errors[0];
+    const t=document.getElementById('aapTxt');
+    if(t)t.textContent=`วิเคราะห์แล้ว ${doneN}/${total} รายการ...${provTxt(prov)}`;
+    if(!r.analyzed)break;
+  }
+  if(!_aapStop){closeModal();S.cache={};show(S.tab);
+    if(lastErr&&doneN<total)toast(`⚠️ วิเคราะห์ได้ ${doneN}/${total} — ติดที่: ${lastErr}`,true);
+    else toast(`วิเคราะห์เสร็จ ${doneN} รายการ ✓${provTxt(prov)}`)}
+}
+
+/* ============ แชทลูกค้า ============ */
+async function loadThreads(){
+  const rows=await sel('social_chat_log','select=*&order=created_at.desc&limit=600')||[];
+  const map={};
+  rows.forEach(r=>{
+    const k=r.channel+'|'+r.thread_id;
+    if(!map[k])map[k]={channel:r.channel,thread_id:r.thread_id,name:null,last:r,msgs:[]};
+    map[k].msgs.unshift(r);
+    if(!map[k].name&&r.direction==='in'&&r.author)map[k].name=r.author;
+  });
+  const list=Object.values(map);
+  list.forEach(t=>{
+    const last=t.msgs[t.msgs.length-1];
+    const lastReal=[...t.msgs].reverse().find(m=>!(m.meta&&m.meta.draft));
+    t.waiting=(lastReal&&lastReal.direction==='in')||(last.meta&&last.meta.draft);
+    t.lastAt=t.msgs[t.msgs.length-1].created_at;
+  });
+  list.sort((a,b)=>b.lastAt.localeCompare(a.lastAt));
+  S._threads=list; return list;
+}
+async function vChat(el){
+  el.innerHTML='<div class="spin"></div>';
+  const threads=await loadThreads();
+  if(!threads.length){el.innerHTML=`<div class="empty">ยังไม่มีแชทเข้ามา<br><span class="xs">เชื่อมต่อ LINE OA / Facebook ที่หน้า “เชื่อมต่อช่องทาง” แล้วข้อความลูกค้าจะเด้งมาที่นี่แบบเรียลไทม์<br>ตั้งโหมดบอท (ร่างให้ตรวจ/ตอบอัตโนมัติ) ได้ที่หน้า “ตั้งค่าแชทบอท”</span></div>`;return}
+  if(!S.chatThread||!threads.find(t=>t.channel+'|'+t.thread_id===S.chatThread))S.chatThread=threads[0].channel+'|'+threads[0].thread_id;
+  el.innerHTML=`<div class="chatwrap">
+    <div class="threads">${threads.map(t=>{
+      const k=t.channel+'|'+t.thread_id;
+      return `<div class="thr ${k===S.chatThread?'on':''}" onclick="S.chatThread='${esc(k)}';vChat($('#view-chat'))">
+        <span>${CH_META[t.channel]?.em||'💬'}</span>
+        <div style="min-width:0"><div class="nm">${esc(t.name||t.thread_id.slice(0,10)+'…')}</div>
+        <div class="lst">${esc(t.msgs[t.msgs.length-1].text)}</div></div>
+        ${t.waiting?'<span class="wait" title="รอตอบ"></span>':''}</div>`}).join('')}
+    </div>
+    <div class="convo">
+      <div class="msgs" id="msgs"></div>
+      <div class="chatin">
+        <textarea id="chatText" placeholder="พิมพ์ตอบลูกค้า..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend()}"></textarea>
+        <button class="btn" onclick="chatSend()">ส่ง</button>
+      </div>
+    </div>
+  </div>`;
+  renderConvo();
+}
+function renderConvo(){
+  const t=(S._threads||[]).find(x=>x.channel+'|'+x.thread_id===S.chatThread); if(!t)return;
+  $('#msgs').innerHTML=t.msgs.map(m=>{
+    const draft=m.meta&&m.meta.draft;
+    return `<div class="bub ${m.direction==='in'?'in':draft?'draft':'out'}">${esc(m.text)}
+      <span class="bmeta">${draft?'🤖 ร่างจากบอท — ยังไม่ส่ง · ':''}${m.direction==='out'&&!draft?(m.meta&&m.meta.auto?'🤖 บอท':'👤 '+esc(m.author||'แอดมิน'))+' · ':''}${new Date(m.created_at).toLocaleString('th-TH',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+      ${draft?`<a class="hintlink" href="javascript:useDraft(${m.id})">ใช้ร่างนี้</a>`:''}</span></div>`;
+  }).join('');
+  const box=$('#msgs');box.scrollTop=box.scrollHeight;
+  const lastDraft=[...t.msgs].reverse().find(m=>m.meta&&m.meta.draft);
+  if(lastDraft&&!$('#chatText').value)$('#chatText').value=lastDraft.text;
+}
+function useDraft(id){
+  const t=(S._threads||[]).find(x=>x.channel+'|'+x.thread_id===S.chatThread);
+  const m=t&&t.msgs.find(x=>x.id===id); if(m){$('#chatText').value=m.text;$('#chatText').focus()}
+}
+async function chatSend(){
+  const txt=$('#chatText').value.trim(); if(!txt)return;
+  const t=(S._threads||[]).find(x=>x.channel+'|'+x.thread_id===S.chatThread); if(!t)return;
+  try{
+    const r=await brain('send_chat',{channel:t.channel,thread_id:t.thread_id,text:txt,by:S.user.username});
+    if(r.ok){$('#chatText').value='';await vChat($('#view-chat'));refreshBadges()}
+    else toast(r.reason||'ส่งไม่ได้ — ตรวจ token ของช่องทางนี้',true);
+  }catch(e){toast('ส่งไม่ได้: '+e.message,true)}
+}
+
+/* ============ สรุป & ประเด็น ============ */
+async function vInsight(el){
+  el.innerHTML='<div class="spin"></div>';
+  const allMen=brFilter(await loadMentions());
+  const rows=allMen.filter(r=>r.kind!=='message'&&r.analyzed_at);
+  // สถิติคอมเมนต์รายโพสต์ (FB/IG)
+  const posts={};
+  allMen.filter(r=>r.kind==='comment'&&(r.channel==='facebook'||r.channel==='instagram')).forEach(r=>{
+    const pid=r.thread_id||(r.raw&&r.raw.post_id)||'ไม่ทราบโพสต์';
+    const p=posts[pid]=posts[pid]||{n:0,ans:0,neg:0,url:null,last:r.posted_at};
+    p.n++;
+    if(['sent','auto_sent'].includes(r.reply_status))p.ans++;
+    if(r.sentiment==='neg')p.neg++;
+    if(!p.url&&r.url)p.url=r.url;
+    if(r.posted_at>p.last)p.last=r.posted_at;
+  });
+  const postArr=Object.entries(posts).sort((a,b)=>b[1].n-a[1].n);
+  // ดึงสรุป AI ล่าสุด
+  let digest=null;
+  try{
+    const ds=await sel('social_daily',`select=*&branch=eq.${S.br}&order=d.desc&limit=1`);
+    digest=ds&&ds[0];
+  }catch(e){}
+
+  // aggregate ฝั่ง client
+  const issueAgg={},praiseAgg={},staffAgg={};
+  rows.forEach(r=>{
+    (r.issues||[]).forEach(i=>{const k=i.topic||'อื่นๆ';issueAgg[k]=issueAgg[k]||{n:0,sev:0,ex:[]};issueAgg[k].n++;issueAgg[k].sev=Math.max(issueAgg[k].sev,num(i.severity));if(issueAgg[k].ex.length<3)issueAgg[k].ex.push(i.detail)});
+    (r.praises||[]).forEach(p=>{const k=p.topic||'อื่นๆ';praiseAgg[k]=praiseAgg[k]||{n:0,ex:[]};praiseAgg[k].n++;if(praiseAgg[k].ex.length<3)praiseAgg[k].ex.push(p.detail)});
+    (r.staff||[]).forEach(s=>{const k=s.name;staffAgg[k]=staffAgg[k]||{pos:0,neg:0,ex:[]};if(s.sentiment==='neg')staffAgg[k].neg++;else if(s.sentiment==='pos')staffAgg[k].pos++;if(staffAgg[k].ex.length<3)staffAgg[k].ex.push((s.sentiment==='neg'?'⚠️ ':'💚 ')+s.detail)});
+  });
+  const issues=Object.entries(issueAgg).sort((a,b)=>b[1].n-a[1].n);
+  const praises=Object.entries(praiseAgg).sort((a,b)=>b[1].n-a[1].n);
+  const staffArr=Object.entries(staffAgg).sort((a,b)=>(b[1].pos-b[1].neg)-(a[1].pos-a[1].neg));
+
+  const slotRows=['lunch','afternoon','dinner','late','unknown'].map(sl=>{
+    const set=rows.filter(r=>r.visit_slot===sl);
+    if(!set.length)return null;
+    const sc=Math.round(set.reduce((s,r)=>s+num(r.ai_score),0)/set.length);
+    const ng=set.filter(r=>r.sentiment==='neg').length;
+    return {sl,n:set.length,sc,ng};
+  }).filter(Boolean);
+
+  el.innerHTML=`
+  <div class="card">
+    <h3>🧠 สรุปโดย AI <span class="sp">${digest?('ข้อมูลวันที่ '+new Date(digest.d).toLocaleDateString('th-TH',{day:'numeric',month:'long'})+(digest.kind==='weekly'?' (รอบสัปดาห์)':'')):'ยังไม่มีสรุป'}</span>
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn gh sm" onclick="genDigest('daily')">สรุปวันนี้</button>
+        <button class="btn sm" onclick="genDigest('weekly')">สรุปรอบ 7 วัน</button>
+      </span></h3>
+    <div id="digestBox">${digest?digestHtml(digest.data):'<div class="empty">กด "สรุปรอบ 7 วัน" เพื่อให้ AI สรุปว่ามีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี</div>'}</div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h3>⚠️ ปัญหาที่ถูกพูดถึงบ่อย <span class="sp">${daysLabel()}</span></h3>
+      ${issues.length?`<div class="twrap"><table><tr><th>ประเด็น</th><th class="right">ครั้ง</th><th>ตัวอย่าง</th></tr>
+        ${issues.slice(0,10).map(([t,v])=>`<tr><td><b>${esc(t)}</b>${v.sev>=3?' <span class="chip sev3">ด่วน</span>':''}</td><td class="right num">${v.n}</td><td class="xs mut">${esc(v.ex[0]||'')}</td></tr>`).join('')}</table></div>`
+      :'<div class="empty">ไม่พบปัญหาในช่วงนี้ 🎉</div>'}
+    </div>
+    <div class="card"><h3>💚 สิ่งที่ลูกค้าชม</h3>
+      ${praises.length?`<div class="twrap"><table><tr><th>ประเด็น</th><th class="right">ครั้ง</th><th>ตัวอย่าง</th></tr>
+        ${praises.slice(0,10).map(([t,v])=>`<tr><td><b>${esc(t)}</b></td><td class="right num">${v.n}</td><td class="xs mut">${esc(v.ex[0]||'')}</td></tr>`).join('')}</table></div>`
+      :'<div class="empty">ยังไม่มีข้อมูล</div>'}
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h3>👥 พนักงานที่ถูกเอ่ยถึง <span class="sp">จากรีวิวลูกค้า</span></h3>
+      ${staffArr.length?`<div class="twrap"><table><tr><th>ชื่อ</th><th class="right">ถูกชม</th><th class="right">ถูกตำหนิ</th><th>รายละเอียด</th></tr>
+        ${staffArr.map(([n,v])=>`<tr><td class="b">${esc(n)}</td><td class="right" style="color:var(--ok)">${v.pos||''}</td><td class="right" style="color:var(--bad)">${v.neg||''}</td><td class="xs mut">${v.ex.map(esc).join('<br>')}</td></tr>`).join('')}</table></div>
+      <div class="xs mut" style="margin-top:8px">เพิ่มรายชื่อ/ชื่อเล่นพนักงานที่หน้า “ตั้งค่า” เพื่อให้ AI จับชื่อแม่นขึ้น</div>`
+      :'<div class="empty">ยังไม่มีรีวิวที่เอ่ยถึงพนักงาน</div>'}
+    </div>
+    <div class="card"><h3>🕒 คุณภาพรายช่วงเวลา</h3>
+      ${slotRows.length?`<div class="twrap"><table><tr><th>ช่วงเวลา</th><th class="right">รีวิว</th><th class="right">พึงพอใจ</th><th class="right">ตำหนิ</th></tr>
+        ${slotRows.map(s=>`<tr><td>${SLOT_TH[s.sl]}</td><td class="right num">${s.n}</td><td class="right num" style="color:${s.sc>=75?'var(--ok)':s.sc>=55?'var(--gold)':'var(--bad)'}">${s.sc}</td><td class="right num">${s.ng||''}</td></tr>`).join('')}</table></div>
+      <div class="xs mut" style="margin-top:8px">ใช้ดูว่ากะ/ช่วงเวลาไหนบริการดี ช่วงไหนมีปัญหา (AI อ่านจากเนื้อหารีวิว)</div>`
+      :'<div class="empty">ยังไม่มีข้อมูล</div>'}
+    </div>
+  </div>
+  ${postArr.length?`<div class="card"><h3>📘 อัตราการตอบคอมเมนต์รายโพสต์ <span class="sp">Facebook / Instagram · ${daysLabel()}</span></h3>
+    <div class="twrap"><table><tr><th>โพสต์</th><th class="right">คอมเมนต์</th><th class="right">ตอบแล้ว</th><th class="right">อัตราตอบ</th><th class="right">ตำหนิ</th><th>ล่าสุด</th></tr>
+    ${postArr.slice(0,12).map(([pid,p])=>{const rate=Math.round(p.ans/p.n*100);
+      return `<tr><td class="xs">${p.url?`<a class="hintlink" target="_blank" href="${esc(p.url)}">🔗 โพสต์ …${esc(String(pid).slice(-10))}</a>`:'โพสต์ …'+esc(String(pid).slice(-10))}</td>
+      <td class="right num">${p.n}</td><td class="right num">${p.ans}</td>
+      <td class="right num b" style="color:${rate>=80?'var(--ok)':rate>=50?'var(--gold)':'var(--bad)'}">${rate}%</td>
+      <td class="right num" style="color:${p.neg?'var(--bad)':'inherit'}">${p.neg||''}</td>
+      <td class="xs mut">${timeago(p.last)}</td></tr>`}).join('')}</table></div>
+    <div class="xs mut" style="margin-top:8px">"ตอบแล้ว" = ส่งตอบผ่านระบบ หรือกดทำเครื่องหมายว่าตอบแล้ว · ใช้เช็คว่าแอดมินตอบคอมเมนต์ทั่วถึงไหมทีละโพสต์</div>
+  </div>`:''}`;
+}
+function digestHtml(d){
+  if(!d)return '';
+  return `<p style="margin:4px 0 10px;font-size:15px"><b>${esc(d.headline||'')}</b></p>
+  ${(d.stat?`<div class="mchips"><span class="chip">${d.stat.count} รายการ</span>${d.stat.avg_rating?`<span class="chip">เฉลี่ย ${d.stat.avg_rating}★</span>`:''}${d.stat.avg_score?`<span class="chip">พึงพอใจ ${Math.round(d.stat.avg_score)}/100</span>`:''}<span class="chip pos">ชม ${d.stat.pos}</span><span class="chip neg">ตำหนิ ${d.stat.neg}</span></div>`:'')}
+  ${(d.problems||[]).length?`<div class="sm b" style="margin:8px 0 4px">ปัญหาที่ต้องแก้</div><ul class="ilist">${d.problems.map(p=>`<li>⚠️ <b>${esc(p.topic)}</b> (${p.count} ครั้ง)${num(p.severity)>=3?' <span class="chip sev3">ด่วน</span>':''} — ${esc(p.detail)}<br><span class="xs" style="color:var(--blu)">→ ${esc(p.action)}</span></li>`).join('')}</ul>`:''}
+  ${(d.praises||[]).length?`<div class="sm b" style="margin:8px 0 4px">จุดแข็งที่ลูกค้าชม</div><ul class="ilist">${d.praises.map(p=>`<li>💚 <b>${esc(p.topic)}</b> (${p.count}) — ${esc(p.detail)}</li>`).join('')}</ul>`:''}
+  ${(d.staff_good||[]).length?`<div class="sm b" style="margin:8px 0 4px">พนักงานที่ทำดี 👏</div><ul class="ilist">${d.staff_good.map(s=>`<li>🌟 <b>${esc(s.name)}</b> — ${esc(s.detail)}</li>`).join('')}</ul>`:''}
+  ${(d.staff_fix||[]).length?`<div class="sm b" style="margin:8px 0 4px">พนักงานที่ควรคุย/พัฒนา</div><ul class="ilist">${d.staff_fix.map(s=>`<li>🔧 <b>${esc(s.name)}</b> — ${esc(s.detail)}</li>`).join('')}</ul>`:''}
+  ${(d.time_slots||[]).length?`<div class="sm b" style="margin:8px 0 4px">รายช่วงเวลา</div><ul class="ilist">${d.time_slots.map(s=>`<li>🕒 <b>${esc(SLOT_TH[s.slot]||s.slot)}</b> — ${esc(s.verdict)}</li>`).join('')}</ul>`:''}
+  ${(d.actions||[]).length?`<div class="sm b" style="margin:8px 0 4px">ควรทำต่อ</div><ol style="margin:0;padding-left:20px;font-size:13.5px">${d.actions.map(a=>`<li>${esc(a)}</li>`).join('')}</ol>`:''}`;
+}
+async function genDigest(span){
+  $('#digestBox').innerHTML='<div class="spin"></div>';
+  try{
+    const today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+    const r=await brain('summary',{date:today,span});
+    if(!r.ok){$('#digestBox').innerHTML='<div class="empty">'+esc(r.reason||'สรุปไม่ได้')+'</div>';return}
+    await vInsight($('#view-insight'));toast('สรุปเสร็จแล้ว ✓');
+  }catch(e){$('#digestBox').innerHTML='<div class="empty">สรุปไม่ได้: '+esc(e.message)+'</div>'}
+}
+
+/* ============ ตั้งค่าแชทบอท ============ */
+async function vBot(el){
+  el.innerHTML='<div class="spin"></div>';
+  await loadSettings();
+  const bot=S.settings.bot||{},shop=S.settings.shop||{};
+  const mode=bot.mode||{};
+  const modeSel=(chn)=>`<select id="bm_${chn}">
+    <option value="off" ${(mode[chn]||'off')==='off'?'selected':''}>ปิด — ไม่ตอบ</option>
+    <option value="draft" ${mode[chn]==='draft'?'selected':''}>ร่างให้ตรวจ — บอทร่าง คนกดส่ง</option>
+    <option value="faq" ${mode[chn]==='faq'?'selected':''}>ตอบออโต้เฉพาะคำถามพบบ่อย — ที่เหลือส่งให้คน</option>
+    <option value="auto" ${mode[chn]==='auto'?'selected':''}>ตอบอัตโนมัติทุกเรื่อง</option></select>`;
+  el.innerHTML=`
+  <div class="grid g2">
+    <div class="card"><h3>🤖 โหมดตอบอัตโนมัติรายช่องทาง</h3>
+      <div class="fld"><label>💬 LINE OA</label>${modeSel('line')}</div>
+      <div class="fld"><label>📘 Facebook Messenger</label>${modeSel('facebook')}</div>
+      <div class="fld"><label>📸 Instagram DM</label>${modeSel('instagram')}</div>
+      <div class="xs mut">แนะนำเส้นทางใช้งาน: เริ่มที่ <b>“ร่างให้ตรวจ”</b> (คนตอบ บอทช่วยร่าง) → พอ FAQ สะสมมากพอ เปลี่ยนเป็น <b>“ตอบออโต้เฉพาะคำถามพบบ่อย”</b> (บอทตอบเองเฉพาะแนวคำถามซ้ำๆ ที่อนุมัติแล้ว คำถามใหม่/เรื่องร้องเรียนส่งให้คนเสมอ)</div>
+      <div class="fld" style="margin-top:10px"><label>ข้อความขอเวลา (ตอนส่งต่อให้คน)</label><input id="btFallback" value="${esc(bot.fallback_text||'')}"></div>
+      <div class="fld"><label>คำที่ต้องส่งต่อให้คนเสมอ (คั่นด้วย ,)</label><input id="btEsc" value="${esc((bot.escalate_keywords||[]).join(', '))}"></div>
+    </div>
+    <div class="card"><h3>🗣️ บุคลิกบอท & ข้อมูลร้าน</h3>
+      <div class="fld"><label>บุคลิก/วิธีพูดของบอท</label><textarea id="btPersona" style="min-height:70px">${esc(bot.persona||'')}</textarea></div>
+      <div class="fld"><label>ข้อมูลร้าน (บอทใช้ตอบ)</label><textarea id="shInfo" style="min-height:70px">${esc(shop.info||'')}</textarea></div>
+      <div class="fld"><label>เวลาเปิด-ปิด</label><input id="shHours" value="${esc(shop.hours||'')}"></div>
+    </div>
+  </div>
+  <div class="card"><h3>❓ คำถามพบบ่อย (FAQ) <span class="sp">บอทจะตอบตามนี้ก่อนเสมอ</span></h3>
+    <div id="faqList">${(shop.faq||[]).map((f,i)=>faqRow(f,i)).join('')}</div>
+    <button class="btn gh sm" onclick="addFaq()">➕ เพิ่มคำถาม</button>
+  </div>
+  <div class="card"><h3>💡 คำถามที่ลูกค้าถามซ้ำบ่อย <span class="sp">AI สกัดจากแชทจริง — กดเพิ่มเข้า FAQ แล้วโหมด “ตอบเฉพาะคำถามพบบ่อย” จะตอบเองได้</span>
+    <button class="btn gh sm" style="margin-left:auto" onclick="learnFaqNow()">🔄 วิเคราะห์ตอนนี้</button></h3>
+    <div id="faqCand"></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <button class="btn" onclick="saveBot()">💾 บันทึกการตั้งค่าบอท</button>
+  </div>
+  <div class="card"><h3>🧪 ทดสอบบอท <span class="sp">คุยกับบอทตามการตั้งค่าล่าสุดที่บันทึกไว้</span></h3>
+    <div class="msgs" id="btMsgs" style="max-height:260px;min-height:60px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px"></div>
+    <div class="chatin" style="border:0;padding:0">
+      <textarea id="btIn" placeholder="ลองพิมพ์แบบลูกค้า เช่น เปิดกี่โมง / มีโปรไหม" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();botTestSend()}"></textarea>
+      <button class="btn" onclick="botTestSend()">ส่ง</button>
+    </div>
+  </div>`;
+  renderBotTest();renderCands();
+}
+function candRow(c,i){return `<div style="border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin-bottom:8px">
+  <div class="sm"><span class="chip">${num(c.count)||1}×</span> <b>${esc(c.q)}</b></div>
+  <div class="xs mut" style="margin:3px 0 7px">${esc(c.a)}</div>
+  <div style="display:flex;gap:6px">
+    <button class="btn sm" onclick="candMut(${i},true)">➕ เพิ่มเข้า FAQ</button>
+    <button class="btn gh sm" onclick="candMut(${i},false)">ซ่อน</button>
+  </div></div>`}
+function renderCands(){
+  const el=document.getElementById('faqCand');if(!el)return;
+  const items=(S.settings.faq_candidates&&S.settings.faq_candidates.items)||[];
+  el.innerHTML=items.map((c,i)=>candRow(c,i)).join('')
+    ||'<div class="empty xs">ยังไม่มีข้อมูล — ระบบวิเคราะห์ให้เองทุกเช้า 06:10 หรือกด "วิเคราะห์ตอนนี้" (ต้องมีแชทลูกค้าสะสมก่อน)</div>';
+}
+async function learnFaqNow(){
+  toast('กำลังวิเคราะห์คำถามซ้ำจากแชทลูกค้า...');
+  try{
+    const r=await brain('learn_faq',{});
+    if(!r.ok){toast(r.reason||'วิเคราะห์ไม่ได้',true);return}
+    await loadSettings();renderCands();
+    toast(`พบ ${r.count} คำถามที่ถูกถามบ่อย ✓`);
+  }catch(e){toast(e.message,true)}
+}
+async function candMut(i,add){
+  const items=[...((S.settings.faq_candidates&&S.settings.faq_candidates.items)||[])];
+  const c=items[i];if(!c)return;
+  if(add){
+    $('#faqList').insertAdjacentHTML('beforeend',
+      faqRow({q:c.q,a:/^\(ร้านยังไม่เคยตอบ/.test(c.a)?'':c.a},Date.now()));
+    toast('เพิ่มเข้า FAQ ด้านบนแล้ว — ตรวจ/แก้คำตอบ แล้วอย่าลืมกด "บันทึกการตั้งค่าบอท"');
+  }
+  items.splice(i,1);
+  await api('POST','social_settings',[{id:'faq_candidates',val:{items,updated_at:new Date().toISOString()},updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
+  S.settings.faq_candidates={items};
+  renderCands();
+}
+function faqRow(f,i){return `<div class="faqrow"><input placeholder="คำถาม เช่น มีที่จอดรถไหม" value="${esc(f.q||'')}" data-fq="${i}"><input placeholder="คำตอบ" value="${esc(f.a||'')}" data-fa="${i}"><button class="icb" onclick="this.parentElement.remove()">✕</button></div>`}
+function addFaq(){$('#faqList').insertAdjacentHTML('beforeend',faqRow({},Date.now()))}
+async function saveBot(){
+  const bot={
+    mode:{line:$('#bm_line').value,facebook:$('#bm_facebook').value,instagram:$('#bm_instagram').value},
+    persona:$('#btPersona').value.trim(),
+    fallback_text:$('#btFallback').value.trim(),
+    escalate_keywords:$('#btEsc').value.split(',').map(x=>x.trim()).filter(Boolean)
+  };
+  const shopOld=S.settings.shop||{};
+  const shop={...shopOld,info:$('#shInfo').value.trim(),hours:$('#shHours').value.trim(),
+    faq:[...document.querySelectorAll('#faqList .faqrow')].map(r=>({q:r.children[0].value.trim(),a:r.children[1].value.trim()})).filter(f=>f.q&&f.a)};
+  await api('POST','social_settings',[{id:'bot',val:bot,updated_at:new Date().toISOString()},{id:'shop',val:shop,updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
+  S.settings.bot=bot;S.settings.shop=shop;
+  toast('บันทึกแล้ว ✓ มีผลกับข้อความถัดไปทันที');
+}
+function renderBotTest(){
+  const b=$('#btMsgs'); if(!b)return;
+  b.innerHTML=S.botTest.map(m=>`<div class="bub ${m.role==='user'?'out':'in'}">${esc(m.text)}${m.needs_human?'<span class="bmeta">⚠️ บอทจะส่งต่อให้คน (needs_human)</span>':''}</div>`).join('')||'<div class="empty xs">ยังไม่มีบทสนทนา — พิมพ์ทดสอบด้านล่าง</div>';
+  b.scrollTop=b.scrollHeight;
+}
+async function botTestSend(){
+  const t=$('#btIn').value.trim(); if(!t)return;
+  S.botTest.push({role:'user',text:t});$('#btIn').value='';renderBotTest();
+  try{
+    const r=await brain('chat_test',{history:S.botTest.map(m=>({role:m.role==='user'?'user':'assistant',text:m.text}))});
+    S.botTest.push({role:'bot',text:r.reply||'(บอทเลือกไม่ตอบ)',needs_human:r.needs_human});
+  }catch(e){S.botTest.push({role:'bot',text:'ทดสอบไม่ได้: '+e.message})}
+  renderBotTest();
+}
+
+/* ============ เชื่อมต่อช่องทาง ============ */
+function hookUrl(ch){return cfg().url+'/functions/v1/social-webhook?ch='+ch}
+function copyTxt(v){navigator.clipboard.writeText(v).then(()=>toast('คัดลอกแล้ว ✓'))}
+async function vCh(el){
+  el.innerHTML='<div class="spin"></div>';
+  await loadSettings();
+  const chs=S.settings.channels||{};
+  const gp=chs.google_places||[];
+  const gstat=chs.google_stat||{};
+  const gbp=chs.gbp||{};
+  el.innerHTML=`
+  <div class="card" style="border-left:4px solid var(--blu)"><h3>ℹ️ ภาพรวมการเชื่อมต่อ</h3>
+    <div class="sm">ระบบรับข้อมูล 2 ทาง: <b>Webhook</b> (LINE / Facebook / Instagram — เด้งเข้าทันที) และ <b>ดึงอัตโนมัติ</b> (Google Maps — ทุก 15 นาที)
+    ช่องทางที่ยังไม่เชื่อม (Wongnai, Grab, LINE MAN, TikTok) ใช้ปุ่ม “เพิ่มรีวิวเอง” ในหน้าเสียงลูกค้า หรือยิงเข้า Generic Webhook ได้</div>
+    <div class="xs mut" style="margin-top:6px">Token/Secret ทั้งหมดเก็บใน Supabase Edge Function Secrets (ไม่เก็บในหน้าเว็บ) — ตั้งตามคู่มือ README-SOCIAL.md</div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h3>💬 LINE Official Account</h3>
+      <div class="xs b mut">Webhook URL (วางใน LINE Developers → Messaging API)</div>
+      <div class="copyline"><input readonly value="${esc(hookUrl('line'))}"><button class="btn gh sm" onclick="copyTxt('${esc(hookUrl('line'))}')">⧉</button></div>
+      <div class="xs mut">1) สร้าง Messaging API channel ของ OA ร้าน<br>2) เปิด Use webhook + ปิด Auto-reply เดิมของ LINE<br>3) ตั้ง secrets: <b>LINE_CHANNEL_SECRET</b>, <b>LINE_CHANNEL_ACCESS_TOKEN</b><br>4) ทดสอบทักแชทหาร้าน — ข้อความจะเด้งในหน้า “แชทลูกค้า”</div>
+    </div>
+    <div class="card"><h3>📘 Facebook เพจ + Messenger</h3>
+      <div class="xs b mut">Webhook URL (Meta for Developers → Webhooks → Page)</div>
+      <div class="copyline"><input readonly value="${esc(hookUrl('facebook'))}"><button class="btn gh sm" onclick="copyTxt('${esc(hookUrl('facebook'))}')">⧉</button></div>
+      <div class="xs mut">Subscribe fields: <b>messages, feed, ratings</b> · Verify token ต้องตรงกับ secret <b>FB_VERIFY_TOKEN</b><br>ตั้ง secrets: <b>FB_APP_SECRET</b>, <b>FB_PAGE_TOKEN</b> (Page access token)<br>ได้ทั้งแชท Messenger + คอมเมนต์โพสต์ + รีวิวเพจ</div>
+    </div>
+    <div class="card"><h3>📸 Instagram</h3>
+      <div class="copyline"><input readonly value="${esc(hookUrl('instagram'))}"><button class="btn gh sm" onclick="copyTxt('${esc(hookUrl('instagram'))}')">⧉</button></div>
+      <div class="xs mut">ใช้แอป Meta เดียวกับ Facebook · Subscribe: <b>messages, comments</b> (บัญชีต้องเป็น Business และผูกกับเพจ)</div>
+    </div>
+    <div class="card"><h3>📍 Google Maps รีวิว</h3>
+      <div class="sm b" style="margin-bottom:6px">วิธีที่ 1 (แนะนำ): บัญชี Google Business ของร้าน — ได้รีวิว<b>ครบทุกอัน</b> + <b>ตอบกลับจากระบบได้</b> ฟรี</div>
+      ${gbp.rt_enc?`
+        <div class="sm" style="color:var(--ok)">✓ เชื่อมต่อบัญชีแล้ว${gbp.last_sync?` · ซิงค์ล่าสุด ${timeago(gbp.last_sync)}`:' · ยังไม่เคยซิงค์'}</div>
+        ${(gbp.locations||[]).map((l,i)=>`<div class="copyline">
+          <input readonly value="${esc(l.title||l.id)}">
+          <select data-gbpbr="${i}" style="width:130px"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}" ${l.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+        </div>`).join('')}
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 4px">
+          <button class="btn sm" onclick="gbpSync(true)">⟳ ซิงค์รีวิวทั้งหมด</button>
+          <button class="btn gh sm" onclick="gbpSync(false)">ซิงค์เฉพาะล่าสุด</button>
+          ${(gbp.locations||[]).length?`<button class="btn gh sm" onclick="gbpSaveMap()">💾 บันทึกสาขา</button>`:''}
+          <button class="btn gh sm" onclick="gbpConnect()">เชื่อมต่อใหม่</button>
+        </div>
+        <div class="xs mut">ซิงค์ครั้งแรกอาจใช้เวลา 1-3 นาที (ดึงย้อนหลังทุกหน้า) · หลังจากนั้น cron ซิงค์รีวิวใหม่ให้เองทุก 15 นาที</div>`
+      :`<button class="btn sm" onclick="gbpConnect()">🔗 เชื่อมต่อบัญชี Google Business ของร้าน</button>
+        <div class="xs mut" style="margin-top:6px">ต้องเตรียมใน Google Cloud ครั้งเดียวก่อนกด: ①ขอสิทธิ์ใช้ Business Profile API (มีแบบฟอร์ม รออนุมัติ) ②เปิด API 3 ตัว ③สร้าง OAuth Client แล้วตั้ง secrets <b>GBP_CLIENT_ID / GBP_CLIENT_SECRET</b> — ขั้นตอนละเอียดอยู่ใน README-SOCIAL.md</div>`}
+      <div style="border-top:1.5px dashed var(--line);margin:12px 0"></div>
+      <div class="sm b" style="margin-bottom:6px">วิธีที่ 2: Place ID — ง่ายกว่า แต่ได้เฉพาะรีวิวล่าสุด ~5-10 อัน/รอบ และตอบจากระบบไม่ได้</div>
+      <div id="gpList">${gp.map((p,i)=>`<div class="copyline">
+        <input value="${esc(p.place_id)}" placeholder="Place ID" data-gpid="${i}">
+        <select data-gpbr="${i}" style="width:130px">${S.branches.map(b=>`<option value="${b.code}" ${p.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+        <button class="icb" onclick="this.parentElement.remove()">✕</button></div>
+        ${gstat[p.place_id]?`<div class="xs mut" style="margin:-2px 0 6px">คะแนนรวม ${gstat[p.place_id].rating}★ จาก ${gstat[p.place_id].count} รีวิว · ดึงล่าสุด ${timeago(gstat[p.place_id].at)}</div>`:''}`).join('')}
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:6px">
+        <button class="btn gh sm" onclick="addGp()">➕ เพิ่มสาขา</button>
+        <button class="btn gh sm" onclick="saveGp()">💾 บันทึก</button>
+        <button class="btn sm" onclick="pollGoogleNow()">⟳ ดึงรีวิวตอนนี้</button>
+      </div>
+      <div class="xs mut" style="margin-top:8px">หา Place ID: <a class="hintlink" href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank">Place ID Finder</a> · ตั้ง secret <b>GOOGLE_API_KEY</b> (เปิด Places API) · Places API ให้รีวิวล่าสุด ~5 รายการต่อรอบ ระบบจะสะสมให้เรื่อยๆ</div>
+    </div>
+  </div>
+  <div class="card"><h3>🌐 Generic Webhook <span class="sp">สำหรับ Wongnai / Grab / TikTok / ระบบอื่น</span></h3>
+    <div class="copyline"><input readonly value="${esc(hookUrl('generic'))}"><button class="btn gh sm" onclick="copyTxt('${esc(hookUrl('generic'))}')">⧉</button></div>
+    <div class="codebx">curl -X POST '${esc(hookUrl('generic'))}' \\
+  -H 'x-webhook-key: &lt;WEBHOOK_SHARED_KEY&gt;' -H 'Content-Type: application/json' \\
+  -d '{"channel":"wongnai","kind":"review","author_name":"คุณเอ","rating":4,
+       "text":"หมูนุ่ม น้ำจิ้มแจ่วอร่อย แต่รอคิวนาน","branch":"JJRD"}'</div>
+    <div class="xs mut" style="margin-top:6px">ตั้ง secret <b>WEBHOOK_SHARED_KEY</b> เป็นรหัสลับอะไรก็ได้ แล้วใช้ยิงรีวิวจากระบบอื่นเข้ามา</div>
+  </div>`;
+}
+async function gbpConnect(){
+  try{
+    const r=await brain('gbp_auth_url',{});
+    if(r.ok){toast('เปิดหน้าล็อกอิน Google — เลือกบัญชีที่ดูแลเพจร้าน');window.open(r.url,'_blank')}
+    else toast(r.reason||'ยังตั้งค่าไม่ครบ',true);
+  }catch(e){toast(e.message,true)}
+}
+async function gbpSync(full){
+  toast(full?'กำลังซิงค์รีวิวทั้งหมด — อาจใช้เวลา 1-3 นาที...':'กำลังซิงค์รีวิวล่าสุด...');
+  try{
+    const r=await brain('gbp_sync',{full});
+    if(!r.ok){toast('⚠️ '+(r.reason||'ซิงค์ไม่ได้'),true);return}
+    S.cache={};refreshBadges();await loadSettings();show('ch');
+    toast(`ซิงค์แล้ว ✓ รีวิวใหม่ ${r.added}${r.upgraded?` · รวมกับของเดิม ${r.upgraded}`:''} · เห็นทั้งหมด ${r.seen}`);
+    if(r.added&&confirm(`ให้ AI เริ่มไล่วิเคราะห์ ${r.added} รายการเลยไหม? (เปิดหน้าจอทิ้งไว้ได้)`))analyzeAllPending();
+  }catch(e){toast('ซิงค์ไม่ได้: '+e.message,true)}
+}
+async function gbpSaveMap(){
+  const chs={...(S.settings.channels||{})};const gbp={...(chs.gbp||{})};
+  document.querySelectorAll('[data-gbpbr]').forEach(sel=>{
+    const i=+sel.dataset.gbpbr;
+    if(gbp.locations&&gbp.locations[i])gbp.locations[i].branch=sel.value||null;
+  });
+  chs.gbp=gbp;
+  await api('POST','social_settings',[{id:'channels',val:chs,updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
+  S.settings.channels=chs;toast('บันทึกสาขาแล้ว ✓');
+}
+function addGp(){
+  $('#gpList').insertAdjacentHTML('beforeend',`<div class="copyline">
+    <input placeholder="Place ID (ChIJ...)"><select style="width:130px">${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select>
+    <button class="icb" onclick="this.parentElement.remove()">✕</button></div>`);
+}
+async function saveGp(silent){
+  const rows=[...document.querySelectorAll('#gpList .copyline')].map(r=>({
+    place_id:r.children[0].value.trim(),branch:r.children[1].value})).filter(p=>p.place_id);
+  const chs={...(S.settings.channels||{}),google_places:rows};
+  await api('POST','social_settings',[{id:'channels',val:chs,updated_at:new Date().toISOString()}],'resolution=merge-duplicates');
+  S.settings.channels=chs;if(!silent)toast('บันทึกแล้ว ✓');
+  return rows;
+}
+async function pollGoogleNow(){
+  // อ่าน Place ID จากช่องกรอกตรงๆ แล้วส่งไปกับคำสั่งเลย (ฟังก์ชันจะบันทึกให้เองฝั่งเซิร์ฟเวอร์)
+  const rows=[...document.querySelectorAll('#gpList .copyline')].map(r=>({
+    place_id:r.children[0].value.trim(),branch:r.children[1].value})).filter(p=>p.place_id);
+  if(!rows.length){toast('ใส่ Place ID อย่างน้อย 1 สาขาก่อนครับ',true);return}
+  try{await saveGp(true)}catch(e){/* บันทึกฝั่งเว็บพลาดไม่เป็นไร — เซิร์ฟเวอร์บันทึกให้ */}
+  toast('กำลังดึงรีวิว Google...');
+  try{
+    const r=await brain('poll_google',{places:rows});
+    if(!r.ok){toast(r.reason||'ดึงไม่ได้',true);return}
+    S.cache={};refreshBadges();
+    if(!r.diag){ // ฟังก์ชันเวอร์ชันเก่าจะไม่ส่ง diag กลับมา
+      toast('ฟังก์ชัน social-brain ในเซิร์ฟเวอร์ยังเป็นเวอร์ชันเก่า — วางโค้ดล่าสุดแล้วกด Deploy อีกครั้งครับ',true);return}
+    openModal(`<h3>🔎 ผลการดึงรีวิว Google</h3>
+      <p class="sm" style="margin:0 0 10px">รีวิวใหม่เข้าระบบ <b style="font-size:17px">${r.added}</b> รายการ</p>`
+      +r.diag.map(d=>`
+      <div class="card" style="margin-bottom:10px">
+        <div class="b">${esc(brName(d.branch))}</div>
+        ${d.http!==200?`<div class="sm" style="color:var(--bad)">Google ตอบ HTTP ${d.http}<br><span class="xs">${esc(d.error||'')}</span></div>`
+        :`<div class="sm">Google เห็นร้านนี้: คะแนนรวม <b>${d.place_rating??'—'}★</b> จาก <b>${d.place_review_count??'—'}</b> รีวิว</div>
+          <div class="sm">รอบนี้ Google ส่งมา <b>${d.reviews_from_google}</b> รายการ${d.newest_api?` (มีชุดล่าสุด ${d.newest_api})`:' (ยังไม่ได้ชุด "ล่าสุด" — เปิด Legacy Places API ใน Google Cloud จะได้เพิ่ม)'}
+          · ใหม่ ${d.inserted} · ซ้ำของเดิม ${d.duplicated}</div>
+          ${d.insert_error?`<div class="sm" style="color:var(--bad)">บันทึกลงฐานข้อมูลไม่ได้: ${esc(d.insert_error)}</div>`:''}
+          ${d.reviews_from_google===0?`<div class="xs mut" style="margin-top:4px">Google ไม่ส่งรีวิวมาเลย — ส่วนใหญ่คือ Place ID ชี้ผิดที่ (เช็คใน Place ID Finder)</div>`:''}`}
+      </div>`).join('')
+      +`<div class="xs mut" style="margin:2px 0 10px">💡 API สาธารณะของ Google ให้รีวิวรอบละไม่เกิน 5+5 ต่อสาขา — ระบบดึงซ้ำทุก 15 นาทีและสะสมเพิ่มเอง · รีวิวที่ได้มามักเป็นของเก่าหลายเดือน/ปี จึงไม่โผล่ในมุมมอง "30 วันล่าสุด" ให้เปลี่ยนช่วงเวลาเป็น "ทั้งหมด"</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" style="flex:1" onclick="closeModal();S.days=3650;document.getElementById('daysPick').value='3650';S.cache={};show('feed')">ดูรีวิวทั้งหมดในฟีด →</button>
+        <button class="btn gh" onclick="closeModal()">ปิด</button>
+      </div>`);
+  }catch(e){toast('ดึงไม่ได้: '+e.message,true)}
+}
+
+/* ============ ตั้งค่า ============ */
+async function vSet(el){
+  el.innerHTML='<div class="spin"></div>';
+  await loadStaff();
+  el.innerHTML=`
+  <div class="card"><h3>👥 รายชื่อพนักงาน <span class="sp">ช่วยให้ AI จับชื่อในรีวิวได้แม่น + ใช้สรุปใครทำดี</span></h3>
+    <div class="twrap"><table><tr><th>ชื่อ</th><th>ชื่อเล่น/สะกดอื่น</th><th>สาขา</th><th>กะ</th><th></th></tr>
+      ${S.staff.map(s=>`<tr style="${s.active?'':'opacity:.45'}">
+        <td class="b">${esc(s.name)}</td><td class="xs">${esc((s.aliases||[]).join(', '))}</td>
+        <td>${s.branch?esc(brName(s.branch)):'ทุกสาขา'}</td><td>${s.shift==='am'?'เช้า':s.shift==='pm'?'เย็น':'ทุกกะ'}</td>
+        <td class="right"><button class="hintlink" onclick="staffModal(${s.id})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="5" class="empty">ยังไม่มีรายชื่อ</td></tr>'}
+    </table></div>
+    <button class="btn gh sm" style="margin-top:8px" onclick="staffModal()">➕ เพิ่มพนักงาน</button>
+  </div>
+  <div class="card"><h3>🔧 เครื่องมือ</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn gh sm" onclick="analyzeAllPending()">🧠 วิเคราะห์ทั้งหมดที่ค้าง (วนจนหมด)</button>
+      <button class="btn gh sm" onclick="genDigest('weekly')">📋 สรุปรอบ 7 วันตอนนี้</button>
+      <button class="btn gh sm" onclick="importModal()">📥 นำเข้ารีวิวจากไฟล์</button>
+    </div>
+    <div class="xs mut" style="margin-top:8px">ปกติระบบวิเคราะห์อัตโนมัติทันทีที่มีรีวิวเข้า และสรุปรายวันเวลา 06:10 (ถ้าเปิด pg_cron ตามคู่มือ)<br>
+    🧠 โหมด AI เลือกเองอัตโนมัติ: <b>Claude</b> (ถ้ามีเครดิต) → <b>Gemini</b> (โควต้าฟรีรายวัน) → <b>วิเคราะห์เบื้องต้นจากคำสำคัญ</b> (ฟรี ไม่จำกัด — ผลจะขึ้นป้าย [เบื้องต้น])</div>
+  </div>
+  `;
+}
+function staffModal(id){
+  const s=id?S.staff.find(x=>x.id===id):{name:'',aliases:[],branch:'',shift:'all',active:true};
+  openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}พนักงาน</h3>
+    <div class="fld"><label>ชื่อ</label><input id="stName" value="${esc(s.name)}" placeholder="เช่น พี่หน่อย"></div>
+    <div class="fld"><label>ชื่อเล่น/สะกดอื่น (คั่นด้วย ,)</label><input id="stAlias" value="${esc((s.aliases||[]).join(', '))}"></div>
+    <div class="grid2">
+      <div class="fld"><label>สาขา</label><select id="stBr"><option value="">ทุกสาขา</option>${S.branches.map(b=>`<option value="${b.code}" ${s.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label>กะ</label><select id="stShift">
+        <option value="all" ${s.shift==='all'?'selected':''}>ทุกกะ</option>
+        <option value="am" ${s.shift==='am'?'selected':''}>เช้า</option>
+        <option value="pm" ${s.shift==='pm'?'selected':''}>เย็น</option></select></div>
+    </div>
+    ${id?`<div class="fld"><label><input type="checkbox" id="stActive" ${s.active?'checked':''} style="width:auto;margin-right:6px">ยังทำงานอยู่</label></div>`:''}
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="flex:1" onclick="saveStaff(${id||'null'})">บันทึก</button>
+      ${id?`<button class="btn gh" onclick="delStaff(${id})">ลบ</button>`:''}
+    </div>`);
+}
+async function saveStaff(id){
+  const row={name:$('#stName').value.trim(),
+    aliases:$('#stAlias').value.split(',').map(x=>x.trim()).filter(Boolean),
+    branch:$('#stBr').value||null,shift:$('#stShift').value,
+    active:id?$('#stActive').checked:true};
+  if(!row.name){toast('ใส่ชื่อก่อนครับ',true);return}
+  if(id)await api('PATCH','social_staff?id=eq.'+id,row);
+  else await api('POST','social_staff',row);
+  closeModal();show('set');
+}
+async function delStaff(id){
+  if(!confirm('ลบรายชื่อนี้?'))return;
+  await api('DELETE','social_staff?id=eq.'+id);closeModal();show('set');
+}
+
+/* ---------- realtime ---------- */
+let _rtLive=false,_rtT=null;
+function rtStart(){
+  try{
+    if(window.supabase&&window.supabase.createClient){
+      const c=cfg();const sb=window.supabase.createClient(c.url,c.key);
+      sb.channel('jjsocial-live')
+        .on('postgres_changes',{event:'*',schema:'public',table:'social_mentions'},rtEvent)
+        .on('postgres_changes',{event:'*',schema:'public',table:'social_chat_log'},rtEvent)
+        .subscribe(st=>{_rtLive=(st==='SUBSCRIBED')});
+    }
+  }catch(e){}
+  setInterval(()=>{if(!_rtLive&&!document.hidden)rtApply()},90000); // โพลสำรอง
+}
+function rtEvent(){clearTimeout(_rtT);_rtT=setTimeout(rtApply,1200)}
+async function rtApply(){
+  if(document.hidden)return;
+  const a=document.activeElement;
+  if(a&&['TEXTAREA','INPUT'].includes(a.tagName)&&a.value){rtBanner();return} // ไม่ทับของที่พิมพ์ค้าง
+  S.cache={};
+  refreshBadges();
+  if(['dash','feed','chat','insight'].includes(S.tab))await show(S.tab);
+}
+function rtBanner(){
+  let b=document.getElementById('rtBar');
+  if(!b){b=document.createElement('div');b.id='rtBar';
+    b.innerHTML='🔄 มีข้อมูลใหม่เข้ามา — <b>แตะเพื่อโหลด</b>';
+    b.onclick=()=>{b.style.display='none';S.cache={};refreshBadges();show(S.tab)};
+    document.body.appendChild(b)}
+  b.style.display='block';
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){S.cache={};refreshBadges();if(['dash','feed','chat'].includes(S.tab))show(S.tab)}});
+
+/* ---------- boot ---------- */
+async function loadBranches(){
+  try{
+    const rows=await sel('pnl_branches','select=*');
+    const bs=(rows||[]).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code})).filter(b=>b.code);
+    if(bs.length)S.branches=bs;
+  }catch(e){}
+  if(S.br!=='ALL'&&!S.branches.find(b=>b.code===S.br))S.br='ALL';
+  $('#brSeg').innerHTML=[...S.branches.map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}>${esc(b.name.replace('สาขา',''))}</button>`),`<button data-br="ALL" ${S.br==='ALL'?'class="on"':''}>ทุกสาขา</button>`].join('');
+  $('#brSeg').addEventListener('click',e=>{
+    const b=e.target.closest('[data-br]');if(!b)return;
+    S.br=b.dataset.br;localStorage.setItem('jjsocial_br',S.br);
+    document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x===b));
+    show(S.tab);
+  });
+}
+async function startApp(){
+  $('#login').style.display='none';$('#app').style.display='block';
+  $('#daysPick').value=String(S.days);
+  applyPerms();
+  await loadBranches();
+  rtStart();refreshBadges();
+  if(S._gbpResult){
+    const g=S._gbpResult;S._gbpResult=null;
+    if(g.ok){toast('✅ เชื่อมต่อ Google Business สำเร็จ — กด "ซิงค์รีวิวทั้งหมด" ได้เลย');await loadSettings();show('ch');return}
+    toast('เชื่อมต่อ Google ไม่สำเร็จ: '+g.msg,true);
+  }
+  show('dash');
+}
+/* ---------- โลโก้ (CI เดียวกับระบบ P&L) + ธีมกราฟมืด ---------- */
+const LOGO_B64='data:image/png;base64,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';
+(function(){
+  ['sbLogo','hdLogo','liLogo'].forEach(id=>{const el=document.getElementById(id);if(el)el.src=LOGO_B64});
+  ['icon','apple-touch-icon'].forEach(rel=>{const l=document.createElement('link');l.rel=rel;l.href=LOGO_B64;document.head.appendChild(l)});
+  if(window.Chart){Chart.defaults.color='#A89E93';Chart.defaults.borderColor='rgba(255,255,255,.08)';Chart.defaults.font.family="'Prompt','Sarabun',sans-serif"}
+})();
+(function(){ // ผลเด้งกลับจากการเชื่อมต่อ Google Business
+  const m=location.hash.match(/^#gbp=(ok|err:(.*))$/);
+  if(!m)return;
+  history.replaceState(null,'',location.pathname+location.search);
+  S._gbpResult=m[1]==='ok'?{ok:true}:{ok:false,msg:decodeURIComponent(m[2]||'')};
+})();
+(function init(){
+  const sess=LS.get('jjsocial_sess',null);
+  if(sess&&sess.username){S.user=sess;startApp()}
+  else $('#login').style.display='block';
+})();
+</script>
+</body>
+</html>

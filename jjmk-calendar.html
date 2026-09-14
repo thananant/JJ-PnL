@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JJ Calendar — จริงใจหมูกระทะ</title>
+<meta name="theme-color" content="#0C0A09">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23A31B24'/%3E%3Ctext x='50' y='70' font-size='56' text-anchor='middle'%3E%F0%9F%93%85%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --red:#FF4046; --red-d:#C62127; --red-t:rgba(255,64,70,.15);
+  --gold:#FFC643; --gold-t:rgba(255,198,67,.13);
+  --ink:#F4EFE8; --mut:#A89E93; --bg:#0C0A09; --card:rgba(255,255,255,.035); --line:rgba(255,255,255,.10);
+  --ok:#2FE08A; --ok-t:rgba(47,224,138,.13); --bad:#FF5C5C; --bad-t:rgba(255,92,92,.13);
+  --blu:#58B0FF; --blu-t:rgba(88,176,255,.13);
+  --r:16px; --sh:0 2px 20px rgba(0,0,0,.35); --glow:0 0 18px rgba(255,64,70,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;min-height:100dvh;overflow-x:hidden}
+::selection{background:rgba(255,64,70,.4)}
+body::before{content:'';position:fixed;inset:-20%;z-index:-2;pointer-events:none;
+  background:radial-gradient(38% 30% at 12% 8%,rgba(198,33,39,.25),transparent 60%),
+             radial-gradient(30% 26% at 88% 12%,rgba(255,198,67,.11),transparent 60%),
+             radial-gradient(42% 36% at 78% 92%,rgba(198,33,39,.16),transparent 60%);
+  animation:aur 26s ease-in-out infinite alternate}
+body::after{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.55;
+  background:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(75% 65% at 50% 28%,#000 0%,transparent 100%);
+  mask-image:radial-gradient(75% 65% at 50% 28%,#000 0%,transparent 100%)}
+@keyframes aur{to{transform:translate3d(3%,4%,0) scale(1.07)}}
+h1,h2,h3,.num{font-family:'Prompt',sans-serif}
+button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:15px;color:inherit}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)}
+input,select,textarea{background:rgba(255,255,255,.05);border:1.5px solid var(--line);border-radius:12px;padding:9px 11px;width:100%;outline:none;transition:border-color .18s,box-shadow .18s}
+input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(255,64,70,.14)}
+input::placeholder,textarea::placeholder{color:#6E655C}
+select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mut) 50%),linear-gradient(135deg,var(--mut) 50%,transparent 50%);background-position:calc(100% - 17px) 55%,calc(100% - 12px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
+select option{background:#1A1512;color:var(--ink)}
+textarea{resize:vertical;min-height:64px;line-height:1.5}
+input[type=date],input[type=time]{color-scheme:dark}
+::-webkit-scrollbar{height:7px;width:7px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,64,70,.45)}
+
+/* ---------- layout ---------- */
+header{position:sticky;top:0;z-index:40;background:rgba(14,11,10,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+header::after{content:'';display:block;height:2px;margin-top:-1px;
+  background:linear-gradient(90deg,transparent,var(--red) 18%,var(--gold) 50%,var(--red) 82%,transparent);
+  background-size:220% 100%;animation:scan 6s linear infinite;opacity:.85}
+@keyframes scan{to{background-position:-220% 0}}
+.hrow{display:flex;align-items:center;gap:10px;padding:10px clamp(14px,1.6vw,28px) 8px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-family:'Prompt';font-weight:700;font-size:18px}
+.brand .hlogo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--red-d),var(--red));display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 14px rgba(255,198,67,.35)}
+.brand>span{background:linear-gradient(90deg,#FFF3E0 0%,var(--gold) 45%,#FFF3E0 90%);background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 7s linear infinite}
+.brand small{font-weight:500;font-size:11px;display:block;line-height:1;-webkit-text-fill-color:var(--mut);color:var(--mut)}
+@keyframes shine{to{background-position:-200% 0}}
+.seg{display:flex;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px;overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{padding:7px 13px;border-radius:9px;font-weight:600;color:var(--mut);font-size:14px;white-space:nowrap;transition:.15s}
+.seg button.on{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;box-shadow:var(--glow)}
+#mineBtn{border:1.5px solid var(--line);border-radius:99px;padding:7px 14px;font-weight:600;font-size:13.5px;color:var(--mut);white-space:nowrap;transition:.15s}
+#mineBtn.on{border-color:rgba(255,198,67,.55);color:var(--gold);background:var(--gold-t);box-shadow:0 0 14px rgba(255,198,67,.2)}
+#hdUser{margin-left:auto;font-size:12px;color:var(--mut);white-space:nowrap}
+.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px 10px 9px;scrollbar-width:none}
+.tabbar::-webkit-scrollbar{display:none}
+.tabbar button{flex:none;padding:8px 14px;border-radius:99px;font-weight:600;color:var(--mut);font-size:14px}
+.tabbar button.on{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;box-shadow:var(--glow)}
+main{padding:16px clamp(12px,1.6vw,28px) 90px;max-width:1100px;margin:0 auto;position:relative}
+.view{display:none}.view.on{display:block;animation:vin .3s ease}
+@keyframes vin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ---------- components ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px 16px;margin-bottom:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.card h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;border-radius:11px;padding:9px 16px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 14px rgba(255,64,70,.3);transition:.18s;text-decoration:none}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 24px rgba(255,64,70,.5)}
+.btn.dk{background:linear-gradient(135deg,#2B2420,#3C312B);box-shadow:0 2px 12px rgba(0,0,0,.45)}
+.btn.gh{background:rgba(255,255,255,.05);color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
+.btn.gh:hover{border-color:rgba(255,64,70,.5);box-shadow:0 0 14px rgba(255,64,70,.18)}
+.btn.sm{padding:6px 12px;font-size:13px;border-radius:9px}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;border-radius:99px;padding:2.5px 9px;background:rgba(255,255,255,.07);color:#CFC6BB;border:1px solid rgba(255,255,255,.08);white-space:nowrap}
+.mut{color:var(--mut)} .xs{font-size:11.5px} .sm{font-size:13px} .b{font-weight:700}
+.fld{margin-bottom:10px}
+.fld label{display:block;font-size:12px;font-weight:700;color:var(--mut);margin-bottom:4px;font-family:'Prompt'}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13.5px}
+.spin{width:24px;height:24px;border:3px solid rgba(255,255,255,.08);border-top-color:var(--red);border-radius:50%;animation:sp .7s linear infinite;margin:30px auto;box-shadow:0 0 18px rgba(255,64,70,.25)}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ckrow{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:2px 0 10px;cursor:pointer}
+.ckrow input{width:18px;height:18px;accent-color:var(--red)}
+.copyline{display:flex;gap:7px;align-items:center;margin:6px 0}
+.copyline input{font-size:12px;font-family:ui-monospace,Menlo,monospace;background:rgba(0,0,0,.28)}
+.hintlink{color:var(--blu);font-weight:600;font-size:13px;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
+.steps{margin:6px 0 2px;padding-left:20px;font-size:13.5px;line-height:1.7;color:#DCD3C7}
+.steps li::marker{color:var(--gold);font-weight:700}
+
+/* ---------- ปฏิทินเดือน ---------- */
+.mnav{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.mnav h2{margin:0;font-size:18px;min-width:170px}
+.mnav .nv{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.05);font-size:18px;font-weight:700;transition:.15s}
+.mnav .nv:hover{border-color:rgba(255,198,67,.5);color:var(--gold)}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11.5px;color:var(--mut);font-family:'Prompt';font-weight:700;margin-bottom:5px}
+.dow .sun{color:var(--bad)}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.mcell{min-height:92px;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:4px 4px 3px;background:rgba(255,255,255,.02);cursor:pointer;overflow:hidden;transition:.15s}
+.mcell:hover{border-color:rgba(255,198,67,.45);background:rgba(255,255,255,.05)}
+.mcell.out{opacity:.32}
+.mcell.today{border-color:var(--red);box-shadow:inset 0 0 0 1px rgba(255,64,70,.35),0 0 14px rgba(255,64,70,.14)}
+.mcell .dnum{font-family:'Prompt';font-size:12px;font-weight:600;color:var(--mut);display:block}
+.mcell.today .dnum{color:var(--red);font-weight:700}
+.mev{font-size:10.5px;line-height:1.35;border-radius:6px;padding:1.5px 5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.mev:hover{filter:brightness(1.25)}
+.mmore{font-size:10px;color:var(--mut);margin-top:2px;font-weight:600}
+.todaybar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:linear-gradient(135deg,rgba(255,64,70,.10),rgba(255,198,67,.07));border:1px solid rgba(255,198,67,.3);border-radius:13px;padding:9px 13px;margin-bottom:12px;font-size:13.5px}
+.todaybar .tchip{cursor:pointer;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:99px;padding:3px 11px;font-size:12.5px;font-weight:600}
+.todaybar .tchip:hover{border-color:var(--gold);color:var(--gold)}
+@media(max-width:640px){
+  .mcell{min-height:66px;padding:3px 2px 2px;border-radius:8px}
+  .mev{font-size:8.5px;padding:1px 3px;border-radius:4px}
+  .mcell .dnum{font-size:11px}
+  .mnav h2{font-size:16px;min-width:150px}
+}
+
+/* ---------- รายการนัด ---------- */
+.agrp{margin:16px 2px 8px;font-family:'Prompt';font-weight:700;font-size:14px;color:var(--gold);display:flex;align-items:center;gap:8px}
+.agrp.today{color:var(--red)}
+.acard{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:12px 14px;margin-bottom:9px;cursor:pointer;transition:.18s;backdrop-filter:blur(8px)}
+.acard:hover{border-color:rgba(255,198,67,.4);transform:translateY(-1px)}
+.atime{flex:none;width:76px;text-align:center;font-family:'Prompt';font-weight:700;font-size:14px;padding-top:2px;line-height:1.5}
+.atime .xs{display:block;font-weight:500;color:var(--mut)}
+.abody{flex:1;min-width:0}
+.abody .t{font-weight:700;font-family:'Prompt';font-size:15px;margin-bottom:3px}
+.abody .meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--mut)}
+.ppl{font-size:12.5px;color:#DCD3C7;margin-top:5px;line-height:1.5}
+
+/* ---------- ผู้เข้าร่วม (ฟอร์ม) ---------- */
+.attops{display:flex;gap:7px;margin-bottom:7px}
+.attgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:3px;max-height:190px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:8px;background:rgba(0,0,0,.18)}
+.attgrid label{display:flex;gap:7px;align-items:center;font-size:13.5px;cursor:pointer;padding:3px 4px;border-radius:7px}
+.attgrid label:hover{background:rgba(255,255,255,.05)}
+.attgrid input{width:16px;height:16px;accent-color:var(--red);flex:none}
+
+/* ---------- misc ---------- */
+#fab{position:fixed;right:18px;bottom:20px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;font-size:28px;line-height:1;box-shadow:0 6px 26px rgba(255,64,70,.55);z-index:45;display:none;align-items:center;justify-content:center;transition:.18s}
+#fab:hover{transform:scale(1.08)}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(90px);background:rgba(24,19,16,.92);backdrop-filter:blur(10px);border:1px solid rgba(255,64,70,.4);color:#fff;font-size:13.5px;font-weight:600;border-radius:13px;padding:11px 18px;transition:.28s;z-index:99;max-width:88vw;text-align:center;box-shadow:0 6px 30px rgba(0,0,0,.5),0 0 20px rgba(255,64,70,.15)}
+#toast.on{transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:var(--bad);box-shadow:0 6px 30px rgba(0,0,0,.5),0 0 24px rgba(255,92,92,.35)}
+#modalWrap{position:fixed;inset:0;background:rgba(5,3,2,.7);backdrop-filter:blur(6px);z-index:80;display:none;align-items:flex-start;justify-content:center;padding:5vh 14px;overflow-y:auto}
+#modalWrap.on{display:flex}
+.modal{background:#181310;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:18px 18px 16px;width:100%;max-width:560px;box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 40px rgba(255,64,70,.08);animation:vin .25s ease}
+.modal h3{margin:0 0 12px;font-size:16px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+#login{max-width:340px;margin:9vh auto;text-align:center;padding:0 16px}
+#login .lg{width:76px;height:76px;border-radius:20px;margin:0 auto 14px;background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;font-size:36px;box-shadow:0 0 22px rgba(255,198,67,.4)}
+#login h1{background:linear-gradient(90deg,#FFF3E0,var(--gold) 50%,#FFF3E0);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 7s linear infinite;font-size:21px;margin:0 0 4px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ======== login ======== -->
+<div id="login" style="display:none">
+  <div class="lg">📅</div>
+  <h1>JJ Calendar</h1>
+  <p class="mut" style="margin:0 0 16px">ปฏิทินนัดหมายภายในองค์กร<br>จริงใจหมูกระทะ · ใช้บัญชีเดียวกับระบบ P&amp;L</p>
+  <div class="fld" style="text-align:left"><label>Username</label><input id="liUser" autocomplete="username"></div>
+  <div class="fld" style="text-align:left"><label>รหัสผ่าน</label><input id="liPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+  <button class="btn dk" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
+  <p class="xs mut" style="margin-top:14px">* ต้องรัน <b>jjmk-calendar.sql</b> ใน Supabase ก่อน 1 ครั้ง</p>
+</div>
+
+<!-- ======== app ======== -->
+<div id="app" style="display:none">
+<header>
+  <div class="hrow">
+    <div class="brand"><div class="hlogo">📅</div><span>JJ Calendar<small>จริงใจหมูกระทะ</small></span></div>
+    <div class="seg" id="brSeg"></div>
+    <button id="mineBtn" onclick="toggleMine()">👤 เฉพาะนัดของฉัน</button>
+    <div id="hdUser"></div>
+  </div>
+  <nav class="tabbar">
+    <button data-v="month" class="on">🗓 ปฏิทินเดือน</button>
+    <button data-v="agenda">📋 นัดที่จะถึง</button>
+    <button data-v="sync">📲 เชื่อมมือถือ &amp; เตือน</button>
+  </nav>
+</header>
+<main>
+  <section class="view on" id="view-month"><div class="spin"></div></section>
+  <section class="view" id="view-agenda"></section>
+  <section class="view" id="view-sync"></section>
+</main>
+<button id="fab" title="สร้างนัดใหม่" onclick="openEventForm()">＋</button>
+</div>
+
+<div id="modalWrap" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   JJ Calendar — ปฏิทินนัดหมายภายในองค์กร จริงใจหมูกระทะ
+   ตาราง Supabase: cal_events / cal_attendees / cal_settings
+   ล็อกอิน: pnl_users (บัญชีเดียวกับระบบ P&L)
+   ============================================================ */
+const CONFIG = {
+  SUPABASE_URL: 'https://aikyxvluaiubdidqxwnd.supabase.co',
+  SUPABASE_KEY: 'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'
+};
+function cfg(){
+  return {
+    url: (localStorage.getItem('jjpnl_url') || CONFIG.SUPABASE_URL || '').replace(/\/$/,''),
+    key: localStorage.getItem('jjpnl_key') || CONFIG.SUPABASE_KEY || ''
+  };
+}
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+
+const S={user:null,tab:'month',
+  br:localStorage.getItem('jjcal_br')||'ALL',
+  mine:LS.get('jjcal_mine',false),
+  cur:new Date(),           // เดือนที่กำลังดู
+  events:[],loaded:false,
+  users:[],branches:[{code:'JJLP',name:'ลาดพร้าว'},{code:'JJRD',name:'รัชดา'}],
+  feedToken:''};
+
+const TH_D=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+const TH_DS=['อา','จ','อ','พ','พฤ','ศ','ส'];
+const TH_M=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const TH_MS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const BR_EXTRA=[{code:'JJCK',name:'ครัวกลาง'},{code:'OFFICE',name:'ออฟฟิศ'}];
+const BR_C={ALL:'#B08BE0',JJLP:'#FFC643',JJRD:'#FF6B6B',JJCK:'#2FE08A',OFFICE:'#58B0FF'};
+const REM_OPTS=[[0,'ไม่เตือน'],[15,'15 นาที'],[30,'30 นาที'],[60,'1 ชั่วโมง'],[120,'2 ชั่วโมง'],[1440,'1 วัน']];
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',3200)}
+function openModal(html){$('#modalBox').innerHTML=html;$('#modalWrap').classList.add('on')}
+function closeModal(){$('#modalWrap').classList.remove('on')}
+function pad(n){return String(n).padStart(2,'0')}
+function dstart(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
+function dkey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function thDate(d,short){const x=new Date(d);return (short?TH_DS[x.getDay()]+'. ':'วัน'+TH_D[x.getDay()]+'ที่ ')+x.getDate()+' '+(short?TH_MS[x.getMonth()]:TH_M[x.getMonth()])+' '+(x.getFullYear()+543)}
+function thTime(d){const x=new Date(d);return pad(x.getHours())+':'+pad(x.getMinutes())}
+function brLabel(c){if(c==='ALL')return 'ทุกสาขา';const b=allBranches().find(x=>x.code===c);return b?b.name:(c||'')}
+function brColor(c){return BR_C[c]||'#CFC6BB'}
+function allBranches(){
+  const out=[...S.branches];
+  BR_EXTRA.forEach(x=>{if(!out.find(b=>b.code===x.code))out.push(x)});
+  return out;
+}
+function att(e){return e.cal_attendees||[]}
+function byId(id){return S.events.find(e=>e.id===id)}
+function isMine(e){return e.created_by===S.user.username||att(e).some(a=>a.username===S.user.username)}
+function canEdit(e){return S.user&&(S.user.role==='admin'||e.created_by===S.user.username)}
+function nameOf(u){const x=S.users.find(r=>r.username===u);return x?(x.display_name||u):u}
+
+/* ---------- REST ---------- */
+async function api(method,path,body,prefer){
+  const {url,key}=cfg();
+  const r=await fetch(url+'/rest/v1/'+path,{method,
+    headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+key,
+      ...(prefer?{Prefer:prefer}:{})},
+    body:body?JSON.stringify(body):undefined});
+  if(!r.ok)throw new Error(await r.text());
+  const tx=await r.text(); return tx?JSON.parse(tx):null;
+}
+const sel=(t,q)=>api('GET',t+'?'+q);
+
+/* ---------- login (บัญชีเดียวกับ P&L: ตาราง pnl_users) ---------- */
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const enc=new TextEncoder().encode(str);
+  const l=enc.length,bitLen=l*8,withOne=l+1,total=(Math.ceil((withOne+8)/64))*64;
+  const M=new Uint8Array(total);M.set(enc);M[l]=0x80;
+  const dv=new DataView(M.buffer);
+  dv.setUint32(total-4,bitLen>>>0);dv.setUint32(total-8,Math.floor(bitLen/4294967296));
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n));const w=new Array(64);
+  for(let i=0;i<total;i+=64){
+    for(let t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+    for(let t=16;t<64;t++){const s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3),s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0}
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){const S1=rr(e,6)^rr(e,11)^rr(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[t]+w[t])>>>0,S0=rr(a,2)^rr(a,13)^rr(a,22),maj=(a&b)^(a&c)^(b&c),t2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0}
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+function pwHash(u,p){return sha256hex(u+'|'+p+'|JJPNL')}
+async function doLogin(){
+  const u=$('#liUser').value.trim(),p=$('#liPass').value;
+  if(!u||!p){toast('กรอกให้ครบก่อนครับ',true);return}
+  try{
+    const rows=await sel('pnl_users',`select=id,username,display_name,role,active,pass_hash&username=eq.${encodeURIComponent(u)}&limit=1`);
+    const usr=rows&&rows[0];
+    if(!usr||usr.pass_hash!==pwHash(u,p)){toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',true);return}
+    if(!usr.active){toast('บัญชีนี้ถูกปิดการใช้งาน',true);return}
+    S.user={username:usr.username,display_name:usr.display_name,role:usr.role};
+    LS.set('jjcal_sess',S.user);
+    startApp();
+  }catch(e){toast('เชื่อมต่อไม่ได้ — ตรวจว่ารัน jjmk-calendar.sql หรือยัง',true);console.error(e)}
+}
+function logout(){localStorage.removeItem('jjcal_sess');location.reload()}
+
+/* ---------- โหลดข้อมูล ---------- */
+async function loadBranches(){
+  try{
+    const rows=await sel('pnl_branches','select=*');
+    const bs=(rows||[]).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code})).filter(b=>b.code);
+    if(bs.length)S.branches=bs;
+  }catch(e){}
+  if(S.br!=='ALL'&&!allBranches().find(b=>b.code===S.br))S.br='ALL';
+  renderSeg();
+}
+function renderSeg(){
+  $('#brSeg').innerHTML=[`<button data-br="ALL" ${S.br==='ALL'?'class="on"':''}>ทุกที่</button>`,
+    ...allBranches().map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}>${esc(String(b.name).replace('สาขา',''))}</button>`)].join('');
+}
+async function loadUsers(){
+  try{S.users=await sel('pnl_users','select=username,display_name,role&active=eq.true&order=display_name.asc')||[]}
+  catch(e){S.users=[]}
+}
+async function loadToken(){
+  if(S.feedToken)return S.feedToken;
+  try{const rows=await sel('cal_settings','select=val&id=eq.feed');S.feedToken=(rows&&rows[0]&&rows[0].val&&rows[0].val.token)||''}
+  catch(e){S.feedToken=''}
+  return S.feedToken;
+}
+async function loadEvents(force){
+  if(S.loaded&&!force)return S.events;
+  const since=new Date(Date.now()-400*86400000).toISOString();
+  const rows=await sel('cal_events',`select=*,cal_attendees(username,display_name)&cancelled=eq.false&start_at=gte.${encodeURIComponent(since)}&order=start_at.asc&limit=2000`);
+  S.events=rows||[];S.loaded=true;
+  return S.events;
+}
+function filtered(){
+  let out=S.events;
+  if(S.br!=='ALL')out=out.filter(e=>e.branch===S.br||e.branch==='ALL');
+  if(S.mine)out=out.filter(e=>isMine(e));
+  return out;
+}
+function evDays(e){ // รายการวันที่นัดนี้กินถึง (กันเหตุ end ก่อน start ด้วย)
+  const out=[];let d=dstart(new Date(e.start_at));
+  let last=dstart(new Date(e.end_at));if(last<d)last=d;
+  while(d<=last&&out.length<62){out.push(dkey(d));d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1)}
+  return out;
+}
+function evWhen(e){
+  const s=new Date(e.start_at),en=new Date(e.end_at);
+  if(e.all_day)return dkey(s)===dkey(en)?'ทั้งวัน':'ทั้งวัน · ถึง'+thDate(en,true);
+  if(dkey(s)===dkey(en))return thTime(s)+'–'+thTime(en)+' น.';
+  return thTime(s)+' น. · ถึง'+thDate(en,true)+' '+thTime(en)+' น.';
+}
+
+/* ---------- nav ---------- */
+function toggleMine(){S.mine=!S.mine;LS.set('jjcal_mine',S.mine);$('#mineBtn').classList.toggle('on',S.mine);show(S.tab)}
+async function show(v){
+  S.tab=v;
+  document.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
+  $('#fab').style.display=(v==='sync')?'none':'flex';
+  const el=$('#view-'+v);
+  try{
+    if(v==='month')vMonth(el);
+    else if(v==='agenda')vAgenda(el);
+    else if(v==='sync')await vSync(el);
+  }catch(e){el.innerHTML='<div class="empty">โหลดไม่ได้: '+esc(e.message)+'<br><span class="xs">ถ้ายังไม่ได้ติดตั้ง ให้รัน jjmk-calendar.sql ใน Supabase ก่อนครับ</span></div>';console.error(e)}
+}
+document.addEventListener('click',e=>{
+  const ev=e.target.closest('[data-ev]');
+  if(ev){openEv(ev.dataset.ev);return}
+  const nv=e.target.closest('[data-nav]');
+  if(nv){
+    const n=+nv.dataset.nav;
+    S.cur=n===0?new Date():new Date(S.cur.getFullYear(),S.cur.getMonth()+n,1);
+    vMonth($('#view-month'));return;
+  }
+  const dy=e.target.closest('[data-day]');
+  if(dy){openDay(dy.dataset.day);return}
+  const tb=e.target.closest('[data-v]');
+  if(tb){show(tb.dataset.v);return}
+  const br=e.target.closest('[data-br]');
+  if(br){S.br=br.dataset.br;localStorage.setItem('jjcal_br',S.br);renderSeg();show(S.tab)}
+});
+
+/* ---------- มุมมองเดือน ---------- */
+function vMonth(el){
+  const y=S.cur.getFullYear(),m=S.cur.getMonth();
+  const startDow=new Date(y,m,1).getDay();
+  const gridStart=new Date(y,m,1-startDow);
+  const todayKey=dkey(new Date());
+  const map={};
+  filtered().forEach(e=>evDays(e).forEach(k=>{(map[k]=map[k]||[]).push(e)}));
+  let cells='';
+  for(let i=0;i<42;i++){
+    const d=new Date(gridStart.getFullYear(),gridStart.getMonth(),gridStart.getDate()+i);
+    const k=dkey(d),evs=map[k]||[],out=d.getMonth()!==m;
+    const chips=evs.slice(0,3).map(e=>{
+      const c=brColor(e.branch);
+      return `<div class="mev" data-ev="${e.id}" style="background:${c}22;color:${c};border:1px solid ${c}44">${e.all_day?'':thTime(e.start_at)+' '}${esc(e.title)}</div>`;
+    }).join('')+(evs.length>3?`<div class="mmore">+${evs.length-3} รายการ</div>`:'');
+    cells+=`<div class="mcell${out?' out':''}${k===todayKey?' today':''}" data-day="${k}"><span class="dnum">${d.getDate()}</span>${chips}</div>`;
+  }
+  const todayEvs=(map[todayKey]||[]);
+  const bar=todayEvs.length?`<div class="todaybar">📌 <b>วันนี้มีนัด ${todayEvs.length} รายการ</b>${todayEvs.map(e=>`<span class="tchip" data-ev="${e.id}">${e.all_day?'ทั้งวัน':thTime(e.start_at)} · ${esc(e.title)}</span>`).join('')}</div>`:'';
+  el.innerHTML=`${bar}<div class="card">
+    <div class="mnav">
+      <button class="nv" data-nav="-1">‹</button>
+      <h2>${TH_M[m]} ${y+543}</h2>
+      <button class="nv" data-nav="1">›</button>
+      <button class="btn gh sm" data-nav="0">วันนี้</button>
+      <span style="flex:1"></span>
+      <button class="btn sm" onclick="openEventForm()">➕ สร้างนัดใหม่</button>
+    </div>
+    <div class="dow"><span class="sun">อา</span><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span></div>
+    <div class="mgrid">${cells}</div>
+  </div>
+  <p class="xs mut" style="text-align:center">แตะวันเพื่อดูนัดของวันนั้น / เพิ่มนัด · แตะแถบนัดเพื่อดูรายละเอียด</p>`;
+}
+
+function openDay(k){
+  const evs=filtered().filter(e=>evDays(e).includes(k)).sort((a,b)=>(a.all_day?-1:1)-(b.all_day?-1:1)||new Date(a.start_at)-new Date(b.start_at));
+  const d=new Date(k+'T00:00:00');
+  openModal(`<h3>📅 ${thDate(d)} ${d.getFullYear()+543===new Date().getFullYear()+543&&dkey(d)===dkey(new Date())?'<span class="chip" style="color:var(--red)">วันนี้</span>':''}</h3>
+    ${evs.length?evs.map(e=>{
+      const c=brColor(e.branch);
+      return `<div class="acard" data-ev="${e.id}" style="margin-bottom:8px">
+        <div class="atime" style="color:${c}">${e.all_day?'ทั้งวัน':thTime(e.start_at)}<span class="xs">${e.all_day?'':'ถึง '+thTime(e.end_at)}</span></div>
+        <div class="abody"><div class="t">${esc(e.title)}</div>
+          <div class="meta"><span class="chip" style="color:${c};border-color:${c}55">${esc(brLabel(e.branch))}</span>${e.location?`<span>📍 ${esc(e.location)}</span>`:''}<span>👥 ${att(e).length} คน</span></div>
+        </div></div>`;
+    }).join(''):'<div class="empty">วันนี้ยังไม่มีนัด</div>'}
+    <div class="acts"><button class="btn" onclick="closeModal();openEventForm(null,'${k}')">➕ เพิ่มนัดวันนี้</button>
+    <button class="btn gh" onclick="closeModal()">ปิด</button></div>`);
+}
+
+/* ---------- มุมมองรายการนัด ---------- */
+function vAgenda(el){
+  const t0=dstart(new Date()).getTime();
+  const ups=filtered().filter(e=>{let en=dstart(new Date(e.end_at));const st=dstart(new Date(e.start_at));if(en<st)en=st;return en.getTime()>=t0});
+  if(!ups.length){el.innerHTML='<div class="empty">ยังไม่มีนัดที่จะถึง<br><br><button class="btn" onclick="openEventForm()">➕ สร้างนัดใหม่</button></div>';return}
+  const groups={};
+  ups.forEach(e=>{
+    const st=dstart(new Date(e.start_at));
+    const k=st.getTime()<t0?dkey(new Date()):dkey(st); // นัดที่เริ่มไปแล้วแต่ยังไม่จบ → โชว์ในวันนี้
+    (groups[k]=groups[k]||[]).push(e);
+  });
+  const todayKey=dkey(new Date());
+  el.innerHTML=Object.keys(groups).sort().map(k=>{
+    const d=new Date(k+'T00:00:00');
+    return `<div class="agrp${k===todayKey?' today':''}">${k===todayKey?'📌 วันนี้ · ':''}${thDate(d)}</div>`+
+      groups[k].sort((a,b)=>new Date(a.start_at)-new Date(b.start_at)).map(e=>{
+        const c=brColor(e.branch);
+        const names=att(e).map(a=>a.display_name||a.username);
+        return `<div class="acard" data-ev="${e.id}">
+          <div class="atime" style="color:${c}">${e.all_day?'ทั้งวัน':thTime(e.start_at)}<span class="xs">${e.all_day?'':'ถึง '+thTime(e.end_at)}</span></div>
+          <div class="abody">
+            <div class="t">${esc(e.title)}</div>
+            <div class="meta"><span class="chip" style="color:${c};border-color:${c}55">${esc(brLabel(e.branch))}</span>${e.location?`<span>📍 ${esc(e.location)}</span>`:''}<span>✍️ ${esc(e.created_name||e.created_by)}</span></div>
+            <div class="ppl">👥 <b>${names.length} คน:</b> ${esc(names.slice(0,6).join(', '))}${names.length>6?' และอีก '+(names.length-6)+' คน':''}</div>
+          </div></div>`;
+      }).join('');
+  }).join('');
+}
+
+/* ---------- ฟอร์มสร้าง/แก้ไขนัด ---------- */
+function openEventForm(id,presetDate){
+  const e=id?byId(id):null;
+  if(id&&!e)return;
+  if(e&&!canEdit(e)){toast('แก้ได้เฉพาะผู้สร้างนัดหรือ admin ครับ',true);return}
+  const s=e?new Date(e.start_at):null,en=e?new Date(e.end_at):null;
+  const d1=e?dkey(s):(presetDate||dkey(new Date()));
+  const d2=e?dkey(en):d1;
+  const picked=e?att(e).map(a=>a.username):[S.user.username];
+  const brOpts=[{code:'ALL',name:'ทุกสาขา / ส่วนกลาง'},...allBranches()]
+    .map(b=>`<option value="${esc(b.code)}" ${e&&e.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('');
+  const remOpts=REM_OPTS.map(([v,t])=>`<option value="${v}" ${(e?e.reminder_min:60)===v?'selected':''}>${t}</option>`).join('');
+  const userCks=S.users.map(u=>`<label><input type="checkbox" class="attck" value="${esc(u.username)}" ${picked.includes(u.username)?'checked':''}> ${esc(u.display_name||u.username)}</label>`).join('');
+  openModal(`<h3>${e?'✏️ แก้ไขนัด':'➕ สร้างนัดใหม่'}</h3>
+    <div class="fld"><label>หัวข้อนัด *</label><input id="fTitle" value="${e?esc(e.title):''}" placeholder="เช่น ประชุมผู้จัดการสาขาประจำเดือน"></div>
+    <div class="grid2">
+      <div class="fld"><label>วันที่เริ่ม *</label><input type="date" id="fDate" value="${d1}"></div>
+      <div class="fld"><label>ถึงวันที่</label><input type="date" id="fDateEnd" value="${d2}"></div>
+    </div>
+    <label class="ckrow"><input type="checkbox" id="fAllDay" ${e&&e.all_day?'checked':''} onchange="$('#timeRow').style.display=this.checked?'none':'grid'"> ทั้งวัน (ไม่ระบุเวลา)</label>
+    <div class="grid2" id="timeRow" style="${e&&e.all_day?'display:none':''}">
+      <div class="fld"><label>เวลาเริ่ม</label><input type="time" id="fT1" value="${e&&!e.all_day?thTime(s):'10:00'}"></div>
+      <div class="fld"><label>เวลาจบ</label><input type="time" id="fT2" value="${e&&!e.all_day?thTime(en):'11:00'}"></div>
+    </div>
+    <div class="grid2">
+      <div class="fld"><label>สาขา / หน่วยงาน</label><select id="fBr">${brOpts}</select></div>
+      <div class="fld"><label>🔔 แจ้งเตือนล่วงหน้า</label><select id="fRem">${remOpts}</select></div>
+    </div>
+    <div class="fld"><label>สถานที่</label><input id="fLoc" value="${e?esc(e.location||''):''}" placeholder="เช่น ห้องประชุมชั้น 2 สาขารัชดา"></div>
+    <div class="fld"><label>รายละเอียด</label><textarea id="fDetail" placeholder="วาระ / สิ่งที่ต้องเตรียม">${e?esc(e.detail||''):''}</textarea></div>
+    <div class="fld"><label>👥 ใครต้องเข้าบ้าง</label>
+      <div class="attops"><button class="btn gh sm" onclick="attAll(1)">เลือกทั้งหมด</button><button class="btn gh sm" onclick="attAll(0)">ล้าง</button><input id="attQ" placeholder="ค้นหาชื่อ…" style="flex:1;padding:6px 10px;font-size:13px" oninput="attFilter(this.value)"></div>
+      <div class="attgrid" id="attGrid">${userCks||'<span class="xs mut">ไม่พบรายชื่อผู้ใช้</span>'}</div>
+      <p class="xs mut" style="margin:5px 0 0">* ผู้สร้างนัดถูกนับเป็นผู้เข้าร่วมอัตโนมัติ</p>
+    </div>
+    <div class="acts">
+      <button class="btn" id="fSave" onclick="saveEvent(${e?`'${e.id}'`:'null'})">💾 บันทึกนัด</button>
+      <button class="btn gh" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+function attAll(v){document.querySelectorAll('.attck').forEach(c=>{if(c.closest('label').style.display!=='none')c.checked=!!v})}
+function attFilter(q){
+  q=q.trim().toLowerCase();
+  document.querySelectorAll('#attGrid label').forEach(l=>{l.style.display=!q||l.textContent.toLowerCase().includes(q)?'':'none'});
+}
+async function saveEvent(id){
+  const title=$('#fTitle').value.trim();
+  if(!title){toast('ใส่หัวข้อนัดก่อนครับ',true);return}
+  const d1=$('#fDate').value;
+  if(!d1){toast('เลือกวันที่ก่อนครับ',true);return}
+  let d2=$('#fDateEnd').value||d1; if(d2<d1)d2=d1;
+  const allDay=$('#fAllDay').checked;
+  let start,end;
+  if(allDay){start=new Date(d1+'T00:00:00');end=new Date(d2+'T00:00:00')}
+  else{
+    const t1=$('#fT1').value||'10:00';let t2=$('#fT2').value||'';
+    start=new Date(d1+'T'+t1);
+    end=t2?new Date(d2+'T'+t2):new Date(start.getTime()+3600000);
+    if(end<=start)end=new Date(start.getTime()+3600000);
+  }
+  const picks=[...document.querySelectorAll('.attck')].filter(c=>c.checked).map(c=>c.value);
+  if(!picks.includes(S.user.username))picks.push(S.user.username);
+  const body={title,detail:$('#fDetail').value.trim()||null,branch:$('#fBr').value,
+    location:$('#fLoc').value.trim()||null,all_day:allDay,
+    start_at:start.toISOString(),end_at:end.toISOString(),
+    reminder_min:+$('#fRem').value,updated_by:S.user.username};
+  $('#fSave').disabled=true;
+  try{
+    let evId=id;
+    if(id){
+      await api('PATCH',`cal_events?id=eq.${id}`,body);
+      await api('DELETE',`cal_attendees?event_id=eq.${id}`);
+    }else{
+      body.created_by=S.user.username;body.created_name=S.user.display_name;
+      const r=await api('POST','cal_events',body,'return=representation');
+      evId=r[0].id;
+    }
+    const rows=picks.map(u=>({event_id:evId,username:u,display_name:u===S.user.username?S.user.display_name:nameOf(u)}));
+    if(rows.length)await api('POST','cal_attendees',rows);
+    toast(id?'แก้ไขนัดแล้ว ✅':'สร้างนัดแล้ว ✅ — ผู้เข้าร่วมกดเพิ่มลงมือถือได้จากหน้านัด');
+    closeModal();
+    await loadEvents(true);show(S.tab);
+  }catch(e){toast('บันทึกไม่สำเร็จ: '+e.message,true);console.error(e)}
+  finally{const b=$('#fSave');if(b)b.disabled=false}
+}
+async function cancelEv(id){
+  const e=byId(id);if(!e)return;
+  if(!canEdit(e)){toast('ยกเลิกได้เฉพาะผู้สร้างนัดหรือ admin ครับ',true);return}
+  if(!confirm('ยกเลิกนัด "'+e.title+'" ใช่ไหม? นัดจะหายจากปฏิทินทุกคน (รวมถึงมือถือที่ subscribe ไว้)'))return;
+  try{
+    await api('PATCH',`cal_events?id=eq.${id}`,{cancelled:true,updated_by:S.user.username});
+    toast('ยกเลิกนัดแล้ว');closeModal();
+    await loadEvents(true);show(S.tab);
+  }catch(err){toast('ยกเลิกไม่สำเร็จ: '+err.message,true)}
+}
+
+/* ---------- รายละเอียดนัด ---------- */
+function openEv(id){
+  const e=byId(id);if(!e)return;
+  const c=brColor(e.branch);
+  const names=att(e).map(a=>a.display_name||a.username);
+  openModal(`<h3 style="font-size:18px">${esc(e.title)}</h3>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="chip" style="color:${c};border-color:${c}55">${esc(brLabel(e.branch))}</span>
+      <span class="chip">🕐 ${evWhen(e)}</span>
+      ${e.reminder_min>0?`<span class="chip">🔔 เตือนล่วงหน้า ${(REM_OPTS.find(r=>r[0]===e.reminder_min)||[,e.reminder_min+' นาที'])[1]}</span>`:''}
+    </div>
+    <p style="margin:0 0 4px" class="sm"><b>📅 ${thDate(e.start_at)}</b>${dkey(new Date(e.start_at))!==dkey(new Date(e.end_at))?' ถึง'+thDate(e.end_at,true):''}</p>
+    ${e.location?`<p style="margin:0 0 4px" class="sm">📍 ${esc(e.location)}</p>`:''}
+    ${e.detail?`<p style="margin:8px 0;white-space:pre-wrap;line-height:1.55;color:#E6DFD5">${esc(e.detail)}</p>`:''}
+    <p class="sm" style="margin:8px 0 4px"><b>👥 ผู้เข้าร่วม (${names.length} คน)</b></p>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">${names.map(n=>`<span class="chip">${esc(n)}</span>`).join('')||'<span class="xs mut">ไม่ระบุ</span>'}</div>
+    <p class="xs mut" style="margin:0">✍️ สร้างโดย ${esc(e.created_name||e.created_by)} · ${thDate(e.created_at,true)}</p>
+    <div class="acts">
+      <button class="btn" onclick="dlIcs('${e.id}')">📥 ลงปฏิทินมือถือ (.ics)</button>
+      <a class="btn gh" target="_blank" rel="noopener" href="${gcalUrl(e)}">📆 Google Calendar</a>
+      ${canEdit(e)?`<button class="btn gh" onclick="closeModal();openEventForm('${e.id}')">✏️ แก้ไข</button>
+      <button class="btn gh" style="color:var(--bad)" onclick="cancelEv('${e.id}')">🗑 ยกเลิกนัด</button>`:''}
+    </div>
+    <p class="xs mut" style="margin:10px 0 0">💡 กด .ics บน iPhone จะเปิดแอปปฏิทินให้ "เพิ่ม" ได้เลย · Android เปิดด้วย Google Calendar · หรือ subscribe ปฏิทินทั้งองค์กรได้ที่แท็บ "📲 เชื่อมมือถือ"</p>`);
+}
+
+/* ---------- ICS / Google Calendar ---------- */
+function icsEsc(s){return String(s??'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n')}
+function icsUtc(d){const x=new Date(d);return x.getUTCFullYear()+pad(x.getUTCMonth()+1)+pad(x.getUTCDate())+'T'+pad(x.getUTCHours())+pad(x.getUTCMinutes())+'00Z'}
+function icsDate(d,addDays){const x=new Date(d);if(addDays)x.setDate(x.getDate()+addDays);return ''+x.getFullYear()+pad(x.getMonth()+1)+pad(x.getDate())}
+function icsForEvent(e){
+  const names=att(e).map(a=>a.display_name||a.username).join(', ');
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//JJ-PnL//JJ Calendar//TH','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+    'BEGIN:VEVENT','UID:'+e.id+'@jj-pnl','DTSTAMP:'+icsUtc(new Date())];
+  if(e.all_day)L.push('DTSTART;VALUE=DATE:'+icsDate(e.start_at),'DTEND;VALUE=DATE:'+icsDate(e.end_at,1));
+  else L.push('DTSTART:'+icsUtc(e.start_at),'DTEND:'+icsUtc(e.end_at));
+  L.push('SUMMARY:'+icsEsc(e.title));
+  const loc=[e.branch==='ALL'?'':brLabel(e.branch),e.location].filter(Boolean).join(' · ');
+  if(loc)L.push('LOCATION:'+icsEsc(loc));
+  L.push('DESCRIPTION:'+icsEsc([e.detail,names?'ผู้เข้าร่วม: '+names:'','สร้างโดย '+(e.created_name||e.created_by)].filter(Boolean).join('\n')));
+  if(e.reminder_min>0)L.push('BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+icsEsc(e.title),'TRIGGER:-PT'+e.reminder_min+'M','END:VALARM');
+  L.push('END:VEVENT','END:VCALENDAR');
+  return L.join('\r\n')+'\r\n';
+}
+function dlIcs(id){
+  const e=byId(id);if(!e)return;
+  const blob=new Blob([icsForEvent(e)],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='jj-nud-'+icsDate(e.start_at)+'.ics';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
+  toast('ดาวน์โหลดไฟล์นัดแล้ว — เปิดไฟล์เพื่อเพิ่มลงปฏิทินมือถือ');
+}
+function gcalUrl(e){
+  const dates=e.all_day?icsDate(e.start_at)+'/'+icsDate(e.end_at,1):icsUtc(e.start_at)+'/'+icsUtc(e.end_at);
+  const names=att(e).map(a=>a.display_name||a.username).join(', ');
+  const p=new URLSearchParams({action:'TEMPLATE',text:e.title,dates,
+    details:[e.detail,names?'ผู้เข้าร่วม: '+names:''].filter(Boolean).join('\n'),
+    location:[e.branch==='ALL'?'':brLabel(e.branch),e.location].filter(Boolean).join(' · '),ctz:'Asia/Bangkok'});
+  return 'https://calendar.google.com/calendar/render?'+p.toString();
+}
+
+/* ---------- เชื่อมมือถือ & แจ้งเตือน ---------- */
+async function vSync(el){
+  el.innerHTML='<div class="spin"></div>';
+  await loadToken();
+  const base=cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken);
+  const mineUrl=base+'&user='+encodeURIComponent(S.user.username);
+  const webcal=u=>u.replace(/^https:/,'webcal:');
+  const notifOk=('Notification' in window)&&Notification.permission==='granted';
+  el.innerHTML=`
+  <div class="card">
+    <h3>📲 เพิ่มปฏิทินองค์กรลงมือถือ (ซิงก์อัตโนมัติ)</h3>
+    ${S.feedToken?`
+    <p class="sm" style="margin:0 0 8px">Subscribe ครั้งเดียว — นัดใหม่/แก้ไข/ยกเลิก จะอัพเดตเข้าแอปปฏิทินในมือถือเองทุกชั่วโมง</p>
+    <p class="sm b" style="margin:8px 0 2px;color:var(--gold)">🔗 เฉพาะนัดของฉัน (${esc(S.user.display_name||S.user.username)})</p>
+    <div class="copyline"><input readonly value="${esc(mineUrl)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(mineUrl)}')">คัดลอก</button></div>
+    <p class="sm b" style="margin:8px 0 2px;color:var(--gold)">🔗 นัดทั้งองค์กร (ทุกคน ทุกสาขา)</p>
+    <div class="copyline"><input readonly value="${esc(base)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(base)}')">คัดลอก</button></div>
+    <div style="margin-top:12px">
+      <p class="sm b" style="margin:0 0 2px">🍎 iPhone / iPad</p>
+      <ol class="steps">
+        <li>คัดลอก URL ข้างบน แล้วไปที่ <b>การตั้งค่า → แอปปฏิทิน (Calendar) → บัญชี → เพิ่มบัญชี → อื่นๆ → เพิ่มปฏิทินที่ติดตาม</b> (Add Subscribed Calendar)</li>
+        <li>วาง URL → ถัดไป → บันทึก (ตั้งการเตือนของปฏิทินนี้ได้ในหน้าเดียวกัน)</li>
+        <li>หรือกดลิงก์นี้บน iPhone ได้เลย: <a class="hintlink" href="${esc(webcal(mineUrl))}">เพิ่มปฏิทินของฉันทันที (webcal)</a></li>
+      </ol>
+      <p class="sm b" style="margin:10px 0 2px">🤖 Android (Google Calendar)</p>
+      <ol class="steps">
+        <li>เปิดเบราว์เซอร์ไปที่ <b>calendar.google.com</b> (ล็อกอิน Gmail เครื่องตัวเอง)</li>
+        <li>เมนู <b>การตั้งค่า → เพิ่มปฏิทิน → จาก URL</b> → วาง URL ข้างบน → เพิ่มปฏิทิน</li>
+        <li>ปฏิทินจะโผล่ในแอป Google Calendar บนมือถืออัตโนมัติ (เปิดการซิงก์ปฏิทินนั้นในแอปด้วย)</li>
+      </ol>
+    </div>
+    <div class="acts"><button class="btn gh sm" onclick="checkFeed()">🔎 ทดสอบว่าฟีดใช้งานได้</button><span id="feedStatus" class="sm mut"></span></div>
+    <p class="xs mut" style="margin:10px 0 0">* ฟีดนี้ต้อง deploy Edge Function ชื่อ <b>cal-feed</b> ใน Supabase ก่อน (ปิด Verify JWT) — ถ้าทดสอบแล้วไม่ผ่าน แจ้งผู้ดูแลระบบ</p>
+    `:`<div class="empty">ยังไม่พบ token ของฟีด — ต้องรัน <b>jjmk-calendar.sql</b> ใน Supabase ก่อนครับ</div>`}
+  </div>
+  <div class="card">
+    <h3>🔔 การแจ้งเตือน</h3>
+    <ul class="steps" style="list-style:disc">
+      <li><b>เตือนบนมือถือ:</b> นัดที่เพิ่ม/subscribe เข้าแอปปฏิทินมือถือ จะเตือนตามเวลา "แจ้งเตือนล่วงหน้า" ที่ตั้งไว้ในนัด (iPhone ตั้งการเตือนเริ่มต้นของปฏิทินที่ติดตามได้ใน การตั้งค่า → แอปปฏิทิน)</li>
+      <li><b>เตือนในเว็บนี้:</b> ถ้าเปิดหน้านี้ค้างไว้ ระบบจะเด้งเตือนก่อนถึงเวลานัดของคุณโดยอัตโนมัติ</li>
+    </ul>
+    <div class="acts">
+      <button class="btn ${notifOk?'gh':''}" onclick="notifPerm()">${notifOk?'✅ เปิดการแจ้งเตือนในเบราว์เซอร์แล้ว':'🔔 เปิดการแจ้งเตือนในเบราว์เซอร์'}</button>
+    </div>
+  </div>`;
+}
+function copyTxt(t){
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('คัดลอกแล้ว ✅')).catch(()=>{prompt('คัดลอก URL นี้',t)});
+}
+async function checkFeed(){
+  const st=$('#feedStatus');st.textContent='กำลังทดสอบ…';
+  try{
+    const r=await fetch(cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken));
+    if(r.ok&&(await r.text()).includes('BEGIN:VCALENDAR')){st.textContent='✅ ฟีดใช้งานได้ พร้อม subscribe';st.style.color='var(--ok)'}
+    else{st.textContent='❌ ฟีดตอบกลับผิดปกติ (HTTP '+r.status+') — ตรวจว่า deploy cal-feed แล้วหรือยัง';st.style.color='var(--bad)'}
+  }catch(e){st.textContent='❌ เชื่อมต่อฟีดไม่ได้ — ยังไม่ได้ deploy cal-feed';st.style.color='var(--bad)'}
+}
+async function notifPerm(){
+  if(!('Notification' in window)){toast('เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน',true);return}
+  const p=await Notification.requestPermission();
+  toast(p==='granted'?'เปิดการแจ้งเตือนแล้ว ✅':'ยังไม่ได้รับอนุญาตจากเบราว์เซอร์',p!=='granted');
+  if(S.tab==='sync')vSync($('#view-sync'));
+}
+function notifTick(){
+  if(!S.user||!S.events.length)return;
+  const now=Date.now();
+  const seen=LS.get('jjcal_ntf',{});
+  let changed=false;
+  S.events.filter(e=>isMine(e)&&!e.all_day&&e.reminder_min>0).forEach(e=>{
+    const t=new Date(e.start_at).getTime(),k=e.id+'@'+e.start_at;
+    if(now>=t-e.reminder_min*60000&&now<t&&!seen[k]){
+      seen[k]=now;changed=true;
+      const msg='🔔 อีก '+Math.max(1,Math.round((t-now)/60000))+' นาที: '+e.title+(e.location?' · 📍 '+e.location:'');
+      toast(msg);
+      if(('Notification' in window)&&Notification.permission==='granted'){
+        try{new Notification('JJ Calendar — ใกล้ถึงเวลานัด',{body:e.title+'\n'+thTime(e.start_at)+' น.'+(e.location?' · '+e.location:''),tag:k})}catch(x){}
+      }
+    }
+  });
+  if(changed){ // เก็บเฉพาะรายการช่วงหลัง กัน localStorage บวม
+    Object.keys(seen).forEach(k=>{if(now-seen[k]>7*86400000)delete seen[k]});
+    LS.set('jjcal_ntf',seen);
+  }
+}
+
+/* ---------- boot ---------- */
+async function startApp(){
+  $('#login').style.display='none';$('#app').style.display='block';
+  $('#mineBtn').classList.toggle('on',S.mine);
+  $('#hdUser').innerHTML=`👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:logout()">ออก</a>`;
+  await loadBranches();
+  await Promise.all([loadUsers(),loadEvents(true),loadToken()]);
+  show('month');
+  notifTick();setInterval(notifTick,30000);
+  setInterval(async()=>{if(!document.hidden){await loadEvents(true);if(S.tab!=='sync')show(S.tab)}},300000);
+  document.addEventListener('visibilitychange',async()=>{
+    if(!document.hidden&&!$('#modalWrap').classList.contains('on')){await loadEvents(true);if(S.tab!=='sync')show(S.tab)}
+  });
+}
+(function init(){
+  const sess=LS.get('jjcal_sess',null);
+  if(sess&&sess.username){S.user=sess;startApp()}
+  else $('#login').style.display='block';
+})();
+</script>
+</body>
+</html>
