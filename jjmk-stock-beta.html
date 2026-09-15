@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b56 — แนะนำสั่งกันของขาด (+กันพลาด% −ของกำลังมา +ป้ายเสี่ยงหมด) + Excel ข้อมูลดิบแยกตามซัพ</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b57 — แม่บทสินค้า (ตั้งหน่วย/ซัพครั้งเดียวทุกสาขา · อัตราใช้แยกสาขา) + จับบั๊กบันทึกผูกชื่อไม่เข้า DB</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -2939,8 +2939,13 @@ async function openLinkCenter(filterSup){
       if(!ups.length){done(bad?('มี '+bad+' แถวชื่อนับไม่ตรงกับระบบ — เลือกจากลิสต์ก่อน'):'ไม่มีอะไรเปลี่ยน');return;}
       let fail=0;
       for(let i=0;i<ups.length;i+=10){
-        const rs=await Promise.all(ups.slice(i,i+10).map(u=>{const v={stock_name:u.stock_name};if('conv_factor' in u)v.conv_factor=u.conv_factor;return sb.from('supplier_items').update(v).eq('id',u.id);}));
-        rs.forEach(x=>{if(x.error)fail++;});
+        // b57: .select('id') เพื่อจับเคส RLS บล็อกแบบเงียบ (ไม่ error แต่ 0 แถวถูกเขียน = รีเฟรชแล้วหาย)
+        const rs=await Promise.all(ups.slice(i,i+10).map(u=>{const v={stock_name:u.stock_name};if('conv_factor' in u)v.conv_factor=u.conv_factor;return sb.from('supplier_items').update(v).eq('id',u.id).select('id');}));
+        rs.forEach(x=>{if(x.error||!x.data||!x.data.length)fail++;});
+      }
+      if(fail===ups.length){ // ไม่เข้าเลยสักแถว = สิทธิ์เขียนยังไม่เปิด
+        done('⛔ บันทึกไม่เข้าฐานข้อมูลเลย (สิทธิ์เขียน supplier_items ยังไม่เปิด) — รัน SQL b57 ใน Supabase แล้วลองใหม่');
+        return;
       }
       // ซิงค์ฝั่งชื่อนับ: products.bill_name ทุกสาขา (ป้าย 🧾 ใช้ทุกหน้า)
       const sy=[];
@@ -2964,6 +2969,118 @@ async function openLinkCenter(filterSup){
       render();
     };
   }
+  render();
+}
+
+/* ===== 🛠 b57: แม่บทสินค้า — ตั้งที่เดียว: หน่วยนับ/หน่วยซื้อ/ซัพ ใช้ร่วมทุกสาขา · อัตราใช้แยกรายสาขา ===== */
+function masterRows(){ // รวมสินค้าทุกสาขาเป็น 1 แถวต่อชื่อ + ตัวชี้ไปแถวของแต่ละสาขา
+  const m={};
+  ROOT.branches.forEach(b=>b.data.categories.forEach(c=>c.items.forEach(i=>{
+    const k=(i.name||'').trim();if(!k)return;
+    const o=(m[k]=m[k]||{name:k,cat:c.label,ic:c.ic||'📦',unit:i.unit||'',sup:i.sup||'',
+      pack:i.pack,pack_unit:i.pack_unit||'',step:i.order_step,step_unit:i.step_unit||'',
+      bill:i.bill_name||null,br:{}});
+    o.br[b.id]=i;
+    if(!o.bill&&i.bill_name)o.bill=i.bill_name;
+  })));
+  return Object.values(m).sort((a,b)=>a.cat.localeCompare(b.cat,'th')||a.name.localeCompare(b.name,'th'));
+}
+async function mUpdAll(name,patch,apply){ // แก้ครั้งเดียว มีผลทุกสาขา (อ้างโดยชื่อ) — ตรวจว่าเขียนเข้าจริง
+  const {data,error}=await sb.from('products').update(patch).eq('name',name).select('id');
+  if(error){toast('บันทึกไม่สำเร็จ: '+error.message);return false;}
+  if(!data||!data.length){toast('⛔ บันทึกไม่เข้าฐานข้อมูล (สิทธิ์เขียนไม่เปิด?)');return false;}
+  ROOT.branches.forEach(b=>b.data.categories.forEach(c=>c.items.forEach(i=>{if((i.name||'').trim()===name)apply(i);})));
+  save();return true;
+}
+function openMasterPage(){
+  if(!(can('manageProducts')||can('manageCentral'))){toast('หน้านี้เฉพาะผู้ดูแลสินค้า/Safety-Max');return;}
+  const ov=document.createElement('div');ov.className='overlay pagemode';ov.style.cssText='display:flex;z-index:200';
+  const brs=ROOT.branches;
+  const bn=b=>escapeHtml((b.name||'').replace('สาขา','').trim()||b.id);
+  ov.innerHTML=`<div class="sheet" style="max-width:900px">
+    <div class="sheet-head"><h3>🛠 แม่บทสินค้า</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <p class="hint" style="margin:0 0 8px"><b>หน่วยนับ · สั่งเป็น · ซัพ</b> ตั้งครั้งเดียวมีผลทุกสาขา · <b style="color:#1559c7">อัตราใช้/วัน</b> กรอกแยกรายสาขา · แก้แล้วบันทึกทันที ไม่ต้องกดเซฟ</p>
+      <button class="act wide mp_lc" style="background:#eef4ff;color:#1559c7;border:1.5px solid #1559c7;margin-bottom:8px">🔗 ผูกชื่อบิล & อัตราแปลง / นำเข้า-ส่งออก Excel</button>
+      <div class="rfilters" style="margin-bottom:8px">
+        <input class="mp_q" placeholder="🔍 ค้นหาชื่อสินค้า/ซัพ..." autocomplete="off" style="padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'">
+        <select class="mp_cat"><option value="">📁 ทุกแผนก</option></select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85em"><input type="checkbox" class="mp_miss"> เฉพาะที่ข้อมูลยังไม่ครบ</label>
+      </div>
+      <div class="mp_list"><div class="rempty">กำลังโหลด...</div></div>
+    </div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('[data-x]').onclick=()=>ov.remove();
+  const list=ov.querySelector('.mp_list');
+  const rows=masterRows();
+  const cats=[...new Set(rows.map(r=>r.cat))];
+  ov.querySelector('.mp_cat').innerHTML='<option value="">📁 ทุกแผนก ('+rows.length+')</option>'+cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
+  const missing=r=>!r.unit||brs.some(b=>{const it=r.br[b.id];return it&&numR(it.rate_wk,it.safety)==null;});
+  const NUMS='inputmode="decimal" autocomplete="off" style="width:54px;padding:7px;border:1.5px solid var(--line);border-radius:8px;text-align:right;font-family:\'Sarabun\'"';
+  function render(){
+    const q=ov.querySelector('.mp_q').value.trim().toLowerCase();
+    const fc=ov.querySelector('.mp_cat').value;
+    const onlyMiss=ov.querySelector('.mp_miss').checked;
+    const vis=rows.filter(r=>(!fc||r.cat===fc)&&(!onlyMiss||missing(r))&&(!q||(r.name+' '+r.sup).toLowerCase().includes(q)));
+    let lastCat=null,html='';
+    vis.forEach(r=>{
+      const i=rows.indexOf(r);
+      if(r.cat!==lastCat){lastCat=r.cat;html+=`<h4 style="margin:14px 0 4px">${escapeHtml(r.ic)} ${escapeHtml(r.cat)}</h4>`;}
+      html+=`<div class="mp_row" data-i="${i}" style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <b style="flex:1;min-width:140px">${escapeHtml(r.name)}</b>
+          <span style="display:flex;align-items:center;gap:4px;font-size:.82em;color:var(--ink-soft)">นับเป็น
+            <select class="m_unit" style="padding:7px;border:1.5px solid var(--line);border-radius:8px;font-family:'Sarabun'">${unitOptions(r.unit)}</select></span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:.82em;color:var(--ink-soft)">สั่งเป็น
+            <input class="m_pu" value="${escapeHtml(r.pack_unit||'')}" placeholder="ลัง" autocomplete="off" style="width:56px;padding:7px;border:1.5px solid var(--line);border-radius:8px;font-family:'Sarabun'">
+            <span>1 หน่วย =</span><input class="m_pack" value="${r.pack!=null?r.pack:''}" placeholder="—" ${NUMS}><span class="m_pun">${escapeHtml(r.unit||'หน่วยนับ')}</span></span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:.82em;color:var(--ink-soft)">ซัพ
+            <select class="m_sup" style="max-width:150px;padding:7px;border:1.5px solid var(--line);border-radius:8px;font-family:'Sarabun'">
+              <option value="">—</option>${SUPPLIERS.map(s=>`<option ${s.name===r.sup?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select></span>
+          ${r.bill?`<span class="xs" style="color:#1559c7">🧾 ${escapeHtml(r.bill)}</span>`:`<button class="m_link" style="border:1px dashed #b3261e;background:#fff;color:#b3261e;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:.78em;font-family:'Sarabun'">⚠ ยังไม่ผูกบิล — ไปผูก</button>`}
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
+          ${brs.map(b=>{const it=r.br[b.id];if(!it)return `<span class="xs" style="color:var(--ink-soft)">🏪 ${bn(b)}: ไม่มีสินค้านี้</span>`;
+            const wk=numR(it.rate_wk,it.safety),fr=numR(it.rate_fri,null),we=numR(it.rate_we,it.max);
+            return `<span data-b="${b.id}" style="display:flex;align-items:center;gap:4px;font-size:.82em;color:#1559c7">🏪 ${bn(b)} ใช้/วัน:
+              <span style="color:var(--ink-soft)">จ-พฤ</span><input class="m_wk" value="${wk==null?'':fmt(wk)}" placeholder="–" ${NUMS}>
+              <span style="color:var(--ink-soft)">ศ</span><input class="m_fr" value="${fr==null?'':fmt(fr)}" placeholder="–" ${NUMS}>
+              <span style="color:var(--ink-soft)">ส-อา</span><input class="m_we" value="${we==null?'':fmt(we)}" placeholder="–" ${NUMS}></span>`;}).join('')}
+        </div>
+      </div>`;
+    });
+    list.innerHTML=html||'<div class="rempty">ไม่พบรายการตามตัวกรอง</div>';
+    bind();
+  }
+  function bind(){
+    list.querySelectorAll('.mp_row').forEach(el=>{
+      const r=rows[+el.dataset.i];
+      const num=v=>{v=String(v||'').trim().replace(',','.');if(v==='')return null;const n=parseFloat(v);return isFinite(n)&&n>=0?n:null;};
+      el.querySelector('.m_unit').onchange=async e=>{const u=e.target.value;
+        if(await mUpdAll(r.name,{unit:u},i=>i.unit=u)){r.unit=u;el.querySelector('.m_pun').textContent=u;toast('หน่วยนับ "'+r.name+'" = '+u+' (ทุกสาขา) ✓');renderTabs();renderMain();}};
+      el.querySelector('.m_pack').onchange=async e=>{const v=num(e.target.value);const pv=v!=null?Math.round(v):null;
+        if(await mUpdAll(r.name,{pack:pv},i=>i.pack=pv)){r.pack=pv;toast('ต่อ'+(r.pack_unit||'ลัง')+' ✓ (ทุกสาขา)');}};
+      el.querySelector('.m_pu').onchange=async e=>{const v=e.target.value.trim()||null;
+        if(await mUpdAll(r.name,{pack_unit:v},i=>i.pack_unit=v)){r.pack_unit=v||'';toast('หน่วยสั่ง ✓ (ทุกสาขา)');}};
+      el.querySelector('.m_sup').onchange=async e=>{const v=e.target.value||'';
+        if(await mUpdAll(r.name,{sup:v||null},i=>i.sup=v)){r.sup=v;toast('ซัพ "'+r.name+'" ✓ (ทุกสาขา)');}};
+      const lk=el.querySelector('.m_link');if(lk)lk.onclick=()=>openLinkCenter(r.sup||undefined);
+      el.querySelectorAll('[data-b]').forEach(sp=>{
+        const it=r.br[sp.dataset.b];if(!it)return;
+        const saveRate=(cls,field,label)=>{const inp=sp.querySelector(cls);if(!inp)return;
+          inp.onfocus=()=>inp.select();
+          inp.onchange=async()=>{const v=num(inp.value);it[field]=v;
+            const {data,error}=await sb.from('products').update({[field]:v}).eq('id',it.id).select('id');
+            if(error||!data||!data.length)toast('⛔ บันทึก'+label+'ไม่เข้า'+(error?': '+error.message:' (สิทธิ์เขียนไม่เปิด?)'));
+            else{save();toast(label+' ✓ (เฉพาะสาขานี้)');}};};
+        saveRate('.m_wk','rate_wk','อัตรา จ-พฤ');saveRate('.m_fr','rate_fri','อัตรา ศ');saveRate('.m_we','rate_we','อัตรา ส-อา');
+      });
+    });
+  }
+  const q=ov.querySelector('.mp_q');q.oninput=()=>{clearTimeout(q._t);q._t=setTimeout(render,300);};
+  ov.querySelector('.mp_cat').onchange=render;
+  ov.querySelector('.mp_miss').onchange=render;
+  ov.querySelector('.mp_lc').onclick=()=>openLinkCenter();
   render();
 }
 
@@ -3592,6 +3709,7 @@ function goPage(g){
   else if(g==='dispatch'){openModule('stock');openDispatch();}
   else if(g==='central'){openModule('stock');$('#centralBtn').click();}
   else if(g==='link'){openModule('stock');openLinkCenter();}
+  else if(g==='master'){openModule('stock');openMasterPage();}
   else if(g==='settings'){openModule('stock');$('#gearBtn').click();}
   else return;
   try{localStorage.setItem('jj_last_page',g);}catch(e){}
@@ -3602,6 +3720,7 @@ function restoreLastPage(){
   const allowed={order:true,usage:true,
     dispatch:can('viewDispatch'),
     link:can('manageSuppliers')||can('manageProducts'),
+    master:can('manageProducts')||can('manageCentral'),
     central:can('manageCentral'),settings:canAnyManage()}[last];
   if(allowed)setTimeout(()=>{try{goPage(last);}catch(e){}},150);
 }
@@ -3618,8 +3737,8 @@ function buildSidebar(){
   sub+=it('🧾','ใบสั่งซื้อ / ส่งไลน์','order');
   sub+=it('📈','การใช้ของ','usage');
   if(can('viewDispatch'))sub+=it('📦','รายการสั่งของ','dispatch');
+  if(can('manageProducts')||can('manageCentral'))sub+=it('🛠','แม่บทสินค้า','master'); // b57: รวมตั้งค่าสินค้าที่เดียว (ผูกบิลอยู่ข้างในนี้)
   if(can('manageCentral'))sub+=it('🎯','อัตราใช้/วัน & จัดส่ง','central');
-  if(can('manageSuppliers')||can('manageProducts'))sub+=it('🔗','ผูกชื่อ & แปลงหน่วย','link');
   if(canAnyManage())sub+=it('⚙️','ตั้งค่า','settings');
   let m='';
   m+=`<div class="sb_grp open" data-grp="stock">
