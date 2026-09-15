@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b64 — แม่บทใช้บิลจากระบบ P&L อย่างเดียว (ตัดบิลสต๊อกเก่าออก)</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b65 — สินค้า 1 ตัวผูกได้หลายชื่อบิล (ต้องรัน SQL b65 ครั้งเดียว)</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -3067,11 +3067,17 @@ function openMasterPage(){
     return okn;
   }
   async function linkPnName(name,r){ // ผูกชื่อบิล P&L → สินค้า r (เขียน pnl_stock_map ทุกสาขาที่มีสินค้านี้)
-    const ins=[];
+    // b65: คู่ (สินค้า+ชื่อบิล) ที่มีอยู่แล้วให้ข้าม ไม่ insert ซ้ำ — สินค้า 1 ตัวผูกได้หลายชื่อบิล
+    const dup=pid=>PN.map.some(m=>String(m.product_id)===String(pid)&&pnorm(m.pnl_item)===pnorm(name));
+    const ins=[];let skip=0;
     ROOT.branches.forEach(b2=>{const code=brCode(b2),it=r.br[b2.id];
-      if(code&&it)ins.push({branch:code,product_id:it.id,product_name:r.name,pnl_item:name,bill_unit:'',stock_unit:r.unit||'',factor:1,active:true});});
-    if(!ins.length){toast('หาสาขา JJRD/JJLP ของสินค้านี้ไม่เจอ');return 0;}
+      if(!code||!it)return;
+      if(dup(it.id)){skip++;return;}
+      ins.push({branch:code,product_id:it.id,product_name:r.name,pnl_item:name,bill_unit:'',stock_unit:r.unit||'',factor:1,active:true});});
+    if(!ins.length){if(skip){toast('"'+name+'" ผูกกับตัวนี้ไว้อยู่แล้ว ✓');return 1;}toast('หาสาขา JJRD/JJLP ของสินค้านี้ไม่เจอ');return 0;}
     const {data,error}=await sb.from('pnl_stock_map').insert(ins).select('id');
+    if(error&&/duplicate key|23505/i.test(String(error.code||'')+' '+String(error.message||''))){
+      toast('⛔ ฐานข้อมูลยังล็อก 1 สินค้า = 1 ชื่อบิลอยู่ — รัน SQL b65 (ส่งไว้ใน chat) ครั้งเดียว แล้วกดผูกใหม่ได้เลย');return 0;}
     if(error||!data||!data.length){toast('⛔ ผูกฝั่ง P&L ไม่เข้า DB'+(error?': '+error.message:'')+' — รัน SQL b63 หรือยัง?');return 0;}
     data.forEach((d2,i2)=>{PN.map.push({id:d2.id,...ins[i2]});});
     rebuildPnl();return ins.length;

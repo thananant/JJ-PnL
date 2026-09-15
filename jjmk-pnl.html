@@ -2909,7 +2909,14 @@ async function stkLoad(){
   const sbidOther=Object.keys(bn2).find(id2=>String(bn2[id2]).includes(wantOther)) || (brOther==='JJRD'?'b19f0a17b4472':'b19f0a17b448212');
   const sales={}; (inc||[]).forEach(r=>{ sales[r.d]=(sales[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
   const P=(prods||[]).filter(x=>x.branch_id===sbid);
-  const M={}; (map||[]).forEach(r=>M[r.product_id]=r);
+  // สินค้า 1 ตัวผูกได้หลายชื่อบิล (หลายแถวใน pnl_stock_map) — รวมเป็นระเบียนเดียว เก็บลิสต์ไว้ใน items
+  const M={}; (map||[]).forEach(r=>{
+    const it=(r.active&&r.pnl_item&&r.pnl_item!=='-')?{pnl_item:r.pnl_item,factor:num(r.factor)||1}:null;
+    const m0=M[r.product_id];
+    if(!m0){ M[r.product_id]={...r,items:it?[it]:[]}; }
+    else if(it){ m0.items.push(it); if(!m0.active){ m0.active=true; m0.pnl_item=r.pnl_item; m0.factor=r.factor; } }
+  });
+  Object.values(M).forEach(m0=>{ if(m0.items.length>1) m0.pnl_names=m0.items.map(x=>x.pnl_item).join(' + '); });
   // นับล่าสุดต่อ (สินค้า,วัน) — วันเดียวนับซ้ำเอาครั้งหลังสุด
   const C={}; (counts||[]).filter(c=>c.branch_id===sbid).forEach(c=>{
     const k=c.product_id; (C[k]??={})[c.count_date]={qty:c.out_of_stock?0:num(c.qty),at:c.created_at};
@@ -2947,7 +2954,7 @@ RENDER.actual = async (el)=>{
   let names=[];
   try{ const si=await selAllQ('pnl_sup_items','select=item&order=item').catch(()=>[]); names=si.map(x=>x.item); }catch(e){}
   try{ const bi=await selAllQ('pnl_bill_items',`select=item&branch=eq.${S.br}&d=gte.${st.from}&d=lte.${st.to}&order=d`); bi.forEach(x=>names.push(x.item)); }catch(e){}
-  const usedN=new Set(Object.values(st.map).filter(r2=>r2.active&&r2.branch===S.br&&r2.pnl_item&&r2.pnl_item!=='-').map(r2=>ocrNorm(r2.pnl_item)));
+  const usedN=new Set(Object.values(st.map).filter(r2=>r2.branch===S.br).flatMap(r2=>(r2.items||[]).map(it=>ocrNorm(it.pnl_item))));
   names=[...new Set(names.filter(Boolean))].filter(n2=>!usedN.has(ocrNorm(n2))).sort((a,b)=>a.localeCompare(b,'th')); // ตัดชื่อที่ผูกแล้วออก (1 ชื่อบิล = 1 สินค้านับ)
   S._stkNames=names;
   const mapped=st.prods.filter(x=>st.map[x.id]&&st.map[x.id].active);
@@ -2966,8 +2973,7 @@ RENDER.actual = async (el)=>{
       const Pd=days[i-1], Cd=days[i];
       if(Cd<mStart) continue; // เอาช่วงที่จบในเดือนที่ดู
       const q0=st.C[pr.id][Pd].qty, q1=st.C[pr.id][Cd].qty;
-      let buy=0; const bk=ocrNorm(mp.pnl_item);
-      Object.entries(st.B[bk]||{}).forEach(([d2,q])=>{ if(d2>Pd&&d2<=Cd) buy+=q*num(mp.factor||1); });
+      let buy=0; (mp.items||[]).forEach(it=>{ Object.entries(st.B[ocrNorm(it.pnl_item)]||{}).forEach(([d2,q])=>{ if(d2>Pd&&d2<=Cd) buy+=q*num(it.factor||1); }); }); // รวมซื้อเข้าจากทุกชื่อบิลที่ผูก
       let sale=0,dd=0; for(let d2=Pd; d2<Cd; d2=stkAddDays(d2,1)){ const v=st.sales[d2]||0; if(v>0){sale+=v;dd++;} }
       const use=q0+buy-q1;
       per.push({Pd,Cd,q0,q1,buy,use,sale,dd,p10:sale>0?use/(sale/10000):null});
@@ -3052,8 +3058,7 @@ RENDER.actual = async (el)=>{
           const C1=[...ds].reverse().find(d2=>d2<=Bd);
           if(!P0||!C1||P0>=C1) return;
           const q0=st.C[r.pr.id][P0].qty, q1=st.C[r.pr.id][C1].qty;
-          let buy=0; const bk=ocrNorm(r.mp.pnl_item);
-          Object.entries(st.B[bk]||{}).forEach(([d2,q])=>{ if(d2>P0&&d2<=C1) buy+=q*num(r.mp.factor||1); });
+          let buy=0; (r.mp.items||[]).forEach(it=>{ Object.entries(st.B[ocrNorm(it.pnl_item)]||{}).forEach(([d2,q])=>{ if(d2>P0&&d2<=C1) buy+=q*num(it.factor||1); }); });
           let sale=0; for(let d2=P0; d2<C1; d2=stkAddDays(d2,1)){ const v=st.sales[d2]||0; if(v>0)sale+=v; }
           const use=q0+buy-q1;
           disp.push({r,i,p:{Pd:P0,Cd:C1,q0,q1,buy,use,sale,p10:sale>0?use/(sale/10000):null}});
@@ -3070,7 +3075,7 @@ RENDER.actual = async (el)=>{
       ${disp.map(({r,i,p:L})=>{
         const q=V==='last'?r.lastQty:(L?L.q1:null);
         return `<tr style="cursor:pointer" onclick="stkDetail(${i})">
-          <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span>${billNmHtml(r.mp&&r.mp.pnl_item,r.pr.name)}</td>
+          <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span>${billNmHtml(r.mp&&(r.mp.pnl_names||r.mp.pnl_item),r.pr.name)}</td>
           <td class="n xs mut">${L?`${thDate(L.Pd)}→${thDate(L.Cd)}`:'–'}</td>
           <td class="n b" ${L&&L.use<0?'style="color:var(--red)" title="ติดลบ = มีของเข้าที่ระบบยังไม่รู้ (บิลยังไม่ลง / ของครัวกลาง-โอนสาขาไม่มีบิล) หรือนับ/ผูกพลาด"':''}>${L?fq(L.use):'–'}${L&&L.use<0?' ⚠':''}</td>
           <td class="n">${L&&L.p10!=null?fq(L.p10):'–'}</td>
@@ -3118,7 +3123,7 @@ function stkAutoHtml(rows,st){
     const thin=x.n[D]<2;
     return `<tr>
       <td><input type="checkbox" class="autock" data-pid="${esc(x.r.pr.id)}" data-sf="${sf}" data-mx="${mx}" ${thin?'':'checked'} onchange="stkAutoCnt()"></td>
-      <td><b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${billNmHtml(x.r.mp&&x.r.mp.pnl_item,x.r.pr.name)}${thin?` <span class="chip mid" title="มีข้อมูลวันนี้แค่ ${x.n[D]} จุด — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}</td>
+      <td><b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${billNmHtml(x.r.mp&&(x.r.mp.pnl_names||x.r.mp.pnl_item),x.r.pr.name)}${thin?` <span class="chip mid" title="มีข้อมูลวันนี้แค่ ${x.n[D]} จุด — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}</td>
       <td class="n">${fmt(base,2)} <span class="xs mut">· ${x.n[D]} จุด</span></td>
       <td class="n">${cs?fmt(cs,0):'–'} → <b ${sf!==cs?'style="color:var(--red)"':''}>${sf}</b></td>
       <td class="n">${cm?fmt(cm,0):'–'} → <b ${mx!==cm?'style="color:var(--red)"':''}>${mx}</b></td>
@@ -3226,7 +3231,7 @@ async function stkCopyFromOther(){ // เก็บตก: ตัวที่อ�
   const rows=[];
   st.prods.filter(x=>!st.map[x.id]).forEach(x=>{
     const src=Object.values(st.map).find(r=>r.active&&r.branch!==S.br&&ocrNorm(r.product_name)===ocrNorm(x.name)&&String(r.stock_unit||'')===String(x.unit||''));
-    if(src)rows.push({branch:S.br,product_id:x.id,product_name:x.name||'',pnl_item:src.pnl_item,bill_unit:'',stock_unit:x.unit||'',factor:num(src.factor)||1,active:true});
+    if(src)((src.items&&src.items.length)?src.items:[{pnl_item:src.pnl_item,factor:src.factor}]).forEach(it=>rows.push({branch:S.br,product_id:x.id,product_name:x.name||'',pnl_item:it.pnl_item,bill_unit:'',stock_unit:x.unit||'',factor:num(it.factor)||1,active:true})); // คัดลอกทุกชื่อบิลที่อีกสาขาผูกไว้
   });
   if(!rows.length){ toast('ไม่มีตัวที่คัดลอกจากอีกสาขาได้',true); return; }
   try{ await ins('pnl_stock_map',rows); toast(`✅ ผูกตามอีกสาขาแล้ว ${rows.length} ตัว`); show('actual'); }
@@ -3248,8 +3253,8 @@ async function stkUnskipAll(){
 function stkDetail(i){
   const r=(S._stkRows||[])[i]; if(!r)return;
   const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
-  openModal(`<h3>📦 ${esc(r.pr.name)} <span class="sp">${esc(r.pr.unit||'')} · ตัวคูณบิล ×${num(r.mp.factor)||1}</span></h3>
-    <div class="xs mut" style="margin-bottom:8px">ผูกกับบิล: <b>${esc(r.mp.pnl_item)}</b> · ใช้จริง = นับก่อน + ซื้อเข้า − นับหลัง</div>
+  openModal(`<h3>📦 ${esc(r.pr.name)} <span class="sp">${esc(r.pr.unit||'')}</span></h3>
+    <div class="xs mut" style="margin-bottom:8px">ผูกกับบิล: ${((r.mp.items&&r.mp.items.length)?r.mp.items.map(it=>`<b>${esc(it.pnl_item)}</b> ×${num(it.factor)||1}`).join(' · '):`<b>${esc(r.mp.pnl_item)}</b> ×${num(r.mp.factor)||1}`)} · ใช้จริง = นับก่อน + ซื้อเข้า − นับหลัง</div>
     <div class="twrap"><table>
       <tr><th>ช่วง</th><th class="right">นับก่อน</th><th class="right">+ซื้อเข้า</th><th class="right">นับหลัง</th><th class="right">ใช้จริง</th><th class="right">ยอดขาย</th><th class="right">ใช้/หมื่น</th></tr>
       ${r.per.slice().reverse().map(x=>`<tr${x.use<0?' style="color:var(--red)"':''}><td class="xs">${thDate(x.Pd)}→${thDate(x.Cd)}${x.dd>1?` <span class="mut">(${x.dd} วัน)</span>`:''}</td>
