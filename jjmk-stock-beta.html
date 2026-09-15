@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b65 — สินค้า 1 ตัวผูกได้หลายชื่อบิล (ต้องรัน SQL b65 ครั้งเดียว)</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b66 — ตอนเลือกผูก โชว์ด้วยว่าสินค้าผูกบิลอะไรอยู่แล้ว</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -3088,9 +3088,10 @@ function openMasterPage(){
       <div class="sheet-body">
         <input class="pp_q" placeholder="🔍 ค้นหาชื่อนับ..." autocomplete="off" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun';margin-bottom:8px">
         <div style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px">
-          ${rows.map((r2,i2)=>`<div class="pp_row" data-k="${escapeHtml((r2.name+' '+r2.sup).toLowerCase())}" style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)">
-            <span style="flex:1;min-width:0"><b style="font-size:.88em">${escapeHtml(r2.name)}</b> <small style="color:var(--ink-soft)">${escapeHtml(r2.unit||'')} · ${escapeHtml(r2.cat)}</small></span>
-            <button data-pick="${i2}" style="border:1px solid var(--red);background:#fff;color:var(--red);border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Sarabun';font-weight:700">ผูก</button></div>`).join('')}
+          ${rows.map((r2,i2)=>{const lk=(PNLBY[r2.name]||[]).map(x=>x.pnl_item); // b66: โชว์ว่าสินค้าตัวนี้ผูกบิลอะไรอยู่แล้วบ้าง
+            return `<div class="pp_row" data-k="${escapeHtml((r2.name+' '+r2.sup).toLowerCase())}" style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)">
+            <span style="flex:1;min-width:0"><b style="font-size:.88em">${escapeHtml(r2.name)}</b> <small style="color:var(--ink-soft)">${escapeHtml(r2.unit||'')} · ${escapeHtml(r2.cat)}</small>${lk.length?`<br><small style="color:#7c3aed">💰 ผูกอยู่แล้วกับ: ${lk.map(escapeHtml).join(' · ')}</small>`:''}</span>
+            <button data-pick="${i2}" data-lbl="${lk.length?'ผูกเพิ่ม':'ผูก'}" style="border:1px solid var(--red);background:#fff;color:var(--red);border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Sarabun';font-weight:700;flex:none">${lk.length?'ผูกเพิ่ม':'ผูก'}</button></div>`;}).join('')}
         </div></div></div>`;
     document.body.appendChild(cv);
     cv.querySelector('[data-x]').onclick=()=>cv.remove();
@@ -3101,8 +3102,8 @@ function openMasterPage(){
       let ok=0;
       if(bill.src==='si')ok=await linkSiIds(bill.ids,r2);
       else ok=await linkPnName(bill.name,r2);
-      if(!ok&&bill.src==='si'){toast('⛔ ผูกไม่เข้า DB (รัน SQL b57 หรือยัง?)');btn.disabled=false;btn.textContent='ผูก';return;}
-      if(!ok)return void(btn.disabled=false,btn.textContent='ผูก');
+      if(!ok&&bill.src==='si'){toast('⛔ ผูกไม่เข้า DB (รัน SQL b57 หรือยัง?)');btn.disabled=false;btn.textContent=btn.dataset.lbl||'ผูก';return;}
+      if(!ok)return void(btn.disabled=false,btn.textContent=btn.dataset.lbl||'ผูก');
       if(!r2.bill)await syncBillNameFor(r2,bill.name);else save();
       cv.remove();toast('ผูก "'+bill.name+'" → '+r2.name+' ✓');render();});
   }
@@ -3123,6 +3124,7 @@ function openMasterPage(){
       </label>`).join('');
     cv.innerHTML=`<div class="sheet" style="max-width:560px"><div class="sheet-head"><h3>🧾 ผูกบิล → ${escapeHtml(r.name)}</h3><button class="x" data-x>✕</button></div>
       <div class="sheet-body">
+        ${(PNLBY[r.name]||[]).length?`<div style="font-size:.8em;color:#7c3aed;margin:0 0 6px">💰 ตอนนี้ผูกอยู่: ${(PNLBY[r.name]||[]).map(x=>escapeHtml(x.pnl_item)).join(' · ')}</div>`:''}
         <input class="bp_q" placeholder="🔍 ค้นหาชื่อบิล/ซัพ..." autocomplete="off" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun';margin-bottom:8px">
         <div class="bp_list" style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px">
           ${PN.ready?(pnRows||'<div class="rempty" style="padding:6px">ชื่อบิล P&L ถูกผูกครบหมดแล้ว 🎉</div>'):'<div class="rempty" style="padding:6px">อ่านบิล P&L ไม่ได้ — รัน SQL b63 ใน Supabase ก่อน</div>'}
