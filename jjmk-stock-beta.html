@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b57 — แม่บทสินค้า (ตั้งหน่วย/ซัพครั้งเดียวทุกสาขา · อัตราใช้แยกสาขา) + จับบั๊กบันทึกผูกชื่อไม่เข้า DB</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b58 — แม่บทสินค้าจัดเป็นตารางคอลัมน์ตรงแนว อ่านง่าย (จอแคบเลื่อนข้างได้)</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -3002,10 +3002,10 @@ function openMasterPage(){
     <div class="sheet-body">
       <p class="hint" style="margin:0 0 8px"><b>หน่วยนับ · สั่งเป็น · ซัพ</b> ตั้งครั้งเดียวมีผลทุกสาขา · <b style="color:#1559c7">อัตราใช้/วัน</b> กรอกแยกรายสาขา · แก้แล้วบันทึกทันที ไม่ต้องกดเซฟ</p>
       <button class="act wide mp_lc" style="background:#eef4ff;color:#1559c7;border:1.5px solid #1559c7;margin-bottom:8px">🔗 ผูกชื่อบิล & อัตราแปลง / นำเข้า-ส่งออก Excel</button>
-      <div class="rfilters" style="margin-bottom:8px">
-        <input class="mp_q" placeholder="🔍 ค้นหาชื่อสินค้า/ซัพ..." autocomplete="off" style="padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'">
-        <select class="mp_cat"><option value="">📁 ทุกแผนก</option></select>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.85em"><input type="checkbox" class="mp_miss"> เฉพาะที่ข้อมูลยังไม่ครบ</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <input class="mp_q" placeholder="🔍 ค้นหาชื่อสินค้า/ซัพ..." autocomplete="off" style="flex:1;min-width:170px;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'">
+        <select class="mp_cat" style="padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'"><option value="">📁 ทุกแผนก</option></select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85em;white-space:nowrap"><input type="checkbox" class="mp_miss"> เฉพาะที่ยังไม่ครบ</label>
       </div>
       <div class="mp_list"><div class="rempty">กำลังโหลด...</div></div>
     </div></div>`;
@@ -3016,40 +3016,42 @@ function openMasterPage(){
   const cats=[...new Set(rows.map(r=>r.cat))];
   ov.querySelector('.mp_cat').innerHTML='<option value="">📁 ทุกแผนก ('+rows.length+')</option>'+cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
   const missing=r=>!r.unit||brs.some(b=>{const it=r.br[b.id];return it&&numR(it.rate_wk,it.safety)==null;});
-  const NUMS='inputmode="decimal" autocomplete="off" style="width:54px;padding:7px;border:1.5px solid var(--line);border-radius:8px;text-align:right;font-family:\'Sarabun\'"';
+  // b58: ตารางคอลัมน์ตรงแนว อ่านแถวเดียวจบ (จอแคบเลื่อนซ้าย-ขวาในกรอบ)
+  const COLT=`minmax(150px,1.2fr) 90px 168px minmax(130px,.9fr) 46px${' 186px'.repeat(brs.length)}`;
+  const MINW=640+186*brs.length;
+  const NUMS='inputmode="decimal" autocomplete="off" style="width:50px;padding:6px 4px;border:1px solid #e3d9c6;border-radius:7px;text-align:right;font-family:\'Sarabun\';background:#fffdf8"';
   function render(){
     const q=ov.querySelector('.mp_q').value.trim().toLowerCase();
     const fc=ov.querySelector('.mp_cat').value;
     const onlyMiss=ov.querySelector('.mp_miss').checked;
     const vis=rows.filter(r=>(!fc||r.cat===fc)&&(!onlyMiss||missing(r))&&(!q||(r.name+' '+r.sup).toLowerCase().includes(q)));
-    let lastCat=null,html='';
+    const hd=`<div style="display:grid;grid-template-columns:${COLT};gap:8px;align-items:end;padding:10px 12px;background:#f4ecdd;border-bottom:2px solid var(--gold-line);font-size:.76em;font-weight:700;color:#6E0E14">
+      <span>สินค้า</span><span>นับเป็น</span><span>สั่งเป็น · 1 หน่วยสั่ง = ?นับ</span><span>ซัพพลายเออร์</span><span title="ผูกชื่อบิลแล้วหรือยัง">บิล</span>
+      ${brs.map(b=>`<span style="color:#1559c7">🏪 ${bn(b)} ใช้/วัน<br><small style="font-weight:500;color:#51617f">จ-พฤ · ศ · ส-อา</small></span>`).join('')}</div>`;
+    let lastCat=null,body='';
     vis.forEach(r=>{
       const i=rows.indexOf(r);
-      if(r.cat!==lastCat){lastCat=r.cat;html+=`<h4 style="margin:14px 0 4px">${escapeHtml(r.ic)} ${escapeHtml(r.cat)}</h4>`;}
-      html+=`<div class="mp_row" data-i="${i}" style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <b style="flex:1;min-width:140px">${escapeHtml(r.name)}</b>
-          <span style="display:flex;align-items:center;gap:4px;font-size:.82em;color:var(--ink-soft)">นับเป็น
-            <select class="m_unit" style="padding:7px;border:1.5px solid var(--line);border-radius:8px;font-family:'Sarabun'">${unitOptions(r.unit)}</select></span>
-          <span style="display:flex;align-items:center;gap:4px;font-size:.82em;color:var(--ink-soft)">สั่งเป็น
-            <input class="m_pu" value="${escapeHtml(r.pack_unit||'')}" placeholder="ลัง" autocomplete="off" style="width:56px;padding:7px;border:1.5px solid var(--line);border-radius:8px;font-family:'Sarabun'">
-            <span>1 หน่วย =</span><input class="m_pack" value="${r.pack!=null?r.pack:''}" placeholder="—" ${NUMS}><span class="m_pun">${escapeHtml(r.unit||'หน่วยนับ')}</span></span>
-          <span style="display:flex;align-items:center;gap:4px;font-size:.82em;color:var(--ink-soft)">ซัพ
-            <select class="m_sup" style="max-width:150px;padding:7px;border:1.5px solid var(--line);border-radius:8px;font-family:'Sarabun'">
-              <option value="">—</option>${SUPPLIERS.map(s=>`<option ${s.name===r.sup?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select></span>
-          ${r.bill?`<span class="xs" style="color:#1559c7">🧾 ${escapeHtml(r.bill)}</span>`:`<button class="m_link" style="border:1px dashed #b3261e;background:#fff;color:#b3261e;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:.78em;font-family:'Sarabun'">⚠ ยังไม่ผูกบิล — ไปผูก</button>`}
-        </div>
-        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
-          ${brs.map(b=>{const it=r.br[b.id];if(!it)return `<span class="xs" style="color:var(--ink-soft)">🏪 ${bn(b)}: ไม่มีสินค้านี้</span>`;
-            const wk=numR(it.rate_wk,it.safety),fr=numR(it.rate_fri,null),we=numR(it.rate_we,it.max);
-            return `<span data-b="${b.id}" style="display:flex;align-items:center;gap:4px;font-size:.82em;color:#1559c7">🏪 ${bn(b)} ใช้/วัน:
-              <span style="color:var(--ink-soft)">จ-พฤ</span><input class="m_wk" value="${wk==null?'':fmt(wk)}" placeholder="–" ${NUMS}>
-              <span style="color:var(--ink-soft)">ศ</span><input class="m_fr" value="${fr==null?'':fmt(fr)}" placeholder="–" ${NUMS}>
-              <span style="color:var(--ink-soft)">ส-อา</span><input class="m_we" value="${we==null?'':fmt(we)}" placeholder="–" ${NUMS}></span>`;}).join('')}
-        </div>
+      if(r.cat!==lastCat){lastCat=r.cat;body+=`<div style="padding:8px 12px 4px;font-family:Prompt;font-weight:600;font-size:.9em;background:#faf5ea;border-bottom:1px solid var(--line)">${escapeHtml(r.ic)} ${escapeHtml(r.cat)}</div>`;}
+      body+=`<div class="mp_row" data-i="${i}" style="display:grid;grid-template-columns:${COLT};gap:8px;align-items:center;padding:6px 12px;border-bottom:1px dashed var(--line)">
+        <b style="font-size:.86em">${escapeHtml(r.name)}</b>
+        <select class="m_unit" style="padding:6px 3px;border:1px solid #e3d9c6;border-radius:7px;font-family:'Sarabun';font-size:.85em;background:#fffdf8">${unitOptions(r.unit)}</select>
+        <span style="display:flex;align-items:center;gap:3px;font-size:.8em;color:var(--ink-soft)">
+          <input class="m_pu" value="${escapeHtml(r.pack_unit||'')}" placeholder="ลัง" autocomplete="off" style="width:46px;padding:6px 4px;border:1px solid #e3d9c6;border-radius:7px;font-family:'Sarabun';background:#fffdf8">=
+          <input class="m_pack" value="${r.pack!=null?r.pack:''}" placeholder="?" ${NUMS}><span class="m_pun">${escapeHtml(r.unit||'นับ')}</span></span>
+        <select class="m_sup" style="padding:6px 3px;border:1px solid #e3d9c6;border-radius:7px;font-family:'Sarabun';font-size:.82em;background:#fffdf8;min-width:0">
+          <option value="">—</option>${SUPPLIERS.map(s=>`<option ${s.name===r.sup?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select>
+        ${r.bill?`<span title="${escapeHtml(r.bill)}" style="cursor:help;text-align:center">🧾✓</span>`:`<button class="m_link" title="ยังไม่ผูกชื่อบิล — แตะเพื่อไปผูก" style="border:1px dashed #b3261e;background:#fff;color:#b3261e;border-radius:7px;padding:4px;cursor:pointer;font-size:.78em">⚠</button>`}
+        ${brs.map(b=>{const it=r.br[b.id];if(!it)return `<span class="xs" style="color:var(--ink-soft);border-left:3px solid #edf2fb;padding-left:8px">ไม่มีที่สาขานี้</span>`;
+          const wk=numR(it.rate_wk,it.safety),fr=numR(it.rate_fri,null),we=numR(it.rate_we,it.max);
+          return `<span data-b="${b.id}" style="display:flex;gap:4px;border-left:3px solid #dbe7fb;padding-left:8px">
+            <input class="m_wk" value="${wk==null?'':fmt(wk)}" placeholder="–" title="จ-พฤ" ${NUMS}>
+            <input class="m_fr" value="${fr==null?'':fmt(fr)}" placeholder="–" title="ศุกร์" ${NUMS}>
+            <input class="m_we" value="${we==null?'':fmt(we)}" placeholder="–" title="ส-อา" ${NUMS}></span>`;}).join('')}
       </div>`;
     });
-    list.innerHTML=html||'<div class="rempty">ไม่พบรายการตามตัวกรอง</div>';
+    list.innerHTML=vis.length?`<div style="overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff"><div style="min-width:${MINW}px">${hd}${body}</div></div>
+      <p class="hint" style="margin:6px 0 0">แตะช่องแล้วพิมพ์ทับได้เลย บันทึกทันทีที่ออกจากช่อง · คอลัมน์ซ้าย (นับเป็น/สั่งเป็น/ซัพ) มีผลทุกสาขา · ช่องสีน้ำเงินขวา = อัตราใช้แยกของแต่ละสาขา · จอแคบเลื่อนตารางซ้าย-ขวาได้</p>`
+      :'<div class="rempty">ไม่พบรายการตามตัวกรอง</div>';
     bind();
   }
   function bind(){
