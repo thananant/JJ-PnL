@@ -2932,6 +2932,7 @@ RENDER.usage = async (el)=>{
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
       <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button>
       <button class="btn gh sm2" onclick="usageXlsx()" title="ดาวน์โหลดข้อมูลดิบทั้งหมดของเดือนนี้เป็น Excel (รายสินค้า · แยกซัพ · เทียบสาขา)">⬇ Excel</button>
+      <button class="btn gh sm2" onclick="masterFillXlsx()" title="ส่งออกชื่อบิลทุกตัวในระบบ P&L เป็นแบบฟอร์มเปล่าให้กรอกเอง: ชื่อที่จะใช้ในระบบนับ / หน่วย / อัตราแปลง / อัตราใช้ต่อวัน">📋 แม่บทกรอกเอง</button>
       <button class="btn gh sm2" onclick="usagePdf()" title="รายงานสินค้าละ 1 หน้า A4 ตามแถวที่แสดงอยู่ (กรองก่อนได้) — สั่งพิมพ์แล้วเลือก Save as PDF">📄 PDF รายสินค้า</button></div>
     <div class="twrap"><table id="useTbl">
       ${S.usageMode==='cmp'
@@ -3459,6 +3460,53 @@ function usagePdf(){ // เปิดตัวเลือกสินค้า (
       <button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ยกเลิก</button>
       <button class="btn sm2" id="pdfGoBtn" onclick="usagePdfGo()">สร้าง PDF (${keys.length} หน้า)</button>
     </div>`);
+}
+async function masterFillXlsx(){ // 📋 แม่บทกรอกเอง: ชื่อบิลทุกตัวจากระบบ P&L (แคตตาล็อกซัพ + บิล 3 เดือนทุกสาขา) + ช่องว่างให้กรอก ชื่อในระบบ/หน่วย/อัตราแปลง/อัตราใช้
+  if(!window.XLSX){ toast('ตัวสร้าง Excel โหลดไม่ขึ้น (เช็คเน็ต)',true); return; }
+  toast('กำลังรวบรวมชื่อบิลทั้งหมดจากระบบ P&L...');
+  let si=[],bi=[],prods=[];
+  const to=new Date(), z=d=>d.toISOString().slice(0,10);
+  const from=new Date(+to-92*86400000);
+  try{ si=await selAllQ('pnl_sup_items','select=item,unit,supplier_id&order=item'); }catch(e){}
+  try{ bi=await selAll('pnl_bill_items',`select=branch,item,unit&d=gte.${z(from)}&d=lte.${z(to)}&order=d`); }catch(e){}
+  try{ prods=await selAllQ('products','select=name,unit,sup&deleted_at=is.null&order=name').catch(()=>[]); }catch(e){}
+  const M={};
+  const put=(item,unit,supName,br)=>{ const k=ocrNorm(item); if(!k)return;
+    const o=(M[k]??={item:String(item).trim(),units:new Set(),sups:new Set(),brs:new Set(),n:0});
+    if(unit)o.units.add(String(unit).trim()); if(supName)o.sups.add(supName); if(br)o.brs.add(br); };
+  si.forEach(r=>put(r.item,r.unit,((S.core&&S.core.supById&&S.core.supById[r.supplier_id])||{}).name||'',''));
+  bi.forEach(r=>{ put(r.item,r.unit,'',r.branch); const o=M[ocrNorm(r.item)]; if(o)o.n++; });
+  const rows=Object.values(M).sort((a,b)=>(([...a.sups][0]||'￿').localeCompare([...b.sups][0]||'￿','th'))||a.item.localeCompare(b.item,'th'));
+  if(!rows.length){ toast('ไม่พบชื่อบิลในระบบ',true); return; }
+  const head=['ชื่อตามบิล P&L (ห้ามแก้)','ซัพพลายเออร์','หน่วยตามบิล','พบในสาขา','บิล 3 เดือน (ครั้ง)',
+    'ชื่อที่จะใช้ในระบบนับ (กรอกเอง · เว้นว่าง = ไม่นับสต๊อก)','หน่วยนับ (กรอกเอง)',
+    'อัตราแปลง: 1 หน่วยบิล = กี่หน่วยนับ (หน่วยเดียวกันเว้นว่าง)',
+    'อัตราใช้/วัน จ-พฤ (หน่วยนับ)','อัตราใช้/วัน ศ','อัตราใช้/วัน ส-อา',
+    'แผนก (เฉพาะของใหม่ที่ยังไม่มีในระบบนับ)','หมายเหตุ'];
+  const data=rows.map(o=>[o.item,[...o.sups].join(' / '),[...o.units].join(' / '),[...o.brs].sort().join('+'),o.n||'','','','','','','','','']);
+  const ws=XLSX.utils.aoa_to_sheet([head,...data]);
+  ws['!cols']=[36,22,10,10,9,36,11,26,12,10,12,18,24].map(w=>({wch:w}));
+  const seen={},pr=[];
+  (prods||[]).forEach(p=>{ const k=(p.name||'').trim(); if(!k||seen[k])return; seen[k]=1; pr.push([k,p.unit||'',p.sup||'']); });
+  const ws2=XLSX.utils.aoa_to_sheet([['ชื่อนับที่มีอยู่ตอนนี้ (ก๊อปไปวางในคอลัมน์ F ได้เลย — สะกดตรง ประวัติเดิมต่อเนื่อง)','หน่วย','ซัพ'],...pr]);
+  ws2['!cols']=[{wch:44},{wch:10},{wch:22}];
+  const ws3=XLSX.utils.aoa_to_sheet([
+    ['วิธีกรอก (แก้เฉพาะคอลัมน์ F ถึง M ของชีท "แม่บทกรอกเอง")'],
+    ['F ชื่อที่จะใช้ในระบบนับ: บิลหลายตัวที่เป็นของเดียวกัน = พิมพ์ชื่อเดียวกันทุกแถว (เช่นน้ำตาลหลายยี่ห้อ → "น้ำตาลทรายขาว") · เว้นว่าง = ตัวนี้ไม่นับสต๊อก'],
+    ['   ถ้าตรงกับของที่นับอยู่แล้ว ให้ก๊อปชื่อจากชีท "ชื่อนับที่มีอยู่ตอนนี้" มาวาง — สะกดตรงเป๊ะ ประวัติการนับเดิมจะต่อเนื่อง ไม่ขาดตอน'],
+    ['G หน่วยนับ: หน่วยที่พนักงานนับหน้าสาขา เช่น โล / ถุง / ขวด / แผง / แพ็ค'],
+    ['H อัตราแปลง: 1 หน่วยบิล = กี่หน่วยนับ เช่น บิลเป็นลัง นับเป็นกก. และ 1 ลัง = 9 กก. → ใส่ 9 · หน่วยเดียวกันเว้นว่าง (คิดเป็น 1)'],
+    ['I-K อัตราใช้ต่อวัน (หน่วยนับ): จันทร์-พฤหัส / ศุกร์ / เสาร์-อาทิตย์และวันหยุดพิเศษ — ใส่เท่าที่รู้ ที่เหลือระบบคำนวณจากการใช้จริงต่อได้'],
+    ['L แผนก: กรอกเฉพาะของใหม่ที่ยังไม่เคยมีในระบบนับ (เช่น ของสด / ของแห้ง / ของใช้) — ของเดิมไม่ต้องกรอก'],
+    ['ห้ามแก้คอลัมน์ A (ชื่อตามบิล) — ใช้เป็นตัวจับคู่ตอนนำเข้า · ลบแถวที่ไม่เกี่ยวออกได้'],
+    ['เสร็จแล้วส่งไฟล์กลับในแชท Claude — ระบบจะตรวจทุกแถวและนำเข้าให้ทั้งหมด (ผูกชื่อ + อัตราแปลง + อัตราใช้)']]);
+  ws3['!cols']=[{wch:135}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'แม่บทกรอกเอง');
+  XLSX.utils.book_append_sheet(wb,ws2,'ชื่อนับที่มีอยู่ตอนนี้');
+  XLSX.utils.book_append_sheet(wb,ws3,'วิธีกรอก');
+  XLSX.writeFile(wb,'JJ-แม่บทกรอกเอง-'+z(to)+'.xlsx');
+  toast('📋 ส่งออก '+rows.length+' ชื่อบิลแล้ว — กรอกคอลัมน์ F-M เสร็จส่งไฟล์กลับให้ Claude ได้เลย');
 }
 function usageXlsx(){ // ข้อมูลดิบทั้งเดือน ทุกสินค้า ครบทุกคอลัมน์ที่ระบบคำนวณ
   const U=S._usage; if(!U||!window.XLSX){ toast('ยังไม่มีข้อมูลให้ส่งออก',true); return; }
