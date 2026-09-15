@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b66 — ตอนเลือกผูก โชว์ด้วยว่าสินค้าผูกบิลอะไรอยู่แล้ว</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b67 — โชว์ว่าสินค้ามีนับสาขาไหนบ้าง + ปุ่ม ➕ เพิ่มที่สาขาที่ขาด</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -3069,11 +3069,13 @@ function openMasterPage(){
   async function linkPnName(name,r){ // ผูกชื่อบิล P&L → สินค้า r (เขียน pnl_stock_map ทุกสาขาที่มีสินค้านี้)
     // b65: คู่ (สินค้า+ชื่อบิล) ที่มีอยู่แล้วให้ข้าม ไม่ insert ซ้ำ — สินค้า 1 ตัวผูกได้หลายชื่อบิล
     const dup=pid=>PN.map.some(m=>String(m.product_id)===String(pid)&&pnorm(m.pnl_item)===pnorm(name));
-    const ins=[];let skip=0;
+    const ins=[];let skip=0;const miss=[]; // b67: สาขาที่ไม่มีสินค้านี้ในรายการนับ
     ROOT.branches.forEach(b2=>{const code=brCode(b2),it=r.br[b2.id];
-      if(!code||!it)return;
+      if(!code)return;
+      if(!it){miss.push(bn(b2));return;}
       if(dup(it.id)){skip++;return;}
       ins.push({branch:code,product_id:it.id,product_name:r.name,pnl_item:name,bill_unit:'',stock_unit:r.unit||'',factor:1,active:true});});
+    PN.lastWarn=miss.length?('⚠ '+miss.join('/')+' ไม่มี "'+r.name+'" ในรายการนับ — ผูกให้เฉพาะสาขาที่มี (กด ➕ เพิ่มที่สาขานี้ ในตารางเพื่อเติมให้ครบได้)'):'';
     if(!ins.length){if(skip){toast('"'+name+'" ผูกกับตัวนี้ไว้อยู่แล้ว ✓');return 1;}toast('หาสาขา JJRD/JJLP ของสินค้านี้ไม่เจอ');return 0;}
     const {data,error}=await sb.from('pnl_stock_map').insert(ins).select('id');
     if(error&&/duplicate key|23505/i.test(String(error.code||'')+' '+String(error.message||''))){
@@ -3082,6 +3084,38 @@ function openMasterPage(){
     data.forEach((d2,i2)=>{PN.map.push({id:d2.id,...ins[i2]});});
     rebuildPnl();return ins.length;
   }
+  async function addToBranch(r,bid,btn){ // b67: สาขานี้ไม่มีสินค้าตัวนี้ → คัดลอกจากสาขาที่มี + ผูกบิลตามให้
+    const b=ROOT.branches.find(x=>x.id===bid);if(!b)return;
+    const srcB=ROOT.branches.find(x=>r.br[x.id]);const src=srcB&&r.br[srcB.id];
+    if(!src){toast('ไม่เจอข้อมูลต้นแบบจากสาขาอื่น');return;}
+    let key='',label=r.cat,ic=r.ic||'📦';
+    srcB.data.categories.forEach(c2=>{if(c2.items.some(i2=>i2.id===src.id)){key=c2.key;label=c2.label;ic=c2.ic||'📦';}});
+    if(!key){toast('หาแผนกของสินค้าไม่เจอ');return;}
+    let cat=b.data.categories.find(c2=>c2.key===key);
+    if(!cat){cat={key,label,ic,items:[]};b.data.categories.push(cat);}
+    if(btn){btn.disabled=true;btn.textContent='⏳';}
+    const nid=uid('it');
+    const row={id:nid,branch_id:bid,cat_key:key,cat_label:label,cat_ic:ic,name:r.name,unit:src.unit||r.unit||'',
+      i18n:src.i18n||null,sup:src.sup||r.sup||'',sort:(cat.items.length||0)+1,
+      pack:src.pack==null?null:src.pack,pack_unit:src.pack_unit||null,
+      order_step:src.order_step==null?null:src.order_step,step_unit:src.step_unit||null,bill_name:src.bill_name||null};
+    const {data,error}=await sb.from('products').insert(row).select('id');
+    if(error||!data||!data.length){toast('⛔ เพิ่มไม่เข้า DB'+(error?': '+error.message:' (สิทธิ์เขียนไม่เปิด?)'));
+      if(btn){btn.disabled=false;btn.textContent='➕ เพิ่มที่สาขานี้';}return;}
+    const item={id:nid,name:r.name,unit:row.unit,qty:null,img:null,i18n:row.i18n,sup:row.sup,location:'',safety:null,max:null,
+      rate_wk:null,rate_fri:null,rate_we:null,bill_name:row.bill_name,pack:row.pack,pack_unit:row.pack_unit,
+      order_step:row.order_step,step_unit:row.step_unit};
+    cat.items.push(item);ITEM_INDEX[nid]={item,branchId:bid};r.br[bid]=item;save();
+    // สินค้าตัวนี้มีบิล P&L ผูกอยู่แล้ว → ผูกให้สาขาใหม่ตามด้วย จะได้เหมือนกันทุกสาขา
+    const code=brCode(b),links=PNLBY[r.name]||[];let lkOk=0;
+    if(code&&links.length){
+      const ins=links.map(x=>({branch:code,product_id:nid,product_name:r.name,pnl_item:x.pnl_item,bill_unit:'',stock_unit:row.unit||'',factor:x.factor||1,active:true}));
+      const {data:d2,error:e2}=await sb.from('pnl_stock_map').insert(ins).select('id');
+      if(!e2&&d2&&d2.length){d2.forEach((d3,i3)=>PN.map.push({id:d3.id,...ins[i3]}));rebuildPnl();lkOk=d2.length;}
+    }
+    toast('เพิ่ม "'+r.name+'" ที่ '+(b.name||'สาขา')+' แล้ว ✓ (อัตราใช้/วันของสาขานี้ยังว่าง — ใส่ในช่องน้ำเงินได้เลย)'+(lkOk?' · ผูกบิลตามให้ '+lkOk+' ชื่อ':''));
+    render();
+  }
   function openProductPicker(bill){ // เลือกสินค้าให้ชื่อบิลที่ยังไม่ผูก (ผูกย้อนทาง)
     const cv=document.createElement('div');cv.className='overlay';cv.style.cssText='display:flex;z-index:510';
     cv.innerHTML=`<div class="sheet" style="max-width:520px"><div class="sheet-head"><h3>ผูก "${escapeHtml(bill.name)}" กับสินค้าไหน?</h3><button class="x" data-x>✕</button></div>
@@ -3089,8 +3123,10 @@ function openMasterPage(){
         <input class="pp_q" placeholder="🔍 ค้นหาชื่อนับ..." autocomplete="off" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun';margin-bottom:8px">
         <div style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px">
           ${rows.map((r2,i2)=>{const lk=(PNLBY[r2.name]||[]).map(x=>x.pnl_item); // b66: โชว์ว่าสินค้าตัวนี้ผูกบิลอะไรอยู่แล้วบ้าง
+            const have=brs.filter(b2=>r2.br[b2.id]); // b67: บอกด้วยว่าสินค้ามีนับที่สาขาไหนบ้าง
+            const cov=have.length<brs.length?`<br><small style="color:#b3261e">⚠ มีนับเฉพาะ ${have.map(bn).join(' / ')||'—'} — ผูกแล้วมีผลเฉพาะสาขาที่มี</small>`:'';
             return `<div class="pp_row" data-k="${escapeHtml((r2.name+' '+r2.sup).toLowerCase())}" style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)">
-            <span style="flex:1;min-width:0"><b style="font-size:.88em">${escapeHtml(r2.name)}</b> <small style="color:var(--ink-soft)">${escapeHtml(r2.unit||'')} · ${escapeHtml(r2.cat)}</small>${lk.length?`<br><small style="color:#7c3aed">💰 ผูกอยู่แล้วกับ: ${lk.map(escapeHtml).join(' · ')}</small>`:''}</span>
+            <span style="flex:1;min-width:0"><b style="font-size:.88em">${escapeHtml(r2.name)}</b> <small style="color:var(--ink-soft)">${escapeHtml(r2.unit||'')} · ${escapeHtml(r2.cat)}</small>${cov}${lk.length?`<br><small style="color:#7c3aed">💰 ผูกอยู่แล้วกับ: ${lk.map(escapeHtml).join(' · ')}</small>`:''}</span>
             <button data-pick="${i2}" data-lbl="${lk.length?'ผูกเพิ่ม':'ผูก'}" style="border:1px solid var(--red);background:#fff;color:var(--red);border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Sarabun';font-weight:700;flex:none">${lk.length?'ผูกเพิ่ม':'ผูก'}</button></div>`;}).join('')}
         </div></div></div>`;
     document.body.appendChild(cv);
@@ -3105,7 +3141,10 @@ function openMasterPage(){
       if(!ok&&bill.src==='si'){toast('⛔ ผูกไม่เข้า DB (รัน SQL b57 หรือยัง?)');btn.disabled=false;btn.textContent=btn.dataset.lbl||'ผูก';return;}
       if(!ok)return void(btn.disabled=false,btn.textContent=btn.dataset.lbl||'ผูก');
       if(!r2.bill)await syncBillNameFor(r2,bill.name);else save();
-      cv.remove();toast('ผูก "'+bill.name+'" → '+r2.name+' ✓');render();});
+      cv.remove();
+      if(PN.lastWarn){toast('ผูก "'+bill.name+'" → '+r2.name+' ✓ · '+PN.lastWarn);PN.lastWarn='';}
+      else toast('ผูก "'+bill.name+'" → '+r2.name+' ✓');
+      render();});
   }
   async function syncBillNameFor(r,v){await sb.from('products').update({bill_name:v}).eq('name',r.name).select('id');
     r.bill=v;ROOT.branches.forEach(b2=>b2.data.categories.forEach(c2=>c2.items.forEach(i2=>{if((i2.name||'').trim()===r.name)i2.bill_name=v;})));save();}
@@ -3153,7 +3192,10 @@ function openMasterPage(){
       for(const nm of pnNames){const k=await linkPnName(nm,r);if(k){okPn++;names.push(nm);}}
       if(!okSi&&!okPn){goBtn.disabled=false;cnt();return;}
       if(!r.bill&&names.length)await syncBillNameFor(r,names[0]);else save();
-      close();toast('ผูกแล้ว '+(okSi+okPn)+' รายการ ✓');render();
+      close();
+      if(PN.lastWarn){toast('ผูกแล้ว '+(okSi+okPn)+' รายการ ✓ · '+PN.lastWarn);PN.lastWarn='';}
+      else toast('ผูกแล้ว '+(okSi+okPn)+' รายการ ✓');
+      render();
     };
   }
   const cats=[...new Set(rows.map(r=>r.cat))];
@@ -3204,7 +3246,7 @@ function openMasterPage(){
           <input class="m_pack" value="${r.pack!=null?r.pack:''}" placeholder="?" ${NUMS}><span class="m_pun">${escapeHtml(r.unit||'นับ')}</span></span>
         <select class="m_sup" style="padding:6px 3px;border:1px solid #e3d9c6;border-radius:7px;font-family:'Sarabun';font-size:.82em;background:#fffdf8;min-width:0">
           <option value="">—</option>${SUPPLIERS.map(s=>`<option ${s.name===r.sup?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select>
-        ${brs.map(b=>{const it=r.br[b.id];if(!it)return `<span class="xs" style="color:var(--ink-soft);border-left:3px solid #edf2fb;padding-left:8px">ไม่มีที่สาขานี้</span>`;
+        ${brs.map(b=>{const it=r.br[b.id];if(!it)return `<span class="xs" style="color:var(--ink-soft);border-left:3px solid #edf2fb;padding-left:8px">ไม่มีที่สาขานี้<br><button data-addbr="${b.id}" style="margin-top:3px;border:1px dashed #1559c7;background:#f2f7ff;color:#1559c7;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:.92em;font-family:'Sarabun'">➕ เพิ่มที่สาขานี้</button></span>`;
           const wk=numR(it.rate_wk,it.safety),fr=numR(it.rate_fri,null),we=numR(it.rate_we,it.max);
           return `<span data-b="${b.id}" style="display:flex;gap:4px;border-left:3px solid #dbe7fb;padding-left:8px">
             <input class="m_wk" value="${wk==null?'':fmt(wk)}" placeholder="–" title="จ-พฤ" ${NUMS}>
@@ -3245,6 +3287,7 @@ function openMasterPage(){
         if(error||!data||!data.length){toast('⛔ ถอดฝั่ง P&L ไม่เข้า DB'+(error?': '+error.message:' — รัน SQL b63 หรือยัง?'));return;}
         PN.map=PN.map.filter(m=>!hit.ids.includes(m.id));rebuildPnl();
         toast('ถอดการผูก P&L แล้ว ✓');render();});
+      el.querySelectorAll('[data-addbr]').forEach(ab=>ab.onclick=()=>addToBranch(r,ab.dataset.addbr,ab));
       const bli=el.querySelector('.m_bl');
       if(bli)bli.onclick=()=>{if(!SI_READY){toast('กำลังโหลดรายการบิล รอแป๊บนึง...');return;}openBillPicker(r);};
       el.querySelectorAll('[data-b]').forEach(sp=>{
