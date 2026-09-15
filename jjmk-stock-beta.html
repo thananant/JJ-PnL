@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b67 — โชว์ว่าสินค้ามีนับสาขาไหนบ้าง + ปุ่ม ➕ เพิ่มที่สาขาที่ขาด</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b68 — ชื่อบิลที่ยังไม่ผูก สร้างเป็นสินค้านับใหม่ได้เลย</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -3116,6 +3116,64 @@ function openMasterPage(){
     toast('เพิ่ม "'+r.name+'" ที่ '+(b.name||'สาขา')+' แล้ว ✓ (อัตราใช้/วันของสาขานี้ยังว่าง — ใส่ในช่องน้ำเงินได้เลย)'+(lkOk?' · ผูกบิลตามให้ '+lkOk+' ชื่อ':''));
     render();
   }
+  function createProductFromBill(bill,parentCv){ // b68: ชื่อบิลไม่มีในรายการนับ → สร้างสินค้านับใหม่ทุกสาขา แล้วผูกบิลนี้ให้เลย
+    const pf=PNFREE.find(x=>x.name===bill.name)||{sups:new Set(),unit:''};
+    const catU={};ROOT.branches.forEach(b2=>b2.data.categories.forEach(c2=>{if(!catU[c2.key])catU[c2.key]={key:c2.key,label:c2.label,ic:c2.ic||'📦'};}));
+    const cats2=Object.values(catU);
+    const supPre=SUPPLIERS.map(s=>s.name).find(n2=>[...pf.sups].some(s2=>s2&&(s2.includes(n2)||n2.includes(s2))))||'';
+    const cv=document.createElement('div');cv.className='overlay';cv.style.cssText='display:flex;z-index:520';
+    cv.innerHTML=`<div class="sheet" style="max-width:460px"><div class="sheet-head"><h3>➕ สร้างสินค้านับใหม่</h3><button class="x" data-x>✕</button></div>
+      <div class="sheet-body">
+        <p class="hint" style="margin:0 0 10px">สร้างเข้ารายการเช็คสต๊อก<b>ทุกสาขา</b> แล้วผูกกับบิล "${escapeHtml(bill.name)}" ให้ทันที</p>
+        <label class="xs" style="display:block;margin-bottom:2px">ชื่อนับ (ตั้งสั้นๆ ให้พนักงานอ่านง่าย — แก้จากชื่อบิลได้)</label>
+        <input class="np_name" value="${escapeHtml(bill.name)}" style="width:100%;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun';margin-bottom:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <label style="flex:1;min-width:120px"><span class="xs">หน่วยนับ</span><br><select class="np_unit" style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'">${unitOptions(pf.unit||'')}</select></label>
+          <label style="flex:1.4;min-width:150px"><span class="xs">แผนก</span><br><select class="np_cat" style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'"><option value="">— เลือกแผนก —</option>${cats2.map(c2=>`<option value="${escapeHtml(c2.key)}">${escapeHtml(c2.ic+' '+c2.label)}</option>`).join('')}</select></label>
+        </div>
+        <label style="display:block;margin-bottom:10px"><span class="xs">ซัพพลายเออร์</span><br><select class="np_sup" style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'"><option value="">—</option>${SUPPLIERS.map(s=>`<option ${s.name===supPre?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select></label>
+        <button class="act wide np_go" style="background:var(--red);color:#fff;border:none">✅ สร้างทุกสาขา + ผูกบิลนี้</button>
+        <p class="hint" style="margin:8px 0 0">อัตราใช้/วัน กับ หน่วยสั่ง ไปใส่ต่อในตารางแม่บทได้เลย</p>
+      </div></div>`;
+    document.body.appendChild(cv);
+    cv.querySelector('[data-x]').onclick=()=>cv.remove();
+    cv.querySelector('.np_go').onclick=async()=>{
+      const name=cv.querySelector('.np_name').value.trim();
+      const unit=cv.querySelector('.np_unit').value;
+      const key=cv.querySelector('.np_cat').value;
+      const sup=cv.querySelector('.np_sup').value||'';
+      if(!name){toast('ใส่ชื่อนับก่อนครับ');return;}
+      if(!key){toast('เลือกแผนกก่อนครับ');return;}
+      const ex=rows.find(r2=>r2.name===name);
+      if(ex){ // ชื่อนี้มีอยู่แล้ว → ไม่สร้างซ้ำ ผูกกับตัวเดิมให้เลย
+        cv.remove();if(parentCv)parentCv.remove();
+        const k2=await linkPnName(bill.name,ex);
+        if(k2){toast('มีชื่อ "'+name+'" อยู่แล้ว — ผูกกับตัวเดิมให้ ✓'+(PN.lastWarn?' · '+PN.lastWarn:''));PN.lastWarn='';render();}
+        return;}
+      const ci=catU[key];const btn=cv.querySelector('.np_go');btn.disabled=true;btn.textContent='⏳ กำลังสร้าง...';
+      const r={name,cat:ci.label,ic:ci.ic,unit,sup,pack:null,pack_unit:'',step:null,step_unit:'',bill:null,br:{}};
+      let okn=0,fail='';
+      for(const b2 of ROOT.branches){
+        let cat=b2.data.categories.find(c2=>c2.key===key);
+        if(!cat){cat={key,label:ci.label,ic:ci.ic,items:[]};b2.data.categories.push(cat);}
+        const nid=uid('it');
+        const row={id:nid,branch_id:b2.id,cat_key:key,cat_label:ci.label,cat_ic:ci.ic,name,unit,sup,sort:(cat.items.length||0)+1};
+        const {data,error}=await sb.from('products').insert(row).select('id');
+        if(error||!data||!data.length){fail=(error&&error.message)||'สิทธิ์เขียนไม่เปิด?';continue;}
+        const item={id:nid,name,unit,qty:null,img:null,i18n:null,sup,location:'',safety:null,max:null,rate_wk:null,rate_fri:null,rate_we:null,bill_name:null,pack:null,pack_unit:null,order_step:null,step_unit:null};
+        cat.items.push(item);ITEM_INDEX[nid]={item,branchId:b2.id};r.br[b2.id]=item;okn++;
+      }
+      if(!okn){toast('⛔ สร้างไม่เข้า DB: '+fail);btn.disabled=false;btn.textContent='✅ สร้างทุกสาขา + ผูกบิลนี้';return;}
+      save();
+      rows.push(r);rows.sort((a2,b3)=>a2.cat.localeCompare(b3.cat,'th')||a2.name.localeCompare(b3.name,'th'));
+      const k2=await linkPnName(bill.name,r);
+      cv.remove();if(parentCv)parentCv.remove();
+      PN.lastWarn='';
+      toast('สร้าง "'+name+'" '+okn+' สาขา ✓'+(k2?' · ผูกกับบิล "'+bill.name+'" แล้ว':' · แต่ผูกบิลไม่สำเร็จ ลองผูกอีกครั้ง')+(fail?' · ⚠ บางสาขาไม่สำเร็จ: '+fail:''));
+      try{renderTabs();renderMain();}catch(e){}
+      render();
+    };
+  }
   function openProductPicker(bill){ // เลือกสินค้าให้ชื่อบิลที่ยังไม่ผูก (ผูกย้อนทาง)
     const cv=document.createElement('div');cv.className='overlay';cv.style.cssText='display:flex;z-index:510';
     cv.innerHTML=`<div class="sheet" style="max-width:520px"><div class="sheet-head"><h3>ผูก "${escapeHtml(bill.name)}" กับสินค้าไหน?</h3><button class="x" data-x>✕</button></div>
@@ -3128,9 +3186,12 @@ function openMasterPage(){
             return `<div class="pp_row" data-k="${escapeHtml((r2.name+' '+r2.sup).toLowerCase())}" style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)">
             <span style="flex:1;min-width:0"><b style="font-size:.88em">${escapeHtml(r2.name)}</b> <small style="color:var(--ink-soft)">${escapeHtml(r2.unit||'')} · ${escapeHtml(r2.cat)}</small>${cov}${lk.length?`<br><small style="color:#7c3aed">💰 ผูกอยู่แล้วกับ: ${lk.map(escapeHtml).join(' · ')}</small>`:''}</span>
             <button data-pick="${i2}" data-lbl="${lk.length?'ผูกเพิ่ม':'ผูก'}" style="border:1px solid var(--red);background:#fff;color:var(--red);border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Sarabun';font-weight:700;flex:none">${lk.length?'ผูกเพิ่ม':'ผูก'}</button></div>`;}).join('')}
-        </div></div></div>`;
+        </div>
+        ${bill.src==='pnl'?`<button class="pp_new" style="width:100%;margin-top:10px;border:1.5px dashed #1559c7;background:#f2f7ff;color:#1559c7;border-radius:10px;padding:10px;cursor:pointer;font-family:'Sarabun';font-weight:700">➕ ไม่มีในรายการนับ — สร้าง "${escapeHtml(bill.name)}" เป็นสินค้านับใหม่แล้วผูกเลย</button>`:''}
+        </div></div>`;
     document.body.appendChild(cv);
     cv.querySelector('[data-x]').onclick=()=>cv.remove();
+    const nb=cv.querySelector('.pp_new');if(nb)nb.onclick=()=>createProductFromBill(bill,cv);
     cv.querySelector('.pp_q').oninput=e=>{const k=e.target.value.trim().toLowerCase();
       cv.querySelectorAll('.pp_row').forEach(el=>{el.style.display=(!k||el.dataset.k.includes(k))?'flex':'none';});};
     cv.querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=async()=>{
