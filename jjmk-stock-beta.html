@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b59 — แม่บทสินค้าโชว์ชื่อบิลที่ผูกในตาราง แก้/ถอด/ผูกเพิ่มได้ทันที (เผื่อผูกผิด)</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b60 — ลิสต์เลือกชื่อบิลโชว์ชื่อซัพกำกับ (รู้ว่าชื่อไหนมาจากเจ้าไหน)</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -3014,10 +3014,12 @@ function openMasterPage(){
   const list=ov.querySelector('.mp_list');
   const rows=masterRows();
   // b59: โหลดรายการบิลมาโชว์/แก้การผูกในตารางเลย (ชิป 🧾 ลบได้ + ช่องผูกเพิ่ม)
-  let SI=[],SI_READY=false,BILLBY={},BILLIX={},BILLNAMES=[];
-  function rebuildBill(){BILLBY={};BILLIX={};BILLNAMES=[];const seen={};
+  let SI=[],SI_READY=false,BILLBY={},BILLIX={},BILLNAMES=[],BILLSUP={};
+  function rebuildBill(){BILLBY={};BILLIX={};BILLNAMES=[];BILLSUP={};const seen={};
     SI.forEach(s=>{const n=(s.name||'').trim();if(!n)return;
       (BILLIX[n]=BILLIX[n]||[]).push(s);
+      const sp=(s.sup_full||s.sup_sheet||'').trim();
+      if(sp)(BILLSUP[n]=BILLSUP[n]||new Set()).add(sp);
       if(!seen[n]){seen[n]=1;BILLNAMES.push(n);}
       const sn=(s.stock_name||'').trim();
       if(sn)(BILLBY[sn]=BILLBY[sn]||[]).push({id:s.id,name:n,unit:s.unit||'',f:(+s.conv_factor>0)?+s.conv_factor:0});});
@@ -3065,7 +3067,7 @@ function openMasterPage(){
       </div>`;
     });
     list.innerHTML=vis.length?`<div style="overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff"><div style="min-width:${MINW}px">${hd}${body}</div></div>
-      <datalist id="mpBillDL">${BILLNAMES.map(n=>`<option value="${escapeHtml(n)}"></option>`).join('')}</datalist>
+      <datalist id="mpBillDL">${BILLNAMES.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(BILLSUP[n]?('ซัพ: '+[...BILLSUP[n]].join(' / ')):'')}</option>`).join('')}</datalist>
       <p class="hint" style="margin:6px 0 0">แตะช่องแล้วพิมพ์ทับได้เลย บันทึกทันที · ชิป 🧾 = ชื่อบิลที่ผูกอยู่ (ชี้ดูอัตราแปลง · กด × ถอดถ้าผูกผิด · พิมพ์ในช่องประเดี๋ยวขึ้นลิสต์ให้เลือกผูกเพิ่ม) · นับเป็น/สั่งเป็น/ซัพ มีผลทุกสาขา · ช่องน้ำเงิน = อัตราใช้แยกสาขา · จอแคบเลื่อนตารางข้างได้</p>`
       :'<div class="rempty">ไม่พบรายการตามตัวกรอง</div>';
     bind();
