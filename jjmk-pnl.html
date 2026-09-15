@@ -1049,7 +1049,7 @@ async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; S.benchCache={}; aw
           หน้ากรอก (รายรับ/รายจ่าย/PV) ขึ้นแถบ "แตะเพื่อโหลดใหม่" ไม่ทับของที่พิมพ์ค้าง
           หน้าบันทึกบิล รีเฟรชเฉพาะลิสต์ประวัติ/รายการบิล + เตือนถ้าบิลที่เปิดอยู่โดนแก้จากเครื่องอื่น */
 const RT_TABLES=['pnl_bill_items','pnl_expense_daily','pnl_income_daily','pnl_cash_expenses','pnl_shopee','pnl_month_meta','pnl_fixed_monthly','pnl_stock_map'];
-let _rtLive=false,_rtT=null,_rtPend=false;
+let _rtLive=false,_rtT=null,_rtPend=false,_rtTbl=new Set();
 function rtBusyForm(){
   const a=document.activeElement;
   if(!(a&&['INPUT','TEXTAREA','SELECT'].includes(a.tagName)))return false;
@@ -1070,7 +1070,7 @@ function rtStart(){
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&_rtPend)rtApply(); });
   document.addEventListener('focusout',()=>{ if(_rtPend)setTimeout(()=>{ if(_rtPend&&!rtBusyForm()&&!document.hidden)rtApply(); },400); });
 }
-function rtEvent(){ clearTimeout(_rtT); _rtT=setTimeout(rtApply,1200); } // รวมหลายเหตุการณ์ติด ๆ กันเป็นรอบเดียว
+function rtEvent(p){ try{ if(p&&p.table)_rtTbl.add(p.table); }catch(e){} clearTimeout(_rtT); _rtT=setTimeout(rtApply,1200); } // รวมหลายเหตุการณ์ติด ๆ กันเป็นรอบเดียว (จำด้วยว่าตารางไหนเปลี่ยน)
 function rtTick(){ // โพลสำรองตอน Realtime ยังไม่เปิด: รีเฟรชเงียบ ๆ เฉพาะหน้าดูอย่างเดียว
   if(_rtLive||document.hidden||rtBusyForm())return;
   if(['dash','sum','usage','vatrep','actual'].includes(S.tab)){ S.cache={}; S.benchCache={}; loadStkNames().then(()=>show(S.tab)); stkBadge(); }
@@ -1079,17 +1079,21 @@ function rtTick(){ // โพลสำรองตอน Realtime ยังไม
 async function rtApply(){
   _rtPend=false;
   if(document.hidden){ _rtPend=true; return; }
+  const hadMap=_rtTbl.has('pnl_stock_map'); // มีการผูก/ถอดชื่อจากระบบนับสต๊อก (หรือเครื่องอื่น)
   S.cache={}; S.benchCache={};
   await loadStkNames();
   const v=S.tab;
   if(v==='detail'){
     dtMonthList(); dtHist();
     dtStaleCheck();
+    _rtTbl.clear(); if(hadMap)toast('🔗 การผูกชื่อบิล↔ชื่อนับ มีอัพเดตใหม่ — โหลดให้แล้ว');
     return;
   }
   if(['dash','sum','usage','vatrep','actual'].includes(v)){
     if(rtBusyForm()){ _rtPend=true; rtBanner(); return; }
-    await show(v); stkBadge(); return;
+    await show(v); stkBadge();
+    _rtTbl.clear(); if(hadMap)toast('🔗 การผูกชื่อบิล↔ชื่อนับ มีอัพเดตใหม่ — โหลดให้แล้ว');
+    return;
   }
   if(['income','exp','pv'].includes(v)){ rtBanner(); return; } // หน้ากรอก: ไม่ทับของที่พิมพ์อยู่
 }
