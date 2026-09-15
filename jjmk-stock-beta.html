@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b60 — ลิสต์เลือกชื่อบิลโชว์ชื่อซัพกำกับ (รู้ว่าชื่อไหนมาจากเจ้าไหน)</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b61 — ผูกบิลแบบติ๊กหลายอันพร้อมกัน · ชื่อที่ผูกแล้วหายจากลิสต์อัตโนมัติ</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -3025,6 +3025,46 @@ function openMasterPage(){
       if(sn)(BILLBY[sn]=BILLBY[sn]||[]).push({id:s.id,name:n,unit:s.unit||'',f:(+s.conv_factor>0)?+s.conv_factor:0});});
     BILLNAMES.sort((a,b)=>a.localeCompare(b,'th'));}
   loadSupItemsAll().then(d=>{SI=d;rebuildBill();SI_READY=true;render();}).catch(()=>{SI_READY=true;render();});
+  async function syncBillNameFor(r,v){await sb.from('products').update({bill_name:v}).eq('name',r.name).select('id');
+    r.bill=v;ROOT.branches.forEach(b2=>b2.data.categories.forEach(c2=>c2.items.forEach(i2=>{if((i2.name||'').trim()===r.name)i2.bill_name=v;})));save();}
+  // b61: ตัวเลือกผูกบิลแบบติ๊กหลายอันพร้อมกัน — โชว์เฉพาะชื่อบิลที่ยังไม่ถูกผูกกับตัวไหน
+  function openBillPicker(r){
+    const free=SI.filter(s=>!(String(s.stock_name||'').trim())&&(s.name||'').trim())
+      .sort((a,b)=>(a.name||'').localeCompare(b.name||'','th'));
+    const cv=document.createElement('div');cv.className='overlay';cv.style.cssText='display:flex;z-index:500';
+    cv.innerHTML=`<div class="sheet" style="max-width:560px"><div class="sheet-head"><h3>🧾 ผูกบิล → ${escapeHtml(r.name)}</h3><button class="x" data-x>✕</button></div>
+      <div class="sheet-body">
+        <input class="bp_q" placeholder="🔍 ค้นหาชื่อบิล/ซัพ..." autocomplete="off" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun';margin-bottom:8px">
+        <div class="bp_list" style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px">
+          ${free.map(s=>`<label class="bp_row" data-k="${escapeHtml(((s.name||'')+' '+(s.sup_full||s.sup_sheet||'')).toLowerCase())}" style="display:flex;gap:9px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line);cursor:pointer">
+              <input type="checkbox" class="bp_ck" data-id="${s.id}" style="width:19px;height:19px;flex:none">
+              <span style="flex:1;min-width:0"><b style="font-size:.88em">${escapeHtml(s.name)}</b><br><small style="color:var(--ink-soft)">ซัพ: ${escapeHtml(s.sup_full||s.sup_sheet||'—')}${s.unit?' · หน่วยบิล: '+escapeHtml(s.unit):''}</small></span>
+            </label>`).join('')||'<div class="rempty">ไม่มีชื่อบิลที่ยังว่างเหลือแล้ว 🎉</div>'}
+        </div>
+        <p class="hint" style="margin:6px 0 0">โชว์เฉพาะชื่อบิลที่<b>ยังไม่ถูกผูกกับตัวไหน</b> (เหลือ ${free.length} จากทั้งหมด ${SI.length}) — ตัวที่ผูกแล้วถูกเอาออกจากลิสต์ให้อัตโนมัติ · ถ้าจะย้ายคู่ ให้ไปกด × ที่ชิปของตัวเดิมก่อน</p>
+        <button class="act wide bp_go" style="background:var(--red);color:#fff;border:none;margin-top:10px">✅ ผูกที่เลือก (0)</button>
+      </div></div>`;
+    document.body.appendChild(cv);
+    const close=()=>cv.remove();
+    cv.querySelector('[data-x]').onclick=close;
+    const goBtn=cv.querySelector('.bp_go');
+    const cnt=()=>{goBtn.textContent='✅ ผูกที่เลือก ('+cv.querySelectorAll('.bp_ck:checked').length+')';};
+    cv.querySelectorAll('.bp_ck').forEach(c=>c.onchange=cnt);
+    cv.querySelector('.bp_q').oninput=e=>{const k=e.target.value.trim().toLowerCase();
+      cv.querySelectorAll('.bp_row').forEach(el=>{el.style.display=(!k||el.dataset.k.includes(k))?'':'none';});};
+    goBtn.onclick=async()=>{
+      const ids=[...cv.querySelectorAll('.bp_ck:checked')].map(c=>c.dataset.id);
+      if(!ids.length){toast('ติ๊กเลือกชื่อบิลก่อนครับ');return;}
+      goBtn.disabled=true;goBtn.textContent='⏳ กำลังผูก...';
+      let okn=0;const names=[];
+      for(const id of ids){const {data,error}=await sb.from('supplier_items').update({stock_name:r.name}).eq('id',id).select('id');
+        if(!error&&data&&data.length){okn++;SI.forEach(s=>{if(String(s.id)===String(id)){s.stock_name=r.name;names.push((s.name||'').trim());}});}}
+      if(!okn){goBtn.disabled=false;cnt();toast('⛔ ผูกไม่เข้า DB (รัน SQL b57 หรือยัง?)');return;}
+      rebuildBill();
+      if(!r.bill&&names.length)await syncBillNameFor(r,names[0]);else save();
+      close();toast('ผูกแล้ว '+okn+' รายการ ✓');render();
+    };
+  }
   const cats=[...new Set(rows.map(r=>r.cat))];
   ov.querySelector('.mp_cat').innerHTML='<option value="">📁 ทุกแผนก ('+rows.length+')</option>'+cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
   const missing=r=>!r.unit||brs.some(b=>{const it=r.br[b.id];return it&&numR(it.rate_wk,it.safety)==null;});
@@ -3048,7 +3088,7 @@ function openMasterPage(){
       const billCell=!SI_READY?'<small style="color:var(--ink-soft)">กำลังโหลดบิล...</small>'
         :`<span style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${bl.map(x=>
             `<span style="display:inline-flex;align-items:center;gap:3px;background:#eef4ff;color:#1559c7;border-radius:7px;padding:2px 5px;font-size:.74em" title="1 ${escapeHtml(x.unit||'หน่วยบิล')} = ${x.f>0?fmt(x.f):'?'} ${escapeHtml(r.unit||'นับ')} · กด × เพื่อถอด (เผื่อผูกผิด)">🧾${escapeHtml(x.name)}<b data-unlink="${x.id}" style="cursor:pointer;color:#b3261e;padding:0 2px">×</b></span>`).join('')}
-          <input class="m_bl" list="mpBillDL" placeholder="${bl.length?'+ ผูกเพิ่ม':'⚠ พิมพ์ชื่อบิลเพื่อผูก'}" autocomplete="off" style="flex:1;min-width:86px;padding:5px;border:1px dashed ${bl.length?'#c9d6ef':'#e0a9a4'};border-radius:7px;font-size:.76em;font-family:'Sarabun';background:#fff"></span>`;
+          <button class="m_bl" style="flex:none;padding:4px 8px;border:1px dashed ${bl.length?'#c9d6ef':'#e0a9a4'};border-radius:7px;font-size:.76em;font-family:'Sarabun';background:#fff;color:${bl.length?'#1559c7':'#b3261e'};cursor:pointer">${bl.length?'＋ ผูกเพิ่ม':'⚠ เลือกชื่อบิลมาผูก'}</button></span>`;
       body+=`<div class="mp_row" data-i="${i}" style="display:grid;grid-template-columns:${COLT};gap:8px;align-items:center;padding:6px 12px;border-bottom:1px dashed var(--line)">
         <b style="font-size:.86em">${escapeHtml(r.name)}</b>
         ${billCell}
@@ -3067,8 +3107,7 @@ function openMasterPage(){
       </div>`;
     });
     list.innerHTML=vis.length?`<div style="overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff"><div style="min-width:${MINW}px">${hd}${body}</div></div>
-      <datalist id="mpBillDL">${BILLNAMES.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(BILLSUP[n]?('ซัพ: '+[...BILLSUP[n]].join(' / ')):'')}</option>`).join('')}</datalist>
-      <p class="hint" style="margin:6px 0 0">แตะช่องแล้วพิมพ์ทับได้เลย บันทึกทันที · ชิป 🧾 = ชื่อบิลที่ผูกอยู่ (ชี้ดูอัตราแปลง · กด × ถอดถ้าผูกผิด · พิมพ์ในช่องประเดี๋ยวขึ้นลิสต์ให้เลือกผูกเพิ่ม) · นับเป็น/สั่งเป็น/ซัพ มีผลทุกสาขา · ช่องน้ำเงิน = อัตราใช้แยกสาขา · จอแคบเลื่อนตารางข้างได้</p>`
+      <p class="hint" style="margin:6px 0 0">ชิป 🧾 = ชื่อบิลที่ผูกอยู่ (ชี้ดูอัตราแปลง · กด × ถอดถ้าผูกผิด) · ปุ่ม ＋ เปิดลิสต์ติ๊กผูกได้ทีละหลายอัน — ชื่อบิลที่ถูกผูกแล้วหายจากลิสต์อัตโนมัติ · นับเป็น/สั่งเป็น/ซัพ มีผลทุกสาขา · ช่องน้ำเงิน = อัตราใช้แยกสาขา · จอแคบเลื่อนตารางข้างได้</p>`
       :'<div class="rempty">ไม่พบรายการตามตัวกรอง</div>';
     bind();
   }
@@ -3084,28 +3123,17 @@ function openMasterPage(){
         if(await mUpdAll(r.name,{pack_unit:v},i=>i.pack_unit=v)){r.pack_unit=v||'';toast('หน่วยสั่ง ✓ (ทุกสาขา)');}};
       el.querySelector('.m_sup').onchange=async e=>{const v=e.target.value||'';
         if(await mUpdAll(r.name,{sup:v||null},i=>i.sup=v)){r.sup=v;toast('ซัพ "'+r.name+'" ✓ (ทุกสาขา)');}};
-      // b59: ผูก/ถอดชื่อบิลจากตาราง (เผื่อผูกผิดแก้ได้ทันที) — อัปเดต products.bill_name ให้สอดคล้องเสมอ
-      const syncBillName=async v=>{await sb.from('products').update({bill_name:v}).eq('name',r.name).select('id');
-        r.bill=v;ROOT.branches.forEach(b2=>b2.data.categories.forEach(c2=>c2.items.forEach(i2=>{if((i2.name||'').trim()===r.name)i2.bill_name=v;})));save();};
+      // b61: ถอดการผูก (×) + เปิดตัวเลือกติ๊กหลายอัน (＋)
       el.querySelectorAll('[data-unlink]').forEach(xb=>xb.onclick=async()=>{
         const id=xb.dataset.unlink;
         const {data,error}=await sb.from('supplier_items').update({stock_name:null}).eq('id',id).select('id');
         if(error||!data||!data.length){toast('⛔ ถอดไม่เข้า DB'+(error?': '+error.message:' (รัน SQL b57 หรือยัง?)'));return;}
         SI.forEach(s=>{if(String(s.id)===String(id))s.stock_name=null;});rebuildBill();
         const left=(BILLBY[r.name]||[])[0];
-        await syncBillName(left?left.name:null);
-        toast('ถอดการผูกแล้ว ✓');render();});
+        await syncBillNameFor(r,left?left.name:null);
+        toast('ถอดการผูกแล้ว ✓ (กลับไปอยู่ในลิสต์ให้เลือกใหม่ได้)');render();});
       const bli=el.querySelector('.m_bl');
-      if(bli)bli.onchange=async()=>{
-        const v=bli.value.trim();if(!v)return;
-        const hits=BILLIX[v];
-        if(!hits){toast('ไม่พบชื่อบิล "'+v+'" — พิมพ์แล้วเลือกจากลิสต์ที่ขึ้นมา');bli.value='';return;}
-        let okn=0;
-        for(const s of hits){const {data,error}=await sb.from('supplier_items').update({stock_name:r.name}).eq('id',s.id).select('id');
-          if(!error&&data&&data.length){okn++;s.stock_name=r.name;}}
-        if(!okn){toast('⛔ ผูกไม่เข้า DB (รัน SQL b57 หรือยัง?)');return;}
-        rebuildBill();await syncBillName(v);
-        toast('ผูก "'+v+'" ✓'+(okn>1?' ('+okn+' รายการบิลชื่อเดียวกัน)':''));render();};
+      if(bli)bli.onclick=()=>{if(!SI_READY){toast('กำลังโหลดรายการบิล รอแป๊บนึง...');return;}openBillPicker(r);};
       el.querySelectorAll('[data-b]').forEach(sp=>{
         const it=r.br[sp.dataset.b];if(!it)return;
         const saveRate=(cls,field,label)=>{const inp=sp.querySelector(cls);if(!inp)return;
