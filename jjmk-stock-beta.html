@@ -624,7 +624,7 @@ main{padding-top:6px}
   <div class="ctx">
     <div class="hlang" id="langSwitchHeader"></div>
     <button class="chip" id="branchChip">🏪 <span id="branchName">สาขาหลัก</span> ▾</button>
-    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b63 — แผง "ยังไม่ผูกมีอะไรบ้าง" + ดึงชื่อบิลจากระบบ P&L มาผูกได้ (ชิป 💰)</span></div>
+    <div style="text-align:right;margin:-2px 2px 4px"><span class="verb">🧪 BETA b64 — แม่บทใช้บิลจากระบบ P&L อย่างเดียว (ตัดบิลสต๊อกเก่าออก)</span></div>
     <div class="chip user">👤 <span id="userName">—</span><button class="logout" id="logoutBtn" data-i18n="logout">ออก</button></div>
   </div>
 </header>
@@ -3001,7 +3001,6 @@ function openMasterPage(){
     <div class="sheet-head"><h3>🛠 แม่บทสินค้า</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
       <p class="hint" style="margin:0 0 8px"><b>หน่วยนับ · สั่งเป็น · ซัพ</b> ตั้งครั้งเดียวมีผลทุกสาขา · <b style="color:#1559c7">อัตราใช้/วัน</b> กรอกแยกรายสาขา · แก้แล้วบันทึกทันที ไม่ต้องกดเซฟ</p>
-      <button class="act wide mp_lc" style="background:#eef4ff;color:#1559c7;border:1.5px solid #1559c7;margin-bottom:8px">🔗 ผูกชื่อบิล & อัตราแปลง / นำเข้า-ส่งออก Excel</button>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
         <input class="mp_q" placeholder="🔍 ค้นหาชื่อสินค้า/ซัพ..." autocomplete="off" style="flex:1;min-width:170px;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'">
         <select class="mp_cat" style="padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun'"><option value="">📁 ทุกแผนก</option></select>
@@ -3025,7 +3024,7 @@ function openMasterPage(){
       const sn=(s.stock_name||'').trim();
       if(sn)(BILLBY[sn]=BILLBY[sn]||[]).push({id:s.id,name:n,unit:s.unit||'',f:(+s.conv_factor>0)?+s.conv_factor:0});});
     BILLNAMES.sort((a,b)=>a.localeCompare(b,'th'));}
-  loadSupItemsAll().then(d=>{SI=d;rebuildBill();SI_READY=true;render();}).catch(()=>{SI_READY=true;render();});
+  SI_READY=true; // b64: หน้านี้ใช้บิลจากระบบ P&L อย่างเดียว (ทีมลงบิลจริงที่ P&L) — แคตตาล็อกบิลสต๊อกเก่าไม่เอามาโชว์
   // b63: ดึงชื่อบิลจากระบบ P&L (แคตตาล็อกสินค้าประจำซัพ + ตารางผูก pnl_stock_map) มาผูกจากหน้านี้ได้ด้วย
   const pnorm=s=>String(s||'').replace(/\s+/g,'').toLowerCase();
   const brCode=b=>/รัชดา/.test(b.name||'')?'JJRD':(/ลาดพร้าว/.test(b.name||'')?'JJLP':null);
@@ -3120,10 +3119,7 @@ function openMasterPage(){
       <div class="sheet-body">
         <input class="bp_q" placeholder="🔍 ค้นหาชื่อบิล/ซัพ..." autocomplete="off" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;font-family:'Sarabun';margin-bottom:8px">
         <div class="bp_list" style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px">
-          <div style="font-weight:700;font-size:.8em;color:#1559c7;padding:6px 0 2px">🧾 บิลระบบสต๊อก (${free.length})</div>
-          ${siRows||'<div class="rempty" style="padding:6px">ผูกครบหมดแล้ว 🎉</div>'}
-          <div style="font-weight:700;font-size:.8em;color:#7c3aed;padding:10px 0 2px">💰 บิลระบบ P&L (${PN.ready?PNFREE.length:'—'})</div>
-          ${PN.ready?(pnRows||'<div class="rempty" style="padding:6px">ผูกครบหมดแล้ว 🎉</div>'):'<div class="rempty" style="padding:6px">อ่านบิล P&L ไม่ได้ — รัน SQL b63 ใน Supabase ก่อน</div>'}
+          ${PN.ready?(pnRows||'<div class="rempty" style="padding:6px">ชื่อบิล P&L ถูกผูกครบหมดแล้ว 🎉</div>'):'<div class="rempty" style="padding:6px">อ่านบิล P&L ไม่ได้ — รัน SQL b63 ใน Supabase ก่อน</div>'}
         </div>
         <p class="hint" style="margin:6px 0 0">โชว์เฉพาะชื่อบิลที่<b>ยังไม่ถูกผูกกับตัวไหน</b> — ผูกแล้วหายจากลิสต์อัตโนมัติ · ถ้าจะย้ายคู่ ให้กด × ที่ชิปของตัวเดิมก่อน</p>
         <button class="act wide bp_go" style="background:var(--red);color:#fff;border:none;margin-top:10px">✅ ผูกที่เลือก (0)</button>
@@ -3165,41 +3161,32 @@ function openMasterPage(){
     const fc=ov.querySelector('.mp_cat').value;
     const onlyMiss=ov.querySelector('.mp_miss').checked;
     const onlyNoLink=ov.querySelector('.mp_nolink').checked;
-    const noLink=r=>((BILLBY[r.name]||[]).length+(PNLBY[r.name]||[]).length)===0;
+    const noLink=r=>((PNLBY[r.name]||[]).length===0); // b64: นับเฉพาะบิล P&L
     const vis=rows.filter(r=>(!fc||r.cat===fc)&&(!onlyMiss||missing(r))&&(!onlyNoLink||noLink(r))&&(!q||(r.name+' '+r.sup).toLowerCase().includes(q)));
-    // b63: แผงสรุป "ยังไม่ผูก" — เห็นทั้งบิลสต๊อก/บิล P&L ที่ยังว่าง และผูกจากตรงนี้ได้เลย
-    const freeSi=SI.filter(s=>!(String(s.stock_name||'').trim())&&(s.name||'').trim());
-    const bySup={};freeSi.forEach(s=>{const sp=(s.sup_full||s.sup_sheet||'—').trim()||'—';(bySup[sp]=bySup[sp]||[]).push(s);});
+    // แผงสรุป "ยังไม่ผูก" — ชื่อบิล P&L ที่ยังว่าง + สินค้าที่ไม่มีบิลผูก กดผูกจากตรงนี้ได้เลย
     const orphanN=rows.filter(noLink).length;
     const unb=`<details class="mp_unb" ${MP_UNB?'open':''} style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:8px">
-      <summary style="cursor:pointer;font-size:.88em"><b style="color:#b3261e">⚠ ยังไม่ผูก:</b> บิลสต๊อก <b>${freeSi.length}</b> · บิล P&L <b>${PN.ready?PNFREE.length:'?'}</b> · สินค้าที่ไม่มีบิลผูกเลย <b>${orphanN}</b> — แตะดูรายชื่อ/กดผูกจากตรงนี้ได้เลย</summary>
+      <summary style="cursor:pointer;font-size:.88em"><b style="color:#b3261e">⚠ ยังไม่ผูก:</b> ชื่อบิล P&L <b>${PN.ready?PNFREE.length:'?'}</b> ตัว · สินค้าที่ไม่มีบิลผูกเลย <b>${orphanN}</b> ตัว — แตะดูรายชื่อ/กดผูกจากตรงนี้ได้เลย</summary>
       <input class="ub_q" placeholder="🔍 ค้นหาชื่อบิล/ซัพ..." autocomplete="off" style="width:100%;margin:8px 0 6px;padding:8px;border:1px solid var(--line);border-radius:9px;font-family:'Sarabun'">
       <div style="max-height:42vh;overflow:auto">
-        <div style="font-weight:700;font-size:.8em;color:#1559c7;padding:4px 0">🧾 บิลระบบสต๊อกที่ยังไม่ผูก (${freeSi.length})</div>
-        ${Object.keys(bySup).sort((a,b)=>a.localeCompare(b,'th')).map(sp=>
-          `<div style="font-size:.78em;color:var(--ink-soft);padding:5px 0 2px">🏭 ${escapeHtml(sp)}</div>`+
-          bySup[sp].map(s=>`<div class="ub_row" data-k="${escapeHtml(((s.name||'')+' '+sp).toLowerCase())}" style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line)">
-            <span style="flex:1;min-width:0;font-size:.84em">${escapeHtml(s.name)} <small style="color:var(--ink-soft)">${escapeHtml(s.unit||'')}</small></span>
-            <button data-lksi="${s.id}" data-nm="${escapeHtml(s.name)}" style="border:1px solid #1559c7;background:#eef4ff;color:#1559c7;border-radius:7px;padding:3px 10px;cursor:pointer;font-size:.78em;font-family:'Sarabun'">ผูก →</button></div>`).join('')).join('')||'<div class="rempty">ผูกครบแล้ว 🎉</div>'}
-        <div style="font-weight:700;font-size:.8em;color:#7c3aed;padding:8px 0 2px">💰 บิลระบบ P&L ที่ยังไม่ผูก (${PN.ready?PNFREE.length:'—'})</div>
         ${PN.ready?((PNFREE.map(x=>`<div class="ub_row" data-k="${escapeHtml((x.name+' '+[...x.sups].join(' ')).toLowerCase())}" style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line)">
             <span style="flex:1;min-width:0;font-size:.84em">${escapeHtml(x.name)} <small style="color:var(--ink-soft)">ซัพ: ${escapeHtml([...x.sups].join(' / ')||'—')}</small></span>
-            <button data-lkpn="${escapeHtml(x.name)}" style="border:1px solid #7c3aed;background:#f3e8ff;color:#7c3aed;border-radius:7px;padding:3px 10px;cursor:pointer;font-size:.78em;font-family:'Sarabun'">ผูก →</button></div>`).join(''))||'<div class="rempty">ผูกครบแล้ว 🎉</div>')
+            <button data-lkpn="${escapeHtml(x.name)}" style="border:1px solid #7c3aed;background:#f3e8ff;color:#7c3aed;border-radius:7px;padding:3px 10px;cursor:pointer;font-size:.78em;font-family:'Sarabun'">ผูก →</button></div>`).join(''))||'<div class="rempty">ชื่อบิล P&L ถูกผูกครบหมดแล้ว 🎉</div>')
           :'<div class="rempty">อ่านบิล P&L ไม่ได้ — รัน SQL b63 ใน Supabase ก่อน</div>'}
       </div></details>`;
     const hd=`<div style="display:grid;grid-template-columns:${COLT};gap:8px;align-items:end;padding:10px 12px;background:#f4ecdd;border-bottom:2px solid var(--gold-line);font-size:.76em;font-weight:700;color:#6E0E14">
-      <span>ชื่อนับ (สินค้า)</span><span>🧾 ชื่อบิลที่ผูก — กด × ถอด · พิมพ์ในช่องเพื่อผูกเพิ่ม</span><span>นับเป็น</span><span>สั่งเป็น · 1 หน่วยสั่ง = ?นับ</span><span>ซัพพลายเออร์</span>
+      <span>ชื่อนับ (สินค้า)</span><span>💰 ชื่อบิล P&L ที่ผูก — กด × ถอด · ปุ่ม ＋ เลือกผูกเพิ่ม</span><span>นับเป็น</span><span>สั่งเป็น · 1 หน่วยสั่ง = ?นับ</span><span>ซัพพลายเออร์</span>
       ${brs.map(b=>`<span style="color:#1559c7">🏪 ${bn(b)} ใช้/วัน<br><small style="font-weight:500;color:#51617f">จ-พฤ · ศ · ส-อา</small></span>`).join('')}</div>`;
     let lastCat=null,body='';
     vis.forEach(r=>{
       const i=rows.indexOf(r);
       if(r.cat!==lastCat){lastCat=r.cat;body+=`<div style="padding:8px 12px 4px;font-family:Prompt;font-weight:600;font-size:.9em;background:#faf5ea;border-bottom:1px solid var(--line)">${escapeHtml(r.ic)} ${escapeHtml(r.cat)}</div>`;}
-      const bl=BILLBY[r.name]||[],pl=PNLBY[r.name]||[],nlk=bl.length+pl.length;
-      const billCell=!SI_READY?'<small style="color:var(--ink-soft)">กำลังโหลดบิล...</small>'
-        :`<span style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${bl.map(x=>
-            `<span style="display:inline-flex;align-items:center;gap:3px;background:#eef4ff;color:#1559c7;border-radius:7px;padding:2px 5px;font-size:.74em" title="บิลระบบสต๊อก · 1 ${escapeHtml(x.unit||'หน่วยบิล')} = ${x.f>0?fmt(x.f):'?'} ${escapeHtml(r.unit||'นับ')} · กด × เพื่อถอด (เผื่อผูกผิด)">🧾${escapeHtml(x.name)}<b data-unlink="${x.id}" style="cursor:pointer;color:#b3261e;padding:0 2px">×</b></span>`).join('')}
-          ${pl.map(x=>`<span style="display:inline-flex;align-items:center;gap:3px;background:#f3e8ff;color:#7c3aed;border-radius:7px;padding:2px 5px;font-size:.74em" title="บิลระบบ P&L · ตัวคูณ ×${fmt(x.factor||1)} · กด × เพื่อถอด">💰${escapeHtml(x.pnl_item)}<b data-punlink="${escapeHtml(x.pnl_item)}" style="cursor:pointer;color:#b3261e;padding:0 2px">×</b></span>`).join('')}
-          <button class="m_bl" style="flex:none;padding:4px 8px;border:1px dashed ${nlk?'#c9d6ef':'#e0a9a4'};border-radius:7px;font-size:.76em;font-family:'Sarabun';background:#fff;color:${nlk?'#1559c7':'#b3261e'};cursor:pointer">${nlk?'＋ ผูกเพิ่ม':'⚠ เลือกชื่อบิลมาผูก'}</button></span>`;
+      const pl=PNLBY[r.name]||[],nlk=pl.length;
+      const billCell=(!PN.ready&&!PN.err)?'<small style="color:var(--ink-soft)">กำลังโหลดบิล P&L...</small>'
+        :PN.err?'<small style="color:#b3261e">อ่านบิล P&L ไม่ได้ — รัน SQL b63</small>'
+        :`<span style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${pl.map(x=>
+            `<span style="display:inline-flex;align-items:center;gap:3px;background:#f3e8ff;color:#7c3aed;border-radius:7px;padding:2px 5px;font-size:.74em" title="บิล P&L · ตัวคูณ ×${fmt(x.factor||1)} · กด × เพื่อถอด (เผื่อผูกผิด)">💰${escapeHtml(x.pnl_item)}<b data-punlink="${escapeHtml(x.pnl_item)}" style="cursor:pointer;color:#b3261e;padding:0 2px">×</b></span>`).join('')}
+          <button class="m_bl" style="flex:none;padding:4px 8px;border:1px dashed ${nlk?'#d9c9f2':'#e0a9a4'};border-radius:7px;font-size:.76em;font-family:'Sarabun';background:#fff;color:${nlk?'#7c3aed':'#b3261e'};cursor:pointer">${nlk?'＋ ผูกเพิ่ม':'⚠ เลือกชื่อบิลมาผูก'}</button></span>`;
       body+=`<div class="mp_row" data-i="${i}" style="display:grid;grid-template-columns:${COLT};gap:8px;align-items:center;padding:6px 12px;border-bottom:1px dashed var(--line)">
         <b style="font-size:.86em">${escapeHtml(r.name)}</b>
         ${billCell}
@@ -3218,7 +3205,7 @@ function openMasterPage(){
       </div>`;
     });
     list.innerHTML=unb+(vis.length?`<div style="overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff"><div style="min-width:${MINW}px">${hd}${body}</div></div>
-      <p class="hint" style="margin:6px 0 0">ชิป 🧾 = บิลระบบสต๊อก · ชิป 💰 = บิลระบบ P&L (ชี้ดูอัตราแปลง · กด × ถอดถ้าผูกผิด) · ปุ่ม ＋ เปิดลิสต์ติ๊กผูกได้ทีละหลายอัน — ชื่อที่ผูกแล้วหายจากลิสต์อัตโนมัติ · นับเป็น/สั่งเป็น/ซัพ มีผลทุกสาขา · ช่องน้ำเงิน = อัตราใช้แยกสาขา</p>`
+      <p class="hint" style="margin:6px 0 0">ชิป 💰 = ชื่อบิล P&L ที่ผูกอยู่ (กด × ถอดถ้าผูกผิด) · ปุ่ม ＋ เปิดลิสต์ติ๊กผูกได้ทีละหลายอัน — ชื่อที่ผูกแล้วหายจากลิสต์อัตโนมัติ · นับเป็น/สั่งเป็น/ซัพ มีผลทุกสาขา · ช่องน้ำเงิน = อัตราใช้แยกสาขา</p>`
       :'<div class="rempty">ไม่พบรายการตามตัวกรอง</div>');
     bind();
   }
@@ -3278,7 +3265,6 @@ function openMasterPage(){
   ov.querySelector('.mp_cat').onchange=render;
   ov.querySelector('.mp_miss').onchange=render;
   ov.querySelector('.mp_nolink').onchange=render;
-  ov.querySelector('.mp_lc').onclick=()=>openLinkCenter();
   render();
 }
 
