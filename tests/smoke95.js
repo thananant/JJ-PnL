@@ -206,8 +206,10 @@ setTimeout(async()=>{
   // 5) Safety: ช่องแผนกเป็น dropdown จากรายชื่อแผนกหน้าตั้งค่า
   w.setTab('set'); await sleep(30);
   const dsel=[...d.querySelectorAll('#list select')].find(s2=>s2.textContent.includes('– แผนก –'));
-  out.push('Safety: แผนกเป็น dropdown ดึงรายชื่อจากหน้าตั้งค่า (ไม่ใช่ช่องพิมพ์): '
-    +(!!dsel&&dsel.textContent.includes('ผัก')&&dsel.textContent.includes('เตรียมของ')&&!d.querySelector('#list input[list="deptList"]')));
+  out.push('Safety: แผนกเป็น dropdown ดึงรายชื่อจากหน้าตั้งค่า + หมวดเดิม และเลือกค่าที่ใช้อยู่ไว้ให้ (ไม่ว่าง): '
+    +(!!dsel&&dsel.textContent.includes('ผัก')&&dsel.textContent.includes('เตรียมของ')
+      &&[...d.querySelectorAll('#list select')].filter(x=>x.textContent.includes('– แผนก –')).every(x=>!!x.value)
+      &&!d.querySelector('#list input[list="deptList"]')));
   // 6) จำค่านับตอนรีเฟรช: นับแล้วไม่กดบันทึก → โหลดใหม่ ค่ายังอยู่
   w.setTab('count'); await sleep(30);
   out.push('setTab เก็บหน้าล่าสุดใน localStorage: '+(w.localStorage.getItem('jjsc_tab')==='count'));
