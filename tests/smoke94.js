@@ -37,6 +37,10 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
         {id:4,product_id:'p9',pnl_item:'สามชั้น',product_name:'หมูสามชั้นสไลด์'},
         {id:5,product_id:'p2b',pnl_item:'ผักบุ้งจีน',product_name:'ผักบุ้ง'}]);
       if(url.includes('stock_current'))return T([{product_id:'p1',qty:5,updated_at:'2026-09-16T20:00:00Z'}]);
+      if(url.includes('suppliers'))return T([
+        {name:'FarmFresh',order_mode:'fixed',schedule:{mon:'tue',thu:'fri'},lead_days:1},
+        {name:'Smilemeat',order_mode:'any',lead_days:1}]);
+      if(url.includes('stock_counts')&&method==='GET')return T([{product_id:'p1',qty:7,out_of_stock:false,created_at:'2026-09-17T10:00:00Z'}]);
       return T([]);
     };
     w.TextEncoder=TextEncoder; // jsdom ไม่มีใน window — sha256hex ต้องใช้
@@ -66,11 +70,15 @@ setTimeout(async()=>{
   out.push('พื้นที่แบ่งโซน หน้าร้าน/หลังร้าน: '+(pills().includes('หน้าร้าน')&&pills().includes('หลังร้าน')));
   out.push('โลโก้ขึ้นทั้ง sidebar และหัว: '+(String(d.getElementById('scLogo').src).startsWith('data:image/png')&&String(d.getElementById('hdLogo').src).startsWith('data:image/png')));
   out.push('แผนกแรกเลือกอยู่ เห็นหมูตัวเดียว: '+(list().includes('สามชั้น')&&!list().includes('ผักบุ้ง')));
-  out.push('การ์ด: ชื่อนับเป็นหลัก + บิลสีฟ้าตัวรอง + หน่วย กก. + ครั้งก่อน 5: '
-    +(list().includes('ยังไม่นับ')&&list().includes('หมูสามชั้น')&&list().includes('บิล: สามชั้น')&&list().includes('กก.')&&list().includes('ครั้งก่อน 5')));
+  out.push('การ์ด: prefill ยอดนับวันนี้ 7 (✓ นับแล้ว) + ชื่อนับหลัก + บิลสีฟ้า + ครั้งก่อน 5: '
+    +(list().includes('นับได้ 7')&&list().includes('✓ นับแล้ว')&&list().includes('หมูสามชั้น')&&list().includes('บิล: สามชั้น')&&list().includes('ครั้งก่อน 5')));
+  // เปลี่ยนวันเป็น 17 ก.ย. (พฤ) → แบนเนอร์รอบสั่ง: FarmFresh พฤ→ศ · Smilemeat สั่งได้ทุกวัน
+  d.getElementById('cd').dispatchEvent(new w.Event('change')); await sleep(250);
+  out.push('แบนเนอร์ 🚚 รอบสั่งวันนี้ (พฤ): FarmFresh → ส่งศ. + Smilemeat สั่งได้ทุกวัน: '
+    +(list().includes('🚚')&&list().includes('FarmFresh')&&list().includes('ส่งศ.')&&list().includes('Smilemeat')&&list().includes('ส่งพรุ่งนี้')));
   // 2) stepper: + สองครั้ง = 2 · pill ✓
   w.bump('p1',1); w.bump('p1',1); await sleep(30);
-  out.push('กด + สองครั้ง → นับได้ 2 + ✓ นับแล้ว: '+(list().includes('นับได้ 2')&&list().includes('✓ นับแล้ว')));
+  out.push('กด + สองครั้ง 7→9: '+(list().includes('นับได้ 9')));
   out.push('pill ครัวครบ → มี ✓: '+!!d.querySelector('#pills .pill .ok'));
   // 3) ค้นหาข้ามแผนก
   d.getElementById('q').value='ผักบุ้ง'; d.getElementById('q').dispatchEvent(new w.Event('input')); await sleep(30);
@@ -84,8 +92,8 @@ setTimeout(async()=>{
   await w.saveAll(); await sleep(60);
   const hist=posts.find(p=>p.url.includes('stock_counts'));
   const h1=hist&&hist.rows.find(r=>r.product_id==='p1'),h2=hist&&hist.rows.find(r=>r.product_id==='p2');
-  out.push('บันทึก 2 แถว: หมู qty 2 cat=ครัว · ผักบุ้ง out_of_stock cat=บาร์น้ำ: '
-    +(!!h1&&h1.qty===2&&h1.cat_label==='ครัว'&&!!h2&&h2.out_of_stock===true&&h2.cat_label==='บาร์น้ำ'&&h1.count_date==='2026-09-17'&&h1.counter==='admin'));
+  out.push('บันทึก 2 แถว (เฉพาะที่เปลี่ยนจากที่เซฟแล้ว): หมู qty 9 cat=ครัว · ผักบุ้ง out_of_stock cat=บาร์น้ำ: '
+    +(!!h1&&h1.qty===9&&h1.cat_label==='ครัว'&&!!h2&&h2.out_of_stock===true&&h2.cat_label==='บาร์น้ำ'&&h1.count_date==='2026-09-17'&&h1.counter==='admin'));
   out.push('stock_current upsert: '+!!posts.find(p=>p.url.includes('on_conflict=branch_id,product_id')));
   // 6) หน้าผูกชื่อ: แยกกลุ่ม + สรุป
   w.setTab('link'); await sleep(30);
@@ -123,6 +131,11 @@ setTimeout(async()=>{
   out.push('bizToday ตี 2 → เมื่อวาน · dayGrp พฤ/ศ/ส = 0/1/2: '
     +(w.bizToday(new Date(2026,8,17,2,0))==='2026-09-16'&&w.dayGrp('2026-09-17')===0&&w.dayGrp('2026-09-18')===1&&w.dayGrp('2026-09-19')===2));
   // 9) หน้า Safety (แอดมิน) มีการ์ดผู้ใช้ · แก้สิทธิ์ boy → PATCH sc_users
+  out.push('การ์ดรอบสั่งซัพขึ้นในหน้า Safety: '+(list().includes('รอบสั่ง–ส่งของซัพ')&&list().includes('FarmFresh')));
+  const si=w.eval("S.supList.indexOf('Smilemeat')");
+  w.supSetLead(si,2); await w.supSave(si); await sleep(40);
+  const ps=patches.find(p=>p.url.includes('suppliers?name=eq.Smilemeat'));
+  out.push('ตั้ง Smilemeat ส่งหลังสั่ง 2 วัน → PATCH suppliers: '+(!!ps&&ps.body.lead_days===2&&ps.body.order_mode==='any'));
   out.push('การ์ดผู้ใช้: เห็น admin+boy: '+(list().includes('ผู้ใช้ระบบเช็คสต๊อก')&&list().includes('boy')));
   await w.userSave(2); await sleep(30);
   const pu=patches.find(p=>p.url.includes('sc_users?id=eq.2'));
