@@ -51,8 +51,7 @@ setTimeout(async()=>{
   out.push('กล่องวันที่/สาขาอยู่ใน sidebar ใต้โลโก้: '+(d.querySelector('#scSlot #ctl')!==null));
   d.getElementById('lgU').value='admin'; d.getElementById('lgP').value='jjmk1234';
   await w.doLogin(); await sleep(300);
-  out.push('login แอดมินผ่าน + ชื่อผู้นับเติมอัตโนมัติ: '+(!d.getElementById('loginOv').classList.contains('on')&&d.getElementById('who').value==='ผู้ดูแลระบบ'));
-  d.getElementById('who').value='';
+  out.push('login แอดมินผ่าน + ผู้นับล็อกเป็น username: '+(!d.getElementById('loginOv').classList.contains('on')&&d.getElementById('who').value==='admin'&&d.getElementById('who').readOnly===true));
   d.getElementById('cd').value='2026-09-17';
   const list=()=>d.getElementById('list').textContent;
   const pills=()=>d.getElementById('pills').textContent;
@@ -75,12 +74,12 @@ setTimeout(async()=>{
   w.pickDept('บาร์น้ำ'); await sleep(30);
   out.push('สลับแผนกบาร์น้ำ เห็นผักบุ้ง: '+(list().includes('ผักบุ้ง')&&!list().includes('สามชั้น')));
   // 5) กดหมด + บันทึก → stock_counts ใช้แผนกเป็น cat_label
-  w.setOut('p2'); d.getElementById('who').value='นัน';
+  w.setOut('p2');
   await w.saveAll(); await sleep(60);
   const hist=posts.find(p=>p.url.includes('stock_counts'));
   const h1=hist&&hist.rows.find(r=>r.product_id==='p1'),h2=hist&&hist.rows.find(r=>r.product_id==='p2');
   out.push('บันทึก 2 แถว: หมู qty 2 cat=ครัว · ผักบุ้ง out_of_stock cat=บาร์น้ำ: '
-    +(!!h1&&h1.qty===2&&h1.cat_label==='ครัว'&&!!h2&&h2.out_of_stock===true&&h2.cat_label==='บาร์น้ำ'&&h1.count_date==='2026-09-17'));
+    +(!!h1&&h1.qty===2&&h1.cat_label==='ครัว'&&!!h2&&h2.out_of_stock===true&&h2.cat_label==='บาร์น้ำ'&&h1.count_date==='2026-09-17'&&h1.counter==='admin'));
   out.push('stock_current upsert: '+!!posts.find(p=>p.url.includes('on_conflict=branch_id,product_id')));
   // 6) หน้าผูกชื่อ: แยกกลุ่ม + สรุป
   w.setTab('link'); await sleep(30);
