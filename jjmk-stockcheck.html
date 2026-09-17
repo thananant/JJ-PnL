@@ -439,6 +439,9 @@ function addDays(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n)
 function nextDow(ds,key){const want=DOW_EN.indexOf(key); if(want<0)return '';
   for(let i=1;i<=7;i++){const d2=addDays(ds,i); if(new Date(d2+'T12:00:00').getDay()===want)return d2;} return '';}
 const dowTH=ds=>DOW_SH[DOW_EN[new Date(ds+'T12:00:00').getDay()]]||'';
+const MON_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function thDate(ds){const d=new Date(ds+'T12:00:00'); if(isNaN(+d))return ds||'-';
+  return d.getDate()+' '+MON_TH[d.getMonth()]+' '+(d.getFullYear()+543)+' ('+dowTH(ds)+')';}
 function rateOn(it,ds){const g=dayGrp(ds);return num(g===1?it.rate_fri:g===2?it.rate_we:it.rate_wk);}
 function deliveryDate(sup,cd){ // ของจะมาส่งวันไหน ถ้าสั่งวันนี้
   const x=supSched(sup);
@@ -474,12 +477,12 @@ function orderPlan(){ // คิดใบสั่งของทุกซัพ�
       nNoRate:rows.filter(r=>!r.need).length};
   }).sort((a,b2)=>(b2.nOrder-a.nOrder)||a.sup.localeCompare(b2.sup,'th'));
 }
-function orderText(sp){ // รูปแบบเดียวกับใบสั่งของแอพนับเดิม (ซัพคุ้นตา)
+function orderText(sp){ // ฟอร์แมตใบสั่งที่ส่งเข้าไลน์ซัพ
   const g=(orderPlan()||[]).find(x=>x.sup===sp); if(!g)return '';
   const cd=($('#cd')&&$('#cd').value)||bizToday();
   const list=g.rows.filter(r=>r.order>0); if(!list.length)return '';
-  const L=['🛒 ออเดอร์ จริงใจหมูกระทะ','📅 '+cd+' ('+dowTH(cd)+')','🏷️ '+sp,
-    '🚚 ส่งวัน '+(g.dl.d?(g.dl.d+' ('+dowTH(g.dl.d)+')'):'-'),'','🏪 '+BR_NAME[S.br]];
+  const L=['จริงใจหมูกระทะ','สาขา'+BR_NAME[S.br],sp,
+    'สั่งวันที่ '+thDate(cd),'ส่งวันที่ '+(g.dl.d?thDate(g.dl.d):'-'),''];
   list.forEach(r=>{
     L.push('• '+billName(r.it)+' — '+fq(r.packs!=null?r.packs:r.order)+' '+(r.packs!=null?r.bu:(r.it.unit||''))
       +(r.packs!=null?(' (= '+fq(r.order)+' '+(r.it.unit||'')+')'):''));
@@ -563,7 +566,7 @@ function sendAllOpen(){
         +'<select class="zsel" style="margin-left:0;width:100%" id="testGrp" onchange="localStorage.setItem(\'jjsc_testgrp\',this.value)">'
         +'<option value="">— เลือกกลุ่มทดสอบ —</option>'
         +gList.map(g=>'<option value="'+esc(g.group_id)+'"'+(String(testGid)===String(g.group_id)?' selected':'')+'>'+esc(lgLabel(g))+'</option>').join('')+'</select>'
-        +'<div class="note" style="margin:8px 0 0">โหมดทดสอบ: <b>ไม่บันทึกยอดสั่ง</b> ลงระบบ (ซ้อมส่งอย่างเดียว) และซัพจริงจะไม่ได้รับข้อความ</div></div>'
+        +'<div class="note" style="margin:8px 0 0">โหมดทดสอบ: ส่งข้อความชุดเดียวกับของจริงเข้ากลุ่มนี้กลุ่มเดียว · <b>ไม่บันทึกยอดสั่ง</b> ลงระบบ · ซัพจริงไม่ได้รับอะไร</div></div>'
       :'<div class="note" style="margin:0 0 10px;border-color:#E4A6A6;background:#FBEAEA;color:#8A2A2A">ส่งเข้ากลุ่มจริงของซัพ = ซัพเห็นทันที และระบบจะบันทึกยอดสั่งให้ด้วย</div>')
     +rows
     +'<div class="ovlfoot"><button class="cx" onclick="modalClose()">ยกเลิก</button>'
@@ -582,7 +585,7 @@ async function sendAllGo(){
   let ok=0,fail=[],skip=plan.length-list.length;
   for(const g of list){
     const to=test?tg:lineOf(g.sup).group_id;
-    const txt=(test?'🧪 [ทดสอบระบบสั่งของ — ไม่ใช่ออเดอร์จริง]\n':'')+orderText(g.sup);
+    const txt=orderText(g.sup); // ส่งข้อความชุดเดียวกับของจริง (กลุ่มทดสอบไม่ต้องติดป้าย)
     try{
       const r=await fetch(lineEndpoint(),{method:'POST',
         headers:{'Content-Type':'application/json',apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY},
@@ -877,7 +880,13 @@ async function userAdd(){
   }catch(e){toast('เพิ่มไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
 /* แผนกทั้งหมด (ตั้งได้ที่หน้า ⚙️ ตั้งค่า) — ใช้เป็น dropdown ในหน้า Safety */
-function deptNames(){return [...new Set([].concat((S.depts||[]).map(d2=>String(d2.name||'').trim()),S.all.map(i=>i.dept)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));}
+function deptNames(){ // แผนกทั้งหมดที่เลือกได้ = ตารางแผนก + dept ที่ตั้งไว้ + หมวดเดิมของแอพนับ
+  return [...new Set([].concat(
+    (S.depts||[]).map(d2=>String(d2.name||'').trim()),
+    (S.all||[]).map(i=>String(i.dept||'').trim()),
+    (S.all||[]).map(i=>String(i.cat_label||'').trim())
+  ).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+}
 function deptOpts(cur){const l=deptNames();if(cur&&l.indexOf(cur)<0)l.unshift(cur);
   return l.map(d2=>'<option value="'+esc(d2)+'"'+(d2===cur?' selected':'')+'>'+esc(d2)+'</option>').join('');}
 /* ---- 🚚 หน้ารอบสั่งซัพ (แยกจาก Safety) ---- */
@@ -1524,7 +1533,7 @@ function renderSet(){
         const ri=(f,i)=>'<span class="lbl" data-l="'+['จ–พฤ/วัน','ศ/วัน','ส–อา/วัน','safety','max'][i]+'"><input class="ri'+(it.dirty[f]!==undefined?' dirty':'')+'" type="text" inputmode="decimal" value="'+fq(it[f])+'" style="'+(i<3?hl(i):'')+'" onchange="setF(\''+it.id+'\',\''+f+'\',this.value)"></span>';
         return '<div class="row2">'+imgCell(it)
           +'<div class="nm"><div class="t">'+esc(it.name)+'</div><div class="s">'+(cn?'<span class="cn">🧾 บิล: '+esc(billName(it))+'</span> · ':'')+esc(it.sup||'')+'</div></div>'
-          +'<span class="lbl" data-l="แผนก"><select class="zsel'+(it.dirty.dept!==undefined?' dirty':'')+'" style="margin-left:0;width:100%;max-width:150px" '+(S.deptOk?'':'disabled')+' onchange="setF(\''+it.id+'\',\'dept\',this.value)"><option value="">– แผนก –</option>'+deptOpts(it.dirty.dept!==undefined?(it.dirty.dept||''):(it.dept||''))+'</select></span>'
+          +'<span class="lbl" data-l="แผนก"><select class="zsel'+(it.dirty.dept!==undefined?' dirty':'')+'" style="margin-left:0;width:100%;max-width:150px" '+(S.deptOk?'':'disabled')+' onchange="setF(\''+it.id+'\',\'dept\',this.value)"><option value="">– แผนก –</option>'+deptOpts(it.dirty.dept!==undefined?(it.dirty.dept||''):deptOf(it))+'</select></span>'
           +ri('rate_wk',0)+ri('rate_fri',1)+ri('rate_we',2)+'</div>';
       }).join('');
       const z0=(ds[k].find(i=>i.zone)||{}).zone||'';
