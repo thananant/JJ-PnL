@@ -199,13 +199,15 @@ const APPS={
 const APPKEYS=Object.keys(APPS);
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
 
-const S={user:null,tab:'users',users:[],sc:null,scErr:null,editId:null,draft:{}};
+const S={user:null,tab:'users',users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{}};
 
 /* ---------- utils ---------- */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2800);}
 function openModal(h){$('#modal').innerHTML=h;$('#ov').classList.add('on');}
+/* ใส่ค่าเป็น argument ใน onclick="..." ให้ปลอดภัย — double quote ต้องเป็น &quot; ไม่งั้น attribute ขาดกลางคัน */
+function jsArg(v){return esc(JSON.stringify(String(v==null?'':v)));}
 function closeModal(){$('#ov').classList.remove('on');}
 
 /* sha256 (ให้ตรงกับ pwHash ของ P&L: sha256hex(u+'|'+p+'|JJPNL')) */
@@ -301,7 +303,7 @@ async function render(){
 
 async function loadUsers(force){
   if(S.users.length&&!force)return S.users;
-  S.users=await sel('pnl_users','select=*&order=role.desc,username');
+  S.users=await sel('pnl_users','select=*&order=role.desc,username&limit=1000');
   return S.users;
 }
 
@@ -463,8 +465,12 @@ async function saveUser(id){
 async function viewSurvey(){
   const us=await loadUsers();
   if(S.sc===null&&!S.scErr){
-    try{S.sc=await sel('sc_users','select=id,username,display_name,role,active,branches,depts&order=id');}
+    try{S.sc=await sel('sc_users','select=id,username,display_name,role,active,branches,depts&order=id&limit=1000');}
     catch(e){S.scErr=e.message;S.sc=[];}
+  }
+  if(S.au===null&&!S.auErr){
+    try{S.au=await sel('app_users','select=*&order=id&limit=1000');}
+    catch(e){S.auErr=e.message;S.au=[];}
   }
   const known=new Set(us.map(u=>u.username.toLowerCase()));
   const pnlRows=us.map(u=>'<tr><td><b>'+esc(u.display_name||u.username)+'</b><div style="font-size:11.5px;color:var(--mut)">'+esc(u.username)+'</div></td>'+
@@ -487,7 +493,28 @@ async function viewSurvey(){
         '<td style="font-size:12px;color:var(--ink2)">'+esc(((u.branches||[]).join(', ')||'ทุกสาขา'))+
           ((u.depts||[]).length?'<div style="color:var(--mut)">'+esc((u.depts||[]).join(', '))+'</div>':'')+'</td>'+
         '<td>'+(dup?'<span class="chip ok">มีบัญชีกลางแล้ว</span>':'<span class="chip off">ยังไม่มี</span>')+'</td>'+
-        '<td style="text-align:right">'+(dup?'':'<button class="btn sm" onclick="importSc('+JSON.stringify(esc(u.username))+','+JSON.stringify(esc(u.display_name||''))+',\''+(u.role==='admin'?'admin':'staff')+'\')">⬇ นำเข้า</button>')+'</td></tr>';
+        '<td style="text-align:right">'+(dup?'':'<button class="btn sm" onclick="importSc('+jsArg(u.username)+','+jsArg(u.display_name||'')+',\''+(u.role==='admin'?'admin':'staff')+'\')">⬇ นำเข้า</button>')+'</td></tr>';
+      }).join('')+'</table></div>';
+  }
+
+  // ---- ตารางบัญชีครัวกลาง/ซ่อมบำรุง (app_users — Supabase Auth) ----
+  let auBlock;
+  if(S.auErr){
+    auBlock='<div class="empty">อ่านตาราง <b>app_users</b> ไม่ได้ — รัน <b>jjmk-access.sql</b> เวอร์ชันล่าสุดใน Supabase เพื่อเปิดสิทธิ์อ่าน<br><span style="font-size:12px">'+esc(S.auErr)+'</span></div>';
+  }else if(!S.au.length){
+    auBlock='<div class="empty">ไม่พบบัญชีในระบบครัวกลาง/ซ่อมบำรุง</div>';
+  }else{
+    auBlock='<div class="twrap"><table><tr><th>ชื่อ</th><th>บทบาท</th><th>สาขา</th><th>สถานะ</th><th>บัญชีกลาง</th><th></th></tr>'+
+      S.au.map(u=>{
+        const un=String(u.username||u.name||'').trim();
+        const dup=known.has(un.toLowerCase());
+        const act=String(u.status||'')==='active';
+        return '<tr><td><b>'+esc(u.name||un||'(ไม่มีชื่อ)')+'</b>'+(un?'<div style="font-size:11.5px;color:var(--mut)">'+esc(un)+'</div>':'')+'</td>'+
+        '<td>'+(String(u.role||'')==='admin'?'<span class="chip adm">ผู้ดูแล</span>':'<span class="chip">'+esc(u.role||'พนักงาน')+'</span>')+'</td>'+
+        '<td style="font-size:12px;color:var(--ink2)">'+esc(u.branch||'—')+'</td>'+
+        '<td>'+(act?'<span class="chip ok">อนุมัติแล้ว</span>':'<span class="chip off">'+esc(u.status||'รออนุมัติ')+'</span>')+'</td>'+
+        '<td>'+(dup?'<span class="chip ok">มีแล้ว</span>':'<span class="chip off">ยังไม่มี</span>')+'</td>'+
+        '<td style="text-align:right">'+(dup||!un?'':'<button class="btn sm" onclick="importSc('+jsArg(un)+','+jsArg(u.name||'')+',\''+(String(u.role||'')==='admin'?'admin':'staff')+'\')">⬇ นำเข้า</button>')+'</td></tr>';
       }).join('')+'</table></div>';
   }
 
@@ -497,17 +524,24 @@ async function viewSurvey(){
       '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">📒</span><span class="nm">บัญชีกลาง (pnl_users)</span><span class="cnt">'+us.length+' คน</span></div>'+
       '<div class="appbody" style="display:block"><p class="sub" style="margin:8px 0">ใช้ร่วมกันแล้วโดย: P&amp;L · Owner · Payroll · Social · Calendar · Invoice</p>'+
       '<div class="twrap"><table><tr><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>แอพ</th></tr>'+pnlRows+'</table></div></div></div>'+
-      '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">🔐</span><span class="nm">ระบบที่ยังแยกบัญชี</span><span class="cnt">3 ระบบ</span></div>'+
+      '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">🔐</span><span class="nm">ระบบที่ยังแยกบัญชี</span><span class="cnt">'+(us.length+(S.sc||[]).length+(S.au||[]).length)+' บัญชีรวมทุกที่</span></div>'+
       '<div class="appbody" style="display:block">'+
-        '<p class="sub" style="margin:8px 0 10px">ระบบเหล่านี้ยังใช้บัญชีคนละชุดกับบัญชีกลาง:</p>'+
-        '<div style="font-size:13px;line-height:2.1">'+
-        '<div>📦 <b>นับสต๊อก</b> — ตาราง <code>sc_users</code> ('+(S.scErr?'อ่านไม่ได้':S.sc.length+' คน')+')</div>'+
-        '<div>🍳 <b>ครัวกลาง</b> + 🛠️ <b>ซ่อมบำรุง</b> — ใช้ Supabase Auth (<code>app_users</code>) ต้องย้ายด้วยมือ</div>'+
-        '<div>📊 <b>KPI</b> — ไม่มีล็อกอิน (แท็บเล็ตหน้าร้าน)</div></div></div></div>'+
+        '<p class="sub" style="margin:8px 0 10px">ทั้งร้านมีที่เก็บบัญชี 3 ที่ — ตัวเลขคือจำนวนที่ดึงมาได้จริงตอนนี้:</p>'+
+        '<div style="font-size:13px;line-height:2.2">'+
+        '<div>📒 <b>บัญชีกลาง</b> <code>pnl_users</code> — <b class="gold-txt">'+us.length+' คน</b> <span style="color:var(--mut)">(P&amp;L · Owner · Payroll · Social · Calendar · Invoice)</span></div>'+
+        '<div>📦 <b>นับสต๊อก</b> <code>sc_users</code> — '+(S.scErr?'<span class="chip off">อ่านไม่ได้</span>':'<b class="gold-txt">'+S.sc.length+' คน</b>')+'</div>'+
+        '<div>🍳 <b>ครัวกลาง</b> + 🛠️ <b>ซ่อมบำรุง</b> <code>app_users</code> — '+(S.auErr?'<span class="chip off">อ่านไม่ได้</span>':'<b class="gold-txt">'+S.au.length+' คน</b>')+'</div>'+
+        '<div>📊 <b>KPI</b> — ไม่มีล็อกอิน (แท็บเล็ตหน้าร้าน)</div></div>'+
+        (S.scErr||S.auErr?'<p class="sub" style="margin:10px 0 0;color:#F2A0A5">อ่านบางตารางไม่ได้ — ยังไม่ได้รัน <b>jjmk-access.sql</b> เวอร์ชันล่าสุดใน Supabase (เปิดสิทธิ์อ่านให้หน้านี้)</p>':'')+
+      '</div></div>'+
     '</div></div>'+
     '<div class="card"><h3>📦 บัญชีระบบนับสต๊อก (sc_users)</h3>'+
     '<p class="sub">กด <b>⬇ นำเข้า</b> เพื่อสร้างบัญชีกลางชื่อเดียวกัน (ต้องตั้งรหัสผ่านใหม่) แล้วค่อยติ๊กสิทธิ์ในแท็บ "ผู้ใช้ &amp; สิทธิ์"</p>'+
-    scBlock+'</div>';
+    scBlock+'</div>'+
+    '<div class="card"><h3>🍳🛠️ บัญชีครัวกลาง + ซ่อมบำรุง (app_users)</h3>'+
+    '<p class="sub">สองระบบนี้ล็อกอินผ่าน Supabase Auth (อีเมล <code>ชื่อผู้ใช้@jjmk.local</code>) — คนละชุดกับบัญชีกลาง<br>'+
+    'กด <b>⬇ นำเข้า</b> เพื่อสร้างบัญชีกลางชื่อเดียวกัน · บัญชี Supabase Auth เดิมยังใช้เข้า 2 ระบบนั้นได้ตามปกติจนกว่าจะย้ายระบบเสร็จ</p>'+
+    auBlock+'</div>';
 }
 function importSc(username,display,role){
   openModal('<h3>⬇ นำเข้าบัญชี "'+esc(username)+'" เป็นบัญชีกลาง</h3>'+
