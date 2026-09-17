@@ -116,7 +116,7 @@ setTimeout(async()=>{
   const pm=patches.find(p=>p.url.includes('pnl_stock_map?product_name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.product_name==='ผักบุ้งไทย');
   out.push('แก้ชื่อนับ inline → PATCH products (2 สาขา) + pnl_stock_map: '+(!!pn&&!!pm&&list().includes('ผักบุ้งไทย')));
   out.push('แถบข้าง 7 เมนูหลัก (แดชบอร์ด/นับ/สั่งของ/ผูกชื่อ/Safety/รอบสั่งซัพ/รายการสินค้า) + 3 เมนูย่อยตั้งค่า: '
-    +(d.querySelectorAll('#sideNav [data-t]').length===11&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')
+    +(d.querySelectorAll('#sideNav [data-t]').length===12&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')
       &&!!d.querySelector('#sideNav [data-t="order"]')));
   out.push('แถบแผนกซ่อนในหน้าผูกชื่อ: '+(d.getElementById('deptbar').style.display==='none'));
   out.push('ปุ่มบันทึกซ่อน: '+(d.getElementById('save').style.display==='none'));

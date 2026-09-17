@@ -78,7 +78,7 @@ setTimeout(async()=>{
       &&d.querySelector('#sideNav [data-t="cfgn"]').textContent.includes('หน่วยซื้อ')));
   out.push('หน้าสิทธิ์ผู้ใช้มีเฉพาะหัวข้อตัวเอง (ไม่ปนแผนก/หน่วย): '
     +(cards().includes('สิทธิ์การใช้งานพนักงาน')&&!cards().includes('แผนก + ของที่ต้องนับ')&&!cards().includes('หน่วยซื้อ ↔ หน่วยนับ')));
-  out.push('มีแถบเลือกหัวข้อในหน้า (สำหรับจอเล็ก) 3 ปุ่ม: '+(d.querySelectorAll('#list .subtabs .stb').length===3));
+  out.push('มีแถบเลือกหัวข้อในหน้า (สำหรับจอเล็ก) 4 ปุ่ม: '+(d.querySelectorAll('#list .subtabs .stb').length===4));
   out.push('เมนูข้าง: มีปุ่ม ⚙️ ตั้งค่า + 🚚 รอบสั่งซัพ: '
     +(!!d.querySelector('#sideNav [data-t="cfg"]')&&!!d.querySelector('#sideNav [data-t="sched"]')));
   // 2) สิทธิ์ผู้ใช้: เลือกระดับ ผู้จัดการ/พนักงานทั่วไป ได้ + เซฟ role
