@@ -104,7 +104,18 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 #sideNav #ctl input[type=text]::placeholder{color:rgba(255,255,255,.55)}
 header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px;border:0}
 #sideNav #ctl .seg button{flex:1}
-#uchip{margin-top:auto;display:none;color:#F2DCDC;font-size:12.5px;padding:10px 4px 2px;border-top:1px solid rgba(255,255,255,.15)}
+#cfgBox{margin-top:auto}
+#cfgSub{display:none;margin:2px 0 4px}
+#cfgSub.on{display:block}
+.subtabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.stb{padding:9px 14px;border-radius:99px;border:1.8px solid var(--wine);background:#fff;color:var(--wine);font-family:'Prompt';font-weight:700;font-size:13.5px;cursor:pointer}
+.stb.on{background:var(--wine);color:#fff}
+@media(min-width:821px){
+  .subtabs{display:none}
+  #sideNav .ni.sub{font-size:13px;font-weight:600;padding:8px 12px 8px 30px;opacity:.92}
+  #sideNav .ni.sub.on{background:rgba(255,255,255,.16);color:#fff;box-shadow:none}
+}
+#uchip{display:none;color:#F2DCDC;font-size:12.5px;padding:10px 4px 2px;border-top:1px solid rgba(255,255,255,.15)}
 #uchip b{color:#fff}
 #uchip a{color:#F1C40F;cursor:pointer;font-weight:700;margin-left:8px}
 #loginOv{position:fixed;inset:0;background:linear-gradient(180deg,#7E1013,#4E090B);z-index:100;display:none;align-items:center;justify-content:center}
@@ -157,7 +168,14 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
   <button class="ni" data-t="link">🔗 ผูกชื่อ</button>
   <button class="ni" data-t="set">🛟 Safety</button>
   <button class="ni" data-t="sched">🚚 รอบสั่งซัพ</button>
-  <button class="ni" data-t="cfg" style="margin-top:auto">⚙️ ตั้งค่า</button>
+  <div id="cfgBox">
+    <button class="ni" data-t="cfg">⚙️ ตั้งค่า</button>
+    <div id="cfgSub">
+      <button class="ni sub" data-t="cfgu">👤 สิทธิ์การใช้งานพนักงาน</button>
+      <button class="ni sub" data-t="cfgd">🗂 แผนก</button>
+      <button class="ni sub" data-t="cfgn">📐 หน่วยซื้อ–หน่วยนับ</button>
+    </div>
+  </div>
   <div id="uchip"></div>
 </nav>
 <header>
@@ -203,7 +221,7 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
 <div id="ptr">↓ ลากลงเพื่อรีเฟรช</div>
 <script>
 /* ============ JJ เช็คสต๊อก v3 ============
-   หน้า: 📋 นับสต๊อก · 🔗 ผูกชื่อ · 🛟 Safety (อัตราใช้/วัน) · 🚚 รอบสั่งซัพ · ⚙️ ตั้งค่า (สิทธิ์ผู้ใช้/แผนก/หน่วยซื้อ↔หน่วยนับ)
+   หน้า: 📋 นับสต๊อก · 🔗 ผูกชื่อ · 🛟 Safety (อัตราใช้/วัน) · 🚚 รอบสั่งซัพ · ⚙️ ตั้งค่า แยกหน้าละหัวข้อ (👤 สิทธิ์ผู้ใช้ · 🗂 แผนก · 📐 หน่วยซื้อ↔หน่วยนับ)
    - นับเฉพาะรายการที่ผูกชื่อบิล P&L แล้ว · ชื่อจริง = ชื่อบิล · จัดกลุ่มตามแผนก (products.dept)
    - บันทึกรูปแบบเดียวกับแอพนับ (stock_counts + stock_current) · รูปใช้ bucket product-images ร่วมกัน */
 /* ---------- ล็อกอิน + สิทธิ์ (sc_users): เห็นบางสาขา · นับได้บางแผนก ---------- */
@@ -274,13 +292,16 @@ async function loadAll(){
     catch(e2){ S.deptOk=false; prods=await selAll(base+'&deleted_at=is.null&branch_id=eq.'+bid+'&order=sort'); }
   }
   const cd=($('#cd')&&$('#cd').value)||bizToday();
-  const [map,cur,sups,todayCnt]=await Promise.all([
+  const [map,cur,sups,todayCnt,deptRows]=await Promise.all([
     selAll('pnl_stock_names?select=*&order=id').catch(()=>selAll('pnl_stock_map?select=*&order=id')).catch(()=>[]),
     selAll('stock_current?select=product_id,qty,updated_at&branch_id=eq.'+bid).catch(()=>[]),
     selAll('suppliers?select=name,order_mode,schedule,lead_days&order=name').catch(()=>[]),
     // ยอดที่นับไปแล้วของ "วันขายนี้" — ตี 6 ขึ้นวันใหม่ = ว่างเอง (รีเซ็ตอัตโนมัติ)
-    selAll('stock_counts?select=product_id,qty,out_of_stock,created_at&branch_id=eq.'+bid+'&count_date=eq.'+encodeURIComponent(cd)+'&order=created_at.desc').catch(()=>[])
+    selAll('stock_counts?select=product_id,qty,out_of_stock,created_at&branch_id=eq.'+bid+'&count_date=eq.'+encodeURIComponent(cd)+'&order=created_at.desc').catch(()=>[]),
+    // รายชื่อแผนกของ "สาขานี้" (แผนกแยกสาขา) — ยังไม่รัน sql/jjmk_stockcheck_depts.sql = ไม่มีตาราง
+    selAll('sc_depts?select=*&branch_id=eq.'+bid+'&order=sort,name').then(r=>{S.deptTbl=true;return r;}).catch(()=>{S.deptTbl=false;return null;})
   ]);
+  S.depts=deptRows||[];
   S.sups=sups;
   S.map={}; map.forEach(r=>{ if(r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-')S.map[r.product_id]=r; });
   S.mapRows=map.filter(r=>r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-');
@@ -303,9 +324,14 @@ const counted=it=>it.out||(it.qty!=null&&it.qty!=='');
 const isDirty=it=>Object.keys(it.dirty).length>0;
 function deptList(){
   const m={};
+  (S.depts||[]).forEach(d2=>{const k=String(d2.name||'').trim(); // แผนกที่ตั้งไว้ในสาขานี้ (แม้ยังไม่มีของ)
+    if(!k||!canDept(k))return; m[k]={label:k,items:[],zone:d2.zone||null};});
   S.items.forEach(it=>{const k=deptOf(it);if(!canDept(k))return;(m[k]=m[k]||{label:k,items:[]}).items.push(it);});
   return Object.values(m);
 }
+const deptZone=l=>{const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===l); // โซนของแผนก (รายสาขา)
+  if(d2&&d2.zone)return d2.zone;
+  const it=S.all.find(x=>deptOf(x)===l&&x.zone); return it?it.zone:null;};
 function matches(it){const q=S.q.trim().toLowerCase();
   return !q||it.name.toLowerCase().includes(q)||billName(it).toLowerCase().includes(q)||(it.sup||'').toLowerCase().includes(q);}
 function imgCell(it){
@@ -318,7 +344,9 @@ function render(){
   if(S.tab==='count')renderCount();
   else if(S.tab==='link')renderLink();
   else if(S.tab==='sched')renderSched();
-  else if(S.tab==='cfg')renderCfg();
+  else if(S.tab==='cfgu')renderCfgUsers();
+  else if(S.tab==='cfgd')renderCfgDept();
+  else if(S.tab==='cfgn')renderCfgUnit();
   else renderSet();
   refresh();
 }
@@ -334,8 +362,8 @@ function renderCount(){
       +(DEPT_IC[dp.label]||'🗂')+' '+esc(dp.label)
       +' <span class="bdg">'+(done<all?(all-done):all)+'</span>'+(done===all?' <span class="ok">✓</span>':'')+'</button>';
   };
-  const zoneOf=dp=>{const it=dp.items.find(i=>i.zone);const z=it?it.zone:null;return (z==='หน้าร้าน'||z==='หลังร้าน')?z:null;};
-  if(S.zoneOk&&ds.some(zoneOf)){ // พื้นที่แบ่งโซน: หน้าร้าน / หลังร้าน (ตั้งโซนที่หน้า Safety)
+  const zoneOf=dp=>{const z=deptZone(dp.label);return (z==='หน้าร้าน'||z==='หลังร้าน')?z:null;};
+  if((S.zoneOk||S.deptTbl)&&ds.some(zoneOf)){ // พื้นที่แบ่งโซน: หน้าร้าน / หลังร้าน (ตั้งโซนที่หน้า Safety)
     const zs={'หน้าร้าน':[],'หลังร้าน':[],'อื่นๆ':[]};
     ds.forEach(dp=>{zs[zoneOf(dp)||'อื่นๆ'].push(dp);});
     $('#pills').innerHTML=[['🏪 หน้าร้าน','หน้าร้าน'],['🍳 หลังร้าน','หลังร้าน'],['🗂 ยังไม่จัดโซน','อื่นๆ']]
@@ -496,30 +524,97 @@ function renderSched(){
     +'<div class="note">ตั้งวันสั่ง→วันส่ง เช่น สั่งจันทร์→ส่งอังคาร หรือสั่งได้ทุกวัน+จำนวนวันส่ง · ใช้ร่วมกับโฟลว์สั่งของแอพนับ · ค่าเดียวใช้ทั้ง 2 สาขา</div>'
     +(schedCard()||'<div class="empty">ยังไม่มีซัพในรายการสินค้า</div>');
 }
-/* ---- ⚙️ หน้าตั้งค่า: สิทธิ์ผู้ใช้ · แผนก · หน่วยซื้อ↔หน่วยนับ ---- */
-function renderCfg(){
-  if(S.user&&S.user.role!=='admin'){$('#list').innerHTML='<div class="empty">หน้าตั้งค่าสำหรับแอดมินเท่านั้น</div>';return;}
-  $('#list').innerHTML='<div class="dhead">⚙️ ตั้งค่า</div>'
-    +(usersCard()||'<div class="note">⚠ ยังไม่ได้เปิดระบบผู้ใช้ — รัน sql/jjmk_stockcheck_users.sql ก่อน แล้วรีเฟรช</div>')
-    +deptCard()
-    +unitCard();
+/* ---- ⚙️ ตั้งค่า: แยกหน้าละหัวข้อ (สิทธิ์ผู้ใช้ · แผนก · หน่วยซื้อ↔หน่วยนับ) ---- */
+const CFG_SUBS=[['cfgu','👤','สิทธิ์การใช้งานพนักงาน'],['cfgd','🗂','แผนก'],['cfgn','📐','หน่วยซื้อ–หน่วยนับ']];
+const isCfgTab=t=>String(t||'').indexOf('cfg')===0;
+function cfgHead(t){ // แถบเลือกหัวข้อ (โชว์เฉพาะจอเล็กที่ไม่มีแถบข้าง) + หัวหน้า
+  const s2=CFG_SUBS.find(x=>x[0]===t)||CFG_SUBS[0];
+  return '<div class="subtabs">'+CFG_SUBS.map(x=>'<button class="stb'+(x[0]===t?' on':'')+'" onclick="setTab(\''+x[0]+'\')">'+x[1]+' '+x[2]+'</button>').join('')+'</div>'
+    +'<div class="dhead">⚙️ ตั้งค่า · '+s2[1]+' '+s2[2]+'</div>';
+}
+function cfgDeny(){
+  if(S.user&&S.user.role!=='admin'){$('#list').innerHTML='<div class="empty">หน้าตั้งค่าสำหรับแอดมินเท่านั้น</div>';return true;}
+  return false;
+}
+function renderCfgUsers(){
+  if(cfgDeny())return;
+  $('#list').innerHTML=cfgHead('cfgu')
+    +(usersCard()||'<div class="note">⚠ ยังไม่ได้เปิดระบบผู้ใช้ — รัน sql/jjmk_stockcheck_users.sql ก่อน แล้วรีเฟรช</div>');
+}
+function renderCfgDept(){
+  if(cfgDeny())return;
+  $('#list').innerHTML=cfgHead('cfgd')+deptCard();
+}
+function renderCfgUnit(){
+  if(cfgDeny())return;
+  $('#list').innerHTML=cfgHead('cfgn')+unitCard();
 }
 function deptCard(){
   if(!S.deptOk)return '<div class="note">⚠ ยังไม่ได้รัน sql/jjmk_stockcheck_dept.sql — ตั้งแผนกยังไม่ได้</div>';
   const ds={};
+  (S.depts||[]).forEach(d2=>{const k=String(d2.name||'').trim(); if(k)ds[k]=[];});
   S.all.forEach(it=>{const k=deptOf(it);(ds[k]=ds[k]||[]).push(it);});
   const depts=Object.keys(ds).sort((a,b)=>a.localeCompare(b,'th'));
   const opt=cur=>'<option value="__keep">– ย้ายไป… –</option>'
     +depts.filter(d2=>d2!==cur&&d2!=='ยังไม่จัดแผนก').map(d2=>'<option value="'+esc(d2)+'">'+esc(d2)+'</option>').join('')
     +'<option value="__new">➕ แผนกใหม่…</option>'+(cur!=='ยังไม่จัดแผนก'?'<option value="__none">✗ เอาออกจากแผนก</option>':'');
-  return '<div class="card"><div class="h">🗂 แผนก + ของที่ต้องนับ <span class="n">'+depts.length+' แผนก · ย้าย/เพิ่ม/เอาออก/เปลี่ยนชื่อ มีผลทั้ง 2 สาขา</span></div>'
-    +depts.map(k=>{
-      const rn=ds[k].some(i=>i.dept===k)?' <button class="outb" style="padding:3px 8px;font-size:12px" onclick="renameDept(\''+esc(k).replace(/'/g,"\\'")+'\')">✏️ เปลี่ยนชื่อ</button>':'';
-      return '<div class="lrow" style="grid-template-columns:1fr;background:#FBF6EA"><div><b>'+(DEPT_IC[k]||'🗂')+' '+esc(k)+'</b>'+rn+' <span style="font-size:11px;color:var(--mut)">'+ds[k].length+' รายการ</span></div></div>'
-        +ds[k].map(it=>'<div class="lrow" style="grid-template-columns:46px 1fr 170px">'+imgCell(it)
-          +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(it.name)+'</div><div class="s">'+(it.name!==billName(it)?'<span class="cn">🧾 '+esc(billName(it))+'</span> · ':'')+esc(it.sup||'')+'</div></div>'
-          +'<select class="zsel" style="margin-left:0" onchange="moveDept(\''+it.id+'\',this.value)">'+opt(k)+'</select></div>').join('');
-    }).join('')+'</div>';
+  const q=(S.cfgQ||'').trim().toLowerCase();
+  S.deptOpen=S.deptOpen||{};
+  const rows=depts.map(k=>{
+    const real=k!=='ยังไม่จัดแผนก'; // แผนกจริง (แก้ชื่อ/ลบได้) · "ยังไม่จัดแผนก" คือถังรวมของที่ยังไม่ตั้ง
+    const open=!!S.deptOpen[k]||!!q;
+    const z=deptZone(k)||'';
+    const esk=esc(k).replace(/'/g,"\\'");
+    const zsel=(real&&(S.zoneOk||S.deptTbl))?'<select class="zsel" onclick="event.stopPropagation()" onchange="setZone(\''+esk+'\',this.value)"><option value="">โซน…</option>'
+      +['หน้าร้าน','หลังร้าน'].map(o=>'<option'+(z===o?' selected':'')+'>'+o+'</option>').join('')+'</select>':'';
+    const btns=real?'<button class="outb" style="padding:3px 9px;font-size:12px" onclick="event.stopPropagation();renameDept(\''+esk+'\')">✏️ แก้ชื่อ</button>'
+      +' <button class="outb" style="padding:3px 9px;font-size:12px;color:var(--red);border-color:#E4A6A6" onclick="event.stopPropagation();delDept(\''+esk+'\')">🗑 ลบ</button>':'';
+    const head='<div class="lrow dhrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleDept(\''+esk+'\')">'
+      +'<div><b>'+(open?'▾':'▸')+' '+(DEPT_IC[k]||'🗂')+' '+esc(k)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+ds[k].length+' รายการ'+(z?(' · '+esc(z)):'')+'</span></div>'
+      +'<div style="display:flex;gap:6px;align-items:center;white-space:nowrap">'+zsel+' '+btns+'</div></div>';
+    if(!open)return head;
+    const items=ds[k].filter(it=>!q||it.name.toLowerCase().includes(q)||billName(it).toLowerCase().includes(q));
+    const body=items.length?items.map(it=>'<div class="lrow" style="grid-template-columns:46px 1fr 170px">'+imgCell(it)
+      +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(it.name)+'</div><div class="s">'+(it.name!==billName(it)?'<span class="cn">🧾 '+esc(billName(it))+'</span> · ':'')+esc(it.sup||'')+'</div></div>'
+      +'<select class="zsel" style="margin-left:0" onchange="moveDept(\''+it.id+'\',this.value)">'+opt(k)+'</select></div>').join('')
+      :'<div class="lrow" style="grid-template-columns:1fr;color:var(--mut);font-size:13px">ยังไม่มีของในแผนกนี้ — ย้ายของเข้ามาได้จากแผนกอื่น</div>';
+    return head+body;
+  }).join('');
+  return '<div class="card"><div class="h">🗂 แผนก + ของที่ต้องนับ <span class="n">สาขา'+BR_NAME[S.br]+' · '+depts.filter(k=>k!=='ยังไม่จัดแผนก').length+' แผนก</span></div>'
+    +'<div class="note" style="margin:10px 15px">แผนกและของในแต่ละแผนก <b>แยกกันคนละสาขา</b> (สลับสาขาที่แถบซ้ายเพื่อตั้งอีกสาขา) · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ · เพิ่ม/ลบแผนกที่นี่ แถบแผนกหน้านับสต๊อกเปลี่ยนตามทันที'
+    +(S.deptTbl?'':' · ⚠ ยังไม่ได้รัน <b>sql/jjmk_stockcheck_depts.sql</b> — แผนกที่ยังไม่มีของจะยังไม่ถูกจำ')+'</div>'
+    +'<div class="lrow" style="grid-template-columns:1fr 150px 130px;gap:8px"><div><input class="di" id="cfgQ" value="'+esc(S.cfgQ||'')+'" placeholder="🔍 ค้นหาสินค้าในทุกแผนก" oninput="cfgSearch(this.value)"></div>'
+    +'<div><input class="di" id="ndName" placeholder="ชื่อแผนกใหม่" onkeydown="if(event.key===\'Enter\')addDept()"></div>'
+    +'<div><button class="outb" onclick="addDept()">➕ เพิ่มแผนก</button></div></div>'
+    +rows+'</div>';
+}
+function toggleDept(k){S.deptOpen=S.deptOpen||{};S.deptOpen[k]=!S.deptOpen[k];render();}
+function cfgSearch(v){S.cfgQ=v;render();const el=document.getElementById('cfgQ');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}}
+async function addDept(){
+  const el=document.getElementById('ndName'),nm=((el&&el.value)||'').trim();
+  if(!nm){toast('พิมพ์ชื่อแผนกก่อนครับ',true);return;}
+  if((S.depts||[]).some(d2=>String(d2.name||'').trim()===nm)||S.all.some(x=>deptOf(x)===nm)){toast('มีแผนก "'+nm+'" อยู่แล้ว',true);return;}
+  if(!S.deptTbl){toast('ต้องรัน sql/jjmk_stockcheck_depts.sql ก่อนถึงเพิ่มแผนกเปล่าได้ครับ',true);return;}
+  try{
+    const r=await api('POST','sc_depts',{branch_id:STK_BR[S.br],name:nm,sort:(S.depts||[]).length+1},'return=representation');
+    (S.depts=S.depts||[]).push((r&&r[0])||{name:nm,branch_id:STK_BR[S.br]});
+    if(el)el.value='';
+    S.deptOpen=S.deptOpen||{};S.deptOpen[nm]=true;
+    toast('✅ เพิ่มแผนก "'+nm+'" · สาขา'+BR_NAME[S.br]+' แล้ว (ขึ้นหน้านับสต๊อกทันที)');render();
+  }catch(e){toast('เพิ่มแผนกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
+}
+async function delDept(nm){
+  const cnt=S.all.filter(x=>deptOf(x)===nm).length;
+  if(!confirm('ลบแผนก "'+nm+'" ของสาขา'+BR_NAME[S.br]+'?'+(cnt?('\n\nของ '+cnt+' รายการในแผนกนี้จะถูกย้ายไป "ยังไม่จัดแผนก" (ไม่ได้ลบสินค้า)'):''))) return;
+  try{
+    if(cnt)await api('PATCH','products?branch_id=eq.'+STK_BR[S.br]+'&dept=eq.'+encodeURIComponent(nm),{dept:null},'return=minimal');
+    const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===nm);
+    if(d2&&d2.id!=null)await api('DELETE','sc_depts?id=eq.'+d2.id,null,'return=minimal');
+    S.all.forEach(x=>{if(x.dept===nm)x.dept=null;});
+    S.depts=(S.depts||[]).filter(x=>String(x.name||'').trim()!==nm);
+    if(S.dept===nm)S.dept=null;
+    toast('✅ ลบแผนก "'+nm+'" แล้ว'+(cnt?(' · ย้ายของ '+cnt+' รายการไปยังไม่จัดแผนก'):''));render();
+  }catch(e){toast('ลบแผนกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
 async function moveDept(id,v){
   if(v==='__keep')return;
@@ -527,19 +622,26 @@ async function moveDept(id,v){
   let nd=v==='__none'?'':v;
   if(v==='__new'){nd=(prompt('ชื่อแผนกใหม่')||'').trim();if(!nd){render();return;}}
   try{
-    await api('PATCH','products?name=eq.'+encodeURIComponent(it.name),{dept:nd||null},'return=minimal');
-    S.all.forEach(x=>{if(x.name===it.name)x.dept=nd||null;});
-    toast(nd?('✅ ย้าย "'+it.name+'" → แผนก'+nd+' (ทั้ง 2 สาขา)'):('✅ เอา "'+it.name+'" ออกจากแผนกแล้ว'));render();
+    await api('PATCH','products?id=eq.'+encodeURIComponent(it.id),{dept:nd||null},'return=minimal'); // แผนกแยกสาขา → แก้เฉพาะตัวนี้
+    if(nd&&S.deptTbl&&!(S.depts||[]).some(x=>String(x.name||'').trim()===nd)){
+      const r=await api('POST','sc_depts',{branch_id:STK_BR[S.br],name:nd,sort:(S.depts||[]).length+1},'return=representation').catch(()=>null);
+      (S.depts=S.depts||[]).push((r&&r[0])||{name:nd,branch_id:STK_BR[S.br]});
+    }
+    it.dept=nd||null;
+    toast(nd?('✅ ย้าย "'+it.name+'" → แผนก'+nd+' (สาขา'+BR_NAME[S.br]+')'):('✅ เอา "'+it.name+'" ออกจากแผนกแล้ว'));render();
   }catch(e){toast('ย้ายแผนกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);render();}
 }
 async function renameDept(old){
   const nn=(prompt('เปลี่ยนชื่อแผนก "'+old+'" เป็น',old)||'').trim();
   if(!nn||nn===old)return;
   try{
-    await api('PATCH','products?dept=eq.'+encodeURIComponent(old),{dept:nn},'return=minimal');
+    await api('PATCH','products?branch_id=eq.'+STK_BR[S.br]+'&dept=eq.'+encodeURIComponent(old),{dept:nn},'return=minimal'); // แผนกแยกสาขา
+    const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===old);
+    if(d2&&d2.id!=null){await api('PATCH','sc_depts?id=eq.'+d2.id,{name:nn},'return=minimal').catch(()=>{});d2.name=nn;}
     S.all.forEach(x=>{if(x.dept===old)x.dept=nn;});
+    if(S.deptOpen&&S.deptOpen[old]){S.deptOpen[nn]=true;delete S.deptOpen[old];}
     if(localStorage.getItem('jjsc_dept')===old)localStorage.setItem('jjsc_dept',nn);
-    toast('✅ เปลี่ยนชื่อแผนก "'+old+'" → "'+nn+'" (ทั้ง 2 สาขา)');render();
+    toast('✅ เปลี่ยนชื่อแผนก "'+old+'" → "'+nn+'" (สาขา'+BR_NAME[S.br]+')');render();
   }catch(e){toast('เปลี่ยนชื่อแผนกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
 function unitCard(){
@@ -609,9 +711,9 @@ function draftApply(cd){
 }
 function restoreTab(){ // รีเฟรชแล้วกลับหน้าเดิม
   const t=localStorage.getItem('jjsc_tab');
-  if(t&&t!==S.tab&&['count','link','set','sched','cfg'].indexOf(t)>=0
-    &&!((t==='set'||t==='sched'||t==='cfg')&&S.user&&S.user.role!=='admin')){
-    S.tab=t; document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  if(t&&t!==S.tab&&['count','link','set','sched','cfgu','cfgd','cfgn'].indexOf(t)>=0
+    &&!((t==='set'||t==='sched'||isCfgTab(t))&&S.user&&S.user.role!=='admin')){
+    S.tab=t; markNav(t);
   }
 }
 function initPtr(){ // จอสัมผัส (มือถือ/แท็บเล็ต): ลากลงจากบนสุด = รีเฟรชข้อมูล
@@ -636,7 +738,7 @@ function renderSet(){
   const keys=Object.keys(ds);
   $('#list').innerHTML='<div class="dhead">🛟 Safety · อัตราใช้ต่อวัน + แผนก · สาขา'+BR_NAME[S.br]+'</div>'
 
-    +'<div class="note">จ–พฤ / ศ / ส–อา = ใช้ของกี่หน่วยต่อวัน (ช่องเหลือง = กลุ่มของวันนี้) · ค่าลงช่องเดิมของแอพนับ → ระบบคำนวณสั่งของ + ส่ง LINE ซัพใช้ต่อได้เลย · แผนกเลือกจากรายชื่อในหน้า ⚙️ ตั้งค่า (เพิ่ม/แก้ชื่อแผนกที่นั่น) · แผนก/รูปใช้ร่วม 2 สาขา ที่เหลือแยกสาขา'+(S.deptOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ก่อนถึงตั้งแผนกได้')+'</div>'
+    +'<div class="note">จ–พฤ / ศ / ส–อา = ใช้ของกี่หน่วยต่อวัน (ช่องเหลือง = กลุ่มของวันนี้) · ค่าลงช่องเดิมของแอพนับ → ระบบคำนวณสั่งของ + ส่ง LINE ซัพใช้ต่อได้เลย · แผนกเลือกจากรายชื่อในหน้า ⚙️ ตั้งค่า › แผนก (เพิ่ม/ลบ/แก้ชื่อที่นั่น) · <b>แผนกแยกกันคนละสาขา</b> · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ'+(S.deptOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ก่อนถึงตั้งแผนกได้')+'</div>'
     +(keys.length?keys.map(k=>{
       const rows=ds[k].map(it=>{
         const cn=it.name!==billName(it);
@@ -688,8 +790,9 @@ function refresh(){
   }else if(S.tab==='sched'){
     $('#st').innerHTML='🚚 รอบสั่ง–ส่งของซัพ — กด 💾 บันทึกทีละซัพ';
     $('#save').style.display='none';
-  }else if(S.tab==='cfg'){
-    $('#st').innerHTML='⚙️ ตั้งค่า — กด 💾 บันทึกทีละรายการ';
+  }else if(isCfgTab(S.tab)){
+    const s2=CFG_SUBS.find(x=>x[0]===S.tab)||CFG_SUBS[0];
+    $('#st').innerHTML='⚙️ ตั้งค่า · '+s2[1]+' '+s2[2]+' — กด 💾 บันทึกทีละรายการ';
     $('#save').style.display='none';
   }else{
     $('#st').innerHTML='หน้าดูสถานะการผูกชื่อ — แก้การผูกที่แอพ P&L';
@@ -730,12 +833,14 @@ async function saveCn(id){
     render();
   }catch(e){toast('เปลี่ยนชื่อไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
-async function setZone(dept,z){ // โซนผูกกับแผนก → อัปเดตสินค้าทุกตัวในแผนก (ทั้ง 2 สาขา)
+async function setZone(dept,z){ // โซนผูกกับแผนก (แยกสาขา) → อัปเดตสินค้าในแผนกของสาขานี้ + ตารางแผนก
   try{
-    await api('PATCH','products?dept=eq.'+encodeURIComponent(dept),{zone:z||null},'return=minimal');
+    const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===dept);
+    if(d2&&d2.id!=null){await api('PATCH','sc_depts?id=eq.'+d2.id,{zone:z||null},'return=minimal');d2.zone=z||null;}
+    await api('PATCH','products?branch_id=eq.'+STK_BR[S.br]+'&dept=eq.'+encodeURIComponent(dept),{zone:z||null},'return=minimal').catch(()=>{});
     S.all.forEach(x=>{if(x.dept===dept)x.zone=z||null;});
-    toast('✅ แผนก "'+dept+'" → โซน'+(z||' (ไม่ระบุ)'));render();
-  }catch(e){toast('ตั้งโซนไม่สำเร็จ — รัน sql/jjmk_stockcheck_dept.sql ตัวอัปเดตก่อนครับ',true);}
+    toast('✅ แผนก "'+dept+'" → โซน'+(z||' (ไม่ระบุ)')+' · สาขา'+BR_NAME[S.br]);render();
+  }catch(e){toast('ตั้งโซนไม่สำเร็จ — รัน sql/jjmk_stockcheck_depts.sql ก่อนครับ',true);}
 }
 /* ---- รูปสินค้า (bucket เดียวกับแอพนับ, อัปเดตตามชื่อ = 2 สาขา 2 ระบบ) ---- */
 function pickImg(id){S.imgTarget=id;$('#imgFile').click();}
@@ -787,9 +892,9 @@ async function saveAll(){
       for(const it of dirty){
         const d2={...it.dirty};
         const dept=d2.dept; delete d2.dept;
+        if(dept!==undefined)d2.dept=dept||null; // แผนกแยกสาขา → ไปกับ PATCH by id ตัวเดียวกัน
         if(Object.keys(d2).length)await api('PATCH','products?id=eq.'+encodeURIComponent(it.id),d2,'return=minimal');
-        if(dept!==undefined){await api('PATCH','products?name=eq.'+encodeURIComponent(it.name),{dept:dept||null},'return=minimal');
-          S.all.forEach(x=>{if(x.name===it.name)x.dept=dept||null;});}
+        if(dept!==undefined)it.dept=dept||null;
         Object.assign(it,Object.fromEntries(Object.entries(it.dirty).filter(([k])=>k!=='dept')));
         it.dirty={};
       }
@@ -800,10 +905,16 @@ async function saveAll(){
   btn.disabled=false;btn.textContent=old;refresh();
 }
 function setTab(t){
-  if((t==='set'||t==='sched'||t==='cfg')&&S.user&&S.user.role!=='admin'){toast('หน้านี้สำหรับแอดมินเท่านั้น',true);return;}
+  if((t==='set'||t==='sched'||isCfgTab(t))&&S.user&&S.user.role!=='admin'){toast('หน้านี้สำหรับแอดมินเท่านั้น',true);return;}
+  if(t==='cfg')t=localStorage.getItem('jjsc_cfg')||'cfgu'; // กดหัวข้อ "ตั้งค่า" = เข้าหัวข้อย่อยล่าสุด
   S.tab=t;localStorage.setItem('jjsc_tab',t);
-  document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  if(isCfgTab(t))localStorage.setItem('jjsc_cfg',t);
+  markNav(t);
   render();}
+function markNav(t){
+  document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t||(b.dataset.t==='cfg'&&isCfgTab(t))));
+  const sub=$('#cfgSub'); if(sub)sub.classList.toggle('on',isCfgTab(t));
+}
 const LOGO_B64='data:image/png;base64,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';
 async function initAuth(){
   try{ await api('GET','sc_users?select=id&limit=1'); S.authOn=true; }
@@ -842,7 +953,8 @@ function applyAuth(){
   else $('#who').readOnly=false;
   $('#uchip').style.display=u?'block':'none';
   if(u)$('#uchip').innerHTML='👤 <b>'+esc(u.display_name||u.username)+'</b> · '+(u.role==='admin'?'แอดมิน':'พนักงาน')+'<a onclick="logout()">ออก</a>';
-  document.querySelectorAll('[data-t="set"],[data-t="sched"],[data-t="cfg"]').forEach(b=>{b.style.display=(u&&u.role!=='admin')?'none':'';}); // Safety/รอบสั่งซัพ/ตั้งค่า เฉพาะแอดมิน
+  const noAdm=!!(u&&u.role!=='admin');
+  document.querySelectorAll('[data-t="set"],[data-t="sched"],[data-t="cfg"],#cfgBox').forEach(b=>{b.style.display=noAdm?'none':'';}); // Safety/รอบสั่งซัพ/ตั้งค่า เฉพาะแอดมิน
 }
 function placeCtl(){
   const c=$('#ctl'),t=window.innerWidth>=821?$('#scSlot'):$('#hcSlot');
