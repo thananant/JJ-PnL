@@ -122,8 +122,8 @@ setTimeout(async()=>{
       &&w.eval("S.all.find(x=>x.id==='p1').dept")==='ผักสด'));
   // ลบแผนก → ของย้ายไปยังไม่จัดแผนก + DELETE sc_depts + หายจากหน้านับ
   await w.delDept('ของแห้ง'); await sleep(40);
-  out.push('ลบแผนก "ของแห้ง": ย้ายของออก (ล้าง dept+หมวดเดิม) + DELETE sc_depts: '
-    +(!!patches.find(p=>p.url.includes('products?id=in.')&&p.body.dept===null&&p.body.cat_label===null)
+  out.push('ลบแผนก "ของแห้ง": ย้ายของออก (ล้างเฉพาะ dept ไม่แตะ cat_label ของแอพนับเดิม) + DELETE sc_depts: '
+    +(!!patches.find(p=>p.url.includes('products?id=in.')&&p.body.dept===null&&p.body.cat_label===undefined)
       &&dels.some(u=>u.includes('sc_depts?id=eq.99'))));
   w.setTab('count'); await sleep(40);
   out.push('ลบแล้วแถบแผนกหน้านับหายตาม: '+!d.getElementById('pills').textContent.includes('ของแห้ง'));
