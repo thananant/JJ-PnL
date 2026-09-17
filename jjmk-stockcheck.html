@@ -88,6 +88,19 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 #toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:86px;background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:99;max-width:92vw}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.err{background:var(--red)}
+#sideNav{display:none}
+@media(min-width:821px){
+  body{padding-left:222px}
+  #sideNav{display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;width:222px;z-index:60;background:linear-gradient(180deg,#7E1013,#690C0F);padding:18px 13px;gap:3px}
+  #sideNav .brand{font-family:'Prompt';font-weight:700;color:#fff;font-size:17px}
+  #sideNav .bsub{font-size:11px;color:#F2DCDC;margin-bottom:14px}
+  #sideNav .ni{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;color:#F2DCDC;font-family:'Prompt';font-weight:600;font-size:14.5px;padding:11px 12px;border-radius:11px;cursor:pointer}
+  #sideNav .ni:hover{background:rgba(255,255,255,.09)}
+  #sideNav .ni.on{background:var(--red);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.28)}
+  .tabs{display:none}
+  header h1{display:none}
+  .foot{left:222px}
+}
 @media(max-width:640px){
   .grid{grid-template-columns:1fr 1fr;gap:9px}
   .pcard{padding:10px}
@@ -103,6 +116,13 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 </style>
 </head>
 <body>
+<nav id="sideNav">
+  <div class="brand">📋 JJ เช็คสต๊อก</div>
+  <div class="bsub">จริงใจหมูกระทะ · เชื่อมระบบนับ + P&amp;L</div>
+  <button class="ni on" data-t="count">📋 นับสต๊อก</button>
+  <button class="ni" data-t="link">🔗 ผูกชื่อ</button>
+  <button class="ni" data-t="set">🛟 Safety</button>
+</nav>
 <header>
   <div class="hrow">
     <h1>📋 JJ เช็คสต๊อก</h1>
@@ -110,9 +130,9 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
     <input type="date" id="cd">
     <input type="text" id="who" placeholder="ชื่อผู้นับ" style="width:100px">
     <div class="tabs">
-      <button id="tabCount" class="on">📋 นับสต๊อก</button>
-      <button id="tabLink">🔗 ผูกชื่อ</button>
-      <button id="tabSet">🛟 Safety</button>
+      <button id="tabCount" data-t="count" class="on">📋 นับสต๊อก</button>
+      <button id="tabLink" data-t="link">🔗 ผูกชื่อ</button>
+      <button id="tabSet" data-t="set">🛟 Safety</button>
     </div>
   </div>
 </header>
@@ -357,15 +377,13 @@ async function saveAll(){
   btn.disabled=false;btn.textContent=old;refresh();
 }
 function setTab(t){S.tab=t;
-  [['tabCount','count'],['tabLink','link'],['tabSet','set']].forEach(([id,k])=>$('#'+id).classList.toggle('on',k===t));
+  document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   render();}
 function boot(){
   $('#brSeg').innerHTML=Object.keys(STK_BR).map(b=>'<button data-br="'+b+'" class="'+(S.br===b?'on':'')+'">'+BR_NAME[b]+'</button>').join('');
   $('#brSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.br=b.dataset.br;localStorage.setItem('jjsc_br',S.br);
     document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x.dataset.br===S.br));loadAll();};
-  $('#tabCount').onclick=()=>setTab('count');
-  $('#tabLink').onclick=()=>setTab('link');
-  $('#tabSet').onclick=()=>setTab('set');
+  document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
   $('#cd').value=bizToday();
   $('#who').value=localStorage.getItem('jjsc_who')||'';
   $('#q').oninput=e=>{S.q=e.target.value;render();};
