@@ -339,8 +339,9 @@ async function loadAll(){
   });
   draftApply(cd); // ค่านับที่ยังไม่ได้กดบันทึก (จำไว้ตอนรีเฟรช)
   if(S.authOn&&S.user&&S.user.role==='admin')S.users=await api('GET','sc_users?select=*&order=id').catch(()=>null);
-  S.dept=null; S.allBr=null; // รายการสินค้าทุกสาขาโหลดใหม่เมื่อเปิดหน้านั้น
+  S.dept=null; S.allBr=null; S.nameBrN=null;
   render();
+  ensureAllProducts(); // รายการทุกสาขา (ใช้จัดลำดับให้เหมือนกันทุกเมนู)
 }
 const billName=it=>{const m=S.map[it.id];return m?m.pnl_item:it.name;};
 const deptOf=it=>(S.deptOk&&it.dept)?it.dept:(it.cat_label||'ยังไม่จัดแผนก');
@@ -411,7 +412,7 @@ function orderPlan(){ // คิดใบสั่งของทุกซัพ�
       const c=bu&&bu!==String(it.unit||'')?(S.conv||{})[String(billName(it)).trim()+'|'+bu]:null;
       const packs=(order&&c&&c.f)?Math.ceil(order/c.f):null;
       return {it,have,need,order,bu,factor:c?c.f:null,packs};
-    }).sort((a,b2)=>(b2.order||0)-(a.order||0)||a.it.name.localeCompare(b2.it.name,'th'));
+    }).sort((a,b2)=>cmpItem(a.it,b2.it)); // ลำดับเดียวกับเมนูอื่น
     return {sup:x.sup,dl,rows,
       nOrder:rows.filter(r=>r.order>0).length,
       nNoCount:rows.filter(r=>r.have==null&&r.need>0).length,
@@ -492,7 +493,7 @@ function renderDash(){
   const ds=deptList();
   const items=ds.reduce((a,d2)=>a.concat(d2.items),[]);
   const done=items.filter(counted).length,all=items.length;
-  const out=items.filter(x=>x.out);
+  const out=items.filter(x=>x.out).slice().sort(cmpItem);
   const pct=all?Math.round(done*100/all):0;
   const unb=S.all.filter(p=>!S.map[p.id]).length;
   const noDept=S.all.filter(p=>!String(p.dept||'').trim()&&!String(p.cat_label||'').trim()).length;
@@ -558,7 +559,7 @@ function renderCount(){
       +(S.user&&S.user.role==='admin'?'<div style="font-size:11px;color:var(--mut);margin-top:2px">แบ่งแถบเป็น 🏪 หน้าร้าน / 🍳 หลังร้าน ได้ที่ ⚙️ ตั้งค่า › แผนก (ตั้งโซนให้แต่ละแผนก)</div>':'');
   }
   const q=S.q.trim();
-  const show=q?S.items.filter(matches):(deptList().find(d2=>d2.label===S.dept)||{items:[]}).items;
+  const show=(q?S.items.filter(matches):(deptList().find(d2=>d2.label===S.dept)||{items:[]}).items).slice().sort(cmpItem);
   const unb=S.all.filter(p=>!S.map[p.id]).length;
   const warns=(unb?'⚠ ยังไม่ผูกชื่อบิล '+unb+' รายการ (ยังนับได้ปกติ) — ผูก/แก้ชื่อได้ที่หน้า "ผูกชื่อ"':'')
     +(S.deptOk?(S.zoneOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ตัวอัปเดต เพื่อแบ่งโซนหน้าร้าน/หลังร้าน'):' · ⚠ ยังไม่ได้รัน sql/jjmk_stockcheck_dept.sql ใช้หมวดเดิมแทนแผนก');
@@ -572,7 +573,8 @@ function renderCount(){
         +'<div class="top">'+imgCell(it)
         +'<div><div class="t">'+esc(it.name)+' '+(ok?(it.out?'<span class="st-n" style="color:var(--red)">✗ หมด</span>':'<span class="st-y">✓ นับแล้ว</span>'):'<span class="st-n">⚠ ยังไม่นับ</span>')+'</div>'
         +(cn?'<div class="cn">🧾 บิล: '+esc(billName(it))+'</div>':'')
-        +(!S.map[it.id]?'<div class="cn" style="color:var(--amber)">⚠ ยังไม่ผูกชื่อบิล</div>':'')+'</div>'
+        +(!S.map[it.id]?'<div class="cn" style="color:var(--amber)">⚠ ยังไม่ผูกชื่อบิล</div>':'')
+        +(onlySome(it.name)?'<div class="cn" style="color:var(--mut)">เฉพาะสาขา'+BR_NAME[S.br]+'</div>':'')+'</div>'
         +'<button class="cam" onclick="pickImg(\''+it.id+'\')">✏️</button></div>'
         +'<div class="mid"><span class="chip">'+esc(it.unit||'หน่วย')+'</span>'
         +'<div class="step"><button onclick="bump(\''+it.id+'\',-1)">−</button>'
@@ -585,7 +587,7 @@ function renderCount(){
 }
 /* ---- 🔗 หน้าผูกชื่อ: ชื่อจริง (บิล) ↔ ชื่อนับ รายสาขา ---- */
 function renderLink(){
-  const ok=S.all.filter(it=>S.map[it.id]),no=S.all.filter(it=>!S.map[it.id]);
+  const ok=S.all.filter(it=>S.map[it.id]).slice().sort(cmpItem),no=S.all.filter(it=>!S.map[it.id]).slice().sort(cmpItem);
   const canEdit=!S.user||S.user.role==='admin';
   const row=it=>{const m=S.map[it.id];
     return '<div class="lrow">'+imgCell(it)
@@ -740,6 +742,8 @@ async function ensureAllProducts(force){ // รายการสินค้า
     try{ rows=await selAll(base.replace('image_url','image_url,dept')); }
     catch(e){ rows=await selAll(base); }
     S.allBr=rows; S.apErr=null;
+    const nb={}; rows.forEach(r=>{const n=String(r.name||'').trim(); if(!n)return;(nb[n]=nb[n]||{})[r.branch_id]=1;});
+    S.nameBrN={}; Object.keys(nb).forEach(n=>{S.nameBrN[n]=Object.keys(nb[n]).length;});
   }catch(e){ S.allBr=[]; S.apErr=String(e.message||e).slice(0,90); }
   S._apLoading=false;
   if(isCfgTab(S.tab)||S.tab==='items'||S.tab==='order'||S.tab==='dash')render(); // โหลดเสร็จแล้ววาดใหม่
@@ -774,7 +778,7 @@ function itemsCard(){
   const total=Object.keys(byName).length;
   const body=keys.map(k=>{
     const list=groups[k].filter(e=>!q||e.name.toLowerCase().includes(q)||String(e.sup||'').toLowerCase().includes(q)
-      ||String(billOfName(e)||'').toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'th'));
+      ||String(billOfName(e)||'').toLowerCase().includes(q)).sort(cmpItem);
     if(q&&!list.length)return '';
     const open=!!S.itemOpen[k]||!!q;
     const esk=esc(k).replace(/'/g,"\\'");
@@ -866,7 +870,7 @@ function deptCard(){
       +'<div><b>'+(open?'▾':'▸')+' '+(DEPT_IC[k]||'🗂')+' '+esc(k)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+ds[k].length+' รายการ'+(z?(' · '+esc(z)):'')+'</span></div>'
       +'<div style="display:flex;gap:6px;align-items:center;white-space:nowrap">'+zsel+' '+btns+'</div></div>';
     if(!open)return head;
-    const items=ds[k].filter(it=>!q||it.name.toLowerCase().includes(q)||billName(it).toLowerCase().includes(q));
+    const items=ds[k].filter(it=>!q||it.name.toLowerCase().includes(q)||billName(it).toLowerCase().includes(q)).sort(cmpItem);
     const body=items.length?items.map(it=>'<div class="lrow" style="grid-template-columns:46px 1fr 170px">'+imgCell(it)
       +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(it.name)+'</div><div class="s">'+(it.name!==billName(it)?'<span class="cn">🧾 '+esc(billName(it))+'</span> · ':'')+esc(it.sup||'')+'</div></div>'
       +'<select class="zsel" style="margin-left:0" onchange="moveDept(\''+it.id+'\',this.value)">'+opt(k)+'</select></div>').join('')
@@ -999,6 +1003,15 @@ async function ensureBillUnits(force){ // หน่วยซื้อ = หน�
   if(isCfgTab(S.tab)||S.tab==='items'||S.tab==='order'||S.tab==='dash')render(); // โหลดเสร็จแล้ววาดใหม่
 }
 const buOf=n=>(S.billUnits||{})[String(n||'').trim()]||null;
+/* ---- ลำดับรายการมาตรฐาน (ใช้ทุกเมนู): ของที่มีครบทุกสาขาก่อน เรียงตามชื่อ · ของที่มีบางสาขาไว้ท้ายกลุ่ม ---- */
+const nBr=n=>(S.nameBrN||{})[String(n||'').trim()]||Object.keys(STK_BR).length;
+function cmpName(a,b){
+  const na=String(a||'').trim(),nb2=String(b||'').trim(),tot=Object.keys(STK_BR).length;
+  const pa=nBr(na)>=tot?0:1,pb=nBr(nb2)>=tot?0:1;
+  return (pa-pb)||na.localeCompare(nb2,'th');
+}
+const cmpItem=(a,b)=>cmpName(a&&a.name,b&&b.name);
+const onlySome=n=>nBr(n)<Object.keys(STK_BR).length; // มีบางสาขา
 async function fillBillUnits(){ // เติมหน่วยซื้อจากบิลให้ทุกตัวที่ยังไม่ตรง
   const todo=S.all.map(it=>({it,m:S.map[it.id],b:buOf(billName(it))}))
     .filter(x=>x.m&&x.b&&String(x.m.bill_unit||'').trim()!==x.b.top);
@@ -1042,7 +1055,7 @@ function unitCard(){
   const secs=[];
   const sups=Object.keys(S.billSup||{}).sort((a,b)=>a.localeCompare(b,'th'));
   sups.forEach(sp=>{
-    const g=S.billSup[sp],items=Object.keys(g).filter(item=>byBill[item]).sort((a,b)=>a.localeCompare(b,'th'));
+    const g=S.billSup[sp],items=Object.keys(g).filter(item=>byBill[item]).sort((a,b)=>cmpName((byBill[a][0]||{}).name||a,(byBill[b][0]||{}).name||b));
     if(!items.length)return;
     let nUnit=0,nTodo=0,body='';
     items.forEach(item=>{
@@ -1070,7 +1083,7 @@ function unitCard(){
     const grp={}; rest.forEach(it=>{(grp[String(it.sup||'').trim()||'(ไม่ระบุซัพ)']=grp[String(it.sup||'').trim()||'(ไม่ระบุซัพ)']||[]).push(it);});
     let body='';
     Object.keys(grp).sort((a,b)=>a.localeCompare(b,'th')).forEach(sp=>{
-      const list=grp[sp].filter(it=>!q||it.name.toLowerCase().includes(q)||String(billName(it)).toLowerCase().includes(q));
+      const list=grp[sp].filter(it=>!q||it.name.toLowerCase().includes(q)||String(billName(it)).toLowerCase().includes(q)).sort(cmpItem);
       if(!list.length)return;
       body+='<div class="lrow" style="grid-template-columns:1fr;font-size:12px;color:var(--mut)">🏷 '+esc(sp)+' (ซัพจากระบบนับ)</div>'
         +list.map(it=>{
@@ -1177,7 +1190,7 @@ function renderSet(){
 
     +'<div class="note">จ–พฤ / ศ / ส–อา = ใช้ของกี่หน่วยต่อวัน (ช่องเหลือง = กลุ่มของวันนี้) · ค่าลงช่องเดิมของแอพนับ → ระบบคำนวณสั่งของ + ส่ง LINE ซัพใช้ต่อได้เลย · แผนกเลือกจากรายชื่อในหน้า ⚙️ ตั้งค่า › แผนก (เพิ่ม/ลบ/แก้ชื่อที่นั่น) · <b>แผนกแยกกันคนละสาขา</b> · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ'+(S.deptOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ก่อนถึงตั้งแผนกได้')+'</div>'
     +(keys.length?keys.map(k=>{
-      const rows=ds[k].map(it=>{
+      const rows=ds[k].slice().sort(cmpItem).map(it=>{
         const cn=it.name!==billName(it);
         const ri=(f,i)=>'<span class="lbl" data-l="'+['จ–พฤ/วัน','ศ/วัน','ส–อา/วัน','safety','max'][i]+'"><input class="ri'+(it.dirty[f]!==undefined?' dirty':'')+'" type="text" inputmode="decimal" value="'+fq(it[f])+'" style="'+(i<3?hl(i):'')+'" onchange="setF(\''+it.id+'\',\''+f+'\',this.value)"></span>';
         return '<div class="row2">'+imgCell(it)
