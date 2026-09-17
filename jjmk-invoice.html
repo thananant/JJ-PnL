@@ -122,6 +122,14 @@
   .logrow{border-bottom:1px dashed var(--line);padding:8px 2px;font-size:13.5px;}
   .logrow .t{color:var(--muted);font-size:12px;}
   .logrow b{color:var(--brand);}
+  .setupbox{border:1px solid var(--accent);background:#fffdf7;border-radius:10px;
+    padding:10px 14px;margin-bottom:14px;}
+  .setupbox summary{cursor:pointer;font-family:"Mitr";font-size:14px;color:#8a5a00;}
+  .setupbox .steps{margin:10px 0 4px;padding-left:22px;font-size:13.5px;line-height:1.85;}
+  .setupbox .steps li{margin-bottom:6px;}
+  .setupbox code{background:#f3ece0;padding:1px 5px;border-radius:4px;font-size:12.5px;}
+  .codebox{width:100%;height:220px;font-family:ui-monospace,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.45;margin-top:8px;white-space:pre;}
   .kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;
     border-bottom:1px dashed var(--line);font-size:14px;align-items:center;flex-wrap:wrap;}
   .kv:last-child{border-bottom:none;}
@@ -374,12 +382,39 @@
     <div class="card">
       <h2>✉️ ส่งอีเมลหาลูกค้าอัตโนมัติ + ตรวจการตีกลับ</h2>
       <div class="detail" style="margin-bottom:10px;line-height:1.7">
-        ระบบส่งผ่าน <b>Google Apps Script ของบัญชี Gmail ร้าน</b> (โค้ดส่งให้ในแชท Claude):
-        วางโค้ด → รัน <code>setup()</code> ครั้งเดียว → Deploy เป็น Web app (สิทธิ์ Anyone)
-        → เอา URL ลงท้าย <code>/exec</code> มาใส่ช่องนี้<br>
-        เมื่อกดออกบิล ระบบจะแนบ PDF ส่งหาลูกค้าทันที และ Apps Script จะตรวจอีเมลตีกลับทุก 5 นาที
-        แล้วอัพเดตสถานะเป็น <b>ส่งถึงแล้ว / ส่งไม่สำเร็จ</b> ให้อัตโนมัติ
+        ส่งจาก <b>Gmail ของร้าน</b> ผ่าน Google Apps Script (ฟรี ไม่ต้องใช้บัตร ไม่ต้องบอกรหัสผ่านใคร):
+        เมื่อกดออกบิล ระบบแนบ PDF ส่งหาลูกค้าทันที แล้วตรวจอีเมลตีกลับทุก 5 นาที
+        อัพเดตสถานะเป็น <b>ส่งถึงแล้ว / ส่งไม่สำเร็จ</b> ให้เอง · <b>ตั้งครั้งเดียว ใช้ได้ทุกเครื่อง</b>
       </div>
+
+      <details id="gasHelp" class="setupbox">
+        <summary>📋 ขั้นตอนตั้งค่าตัวส่งอีเมล (ทำครั้งเดียว ~3 นาที) — กดเพื่อดู</summary>
+        <ol class="steps">
+          <li>เปิด <a href="https://script.new" target="_blank" rel="noopener"><b>script.new</b></a>
+              ด้วยบัญชี <b>Gmail ของร้าน</b> (บัญชีที่จะใช้เป็นผู้ส่ง)</li>
+          <li>ลบโค้ดตัวอย่างในหน้านั้นออกให้หมด →
+              กดปุ่ม <b>คัดลอกโค้ด</b> ข้างล่างนี้ แล้ววาง (Ctrl+V) ลงไป → กดบันทึก 💾</li>
+          <li>เลือกฟังก์ชัน <code>setup</code> ด้านบน → กด <b>Run ▶</b> →
+              กด <b>Review permissions</b> → เลือกบัญชีร้าน →
+              <b>Advanced</b> → <b>Go to (unsafe)</b> → <b>Allow</b>
+              <span class="detail">(หน้าเตือนนี้ปกติ เพราะเป็นสคริปต์ที่เราเขียนเอง)</span></li>
+          <li>กด <b>Deploy</b> (มุมขวาบน) → <b>New deployment</b> → ไอคอน ⚙ เลือก <b>Web app</b> →
+              ตั้ง <b>Execute as: Me</b> · <b>Who has access: Anyone</b> → <b>Deploy</b></li>
+          <li>คัดลอก <b>Web app URL</b> (ลงท้าย <code>/exec</code>) มาวางในช่องข้างล่าง →
+              กด <b>บันทึก URL</b> → กด <b>ทดสอบส่งอีเมล</b> เช็คว่าเข้ากล่องจดหมายจริง</li>
+        </ol>
+        <div class="actions" style="border:none;padding-top:4px">
+          <button class="btn btn-gold btn-sm" id="copyGasBtn">📋 คัดลอกโค้ด Apps Script</button>
+          <button class="btn btn-ghost btn-sm" id="showGasBtn">แสดงโค้ด (คัดลอกเอง)</button>
+          <a class="btn btn-ghost btn-sm" href="https://script.new" target="_blank" rel="noopener"
+             style="text-decoration:none;display:inline-block">เปิด script.new ↗</a>
+        </div>
+        <textarea id="gasCodeBox" class="codebox" readonly style="display:none"></textarea>
+        <div class="detail" style="margin-top:8px">
+          โควตาส่งฟรีของ Gmail ทั่วไป = 100 ฉบับ/วัน (บัญชี Google Workspace = 1,500 ฉบับ/วัน)
+        </div>
+      </details>
+
       <label>Apps Script Web App URL (ตัวส่งอีเมล)</label>
       <input id="gasEndpoint" placeholder="https://script.google.com/macros/s/…/exec">
       <div class="actions" style="border:none;padding-top:8px">
@@ -424,6 +459,96 @@
 </div>
 
 <div id="pdfStage"></div>
+<script type="text/plain" id="gasCodeSrc">
+/** ตัวส่งอีเมลใบกำกับภาษี + ตรวจการตีกลับ (จริงใจหมูกระทะ)
+ *  วิธีใช้: วางโค้ดนี้ใน https://script.new ของ Gmail ร้าน
+ *  1) เลือกฟังก์ชัน setup แล้วกด Run (อนุญาตสิทธิ์)
+ *  2) Deploy > New deployment > Web app
+ *     Execute as: Me · Who has access: Anyone > Deploy
+ *  3) คัดลอก URL ที่ลงท้าย /exec ไปใส่ในหน้าตั้งค่าของแอป
+ */
+var SUPABASE_URL = 'https://aikyxvluaiubdidqxwnd.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
+var SENDER_NAME  = 'จริงใจหมูกระทะ';
+var ASSUME_DELIVERED_AFTER_MIN = 30;   // ต้องตรงกับค่าในแอป
+
+// รับคำสั่งส่งอีเมลจากแอป (แนบ PDF ที่แอปสร้างมา - ไม่เก็บไฟล์ที่ไหน)
+function doPost(e) {
+  var out;
+  try {
+    var req = JSON.parse(e.postData.contents);
+    if (req.action === 'send') {
+      if (!req.email) throw new Error('ไม่มีอีเมลผู้รับ');
+      var opts = { name: SENDER_NAME };
+      if (req.pdfBase64) {
+        opts.attachments = [Utilities.newBlob(
+          Utilities.base64Decode(req.pdfBase64), 'application/pdf',
+          req.filename || ((req.billNo || 'invoice') + '.pdf'))];
+      }
+      GmailApp.sendEmail(req.email, req.subject || '', req.body || '', opts);
+      out = { ok: true };
+    } else {
+      out = { ok: false, message: 'unknown action' };
+    }
+  } catch (err) {
+    out = { ok: false, message: String(err && err.message || err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ตรวจการตีกลับทุก 5 นาที แล้วอัพเดตสถานะกลับเข้า Supabase
+function checkBounces() {
+  var rows = sbGet_('/rest/v1/inv_invoices?email_status=eq.' +
+    encodeURIComponent('กำลังส่ง') + '&select=bill_no,email,email_sent_at');
+  if (!rows || !rows.length) return;
+  var threads = GmailApp.search('from:(mailer-daemon OR postmaster) newer_than:2d', 0, 50);
+  var parts = [];
+  threads.forEach(function (th) {
+    th.getMessages().forEach(function (m) {
+      parts.push((m.getPlainBody() || '') + ' ' + (m.getSubject() || ''));
+    });
+  });
+  var all = parts.join('\n').toLowerCase();
+  var now = new Date();
+  rows.forEach(function (r) {
+    var hit = (r.bill_no && all.indexOf(String(r.bill_no).toLowerCase()) !== -1) ||
+              (r.email  && all.indexOf(String(r.email).toLowerCase())  !== -1);
+    if (hit) {
+      sbPatch_(r.bill_no, { email_status: 'ส่งไม่สำเร็จ',
+        email_status_detail: 'พบการตีกลับ - อีเมลปลายทางอาจไม่มีอยู่จริง' });
+    } else if (r.email_sent_at &&
+        (now - new Date(r.email_sent_at)) / 60000 >= ASSUME_DELIVERED_AFTER_MIN) {
+      sbPatch_(r.bill_no, { email_status: 'ส่งถึงแล้ว',
+        email_status_detail: 'ส่งถึงแล้ว (ไม่พบการตีกลับใน ' + ASSUME_DELIVERED_AFTER_MIN + ' นาที)' });
+    }
+  });
+}
+
+// รันครั้งเดียว: ขอสิทธิ์ + ติดตั้ง trigger ทุก 5 นาที
+function setup() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'checkBounces') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('checkBounces').timeBased().everyMinutes(5).create();
+  GmailApp.search('in:inbox', 0, 1);
+  return 'ติดตั้ง trigger ตรวจการตีกลับทุก 5 นาทีแล้ว';
+}
+
+function sbGet_(path) {
+  var res = UrlFetchApp.fetch(SUPABASE_URL + path, {
+    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY },
+    muteHttpExceptions: true });
+  try { return JSON.parse(res.getContentText()); } catch (e) { return null; }
+}
+function sbPatch_(billNo, fields) {
+  fields.updated_at = new Date().toISOString();
+  UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/inv_invoices?bill_no=eq.' + encodeURIComponent(billNo), {
+    method: 'patch', contentType: 'application/json',
+    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, Prefer: 'return=minimal' },
+    payload: JSON.stringify(fields), muteHttpExceptions: true });
+}
+</script>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -903,9 +1028,11 @@ async function sendInvoiceEmail(inv, blob, opts){
 
 // ================= ตั้งค่าที่แชร์ทุกเครื่อง (ตาราง inv_settings) =================
 function renderGasStatus(){
-  $('gasStatus').innerHTML=settings.gas_endpoint
+  var on=!!settings.gas_endpoint;
+  $('gasStatus').innerHTML=on
     ?'✅ ตั้งค่าแล้ว — กดออกบิลแล้วระบบจะส่งอีเมลหาลูกค้าทันที และตรวจการตีกลับให้ทุก 5 นาที'
-    :'ยังไม่ได้ตั้งค่า — บิลจะยังไม่ถูกส่งอีเมลอัตโนมัติจนกว่าจะใส่ URL';
+    :'⚠️ <b>ยังไม่ได้ตั้งค่า</b> — บิลจะยังไม่ถูกส่งอีเมล (ทำตามขั้นตอนข้างบนก่อน)';
+  $('gasHelp').open=!on;   // ยังไม่ตั้งค่า = กางขั้นตอนให้เลย
 }
 async function loadSettings(){
   if(!dbReady) return;
@@ -1504,6 +1631,24 @@ $('testGasBtn').onclick=async function(){
     toast(r.ok?('ส่งทดสอบไปที่ '+to.trim()+' แล้ว — เช็คกล่องจดหมาย'):('ไม่สำเร็จ: '+(r.message||'')),r.ok?'ok':'err');
   }catch(e){ toast('ไม่สำเร็จ: '+e.message,'err'); }
   b.disabled=false; b.textContent='ทดสอบส่งอีเมล';
+};
+function gasCodeText(){ return ($('gasCodeSrc').textContent||'').replace(/^\n/,''); }
+$('copyGasBtn').onclick=async function(){
+  var code=gasCodeText(), ok=false;
+  try{ await navigator.clipboard.writeText(code); ok=true; }
+  catch(e){
+    var ta=$('gasCodeBox'); ta.style.display='block'; ta.value=code;
+    ta.focus(); ta.select();
+    try{ ok=document.execCommand('copy'); }catch(e2){}
+  }
+  toast(ok?'คัดลอกโค้ดแล้ว — ไปวางใน script.new ของ Gmail ร้าน'
+          :'คัดลอกอัตโนมัติไม่ได้ — กด Ctrl+A แล้ว Ctrl+C ในกล่องโค้ดที่เปิดให้', ok?'ok':'err');
+};
+$('showGasBtn').onclick=function(){
+  var ta=$('gasCodeBox'), open=(ta.style.display!=='none');
+  if(open){ ta.style.display='none'; this.textContent='แสดงโค้ด (คัดลอกเอง)'; }
+  else{ ta.value=gasCodeText(); ta.style.display='block';
+    this.textContent='ซ่อนโค้ด'; ta.scrollIntoView({block:'nearest'}); }
 };
 $('sigUploadBtn').onclick=function(){ $('sigFile').click(); };
 $('sigFile').onchange=function(){ handleSigFile(this.files[0]); this.value=''; };
