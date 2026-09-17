@@ -90,6 +90,13 @@ setTimeout(async()=>{
     +(list().includes('ชื่อบิลไม่ตรงกัน')&&list().includes('ผักบุ้งจีน')));
   out.push('ผูกชื่อ: สรุปผูกแล้ว 2/3 + น้ำแข็งกลุ่มยังไม่ผูก: '
     +(list().includes('ผูกแล้ว 2')&&list().includes('ทั้งหมด 3')&&list().includes('น้ำแข็ง')&&list().includes('ยังไม่ผูก')));
+  // แก้ชื่อนับ inline: ผักบุ้ง → ผักบุ้งไทย (products ตามชื่อ + pnl_stock_map ตามสำเนาชื่อ)
+  w.editCn('p2'); await sleep(30);
+  d.getElementById('cni_p2').value='ผักบุ้งไทย';
+  await w.saveCn('p2'); await sleep(40);
+  const pn=patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.name==='ผักบุ้งไทย');
+  const pm=patches.find(p=>p.url.includes('pnl_stock_map?product_name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.product_name==='ผักบุ้งไทย');
+  out.push('แก้ชื่อนับ inline → PATCH products (2 สาขา) + pnl_stock_map: '+(!!pn&&!!pm&&list().includes('ผักบุ้งไทย')));
   out.push('แถบข้าง 3 เมนู + ไฮไลต์ตามหน้า: '+(d.querySelectorAll('#sideNav [data-t]').length===3&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
   out.push('แถบแผนกซ่อนในหน้าผูกชื่อ: '+(d.getElementById('deptbar').style.display==='none'));
   out.push('ปุ่มบันทึกซ่อน: '+(d.getElementById('save').style.display==='none'));
