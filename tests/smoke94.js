@@ -1,4 +1,4 @@
-// smoke94: jjmk-stockcheck v3 — 3 หน้า: นับ (แถบแผนก+การ์ด+stepper) / ผูกชื่อ / Safety
+// smoke94: jjmk-stockcheck v3 — นับ (แถบแผนก+การ์ด+stepper) / ผูกชื่อ / Safety (+เมนู รอบสั่งซัพ/ตั้งค่า แยก — เทสต์ละเอียดใน smoke95)
 // fixture JJRD: p1 หมูสามชั้น (ผูก "สามชั้น", dept ครัว) · p2 ผักบุ้ง (ผูก, dept บาร์น้ำ) · p3 น้ำแข็ง (ไม่ผูก)
 // นับ: เลือกแผนกครัว เห็นเฉพาะหมู · stepper + 2 ครั้ง = 2 · pill ครัวขึ้น ✓ · ค้นหาข้ามแผนก
 // ผูกชื่อ: น้ำแข็งอยู่กลุ่ม ⚠ ยังไม่ผูก · สรุป 2/3 · Safety: แก้ rate_wk → PATCH id / dept → PATCH name
@@ -110,7 +110,7 @@ setTimeout(async()=>{
   const pn=patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.name==='ผักบุ้งไทย');
   const pm=patches.find(p=>p.url.includes('pnl_stock_map?product_name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.product_name==='ผักบุ้งไทย');
   out.push('แก้ชื่อนับ inline → PATCH products (2 สาขา) + pnl_stock_map: '+(!!pn&&!!pm&&list().includes('ผักบุ้งไทย')));
-  out.push('แถบข้าง 3 เมนู + ไฮไลต์ตามหน้า: '+(d.querySelectorAll('#sideNav [data-t]').length===3&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
+  out.push('แถบข้าง 5 เมนู (นับ/ผูก/Safety/รอบสั่งซัพ/ตั้งค่า) + ไฮไลต์ตามหน้า: '+(d.querySelectorAll('#sideNav [data-t]').length===5&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
   out.push('แถบแผนกซ่อนในหน้าผูกชื่อ: '+(d.getElementById('deptbar').style.display==='none'));
   out.push('ปุ่มบันทึกซ่อน: '+(d.getElementById('save').style.display==='none'));
   // 7) หน้า Safety: แก้อัตรา + แผนก
@@ -130,13 +130,16 @@ setTimeout(async()=>{
   out.push('setImgUrl PATCH name=eq + local: '+(!!patches.find(p=>p.body.image_url)&&w.eval("S.all.find(x=>x.id==='p1').image_url")==='https://x.test/img.jpg'));
   out.push('bizToday ตี 2 → เมื่อวาน · dayGrp พฤ/ศ/ส = 0/1/2: '
     +(w.bizToday(new Date(2026,8,17,2,0))==='2026-09-16'&&w.dayGrp('2026-09-17')===0&&w.dayGrp('2026-09-18')===1&&w.dayGrp('2026-09-19')===2));
-  // 9) หน้า Safety (แอดมิน) มีการ์ดผู้ใช้ · แก้สิทธิ์ boy → PATCH sc_users
-  out.push('การ์ดรอบสั่งซัพขึ้นในหน้า Safety: '+(list().includes('รอบสั่ง–ส่งของซัพ')&&list().includes('FarmFresh')));
+  // 9) เมนู 🚚 รอบสั่งซัพ (แยกจาก Safety แล้ว) · เมนู ⚙️ ตั้งค่า มีการ์ดผู้ใช้
+  out.push('Safety ไม่มีการ์ดรอบสั่ง/ผู้ใช้แล้ว (แยกเมนู): '+(!list().includes('รอบสั่ง–ส่งของซัพ')&&!list().includes('สิทธิ์การใช้งานพนักงาน')));
+  w.setTab('sched'); await sleep(30);
+  out.push('หน้ารอบสั่งซัพ: การ์ดซัพ + ช่องวันสั่งแบบการ์ดรายวัน: '+(list().includes('รอบสั่ง–ส่งของซัพ')&&list().includes('FarmFresh')&&list().includes('สั่งจ.')&&list().includes('ไม่สั่ง')));
   const si=w.eval("S.supList.indexOf('Smilemeat')");
   w.supSetLead(si,2); await w.supSave(si); await sleep(40);
   const ps=patches.find(p=>p.url.includes('suppliers?name=eq.Smilemeat'));
   out.push('ตั้ง Smilemeat ส่งหลังสั่ง 2 วัน → PATCH suppliers: '+(!!ps&&ps.body.lead_days===2&&ps.body.order_mode==='any'));
-  out.push('การ์ดผู้ใช้: เห็น admin+boy: '+(list().includes('ผู้ใช้ระบบเช็คสต๊อก')&&list().includes('boy')));
+  w.setTab('cfg'); await sleep(30);
+  out.push('หน้าตั้งค่า: การ์ดสิทธิ์ผู้ใช้ เห็น admin+boy: '+(list().includes('สิทธิ์การใช้งานพนักงาน')&&list().includes('boy')));
   await w.userSave(2); await sleep(30);
   const pu=patches.find(p=>p.url.includes('sc_users?id=eq.2'));
   out.push('userSave boy → PATCH branches JJRD + depts ครัว: '+(!!pu&&JSON.stringify(pu.body.branches)==='["JJRD"]'&&JSON.stringify(pu.body.depts)==='["ครัว"]'&&pu.body.active===true));
