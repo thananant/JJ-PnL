@@ -110,8 +110,8 @@ setTimeout(async()=>{
   const pn=patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.name==='ผักบุ้งไทย');
   const pm=patches.find(p=>p.url.includes('pnl_stock_map?product_name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.product_name==='ผักบุ้งไทย');
   out.push('แก้ชื่อนับ inline → PATCH products (2 สาขา) + pnl_stock_map: '+(!!pn&&!!pm&&list().includes('ผักบุ้งไทย')));
-  out.push('แถบข้าง 5 เมนูหลัก + 3 เมนูย่อยตั้งค่า + ไฮไลต์ตามหน้า: '
-    +(d.querySelectorAll('#sideNav [data-t]').length===8&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
+  out.push('แถบข้าง 5 เมนูหลัก + 4 เมนูย่อยตั้งค่า + ไฮไลต์ตามหน้า: '
+    +(d.querySelectorAll('#sideNav [data-t]').length===9&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
   out.push('แถบแผนกซ่อนในหน้าผูกชื่อ: '+(d.getElementById('deptbar').style.display==='none'));
   out.push('ปุ่มบันทึกซ่อน: '+(d.getElementById('save').style.display==='none'));
   // 7) หน้า Safety: แก้อัตรา + แผนก

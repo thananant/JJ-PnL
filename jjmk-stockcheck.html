@@ -84,6 +84,9 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .di{width:100%;padding:8px;border:1.5px solid var(--line);border-radius:10px;font-size:13.5px;background:#fff}
 .di.dirty{border-color:var(--amber);background:#FFFBEF}
 .zsel.dirty{border-color:var(--amber);background:#FFFBEF}
+.brchip{display:inline-flex;align-items:center;gap:5px;background:#F2EDE0;border:1.5px solid var(--line);color:var(--mut);border-radius:99px;padding:4px 10px;font-size:12px;margin:2px 3px 2px 0}
+.brchip.on{background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700}
+.brchip button{border:0;background:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 1px;font-weight:700}
 .bchip{display:inline-block;background:#F1E7D2;border:1.5px solid #D9BE85;color:#6B4E14;border-radius:9px;padding:6px 12px;font-weight:700;font-size:13.5px}
 .foot{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -3px 12px rgba(0,0,0,.07);z-index:20}
 .foot .in{max-width:1220px;margin:0 auto;display:flex;gap:12px;align-items:center}
@@ -179,6 +182,7 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
     <div id="cfgSub">
       <button class="ni sub" data-t="cfgu"><span class="ic">👤</span>สิทธิ์การใช้งานพนักงาน</button>
       <button class="ni sub" data-t="cfgd"><span class="ic">🗂</span>แผนก</button>
+      <button class="ni sub" data-t="cfgi"><span class="ic">📦</span>รายการสินค้า</button>
       <button class="ni sub" data-t="cfgn"><span class="ic">📐</span>หน่วยซื้อ–หน่วยนับ</button>
     </div>
   </div>
@@ -321,7 +325,7 @@ async function loadAll(){
   });
   draftApply(cd); // ค่านับที่ยังไม่ได้กดบันทึก (จำไว้ตอนรีเฟรช)
   if(S.authOn&&S.user&&S.user.role==='admin')S.users=await api('GET','sc_users?select=*&order=id').catch(()=>null);
-  S.dept=null;
+  S.dept=null; S.allBr=null; // รายการสินค้าทุกสาขาโหลดใหม่เมื่อเปิดหน้านั้น
   render();
 }
 const billName=it=>{const m=S.map[it.id];return m?m.pnl_item:it.name;};
@@ -352,6 +356,7 @@ function render(){
   else if(S.tab==='sched')renderSched();
   else if(S.tab==='cfgu')renderCfgUsers();
   else if(S.tab==='cfgd')renderCfgDept();
+  else if(S.tab==='cfgi')renderCfgItems();
   else if(S.tab==='cfgn')renderCfgUnit();
   else renderSet();
   refresh();
@@ -520,7 +525,7 @@ async function userAdd(){
   }catch(e){toast('เพิ่มไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
 /* แผนกทั้งหมด (ตั้งได้ที่หน้า ⚙️ ตั้งค่า) — ใช้เป็น dropdown ในหน้า Safety */
-function deptNames(){return [...new Set(S.all.map(i=>i.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));}
+function deptNames(){return [...new Set([].concat((S.depts||[]).map(d2=>String(d2.name||'').trim()),S.all.map(i=>i.dept)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));}
 function deptOpts(cur){const l=deptNames();if(cur&&l.indexOf(cur)<0)l.unshift(cur);
   return l.map(d2=>'<option value="'+esc(d2)+'"'+(d2===cur?' selected':'')+'>'+esc(d2)+'</option>').join('');}
 /* ---- 🚚 หน้ารอบสั่งซัพ (แยกจาก Safety) ---- */
@@ -531,7 +536,7 @@ function renderSched(){
     +(schedCard()||'<div class="empty">ยังไม่มีซัพในรายการสินค้า</div>');
 }
 /* ---- ⚙️ ตั้งค่า: แยกหน้าละหัวข้อ (สิทธิ์ผู้ใช้ · แผนก · หน่วยซื้อ↔หน่วยนับ) ---- */
-const CFG_SUBS=[['cfgu','👤','สิทธิ์การใช้งานพนักงาน'],['cfgd','🗂','แผนก'],['cfgn','📐','หน่วยซื้อ–หน่วยนับ']];
+const CFG_SUBS=[['cfgu','👤','สิทธิ์การใช้งานพนักงาน'],['cfgd','🗂','แผนก'],['cfgi','📦','รายการสินค้า'],['cfgn','📐','หน่วยซื้อ–หน่วยนับ']];
 const isCfgTab=t=>String(t||'').indexOf('cfg')===0;
 function cfgHead(t){ // แถบเลือกหัวข้อ (โชว์เฉพาะจอเล็กที่ไม่มีแถบข้าง) + หัวหน้า
   const s2=CFG_SUBS.find(x=>x[0]===t)||CFG_SUBS[0];
@@ -550,6 +555,112 @@ function renderCfgUsers(){
 function renderCfgDept(){
   if(cfgDeny())return;
   $('#list').innerHTML=cfgHead('cfgd')+deptCard();
+}
+async function ensureAllProducts(force){ // รายการสินค้าทุกสาขา (ดูว่าสาขาไหนใช้ตัวไหน)
+  if((S.allBr&&!force)||S._apLoading)return;
+  S._apLoading=true;
+  try{
+    const ids=Object.values(STK_BR).join(',');
+    const base='products?select=id,branch_id,name,unit,sup,image_url&deleted_at=is.null&branch_id=in.('+ids+')&order=name';
+    let rows;
+    try{ rows=await selAll(base.replace('image_url','image_url,dept')); }
+    catch(e){ rows=await selAll(base); }
+    S.allBr=rows; S.apErr=null;
+  }catch(e){ S.allBr=[]; S.apErr=String(e.message||e).slice(0,90); }
+  S._apLoading=false;
+  if(isCfgTab(S.tab))render();
+}
+function renderCfgItems(){
+  if(cfgDeny())return;
+  $('#list').innerHTML=cfgHead('cfgi')+itemsCard();
+}
+function itemsCard(){
+  if(!S.allBr)ensureAllProducts();
+  const q=(S.cfgQ||'').trim().toLowerCase();
+  const BRK=Object.keys(STK_BR),BID2BR={};
+  BRK.forEach(b=>{BID2BR[STK_BR[b]]=b;});
+  const byName={};
+  (S.allBr||[]).forEach(r=>{
+    const n=String(r.name||'').trim(); if(!n)return;
+    const br=BID2BR[r.branch_id]; if(!br)return;
+    const e=byName[n]=byName[n]||{name:n,rows:{},unit:r.unit||'',sup:r.sup||'',image_url:r.image_url||null};
+    e.rows[br]=r; if(!e.image_url&&r.image_url)e.image_url=r.image_url; if(!e.sup&&r.sup)e.sup=r.sup;
+  });
+  // แผนกของสินค้า: ใช้ของสาขาที่เปิดอยู่ก่อน ถ้าไม่มีค่อยเอาของอีกสาขา
+  const groupOf=e=>{
+    const pick=b=>{const r=e.rows[b];return r&&String(r.dept||'').trim()?String(r.dept).trim():'';};
+    return pick(S.br)||BRK.map(pick).find(Boolean)||'ยังไม่จัดแผนก';
+  };
+  const groups={};
+  Object.values(byName).forEach(e=>{const g=groupOf(e);(groups[g]=groups[g]||[]).push(e);});
+  const keys=Object.keys(groups).sort((a,b)=>a==='ยังไม่จัดแผนก'?1:b==='ยังไม่จัดแผนก'?-1:a.localeCompare(b,'th'));
+  S.itemOpen=S.itemOpen||{};
+  const G='grid-template-columns:44px minmax(160px,1.6fr) minmax(180px,1.2fr) 120px 90px';
+  const total=Object.keys(byName).length;
+  const body=keys.map(k=>{
+    const list=groups[k].filter(e=>!q||e.name.toLowerCase().includes(q)||String(e.sup||'').toLowerCase().includes(q)
+      ||String(billOfName(e)||'').toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'th'));
+    if(q&&!list.length)return '';
+    const open=!!S.itemOpen[k]||!!q;
+    const esk=esc(k).replace(/'/g,"\\'");
+    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleItemGrp(\''+esk+'\')">'
+      +'<div><b>'+(open?'▾':'▸')+' '+(DEPT_IC[k]||'🗂')+' '+esc(k)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+groups[k].length+' รายการ</span></div>'
+      +'<div style="font-size:11.5px;color:var(--mut)">'+BRK.filter(b=>groups[k].some(e=>e.rows[b])).map(b=>BR_NAME[b]).join(' · ')+'</div></div>';
+    if(!open)return head;
+    return head+list.map(e=>{
+      const bill=billOfName(e);
+      const chips=BRK.map(b=>{
+        const r=e.rows[b];
+        return r?'<span class="brchip on">'+BR_NAME[b]+'<button title="เอาออกจากสาขานี้" onclick="delProd(\''+r.id+'\')">✕</button></span>'
+          :'<span class="brchip">'+BR_NAME[b]+' –</span>';
+      }).join(' ');
+      const esn=esc(e.name).replace(/'/g,"\\'");
+      return '<div class="lrow" style="'+G+'">'
+        +(e.image_url?'<img class="pimg" style="width:40px;height:40px" src="'+esc(e.image_url)+'" loading="lazy">':'<div class="pimg" style="width:40px;height:40px;font-size:16px">📦</div>')
+        +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(e.name)+'</div>'
+        +'<div class="s">'+(bill?'<span class="cn">🧾 '+esc(bill)+'</span>':'<span class="wat">⚠ ยังไม่ผูกชื่อบิล</span>')+'</div></div>'
+        +'<span class="lbl" data-l="สาขาที่ใช้">'+chips+'</span>'
+        +'<span class="lbl" data-l="หน่วย/ซัพ"><div style="font-size:12.5px">'+esc(e.unit||'–')+'</div><div style="font-size:11px;color:var(--mut)">'+esc(e.sup||'')+'</div></span>'
+        +'<button class="outb" style="color:var(--red);border-color:#E4A6A6" onclick="delProdAll(\''+esn+'\')">🗑 เลิกใช้</button></div>';
+    }).join('');
+  }).join('');
+  const st=S._apLoading?'<div class="note" style="margin:10px 15px">⏳ กำลังโหลดรายการสินค้าทุกสาขา...</div>'
+    :(S.apErr?'<div class="note" style="margin:10px 15px">⚠ โหลดไม่สำเร็จ ('+esc(S.apErr)+')</div>':'');
+  return '<div class="card"><div class="h">📦 รายการสินค้าทั้งหมด <span class="n">'+total+' รายการ · รวมทุกสาขา แยกตามแผนก</span></div>'
+    +'<div class="note" style="margin:10px 15px">ดูได้ว่าสินค้าตัวไหน <b>สาขาไหนใช้บ้าง</b> — กด ✕ บนชื่อสาขา = เอาออกเฉพาะสาขานั้น · ปุ่ม 🗑 เลิกใช้ = เอาออกทุกสาขา (ข้อมูลเก่ายังอยู่ในระบบ กู้คืนได้ที่ฐานข้อมูล) · แผนกจัดตามสาขาที่เปิดอยู่ (สาขา'+BR_NAME[S.br]+')</div>'
+    +'<div class="lrow" style="grid-template-columns:1fr"><input class="di" id="cfgQ" value="'+esc(S.cfgQ||'')+'" placeholder="🔍 ค้นหาชื่อสินค้า / ชื่อบิล / ซัพ" oninput="cfgSearch(this.value)"></div>'
+    +st
+    +'<div class="hd2" style="'+G+'"><span></span><span>สินค้า (ชื่อนับ / ชื่อบิล)</span><span>สาขาที่ใช้</span><span>หน่วย / ซัพ</span><span></span></div>'
+    +(body||'<div class="empty">ไม่พบ "'+esc(S.cfgQ||'')+'"</div>')+'</div>';
+}
+function billOfName(e){ // ชื่อบิลของสินค้า (จากการผูกของสาขาใดก็ได้)
+  const ids=Object.keys(e.rows).map(b=>e.rows[b].id);
+  for(const id of ids){ if(S.map[id])return S.map[id].pnl_item; }
+  const m=(S.mapRows||[]).find(r=>String(r.product_name||'').trim()===e.name);
+  return m?m.pnl_item:'';
+}
+function toggleItemGrp(k){S.itemOpen=S.itemOpen||{};S.itemOpen[k]=!S.itemOpen[k];render();}
+async function delProd(id){ // เอาสินค้าออกจากสาขาเดียว (soft delete)
+  const r=(S.allBr||[]).find(x=>x.id===id); if(!r)return;
+  const br=Object.keys(STK_BR).find(b=>STK_BR[b]===r.branch_id)||'';
+  if(!confirm('เอา "'+r.name+'" ออกจากสาขา'+(BR_NAME[br]||'')+'?\n\nจะไม่ขึ้นหน้านับสต๊อกของสาขานี้อีก (ยอดนับเดิมยังอยู่)'))return;
+  try{
+    await api('PATCH','products?id=eq.'+encodeURIComponent(id),{deleted_at:new Date().toISOString()},'return=minimal');
+    S.allBr=(S.allBr||[]).filter(x=>x.id!==id);
+    S.all=(S.all||[]).filter(x=>x.id!==id); S.items=S.all;
+    toast('✅ เอา "'+r.name+'" ออกจากสาขา'+(BR_NAME[br]||'')+'แล้ว');render();
+  }catch(e){toast('ลบไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
+}
+async function delProdAll(name){ // เลิกใช้สินค้า = เอาออกทุกสาขา (soft delete)
+  const rows=(S.allBr||[]).filter(x=>String(x.name||'').trim()===name);
+  if(!rows.length)return;
+  if(!confirm('เลิกใช้ "'+name+'" ทุกสาขา ('+rows.length+' สาขา)?\n\nจะไม่ขึ้นหน้านับสต๊อกอีก (ยอดนับเดิมและประวัติบิลยังอยู่)'))return;
+  try{
+    await api('PATCH','products?name=eq.'+encodeURIComponent(name)+'&deleted_at=is.null',{deleted_at:new Date().toISOString()},'return=minimal');
+    S.allBr=(S.allBr||[]).filter(x=>String(x.name||'').trim()!==name);
+    S.all=(S.all||[]).filter(x=>String(x.name||'').trim()!==name); S.items=S.all;
+    toast('✅ เลิกใช้ "'+name+'" แล้ว ('+rows.length+' สาขา)');render();
+  }catch(e){toast('ลบไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
 function renderCfgUnit(){
   if(cfgDeny())return;
@@ -834,7 +945,7 @@ function draftApply(cd){
 }
 function restoreTab(){ // รีเฟรชแล้วกลับหน้าเดิม
   const t=localStorage.getItem('jjsc_tab');
-  if(t&&t!==S.tab&&['count','link','set','sched','cfgu','cfgd','cfgn'].indexOf(t)>=0
+  if(t&&t!==S.tab&&['count','link','set','sched','cfgu','cfgd','cfgi','cfgn'].indexOf(t)>=0
     &&!((t==='set'||t==='sched'||isCfgTab(t))&&S.user&&S.user.role!=='admin')){
     S.tab=t; markNav(t);
   }

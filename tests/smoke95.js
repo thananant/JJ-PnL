@@ -37,6 +37,10 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_stock_names'))return T([
         {id:11,branch:'JJRD',product_id:'p1',pnl_item:'ผักบุ้งจีน',product_name:'ผักบุ้ง',bill_unit:null,stock_unit:'โล',factor:12,active:true}]);
       if(url.includes('pnl_stock_map'))return T([]);
+      if(url.includes('products')&&url.includes('branch_id=in.'))return T([
+        {id:'p1',branch_id:BID,name:'ผักบุ้ง',unit:'โล',sup:'FarmFresh',dept:'ผัก',image_url:null},
+        {id:'p1b',branch_id:'b19f0a17b448212',name:'ผักบุ้ง',unit:'โล',sup:'FarmFresh',dept:'ผักสดลาดพร้าว',image_url:null},
+        {id:'p2',branch_id:BID,name:'น้ำแข็ง',unit:'ถุง',sup:'โรงน้ำแข็ง',dept:'บาร์น้ำ',image_url:null}]);
       if(url.includes('products')&&url.includes('branch_id=eq.'+BID))return T([
         {id:'p1',branch_id:BID,cat_label:'ผัก',name:'ผักบุ้ง',unit:'โล',sup:'FarmFresh',safety:null,max:null,rate_wk:2,rate_fri:3,rate_we:4,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:1},
         {id:'p2',branch_id:BID,cat_label:'อื่นๆ',name:'น้ำแข็ง',unit:'ถุง',sup:'โรงน้ำแข็ง',safety:null,max:null,rate_wk:null,rate_fri:null,rate_we:null,dept:'บาร์น้ำ',zone:'หน้าร้าน',image_url:null,sort:2}]);
@@ -74,7 +78,7 @@ setTimeout(async()=>{
       &&d.querySelector('#sideNav [data-t="cfgn"]').textContent.includes('หน่วยซื้อ')));
   out.push('หน้าสิทธิ์ผู้ใช้มีเฉพาะหัวข้อตัวเอง (ไม่ปนแผนก/หน่วย): '
     +(cards().includes('สิทธิ์การใช้งานพนักงาน')&&!cards().includes('แผนก + ของที่ต้องนับ')&&!cards().includes('หน่วยซื้อ ↔ หน่วยนับ')));
-  out.push('มีแถบเลือกหัวข้อในหน้า (สำหรับจอเล็ก) 3 ปุ่ม: '+(d.querySelectorAll('#list .subtabs .stb').length===3));
+  out.push('มีแถบเลือกหัวข้อในหน้า (สำหรับจอเล็ก) 4 ปุ่ม: '+(d.querySelectorAll('#list .subtabs .stb').length===4));
   out.push('เมนูข้าง: มีปุ่ม ⚙️ ตั้งค่า + 🚚 รอบสั่งซัพ: '
     +(!!d.querySelector('#sideNav [data-t="cfg"]')&&!!d.querySelector('#sideNav [data-t="sched"]')));
   // 2) สิทธิ์ผู้ใช้: เลือกระดับ ผู้จัดการ/พนักงานทั่วไป ได้ + เซฟ role
@@ -129,6 +133,32 @@ setTimeout(async()=>{
   out.push('ตั้งโซนแผนก → PATCH sc_depts + products ของสาขานี้: '
     +(!!patches.find(p=>p.url.includes('sc_depts?id=eq.1')&&p.body.zone==='หน้าร้าน')
       &&!!patches.find(p=>p.url.includes('branch_id=eq.b19f0a17b4472')&&p.url.includes('dept=eq.'+encodeURIComponent('ผักสด'))&&p.body.zone==='หน้าร้าน')));
+  // 3.5) หน้า 📦 รายการสินค้า: ทุกสาขา แยกแผนก + ค้นหา + ลบ
+  w.setTab('cfgi'); await sleep(150);
+  out.push('แถบรายการสินค้าอยู่ในเมนูย่อยตั้งค่า + หน้าโหลดสินค้าทุกสาขา: '
+    +(!!d.querySelector('#sideNav [data-t="cfgi"]')&&cards().includes('รายการสินค้าทั้งหมด')&&w.eval('S.allBr.length')===3));
+  out.push('จัดกลุ่มตามแผนก (ใช้แผนกของสาขาที่เปิดอยู่) + มีช่องค้นหาด้านบน: '
+    +(cards().includes('ผัก')&&cards().includes('บาร์น้ำ')&&!!d.getElementById('cfgQ')));
+  w.toggleItemGrp('ผัก'); await sleep(30);
+  out.push('กางกลุ่ม → ผักบุ้งขึ้น 2 สาขา (รัชดา+ลาดพร้าว): '
+    +(cards().includes('ผักบุ้ง')&&[...d.querySelectorAll('.brchip.on')].filter(x=>x.textContent.includes('รัชดา')||x.textContent.includes('ลาดพร้าว')).length>=2));
+  w.cfgSearch('น้ำแข็ง'); await sleep(40);
+  out.push('ค้นหา "น้ำแข็ง" → เจอและกางให้เอง + ไม่โชว์ผักบุ้ง: '+(cards().includes('น้ำแข็ง')&&!cards().includes('ผักบุ้ง')));
+  out.push('น้ำแข็งมีสาขาเดียว (ลาดพร้าวขึ้นว่าไม่มี): '
+    +[...d.querySelectorAll('.brchip')].some(x=>!x.classList.contains('on')&&x.textContent.includes('ลาดพร้าว')));
+  // ลบเฉพาะสาขา
+  await w.delProd('p2'); await sleep(40);
+  const dl1=patches.find(p=>p.url.includes('products?id=eq.p2')&&p.body.deleted_at);
+  out.push('กด ✕ ที่สาขา → soft delete เฉพาะสาขานั้น (deleted_at) + หายจากรายการ: '
+    +(!!dl1&&!w.eval("(S.allBr||[]).some(x=>x.id==='p2')")));
+  // เลิกใช้ทุกสาขา
+  w.cfgSearch(''); await sleep(40);
+  await w.delProdAll('ผักบุ้ง'); await sleep(40);
+  const dl2=patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.deleted_at);
+  out.push('ปุ่ม 🗑 เลิกใช้ → PATCH ตามชื่อ ทุกสาขาที่ยังไม่ถูกลบ: '
+    +(!!dl2&&dl2.url.includes('deleted_at=is.null')&&!w.eval("(S.allBr||[]).some(x=>x.name==='ผักบุ้ง')")));
+  await w.loadAll(); await sleep(80); // โหลดใหม่จาก mock (คืนสภาพก่อนเทสต์หัวข้อถัดไป)
+  w.setTab('cfgd'); await sleep(40);
   // 4) หน้า 📐 หน่วยซื้อ↔หน่วยนับ (แยกหน้า): โชว์ "หน่วยซื้อ คือ ลัง" + "1 ลัง = 12 โล" · แก้ตัวคูณ → PATCH pnl_stock_map
   w.setTab('cfgn'); await sleep(30);
   out.push('หน้าหน่วยแยกหน้า มีเฉพาะการ์ดหน่วย: '
@@ -172,8 +202,8 @@ setTimeout(async()=>{
   // 5) Safety: ช่องแผนกเป็น dropdown จากรายชื่อแผนกหน้าตั้งค่า
   w.setTab('set'); await sleep(30);
   const dsel=[...d.querySelectorAll('#list select')].find(s2=>s2.textContent.includes('– แผนก –'));
-  out.push('Safety: แผนกเป็น dropdown มีตัวเลือกจากตั้งค่า (ผักสด): '
-    +(!!dsel&&dsel.textContent.includes('ผักสด')&&!d.querySelector('#list input[list="deptList"]')));
+  out.push('Safety: แผนกเป็น dropdown ดึงรายชื่อจากหน้าตั้งค่า (ไม่ใช่ช่องพิมพ์): '
+    +(!!dsel&&dsel.textContent.includes('ผัก')&&dsel.textContent.includes('เตรียมของ')&&!d.querySelector('#list input[list="deptList"]')));
   // 6) จำค่านับตอนรีเฟรช: นับแล้วไม่กดบันทึก → โหลดใหม่ ค่ายังอยู่
   w.setTab('count'); await sleep(30);
   out.push('setTab เก็บหน้าล่าสุดใน localStorage: '+(w.localStorage.getItem('jjsc_tab')==='count'));
