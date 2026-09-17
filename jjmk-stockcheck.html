@@ -349,7 +349,12 @@ async function loadAll(){
   ensureAllProducts(); // รายการทุกสาขา (ใช้จัดลำดับให้เหมือนกันทุกเมนู)
 }
 const billName=it=>{const m=S.map[it.id];return m?m.pnl_item:it.name;};
-const deptOf=it=>(S.deptOk&&it.dept)?it.dept:(it.cat_label||'ยังไม่จัดแผนก');
+const useDeptOnly=()=>!!(S.deptOk&&S.all&&S.all.some(x=>String(x.dept||'').trim())); // เริ่มตั้งแผนกจริงแล้ว = ยึด dept
+const deptOf=it=>{
+  const d2=S.deptOk?String(it.dept||'').trim():'';
+  if(d2)return d2;
+  return useDeptOnly()?'ยังไม่จัดแผนก':(it.cat_label||'ยังไม่จัดแผนก'); // ยังไม่ตั้งแผนกเลย = ใช้หมวดเดิมของแอพนับไปก่อน
+};
 const counted=it=>it.out||(it.qty!=null&&it.qty!=='');
 const isDirty=it=>Object.keys(it.dirty).length>0;
 function deptList(){
@@ -971,7 +976,7 @@ function deptCard(){
   }).join('');
   return '<div class="card"><div class="h">🗂 แผนก + ของที่ต้องนับ <span class="n">สาขา'+BR_NAME[S.br]+' · '+depts.filter(k=>k!=='ยังไม่จัดแผนก').length+' แผนก</span></div>'
     +'<div class="note" style="margin:10px 15px">แผนกและของในแต่ละแผนก <b>แยกกันคนละสาขา</b> (สลับสาขาที่แถบซ้ายเพื่อตั้งอีกสาขา) · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ · เพิ่ม/ลบแผนกที่นี่ แถบแผนกหน้านับสต๊อกเปลี่ยนตามทันที'
-    +(S.deptTbl?'':' · ⚠ ยังไม่ได้รัน <b>sql/jjmk_stockcheck_depts.sql</b> — แผนกที่ยังไม่มีของจะยังไม่ถูกจำ')+'</div>'
+    +(S.deptTbl?'':' · ⚠ ยังไม่ได้รัน <b>sql/jjmk_stockcheck_depts.sql</b> — แผนกที่ยังไม่มีของจะยังไม่ถูกจำ')+' · หมวดเดิมของแอพนับ (cat_label) ไม่ถูกแก้/ลบจากหน้านี้ ระบบนับเดิมยังใช้งานได้ปกติ'+'</div>'
     +'<div class="lrow" style="grid-template-columns:1fr 150px 130px;gap:8px"><div><input class="di" id="cfgQ" value="'+esc(S.cfgQ||'')+'" placeholder="🔍 ค้นหาสินค้าในทุกแผนก" oninput="cfgSearch(this.value)"></div>'
     +'<div><input class="di" id="ndName" placeholder="ชื่อแผนกใหม่" onkeydown="if(event.key===\'Enter\')addDept()"></div>'
     +'<div><button class="outb" onclick="addDept()">➕ เพิ่มแผนก</button></div></div>'
@@ -999,10 +1004,10 @@ async function delDept(nm){
   const ids=deptIds(nm),cnt=ids.length;
   if(!confirm('ลบแผนก "'+nm+'" ของสาขา'+BR_NAME[S.br]+'?'+(cnt?('\n\nของ '+cnt+' รายการในแผนกนี้จะถูกย้ายไป "ยังไม่จัดแผนก" (ไม่ได้ลบสินค้า)'):''))) return;
   try{
-    if(cnt)await patchIds(ids,{dept:null,cat_label:null}); // ล้างทั้งแผนกและหมวดเดิม ไม่งั้นกลุ่มยังค้างอยู่
+    if(cnt)await patchIds(ids,{dept:null}); // ล้างเฉพาะ dept — ห้ามแตะ cat_label (แอพนับเดิมใช้จัดหมวดและบันทึกลง stock_counts)
     const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===nm);
     if(d2&&d2.id!=null)await api('DELETE','sc_depts?id=eq.'+d2.id,null,'return=minimal');
-    S.all.forEach(x=>{if(ids.includes(x.id)){x.dept=null;x.cat_label=null;}});
+    S.all.forEach(x=>{if(ids.includes(x.id))x.dept=null;});
     S.depts=(S.depts||[]).filter(x=>String(x.name||'').trim()!==nm);
     if(S.dept===nm)S.dept=null;
     toast('✅ ลบแผนก "'+nm+'" แล้ว'+(cnt?(' · ย้ายของ '+cnt+' รายการไปยังไม่จัดแผนก'):''));render();
