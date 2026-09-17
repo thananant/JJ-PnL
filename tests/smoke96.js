@@ -30,7 +30,12 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
         {id:21,branch:'JJRD',product_id:'p1',pnl_item:'หมูสไลด์',product_name:'หมูสไลด์',bill_unit:'ลัง',stock_unit:'กก.',factor:12,active:true},
         {id:22,branch:'JJRD',product_id:'p2',pnl_item:'ผักบุ้งจีน',product_name:'ผักบุ้ง',bill_unit:'กก.',stock_unit:'กก.',factor:1,active:true}]);
       if(url.includes('pnl_stock_map'))return T([]);
-      if(url.includes('products')&&url.includes('branch_id=in.'))return T([]);
+      if(url.includes('products')&&url.includes('branch_id=in.'))return T([
+        {id:'p1',branch_id:BID,name:'หมูสไลด์',unit:'กก.',sup:'Smilemeat',cat_label:'เนื้อสัตว์',dept:'ครัว'},
+        {id:'p1b',branch_id:'b19f0a17b448212',name:'หมูสไลด์',unit:'กก.',sup:'Smilemeat',cat_label:'เนื้อสัตว์',dept:'ครัว'},
+        {id:'p2',branch_id:BID,name:'ผักบุ้ง',unit:'กก.',sup:'FarmFresh',cat_label:'ผัก',dept:'ผัก'},
+        {id:'p2b',branch_id:'b19f0a17b448212',name:'ผักบุ้ง',unit:'กก.',sup:'FarmFresh',cat_label:'ผัก',dept:'ผัก'},
+        {id:'p3',branch_id:BID,name:'น้ำแข็ง',unit:'ถุง',sup:'Smilemeat',cat_label:'เครื่องดื่ม',dept:'บาร์น้ำ'}]);
       if(url.includes('products'))return T([
         {id:'p1',branch_id:BID,cat_label:'เนื้อสัตว์',name:'หมูสไลด์',unit:'กก.',sup:'Smilemeat',rate_wk:50,rate_fri:60,rate_we:80,dept:'ครัว',zone:'หลังร้าน',image_url:null,sort:1},
         {id:'p2',branch_id:BID,cat_label:'ผัก',name:'ผักบุ้ง',unit:'กก.',sup:'FarmFresh',rate_wk:8,rate_fri:9,rate_we:12,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:2},
@@ -103,6 +108,18 @@ setTimeout(async()=>{
   w.setTab('order'); await sleep(50);
   const r1b=plan().find(g=>g.sup==='Smilemeat').rows.find(r=>r.n==='หมูสไลด์');
   out.push('กดหมด → นับได้ 0 → ต้องสั่งเต็ม 50: '+(r1b.have===0&&r1b.order===50));
+  // 5) ลำดับรายการเหมือนกันทุกเมนู: ของที่มีครบ 2 สาขาขึ้นก่อน · ของที่มีสาขาเดียวไว้ท้ายกลุ่ม
+  // (น้ำแข็ง มีเฉพาะรัชดา — ตามตัวอักษรไทย "น" มาก่อน "ห" แต่ต้องถูกดันลงล่าง)
+  out.push('รู้ว่าสินค้าตัวไหนมีกี่สาขา (โหลดทุกสาขาตั้งแต่เปิดแอพ): '
+    +(w.eval("S.nameBrN['หมูสไลด์']")===2&&w.eval("S.nameBrN['น้ำแข็ง']")===1));
+  const ordNames=plan().find(g=>g.sup==='Smilemeat').rows.map(r=>r.n);
+  out.push('หน้าสั่งของ: หมูสไลด์ (2 สาขา) มาก่อน น้ำแข็ง (สาขาเดียว): '
+    +(JSON.stringify(ordNames)===JSON.stringify(['หมูสไลด์','น้ำแข็ง'])));
+  out.push('ตัวเรียงกลาง cmpItem ใช้ร่วมทุกเมนู (ของสาขาเดียวลงท้าย ถึงชื่อจะมาก่อนตามตัวอักษร): '
+    +(w.eval("[{name:'น้ำแข็ง'},{name:'หมูสไลด์'},{name:'ผักบุ้ง'}].sort(cmpItem).map(x=>x.name).join(',')")==='ผักบุ้ง,หมูสไลด์,น้ำแข็ง'));
+  w.setTab('count'); w.pickDept('บาร์น้ำ'); await sleep(50);
+  const cntTxt=list();
+  out.push('การ์ดหน้านับบอกด้วยว่าเป็นของเฉพาะสาขานี้: '+cntTxt.includes('เฉพาะสาขารัชดา'));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
