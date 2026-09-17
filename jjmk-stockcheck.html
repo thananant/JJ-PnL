@@ -650,24 +650,37 @@ async function renameDept(old){
     toast('✅ เปลี่ยนชื่อแผนก "'+old+'" → "'+nn+'" (สาขา'+BR_NAME[S.br]+')');render();
   }catch(e){toast('เปลี่ยนชื่อแผนกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
-async function ensureBillUnits(force){ // หน่วยซื้อ = หน่วยที่ลงในบิลจริง (pnl_bill_items ฝั่ง P&L)
+async function ensureBillUnits(force){ // หน่วยซื้อ = หน่วยที่ลงบิลจริง (pnl_bill_items) แยกตามซัพ + ตัวคูณจาก pnl_unit_conv
   if((S.billUnits&&!force)||S._buLoading)return;
   S._buLoading=true;
   try{
     const to=($('#cd')&&$('#cd').value)||bizToday(),dt=new Date(to+'T12:00:00');
     dt.setDate(dt.getDate()-180); const p2=n=>String(n).padStart(2,'0');
     const from=dt.getFullYear()+'-'+p2(dt.getMonth()+1)+'-'+p2(dt.getDate());
-    const rows=await selAll('pnl_bill_items?select=item,unit,d&branch=eq.'+S.br+'&d=gte.'+from+'&order=d.desc');
-    const acc={};
-    rows.forEach(r=>{const k=String(r.item||'').trim(),u=String(r.unit||'').trim(); if(!k||!u)return;
+    const [rows,sups,conv]=await Promise.all([
+      selAll('pnl_bill_items?select=item,unit,d,supplier_id&branch=eq.'+S.br+'&d=gte.'+from+'&order=d.desc'),
+      selAll('pnl_suppliers?select=id,name&order=id').catch(()=>[]),
+      selAll('pnl_unit_conv?select=item,from_unit,to_unit,factor&order=id').catch(()=>[])
+    ]);
+    const supName={}; sups.forEach(x=>{supName[String(x.id)]=String(x.name||'').trim();});
+    const acc={},bySup={};
+    rows.forEach(r=>{
+      const k=String(r.item||'').trim(),u=String(r.unit||'').trim(); if(!k||!u)return;
+      const sp=supName[String(r.supplier_id)]||'(ไม่ระบุซัพ)',d2=String(r.d||'');
       const e=acc[k]=acc[k]||{n:{},last:{}};
-      e.n[u]=(e.n[u]||0)+1; if(!e.last[u]||String(r.d)>e.last[u])e.last[u]=String(r.d);});
+      e.n[u]=(e.n[u]||0)+1; if(!e.last[u]||d2>e.last[u])e.last[u]=d2;
+      const g=bySup[sp]=bySup[sp]||{};
+      const gi=g[k]=g[k]||{};
+      const gu=gi[u]=gi[u]||{n:0,last:''};
+      gu.n++; if(d2>gu.last)gu.last=d2;
+    });
     const out={};
     Object.keys(acc).forEach(k=>{const e=acc[k];
       const list=Object.keys(e.n).map(u=>({u,n:e.n[u],last:e.last[u]})).sort((a,b)=>b.n-a.n||(a.last<b.last?1:-1));
       out[k]={list,top:list[0].u,last:list[0].last};});
-    S.billUnits=out; S.buFrom=from; S.buErr=null;
-  }catch(e){ S.billUnits={}; S.buErr=String(e.message||e).slice(0,90); }
+    S.billUnits=out; S.billSup=bySup; S.buFrom=from; S.buErr=null;
+    S.conv={}; conv.forEach(r=>{S.conv[String(r.item||'').trim()+'|'+String(r.from_unit||'').trim()]={to:String(r.to_unit||'').trim(),f:num(r.factor)};});
+  }catch(e){ S.billUnits={}; S.billSup={}; S.conv=S.conv||{}; S.buErr=String(e.message||e).slice(0,90); }
   S._buLoading=false;
   if(isCfgTab(S.tab))render();
 }
@@ -688,69 +701,115 @@ function unitCard(){
   if(!S.billUnits)ensureBillUnits();
   const units=[...new Set([].concat(S.all.map(i=>i.unit),(S.mapRows||[]).map(m=>m.stock_unit))
     .map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
-  const G='grid-template-columns:46px minmax(170px,1.4fr) minmax(150px,1fr) 96px minmax(120px,1fr) 58px';
-  const rows=S.all.map(it=>{
-    const m=S.map[it.id],b=buOf(billName(it));
-    const cu=String(it.unit||'');
-    const bu=String((m&&m.bill_unit)||'').trim()||(b?b.top:'');
-    const fx=fq(num(m&&m.factor)||1);
-    const same=bu&&bu===cu;
-    const sum=!m?'<div class="s" style="color:var(--amber)">⚠ ยังไม่ผูกชื่อบิล — ผูกที่หน้า 🔗 ผูกชื่อ ก่อน</div>'
-      :(!bu?'<div class="s" style="color:var(--mut)">ยังไม่พบหน่วยในบิล 6 เดือนล่าสุด — พิมพ์เองได้</div>'
-        :(same?'<div class="s" style="color:var(--green)">หน่วยเดียวกัน — ไม่ต้องแปลง</div>'
-          :'<div class="s" style="color:var(--green);font-weight:700">1 '+esc(bu)+' = '+fx+' '+esc(cu||'หน่วยนับ')+'</div>'));
-    // ช่องหน่วยซื้อ: มาจากบิลจริง (หลายหน่วย = เลือกได้) · ไม่พบในบิล = พิมพ์เอง
-    let buCell;
-    if(!m)buCell='<span style="font-size:11.5px;color:var(--amber)">ยังไม่ผูกชื่อบิล</span>';
-    else if(b&&b.list.length>1)
-      buCell='<select class="zsel" style="margin-left:0;width:100%" id="bu_'+it.id+'">'
-        +b.list.map(x=>'<option value="'+esc(x.u)+'"'+(x.u===bu?' selected':'')+'>'+esc(x.u)+' ('+x.n+' บิล)</option>').join('')
-        +'</select><div style="font-size:10.5px;color:var(--amber)">บิลใช้ '+b.list.length+' หน่วย — เลือกหน่วยหลัก</div>';
-    else if(b)
-      buCell='<div class="bchip">'+esc(b.top)+'</div><input type="hidden" id="bu_'+it.id+'" value="'+esc(b.top)+'">'
-        +'<div style="font-size:10.5px;color:var(--mut)">จากบิล '+b.list[0].n+' ครั้ง · ล่าสุด '+esc(b.last||'')+'</div>';
-    else buCell='<input class="di" id="bu_'+it.id+'" list="unitList" value="'+esc(bu)+'" placeholder="ไม่พบในบิล">';
+  const q=(S.cfgQ||'').trim().toLowerCase();
+  S.supOpen=S.supOpen||{}; S._uRows=[];
+  const byBill={}; // ชื่อบิล → สินค้าในระบบนับของสาขานี้
+  S.all.forEach(it=>{const b=String(billName(it)||'').trim(); if(b)(byBill[b]=byBill[b]||[]).push(it);});
+  const G='grid-template-columns:40px minmax(150px,1.3fr) 120px 150px minmax(110px,.9fr) 54px';
+  const convOf=(item,u)=>S.conv?S.conv[item+'|'+u]:null;
+  const rowHtml=(it,item,u,info)=>{ // 1 แถว = 1 หน่วยซื้อของซัพนั้น
+    const i=S._uRows.length; S._uRows.push({pid:it.id,item,unit:u});
+    const cu=String(it.unit||''),c=convOf(item,u);
+    const same=u===cu;
+    const fx=same?1:(c&&c.f?c.f:'');
+    const stat=same?'<span class="okt">= หน่วยนับ ไม่ต้องแปลง</span>'
+      :(fx!==''?'<span class="okt">1 '+esc(u)+' = '+fq(fx)+' '+esc(cu||'หน่วยนับ')+'</span>'
+        :'<span class="wat">⚠ ยังไม่ใส่ตัวคูณ</span>');
     return '<div class="lrow" style="'+G+'">'+imgCell(it)
-      +'<div class="nm"><div class="t" style="font-size:14px">'+esc(it.name)+'</div>'
-      +'<div class="s"><span class="cn">🧾 '+esc(billName(it))+'</span></div>'+sum+'</div>'
-      +'<span class="lbl" data-l="หน่วยซื้อ (จากบิล)">'+buCell+'</span>'
-      +'<span class="lbl" data-l="×ตัวคูณ">'+(m?'<input class="ri" id="fx_'+it.id+'" type="text" inputmode="decimal" value="'+fx+'" title="1 หน่วยซื้อ = กี่หน่วยนับ"'+(same?' disabled':'')+'>':'')+'</span>'
-      +'<span class="lbl" data-l="หน่วยนับ"><input class="di" id="cu_'+it.id+'" list="unitList" value="'+esc(cu)+'" placeholder="เช่น โล"></span>'
-      +'<button class="outb" onclick="unitSave(\''+it.id+'\')">💾</button></div>';
-  }).join('');
+      +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(it.name)+'</div>'
+      +'<div class="s"><span class="cn">🧾 '+esc(item)+'</span></div><div class="s">'+stat+'</div></div>'
+      +'<span class="lbl" data-l="หน่วยซื้อ"><div class="bchip">'+esc(u)+'</div>'
+      +'<div style="font-size:10.5px;color:var(--mut)">'+info.n+' บิล · ล่าสุด '+esc(info.last||'')+'</div></span>'
+      +'<span class="lbl" data-l="ตัวคูณ"><span style="font-size:12px;color:var(--mut)">1 '+esc(u)+' =</span> '
+      +'<input class="ri" style="max-width:74px;display:inline-block" id="fx_'+i+'" type="text" inputmode="decimal" value="'+(same?'1':fq(fx))+'"'+(same?' disabled':'')+'></span>'
+      +'<span class="lbl" data-l="หน่วยนับ"><input class="di" id="cu_'+i+'" list="unitList" value="'+esc(cu)+'" placeholder="เช่น โล"></span>'
+      +'<button class="outb" onclick="convSave('+i+')">💾</button></div>';
+  };
+  const secs=[];
+  const sups=Object.keys(S.billSup||{}).sort((a,b)=>a.localeCompare(b,'th'));
+  sups.forEach(sp=>{
+    const g=S.billSup[sp],items=Object.keys(g).filter(item=>byBill[item]).sort((a,b)=>a.localeCompare(b,'th'));
+    if(!items.length)return;
+    let nUnit=0,nTodo=0,body='';
+    items.forEach(item=>{
+      Object.keys(g[item]).forEach(u=>{
+        nUnit++;
+        (byBill[item]||[]).forEach(it=>{
+          if(u!==String(it.unit||'')&&!(S.conv||{})[item+'|'+u])nTodo++;
+          if(q&&!(it.name.toLowerCase().includes(q)||item.toLowerCase().includes(q)||sp.toLowerCase().includes(q)))return;
+          body+=rowHtml(it,item,u,g[item][u]);
+        });
+      });
+    });
+    const open=!!S.supOpen[sp]||!!q;
+    const esp=esc(sp).replace(/'/g,"\\'");
+    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleSup(\''+esp+'\')">'
+      +'<div><b>'+(open?'▾':'▸')+' 🏷 '+esc(sp)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+items.length+' สินค้า · '+nUnit+' หน่วยซื้อ</span></div>'
+      +'<div style="font-size:11.5px;color:'+(nTodo?'var(--amber)':'var(--green)')+';font-weight:700">'+(nTodo?('⚠ ยังไม่ใส่ตัวคูณ '+nTodo):'✓ ครบ')+'</div></div>';
+    secs.push(head+(open?(body||'<div class="lrow" style="grid-template-columns:1fr;color:var(--mut);font-size:13px">ไม่พบสินค้าที่ค้นหาในซัพนี้</div>'):''));
+  });
+  // สินค้าที่ยังไม่เจอในบิล 6 เดือน (จัดกลุ่มตามซัพในระบบนับ)
+  const inBill={}; Object.keys(S.billSup||{}).forEach(sp=>Object.keys(S.billSup[sp]).forEach(k=>{inBill[k]=1;}));
+  const rest=S.all.filter(it=>!inBill[String(billName(it)||'').trim()]);
+  if(rest.length){
+    const open=!!S.supOpen['__rest']||!!q;
+    const grp={}; rest.forEach(it=>{(grp[String(it.sup||'').trim()||'(ไม่ระบุซัพ)']=grp[String(it.sup||'').trim()||'(ไม่ระบุซัพ)']||[]).push(it);});
+    let body='';
+    Object.keys(grp).sort((a,b)=>a.localeCompare(b,'th')).forEach(sp=>{
+      const list=grp[sp].filter(it=>!q||it.name.toLowerCase().includes(q)||String(billName(it)).toLowerCase().includes(q));
+      if(!list.length)return;
+      body+='<div class="lrow" style="grid-template-columns:1fr;font-size:12px;color:var(--mut)">🏷 '+esc(sp)+' (ซัพจากระบบนับ)</div>'
+        +list.map(it=>{
+          const i=S._uRows.length; S._uRows.push({pid:it.id,item:String(billName(it)||'').trim(),unit:''});
+          return '<div class="lrow" style="'+G+'">'+imgCell(it)
+            +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(it.name)+'</div>'
+            +'<div class="s">'+(S.map[it.id]?'<span class="cn">🧾 '+esc(billName(it))+'</span>':'<span class="wat">⚠ ยังไม่ผูกชื่อบิล</span>')+'</div></div>'
+            +'<span class="lbl" data-l="หน่วยซื้อ"><span style="font-size:11.5px;color:var(--mut)">ยังไม่มีในบิล</span></span>'
+            +'<span class="lbl" data-l="ตัวคูณ"><span style="font-size:11.5px;color:var(--mut)">–</span></span>'
+            +'<span class="lbl" data-l="หน่วยนับ"><input class="di" id="cu_'+i+'" list="unitList" value="'+esc(it.unit||'')+'" placeholder="เช่น โล"></span>'
+            +'<button class="outb" onclick="convSave('+i+')">💾</button></div>';
+        }).join('');
+    });
+    secs.push('<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleSup(\'__rest\')">'
+      +'<div><b>'+(open?'▾':'▸')+' ❓ ยังไม่พบในบิล 6 เดือน</b> <span style="font-size:11.5px;color:var(--mut)">'+rest.length+' รายการ · ตั้งได้เฉพาะหน่วยนับ</span></div><div></div></div>'
+      +(open?body:''));
+  }
   const nFix=S.all.map(it=>({m:S.map[it.id],b:buOf(billName(it))})).filter(x=>x.m&&x.b&&String(x.m.bill_unit||'').trim()!==x.b.top).length;
   const st=S._buLoading?'<div class="note" style="margin:10px 15px">⏳ กำลังดึงหน่วยซื้อจากบิลใน P&L...</div>'
-    :(S.buErr?'<div class="note" style="margin:10px 15px">⚠ อ่านบิลไม่ได้ ('+esc(S.buErr)+') — พิมพ์หน่วยซื้อเองได้</div>':'');
-  return '<div class="card"><div class="h">📐 หน่วยซื้อ ↔ หน่วยนับ <span class="n">สาขา'+BR_NAME[S.br]+' · ใช้ร่วมกันทั้ง 2 สาขา</span></div>'
-    +'<div class="note" style="margin:10px 15px"><b>หน่วยซื้อ</b> ดึงจากรายละเอียดบิลจริงใน P&L (6 เดือนล่าสุด) — ไม่ต้องพิมพ์เอง · <b>หน่วยนับ</b> = หน่วยตอนเช็คสต๊อก · <b>ตัวคูณ</b> = 1 หน่วยซื้อเท่ากับกี่หน่วยนับ (ใส่เอง) · ถ้าซัพลงบิลหลายหน่วย จะให้เลือกว่าหน่วยไหนเป็นหน่วยหลัก</div>'
+    :(S.buErr?'<div class="note" style="margin:10px 15px">⚠ อ่านบิลไม่ได้ ('+esc(S.buErr)+')</div>':'');
+  return '<div class="card"><div class="h">📐 หน่วยซื้อ ↔ หน่วยนับ · แยกตามซัพ <span class="n">สาขา'+BR_NAME[S.br]+' · '+sups.length+' ซัพจากบิล 6 เดือน</span></div>'
+    +'<div class="note" style="margin:10px 15px"><b>หน่วยซื้อดึงจากบิลจริงใน P&L</b> แยกรายซัพ — สินค้าตัวเดียวมีได้หลายซัพ และแต่ละซัพลงคนละหน่วยได้ (ซัพ A ลัง · ซัพ B โล) · ใส่ <b>ตัวคูณ</b> ของแต่ละหน่วยว่าเท่ากับกี่หน่วยนับ ระบบจะแปลงให้ตอนคำนวณ · ตัวคูณเก็บที่ตาราง pnl_unit_conv ใช้ร่วมกับ P&L'
+    +(S.conv?'':' · ⚠ ยังไม่ได้รัน sql/jjmk_pnl_unitconv.sql')+'</div>'
     +st
-    +(nFix?'<div class="lrow" style="grid-template-columns:1fr auto"><div style="font-size:13px">หน่วยซื้อยังไม่ตรงกับบิล <b>'+nFix+'</b> รายการ</div><div><button class="outb" onclick="fillBillUnits()">⬇ เติมหน่วยซื้อจากบิลทั้งหมด</button></div></div>':'')
-    +'<div class="hd2" style="'+G+'"><span></span><span>สินค้า (ชื่อนับ / ชื่อบิล)</span><span>หน่วยซื้อ (จากบิล)</span><span style="text-align:center">×ตัวคูณ</span><span>หน่วยนับ</span><span></span></div>'
-    +rows+'<datalist id="unitList">'+units.map(u2=>'<option value="'+esc(u2)+'">').join('')+'</datalist></div>';
+    +'<div class="lrow" style="grid-template-columns:1fr auto;gap:8px"><div><input class="di" id="cfgQ" value="'+esc(S.cfgQ||'')+'" placeholder="🔍 ค้นหาสินค้า / ซัพ" oninput="cfgSearch(this.value)"></div>'
+    +(nFix?'<div><button class="outb" onclick="fillBillUnits()">⬇ เติมหน่วยหลักจากบิล ('+nFix+')</button></div>':'<div></div>')+'</div>'
+    +'<div class="hd2" style="'+G+'"><span></span><span>สินค้า (ชื่อนับ / ชื่อบิล)</span><span>หน่วยซื้อ</span><span>ตัวคูณ</span><span>หน่วยนับ</span><span></span></div>'
+    +(secs.length?secs.join(''):'<div class="empty">ยังไม่มีข้อมูลบิลของสาขานี้</div>')
+    +'<datalist id="unitList">'+units.map(u2=>'<option value="'+esc(u2)+'">').join('')+'</datalist></div>';
 }
-async function unitSave(id){
-  const it=S.all.find(x=>x.id===id); if(!it)return;
-  const cuEl=document.getElementById('cu_'+id);
-  const cu=cuEl?(cuEl.value||'').trim():String(it.unit||'');
-  const m=S.map[it.id];
+function toggleSup(k){S.supOpen=S.supOpen||{};S.supOpen[k]=!S.supOpen[k];render();}
+async function convSave(i){ // เซฟหน่วยนับ (ตามชื่อ=2 สาขา) + ตัวคูณของหน่วยซื้อนั้น (pnl_unit_conv)
+  const r=(S._uRows||[])[i]; if(!r)return;
+  const it=S.all.find(x=>x.id===r.pid); if(!it)return;
+  const cuEl=document.getElementById('cu_'+i),fxEl=document.getElementById('fx_'+i);
+  const cu=((cuEl&&cuEl.value)||'').trim()||String(it.unit||'');
   try{
-    if(cu&&cu!==String(it.unit||'')){ // หน่วยนับ: ชื่อเดียวทั้ง 2 สาขา (อัปเดตตามชื่อสินค้า)
+    if(cu&&cu!==String(it.unit||'')){ // หน่วยนับ: ชื่อเดียวทั้ง 2 สาขา
       await api('PATCH','products?name=eq.'+encodeURIComponent(it.name),{unit:cu},'return=minimal');
       await api('PATCH','pnl_stock_map?product_name=eq.'+encodeURIComponent(it.name),{stock_unit:cu},'return=minimal').catch(()=>{});
       S.all.forEach(x=>{if(x.name===it.name)x.unit=cu;});
-      (S.mapRows||[]).forEach(r=>{if(r.product_name===it.name)r.stock_unit=cu;});
+      (S.mapRows||[]).forEach(x=>{if(x.product_name===it.name)x.stock_unit=cu;});
     }
-    if(m){
-      const buEl=document.getElementById('bu_'+id),fxEl=document.getElementById('fx_'+id);
-      const bu=((buEl&&buEl.value)||'').trim();
-      const fx=(fxEl&&!fxEl.disabled?num(fxEl.value):num(m.factor))||1;
-      if(bu!==String(m.bill_unit||'')||fx!==(num(m.factor)||1)){
-        await api('PATCH','pnl_stock_map?id=eq.'+encodeURIComponent(m.id),{bill_unit:bu||null,factor:fx},'return=minimal');
-        m.bill_unit=bu||null;m.factor=fx;
-      }
-    }
-    toast('✅ บันทึกหน่วย '+it.name);render();
-  }catch(e){toast('บันทึกหน่วยไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
+    if(r.unit&&r.unit!==cu&&fxEl&&!fxEl.disabled){
+      const f=num(fxEl.value);
+      if(!f){toast('ใส่ตัวคูณก่อนครับ (1 '+r.unit+' = กี่ '+cu+')',true);return;}
+      await api('POST','pnl_unit_conv?on_conflict=item,from_unit',
+        [{item:r.item,from_unit:r.unit,to_unit:cu,factor:f}],'resolution=merge-duplicates,return=minimal');
+      (S.conv=S.conv||{})[r.item+'|'+r.unit]={to:cu,f};
+      toast('✅ 1 '+r.unit+' = '+fq(f)+' '+cu+' ('+r.item+')');
+    }else toast('✅ บันทึกหน่วยนับ '+it.name+' = '+cu);
+    render();
+  }catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message||e).slice(0,110),true);}
 }
 /* ---- จำค่าตอนรีเฟรช: หน้าเดิม + ค่านับที่ยังไม่เซฟ ---- */
 const cntHash=it=>String(num(it.qty))+'|'+(it.out?1:0);
