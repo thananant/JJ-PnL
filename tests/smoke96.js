@@ -12,7 +12,7 @@ const html=fs.readFileSync('jjmk-stockcheck.html','utf8');
 const patched=html.replace(/<link href="https:\/\/fonts[^>]*>/g,'');
 const BID='b19f0a17b4472';
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
-const sent=[];
+const sent=[],receipts=[];
 const users=[{id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true}];
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
@@ -20,16 +20,17 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
     w.localStorage.setItem('jjsc_tab','dash');
     w.fetch=async(url,opt)=>{
       const method=opt&&opt.method||'GET';
-      const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v)});
-      if(url.includes('hook.test')){sent.push(JSON.parse(opt.body));return T({ok:true});}
+      const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),json:async()=>v}); // ของจริงมี json()
+      if(url.includes('/functions/v1/line-order')){sent.push(JSON.parse(opt.body));return T({ok:true});}
+      if(url.includes('stock_receipts')){receipts.push(JSON.parse(opt.body));return T([]);}
       if(method!=='GET')return T([]);
       if(url.includes('sc_users')){
         const um=url.match(/username=eq\.([^&]+)/);
         return T(um?users.filter(x=>x.username===decodeURIComponent(um[1])):users);
       }
       if(url.includes('sc_depts'))return T([]);
-      if(url.includes('sc_line_groups'))return T([{id:1,supplier:'Smilemeat',group_id:'C123',group_name:'กลุ่มหมู',branch_id:null,active:true}]);
-      if(url.includes('sc_config'))return T([{k:'line_endpoint',v:'https://hook.test/line'}]);
+      if(url.includes('line_groups'))return T([{group_id:'C123',name:'กลุ่มสั่งของ Smilemeat',seen_at:'2026-09-01'}]);
+      if(url.includes('sc_config'))return T([]);
       if(url.includes('pnl_stock_names'))return T([
         {id:21,branch:'JJRD',product_id:'p1',pnl_item:'หมูสไลด์',product_name:'หมูสไลด์',bill_unit:'ลัง',stock_unit:'กก.',factor:12,active:true},
         {id:22,branch:'JJRD',product_id:'p2',pnl_item:'ผักบุ้งจีน',product_name:'ผักบุ้ง',bill_unit:'กก.',stock_unit:'กก.',factor:1,active:true}]);
@@ -50,8 +51,8 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_suppliers'))return T([{id:1,name:'Smilemeat'}]);
       if(url.includes('pnl_unit_conv'))return T([{item:'หมูสไลด์',from_unit:'ลัง',to_unit:'กก.',factor:12}]);
       if(url.includes('suppliers'))return T([
-        {name:'Smilemeat',order_mode:'any',lead_days:1},
-        {name:'FarmFresh',order_mode:'fixed',schedule:{mon:'wed'},lead_days:1}]);
+        {name:'Smilemeat',order_mode:'any',lead_days:1,line_group_id:'C123'},
+        {name:'FarmFresh',order_mode:'fixed',schedule:{mon:'wed'},lead_days:1,line_group_id:null}]);
       if(url.includes('stock_counts'))return T(url.includes(encodeURIComponent('2026-09-14'))||url.includes('2026-09-14')?[
         {product_id:'p1',qty:10,out_of_stock:false,created_at:'2026-09-15T01:00:00Z'},  // นับตี 1 = ยังเป็นวันจันทร์
         {product_id:'p2',qty:8,out_of_stock:false,created_at:'2026-09-15T01:05:00Z'}]:[]); // วันอื่น = ยังไม่ได้นับ
@@ -97,12 +98,14 @@ setTimeout(async()=>{
   // 3) หน้าจอ
   out.push('หน้าสั่งของแยกการ์ดรายซัพ + บอกวันส่ง + ปุ่มคัดลอกใบสั่ง: '
     +(list().includes('Smilemeat')&&list().includes('FarmFresh')&&list().includes('ส่ง 2026-09-15')&&list().includes('คัดลอก')&&list().includes('ส่งเข้าไลน์')));
+  out.push('ซัพที่ยังไม่ผูกกลุ่มในระบบเดิม ปุ่มบอกว่ายังไม่ผูก: '+w.eval("lineOf('FarmFresh')===null"));
   w.toggleOrd('FarmFresh'); await sleep(40); // ซัพที่ไม่ต้องสั่งพับไว้ตั้งต้น — กางดู
   out.push('แถวหมูสไลด์โชว์ 40 กก. + ≈ 4 ลัง · ผักบุ้งขึ้น "พอแล้ว" · น้ำแข็ง "ยังไม่นับ": '
     +(list().includes('40')&&list().includes('4 ลัง')&&list().includes('พอแล้ว')&&list().includes('ยังไม่นับ')));
-  out.push('ข้อความใบสั่งสำหรับไลน์: มีชื่อบิล จำนวนหน่วยซื้อ + กำกับหน่วยนับ: '
+  out.push('ข้อความใบสั่งรูปแบบเดียวกับแอพนับเดิม (🛒 ออเดอร์ / ซัพ / สาขา / • รายการ): '
     +(()=>{const t=w.orderText('Smilemeat');
-      return t.includes('สั่งของ Smilemeat')&&t.includes('ส่งวัน 2026-09-15')&&t.includes('หมูสไลด์ 4 ลัง')&&t.includes('= 40 กก.');})());
+      return t.includes('🛒 ออเดอร์')&&t.includes('🏷️ Smilemeat')&&t.includes('🏪 รัชดา')
+        &&t.includes('ส่งวัน 2026-09-15')&&t.includes('• หมูสไลด์ — 4 ลัง')&&t.includes('= 40 กก.')&&t.includes('รวม 1 รายการ');})());
   out.push('ค้นหาในใบสั่ง: พิมพ์ "ผักบุ้ง" เหลือเฉพาะผักบุ้ง: '
     +(w.ordSearch('ผักบุ้ง')===undefined&&list().includes('ผักบุ้ง')&&!list().includes('หมูสไลด์')));
   w.ordSearch('');
@@ -130,10 +133,13 @@ setTimeout(async()=>{
   // ส่งใบสั่งเข้ากลุ่มไลน์ของซัพ (ผ่านตัวกลางที่ถือโทเคน)
   w.confirm=()=>true;
   await w.sendLine('Smilemeat'); await sleep(60);
-  out.push('ปุ่มส่งไลน์: ยิงใบสั่งไปตัวกลาง พร้อม group id ของซัพนั้น: '
-    +(sent.length===1&&sent[0].to==='C123'&&sent[0].supplier==='Smilemeat'&&sent[0].text.includes('หมูสไลด์')));
+  out.push('ส่งไลน์ผ่าน Edge Function เดิม (/functions/v1/line-order) ด้วย group id จาก suppliers: '
+    +(sent.length===1&&sent[0].to==='C123'&&sent[0].text.includes('หมูสไลด์')));
+  out.push('ส่งสำเร็จ → บันทึกยอดสั่งลง stock_receipts ให้ระบบเดิมใช้ต่อ (ordered 40, order_date วันขาย): '
+    +(receipts.length===1&&receipts[0][0].ordered===40&&receipts[0][0].sup==='Smilemeat'
+      &&receipts[0][0].order_date==='2026-09-14'&&receipts[0][0].product_id==='p1'));
   await w.sendLine('FarmFresh'); await sleep(40);
-  out.push('ซัพที่ไม่ต้องสั่ง/ยังไม่ผูกกลุ่ม ไม่ยิงซ้ำ: '+(sent.length===1));
+  out.push('ซัพที่ยังไม่ผูกกลุ่ม ไม่ยิงเข้าไลน์ (เปิดแชร์ให้เลือกกลุ่มเองแทน): '+(sent.length===1));
   out.push('ตัวเรียงกลาง cmpItem ใช้ร่วมทุกเมนู (ของสาขาเดียวลงท้าย ถึงชื่อจะมาก่อนตามตัวอักษร): '
     +(w.eval("[{name:'น้ำแข็ง'},{name:'หมูสไลด์'},{name:'ผักบุ้ง'}].sort(cmpItem).map(x=>x.name).join(',')")==='ผักบุ้ง,หมูสไลด์,น้ำแข็ง'));
   w.setTab('count'); w.pickDept('บาร์น้ำ'); await sleep(50);
