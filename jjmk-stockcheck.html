@@ -320,16 +320,17 @@ async function loadAll(){
   const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows]=await Promise.all([
     selAll('pnl_stock_names?select=*&order=id').catch(()=>selAll('pnl_stock_map?select=*&order=id')).catch(()=>[]),
     selAll('stock_current?select=product_id,qty,updated_at&branch_id=eq.'+bid).catch(()=>[]),
-    selAll('suppliers?select=name,order_mode,schedule,lead_days&order=name').catch(()=>[]),
+    selAll('suppliers?select=name,order_mode,schedule,lead_days,cycle_days,min_cases,cutoff,line_group_id&order=name')
+      .catch(()=>selAll('suppliers?select=name,order_mode,schedule,lead_days&order=name')).catch(()=>[]),
     // ยอดที่นับไปแล้วของ "วันขายนี้" — ตี 6 ขึ้นวันใหม่ = ว่างเอง (รีเซ็ตอัตโนมัติ)
     selAll('stock_counts?select=product_id,qty,out_of_stock,created_at&branch_id=eq.'+bid+'&count_date=eq.'+encodeURIComponent(cd)+'&order=created_at.desc').catch(()=>[]),
     // รายชื่อแผนกของ "สาขานี้" (แผนกแยกสาขา) — ยังไม่รัน sql/jjmk_stockcheck_depts.sql = ไม่มีตาราง
     selAll('sc_depts?select=*&branch_id=eq.'+bid+'&order=sort,name').then(r=>{S.deptTbl=true;return r;}).catch(()=>{S.deptTbl=false;return null;}),
-    selAll('sc_line_groups?select=*&order=supplier').then(r=>{S.lineTbl=true;return r;}).catch(()=>{S.lineTbl=false;return [];}),
+    selAll('line_groups?select=*').catch(()=>[]), // กลุ่มไลน์ที่บอทเห็น (ของแอพนับเดิม)
     selAll('sc_config?select=*').catch(()=>[])
   ]);
   S.depts=deptRows||[];
-  S.lineG=lineRows||[];
+  S.lineGroups=lineRows||[]; // [{group_id,name,seen_at}]
   S.cfg={}; (cfgRows||[]).forEach(r=>{S.cfg[r.k]=r.v;});
   S.sups=sups;
   S.map={}; map.forEach(r=>{ if(r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-')S.map[r.product_id]=r; });
@@ -430,33 +431,56 @@ function orderPlan(){ // คิดใบสั่งของทุกซัพ�
       nNoRate:rows.filter(r=>!r.need).length};
   }).sort((a,b2)=>(b2.nOrder-a.nOrder)||a.sup.localeCompare(b2.sup,'th'));
 }
-function orderText(sp){
+function orderText(sp){ // รูปแบบเดียวกับใบสั่งของแอพนับเดิม (ซัพคุ้นตา)
   const g=(orderPlan()||[]).find(x=>x.sup===sp); if(!g)return '';
-  const L=['สั่งของ '+sp+' · สาขา'+BR_NAME[S.br],'ส่งวัน '+(g.dl.d?(g.dl.d+' ('+dowTH(g.dl.d)+')'):'-'),''];
-  g.rows.filter(r=>r.order>0).forEach(r=>{
-    L.push('- '+billName(r.it)+' '+fq(r.packs!=null?r.packs:r.order)+' '+(r.packs!=null?r.bu:(r.it.unit||''))
+  const cd=($('#cd')&&$('#cd').value)||bizToday();
+  const list=g.rows.filter(r=>r.order>0); if(!list.length)return '';
+  const L=['🛒 ออเดอร์ จริงใจหมูกระทะ','📅 '+cd+' ('+dowTH(cd)+')','🏷️ '+sp,
+    '🚚 ส่งวัน '+(g.dl.d?(g.dl.d+' ('+dowTH(g.dl.d)+')'):'-'),'','🏪 '+BR_NAME[S.br]];
+  list.forEach(r=>{
+    L.push('• '+billName(r.it)+' — '+fq(r.packs!=null?r.packs:r.order)+' '+(r.packs!=null?r.bu:(r.it.unit||''))
       +(r.packs!=null?(' (= '+fq(r.order)+' '+(r.it.unit||'')+')'):''));
   });
+  L.push('','รวม '+list.length+' รายการ');
   return L.join('\n');
 }
-const lineOf=sp=>(S.lineG||[]).find(x=>String(x.supplier||'').trim()===String(sp||'').trim()
-  &&x.active!==false&&(!x.branch_id||x.branch_id===STK_BR[S.br]))||null;
-async function sendLine(sp){ // ส่งใบสั่งเข้ากลุ่มไลน์ของซัพ (ผ่านตัวกลางที่ถือโทเคนบอท)
+function lineOf(sp){ // กลุ่มไลน์ของซัพ — ใช้ของระบบเดิม: suppliers.line_group_id
+  const x=supSched(sp); if(!x||!x.line_group_id)return null;
+  const g=(S.lineGroups||[]).find(y=>String(y.group_id)===String(x.line_group_id));
+  return {group_id:x.line_group_id,group_name:(g&&g.name)||''};
+}
+const lgLabel=g=>(g.name&&g.name.trim())?g.name:('กลุ่ม '+String(g.group_id).slice(0,10)+'…');
+const lineEndpoint=()=>((S.cfg||{}).line_endpoint||'').trim()||(CONFIG.URL+'/functions/v1/line-order');
+async function sendLine(sp){ // ส่งใบสั่งเข้ากลุ่มไลน์ของซัพ — ใช้ Edge Function 'line-order' ของระบบเดิม
   const t=orderText(sp); if(!t){toast('ไม่มีรายการต้องสั่ง',true);return;}
-  const g=lineOf(sp),ep=(S.cfg||{}).line_endpoint;
-  if(!g||!g.group_id||!ep){ // ยังไม่ได้ผูก → เปิดไลน์ให้เลือกกลุ่มเอง
+  const g=lineOf(sp);
+  if(!g||!g.group_id){ // ซัพนี้ยังไม่ได้ผูกกลุ่มในระบบเดิม → เปิดไลน์ให้เลือกกลุ่มเอง
     try{window.open('https://line.me/R/share?text='+encodeURIComponent(t),'_blank');}catch(e){}
-    toast(!ep?'ยังไม่ได้ตั้งตัวกลางส่งไลน์ (⚙️ ตั้งค่า › ไลน์ซัพ) — เปิดไลน์ให้เลือกกลุ่มเองก่อน'
-      :'ซัพนี้ยังไม่ได้ผูกกลุ่มไลน์ — เปิดไลน์ให้เลือกกลุ่มเองก่อน',true);
+    toast('ซัพนี้ยังไม่ได้ผูกกลุ่มไลน์ (⚙️ ตั้งค่า › ไลน์ซัพ) — เปิดไลน์ให้เลือกกลุ่มเองก่อน',true);
     return;
   }
   if(!confirm('ส่งใบสั่ง "'+sp+'" เข้ากลุ่ม '+(g.group_name||g.group_id)+' ?\n\n'+t))return;
   try{
-    const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({to:g.group_id,text:t,supplier:sp,branch:S.br,branch_name:BR_NAME[S.br],source:'jjmk-stockcheck'})});
-    if(!r.ok)throw new Error((await r.text().catch(()=>''))||r.status);
-    toast('✅ ส่งใบสั่ง '+sp+' เข้ากลุ่มไลน์แล้ว');
+    const r=await fetch(lineEndpoint(),{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY},
+      body:JSON.stringify({to:g.group_id,text:t})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||j.ok===false)throw new Error(j.error||j.message||('HTTP '+r.status));
+    await logReceipts(sp);   // บันทึก "สั่งจริง" ให้ระบบเดิมใช้ต่อ (หน้ารับของ/รายงานการใช้ของ)
+    toast('✅ ส่งใบสั่ง '+sp+' เข้ากลุ่มไลน์แล้ว · บันทึกยอดสั่งเรียบร้อย');
+    render();
   }catch(e){toast('ส่งไลน์ไม่สำเร็จ — '+String(e.message||e).slice(0,110),true);}
+}
+async function logReceipts(sp){ // upsert stock_receipts (แหล่งความจริงของ "สั่งจริง" ของระบบเดิม)
+  const g=(orderPlan()||[]).find(x=>x.sup===sp); if(!g)return;
+  const od=($('#cd')&&$('#cd').value)||bizToday(),bid=STK_BR[S.br];
+  const rows=g.rows.filter(r=>r.order>0).map(r=>({
+    branch_id:bid,branch_name:BR_NAME[S.br],product_id:r.it.id,name:r.it.name,
+    cat_label:r.it.cat_label||deptOf(r.it),unit:r.it.unit||'',sup:sp,order_date:od,ordered:num(r.order)}));
+  if(!rows.length)return;
+  await api('POST','stock_receipts?on_conflict=branch_id,product_id,order_date',rows,'resolution=merge-duplicates,return=minimal')
+    .catch(e=>{toast('ส่งไลน์สำเร็จ แต่บันทึกยอดสั่งไม่ได้ — '+String(e.message||e).slice(0,90),true);});
+  S.sentToday=S.sentToday||{}; S.sentToday[sp]=od;
 }
 function copyOrder(sp){
   const t=orderText(sp); if(!t){toast('ไม่มีรายการต้องสั่ง',true);return;}
@@ -879,63 +903,49 @@ function renderCfgLine(){
   $('#list').innerHTML=cfgHead('cfgl')+lineCard();
 }
 function lineCard(){
-  const sups=[...new Set([].concat(S.all.map(i=>String(i.sup||'').trim()),(S.lineG||[]).map(x=>String(x.supplier||'').trim()))
-    .filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
-  const ep=(S.cfg||{}).line_endpoint||'';
-  const G='grid-template-columns:minmax(130px,1fr) minmax(130px,1fr) minmax(170px,1.2fr) 150px';
+  const sups=[...new Set(S.all.map(i=>String(i.sup||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  const G='grid-template-columns:minmax(150px,1.2fr) minmax(220px,1.4fr) 150px';
+  const opts=cur=>'<option value="">— ไม่ผูกกลุ่ม —</option>'
+    +(S.lineGroups||[]).map(g=>'<option value="'+esc(g.group_id)+'"'+(String(cur||'')===String(g.group_id)?' selected':'')+'>'+esc(lgLabel(g))+'</option>').join('')
+    +(cur&&!(S.lineGroups||[]).some(g=>String(g.group_id)===String(cur))?'<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>':'');
   const rows=sups.map((sp,i)=>{
-    const g=lineOf(sp)||{};
-    const ok=!!g.group_id;
+    const g=lineOf(sp),ok=!!(g&&g.group_id);
     return '<div class="lrow" style="'+G+'">'
-      +'<div><b>'+esc(sp)+'</b><div style="font-size:11px;color:'+(ok?'var(--green)':'var(--mut)')+'">'+(ok?'✓ ผูกกลุ่มแล้ว':'ยังไม่ผูกกลุ่ม')+'</div></div>'
-      +'<span class="lbl" data-l="ชื่อกลุ่ม"><input class="di" id="lgn_'+i+'" value="'+esc(g.group_name||'')+'" placeholder="เช่น สั่งของ สี่มุมเมือง"></span>'
-      +'<span class="lbl" data-l="LINE group id"><input class="di" id="lgi_'+i+'" value="'+esc(g.group_id||'')+'" placeholder="Cxxxxxxxx… (จากบอทในกลุ่ม)"></span>'
-      +'<div style="display:flex;gap:6px"><button class="outb" onclick="lineSave('+i+')">💾</button>'
-      +'<button class="outb" onclick="lineTest('+i+')">🔔 ทดสอบส่ง</button></div></div>';
+      +'<div><b>'+esc(sp)+'</b><div style="font-size:11px;color:'+(ok?'var(--green)':'var(--mut)')+'">'+(ok?('✓ '+esc(g.group_name||g.group_id)):'ยังไม่ผูกกลุ่ม')+'</div></div>'
+      +'<span class="lbl" data-l="กลุ่มไลน์"><select class="zsel" style="margin-left:0;width:100%" id="lgi_'+i+'" onchange="lineSave('+i+')">'+opts(g&&g.group_id)+'</select></span>'
+      +'<div><button class="outb" onclick="lineTest('+i+')">🔔 ทดสอบส่ง</button></div></div>';
   }).join('');
   S._lineSups=sups;
-  return '<div class="card"><div class="h">📣 ผูกซัพเข้ากลุ่มไลน์ <span class="n">'+sups.length+' ซัพ · ใช้กับปุ่มส่งใบสั่งในหน้า 🛒 สั่งของ</span></div>'
-    +'<div class="note" style="margin:10px 15px">ใส่ <b>LINE group id</b> ของกลุ่มซัพแต่ละราย (ได้จากบอทที่อยู่ในกลุ่มอยู่แล้ว) · ระบบจะส่งใบสั่งผ่าน <b>ตัวกลาง</b> ที่ถือโทเคนบอทไว้ฝั่งเซิร์ฟเวอร์ '
-    +'<u>ห้ามเอาโทเคนบอทมาไว้ในหน้าเว็บ</u> เพราะหน้านี้เปิดสาธารณะ · ถ้ายังไม่ตั้งตัวกลาง ปุ่มส่งจะเปิดแอพไลน์ให้เลือกกลุ่มเองแทน'
-    +(S.lineTbl?'':' · ⚠ ยังไม่ได้รัน <b>sql/jjmk_stockcheck_line.sql</b>')+'</div>'
-    +'<div class="lrow" style="grid-template-columns:1fr 130px"><div><input class="di" id="lineEp" value="'+esc(ep)+'" placeholder="URL ตัวกลางส่งไลน์ เช่น https://xxx.workers.dev/line-push"></div>'
-    +'<div><button class="outb" onclick="lineEpSave()">💾 บันทึก URL</button></div></div>'
-    +'<div class="hd2" style="'+G+'"><span>ซัพ</span><span>ชื่อกลุ่ม</span><span>LINE group id</span><span></span></div>'
+  const nOk=sups.filter(sp=>{const g=lineOf(sp);return g&&g.group_id;}).length;
+  return '<div class="card"><div class="h">📣 กลุ่มไลน์ของซัพ <span class="n">ผูกแล้ว '+nOk+'/'+sups.length+' ซัพ</span></div>'
+    +'<div class="note" style="margin:10px 15px">ใช้ข้อมูลชุดเดียวกับ<b>แอพนับสต๊อกเดิม</b> (คอลัมน์ <code>suppliers.line_group_id</code>) — แก้ที่นี่หรือที่แอพเดิมก็เห็นตรงกัน · '
+    +'รายชื่อกลุ่มมาจากตาราง <code>line_groups</code> (กลุ่มที่บอทเข้าไปอยู่แล้ว '+((S.lineGroups||[]).length)+' กลุ่ม) · '
+    +'ส่งจริงผ่าน Edge Function <code>line-order</code> ของระบบเดิม (โทเคนบอทอยู่ฝั่งเซิร์ฟเวอร์) · ส่งสำเร็จจะบันทึกยอดสั่งลง <code>stock_receipts</code> ให้ระบบเดิมใช้ต่อ</div>'
+    +'<div class="hd2" style="'+G+'"><span>ซัพ</span><span>กลุ่มไลน์</span><span></span></div>'
     +(rows||'<div class="empty">ยังไม่มีซัพในรายการสินค้า</div>')+'</div>';
 }
-async function lineEpSave(){
-  const v=(document.getElementById('lineEp').value||'').trim();
-  try{
-    await api('POST','sc_config?on_conflict=k',[{k:'line_endpoint',v}],'resolution=merge-duplicates,return=minimal');
-    (S.cfg=S.cfg||{}).line_endpoint=v;
-    toast(v?'✅ บันทึก URL ตัวกลางแล้ว':'✅ ล้าง URL ตัวกลางแล้ว');render();
-  }catch(e){toast('บันทึกไม่สำเร็จ — รัน sql/jjmk_stockcheck_line.sql ก่อนครับ',true);}
-}
-async function lineSave(i){
+async function lineSave(i){ // เขียนลง suppliers.line_group_id (ชุดเดียวกับแอพนับเดิม)
   const sp=(S._lineSups||[])[i]; if(!sp)return;
-  const gn=(document.getElementById('lgn_'+i).value||'').trim();
-  const gi=(document.getElementById('lgi_'+i).value||'').trim();
+  const gi=((document.getElementById('lgi_'+i)||{}).value||'').trim();
   try{
-    const row=(S.lineG||[]).find(x=>String(x.supplier||'').trim()===sp&&!x.branch_id);
-    if(row&&row.id!=null){
-      await api('PATCH','sc_line_groups?id=eq.'+row.id,{group_id:gi||null,group_name:gn||null,updated_at:new Date().toISOString()},'return=minimal');
-      row.group_id=gi||null; row.group_name=gn||null;
-    }else{
-      const r=await api('POST','sc_line_groups',{supplier:sp,group_id:gi||null,group_name:gn||null,active:true},'return=representation');
-      (S.lineG=S.lineG||[]).push((r&&r[0])||{supplier:sp,group_id:gi||null,group_name:gn||null,active:true});
-    }
-    toast('✅ ผูก '+sp+' → '+(gn||gi||'(ล้างแล้ว)'));render();
+    const x=supSched(sp);
+    if(x)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(sp),{line_group_id:gi||null},'return=minimal');
+    else await api('POST','suppliers',{name:sp,line_group_id:gi||null},'return=minimal');
+    if(x)x.line_group_id=gi||null; else (S.sups=S.sups||[]).push({name:sp,line_group_id:gi||null});
+    const g=(S.lineGroups||[]).find(y=>String(y.group_id)===gi);
+    toast(gi?('✅ ผูก '+sp+' → '+((g&&g.name)||gi)):('✅ ยกเลิกการผูกกลุ่มของ '+sp));render();
   }catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message||e).slice(0,110),true);}
 }
 async function lineTest(i){
   const sp=(S._lineSups||[])[i]; if(!sp)return;
-  const g=lineOf(sp),ep=(S.cfg||{}).line_endpoint;
-  if(!ep){toast('ใส่ URL ตัวกลางก่อนครับ',true);return;}
-  if(!g||!g.group_id){toast('ใส่ LINE group id ของ '+sp+' แล้วกด 💾 ก่อนครับ',true);return;}
+  const g=lineOf(sp);
+  if(!g||!g.group_id){toast('เลือกกลุ่มไลน์ของ '+sp+' ก่อนครับ',true);return;}
   try{
-    const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({to:g.group_id,text:'🔔 ทดสอบจากระบบเช็คสต๊อก JJ — ถ้าเห็นข้อความนี้แปลว่าผูกกลุ่มซัพ "'+sp+'" สำเร็จแล้วครับ',supplier:sp,branch:S.br,source:'jjmk-stockcheck-test'})});
-    if(!r.ok)throw new Error((await r.text().catch(()=>''))||r.status);
+    const r=await fetch(lineEndpoint(),{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY},
+      body:JSON.stringify({to:g.group_id,text:'🔔 ทดสอบจากระบบเช็คสต๊อก JJ — ผูกกลุ่มซัพ "'+sp+'" สำเร็จแล้วครับ'})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||j.ok===false)throw new Error(j.error||j.message||('HTTP '+r.status));
     toast('✅ ส่งข้อความทดสอบเข้ากลุ่ม '+(g.group_name||sp)+' แล้ว');
   }catch(e){toast('ส่งไม่สำเร็จ — '+String(e.message||e).slice(0,110),true);}
 }
