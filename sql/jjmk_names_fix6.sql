@@ -50,7 +50,16 @@ begin
     select veg_id,'กล้วยหอม','โล',coalesce((select max(sort) from pnl_sup_items where supplier_id=veg_id),0)+1
     where not exists (select 1 from pnl_sup_items where supplier_id=veg_id and trim(item)='กล้วยหอม');
   foreach b in array array['b19f0a17b4472','b19f0a17b448212'] loop  -- ชื่อนับใหม่ทั้งสองสาขา (ก๊อปหมวด/ซัพจากผักบุ้ง)
-    if exists (select 1 from products where branch_id=b and trim(name)='กล้วยหอม' and deleted_at is null) then continue; end if;
+    if exists (select 1 from products where branch_id=b and trim(name)='กล้วยหอม' and deleted_at is null) then
+      -- มีชื่อนับแล้ว: เติมการผูกให้ถ้ายังไม่ผูก (ตารางนี้ไม่มี unique จึงเช็คเองแทน on conflict)
+      insert into pnl_stock_map(branch,product_id,product_name,pnl_item,bill_unit,stock_unit,factor,active)
+        select case b when 'b19f0a17b4472' then 'JJRD' else 'JJLP' end, p.id,'กล้วยหอม','กล้วยหอม','โล','โล',1,true
+        from products p
+        where p.branch_id=b and trim(p.name)='กล้วยหอม' and p.deleted_at is null
+          and not exists (select 1 from pnl_stock_map m where m.product_id=p.id)
+        limit 1;
+      continue;
+    end if;
     select * into tpl from products where branch_id=b and deleted_at is null
       and trim(name) in ('ผักบุ้ง','ผักกาดขาว','แครอท') limit 1;
     if tpl is null then raise notice '⚠ สาขา % ไม่เจอสินค้าผักต้นแบบ — เพิ่มกล้วยหอมในแอพนับเองครับ', b; continue; end if;
@@ -58,8 +67,7 @@ begin
     insert into products select (jsonb_populate_record(null::products,
       to_jsonb(tpl) || jsonb_build_object('id',new_id,'name','กล้วยหอม','unit','โล','safety',null,'max',null))).*;
     insert into pnl_stock_map(branch,product_id,product_name,pnl_item,bill_unit,stock_unit,factor,active)
-      values (case b when 'b19f0a17b4472' then 'JJRD' else 'JJLP' end, new_id,'กล้วยหอม','กล้วยหอม','โล','โล',1,true)
-      on conflict (product_id) do nothing;
+      values (case b when 'b19f0a17b4472' then 'JJRD' else 'JJLP' end, new_id,'กล้วยหอม','กล้วยหอม','โล','โล',1,true); -- new_id เพิ่งสุ่มใหม่ ไม่มีทางชนกับแถวเดิม
   end loop;
 end $$;
 
