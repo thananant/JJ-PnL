@@ -133,6 +133,13 @@ setTimeout(async()=>{
     +(d.querySelectorAll('#sideNav [data-t]').length===12&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')
       &&!!d.querySelector('#sideNav [data-t="order"]')));
   out.push('แถบแผนกซ่อนในหน้าผูกชื่อ: '+(d.getElementById('deptbar').style.display==='none'));
+  // ช่องค้นหาในหน้าผูกชื่อ
+  out.push('หน้าผูกชื่อมีช่องค้นหา: '+!!d.getElementById('lnkQ'));
+  w.lnkSearch('น้ำแข็ง'); await sleep(40);
+  out.push('ค้นหา "น้ำแข็ง" → เหลือแถวเดียว (กลุ่มยังไม่ผูก) + บอกผลค้นหา: '
+    +(d.querySelectorAll('#list .wat').length===1&&d.querySelectorAll('#list .okt').length===0
+      &&list().includes('ผลค้นหา')&&list().includes('ยังไม่ผูก 1 รายการ')));
+  w.lnkSearch(''); await sleep(30);
   out.push('ปุ่มบันทึกซ่อน: '+(d.getElementById('save').style.display==='none'));
   // 7) หน้า Safety: แก้อัตรา + แผนก
   w.setTab('set'); await sleep(30);
