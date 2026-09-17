@@ -40,7 +40,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('products')&&url.includes('branch_id=in.'))return T([
         {id:'p1',branch_id:BID,name:'ผักบุ้ง',unit:'โล',sup:'FarmFresh',dept:'ผัก',image_url:null},
         {id:'p1b',branch_id:'b19f0a17b448212',name:'ผักบุ้ง',unit:'โล',sup:'FarmFresh',dept:'ผักสดลาดพร้าว',image_url:null},
-        {id:'p2',branch_id:BID,name:'น้ำแข็ง',unit:'ถุง',sup:'โรงน้ำแข็ง',dept:'บาร์น้ำ',image_url:null}]);
+        {id:'p2',branch_id:BID,name:'น้ำแข็ง',unit:'ถุง',sup:'โรงน้ำแข็ง',dept:null,cat_label:'ของแห้งเดิม',image_url:null}]);
       if(url.includes('products')&&url.includes('branch_id=eq.'+BID))return T([
         {id:'p1',branch_id:BID,cat_label:'ผัก',name:'ผักบุ้ง',unit:'โล',sup:'FarmFresh',safety:null,max:null,rate_wk:2,rate_fri:3,rate_we:4,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:1},
         {id:'p2',branch_id:BID,cat_label:'อื่นๆ',name:'น้ำแข็ง',unit:'ถุง',sup:'โรงน้ำแข็ง',safety:null,max:null,rate_wk:null,rate_fri:null,rate_we:null,dept:'บาร์น้ำ',zone:'หน้าร้าน',image_url:null,sort:2}]);
@@ -138,7 +138,9 @@ setTimeout(async()=>{
   out.push('แถบรายการสินค้าอยู่ในเมนูย่อยตั้งค่า + หน้าโหลดสินค้าทุกสาขา: '
     +(!!d.querySelector('#sideNav [data-t="cfgi"]')&&cards().includes('รายการสินค้าทั้งหมด')&&w.eval('S.allBr.length')===3));
   out.push('จัดกลุ่มตามแผนก (ใช้แผนกของสาขาที่เปิดอยู่) + มีช่องค้นหาด้านบน: '
-    +(cards().includes('ผัก')&&cards().includes('บาร์น้ำ')&&!!d.getElementById('cfgQ')));
+    +(cards().includes('ผัก')&&!!d.getElementById('cfgQ')));
+  out.push('ของที่ยังไม่ตั้ง dept ใช้หมวดเดิมจากแอพนับ ไม่ตกไป "ยังไม่จัดแผนก": '
+    +(cards().includes('ของแห้งเดิม')&&cards().includes('หมวดเดิมจากแอพนับ')&&!cards().includes('ยังไม่จัดแผนก')));
   w.toggleItemGrp('ผัก'); await sleep(30);
   out.push('กางกลุ่ม → ผักบุ้งขึ้น 2 สาขา (รัชดา+ลาดพร้าว): '
     +(cards().includes('ผักบุ้ง')&&[...d.querySelectorAll('.brchip.on')].filter(x=>x.textContent.includes('รัชดา')||x.textContent.includes('ลาดพร้าว')).length>=2));

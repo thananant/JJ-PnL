@@ -561,7 +561,7 @@ async function ensureAllProducts(force){ // รายการสินค้า
   S._apLoading=true;
   try{
     const ids=Object.values(STK_BR).join(',');
-    const base='products?select=id,branch_id,name,unit,sup,image_url&deleted_at=is.null&branch_id=in.('+ids+')&order=name';
+    const base='products?select=id,branch_id,name,unit,sup,cat_label,image_url&deleted_at=is.null&branch_id=in.('+ids+')&order=name';
     let rows;
     try{ rows=await selAll(base.replace('image_url','image_url,dept')); }
     catch(e){ rows=await selAll(base); }
@@ -587,9 +587,10 @@ function itemsCard(){
     e.rows[br]=r; if(!e.image_url&&r.image_url)e.image_url=r.image_url; if(!e.sup&&r.sup)e.sup=r.sup;
   });
   // แผนกของสินค้า: ใช้ของสาขาที่เปิดอยู่ก่อน ถ้าไม่มีค่อยเอาของอีกสาขา
-  const groupOf=e=>{
-    const pick=b=>{const r=e.rows[b];return r&&String(r.dept||'').trim()?String(r.dept).trim():'';};
-    return pick(S.br)||BRK.map(pick).find(Boolean)||'ยังไม่จัดแผนก';
+  const groupOf=e=>{ // เหมือนหน้านับ: ใช้ dept ก่อน ไม่มีก็หมวดเดิม (cat_label)
+    const pick=(b,f)=>{const r=e.rows[b];return r&&String(r[f]||'').trim()?String(r[f]).trim():'';};
+    return pick(S.br,'dept')||BRK.map(b=>pick(b,'dept')).find(Boolean)
+      ||pick(S.br,'cat_label')||BRK.map(b=>pick(b,'cat_label')).find(Boolean)||'ยังไม่จัดแผนก';
   };
   const groups={};
   Object.values(byName).forEach(e=>{const g=groupOf(e);(groups[g]=groups[g]||[]).push(e);});
@@ -604,7 +605,8 @@ function itemsCard(){
     const open=!!S.itemOpen[k]||!!q;
     const esk=esc(k).replace(/'/g,"\\'");
     const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleItemGrp(\''+esk+'\')">'
-      +'<div><b>'+(open?'▾':'▸')+' '+(DEPT_IC[k]||'🗂')+' '+esc(k)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+groups[k].length+' รายการ</span></div>'
+      +'<div><b>'+(open?'▾':'▸')+' '+(DEPT_IC[k]||'🗂')+' '+esc(k)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+groups[k].length+' รายการ'
+      +(groups[k].some(e=>Object.keys(e.rows).some(b=>String(e.rows[b].dept||'').trim()))?'':' · หมวดเดิมจากแอพนับ')+'</span></div>'
       +'<div style="font-size:11.5px;color:var(--mut)">'+BRK.filter(b=>groups[k].some(e=>e.rows[b])).map(b=>BR_NAME[b]).join(' · ')+'</div></div>';
     if(!open)return head;
     return head+list.map(e=>{
