@@ -1,4 +1,4 @@
-// smoke95: jjmk-stockcheck — เมนู ⚙️ ตั้งค่า แยกหน้าละหัวข้อ (👤 สิทธิ์ผู้ใช้ / 🗂 แผนก / 📐 หน่วยซื้อ↔หน่วยนับ)
+// smoke95: jjmk-stockcheck — เมนู ⚙️ ตั้งค่า แยกหน้าละหัวข้อ (👤 สิทธิ์ผู้ใช้ / 🗂 แผนก / 📐 หน่วยซื้อ↔หน่วยนับ แยกรายซัพ)
 //          + จำหน้าเดิมและค่านับตอนรีเฟรช + แผนกใน Safety เป็น dropdown + ลากลงเพื่อรีเฟรช (มือถือ/แท็บเล็ต)
 // fixture JJRD: p1 ผักบุ้ง (ผูก "ผักบุ้งจีน", dept ผัก, หน่วยนับ โล, หน่วยซื้อ ลัง ×12) · p2 น้ำแข็ง (ไม่ผูก, dept บาร์น้ำ, ถุง)
 //          sc_depts สาขารัชดา: ผัก · บาร์น้ำ · เตรียมของ (แผนกเปล่า) — แผนก/ของในแผนก แยกกันคนละสาขา
@@ -42,10 +42,12 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
         {id:'p2',branch_id:BID,cat_label:'อื่นๆ',name:'น้ำแข็ง',unit:'ถุง',sup:'โรงน้ำแข็ง',safety:null,max:null,rate_wk:null,rate_fri:null,rate_we:null,dept:'บาร์น้ำ',zone:'หน้าร้าน',image_url:null,sort:2}]);
       if(url.includes('products'))return T([]);
       if(url.includes('pnl_bill_items'))return T([
-        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-10'},
-        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-05'},
-        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-01'},
-        {item:'ผักบุ้งจีน',unit:'โล',d:'2026-08-20'}]);
+        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-10',supplier_id:1},
+        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-05',supplier_id:1},
+        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-01',supplier_id:1},
+        {item:'ผักบุ้งจีน',unit:'โล',d:'2026-08-20',supplier_id:2}]);
+      if(url.includes('pnl_suppliers'))return T([{id:1,name:'FarmFresh'},{id:2,name:'ตลาดสด'}]);
+      if(url.includes('pnl_unit_conv'))return T([]);
       if(url.includes('stock_current'))return T([]);
       if(url.includes('suppliers'))return T([{name:'FarmFresh',order_mode:'any',lead_days:1}]);
       if(url.includes('stock_counts')&&method==='GET')return T([]);
@@ -132,28 +134,40 @@ setTimeout(async()=>{
   out.push('หน้าหน่วยแยกหน้า มีเฉพาะการ์ดหน่วย: '
     +(cards().includes('หน่วยซื้อ ↔ หน่วยนับ')&&!cards().includes('สิทธิ์การใช้งานพนักงาน')&&!cards().includes('แผนก + ของที่ต้องนับ')));
   out.push('จำหัวข้อย่อยล่าสุด (jjsc_cfg=cfgn): '+(w.localStorage.getItem('jjsc_cfg')==='cfgn'));
-  await sleep(120); // รอดึงหน่วยจากบิล
-  out.push('ดึงหน่วยซื้อจากบิลจริงใน P&L (ลัง 3 ครั้ง · โล 1) → ให้เลือกหน่วยหลัก ตั้งต้น ลัง: '
-    +(!!w.eval("S.billUnits['ผักบุ้งจีน'].top==='ลัง'")&&d.getElementById('bu_p1').tagName==='SELECT'
-      &&d.getElementById('bu_p1').value==='ลัง'&&list().includes('บิลใช้ 2 หน่วย')));
-  out.push('สรุปตัวคูณอ่านง่าย 1 ลัง = 12 โล: '+list().includes('1 ลัง = 12 โล'));
-  out.push('ปุ่มเติมหน่วยซื้อจากบิลทั้งหมด (ยังไม่ตรง 1 รายการ): '
-    +(list().includes('เติมหน่วยซื้อจากบิลทั้งหมด')&&list().includes('ยังไม่ตรงกับบิล')));
-  await w.fillBillUnits(); await sleep(60);
-  out.push('กดเติม → PATCH pnl_stock_map bill_unit=ลัง (ไม่แตะตัวคูณ): '
-    +(!!patches.find(p=>p.url.includes('pnl_stock_map?id=eq.11')&&p.body.bill_unit==='ลัง'&&p.body.factor===undefined)));
-  out.push('ตัวไม่ผูก (น้ำแข็ง) ขึ้นว่ายังไม่ผูกชื่อบิล แก้หน่วยซื้อไม่ได้: '+list().includes('ยังไม่ผูกชื่อบิล'));
-  d.getElementById('fx_p1').value='24'; d.getElementById('cu_p1').value='โล';
-  await w.unitSave('p1'); await sleep(40);
-  const pfx=patches.filter(p=>p.url.includes('pnl_stock_map?id=eq.11')&&p.body.factor!==undefined).pop();
-  out.push('แก้ตัวคูณ 12→24 → PATCH pnl_stock_map ตัวเดียว (หน่วยนับไม่เปลี่ยนไม่ PATCH products): '
-    +(!!pfx&&pfx.body.factor===24&&pfx.body.bill_unit==='ลัง'&&!patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.unit)));
-  // เปลี่ยนหน่วยนับ โล → กก. → PATCH products ตามชื่อ + สำเนาใน map
-  d.getElementById('cu_p1').value='กก.';
-  await w.unitSave('p1'); await sleep(40);
+  await sleep(150); // รอดึงหน่วยจากบิล + ซัพ + ตัวคูณ
+  out.push('จัดกลุ่มตามซัพจากบิลจริง: FarmFresh (ลัง) · ตลาดสด (โล) — สินค้าตัวเดียวหลายซัพได้: '
+    +(list().includes('FarmFresh')&&list().includes('ตลาดสด')
+      &&!!w.eval("S.billSup['FarmFresh']['ผักบุ้งจีน']['ลัง'].n===3")
+      &&!!w.eval("S.billSup['ตลาดสด']['ผักบุ้งจีน']['โล'].n===1")));
+  out.push('ซัพพับไว้ตั้งต้น + บอกว่ายังไม่ใส่ตัวคูณ: '+(!list().includes('ผักบุ้ง ')&&list().includes('ยังไม่ใส่ตัวคูณ')&&list().includes('▸')));
+  w.toggleSup('FarmFresh'); await sleep(40);
+  const uRows=()=>JSON.parse(w.eval('JSON.stringify(S._uRows)'));
+  const idxOf=u=>uRows().findIndex(r=>r.unit===u);
+  const iLang=idxOf('ลัง');
+  out.push('กางซัพ FarmFresh → เห็นแถวหน่วย ลัง (3 บิล) ของผักบุ้ง: '
+    +(list().includes('ผักบุ้ง')&&list().includes('ลัง')&&list().includes('3 บิล')&&iLang>=0&&!!d.getElementById('fx_'+iLang)));
+  // ใส่ตัวคูณ 1 ลัง = 12 โล → upsert pnl_unit_conv
+  d.getElementById('fx_'+iLang).value='12';
+  await w.convSave(iLang); await sleep(50);
+  const pc=posts.find(p=>p.url.includes('pnl_unit_conv'));
+  out.push('ใส่ตัวคูณ → upsert pnl_unit_conv (item,from_unit) 1 ลัง = 12 โล: '
+    +(!!pc&&pc.url.includes('on_conflict=item,from_unit')&&pc.rows[0].item==='ผักบุ้งจีน'
+      &&pc.rows[0].from_unit==='ลัง'&&pc.rows[0].to_unit==='โล'&&pc.rows[0].factor===12));
+  out.push('ตั้งแล้วขึ้นสรุป 1 ลัง = 12 โล: '+list().includes('1 ลัง = 12 โล'));
+  // ซัพตลาดสดลงหน่วย โล = หน่วยนับ → ไม่ต้องแปลง ช่องตัวคูณถูกปิด
+  w.toggleSup('ตลาดสด'); await sleep(40);
+  const kRow=idxOf('โล');
+  out.push('ซัพที่ลงหน่วยเดียวกับหน่วยนับ (โล) → ไม่ต้องแปลง + ปิดช่องตัวคูณ: '
+    +(kRow>=0&&!!d.getElementById('fx_'+kRow)&&d.getElementById('fx_'+kRow).disabled===true&&list().includes('ไม่ต้องแปลง')));
+  // เปลี่ยนหน่วยนับจากหน้านี้ → PATCH products ตามชื่อ (2 สาขา) + สำเนาใน map
+  const iLang2=idxOf('ลัง');
+  d.getElementById('cu_'+iLang2).value='กก.';
+  await w.convSave(iLang2); await sleep(50);
   out.push('เปลี่ยนหน่วยนับ โล→กก. → PATCH products ตามชื่อ (2 สาขา) + stock_unit ใน map: '
     +(!!patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.unit==='กก.')
       &&!!patches.find(p=>p.url.includes('pnl_stock_map?product_name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.stock_unit==='กก.')));
+  out.push('น้ำแข็ง (ไม่มีในบิล) อยู่กลุ่ม "ยังไม่พบในบิล" ตั้งได้เฉพาะหน่วยนับ: '
+    +(list().includes('ยังไม่พบในบิล')&&list().includes('ตั้งได้เฉพาะหน่วยนับ')));
   out.push('มี datalist หน่วย (เพิ่ม/พิมพ์หน่วยใหม่ได้): '+!!d.getElementById('unitList'));
   // 5) Safety: ช่องแผนกเป็น dropdown จากรายชื่อแผนกหน้าตั้งค่า
   w.setTab('set'); await sleep(30);
