@@ -84,6 +84,15 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .di{width:100%;padding:8px;border:1.5px solid var(--line);border-radius:10px;font-size:13.5px;background:#fff}
 .di.dirty{border-color:var(--amber);background:#FFFBEF}
 .zsel.dirty{border-color:var(--amber);background:#FFFBEF}
+@keyframes jjblink{0%,100%{box-shadow:0 0 0 0 rgba(198,33,39,.55);border-color:var(--red)}50%{box-shadow:0 0 0 5px rgba(198,33,39,0);border-color:#EFAFAF}}
+.needlink{border-color:var(--red)!important;background:#FFF4F4;animation:jjblink 1.1s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.needlink{animation:none}}
+@keyframes jjblink2{0%,100%{box-shadow:0 0 0 0 rgba(198,33,39,.45)}50%{box-shadow:0 0 0 6px rgba(198,33,39,0)}}
+.pill.needc{border-color:var(--red);animation:jjblink2 1.4s ease-in-out infinite}
+.pill.needc .bdg{background:#FBE3E3;color:var(--red)}
+.pill.needc.on{background:var(--red);border-color:var(--red)}
+.pcard.needc{border-color:var(--red);animation:jjblink2 1.6s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.pill.needc,.pcard.needc{animation:none}}
 .brchip{display:inline-flex;align-items:center;gap:5px;background:#F2EDE0;border:1.5px solid var(--line);color:var(--mut);border-radius:99px;padding:4px 10px;font-size:12px;margin:2px 3px 2px 0}
 .brchip.on{background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700}
 .brchip button{border:0;background:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 1px;font-weight:700}
@@ -456,7 +465,18 @@ function lineOf(sp){ // กลุ่มไลน์ของซัพ — ใช
   const g=(S.lineGroups||[]).find(y=>String(y.group_id)===String(x.line_group_id));
   return {group_id:x.line_group_id,group_name:(g&&g.name)||''};
 }
-const lgLabel=g=>(g.name&&g.name.trim())?g.name:('กลุ่ม '+String(g.group_id).slice(0,10)+'…');
+const lgLabel=g=>(g&&g.name&&String(g.name).trim())?String(g.name).trim():('กลุ่ม '+String((g&&g.group_id)||'').slice(0,10)+'…');
+const lgNamed=gid=>{const g=(S.lineGroups||[]).find(x=>String(x.group_id)===String(gid));return !!(g&&g.name&&String(g.name).trim());};
+async function lgRename(gid){ // ชื่อกลุ่มจากไลน์ไม่มา = ตั้งเองได้ (เก็บที่ line_groups.name ชุดเดียวกับแอพเดิม)
+  const g=(S.lineGroups||[]).find(x=>String(x.group_id)===String(gid));
+  const nn=(prompt('ตั้งชื่อกลุ่มไลน์นี้ (ใช้แสดงในระบบ)\n'+gid,(g&&g.name)||'')||'').trim();
+  if(!nn)return;
+  try{
+    await api('PATCH','line_groups?group_id=eq.'+encodeURIComponent(gid),{name:nn},'return=minimal');
+    if(g)g.name=nn; else (S.lineGroups=S.lineGroups||[]).push({group_id:gid,name:nn});
+    toast('✅ ตั้งชื่อกลุ่มเป็น "'+nn+'" แล้ว (แอพนับเดิมเห็นด้วย)');render();
+  }catch(e){toast('ตั้งชื่อไม่สำเร็จ — '+errMsg(e),true);}
+}
 const lineEndpoint=()=>((S.cfg||{}).line_endpoint||'').trim()||(CONFIG.URL+'/functions/v1/line-order');
 async function sendLine(sp){ // ส่งใบสั่งเข้ากลุ่มไลน์ของซัพ — ใช้ Edge Function 'line-order' ของระบบเดิม
   const t=orderText(sp); if(!t){toast('ไม่มีรายการต้องสั่ง',true);return;}
@@ -606,7 +626,7 @@ function renderCount(){
   if(!S.dept||!ds.some(d2=>d2.label===S.dept))S.dept=ds[0].label;
   const pillHtml=dp=>{
     const done=dp.items.filter(counted).length,all=dp.items.length;
-    return '<button class="pill'+(dp.label===S.dept?' on':'')+'" onclick="pickDept(\''+esc(dp.label).replace(/'/g,"\\'")+'\')">'
+    return '<button class="pill'+(dp.label===S.dept?' on':'')+(done<all?' needc':'')+'" onclick="pickDept(\''+esc(dp.label).replace(/'/g,"\\'")+'\')">'
       +(DEPT_IC[dp.label]||'🗂')+' '+esc(dp.label)
       +' <span class="bdg">'+(done<all?(all-done):all)+'</span>'+(done===all?' <span class="ok">✓</span>':'')+'</button>';
   };
@@ -632,7 +652,7 @@ function renderCount(){
     +(warns.replace(/^ · /,'')?'<div class="note">'+warns.replace(/^ · /,'')+'</div>':'')
     +(show.length?'<div class="grid">'+show.map(it=>{
       const cur=S.cur[it.id],cn=it.name!==billName(it),ok=counted(it);
-      return '<div class="pcard'+(ok?' done':'')+'">'
+      return '<div class="pcard'+(ok?' done':' needc')+'">'
         +'<div class="top">'+imgCell(it)
         +'<div><div class="t">'+esc(it.name)+' '+(ok?(it.out?'<span class="st-n" style="color:var(--red)">✗ หมด</span>':'<span class="st-y">✓ นับแล้ว</span>'):'<span class="st-n">⚠ ยังไม่นับ</span>')+'</div>'
         +(cn?'<div class="cn">🧾 บิล: '+esc(billName(it))+'</div>':'')
@@ -930,16 +950,18 @@ function lineCard(){
   });
   const gTag=gid=>{const n=gUse[gid]||0;return n?(' · ผูกอยู่ '+n+' ซัพ'):' · ยังไม่ผูก';};
   const opts=cur=>'<option value="">— ไม่ผูกกลุ่ม —</option>'
-    +gList.map(g=>'<option value="'+esc(g.group_id)+'"'+(String(cur||'')===String(g.group_id)?' selected':'')+'>'
+    +gList.map(g=>'<option value="'+esc(g.group_id)+'"'+(String(cur||'')===String(g.group_id)?' selected':'')
+      +(gUse[g.group_id]?' style="color:var(--red);font-weight:700"':'')+'>'
       +esc(lgLabel(g))+esc(gTag(g.group_id))+'</option>').join('')
     +(cur&&!gList.some(g=>String(g.group_id)===String(cur))?'<option value="'+esc(cur)+'" selected>'+esc(cur)+' · (ไม่พบในรายชื่อกลุ่ม)</option>':'');
   const rows=sups.map((sp,i)=>{
     const g=lineOf(sp),ok=!!(g&&g.group_id),inDb=!!supSched(sp),n=supCount(sp);
     const esp=esc(sp).replace(/'/g,"\\'");
     return '<div class="lrow" style="'+G+'">'
-      +'<div><b>'+esc(sp)+'</b><div style="font-size:11px;color:'+(ok?'var(--green)':'var(--mut)')+'">'
-      +(inDb?(ok?('✓ '+esc(g.group_name||g.group_id)):'ยังไม่ผูกกลุ่มไลน์'):'⚠ ยังไม่มีในตารางซัพ')+'</div></div>'
-      +'<span class="lbl" data-l="กลุ่มไลน์">'+(inDb?'<select class="zsel" style="margin-left:0;width:100%" id="lgi_'+i+'" onchange="lineSave('+i+')">'+opts(g&&g.group_id)+'</select>'
+      +'<div><b>'+esc(sp)+'</b><div style="font-size:11px;font-weight:'+(ok?'400':'700')+';color:'+(ok?'var(--green)':'var(--red)')+'">'
+      +(inDb?(ok?('✓ '+esc(lgLabel({group_id:g.group_id,name:g.group_name}))):'⚠ ยังไม่ผูกกลุ่มไลน์'):'⚠ ยังไม่มีในตารางซัพ')+'</div></div>'
+      +'<span class="lbl" data-l="กลุ่มไลน์">'+(inDb?'<select class="zsel'+(ok?'':' needlink')+'" style="margin-left:0;width:100%" id="lgi_'+i+'" onchange="lineSave('+i+')">'+opts(g&&g.group_id)+'</select>'
+        +(ok&&!lgNamed(g.group_id)?'<div><button class="outb" style="padding:3px 8px;font-size:11.5px;margin-top:3px" onclick="lgRename(\''+esc(g.group_id)+'\')">✏️ ตั้งชื่อกลุ่มนี้</button></div>':'')
         :'<button class="outb" onclick="supAdd(\''+esp+'\')">➕ เพิ่มเข้าตารางซัพ</button>')+'</span>'
       +'<span class="lbl" data-l="สินค้า"><span style="font-size:12.5px;color:var(--mut)">'+n+' ตัว</span></span>'
       +'<div style="display:flex;gap:5px;flex-wrap:wrap">'
@@ -960,7 +982,8 @@ function lineCard(){
     +'<div class="lrow" style="grid-template-columns:1fr auto auto;gap:8px"><div><input class="di" id="nsName" placeholder="ชื่อซัพใหม่ (ใช้ชื่อเดียวกับที่ลงบิล)" onkeydown="if(event.key===\'Enter\')supAdd()"></div>'
     +'<div><button class="outb" onclick="supAdd()">➕ เพิ่มซัพ</button></div>'
     +'<div><button class="outb" onclick="syncLineGroups()">🔄 ดึงกลุ่มไลน์ใหม่ ('+gList.length+')</button></div></div>'
-    +(gList.length?'<div class="note" style="margin:0 15px 10px">กลุ่มไลน์ที่บอทอยู่ '+gList.length+' กลุ่ม · <b>ยังไม่ได้ผูกกับซัพไหนเลย '
+    +(gList.length?'<div class="note" style="margin:0 15px 10px">กลุ่มไลน์ที่บอทอยู่ '+gList.length+' กลุ่ม · '
+      +'<b style="color:var(--red)">ผูกอยู่แล้ว '+gList.filter(g=>gUse[g.group_id]).length+' กลุ่ม</b> · <b>ยังไม่ได้ผูก '
       +gList.filter(g=>!gUse[g.group_id]).length+' กลุ่ม</b>'
       +(gList.filter(g=>!gUse[g.group_id]).length?(' — '+gList.filter(g=>!gUse[g.group_id]).slice(0,6).map(g=>esc(lgLabel(g))).join(' · ')
         +(gList.filter(g=>!gUse[g.group_id]).length>6?' …':'')):'')+'</div>':'')
