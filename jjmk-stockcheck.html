@@ -352,15 +352,23 @@ function renderLink(){
       +'<div><b>'+(m?esc(m.pnl_item):'–')+'</b><div style="font-size:11px;color:var(--mut)">ชื่อจริง (บิล P&L)</div></div>'
       +'<div>'+esc(it.name)+'<div style="font-size:11px;color:var(--mut)">ชื่อนับ · '+esc(deptOf(it))+'</div></div>'
       +(m?'<span class="okt">✓ ผูกแล้ว</span>':'<span class="wat">⚠ ยังไม่ผูก</span>')+'</div>';};
-  // ชื่อบิลเดียวกันควรมีชื่อนับเดียว (ทั้ง 2 สาขา) — หาตัวที่ชื่อนับไม่ตรงกัน
-  const byBill={};
-  (S.mapRows||[]).forEach(r=>{const k=r.pnl_item;(byBill[k]=byBill[k]||new Set()).add(String(r.product_name||'').trim());});
-  const dup=Object.keys(byBill).map(k=>[k,[...byBill[k]].filter(Boolean)]).filter(x=>x[1].length>1);
-  const dupHtml=dup.length
-    ?'<div class="card"><div class="h">🚨 ชื่อบิลเดียวกัน แต่ชื่อนับไม่ตรงกัน <span class="n">'+dup.length+' ชื่อ (เช็ครวม 2 สาขา)</span></div>'
-      +dup.map(x=>'<div class="lrow" style="grid-template-columns:minmax(140px,1fr) 2fr"><div><b>'+esc(x[0])+'</b><div style="font-size:11px;color:var(--mut)">ชื่อบิล</div></div>'
-        +'<div>'+x[1].map(esc).join(' <span style="color:var(--red);font-weight:700">≠</span> ')+'<div style="font-size:11px;color:var(--mut)">ชื่อนับที่พบ — ควรแก้ให้เหลือชื่อเดียว (แก้ชื่อในแอพนับ หรือแก้การผูกใน P&L)</div></div></div>').join('')+'</div>'
-    :'<div class="note" style="border-color:#B9D9B0;background:#F0F8F1;color:#2E5B3C">✓ ชื่อบิลทุกชื่อมีชื่อนับตรงกันทั้ง 2 สาขา — ไม่มีตัวที่ต้องแก้</div>';
+  // การผูกต้องตรงกันทั้งสองทาง (เช็ครวม 2 สาขา):
+  //   ชื่อบิลเดียวกัน → ต้องชี้ชื่อนับเดียว · ชื่อนับเดียวกัน → ต้องชี้ชื่อบิลเดียว
+  const byBill={},byCnt={};
+  (S.mapRows||[]).forEach(r=>{
+    const b=String(r.pnl_item||'').trim(),c=String(r.product_name||'').trim();
+    if(b)(byBill[b]=byBill[b]||new Set()).add(c);
+    if(c)(byCnt[c]=byCnt[c]||new Set()).add(b);
+  });
+  const pick=m=>Object.keys(m).map(k=>[k,[...m[k]].filter(Boolean)]).filter(x=>x[1].length>1);
+  const dup=pick(byBill),dup2=pick(byCnt);
+  const dupCard=(title,rows,l1,l2,hint)=>'<div class="card"><div class="h">🚨 '+title+' <span class="n">'+rows.length+' ชื่อ (เช็ครวม 2 สาขา)</span></div>'
+    +rows.map(x=>'<div class="lrow" style="grid-template-columns:minmax(140px,1fr) 2fr"><div><b>'+esc(x[0])+'</b><div style="font-size:11px;color:var(--mut)">'+l1+'</div></div>'
+      +'<div>'+x[1].map(esc).join(' <span style="color:var(--red);font-weight:700">≠</span> ')+'<div style="font-size:11px;color:var(--mut)">'+l2+' — '+hint+'</div></div></div>').join('')+'</div>';
+  const dupHtml=(dup.length||dup2.length)
+    ?(dup.length?dupCard('ชื่อบิลเดียวกัน แต่ชื่อนับไม่ตรงกัน',dup,'ชื่อบิล','ชื่อนับที่พบ','ควรแก้ให้เหลือชื่อเดียว (แก้ชื่อในแอพนับ หรือแก้การผูกใน P&L)'):'')
+      +(dup2.length?dupCard('ชื่อนับเดียวกัน แต่ชื่อบิลไม่ตรงกัน',dup2,'ชื่อนับ','ชื่อบิลที่พบ','ควรใช้ชื่อบิลเดียว (แก้การผูกในแอพ P&L หน้า "ใช้จริง (สต๊อก)")'):'')
+    :'<div class="note" style="border-color:#B9D9B0;background:#F0F8F1;color:#2E5B3C">✓ การผูกตรงกันหมดทั้งสองทาง (ชื่อบิล↔ชื่อนับ) ทั้ง 2 สาขา — ไม่มีตัวที่ต้องแก้</div>';
   $('#list').innerHTML=
     '<div class="dhead">🔗 การผูกชื่อ · สาขา'+BR_NAME[S.br]+'</div>'
     +dupHtml
