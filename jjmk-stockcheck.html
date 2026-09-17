@@ -378,11 +378,9 @@ async function loadAll(){
   ensureAllProducts(); // รายการทุกสาขา (ใช้จัดลำดับให้เหมือนกันทุกเมนู)
 }
 const billName=it=>{const m=S.map[it.id];return m?m.pnl_item:it.name;};
-const useDeptOnly=()=>!!(S.deptOk&&S.all&&S.all.some(x=>String(x.dept||'').trim())); // เริ่มตั้งแผนกจริงแล้ว = ยึด dept
-const deptOf=it=>{
+const deptOf=it=>{ // แผนกของสินค้า: dept (ตั้งเอง) → ถ้ายังไม่ตั้ง ใช้หมวดเดิมของแอพนับ (cat_label) รายตัว
   const d2=S.deptOk?String(it.dept||'').trim():'';
-  if(d2)return d2;
-  return useDeptOnly()?'ยังไม่จัดแผนก':(it.cat_label||'ยังไม่จัดแผนก'); // ยังไม่ตั้งแผนกเลย = ใช้หมวดเดิมของแอพนับไปก่อน
+  return d2||String(it.cat_label||'').trim()||'ยังไม่จัดแผนก';
 };
 const counted=it=>it.out||(it.qty!=null&&it.qty!=='');
 const isDirty=it=>Object.keys(it.dirty).length>0;
@@ -1153,7 +1151,9 @@ async function addDept(){
 }
 async function delDept(nm){
   const ids=deptIds(nm),cnt=ids.length;
-  if(!confirm('ลบแผนก "'+nm+'" ของสาขา'+BR_NAME[S.br]+'?'+(cnt?('\n\nของ '+cnt+' รายการในแผนกนี้จะถูกย้ายไป "ยังไม่จัดแผนก" (ไม่ได้ลบสินค้า)'):''))) return;
+  const back=S.all.filter(x=>ids.includes(x.id)&&String(x.cat_label||'').trim()).length;
+  if(!confirm('ลบแผนก "'+nm+'" ของสาขา'+BR_NAME[S.br]+'?'+(cnt?('\n\nของ '+cnt+' รายการจะถูกเอาออกจากแผนกนี้ (ไม่ได้ลบสินค้า)'
+    +(back?('\n'+back+' รายการจะกลับไปอยู่หมวดเดิมของแอพนับ'):'')):''))) return;
   try{
     if(cnt)await patchIds(ids,{dept:null}); // ล้างเฉพาะ dept — ห้ามแตะ cat_label (แอพนับเดิมใช้จัดหมวดและบันทึกลง stock_counts)
     const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===nm);
@@ -1557,14 +1557,14 @@ async function saveCn(id){
 async function setZone(dept,z){ // โซนผูกกับแผนก (แยกสาขา) → อัปเดตสินค้าในแผนกของสาขานี้ + ตารางแผนก
   try{
     const ids=deptIds(dept);
-    if(ids.length)await patchIds(ids,{zone:z||null,dept:dept}); // เขียน dept ด้วย เผื่อกลุ่มนี้ยังเป็นหมวดเดิม
+    if(ids.length)await patchIds(ids,{zone:z||null}); // เขียนเฉพาะโซน — ไม่แตะ dept/หมวดเดิม (ไม่งั้นกลุ่มอื่นเพี้ยน)
     const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===dept);
     if(d2&&d2.id!=null){await api('PATCH','sc_depts?id=eq.'+d2.id,{zone:z||null},'return=minimal').catch(()=>{});d2.zone=z||null;}
     else if(S.deptTbl){
       const r=await api('POST','sc_depts',{branch_id:STK_BR[S.br],name:dept,zone:z||null,sort:(S.depts||[]).length+1},'return=representation').catch(()=>null);
       if(r&&r[0])(S.depts=S.depts||[]).push(r[0]);
     }
-    S.all.forEach(x=>{if(ids.includes(x.id)){x.zone=z||null;x.dept=dept;}});
+    S.all.forEach(x=>{if(ids.includes(x.id))x.zone=z||null;});
     toast('✅ แผนก "'+dept+'" → โซน'+(z||' (ไม่ระบุ)')+' · สาขา'+BR_NAME[S.br]);render();
   }catch(e){toast('ตั้งโซนไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);render();}
 }

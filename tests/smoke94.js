@@ -67,10 +67,10 @@ setTimeout(async()=>{
   const pills=()=>d.getElementById('pills').textContent;
   // 1) แถบแผนก + การ์ดเฉพาะแผนกแรก
   out.push('pills 2 แผนก (ครัว/บาร์น้ำ): '+(pills().includes('ครัว')&&pills().includes('บาร์น้ำ')));
-  // สาขานี้ตั้งแผนกจริง (dept) แล้ว → ของที่ยังไม่ตั้งแผนกไปกอง "ยังไม่จัดแผนก" (ไม่ใช้หมวดเดิมปนอีก)
-  out.push('ของยังไม่ผูก/ยังไม่ตั้งแผนก ไม่ถูกซ่อน: มี pill ยังไม่จัดแผนก + โน้ตนับได้ปกติ: '
-    +(pills().includes('ยังไม่จัดแผนก')&&pills().includes('ยังไม่จัดโซน')&&list().includes('ยังนับได้ปกติ')));
-  w.pickDept('ยังไม่จัดแผนก'); await sleep(30);
+  // ของที่ยังไม่ตั้ง dept ยังอยู่หมวดเดิมของแอพนับ (ไม่ถูกดันไปกองรวม)
+  out.push('ของยังไม่ผูกไม่ถูกซ่อน: มี pill หมวดเดิม (อื่นๆ) + โน้ตนับได้ปกติ: '
+    +(pills().includes('อื่นๆ')&&pills().includes('ยังไม่จัดโซน')&&list().includes('ยังนับได้ปกติ')));
+  w.pickDept('อื่นๆ'); await sleep(30);
   out.push('การ์ดน้ำแข็งขึ้นหน้านับ + ป้าย ⚠ ยังไม่ผูกชื่อบิล: '+(list().includes('น้ำแข็ง')&&list().includes('ยังไม่ผูกชื่อบิล')));
   w.pickDept('ครัว'); await sleep(30);
   out.push('พื้นที่แบ่งโซน หน้าร้าน/หลังร้าน: '+(pills().includes('หน้าร้าน')&&pills().includes('หลังร้าน')));
@@ -96,7 +96,7 @@ setTimeout(async()=>{
     +(!!d.querySelector('#pills .pill .ok')&&!d.querySelector('#pills .pill.on.needc')));
   out.push('แผนกที่ยังนับไม่ครบ pill กระพริบแดง (.needc) + การ์ดที่ยังไม่นับกระพริบด้วย: '
     +(d.querySelectorAll('#pills .pill.needc').length>0
-      &&(w.pickDept('ยังไม่จัดแผนก'),d.querySelectorAll('#list .pcard.needc').length===1
+      &&(w.pickDept('อื่นๆ'),d.querySelectorAll('#list .pcard.needc').length===1
          &&d.querySelectorAll('#list .pcard.done').length===0)));
   w.pickDept('ครัว');
   // 3) ค้นหาข้ามแผนก
@@ -147,8 +147,8 @@ setTimeout(async()=>{
   await w.setImgUrl('หมูสามชั้น','https://x.test/img.jpg');
   await w.setZone('หน้าเตา','หน้าร้าน'); await sleep(30); // p1 ถูกย้ายไปแผนกหน้าเตาแล้วจากขั้นก่อน
   const pz=patches.find(p=>p.url.includes('products?id=in.')&&p.body.zone==='หน้าร้าน');
-  out.push('setZone → PATCH สินค้าในแผนกนั้น (id=in.) zone=หน้าร้าน + ตั้ง dept ให้ด้วย + local: '
-    +(!!pz&&pz.body.dept==='หน้าเตา'&&w.eval("S.all.find(x=>x.id==='p1').zone")==='หน้าร้าน'));
+  out.push('setZone → PATCH เฉพาะ zone ของสินค้าในแผนกนั้น (ไม่ไปแตะ dept/หมวดเดิม) + local: '
+    +(!!pz&&pz.body.dept===undefined&&pz.body.cat_label===undefined&&w.eval("S.all.find(x=>x.id==='p1').zone")==='หน้าร้าน'));
   out.push('setImgUrl PATCH name=eq + local: '+(!!patches.find(p=>p.body.image_url)&&w.eval("S.all.find(x=>x.id==='p1').image_url")==='https://x.test/img.jpg'));
   out.push('bizToday ตี 2 → เมื่อวาน · dayGrp พฤ/ศ/ส = 0/1/2: '
     +(w.bizToday(new Date(2026,8,17,2,0))==='2026-09-16'&&w.dayGrp('2026-09-17')===0&&w.dayGrp('2026-09-18')===1&&w.dayGrp('2026-09-19')===2));

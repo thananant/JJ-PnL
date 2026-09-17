@@ -130,9 +130,9 @@ setTimeout(async()=>{
   w.setTab('cfgd'); await sleep(30);
   // ตั้งโซนแผนก = รายสาขา
   await w.setZone('ผักสด','หน้าร้าน'); await sleep(40);
-  out.push('ตั้งโซนแผนก → PATCH sc_depts + สินค้าในแผนกนั้น (แก้บั๊กโซนไม่ถูกบันทึก): '
+  out.push('ตั้งโซนแผนก → PATCH sc_depts + zone ของสินค้าในแผนกนั้น (ไม่แตะ dept ของตัวอื่น): '
     +(!!patches.find(p=>p.url.includes('sc_depts?id=eq.1')&&p.body.zone==='หน้าร้าน')
-      &&!!patches.find(p=>p.url.includes('products?id=in.')&&p.body.zone==='หน้าร้าน'&&p.body.dept==='ผักสด')
+      &&!!patches.find(p=>p.url.includes('products?id=in.')&&p.body.zone==='หน้าร้าน'&&p.body.dept===undefined)
       &&w.eval("S.all.find(x=>x.id==='p1').zone")==='หน้าร้าน'));
   // 3.5) หน้า 📦 รายการสินค้า: ทุกสาขา แยกแผนก + ค้นหา + ลบ
   w.setTab('items'); await sleep(150);
