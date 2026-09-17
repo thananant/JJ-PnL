@@ -333,7 +333,7 @@ async function loadAll(){
     selAll('stock_counts?select=product_id,qty,out_of_stock,created_at&branch_id=eq.'+bid+'&count_date=eq.'+encodeURIComponent(cd)+'&order=created_at.desc').catch(()=>[]),
     // รายชื่อแผนกของ "สาขานี้" (แผนกแยกสาขา) — ยังไม่รัน sql/jjmk_stockcheck_depts.sql = ไม่มีตาราง
     selAll('sc_depts?select=*&branch_id=eq.'+bid+'&order=sort,name').then(r=>{S.deptTbl=true;return r;}).catch(()=>{S.deptTbl=false;return null;}),
-    selAll('line_groups?select=*').catch(()=>[]), // กลุ่มไลน์ที่บอทเห็น (ของแอพนับเดิม)
+    selAll('line_groups?select=*&order=seen_at.desc.nullslast').catch(()=>selAll('line_groups?select=*')).catch(()=>[]), // กลุ่มไลน์ที่บอทเห็น (ของแอพนับเดิม)
     selAll('sc_config?select=*').catch(()=>[])
   ]);
   S.depts=deptRows||[];
@@ -921,9 +921,18 @@ function lineCard(){
   S.all.forEach(i=>{const n=String(i.sup||'').trim(); if(n&&!names[supKey(n)])names[supKey(n)]=n;});
   const sups=Object.values(names).sort((a,b)=>a.localeCompare(b,'th'));
   const G='grid-template-columns:minmax(150px,1.2fr) minmax(200px,1.3fr) 70px 190px';
+  const gUse={}; // กลุ่มนี้ถูกผูกกับกี่ซัพ
+  (S.sups||[]).forEach(x=>{const gid=String(x.line_group_id||''); if(gid)gUse[gid]=(gUse[gid]||0)+1;});
+  const isThai=t=>/^[\u0E00-\u0E7F]/.test(String(t||'').trim());  // อังกฤษ/ตัวเลขก่อน แล้วค่อยไทย (แบบที่คนอ่านคาด)
+  const gList=[...(S.lineGroups||[])].sort((a,b)=>{
+    const la=lgLabel(a).trim(),lb=lgLabel(b).trim();
+    return (isThai(la)?1:0)-(isThai(lb)?1:0)||la.localeCompare(lb,'th',{numeric:true,sensitivity:'base'});
+  });
+  const gTag=gid=>{const n=gUse[gid]||0;return n?(' · ผูกอยู่ '+n+' ซัพ'):' · ยังไม่ผูก';};
   const opts=cur=>'<option value="">— ไม่ผูกกลุ่ม —</option>'
-    +(S.lineGroups||[]).map(g=>'<option value="'+esc(g.group_id)+'"'+(String(cur||'')===String(g.group_id)?' selected':'')+'>'+esc(lgLabel(g))+'</option>').join('')
-    +(cur&&!(S.lineGroups||[]).some(g=>String(g.group_id)===String(cur))?'<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>':'');
+    +gList.map(g=>'<option value="'+esc(g.group_id)+'"'+(String(cur||'')===String(g.group_id)?' selected':'')+'>'
+      +esc(lgLabel(g))+esc(gTag(g.group_id))+'</option>').join('')
+    +(cur&&!gList.some(g=>String(g.group_id)===String(cur))?'<option value="'+esc(cur)+'" selected>'+esc(cur)+' · (ไม่พบในรายชื่อกลุ่ม)</option>':'');
   const rows=sups.map((sp,i)=>{
     const g=lineOf(sp),ok=!!(g&&g.group_id),inDb=!!supSched(sp),n=supCount(sp);
     const esp=esc(sp).replace(/'/g,"\\'");
@@ -948,10 +957,32 @@ function lineCard(){
     +'เปลี่ยนชื่อซัพจะตามไปแก้ชื่อซัพในสินค้าทุกสาขาให้เอง · ลบได้เมื่อไม่มีสินค้าใช้ซัพนั้นแล้ว (ถ้ายังมีให้กด ↔ ย้ายของ ไปซัพอื่นก่อน) · '
     +'ส่งใบสั่งผ่าน Edge Function <code>line-order</code> ของระบบเดิม</div>'
     +(nDb<sups.length?'<div class="note" style="margin:0 15px 10px">⚠ บางซัพยังไม่มีในตาราง <code>suppliers</code> — กด "➕ เพิ่มเข้าตารางซัพ" (ถ้าเพิ่มไม่ได้ ให้รัน <b>sql/jjmk_stockcheck_grants.sql</b> ก่อน)</div>':'')
-    +'<div class="lrow" style="grid-template-columns:1fr 150px"><div><input class="di" id="nsName" placeholder="ชื่อซัพใหม่ (ใช้ชื่อเดียวกับที่ลงบิล)" onkeydown="if(event.key===\'Enter\')supAdd()"></div>'
-    +'<div><button class="outb" onclick="supAdd()">➕ เพิ่มซัพ</button></div></div>'
+    +'<div class="lrow" style="grid-template-columns:1fr auto auto;gap:8px"><div><input class="di" id="nsName" placeholder="ชื่อซัพใหม่ (ใช้ชื่อเดียวกับที่ลงบิล)" onkeydown="if(event.key===\'Enter\')supAdd()"></div>'
+    +'<div><button class="outb" onclick="supAdd()">➕ เพิ่มซัพ</button></div>'
+    +'<div><button class="outb" onclick="syncLineGroups()">🔄 ดึงกลุ่มไลน์ใหม่ ('+gList.length+')</button></div></div>'
+    +(gList.length?'<div class="note" style="margin:0 15px 10px">กลุ่มไลน์ที่บอทอยู่ '+gList.length+' กลุ่ม · <b>ยังไม่ได้ผูกกับซัพไหนเลย '
+      +gList.filter(g=>!gUse[g.group_id]).length+' กลุ่ม</b>'
+      +(gList.filter(g=>!gUse[g.group_id]).length?(' — '+gList.filter(g=>!gUse[g.group_id]).slice(0,6).map(g=>esc(lgLabel(g))).join(' · ')
+        +(gList.filter(g=>!gUse[g.group_id]).length>6?' …':'')):'')+'</div>':'')
+    +'<div class="note" style="margin:0 15px 10px;border-color:#B9CBE0;background:#EFF4FA;color:#33517A">กลุ่มใหม่: สร้างกลุ่ม → เชิญบอทเข้ากลุ่ม → <b>พิมพ์อะไรก็ได้ในกลุ่ม 1 ข้อความ</b> (บอทถึงจะรู้จักกลุ่ม) → กลับมากด 🔄 ดึงกลุ่มไลน์ใหม่ แล้วกลุ่มจะโผล่ใน dropdown</div>'
     +'<div class="hd2" style="'+G+'"><span>ซัพ</span><span>กลุ่มไลน์</span><span>สินค้า</span><span></span></div>'
     +(rows||'<div class="empty">ยังไม่มีซัพ</div>')+'</div>';
+}
+async function syncLineGroups(){ // ดึงกลุ่มที่บอทอยู่ + อัปเดตชื่อกลุ่ม (Edge Function ของระบบเดิม)
+  toast('⏳ กำลังดึงชื่อกลุ่มจากไลน์...');
+  let synced=null;
+  try{
+    const r=await fetch(CONFIG.URL+'/functions/v1/sync-line-groups',{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY},body:'{}'});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&typeof j.updated==='number')synced=j.updated;
+  }catch(e){}
+  try{ S.lineGroups=await selAll('line_groups?select=*&order=seen_at.desc.nullslast'); }
+  catch(e){ try{ S.lineGroups=await selAll('line_groups?select=*'); }catch(e2){} }
+  const n=(S.lineGroups||[]).length;
+  toast(n?('🔄 เจอ '+n+' กลุ่ม'+(synced!=null?(' · อัปเดตชื่อ '+synced+' กลุ่ม'):'')+' ✓')
+        :'ยังไม่เจอกลุ่ม — เชิญบอทเข้ากลุ่มแล้วพิมพ์ 1 ข้อความในกลุ่มก่อนครับ',!n);
+  render();
 }
 async function supAdd(nm){
   const el=document.getElementById('nsName');

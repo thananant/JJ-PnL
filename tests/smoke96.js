@@ -12,7 +12,8 @@ const html=fs.readFileSync('jjmk-stockcheck.html','utf8');
 const patched=html.replace(/<link href="https:\/\/fonts[^>]*>/g,'');
 const BID='b19f0a17b4472';
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
-const sent=[],receipts=[],supPosts=[],supPatches=[],supDels=[];
+const sent=[],receipts=[],supPosts=[],supPatches=[],supDels=[],syncs=[];
+let lineGroups=[{group_id:'C123',name:'กลุ่มสั่งของ Smilemeat',seen_at:'2026-09-01'}];
 const users=[{id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true}];
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
@@ -22,6 +23,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       const method=opt&&opt.method||'GET';
       const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),json:async()=>v}); // ของจริงมี json()
       if(url.includes('/functions/v1/line-order')){sent.push(JSON.parse(opt.body));return T({ok:true});}
+      if(url.includes('/functions/v1/sync-line-groups')){syncs.push(1);return T({updated:2});}
       if(url.includes('stock_receipts')){receipts.push(JSON.parse(opt.body));return T([]);}
       if(url.includes('suppliers')&&method==='POST'){supPosts.push(JSON.parse(opt.body));return T([]);}
       if(url.includes('suppliers')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}
@@ -33,7 +35,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
         return T(um?users.filter(x=>x.username===decodeURIComponent(um[1])):users);
       }
       if(url.includes('sc_depts'))return T([]);
-      if(url.includes('line_groups'))return T([{group_id:'C123',name:'กลุ่มสั่งของ Smilemeat',seen_at:'2026-09-01'}]);
+      if(url.includes('line_groups'))return T(lineGroups);
       if(url.includes('sc_config'))return T([]);
       if(url.includes('pnl_stock_names'))return T([
         {id:21,branch:'JJRD',product_id:'p1',pnl_item:'หมูสไลด์',product_name:'หมูสไลด์',bill_unit:'ลัง',stock_unit:'กก.',factor:12,active:true},
@@ -176,6 +178,20 @@ setTimeout(async()=>{
   out.push('ย้ายสินค้าทั้งหมดไปซัพอื่น → PATCH products?sup=eq.Smilemeat: '
     +(!!supPatches.find(p=>p.url.includes('products?sup=eq.')&&p.body.sup==='FarmFresh')
       &&w.eval("supCount('Smilemeat')")===0));
+  // 7) กลุ่มไลน์ใหม่: เชิญบอท+พิมพ์ในกลุ่ม → กด 🔄 แล้วกลุ่มต้องโผล่ใน dropdown
+  lineGroups=lineGroups.concat([{group_id:'C999',name:'JJ x ซัพใหม่',seen_at:'2026-09-17'}]);
+  await w.syncLineGroups(); await sleep(60);
+  out.push('ปุ่ม 🔄 เรียก Edge Function sync-line-groups แล้วโหลดกลุ่มใหม่เข้ามา: '
+    +(syncs.length===1&&w.eval('S.lineGroups.length')===2
+      &&[...d.querySelectorAll('#list select option')].some(o=>o.textContent.includes('JJ x ซัพใหม่'))));
+  const opTxt=[...d.querySelectorAll('#list select option')].map(o=>o.textContent);
+  out.push('dropdown บอกสถานะ: กลุ่มที่ผูกแล้วบอกจำนวนซัพ · กลุ่มใหม่ขึ้น "ยังไม่ผูก": '
+    +(opTxt.some(t=>t.includes('กลุ่มสั่งของ Smilemeat')&&t.includes('ผูกอยู่ 1 ซัพ'))
+      &&opTxt.some(t=>t.includes('JJ x ซัพใหม่')&&t.includes('ยังไม่ผูก'))));
+  const gOpts=opTxt.filter(t=>t.includes('·'));
+  out.push('เรียงชื่อกลุ่ม อังกฤษก่อนแล้วไทย + สรุปกลุ่มที่ยังไม่ผูกด้านบน: '
+    +(gOpts.length===4&&gOpts[0].indexOf('JJ x ซัพใหม่')===0&&gOpts[1].indexOf('กลุ่มสั่งของ')===0
+      &&list().includes('ยังไม่ได้ผูกกับซัพไหนเลย 1 กลุ่ม')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
