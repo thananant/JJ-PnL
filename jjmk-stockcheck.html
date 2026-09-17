@@ -347,10 +347,13 @@ function renderCount(){
 /* ---- 🔗 หน้าผูกชื่อ: ชื่อจริง (บิล) ↔ ชื่อนับ รายสาขา ---- */
 function renderLink(){
   const ok=S.all.filter(it=>S.map[it.id]),no=S.all.filter(it=>!S.map[it.id]);
+  const canEdit=!S.user||S.user.role==='admin';
   const row=it=>{const m=S.map[it.id];
     return '<div class="lrow">'+imgCell(it)
       +'<div><b>'+(m?esc(m.pnl_item):'–')+'</b><div style="font-size:11px;color:var(--mut)">ชื่อจริง (บิล P&L)</div></div>'
-      +'<div>'+esc(it.name)+'<div style="font-size:11px;color:var(--mut)">ชื่อนับ · '+esc(deptOf(it))+'</div></div>'
+      +'<div><span id="cn_'+it.id+'">'+esc(it.name)
+      +(canEdit?' <button class="outb" style="padding:3px 8px;font-size:12px" onclick="editCn(\''+it.id+'\')" title="แก้ชื่อนับ (มีผลทั้ง 2 สาขา)">✏️</button>':'')
+      +'</span><div style="font-size:11px;color:var(--mut)">ชื่อนับ · '+esc(deptOf(it))+'</div></div>'
       +(m?'<span class="okt">✓ ผูกแล้ว</span>':'<span class="wat">⚠ ยังไม่ผูก</span>')+'</div>';};
   // การผูกต้องตรงกันทั้งสองทาง (เช็ครวม 2 สาขา):
   //   ชื่อบิลเดียวกัน → ต้องชี้ชื่อนับเดียว · ชื่อนับเดียวกัน → ต้องชี้ชื่อบิลเดียว
@@ -465,6 +468,31 @@ function setOut(id){const it=S.items.find(x=>x.id===id);if(!it)return;
   it.out=!it.out;if(it.out)it.qty=0;render();}
 function setF(id,f,v){const it=S.items.find(x=>x.id===id);if(!it)return;
   it.dirty[f]=(f==='dept')?String(v).trim():(v===''?null:num(v));render();}
+function editCn(id){ // แก้ชื่อนับ inline จากหน้าผูกชื่อ
+  const it=S.all.find(x=>x.id===id),sp=document.getElementById('cn_'+id);
+  if(!it||!sp)return;
+  sp.innerHTML='<input class="di" id="cni_'+id+'" value="'+esc(it.name)+'" style="max-width:230px;display:inline-block"> '
+    +'<button class="outb" style="padding:6px 10px" onclick="saveCn(\''+id+'\')">💾</button> '
+    +'<button class="outb" style="padding:6px 10px" onclick="render()">✗</button>';
+  const inp=document.getElementById('cni_'+id); inp.focus(); inp.select();
+  inp.onkeydown=e=>{if(e.key==='Enter')saveCn(id);if(e.key==='Escape')render();};
+}
+async function saveCn(id){
+  const it=S.all.find(x=>x.id===id); if(!it)return;
+  const nn=(document.getElementById('cni_'+id).value||'').trim(),old=it.name;
+  if(!nn||nn===old){render();return;}
+  try{
+    // เปลี่ยนชื่อนับที่ต้นทาง (ระบบ stock) ทุกแถวชื่อเดียวกัน = ทั้ง 2 สาขา
+    await api('PATCH','products?name=eq.'+encodeURIComponent(old),{name:nn},'return=minimal');
+    // ตารางผูกฝั่ง P&L เก็บสำเนาชื่อนับไว้ — อัปเดตตามให้เลย
+    await api('PATCH','pnl_stock_map?product_name=eq.'+encodeURIComponent(old),{product_name:nn},'return=minimal').catch(()=>{});
+    S.all.forEach(x=>{if(x.name===old)x.name=nn;});
+    (S.mapRows||[]).forEach(r=>{if(r.product_name===old)r.product_name=nn;});
+    Object.values(S.map).forEach(r=>{if(r.product_name===old)r.product_name=nn;});
+    toast('✅ เปลี่ยนชื่อนับ "'+old+'" → "'+nn+'" (ทั้ง 2 สาขา + ตารางผูก)');
+    render();
+  }catch(e){toast('เปลี่ยนชื่อไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
+}
 async function setZone(dept,z){ // โซนผูกกับแผนก → อัปเดตสินค้าทุกตัวในแผนก (ทั้ง 2 สาขา)
   try{
     await api('PATCH','products?dept=eq.'+encodeURIComponent(dept),{zone:z||null},'return=minimal');
