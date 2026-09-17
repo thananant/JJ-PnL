@@ -359,7 +359,7 @@ function evWhen(e){
 /* ---------- nav ---------- */
 function toggleMine(){S.mine=!S.mine;LS.set('jjcal_mine',S.mine);$('#mineBtn').classList.toggle('on',S.mine);show(S.tab)}
 async function show(v){
-  S.tab=v;
+  S.tab=v; LS.set('jjcal_tab',v);   // จำหน้าที่เปิดอยู่ — รีเฟรชแล้วกลับมาหน้าเดิม
   document.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   $('#fab').style.display=(v==='sync')?'none':'flex';
@@ -717,7 +717,7 @@ async function startApp(){
   $('#hdUser').innerHTML=`👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:logout()">ออก</a>`;
   await loadBranches();
   await Promise.all([loadUsers(),loadEvents(true),loadToken()]);
-  show('month');
+  show(LS.get('jjcal_tab','month'));   // เปิดมาที่หน้าเดิมก่อนรีเฟรช
   notifTick();setInterval(notifTick,30000);
   setInterval(async()=>{if(!document.hidden){await loadEvents(true);if(S.tab!=='sync')show(S.tab)}},300000);
   document.addEventListener('visibilitychange',async()=>{

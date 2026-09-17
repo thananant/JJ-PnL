@@ -1530,10 +1530,18 @@ document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
   document.querySelectorAll('.panel').forEach(function(x){ x.classList.remove('active'); });
   t.classList.add('active');
   $('panel-'+t.dataset.tab).classList.add('active');
+  try{ localStorage.setItem('jjinv_tab', t.dataset.tab); }catch(e){}   // จำหน้าที่เปิดอยู่ — รีเฟรชแล้วกลับมาหน้าเดิม
   if(t.dataset.tab==='list'||t.dataset.tab==='cancelled'||t.dataset.tab==='failed')loadInvoices();
   if(t.dataset.tab==='history')loadHistory();
   if(t.dataset.tab==='settings')loadCounters();
 }; });
+/* เปิดแอพมาที่หน้าเดิมก่อนรีเฟรช (ถ้าไม่มีที่จำไว้ = หน้าออกบิลใหม่ตามเดิม) */
+(function(){
+  var t; try{ t=localStorage.getItem('jjinv_tab'); }catch(e){ return; }
+  if(!t||t==='new')return;
+  var btn=document.querySelector('.tab[data-tab="'+t+'"]');
+  if(btn)btn.click();
+})();
 
 $('liBtn').onclick=doLogin;
 $('liPass').addEventListener('keydown',function(e){ if(e.key==='Enter')doLogin(); });
