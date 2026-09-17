@@ -63,6 +63,7 @@ setTimeout(async()=>{
   w.setTab('link'); await sleep(30);
   out.push('ผูกชื่อ: สรุปผูกแล้ว 2/3 + น้ำแข็งกลุ่มยังไม่ผูก: '
     +(list().includes('ผูกแล้ว 2')&&list().includes('ทั้งหมด 3')&&list().includes('น้ำแข็ง')&&list().includes('ยังไม่ผูก')));
+  out.push('แถบข้าง 3 เมนู + ไฮไลต์ตามหน้า: '+(d.querySelectorAll('#sideNav [data-t]').length===3&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
   out.push('แถบแผนกซ่อนในหน้าผูกชื่อ: '+(d.getElementById('deptbar').style.display==='none'));
   out.push('ปุ่มบันทึกซ่อน: '+(d.getElementById('save').style.display==='none'));
   // 7) หน้า Safety: แก้อัตรา + แผนก
