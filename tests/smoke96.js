@@ -62,7 +62,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
         {name:'FarmFresh',order_mode:'fixed',schedule:{mon:'wed'},lead_days:1,line_group_id:null}]);
       if(url.includes('stock_counts'))return T(url.includes(encodeURIComponent('2026-09-14'))||url.includes('2026-09-14')?[
         {product_id:'p1',qty:10,out_of_stock:false,created_at:'2026-09-15T01:00:00Z'},  // นับตี 1 = ยังเป็นวันจันทร์
-        {product_id:'p2',qty:8,out_of_stock:false,created_at:'2026-09-15T01:05:00Z'}]:[]); // วันอื่น = ยังไม่ได้นับ
+        {product_id:'p2',qty:2,out_of_stock:false,created_at:'2026-09-15T01:05:00Z'}]:[]); // วันอื่น = ยังไม่ได้นับ
       return T([]);
     };
     w.TextEncoder=TextEncoder;
@@ -99,18 +99,17 @@ setTimeout(async()=>{
   const r2=ff.rows.find(r=>r.n==='ผักบุ้ง');
   out.push('หมูสไลด์: นับได้ 10 · วันอังคารใช้ 50 → ต้องสั่ง 40: '+(r1.have===10&&r1.need===50&&r1.order===40));
   out.push('แปลงเป็นหน่วยซื้อ: 40 กก. ÷ 12 = 4 ลัง (ปัดขึ้น): '+(r1.packs===4&&r1.bu==='ลัง'));
-  out.push('ผักบุ้ง: นับได้ 8 · วันพุธใช้ 8 → ไม่ต้องสั่ง (0): '+(r2.have===8&&r2.need===8&&r2.order===0));
+  out.push('ผักบุ้ง: นับได้ 2 · วันพุธใช้ 8 → ต้องสั่ง 6: '+(r2.have===2&&r2.need===8&&r2.order===6));
   out.push('น้ำแข็ง: ยังไม่ได้นับ → order=null (ไม่เดาให้): '+(r3.have===null&&r3.order===null));
-  out.push('สรุปรายซัพ: Smilemeat ต้องสั่ง 1 รายการ · FarmFresh 0: '+(sm.nOrder===1&&ff.nOrder===0));
+  out.push('สรุปรายซัพ: Smilemeat ต้องสั่ง 1 รายการ · FarmFresh 1: '+(sm.nOrder===1&&ff.nOrder===1));
   // 3) หน้าจอ
   out.push('หน้าสั่งของแยกการ์ดรายซัพ + บอกวันส่ง + ปุ่มคัดลอกใบสั่ง: '
     +(list().includes('Smilemeat')&&list().includes('FarmFresh')&&list().includes('ส่ง 2026-09-15')&&list().includes('คัดลอก')&&list().includes('ส่งเข้าไลน์')));
   out.push('ซัพที่ยังไม่ผูกกลุ่มในระบบเดิม ปุ่มบอกว่ายังไม่ผูก: '+w.eval("lineOf('FarmFresh')===null"));
   out.push('จับคู่ชื่อซัพทนตัวพิมพ์/ช่องว่างต่างกัน (products.sup "Smilemeat" ↔ suppliers "smilemeat "): '
     +(w.eval("!!supSched('Smilemeat')")&&w.eval("lineOf('Smilemeat').group_id")==='C123'));
-  w.toggleOrd('FarmFresh'); await sleep(40); // ซัพที่ไม่ต้องสั่งพับไว้ตั้งต้น — กางดู
-  out.push('แถวหมูสไลด์โชว์ 40 กก. + ≈ 4 ลัง · ผักบุ้งขึ้น "พอแล้ว" · น้ำแข็ง "ยังไม่นับ": '
-    +(list().includes('40')&&list().includes('4 ลัง')&&list().includes('พอแล้ว')&&list().includes('ยังไม่นับ')));
+  out.push('แถวหมูสไลด์โชว์ 40 กก. + ≈ 4 ลัง · น้ำแข็งขึ้น "ยังไม่นับ": '
+    +(list().includes('40')&&list().includes('4 ลัง')&&list().includes('ยังไม่นับ')));
   out.push('ข้อความใบสั่งรูปแบบเดียวกับแอพนับเดิม (🛒 ออเดอร์ / ซัพ / สาขา / • รายการ): '
     +(()=>{const t=w.orderText('Smilemeat');
       return t.includes('🛒 ออเดอร์')&&t.includes('🏷️ Smilemeat')&&t.includes('🏪 รัชดา')
@@ -207,6 +206,28 @@ setTimeout(async()=>{
   out.push('ซัพที่ยังไม่ผูกกลุ่มไลน์ ขึ้นกรอบแดงกระพริบ (.needlink) + ข้อความแดง: '
     +(!!d.querySelector('#list select.needlink')&&list().includes('⚠ ยังไม่ผูกกลุ่มไลน์')
       &&d.querySelectorAll('#list select.needlink').length===w.eval("(S._lineSups||[]).filter(sp=>supSched(sp)&&!(lineOf(sp)&&lineOf(sp).group_id)).length")));
+  // 8) ปุ่มส่งทั้งหมด: เลือกกลุ่มจริง / กลุ่มทดสอบ + ยืนยันก่อนส่ง
+  await w.loadAll(); await sleep(150); // คืนสภาพข้อมูลจาก mock (ข้อก่อนหน้าย้าย/ลบซัพไปแล้ว)
+  w.setTab('order'); await sleep(120);
+  sent.length=0; receipts.length=0;
+  w.sendAllOpen(); await sleep(40);
+  const ov=()=>d.getElementById('ovlBox').textContent;
+  out.push('กดส่งทั้งหมด → กล่องยืนยันเลือกปลายทาง (กลุ่มจริง/กลุ่มทดสอบ) + ติ๊กซัพได้: '
+    +(d.getElementById('ovl').classList.contains('on')&&ov().includes('กลุ่มจริงของแต่ละซัพ')&&ov().includes('กลุ่มทดสอบ')
+      &&d.querySelectorAll('#ovlBox .mrow').length===2&&ov().includes('ยืนยันส่ง')));
+  out.push('ซัพที่ยังไม่ผูกกลุ่มขึ้นเตือนว่าจะถูกข้าม + ปุ่มยืนยันนับเฉพาะซัพที่ส่งได้: '
+    +(ov().includes('ยังไม่ผูกกลุ่มไลน์ — จะข้ามซัพนี้')&&ov().includes('ยืนยันส่ง 1 ซัพ')));
+  w.sendMode('test'); await sleep(40);
+  d.getElementById('testGrp').value='C123';
+  await w.sendAllGo(); await sleep(150);
+  out.push('โหมดทดสอบ: ส่งทุกซัพเข้ากลุ่มทดสอบกลุ่มเดียว + ติดป้าย [ทดสอบ] + ไม่บันทึกยอดสั่ง: '
+    +(sent.length===2&&sent.every(x=>x.to==='C123')&&sent.every(x=>x.text.includes('ทดสอบระบบสั่งของ'))
+      &&receipts.length===0&&!d.getElementById('ovl').classList.contains('on')));
+  sent.length=0; receipts.length=0;
+  w.sendAllOpen(); await sleep(30); w.sendMode('real'); await sleep(30);
+  await w.sendAllGo(); await sleep(150);
+  out.push('โหมดจริง: ส่งเข้ากลุ่มของซัพเอง (ข้ามซัพที่ยังไม่ผูก) + บันทึกยอดสั่ง: '
+    +(sent.length===1&&sent[0].to==='C123'&&!sent[0].text.includes('ทดสอบ')&&receipts.length===1));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);

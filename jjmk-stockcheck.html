@@ -92,6 +92,22 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .pill.needc .bdg{background:#FBE3E3;color:var(--red)}
 .pill.needc.on{background:var(--red);border-color:var(--red)}
 .pcard.needc{border-color:var(--red);animation:jjblink2 1.6s ease-in-out infinite}
+.ovl{position:fixed;inset:0;background:rgba(30,18,10,.5);z-index:200;display:none;align-items:center;justify-content:center;padding:16px}
+.ovl.on{display:flex}
+.ovlbox{background:var(--card);border-radius:16px;width:min(620px,100%);max-height:88vh;overflow:auto;padding:16px 18px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.ovlbox h3{font-family:'Prompt';font-size:17px;margin-bottom:4px}
+.ovlbox .mrow{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1.5px solid var(--line);border-radius:11px;margin-bottom:7px;background:#fff}
+.ovlbox .mrow.off{opacity:.55}
+.ovlbox .mrow .nm{flex:1;font-size:13.5px}
+.ovlbox .mrow .nm small{display:block;color:var(--mut);font-size:11px}
+.ovlbox .seg2{display:flex;gap:8px;margin:10px 0}
+.ovlbox .seg2 button{flex:1;padding:11px 10px;border-radius:12px;border:1.8px solid var(--line);background:#fff;font-family:'Prompt';font-weight:700;font-size:13.5px;cursor:pointer;color:var(--mut)}
+.ovlbox .seg2 button.on{border-color:var(--wine);background:#FBF6EA;color:var(--wine)}
+.ovlfoot{display:flex;gap:9px;margin-top:12px}
+.ovlfoot button{flex:1;padding:12px;border-radius:12px;border:0;font-family:'Prompt';font-weight:700;font-size:14.5px;cursor:pointer}
+.ovlfoot .go{background:var(--red);color:#fff}
+.ovlfoot .go:disabled{opacity:.5}
+.ovlfoot .cx{background:#EFE7D6;color:var(--ink)}
 .obann{background:#EFF4FA;border:1.5px solid #B9CBE0;border-radius:12px;padding:9px 12px;margin-bottom:12px;color:#33517A}
 .obhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:13.5px}
 .obhead .obsum{color:#4A6A93}
@@ -263,6 +279,7 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
   <div class="lgmsg" id="lgMsg"></div>
   <button id="lgBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
 </div></div>
+<div id="ovl" class="ovl"><div class="ovlbox" id="ovlBox"></div></div>
 <div id="toast"></div>
 <div id="ptr">↓ ลากลงเพื่อรีเฟรช</div>
 <script>
@@ -519,6 +536,69 @@ async function logReceipts(sp){ // upsert stock_receipts (แหล่งคว�
     .catch(e=>{toast('ส่งไลน์สำเร็จ แต่บันทึกยอดสั่งไม่ได้ — '+String(e.message||e).slice(0,90),true);});
   S.sentToday=S.sentToday||{}; S.sentToday[sp]=od;
 }
+function modalOpen(html){const b=$('#ovlBox');if(!b)return;b.innerHTML=html;$('#ovl').classList.add('on');}
+function modalClose(){const o=$('#ovl');if(o)o.classList.remove('on');}
+function sendAllOpen(){
+  const plan=(orderPlan()||[]).filter(g=>g.nOrder>0);
+  if(!plan.length){toast('วันนี้ยังไม่มีอะไรต้องสั่ง',true);return;}
+  S._sendMode=S._sendMode||'real';
+  S._sendPick=S._sendPick||{}; plan.forEach(g=>{if(S._sendPick[g.sup]===undefined)S._sendPick[g.sup]=true;});
+  const testGid=localStorage.getItem('jjsc_testgrp')||'';
+  const gList=[...(S.lineGroups||[])].sort((a,b)=>lgLabel(a).localeCompare(lgLabel(b),'th'));
+  const rows=plan.map(g=>{
+    const ln=lineOf(g.sup),ok=!!(ln&&ln.group_id),on=!!S._sendPick[g.sup];
+    return '<label class="mrow'+(on?'':' off')+'"><input type="checkbox" '+(on?'checked':'')+' onchange="sendPick(\''+esc(g.sup).replace(/'/g,"\\'")+'\',this.checked)">'
+      +'<span class="nm"><b>'+esc(g.sup)+'</b> · '+g.nOrder+' รายการ'
+      +'<small>'+(ok?('กลุ่ม: '+esc(lgLabel({group_id:ln.group_id,name:ln.group_name}))):'<span style="color:var(--red)">⚠ ยังไม่ผูกกลุ่มไลน์ — จะข้ามซัพนี้</span>')
+      +' · ส่ง '+(g.dl.d?esc(g.dl.d):'-')+'</small></span></label>';
+  }).join('');
+  const nPick=plan.filter(g=>S._sendPick[g.sup]&&lineOf(g.sup)&&lineOf(g.sup).group_id).length;
+  modalOpen('<h3>📤 ส่งใบสั่งเข้าไลน์</h3>'
+    +'<div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">เลือกปลายทางก่อน แล้วติ๊กซัพที่จะส่ง</div>'
+    +'<div class="seg2">'
+    +'<button class="'+(S._sendMode==='real'?'on':'')+'" onclick="sendMode(\'real\')">🏷️ กลุ่มจริงของแต่ละซัพ</button>'
+    +'<button class="'+(S._sendMode==='test'?'on':'')+'" onclick="sendMode(\'test\')">🧪 กลุ่มทดสอบ (กลุ่มเดียว)</button></div>'
+    +(S._sendMode==='test'
+      ?'<div style="margin-bottom:10px"><div style="font-size:12px;color:var(--mut);margin-bottom:3px">ส่งทุกใบเข้ากลุ่มนี้</div>'
+        +'<select class="zsel" style="margin-left:0;width:100%" id="testGrp" onchange="localStorage.setItem(\'jjsc_testgrp\',this.value)">'
+        +'<option value="">— เลือกกลุ่มทดสอบ —</option>'
+        +gList.map(g=>'<option value="'+esc(g.group_id)+'"'+(String(testGid)===String(g.group_id)?' selected':'')+'>'+esc(lgLabel(g))+'</option>').join('')+'</select>'
+        +'<div class="note" style="margin:8px 0 0">โหมดทดสอบ: <b>ไม่บันทึกยอดสั่ง</b> ลงระบบ (ซ้อมส่งอย่างเดียว) และซัพจริงจะไม่ได้รับข้อความ</div></div>'
+      :'<div class="note" style="margin:0 0 10px;border-color:#E4A6A6;background:#FBEAEA;color:#8A2A2A">ส่งเข้ากลุ่มจริงของซัพ = ซัพเห็นทันที และระบบจะบันทึกยอดสั่งให้ด้วย</div>')
+    +rows
+    +'<div class="ovlfoot"><button class="cx" onclick="modalClose()">ยกเลิก</button>'
+    +'<button class="go" id="sendGo" onclick="sendAllGo()"'+(nPick?'':' disabled')+'>ยืนยันส่ง '+nPick+' ซัพ</button></div>');
+}
+function sendMode(m){S._sendMode=m;sendAllOpen();}
+function sendPick(sp,v){S._sendPick=S._sendPick||{};S._sendPick[sp]=!!v;sendAllOpen();}
+async function sendAllGo(){
+  const test=S._sendMode==='test';
+  const tg=test?((document.getElementById('testGrp')||{}).value||localStorage.getItem('jjsc_testgrp')||''):'';
+  if(test&&!tg){toast('เลือกกลุ่มทดสอบก่อนครับ',true);return;}
+  const plan=(orderPlan()||[]).filter(g=>g.nOrder>0&&S._sendPick[g.sup]);
+  const list=plan.filter(g=>test||(lineOf(g.sup)&&lineOf(g.sup).group_id));
+  if(!list.length){toast('ไม่มีซัพที่ส่งได้ (ยังไม่ผูกกลุ่มไลน์)',true);return;}
+  const btn=document.getElementById('sendGo'); if(btn){btn.disabled=true;btn.textContent='⏳ กำลังส่ง...';}
+  let ok=0,fail=[],skip=plan.length-list.length;
+  for(const g of list){
+    const to=test?tg:lineOf(g.sup).group_id;
+    const txt=(test?'🧪 [ทดสอบระบบสั่งของ — ไม่ใช่ออเดอร์จริง]\n':'')+orderText(g.sup);
+    try{
+      const r=await fetch(lineEndpoint(),{method:'POST',
+        headers:{'Content-Type':'application/json',apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY},
+        body:JSON.stringify({to,text:txt})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||j.ok===false)throw new Error(j.error||j.message||('HTTP '+r.status));
+      ok++;
+      if(!test)await logReceipts(g.sup); // โหมดทดสอบไม่บันทึกยอดสั่ง
+    }catch(e){fail.push(g.sup);}
+  }
+  modalClose();
+  toast((test?'🧪 ทดสอบ: ':'')+'ส่งไลน์สำเร็จ '+ok+' ซัพ'
+    +(fail.length?(' · ❌ ไม่สำเร็จ '+fail.length+' ('+fail.slice(0,3).join(', ')+')'):'')
+    +(skip?(' · ข้ามที่ยังไม่ผูกกลุ่ม '+skip):'')+(test?' · ไม่ได้บันทึกยอดสั่ง':''),!!fail.length);
+  render();
+}
 function copyOrder(sp){
   const t=orderText(sp); if(!t){toast('ไม่มีรายการต้องสั่ง',true);return;}
   const done=()=>toast('✅ คัดลอกใบสั่ง '+sp+' แล้ว — วางในไลน์กลุ่มซัพได้เลย');
@@ -575,7 +655,8 @@ function renderOrder(){
     +'<div class="note">สูตร: <b>ต้องสั่ง = ยอดใช้ของ "วันที่ของมาส่ง" − ยอดที่นับได้</b> (เช่น นับได้ 10 · วันอังคารใช้ 50 → สั่งเพิ่ม 40) · วันขายตัดรอบ 6 โมงเช้า (นับตี 1 ของพรุ่งนี้ = ยังเป็นวันนี้) · อัตราใช้ของตั้งที่หน้า 🛟 Safety · รอบส่งตั้งที่ 🚚 รอบสั่งซัพ'
     +(Object.keys(S.conv||{}).length?' · ถ้าตั้งตัวคูณหน่วยไว้ จะบอกจำนวนเป็นหน่วยซื้อให้ด้วย':'')+'</div>'
     +'<div class="lrow" style="grid-template-columns:1fr auto"><div><input class="di" id="ordQ" value="'+esc(S.ordQ||'')+'" placeholder="🔍 ค้นหาสินค้าในใบสั่ง" oninput="ordSearch(this.value)"></div>'
-    +'<div style="font-size:13px;white-space:nowrap;padding-left:10px">รวมต้องสั่ง <b style="color:var(--red)">'+totOrder+'</b> รายการ</div></div>'
+    +'<div style="font-size:13px;white-space:nowrap;padding-left:10px">รวมต้องสั่ง <b style="color:var(--red)">'+totOrder+'</b> รายการ</div>'
+    +(plan.some(g=>g.nOrder)?'<div><button class="outb" style="background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700;white-space:nowrap" onclick="sendAllOpen()">📤 ส่งทั้งหมด</button></div>':'<div></div>')+'</div>'
     +(secs||'<div class="empty">ยังไม่มีซัพในรายการสินค้าของสาขานี้</div>');
 }
 function toggleOrd(k){S.ordOpen=S.ordOpen||{};S.ordOpen[k]=!((S._ordNow||{})[k]);render();}
