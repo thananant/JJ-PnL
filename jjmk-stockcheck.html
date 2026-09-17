@@ -195,7 +195,7 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
       <button class="ni sub" data-t="cfgu"><span class="ic">👤</span>สิทธิ์การใช้งานพนักงาน</button>
       <button class="ni sub" data-t="cfgd"><span class="ic">🗂</span>แผนก</button>
       <button class="ni sub" data-t="cfgn"><span class="ic">📐</span>หน่วยซื้อ–หน่วยนับ</button>
-      <button class="ni sub" data-t="cfgl"><span class="ic">📣</span>ไลน์ซัพ</button>
+      <button class="ni sub" data-t="cfgl"><span class="ic">🏭</span>ซัพพลายเออร์</button>
     </div>
   </div>
   <div id="uchip"></div>
@@ -777,7 +777,7 @@ function renderSched(){
     +(schedCard()||'<div class="empty">ยังไม่มีซัพในรายการสินค้า</div>');
 }
 /* ---- ⚙️ ตั้งค่า: แยกหน้าละหัวข้อ (สิทธิ์ผู้ใช้ · แผนก · หน่วยซื้อ↔หน่วยนับ) ---- */
-const CFG_SUBS=[['cfgu','👤','สิทธิ์การใช้งานพนักงาน'],['cfgd','🗂','แผนก'],['cfgn','📐','หน่วยซื้อ–หน่วยนับ'],['cfgl','📣','ไลน์ซัพ']];
+const CFG_SUBS=[['cfgu','👤','สิทธิ์การใช้งานพนักงาน'],['cfgd','🗂','แผนก'],['cfgn','📐','หน่วยซื้อ–หน่วยนับ'],['cfgl','🏭','ซัพพลายเออร์']];
 const isCfgTab=t=>String(t||'').indexOf('cfg')===0;
 function cfgHead(t){ // แถบเลือกหัวข้อ (โชว์เฉพาะจอเล็กที่ไม่มีแถบข้าง) + หัวหน้า
   const s2=CFG_SUBS.find(x=>x[0]===t)||CFG_SUBS[0];
@@ -911,27 +911,93 @@ function renderCfgLine(){
   if(cfgDeny())return;
   $('#list').innerHTML=cfgHead('cfgl')+lineCard();
 }
+function supCount(n){ // จำนวนสินค้าที่ใช้ซัพนี้ (ทุกสาขา ถ้าโหลดแล้ว)
+  const k=supKey(n),src=(S.allBr&&S.allBr.length)?S.allBr:S.all;
+  return (src||[]).filter(x=>supKey(x.sup)===k).length;
+}
 function lineCard(){
-  const sups=[...new Set(S.all.map(i=>String(i.sup||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
-  const G='grid-template-columns:minmax(150px,1.2fr) minmax(220px,1.4fr) 150px';
+  const names={};
+  (S.sups||[]).forEach(x=>{const n=String(x.name||'').trim(); if(n)names[supKey(n)]=n;});
+  S.all.forEach(i=>{const n=String(i.sup||'').trim(); if(n&&!names[supKey(n)])names[supKey(n)]=n;});
+  const sups=Object.values(names).sort((a,b)=>a.localeCompare(b,'th'));
+  const G='grid-template-columns:minmax(150px,1.2fr) minmax(200px,1.3fr) 70px 190px';
   const opts=cur=>'<option value="">— ไม่ผูกกลุ่ม —</option>'
     +(S.lineGroups||[]).map(g=>'<option value="'+esc(g.group_id)+'"'+(String(cur||'')===String(g.group_id)?' selected':'')+'>'+esc(lgLabel(g))+'</option>').join('')
     +(cur&&!(S.lineGroups||[]).some(g=>String(g.group_id)===String(cur))?'<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>':'');
   const rows=sups.map((sp,i)=>{
-    const g=lineOf(sp),ok=!!(g&&g.group_id);
+    const g=lineOf(sp),ok=!!(g&&g.group_id),inDb=!!supSched(sp),n=supCount(sp);
+    const esp=esc(sp).replace(/'/g,"\\'");
     return '<div class="lrow" style="'+G+'">'
-      +'<div><b>'+esc(sp)+'</b><div style="font-size:11px;color:'+(ok?'var(--green)':'var(--mut)')+'">'+(ok?('✓ '+esc(g.group_name||g.group_id)):'ยังไม่ผูกกลุ่ม')+'</div></div>'
-      +'<span class="lbl" data-l="กลุ่มไลน์"><select class="zsel" style="margin-left:0;width:100%" id="lgi_'+i+'" onchange="lineSave('+i+')">'+opts(g&&g.group_id)+'</select></span>'
-      +'<div><button class="outb" onclick="lineTest('+i+')">🔔 ทดสอบส่ง</button></div></div>';
+      +'<div><b>'+esc(sp)+'</b><div style="font-size:11px;color:'+(ok?'var(--green)':'var(--mut)')+'">'
+      +(inDb?(ok?('✓ '+esc(g.group_name||g.group_id)):'ยังไม่ผูกกลุ่มไลน์'):'⚠ ยังไม่มีในตารางซัพ')+'</div></div>'
+      +'<span class="lbl" data-l="กลุ่มไลน์">'+(inDb?'<select class="zsel" style="margin-left:0;width:100%" id="lgi_'+i+'" onchange="lineSave('+i+')">'+opts(g&&g.group_id)+'</select>'
+        :'<button class="outb" onclick="supAdd(\''+esp+'\')">➕ เพิ่มเข้าตารางซัพ</button>')+'</span>'
+      +'<span class="lbl" data-l="สินค้า"><span style="font-size:12.5px;color:var(--mut)">'+n+' ตัว</span></span>'
+      +'<div style="display:flex;gap:5px;flex-wrap:wrap">'
+      +(inDb?'<button class="outb" style="padding:5px 9px;font-size:12px" onclick="lineTest('+i+')">🔔 ทดสอบ</button>':'')
+      +'<button class="outb" style="padding:5px 9px;font-size:12px" onclick="supRename(\''+esp+'\')">✏️ ชื่อ</button>'
+      +(n?'<button class="outb" style="padding:5px 9px;font-size:12px" onclick="supMove(\''+esp+'\')">↔ ย้ายของ</button>'
+         :'<button class="outb" style="padding:5px 9px;font-size:12px;color:var(--red);border-color:#E4A6A6" onclick="supDel(\''+esp+'\')">🗑 ลบ</button>')
+      +'</div></div>';
   }).join('');
   S._lineSups=sups;
   const nOk=sups.filter(sp=>{const g=lineOf(sp);return g&&g.group_id;}).length;
-  return '<div class="card"><div class="h">📣 กลุ่มไลน์ของซัพ <span class="n">ผูกแล้ว '+nOk+'/'+sups.length+' ซัพ</span></div>'
-    +'<div class="note" style="margin:10px 15px">ใช้ข้อมูลชุดเดียวกับ<b>แอพนับสต๊อกเดิม</b> (คอลัมน์ <code>suppliers.line_group_id</code>) — แก้ที่นี่หรือที่แอพเดิมก็เห็นตรงกัน · '
-    +'รายชื่อกลุ่มมาจากตาราง <code>line_groups</code> (กลุ่มที่บอทเข้าไปอยู่แล้ว '+((S.lineGroups||[]).length)+' กลุ่ม) · '
-    +'ส่งจริงผ่าน Edge Function <code>line-order</code> ของระบบเดิม (โทเคนบอทอยู่ฝั่งเซิร์ฟเวอร์) · ส่งสำเร็จจะบันทึกยอดสั่งลง <code>stock_receipts</code> ให้ระบบเดิมใช้ต่อ</div>'
-    +'<div class="hd2" style="'+G+'"><span>ซัพ</span><span>กลุ่มไลน์</span><span></span></div>'
-    +(rows||'<div class="empty">ยังไม่มีซัพในรายการสินค้า</div>')+'</div>';
+  const nDb=sups.filter(sp=>supSched(sp)).length;
+  return '<div class="card"><div class="h">🏭 ซัพพลายเออร์ + กลุ่มไลน์ <span class="n">'+sups.length+' ซัพ · อยู่ในระบบเดิม '+nDb+' · ผูกกลุ่มไลน์ '+nOk+'</span></div>'
+    +'<div class="note" style="margin:10px 15px">ใช้ข้อมูลชุดเดียวกับ<b>แอพนับสต๊อกเดิม</b> (<code>suppliers</code>) — เพิ่ม/เปลี่ยนชื่อ/ลบ ที่นี่ แอพเดิมเห็นทันที · '
+    +'เปลี่ยนชื่อซัพจะตามไปแก้ชื่อซัพในสินค้าทุกสาขาให้เอง · ลบได้เมื่อไม่มีสินค้าใช้ซัพนั้นแล้ว (ถ้ายังมีให้กด ↔ ย้ายของ ไปซัพอื่นก่อน) · '
+    +'ส่งใบสั่งผ่าน Edge Function <code>line-order</code> ของระบบเดิม</div>'
+    +(nDb<sups.length?'<div class="note" style="margin:0 15px 10px">⚠ บางซัพยังไม่มีในตาราง <code>suppliers</code> — กด "➕ เพิ่มเข้าตารางซัพ" (ถ้าเพิ่มไม่ได้ ให้รัน <b>sql/jjmk_stockcheck_grants.sql</b> ก่อน)</div>':'')
+    +'<div class="lrow" style="grid-template-columns:1fr 150px"><div><input class="di" id="nsName" placeholder="ชื่อซัพใหม่ (ใช้ชื่อเดียวกับที่ลงบิล)" onkeydown="if(event.key===\'Enter\')supAdd()"></div>'
+    +'<div><button class="outb" onclick="supAdd()">➕ เพิ่มซัพ</button></div></div>'
+    +'<div class="hd2" style="'+G+'"><span>ซัพ</span><span>กลุ่มไลน์</span><span>สินค้า</span><span></span></div>'
+    +(rows||'<div class="empty">ยังไม่มีซัพ</div>')+'</div>';
+}
+async function supAdd(nm){
+  const el=document.getElementById('nsName');
+  const name=String(nm||(el&&el.value)||'').trim();
+  if(!name){toast('พิมพ์ชื่อซัพก่อนครับ',true);return;}
+  if(supSched(name)){toast('มีซัพ "'+name+'" อยู่แล้ว',true);return;}
+  try{
+    await api('POST','suppliers',{name,order_mode:'any',lead_days:1},'return=minimal');
+    (S.sups=S.sups||[]).push({name,order_mode:'any',lead_days:1,line_group_id:null});
+    if(el&&!nm)el.value='';
+    toast('✅ เพิ่มซัพ "'+name+'" แล้ว — ผูกกลุ่มไลน์และตั้งรอบสั่งได้เลย');render();
+  }catch(e){toast('เพิ่มซัพไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function supRename(old){
+  const x=supSched(old);
+  const nn=(prompt('เปลี่ยนชื่อซัพ "'+old+'" เป็น\n(จะแก้ชื่อซัพในสินค้าทุกสาขาให้ด้วย)',old)||'').trim();
+  if(!nn||nn===old)return;
+  if(supKey(nn)!==supKey(old)&&supSched(nn)){toast('มีซัพชื่อ "'+nn+'" อยู่แล้ว',true);return;}
+  try{
+    if(x)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x.name),{name:nn},'return=minimal');
+    await api('PATCH','products?sup=eq.'+encodeURIComponent(old),{sup:nn},'return=minimal').catch(()=>{});
+    if(x)x.name=nn;
+    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(old))p2.sup=nn;}));
+    toast('✅ เปลี่ยนชื่อซัพ "'+old+'" → "'+nn+'" (แก้ในสินค้าทุกสาขาแล้ว)');render();
+  }catch(e){toast('เปลี่ยนชื่อไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function supMove(from){
+  const others=(S._lineSups||[]).filter(x=>supKey(x)!==supKey(from));
+  const to=(prompt('ย้ายสินค้าของ "'+from+'" ('+supCount(from)+' ตัว) ไปซัพไหน?\n\nซัพที่มี: '+others.join(', '),'')||'').trim();
+  if(!to)return;
+  if(!supSched(to)&&!others.some(x=>supKey(x)===supKey(to))){toast('ไม่พบซัพ "'+to+'" — เพิ่มซัพก่อนครับ',true);return;}
+  try{
+    await api('PATCH','products?sup=eq.'+encodeURIComponent(from),{sup:to},'return=minimal');
+    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(from))p2.sup=to;}));
+    toast('✅ ย้ายสินค้าของ "'+from+'" → "'+to+'" แล้ว');render();
+  }catch(e){toast('ย้ายไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function supDel(name){
+  const n=supCount(name);
+  if(n){toast('ยังมีสินค้าใช้ซัพนี้ '+n+' ตัว — กด ↔ ย้ายของ ไปซัพอื่นก่อนครับ',true);return;}
+  if(!confirm('ลบซัพ "'+name+'" ออกจากระบบ?\n\n(รอบสั่ง–ส่ง และการผูกกลุ่มไลน์ของซัพนี้จะหายไปด้วย · ประวัติบิล/ยอดสั่งเดิมยังอยู่)'))return;
+  try{
+    await api('DELETE','suppliers?name=eq.'+encodeURIComponent(name),null,'return=minimal');
+    S.sups=(S.sups||[]).filter(x=>supKey(x.name)!==supKey(name));
+    toast('✅ ลบซัพ "'+name+'" แล้ว');render();
+  }catch(e){toast('ลบไม่สำเร็จ — '+errMsg(e),true);}
 }
 async function lineSave(i){ // เขียนลง suppliers.line_group_id (ชุดเดียวกับแอพนับเดิม)
   const sp=(S._lineSups||[])[i]; if(!sp)return;
