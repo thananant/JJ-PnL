@@ -110,7 +110,8 @@ setTimeout(async()=>{
   const pn=patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.name==='ผักบุ้งไทย');
   const pm=patches.find(p=>p.url.includes('pnl_stock_map?product_name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.product_name==='ผักบุ้งไทย');
   out.push('แก้ชื่อนับ inline → PATCH products (2 สาขา) + pnl_stock_map: '+(!!pn&&!!pm&&list().includes('ผักบุ้งไทย')));
-  out.push('แถบข้าง 5 เมนู (นับ/ผูก/Safety/รอบสั่งซัพ/ตั้งค่า) + ไฮไลต์ตามหน้า: '+(d.querySelectorAll('#sideNav [data-t]').length===5&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
+  out.push('แถบข้าง 5 เมนูหลัก + 3 เมนูย่อยตั้งค่า + ไฮไลต์ตามหน้า: '
+    +(d.querySelectorAll('#sideNav [data-t]').length===8&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
   out.push('แถบแผนกซ่อนในหน้าผูกชื่อ: '+(d.getElementById('deptbar').style.display==='none'));
   out.push('ปุ่มบันทึกซ่อน: '+(d.getElementById('save').style.display==='none'));
   // 7) หน้า Safety: แก้อัตรา + แผนก
@@ -119,9 +120,9 @@ setTimeout(async()=>{
   w.setF('p1','rate_wk',2.5); w.setF('p1','dept','หน้าเตา'); await sleep(30);
   await w.saveAll(); await sleep(60);
   const pr=patches.find(p=>p.url.includes('id=eq.p1'));
-  const pd=patches.find(p=>p.url.includes('name=eq.'+encodeURIComponent('หมูสามชั้น'))&&p.body.dept!==undefined);
-  out.push('PATCH อัตรารายสาขา (id) 2.5 + แผนกตามชื่อ (2 สาขา) หน้าเตา: '
-    +(!!pr&&pr.body.rate_wk===2.5&&pr.body.dept===undefined&&!!pd&&pd.body.dept==='หน้าเตา'));
+  const pdName=patches.find(p=>p.url.includes('name=eq.'+encodeURIComponent('หมูสามชั้น'))&&p.body.dept!==undefined);
+  out.push('PATCH by id: อัตรา 2.5 + แผนกหน้าเตา (แผนกแยกสาขา ไม่ PATCH ตามชื่อ): '
+    +(!!pr&&pr.body.rate_wk===2.5&&pr.body.dept==='หน้าเตา'&&!pdName));
   // 8) รูปตามชื่อ + วันตัดตี 6
   await w.setImgUrl('หมูสามชั้น','https://x.test/img.jpg');
   await w.setZone('หน้าเตา','หน้าร้าน'); await sleep(30); // p1 ถูกย้ายไปแผนกหน้าเตาแล้วจากขั้นก่อน

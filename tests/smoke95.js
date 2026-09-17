@@ -1,7 +1,8 @@
-// smoke95: jjmk-stockcheck — เมนู ⚙️ ตั้งค่า (สิทธิ์ผู้ใช้แบบเลือกระดับ / แผนก / หน่วยซื้อ↔หน่วยนับ)
+// smoke95: jjmk-stockcheck — เมนู ⚙️ ตั้งค่า แยกหน้าละหัวข้อ (👤 สิทธิ์ผู้ใช้ / 🗂 แผนก / 📐 หน่วยซื้อ↔หน่วยนับ)
 //          + จำหน้าเดิมและค่านับตอนรีเฟรช + แผนกใน Safety เป็น dropdown + ลากลงเพื่อรีเฟรช (มือถือ/แท็บเล็ต)
 // fixture JJRD: p1 ผักบุ้ง (ผูก "ผักบุ้งจีน", dept ผัก, หน่วยนับ โล, หน่วยซื้อ ลัง ×12) · p2 น้ำแข็ง (ไม่ผูก, dept บาร์น้ำ, ถุง)
-// ตั้ง localStorage jjsc_tab='cfg' ก่อนโหลด → ต้องเปิดมาที่หน้าตั้งค่าเลย
+//          sc_depts สาขารัชดา: ผัก · บาร์น้ำ · เตรียมของ (แผนกเปล่า) — แผนก/ของในแผนก แยกกันคนละสาขา
+// ตั้ง localStorage jjsc_tab='cfgu' ก่อนโหลด → ต้องเปิดมาที่หน้าสิทธิ์ผู้ใช้เลย
 const fs=require('fs');
 const {JSDOM}=require('jsdom');
 const crypto=require('crypto');
@@ -12,17 +13,22 @@ const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex')
 const users=[
   {id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true},
   {id:2,username:'boy',pass_hash:H('boy','1234'),display_name:'บอย',role:'staff',branches:['JJRD'],depts:['ผัก'],active:true}];
-const posts=[],patches=[];
+const posts=[],patches=[],dels=[];
+let depts=[{id:1,branch_id:BID,name:'ผัก',zone:'หลังร้าน',sort:1},{id:2,branch_id:BID,name:'บาร์น้ำ',zone:'หน้าร้าน',sort:2},{id:3,branch_id:BID,name:'เตรียมของ',zone:null,sort:3}];
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
     // ล็อกอินค้างไว้ + จำหน้าเดิม = ตั้งค่า
     w.localStorage.setItem('jjsc_auth',JSON.stringify({u:'admin',h:H('admin','jjmk1234')}));
-    w.localStorage.setItem('jjsc_tab','cfg');
+    w.localStorage.setItem('jjsc_tab','cfgu');
     w.fetch=async(url,opt)=>{
       const method=opt&&opt.method||'GET';
       const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v)});
-      if(method==='POST'){posts.push({url,rows:JSON.parse(opt.body)});return T([]);}
+      if(method==='POST'){const b=JSON.parse(opt.body);posts.push({url,rows:b});
+        if(url.includes('sc_depts')){const r={id:99,...b};depts.push(r);return T([r]);}
+        return T([]);}
       if(method==='PATCH'){patches.push({url,body:JSON.parse(opt.body)});return T([]);}
+      if(method==='DELETE'){dels.push(url);const m2=url.match(/id=eq\.(\d+)/);if(m2)depts=depts.filter(x=>String(x.id)!==m2[1]);return T([]);}
+      if(url.includes('sc_depts'))return T(depts.filter(x=>x.branch_id===BID));
       if(url.includes('sc_users')){
         const um=url.match(/username=eq\.([^&]+)/);
         if(um)return T(users.filter(x=>x.username===decodeURIComponent(um[1])));
@@ -41,6 +47,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       return T([]);
     };
     w.TextEncoder=TextEncoder;
+    w.confirm=()=>true;
     w.errors=[]; w.addEventListener('error',e=>w.errors.push(e.message));
   }});
 const w=vc.window,d=w.document;
@@ -49,10 +56,18 @@ setTimeout(async()=>{
   const out=[];
   await sleep(350);
   const list=()=>d.getElementById('list').textContent;
-  // 1) จำหน้าเดิม: เปิดมาที่ ⚙️ ตั้งค่า + ครบ 3 หัวข้อ
-  out.push('รีเฟรชแล้วกลับหน้าเดิม (ตั้งค่า): '+(w.eval('S.tab')==='cfg'&&d.querySelector('#sideNav [data-t="cfg"]').classList.contains('on')));
-  out.push('ตั้งค่ามี 3 หัวข้อ (สิทธิ์ผู้ใช้/แผนก/หน่วย): '
-    +(list().includes('สิทธิ์การใช้งานพนักงาน')&&list().includes('แผนก + ของที่ต้องนับ')&&list().includes('หน่วยซื้อ ↔ หน่วยนับ')));
+  const cards=()=>[...d.querySelectorAll('#list .card')].map(x=>x.textContent).join('|'); // เนื้อการ์ด (ไม่รวมแถบเลือกหัวข้อ)
+  // 1) จำหน้าเดิม: เปิดมาที่ ⚙️ ตั้งค่า › สิทธิ์ผู้ใช้ · เมนูย่อยแยก 3 หัวข้อ
+  out.push('รีเฟรชแล้วกลับหน้าเดิม (ตั้งค่า › สิทธิ์ผู้ใช้): '
+    +(w.eval('S.tab')==='cfgu'&&d.querySelector('#sideNav [data-t="cfgu"]').classList.contains('on')
+      &&d.querySelector('#sideNav [data-t="cfg"]').classList.contains('on')&&d.getElementById('cfgSub').classList.contains('on')));
+  out.push('เมนูย่อยตั้งค่า 3 หัวข้อแยกกัน: '
+    +(['cfgu','cfgd','cfgn'].every(t=>!!d.querySelector('#sideNav [data-t="'+t+'"]'))
+      &&d.querySelector('#sideNav [data-t="cfgd"]').textContent.includes('แผนก')
+      &&d.querySelector('#sideNav [data-t="cfgn"]').textContent.includes('หน่วยซื้อ')));
+  out.push('หน้าสิทธิ์ผู้ใช้มีเฉพาะหัวข้อตัวเอง (ไม่ปนแผนก/หน่วย): '
+    +(cards().includes('สิทธิ์การใช้งานพนักงาน')&&!cards().includes('แผนก + ของที่ต้องนับ')&&!cards().includes('หน่วยซื้อ ↔ หน่วยนับ')));
+  out.push('มีแถบเลือกหัวข้อในหน้า (สำหรับจอเล็ก) 3 ปุ่ม: '+(d.querySelectorAll('#list .subtabs .stb').length===3));
   out.push('เมนูข้าง: มีปุ่ม ⚙️ ตั้งค่า + 🚚 รอบสั่งซัพ: '
     +(!!d.querySelector('#sideNav [data-t="cfg"]')&&!!d.querySelector('#sideNav [data-t="sched"]')));
   // 2) สิทธิ์ผู้ใช้: เลือกระดับ ผู้จัดการ/พนักงานทั่วไป ได้ + เซฟ role
@@ -63,22 +78,55 @@ setTimeout(async()=>{
   await w.userSave(2); await sleep(40);
   const pu=patches.find(p=>p.url.includes('sc_users?id=eq.2'));
   out.push('อัปเกรด boy → ผู้จัดการ: PATCH role=admin: '+(!!pu&&pu.body.role==='admin'));
-  // 3) แผนก: ย้ายไปแผนกใหม่ (prompt) → PATCH ตามชื่อ (2 สาขา)
-  w.prompt=()=>'ของแห้ง';
-  await w.moveDept('p2','__new'); await sleep(40);
-  const pmv=patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('น้ำแข็ง'))&&p.body.dept==='ของแห้ง');
-  out.push('ย้ายน้ำแข็ง → แผนกใหม่ "ของแห้ง" (PATCH ตามชื่อ + local): '
-    +(!!pmv&&w.eval("S.all.find(x=>x.id==='p2').dept")==='ของแห้ง'));
-  // เปลี่ยนชื่อแผนก ผัก → ผักสด
+  // 3) หน้า 🗂 แผนก (แยกหน้า, แยกสาขา): พับรายละเอียด + เพิ่ม/ลบ/แก้ชื่อ/ย้าย
+  w.setTab('cfgd'); await sleep(30);
+  out.push('หน้าแผนกแยกหน้า มีเฉพาะการ์ดแผนก + บอกว่าแยกสาขา: '
+    +(cards().includes('แผนก + ของที่ต้องนับ')&&cards().includes('แยกกันคนละสาขา')
+      &&!cards().includes('สิทธิ์การใช้งานพนักงาน')&&!cards().includes('หน่วยซื้อ ↔ หน่วยนับ')));
+  out.push('แผนกเปล่า "เตรียมของ" จากตารางแผนกขึ้นด้วย (0 รายการ): '+(cards().includes('เตรียมของ')&&cards().includes('0 รายการ')));
+  out.push('รายละเอียดพับไว้ตั้งต้น (ยังไม่เห็นชื่อสินค้า): '+(!cards().includes('ผักบุ้ง')&&cards().includes('▸')));
+  w.toggleDept('ผัก'); await sleep(30);
+  out.push('กดแผนก → ขยายเห็นรายการในแผนก: '+(cards().includes('ผักบุ้ง')&&cards().includes('▾')));
+  // เพิ่มแผนกใหม่ → POST sc_depts รายสาขา + ขึ้นแถบแผนกหน้านับทันที
+  d.getElementById('ndName').value='ของแห้ง';
+  await w.addDept(); await sleep(40);
+  const pnew=posts.find(p=>p.url.includes('sc_depts'));
+  out.push('เพิ่มแผนก "ของแห้ง" → POST sc_depts ผูก branch_id สาขานี้: '
+    +(!!pnew&&pnew.rows.name==='ของแห้ง'&&pnew.rows.branch_id==='b19f0a17b4472'));
+  w.setTab('count'); await sleep(40);
+  out.push('แผนกใหม่ขึ้นแถบแผนกหน้านับเลย (ยังไม่มีของ): '+d.getElementById('pills').textContent.includes('ของแห้ง'));
+  w.setTab('cfgd'); await sleep(30);
+  // ย้ายของข้ามแผนก = PATCH by id (สาขาเดียว ไม่กระทบอีกสาขา)
+  await w.moveDept('p2','ของแห้ง'); await sleep(40);
+  const pmv=patches.find(p=>p.url.includes('products?id=eq.p2')&&p.body.dept==='ของแห้ง');
+  const pmvName=patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('น้ำแข็ง'))&&p.body.dept!==undefined);
+  out.push('ย้ายน้ำแข็ง → "ของแห้ง" แบบแยกสาขา (PATCH by id ไม่ใช่ตามชื่อ): '
+    +(!!pmv&&!pmvName&&w.eval("S.all.find(x=>x.id==='p2').dept")==='ของแห้ง'));
+  // เปลี่ยนชื่อแผนก ผัก → ผักสด (เฉพาะสาขานี้ + ตารางแผนก)
   w.prompt=()=>'ผักสด';
   await w.renameDept('ผัก'); await sleep(40);
-  const prn=patches.find(p=>p.url.includes('products?dept=eq.'+encodeURIComponent('ผัก'))&&p.body.dept==='ผักสด');
-  out.push('เปลี่ยนชื่อแผนก ผัก → ผักสด: '+(!!prn&&w.eval("S.all.find(x=>x.id==='p1').dept")==='ผักสด'));
-  // เอาออกจากแผนก
-  await w.moveDept('p2','__none'); await sleep(40);
-  out.push('เอาน้ำแข็งออกจากแผนก → dept=null: '
-    +(!!patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('น้ำแข็ง'))&&p.body.dept===null)));
-  // 4) หน่วยซื้อ↔หน่วยนับ: โชว์ "หน่วยซื้อ คือ ลัง" + "1 ลัง = 12 โล" · แก้ตัวคูณ → PATCH pnl_stock_map
+  const prn=patches.find(p=>p.url.includes('dept=eq.'+encodeURIComponent('ผัก'))&&p.url.includes('branch_id=eq.b19f0a17b4472')&&p.body.dept==='ผักสด');
+  out.push('เปลี่ยนชื่อแผนก ผัก → ผักสด เฉพาะสาขานี้ + อัปเดต sc_depts: '
+    +(!!prn&&!!patches.find(p=>p.url.includes('sc_depts?id=eq.1')&&p.body.name==='ผักสด')
+      &&w.eval("S.all.find(x=>x.id==='p1').dept")==='ผักสด'));
+  // ลบแผนก → ของย้ายไปยังไม่จัดแผนก + DELETE sc_depts + หายจากหน้านับ
+  await w.delDept('ของแห้ง'); await sleep(40);
+  out.push('ลบแผนก "ของแห้ง": ย้ายของออก (dept=null) + DELETE sc_depts: '
+    +(!!patches.find(p=>p.url.includes('dept=eq.'+encodeURIComponent('ของแห้ง'))&&p.body.dept===null)
+      &&dels.some(u=>u.includes('sc_depts?id=eq.99'))));
+  w.setTab('count'); await sleep(40);
+  out.push('ลบแล้วแถบแผนกหน้านับหายตาม: '+!d.getElementById('pills').textContent.includes('ของแห้ง'));
+  w.setTab('cfgd'); await sleep(30);
+  // ตั้งโซนแผนก = รายสาขา
+  await w.setZone('ผักสด','หน้าร้าน'); await sleep(40);
+  out.push('ตั้งโซนแผนก → PATCH sc_depts + products ของสาขานี้: '
+    +(!!patches.find(p=>p.url.includes('sc_depts?id=eq.1')&&p.body.zone==='หน้าร้าน')
+      &&!!patches.find(p=>p.url.includes('branch_id=eq.b19f0a17b4472')&&p.url.includes('dept=eq.'+encodeURIComponent('ผักสด'))&&p.body.zone==='หน้าร้าน')));
+  // 4) หน้า 📐 หน่วยซื้อ↔หน่วยนับ (แยกหน้า): โชว์ "หน่วยซื้อ คือ ลัง" + "1 ลัง = 12 โล" · แก้ตัวคูณ → PATCH pnl_stock_map
+  w.setTab('cfgn'); await sleep(30);
+  out.push('หน้าหน่วยแยกหน้า มีเฉพาะการ์ดหน่วย: '
+    +(cards().includes('หน่วยซื้อ ↔ หน่วยนับ')&&!cards().includes('สิทธิ์การใช้งานพนักงาน')&&!cards().includes('แผนก + ของที่ต้องนับ')));
+  out.push('จำหัวข้อย่อยล่าสุด (jjsc_cfg=cfgn): '+(w.localStorage.getItem('jjsc_cfg')==='cfgn'));
   out.push('บอกหน่วยซื้อ/หน่วยนับ + ตัวคูณ 1 ลัง = 12 โล: '
     +(list().includes('หน่วยซื้อ คือ')&&list().includes('ลัง')&&list().includes('1 ลัง = 12 โล')));
   out.push('ตัวไม่ผูก (น้ำแข็ง) ขึ้นว่ายังไม่ผูกชื่อบิล แก้หน่วยซื้อไม่ได้: '+list().includes('ยังไม่ผูกชื่อบิล'));
@@ -128,9 +176,11 @@ setTimeout(async()=>{
   out.push('ลากสั้น <75px ไม่รีเฟรช: '+(reloaded===false));
   // 9) พนักงานทั่วไป: เมนู ตั้งค่า/รอบสั่งซัพ ซ่อน + setTab โดนกัน
   w.eval("S.user={role:'staff',username:'boy',branches:['JJRD'],depts:['ผักสด']};applyAuth()");
-  const hid=['set','sched','cfg'].every(t=>d.querySelector('#sideNav [data-t="'+t+'"]').style.display==='none');
-  w.setTab('cfg');
-  out.push('พนักงานทั่วไป: เมนูแอดมินซ่อนครบ + เข้า ตั้งค่า ไม่ได้: '+(hid&&w.eval('S.tab')!=='cfg'));
+  const hid=['set','sched','cfg','cfgu','cfgd','cfgn'].every(t=>{const b=d.querySelector('#sideNav [data-t="'+t+'"]');
+    return b.style.display==='none'||d.getElementById('cfgBox').style.display==='none';});
+  const hidBox=d.getElementById('cfgBox').style.display==='none';
+  w.setTab('cfgu'); w.setTab('cfg');
+  out.push('พนักงานทั่วไป: เมนูแอดมิน+กล่องตั้งค่าซ่อนครบ + เข้าตั้งค่าไม่ได้: '+(hid&&hidBox&&!w.eval('isCfgTab(S.tab)')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
