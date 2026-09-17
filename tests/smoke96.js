@@ -112,8 +112,8 @@ setTimeout(async()=>{
     +(list().includes('40')&&list().includes('4 ลัง')&&list().includes('ยังไม่นับ')));
   out.push('ข้อความใบสั่ง: ร้าน/สาขา/ซัพ/สั่งวันที่/ส่งวันที่ (พ.ศ.) แล้วค่อยรายการ: '
     +(()=>{const t=w.orderText('Smilemeat'),L=t.split('\n');
-      return L[0]==='จริงใจหมูกระทะ'&&L[1]==='สาขารัชดา'&&L[2]==='Smilemeat'
-        &&L[3]==='สั่งวันที่ 14 ก.ย. 2569 (จ.)'&&L[4]==='ส่งวันที่ 15 ก.ย. 2569 (อ.)'&&L[5]===''
+      return L[0]==='🛒 จริงใจหมูกระทะ'&&L[1]==='🏪 สาขารัชดา'&&L[2]==='🏷️ Smilemeat'
+        &&L[3]==='📅 สั่งวันที่ 14 ก.ย. 2569 (จันทร์)'&&L[4]==='🚚 ส่งวันที่ 15 ก.ย. 2569 (อังคาร)'&&L[5]===''
         &&t.includes('• หมูสไลด์ — 4 ลัง')&&t.includes('= 40 กก.')&&t.includes('รวม 1 รายการ');})());
   out.push('ค้นหาในใบสั่ง: พิมพ์ "ผักบุ้ง" เหลือเฉพาะผักบุ้ง: '
     +(w.ordSearch('ผักบุ้ง')===undefined&&list().includes('ผักบุ้ง')&&!list().includes('หมูสไลด์')));
@@ -222,7 +222,7 @@ setTimeout(async()=>{
   d.getElementById('testGrp').value='C123';
   await w.sendAllGo(); await sleep(150);
   out.push('โหมดทดสอบ: ส่งทุกซัพเข้ากลุ่มทดสอบกลุ่มเดียว · ข้อความเหมือนของจริง (ไม่มีป้ายทดสอบ) · ไม่บันทึกยอดสั่ง: '
-    +(sent.length===2&&sent.every(x=>x.to==='C123')&&sent.every(x=>!x.text.includes('ทดสอบ')&&x.text.indexOf('จริงใจหมูกระทะ')===0)
+    +(sent.length===2&&sent.every(x=>x.to==='C123')&&sent.every(x=>!x.text.includes('ทดสอบ')&&x.text.indexOf('🛒 จริงใจหมูกระทะ')===0)
       &&receipts.length===0&&!d.getElementById('ovl').classList.contains('on')));
   sent.length=0; receipts.length=0;
   w.sendAllOpen(); await sleep(30); w.sendMode('real'); await sleep(30);

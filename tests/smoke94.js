@@ -82,12 +82,12 @@ setTimeout(async()=>{
   d.getElementById('cd').dispatchEvent(new w.Event('change')); await sleep(250);
   // แบนเนอร์รอบสั่ง: ย่อเป็นสรุปสั้น (ไม่ยัดชื่อซัพทั้งหมด) กด "ดูรายชื่อ" ถึงจะกาง
   out.push('แบนเนอร์ 🚚 สรุปสั้น: ถึงรอบสั่ง 1 ซัพ · สั่งได้ทุกวันอีก 1 ซัพ + ยังไม่โชว์ชื่อซัพ: '
-    +(list().includes('รอบสั่งวันนี้ (พฤ.)')&&list().includes('ถึงรอบสั่ง')&&list().includes('สั่งได้ทุกวันอีก 1 ซัพ')
+    +(list().includes('รอบสั่งวันนี้ (พฤหัสบดี)')&&list().includes('ถึงรอบสั่ง')&&list().includes('สั่งได้ทุกวันอีก 1 ซัพ')
       &&!d.querySelector('#list .obchip')));
   w.obToggle(); await sleep(40);
   out.push('กดดูรายชื่อ → ชิปซัพ FarmFresh → ส่งศ. · Smilemeat → พรุ่งนี้ (กดไปหน้าสั่งของได้): '
     +(d.querySelectorAll('#list .obchip').length===2
-      &&list().includes('FarmFresh')&&list().includes('ศ.')&&list().includes('Smilemeat')&&list().includes('พรุ่งนี้')));
+      &&list().includes('FarmFresh')&&list().includes('ศุกร์')&&list().includes('Smilemeat')&&list().includes('พรุ่งนี้')));
   w.obToggle(); await sleep(30);
   // 2) stepper: + สองครั้ง = 2 · pill ✓
   w.bump('p1',1); w.bump('p1',1); await sleep(30);
@@ -155,7 +155,7 @@ setTimeout(async()=>{
   // 9) เมนู 🚚 รอบสั่งซัพ (แยกจาก Safety แล้ว) · เมนู ⚙️ ตั้งค่า มีการ์ดผู้ใช้
   out.push('Safety ไม่มีการ์ดรอบสั่ง/ผู้ใช้แล้ว (แยกเมนู): '+(!list().includes('รอบสั่ง–ส่งของซัพ')&&!list().includes('สิทธิ์การใช้งานพนักงาน')));
   w.setTab('sched'); await sleep(30);
-  out.push('หน้ารอบสั่งซัพ: การ์ดซัพ + ช่องวันสั่งแบบการ์ดรายวัน: '+(list().includes('รอบสั่ง–ส่งของซัพ')&&list().includes('FarmFresh')&&list().includes('สั่งจ.')&&list().includes('ไม่สั่ง')));
+  out.push('หน้ารอบสั่งซัพ: การ์ดซัพ + ช่องวันสั่งแบบการ์ดรายวัน (ชื่อวันเต็ม): '+(list().includes('รอบสั่ง–ส่งของซัพ')&&list().includes('FarmFresh')&&list().includes('สั่งจันทร์')&&list().includes('ไม่สั่ง')));
   const si=w.eval("S.supList.indexOf('Smilemeat')");
   w.supSetLead(si,2); await w.supSave(si); await sleep(40);
   const ps=patches.find(p=>p.url.includes('suppliers?name=eq.Smilemeat'));
