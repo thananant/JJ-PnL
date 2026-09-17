@@ -59,6 +59,11 @@ setTimeout(async()=>{
   out.push('login แอดมินผ่าน + ผู้นับล็อกเป็น username: '+(!d.getElementById('loginOv').classList.contains('on')&&d.getElementById('who').value==='admin'&&d.getElementById('who').readOnly===true));
   d.getElementById('cd').value='2026-09-17';
   const list=()=>d.getElementById('list').textContent;
+  // 0.5) เปิดมาเจอแดชบอร์ดก่อน (เมนูบนสุด) แล้วค่อยไปหน้านับ
+  out.push('เปิดแอพมาที่ 📊 แดชบอร์ด (เมนูบนสุด) + มีกล่องสรุปนับแล้ว/ยังไม่นับ/ของหมด: '
+    +(w.eval("S.tab")==='dash'&&d.querySelector('#sideNav [data-t]').dataset.t==='dash'
+      &&d.querySelectorAll('#list .dtile').length===4&&list().includes('นับแล้ววันนี้')&&list().includes('ของหมดสต๊อก')));
+  w.setTab('count'); await sleep(60);
   const pills=()=>d.getElementById('pills').textContent;
   // 1) แถบแผนก + การ์ดเฉพาะแผนกแรก
   out.push('pills 2 แผนก (ครัว/บาร์น้ำ): '+(pills().includes('ครัว')&&pills().includes('บาร์น้ำ')));
@@ -110,8 +115,9 @@ setTimeout(async()=>{
   const pn=patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.name==='ผักบุ้งไทย');
   const pm=patches.find(p=>p.url.includes('pnl_stock_map?product_name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.product_name==='ผักบุ้งไทย');
   out.push('แก้ชื่อนับ inline → PATCH products (2 สาขา) + pnl_stock_map: '+(!!pn&&!!pm&&list().includes('ผักบุ้งไทย')));
-  out.push('แถบข้าง 5 เมนูหลัก + 4 เมนูย่อยตั้งค่า + ไฮไลต์ตามหน้า: '
-    +(d.querySelectorAll('#sideNav [data-t]').length===9&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
+  out.push('แถบข้าง 7 เมนูหลัก (แดชบอร์ด/นับ/สั่งของ/ผูกชื่อ/Safety/รอบสั่งซัพ/รายการสินค้า) + 3 เมนูย่อยตั้งค่า: '
+    +(d.querySelectorAll('#sideNav [data-t]').length===11&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')
+      &&!!d.querySelector('#sideNav [data-t="order"]')));
   out.push('แถบแผนกซ่อนในหน้าผูกชื่อ: '+(d.getElementById('deptbar').style.display==='none'));
   out.push('ปุ่มบันทึกซ่อน: '+(d.getElementById('save').style.display==='none'));
   // 7) หน้า Safety: แก้อัตรา + แผนก
@@ -126,8 +132,9 @@ setTimeout(async()=>{
   // 8) รูปตามชื่อ + วันตัดตี 6
   await w.setImgUrl('หมูสามชั้น','https://x.test/img.jpg');
   await w.setZone('หน้าเตา','หน้าร้าน'); await sleep(30); // p1 ถูกย้ายไปแผนกหน้าเตาแล้วจากขั้นก่อน
-  const pz=patches.find(p=>p.url.includes('dept=eq.'+encodeURIComponent('หน้าเตา')));
-  out.push('setZone → PATCH products?dept=eq.หน้าเตา zone=หน้าร้าน + local: '+(!!pz&&pz.body.zone==='หน้าร้าน'&&w.eval("S.all.find(x=>x.id==='p1').zone")==='หน้าร้าน'));
+  const pz=patches.find(p=>p.url.includes('products?id=in.')&&p.body.zone==='หน้าร้าน');
+  out.push('setZone → PATCH สินค้าในแผนกนั้น (id=in.) zone=หน้าร้าน + ตั้ง dept ให้ด้วย + local: '
+    +(!!pz&&pz.body.dept==='หน้าเตา'&&w.eval("S.all.find(x=>x.id==='p1').zone")==='หน้าร้าน'));
   out.push('setImgUrl PATCH name=eq + local: '+(!!patches.find(p=>p.body.image_url)&&w.eval("S.all.find(x=>x.id==='p1').image_url")==='https://x.test/img.jpg'));
   out.push('bizToday ตี 2 → เมื่อวาน · dayGrp พฤ/ศ/ส = 0/1/2: '
     +(w.bizToday(new Date(2026,8,17,2,0))==='2026-09-16'&&w.dayGrp('2026-09-17')===0&&w.dayGrp('2026-09-18')===1&&w.dayGrp('2026-09-19')===2));

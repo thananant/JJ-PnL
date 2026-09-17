@@ -78,7 +78,7 @@ setTimeout(async()=>{
       &&d.querySelector('#sideNav [data-t="cfgn"]').textContent.includes('หน่วยซื้อ')));
   out.push('หน้าสิทธิ์ผู้ใช้มีเฉพาะหัวข้อตัวเอง (ไม่ปนแผนก/หน่วย): '
     +(cards().includes('สิทธิ์การใช้งานพนักงาน')&&!cards().includes('แผนก + ของที่ต้องนับ')&&!cards().includes('หน่วยซื้อ ↔ หน่วยนับ')));
-  out.push('มีแถบเลือกหัวข้อในหน้า (สำหรับจอเล็ก) 4 ปุ่ม: '+(d.querySelectorAll('#list .subtabs .stb').length===4));
+  out.push('มีแถบเลือกหัวข้อในหน้า (สำหรับจอเล็ก) 3 ปุ่ม: '+(d.querySelectorAll('#list .subtabs .stb').length===3));
   out.push('เมนูข้าง: มีปุ่ม ⚙️ ตั้งค่า + 🚚 รอบสั่งซัพ: '
     +(!!d.querySelector('#sideNav [data-t="cfg"]')&&!!d.querySelector('#sideNav [data-t="sched"]')));
   // 2) สิทธิ์ผู้ใช้: เลือกระดับ ผู้จัดการ/พนักงานทั่วไป ได้ + เซฟ role
@@ -116,27 +116,29 @@ setTimeout(async()=>{
   // เปลี่ยนชื่อแผนก ผัก → ผักสด (เฉพาะสาขานี้ + ตารางแผนก)
   w.prompt=()=>'ผักสด';
   await w.renameDept('ผัก'); await sleep(40);
-  const prn=patches.find(p=>p.url.includes('dept=eq.'+encodeURIComponent('ผัก'))&&p.url.includes('branch_id=eq.b19f0a17b4472')&&p.body.dept==='ผักสด');
-  out.push('เปลี่ยนชื่อแผนก ผัก → ผักสด เฉพาะสาขานี้ + อัปเดต sc_depts: '
+  const prn=patches.find(p=>p.url.includes('products?id=in.')&&p.url.includes('p1')&&p.body.dept==='ผักสด');
+  out.push('เปลี่ยนชื่อแผนก ผัก → ผักสด เฉพาะของในแผนกของสาขานี้ + อัปเดต sc_depts: '
     +(!!prn&&!!patches.find(p=>p.url.includes('sc_depts?id=eq.1')&&p.body.name==='ผักสด')
       &&w.eval("S.all.find(x=>x.id==='p1').dept")==='ผักสด'));
   // ลบแผนก → ของย้ายไปยังไม่จัดแผนก + DELETE sc_depts + หายจากหน้านับ
   await w.delDept('ของแห้ง'); await sleep(40);
-  out.push('ลบแผนก "ของแห้ง": ย้ายของออก (dept=null) + DELETE sc_depts: '
-    +(!!patches.find(p=>p.url.includes('dept=eq.'+encodeURIComponent('ของแห้ง'))&&p.body.dept===null)
+  out.push('ลบแผนก "ของแห้ง": ย้ายของออก (ล้าง dept+หมวดเดิม) + DELETE sc_depts: '
+    +(!!patches.find(p=>p.url.includes('products?id=in.')&&p.body.dept===null&&p.body.cat_label===null)
       &&dels.some(u=>u.includes('sc_depts?id=eq.99'))));
   w.setTab('count'); await sleep(40);
   out.push('ลบแล้วแถบแผนกหน้านับหายตาม: '+!d.getElementById('pills').textContent.includes('ของแห้ง'));
   w.setTab('cfgd'); await sleep(30);
   // ตั้งโซนแผนก = รายสาขา
   await w.setZone('ผักสด','หน้าร้าน'); await sleep(40);
-  out.push('ตั้งโซนแผนก → PATCH sc_depts + products ของสาขานี้: '
+  out.push('ตั้งโซนแผนก → PATCH sc_depts + สินค้าในแผนกนั้น (แก้บั๊กโซนไม่ถูกบันทึก): '
     +(!!patches.find(p=>p.url.includes('sc_depts?id=eq.1')&&p.body.zone==='หน้าร้าน')
-      &&!!patches.find(p=>p.url.includes('branch_id=eq.b19f0a17b4472')&&p.url.includes('dept=eq.'+encodeURIComponent('ผักสด'))&&p.body.zone==='หน้าร้าน')));
+      &&!!patches.find(p=>p.url.includes('products?id=in.')&&p.body.zone==='หน้าร้าน'&&p.body.dept==='ผักสด')
+      &&w.eval("S.all.find(x=>x.id==='p1').zone")==='หน้าร้าน'));
   // 3.5) หน้า 📦 รายการสินค้า: ทุกสาขา แยกแผนก + ค้นหา + ลบ
-  w.setTab('cfgi'); await sleep(150);
-  out.push('แถบรายการสินค้าอยู่ในเมนูย่อยตั้งค่า + หน้าโหลดสินค้าทุกสาขา: '
-    +(!!d.querySelector('#sideNav [data-t="cfgi"]')&&cards().includes('รายการสินค้าทั้งหมด')&&w.eval('S.allBr.length')===3));
+  w.setTab('items'); await sleep(150);
+  out.push('เมนูหลัก 📦 รายการสินค้า อยู่ถัดจาก 🚚 รอบสั่งซัพ + โหลดสินค้าทุกสาขา: '
+    +(d.querySelector('#sideNav [data-t="sched"]').nextElementSibling===d.querySelector('#sideNav [data-t="items"]')
+      &&cards().includes('รายการสินค้าทั้งหมด')&&w.eval('S.allBr.length')===3));
   out.push('จัดกลุ่มตามแผนก (ใช้แผนกของสาขาที่เปิดอยู่) + มีช่องค้นหาด้านบน: '
     +(cards().includes('ผัก')&&!!d.getElementById('cfgQ')));
   out.push('ของที่ยังไม่ตั้ง dept ใช้หมวดเดิมจากแอพนับ ไม่ตกไป "ยังไม่จัดแผนก": '
@@ -235,7 +237,7 @@ setTimeout(async()=>{
   out.push('ลากสั้น <75px ไม่รีเฟรช: '+(reloaded===false));
   // 9) พนักงานทั่วไป: เมนู ตั้งค่า/รอบสั่งซัพ ซ่อน + setTab โดนกัน
   w.eval("S.user={role:'staff',username:'boy',branches:['JJRD'],depts:['ผักสด']};applyAuth()");
-  const hid=['set','sched','cfg','cfgu','cfgd','cfgn'].every(t=>{const b=d.querySelector('#sideNav [data-t="'+t+'"]');
+  const hid=['set','sched','items','cfg','cfgu','cfgd','cfgn'].every(t=>{const b=d.querySelector('#sideNav [data-t="'+t+'"]');
     return b.style.display==='none'||d.getElementById('cfgBox').style.display==='none';});
   const hidBox=d.getElementById('cfgBox').style.display==='none';
   w.setTab('cfgu'); w.setTab('cfg');
