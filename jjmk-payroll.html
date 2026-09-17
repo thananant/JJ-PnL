@@ -309,7 +309,7 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
     <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">วันที่:
       <input type="date" id="todayDate" onchange="renderToday()" style="width:auto">
     </label>
-    <button class="btn btn-light btn-sm" onclick="document.getElementById('todayDate').value=localYMD(new Date());renderToday()">วันนี้</button>
+    <button class="btn btn-light btn-sm" onclick="document.getElementById('todayDate').value=bizToday();renderToday()">วันนี้</button>
     <span class="muted" id="todayHint"></span>
   </div>
   <div id="todayBody"></div>
@@ -1595,6 +1595,9 @@ const WD_TH = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
 const toMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
 const fmtT  = d => d.toTimeString().slice(0,5);
 const localYMD = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+/* วันของร้าน = 06:00 ถึง 05:59 ของวันถัดไป (ตามจุดตัดวัน cutoff เดียวกับการคิดเงิน)
+   หลังเที่ยงคืนถึงตี 5:59 ยังนับเป็นวันเดิม — หน้า "วันนี้" จะเห็นกะเย็นที่ยังทำงานอยู่ */
+const bizToday = () => { const d = new Date(); if(d.getHours() < (Number(settings.cutoff)||6)) d.setDate(d.getDate()-1); return localYMD(d); };
 const minLabel = m => m>=60 ? Math.floor(m/60)+' ชม. '+(m%60?(m%60)+' น.':'') : m+' น.';
 
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',2200); }
@@ -4566,12 +4569,12 @@ async function delOrgDept(dept){
 function renderToday(){
   const el = document.getElementById('todayBody'); if(!el) return;
   const dEl = document.getElementById('todayDate');
-  if(!dEl.value) dEl.value = localYMD(new Date());
+  if(!dEl.value) dEl.value = bizToday();
   const day = dEl.value;
   document.getElementById('todayHint').textContent =
-    day===localYMD(new Date()) ? 'ข้อมูลอัปเดตสดจากเครื่องสแกน (กะเย็นที่เลิกหลังเที่ยงคืนนับเป็นวันนี้)' : '';
+    day===bizToday() ? 'ข้อมูลอัปเดตสดจากเครื่องสแกน · วันของร้าน = 06:00 ถึง 05:59 ของวันถัดไป (หลังเที่ยงคืนยังนับเป็นวันเดิมจนถึงตี 6)' : '';
 
-  const isToday = day === localYMD(new Date());
+  const isToday = day === bizToday();
 
   // record ของวันนั้น (จับคู่ตาม shift-day แล้ว)
   const recOf = {};
@@ -4755,7 +4758,7 @@ function renderCalendar(){
   const [y, mo] = period.split('-').map(Number);
   const first = new Date(y, mo-1, 1);
   const daysIn = new Date(y, mo, 0).getDate();
-  const todayStr = localYMD(new Date());
+  const todayStr = bizToday();
   const maxCnt = Math.max(1, ...Object.values(dm).map(a=>a.length));
 
   let html = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'].map(w=>`<div class="wd">${w}</div>`).join('');
