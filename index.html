@@ -208,21 +208,25 @@ footer{
     'วัน'+days[d.getDay()]+'ที่ '+d.getDate()+' '+months[d.getMonth()]+' พ.ศ. '+(d.getFullYear()+543);
 })();
 
-/* ไอคอน JJ Access (จัดการผู้ใช้และสิทธิ์) โผล่เฉพาะบัญชีผู้ดูแลระบบ
-   อ่านบัญชีที่ล็อกอินค้างไว้จาก localStorage ชุดเดียวกับระบบ P&L แล้วถามสิทธิ์จาก Supabase */
+/* ไอคอน JJ Access (จัดการผู้ใช้และสิทธิ์)
+   ซ่อน "เฉพาะเมื่อรู้แน่ว่าเป็นพนักงาน" — กรณีอื่น (ยังไม่ล็อกอิน / เช็คไม่ได้ / เป็น admin) แสดงไว้
+   เพราะตัวหน้า jjmk-admin.html บังคับล็อกอินด้วยบัญชี admin อยู่แล้ว การซ่อนไอคอนไม่ได้กันอะไรเพิ่ม
+   แต่ถ้าซ่อนไว้ก่อน เจ้าของเปิดเครื่องที่ยังไม่เคยล็อกอินจะหาทางเข้าไม่เจอ */
 (function(){
+  var el=document.getElementById('appAdmin'); if(!el)return;
+  el.hidden=false;                       // ค่าเริ่มต้น: แสดงไว้ก่อน
   var URL='https://aikyxvluaiubdidqxwnd.supabase.co',
       KEY='sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm';
   var saved; try{ saved=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); }catch(e){ return; }
-  if(!saved||!saved.u)return;
+  if(!saved||!saved.u)return;            // ยังไม่ล็อกอิน = ยังไม่รู้ว่าใคร -> แสดงไว้
   fetch(URL+'/rest/v1/pnl_users?select=role,pass_hash&active=is.true&username=eq.'+encodeURIComponent(saved.u),
     {headers:{apikey:KEY,Authorization:'Bearer '+KEY}})
     .then(function(r){ return r.ok?r.json():null; })
     .then(function(rows){
-      if(rows&&rows[0]&&rows[0].role==='admin'&&rows[0].pass_hash===saved.h){
-        var el=document.getElementById('appAdmin'); if(el)el.hidden=false;
-      }
-    }).catch(function(){});
+      var u=rows&&rows[0];
+      // ซ่อนเฉพาะพนักงานที่ล็อกอินอยู่จริง (รหัสตรง แต่ไม่ใช่ admin)
+      if(u&&u.pass_hash===saved.h&&u.role!=='admin')el.hidden=true;
+    }).catch(function(){});              // เช็คไม่ได้ (เน็ตล่ม) -> คงไว้ให้เห็น
 })();
 </script>
 </body>
