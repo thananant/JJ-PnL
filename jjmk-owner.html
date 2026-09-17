@@ -359,10 +359,12 @@ function openModal(html){document.getElementById('modalBox').innerHTML=html;docu
 function closeModal(){document.getElementById('modalWrap').classList.remove('on');}
 
 /* ---------- State ---------- */
+/* จำปี/สาขาที่ดูค้างไว้ — รีเฟรชแล้วกลับมาที่เดิม */
+const OWV=(function(){try{return JSON.parse(localStorage.getItem('jjowner_view')||'null')||{};}catch(e){return {};}})();
 const S={
   user:null,
-  y: new Date().getFullYear(),
-  br: 'ALL',
+  y: (Number(OWV.y)>=2000&&Number(OWV.y)<=2100) ? Number(OWV.y) : new Date().getFullYear(),
+  br: OWV.br || 'ALL',
   branches:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}],
   sup:[], supById:{}, supByName:{}, fixed:[],
   yearCache:{}, prevCache:{},
@@ -701,8 +703,9 @@ function paintCtrls(){
   const u=document.getElementById('uName');
   if(u&&S.user)u.innerHTML=`👑 <b>${esc(S.user.display_name||S.user.username)}</b>`;
 }
-function chYear(d){ S.y+=d; render(); }
-function chBr(b){ S.br=b; render(); }
+function saveView(){ try{localStorage.setItem('jjowner_view',JSON.stringify({y:S.y,br:S.br}));}catch(e){} }
+function chYear(d){ S.y+=d; saveView(); render(); }
+function chBr(b){ S.br=b; saveView(); render(); }
 
 function yoyChip(cur,prv,label){
   if(!prv||!cur)return `<span class="chip mid">– เทียบปีก่อน</span>`;

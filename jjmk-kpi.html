@@ -389,7 +389,7 @@ function errHTML(e) {
 /* ===================== state ===================== */
 const S = {
   branch: (function () { const b = lsGet('kpi_branch'); return (b && (CONFIG.BRANCHES[b] || b === ALL)) ? b : Object.keys(CONFIG.BRANCHES)[0]; })(),
-  tab: 'daily',
+  tab: (function(){ var t=lsGet('kpi_tab'); return ['daily','monthly','staff','settings'].indexOf(t)>=0?t:'daily'; })(),   // จำหน้าที่เปิดอยู่
   date: bizDateOf(),
   month: bizDateOf().slice(0, 7),
   depts: [], staff: [],
@@ -674,7 +674,7 @@ async function saveStaff() {
 /* ===================== dashboard events ===================== */
 function onDashClick(e) {
   const t = e.target.closest('[data-act]'); if (!t) return; const a = t.dataset.act;
-  if (a === 'tab') { S.tab = t.dataset.tab; renderTab(); }
+  if (a === 'tab') { S.tab = t.dataset.tab; lsSet('kpi_tab', S.tab); renderTab(); }   // รีเฟรชแล้วกลับมาหน้าเดิม
   else if (a === 'prevDay') { S.date = addDays(S.date, -1); renderDaily(); }
   else if (a === 'nextDay') { S.date = addDays(S.date, 1); renderDaily(); }
   else if (a === 'today') { S.date = bizDateOf(); renderDaily(); }

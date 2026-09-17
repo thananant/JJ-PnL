@@ -199,7 +199,7 @@ const APPS={
 const APPKEYS=Object.keys(APPS);
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
 
-const S={user:null,tab:'users',users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{}};
+const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{}};
 
 /* ---------- utils ---------- */
 const $=s=>document.querySelector(s);
@@ -283,7 +283,7 @@ function countScreens(u,app){
 
 /* ============ Render หลัก ============ */
 function go(t){
-  S.tab=t;
+  S.tab=t; try{localStorage.setItem('jjacc_tab',t);}catch(e){}   // จำหน้าที่เปิดอยู่ — รีเฟรชแล้วกลับมาหน้าเดิม
   ['users','survey','matrix','log'].forEach(x=>{const b=$('#tb_'+x);if(b)b.classList.toggle('on',x===t);});
   render();
 }
@@ -637,7 +637,7 @@ function logout(){localStorage.removeItem('jjpnl_auth');location.reload();}
       '<a class="back" href="index.html">← กลับหน้าศูนย์รวมแอพ</a></div></div>';
     return;
   }
-  render();
+  go(S.tab);   // เปิดมาที่หน้าเดิมก่อนรีเฟรช (ไฮไลต์ปุ่มให้ตรงด้วย)
 })();
 </script>
 </body>
