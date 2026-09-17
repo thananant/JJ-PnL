@@ -31,6 +31,11 @@
   · ล็อกอินด้วยบัญชีเดียวกับ P&L (`pnl_users`) — บันทึกผู้ทำรายการทุกครั้ง
   (`created_by`/`updated_by` + ตารางประวัติ `inv_activity` ดูได้ที่แท็บ 📜 ประวัติ)
   · SQL ติดตั้ง: `jjmk-invoice.sql` ที่ branch `sql`
+- `jjmk-admin.html` — 🔑 **ศูนย์จัดการผู้ใช้และสิทธิ์ (JJ Access)** (2026-09-17): บัญชีเดียวเข้าได้ทุกระบบ
+  · admin ติ๊กเลือกว่าใครเข้าแอพไหนได้ และในแต่ละหน้าจอทำอะไรได้บ้าง (ดู/เพิ่ม/แก้/ลบ)
+  · เก็บแผนสิทธิ์ในคอลัมน์ `pnl_users.apps` (jsonb) · ประวัติการแก้สิทธิ์อยู่ตาราง `pnl_access_log`
+  · **เข้าได้เฉพาะบัญชี admin** (ไอคอนในหน้าศูนย์รวมแอพซ่อนจากพนักงาน)
+  · SQL ติดตั้ง: `jjmk-access.sql` ที่ branch `sql`
 
 ไฟล์ SQL (รันครั้งเดียวใน Supabase → SQL Editor) เก็บที่ **branch `sql`**
 (https://github.com/thananant/JJ-PnL/tree/sql) — ไม่รวมเข้า main และไม่ merge กับใคร:
@@ -40,6 +45,7 @@
 - `jjmk_owner_setup.sql` — ตารางหน้า Owner: ผ่อนชำระ `pnl_installments` + ยอดขาย/กำไรใส่เอง `pnl_owner_monthly`
 - `jjmk_maint_setup.sql` — ติดตั้งตารางบำรุงรักษาสาขา + งานตั้งต้น 9 งานให้ทุกสาขา
 - `jjmk-kpi.sql` — ติดตั้งตารางระบบวัดความพึงพอใจลูกค้า (JJ KPI, ตาราง prefix `kpi_`)
+- `jjmk-access.sql` — ระบบสิทธิ์กลาง (JJ Access): คอลัมน์ `pnl_users.apps` + ตาราง `pnl_access_log`
 - `jjmk-calendar.sql` — ติดตั้งตารางปฏิทินองค์กร (JJ Calendar, ตาราง prefix `cal_`)
   · คู่กับ Edge Function `cal-feed` (ฟีด ICS สำหรับ subscribe ลงมือถือ — deploy ผ่าน Dashboard, ปิด Verify JWT)
 - `jjmk-payroll/*.sql` — migration ทั้งหมดของระบบเงินเดือน (15 ไฟล์ รันซ้ำได้ · Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`)

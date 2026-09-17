@@ -106,6 +106,7 @@ h1{font-family:var(--fd);font-weight:700;font-size:24px}
 .ic-social{background:linear-gradient(145deg,#3E8FD8,#1A4E85)}
 .ic-invoice{background:linear-gradient(145deg,#D8583E,#851F1A)}
 .ic-cal{background:linear-gradient(145deg,#B08BE0,#4A2E85)}
+.ic-admin{background:linear-gradient(145deg,#8E7F70,#3A2E27)}
 
 .name{font-family:var(--fd);font-weight:600;font-size:15px}
 .desc{font-size:12px;color:var(--ink2);line-height:1.45;min-height:2.6em}
@@ -186,6 +187,12 @@ footer{
       <span class="desc">ปฏิทินนัดหมายองค์กร<br>ซิงก์ลงมือถือ + แจ้งเตือน</span>
     </a>
 
+    <a class="app" id="appAdmin" href="jjmk-admin.html" hidden>
+      <span class="icon ic-admin">🔑<span class="badge" title="เฉพาะบัญชี admin">🔒</span></span>
+      <span class="name">JJ Access</span>
+      <span class="desc">จัดการผู้ใช้และสิทธิ์<br>ทุกระบบ (เฉพาะ admin)</span>
+    </a>
+
   </nav>
 
   <footer>จริงใจหมูกระทะ · ศูนย์รวมแอพประจำร้าน</footer>
@@ -198,6 +205,23 @@ footer{
   var months=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
   document.getElementById('today').textContent=
     'วัน'+days[d.getDay()]+'ที่ '+d.getDate()+' '+months[d.getMonth()]+' พ.ศ. '+(d.getFullYear()+543);
+})();
+
+/* ไอคอน JJ Access (จัดการผู้ใช้และสิทธิ์) โผล่เฉพาะบัญชีผู้ดูแลระบบ
+   อ่านบัญชีที่ล็อกอินค้างไว้จาก localStorage ชุดเดียวกับระบบ P&L แล้วถามสิทธิ์จาก Supabase */
+(function(){
+  var URL='https://aikyxvluaiubdidqxwnd.supabase.co',
+      KEY='sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm';
+  var saved; try{ saved=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); }catch(e){ return; }
+  if(!saved||!saved.u)return;
+  fetch(URL+'/rest/v1/pnl_users?select=role,pass_hash&active=is.true&username=eq.'+encodeURIComponent(saved.u),
+    {headers:{apikey:KEY,Authorization:'Bearer '+KEY}})
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(rows){
+      if(rows&&rows[0]&&rows[0].role==='admin'&&rows[0].pass_hash===saved.h){
+        var el=document.getElementById('appAdmin'); if(el)el.hidden=false;
+      }
+    }).catch(function(){});
 })();
 </script>
 </body>
