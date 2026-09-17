@@ -7,7 +7,7 @@
 --
 --   ให้สิทธิ์เท่าที่ตัวใหม่ต้องใช้จริง:
 --     suppliers      → อ่าน + เพิ่ม + แก้ + ลบ (จัดการซัพจากแอพใหม่: เพิ่ม/เปลี่ยนชื่อ/ลบซัพ, รอบสั่ง-ส่ง, line_group_id)
---     line_groups    → อ่านอย่างเดียว (รายชื่อกลุ่มที่บอทอยู่)
+--     line_groups    → อ่าน + แก้ชื่อกลุ่ม (บางกลุ่ม LINE ไม่ส่งชื่อมา ต้องตั้งเอง)   *ไม่ให้สิทธิ์เพิ่ม/ลบ*
 --     stock_receipts → อ่าน + เพิ่ม + แก้ (บันทึก "สั่งจริง" ตอนส่งไลน์สำเร็จ)  *ไม่ให้สิทธิ์ลบ*
 --   (products / stock_counts / stock_current ใช้ได้อยู่แล้ว ไม่ต้องแตะ)
 --
@@ -30,7 +30,7 @@ begin
     execute 'grant select, insert, update, delete on public.suppliers to anon, authenticated';
   end if;
   if to_regclass('public.line_groups') is not null then
-    execute 'grant select on public.line_groups to anon, authenticated';
+    execute 'grant select, update on public.line_groups to anon, authenticated';
   end if;
   if to_regclass('public.stock_receipts') is not null then
     execute 'grant select, insert, update on public.stock_receipts to anon, authenticated';
@@ -63,5 +63,5 @@ where table_schema='public' and grantee='anon'
 group by table_name, grantee order by table_name;
 
 select count(*) as ซัพทั้งหมด, count(line_group_id) as ผูกกลุ่มไลน์แล้ว from suppliers;
--- คาด: anon มี DELETE,INSERT,SELECT,UPDATE บน suppliers · INSERT,SELECT,UPDATE บน stock_receipts · SELECT บน line_groups
+-- คาด: anon มี DELETE,INSERT,SELECT,UPDATE บน suppliers · INSERT,SELECT,UPDATE บน stock_receipts · SELECT,UPDATE บน line_groups
 --      แล้วกลับไปรีเฟรชแอพเช็คสต๊อก → หน้า 🚚 รอบสั่งซัพ ต้องขึ้น "เจอในระบบเดิม 43/43 ซัพ"

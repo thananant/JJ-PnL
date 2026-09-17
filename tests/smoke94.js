@@ -85,7 +85,13 @@ setTimeout(async()=>{
   // 2) stepper: + สองครั้ง = 2 · pill ✓
   w.bump('p1',1); w.bump('p1',1); await sleep(30);
   out.push('กด + สองครั้ง 7→9: '+(list().includes('นับได้ 9')));
-  out.push('pill ครัวครบ → มี ✓: '+!!d.querySelector('#pills .pill .ok'));
+  out.push('pill ครัวครบ → มี ✓ และไม่กระพริบแล้ว: '
+    +(!!d.querySelector('#pills .pill .ok')&&!d.querySelector('#pills .pill.on.needc')));
+  out.push('แผนกที่ยังนับไม่ครบ pill กระพริบแดง (.needc) + การ์ดที่ยังไม่นับกระพริบด้วย: '
+    +(d.querySelectorAll('#pills .pill.needc').length>0
+      &&(w.pickDept('ยังไม่จัดแผนก'),d.querySelectorAll('#list .pcard.needc').length===1
+         &&d.querySelectorAll('#list .pcard.done').length===0)));
+  w.pickDept('ครัว');
   // 3) ค้นหาข้ามแผนก
   d.getElementById('q').value='ผักบุ้ง'; d.getElementById('q').dispatchEvent(new w.Event('input')); await sleep(30);
   out.push('ค้นหาเจอผักบุ้งข้ามแผนก: '+(list().includes('ผักบุ้ง')&&list().includes('ผลค้นหา')));

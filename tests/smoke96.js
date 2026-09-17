@@ -28,6 +28,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('suppliers')&&method==='POST'){supPosts.push(JSON.parse(opt.body));return T([]);}
       if(url.includes('suppliers')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}
       if(url.includes('products')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}
+      if(url.includes('line_groups')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}
       if(method==='DELETE'){supDels.push(url);return T([]);}
       if(method!=='GET')return T([]);
       if(url.includes('sc_users')){
@@ -179,19 +180,33 @@ setTimeout(async()=>{
     +(!!supPatches.find(p=>p.url.includes('products?sup=eq.')&&p.body.sup==='FarmFresh')
       &&w.eval("supCount('Smilemeat')")===0));
   // 7) กลุ่มไลน์ใหม่: เชิญบอท+พิมพ์ในกลุ่ม → กด 🔄 แล้วกลุ่มต้องโผล่ใน dropdown
-  lineGroups=lineGroups.concat([{group_id:'C999',name:'JJ x ซัพใหม่',seen_at:'2026-09-17'}]);
+  lineGroups=lineGroups.concat([{group_id:'C999',name:'JJ x ซัพใหม่',seen_at:'2026-09-17'},{group_id:'C7f5de7010abc',name:null,seen_at:'2026-09-17'}]);
   await w.syncLineGroups(); await sleep(60);
   out.push('ปุ่ม 🔄 เรียก Edge Function sync-line-groups แล้วโหลดกลุ่มใหม่เข้ามา: '
-    +(syncs.length===1&&w.eval('S.lineGroups.length')===2
+    +(syncs.length===1&&w.eval('S.lineGroups.length')===3
       &&[...d.querySelectorAll('#list select option')].some(o=>o.textContent.includes('JJ x ซัพใหม่'))));
   const opTxt=[...d.querySelectorAll('#list select option')].map(o=>o.textContent);
   out.push('dropdown บอกสถานะ: กลุ่มที่ผูกแล้วบอกจำนวนซัพ · กลุ่มใหม่ขึ้น "ยังไม่ผูก": '
     +(opTxt.some(t=>t.includes('กลุ่มสั่งของ Smilemeat')&&t.includes('ผูกอยู่ 1 ซัพ'))
       &&opTxt.some(t=>t.includes('JJ x ซัพใหม่')&&t.includes('ยังไม่ผูก'))));
   const gOpts=opTxt.filter(t=>t.includes('·'));
-  out.push('เรียงชื่อกลุ่ม อังกฤษก่อนแล้วไทย + สรุปกลุ่มที่ยังไม่ผูกด้านบน: '
-    +(gOpts.length===4&&gOpts[0].indexOf('JJ x ซัพใหม่')===0&&gOpts[1].indexOf('กลุ่มสั่งของ')===0
-      &&list().includes('ยังไม่ได้ผูกกับซัพไหนเลย 1 กลุ่ม')));
+  const one=[...d.querySelector('#list select').options].map(o=>o.textContent).filter(t=>t.includes('·'));
+  out.push('เรียงชื่อกลุ่ม อังกฤษก่อนแล้วไทย + สรุปบอกจำนวนผูกแล้ว/ยังไม่ผูก: '
+    +(one.length===3&&one[0].indexOf('JJ x ซัพใหม่')===0&&one.slice(1).every(t=>/^[\u0E00-\u0E7F]/.test(t))
+      &&list().includes('ผูกอยู่แล้ว 1 กลุ่ม')&&list().includes('ยังไม่ได้ผูก 2 กลุ่ม')));
+  out.push('กลุ่มที่ไลน์ไม่ส่งชื่อมา แสดงเป็น "กลุ่ม C7f5de7010…" และตั้งชื่อเองได้: '
+    +(opTxt.some(t=>t.includes('กลุ่ม C7f5de7010'))
+      &&w.eval("lgLabel({group_id:'C7f5de7010abc',name:null})")==='กลุ่ม C7f5de7010…'));
+  w.prompt=()=>'JJ x กลุ่มตั้งชื่อเอง';
+  await w.lgRename('C7f5de7010abc'); await sleep(50);
+  out.push('ตั้งชื่อกลุ่มเอง → PATCH line_groups.name (แอพเดิมเห็นด้วย): '
+    +(!!supPatches.find(p=>p.url.includes('line_groups?group_id=eq.')&&p.body.name==='JJ x กลุ่มตั้งชื่อเอง')
+      &&w.eval("lgLabel(S.lineGroups.find(g=>g.group_id==='C7f5de7010abc'))")==='JJ x กลุ่มตั้งชื่อเอง'));
+  out.push('กลุ่มที่มีซัพใช้อยู่ ป้าย "ผูกอยู่ N ซัพ" เป็นสีแดง: '
+    +[...d.querySelectorAll('#list select option')].some(o=>o.textContent.includes('ผูกอยู่')&&(o.getAttribute('style')||'').includes('--red')));
+  out.push('ซัพที่ยังไม่ผูกกลุ่มไลน์ ขึ้นกรอบแดงกระพริบ (.needlink) + ข้อความแดง: '
+    +(!!d.querySelector('#list select.needlink')&&list().includes('⚠ ยังไม่ผูกกลุ่มไลน์')
+      &&d.querySelectorAll('#list select.needlink').length===w.eval("(S._lineSups||[]).filter(sp=>supSched(sp)&&!(lineOf(sp)&&lineOf(sp).group_id)).length")));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
