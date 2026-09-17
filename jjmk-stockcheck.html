@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>JJ เช็คสต๊อก · จริงใจหมูกระทะ</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--red:#C62127;--dk:#7E1013;--ink:#2E2119;--mut:#8A7A66;--line:#E8DFCC;--card:#FFFDF7;--bg:#F6F1E5;--green:#1F7A43;--amber:#A66A00;--r:14px}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Sarabun',sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--ink);font-size:15px;padding-bottom:90px}
+header{position:sticky;top:0;z-index:30;background:linear-gradient(180deg,var(--dk),#690C0F);color:#fff;padding:12px 14px calc(10px + env(safe-area-inset-top)) 14px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+header h1{font-family:'Prompt';font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px}
+header .sub{font-size:11.5px;color:#F2DCDC;margin-top:2px}
+.seg{display:flex;gap:6px;margin-top:10px}
+.seg button{flex:1;padding:9px 6px;border:0;border-radius:10px;background:rgba(255,255,255,.14);color:#F2DCDC;font-weight:700;font-size:14px;font-family:'Prompt'}
+.seg button.on{background:#fff;color:var(--dk)}
+.bar{display:flex;gap:8px;margin-top:8px;align-items:center}
+.bar input[type=date]{flex:1;padding:8px;border:0;border-radius:10px;font-size:14px}
+.bar input[type=text]{flex:1;padding:8px 10px;border:0;border-radius:10px;font-size:14px}
+main{max-width:720px;margin:0 auto;padding:12px}
+.search{width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;background:#fff;margin-bottom:10px}
+.cat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.cat>.h{display:flex;align-items:center;gap:8px;padding:11px 13px;font-family:'Prompt';font-weight:700;font-size:14.5px;cursor:pointer;user-select:none;background:#FBF6EA}
+.cat>.h .n{margin-left:auto;font-size:12px;color:var(--mut);font-weight:600}
+.item{display:flex;align-items:center;gap:9px;padding:10px 12px;border-top:1px solid #F2EBDB}
+.item .nm{flex:1;min-width:0}
+.item .nm .t{font-weight:700;font-size:14.5px}
+.item .nm .b{font-size:11.5px;color:var(--mut);margin-top:1px}
+.item .nm .b .bn{color:#5B7FA6}
+.item .nm .b .warn{color:var(--amber)}
+.item .last{font-size:11px;color:var(--mut);text-align:right;min-width:52px}
+.item input.q{width:74px;padding:9px 6px;border:1.5px solid var(--line);border-radius:10px;font-size:16px;text-align:center;background:#fff}
+.item input.q.has{border-color:var(--green);background:#F0F8F1;font-weight:700}
+.item .out{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:8px 9px;font-size:13px;color:var(--mut)}
+.item .out.on{background:#FBEAEA;border-color:#E4A6A6;color:var(--red);font-weight:700}
+.foot{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;box-shadow:0 -3px 12px rgba(0,0,0,.07)}
+.foot .st{flex:1;font-size:13px;color:var(--mut)}
+.foot .st b{color:var(--ink)}
+.savebtn{background:var(--red);color:#fff;border:0;border-radius:12px;padding:12px 18px;font-family:'Prompt';font-weight:700;font-size:15px;box-shadow:0 3px 10px rgba(198,33,39,.3)}
+.savebtn:disabled{opacity:.55}
+.empty{text-align:center;color:var(--mut);padding:36px 10px}
+#toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:86px;background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:99;max-width:92vw}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--red)}
+.note{background:#FDF6E7;border:1px solid #EAD9AE;border-radius:12px;padding:9px 12px;font-size:12.5px;color:#7A6234;margin-bottom:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 JJ เช็คสต๊อก <span style="font-size:11px;font-weight:500;background:rgba(255,255,255,.18);padding:2px 8px;border-radius:99px">ต้นแบบ</span></h1>
+  <div class="sub">รายการจากระบบนับสต๊อก + ชื่อบิลจากระบบ P&L · บันทึกเข้าที่เดียวกับแอพนับ</div>
+  <div class="seg" id="brSeg"></div>
+  <div class="bar">
+    <input type="date" id="cd">
+    <input type="text" id="who" placeholder="ชื่อผู้นับ" style="max-width:130px">
+  </div>
+</header>
+<main>
+  <input class="search" id="q" placeholder="🔍 ค้นหาสินค้า / ชื่อบิล...">
+  <div id="list"><div class="empty">กำลังโหลด...</div></div>
+</main>
+<div class="foot">
+  <div class="st" id="st">–</div>
+  <button class="savebtn" id="save">💾 บันทึก</button>
+</div>
+<div id="toast"></div>
+<script>
+/* ============ JJ เช็คสต๊อก (ต้นแบบ) ============
+   เชื่อม 2 ระบบ: รายการสินค้าต่อสาขาจากระบบนับ (products) + ชื่อบิล/การผูกจาก P&L (pnl_stock_names → pnl_stock_map)
+   บันทึกรูปแบบเดียวกับแอพนับตัวจริง (stock_counts + stock_current) — ระบบเดิมเห็นข้อมูลชุดเดียวกัน */
+const CONFIG={URL:'https://aikyxvluaiubdidqxwnd.supabase.co',KEY:'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'};
+const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'}; // สาขาในระบบนับ (ห้ามใช้ตาราง branches — id คนละชุด)
+const BR_NAME={JJRD:'รัชดา',JJLP:'ลาดพร้าว'};
+const S={br:localStorage.getItem('jjsc_br')||'JJRD',items:[],map:{},cur:{},q:'',open:{}};
+const $=s=>document.querySelector(s);
+const num=v=>{const n=parseFloat(String(v??'').replace(/,/g,''));return isNaN(n)?0:n;};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2800);}
+async function api(method,path,body,prefer){
+  const r=await fetch(CONFIG.URL+'/rest/v1/'+path,{method,
+    headers:{apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY,'Content-Type':'application/json',...(prefer?{Prefer:prefer}:{})},
+    body:body?JSON.stringify(body):undefined});
+  if(!r.ok)throw new Error(await r.text().catch(()=>r.status));
+  const tx=await r.text();return tx?JSON.parse(tx):[];
+}
+async function selAll(path){ // แบ่งหน้า กัน PostgREST ตัด 1,000 แถว
+  let out=[],off=0;
+  for(;;){const rows=await api('GET',path+'&limit=1000&offset='+off);out=out.concat(rows);if(rows.length<1000)break;off+=1000;}
+  return out;
+}
+// วันขายจริง: ร้านเปิดถึงตี 3 → ก่อน 06:00 นับเป็นของเมื่อวาน (กติกาเดียวกับแอพนับ/ตรวจสอบเงิน)
+function bizToday(now){const d=new Date(now||Date.now());if(d.getHours()<6)d.setDate(d.getDate()-1);
+  const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+async function loadAll(){
+  $('#list').innerHTML='<div class="empty">กำลังโหลด...</div>';
+  const bid=STK_BR[S.br];
+  const [prods,map,cur]=await Promise.all([
+    selAll('products?select=id,branch_id,cat_key,cat_label,cat_ic,name,unit,sup,safety,max,sort&deleted_at=is.null&branch_id=eq.'+bid+'&order=sort'),
+    // ชื่อบิลจาก P&L: view ก่อน ตกกลับตาราง map (กติกาเดียวกับแอพ P&L)
+    selAll('pnl_stock_names?select=*&order=id').catch(()=>selAll('pnl_stock_map?select=*&order=id')).catch(()=>[]),
+    selAll('stock_current?select=product_id,qty,counter,updated_at&branch_id=eq.'+bid).catch(()=>[])
+  ]);
+  S.items=prods.map(p=>({...p,qty:null,out:false}));
+  S.map={}; map.forEach(r=>{ if(r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-')S.map[r.product_id]=r; });
+  S.cur={}; cur.forEach(r=>{S.cur[r.product_id]=r;});
+  render();
+}
+function cats(){
+  const q=S.q.trim().toLowerCase(); const m={};
+  S.items.forEach(it=>{
+    const link=S.map[it.id];
+    if(q&&!(it.name.toLowerCase().includes(q)||(link&&String(link.pnl_item).toLowerCase().includes(q))))return;
+    const k=it.cat_label||'ไม่มีหมวด';
+    (m[k]=m[k]||{label:k,ic:it.cat_ic||'📦',items:[]}).items.push(it);
+  });
+  return Object.values(m);
+}
+function counted(it){return it.out||(it.qty!=null&&it.qty!=='');}
+function render(){
+  const cs=cats();
+  if(!S.items.length){$('#list').innerHTML='<div class="empty">สาขานี้ยังไม่มีสินค้าในระบบนับ</div>';refresh();return;}
+  const nMap=S.items.filter(it=>S.map[it.id]).length;
+  $('#list').innerHTML=
+    '<div class="note">🔗 ผูกชื่อบิล P&L แล้ว '+nMap+'/'+S.items.length+' รายการ · ตัวที่ขึ้น ⚠ ไปผูกได้ที่แอพ P&L หน้า "ใช้จริง (สต๊อก)"</div>'
+    +(cs.length?cs.map(c=>{
+      const open=S.open[c.label]!==false;
+      return '<div class="cat"><div class="h" onclick="tg(\''+esc(c.label).replace(/'/g,"\\'")+'\')">'+esc(c.ic)+' '+esc(c.label)
+        +'<span class="n">'+c.items.filter(counted).length+'/'+c.items.length+'</span></div>'
+        +(open?c.items.map(it=>{
+          const link=S.map[it.id],cur=S.cur[it.id];
+          return '<div class="item">'
+            +'<div class="nm"><div class="t">'+esc(it.name)+' <span style="font-weight:500;color:var(--mut);font-size:12px">'+esc(it.unit||'')+'</span></div>'
+            +'<div class="b">'+(link?'<span class="bn">🧾 '+esc(link.pnl_item)+'</span>':'<span class="warn">⚠ ยังไม่ผูกชื่อบิล</span>')
+            +(it.sup?' · '+esc(it.sup):'')+'</div></div>'
+            +'<div class="last">'+(cur?('ครั้งก่อน<br><b>'+cur.qty+'</b>'):'')+'</div>'
+            +'<input class="q'+(it.qty!=null&&it.qty!==''?' has':'')+'" type="text" inputmode="decimal" placeholder="นับ" value="'+(it.qty??'')+'" onchange="setQ(\''+it.id+'\',this.value)">'
+            +'<button class="out'+(it.out?' on':'')+'" onclick="setOut(\''+it.id+'\')">หมด</button>'
+            +'</div>';
+        }).join(''):'')+'</div>';
+    }).join(''):'<div class="empty">ไม่พบ "'+esc(S.q)+'"</div>');
+  refresh();
+}
+function refresh(){
+  const n=S.items.filter(counted).length;
+  $('#st').innerHTML='นับแล้ว <b>'+n+'</b>/'+S.items.length+' รายการ · '+BR_NAME[S.br]+' · '+$('#cd').value;
+  $('#save').disabled=!n;
+}
+function tg(l){S.open[l]=S.open[l]===false;render();}
+function setQ(id,v){const it=S.items.find(x=>x.id===id);if(!it)return;
+  it.qty=v===''?null:num(v);if(it.qty!=null)it.out=false;render();}
+function setOut(id){const it=S.items.find(x=>x.id===id);if(!it)return;
+  it.out=!it.out;if(it.out)it.qty=0;render();}
+async function saveAll(){
+  const who=($('#who').value||'').trim();
+  localStorage.setItem('jjsc_who',who);
+  const picked=S.items.filter(counted);
+  if(!picked.length){toast('ยังไม่มีรายการที่นับ',true);return;}
+  const btn=$('#save');btn.disabled=true;btn.textContent='⏳ กำลังบันทึก...';
+  const cd=$('#cd').value||bizToday();
+  const bid=STK_BR[S.br];
+  // รูปแบบแถวเหมือนแอพนับตัวจริงทุกคอลัมน์ — สองระบบเห็นข้อมูลชุดเดียวกัน
+  const hist=picked.map(it=>({branch_id:bid,branch_name:BR_NAME[S.br],count_date:cd,counter:who||null,
+    cat_key:it.cat_key||null,cat_label:it.cat_label||'',product_id:it.id,name:it.name,unit:it.unit||'',
+    sup:it.sup||'',qty:num(it.qty),out_of_stock:!!it.out,safety:it.safety??null,max:it.max??null}));
+  const cur=picked.map(it=>({branch_id:bid,product_id:it.id,qty:num(it.qty),counter:who||null,updated_at:new Date().toISOString()}));
+  try{
+    await api('POST','stock_counts',hist,'return=minimal');
+    await api('POST','stock_current?on_conflict=branch_id,product_id',cur,'resolution=merge-duplicates,return=minimal');
+    toast('✅ บันทึกแล้ว '+picked.length+' รายการ');
+    picked.forEach(it=>{S.cur[it.id]={product_id:it.id,qty:num(it.qty)};});
+    render();
+  }catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message||e).slice(0,120),true);}
+  btn.disabled=false;btn.textContent='💾 บันทึก';
+}
+function boot(){
+  $('#brSeg').innerHTML=Object.keys(STK_BR).map(b=>'<button data-br="'+b+'" class="'+(S.br===b?'on':'')+'">'+BR_NAME[b]+'</button>').join('');
+  $('#brSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.br=b.dataset.br;localStorage.setItem('jjsc_br',S.br);
+    document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x.dataset.br===S.br));loadAll();};
+  $('#cd').value=bizToday();
+  $('#who').value=localStorage.getItem('jjsc_who')||'';
+  $('#q').oninput=e=>{S.q=e.target.value;render();};
+  $('#cd').onchange=refresh;
+  $('#save').onclick=saveAll;
+  loadAll().catch(e=>{$('#list').innerHTML='<div class="empty">โหลดไม่สำเร็จ — '+esc(e.message||e)+'</div>';});
+}
+boot();
+</script>
+</body>
+</html>
