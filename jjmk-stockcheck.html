@@ -272,7 +272,7 @@ async function loadAll(){
   S.map={}; map.forEach(r=>{ if(r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-')S.map[r.product_id]=r; });
   S.mapRows=map.filter(r=>r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-');
   S.all=prods.map(p=>({...p,qty:null,out:false,dirty:{}}));
-  S.items=S.all.filter(p=>S.map[p.id]);       // นับเฉพาะที่มีชื่อบิล
+  S.items=S.all; // นับได้ทุกตัว รวมที่ยังไม่ผูกชื่อบิล (ของต้องถูกนับอยู่ดี)
   S.cur={}; cur.forEach(r=>{S.cur[r.product_id]=r;});
   if(S.authOn&&S.user&&S.user.role==='admin')S.users=await api('GET','sc_users?select=*&order=id').catch(()=>null);
   S.dept=null;
@@ -304,7 +304,7 @@ function render(){
 /* ---- 📋 หน้านับ: แถบแผนก + การ์ด ---- */
 function renderCount(){
   const ds=deptList();
-  if(!ds.length){$('#pills').innerHTML='';$('#list').innerHTML='<div class="empty">สาขานี้ยังไม่มีรายการที่ผูกชื่อบิล — ดูหน้า 🔗 ผูกชื่อ</div>';return;}
+  if(!ds.length){$('#pills').innerHTML='';$('#list').innerHTML='<div class="empty">สาขานี้ยังไม่มีสินค้าในระบบนับ</div>';return;}
   if(!S.dept||!ds.some(d2=>d2.label===S.dept))S.dept=ds[0].label;
   const pillHtml=dp=>{
     const done=dp.items.filter(counted).length,all=dp.items.length;
@@ -324,16 +324,19 @@ function renderCount(){
   }
   const q=S.q.trim();
   const show=q?S.items.filter(matches):(deptList().find(d2=>d2.label===S.dept)||{items:[]}).items;
-  const hidden=S.all.length-S.items.length;
+  const unb=S.all.filter(p=>!S.map[p.id]).length;
+  const warns=(unb?'⚠ ยังไม่ผูกชื่อบิล '+unb+' รายการ (ยังนับได้ปกติ) — ผูก/แก้ชื่อได้ที่หน้า "ผูกชื่อ"':'')
+    +(S.deptOk?(S.zoneOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ตัวอัปเดต เพื่อแบ่งโซนหน้าร้าน/หลังร้าน'):' · ⚠ ยังไม่ได้รัน sql/jjmk_stockcheck_dept.sql ใช้หมวดเดิมแทนแผนก');
   $('#list').innerHTML=
     '<div class="dhead">'+(q?('🔍 ผลค้นหา "'+esc(q)+'" (ทุกแผนก)'):(DEPT_IC[S.dept]||'🗂')+' '+esc(S.dept))+'</div>'
-    +(hidden?'<div class="note">🔗 ซ่อน '+hidden+' รายการที่ยังไม่ผูกชื่อบิล — ดูที่หน้า "ผูกชื่อ"'+(S.deptOk?(S.zoneOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ตัวอัปเดต เพื่อแบ่งโซนหน้าร้าน/หลังร้าน'):' · ⚠ ยังไม่ได้รัน sql/jjmk_stockcheck_dept.sql ใช้หมวดเดิมแทนแผนก')+'</div>':'')
+    +(warns.replace(/^ · /,'')?'<div class="note">'+warns.replace(/^ · /,'')+'</div>':'')
     +(show.length?'<div class="grid">'+show.map(it=>{
       const cur=S.cur[it.id],cn=it.name!==billName(it),ok=counted(it);
       return '<div class="pcard'+(ok?' done':'')+'">'
         +'<div class="top">'+imgCell(it)
         +'<div><div class="t">'+esc(it.name)+' '+(ok?(it.out?'<span class="st-n" style="color:var(--red)">✗ หมด</span>':'<span class="st-y">✓ นับแล้ว</span>'):'<span class="st-n">⚠ ยังไม่นับ</span>')+'</div>'
-        +(cn?'<div class="cn">🧾 บิล: '+esc(billName(it))+'</div>':'')+'</div>'
+        +(cn?'<div class="cn">🧾 บิล: '+esc(billName(it))+'</div>':'')
+        +(!S.map[it.id]?'<div class="cn" style="color:var(--amber)">⚠ ยังไม่ผูกชื่อบิล</div>':'')+'</div>'
         +'<button class="cam" onclick="pickImg(\''+it.id+'\')">✏️</button></div>'
         +'<div class="mid"><span class="chip">'+esc(it.unit||'หน่วย')+'</span>'
         +'<div class="step"><button onclick="bump(\''+it.id+'\',-1)">−</button>'

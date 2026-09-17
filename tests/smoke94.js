@@ -58,6 +58,11 @@ setTimeout(async()=>{
   const pills=()=>d.getElementById('pills').textContent;
   // 1) แถบแผนก + การ์ดเฉพาะแผนกแรก
   out.push('pills 2 แผนก (ครัว/บาร์น้ำ): '+(pills().includes('ครัว')&&pills().includes('บาร์น้ำ')));
+  out.push('ของยังไม่ผูกไม่ถูกซ่อน: มี pill อื่นๆ (น้ำแข็ง) ในโซนยังไม่จัด + โน้ตนับได้ปกติ: '
+    +(pills().includes('อื่นๆ')&&pills().includes('ยังไม่จัดโซน')&&list().includes('ยังนับได้ปกติ')));
+  w.pickDept('อื่นๆ'); await sleep(30);
+  out.push('การ์ดน้ำแข็งขึ้นหน้านับ + ป้าย ⚠ ยังไม่ผูกชื่อบิล: '+(list().includes('น้ำแข็ง')&&list().includes('ยังไม่ผูกชื่อบิล')));
+  w.pickDept('ครัว'); await sleep(30);
   out.push('พื้นที่แบ่งโซน หน้าร้าน/หลังร้าน: '+(pills().includes('หน้าร้าน')&&pills().includes('หลังร้าน')));
   out.push('โลโก้ขึ้นทั้ง sidebar และหัว: '+(String(d.getElementById('scLogo').src).startsWith('data:image/png')&&String(d.getElementById('hdLogo').src).startsWith('data:image/png')));
   out.push('แผนกแรกเลือกอยู่ เห็นหมูตัวเดียว: '+(list().includes('สามชั้น')&&!list().includes('ผักบุ้ง')));
