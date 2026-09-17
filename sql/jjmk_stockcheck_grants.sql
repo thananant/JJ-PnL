@@ -6,13 +6,14 @@
 --                → เลยเจอ ERROR 42501 "permission denied" ตอนบันทึกรอบสั่ง/ผูกกลุ่มไลน์
 --
 --   ให้สิทธิ์เท่าที่ตัวใหม่ต้องใช้จริง:
---     suppliers      → อ่าน + แก้ (รอบสั่ง-ส่ง, line_group_id)   *ไม่ให้สิทธิ์ลบ*
+--     suppliers      → อ่าน + เพิ่ม + แก้ + ลบ (จัดการซัพจากแอพใหม่: เพิ่ม/เปลี่ยนชื่อ/ลบซัพ, รอบสั่ง-ส่ง, line_group_id)
 --     line_groups    → อ่านอย่างเดียว (รายชื่อกลุ่มที่บอทอยู่)
 --     stock_receipts → อ่าน + เพิ่ม + แก้ (บันทึก "สั่งจริง" ตอนส่งไลน์สำเร็จ)  *ไม่ให้สิทธิ์ลบ*
 --   (products / stock_counts / stock_current ใช้ได้อยู่แล้ว ไม่ต้องแตะ)
 --
 --   ⚠️ หมายเหตุความปลอดภัย: publishable key ฝังอยู่ในหน้าเว็บสาธารณะ = ใครก็เรียกได้
---      ไฟล์นี้จึงให้เท่าที่จำเป็นและ "ไม่ให้สิทธิ์ลบ" ทุกตาราง
+--      ให้เท่าที่จำเป็น · ลบได้เฉพาะตาราง suppliers (เพื่อให้เพิ่ม/ลบซัพในอนาคตได้)
+--      ส่วน stock_receipts/สินค้า/ยอดนับ ไม่ให้สิทธิ์ลบ
 -- ============================================================
 
 -- ---------- 1) ดูสิทธิ์ปัจจุบันก่อน ----------
@@ -26,7 +27,7 @@ group by table_name, grantee order by table_name, grantee;
 do $$
 begin
   if to_regclass('public.suppliers') is not null then
-    execute 'grant select, insert, update on public.suppliers to anon, authenticated';
+    execute 'grant select, insert, update, delete on public.suppliers to anon, authenticated';
   end if;
   if to_regclass('public.line_groups') is not null then
     execute 'grant select on public.line_groups to anon, authenticated';
@@ -62,5 +63,5 @@ where table_schema='public' and grantee='anon'
 group by table_name, grantee order by table_name;
 
 select count(*) as ซัพทั้งหมด, count(line_group_id) as ผูกกลุ่มไลน์แล้ว from suppliers;
--- คาด: anon มี SELECT,INSERT,UPDATE บน suppliers และ stock_receipts · SELECT บน line_groups
+-- คาด: anon มี DELETE,INSERT,SELECT,UPDATE บน suppliers · INSERT,SELECT,UPDATE บน stock_receipts · SELECT บน line_groups
 --      แล้วกลับไปรีเฟรชแอพเช็คสต๊อก → หน้า 🚚 รอบสั่งซัพ ต้องขึ้น "เจอในระบบเดิม 43/43 ซัพ"

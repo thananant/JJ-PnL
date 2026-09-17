@@ -12,7 +12,7 @@ const html=fs.readFileSync('jjmk-stockcheck.html','utf8');
 const patched=html.replace(/<link href="https:\/\/fonts[^>]*>/g,'');
 const BID='b19f0a17b4472';
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
-const sent=[],receipts=[];
+const sent=[],receipts=[],supPosts=[],supPatches=[],supDels=[];
 const users=[{id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true}];
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
@@ -23,6 +23,10 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),json:async()=>v}); // ของจริงมี json()
       if(url.includes('/functions/v1/line-order')){sent.push(JSON.parse(opt.body));return T({ok:true});}
       if(url.includes('stock_receipts')){receipts.push(JSON.parse(opt.body));return T([]);}
+      if(url.includes('suppliers')&&method==='POST'){supPosts.push(JSON.parse(opt.body));return T([]);}
+      if(url.includes('suppliers')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}
+      if(url.includes('products')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}
+      if(method==='DELETE'){supDels.push(url);return T([]);}
       if(method!=='GET')return T([]);
       if(url.includes('sc_users')){
         const um=url.match(/username=eq\.([^&]+)/);
@@ -147,6 +151,31 @@ setTimeout(async()=>{
   w.setTab('count'); w.pickDept('บาร์น้ำ'); await sleep(50);
   const cntTxt=list();
   out.push('การ์ดหน้านับบอกด้วยว่าเป็นของเฉพาะสาขานี้: '+cntTxt.includes('เฉพาะสาขารัชดา'));
+  // 6) จัดการซัพ: เพิ่ม / เปลี่ยนชื่อ (ตามไปแก้ในสินค้า) / ย้ายของ / ลบ
+  w.setTab('cfgl'); await sleep(60);
+  out.push('หน้าซัพพลายเออร์: เห็นซัพจากระบบเดิม + จำนวนสินค้า + ช่องเพิ่มซัพใหม่: '
+    +(list().includes('ซัพพลายเออร์')&&list().includes('Smilemeat')&&!!d.getElementById('nsName')));
+  d.getElementById('nsName').value='ซัพใหม่ทดสอบ';
+  await w.supAdd(); await sleep(50);
+  out.push('เพิ่มซัพใหม่ → POST suppliers (order_mode any, lead 1): '
+    +(supPosts.length===1&&supPosts[0].name==='ซัพใหม่ทดสอบ'&&supPosts[0].order_mode==='any'
+      &&w.eval("!!supSched('ซัพใหม่ทดสอบ')")));
+  w.prompt=()=>'ซัพเปลี่ยนชื่อแล้ว';
+  await w.supRename('ซัพใหม่ทดสอบ'); await sleep(50);
+  out.push('เปลี่ยนชื่อซัพ → PATCH suppliers + PATCH products?sup=eq (ทุกสาขา): '
+    +(!!supPatches.find(p=>p.url.includes('suppliers?name=eq.')&&p.body.name==='ซัพเปลี่ยนชื่อแล้ว')
+      &&!!supPatches.find(p=>p.url.includes('products?sup=eq.')&&p.body.sup==='ซัพเปลี่ยนชื่อแล้ว')));
+  await w.supDel('ซัพเปลี่ยนชื่อแล้ว'); await sleep(50);
+  out.push('ลบซัพที่ไม่มีสินค้าใช้ → DELETE suppliers: '
+    +(supDels.some(u=>u.includes('suppliers?name=eq.'))&&w.eval("!supSched('ซัพเปลี่ยนชื่อแล้ว')")));
+  const before=supDels.length;
+  await w.supDel('Smilemeat'); await sleep(40);
+  out.push('ลบซัพที่ยังมีสินค้าใช้อยู่ไม่ได้ (ต้องย้ายของก่อน): '+(supDels.length===before));
+  w.prompt=()=>'FarmFresh';
+  await w.supMove('Smilemeat'); await sleep(50);
+  out.push('ย้ายสินค้าทั้งหมดไปซัพอื่น → PATCH products?sup=eq.Smilemeat: '
+    +(!!supPatches.find(p=>p.url.includes('products?sup=eq.')&&p.body.sup==='FarmFresh')
+      &&w.eval("supCount('Smilemeat')")===0));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
