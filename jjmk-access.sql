@@ -37,15 +37,20 @@ do $$ declare tb text; begin
 end $$;
 grant usage, select on all sequences in schema public to anon, authenticated;
 
--- 5) เปิดให้หน้าจัดการผู้ใช้กลางอ่านบัญชีของระบบนับสต๊อกได้ (อ่านอย่างเดียว) -----
---    ใช้ตอน "นำเข้าบัญชีเดิม" — ถ้าไม่มีตาราง sc_users ในโปรเจกต์นี้ ข้ามไปเงียบๆ
-do $$ begin
-  if exists (select 1 from information_schema.tables where table_schema='public' and table_name='sc_users') then
-    execute 'grant select on sc_users to anon, authenticated';
-    if not exists (select 1 from pg_policies where tablename='sc_users' and policyname='sc_users_read_central') then
-      execute 'create policy sc_users_read_central on sc_users for select to anon, authenticated using (true)';
+-- 5) เปิดให้หน้าจัดการผู้ใช้กลาง "อ่าน" บัญชีของระบบที่ยังแยกอยู่ (อ่านอย่างเดียว) -----
+--    sc_users  = ระบบนับสต๊อก
+--    app_users = ครัวกลาง + ซ่อมบำรุง (โปรไฟล์ของ Supabase Auth)
+--    ใช้ตอน "นำเข้าบัญชีเดิม" — ตารางไหนไม่มีในโปรเจกต์นี้ ข้ามไปเงียบๆ
+--    ⚠️ ให้แค่สิทธิ์ SELECT — ไม่ให้เพิ่ม/แก้/ลบ ระบบเดิมจึงทำงานเหมือนเดิมทุกอย่าง
+do $$ declare t text; begin
+  foreach t in array array['sc_users','app_users'] loop
+    if exists (select 1 from information_schema.tables where table_schema='public' and table_name=t) then
+      execute format('grant select on %I to anon, authenticated', t);
+      if not exists (select 1 from pg_policies where tablename=t and policyname=t||'_read_central') then
+        execute format('create policy %I on %I for select to anon, authenticated using (true)', t||'_read_central', t);
+      end if;
     end if;
-  end if;
+  end loop;
 end $$;
 
 -- 6) ให้บัญชี admin ที่มีอยู่แล้วได้สิทธิ์เต็มทุกแอพโดยอัตโนมัติ ------------------
