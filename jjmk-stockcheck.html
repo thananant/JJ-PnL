@@ -87,6 +87,15 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .brchip{display:inline-flex;align-items:center;gap:5px;background:#F2EDE0;border:1.5px solid var(--line);color:var(--mut);border-radius:99px;padding:4px 10px;font-size:12px;margin:2px 3px 2px 0}
 .brchip.on{background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700}
 .brchip button{border:0;background:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 1px;font-weight:700}
+.lrow.dim{opacity:.62}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:11px;margin-bottom:13px}
+.dtile{display:flex;gap:11px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:13px 15px}
+.dtile .ic{font-size:23px;flex:none}
+.dtile .lb{font-size:12px;color:var(--mut);font-weight:600}
+.dtile .v{font-family:'Prompt';font-weight:700;font-size:22px;line-height:1.15}
+.dtile .sb{font-size:11.5px;color:var(--mut)}
+.pbar{height:9px;background:#EFE7D6;border-radius:99px;overflow:hidden}
+.pbar i{display:block;height:100%;border-radius:99px}
 .bchip{display:inline-block;background:#F1E7D2;border:1.5px solid #D9BE85;color:#6B4E14;border-radius:9px;padding:6px 12px;font-weight:700;font-size:13.5px}
 .foot{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -3px 12px rgba(0,0,0,.07);z-index:20}
 .foot .in{max-width:1220px;margin:0 auto;display:flex;gap:12px;align-items:center}
@@ -173,16 +182,18 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
   <div class="brand"><img id="scLogo" alt="จริงใจ">JJ เช็คสต๊อก</div>
   <div class="bsub">จริงใจหมูกระทะ · เชื่อมระบบนับ + P&amp;L</div>
   <div id="scSlot"></div>
-  <button class="ni on" data-t="count">📋 นับสต๊อก</button>
+  <button class="ni on" data-t="dash">📊 แดชบอร์ด</button>
+  <button class="ni" data-t="count">📋 นับสต๊อก</button>
+  <button class="ni" data-t="order">🛒 สั่งของ</button>
   <button class="ni" data-t="link">🔗 ผูกชื่อ</button>
   <button class="ni" data-t="set">🛟 Safety</button>
   <button class="ni" data-t="sched">🚚 รอบสั่งซัพ</button>
+  <button class="ni" data-t="items">📦 รายการสินค้า</button>
   <div id="cfgBox">
     <button class="ni head" data-t="cfg"><span class="ic">⚙️</span>ตั้งค่า</button>
     <div id="cfgSub">
       <button class="ni sub" data-t="cfgu"><span class="ic">👤</span>สิทธิ์การใช้งานพนักงาน</button>
       <button class="ni sub" data-t="cfgd"><span class="ic">🗂</span>แผนก</button>
-      <button class="ni sub" data-t="cfgi"><span class="ic">📦</span>รายการสินค้า</button>
       <button class="ni sub" data-t="cfgn"><span class="ic">📐</span>หน่วยซื้อ–หน่วยนับ</button>
     </div>
   </div>
@@ -200,10 +211,13 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
       <input type="text" id="who" placeholder="ชื่อผู้นับ">
     </div></div>
     <div class="tabs">
-      <button id="tabCount" data-t="count" class="on">📋 นับสต๊อก</button>
+      <button id="tabDash" data-t="dash" class="on">📊</button>
+      <button id="tabCount" data-t="count">📋 นับสต๊อก</button>
+      <button id="tabOrder" data-t="order">🛒</button>
       <button id="tabLink" data-t="link">🔗 ผูกชื่อ</button>
       <button id="tabSet" data-t="set">🛟 Safety</button>
       <button id="tabSched" data-t="sched">🚚</button>
+      <button id="tabItems" data-t="items">📦</button>
       <button id="tabCfg" data-t="cfg">⚙️</button>
     </div>
   </div>
@@ -231,7 +245,7 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
 <div id="ptr">↓ ลากลงเพื่อรีเฟรช</div>
 <script>
 /* ============ JJ เช็คสต๊อก v3 ============
-   หน้า: 📋 นับสต๊อก · 🔗 ผูกชื่อ · 🛟 Safety (อัตราใช้/วัน) · 🚚 รอบสั่งซัพ · ⚙️ ตั้งค่า แยกหน้าละหัวข้อ (👤 สิทธิ์ผู้ใช้ · 🗂 แผนก · 📐 หน่วยซื้อ↔หน่วยนับ)
+   หน้า: 📋 นับสต๊อก · 🔗 ผูกชื่อ · 🛟 Safety (อัตราใช้/วัน) · 🚚 รอบสั่งซัพ · 📦 รายการสินค้า (ทุกสาขา) · ⚙️ ตั้งค่า แยกหน้าละหัวข้อ (👤 สิทธิ์ผู้ใช้ · 🗂 แผนก · 📐 หน่วยซื้อ↔หน่วยนับ)
    - นับเฉพาะรายการที่ผูกชื่อบิล P&L แล้ว · ชื่อจริง = ชื่อบิล · จัดกลุ่มตามแผนก (products.dept)
    - บันทึกรูปแบบเดียวกับแอพนับ (stock_counts + stock_current) · รูปใช้ bucket product-images ร่วมกัน */
 /* ---------- ล็อกอิน + สิทธิ์ (sc_users): เห็นบางสาขา · นับได้บางแผนก ---------- */
@@ -270,7 +284,7 @@ const CONFIG={URL:'https://aikyxvluaiubdidqxwnd.supabase.co',KEY:'sb_publishable
 const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};
 const BR_NAME={JJRD:'รัชดา',JJLP:'ลาดพร้าว'};
 const DEPT_IC={'บาร์น้ำ':'🥤','ครัว':'🍳','ครัวกลาง':'🍲','หน้าเตา':'🔥','ล้างจาน':'🧽','ของหวาน':'🍧','ผัก':'🥬','เนื้อสัตว์':'🥩'};
-const S={br:localStorage.getItem('jjsc_br')||'JJRD',tab:'count',items:[],all:[],map:{},cur:{},q:'',dept:null,deptOk:true,imgTarget:null};
+const S={br:localStorage.getItem('jjsc_br')||'JJRD',tab:'dash',items:[],all:[],map:{},cur:{},q:'',dept:null,deptOk:true,imgTarget:null};
 const $=s=>document.querySelector(s);
 const num=v=>{const n=parseFloat(String(v??'').replace(/,/g,''));return isNaN(n)?0:n;};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -351,16 +365,175 @@ function imgCell(it){
 }
 function render(){
   $('#deptbar').style.display=S.tab==='count'?'':'none';
-  if(S.tab==='count')renderCount();
+  if(S.tab==='dash')renderDash();
+  else if(S.tab==='count')renderCount();
+  else if(S.tab==='order')renderOrder();
   else if(S.tab==='link')renderLink();
   else if(S.tab==='sched')renderSched();
   else if(S.tab==='cfgu')renderCfgUsers();
   else if(S.tab==='cfgd')renderCfgDept();
-  else if(S.tab==='cfgi')renderCfgItems();
+  else if(S.tab==='items')renderItems();
   else if(S.tab==='cfgn')renderCfgUnit();
   else renderSet();
   refresh();
 }
+/* ---- 🛒 สั่งของ: แยกรายซัพ · ต้องสั่ง = ยอดใช้ของ "วันที่ของมาส่ง" − ยอดที่นับได้ ---- */
+function addDays(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);
+  const p2=x=>String(x).padStart(2,'0');return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
+function nextDow(ds,key){const want=DOW_EN.indexOf(key); if(want<0)return '';
+  for(let i=1;i<=7;i++){const d2=addDays(ds,i); if(new Date(d2+'T12:00:00').getDay()===want)return d2;} return '';}
+const dowTH=ds=>DOW_SH[DOW_EN[new Date(ds+'T12:00:00').getDay()]]||'';
+function rateOn(it,ds){const g=dayGrp(ds);return num(g===1?it.rate_fri:g===2?it.rate_we:it.rate_wk);}
+function deliveryDate(sup,cd){ // ของจะมาส่งวันไหน ถ้าสั่งวันนี้
+  const x=supSched(sup);
+  if(!x)return {d:addDays(cd,1),mode:'any',lead:1,unset:true};
+  const m=supModeOf(x);
+  if(m==='fixed'){const dd=(x.schedule||{})[DOW_EN[new Date(cd+'T12:00:00').getDay()]];
+    return dd?{d:nextDow(cd,dd),mode:'fixed'}:{d:'',mode:'fixed'};}
+  const l=parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1;
+  return {d:addDays(cd,l),mode:'any',lead:l};
+}
+function orderPlan(){ // คิดใบสั่งของทุกซัพของสาขานี้ ณ วันขายที่เลือก
+  const cd=($('#cd')&&$('#cd').value)||bizToday();
+  const g={};
+  S.all.forEach(it=>{
+    const sp=String(it.sup||'').trim()||'(ไม่ระบุซัพ)';
+    (g[sp]=g[sp]||{sup:sp,rows:[]}).rows.push(it);
+  });
+  return Object.values(g).map(x=>{
+    const dl=deliveryDate(x.sup,cd);
+    const rows=x.rows.map(it=>{
+      const have=counted(it)?(it.out?0:num(it.qty)):null;
+      const need=dl.d?rateOn(it,dl.d):0;                 // ยอดใช้ของวันที่ของมาส่ง
+      const order=(have==null||!need)?null:Math.max(0,+(need-have).toFixed(3));
+      const b=buOf(billName(it));                         // หน่วยซื้อจากบิล (ถ้ามี)
+      const bu=b?b.top:'';
+      const c=bu&&bu!==String(it.unit||'')?(S.conv||{})[String(billName(it)).trim()+'|'+bu]:null;
+      const packs=(order&&c&&c.f)?Math.ceil(order/c.f):null;
+      return {it,have,need,order,bu,factor:c?c.f:null,packs};
+    }).sort((a,b2)=>(b2.order||0)-(a.order||0)||a.it.name.localeCompare(b2.it.name,'th'));
+    return {sup:x.sup,dl,rows,
+      nOrder:rows.filter(r=>r.order>0).length,
+      nNoCount:rows.filter(r=>r.have==null&&r.need>0).length,
+      nNoRate:rows.filter(r=>!r.need).length};
+  }).sort((a,b2)=>(b2.nOrder-a.nOrder)||a.sup.localeCompare(b2.sup,'th'));
+}
+function orderText(sp){
+  const g=(orderPlan()||[]).find(x=>x.sup===sp); if(!g)return '';
+  const L=['สั่งของ '+sp+' · สาขา'+BR_NAME[S.br],'ส่งวัน '+(g.dl.d?(g.dl.d+' ('+dowTH(g.dl.d)+')'):'-'),''];
+  g.rows.filter(r=>r.order>0).forEach(r=>{
+    L.push('- '+billName(r.it)+' '+fq(r.packs!=null?r.packs:r.order)+' '+(r.packs!=null?r.bu:(r.it.unit||''))
+      +(r.packs!=null?(' (= '+fq(r.order)+' '+(r.it.unit||'')+')'):''));
+  });
+  return L.join('\n');
+}
+function copyOrder(sp){
+  const t=orderText(sp); if(!t){toast('ไม่มีรายการต้องสั่ง',true);return;}
+  const done=()=>toast('✅ คัดลอกใบสั่ง '+sp+' แล้ว — วางในไลน์กลุ่มซัพได้เลย');
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done));}
+    else fallbackCopy(t,done); }catch(e){ fallbackCopy(t,done); }
+}
+function fallbackCopy(t,done){
+  const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');done();}catch(e){toast('คัดลอกไม่ได้ — ก็อปจากกล่องข้อความแทนครับ',true);}
+  ta.remove();
+}
+function renderOrder(){
+  if(!S.billUnits)ensureBillUnits(); // หน่วยซื้อ+ตัวคูณ ใช้บอกจำนวนเป็นลัง/แพ็ค
+  const cd=($('#cd')&&$('#cd').value)||bizToday();
+  const plan=orderPlan();
+  S.ordOpen=S.ordOpen||{};
+  const q=(S.ordQ||'').trim().toLowerCase();
+  const G='grid-template-columns:40px minmax(150px,1.4fr) 92px 92px 108px';
+  const secs=plan.map(g=>{
+    const key=g.sup,esk=esc(key).replace(/'/g,"\\'");
+    const open=!!q||(S.ordOpen[key]!==undefined?S.ordOpen[key]:(g.nOrder>0)); // ค้นหา = กางให้เองทุกซัพ
+    (S._ordNow=S._ordNow||{})[key]=open; // จำสถานะจริงไว้ให้ปุ่มพับสลับถูก
+    const due=!!g.dl.d;
+    const rows=g.rows.filter(r=>!q||r.it.name.toLowerCase().includes(q)||String(billName(r.it)).toLowerCase().includes(q));
+    const body=rows.map(r=>{
+      const cls=r.order>0?'':'dim';
+      const val=r.have==null?'<span class="wat">ยังไม่นับ</span>'
+        :(!r.need?'<span style="color:var(--mut)">ยังไม่ตั้งอัตราใช้</span>'
+          :(r.order>0?'<b style="color:var(--red);font-size:15px">'+fq(r.order)+'</b> '+esc(r.it.unit||'')
+            :'<span class="okt">พอแล้ว</span>'));
+      return '<div class="lrow '+cls+'" style="'+G+'">'+imgCell(r.it)
+        +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(r.it.name)+'</div>'
+        +'<div class="s">'+(r.it.name!==billName(r.it)?'<span class="cn">🧾 '+esc(billName(r.it))+'</span>':'')+'</div></div>'
+        +'<span class="lbl" data-l="นับได้"><span style="font-size:13px">'+(r.have==null?'–':fq(r.have)+' '+esc(r.it.unit||''))+'</span></span>'
+        +'<span class="lbl" data-l="ต้องมีวันส่ง"><span style="font-size:13px">'+(r.need?fq(r.need)+' '+esc(r.it.unit||''):'–')+'</span></span>'
+        +'<span class="lbl" data-l="สั่งเพิ่ม">'+val
+        +(r.packs!=null?'<div style="font-size:11px;color:var(--mut)">≈ '+fq(r.packs)+' '+esc(r.bu)+'</div>':'')+'</span></div>';
+    }).join('');
+    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleOrd(\''+esk+'\')">'
+      +'<div><b>'+(open?'▾':'▸')+' 🏷 '+esc(key)+'</b> '
+      +'<span style="font-size:11.5px;color:var(--mut)">'+(due?('ส่ง '+esc(g.dl.d)+' ('+dowTH(g.dl.d)+')'+(g.dl.mode==='any'?(' · สั่งวันนี้ +'+g.dl.lead+' วัน'):' · วันสั่งตายตัว')):'วันนี้ไม่ใช่รอบสั่งของซัพนี้')
+      +(g.dl.unset?' · ⚠ ยังไม่ตั้งรอบสั่ง (เดาว่าพรุ่งนี้)':'')+'</span></div>'
+      +'<div style="display:flex;gap:8px;align-items:center;white-space:nowrap">'
+      +'<span style="font-size:12px;font-weight:700;color:'+(g.nOrder?'var(--red)':'var(--green)')+'">'+(g.nOrder?('ต้องสั่ง '+g.nOrder+' รายการ'):'ไม่ต้องสั่ง')+'</span>'
+      +(g.nOrder?'<button class="outb" onclick="event.stopPropagation();copyOrder(\''+esk+'\')">📋 คัดลอกใบสั่ง</button>':'')+'</div></div>';
+    return head+(open?(body||'<div class="lrow" style="grid-template-columns:1fr;color:var(--mut);font-size:13px">ไม่พบรายการที่ค้นหา</div>')
+      +(g.nNoCount?'<div class="lrow" style="grid-template-columns:1fr;font-size:12px;color:var(--amber)">⚠ ยังไม่ได้นับ '+g.nNoCount+' รายการ — ยอดสั่งยังไม่ครบ</div>':'')
+      :'');
+  }).join('');
+  const totOrder=plan.reduce((a,g)=>a+g.nOrder,0);
+  $('#list').innerHTML='<div class="dhead">🛒 สั่งของ · สาขา'+BR_NAME[S.br]+' · วันขาย '+esc(cd)+' ('+dowTH(cd)+')</div>'
+    +'<div class="note">สูตร: <b>ต้องสั่ง = ยอดใช้ของ "วันที่ของมาส่ง" − ยอดที่นับได้</b> (เช่น นับได้ 10 · วันอังคารใช้ 50 → สั่งเพิ่ม 40) · วันขายตัดรอบ 6 โมงเช้า (นับตี 1 ของพรุ่งนี้ = ยังเป็นวันนี้) · อัตราใช้ของตั้งที่หน้า 🛟 Safety · รอบส่งตั้งที่ 🚚 รอบสั่งซัพ'
+    +(Object.keys(S.conv||{}).length?' · ถ้าตั้งตัวคูณหน่วยไว้ จะบอกจำนวนเป็นหน่วยซื้อให้ด้วย':'')+'</div>'
+    +'<div class="lrow" style="grid-template-columns:1fr auto"><div><input class="di" id="ordQ" value="'+esc(S.ordQ||'')+'" placeholder="🔍 ค้นหาสินค้าในใบสั่ง" oninput="ordSearch(this.value)"></div>'
+    +'<div style="font-size:13px;white-space:nowrap;padding-left:10px">รวมต้องสั่ง <b style="color:var(--red)">'+totOrder+'</b> รายการ</div></div>'
+    +(secs||'<div class="empty">ยังไม่มีซัพในรายการสินค้าของสาขานี้</div>');
+}
+function toggleOrd(k){S.ordOpen=S.ordOpen||{};S.ordOpen[k]=!((S._ordNow||{})[k]);render();}
+function ordSearch(v){S.ordQ=v;render();const el=document.getElementById('ordQ');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}}
+/* ---- 📊 แดชบอร์ด: สรุปสิ่งสำคัญของวัน ---- */
+function renderDash(){
+  const cd=($('#cd')&&$('#cd').value)||bizToday();
+  const ds=deptList();
+  const items=ds.reduce((a,d2)=>a.concat(d2.items),[]);
+  const done=items.filter(counted).length,all=items.length;
+  const out=items.filter(x=>x.out);
+  const pct=all?Math.round(done*100/all):0;
+  const unb=S.all.filter(p=>!S.map[p.id]).length;
+  const noDept=S.all.filter(p=>!String(p.dept||'').trim()&&!String(p.cat_label||'').trim()).length;
+  const noZone=ds.filter(d2=>!deptZone(d2.label)).length;
+  const dirty=items.filter(it=>counted(it)&&(String(num(it.qty))+'|'+(it.out?1:0))!==it._saved).length;
+  const tile=(ic,lb,v,sub,col)=>'<div class="dtile"><div class="ic">'+ic+'</div><div><div class="lb">'+lb+'</div>'
+    +'<div class="v"'+(col?' style="color:'+col+'"':'')+'>'+v+'</div>'+(sub?'<div class="sb">'+sub+'</div>':'')+'</div></div>';
+  const bar=(n,t)=>{const p3=t?Math.round(n*100/t):0;
+    return '<div class="pbar"><i style="width:'+p3+'%;background:'+(p3===100?'var(--green)':p3>=50?'var(--gold)':'#E0A9A9')+'"></i></div>';};
+  const deptRows=ds.map(d2=>{
+    const dn=d2.items.filter(counted).length,dt=d2.items.length;
+    return '<div class="lrow" style="grid-template-columns:minmax(120px,1fr) 1.4fr 96px;cursor:pointer" onclick="goCount(\''+esc(d2.label).replace(/'/g,"\\'")+'\')">'
+      +'<div><b>'+(DEPT_IC[d2.label]||'🗂')+' '+esc(d2.label)+'</b>'+(deptZone(d2.label)?' <span style="font-size:11px;color:var(--mut)">'+esc(deptZone(d2.label))+'</span>':'')+'</div>'
+      +'<div>'+bar(dn,dt)+'</div>'
+      +'<div style="text-align:right;font-size:12.5px;'+(dn===dt&&dt?'color:var(--green);font-weight:700':'color:var(--mut)')+'">'+dn+'/'+dt+(dn===dt&&dt?' ✓':'')+'</div></div>';
+  }).join('');
+  const todo=[];
+  if(dirty)todo.push('มียอดนับ <b>'+dirty+'</b> รายการที่ยังไม่ได้กดบันทึก');
+  if(unb)todo.push('ยังไม่ผูกชื่อบิล <b>'+unb+'</b> รายการ (หน้า 🔗 ผูกชื่อ)');
+  if(noZone)todo.push('ยังไม่จัดโซนหน้าร้าน/หลังร้าน <b>'+noZone+'</b> แผนก (⚙️ ตั้งค่า › แผนก)');
+  if(noDept)todo.push('ยังไม่มีแผนก <b>'+noDept+'</b> รายการ');
+  $('#list').innerHTML='<div class="dhead">📊 แดชบอร์ด · สาขา'+BR_NAME[S.br]+' · วันขาย '+esc(cd)+'</div>'
+    +orderBanner()
+    +'<div class="dgrid">'
+    +tile('📋','นับแล้ววันนี้',done+'/'+all,pct+'% ของรายการทั้งหมด',pct===100?'var(--green)':'')
+    +tile('⏳','ยังไม่ได้นับ',String(all-done),(all-done)?'กดดูรายแผนกด้านล่าง':'ครบแล้ว ✓',(all-done)?'var(--amber)':'var(--green)')
+    +tile('🚫','ของหมดสต๊อก',String(out.length),out.length?out.slice(0,3).map(x=>esc(x.name)).join(', ')+(out.length>3?' …':''):'ไม่มี',out.length?'var(--red)':'')
+    +tile('💾','ยังไม่บันทึก',String(dirty),dirty?'กดบันทึกที่หน้านับสต๊อก':'บันทึกครบแล้ว ✓',dirty?'var(--amber)':'var(--green)')
+    +'</div>'
+    +'<div class="card"><div class="h">🛒 ใบสั่งของวันนี้ <span class="n">คิดจาก ยอดใช้ของวันส่ง − ยอดนับได้</span></div>'
+    +'<div class="lrow" style="grid-template-columns:1fr auto;cursor:pointer" onclick="setTab(\'order\')"><div>ซัพที่ต้องสั่งวันนี้ <b>'+orderPlan().filter(g=>g.nOrder).length+'</b> ราย · รวม <b>'+orderPlan().reduce((a,g)=>a+g.nOrder,0)+'</b> รายการ</div><div><button class="outb">เปิดหน้าสั่งของ →</button></div></div></div>'
+    +(todo.length?'<div class="card"><div class="h">📝 งานที่ควรทำ</div>'
+      +todo.map(t=>'<div class="lrow" style="grid-template-columns:1fr">• '+t+'</div>').join('')+'</div>':'')
+    +'<div class="card"><div class="h">📦 ความคืบหน้าการนับ รายแผนก <span class="n">แตะแผนกเพื่อไปนับ</span></div>'
+    +(deptRows||'<div class="empty">ยังไม่มีสินค้าในสาขานี้</div>')+'</div>'
+    +(out.length?'<div class="card"><div class="h">🚫 ของหมดวันนี้ <span class="n">'+out.length+' รายการ</span></div>'
+      +out.map(x=>'<div class="lrow" style="grid-template-columns:44px 1fr 120px">'+imgCell(x)
+        +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(x.name)+'</div><div class="s">'+esc(deptOf(x))+'</div></div>'
+        +'<div style="text-align:right;font-size:12px;color:var(--mut)">'+esc(x.sup||'')+'</div></div>').join('')+'</div>':'');
+}
+function goCount(l){S.dept=l;localStorage.setItem('jjsc_dept',l);setTab('count');}
 /* ---- 📋 หน้านับ: แถบแผนก + การ์ด ---- */
 function renderCount(){
   const ds=deptList();
@@ -381,7 +554,8 @@ function renderCount(){
       .filter(z=>zs[z[1]].length)
       .map(z=>'<div class="zrow"><span class="zlb">'+z[0]+'</span><div class="pills">'+zs[z[1]].map(pillHtml).join('')+'</div></div>').join('');
   }else{
-    $('#pills').innerHTML='<div class="pills">'+ds.map(pillHtml).join('')+'</div>';
+    $('#pills').innerHTML='<div class="pills">'+ds.map(pillHtml).join('')+'</div>'
+      +(S.user&&S.user.role==='admin'?'<div style="font-size:11px;color:var(--mut);margin-top:2px">แบ่งแถบเป็น 🏪 หน้าร้าน / 🍳 หลังร้าน ได้ที่ ⚙️ ตั้งค่า › แผนก (ตั้งโซนให้แต่ละแผนก)</div>':'');
   }
   const q=S.q.trim();
   const show=q?S.items.filter(matches):(deptList().find(d2=>d2.label===S.dept)||{items:[]}).items;
@@ -536,7 +710,7 @@ function renderSched(){
     +(schedCard()||'<div class="empty">ยังไม่มีซัพในรายการสินค้า</div>');
 }
 /* ---- ⚙️ ตั้งค่า: แยกหน้าละหัวข้อ (สิทธิ์ผู้ใช้ · แผนก · หน่วยซื้อ↔หน่วยนับ) ---- */
-const CFG_SUBS=[['cfgu','👤','สิทธิ์การใช้งานพนักงาน'],['cfgd','🗂','แผนก'],['cfgi','📦','รายการสินค้า'],['cfgn','📐','หน่วยซื้อ–หน่วยนับ']];
+const CFG_SUBS=[['cfgu','👤','สิทธิ์การใช้งานพนักงาน'],['cfgd','🗂','แผนก'],['cfgn','📐','หน่วยซื้อ–หน่วยนับ']];
 const isCfgTab=t=>String(t||'').indexOf('cfg')===0;
 function cfgHead(t){ // แถบเลือกหัวข้อ (โชว์เฉพาะจอเล็กที่ไม่มีแถบข้าง) + หัวหน้า
   const s2=CFG_SUBS.find(x=>x[0]===t)||CFG_SUBS[0];
@@ -568,11 +742,11 @@ async function ensureAllProducts(force){ // รายการสินค้า
     S.allBr=rows; S.apErr=null;
   }catch(e){ S.allBr=[]; S.apErr=String(e.message||e).slice(0,90); }
   S._apLoading=false;
-  if(isCfgTab(S.tab))render();
+  if(isCfgTab(S.tab)||S.tab==='items'||S.tab==='order'||S.tab==='dash')render(); // โหลดเสร็จแล้ววาดใหม่
 }
-function renderCfgItems(){
-  if(cfgDeny())return;
-  $('#list').innerHTML=cfgHead('cfgi')+itemsCard();
+function renderItems(){
+  if(S.user&&S.user.role!=='admin'){$('#list').innerHTML='<div class="empty">หน้ารายการสินค้าสำหรับแอดมินเท่านั้น</div>';return;}
+  $('#list').innerHTML='<div class="dhead">📦 รายการสินค้า</div>'+itemsCard();
 }
 function itemsCard(){
   if(!S.allBr)ensureAllProducts();
@@ -705,6 +879,9 @@ function deptCard(){
     +'<div class="lrow" style="grid-template-columns:1fr 150px 130px;gap:8px"><div><input class="di" id="cfgQ" value="'+esc(S.cfgQ||'')+'" placeholder="🔍 ค้นหาสินค้าในทุกแผนก" oninput="cfgSearch(this.value)"></div>'
     +'<div><input class="di" id="ndName" placeholder="ชื่อแผนกใหม่" onkeydown="if(event.key===\'Enter\')addDept()"></div>'
     +'<div><button class="outb" onclick="addDept()">➕ เพิ่มแผนก</button></div></div>'
+    +(S.all.some(x=>!String(x.dept||'').trim()&&String(x.cat_label||'').trim())
+      ?'<div class="lrow" style="grid-template-columns:1fr auto"><div style="font-size:13px">บางแผนกยังเป็น <b>หมวดเดิมจากแอพนับ</b> — แปลงเป็นแผนกจริงก่อน จะแก้ชื่อ/ลบ/ตั้งโซน ได้ครบ</div>'
+       +'<div><button class="outb" onclick="adoptDepts()">↧ ใช้หมวดเดิมเป็นแผนก</button></div></div>':'')
     +rows+'</div>';
 }
 function toggleDept(k){S.deptOpen=S.deptOpen||{};S.deptOpen[k]=!S.deptOpen[k];render();}
@@ -723,13 +900,13 @@ async function addDept(){
   }catch(e){toast('เพิ่มแผนกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
 async function delDept(nm){
-  const cnt=S.all.filter(x=>deptOf(x)===nm).length;
+  const ids=deptIds(nm),cnt=ids.length;
   if(!confirm('ลบแผนก "'+nm+'" ของสาขา'+BR_NAME[S.br]+'?'+(cnt?('\n\nของ '+cnt+' รายการในแผนกนี้จะถูกย้ายไป "ยังไม่จัดแผนก" (ไม่ได้ลบสินค้า)'):''))) return;
   try{
-    if(cnt)await api('PATCH','products?branch_id=eq.'+STK_BR[S.br]+'&dept=eq.'+encodeURIComponent(nm),{dept:null},'return=minimal');
+    if(cnt)await patchIds(ids,{dept:null,cat_label:null}); // ล้างทั้งแผนกและหมวดเดิม ไม่งั้นกลุ่มยังค้างอยู่
     const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===nm);
     if(d2&&d2.id!=null)await api('DELETE','sc_depts?id=eq.'+d2.id,null,'return=minimal');
-    S.all.forEach(x=>{if(x.dept===nm)x.dept=null;});
+    S.all.forEach(x=>{if(ids.includes(x.id)){x.dept=null;x.cat_label=null;}});
     S.depts=(S.depts||[]).filter(x=>String(x.name||'').trim()!==nm);
     if(S.dept===nm)S.dept=null;
     toast('✅ ลบแผนก "'+nm+'" แล้ว'+(cnt?(' · ย้ายของ '+cnt+' รายการไปยังไม่จัดแผนก'):''));render();
@@ -750,14 +927,38 @@ async function moveDept(id,v){
     toast(nd?('✅ ย้าย "'+it.name+'" → แผนก'+nd+' (สาขา'+BR_NAME[S.br]+')'):('✅ เอา "'+it.name+'" ออกจากแผนกแล้ว'));render();
   }catch(e){toast('ย้ายแผนกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);render();}
 }
+const deptIds=name=>S.all.filter(x=>deptOf(x)===name).map(x=>x.id);
+async function patchIds(ids,body){ // PATCH เป็นชุด ๆ กัน URL ยาวเกิน
+  for(let i=0;i<ids.length;i+=40){
+    await api('PATCH','products?id=in.('+ids.slice(i,i+40).map(encodeURIComponent).join(',')+')',body,'return=minimal');
+  }
+}
+async function adoptDepts(){ // เอา "หมวดเดิม" ของแอพนับมาเป็นแผนกจริงของสาขานี้
+  const todo=S.all.filter(x=>!String(x.dept||'').trim()&&String(x.cat_label||'').trim());
+  if(!todo.length){toast('ทุกตัวตั้งแผนกจริงแล้ว ✓');return;}
+  if(!confirm('ใช้หมวดเดิมจากแอพนับเป็นแผนกจริงของสาขา'+BR_NAME[S.br]+' '+todo.length+' รายการ?\n(ชื่อกลุ่มเหมือนเดิม แต่จะแก้/ย้าย/ลบ ได้จากหน้านี้)'))return;
+  const byCat={}; todo.forEach(x=>{(byCat[String(x.cat_label).trim()]=byCat[String(x.cat_label).trim()]||[]).push(x);});
+  try{
+    for(const k of Object.keys(byCat)){
+      await patchIds(byCat[k].map(x=>x.id),{dept:k});
+      byCat[k].forEach(x=>{x.dept=k;});
+      if(S.deptTbl&&!(S.depts||[]).some(d2=>String(d2.name||'').trim()===k)){
+        const r=await api('POST','sc_depts',{branch_id:STK_BR[S.br],name:k,sort:(S.depts||[]).length+1},'return=representation').catch(()=>null);
+        (S.depts=S.depts||[]).push((r&&r[0])||{name:k,branch_id:STK_BR[S.br]});
+      }
+    }
+    toast('✅ ตั้งแผนกจริงให้ '+todo.length+' รายการแล้ว');render();
+  }catch(e){toast('ตั้งแผนกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
+}
 async function renameDept(old){
   const nn=(prompt('เปลี่ยนชื่อแผนก "'+old+'" เป็น',old)||'').trim();
   if(!nn||nn===old)return;
   try{
-    await api('PATCH','products?branch_id=eq.'+STK_BR[S.br]+'&dept=eq.'+encodeURIComponent(old),{dept:nn},'return=minimal'); // แผนกแยกสาขา
+    const ids=deptIds(old);
+    if(ids.length)await patchIds(ids,{dept:nn}); // เขียน dept ตรง ๆ (รองรับกลุ่มที่มาจากหมวดเดิม)
     const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===old);
     if(d2&&d2.id!=null){await api('PATCH','sc_depts?id=eq.'+d2.id,{name:nn},'return=minimal').catch(()=>{});d2.name=nn;}
-    S.all.forEach(x=>{if(x.dept===old)x.dept=nn;});
+    S.all.forEach(x=>{if(ids.includes(x.id))x.dept=nn;});
     if(S.deptOpen&&S.deptOpen[old]){S.deptOpen[nn]=true;delete S.deptOpen[old];}
     if(localStorage.getItem('jjsc_dept')===old)localStorage.setItem('jjsc_dept',nn);
     toast('✅ เปลี่ยนชื่อแผนก "'+old+'" → "'+nn+'" (สาขา'+BR_NAME[S.br]+')');render();
@@ -795,7 +996,7 @@ async function ensureBillUnits(force){ // หน่วยซื้อ = หน�
     S.conv={}; conv.forEach(r=>{S.conv[String(r.item||'').trim()+'|'+String(r.from_unit||'').trim()]={to:String(r.to_unit||'').trim(),f:num(r.factor)};});
   }catch(e){ S.billUnits={}; S.billSup={}; S.conv=S.conv||{}; S.buErr=String(e.message||e).slice(0,90); }
   S._buLoading=false;
-  if(isCfgTab(S.tab))render();
+  if(isCfgTab(S.tab)||S.tab==='items'||S.tab==='order'||S.tab==='dash')render(); // โหลดเสร็จแล้ววาดใหม่
 }
 const buOf=n=>(S.billUnits||{})[String(n||'').trim()]||null;
 async function fillBillUnits(){ // เติมหน่วยซื้อจากบิลให้ทุกตัวที่ยังไม่ตรง
@@ -947,8 +1148,8 @@ function draftApply(cd){
 }
 function restoreTab(){ // รีเฟรชแล้วกลับหน้าเดิม
   const t=localStorage.getItem('jjsc_tab');
-  if(t&&t!==S.tab&&['count','link','set','sched','cfgu','cfgd','cfgi','cfgn'].indexOf(t)>=0
-    &&!((t==='set'||t==='sched'||isCfgTab(t))&&S.user&&S.user.role!=='admin')){
+  if(t&&t!==S.tab&&['dash','count','order','link','set','sched','items','cfgu','cfgd','cfgn'].indexOf(t)>=0
+    &&!((t==='set'||t==='sched'||t==='items'||isCfgTab(t))&&S.user&&S.user.role!=='admin')){
     S.tab=t; markNav(t);
   }
 }
@@ -1026,6 +1227,15 @@ function refresh(){
   }else if(S.tab==='sched'){
     $('#st').innerHTML='🚚 รอบสั่ง–ส่งของซัพ — กด 💾 บันทึกทีละซัพ';
     $('#save').style.display='none';
+  }else if(S.tab==='order'){
+    $('#st').innerHTML='🛒 ใบสั่งของ · '+BR_NAME[S.br]+' — ยอดที่ต้องสั่ง = ยอดใช้ของวันส่ง − ยอดนับได้';
+    $('#save').style.display='none';
+  }else if(S.tab==='dash'){
+    $('#st').innerHTML='📊 แดชบอร์ด · '+BR_NAME[S.br]+' · '+(($('#cd')&&$('#cd').value)||'');
+    $('#save').style.display='none';
+  }else if(S.tab==='items'){
+    $('#st').innerHTML='📦 รายการสินค้าทุกสาขา — ลบได้เมื่อเลิกใช้';
+    $('#save').style.display='none';
   }else if(isCfgTab(S.tab)){
     const s2=CFG_SUBS.find(x=>x[0]===S.tab)||CFG_SUBS[0];
     $('#st').innerHTML='⚙️ ตั้งค่า · '+s2[1]+' '+s2[2]+' — กด 💾 บันทึกทีละรายการ';
@@ -1071,12 +1281,17 @@ async function saveCn(id){
 }
 async function setZone(dept,z){ // โซนผูกกับแผนก (แยกสาขา) → อัปเดตสินค้าในแผนกของสาขานี้ + ตารางแผนก
   try{
+    const ids=deptIds(dept);
+    if(ids.length)await patchIds(ids,{zone:z||null,dept:dept}); // เขียน dept ด้วย เผื่อกลุ่มนี้ยังเป็นหมวดเดิม
     const d2=(S.depts||[]).find(x=>String(x.name||'').trim()===dept);
-    if(d2&&d2.id!=null){await api('PATCH','sc_depts?id=eq.'+d2.id,{zone:z||null},'return=minimal');d2.zone=z||null;}
-    await api('PATCH','products?branch_id=eq.'+STK_BR[S.br]+'&dept=eq.'+encodeURIComponent(dept),{zone:z||null},'return=minimal').catch(()=>{});
-    S.all.forEach(x=>{if(x.dept===dept)x.zone=z||null;});
+    if(d2&&d2.id!=null){await api('PATCH','sc_depts?id=eq.'+d2.id,{zone:z||null},'return=minimal').catch(()=>{});d2.zone=z||null;}
+    else if(S.deptTbl){
+      const r=await api('POST','sc_depts',{branch_id:STK_BR[S.br],name:dept,zone:z||null,sort:(S.depts||[]).length+1},'return=representation').catch(()=>null);
+      if(r&&r[0])(S.depts=S.depts||[]).push(r[0]);
+    }
+    S.all.forEach(x=>{if(ids.includes(x.id)){x.zone=z||null;x.dept=dept;}});
     toast('✅ แผนก "'+dept+'" → โซน'+(z||' (ไม่ระบุ)')+' · สาขา'+BR_NAME[S.br]);render();
-  }catch(e){toast('ตั้งโซนไม่สำเร็จ — รัน sql/jjmk_stockcheck_depts.sql ก่อนครับ',true);}
+  }catch(e){toast('ตั้งโซนไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);render();}
 }
 /* ---- รูปสินค้า (bucket เดียวกับแอพนับ, อัปเดตตามชื่อ = 2 สาขา 2 ระบบ) ---- */
 function pickImg(id){S.imgTarget=id;$('#imgFile').click();}
@@ -1141,7 +1356,7 @@ async function saveAll(){
   btn.disabled=false;btn.textContent=old;refresh();
 }
 function setTab(t){
-  if((t==='set'||t==='sched'||isCfgTab(t))&&S.user&&S.user.role!=='admin'){toast('หน้านี้สำหรับแอดมินเท่านั้น',true);return;}
+  if((t==='set'||t==='sched'||t==='items'||isCfgTab(t))&&S.user&&S.user.role!=='admin'){toast('หน้านี้สำหรับแอดมินเท่านั้น',true);return;}
   if(t==='cfg')t=localStorage.getItem('jjsc_cfg')||'cfgu'; // กดหัวข้อ "ตั้งค่า" = เข้าหัวข้อย่อยล่าสุด
   S.tab=t;localStorage.setItem('jjsc_tab',t);
   if(isCfgTab(t))localStorage.setItem('jjsc_cfg',t);
@@ -1190,7 +1405,7 @@ function applyAuth(){
   $('#uchip').style.display=u?'block':'none';
   if(u)$('#uchip').innerHTML='👤 <b>'+esc(u.display_name||u.username)+'</b> · '+(u.role==='admin'?'แอดมิน':'พนักงาน')+'<a onclick="logout()">ออก</a>';
   const noAdm=!!(u&&u.role!=='admin');
-  document.querySelectorAll('[data-t="set"],[data-t="sched"],[data-t="cfg"],#cfgBox').forEach(b=>{b.style.display=noAdm?'none':'';}); // Safety/รอบสั่งซัพ/ตั้งค่า เฉพาะแอดมิน
+  document.querySelectorAll('[data-t="set"],[data-t="sched"],[data-t="items"],[data-t="cfg"],#cfgBox').forEach(b=>{b.style.display=noAdm?'none':'';}); // Safety/รอบสั่งซัพ/ตั้งค่า เฉพาะแอดมิน
 }
 function placeCtl(){
   const c=$('#ctl'),t=window.innerWidth>=821?$('#scSlot'):$('#hcSlot');
