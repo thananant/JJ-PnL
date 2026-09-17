@@ -92,6 +92,18 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .pill.needc .bdg{background:#FBE3E3;color:var(--red)}
 .pill.needc.on{background:var(--red);border-color:var(--red)}
 .pcard.needc{border-color:var(--red);animation:jjblink2 1.6s ease-in-out infinite}
+.obann{background:#EFF4FA;border:1.5px solid #B9CBE0;border-radius:12px;padding:9px 12px;margin-bottom:12px;color:#33517A}
+.obhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:13.5px}
+.obhead .obsum{color:#4A6A93}
+.obhead>.outb{margin-left:auto}
+.obhead>.outb+.outb{margin-left:0}
+.obrow{display:flex;gap:9px;align-items:flex-start;margin-top:8px}
+.oblb{flex:none;font-size:11.5px;font-weight:700;background:#DDE7F2;border-radius:8px;padding:4px 9px;margin-top:2px}
+.obchips{display:flex;flex-wrap:wrap;gap:6px}
+.obchip{background:#fff;border:1.5px solid #B9CBE0;color:#24466F;border-radius:99px;padding:5px 11px;font-size:12.5px;font-family:'Sarabun';cursor:pointer;white-space:nowrap}
+.obchip span{color:#6E8CB0;font-size:11.5px}
+.obchip:hover{background:#DDE7F2}
+.obchip.mut{border-color:var(--line);color:var(--mut);background:#FBF9F4}
 @media(prefers-reduced-motion:reduce){.pill.needc,.pcard.needc{animation:none}}
 .brchip{display:inline-flex;align-items:center;gap:5px;background:#F2EDE0;border:1.5px solid var(--line);color:var(--mut);border-radius:99px;padding:4px 10px;font-size:12px;margin:2px 3px 2px 0}
 .brchip.on{background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700}
@@ -1449,23 +1461,35 @@ const supKey=n=>String(n||'').replace(/\s+/g,' ').trim().toLowerCase();
 function supSched(n){const k=supKey(n); if(!k)return null;
   return (S.sups||[]).find(x=>supKey(x.name)===k)||null;}
 function supModeOf(x){return (x.order_mode==='fixed'||(!x.order_mode&&x.schedule&&Object.keys(x.schedule||{}).length))?'fixed':(x.order_mode||'any');}
-function orderBanner(){
+function orderBanner(){ // แถบ "รอบสั่งวันนี้" — สรุปสั้น กดดูรายชื่อได้ (เมื่อก่อนยาวเป็นพืดอ่านไม่ออก)
   if(!(S.sups||[]).length)return '';
   const cd=($('#cd')&&$('#cd').value)||bizToday();
   const key=DOW_EN[new Date(cd+'T12:00:00').getDay()];
-  const names=[...new Set(S.all.map(i=>String(i.sup||'').trim()).filter(Boolean))];
+  const names=[...new Set(S.all.map(i=>String(i.sup||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
   const due=[],daily=[];
   names.forEach(n=>{const x=supSched(n); if(!x)return;
     const m=supModeOf(x);
-    if(m==='fixed'){const dd=(x.schedule||{})[key]; if(dd)due.push(esc(n)+' <b>→ ส่ง'+(DOW_SH[dd]||dd)+'</b>');}
+    if(m==='fixed'){const dd=(x.schedule||{})[key]; if(dd)due.push({n,to:(DOW_SH[dd]||dd)});}
     else if(m==='any'){const l=parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1;
-      daily.push(esc(n)+(l===1?' (ส่งพรุ่งนี้)':' (ส่ง +'+l+' วัน)'));}
+      daily.push({n,to:(l===1?'พรุ่งนี้':'+'+l+' วัน')});}
   });
   if(!due.length&&!daily.length)return '';
-  return '<div class="note" style="border-color:#B9CBE0;background:#EFF4FA;color:#33517A">🚚 วันนี้ ('+(DOW_SH[key]||'')+') '
-    +(due.length?('<b>รอบสั่ง:</b> '+due.join(' · ')):'ไม่มีซัพรอบสั่งตายตัว')
-    +(daily.length?' · สั่งได้ทุกวัน: '+daily.join(', '):'')+'</div>';
+  const chip=(x,cls)=>'<button class="obchip'+(cls||'')+'" onclick="goOrder(\''+esc(x.n).replace(/'/g,"\\'")+'\')" title="ดูใบสั่งของ '+esc(x.n)+'">'
+    +esc(x.n)+' <span>→ '+esc(x.to)+'</span></button>';
+  const open=!!S.obOpen;
+  const head='<div class="obhead"><b>🚚 รอบสั่งวันนี้ ('+(DOW_SH[key]||'')+')</b>'
+    +'<span class="obsum">'+(due.length?('ถึงรอบสั่ง <b>'+due.length+'</b> ซัพ'):'ไม่มีซัพรอบสั่งตายตัว')
+    +(daily.length?(' · สั่งได้ทุกวันอีก '+daily.length+' ซัพ'):'')+'</span>'
+    +'<button class="outb" style="padding:5px 11px;font-size:12.5px" onclick="setTab(\'order\')">🛒 ดูใบสั่ง</button>'
+    +'<button class="outb" style="padding:5px 11px;font-size:12.5px" onclick="obToggle()">'+(open?'ซ่อนรายชื่อ ▴':'ดูรายชื่อ ▾')+'</button></div>';
+  if(!open)return '<div class="obann">'+head+'</div>';
+  return '<div class="obann">'+head
+    +(due.length?'<div class="obrow"><span class="oblb">ถึงรอบสั่ง</span><div class="obchips">'+due.map(x=>chip(x,'')).join('')+'</div></div>':'')
+    +(daily.length?'<div class="obrow"><span class="oblb">สั่งได้ทุกวัน</span><div class="obchips">'+daily.map(x=>chip(x,' mut')).join('')+'</div></div>':'')
+    +'</div>';
 }
+function obToggle(){S.obOpen=!S.obOpen;render();}
+function goOrder(sp){S.ordOpen=S.ordOpen||{};S.ordOpen[sp]=true;S.ordQ='';setTab('order');}
 function refresh(){
   if(S.tab==='count'){
     const n=S.items.filter(counted).length;

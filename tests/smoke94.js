@@ -80,8 +80,15 @@ setTimeout(async()=>{
     +(list().includes('นับได้ 7')&&list().includes('✓ นับแล้ว')&&list().includes('หมูสามชั้น')&&list().includes('บิล: สามชั้น')&&list().includes('ครั้งก่อน 5')));
   // เปลี่ยนวันเป็น 17 ก.ย. (พฤ) → แบนเนอร์รอบสั่ง: FarmFresh พฤ→ศ · Smilemeat สั่งได้ทุกวัน
   d.getElementById('cd').dispatchEvent(new w.Event('change')); await sleep(250);
-  out.push('แบนเนอร์ 🚚 รอบสั่งวันนี้ (พฤ): FarmFresh → ส่งศ. + Smilemeat สั่งได้ทุกวัน: '
-    +(list().includes('🚚')&&list().includes('FarmFresh')&&list().includes('ส่งศ.')&&list().includes('Smilemeat')&&list().includes('ส่งพรุ่งนี้')));
+  // แบนเนอร์รอบสั่ง: ย่อเป็นสรุปสั้น (ไม่ยัดชื่อซัพทั้งหมด) กด "ดูรายชื่อ" ถึงจะกาง
+  out.push('แบนเนอร์ 🚚 สรุปสั้น: ถึงรอบสั่ง 1 ซัพ · สั่งได้ทุกวันอีก 1 ซัพ + ยังไม่โชว์ชื่อซัพ: '
+    +(list().includes('รอบสั่งวันนี้ (พฤ.)')&&list().includes('ถึงรอบสั่ง')&&list().includes('สั่งได้ทุกวันอีก 1 ซัพ')
+      &&!d.querySelector('#list .obchip')));
+  w.obToggle(); await sleep(40);
+  out.push('กดดูรายชื่อ → ชิปซัพ FarmFresh → ส่งศ. · Smilemeat → พรุ่งนี้ (กดไปหน้าสั่งของได้): '
+    +(d.querySelectorAll('#list .obchip').length===2
+      &&list().includes('FarmFresh')&&list().includes('ศ.')&&list().includes('Smilemeat')&&list().includes('พรุ่งนี้')));
+  w.obToggle(); await sleep(30);
   // 2) stepper: + สองครั้ง = 2 · pill ✓
   w.bump('p1',1); w.bump('p1',1); await sleep(30);
   out.push('กด + สองครั้ง 7→9: '+(list().includes('นับได้ 9')));
