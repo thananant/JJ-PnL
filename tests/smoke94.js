@@ -34,7 +34,8 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
         {id:1,product_id:'p1',pnl_item:'สามชั้น',product_name:'หมูสามชั้น'},
         {id:2,product_id:'p2',pnl_item:'ผักบุ้ง',product_name:'ผักบุ้ง'},
         {id:3,product_id:'none:xx',pnl_item:'x',product_name:''},
-        {id:4,product_id:'p9',pnl_item:'สามชั้น',product_name:'หมูสามชั้นสไลด์'}]);
+        {id:4,product_id:'p9',pnl_item:'สามชั้น',product_name:'หมูสามชั้นสไลด์'},
+        {id:5,product_id:'p2b',pnl_item:'ผักบุ้งจีน',product_name:'ผักบุ้ง'}]);
       if(url.includes('stock_current'))return T([{product_id:'p1',qty:5,updated_at:'2026-09-16T20:00:00Z'}]);
       return T([]);
     };
@@ -85,6 +86,8 @@ setTimeout(async()=>{
   w.setTab('link'); await sleep(30);
   out.push('เตือนชื่อบิลเดียวกันชื่อนับต่าง: สามชั้น → หมูสามชั้น ≠ หมูสามชั้นสไลด์: '
     +(list().includes('ชื่อนับไม่ตรงกัน')&&list().includes('หมูสามชั้นสไลด์')));
+  out.push('เตือนชื่อนับเดียวกันชื่อบิลต่าง: ผักบุ้ง → ผักบุ้ง ≠ ผักบุ้งจีน: '
+    +(list().includes('ชื่อบิลไม่ตรงกัน')&&list().includes('ผักบุ้งจีน')));
   out.push('ผูกชื่อ: สรุปผูกแล้ว 2/3 + น้ำแข็งกลุ่มยังไม่ผูก: '
     +(list().includes('ผูกแล้ว 2')&&list().includes('ทั้งหมด 3')&&list().includes('น้ำแข็ง')&&list().includes('ยังไม่ผูก')));
   out.push('แถบข้าง 3 เมนู + ไฮไลต์ตามหน้า: '+(d.querySelectorAll('#sideNav [data-t]').length===3&&d.querySelector('#sideNav [data-t="link"]').classList.contains('on')));
