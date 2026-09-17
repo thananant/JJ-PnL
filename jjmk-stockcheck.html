@@ -290,6 +290,13 @@ const $=s=>document.querySelector(s);
 const num=v=>{const n=parseFloat(String(v??'').replace(/,/g,''));return isNaN(n)?0:n;};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fq=v=>v==null||v===''?'':String(+(+v).toFixed(3));
+function errMsg(e){ // แปลง error ของ PostgREST ให้อ่านรู้เรื่อง
+  const t=String((e&&e.message)||e||'');
+  if(t.includes('42501')||t.includes('permission denied'))
+    return 'สิทธิ์ไม่พอสำหรับตารางนี้ — ต้องรัน sql/jjmk_stockcheck_grants.sql ใน Supabase ก่อนครับ';
+  if(t.includes('42P01'))return 'ยังไม่มีตารางนี้ในฐานข้อมูล — ต้องรันไฟล์ SQL ที่ส่งให้ก่อน';
+  return t.slice(0,110);
+}
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2800);}
 async function api(method,path,body,prefer,raw){
   const r=await fetch(CONFIG.URL+(raw?'':'/rest/v1/')+path,{method,
@@ -691,12 +698,12 @@ async function supSave(i){
   const n=S.supList[i],o=supObj(n);
   const body={order_mode:o.mode,lead_days:o.lead,schedule:o.schedule};
   try{
-    if(o.exists)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(n),body,'return=minimal');
-    else await api('POST','suppliers',{name:n,...body},'return=minimal');
-    o.exists=true;
-    const x=supSched(n); if(x)Object.assign(x,body); else (S.sups=S.sups||[]).push({name:n,...body});
+    const x0=supSched(n);
+    if(!x0){toast('ไม่พบซัพ "'+n+'" ในตาราง suppliers ของระบบเดิม — เพิ่มชื่อซัพที่แอพนับเดิมก่อนครับ',true);return;}
+    await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x0.name),body,'return=minimal');
+    o.exists=true; Object.assign(x0,body);
     toast('✅ บันทึกรอบสั่ง '+n+' — โฟลว์สั่งของแอพนับใช้ค่านี้ด้วย'); render();
-  }catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
+  }catch(e){toast('บันทึกไม่สำเร็จ — '+errMsg(e),true);}
 }
 function schedCard(){
   S.supList=[...new Set(S.all.map(i=>String(i.sup||'').trim()).filter(Boolean))].sort();
@@ -718,7 +725,9 @@ function schedCard(){
       +'<div>'+detail+'</div>'
       +'<div><button class="outb" onclick="supSave('+i+')">💾</button></div></div>';
   }).join('');
-  return '<div class="card"><div class="h">🚚 รอบสั่ง–ส่งของซัพ <span class="n">ตั้งวันสั่ง→วันส่ง เช่น สั่งจันทร์→ส่งอังคาร · ใช้ร่วมกับแอพนับ</span></div>'+rows+'</div>';
+  const nFound=S.supList.filter(n=>supSched(n)).length;
+  const warn=nFound?'':'<div class="note" style="margin:10px 15px">⚠ อ่านตาราง <code>suppliers</code> ของระบบเดิมไม่ได้เลย (0/'+S.supList.length+') — ต้องรัน <b>sql/jjmk_stockcheck_grants.sql</b> ให้สิทธิ์ก่อน ไม่งั้นรอบสั่ง/กลุ่มไลน์จะไม่ขึ้น</div>';
+  return '<div class="card"><div class="h">🚚 รอบสั่ง–ส่งของซัพ <span class="n">เจอในระบบเดิม '+nFound+'/'+S.supList.length+' ซัพ · ใช้ร่วมกับแอพนับ</span></div>'+warn+rows+'</div>';
 }
 function usersCard(){
   if(!S.users)return '';
@@ -929,12 +938,12 @@ async function lineSave(i){ // เขียนลง suppliers.line_group_id (�
   const gi=((document.getElementById('lgi_'+i)||{}).value||'').trim();
   try{
     const x=supSched(sp);
-    if(x)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(sp),{line_group_id:gi||null},'return=minimal');
-    else await api('POST','suppliers',{name:sp,line_group_id:gi||null},'return=minimal');
-    if(x)x.line_group_id=gi||null; else (S.sups=S.sups||[]).push({name:sp,line_group_id:gi||null});
+    if(!x){toast('ไม่พบซัพ "'+sp+'" ในตาราง suppliers ของระบบเดิม — เพิ่มชื่อซัพที่แอพนับเดิมก่อนครับ',true);return;}
+    await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x.name),{line_group_id:gi||null},'return=minimal');
+    x.line_group_id=gi||null;
     const g=(S.lineGroups||[]).find(y=>String(y.group_id)===gi);
     toast(gi?('✅ ผูก '+sp+' → '+((g&&g.name)||gi)):('✅ ยกเลิกการผูกกลุ่มของ '+sp));render();
-  }catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message||e).slice(0,110),true);}
+  }catch(e){toast('บันทึกไม่สำเร็จ — '+errMsg(e),true);}
 }
 async function lineTest(i){
   const sp=(S._lineSups||[])[i]; if(!sp)return;
@@ -1316,7 +1325,9 @@ function renderSet(){
 /* ---- รอบสั่ง–ส่งของซัพ (ใช้ตาราง suppliers ร่วมกับแอพนับ) ---- */
 const DOW_EN=['sun','mon','tue','wed','thu','fri','sat'];
 const DOW_SH={mon:'จ.',tue:'อ.',wed:'พ.',thu:'พฤ.',fri:'ศ.',sat:'ส.',sun:'อา.'};
-function supSched(n){return (S.sups||[]).find(x=>String(x.name||'').trim()===String(n||'').trim());}
+const supKey=n=>String(n||'').replace(/\s+/g,' ').trim().toLowerCase();
+function supSched(n){const k=supKey(n); if(!k)return null;
+  return (S.sups||[]).find(x=>supKey(x.name)===k)||null;}
 function supModeOf(x){return (x.order_mode==='fixed'||(!x.order_mode&&x.schedule&&Object.keys(x.schedule||{}).length))?'fixed':(x.order_mode||'any');}
 function orderBanner(){
   if(!(S.sups||[]).length)return '';

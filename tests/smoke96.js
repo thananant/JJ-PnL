@@ -51,7 +51,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_suppliers'))return T([{id:1,name:'Smilemeat'}]);
       if(url.includes('pnl_unit_conv'))return T([{item:'หมูสไลด์',from_unit:'ลัง',to_unit:'กก.',factor:12}]);
       if(url.includes('suppliers'))return T([
-        {name:'Smilemeat',order_mode:'any',lead_days:1,line_group_id:'C123'},
+        {name:'smilemeat ',order_mode:'any',lead_days:1,line_group_id:'C123'}, // เขียนต่างตัวพิมพ์/มีช่องว่างท้าย
         {name:'FarmFresh',order_mode:'fixed',schedule:{mon:'wed'},lead_days:1,line_group_id:null}]);
       if(url.includes('stock_counts'))return T(url.includes(encodeURIComponent('2026-09-14'))||url.includes('2026-09-14')?[
         {product_id:'p1',qty:10,out_of_stock:false,created_at:'2026-09-15T01:00:00Z'},  // นับตี 1 = ยังเป็นวันจันทร์
@@ -99,6 +99,8 @@ setTimeout(async()=>{
   out.push('หน้าสั่งของแยกการ์ดรายซัพ + บอกวันส่ง + ปุ่มคัดลอกใบสั่ง: '
     +(list().includes('Smilemeat')&&list().includes('FarmFresh')&&list().includes('ส่ง 2026-09-15')&&list().includes('คัดลอก')&&list().includes('ส่งเข้าไลน์')));
   out.push('ซัพที่ยังไม่ผูกกลุ่มในระบบเดิม ปุ่มบอกว่ายังไม่ผูก: '+w.eval("lineOf('FarmFresh')===null"));
+  out.push('จับคู่ชื่อซัพทนตัวพิมพ์/ช่องว่างต่างกัน (products.sup "Smilemeat" ↔ suppliers "smilemeat "): '
+    +(w.eval("!!supSched('Smilemeat')")&&w.eval("lineOf('Smilemeat').group_id")==='C123'));
   w.toggleOrd('FarmFresh'); await sleep(40); // ซัพที่ไม่ต้องสั่งพับไว้ตั้งต้น — กางดู
   out.push('แถวหมูสไลด์โชว์ 40 กก. + ≈ 4 ลัง · ผักบุ้งขึ้น "พอแล้ว" · น้ำแข็ง "ยังไม่นับ": '
     +(list().includes('40')&&list().includes('4 ลัง')&&list().includes('พอแล้ว')&&list().includes('ยังไม่นับ')));
