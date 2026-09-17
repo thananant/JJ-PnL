@@ -72,7 +72,7 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .lhd{display:grid;grid-template-columns:46px minmax(160px,1fr) minmax(160px,1fr) 130px;gap:10px;padding:7px 15px;font-size:11px;color:var(--mut);font-weight:700;border-bottom:1px solid #F2EBDB}
 .okt{color:var(--green);font-weight:700;font-size:12.5px}
 .wat{color:var(--amber);font-weight:700;font-size:12.5px}
-.hd2,.row2{display:grid;grid-template-columns:46px minmax(190px,1fr) 140px 84px 84px 84px 84px 84px;gap:10px;align-items:center;padding:8px 15px}
+.hd2,.row2{display:grid;grid-template-columns:46px minmax(190px,1fr) 150px 90px 90px 90px;gap:10px;align-items:center;padding:8px 15px}
 .hd2{font-size:11px;color:var(--mut);font-weight:700;border-bottom:1px solid #F2EBDB;padding:7px 15px}
 .row2{border-bottom:1px solid #F5EFE1}
 .row2:last-child{border-bottom:0}
@@ -384,7 +384,7 @@ function renderLink(){
     +'<div class="card"><div class="h">✓ ผูกแล้ว <span class="n">'+ok.length+' รายการ</span></div>'
     +'<div class="lhd"><span></span><span>ชื่อจริง (บิล)</span><span>ชื่อนับ</span><span></span></div>'+ok.map(row).join('')+'</div>';
 }
-/* ---- 🛟 หน้า Safety: อัตราใช้/วัน + safety/max + แผนก ---- */
+/* ---- 🛟 หน้า Safety: อัตราใช้/วัน + แผนก (safety/max ไม่ใช้แล้ว — ไม่โชว์ แต่ไม่ลบข้อมูลเดิมใน DB) ---- */
 function usersCard(){
   if(!S.users)return '';
   const rows=S.users.map(u=>{
@@ -438,12 +438,12 @@ function renderSet(){
         return '<div class="row2">'+imgCell(it)
           +'<div class="nm"><div class="t">'+esc(it.name)+'</div><div class="s">'+(cn?'<span class="cn">🧾 บิล: '+esc(billName(it))+'</span> · ':'')+esc(it.sup||'')+'</div></div>'
           +'<span class="lbl" data-l="แผนก"><input class="di'+(it.dirty.dept!==undefined?' dirty':'')+'" list="deptList" value="'+esc(it.dept||'')+'" placeholder="เช่น ครัว" '+(S.deptOk?'':'disabled')+' onchange="setF(\''+it.id+'\',\'dept\',this.value)"></span>'
-          +ri('rate_wk',0)+ri('rate_fri',1)+ri('rate_we',2)+ri('safety',3)+ri('max',4)+'</div>';
+          +ri('rate_wk',0)+ri('rate_fri',1)+ri('rate_we',2)+'</div>';
       }).join('');
       const z0=(ds[k].find(i=>i.zone)||{}).zone||'';
       const zsel=(S.zoneOk&&ds[k][0].dept)?'<select class="zsel" onchange="setZone(\''+esc(k).replace(/'/g,"\\'")+'\',this.value)"><option value="">โซน…</option><option'+(z0==='หน้าร้าน'?' selected':'')+'>หน้าร้าน</option><option'+(z0==='หลังร้าน'?' selected':'')+'>หลังร้าน</option></select>':'';
       return '<div class="card"><div class="h">'+(DEPT_IC[k]||'🗂')+' '+esc(k)+zsel+' <span class="n">'+ds[k].length+' รายการ</span></div>'
-        +'<div class="hd2"><span></span><span>สินค้า</span><span>แผนก</span><span style="text-align:center">จ–พฤ/วัน</span><span style="text-align:center">ศ/วัน</span><span style="text-align:center">ส–อา/วัน</span><span style="text-align:center">safety</span><span style="text-align:center">max</span></div>'
+        +'<div class="hd2"><span></span><span>สินค้า</span><span>แผนก</span><span style="text-align:center">จ–พฤ/วัน</span><span style="text-align:center">ศ/วัน</span><span style="text-align:center">ส–อา/วัน</span></div>'
         +rows+'</div>';
     }).join('')+'<datalist id="deptList">'+[...new Set(S.items.map(i=>i.dept).filter(Boolean))].map(d2=>'<option value="'+esc(d2)+'">').join('')+'</datalist>'
     :'<div class="empty">ไม่มีรายการ</div>');
