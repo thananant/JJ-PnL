@@ -35,12 +35,17 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
         return T(users);
       }
       if(url.includes('pnl_stock_names'))return T([
-        {id:11,branch:'JJRD',product_id:'p1',pnl_item:'ผักบุ้งจีน',product_name:'ผักบุ้ง',bill_unit:'ลัง',stock_unit:'โล',factor:12,active:true}]);
+        {id:11,branch:'JJRD',product_id:'p1',pnl_item:'ผักบุ้งจีน',product_name:'ผักบุ้ง',bill_unit:null,stock_unit:'โล',factor:12,active:true}]);
       if(url.includes('pnl_stock_map'))return T([]);
       if(url.includes('products')&&url.includes('branch_id=eq.'+BID))return T([
         {id:'p1',branch_id:BID,cat_label:'ผัก',name:'ผักบุ้ง',unit:'โล',sup:'FarmFresh',safety:null,max:null,rate_wk:2,rate_fri:3,rate_we:4,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:1},
         {id:'p2',branch_id:BID,cat_label:'อื่นๆ',name:'น้ำแข็ง',unit:'ถุง',sup:'โรงน้ำแข็ง',safety:null,max:null,rate_wk:null,rate_fri:null,rate_we:null,dept:'บาร์น้ำ',zone:'หน้าร้าน',image_url:null,sort:2}]);
       if(url.includes('products'))return T([]);
+      if(url.includes('pnl_bill_items'))return T([
+        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-10'},
+        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-05'},
+        {item:'ผักบุ้งจีน',unit:'ลัง',d:'2026-09-01'},
+        {item:'ผักบุ้งจีน',unit:'โล',d:'2026-08-20'}]);
       if(url.includes('stock_current'))return T([]);
       if(url.includes('suppliers'))return T([{name:'FarmFresh',order_mode:'any',lead_days:1}]);
       if(url.includes('stock_counts')&&method==='GET')return T([]);
@@ -127,12 +132,20 @@ setTimeout(async()=>{
   out.push('หน้าหน่วยแยกหน้า มีเฉพาะการ์ดหน่วย: '
     +(cards().includes('หน่วยซื้อ ↔ หน่วยนับ')&&!cards().includes('สิทธิ์การใช้งานพนักงาน')&&!cards().includes('แผนก + ของที่ต้องนับ')));
   out.push('จำหัวข้อย่อยล่าสุด (jjsc_cfg=cfgn): '+(w.localStorage.getItem('jjsc_cfg')==='cfgn'));
-  out.push('บอกหน่วยซื้อ/หน่วยนับ + ตัวคูณ 1 ลัง = 12 โล: '
-    +(list().includes('หน่วยซื้อ คือ')&&list().includes('ลัง')&&list().includes('1 ลัง = 12 โล')));
+  await sleep(120); // รอดึงหน่วยจากบิล
+  out.push('ดึงหน่วยซื้อจากบิลจริงใน P&L (ลัง 3 ครั้ง · โล 1) → ให้เลือกหน่วยหลัก ตั้งต้น ลัง: '
+    +(!!w.eval("S.billUnits['ผักบุ้งจีน'].top==='ลัง'")&&d.getElementById('bu_p1').tagName==='SELECT'
+      &&d.getElementById('bu_p1').value==='ลัง'&&list().includes('บิลใช้ 2 หน่วย')));
+  out.push('สรุปตัวคูณอ่านง่าย 1 ลัง = 12 โล: '+list().includes('1 ลัง = 12 โล'));
+  out.push('ปุ่มเติมหน่วยซื้อจากบิลทั้งหมด (ยังไม่ตรง 1 รายการ): '
+    +(list().includes('เติมหน่วยซื้อจากบิลทั้งหมด')&&list().includes('ยังไม่ตรงกับบิล')));
+  await w.fillBillUnits(); await sleep(60);
+  out.push('กดเติม → PATCH pnl_stock_map bill_unit=ลัง (ไม่แตะตัวคูณ): '
+    +(!!patches.find(p=>p.url.includes('pnl_stock_map?id=eq.11')&&p.body.bill_unit==='ลัง'&&p.body.factor===undefined)));
   out.push('ตัวไม่ผูก (น้ำแข็ง) ขึ้นว่ายังไม่ผูกชื่อบิล แก้หน่วยซื้อไม่ได้: '+list().includes('ยังไม่ผูกชื่อบิล'));
-  d.getElementById('bu_p1').value='ลัง'; d.getElementById('fx_p1').value='24'; d.getElementById('cu_p1').value='โล';
+  d.getElementById('fx_p1').value='24'; d.getElementById('cu_p1').value='โล';
   await w.unitSave('p1'); await sleep(40);
-  const pfx=patches.find(p=>p.url.includes('pnl_stock_map?id=eq.11'));
+  const pfx=patches.filter(p=>p.url.includes('pnl_stock_map?id=eq.11')&&p.body.factor!==undefined).pop();
   out.push('แก้ตัวคูณ 12→24 → PATCH pnl_stock_map ตัวเดียว (หน่วยนับไม่เปลี่ยนไม่ PATCH products): '
     +(!!pfx&&pfx.body.factor===24&&pfx.body.bill_unit==='ลัง'&&!patches.find(p=>p.url.includes('products?name=eq.'+encodeURIComponent('ผักบุ้ง'))&&p.body.unit)));
   // เปลี่ยนหน่วยนับ โล → กก. → PATCH products ตามชื่อ + สำเนาใน map
