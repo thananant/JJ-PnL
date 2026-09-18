@@ -19,7 +19,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('translate.googleapis.com')){
         const q=decodeURIComponent((url.match(/[&?]q=([^&]*)/)||[])[1]||'');
         const tl=(url.match(/[&?]tl=([^&]*)/)||[])[1]||'';
-        trCalls.push({tl,n:q.split('\n').length});
+        trCalls.push({tl,q,n:q.split('\n').length});
         const lines=q.split('\n').map(x=>tl+':'+x);
         return T([lines.map(x=>[x+'\n','',null,null,1])]);
       }
@@ -35,7 +35,8 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_stock_map'))return T([]);
       if(url.includes('products')&&url.includes('branch_id=in.'))return T([]);
       if(url.includes('products'))return T([
-        {id:'p1',branch_id:BID,cat_label:'ผัก',name:'ผักบุ้ง',unit:'โล',sup:'สี่มุมเมือง',rate_wk:5,rate_fri:6,rate_we:8,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:1}]);
+        {id:'p1',branch_id:BID,cat_label:'ผัก',name:'ผักบุ้ง',unit:'โล',sup:'สี่มุมเมือง',rate_wk:5,rate_fri:6,rate_we:8,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:1},
+        {id:'p2',branch_id:BID,cat_label:'Best Deal',name:'Foodee Pork Bone Broth',unit:'ถุง',sup:'Mixfresh',rate_wk:2,rate_fri:2,rate_we:3,dept:'Best Deal',zone:'หลังร้าน',image_url:null,sort:2}]);
       if(url.includes('stock_current'))return T([]);
       if(url.includes('suppliers'))return T([{name:'สี่มุมเมือง',order_mode:'any',lead_days:1,line_group_id:null}]);
       if(url.includes('stock_counts'))return T([]);
@@ -49,7 +50,8 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 setTimeout(async()=>{
   const out=[];
   await sleep(400);
-  const body=()=>d.body.textContent;
+  const body=()=>{ const c=d.body.cloneNode(true);
+    [...c.querySelectorAll('script,style')].forEach(x=>x.remove()); return c.textContent; };
   // 1) ปุ่มเลือกภาษามุมบนขวา + 4 ภาษา
   const box=d.getElementById('langBox');
   out.push('มีปุ่มเลือกภาษามุมบนขวาของหัวจอ: '
@@ -71,6 +73,21 @@ setTimeout(async()=>{
   out.push('ชื่อสินค้า/ซัพในข้อมูลก็ถูกแปลด้วย: '+(t1.includes('en:ผักบุ้ง')||t1.includes('en:ผัก')));
   out.push('placeholder ช่องค้นหาถูกแปล: '+String(d.getElementById('q').getAttribute('placeholder')).startsWith('en:'));
   out.push('ปุ่มเลือกภาษาเองไม่ถูกแปล (data-notr): '+d.getElementById('langBtn').textContent.includes('English'));
+  // 2.1) ชื่อที่เป็นภาษาอังกฤษในฐานข้อมูลก็ต้องถูกแปล (ไม่ใช่แปลเฉพาะคำไทย)
+  w.pickDept('Best Deal'); await sleep(350);
+  const t2=body();
+  out.push('ชื่อแผนก/สินค้าที่เป็นภาษาอังกฤษก็ถูกแปลด้วย: '
+    +(t2.includes('en:Foodee Pork Bone Broth')&&t1.includes('en:🗂 Best Deal')));
+  out.push('ตัวเลข/วันที่ไม่ถูกส่งไปแปล: '+!trCalls.some(c=>c.q&&c.q.split('\n').some(x=>/^[-0-9/.:\s]+$/.test(x))));
+  // 2.2) ดรอปดาวน์มีรูปธงชาติจริงทั้ง 4 ภาษา + ปุ่มด้านบนก็มีธง
+  const fimg=[...d.querySelectorAll('#langMenu img.flag')];
+  out.push('ดรอปดาวน์มีรูปธงชาติครบ 4 ประเทศ (ฝังในไฟล์ ไม่ง้อเน็ต) + ปุ่มบนมีธง: '
+    +(fimg.length===4&&fimg.map(i=>i.getAttribute('data-f')).join()==='th,gb,la,mm'
+      &&fimg.every(i=>i.getAttribute('src').startsWith('data:image/svg+xml'))
+      &&!!d.querySelector('#langBtn img.flag')));
+  out.push('ดรอปดาวน์บอกชื่อภาษาอังกฤษกำกับ + ติ๊กภาษาที่ใช้อยู่: '
+    +(d.querySelector('#langMenu button.on .lnm b').textContent==='English'
+      &&d.querySelector('#langMenu button.on .lck').textContent==='✓'));
   // 3) แปลแล้วจำไว้ (cache) — เปลี่ยนหน้าไม่ยิงซ้ำ
   const n1=trCalls.length;
   w.setTab('link'); await sleep(300);
@@ -84,10 +101,20 @@ setTimeout(async()=>{
   await w.setLang('lo'); await sleep(400);
   out.push('เปลี่ยนเป็นลาว: ยิง tl=lo + หน้าจอเป็นคำแปลลาว: '
     +(trCalls.some(c=>c.tl==='lo')&&body().includes('lo:')&&w.localStorage.getItem('jjsc_lang')==='lo'));
+  // สลับจากอังกฤษ → ลาว ต้องไม่มีคำแปลภาษาอังกฤษค้างอยู่เลย (เมนูข้าง/หัวจอ/placeholder)
+  out.push('สลับภาษาแล้วไม่มีภาษาเก่าค้าง (แปล 100%): '
+    +(!body().includes('en:')
+      &&[...d.querySelectorAll('#sideNav [data-t]')].every(b=>b.textContent.includes('lo:')&&!b.textContent.includes('en:'))
+      &&String(d.getElementById('q').getAttribute('placeholder')).startsWith('lo:')));
   // 5) พม่า
   await w.setLang('my'); await sleep(400);
   out.push('เปลี่ยนเป็นพม่า: ยิง tl=my + หน้าจอเป็นคำแปลพม่า: '
-    +(trCalls.some(c=>c.tl==='my')&&body().includes('my:')));
+    +(trCalls.some(c=>c.tl==='my')&&body().includes('my:')&&!body().includes('lo:')));
+  // 6) กลับเป็นไทย = ได้ข้อความไทยต้นฉบับคืนทั้งหน้า
+  await w.setLang('th'); await sleep(200);
+  out.push('กลับเป็นไทยได้ข้อความต้นฉบับคืน: '
+    +(!body().includes('my:')&&body().includes('นับสต๊อก')
+      &&String(d.getElementById('q').getAttribute('placeholder')).includes('ค้นหา')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
