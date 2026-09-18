@@ -426,19 +426,44 @@ function errMsg(e){ // แปลง error ของ PostgREST ให้อ่า
 /* ---------- ภาษา: ไทย / อังกฤษ / ลาว / พม่า — แปลอัตโนมัติทั้งหน้า ---------- */
 const LANGS=[['th','ไทย','Thai','th'],['en','English','English','gb'],['lo','ລາວ','Lao','la'],['my','မြန်မာ','Burmese','mm']];
 let LANG=localStorage.getItem('jjsc_lang')||'th';
-const TRKEY=l=>'jjsc_tr2_'+l;   // v2: ล้างแคชรุ่นเก่าที่เคยเก็บคำแปล = ข้อความเดิม (เมนูค้างเป็นไทย)
-function trLoad(l){ let o={}; try{ o=JSON.parse(localStorage.getItem(TRKEY(l))||'{}')||{}; }catch(e){ o={}; }
-  Object.keys(o).forEach(k=>{ if(!o[k]||o[k]===k)delete o[k]; }); return o; }
-let TRC=trLoad(LANG);
 const TRWAIT={th:'⏳ กำลังแปล…',en:'⏳ Translating…',lo:'⏳ ກຳລັງແປ…',my:'⏳ ဘာသာပြန်နေသည်…'};
-const hasTH=t=>/[\u0E00-\u0E7F]/.test(String(t||''));
-const trAble=t=>/[A-Za-z\u0E00-\u0E7F\u0E80-\u0EFF\u1000-\u109F\u00C0-\u024F]/.test(String(t||'')); // มีตัวอักษร (ไม่ใช่เลข/สัญลักษณ์ล้วน)
-function trCacheSave(){ try{ localStorage.setItem(TRKEY(LANG),JSON.stringify(TRC)); }catch(e){} }
-const trURL=(t,sl)=>'https://translate.googleapis.com/translate_a/single?client=gtx&sl='+sl+'&tl='+LANG+'&dt=t&q='+encodeURIComponent(t);
-async function trGET(text,sl){ // ยิงตัวแปล 1 ครั้ง (ลองซ้ำ 1 รอบถ้าเน็ตสะดุด/โดนจำกัด)
+const hasTH=t=>/[฀-๿]/.test(String(t||''));
+const trAble=t=>/[A-Za-z฀-๿຀-໿က-႟À-ɏ]/.test(String(t||'')); // มีตัวอักษร (ไม่ใช่เลข/สัญลักษณ์ล้วน)
+/* หลักการให้ "กดแล้วเปลี่ยนทันที":
+   ① แคช 3 ชั้น: ในเครื่อง (localStorage) → คลังกลาง sc_i18n (ทุกเครื่องใช้ร่วม) → กูเกิล (เฉพาะคำที่ไม่เคยแปล)
+   ② ตัวเลขในข้อความถูกแทนด้วย 0 ก่อนแปล (trKey) → "นับได้ 3 โล"/"นับได้ 12 โล" ใช้คำแปลเดียวกัน ไม่ต้องแปลใหม่ทุกยอด
+   ③ แปลล่วงหน้าทุกภาษาเงียบ ๆ ตั้งแต่ตอนเปิดแอพ (trPrewarm) → พอกดเปลี่ยนภาษา ทุกคำอยู่ในแคชแล้ว */
+const TRKEY=l=>'jjsc_tr3_'+l;   // v3: คีย์แบบตัดตัวเลข (แคชรุ่นเก่าปล่อยทิ้ง)
+const TRALL={};                 // {lang:{key:txt}} ทุกภาษา โหลดครั้งเดียว
+const TRSAME='=';               // ค่าในแคชที่แปลว่า "คำแปล = ต้นฉบับ" (ชื่อละติน/แบรนด์) — จำไว้ ไม่ต้องถามกูเกิลซ้ำ
+function trLoad(l){
+  if(TRALL[l])return TRALL[l];
+  let o={}; try{ o=JSON.parse(localStorage.getItem(TRKEY(l))||'{}')||{}; }catch(e){ o={}; }
+  Object.keys(o).forEach(k=>{ if(!o[k])delete o[k]; else if(o[k]===k)o[k]=TRSAME; });
+  TRALL[l]=o; return o;
+}
+let TRC=trLoad(LANG);
+function trCacheSave(l){ l=l||LANG; try{ localStorage.setItem(TRKEY(l),JSON.stringify(TRALL[l]||{})); }catch(e){} }
+const NUMRE=/\d[\d.,:/]*/g;
+const trKey=t=>String(t).replace(NUMRE,'0');                 // "นับแล้ว 185/208" → "นับแล้ว 0/0"
+function trFill(tpl,src){                                    // ใส่ตัวเลขของต้นฉบับกลับเข้าคำแปล
+  const nums=String(src).match(NUMRE)||[]; if(!nums.length)return tpl;
+  const z=(String(tpl).match(/0/g)||[]).length; if(z!==nums.length)return null; // กูเกิลย้าย/ตัดเลข → ใช้ไม่ได้
+  let i=0; return String(tpl).replace(/0/g,()=>nums[i++]);
+}
+function trGet(t,map){ // คำแปลจากแคช (null = ยังไม่มี · '=' = ใช้ต้นฉบับ)
+  map=map||TRC; let v=map[t]; if(v)return v===TRSAME?t:v;
+  const k=trKey(t); if(k===t||!(v=map[k]))return null;
+  return v===TRSAME?t:trFill(v,t);
+}
+function trWant(t,map){ // ข้อความที่ต้องส่งไปแปลสำหรับ t (ปกติ = คีย์ตัดเลข · ถ้าคีย์มีแล้วแต่ใส่เลขกลับไม่ได้ → ส่งตัวเต็ม)
+  map=map||TRC; const k=trKey(t); return (k!==t&&map[k])?t:k;
+}
+const trURL=(t,sl,tl)=>'https://translate.googleapis.com/translate_a/single?client=gtx&sl='+sl+'&tl='+tl+'&dt=t&q='+encodeURIComponent(t);
+async function trGET(text,sl,tl){ // ยิงตัวแปล 1 ครั้ง (ลองซ้ำ 1 รอบถ้าเน็ตสะดุด/โดนจำกัด)
   for(let k=0;k<2;k++){
     try{
-      const r=await fetch(trURL(text,sl));
+      const r=await fetch(trURL(text,sl,tl));
       if(!r||r.ok===false)throw new Error('http');
       const j=await r.json();
       return ((j&&j[0])||[]).map(x=>(x&&x[0])||'').join('');
@@ -446,69 +471,80 @@ async function trGET(text,sl){ // ยิงตัวแปล 1 ครั้ง 
   }
   return null;
 }
-async function trChunk(chunk,sl,out){ // แปลเป็นก้อน · ถ้าจำนวนบรรทัดกลับมาไม่ตรง ผ่าครึ่งลองใหม่ (ไม่ทิ้งทั้งก้อน)
-  if(!chunk.length)return;
-  if(chunk.length===1){ const v=await trGET(chunk[0],sl); const t=String(v||'').trim(); if(t&&t!==chunk[0])out[chunk[0]]=t; return; }
-  const txt=await trGET(chunk.join('\n'),sl);
-  const ls=(txt==null)?null:String(txt).split('\n').map(x=>x.trim()).filter(x=>x!=='');
-  if(ls&&ls.length===chunk.length){ chunk.forEach((t,k)=>{ if(ls[k]&&ls[k]!==t)out[t]=ls[k]; }); return; }
-  const h=Math.ceil(chunk.length/2);
-  await trChunk(chunk.slice(0,h),sl,out);
-  await trChunk(chunk.slice(h),sl,out);
+async function trChunkOnce(chunk,sl,tl,out,ans){ // แปล 1 ก้อน · คืน 'ok' | 'split' (บรรทัดไม่ตรง ต้องผ่าครึ่ง) | 'fail' (เน็ต/กูเกิลล้ม)
+  const put=(t,v)=>{ ans.add(t); v=String(v||'').trim(); if(v)out[t]=(v===t?TRSAME:v); };
+  if(chunk.length===1){ const v=await trGET(chunk[0],sl,tl); if(v==null)return 'fail'; put(chunk[0],v); return 'ok'; }
+  const txt=await trGET(chunk.join('\n'),sl,tl); if(txt==null)return 'fail';
+  const ls=String(txt).split('\n').map(x=>x.trim()).filter(x=>x!=='');
+  if(ls.length===chunk.length){ chunk.forEach((t,k)=>put(t,ls[k])); return 'ok'; }
+  return 'split';
 }
-async function trFetch(list,onPart){ // แยกก้อน: คำไทย sl=th · ไม่ใช่ไทย sl=auto · ยิงขนานทีละ 4 ก้อน · เสร็จก้อนไหนส่งคืนทันที
-  const tasks=[];
-  const groups=[[list.filter(hasTH),'th'],[list.filter(t=>!hasTH(t)),'auto']];
-  for(const g of groups){ const arr=g[0];
-    for(let i=0;i<arr.length;i+=20)tasks.push([arr.slice(i,i+20),g[1]]);
-  }
-  const out={}; let idx=0;
-  const worker=async()=>{ while(idx<tasks.length){ const k=idx++, part={};
-    await trChunk(tasks[k][0],tasks[k][1],part);
+function trChunks(list){ // แบ่งก้อน ≤30 บรรทัด และ ≤1500 ตัวอักษร
+  const out=[]; let cur=[],len=0;
+  list.forEach(t=>{ if(cur.length>=30||len+t.length>1500){ out.push(cur); cur=[]; len=0; } cur.push(t); len+=t.length+1; });
+  if(cur.length)out.push(cur); return out;
+}
+async function trFetch(list,tl,onPart,ans){ // แยกก้อน: คำไทย sl=th · ไม่ใช่ไทย sl=auto · 4 worker ช่วยกัน · ก้อนที่ตอบไม่ตรงถูกผ่าครึ่งโยนกลับคิว · เสร็จก้อนไหนส่งคืนทันที
+  tl=tl||LANG; ans=ans||new Set();          // ans = คำที่กูเกิล "ตอบแล้ว" (แม้ตอบว่าง) — คำที่เน็ตล้มไม่อยู่ในนี้
+  const queue=[];
+  trChunks(list.filter(hasTH)).forEach(c=>queue.push([c,'th']));
+  trChunks(list.filter(t=>!hasTH(t))).forEach(c=>queue.push([c,'auto']));
+  const out={};
+  const worker=async()=>{ while(queue.length){ const job=queue.shift(), chunk=job[0], sl=job[1], part={};
+    const st=await trChunkOnce(chunk,sl,tl,part,ans);
+    if(st==='split'&&chunk.length>1){ const h=Math.ceil(chunk.length/2); queue.push([chunk.slice(0,h),sl],[chunk.slice(h),sl]); continue; }
+    if(st==='fail')continue;                 // เน็ต/กูเกิลล้ม → ปล่อยไว้ให้รอบถัดไปลองใหม่ (ไม่นับเป็นคำที่แปลไม่ได้)
     Object.assign(out,part);
     if(onPart&&Object.keys(part).length){ try{ onPart(part); }catch(e){} }
   } };
-  await Promise.all(Array.from({length:Math.max(1,Math.min(4,tasks.length))},worker));
+  await Promise.all(Array.from({length:Math.max(1,Math.min(4,queue.length))},worker));
   return out;
 }
-/* คลังคำแปลกลางบนฐานข้อมูล (sc_i18n) — แปลครั้งเดียวใช้ได้ทุกเครื่อง/ทุกคน ไม่ต้องแปลใหม่ */
+/* คลังคำแปลกลางบนฐานข้อมูล (sc_i18n) — แปลครั้งเดียวใช้ได้ทุกเครื่อง/ทุกคน */
 const I18NMAX=400;   // ข้อความยาวกว่านี้เก็บแค่ในเครื่อง (กันดัชนีตารางบวม)
-let _i18nGot={};     // จำว่าโหลดคลังของภาษาไหนมาแล้ว
-async function i18nLoad(lang){
-  const l=lang||LANG; if(l==='th'||_i18nGot[l])return 0;
-  try{
-    const rows=await selAll('sc_i18n?select=src,txt&lang=eq.'+encodeURIComponent(l));
-    let n=0; rows.forEach(r=>{ if(r&&r.src&&r.txt&&r.txt!==r.src&&!TRC[r.src]){ TRC[r.src]=r.txt; n++; } });
-    _i18nGot[l]=1; if(n)trCacheSave();
-    return n;
-  }catch(e){ return 0; }   // ยังไม่ได้รันไฟล์ SQL / ไม่มีสิทธิ์ → ใช้แคชในเครื่องไปก่อน
+const _i18nGot={},_i18nP={},_i18nOk={};   // ภาษาที่โหลดคลังกลางมาแล้ว / promise ที่กำลังโหลด (กันยิงซ้อน) / อ่านฐานสำเร็จ
+function i18nLoad(l){
+  l=l||LANG; if(l==='th'||_i18nGot[l])return Promise.resolve({n:0,chg:0});
+  if(_i18nP[l])return _i18nP[l];
+  return _i18nP[l]=(async()=>{
+    try{
+      const rows=await selAll('sc_i18n?select=src,txt&lang=eq.'+encodeURIComponent(l));
+      const map=trLoad(l); let n=0,chg=0;
+      rows.forEach(r=>{ if(!r||!r.src||!r.txt)return; const v=(r.txt===r.src)?TRSAME:r.txt; // คลังกลางชนะของในเครื่อง (แก้คำแปลผ่าน SQL แล้วทุกเครื่องได้ตาม)
+        if(map[r.src]===v)return; if(map[r.src])chg++; map[r.src]=v; n++; });
+      _i18nOk[l]=1; _i18nGot[l]=1; if(n)trCacheSave(l);
+      return {n:n,chg:chg};
+    }catch(e){ _i18nGot[l]=1; setTimeout(()=>{ delete _i18nGot[l]; },60000); return {n:0,chg:0}; } // ยังไม่ได้รัน SQL/ไม่มีสิทธิ์ → พัก 1 นาทีค่อยลองใหม่ ไม่ยิงซ้ำทุกรอบ
+    finally{ delete _i18nP[l]; }
+  })();
 }
-async function i18nSave(map){ // เก็บคำที่เพิ่งแปลเข้าคลังกลาง (ค่อย ๆ ส่ง ไม่บล็อกหน้าจอ)
-  const keys=Object.keys(map||{}).filter(k=>k&&k.length<=I18NMAX&&map[k]&&map[k]!==k);
+async function i18nSave(map,l){ // เก็บคำที่เพิ่งแปลเข้าคลังกลาง (ค่อย ๆ ส่ง ไม่บล็อกหน้าจอ)
+  l=l||LANG;
+  const keys=Object.keys(map||{}).filter(k=>k&&k.length<=I18NMAX&&map[k]);
   for(let i=0;i<keys.length;i+=100){
-    const rows=keys.slice(i,i+100).map(k=>({lang:LANG,src:k,txt:map[k]}));
+    const rows=keys.slice(i,i+100).map(k=>({lang:l,src:k,txt:(map[k]===TRSAME?k:map[k])})); // '=' (แปลแล้วได้คำเดิม) เก็บเป็น txt=src
     try{ await api('POST','sc_i18n?on_conflict=lang,src',rows,'resolution=merge-duplicates,return=minimal'); }catch(e){ return; }
   }
 }
-let _trBusy=false,_trT=null,_trRun=false,_trAgain=false,_trTry=0,_trWarned=false;
+let _trSaveT=null;
+function trSaveSoon(l){ clearTimeout(_trSaveT); _trSaveT=setTimeout(()=>trCacheSave(l),800); }
+let _trBusy=false,_trT=null,_trFetching=false,_trAgain=false,_trTry=0,_trWarned=false,_trGen=0;
 let TRDONE=new WeakMap(),TRATTR=new WeakMap(); // จำว่าโหนด/แอตทริบิวต์ไหนแปลแล้ว (กันแปลซ้ำทับของเดิม)
-let TRLOG=[],TRALOG=[],TRBAD={};               // ต้นฉบับไทยไว้คืนค่า + นับคำที่แปลไม่สำเร็จ
+let TRLOG=[],TRALOG=[],TRBAD={};               // ต้นฉบับไทยไว้คืนค่า + นับคำที่แปลไม่สำเร็จ (คีย์ lang|ข้อความ)
+const TRPEND={};                               // {lang:Set} คำที่กำลังส่งไปแปลอยู่ (กัน trPass/trPrewarm ยิงซ้ำกัน)
+const trBad=(l,k)=>TRBAD[l+'|'+k]||0;
+const trPending=(l,k)=>!!(TRPEND[l]&&TRPEND[l].has(k));
 function trRestore(){ // คืนข้อความต้นฉบับทั้งหน้า (ถ้าไม่คืน = แปลทับจากภาษาที่แปลไว้แล้ว → ตกค้างเป็นภาษาเก่า)
   TRLOG.forEach(o=>{ try{ o.n.nodeValue=o.s; }catch(e){} });
   TRALOG.forEach(o=>{ try{ o.el.setAttribute(o.a,o.s); }catch(e){} });
-  TRLOG=[]; TRALOG=[]; TRBAD={}; _trTry=0; TRDONE=new WeakMap(); TRATTR=new WeakMap();
+  TRLOG=[]; TRALOG=[]; _trTry=0; _trGen++; TRDONE=new WeakMap(); TRATTR=new WeakMap();
+  const bar=document.getElementById('trBar'); if(bar)bar.classList.remove('on');
 }
+function trMark(){ clearTimeout(_trT); _trT=setTimeout(translateDOM,30); } // มีการวาดใหม่ = แปลใหม่
+function trRepaint(){ trRestore(); trMark(); }   // คำแปลในคลังกลางถูกแก้ → คืนต้นฉบับแล้วทาใหม่
 const TRATT=['placeholder','title','alt','aria-label'];
-function trMark(){ clearTimeout(_trT); _trT=setTimeout(translateDOM,80); } // มีการวาดใหม่ = แปลใหม่
-async function translateDOM(){ // กันเรียกซ้อน: ถ้ากำลังแปลอยู่ ให้ต่อคิวไว้รอบเดียว
-  if(LANG==='th')return;
-  if(_trRun){ _trAgain=true; return; }
-  _trRun=true;
-  try{ await trPass(); }
-  finally{ _trRun=false; if(_trAgain){ _trAgain=false; trMark(); } }
-}
 /* ขอบเขตการแปล: โครงหน้า (เมนู/หัวจอ/แถบล่าง/ล็อกอิน/ข้อความเด้ง) แปลเสมอ
-   ส่วนเนื้อหน้า แปลเฉพาะ "หน้านับสต๊อก" — หน้าอื่นเป็นงานผู้จัดการ ใช้ไทยตามเดิม (แปลเร็วขึ้นด้วย) */
+   ส่วนเนื้อหน้า แปลเฉพาะ "หน้านับสต๊อก" — หน้าอื่นเป็นงานผู้จัดการ ใช้ไทยตามเดิม */
 const TRSHELL='#sideNav,header,.foot,#loginOv,#ptr,#toast';
 function trScope(el){
   if(!el)return false;
@@ -516,18 +552,18 @@ function trScope(el){
   if(el.closest(TRSHELL))return true;
   return S.tab==='count';
 }
-function trCollect(){ // เก็บโหนด/แอตทริบิวต์ที่ยังไม่ได้แปล
+function trCollect(all){ // เก็บโหนด/แอตทริบิวต์ที่ยังไม่ได้แปล (all=true เอาทุกโหนดในขอบเขต)
   const nodes=[],attrs=[];
   const walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode(n){
     if(!trScope(n.parentElement))return NodeFilter.FILTER_REJECT;
-    if(TRDONE.get(n)===n.nodeValue)return NodeFilter.FILTER_REJECT; // แปลไปแล้ว
+    if(!all&&TRDONE.get(n)===n.nodeValue)return NodeFilter.FILTER_REJECT; // แปลไปแล้ว
     return trAble(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
   }});
   for(let n=walk.nextNode();n;n=walk.nextNode())nodes.push(n);
   document.querySelectorAll('[placeholder],[title],[alt],[aria-label]').forEach(el=>{
     if(!trScope(el))return;
     TRATT.forEach(a=>{ const v=el.getAttribute(a);
-      if(v&&trAble(v)&&(TRATTR.get(el)||{})[a]!==v)attrs.push([el,a,v]); });
+      if(v&&trAble(v)&&(all||(TRATTR.get(el)||{})[a]!==v))attrs.push([el,a,v]); });
   });
   return {nodes:nodes,attrs:attrs};
 }
@@ -535,47 +571,112 @@ function applyTr(nodes,attrs){ // ทาคำแปลที่มีอยู�
   let miss=0; _trBusy=true;
   nodes.forEach(n=>{
     if(!n.isConnected||TRDONE.get(n)===n.nodeValue)return;
-    const t=n.nodeValue.trim(),v=TRC[t];
+    const t=n.nodeValue.trim(),v=trGet(t);
     if(v&&v!==t){ TRLOG.push({n:n,s:n.nodeValue}); n.nodeValue=n.nodeValue.replace(t,()=>v); TRDONE.set(n,n.nodeValue); }
-    else if(v||(TRBAD[t]||0)>=3){ TRDONE.set(n,n.nodeValue); } // ไม่ต้องแปล / ยอมแพ้แล้ว
+    else if(v||trBad(LANG,trWant(t))>=3){ TRDONE.set(n,n.nodeValue); } // ไม่ต้องแปล / ยอมแพ้แล้ว
     else miss++;
   });
-  attrs.forEach(pair=>{ const el=pair[0],a=pair[1],v=pair[2],k=v.trim(),x=TRC[k];
+  attrs.forEach(pair=>{ const el=pair[0],a=pair[1],v=pair[2],k=v.trim(),x=trGet(k);
     if((TRATTR.get(el)||{})[a]===el.getAttribute(a)&&x)return;
     if(x&&x!==k){ TRALOG.push({el:el,a:a,s:v}); el.setAttribute(a,x); }
-    if(x||(TRBAD[k]||0)>=3){ const m2=TRATTR.get(el)||{}; m2[a]=el.getAttribute(a); TRATTR.set(el,m2); }
+    if(x||trBad(LANG,trWant(k))>=3){ const m2=TRATTR.get(el)||{}; m2[a]=el.getAttribute(a); TRATTR.set(el,m2); }
     else miss++;
   });
   if(TRLOG.length>6000)TRLOG=TRLOG.filter(o=>o.n.isConnected);
   _trBusy=false;
   return miss;
 }
-async function trPass(){
-  const got1=trCollect(),nodes=got1.nodes,attrs=got1.attrs;
-  let miss=applyTr(nodes,attrs);          // ① ใช้คำที่จำไว้ในเครื่องแล้ว — ขึ้นทันที ไม่ต้องรอเน็ต
-  if(!miss){ _trTry=0; return; }
-  const pend=()=>[...new Set([].concat(nodes.filter(n=>n.isConnected).map(n=>n.nodeValue.trim()),attrs.map(a=>a[2].trim()))
-    .filter(t=>t&&!TRC[t]&&(TRBAD[t]||0)<3))];
+function trApplyNow(){ // เฟสที่ 1 (sync): ทาคำที่มีในแคชลงจอทันที — เรียกได้ทุกเมื่อ ไม่ต้องรอใคร
+  const c=trCollect(); return {miss:applyTr(c.nodes,c.attrs),nodes:c.nodes,attrs:c.attrs};
+}
+function trBar(on,gen,n){ const bar=document.getElementById('trBar'); if(!bar)return;
+  if(on){ bar.dataset.gen=String(gen); bar.textContent=(TRWAIT[LANG]||TRWAIT.en)+' '+n; bar.classList.add('on'); }
+  else if(bar.dataset.gen===String(gen))bar.classList.remove('on'); } // ปิดเฉพาะป้ายของรอบตัวเอง
+async function translateDOM(){
+  if(LANG==='th')return;
+  const r=trApplyNow();                       // ① จากแคช = ทันที (แม้จะมีรอบแปลค้างอยู่ก็ตาม)
+  if(!r.miss){ _trTry=0; return; }
+  if(_trFetching){ _trAgain=true; return; }   // ② มีรอบไปแปลค้างอยู่ → พอเสร็จจะวนเก็บโหนดใหม่ให้เอง
+  _trFetching=true;
+  try{ await trFetchPass(r); }
+  finally{ _trFetching=false; if(_trAgain){ _trAgain=false; trMark(); } }
+}
+async function trFetchPass(r){ // เฟสที่ 2 (async): ดึงคลังกลาง → ส่งไปแปลเฉพาะคำใหม่ → ทาเพิ่ม
+  const gen=_trGen,L=LANG,map=TRC; const nodes=r.nodes,attrs=r.attrs;
+  const pend=()=>[...new Set([].concat(nodes.filter(n=>n.isConnected&&TRDONE.get(n)!==n.nodeValue).map(n=>n.nodeValue.trim()), // ข้ามโหนดที่ทาคำแปลไปแล้ว
+      attrs.filter(a=>(TRATTR.get(a[0])||{})[a[1]]!==a[0].getAttribute(a[1])).map(a=>a[2].trim()))
+    .filter(t=>t&&!trGet(t,map)).map(t=>trWant(t,map)).filter(k=>trBad(L,k)<3&&!trPending(L,k)))];
   let need=pend();
-  if(need.length&&!_i18nGot[LANG]){        // ② ดึงคลังคำแปลกลางจากฐานข้อมูลก่อน (แปลไว้แล้วไม่ต้องแปลซ้ำ)
-    await i18nLoad(LANG);
-    miss=applyTr(nodes,attrs);
-    need=pend();
+  if(need.length&&!_i18nGot[L]){             // ดึงคลังคำแปลกลางจากฐานข้อมูลก่อน (แปลไว้แล้วไม่ต้องแปลซ้ำ)
+    await i18nLoad(L); if(gen!==_trGen)return;
+    applyTr(nodes,attrs); need=pend();
   }
-  if(need.length){                        // ③ เหลือคำใหม่จริง ๆ ค่อยส่งไปแปล
-    const bar=document.getElementById('trBar');
-    if(bar){bar.textContent=(TRWAIT[LANG]||TRWAIT.en)+' '+need.length;bar.classList.add('on');}
-    const got=await trFetch(need,part=>{ Object.assign(TRC,part); applyTr(nodes,attrs); }); // เสร็จก้อนไหนขึ้นก้อนนั้น
-    Object.assign(TRC,got); trCacheSave();
-    i18nSave(got);                        // ④ เก็บเข้าคลังกลาง ครั้งหน้าทุกเครื่อง/ทุกคนไม่ต้องแปลซ้ำ
-    need.forEach(t=>{ if(!TRC[t])TRBAD[t]=(TRBAD[t]||0)+1; });
-    if(bar)bar.classList.remove('on');
+  if(need.length){
+    const P=TRPEND[L]=TRPEND[L]||new Set(); need.forEach(k=>P.add(k));
+    trBar(true,gen,need.length);
+    try{
+      const ans=new Set();
+      const got=await trFetch(need,L,part=>{ Object.assign(map,part);
+        trSaveSoon(L); if(_i18nOk[L]!==0)i18nSave(part,L);  // เก็บทีละก้อน — ปิดแอพกลางคันก็ไม่ต้องแปลใหม่ทั้งชุด
+        if(gen===_trGen)trApplyNow(); },ans);                // เสร็จก้อนไหนขึ้นก้อนนั้น (รวมโหนดที่เพิ่งเกิดใหม่)
+      Object.assign(map,got); trCacheSave(L);
+      need.forEach(k=>{ if(ans.has(k)&&!map[k])TRBAD[L+'|'+k]=trBad(L,k)+1; }); // นับเฉพาะที่กูเกิลตอบแล้วแต่แปลไม่ได้ (เน็ตล้มไม่นับ)
+    }finally{ need.forEach(k=>P.delete(k)); trBar(false,gen); }
+    if(gen!==_trGen)return;                   // ระหว่างรอ ผู้ใช้เปลี่ยนภาษาไปแล้ว → รอบนี้ไม่แตะจอ
   }
-  miss=applyTr(nodes,attrs);
+  const miss=trApplyNow().miss;
   if(miss){ // ยังเหลือคำที่ยังไม่ถูกแปล → ลองใหม่อีกไม่กี่รอบ แล้วค่อยบอกผู้ใช้
-    if(_trTry<4){ _trTry++; setTimeout(()=>{ if(LANG!=='th')translateDOM(); },1200*_trTry); }
+    if(_trTry<4){ _trTry++; setTimeout(()=>{ if(gen===_trGen&&LANG!=='th')translateDOM(); },1200*_trTry); }
     else if(!_trWarned){ _trWarned=true; toast('แปลบางคำไม่สำเร็จ ('+miss+' จุด) — เน็ตสะดุดหรือกูเกิลจำกัดจำนวน ลองเปลี่ยนภาษาซ้ำอีกครั้ง',true); }
   }else _trTry=0;
+}
+/* ---- แปลล่วงหน้าทุกภาษา (เงียบ ๆ) — เพื่อให้กดเปลี่ยนภาษาแล้วขึ้นทันที ---- */
+const TRSEEN=new Set(); // คีย์ข้อความที่เคยขึ้นบนหน้าจอ
+const TR_STATIC=['✓ นับแล้ว','✗ หมด','⚠ ยังไม่นับ','🧾 บิล:','⚠ ยังไม่ผูกชื่อบิล','ของหมดสต๊อก','นับได้','ยังไม่นับ','· ครั้งก่อน 0','ยังไม่นับ · ครั้งก่อน 0','ของหมดสต๊อก · ครั้งก่อน 0','หมด','หน่วย',
+  '🏪 หน้าร้าน','🍳 หลังร้าน','🗂 ยังไม่จัดโซน','เฉพาะสาขารัชดา','เฉพาะสาขาลาดพร้าว','นับแล้ว','💾 บันทึกการนับ','สาขานี้ยังไม่มีสินค้าในระบบนับ',
+  '⚠ ยังไม่ผูกชื่อบิล 0 รายการ (ยังนับได้ปกติ) — ผูก/แก้ชื่อได้ที่หน้า "ผูกชื่อ"','ถึงรอบสั่ง','ซัพ','· สั่งได้ทุกวันอีก 0 ซัพ','ไม่มีซัพรอบสั่งตายตัว',
+  '🛒 ดูใบสั่ง','ดูรายชื่อ ▾','ซ่อนรายชื่อ ▴','พรุ่งนี้','+0 วัน','🔍 พิมพ์ชื่อสินค้าค้นหา (ทุกแผนก)...','ชื่อผู้นับ','↓ ลากลงเพื่อรีเฟรช','↻ ปล่อยเพื่อรีเฟรช',
+  '✅ บันทึกการนับแล้ว','บันทึกไม่สำเร็จ','กำลังโหลด...','ยังไม่ได้บันทึก 0 รายการ — จะออกจากหน้านี้เลยไหม?']
+  .concat(['จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์','อาทิตย์'].map(d=>'🚚 รอบสั่งวันนี้ ('+d+')'));
+function trHarvest(){ // เก็บคีย์ของทุกข้อความในขอบเขตตอนนี้ (ต้นฉบับ ไม่ใช่คำแปล)
+  const c=trCollect(true);
+  c.nodes.forEach(n=>{ const t=n.nodeValue.trim(); if(t&&TRDONE.get(n)!==n.nodeValue)TRSEEN.add(trKey(t)); });
+  c.attrs.forEach(a=>{ const t=a[2].trim(); if(t&&(TRATTR.get(a[0])||{})[a[1]]!==a[2])TRSEEN.add(trKey(t)); });
+  TRLOG.forEach(o=>{ const t=String(o.s).trim(); if(t)TRSEEN.add(trKey(t)); });
+  TRALOG.forEach(o=>{ const t=String(o.s).trim(); if(t)TRSEEN.add(trKey(t)); });
+}
+function trDataKeys(){ // จากข้อมูลสินค้าของสาขา (ทุกแผนก แม้ยังไม่ได้เปิดดู) + ประโยคคงที่ของหน้านับ
+  const out=new Set(TR_STATIC);
+  (S.all||[]).forEach(it=>{
+    const u=String(it.unit||'หน่วย').trim();
+    [it.name,u,'0 '+u,billName(it),deptOf(it),it.sup].forEach(x=>{ const t=String(x||'').trim(); if(t&&trAble(t))out.add(trKey(t)); });
+  });
+  return out;
+}
+let _pwT=null,_pwRun=false,_pwDirty=false;
+function trPrewarmSoon(ms){ if(window.JJSC_NOPREWARM)return; clearTimeout(_pwT); _pwT=setTimeout(trPrewarm,window.JJSC_PREWARM_MS||ms||5000); }
+async function trPrewarm(){
+  if(_pwRun){ _pwDirty=true; return; }
+  _pwRun=true;
+  try{
+    trHarvest();
+    const keys=[...new Set([...TRSEEN,...trDataKeys()])].filter(k=>k&&k.length<=I18NMAX);
+    const langs=LANGS.map(x=>x[0]).filter(x=>x!=='th').sort((a,b)=>(a===LANG?0:1)-(b===LANG?0:1)); // ภาษาที่ใช้อยู่ก่อน
+    for(const l of langs){
+      const map=trLoad(l);
+      const ld=await i18nLoad(l);
+      if(ld&&ld.chg&&l===LANG)trRepaint();   // มีคนแก้คำแปลในฐาน → หน้าจอเปลี่ยนตาม
+      const need=keys.filter(k=>!map[k]&&trBad(l,k)<3&&!trPending(l,k));
+      if(!need.length)continue;
+      const P=TRPEND[l]=TRPEND[l]||new Set(); need.forEach(k=>P.add(k));
+      let got={}; const ans=new Set();
+      try{ got=await trFetch(need,l,null,ans); }finally{ need.forEach(k=>P.delete(k)); }
+      Object.assign(map,got); trCacheSave(l); await i18nSave(got,l);
+      need.forEach(k=>{ if(ans.has(k)&&!map[k])TRBAD[l+'|'+k]=trBad(l,k)+1; });
+      if(l===LANG)trMark();
+    }
+  }catch(e){}
+  finally{ _pwRun=false; if(_pwDirty){ _pwDirty=false; trPrewarmSoon(8000); } }
 }
 function langToggle(){ const m=document.getElementById('langMenu'); if(m)m.classList.toggle('on'); }
 const FLAGSVG={ // ธงชาติวาดเป็น SVG ฝังในไฟล์ (ไม่ต้องโหลดจากเน็ต ร้านเน็ตหลุดก็ยังขึ้น)
@@ -595,28 +696,41 @@ async function setLang(code){
   const m=document.getElementById('langMenu'); if(m)m.classList.remove('on');
   if(code===LANG)return;
   LANG=code; localStorage.setItem('jjsc_lang',code);
-  TRC=trLoad(LANG);
+  TRC=trLoad(code);
   document.documentElement.lang=code;
   trRestore(); _trWarned=false;   // กลับเป็นไทยต้นฉบับก่อนเสมอ แล้วค่อยแปลใหม่ทั้งหน้า
+  Object.keys(TRBAD).forEach(k=>{ if(k.indexOf(code+'|')===0)delete TRBAD[k]; }); // กดเปลี่ยนภาษาซ้ำ = ให้โอกาสคำที่เคยแปลไม่ได้อีกครั้ง
   langPaint();
   if(code==='th')return;
   await translateDOM();           // จำไว้ในเครื่อง → คลังกลาง → ค่อยแปลเฉพาะคำใหม่
+  i18nLoad(code).then(r=>{ if(r&&r.chg&&LANG===code)trRepaint(); }); // คำแปลที่ถูกแก้ในฐาน มีผลทันทีโดยไม่หน่วงการสลับภาษา
+  trPrewarmSoon(1500);
 }
 function initLang(){
   langPaint();
   document.documentElement.lang=LANG;
   document.addEventListener('click',e=>{ if(!e.target.closest('#langBox')){const m=document.getElementById('langMenu'); if(m)m.classList.remove('on');} });
-  if(window.MutationObserver){ // วาดหน้าใหม่เมื่อไร แปลตามทันที
-    new MutationObserver(()=>{ if(!_trBusy&&LANG!=='th')trMark(); })
-      .observe(document.body,{childList:true,subtree:true,characterData:true});
+  if(window.MutationObserver){ // วาดหน้าใหม่เมื่อไร แปลตามทันที (ข้ามการเขียนของตัวแปลเอง)
+    new MutationObserver(recs=>{
+      if(_trBusy||LANG==='th')return;
+      for(const r of recs){
+        const t=r.target,el=(t&&t.nodeType===1)?t:(t&&t.parentElement);
+        if(el&&el.closest&&el.closest('[data-notr],#langBox'))continue;               // ป้ายกำลังแปล/ปุ่มภาษา
+        if(r.type==='characterData'&&TRDONE.get(t)===t.nodeValue)continue;         // ข้อความที่เราเพิ่งแปลเอง
+        trMark(); return;
+      }
+    }).observe(document.body,{childList:true,subtree:true,characterData:true});
   }
   if(LANG!=='th')trMark();
 }
 function TT(t){ // แปลข้อความกล่อง confirm/prompt (ใช้ที่แปลไว้ในแคช · ถ้ายังไม่มีก็ดึงเก็บไว้ให้ครั้งหน้า)
   if(LANG==='th')return t;
   const k=String(t||'').trim(); if(!k)return t;
-  if(TRC[k])return String(t).replace(k,()=>TRC[k]);
-  trFetch([k]).then(g=>{ Object.assign(TRC,g); trCacheSave(); }).catch(e=>{});
+  const v=trGet(k); if(v)return String(t).replace(k,()=>v);
+  const L=LANG,w=trWant(k);
+  i18nLoad(L).then(()=>{ if(trGet(k,trLoad(L)))return;          // คลังกลางมีแล้ว ไม่ต้องถามกูเกิล
+    return trFetch([w],L).then(g=>{ Object.assign(trLoad(L),g); trCacheSave(L); if(_i18nOk[L])i18nSave(g,L); });
+  }).catch(e=>{});
   return t;
 }
 const cfm=t=>confirm(TT(t));
@@ -679,6 +793,7 @@ async function loadAll(){
   S.dept=null; S.allBr=null; S.nameBrN=null;
   render();
   ensureAllProducts(); // รายการทุกสาขา (ใช้จัดลำดับให้เหมือนกันทุกเมนู)
+  trPrewarmSoon(2500); // ข้อมูลสินค้ามาแล้ว → แปลชื่อสินค้าทุกภาษาไว้ล่วงหน้า
 }
 const billName=it=>{const m=S.map[it.id];return m?m.pnl_item:it.name;};
 const deptOf=it=>{ // แผนกของสินค้า: dept (ตั้งเอง) → ถ้ายังไม่ตั้ง ใช้หมวดเดิมของแอพนับ (cat_label) รายตัว
@@ -719,6 +834,7 @@ function render(){
   else renderSet();
   refresh();
   if(LANG!=='th')trMark();
+  trPrewarmSoon(6000);   // แปลล่วงหน้าทุกภาษาเงียบ ๆ (เฉพาะคำที่ยังไม่มีในแคช)
 }
 /* ---- 🛒 สั่งของ: แยกรายซัพ · ต้องสั่ง = ยอดใช้ของ "วันที่ของมาส่ง" − ยอดที่นับได้ ---- */
 function addDays(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);
