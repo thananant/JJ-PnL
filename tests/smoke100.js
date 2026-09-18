@@ -20,8 +20,8 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('translate.googleapis.com')){
         const q=decodeURIComponent((url.match(/[&?]q=([^&]*)/)||[])[1]||'');
         const tl=(url.match(/[&?]tl=([^&]*)/)||[])[1]||'';
-        q.split('\n').forEach(x=>trQ.push(x));
-        return T([q.split('\n').map(x=>[tl+':'+x+'\n','',null,null,1])]);
+        q.split('\n').forEach(x=>trQ.push(tl+'|'+x));
+        return T([q.split('\n').map(x=>[(/^[\x00-\x7F ]+$/.test(x)?x:tl+':'+x)+'\n','',null,null,1])]); // คำละติน = แปลแล้วได้คำเดิม
       }
       if(url.includes('sc_i18n')){
         if(method==='POST'){ posts.push(JSON.parse(opt.body)); return T([]); }
@@ -37,7 +37,8 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_stock_map'))return T([]);
       if(url.includes('products')&&url.includes('branch_id=in.'))return T([]);
       if(url.includes('products'))return T([
-        {id:'p1',branch_id:BID,cat_label:'ผัก',name:'ผักบุ้ง',unit:'โล',sup:'สี่มุมเมือง',rate_wk:5,rate_fri:6,rate_we:8,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:1}]);
+        {id:'p1',branch_id:BID,cat_label:'ผัก',name:'ผักบุ้ง',unit:'โล',sup:'สี่มุมเมือง',rate_wk:5,rate_fri:6,rate_we:8,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:1},
+        {id:'p2',branch_id:BID,cat_label:'ผัก',name:'Coke Zero',unit:'ลัง',sup:'Makro',rate_wk:1,rate_fri:1,rate_we:1,dept:'ผัก',zone:'หลังร้าน',image_url:null,sort:2}]);
       if(url.includes('stock_current'))return T([]);
       if(url.includes('suppliers'))return T([{name:'สี่มุมเมือง',order_mode:'any',lead_days:1,line_group_id:null}]);
       if(url.includes('stock_counts'))return T([]);
@@ -55,10 +56,10 @@ setTimeout(async()=>{
   const nav=[...d.querySelectorAll('#sideNav [data-t]')].map(b=>b.textContent);
   out.push('คำที่มีในคลังกลางถูกใช้เลย (ไม่ต้องรอแปล): '
     +(nav.some(t=>t==='Count stock')&&nav.some(t=>t==='Place order')));
-  out.push('คำที่คลังมีแล้ว ไม่ถูกส่งไปแปลซ้ำ: '+!trQ.some(x=>x==='📋 นับสต๊อก'||x==='🛒 สั่งของ'));
+  out.push('คำที่คลังมีแล้ว ไม่ถูกส่งไปแปลซ้ำ: '+!trQ.some(x=>x==='en|📋 นับสต๊อก'||x==='en|🛒 สั่งของ'));
   const rows=[].concat.apply([],posts);
   out.push('คำที่เพิ่งแปลถูกเก็บเข้าคลังกลาง (lang/src/txt): '
-    +(rows.length>3&&rows.every(r=>r.lang==='en'&&r.src&&r.txt&&r.txt!==r.src)
+    +(rows.length>3&&rows.every(r=>r.lang==='en'&&r.src&&r.txt)
       &&rows.some(r=>r.src==='🔗 ผูกชื่อ'&&r.txt==='en:🔗 ผูกชื่อ')));
   out.push('คำที่ได้มาจากคลัง ไม่ถูกเขียนกลับซ้ำ: '+!rows.some(r=>r.src==='📋 นับสต๊อก'));
   out.push('ข้อความยาวเกิน 400 ตัวไม่ถูกส่งเข้าคลัง: '+rows.every(r=>r.src.length<=400));
@@ -70,6 +71,19 @@ setTimeout(async()=>{
   await w.setLang('en'); await sleep(500);
   out.push('กลับมาภาษาเดิม ใช้ของที่โหลดไว้ ไม่ดึงคลังซ้ำ: '
     +(nGetEn===n1&&[...d.querySelectorAll('#sideNav [data-t]')].some(b=>b.textContent==='Count stock')));
+  // คำที่ "แปลแล้วได้คำเดิม" (ชื่อละติน/แบรนด์) ต้องจำไว้ ไม่ถามซ้ำ และเก็บเข้าคลังกลางเป็น txt=src
+  const nCoke=trQ.filter(x=>x==='en|Coke Zero').length;
+  out.push('ชื่อละตินที่แปลแล้วได้คำเดิม: ถามครั้งเดียว ('+nCoke+') + เก็บเข้าคลังกลางเป็น txt=src: '
+    +(nCoke===1&&rows.some(r=>r.src==='Coke Zero'&&r.txt==='Coke Zero')));
+  w.setTab('link'); await sleep(200); w.setTab('count'); await sleep(400);
+  out.push('กลับมาหน้าเดิม ไม่ถามคำละตินซ้ำอีก: '+(trQ.filter(x=>x==='en|Coke Zero').length===1));
+  // ผู้จัดการแก้คำแปลในคลังกลาง (SQL) → เครื่องที่มีแคชเก่าอยู่แล้ว ต้องเปลี่ยนตามเองโดยไม่ต้องล้างแคช
+  DB[0]={src:'📋 นับสต๊อก',txt:'Stock counting (fixed)'};
+  w.eval('delete _i18nGot.en; delete _i18nOk.en;');
+  await w.setLang('th'); await sleep(60);
+  await w.setLang('en'); await sleep(700);
+  out.push('แก้คำแปลในคลังกลางแล้ว หน้าจอเปลี่ยนตาม (ไม่ต้องล้างแคชเครื่อง): '
+    +[...d.querySelectorAll('#sideNav [data-t]')].some(b=>b.textContent==='Stock counting (fixed)'));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
