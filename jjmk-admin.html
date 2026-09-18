@@ -68,6 +68,15 @@ label.fld span{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;
 .chip.adm{border-color:var(--goldDim);background:#2A2012;color:var(--gold2)}
 .chip.off{border-color:#5A2A2E;background:#2A1416;color:#F2A0A5}
 
+/* ช่องเลือกในตาราง — หน้าตาเหมือนป้าย แต่กดเปลี่ยนได้เลย */
+.inlinesel{
+  width:auto;min-width:120px;font-size:12px;padding:5px 26px 5px 10px;border-radius:99px;
+  border:1px solid var(--line2);background:#1B1512;color:var(--ink2);cursor:pointer;
+}
+.inlinesel:hover{border-color:var(--gold);color:var(--ink)}
+.inlinesel.adm{border-color:var(--goldDim);background:#2A2012;color:var(--gold2)}
+.inlinesel:disabled{opacity:.5;cursor:wait}
+
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:640px){.grid2{grid-template-columns:1fr}}
 
@@ -338,9 +347,9 @@ async function viewUsers(){
     return '<tr>'+
       '<td><b>'+esc(u.display_name||u.username)+'</b>'+
         '<div style="font-size:11.5px;color:var(--mut)">'+esc(u.username)+'</div></td>'+
-      '<td><span class="chip '+(isBoss(u)?'adm':'')+'">'+R.ic+' '+esc(R.n)+'</span>'+
+      '<td>'+pickCell(u,'role')+
         (u.active===false?' <span class="chip off">ปิดใช้งาน</span>':'')+'</td>'+
-      '<td><span class="chip">'+UN.ic+' '+esc(UN.n)+'</span></td>'+
+      '<td>'+pickCell(u,'unit')+'</td>'+
       '<td style="line-height:2">'+chips+'</td>'+
       '<td style="text-align:right;white-space:nowrap">'+
         '<button class="btn sm" onclick="editPerms('+u.id+')">⚙️ ตั้งสิทธิ์</button> '+
@@ -350,9 +359,37 @@ async function viewUsers(){
   return '<div class="card">'+
     '<h3>👥 ผู้ใช้ทั้งหมด <span class="chip">'+us.length+' บัญชี</span>'+
       '<button class="btn pri sm" style="margin-left:auto" onclick="editUser(null)">+ เพิ่มผู้ใช้</button></h3>'+
-    '<p class="sub">บัญชีเดียวใช้เข้าได้ทุกระบบที่เปิดสิทธิ์ให้ · <b>✏️</b> = แก้ชื่อ/รหัส/<b>ระดับ</b>/<b>ประจำที่</b> · <b>⚙️ ตั้งสิทธิ์</b> = เลือกว่าเข้าแอพไหนได้ และในแต่ละหน้าจอทำอะไรได้ (ดู/เพิ่ม/แก้/ลบ)<br><span style="color:var(--goldDim)">🛡️ ผู้ดูแลระบบ · 👑 เจ้าของ</span> = เข้าได้ทุกแอพอัตโนมัติ ไม่ต้องตั้งสิทธิ์รายแอพ</p>'+
+    '<p class="sub">บัญชีเดียวใช้เข้าได้ทุกระบบที่เปิดสิทธิ์ให้ · <b>กดที่ช่อง &quot;ระดับ&quot; หรือ &quot;ประจำที่&quot; ในตารางเพื่อเปลี่ยนได้ทันที</b> · <b>✏️</b> = แก้ชื่อ/รหัสผ่าน · <b>⚙️ ตั้งสิทธิ์</b> = เลือกว่าเข้าแอพไหนได้ และในแต่ละหน้าจอทำอะไรได้ (ดู/เพิ่ม/แก้/ลบ)<br><span style="color:var(--goldDim)">🛡️ ผู้ดูแลระบบ · 👑 เจ้าของ</span> = เข้าได้ทุกแอพอัตโนมัติ ไม่ต้องตั้งสิทธิ์รายแอพ</p>'+
     '<div class="twrap"><table><tr><th>ชื่อ</th><th>ระดับ</th><th>ประจำที่</th><th>แอพที่เข้าได้</th><th></th></tr>'+
     (rows||'<tr><td colspan="5" class="empty">ยังไม่มีผู้ใช้</td></tr>')+'</table></div></div>';
+}
+
+/* ---------- เปลี่ยนระดับ/ประจำที่ ได้จากตารางเลย (ไม่ต้องเปิดฟอร์ม) ---------- */
+function pickCell(u,field){
+  const MAP = field==='role' ? ROLES : UNITS;
+  const cur = field==='role' ? roleOf(u) : unitOf(u);
+  const cls = (field==='role'&&isBoss(u)) ? ' adm' : '';
+  return '<select class="inlinesel'+cls+'" data-id="'+u.id+'" data-f="'+field+'" onchange="quickSet(this)">'+
+    Object.keys(MAP).map(k=>'<option value="'+k+'"'+(cur===k?' selected':'')+'>'+
+      MAP[k].ic+' '+esc(MAP[k].n)+'</option>').join('')+'</select>';
+}
+async function quickSet(el){
+  const id=Number(el.dataset.id), field=el.dataset.f, val=el.value;
+  const u=S.users.find(x=>x.id===id); if(!u)return;
+  const prev = field==='role' ? roleOf(u) : unitOf(u);
+  if(val===prev)return;
+  el.disabled=true;
+  try{
+    const body={}; body[field]=val;
+    await upd('pnl_users','id=eq.'+id,body);
+    u[field]=val;
+    const label = field==='role' ? ROLES[val].n : UNITS[val].n;
+    await alog(u.username, field==='role'?'เปลี่ยนระดับ':'เปลี่ยนประจำที่', label);
+    toast((u.display_name||u.username)+' → '+label+' ✓');
+    render();
+  }catch(e){
+    el.value=prev; toast('บันทึกไม่สำเร็จ: '+e.message,true);
+  }finally{ el.disabled=false; }
 }
 
 /* ---------- ฟอร์มตั้งสิทธิ์รายแอพ ---------- */
