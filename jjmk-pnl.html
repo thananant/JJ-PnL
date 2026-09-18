@@ -2675,7 +2675,7 @@ function expTableView(){
       let a=0,b=0;
       Object.values(c.exp).forEach(r=>{ if(r.supplier_id===s.id){const d=Number(r.d.slice(-2)); if(d<=15)a+=num(r.amount);else b+=num(r.amount);}});
       if(!(a+b))return;
-      rows+=`<tr><td>${esc(s.name)}</td><td class="n">${fmtI(a)}</td><td class="n">${fmtI(b)}</td><td class="n b">${fmtI(a+b)}</td><td class="xs mut">${esc(s.payment_term||'')}</td></tr>`;
+      rows+=`<tr><td>${esc(s.name)}${s.pay_cycle==='monthly'?' <span class="xs" style="color:#A66A00;font-weight:700">· เครดิต 1 เดือน</span>':''}</td><td class="n">${fmtI(a)}</td><td class="n">${fmtI(b)}</td><td class="n b">${fmtI(a+b)}</td><td class="xs mut">${esc(s.payment_term||'')}</td></tr>`;
     });
   });
   openModal(`<h3>ตารางรายจ่ายรวม · ${monthLabel(S.m)} · ${BRNAME[S.br]}</h3>
@@ -4995,21 +4995,31 @@ function pvCreateModal(){
       <div class="fld"><label>ประเภท</label><select id="pvVat"><option>NON-VAT</option><option>VAT</option></select></div>
       <div class="fld"><label>วันที่ PV</label><input type="date" id="pvDate" value="${todayStr()}"></div>
     </div>
-    <p class="xs mut">* ดึงเฉพาะบิลที่<b>ยังไม่ติ๊กจ่าย</b> (จ่ายแล้วถูกหักออกอัตโนมัติ) · ซัพ "VAT / NON-VAT" รวมในใบ VAT · แก้ยอดรายตัวได้ก่อนบันทึก</p>
+    <p class="xs mut">* ดึงเฉพาะบิลที่<b>ยังไม่ติ๊กจ่าย</b> (จ่ายแล้วถูกหักออกอัตโนมัติ) · ซัพ "VAT / NON-VAT" รวมในใบ VAT · แก้ยอดรายตัวได้ก่อนบันทึก<br>
+    * ซัพที่ตั้งไว้ว่า <b>เครดิต 1 เดือน</b> จะไม่ขึ้นในงวด 1–15 แต่จะรวม<b>ทั้งเดือน</b>มาออกในงวด 16–สิ้นเดือน (ตั้งรอบได้ที่ ตั้งค่า › ซัพพลายเออร์)</p>
     <button class="btn" style="width:100%" onclick="pvPreview()">ดึงยอด →</button>
     <div id="pvPrev"></div>`);
   document.getElementById('pvVat').value = (new Date().getDate()<=5||new Date().getDate()>=16)?'NON-VAT':'NON-VAT';
 }
+const isMonthlySup=s=>String(s&&s.pay_cycle||'')==='monthly'; // ซัพเครดิต 1 เดือน = ออก PV รอบสิ้นเดือน ทั้งเดือน
 async function pvPreview(){
   const m=document.getElementById('pvM').value, per=document.getElementById('pvPer').value, vat=document.getElementById('pvVat').value;
   const days=monthDays(m);
   const from=per==='1'?dstr(m,1):dstr(m,16), to=per==='1'?dstr(m,15):dstr(m,days);
-  const rows=await selAll('pnl_expense_daily',`select=supplier_id,amount,paid&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`);
-  const sums={}, paidSums={};
+  // งวดสิ้นเดือน: ดึงทั้งเดือนมาก่อน แล้วค่อยคัด (ซัพเครดิต 1 เดือนเอาทั้งเดือน · ซัพปกติเอาเฉพาะ 16–สิ้นเดือน)
+  const qFrom=per==='1'?from:dstr(m,1), qTo=to;
+  const rows=await selAll('pnl_expense_daily',`select=supplier_id,amount,paid,d&branch=eq.${S.br}&d=gte.${qFrom}&d=lte.${qTo}&order=d`);
+  const sums={}, paidSums={}, monthWide={};
   rows.forEach(r=>{
+    const sup=S.core.supById[r.supplier_id], mon=isMonthlySup(sup);
+    const early=Number(String(r.d||'').slice(-2))<=15;
+    if(per==='1'&&mon)return;              // ซัพเครดิตเดือน ไม่ออกในงวด 1–15
+    if(per!=='1'&&early&&!mon)return;       // ซัพปกติ งวดสิ้นเดือนเอาเฉพาะ 16–สิ้นเดือน
+    if(per!=='1'&&mon)monthWide[r.supplier_id]=1;
     if(r.paid) paidSums[r.supplier_id]=(paidSums[r.supplier_id]||0)+num(r.amount);
     else sums[r.supplier_id]=(sums[r.supplier_id]||0)+num(r.amount);
   });
+  S._pvMonthWide=monthWide;
   const match=s=> vat==='VAT' ? (s.vat_type==='VAT'||s.vat_type==='VAT / NON-VAT') : s.vat_type==='NON-VAT';
   const items=S.core.sup.filter(s=>sums[s.id]>0&&match(s)).map(s=>({s,amt:sums[s.id]}));
   const paidCut=S.core.sup.filter(s=>paidSums[s.id]>0&&match(s)).reduce((a,s)=>a+paidSums[s.id],0);
@@ -5018,7 +5028,8 @@ async function pvPreview(){
     <div class="xs" style="margin-top:10px;color:var(--ok);font-weight:600">✓ ดึงเฉพาะบิลที่ยังไม่จ่าย${paidCut?` · หักบิลติ๊กจ่ายแล้วออก ฿${fmtI(paidCut)}`:''}</div>
     <div style="margin-top:8px;max-height:40dvh;overflow-y:auto">${items.map((it,i)=>{
       const pd=paidSums[it.s.id]||0;
-      return `<div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}${pd?` · <span style="color:var(--ok)">จ่ายไปแล้ว ฿${fmtI(pd)}</span>`:''}</div></div>
+      const mw=(S._pvMonthWide||{})[it.s.id];
+      return `<div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}${mw?` <span class="xs" style="color:#A66A00;font-weight:700">· เครดิต 1 เดือน (รวมทั้งเดือน)</span>`:''}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}${pd?` · <span style="color:var(--ok)">จ่ายไปแล้ว ฿${fmtI(pd)}</span>`:''}</div></div>
       <input type="number" step="any" inputmode="decimal" value="${it.amt.toFixed(2)}" onchange="S._pvDraft.items[${i}].amt=num(this.value)"></div>`;}).join('')}</div>
     <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม ${items.length} ราย · ฿${fmtI(items.reduce((a,x)=>a+x.amt,0))}</span></div>
     <button class="btn dk" style="width:100%;margin-top:6px" onclick="pvSave()">บันทึก PV</button>`
@@ -5788,7 +5799,7 @@ async function supRestore(id){
   sp.active=true; toast('กู้คืน "'+sp.name+'" แล้ว'); show('set');
 }
 function supModal(id){
-  const s=id?S.core.supById[id]:{category:'อาหาร',name:'',payment_term:'',vat_type:'NON-VAT',bank:'',account_no:'',account_name:'',full_name:'',sort:999,active:true};
+  const s=id?S.core.supById[id]:{category:'อาหาร',name:'',payment_term:'',pay_cycle:'period',vat_type:'NON-VAT',bank:'',account_no:'',account_name:'',full_name:'',sort:999,active:true};
   openModal(`<h3>${id?'แก้ไข':'เพิ่ม'}ซัพพลายเออร์</h3>
     <div class="fld"><label>ชื่อ (ชื่อย่อ)</label><input id="spName" value="${esc(s.name)}"></div>
     <div class="grid2">
@@ -5800,6 +5811,10 @@ function supModal(id){
         <div id="spCatNewWrap" style="display:none;margin-top:6px"><input id="spCatNew" placeholder="พิมพ์ชื่อหมวดใหม่ เช่น เครื่องดื่มแอลกอฮอล์"></div></div>
       <div class="fld"><label>ประเภทภาษี</label><select id="spVat"><option ${s.vat_type==='NON-VAT'?'selected':''}>NON-VAT</option><option ${s.vat_type==='VAT'?'selected':''}>VAT</option><option ${s.vat_type==='VAT / NON-VAT'?'selected':''}>VAT / NON-VAT</option></select></div>
       <div class="fld"><label>เงื่อนไขจ่าย</label><input id="spTerm" value="${esc(s.payment_term||'')}" placeholder="เช่น 15 วัน จ่าย"></div>
+      <div class="fld"><label>รอบทำ PV</label><select id="spCycle">
+        <option value="period" ${s.pay_cycle!=='monthly'?'selected':''}>ตามงวด (1–15 / 16–สิ้นเดือน)</option>
+        <option value="monthly" ${s.pay_cycle==='monthly'?'selected':''}>เครดิต 1 เดือน — รวมทั้งเดือน ออกรอบสิ้นเดือน</option>
+      </select></div>
       <div class="fld"><label>ลำดับ</label><input type="number" step="any" id="spSort" value="${s.sort}"></div>
       <div class="fld"><label>ธนาคาร</label><input id="spBank" value="${esc(s.bank||'')}"></div>
       <div class="fld"><label>เลขที่บัญชี</label><input id="spAcc" value="${esc(s.account_no||'')}"></div>
@@ -5813,7 +5828,7 @@ function supModal(id){
 async function supSave(id){
   if(document.getElementById('spCat').value==='__new'&&!(document.getElementById('spCatNew').value||'').trim()){toast('พิมพ์ชื่อหมวดใหม่ก่อนครับ',true);return;}
   const body={ name:spName.value.trim(), category:(spCat.value==='__new'?(document.getElementById('spCatNew').value||'').trim():spCat.value), vat_type:spVat.value,
-    payment_term:spTerm.value.trim()||null, sort:num(spSort.value), bank:spBank.value.trim()||null,
+    payment_term:spTerm.value.trim()||null, pay_cycle:(document.getElementById('spCycle')||{}).value||'period', sort:num(spSort.value), bank:spBank.value.trim()||null,
     account_no:spAcc.value.trim()||null, account_name:spAccN.value.trim()||null,
     full_name:spFull.value.trim()||null, active:spAct.checked };
   if(!body.name){toast('ใส่ชื่อก่อนครับ',true);return;}
