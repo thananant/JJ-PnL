@@ -197,6 +197,24 @@ const APPS={
     users:'ผู้ใช้ & สิทธิ์',log:'ประวัติการแก้สิทธิ์'}}
 };
 const APPKEYS=Object.keys(APPS);
+
+/* ---------- ระดับตำแหน่ง + สังกัด (ประจำที่) ---------- */
+const ROLES={
+  admin:  {n:'ผู้ดูแลระบบ', d:'ทุกสิทธิ์ทุกแอพ + จัดการผู้ใช้', ic:'🛡️'},
+  owner:  {n:'เจ้าของ',     d:'เห็นทุกแอพทุกสาขา + จัดการผู้ใช้', ic:'👑'},
+  manager:{n:'ผู้จัดการ',   d:'ดูแลหน่วยงานที่สังกัด — กำหนดสิทธิ์รายแอพ', ic:'📋'},
+  staff:  {n:'พนักงาน',     d:'กำหนดสิทธิ์รายแอพ', ic:'👤'}
+};
+const UNITS={
+  ALL:   {n:'ส่วนกลาง (ทุกที่)', ic:'🏢'},
+  OFFICE:{n:'ออฟฟิศ',           ic:'🏬'},
+  JJCK:  {n:'ครัวกลาง',         ic:'🍳'},
+  JJLP:  {n:'สาขาลาดพร้าว',     ic:'🏮'},
+  JJRD:  {n:'สาขารัชดา',        ic:'🏮'}
+};
+const isBoss=u=>!!u&&(u.role==='admin'||u.role==='owner');   // เข้าได้ทุกแอพ + จัดการผู้ใช้
+function roleOf(u){ return (u&&ROLES[u.role])?u.role:'staff'; }
+function unitOf(u){ return (u&&UNITS[u.unit])?u.unit:'ALL'; }
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
 
 const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{}};
@@ -264,19 +282,19 @@ async function alog(target,action,detail){
 /* ---------- แผนสิทธิ์ ---------- */
 function permOf(u,app,screen){ // คืนสตริงแฟล็ก เช่น 'vae'
   if(!u)return '';
-  if(u.role==='admin')return 'vaed';
+  if(isBoss(u))return 'vaed';   // ผู้ดูแลระบบ + เจ้าของ = ทุกสิทธิ์
   const a=(u.apps||{})[app]; if(!a)return '';
   return a[screen]||'';
 }
 function appOn(u,app){ // เข้าแอพนี้ได้ไหม (มีอย่างน้อย 1 หน้าจอที่เห็นได้)
   if(!u)return false;
-  if(u.role==='admin')return true;
+  if(isBoss(u))return true;
   const a=(u.apps||{})[app]; if(!a)return false;
   return Object.values(a).some(v=>String(v).includes('v'));
 }
 function countScreens(u,app){
   if(!u)return 0;
-  if(u.role==='admin')return Object.keys(APPS[app].s).length;
+  if(isBoss(u))return Object.keys(APPS[app].s).length;
   const a=(u.apps||{})[app]||{};
   return Object.keys(APPS[app].s).filter(k=>String(a[k]||'').includes('v')).length;
 }
@@ -312,15 +330,17 @@ async function viewUsers(){
   const us=await loadUsers(true);
   const rows=us.map(u=>{
     const apps=APPKEYS.filter(k=>appOn(u,k));
-    const chips=u.role==='admin'
-      ? '<span class="chip adm">ทุกแอพ (admin)</span>'
+    const chips=isBoss(u)
+      ? '<span class="chip adm">ทุกแอพ</span>'
       : (apps.length?apps.map(k=>'<span class="chip ok">'+APPS[k].ic+' '+esc(APPS[k].n)+'</span>').join(' ')
                     :'<span class="chip off">ยังไม่ได้เปิดแอพไหนเลย</span>');
+    const R=ROLES[roleOf(u)], UN=UNITS[unitOf(u)];
     return '<tr>'+
       '<td><b>'+esc(u.display_name||u.username)+'</b>'+
         '<div style="font-size:11.5px;color:var(--mut)">'+esc(u.username)+'</div></td>'+
-      '<td>'+(u.role==='admin'?'<span class="chip adm">ผู้ดูแลระบบ</span>':'<span class="chip">พนักงาน</span>')+
+      '<td><span class="chip '+(isBoss(u)?'adm':'')+'">'+R.ic+' '+esc(R.n)+'</span>'+
         (u.active===false?' <span class="chip off">ปิดใช้งาน</span>':'')+'</td>'+
+      '<td><span class="chip">'+UN.ic+' '+esc(UN.n)+'</span></td>'+
       '<td style="line-height:2">'+chips+'</td>'+
       '<td style="text-align:right;white-space:nowrap">'+
         '<button class="btn sm" onclick="editPerms('+u.id+')">⚙️ ตั้งสิทธิ์</button> '+
@@ -330,9 +350,9 @@ async function viewUsers(){
   return '<div class="card">'+
     '<h3>👥 ผู้ใช้ทั้งหมด <span class="chip">'+us.length+' บัญชี</span>'+
       '<button class="btn pri sm" style="margin-left:auto" onclick="editUser(null)">+ เพิ่มผู้ใช้</button></h3>'+
-    '<p class="sub">บัญชีเดียวใช้เข้าได้ทุกระบบที่ admin ติ๊กเปิดให้ · กด <b>⚙️ ตั้งสิทธิ์</b> เพื่อเลือกว่าคนนั้นเข้าแอพไหนได้ และในแต่ละหน้าจอทำอะไรได้บ้าง (ดู/เพิ่ม/แก้/ลบ)</p>'+
-    '<div class="twrap"><table><tr><th>ชื่อ</th><th>บทบาท</th><th>แอพที่เข้าได้</th><th></th></tr>'+
-    (rows||'<tr><td colspan="4" class="empty">ยังไม่มีผู้ใช้</td></tr>')+'</table></div></div>';
+    '<p class="sub">บัญชีเดียวใช้เข้าได้ทุกระบบที่เปิดสิทธิ์ให้ · <b>✏️</b> = แก้ชื่อ/รหัส/<b>ระดับ</b>/<b>ประจำที่</b> · <b>⚙️ ตั้งสิทธิ์</b> = เลือกว่าเข้าแอพไหนได้ และในแต่ละหน้าจอทำอะไรได้ (ดู/เพิ่ม/แก้/ลบ)<br><span style="color:var(--goldDim)">🛡️ ผู้ดูแลระบบ · 👑 เจ้าของ</span> = เข้าได้ทุกแอพอัตโนมัติ ไม่ต้องตั้งสิทธิ์รายแอพ</p>'+
+    '<div class="twrap"><table><tr><th>ชื่อ</th><th>ระดับ</th><th>ประจำที่</th><th>แอพที่เข้าได้</th><th></th></tr>'+
+    (rows||'<tr><td colspan="5" class="empty">ยังไม่มีผู้ใช้</td></tr>')+'</table></div></div>';
 }
 
 /* ---------- ฟอร์มตั้งสิทธิ์รายแอพ ---------- */
@@ -340,10 +360,10 @@ function editPerms(id){
   const u=S.users.find(x=>x.id===id); if(!u)return;
   S.editId=id;
   S.draft=JSON.parse(JSON.stringify(u.apps||{}));
-  if(u.role==='admin'){
+  if(isBoss(u)){
     openModal('<h3>⚙️ สิทธิ์ของ '+esc(u.display_name||u.username)+'</h3>'+
-      '<div class="empty">บัญชีนี้เป็น <b>ผู้ดูแลระบบ (admin)</b> — เข้าได้ทุกแอพ ทำได้ทุกอย่างโดยอัตโนมัติ<br>'+
-      '<span style="font-size:12px">ถ้าต้องการจำกัดสิทธิ์ ให้เปลี่ยนบทบาทเป็น "พนักงาน" ก่อน (ปุ่ม ✏️)</span></div>'+
+      '<div class="empty">บัญชีนี้เป็น <b>'+ROLES[roleOf(u)].ic+' '+esc(ROLES[roleOf(u)].n)+'</b> — เข้าได้ทุกแอพ ทำได้ทุกอย่างโดยอัตโนมัติ<br>'+
+      '<span style="font-size:12px">ถ้าต้องการจำกัดสิทธิ์ ให้เปลี่ยนระดับเป็น "ผู้จัดการ" หรือ "พนักงาน" ก่อน (ปุ่ม ✏️)</span></div>'+
       '<div class="mbtn"><button class="btn" onclick="closeModal()">ปิด</button></div>');
     return;
   }
@@ -424,7 +444,7 @@ async function savePerms(){
 
 /* ---------- เพิ่ม/แก้ผู้ใช้ ---------- */
 function editUser(id){
-  const u=id?S.users.find(x=>x.id===id):{username:'',display_name:'',role:'staff',active:true};
+  const u=id?S.users.find(x=>x.id===id):{username:'',display_name:'',role:'staff',unit:'ALL',active:true};
   if(!u)return;
   openModal('<h3>'+(id?'✏️ แก้ไขผู้ใช้':'+ เพิ่มผู้ใช้ใหม่')+'</h3>'+
     '<div class="grid2">'+
@@ -433,29 +453,42 @@ function editUser(id){
     '</div>'+
     '<div class="grid2">'+
       '<label class="fld"><span>รหัสผ่าน '+(id?'(เว้นว่าง = ไม่เปลี่ยน)':'(อย่างน้อย 4 ตัว)')+'</span><input id="fPass" type="password" autocomplete="new-password" placeholder="'+(id?'••••••••':'')+'"></label>'+
-      '<label class="fld"><span>บทบาท</span><select id="fRole">'+
-        '<option value="staff"'+(u.role!=='admin'?' selected':'')+'>พนักงาน (กำหนดสิทธิ์รายแอพ)</option>'+
-        '<option value="admin"'+(u.role==='admin'?' selected':'')+'>ผู้ดูแลระบบ (ทุกสิทธิ์ทุกแอพ)</option></select></label>'+
+      '<label class="fld"><span>ระดับตำแหน่ง</span><select id="fRole" onchange="roleHint()">'+
+        Object.keys(ROLES).map(function(k){
+          return '<option value="'+k+'"'+(roleOf(u)===k?' selected':'')+'>'+ROLES[k].ic+' '+esc(ROLES[k].n)+'</option>';
+        }).join('')+'</select></label>'+
+    '</div>'+
+    '<div class="grid2">'+
+      '<label class="fld"><span>ประจำที่ (สังกัด)</span><select id="fUnit">'+
+        Object.keys(UNITS).map(function(k){
+          return '<option value="'+k+'"'+(unitOf(u)===k?' selected':'')+'>'+UNITS[k].ic+' '+esc(UNITS[k].n)+'</option>';
+        }).join('')+'</select></label>'+
+      '<div class="fld"><span style="display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;font-family:var(--fd);font-weight:500">ระดับนี้ได้อะไร</span>'+
+        '<div id="roleHint" style="font-size:12px;color:var(--mut);line-height:1.6;padding-top:6px">'+esc(ROLES[roleOf(u)].d)+'</div></div>'+
     '</div>'+
     '<label class="fld" style="display:flex;gap:9px;align-items:center"><input type="checkbox" id="fAct" '+(u.active!==false?'checked':'')+' style="width:18px;height:18px"><span style="margin:0">เปิดใช้งานบัญชีนี้</span></label>'+
     '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
       '<button class="btn pri" onclick="saveUser('+(id||'null')+')">💾 บันทึก</button></div>');
 }
+function roleHint(){
+  const el=document.getElementById('roleHint'), r=document.getElementById('fRole');
+  if(el&&r&&ROLES[r.value])el.textContent=ROLES[r.value].d;
+}
 async function saveUser(id){
   const name=($('#fName').value||'').trim(), uname=($('#fUser').value||'').trim();
-  const pass=$('#fPass').value||'', role=$('#fRole').value, active=$('#fAct').checked;
+  const pass=$('#fPass').value||'', role=$('#fRole').value, unit=$('#fUnit').value, active=$('#fAct').checked;
   if(!name||!uname){toast('ใส่ชื่อและ username ก่อนครับ',true);return;}
   try{
     if(id){
       const u=S.users.find(x=>x.id===id);
-      const body={display_name:name,role,active};
+      const body={display_name:name,role,unit,active};
       if(pass){if(pass.length<4){toast('รหัสผ่านอย่างน้อย 4 ตัว',true);return;} body.pass_hash=pwHash(u.username,pass);}
       await upd('pnl_users','id=eq.'+id,body);
-      await alog(u.username,'แก้ข้อมูลผู้ใช้',(pass?'เปลี่ยนรหัสผ่าน · ':'')+'บทบาท: '+role+(active?'':' · ปิดใช้งาน'));
+      await alog(u.username,'แก้ข้อมูลผู้ใช้',(pass?'เปลี่ยนรหัสผ่าน · ':'')+ROLES[role].n+' · '+UNITS[unit].n+(active?'':' · ปิดใช้งาน'));
     }else{
       if(pass.length<4){toast('รหัสผ่านอย่างน้อย 4 ตัว',true);return;}
-      await ins('pnl_users',{username:uname,display_name:name,pass_hash:pwHash(uname,pass),role,active,perms:{},apps:{}});
-      await alog(uname,'เพิ่มผู้ใช้','บทบาท: '+role);
+      await ins('pnl_users',{username:uname,display_name:name,pass_hash:pwHash(uname,pass),role,unit,active,perms:{},apps:{}});
+      await alog(uname,'เพิ่มผู้ใช้',ROLES[role].n+' · '+UNITS[unit].n);
     }
     closeModal(); toast('บันทึกแล้ว ✓'); render();
   }catch(e){toast('บันทึกไม่สำเร็จ: '+e.message,true);}
@@ -474,9 +507,9 @@ async function viewSurvey(){
   }
   const known=new Set(us.map(u=>u.username.toLowerCase()));
   const pnlRows=us.map(u=>'<tr><td><b>'+esc(u.display_name||u.username)+'</b><div style="font-size:11.5px;color:var(--mut)">'+esc(u.username)+'</div></td>'+
-    '<td>'+(u.role==='admin'?'<span class="chip adm">ผู้ดูแล</span>':'<span class="chip">พนักงาน</span>')+'</td>'+
+    '<td><span class="chip'+(isBoss(u)?' adm':'')+'">'+ROLES[roleOf(u)].ic+' '+esc(ROLES[roleOf(u)].n)+'</span></td>'+
     '<td>'+(u.active===false?'<span class="chip off">ปิด</span>':'<span class="chip ok">ใช้งาน</span>')+'</td>'+
-    '<td style="font-size:12px;color:var(--ink2)">'+(u.role==='admin'?'ทุกแอพ':(APPKEYS.filter(k=>appOn(u,k)).length+' แอพ'))+'</td></tr>').join('');
+    '<td style="font-size:12px;color:var(--ink2)">'+esc(UNITS[unitOf(u)].n)+' · '+(isBoss(u)?'ทุกแอพ':(APPKEYS.filter(k=>appOn(u,k)).length+' แอพ'))+'</td></tr>').join('');
 
   let scBlock;
   if(S.scErr){
@@ -523,7 +556,7 @@ async function viewSurvey(){
     '<div class="grid2" style="gap:14px">'+
       '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">📒</span><span class="nm">บัญชีกลาง (pnl_users)</span><span class="cnt">'+us.length+' คน</span></div>'+
       '<div class="appbody" style="display:block"><p class="sub" style="margin:8px 0">ใช้ร่วมกันแล้วโดย: P&amp;L · Owner · Payroll · Social · Calendar · Invoice</p>'+
-      '<div class="twrap"><table><tr><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>แอพ</th></tr>'+pnlRows+'</table></div></div></div>'+
+      '<div class="twrap"><table><tr><th>ชื่อ</th><th>ระดับ</th><th>สถานะ</th><th>ประจำที่ · แอพ</th></tr>'+pnlRows+'</table></div></div></div>'+
       '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">🔐</span><span class="nm">ระบบที่ยังแยกบัญชี</span><span class="cnt">'+(us.length+(S.sc||[]).length+(S.au||[]).length)+' บัญชีรวมทุกที่</span></div>'+
       '<div class="appbody" style="display:block">'+
         '<p class="sub" style="margin:8px 0 10px">ทั้งร้านมีที่เก็บบัญชี 3 ที่ — ตัวเลขคือจำนวนที่ดึงมาได้จริงตอนนี้:</p>'+
@@ -567,7 +600,8 @@ async function viewMatrix(){
   const us=(await loadUsers()).filter(u=>u.active!==false);
   const head='<tr><th>ผู้ใช้</th>'+APPKEYS.map(k=>'<th style="text-align:center" title="'+esc(APPS[k].n)+'">'+APPS[k].ic+'</th>').join('')+'</tr>';
   const rows=us.map(u=>'<tr><td><b>'+esc(u.display_name||u.username)+'</b>'+
-    (u.role==='admin'?' <span class="chip adm">admin</span>':'')+'</td>'+
+    ' <span class="chip'+(isBoss(u)?' adm':'')+'">'+ROLES[roleOf(u)].ic+'</span>'+
+    (unitOf(u)!=='ALL'?' <span style="font-size:11px;color:var(--mut)">'+esc(UNITS[unitOf(u)].n)+'</span>':'')+'</td>'+
     APPKEYS.map(k=>{
       const n=countScreens(u,k), tot=Object.keys(APPS[k].s).length;
       const c=n===0?'<span style="color:#5C4F45">–</span>'
@@ -617,14 +651,17 @@ async function doLogin(){
   try{
     const rows=await sel('pnl_users','select=*&active=is.true&username=eq.'+encodeURIComponent(u));
     if(!rows[0]||rows[0].pass_hash!==pwHash(u,p)){$('#lgMsg').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}
-    if(rows[0].role!=='admin'){$('#lgMsg').textContent='หน้านี้เปิดให้เฉพาะผู้ดูแลระบบ (admin)';return;}
+    if(!isBoss(rows[0])){$('#lgMsg').textContent='หน้านี้เปิดให้เฉพาะผู้ดูแลระบบและเจ้าของเท่านั้น';return;}
     localStorage.setItem('jjpnl_auth',JSON.stringify({u:rows[0].username,h:rows[0].pass_hash}));
     $('#login').classList.remove('on'); setUser(rows[0]); render();
   }catch(e){$('#lgMsg').textContent='เข้าสู่ระบบไม่สำเร็จ: '+e.message;}
 }
 function setUser(u){
   S.user=u;
-  $('#uchip').innerHTML='👤 <b>'+esc(u.display_name||u.username)+'</b> · ผู้ดูแล <a class="back" style="margin-left:8px" onclick="logout()" href="javascript:">ออก</a>';
+  const R=ROLES[roleOf(u)], UN=UNITS[unitOf(u)];
+  $('#uchip').innerHTML=R.ic+' <b>'+esc(u.display_name||u.username)+'</b> · '+esc(R.n)+
+    (unitOf(u)!=='ALL'?' · '+esc(UN.n):'')+
+    ' <a class="back" style="margin-left:8px" onclick="logout()" href="javascript:">ออก</a>';
 }
 function logout(){localStorage.removeItem('jjpnl_auth');location.reload();}
 
@@ -632,8 +669,8 @@ function logout(){localStorage.removeItem('jjpnl_auth');location.reload();}
 (async function(){
   const ok=await initAuth();
   if(!ok)return;
-  if(S.user.role!=='admin'){
-    $('#main').innerHTML='<div class="card"><div class="empty">🔒 หน้านี้เปิดให้เฉพาะผู้ดูแลระบบ (admin) เท่านั้น<br>'+
+  if(!isBoss(S.user)){
+    $('#main').innerHTML='<div class="card"><div class="empty">🔒 หน้านี้เปิดให้เฉพาะผู้ดูแลระบบและเจ้าของเท่านั้น<br>'+
       '<a class="back" href="index.html">← กลับหน้าศูนย์รวมแอพ</a></div></div>';
     return;
   }
