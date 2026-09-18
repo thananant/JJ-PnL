@@ -426,53 +426,62 @@ function errMsg(e){ // แปลง error ของ PostgREST ให้อ่า
 /* ---------- ภาษา: ไทย / อังกฤษ / ลาว / พม่า — แปลอัตโนมัติทั้งหน้า ---------- */
 const LANGS=[['th','ไทย','Thai','th'],['en','English','English','gb'],['lo','ລາວ','Lao','la'],['my','မြန်မာ','Burmese','mm']];
 let LANG=localStorage.getItem('jjsc_lang')||'th';
-let TRC={}; try{ TRC=JSON.parse(localStorage.getItem('jjsc_tr_'+LANG)||'{}')||{}; }catch(e){ TRC={}; }
+const TRKEY=l=>'jjsc_tr2_'+l;   // v2: ล้างแคชรุ่นเก่าที่เคยเก็บคำแปล = ข้อความเดิม (เมนูค้างเป็นไทย)
+function trLoad(l){ let o={}; try{ o=JSON.parse(localStorage.getItem(TRKEY(l))||'{}')||{}; }catch(e){ o={}; }
+  Object.keys(o).forEach(k=>{ if(!o[k]||o[k]===k)delete o[k]; }); return o; }
+let TRC=trLoad(LANG);
 const TRWAIT={th:'⏳ กำลังแปล…',en:'⏳ Translating…',lo:'⏳ ກຳລັງແປ…',my:'⏳ ဘာသာပြန်နေသည်…'};
 const hasTH=t=>/[\u0E00-\u0E7F]/.test(String(t||''));
 const trAble=t=>/[A-Za-z\u0E00-\u0E7F\u0E80-\u0EFF\u1000-\u109F\u00C0-\u024F]/.test(String(t||'')); // มีตัวอักษร (ไม่ใช่เลข/สัญลักษณ์ล้วน)
-function trCacheSave(){ try{ localStorage.setItem('jjsc_tr_'+LANG,JSON.stringify(TRC)); }catch(e){} }
+function trCacheSave(){ try{ localStorage.setItem(TRKEY(LANG),JSON.stringify(TRC)); }catch(e){} }
 const trURL=(t,sl)=>'https://translate.googleapis.com/translate_a/single?client=gtx&sl='+sl+'&tl='+LANG+'&dt=t&q='+encodeURIComponent(t);
-async function trOne(t){ // แปลทีละข้อความ (ใช้ตอน batch เพี้ยน)
-  try{
-    const r=await fetch(trURL(t,hasTH(t)?'th':'auto'));
-    const j=await r.json();
-    const out=((j&&j[0])||[]).map(x=>(x&&x[0])||'').join('').trim();
-    return out||null;
-  }catch(e){ return null; }
+async function trGET(text,sl){ // ยิงตัวแปล 1 ครั้ง (ลองซ้ำ 1 รอบถ้าเน็ตสะดุด/โดนจำกัด)
+  for(let k=0;k<2;k++){
+    try{
+      const r=await fetch(trURL(text,sl));
+      if(!r||r.ok===false)throw new Error('http');
+      const j=await r.json();
+      return ((j&&j[0])||[]).map(x=>(x&&x[0])||'').join('');
+    }catch(e){ if(k)return null; await new Promise(z=>setTimeout(z,450+Math.random()*450)); }
+  }
+  return null;
 }
-async function trFetch(list){ // แปลเป็นชุด · แยกกลุ่มไทย/ไม่ใช่ไทย (ไม่งั้นกูเกิลเดาภาษาต้นทางผิด เหลือคำที่ไม่ใช่ไทยไม่ถูกแปล)
+async function trChunk(chunk,sl,out){ // แปลเป็นก้อน · ถ้าจำนวนบรรทัดกลับมาไม่ตรง ผ่าครึ่งลองใหม่ (ไม่ทิ้งทั้งก้อน)
+  if(!chunk.length)return;
+  if(chunk.length===1){ const v=await trGET(chunk[0],sl); const t=String(v||'').trim(); if(t&&t!==chunk[0])out[chunk[0]]=t; return; }
+  const txt=await trGET(chunk.join('\n'),sl);
+  const ls=(txt==null)?null:String(txt).split('\n').map(x=>x.trim()).filter(x=>x!=='');
+  if(ls&&ls.length===chunk.length){ chunk.forEach((t,k)=>{ if(ls[k]&&ls[k]!==t)out[t]=ls[k]; }); return; }
+  const h=Math.ceil(chunk.length/2);
+  await trChunk(chunk.slice(0,h),sl,out);
+  await trChunk(chunk.slice(h),sl,out);
+}
+async function trFetch(list){ // แยกยิง 2 ก้อน: คำไทย sl=th · คำที่ไม่ใช่ไทย sl=auto (ยิงรวมกันกูเกิลเดาภาษาต้นทางผิด)
   const out={};
   const groups=[[list.filter(hasTH),'th'],[list.filter(t=>!hasTH(t)),'auto']];
-  for(const g of groups){
-    const arr=g[0],sl=g[1];
-    for(let i=0;i<arr.length;i+=30){
-      const chunk=arr.slice(i,i+30);
-      let lines=null;
-      try{
-        const r=await fetch(trURL(chunk.join('\n'),sl));
-        const j=await r.json();
-        const txt=((j&&j[0])||[]).map(x=>(x&&x[0])||'').join('');
-        const ls=String(txt).split('\n').map(x=>x.trim()).filter(x=>x!=='');
-        if(ls.length===chunk.length)lines=ls;
-      }catch(e){}
-      if(lines){ chunk.forEach((t,k)=>{ out[t]=lines[k]; }); }
-      else { for(const t of chunk){ const v=await trOne(t); if(v)out[t]=v; } } // batch ไม่ตรง → แปลทีละอัน
-    }
+  for(const g of groups){ const arr=g[0];
+    for(let i=0;i<arr.length;i+=20) await trChunk(arr.slice(i,i+20),g[1],out);
   }
   return out;
 }
-let _trBusy=false,_trT=null;
+let _trBusy=false,_trT=null,_trRun=false,_trAgain=false,_trTry=0,_trWarned=false;
 let TRDONE=new WeakMap(),TRATTR=new WeakMap(); // จำว่าโหนด/แอตทริบิวต์ไหนแปลแล้ว (กันแปลซ้ำทับของเดิม)
-let TRLOG=[],TRALOG=[];                        // เก็บต้นฉบับไทยไว้ เพื่อคืนค่าเวลาสลับภาษา
+let TRLOG=[],TRALOG=[],TRBAD={};               // ต้นฉบับไทยไว้คืนค่า + นับคำที่แปลไม่สำเร็จ
 function trRestore(){ // คืนข้อความต้นฉบับทั้งหน้า (ถ้าไม่คืน = แปลทับจากภาษาที่แปลไว้แล้ว → ตกค้างเป็นภาษาเก่า)
   TRLOG.forEach(o=>{ try{ o.n.nodeValue=o.s; }catch(e){} });
   TRALOG.forEach(o=>{ try{ o.el.setAttribute(o.a,o.s); }catch(e){} });
-  TRLOG=[]; TRALOG=[]; TRDONE=new WeakMap(); TRATTR=new WeakMap();
+  TRLOG=[]; TRALOG=[]; TRBAD={}; _trTry=0; TRDONE=new WeakMap(); TRATTR=new WeakMap();
 }
 const TRATT=['placeholder','title','alt','aria-label'];
 function trMark(){ clearTimeout(_trT); _trT=setTimeout(translateDOM,80); } // มีการวาดใหม่ = แปลใหม่
-async function translateDOM(){
-  if(LANG==='th'||_trBusy)return;
+async function translateDOM(){ // กันเรียกซ้อน: ถ้ากำลังแปลอยู่ ให้ต่อคิวไว้รอบเดียว
+  if(LANG==='th')return;
+  if(_trRun){ _trAgain=true; return; }
+  _trRun=true;
+  try{ await trPass(); }
+  finally{ _trRun=false; if(_trAgain){ _trAgain=false; trMark(); } }
+}
+async function trPass(){
   const nodes=[],attrs=[];
   const walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode(n){
     const p=n.parentElement; if(!p)return NodeFilter.FILTER_REJECT;
@@ -486,23 +495,32 @@ async function translateDOM(){
     TRATT.forEach(a=>{ const v=el.getAttribute(a);
       if(v&&trAble(v)&&(TRATTR.get(el)||{})[a]!==v)attrs.push([el,a,v]); });
   });
-  const need=[...new Set([].concat(nodes.map(n=>n.nodeValue.trim()),attrs.map(a=>a[2].trim())).filter(t=>t&&!TRC[t]))];
+  const need=[...new Set([].concat(nodes.map(n=>n.nodeValue.trim()),attrs.map(a=>a[2].trim()))
+    .filter(t=>t&&!TRC[t]&&(TRBAD[t]||0)<3))];
   if(need.length){
     const bar=document.getElementById('trBar');
     if(bar){bar.textContent=TRWAIT[LANG]||TRWAIT.en;bar.classList.add('on');}
     const got=await trFetch(need);
     Object.assign(TRC,got); trCacheSave();
+    need.forEach(t=>{ if(!TRC[t])TRBAD[t]=(TRBAD[t]||0)+1; }); // แปลไม่ได้รอบนี้ → ไว้ลองใหม่ (ไม่ปักธงว่าเสร็จ)
     if(bar)bar.classList.remove('on');
   }
   _trBusy=true;
+  let miss=0;
   nodes.forEach(n=>{ const t=n.nodeValue.trim(),v=TRC[t];
-    if(v&&v!==t){ TRLOG.push({n:n,s:n.nodeValue}); n.nodeValue=n.nodeValue.replace(t,v); }
-    TRDONE.set(n,n.nodeValue); }); // ตั้งธงทุกโหนดที่ผ่านรอบนี้ (แม้แปลไม่ได้) จะได้ไม่วนแปลซ้ำ
+    if(v&&v!==t){ TRLOG.push({n:n,s:n.nodeValue}); n.nodeValue=n.nodeValue.replace(t,()=>v); TRDONE.set(n,n.nodeValue); }
+    else if(v||(TRBAD[t]||0)>=3){ TRDONE.set(n,n.nodeValue); } // ไม่ต้องแปล / ยอมแพ้แล้ว
+    else miss++; });
   attrs.forEach(pair=>{ const el=pair[0],a=pair[1],v=pair[2],x=TRC[v.trim()];
     if(x&&x!==v.trim()){ TRALOG.push({el:el,a:a,s:v}); el.setAttribute(a,x); }
-    const m2=TRATTR.get(el)||{}; m2[a]=el.getAttribute(a); TRATTR.set(el,m2); });
+    if(x||(TRBAD[v.trim()]||0)>=3){ const m2=TRATTR.get(el)||{}; m2[a]=el.getAttribute(a); TRATTR.set(el,m2); }
+    else miss++; });
   if(TRLOG.length>6000)TRLOG=TRLOG.filter(o=>o.n.isConnected);
   _trBusy=false;
+  if(miss){ // ยังเหลือคำที่ยังไม่ถูกแปล → ลองใหม่อีกไม่กี่รอบ แล้วค่อยบอกผู้ใช้
+    if(_trTry<4){ _trTry++; setTimeout(()=>{ if(LANG!=='th')translateDOM(); },1200*_trTry); }
+    else if(!_trWarned){ _trWarned=true; toast('แปลบางคำไม่สำเร็จ ('+miss+' จุด) — เน็ตสะดุดหรือกูเกิลจำกัดจำนวน ลองเปลี่ยนภาษาซ้ำอีกครั้ง',true); }
+  }else _trTry=0;
 }
 function langToggle(){ const m=document.getElementById('langMenu'); if(m)m.classList.toggle('on'); }
 const FLAGSVG={ // ธงชาติวาดเป็น SVG ฝังในไฟล์ (ไม่ต้องโหลดจากเน็ต ร้านเน็ตหลุดก็ยังขึ้น)
@@ -522,9 +540,9 @@ async function setLang(code){
   const m=document.getElementById('langMenu'); if(m)m.classList.remove('on');
   if(code===LANG)return;
   LANG=code; localStorage.setItem('jjsc_lang',code);
-  try{ TRC=JSON.parse(localStorage.getItem('jjsc_tr_'+LANG)||'{}')||{}; }catch(e){ TRC={}; }
+  TRC=trLoad(LANG);
   document.documentElement.lang=code;
-  trRestore();          // กลับเป็นไทยต้นฉบับก่อนเสมอ แล้วค่อยแปลใหม่ทั้งหน้า
+  trRestore(); _trWarned=false;   // กลับเป็นไทยต้นฉบับก่อนเสมอ แล้วค่อยแปลใหม่ทั้งหน้า
   langPaint();
   if(code==='th')return;
   await translateDOM();
