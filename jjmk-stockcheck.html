@@ -108,6 +108,20 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .ovlfoot .go{background:var(--red);color:#fff}
 .ovlfoot .go:disabled{opacity:.5}
 .ovlfoot .cx{background:#EFE7D6;color:var(--ink)}
+#langBox{position:relative;margin-left:auto;order:2;flex:none}
+#langBtn{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);color:#fff;
+  border-radius:99px;padding:7px 13px;font-family:'Prompt';font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+#langBtn:hover{background:rgba(255,255,255,.24)}
+#langMenu{display:none;position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;z-index:120;min-width:172px}
+#langMenu.on{display:block}
+#langMenu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;background:none;padding:11px 14px;
+  font-family:'Sarabun';font-size:14px;color:var(--ink);cursor:pointer}
+#langMenu button:hover{background:#FBF6EA}
+#langMenu button.on{background:#FBF6EA;font-weight:700;color:var(--wine)}
+#trBar{position:fixed;left:50%;transform:translateX(-50%);top:8px;background:var(--wine);color:#fff;border-radius:99px;
+  padding:6px 14px;font-size:12.5px;z-index:130;display:none}
+#trBar.on{display:block}
 .hbtns{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .obann{background:#EFF4FA;border:1.5px solid #B9CBE0;border-radius:12px;padding:9px 12px;margin-bottom:12px;color:#33517A}
 .obhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:13.5px}
@@ -298,6 +312,8 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
 <header>
   <div class="hrow">
     <h1><img class="hlogo" id="hdLogo" alt="">JJ เช็คสต๊อก</h1>
+    <div id="langBox" data-notr><button id="langBtn" onclick="langToggle()" title="เปลี่ยนภาษา / Language"><span id="langFlag">🇹🇭</span> <span id="langName">ไทย</span> ▾</button>
+      <div id="langMenu"></div></div>
     <div id="hcSlot"><div id="ctl">
       <span class="clb">📅 วันที่นับ</span>
       <input type="date" id="cd">
@@ -338,6 +354,7 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
   <button id="lgBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
 </div></div>
 <div id="ovl" class="ovl"><div class="ovlbox" id="ovlBox"></div></div>
+<div id="trBar" data-notr></div>
 <div id="toast"></div>
 <div id="ptr">↓ ลากลงเพื่อรีเฟรช</div>
 <script>
@@ -392,6 +409,100 @@ function errMsg(e){ // แปลง error ของ PostgREST ให้อ่า
     return 'สิทธิ์ไม่พอสำหรับตารางนี้ — ต้องรัน sql/jjmk_stockcheck_grants.sql ใน Supabase ก่อนครับ';
   if(t.includes('42P01'))return 'ยังไม่มีตารางนี้ในฐานข้อมูล — ต้องรันไฟล์ SQL ที่ส่งให้ก่อน';
   return t.slice(0,110);
+}
+/* ---------- ภาษา: ไทย / อังกฤษ / ลาว / พม่า — แปลอัตโนมัติทั้งหน้า ---------- */
+const LANGS=[['th','ไทย','🇹🇭'],['en','English','🇬🇧'],['lo','ລາວ','🇱🇦'],['my','မြန်မာ','🇲🇲']];
+let LANG=localStorage.getItem('jjsc_lang')||'th';
+let TRC={}; try{ TRC=JSON.parse(localStorage.getItem('jjsc_tr_'+LANG)||'{}')||{}; }catch(e){ TRC={}; }
+const hasTH=t=>/[\u0E00-\u0E7F]/.test(String(t||''));
+function trCacheSave(){ try{ localStorage.setItem('jjsc_tr_'+LANG,JSON.stringify(TRC)); }catch(e){} }
+async function trOne(t){ // แปลทีละข้อความ (ใช้ตอน batch เพี้ยน)
+  try{
+    const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=th&tl='+LANG+'&dt=t&q='+encodeURIComponent(t));
+    const j=await r.json();
+    const out=((j&&j[0])||[]).map(x=>(x&&x[0])||'').join('').trim();
+    return out||null;
+  }catch(e){ return null; }
+}
+async function trFetch(list){ // แปลเป็นชุด (ส่งทีละ ~30 บรรทัด) แล้วแมปกลับ
+  const out={};
+  for(let i=0;i<list.length;i+=30){
+    const chunk=list.slice(i,i+30);
+    let lines=null;
+    try{
+      const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=th&tl='+LANG+'&dt=t&q='+encodeURIComponent(chunk.join('\n')));
+      const j=await r.json();
+      const txt=((j&&j[0])||[]).map(x=>(x&&x[0])||'').join('');
+      const ls=String(txt).split('\n').map(x=>x.trim()).filter(x=>x!=='');
+      if(ls.length===chunk.length)lines=ls;
+    }catch(e){}
+    if(lines){ chunk.forEach((t,k)=>{ out[t]=lines[k]; }); }
+    else { for(const t of chunk){ const v=await trOne(t); if(v)out[t]=v; } } // batch ไม่ตรง → แปลทีละอัน
+  }
+  return out;
+}
+let _trBusy=false,_trT=null;
+const TRDONE=new WeakMap(),TRATTR=new WeakMap(); // จำว่าโหนด/แอตทริบิวต์ไหนแปลแล้ว (กันแปลซ้ำทับของเดิม)
+function trMark(){ clearTimeout(_trT); _trT=setTimeout(translateDOM,80); } // มีการวาดใหม่ = แปลใหม่
+async function translateDOM(){
+  if(LANG==='th'||_trBusy)return;
+  const nodes=[],attrs=[];
+  const walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode(n){
+    const p=n.parentElement; if(!p)return NodeFilter.FILTER_REJECT;
+    if(p.closest('script,style,#langBox,[data-notr]'))return NodeFilter.FILTER_REJECT;
+    if(TRDONE.get(n)===n.nodeValue)return NodeFilter.FILTER_REJECT; // แปลไปแล้ว
+    return hasTH(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
+  }});
+  for(let n=walk.nextNode();n;n=walk.nextNode())nodes.push(n);
+  document.querySelectorAll('[placeholder],[title]').forEach(el=>{
+    if(el.closest('#langBox,[data-notr]'))return;
+    ['placeholder','title'].forEach(a=>{ const v=el.getAttribute(a);
+      if(v&&hasTH(v)&&(TRATTR.get(el)||{})[a]!==v)attrs.push([el,a,v]); });
+  });
+  const need=[...new Set([].concat(nodes.map(n=>n.nodeValue.trim()),attrs.map(a=>a[2].trim())).filter(t=>t&&!TRC[t]))];
+  if(need.length){
+    const bar=document.getElementById('trBar');
+    if(bar){bar.textContent='⏳ กำลังแปล…';bar.classList.add('on');}
+    const got=await trFetch(need);
+    Object.assign(TRC,got); trCacheSave();
+    if(bar)bar.classList.remove('on');
+  }
+  _trBusy=true;
+  nodes.forEach(n=>{ const t=n.nodeValue.trim(),v=TRC[t];
+    if(v){ n.nodeValue=n.nodeValue.replace(t,v); }
+    TRDONE.set(n,n.nodeValue); }); // ตั้งธงทุกโหนดที่ผ่านรอบนี้ (แม้แปลไม่ได้) จะได้ไม่วนแปลซ้ำ
+  attrs.forEach(([el,a,v])=>{ const x=TRC[v.trim()];
+    if(x)el.setAttribute(a,x);
+    const m2=TRATTR.get(el)||{}; m2[a]=el.getAttribute(a); TRATTR.set(el,m2); });
+  _trBusy=false;
+}
+function langToggle(){ const m=document.getElementById('langMenu'); if(m)m.classList.toggle('on'); }
+function langPaint(){
+  const L=LANGS.find(x=>x[0]===LANG)||LANGS[0];
+  const f=document.getElementById('langFlag'),n=document.getElementById('langName'),m=document.getElementById('langMenu');
+  if(f)f.textContent=L[2]; if(n)n.textContent=L[1];
+  if(m)m.innerHTML=LANGS.map(x=>'<button class="'+(x[0]===LANG?'on':'')+'" onclick="setLang(\''+x[0]+'\')">'+x[2]+' '+x[1]+'</button>').join('');
+}
+async function setLang(code){
+  const m=document.getElementById('langMenu'); if(m)m.classList.remove('on');
+  if(code===LANG)return;
+  const wasTH=LANG==='th';
+  LANG=code; localStorage.setItem('jjsc_lang',code);
+  try{ TRC=JSON.parse(localStorage.getItem('jjsc_tr_'+LANG)||'{}')||{}; }catch(e){ TRC={}; }
+  document.documentElement.lang=code;
+  langPaint();
+  if(code==='th'&&!wasTH){ location.reload(); return; } // กลับเป็นไทย = โหลดข้อความต้นฉบับใหม่
+  render(); await translateDOM();
+}
+function initLang(){
+  langPaint();
+  document.documentElement.lang=LANG;
+  document.addEventListener('click',e=>{ if(!e.target.closest('#langBox')){const m=document.getElementById('langMenu'); if(m)m.classList.remove('on');} });
+  if(window.MutationObserver){ // วาดหน้าใหม่เมื่อไร แปลตามทันที
+    new MutationObserver(()=>{ if(!_trBusy&&LANG!=='th')trMark(); })
+      .observe(document.body,{childList:true,subtree:true,characterData:true});
+  }
+  if(LANG!=='th')trMark();
 }
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2800);}
 async function api(method,path,body,prefer,raw){
@@ -490,6 +601,7 @@ function render(){
   else if(S.tab==='cfgl')renderCfgLine();
   else renderSet();
   refresh();
+  if(LANG!=='th')trMark();
 }
 /* ---- 🛒 สั่งของ: แยกรายซัพ · ต้องสั่ง = ยอดใช้ของ "วันที่ของมาส่ง" − ยอดที่นับได้ ---- */
 function addDays(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);
@@ -1861,7 +1973,7 @@ function boot(){
   },60000);
   $('#save').onclick=saveAll;
   $('#imgFile').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';upImg(f);};
-  initPtr();
+  initPtr(); initLang();
   initAuth().then(()=>{applyAuth();restoreTab();return loadAll();})
     .catch(e=>{$('#list').innerHTML='<div class="empty">โหลดไม่สำเร็จ — '+esc(e.message||e)+'</div>';});
 }
