@@ -277,7 +277,8 @@ table.mx td:hover{outline:2px solid #C9A227;outline-offset:-2px;border-radius:4p
 .ptitle{display:none}
 @media(min-width:900px){
   #app{padding-left:236px}
-  main{padding-left:36px;padding-right:36px}
+  /* เนื้อหากว้างสุด 1220px กึ่งกลางโซนขวาแถบข้าง — จอกว้างมากไม่ยืดจนกล่องโล่ง (ใช้ #app นำหน้าให้ชนะกติกา base ท้ายไฟล์) */
+  #app main{padding-left:36px;padding-right:36px;max-width:1220px;margin:0 auto}
   #sideNav{display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;width:236px;z-index:60;
     background:linear-gradient(180deg,#7E1013 0%,#690C0F 100%);padding:18px 13px calc(14px + env(safe-area-inset-bottom));overflow-y:auto}
   #sideNav::-webkit-scrollbar{width:0}
@@ -297,7 +298,7 @@ table.mx td:hover{outline:2px solid #C9A227;outline-offset:-2px;border-radius:4p
   .sb-foot{margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
   header .brand{display:none}
   .tabbar{display:none}
-  .hrow{padding:13px 36px 11px}
+  .hrow{padding:13px 36px 11px;max-width:1220px;margin:0 auto}
   .ptitle{display:block;font-family:'Prompt';font-weight:700;font-size:20px;margin-right:auto}
   #syncDot{margin-left:0}
 }
@@ -473,6 +474,7 @@ canvas{max-width:100%}
   <div class="sb-sec">สต๊อก &amp; วัตถุดิบ</div>
   <button class="sb-item" data-v="usage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7l8 4 8-4-8-4Z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/></svg>ข้อมูลการใช้ของ</button>
   <button class="sb-item" data-v="actual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9 17l11-11"/><path d="M4 6.5h6"/><path d="M4 19.5h6"/></svg>ใช้จริง (สต๊อก)</button>
+  <a class="sb-item" href="jjmk-stockcheck.html" target="_blank" style="text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5v3h6v-3"/><path d="m8.5 11.5 2 2 3.5-4"/><path d="M8.5 17h7"/></svg>เช็คสต๊อก β</a>
   <div class="sb-sec">ครัวกลาง</div>
   <button class="sb-item" data-v="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16v3.5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V11Z"/><path d="M2.8 11h18.4"/><path d="M9 7.5c0-.9-.9-1-.9-1.9 0-.5.3-.9.9-1.1"/><path d="M15 7.5c0-.9-.9-1-.9-1.9 0-.5.3-.9.9-1.1"/></svg>ครัวกลาง</button>
   <div class="sb-sec">ตรวจสอบ &amp; เอกสาร</div>
@@ -1048,7 +1050,7 @@ async function reloadView(){ delete S.cache[mkey(S.br,S.m)]; S.benchCache={}; aw
           หน้ากรอก (รายรับ/รายจ่าย/PV) ขึ้นแถบ "แตะเพื่อโหลดใหม่" ไม่ทับของที่พิมพ์ค้าง
           หน้าบันทึกบิล รีเฟรชเฉพาะลิสต์ประวัติ/รายการบิล + เตือนถ้าบิลที่เปิดอยู่โดนแก้จากเครื่องอื่น */
 const RT_TABLES=['pnl_bill_items','pnl_expense_daily','pnl_income_daily','pnl_cash_expenses','pnl_shopee','pnl_month_meta','pnl_fixed_monthly','pnl_stock_map'];
-let _rtLive=false,_rtT=null,_rtPend=false;
+let _rtLive=false,_rtT=null,_rtPend=false,_rtTbl=new Set();
 function rtBusyForm(){
   const a=document.activeElement;
   if(!(a&&['INPUT','TEXTAREA','SELECT'].includes(a.tagName)))return false;
@@ -1069,7 +1071,7 @@ function rtStart(){
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&_rtPend)rtApply(); });
   document.addEventListener('focusout',()=>{ if(_rtPend)setTimeout(()=>{ if(_rtPend&&!rtBusyForm()&&!document.hidden)rtApply(); },400); });
 }
-function rtEvent(){ clearTimeout(_rtT); _rtT=setTimeout(rtApply,1200); } // รวมหลายเหตุการณ์ติด ๆ กันเป็นรอบเดียว
+function rtEvent(p){ try{ if(p&&p.table)_rtTbl.add(p.table); }catch(e){} clearTimeout(_rtT); _rtT=setTimeout(rtApply,1200); } // รวมหลายเหตุการณ์ติด ๆ กันเป็นรอบเดียว (จำด้วยว่าตารางไหนเปลี่ยน)
 function rtTick(){ // โพลสำรองตอน Realtime ยังไม่เปิด: รีเฟรชเงียบ ๆ เฉพาะหน้าดูอย่างเดียว
   if(_rtLive||document.hidden||rtBusyForm())return;
   if(['dash','sum','usage','vatrep','actual'].includes(S.tab)){ S.cache={}; S.benchCache={}; loadStkNames().then(()=>show(S.tab)); stkBadge(); }
@@ -1078,17 +1080,21 @@ function rtTick(){ // โพลสำรองตอน Realtime ยังไม
 async function rtApply(){
   _rtPend=false;
   if(document.hidden){ _rtPend=true; return; }
+  const hadMap=_rtTbl.has('pnl_stock_map'); // มีการผูก/ถอดชื่อจากระบบนับสต๊อก (หรือเครื่องอื่น)
   S.cache={}; S.benchCache={};
   await loadStkNames();
   const v=S.tab;
   if(v==='detail'){
     dtMonthList(); dtHist();
     dtStaleCheck();
+    _rtTbl.clear(); if(hadMap)toast('🔗 การผูกชื่อบิล↔ชื่อนับ มีอัพเดตใหม่ — โหลดให้แล้ว');
     return;
   }
   if(['dash','sum','usage','vatrep','actual'].includes(v)){
     if(rtBusyForm()){ _rtPend=true; rtBanner(); return; }
-    await show(v); stkBadge(); return;
+    await show(v); stkBadge();
+    _rtTbl.clear(); if(hadMap)toast('🔗 การผูกชื่อบิล↔ชื่อนับ มีอัพเดตใหม่ — โหลดให้แล้ว');
+    return;
   }
   if(['income','exp','pv'].includes(v)){ rtBanner(); return; } // หน้ากรอก: ไม่ทับของที่พิมพ์อยู่
 }
@@ -2931,6 +2937,7 @@ RENDER.usage = async (el)=>{
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
       <button class="btn gh sm2" id="useQx" style="${S._usageQ?'':'display:none'}" onclick="usageFilter('');document.getElementById('useQ').value='';document.getElementById('useQ').focus()">✕ ล้าง</button>
       <button class="btn gh sm2" onclick="usageXlsx()" title="ดาวน์โหลดข้อมูลดิบทั้งหมดของเดือนนี้เป็น Excel (รายสินค้า · แยกซัพ · เทียบสาขา)">⬇ Excel</button>
+      <button class="btn gh sm2" onclick="masterFillXlsx()" title="ส่งออกชื่อบิลทุกตัวในระบบ P&L เป็นแบบฟอร์มเปล่าให้กรอกเอง: ชื่อที่จะใช้ในระบบนับ / หน่วย / อัตราแปลง / อัตราใช้ต่อวัน">📋 แม่บทกรอกเอง</button>
       <button class="btn gh sm2" onclick="usagePdf()" title="รายงานสินค้าละ 1 หน้า A4 ตามแถวที่แสดงอยู่ (กรองก่อนได้) — สั่งพิมพ์แล้วเลือก Save as PDF">📄 PDF รายสินค้า</button></div>
     <div class="twrap"><table id="useTbl">
       ${S.usageMode==='cmp'
@@ -3073,7 +3080,14 @@ async function stkLoad(){
   const sbidOther=Object.keys(bn2).find(id2=>String(bn2[id2]).includes(wantOther)) || (brOther==='JJRD'?'b19f0a17b4472':'b19f0a17b448212');
   const sales={}; (inc||[]).forEach(r=>{ sales[r.d]=(sales[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
   const P=(prods||[]).filter(x=>x.branch_id===sbid);
-  const M={}; (map||[]).forEach(r=>M[r.product_id]=r);
+  // สินค้า 1 ตัวผูกได้หลายชื่อบิล (หลายแถวใน pnl_stock_map) — รวมเป็นระเบียนเดียว เก็บลิสต์ไว้ใน items
+  const M={}; (map||[]).forEach(r=>{
+    const it=(r.active&&r.pnl_item&&r.pnl_item!=='-')?{pnl_item:r.pnl_item,factor:num(r.factor)||1}:null;
+    const m0=M[r.product_id];
+    if(!m0){ M[r.product_id]={...r,items:it?[it]:[]}; }
+    else if(it){ m0.items.push(it); if(!m0.active){ m0.active=true; m0.pnl_item=r.pnl_item; m0.factor=r.factor; } }
+  });
+  Object.values(M).forEach(m0=>{ if(m0.items.length>1) m0.pnl_names=m0.items.map(x=>x.pnl_item).join(' + '); });
   // นับล่าสุดต่อ (สินค้า,วัน) — วันเดียวนับซ้ำเอาครั้งหลังสุด
   const C={}; (counts||[]).filter(c=>c.branch_id===sbid).forEach(c=>{
     const k=c.product_id; (C[k]??={})[c.count_date]={qty:c.out_of_stock?0:num(c.qty),at:c.created_at};
@@ -3111,7 +3125,7 @@ RENDER.actual = async (el)=>{
   let names=[];
   try{ const si=await selAllQ('pnl_sup_items','select=item&order=item').catch(()=>[]); names=si.map(x=>x.item); }catch(e){}
   try{ const bi=await selAllQ('pnl_bill_items',`select=item&branch=eq.${S.br}&d=gte.${st.from}&d=lte.${st.to}&order=d`); bi.forEach(x=>names.push(x.item)); }catch(e){}
-  const usedN=new Set(Object.values(st.map).filter(r2=>r2.active&&r2.branch===S.br&&r2.pnl_item&&r2.pnl_item!=='-').map(r2=>ocrNorm(r2.pnl_item)));
+  const usedN=new Set(Object.values(st.map).filter(r2=>r2.branch===S.br).flatMap(r2=>(r2.items||[]).map(it=>ocrNorm(it.pnl_item))));
   names=[...new Set(names.filter(Boolean))].filter(n2=>!usedN.has(ocrNorm(n2))).sort((a,b)=>a.localeCompare(b,'th')); // ตัดชื่อที่ผูกแล้วออก (1 ชื่อบิล = 1 สินค้านับ)
   S._stkNames=names;
   const mapped=st.prods.filter(x=>st.map[x.id]&&st.map[x.id].active);
@@ -3130,8 +3144,7 @@ RENDER.actual = async (el)=>{
       const Pd=days[i-1], Cd=days[i];
       if(Cd<mStart) continue; // เอาช่วงที่จบในเดือนที่ดู
       const q0=st.C[pr.id][Pd].qty, q1=st.C[pr.id][Cd].qty;
-      let buy=0; const bk=ocrNorm(mp.pnl_item);
-      Object.entries(st.B[bk]||{}).forEach(([d2,q])=>{ if(d2>Pd&&d2<=Cd) buy+=q*num(mp.factor||1); });
+      let buy=0; (mp.items||[]).forEach(it=>{ Object.entries(st.B[ocrNorm(it.pnl_item)]||{}).forEach(([d2,q])=>{ if(d2>Pd&&d2<=Cd) buy+=q*num(it.factor||1); }); }); // รวมซื้อเข้าจากทุกชื่อบิลที่ผูก
       let sale=0,dd=0; for(let d2=Pd; d2<Cd; d2=stkAddDays(d2,1)){ const v=st.sales[d2]||0; if(v>0){sale+=v;dd++;} }
       const use=q0+buy-q1;
       per.push({Pd,Cd,q0,q1,buy,use,sale,dd,p10:sale>0?use/(sale/10000):null});
@@ -3216,8 +3229,7 @@ RENDER.actual = async (el)=>{
           const C1=[...ds].reverse().find(d2=>d2<=Bd);
           if(!P0||!C1||P0>=C1) return;
           const q0=st.C[r.pr.id][P0].qty, q1=st.C[r.pr.id][C1].qty;
-          let buy=0; const bk=ocrNorm(r.mp.pnl_item);
-          Object.entries(st.B[bk]||{}).forEach(([d2,q])=>{ if(d2>P0&&d2<=C1) buy+=q*num(r.mp.factor||1); });
+          let buy=0; (r.mp.items||[]).forEach(it=>{ Object.entries(st.B[ocrNorm(it.pnl_item)]||{}).forEach(([d2,q])=>{ if(d2>P0&&d2<=C1) buy+=q*num(it.factor||1); }); });
           let sale=0; for(let d2=P0; d2<C1; d2=stkAddDays(d2,1)){ const v=st.sales[d2]||0; if(v>0)sale+=v; }
           const use=q0+buy-q1;
           disp.push({r,i,p:{Pd:P0,Cd:C1,q0,q1,buy,use,sale,p10:sale>0?use/(sale/10000):null}});
@@ -3234,7 +3246,7 @@ RENDER.actual = async (el)=>{
       ${disp.map(({r,i,p:L})=>{
         const q=V==='last'?r.lastQty:(L?L.q1:null);
         return `<tr style="cursor:pointer" onclick="stkDetail(${i})">
-          <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span>${billNmHtml(r.mp&&r.mp.pnl_item,r.pr.name)}</td>
+          <td><b>${esc(r.pr.name)}</b> <span class="xs mut">${esc(r.pr.unit||'')}</span>${billNmHtml(r.mp&&(r.mp.pnl_names||r.mp.pnl_item),r.pr.name)}</td>
           <td class="n xs mut">${L?`${thDate(L.Pd)}→${thDate(L.Cd)}`:'–'}</td>
           <td class="n b" ${L&&L.use<0?'style="color:var(--red)" title="ติดลบ = มีของเข้าที่ระบบยังไม่รู้ (บิลยังไม่ลง / ของครัวกลาง-โอนสาขาไม่มีบิล) หรือนับ/ผูกพลาด"':''}>${L?fq(L.use):'–'}${L&&L.use<0?' ⚠':''}</td>
           <td class="n">${L&&L.p10!=null?fq(L.p10):'–'}</td>
@@ -3282,7 +3294,7 @@ function stkAutoHtml(rows,st){
     const thin=x.n[D]<2;
     return `<tr>
       <td><input type="checkbox" class="autock" data-pid="${esc(x.r.pr.id)}" data-sf="${sf}" data-mx="${mx}" ${thin?'':'checked'} onchange="stkAutoCnt()"></td>
-      <td><b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${billNmHtml(x.r.mp&&x.r.mp.pnl_item,x.r.pr.name)}${thin?` <span class="chip mid" title="มีข้อมูลวันนี้แค่ ${x.n[D]} จุด — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}</td>
+      <td><b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${billNmHtml(x.r.mp&&(x.r.mp.pnl_names||x.r.mp.pnl_item),x.r.pr.name)}${thin?` <span class="chip mid" title="มีข้อมูลวันนี้แค่ ${x.n[D]} จุด — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}</td>
       <td class="n">${fmt(base,2)} <span class="xs mut">· ${x.n[D]} จุด</span></td>
       <td class="n">${cs?fmt(cs,0):'–'} → <b ${sf!==cs?'style="color:var(--red)"':''}>${sf}</b></td>
       <td class="n">${cm?fmt(cm,0):'–'} → <b ${mx!==cm?'style="color:var(--red)"':''}>${mx}</b></td>
@@ -3390,7 +3402,7 @@ async function stkCopyFromOther(){ // เก็บตก: ตัวที่อ�
   const rows=[];
   st.prods.filter(x=>!st.map[x.id]).forEach(x=>{
     const src=Object.values(st.map).find(r=>r.active&&r.branch!==S.br&&ocrNorm(r.product_name)===ocrNorm(x.name)&&String(r.stock_unit||'')===String(x.unit||''));
-    if(src)rows.push({branch:S.br,product_id:x.id,product_name:x.name||'',pnl_item:src.pnl_item,bill_unit:'',stock_unit:x.unit||'',factor:num(src.factor)||1,active:true});
+    if(src)((src.items&&src.items.length)?src.items:[{pnl_item:src.pnl_item,factor:src.factor}]).forEach(it=>rows.push({branch:S.br,product_id:x.id,product_name:x.name||'',pnl_item:it.pnl_item,bill_unit:'',stock_unit:x.unit||'',factor:num(it.factor)||1,active:true})); // คัดลอกทุกชื่อบิลที่อีกสาขาผูกไว้
   });
   if(!rows.length){ toast('ไม่มีตัวที่คัดลอกจากอีกสาขาได้',true); return; }
   try{ await ins('pnl_stock_map',rows); toast(`✅ ผูกตามอีกสาขาแล้ว ${rows.length} ตัว`); show('actual'); }
@@ -3412,8 +3424,8 @@ async function stkUnskipAll(){
 function stkDetail(i){
   const r=(S._stkRows||[])[i]; if(!r)return;
   const fq=v=>fmt(v, Math.abs(v%1)>0.004?2:0);
-  openModal(`<h3>📦 ${esc(r.pr.name)} <span class="sp">${esc(r.pr.unit||'')} · ตัวคูณบิล ×${num(r.mp.factor)||1}</span></h3>
-    <div class="xs mut" style="margin-bottom:8px">ผูกกับบิล: <b>${esc(r.mp.pnl_item)}</b> · ใช้จริง = นับก่อน + ซื้อเข้า − นับหลัง</div>
+  openModal(`<h3>📦 ${esc(r.pr.name)} <span class="sp">${esc(r.pr.unit||'')}</span></h3>
+    <div class="xs mut" style="margin-bottom:8px">ผูกกับบิล: ${((r.mp.items&&r.mp.items.length)?r.mp.items.map(it=>`<b>${esc(it.pnl_item)}</b> ×${num(it.factor)||1}`).join(' · '):`<b>${esc(r.mp.pnl_item)}</b> ×${num(r.mp.factor)||1}`)} · ใช้จริง = นับก่อน + ซื้อเข้า − นับหลัง</div>
     <div class="twrap"><table>
       <tr><th>ช่วง</th><th class="right">นับก่อน</th><th class="right">+ซื้อเข้า</th><th class="right">นับหลัง</th><th class="right">ใช้จริง</th><th class="right">ยอดขาย</th><th class="right">ใช้/หมื่น</th></tr>
       ${r.per.slice().reverse().map(x=>`<tr${x.use<0?' style="color:var(--red)"':''}><td class="xs">${thDate(x.Pd)}→${thDate(x.Cd)}${x.dd>1?` <span class="mut">(${x.dd} วัน)</span>`:''}</td>
@@ -3458,6 +3470,53 @@ function usagePdf(){ // เปิดตัวเลือกสินค้า (
       <button class="btn gh sm2" style="margin-left:auto" onclick="closeModal()">ยกเลิก</button>
       <button class="btn sm2" id="pdfGoBtn" onclick="usagePdfGo()">สร้าง PDF (${keys.length} หน้า)</button>
     </div>`);
+}
+async function masterFillXlsx(){ // 📋 แม่บทกรอกเอง: ชื่อบิลทุกตัวจากระบบ P&L (แคตตาล็อกซัพ + บิล 3 เดือนทุกสาขา) + ช่องว่างให้กรอก ชื่อในระบบ/หน่วย/อัตราแปลง/อัตราใช้
+  if(!window.XLSX){ toast('ตัวสร้าง Excel โหลดไม่ขึ้น (เช็คเน็ต)',true); return; }
+  toast('กำลังรวบรวมชื่อบิลทั้งหมดจากระบบ P&L...');
+  let si=[],bi=[],prods=[];
+  const to=new Date(), z=d=>d.toISOString().slice(0,10);
+  const from=new Date(+to-92*86400000);
+  try{ si=await selAllQ('pnl_sup_items','select=item,unit,supplier_id&order=item'); }catch(e){}
+  try{ bi=await selAll('pnl_bill_items',`select=branch,item,unit&d=gte.${z(from)}&d=lte.${z(to)}&order=d`); }catch(e){}
+  try{ prods=await selAllQ('products','select=name,unit,sup&deleted_at=is.null&order=name').catch(()=>[]); }catch(e){}
+  const M={};
+  const put=(item,unit,supName,br)=>{ const k=ocrNorm(item); if(!k)return;
+    const o=(M[k]??={item:String(item).trim(),units:new Set(),sups:new Set(),brs:new Set(),n:0});
+    if(unit)o.units.add(String(unit).trim()); if(supName)o.sups.add(supName); if(br)o.brs.add(br); };
+  si.forEach(r=>put(r.item,r.unit,((S.core&&S.core.supById&&S.core.supById[r.supplier_id])||{}).name||'',''));
+  bi.forEach(r=>{ put(r.item,r.unit,'',r.branch); const o=M[ocrNorm(r.item)]; if(o)o.n++; });
+  const rows=Object.values(M).sort((a,b)=>(([...a.sups][0]||'￿').localeCompare([...b.sups][0]||'￿','th'))||a.item.localeCompare(b.item,'th'));
+  if(!rows.length){ toast('ไม่พบชื่อบิลในระบบ',true); return; }
+  const head=['ชื่อตามบิล P&L (ห้ามแก้)','ซัพพลายเออร์','หน่วยตามบิล','พบในสาขา','บิล 3 เดือน (ครั้ง)',
+    'ชื่อที่จะใช้ในระบบนับ (กรอกเอง · เว้นว่าง = ไม่นับสต๊อก)','หน่วยนับ (กรอกเอง)',
+    'อัตราแปลง: 1 หน่วยบิล = กี่หน่วยนับ (หน่วยเดียวกันเว้นว่าง)',
+    'อัตราใช้/วัน จ-พฤ (หน่วยนับ)','อัตราใช้/วัน ศ','อัตราใช้/วัน ส-อา',
+    'แผนก (เฉพาะของใหม่ที่ยังไม่มีในระบบนับ)','หมายเหตุ'];
+  const data=rows.map(o=>[o.item,[...o.sups].join(' / '),[...o.units].join(' / '),[...o.brs].sort().join('+'),o.n||'','','','','','','','','']);
+  const ws=XLSX.utils.aoa_to_sheet([head,...data]);
+  ws['!cols']=[36,22,10,10,9,36,11,26,12,10,12,18,24].map(w=>({wch:w}));
+  const seen={},pr=[];
+  (prods||[]).forEach(p=>{ const k=(p.name||'').trim(); if(!k||seen[k])return; seen[k]=1; pr.push([k,p.unit||'',p.sup||'']); });
+  const ws2=XLSX.utils.aoa_to_sheet([['ชื่อนับที่มีอยู่ตอนนี้ (ก๊อปไปวางในคอลัมน์ F ได้เลย — สะกดตรง ประวัติเดิมต่อเนื่อง)','หน่วย','ซัพ'],...pr]);
+  ws2['!cols']=[{wch:44},{wch:10},{wch:22}];
+  const ws3=XLSX.utils.aoa_to_sheet([
+    ['วิธีกรอก (แก้เฉพาะคอลัมน์ F ถึง M ของชีท "แม่บทกรอกเอง")'],
+    ['F ชื่อที่จะใช้ในระบบนับ: บิลหลายตัวที่เป็นของเดียวกัน = พิมพ์ชื่อเดียวกันทุกแถว (เช่นน้ำตาลหลายยี่ห้อ → "น้ำตาลทรายขาว") · เว้นว่าง = ตัวนี้ไม่นับสต๊อก'],
+    ['   ถ้าตรงกับของที่นับอยู่แล้ว ให้ก๊อปชื่อจากชีท "ชื่อนับที่มีอยู่ตอนนี้" มาวาง — สะกดตรงเป๊ะ ประวัติการนับเดิมจะต่อเนื่อง ไม่ขาดตอน'],
+    ['G หน่วยนับ: หน่วยที่พนักงานนับหน้าสาขา เช่น โล / ถุง / ขวด / แผง / แพ็ค'],
+    ['H อัตราแปลง: 1 หน่วยบิล = กี่หน่วยนับ เช่น บิลเป็นลัง นับเป็นกก. และ 1 ลัง = 9 กก. → ใส่ 9 · หน่วยเดียวกันเว้นว่าง (คิดเป็น 1)'],
+    ['I-K อัตราใช้ต่อวัน (หน่วยนับ): จันทร์-พฤหัส / ศุกร์ / เสาร์-อาทิตย์และวันหยุดพิเศษ — ใส่เท่าที่รู้ ที่เหลือระบบคำนวณจากการใช้จริงต่อได้'],
+    ['L แผนก: กรอกเฉพาะของใหม่ที่ยังไม่เคยมีในระบบนับ (เช่น ของสด / ของแห้ง / ของใช้) — ของเดิมไม่ต้องกรอก'],
+    ['ห้ามแก้คอลัมน์ A (ชื่อตามบิล) — ใช้เป็นตัวจับคู่ตอนนำเข้า · ลบแถวที่ไม่เกี่ยวออกได้'],
+    ['เสร็จแล้วส่งไฟล์กลับในแชท Claude — ระบบจะตรวจทุกแถวและนำเข้าให้ทั้งหมด (ผูกชื่อ + อัตราแปลง + อัตราใช้)']]);
+  ws3['!cols']=[{wch:135}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'แม่บทกรอกเอง');
+  XLSX.utils.book_append_sheet(wb,ws2,'ชื่อนับที่มีอยู่ตอนนี้');
+  XLSX.utils.book_append_sheet(wb,ws3,'วิธีกรอก');
+  XLSX.writeFile(wb,'JJ-แม่บทกรอกเอง-'+z(to)+'.xlsx');
+  toast('📋 ส่งออก '+rows.length+' ชื่อบิลแล้ว — กรอกคอลัมน์ F-M เสร็จส่งไฟล์กลับให้ Claude ได้เลย');
 }
 function usageXlsx(){ // ข้อมูลดิบทั้งเดือน ทุกสินค้า ครบทุกคอลัมน์ที่ระบบคำนวณ
   const U=S._usage; if(!U||!window.XLSX){ toast('ยังไม่มีข้อมูลให้ส่งออก',true); return; }
@@ -4970,7 +5029,7 @@ async function pvPreview(){
     <div style="margin-top:8px;max-height:40dvh;overflow-y:auto">${items.map((it,i)=>{
       const pd=paidSums[it.s.id]||0;
       const mw=(S._pvMonthWide||{})[it.s.id];
-      return `<div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}${mw?` <span class="xs" style="color:var(--warn,#A66A00);font-weight:700">· เครดิต 1 เดือน (รวมทั้งเดือน)</span>`:''}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}${pd?` · <span style="color:var(--ok)">จ่ายไปแล้ว ฿${fmtI(pd)}</span>`:''}</div></div>
+      return `<div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}${mw?` <span class="xs" style="color:#A66A00;font-weight:700">· เครดิต 1 เดือน (รวมทั้งเดือน)</span>`:''}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}${pd?` · <span style="color:var(--ok)">จ่ายไปแล้ว ฿${fmtI(pd)}</span>`:''}</div></div>
       <input type="number" step="any" inputmode="decimal" value="${it.amt.toFixed(2)}" onchange="S._pvDraft.items[${i}].amt=num(this.value)"></div>`;}).join('')}</div>
     <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม ${items.length} ราย · ฿${fmtI(items.reduce((a,x)=>a+x.amt,0))}</span></div>
     <button class="btn dk" style="width:100%;margin-top:6px" onclick="pvSave()">บันทึก PV</button>`
