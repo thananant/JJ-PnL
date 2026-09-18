@@ -96,7 +96,7 @@ setTimeout(async()=>{
   out.push('เปลี่ยนหน้าแล้วแปลต่อเองอัตโนมัติ + กลับหน้าเดิมใช้แคช ไม่ยิงซ้ำ: '
     +(body().includes('en:')&&n2>n1&&trCalls.length===n2));
   out.push('เก็บคำแปลไว้ใน localStorage (เปิดใหม่ไม่ต้องแปลซ้ำ): '
-    +(Object.keys(JSON.parse(w.localStorage.getItem('jjsc_tr_en')||'{}')).length>5));
+    +(Object.keys(JSON.parse(w.localStorage.getItem('jjsc_tr2_en')||'{}')).length>5));
   // 4) เปลี่ยนเป็นลาว → ยิงตัวแปลด้วย tl=lo
   await w.setLang('lo'); await sleep(400);
   out.push('เปลี่ยนเป็นลาว: ยิง tl=lo + หน้าจอเป็นคำแปลลาว: '
