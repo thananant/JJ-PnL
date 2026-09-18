@@ -347,7 +347,7 @@ function hasSavedLogin(){
 }
 function canOpen(key){
   if(!ME)return true;                              // ยังไม่ล็อกอิน = แสดงทั้งหมด
-  if(ME.role==='admin')return true;                // ผู้ดูแลระบบเข้าได้ทุกแอพ
+  if(ME.role==='admin'||ME.role==='owner')return true;   // ผู้ดูแลระบบ + เจ้าของ เข้าได้ทุกแอพ
   if(ALWAYS.indexOf(key)>=0)return true;
   var apps=ME.apps;
   if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return true;  // ยังไม่เคยตั้งสิทธิ์ = ไม่ล็อกใคร
@@ -362,7 +362,7 @@ function paintApps(){
     /* หน้าจัดการสิทธิ์: เฉพาะผู้ดูแลระบบ
        ยังไม่รู้ว่าใคร (กำลังเช็ค/เน็ตล่ม แต่เคยล็อกอินค้างไว้) → แสดงไว้ก่อน กันเจ้าของเข้าไม่ถึง
        ไม่เคยล็อกอิน หรือกด "ดูแอพทั้งหมด" → ซ่อน (ถ้าเป็นผู้ดูแลให้ล็อกอินก่อน) */
-    if(el.id==='appAdmin') ok = ME ? (ME.role==='admin') : hasSavedLogin();
+    if(el.id==='appAdmin') ok = ME ? (ME.role==='admin'||ME.role==='owner') : hasSavedLogin();
     el.hidden=!ok; if(ok)n++;
   });
   return n;
@@ -371,8 +371,12 @@ function paintUser(){
   var bar=document.getElementById('userbar'); if(!bar)return;
   if(!ME){ bar.hidden=true; return; }
   bar.hidden=false;
-  bar.innerHTML='<span class="chip">👤 <b>'+String(ME.display_name||ME.username).replace(/[<>&]/g,'')+'</b>'+
-    (ME.role==='admin'?' · ผู้ดูแลระบบ':'')+'</span>'+
+  var RN={admin:'🛡️ ผู้ดูแลระบบ',owner:'👑 เจ้าของ',manager:'📋 ผู้จัดการ',staff:'👤 พนักงาน'};
+  var UN={ALL:'',OFFICE:'ออฟฟิศ',JJCK:'ครัวกลาง',JJLP:'สาขาลาดพร้าว',JJRD:'สาขารัชดา'};
+  var un=UN[ME.unit]||'';
+  bar.innerHTML='<span class="chip">'+(RN[ME.role]||RN.staff).split(' ')[0]+' <b>'+
+    String(ME.display_name||ME.username).replace(/[<>&]/g,'')+'</b> · '+
+    (RN[ME.role]||RN.staff).split(' ').slice(1).join(' ')+(un?' · '+un:'')+'</span>'+
     '<a href="javascript:" onclick="logout()">ออกจากระบบ</a>';
 }
 
