@@ -507,17 +507,25 @@ async function translateDOM(){ // กันเรียกซ้อน: ถ้�
   try{ await trPass(); }
   finally{ _trRun=false; if(_trAgain){ _trAgain=false; trMark(); } }
 }
+/* ขอบเขตการแปล: โครงหน้า (เมนู/หัวจอ/แถบล่าง/ล็อกอิน/ข้อความเด้ง) แปลเสมอ
+   ส่วนเนื้อหน้า แปลเฉพาะ "หน้านับสต๊อก" — หน้าอื่นเป็นงานผู้จัดการ ใช้ไทยตามเดิม (แปลเร็วขึ้นด้วย) */
+const TRSHELL='#sideNav,header,.foot,#loginOv,#ptr,#toast';
+function trScope(el){
+  if(!el)return false;
+  if(el.closest('script,style,#langBox,[data-notr]'))return false;
+  if(el.closest(TRSHELL))return true;
+  return S.tab==='count';
+}
 function trCollect(){ // เก็บโหนด/แอตทริบิวต์ที่ยังไม่ได้แปล
   const nodes=[],attrs=[];
   const walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode(n){
-    const p=n.parentElement; if(!p)return NodeFilter.FILTER_REJECT;
-    if(p.closest('script,style,#langBox,[data-notr]'))return NodeFilter.FILTER_REJECT;
+    if(!trScope(n.parentElement))return NodeFilter.FILTER_REJECT;
     if(TRDONE.get(n)===n.nodeValue)return NodeFilter.FILTER_REJECT; // แปลไปแล้ว
     return trAble(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
   }});
   for(let n=walk.nextNode();n;n=walk.nextNode())nodes.push(n);
   document.querySelectorAll('[placeholder],[title],[alt],[aria-label]').forEach(el=>{
-    if(el.closest('#langBox,[data-notr]'))return;
+    if(!trScope(el))return;
     TRATT.forEach(a=>{ const v=el.getAttribute(a);
       if(v&&trAble(v)&&(TRATTR.get(el)||{})[a]!==v)attrs.push([el,a,v]); });
   });

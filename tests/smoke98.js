@@ -90,11 +90,15 @@ setTimeout(async()=>{
       &&d.querySelector('#langMenu button.on .lck').textContent==='✓'));
   // 3) แปลแล้วจำไว้ (cache) — เปลี่ยนหน้าไม่ยิงซ้ำ
   const n1=trCalls.length;
-  w.setTab('link'); await sleep(300);
+  w.setTab('link'); await sleep(400);
   const n2=trCalls.length;
-  w.setTab('count'); await sleep(300);
-  out.push('เปลี่ยนหน้าแล้วแปลต่อเองอัตโนมัติ + กลับหน้าเดิมใช้แคช ไม่ยิงซ้ำ: '
-    +(body().includes('en:')&&n2>n1&&trCalls.length===n2));
+  // แปลเฉพาะหน้านับสต๊อก: หน้าอื่นเนื้อในยังเป็นไทย แต่เมนู/หัวจอ/แถบล่างยังเป็นคำแปล
+  out.push('หน้าอื่นไม่ถูกแปล (เนื้อในยังเป็นไทย) แต่เมนูยังเป็นคำแปล: '
+    +(!d.querySelector('main').textContent.includes('en:')
+      &&d.querySelector('#sideNav [data-t]').textContent.startsWith('en:')));
+  w.setTab('count'); await sleep(400);
+  out.push('กลับหน้านับสต๊อก เนื้อในถูกแปล + ใช้แคช ไม่ยิงแปลซ้ำ: '
+    +(d.querySelector('main').textContent.includes('en:')&&trCalls.length===n2));
   out.push('เก็บคำแปลไว้ใน localStorage (เปิดใหม่ไม่ต้องแปลซ้ำ): '
     +(Object.keys(JSON.parse(w.localStorage.getItem('jjsc_tr2_en')||'{}')).length>5));
   // 4) เปลี่ยนเป็นลาว → ยิงตัวแปลด้วย tl=lo
