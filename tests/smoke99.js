@@ -40,7 +40,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('stock_counts'))return T([]);
       return T([]);
     };
-    w.TextEncoder=TextEncoder;
+    w.TextEncoder=TextEncoder; w.JJSC_NOPREWARM=1;   // เทสต์นี้ไม่ทดสอบการแปลล่วงหน้า (ดู smoke101)
     w.errors=[]; w.addEventListener('error',e=>w.errors.push(e.message));
   }});
 const w=vc.window,d=w.document;
@@ -58,7 +58,7 @@ setTimeout(async()=>{
   out.push('คำขอล้มกลางคัน → ลองซ้ำเองจนได้: '+(nDead>=1&&nTr>4));
   out.push('ไม่มีคำแปลเพี้ยนจากก้อนที่ตอบพัง: '+!d.body.textContent.includes('my:พัง'));
   out.push('คำแปลถูกเก็บลงแคช: '
-    +(Object.keys(JSON.parse(w.localStorage.getItem('jjsc_tr2_my')||'{}')).length>5));
+    +(Object.keys(JSON.parse(w.localStorage.getItem('jjsc_tr3_my')||'{}')).length>5));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);

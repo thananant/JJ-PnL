@@ -43,7 +43,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('stock_counts'))return T([]);
       return T([]);
     };
-    w.TextEncoder=TextEncoder;
+    w.TextEncoder=TextEncoder; w.JJSC_NOPREWARM=1;   // เทสต์นี้ไม่ทดสอบการแปลล่วงหน้า (ดู smoke101)
     w.errors=[]; w.addEventListener('error',e=>w.errors.push(e.message));
   }});
 const w=vc.window,d=w.document;

@@ -42,7 +42,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('stock_counts'))return T([]);
       return T([]);
     };
-    w.TextEncoder=TextEncoder;
+    w.TextEncoder=TextEncoder; w.JJSC_NOPREWARM=1;   // เทสต์นี้ไม่ทดสอบการแปลล่วงหน้า (ดู smoke101)
     w.errors=[]; w.addEventListener('error',e=>w.errors.push(e.message));
   }});
 const w=vc.window,d=w.document;
@@ -100,7 +100,7 @@ setTimeout(async()=>{
   out.push('กลับหน้านับสต๊อก เนื้อในถูกแปล + ใช้แคช ไม่ยิงแปลซ้ำ: '
     +(d.querySelector('main').textContent.includes('en:')&&trCalls.length===n2));
   out.push('เก็บคำแปลไว้ใน localStorage (เปิดใหม่ไม่ต้องแปลซ้ำ): '
-    +(Object.keys(JSON.parse(w.localStorage.getItem('jjsc_tr2_en')||'{}')).length>5));
+    +(Object.keys(JSON.parse(w.localStorage.getItem('jjsc_tr3_en')||'{}')).length>5));
   // 4) เปลี่ยนเป็นลาว → ยิงตัวแปลด้วย tl=lo
   await w.setLang('lo'); await sleep(400);
   out.push('เปลี่ยนเป็นลาว: ยิง tl=lo + หน้าจอเป็นคำแปลลาว: '
