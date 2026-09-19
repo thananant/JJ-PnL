@@ -777,7 +777,7 @@ async function loadAll(){
     selAll('sc_units?select=*&order=sort,name').then(r=>{S.unitTbl=true;return r;}).catch(()=>{S.unitTbl=false;return [];})
   ]);
   S.depts=deptRows||[];
-  S.units=unitRows||[];
+  S.units=unitRows||[]; uDirty();
   S.lineGroups=lineRows||[]; // [{group_id,name,seen_at}]
   S.cfg={}; (cfgRows||[]).forEach(r=>{S.cfg[r.k]=r.v;});
   S.sups=sups;
@@ -873,7 +873,7 @@ function orderPlan(){ // คิดใบสั่งของทุกซัพ�
       const order=(have==null||!need)?null:Math.max(0,+(need-have).toFixed(3));
       const b=buOf(billName(it));                         // หน่วยซื้อจากบิล (ถ้ามี)
       const bu=b?b.top:'';
-      const c=bu&&bu!==String(it.unit||'')?(S.conv||{})[String(billName(it)).trim()+'|'+bu]:null;
+      const c=bu&&!uSame(bu,it.unit)?(S.conv||{})[String(billName(it)).trim()+'|'+bu]:null;  // ชื่อพ้อง = หน่วยเดียวกัน ไม่ต้องแปลง
       const packs=(order&&c&&c.f)?Math.ceil(order/c.f):null;
       return {it,have,need,order,bu,factor:c?c.f:null,packs};
     }).sort((a,b2)=>((b2.order>0?1:0)-(a.order>0?1:0))||cmpItem(a.it,b2.it)); // ต้องสั่งขึ้นบน ที่เหลือลำดับเดียวกับเมนูอื่น
@@ -1773,8 +1773,23 @@ async function fillBillUnits(){ // เติมหน่วยซื้อจา
   }
   toast('✅ เติมหน่วยซื้อจากบิลแล้ว '+ok+'/'+todo.length+' รายการ');render();
 }
-/* ---- 📏 คลังหน่วย: รวมหน่วยทั้งหมด + เพิ่ม/แก้ชื่อ/ลบ ---- */
+/* ---- 📏 คลังหน่วย: รวมหน่วยทั้งหมด + เพิ่ม/แก้ชื่อ/ลบ/รวมชื่อพ้อง ---- */
 const uKey=u=>String(u||'').trim();
+/* ชื่อพ้อง (alias): หน่วยคนละชื่อแต่ของเดียวกัน เช่น บิลเขียน "กก." แต่หน่วยนับคือ "โล"
+   → sc_units.alias_of ชี้ไปหน่วยหลัก · ทุกที่ที่เทียบหน่วยให้เทียบด้วย uMain() */
+function uAliasMap(){
+  const m={};
+  (S.units||[]).forEach(r=>{const n=uKey(r.name),a=uKey(r.alias_of); if(n&&a&&a!==n)m[n]=a;});
+  Object.keys(m).forEach(k=>{ let v=m[k],i=0; while(m[v]&&m[v]!==v&&i++<10)v=m[v]; m[k]=v; }); // ชี้ต่อกันเป็นทอด → ยุบเป็นตัวหลัก
+  return m;
+}
+function uMain(n){ if(!S._uAlias)S._uAlias=uAliasMap(); const k=uKey(n); return S._uAlias[k]||k; }
+const uSame=(a,b)=>uMain(a)===uMain(b);                       // หน่วยเดียวกันไหม (นับชื่อพ้องด้วย)
+function uAliasOf(main){ main=uKey(main);                      // ชื่อพ้องทั้งหมดของหน่วยหลักนี้
+  if(!S._uAlias)S._uAlias=uAliasMap();
+  return Object.keys(S._uAlias).filter(k=>S._uAlias[k]===main).sort((a,b)=>a.localeCompare(b,'th'));
+}
+function uDirty(){ S._uAlias=null; }                           // รายชื่อหน่วยเปลี่ยน → คิดชื่อพ้องใหม่
 function unitStats(){ // หน่วย → ใช้ที่ไหนบ้าง (หน่วยนับกี่รายการ · บิลกี่ครั้ง · ตัวคูณกี่แถว)
   const st={},add=(u,k,n)=>{const x=uKey(u); if(!x)return; (st[x]=st[x]||{cnt:0,map:0,bill:0,conv:0,reg:0})[k]+=(n||1);};
   ((S.allBr&&S.allBr.length)?S.allBr:(S.all||[])).forEach(it=>add(it.unit,'cnt'));
@@ -1785,35 +1800,73 @@ function unitStats(){ // หน่วย → ใช้ที่ไหนบ้�
   (S.units||[]).forEach(r=>add(r.name,'reg'));
   return st;
 }
-function unitAll(){ // รายชื่อหน่วยทั้งหมด (ในรายการ + ที่ใช้จริงในข้อมูล) เรียงตามการใช้งาน
+function unitAll(withAlias){ // รายชื่อหน่วยทั้งหมด (ในรายการ + ที่ใช้จริงในข้อมูล) เรียงตามการใช้งาน
   const st=unitStats(),reg={};
   (S.units||[]).forEach(r=>{const n=uKey(r.name); if(n)reg[n]=r;});
-  return Object.keys(st).map(n=>{const x=st[n];
+  const all=Object.keys(st).map(n=>{const x=st[n];
     return {name:n,row:reg[n]||null,cnt:x.cnt,map:x.map,bill:x.bill,conv:x.conv,
-            used:x.cnt+x.map+x.bill+x.conv};})
+            main:uMain(n),alias:uMain(n)!==n,used:x.cnt+x.map+x.bill+x.conv};})
     .sort((a,b)=>(b.cnt-a.cnt)||(b.bill-a.bill)||a.name.localeCompare(b.name,'th'));
+  return withAlias?all:all.filter(u=>!u.alias);   // ปกติซ่อนชื่อพ้อง (ไปโชว์ใต้หน่วยหลัก)
+}
+function aliasTodo(){ // สินค้าที่บิลใช้ "ชื่อพ้อง" ของหน่วยนับ แต่ยังไม่มีตัวคูณใน pnl_unit_conv (ฝั่ง P&L ต้องใช้)
+  const out=[],seen={};
+  Object.keys(S.billSup||{}).forEach(sp=>Object.keys(S.billSup[sp]).forEach(item=>{
+    Object.keys(S.billSup[sp][item]).forEach(u=>{
+      if(uKey(u)===uMain(u))return;                       // ชื่อหลักอยู่แล้ว
+      const it=(S.all||[]).find(x=>uKey(billName(x))===uKey(item)); if(!it)return;
+      if(!uSame(u,it.unit))return;                        // คนละหน่วยจริง ๆ → ต้องใส่ตัวคูณเอง
+      const k=item+'|'+u; if(seen[k]||(S.conv||{})[k])return; seen[k]=1;
+      out.push({item:item,from:uKey(u),to:uKey(it.unit)});
+    });
+  }));
+  return out;
+}
+async function fillAliasConv(quiet){ // ใส่ตัวคูณ 1:1 ให้ชื่อพ้อง — ฝั่ง P&L จะได้คิดถูกด้วย
+  const todo=aliasTodo();
+  if(!todo.length){ if(!quiet)toast('ไม่มีรายการที่ต้องใส่ตัวคูณชื่อพ้อง ✓'); return 0; }
+  try{
+    await api('POST','pnl_unit_conv?on_conflict=item,from_unit',
+      todo.map(x=>({item:x.item,from_unit:x.from,to_unit:x.to,factor:1})),'resolution=merge-duplicates,return=minimal');
+    todo.forEach(x=>{(S.conv=S.conv||{})[x.item+'|'+x.from]={to:x.to,f:1};});
+    if(!quiet){toast('✅ ใส่ตัวคูณ 1:1 ให้ชื่อพ้องแล้ว '+todo.length+' รายการ');render();}
+    return todo.length;
+  }catch(e){ if(!quiet)toast('ใส่ตัวคูณไม่สำเร็จ — '+errMsg(e),true); return 0; }
 }
 function unitKind(u){ return u.cnt||u.map?(u.bill?'both':'count'):(u.bill?'buy':(u.row?u.row.kind||'both':'both')); }
 function toggleUM(){ S.umOpen=!S.umOpen; render(); }
 function unitCard0(){ // แผงหน่วยทั้งหมด (พับได้)
-  const list=unitAll(),open=S.umOpen!==false;
+  const list=unitAll(),open=S.umOpen!==false,nAl=aliasTodo().length;
   const q=(S.uQ||'').trim().toLowerCase();
   const show=q?list.filter(u=>u.name.toLowerCase().includes(q)):list;
   const nNew=list.filter(u=>!u.row).length;
   const KIND={count:['หน่วยนับ','#2E5B3C'],buy:['หน่วยซื้อ (บิล)','#24466F'],both:['ใช้ทั้งสองแบบ','#7A5B12']};
+  const esq=n=>esc(n).replace(/'/g,"\\'");
+  const mainNames=list.map(u=>u.name);
   const row=u=>{
     const k=unitKind(u),kk=KIND[k]||KIND.both,canEdit=!!(u.cnt||u.map||u.row),inUse=!!(u.cnt||u.map);
+    const al=uAliasOf(u.name),st=unitStats();
+    const merging=S.uMergeFrom===u.name;
     return '<div class="lrow" style="grid-template-columns:minmax(96px,1fr) minmax(150px,1.6fr) auto">'
       +'<div><b style="font-size:15px">'+esc(u.name)+'</b>'
-      +'<div style="font-size:10.5px;color:'+kk[1]+'">'+kk[0]+(u.row?'':' · ⚠ ยังไม่อยู่ในรายการ')+'</div></div>'
+      +'<div style="font-size:10.5px;color:'+kk[1]+'">'+kk[0]+(u.row?'':' · ⚠ ยังไม่อยู่ในรายการ')+'</div>'
+      +(al.length?'<div style="font-size:11px;margin-top:3px">🔗 ชื่อพ้อง: '+al.map(a=>'<span class="bchip" style="font-size:11px">'+esc(a)
+        +' <button class="outb" style="padding:0 5px;font-size:11px" title="แยก '+esc(a)+' ออกจาก '+esc(u.name)+'" onclick="unitUnmerge(\''+esq(a)+'\')">✕</button></span>').join(' ')+'</div>':'')+'</div>'
       +'<div style="font-size:11.5px;color:var(--mut)">'
       +(u.cnt?'หน่วยนับ <b>'+u.cnt+'</b> รายการ':'<span style="opacity:.6">ไม่ได้ใช้เป็นหน่วยนับ</span>')
       +(u.bill?' · พบในบิล <b>'+u.bill+'</b> ครั้ง':'')
-      +(u.conv?' · ตัวคูณ <b>'+u.conv+'</b> แถว':'')+'</div>'
+      +(u.conv?' · ตัวคูณ <b>'+u.conv+'</b> แถว':'')
+      +(al.length?'<div style="margin-top:2px">รวมชื่อพ้องแล้ว '+al.length+' ชื่อ · บิลที่เขียนชื่อพ้องถือว่าเป็น "'+esc(u.name)+'"</div>':'')
+      +(merging?'<div style="margin-top:5px">รวม <b>'+esc(u.name)+'</b> เข้ากับ '
+        +'<select class="zsel" id="uMg">'+mainNames.filter(n=>n!==u.name).map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join('')+'</select> '
+        +'<button class="outb" onclick="unitMergeGo(\''+esq(u.name)+'\')">✅ รวม</button> '
+        +'<button class="outb" onclick="unitMergeCancel()">ยกเลิก</button></div>':'')
+      +'</div>'
       +'<div class="hbtns">'
-      +(u.row?'':'<button class="outb" onclick="unitAdopt(\''+esc(u.name).replace(/'/g,"\\'")+'\')">➕ เพิ่มเข้ารายการ</button>')
-      +(canEdit?'<button class="outb" onclick="unitRename(\''+esc(u.name).replace(/'/g,"\\'")+'\')" title="แก้ชื่อหน่วยนี้ทุกที่ที่ใช้อยู่">✏️ แก้ชื่อ</button>':'')
-      +(u.row||!inUse?'<button class="outb" onclick="unitDel(\''+esc(u.name).replace(/'/g,"\\'")+'\')">🗑 ลบ</button>':'')
+      +(u.row?'':'<button class="outb" onclick="unitAdopt(\''+esq(u.name)+'\')">➕ เพิ่มเข้ารายการ</button>')
+      +(canEdit?'<button class="outb" onclick="unitRename(\''+esq(u.name)+'\')" title="แก้ชื่อหน่วยนี้ทุกที่ที่ใช้อยู่">✏️ แก้ชื่อ</button>':'')
+      +(mainNames.length>1&&!merging?'<button class="outb" onclick="unitMergeOpen(\''+esq(u.name)+'\')" title="หน่วยนี้กับอีกหน่วยคือของเดียวกัน">🔗 รวม</button>':'')
+      +(u.row||!inUse?'<button class="outb" onclick="unitDel(\''+esq(u.name)+'\')">🗑 ลบ</button>':'')
       +'</div></div>';
   };
   return '<div class="card"><div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleUM()">'
@@ -1828,8 +1881,11 @@ function unitCard0(){ // แผงหน่วยทั้งหมด (พั�
       +(nNew?'<button class="outb" onclick="unitAdoptAll()">⬇ เพิ่มที่ใช้อยู่ทั้งหมด ('+nNew+')</button>':'')+'</div></div>'
       +'<div class="hd2" style="grid-template-columns:minmax(96px,1fr) minmax(150px,1.6fr) auto"><span>หน่วย</span><span>ใช้ที่ไหนบ้าง</span><span></span></div>'
       +(show.length?show.map(row).join(''):'<div class="empty">ไม่พบหน่วย "'+esc(q)+'"</div>')
-      +'<div class="note">แก้ชื่อหน่วย = เปลี่ยนให้ทุกที่ที่ใช้อยู่ (สินค้าทั้ง 2 สาขา · ชื่อที่ผูกกับ P&L · ตัวคูณ) — '
-      +'<b>หน่วยในบิลเก่าไม่ถูกแก้</b> เพราะเป็นของที่ซัพส่งมาจริง ให้ตั้งตัวคูณแทน · ลบได้เมื่อไม่มีสินค้าใช้หน่วยนั้นแล้ว</div>'
+      +(nAl?'<div class="lrow" style="grid-template-columns:1fr auto"><div style="font-size:12px">มีบิลที่เขียนชื่อพ้อง <b>'+nAl+'</b> รายการที่ยังไม่มีตัวคูณ 1:1 (ฝั่ง P&L ต้องใช้)</div>'
+        +'<div><button class="outb" onclick="fillAliasConv()">⬇ ใส่ตัวคูณ 1:1 ให้ชื่อพ้อง</button></div></div>':'')
+      +'<div class="note"><b>🔗 รวม</b> = หน่วยคนละชื่อแต่ของเดียวกัน (โล / กก. / กก) → เลือกหน่วยหลัก 1 ชื่อ ระบบจะเปลี่ยนสินค้าทั้ง 2 สาขาให้ใช้ชื่อหลัก '
+      +'และจำไว้ว่าชื่อเดิม = ชื่อหลัก · <b>บิลเก่าไม่ถูกแก้</b> (เป็นของที่ซัพส่งมาจริง) แต่ระบบจะถือว่าเป็นหน่วยเดียวกันและใส่ตัวคูณ 1:1 ให้ฝั่ง P&L เอง — ไม่มีอะไรเสีย · '
+      +'แก้ชื่อหน่วย = เปลี่ยนชื่อให้ทุกที่ที่ใช้อยู่ · ลบได้เมื่อไม่มีสินค้าใช้หน่วยนั้นแล้ว</div>'
     ):'')+'</div>';
 }
 function uSearch(v){ S.uQ=v; clearTimeout(S._uT); S._uT=setTimeout(()=>{ render(); const e=document.getElementById('uQ'); if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);} },250); }
@@ -1841,7 +1897,7 @@ async function unitAdd(){
   try{
     const r=await api('POST','sc_units',[{name:n,kind:'both'}],'return=representation');
     S.units=(S.units||[]).concat(r&&r[0]?r[0]:{name:n,kind:'both'});
-    if(el)el.value=''; toast('✅ เพิ่มหน่วย '+n); render();
+    uDirty(); if(el)el.value=''; toast('✅ เพิ่มหน่วย '+n); render();
   }catch(e){toast('เพิ่มไม่สำเร็จ — '+errMsg(e),true);}
 }
 async function unitAdopt(n){ // หน่วยที่ใช้อยู่ในข้อมูลแต่ยังไม่อยู่ในรายการ
@@ -1850,7 +1906,7 @@ async function unitAdopt(n){ // หน่วยที่ใช้อยู่ใ
   try{
     const r=await api('POST','sc_units',[{name:n,kind:unitKind(u)}],'return=representation');
     S.units=(S.units||[]).concat(r&&r[0]?r[0]:{name:n,kind:unitKind(u)});
-    toast('✅ เพิ่ม '+n+' เข้ารายการแล้ว'); render();
+    uDirty(); toast('✅ เพิ่ม '+n+' เข้ารายการแล้ว'); render();
   }catch(e){toast('เพิ่มไม่สำเร็จ — '+errMsg(e),true);}
 }
 async function unitAdoptAll(){
@@ -1860,7 +1916,7 @@ async function unitAdoptAll(){
   try{
     const r=await api('POST','sc_units',todo.map(u=>({name:u.name,kind:unitKind(u)})),'return=representation');
     S.units=(S.units||[]).concat(r&&r.length?r:todo.map(u=>({name:u.name,kind:unitKind(u)})));
-    toast('✅ เพิ่ม '+todo.length+' หน่วยเข้ารายการ'); render();
+    uDirty(); toast('✅ เพิ่ม '+todo.length+' หน่วยเข้ารายการ'); render();
   }catch(e){toast('เพิ่มไม่สำเร็จ — '+errMsg(e),true);}
 }
 async function unitRename(old){
@@ -1881,6 +1937,7 @@ async function unitRename(old){
     (S.mapRows||[]).forEach(x=>{ if(uKey(x.stock_unit)===old)x.stock_unit=nn; });
     Object.keys(S.conv||{}).forEach(k=>{ if(uKey(S.conv[k].to)===old)S.conv[k].to=nn; });
     if(row)row.name=nn; else if(S.unitTbl)S.units=(S.units||[]).concat({name:nn,kind:unitKind(u)});
+    (S.units||[]).forEach(r2=>{ if(uKey(r2.alias_of)===old)r2.alias_of=nn; }); uDirty();
     // หน่วยเดิมยังอยู่ในบิล (บิลเก่าแก้ไม่ได้) → ใส่ตัวคูณ 1:1 ให้เอง ไม่งั้นใบสั่งจะขึ้น "ยังไม่ใส่ตัวคูณ"
     let nFix=0;
     if(u.bill){
@@ -1900,6 +1957,51 @@ async function unitRename(old){
       +(nFix?' · ใส่ตัวคูณ 1 '+old+' = 1 '+nn+' ให้ '+nFix+' รายการ (บิลเก่ายังเขียน "'+old+'")':'')); render();
   }catch(e){toast('แก้ชื่อไม่สำเร็จ — '+errMsg(e),true);}
 }
+function unitMergeOpen(n){ S.uMergeFrom=uKey(n); render(); }
+function unitMergeCancel(){ S.uMergeFrom=null; render(); }
+function unitMergeGo(from){ const el=document.getElementById('uMg'); if(!el)return; unitMerge(from,el.value); }
+async function unitMerge(src,main){ // รวมหน่วย: src กลายเป็น "ชื่อพ้อง" ของ main และของที่ใช้ src ถูกเปลี่ยนเป็น main
+  src=uKey(src); main=uMain(main);
+  if(!src||!main||src===main)return;
+  const u=unitAll(true).find(x=>x.name===src)||{cnt:0,map:0,bill:0,conv:0};
+  if(!cfm('รวมหน่วย "'+src+'" เข้ากับ "'+main+'" ?\n\n'
+    +'• สินค้าที่ใช้หน่วย "'+src+'" ('+u.cnt+' รายการ ทั้ง 2 สาขา) จะเปลี่ยนเป็น "'+main+'"\n'
+    +'• ระบบจะจำว่า "'+src+'" = "'+main+'" (บิลที่เขียน "'+src+'" ถือว่าเป็น "'+main+'")\n'
+    +'• บิลเก่าไม่ถูกแก้ · ตัวคูณ 1:1 ใส่ให้อัตโนมัติ'))return;
+  try{
+    if(u.cnt)await api('PATCH','products?unit=eq.'+encodeURIComponent(src)+'&deleted_at=is.null',{unit:main},'return=minimal');
+    if(u.map)await api('PATCH','pnl_stock_map?stock_unit=eq.'+encodeURIComponent(src),{stock_unit:main},'return=minimal').catch(()=>{});
+    if(u.conv)await api('PATCH','pnl_unit_conv?to_unit=eq.'+encodeURIComponent(src),{to_unit:main},'return=minimal').catch(()=>{});
+    if(S.unitTbl){
+      if(!unitFind(main))await api('POST','sc_units',[{name:main,kind:'both'}],'return=minimal').catch(()=>{});
+      const row=unitFind(src);
+      if(row&&row.id!=null)await api('PATCH','sc_units?id=eq.'+row.id,{alias_of:main},'return=minimal');
+      else await api('POST','sc_units',[{name:src,kind:'buy',alias_of:main}],'return=minimal');
+      await api('PATCH','sc_units?alias_of=eq.'+encodeURIComponent(src),{alias_of:main},'return=minimal').catch(()=>{}); // ที่เคยชี้มาที่ src ให้ชี้ main
+    }
+    // อัปเดตในหน้าจอทันที
+    (S.all||[]).forEach(x=>{ if(uKey(x.unit)===src)x.unit=main; });
+    (S.allBr||[]).forEach(x=>{ if(uKey(x.unit)===src)x.unit=main; });
+    (S.mapRows||[]).forEach(x=>{ if(uKey(x.stock_unit)===src)x.stock_unit=main; });
+    Object.keys(S.conv||{}).forEach(k=>{ if(uKey(S.conv[k].to)===src)S.conv[k].to=main; });
+    const r0=unitFind(src);
+    if(r0)r0.alias_of=main; else S.units=(S.units||[]).concat({name:src,kind:'buy',alias_of:main});
+    if(!unitFind(main))S.units=(S.units||[]).concat({name:main,kind:'both'});
+    (S.units||[]).forEach(r=>{ if(uKey(r.alias_of)===src)r.alias_of=main; });
+    uDirty(); S.uMergeFrom=null;
+    const nFix=await fillAliasConv(true);   // ฝั่ง P&L: ใส่ตัวคูณ 1:1 ให้บิลที่เขียนชื่อพ้อง
+    toast('✅ รวม "'+src+'" เข้ากับ "'+main+'" แล้ว'+(u.cnt?' · เปลี่ยนสินค้า '+u.cnt+' รายการ':'')+(nFix?' · ใส่ตัวคูณ 1:1 ให้ '+nFix+' รายการ':''));
+    render();
+  }catch(e){toast('รวมหน่วยไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function unitUnmerge(n){ // แยกชื่อพ้องออก (ไม่ได้เปลี่ยนหน่วยของสินค้ากลับ)
+  n=uKey(n); const row=unitFind(n); if(!row)return;
+  if(!cfm('แยก "'+n+'" ออกจาก "'+uMain(n)+'" ?\n\n(สินค้าที่เปลี่ยนหน่วยไปแล้วจะไม่ถูกเปลี่ยนกลับ · บิลที่เขียน "'+n+'" จะต้องใส่ตัวคูณเองอีกครั้ง)'))return;
+  try{
+    if(row.id!=null)await api('PATCH','sc_units?id=eq.'+row.id,{alias_of:null},'return=minimal');
+    row.alias_of=null; uDirty(); toast('แยก "'+n+'" ออกแล้ว'); render();
+  }catch(e){toast('แยกไม่สำเร็จ — '+errMsg(e),true);}
+}
 async function unitDel(n){
   n=uKey(n); const u=unitAll().find(x=>x.name===n);
   if(!u)return;
@@ -1910,7 +2012,7 @@ async function unitDel(n){
   try{
     await api('DELETE','sc_units?id=eq.'+row.id,null,'return=minimal');
     S.units=(S.units||[]).filter(r=>r!==row);
-    toast('✅ ลบหน่วย '+n+' แล้ว'); render();
+    uDirty(); toast('✅ ลบหน่วย '+n+' แล้ว'); render();
   }catch(e){toast('ลบไม่สำเร็จ — '+errMsg(e),true);}
 }
 function unitCard(){
@@ -1925,9 +2027,9 @@ function unitCard(){
   const rowHtml=(it,item,u,info)=>{ // 1 แถว = 1 หน่วยซื้อของซัพนั้น
     const i=S._uRows.length; S._uRows.push({pid:it.id,item,unit:u});
     const cu=String(it.unit||''),c=convOf(item,u);
-    const same=u===cu;
+    const same=uSame(u,cu),alias=same&&uKey(u)!==uKey(cu);   // ชื่อพ้อง = เท่ากับหน่วยนับ
     const fx=same?1:(c&&c.f?c.f:'');
-    const stat=same?'<span class="okt">= หน่วยนับ ไม่ต้องแปลง</span>'
+    const stat=same?'<span class="okt">= หน่วยนับ ไม่ต้องแปลง'+(alias?' (ชื่อพ้องของ '+esc(uMain(cu))+')':'')+'</span>'
       :(fx!==''?'<span class="okt">1 '+esc(u)+' = '+fq(fx)+' '+esc(cu||'หน่วยนับ')+'</span>'
         :'<span class="wat">⚠ ยังไม่ใส่ตัวคูณ</span>');
     return '<div class="lrow" style="'+G+'">'+imgCell(it)
@@ -1950,7 +2052,7 @@ function unitCard(){
       Object.keys(g[item]).forEach(u=>{
         nUnit++;
         (byBill[item]||[]).forEach(it=>{
-          if(u!==String(it.unit||'')&&!(S.conv||{})[item+'|'+u])nTodo++;
+          if(!uSame(u,it.unit)&&!(S.conv||{})[item+'|'+u])nTodo++;   // ชื่อพ้องไม่นับว่าขาดตัวคูณ
           if(q&&!(it.name.toLowerCase().includes(q)||item.toLowerCase().includes(q)||sp.toLowerCase().includes(q)))return;
           body+=rowHtml(it,item,u,g[item][u]);
         });
@@ -2015,7 +2117,7 @@ async function convSave(i){ // เซฟหน่วยนับ (ตามช�
       S.all.forEach(x=>{if(x.name===it.name)x.unit=cu;});
       (S.mapRows||[]).forEach(x=>{if(x.product_name===it.name)x.stock_unit=cu;});
     }
-    if(r.unit&&r.unit!==cu&&fxEl&&!fxEl.disabled){
+    if(r.unit&&!uSame(r.unit,cu)&&fxEl&&!fxEl.disabled){
       const f=num(fxEl.value);
       if(!f){toast('ใส่ตัวคูณก่อนครับ (1 '+r.unit+' = กี่ '+cu+')',true);return;}
       await api('POST','pnl_unit_conv?on_conflict=item,from_unit',
