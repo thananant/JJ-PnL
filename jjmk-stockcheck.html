@@ -762,7 +762,7 @@ async function loadAll(){
     catch(e2){ S.deptOk=false; prods=await selAll(base+'&deleted_at=is.null&branch_id=eq.'+bid+'&order=sort'); }
   }
   const cd=($('#cd')&&$('#cd').value)||bizToday();
-  const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows]=await Promise.all([
+  const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows,unitRows]=await Promise.all([
     selAll('pnl_stock_names?select=*&order=id').catch(()=>selAll('pnl_stock_map?select=*&order=id')).catch(()=>[]),
     selAll('stock_current?select=product_id,qty,updated_at&branch_id=eq.'+bid).catch(()=>[]),
     selAll('suppliers?select=name,order_mode,schedule,lead_days,cycle_days,min_cases,cutoff,line_group_id&order=name')
@@ -772,9 +772,12 @@ async function loadAll(){
     // รายชื่อแผนกของ "สาขานี้" (แผนกแยกสาขา) — ยังไม่รัน sql/jjmk_stockcheck_depts.sql = ไม่มีตาราง
     selAll('sc_depts?select=*&branch_id=eq.'+bid+'&order=sort,name').then(r=>{S.deptTbl=true;return r;}).catch(()=>{S.deptTbl=false;return null;}),
     selAll('line_groups?select=*&order=seen_at.desc.nullslast').catch(()=>selAll('line_groups?select=*')).catch(()=>[]), // กลุ่มไลน์ที่บอทเห็น (ของแอพนับเดิม)
-    selAll('sc_config?select=*').catch(()=>[])
+    selAll('sc_config?select=*').catch(()=>[]),
+    // รายชื่อหน่วยกลาง — ยังไม่รัน sql/jjmk_stockcheck_units.sql = ไม่มีตาราง (ยังใช้หน่วยจากข้อมูลได้)
+    selAll('sc_units?select=*&order=sort,name').then(r=>{S.unitTbl=true;return r;}).catch(()=>{S.unitTbl=false;return [];})
   ]);
   S.depts=deptRows||[];
+  S.units=unitRows||[];
   S.lineGroups=lineRows||[]; // [{group_id,name,seen_at}]
   S.cfg={}; (cfgRows||[]).forEach(r=>{S.cfg[r.k]=r.v;});
   S.sups=sups;
@@ -1588,7 +1591,7 @@ async function lineTest(i){
 }
 function renderCfgUnit(){
   if(cfgDeny())return;
-  $('#list').innerHTML=cfgHead('cfgn')+unitCard();
+  $('#list').innerHTML=cfgHead('cfgn')+unitCard0()+unitCard();
 }
 function deptCard(){
   if(!S.deptOk)return '<div class="note">⚠ ยังไม่ได้รัน sql/jjmk_stockcheck_dept.sql — ตั้งแผนกยังไม่ได้</div>';
@@ -1770,10 +1773,149 @@ async function fillBillUnits(){ // เติมหน่วยซื้อจา
   }
   toast('✅ เติมหน่วยซื้อจากบิลแล้ว '+ok+'/'+todo.length+' รายการ');render();
 }
+/* ---- 📏 คลังหน่วย: รวมหน่วยทั้งหมด + เพิ่ม/แก้ชื่อ/ลบ ---- */
+const uKey=u=>String(u||'').trim();
+function unitStats(){ // หน่วย → ใช้ที่ไหนบ้าง (หน่วยนับกี่รายการ · บิลกี่ครั้ง · ตัวคูณกี่แถว)
+  const st={},add=(u,k,n)=>{const x=uKey(u); if(!x)return; (st[x]=st[x]||{cnt:0,map:0,bill:0,conv:0,reg:0})[k]+=(n||1);};
+  ((S.allBr&&S.allBr.length)?S.allBr:(S.all||[])).forEach(it=>add(it.unit,'cnt'));
+  (S.mapRows||[]).forEach(m=>add(m.stock_unit,'map'));
+  Object.keys(S.billSup||{}).forEach(sp=>Object.keys(S.billSup[sp]).forEach(item=>
+    Object.keys(S.billSup[sp][item]).forEach(u=>add(u,'bill',S.billSup[sp][item][u].n))));
+  Object.keys(S.conv||{}).forEach(k=>{ add(k.split('|')[1],'conv'); add((S.conv[k]||{}).to,'conv'); });
+  (S.units||[]).forEach(r=>add(r.name,'reg'));
+  return st;
+}
+function unitAll(){ // รายชื่อหน่วยทั้งหมด (ในรายการ + ที่ใช้จริงในข้อมูล) เรียงตามการใช้งาน
+  const st=unitStats(),reg={};
+  (S.units||[]).forEach(r=>{const n=uKey(r.name); if(n)reg[n]=r;});
+  return Object.keys(st).map(n=>{const x=st[n];
+    return {name:n,row:reg[n]||null,cnt:x.cnt,map:x.map,bill:x.bill,conv:x.conv,
+            used:x.cnt+x.map+x.bill+x.conv};})
+    .sort((a,b)=>(b.cnt-a.cnt)||(b.bill-a.bill)||a.name.localeCompare(b.name,'th'));
+}
+function unitKind(u){ return u.cnt||u.map?(u.bill?'both':'count'):(u.bill?'buy':(u.row?u.row.kind||'both':'both')); }
+function toggleUM(){ S.umOpen=!S.umOpen; render(); }
+function unitCard0(){ // แผงหน่วยทั้งหมด (พับได้)
+  const list=unitAll(),open=S.umOpen!==false;
+  const q=(S.uQ||'').trim().toLowerCase();
+  const show=q?list.filter(u=>u.name.toLowerCase().includes(q)):list;
+  const nNew=list.filter(u=>!u.row).length;
+  const KIND={count:['หน่วยนับ','#2E5B3C'],buy:['หน่วยซื้อ (บิล)','#24466F'],both:['ใช้ทั้งสองแบบ','#7A5B12']};
+  const row=u=>{
+    const k=unitKind(u),kk=KIND[k]||KIND.both,canEdit=!!(u.cnt||u.map||u.row),inUse=!!(u.cnt||u.map);
+    return '<div class="lrow" style="grid-template-columns:minmax(96px,1fr) minmax(150px,1.6fr) auto">'
+      +'<div><b style="font-size:15px">'+esc(u.name)+'</b>'
+      +'<div style="font-size:10.5px;color:'+kk[1]+'">'+kk[0]+(u.row?'':' · ⚠ ยังไม่อยู่ในรายการ')+'</div></div>'
+      +'<div style="font-size:11.5px;color:var(--mut)">'
+      +(u.cnt?'หน่วยนับ <b>'+u.cnt+'</b> รายการ':'<span style="opacity:.6">ไม่ได้ใช้เป็นหน่วยนับ</span>')
+      +(u.bill?' · พบในบิล <b>'+u.bill+'</b> ครั้ง':'')
+      +(u.conv?' · ตัวคูณ <b>'+u.conv+'</b> แถว':'')+'</div>'
+      +'<div class="hbtns">'
+      +(u.row?'':'<button class="outb" onclick="unitAdopt(\''+esc(u.name).replace(/'/g,"\\'")+'\')">➕ เพิ่มเข้ารายการ</button>')
+      +(canEdit?'<button class="outb" onclick="unitRename(\''+esc(u.name).replace(/'/g,"\\'")+'\')" title="แก้ชื่อหน่วยนี้ทุกที่ที่ใช้อยู่">✏️ แก้ชื่อ</button>':'')
+      +(u.row||!inUse?'<button class="outb" onclick="unitDel(\''+esc(u.name).replace(/'/g,"\\'")+'\')">🗑 ลบ</button>':'')
+      +'</div></div>';
+  };
+  return '<div class="card"><div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleUM()">'
+    +'<div><b>'+(open?'▾':'▸')+' 📏 หน่วยทั้งหมดในระบบ</b> <span style="font-size:11.5px;color:var(--mut)">'+list.length+' หน่วย'
+    +(nNew?' · ยังไม่อยู่ในรายการ '+nNew:'')+'</span></div><div></div></div>'
+    +(open?(
+      (S.unitTbl?'':'<div class="note">⚠ ยังไม่ได้รัน <b>sql/jjmk_stockcheck_units.sql</b> — ดูหน่วยได้ แต่ยังเพิ่ม/แก้/ลบ ไม่ได้</div>')
+      +'<div class="lrow" style="grid-template-columns:1fr 1fr auto;gap:8px">'
+      +'<div><input class="di" id="uQ" value="'+esc(S.uQ||'')+'" placeholder="🔍 ค้นหาหน่วย" oninput="uSearch(this.value)"></div>'
+      +'<div><input class="di" id="uNew" placeholder="＋ หน่วยใหม่ เช่น ลัง / แพ็ค / โล"></div>'
+      +'<div class="hbtns"><button class="outb" onclick="unitAdd()">➕ เพิ่มหน่วย</button>'
+      +(nNew?'<button class="outb" onclick="unitAdoptAll()">⬇ เพิ่มที่ใช้อยู่ทั้งหมด ('+nNew+')</button>':'')+'</div></div>'
+      +'<div class="hd2" style="grid-template-columns:minmax(96px,1fr) minmax(150px,1.6fr) auto"><span>หน่วย</span><span>ใช้ที่ไหนบ้าง</span><span></span></div>'
+      +(show.length?show.map(row).join(''):'<div class="empty">ไม่พบหน่วย "'+esc(q)+'"</div>')
+      +'<div class="note">แก้ชื่อหน่วย = เปลี่ยนให้ทุกที่ที่ใช้อยู่ (สินค้าทั้ง 2 สาขา · ชื่อที่ผูกกับ P&L · ตัวคูณ) — '
+      +'<b>หน่วยในบิลเก่าไม่ถูกแก้</b> เพราะเป็นของที่ซัพส่งมาจริง ให้ตั้งตัวคูณแทน · ลบได้เมื่อไม่มีสินค้าใช้หน่วยนั้นแล้ว</div>'
+    ):'')+'</div>';
+}
+function uSearch(v){ S.uQ=v; clearTimeout(S._uT); S._uT=setTimeout(()=>{ render(); const e=document.getElementById('uQ'); if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);} },250); }
+function unitFind(n){ return (S.units||[]).find(r=>uKey(r.name)===uKey(n))||null; }
+async function unitAdd(){
+  const el=document.getElementById('uNew'),n=uKey(el&&el.value);
+  if(!n){toast('พิมพ์ชื่อหน่วยก่อนครับ',true);return;}
+  if(unitFind(n)){toast('มีหน่วย "'+n+'" อยู่แล้ว',true);return;}
+  try{
+    const r=await api('POST','sc_units',[{name:n,kind:'both'}],'return=representation');
+    S.units=(S.units||[]).concat(r&&r[0]?r[0]:{name:n,kind:'both'});
+    if(el)el.value=''; toast('✅ เพิ่มหน่วย '+n); render();
+  }catch(e){toast('เพิ่มไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function unitAdopt(n){ // หน่วยที่ใช้อยู่ในข้อมูลแต่ยังไม่อยู่ในรายการ
+  n=uKey(n); if(!n||unitFind(n))return;
+  const u=unitAll().find(x=>x.name===n)||{};
+  try{
+    const r=await api('POST','sc_units',[{name:n,kind:unitKind(u)}],'return=representation');
+    S.units=(S.units||[]).concat(r&&r[0]?r[0]:{name:n,kind:unitKind(u)});
+    toast('✅ เพิ่ม '+n+' เข้ารายการแล้ว'); render();
+  }catch(e){toast('เพิ่มไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function unitAdoptAll(){
+  const todo=unitAll().filter(u=>!u.row);
+  if(!todo.length)return;
+  if(!cfm('เพิ่มหน่วยที่ใช้อยู่ '+todo.length+' หน่วยเข้ารายการ?'))return;
+  try{
+    const r=await api('POST','sc_units',todo.map(u=>({name:u.name,kind:unitKind(u)})),'return=representation');
+    S.units=(S.units||[]).concat(r&&r.length?r:todo.map(u=>({name:u.name,kind:unitKind(u)})));
+    toast('✅ เพิ่ม '+todo.length+' หน่วยเข้ารายการ'); render();
+  }catch(e){toast('เพิ่มไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function unitRename(old){
+  old=uKey(old); const u=unitAll().find(x=>x.name===old)||{cnt:0,map:0,bill:0,conv:0};
+  const nn=uKey(ask('เปลี่ยนชื่อหน่วย "'+old+'" เป็น\n(จะเปลี่ยนให้ทุกที่: สินค้าทั้ง 2 สาขา · ชื่อที่ผูกกับ P&L · ตัวคูณ'
+    +(u.bill?' — หน่วยในบิลเก่ายังเป็น "'+old+'" ตามเดิม':'')+')',old));
+  if(!nn||nn===old)return;
+  try{
+    if(u.cnt)await api('PATCH','products?unit=eq.'+encodeURIComponent(old)+'&deleted_at=is.null',{unit:nn},'return=minimal');
+    if(u.map)await api('PATCH','pnl_stock_map?stock_unit=eq.'+encodeURIComponent(old),{stock_unit:nn},'return=minimal').catch(()=>{});
+    if(u.conv)await api('PATCH','pnl_unit_conv?to_unit=eq.'+encodeURIComponent(old),{to_unit:nn},'return=minimal').catch(()=>{});
+    const row=unitFind(old);
+    if(row&&row.id!=null)await api('PATCH','sc_units?id=eq.'+row.id,{name:nn,kind:unitKind(u)},'return=minimal');
+    else if(S.unitTbl)await api('POST','sc_units',[{name:nn,kind:unitKind(u)}],'return=minimal').catch(()=>{});
+    // อัปเดตในหน้าจอเลย ไม่ต้องรีโหลด
+    (S.all||[]).forEach(x=>{ if(uKey(x.unit)===old)x.unit=nn; });
+    (S.allBr||[]).forEach(x=>{ if(uKey(x.unit)===old)x.unit=nn; });
+    (S.mapRows||[]).forEach(x=>{ if(uKey(x.stock_unit)===old)x.stock_unit=nn; });
+    Object.keys(S.conv||{}).forEach(k=>{ if(uKey(S.conv[k].to)===old)S.conv[k].to=nn; });
+    if(row)row.name=nn; else if(S.unitTbl)S.units=(S.units||[]).concat({name:nn,kind:unitKind(u)});
+    // หน่วยเดิมยังอยู่ในบิล (บิลเก่าแก้ไม่ได้) → ใส่ตัวคูณ 1:1 ให้เอง ไม่งั้นใบสั่งจะขึ้น "ยังไม่ใส่ตัวคูณ"
+    let nFix=0;
+    if(u.bill){
+      const items={};
+      Object.keys(S.billSup||{}).forEach(sp=>Object.keys(S.billSup[sp]).forEach(item=>{
+        if(Object.keys(S.billSup[sp][item]).some(x=>uKey(x)===old))items[item]=1; }));
+      const rows2=Object.keys(items).filter(item=>(S.all||[]).some(x=>uKey(billName(x))===uKey(item)&&uKey(x.unit)===nn))
+        .filter(item=>!(S.conv||{})[item+'|'+old])
+        .map(item=>({item:item,from_unit:old,to_unit:nn,factor:1}));
+      if(rows2.length){
+        await api('POST','pnl_unit_conv?on_conflict=item,from_unit',rows2,'resolution=merge-duplicates,return=minimal').catch(()=>{});
+        rows2.forEach(r2=>{(S.conv=S.conv||{})[r2.item+'|'+old]={to:nn,f:1};});
+        nFix=rows2.length;
+      }
+    }
+    toast('✅ เปลี่ยน "'+old+'" เป็น "'+nn+'" แล้ว'+(u.cnt?' ('+u.cnt+' รายการ)':'')
+      +(nFix?' · ใส่ตัวคูณ 1 '+old+' = 1 '+nn+' ให้ '+nFix+' รายการ (บิลเก่ายังเขียน "'+old+'")':'')); render();
+  }catch(e){toast('แก้ชื่อไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function unitDel(n){
+  n=uKey(n); const u=unitAll().find(x=>x.name===n);
+  if(!u)return;
+  if(u.cnt||u.map){toast('ลบไม่ได้ — ยังใช้เป็นหน่วยนับอยู่ '+(u.cnt||u.map)+' รายการ (เปลี่ยนหน่วยของสินค้าก่อน)',true);return;}
+  const row=unitFind(n);
+  if(!row){toast('หน่วยนี้ไม่ได้อยู่ในรายการ (มาจากบิล/ตัวคูณ) — ลบไม่ได้',true);return;}
+  if(!cfm('ลบหน่วย "'+n+'" ออกจากรายการ?'+(u.bill?'\n\n(ยังพบในบิลเก่า '+u.bill+' ครั้ง — บิลเก่าไม่ถูกแตะ)':'')))return;
+  try{
+    await api('DELETE','sc_units?id=eq.'+row.id,null,'return=minimal');
+    S.units=(S.units||[]).filter(r=>r!==row);
+    toast('✅ ลบหน่วย '+n+' แล้ว'); render();
+  }catch(e){toast('ลบไม่สำเร็จ — '+errMsg(e),true);}
+}
 function unitCard(){
   if(!S.billUnits)ensureBillUnits();
-  const units=[...new Set([].concat(S.all.map(i=>i.unit),(S.mapRows||[]).map(m=>m.stock_unit))
-    .map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  const units=unitAll().map(u=>u.name);   // รายชื่อหน่วยกลาง + ที่ใช้จริง (เรียงตามการใช้งาน)
   const q=(S.cfgQ||'').trim().toLowerCase();
   S.supOpen=S.supOpen||{}; S._uRows=[];
   const byBill={}; // ชื่อบิล → สินค้าในระบบนับของสาขานี้
