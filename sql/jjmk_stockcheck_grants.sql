@@ -13,6 +13,8 @@
 --     suppliers       select, insert, update, delete   (จัดการซัพ + รอบสั่ง + line_group_id)
 --     line_groups     select, update            (ตั้งชื่อกลุ่มที่ไลน์ไม่ส่งชื่อมา)
 --     sc_depts        select, insert, update, delete   (แผนกรายสาขา — ตารางของแอพใหม่)
+--     sc_units        select, insert, update, delete   (คลังหน่วย — ตารางของแอพใหม่)
+--     sc_i18n         select, insert, update           (คลังคำแปลกลาง)
 --     sc_users        select, insert, update    (ผู้ใช้แอพใหม่)
 --     pnl_stock_map   select, update            (หน่วยนับ/ชื่อนับ ฝั่ง P&L)
 --     pnl_unit_conv   select, insert, update    (ตัวคูณหน่วยซื้อ↔หน่วยนับ)
@@ -40,6 +42,8 @@ declare
     ['suppliers','select, insert, update, delete'],
     ['line_groups','select, update'],
     ['sc_depts','select, insert, update, delete'],
+    ['sc_units','select, insert, update, delete'],
+    ['sc_i18n','select, insert, update'],
     ['sc_users','select, insert, update'],
     ['pnl_stock_map','select, update'],
     ['pnl_unit_conv','select, insert, update'],
@@ -63,7 +67,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['products','stock_counts','stock_current','stock_receipts','suppliers','line_groups',
-                           'sc_depts','sc_users','pnl_stock_map','pnl_unit_conv','pnl_bill_items','pnl_suppliers'] loop
+                           'sc_depts','sc_units','sc_i18n','sc_users','pnl_stock_map','pnl_unit_conv','pnl_bill_items','pnl_suppliers'] loop
     if to_regclass('public.'||t) is not null
        and exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
                    where n.nspname='public' and c.relname=t and c.relrowsecurity)
