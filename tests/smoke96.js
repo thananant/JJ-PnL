@@ -19,6 +19,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
     w.localStorage.setItem('jjsc_auth',JSON.stringify({u:'admin',h:H('admin','jjmk1234')}));
     w.localStorage.setItem('jjsc_tab','dash');
+    w.localStorage.setItem('jjsc_lgsync',String(Date.now()));   // เพิ่งซิงก์ → ยังไม่ต้องออโต้ (เทสต์ออโต้อยู่ท้ายไฟล์)
     w.fetch=async(url,opt)=>{
       const method=opt&&opt.method||'GET';
       const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),json:async()=>v}); // ของจริงมี json()
@@ -225,6 +226,24 @@ setTimeout(async()=>{
   out.push('เลือกกลุ่มจากรายการ → บันทึกลง suppliers.line_group_id + ปิดกล่อง: '
     +(!!supPatches.find(p=>p.url.includes('suppliers?name=eq.')&&p.body.line_group_id==='Cabc111')
       &&w.eval('S.gpOpen')===null&&!d.getElementById('gpMenu')));
+  // 7.1) คนในไลน์เปลี่ยนชื่อกลุ่ม → เปิดหน้านี้แล้วระบบตามให้เอง (ผูกด้วย group_id จึงไม่หลุด)
+  const nSync=syncs.length;
+  lineGroups=lineGroups.map(g=>g.group_id==='C123'?{...g,name:'JJ x Smilemeat (ชื่อใหม่)'}:g);
+  w.localStorage.removeItem('jjsc_lgsync');          // เกิน 6 ชม. แล้ว
+  w.setTab('cfgl'); await sleep(250);
+  out.push('ชื่อกลุ่มถูกเปลี่ยนในไลน์ → เปิดหน้าซัพแล้วดึงชื่อใหม่ให้เอง + ขึ้นแถบบอกว่าเปลี่ยนอะไร: '
+    +(syncs.length===nSync+1
+      &&w.eval("lgLabel(S.lineGroups.find(g=>g.group_id==='C123'))")==='JJ x Smilemeat (ชื่อใหม่)'
+      &&list().includes('ชื่อกลุ่มไลน์เปลี่ยน 1 กลุ่ม')&&list().includes('กลุ่มสั่งของ Smilemeat')));
+  out.push('ชื่อกลุ่มที่ตั้งเองไว้ (ไลน์ไม่ส่งชื่อมา) ไม่ถูกซิงก์ล้างทิ้ง: '
+    +(w.eval("lgLabel(S.lineGroups.find(g=>g.group_id==='C7f5de7010abc'))")==='JJ x กลุ่มตั้งชื่อเอง'));
+  out.push('การผูกซัพไม่หลุด (ยังชี้ group_id เดิม) + ปิดแถบแจ้งได้: '
+    +(w.eval("String((lineOf('FarmFresh')||{}).group_id||'')")==='C123'||w.eval("(S.sups||[]).some(x=>x.line_group_id==='C123')")));
+  w.lgChgClear(); await sleep(60);
+  out.push('กดปิดแถบแจ้งเตือนแล้วหายไป: '+!list().includes('ชื่อกลุ่มไลน์เปลี่ยน'));
+  const nSync2=syncs.length;
+  w.setTab('cfgu'); await sleep(60); w.setTab('cfgl'); await sleep(200);
+  out.push('เข้า-ออกหน้าซ้ำ ไม่ยิงซิงก์รัว ๆ (เว้น 6 ชม.): '+(syncs.length===nSync2));
   // 8) ปุ่มส่งทั้งหมด: เลือกกลุ่มจริง / กลุ่มทดสอบ + ยืนยันก่อนส่ง
   await w.loadAll(); await sleep(150); // คืนสภาพข้อมูลจาก mock (ข้อก่อนหน้าย้าย/ลบซัพไปแล้ว)
   w.setTab('order'); await sleep(120);

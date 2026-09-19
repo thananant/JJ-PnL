@@ -919,6 +919,7 @@ function lineOf(sp){ // กลุ่มไลน์ของซัพ — ใช
 }
 const lgLabel=g=>(g&&g.name&&String(g.name).trim())?String(g.name).trim():('กลุ่ม '+String((g&&g.group_id)||'').slice(0,10)+'…');
 const lgNamed=gid=>{const g=(S.lineGroups||[]).find(x=>String(x.group_id)===String(gid));return !!(g&&g.name&&String(g.name).trim());};
+function lgChgClear(){ S.lgChanged=null; render(); }
 async function lgRename(gid){ // ชื่อกลุ่มจากไลน์ไม่มา = ตั้งเองได้ (เก็บที่ line_groups.name ชุดเดียวกับแอพเดิม)
   const g=(S.lineGroups||[]).find(x=>String(x.group_id)===String(gid));
   const nn=(ask('ตั้งชื่อกลุ่มไลน์นี้ (ใช้แสดงในระบบ)\n'+gid,(g&&g.name)||'')||'').trim();
@@ -1456,6 +1457,7 @@ async function delProdAll(name){ // เลิกใช้สินค้า = �
 }
 function renderCfgLine(){
   if(cfgDeny())return;
+  lgAutoSync();   // ชื่อกลุ่มไลน์เปลี่ยน → ตามให้เองตอนเปิดหน้านี้ (อย่างน้อยทุก 6 ชม.)
   $('#list').innerHTML=cfgHead('cfgl')+lineCard();
 }
 function supCount(n){ // จำนวนสินค้าที่ใช้ซัพนี้ (ทุกสาขา ถ้าโหลดแล้ว)
@@ -1499,7 +1501,12 @@ function lineCard(){
   S._lineSups=sups; S._gpTag=gTag;
   const nOk=sups.filter(sp=>{const g=lineOf(sp);return g&&g.group_id;}).length;
   const nDb=sups.filter(sp=>supSched(sp)).length;
+  const chgHtml=(S.lgChanged&&S.lgChanged.length)
+    ?'<div class="note" style="margin:10px 15px;border-color:#B9D9B0;background:#F0F8F1;color:#2E5B3C">🔄 <b>ชื่อกลุ่มไลน์เปลี่ยน '+S.lgChanged.length+' กลุ่ม</b> — อัปเดตให้แล้ว (การผูกซัพไม่หลุด เพราะผูกด้วยรหัสกลุ่ม): '
+      +S.lgChanged.slice(0,6).map(c=>esc(c.from||'(ไม่มีชื่อ)')+' → <b>'+esc(c.to||'(ไม่มีชื่อ)')+'</b>').join(' · ')
+      +(S.lgChanged.length>6?' …':'')+' <button class="outb" style="padding:2px 8px;font-size:11.5px" onclick="lgChgClear()">✕ ปิด</button></div>':'';
   return '<div class="card ovok"><div class="h">🏭 ซัพพลายเออร์ + กลุ่มไลน์ <span class="n">'+sups.length+' ซัพ · อยู่ในระบบเดิม '+nDb+' · ผูกกลุ่มไลน์ '+nOk+'</span></div>'
+    +chgHtml
     +'<div class="note" style="margin:10px 15px">ใช้ข้อมูลชุดเดียวกับ<b>แอพนับสต๊อกเดิม</b> (<code>suppliers</code>) — เพิ่ม/เปลี่ยนชื่อ/ลบ ที่นี่ แอพเดิมเห็นทันที · '
     +'เปลี่ยนชื่อซัพจะตามไปแก้ชื่อซัพในสินค้าทุกสาขาให้เอง · ลบได้เมื่อไม่มีสินค้าใช้ซัพนั้นแล้ว (ถ้ายังมีให้กด ↔ ย้ายของ ไปซัพอื่นก่อน) · '
     +'ส่งใบสั่งผ่าน Edge Function <code>line-order</code> ของระบบเดิม</div>'
@@ -1516,8 +1523,11 @@ function lineCard(){
     +'<div class="hd2" style="'+G+'"><span>ซัพ</span><span>กลุ่มไลน์</span><span>สินค้า</span><span></span></div>'
     +(rows||'<div class="empty">ยังไม่มีซัพ</div>')+'</div>';
 }
-async function syncLineGroups(){ // ดึงกลุ่มที่บอทอยู่ + อัปเดตชื่อกลุ่ม (Edge Function ของระบบเดิม)
-  toast('⏳ กำลังดึงชื่อกลุ่มจากไลน์...');
+const LGSYNC_MS=6*3600*1000;   // เช็คชื่อกลุ่มให้เองอย่างน้อยทุก 6 ชม. (กดปุ่ม 🔄 บังคับได้ตลอด)
+async function syncLineGroups(auto){ // ดึงกลุ่มที่บอทอยู่ + อัปเดตชื่อกลุ่ม (Edge Function ของระบบเดิม)
+  if(S._lgSyncing)return; S._lgSyncing=true;
+  if(!auto)toast('⏳ กำลังดึงชื่อกลุ่มจากไลน์...');
+  const before={}; (S.lineGroups||[]).forEach(g=>{before[String(g.group_id)]=String(g.name||'');});
   let synced=null;
   try{
     const r=await fetch(CONFIG.URL+'/functions/v1/sync-line-groups',{method:'POST',
@@ -1527,10 +1537,30 @@ async function syncLineGroups(){ // ดึงกลุ่มที่บอท�
   }catch(e){}
   try{ S.lineGroups=await selAll('line_groups?select=*&order=seen_at.desc.nullslast'); }
   catch(e){ try{ S.lineGroups=await selAll('line_groups?select=*'); }catch(e2){} }
+  try{ localStorage.setItem('jjsc_lgsync',String(Date.now())); }catch(e){}
+  S._lgSyncing=false;
   const n=(S.lineGroups||[]).length;
-  toast(n?('🔄 เจอ '+n+' กลุ่ม'+(synced!=null?(' · อัปเดตชื่อ '+synced+' กลุ่ม'):'')+' ✓')
+  // ชื่อกลุ่มไหนเปลี่ยนไปบ้าง (คนในไลน์เปลี่ยนชื่อกลุ่ม → ระบบตามให้เอง · การผูกซัพใช้ group_id ไม่หลุด)
+  // ถ้าชื่อใหม่ว่าง (ไลน์ไม่ส่งชื่อมา) → คงชื่อเดิมไว้ ไม่นับว่าเปลี่ยน (กันชื่อที่ตั้งเองหายไป)
+  (S.lineGroups||[]).forEach(g=>{ const o=before[String(g.group_id)];
+    if(o&&!String(g.name||'').trim())g.name=o; });
+  const chg=(S.lineGroups||[]).filter(g=>before[String(g.group_id)]!=null&&before[String(g.group_id)]!==String(g.name||''));
+  if(chg.length)S.lgChanged=chg.map(g=>({id:String(g.group_id),from:before[String(g.group_id)],to:String(g.name||'')}));
+  if(auto){
+    if(chg.length){ toast('🔄 ชื่อกลุ่มไลน์เปลี่ยน '+chg.length+' กลุ่ม — อัปเดตให้แล้ว'); render(); }
+    else if(S.tab==='cfgl')render();
+    return;
+  }
+  toast(n?('🔄 เจอ '+n+' กลุ่ม'+(synced!=null?(' · อัปเดตชื่อ '+synced+' กลุ่ม'):'')
+        +(chg.length?(' · ชื่อเปลี่ยน '+chg.length+' กลุ่ม'):'')+' ✓')
         :'ยังไม่เจอกลุ่ม — เชิญบอทเข้ากลุ่มแล้วพิมพ์ 1 ข้อความในกลุ่มก่อนครับ',!n);
   render();
+}
+function lgAutoSync(){ // เข้าหน้าซัพ/ส่งไลน์ = เช็คชื่อกลุ่มให้เองถ้าเกิน 6 ชม.
+  if(window.JJSC_NOLGSYNC)return;
+  let last=0; try{ last=+(localStorage.getItem('jjsc_lgsync')||0)||0; }catch(e){}
+  if(Date.now()-last<LGSYNC_MS)return;
+  syncLineGroups(true);
 }
 async function supAdd(nm){
   const el=document.getElementById('nsName');
