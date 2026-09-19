@@ -182,31 +182,49 @@ setTimeout(async()=>{
   // 7) กลุ่มไลน์ใหม่: เชิญบอท+พิมพ์ในกลุ่ม → กด 🔄 แล้วกลุ่มต้องโผล่ใน dropdown
   lineGroups=lineGroups.concat([{group_id:'C999',name:'JJ x ซัพใหม่',seen_at:'2026-09-17'},{group_id:'C7f5de7010abc',name:null,seen_at:'2026-09-17'}]);
   await w.syncLineGroups(); await sleep(60);
+  w.gpOpen(0); await sleep(60);   // เปิดกล่องเลือกกลุ่มของซัพแถวแรก (ตัวเลือกแบบค้นหาได้)
+  const items=()=>[...d.querySelectorAll('#list .gpitem')];
   out.push('ปุ่ม 🔄 เรียก Edge Function sync-line-groups แล้วโหลดกลุ่มใหม่เข้ามา: '
     +(syncs.length===1&&w.eval('S.lineGroups.length')===3
-      &&[...d.querySelectorAll('#list select option')].some(o=>o.textContent.includes('JJ x ซัพใหม่'))));
-  const opTxt=[...d.querySelectorAll('#list select option')].map(o=>o.textContent);
-  out.push('dropdown บอกสถานะ: กลุ่มที่ผูกแล้วบอกจำนวนซัพ · กลุ่มใหม่ขึ้น "ยังไม่ผูก": '
+      &&items().some(o=>o.textContent.includes('JJ x ซัพใหม่'))));
+  const opTxt=items().map(o=>o.textContent);
+  out.push('รายการกลุ่มบอกสถานะ: กลุ่มที่ผูกแล้วบอกจำนวนซัพ · กลุ่มใหม่ขึ้น "ยังไม่ผูก": '
     +(opTxt.some(t=>t.includes('กลุ่มสั่งของ Smilemeat')&&t.includes('ผูกอยู่ 1 ซัพ'))
       &&opTxt.some(t=>t.includes('JJ x ซัพใหม่')&&t.includes('ยังไม่ผูก'))));
-  const gOpts=opTxt.filter(t=>t.includes('·'));
-  const one=[...d.querySelector('#list select').options].map(o=>o.textContent).filter(t=>t.includes('·'));
+  const one=opTxt.filter(t=>t.includes('·'));
   out.push('เรียงชื่อกลุ่ม อังกฤษก่อนแล้วไทย + สรุปบอกจำนวนผูกแล้ว/ยังไม่ผูก: '
     +(one.length===3&&one[0].indexOf('JJ x ซัพใหม่')===0&&one.slice(1).every(t=>/^[\u0E00-\u0E7F]/.test(t))
       &&list().includes('ผูกอยู่แล้ว 1 กลุ่ม')&&list().includes('ยังไม่ได้ผูก 2 กลุ่ม')));
+  // ช่องพิมพ์ค้นหากลุ่ม
+  out.push('มีช่องพิมพ์ค้นหากลุ่มไลน์ในกล่องเลือก: '+!!d.getElementById('gpQ'));
+  w.gpSearch('smile'); await sleep(30);
+  out.push('พิมพ์ค้นหาแล้วเหลือเฉพาะกลุ่มที่ตรง: '
+    +(items().length===1&&items()[0].textContent.includes('Smilemeat')));
+  w.gpSearch('ไม่มีกลุ่มนี้'); await sleep(30);
+  out.push('ค้นหาไม่เจอ ขึ้นว่าไม่พบ: '+(!items().length&&d.getElementById('gpList').textContent.includes('ไม่พบกลุ่ม')));
+  w.gpSearch(''); await sleep(30);
   out.push('กลุ่มที่ไลน์ไม่ส่งชื่อมา แสดงเป็น "กลุ่ม C7f5de7010…" และตั้งชื่อเองได้: '
-    +(opTxt.some(t=>t.includes('กลุ่ม C7f5de7010'))
+    +(items().map(o=>o.textContent).some(t=>t.includes('กลุ่ม C7f5de7010'))
       &&w.eval("lgLabel({group_id:'C7f5de7010abc',name:null})")==='กลุ่ม C7f5de7010…'));
   w.prompt=()=>'JJ x กลุ่มตั้งชื่อเอง';
   await w.lgRename('C7f5de7010abc'); await sleep(50);
   out.push('ตั้งชื่อกลุ่มเอง → PATCH line_groups.name (แอพเดิมเห็นด้วย): '
     +(!!supPatches.find(p=>p.url.includes('line_groups?group_id=eq.')&&p.body.name==='JJ x กลุ่มตั้งชื่อเอง')
       &&w.eval("lgLabel(S.lineGroups.find(g=>g.group_id==='C7f5de7010abc'))")==='JJ x กลุ่มตั้งชื่อเอง'));
-  out.push('กลุ่มที่มีซัพใช้อยู่ ป้าย "ผูกอยู่ N ซัพ" เป็นสีแดง: '
-    +[...d.querySelectorAll('#list select option')].some(o=>o.textContent.includes('ผูกอยู่')&&(o.getAttribute('style')||'').includes('--red')));
   out.push('ซัพที่ยังไม่ผูกกลุ่มไลน์ ขึ้นกรอบแดงกระพริบ (.needlink) + ข้อความแดง: '
-    +(!!d.querySelector('#list select.needlink')&&list().includes('⚠ ยังไม่ผูกกลุ่มไลน์')
-      &&d.querySelectorAll('#list select.needlink').length===w.eval("(S._lineSups||[]).filter(sp=>supSched(sp)&&!(lineOf(sp)&&lineOf(sp).group_id)).length")));
+    +(!!d.querySelector('#list .gpbtn.needlink')&&list().includes('⚠ ยังไม่ผูกกลุ่มไลน์')
+      &&d.querySelectorAll('#list .gpbtn.needlink').length===w.eval("(S._lineSups||[]).filter(sp=>supSched(sp)&&!(lineOf(sp)&&lineOf(sp).group_id)).length")));
+  if(w.eval('S.gpOpen')!==0){ w.gpOpen(0); await sleep(60); }
+  const red=[...d.querySelectorAll('#list .gpitem .gpu')].map(e=>e.textContent);
+  const blue=[...d.querySelectorAll('#list .gpitem .gpf')].map(e=>e.textContent);
+  out.push('สีแดงเฉพาะป้าย "· ผูกอยู่ N ซัพ" (ไม่ใช่ทั้งบรรทัด) และกลุ่มที่ไม่มีซัพผูกเลยเป็นสีน้ำเงิน: '
+    +(red.length===1&&red[0].trim()==='· ผูกอยู่ 1 ซัพ'&&blue.length===2&&blue.every(t=>t.includes('ยังไม่ผูก'))
+      &&html.includes('.gpu{color:var(--red)')&&html.includes('.gpf{color:#24466F')
+      &&[...d.querySelectorAll('#list .gpitem .gpn')].every(e=>!(e.getAttribute('style')||'').includes('--red'))));
+  w.gpPick(0,'Cabc111'); await sleep(120);   // เลือกกลุ่มจากรายการ = บันทึกเลย
+  out.push('เลือกกลุ่มจากรายการ → บันทึกลง suppliers.line_group_id + ปิดกล่อง: '
+    +(!!supPatches.find(p=>p.url.includes('suppliers?name=eq.')&&p.body.line_group_id==='Cabc111')
+      &&w.eval('S.gpOpen')===null&&!d.getElementById('gpMenu')));
   // 8) ปุ่มส่งทั้งหมด: เลือกกลุ่มจริง / กลุ่มทดสอบ + ยืนยันก่อนส่ง
   await w.loadAll(); await sleep(150); // คืนสภาพข้อมูลจาก mock (ข้อก่อนหน้าย้าย/ลบซัพไปแล้ว)
   w.setTab('order'); await sleep(120);
