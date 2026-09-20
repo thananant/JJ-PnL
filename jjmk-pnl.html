@@ -303,6 +303,9 @@ table.mx td:hover{outline:2px solid #C9A227;outline-offset:-2px;border-radius:4p
   #syncDot{margin-left:0}
 }
 
+
+}
+
 /* ---------- Layout ---------- */
 main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px) calc(30px + env(safe-area-inset-bottom))}
 .view{display:none}.view.on{display:block;animation:fin .18s ease}
@@ -444,6 +447,44 @@ tr:last-child td{border-bottom:none}
 canvas{max-width:100%}
 .linebox{position:relative;height:clamp(230px,30vh,330px);width:100%}
 .linebox canvas{width:100%!important;height:100%!important}
+
+/* ===== โหมดมือถือ — ต้องอยู่ท้ายสุดของสไตล์ เพื่อให้ชนะกติกา base ที่ประกาศทีหลัง ===== */
+/* มือถือ/แท็บเล็ต (≤899px)
+   ปัญหาเดิม: .hrow เป็น flex แถวเดียว (แบรนด์ + สาขา + เดือน) ย่อไม่ได้ → หน้ากว้างขั้นต่ำ ~548px
+   เบราว์เซอร์มือถือเลยย่อทั้งหน้าให้พอดีจอ ตัวหนังสือเล็กจิ๋ว แถบบนเลื่อน/กดยาก
+   ใหม่: หัวจอเป็นกริด 2 แถว (แบรนด์+เดือน / แถบสาขาเลื่อนได้) ทุกชิ้น min-width:0 ย่อได้จริง */
+@media(max-width:899px){
+  header{padding-top:env(safe-area-inset-top)}
+  .hrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;
+    grid-template-areas:"brand month dot" "seg seg seg";gap:7px 9px;padding:8px 12px 7px;align-items:center}
+  .brand{grid-area:brand;font-size:16px;min-width:0;gap:7px}
+  .brand span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .brand small{font-size:10px}
+  .brand .hlogo{width:30px;height:30px}
+  #monthPick{grid-area:month;min-width:0;max-width:46vw;font-size:13.5px;padding:6px 9px}
+  #syncDot{grid-area:dot;margin-left:0}
+  .seg{grid-area:seg;min-width:0;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+  .seg::-webkit-scrollbar{display:none}
+  .seg button{flex:1 0 auto;scroll-snap-align:center;font-size:13.5px;padding:7px 12px}
+  .tabbar{padding:0 10px 7px;scroll-snap-type:x proximity;scroll-padding-inline:44px;-webkit-overflow-scrolling:touch;
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%)}
+  .tabbar button{scroll-snap-align:center;font-size:13.5px;padding:7px 13px}
+  main{padding:12px 12px calc(28px + env(safe-area-inset-bottom))}
+  .perbar{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .perbar .pb{padding:8px 10px}
+  .perbar .pb .v{font-size:15px}
+  .stickysum{bottom:calc(env(safe-area-inset-bottom))}
+  /* หัวการ์ด: ชื่อบรรทัดเดียว คำอธิบายลงบรรทัดใหม่ (เดิมบีบจนชื่อตัดคำ "เลือก / วันที่") */
+  .card h3{flex-wrap:wrap;row-gap:2px}
+  .card h3 .sp{margin-left:0;flex:1 0 100%;font-size:12px;line-height:1.45}
+  .seg{-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 16px),transparent 100%)}
+  .card{padding:12px}
+  /* ตารางกว้าง ๆ ให้เลื่อนในกรอบตัวเอง ไม่ดันทั้งหน้าให้กว้างตาม */
+  .twrap,.mxwrap,.tblwrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+@media(max-width:400px){
+  .brand small{display:none}
+  .brand span{font-size:15px}
 </style>
 </head>
 <body>
@@ -1028,6 +1069,8 @@ async function show(v){
   if(S.user&&permOf(v)==='none') v=firstAllowedTab();
   if(isCen(S.br)&&CEN_HIDE.includes(v)) v='exp'; // ส่วนกลางมีเฉพาะรายจ่าย
   document.querySelectorAll('.tabbar button,.sb-item').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
+  const tb=document.querySelector('.tabbar button.on');   // จอเล็ก: เลื่อนแท็บที่เลือกให้เห็นเสมอ
+  if(tb&&tb.scrollIntoView&&innerWidth<900){try{tb.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});}catch(e){}}
   const _pt=document.getElementById('pageTitle'); if(_pt)_pt.textContent=({dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',actual:'ใช้จริง (สต๊อก)',ck:'ครัวกลาง',sum:'สรุปเดือน',recon:'ตรวจสอบเงิน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'})[v]||'';
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   S.tab=v;
