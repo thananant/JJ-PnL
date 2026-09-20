@@ -2476,13 +2476,22 @@ async function slipPicked(inp){
     const path=`${S.br}/${S.m}/${ds||'PV'}_${sid}_${Date.now()}.jpg`;
     const url=await uploadSlip(blob,path,'image/jpeg');
     const c=await loadMonth(S.br,S.m);
-    // บิลค้างจ่ายของซัพนี้ (จำกัดช่วงถ้ามาจาก PV)
-    const pool=Object.values(c.exp).filter(x=>x.supplier_id===sid&&num(x.amount)>0&&!x.paid
-      &&(!tgt.from||(x.d>=tgt.from&&x.d<=tgt.to))).sort((a,b)=>a.d.localeCompare(b.d));
+    // บิลของซัพนี้ในงวด — มาจาก PV ให้ดึงตามช่วงวันที่ตรงจากฐาน (งวดอาจคร่อม/คนละเดือนกับที่เปิดอยู่)
+    //   และต้องรวมบิลที่ "ติ๊กจ่ายแล้วแต่ยังไม่มีสลิป" ด้วย ไม่งั้นกล่องจะว่างเปล่าไม่มีบิลให้เลือก
+    let pool;
+    if(tgt.from){
+      const rows=await selAllQ('pnl_expense_daily',
+        `select=*&branch=eq.${S.br}&supplier_id=eq.${sid}&d=gte.${tgt.from}&d=lte.${tgt.to}&order=d`).catch(()=>[]);
+      pool=rows.filter(x=>num(x.amount)>0).sort((a,b)=>String(a.d).localeCompare(String(b.d)));
+    }else{
+      pool=Object.values(c.exp).filter(x=>x.supplier_id===sid&&num(x.amount)>0&&(!x.paid||!x.slip_url))
+        .sort((a,b)=>a.d.localeCompare(b.d));
+    }
     const others=pool.filter(x=>x.d!==ds);
     if(tgt.multi || others.length>0){
-      // สลิปเดียวจ่ายหลายบิล -> ให้เลือกบิลของรอบนี้
-      S._assign={url, blob, sid, tgt, bills:pool, checked:new Set(pool.map(x=>x.d))};
+      // สลิปเดียวจ่ายหลายบิล -> ให้เลือกบิลของรอบนี้ (ติ๊กมาให้เฉพาะบิลที่ยังไม่มีสลิป)
+      const pre=pool.filter(x=>!x.slip_url);
+      S._assign={url, blob, sid, tgt, bills:pool, checked:new Set((pre.length?pre:pool).map(x=>x.d))};
       assignSlipModal();
       return;
     }
@@ -2499,9 +2508,14 @@ async function slipPicked(inp){
 function assignSlipModal(){
   const A=S._assign; if(!A)return;
   const sp=S.core.supById[A.sid]||{};
-  const rows=A.bills.map(b=>`<label class="asrow">
+  const tag=b=>(b.slip_url?'<span class="sm" style="color:var(--amber,#B8860B)"> 📎 มีสลิปแล้ว</span>':'')
+             +(b.paid?'<span class="sm" style="color:#2E7D32"> ✓ จ่ายแล้ว</span>':'');
+  const rows=A.bills.length?A.bills.map(b=>`<label class="asrow">
     <input type="checkbox" data-abd="${b.d}" ${A.checked.has(b.d)?'checked':''} onchange="assignTick(this)">
-    <span style="flex:1">${thDate(b.d)}</span><b>฿${fmt(num(b.amount),2)}</b></label>`).join('');
+    <span style="flex:1">${thDate(b.d)}${tag(b)}</span><b>฿${fmt(num(b.amount),2)}</b></label>`).join('')
+    : `<div class="sm mut" style="padding:10px 4px;line-height:1.6">ไม่พบบิลของซัพนี้ในงวดนี้<br>
+       • ตรวจว่าลงบิลของซัพนี้ในช่วง ${A.tgt.from?thDate(A.tgt.from)+' – '+thDate(A.tgt.to):'งวดนี้'} แล้วหรือยัง<br>
+       • ถ้าลงไว้เดือนอื่น ให้ไปแนบสลิปที่หน้ารายจ่ายของเดือนนั้น</div>`;
   openModal(`<h3>🧾 สลิปเดียว จ่ายหลายบิล</h3>
     <div class="sm mut" style="margin:-6px 0 8px">${esc(sp.name||'')}${A.tgt.from?` · งวด ${thDate(A.tgt.from)} – ${thDate(A.tgt.to)}`:''} — ติ๊กบิลที่สลิปใบนี้จ่าย</div>
     <div style="display:flex;gap:10px;align-items:flex-start">
@@ -2528,7 +2542,8 @@ function assignAll(on){ const A=S._assign; if(!A)return;
 function updAssignTot(){ const A=S._assign; if(!A)return;
   const t=A.bills.filter(b=>A.checked.has(b.d)).reduce((a,b)=>a+num(b.amount),0);
   const el=document.getElementById('asTot'); if(el)el.textContent='฿'+fmt(t,2);
-  const btn=document.getElementById('asBtn'); if(btn)btn.textContent=`ติ๊กจ่าย ${A.checked.size} บิล`;
+  const btn=document.getElementById('asBtn');
+  if(btn){ btn.textContent=A.bills.length?`ติ๊กจ่าย ${A.checked.size} บิล`:'ไม่มีบิลให้ติ๊ก'; btn.disabled=!A.checked.size; }
 }
 async function assignOnlyToday(){ const A=S._assign; if(!A||!A.tgt.ds)return;
   A.checked=new Set(A.bills.some(b=>b.d===A.tgt.ds)?[A.tgt.ds]:[]);
@@ -2541,8 +2556,8 @@ async function assignConfirm(){
   const rows=sel2.map(b=>({branch:S.br,d:b.d,supplier_id:A.sid,amount:num(b.amount),paid:true,slip_url:A.url}));
   try{
     await ups('pnl_expense_daily',rows,'branch,d,supplier_id');
-    const c=S.cache[mkey(S.br,S.m)];
-    sel2.forEach(b=>{ const r=c&&c.exp[b.d+'|'+A.sid]; if(r){r.paid=true;r.slip_url=A.url;} });
+    sel2.forEach(b=>{ const cc=S.cache[mkey(S.br,String(b.d).slice(0,7))];   // บิลอาจอยู่คนละเดือนกับที่เปิดอยู่
+      const r=cc&&cc.exp[b.d+'|'+A.sid]; if(r){r.paid=true;r.slip_url=A.url;} });
     updSlipUI(A.sid,true); updPaidUI(A.sid,true);
     updUnpaidBar(); sel2.forEach(b=>updMatrixCell(b.d,A.sid));
     if(A.tgt.pvItemId){ upd('pnl_pv_items','id=eq.'+A.tgt.pvItemId,{paid:true}).catch(()=>{}); }
