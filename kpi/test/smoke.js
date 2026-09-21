@@ -43,7 +43,7 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(noErr(d), 'custom range rerender ok');
 
     await click(w, d, '[data-tab=settings]');
-    ok(d.querySelectorAll('#deptList .edit-row').length === 4 && d.querySelectorAll('#staffList .edit-row').length === 5, 'settings lists all depts & staff');
+    ok(d.querySelectorAll('#deptList .edit-row').length === 4 && d.querySelectorAll('#staffList .f-active').length === 4, 'settings: 4 depts + รายชื่อพนักงานที่เปิดใช้ (อ่านอย่างเดียว)');
     ok(d.body.textContent.includes('?kiosk=JJRD') && d.body.textContent.includes('?kiosk=JJLP'), 'kiosk links shown');
     await click(w, d, '[data-act=addDept]');
     d.querySelector('#deptList .edit-row:last-child .f-name').value = 'ที่จอดรถ';
@@ -53,12 +53,13 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(db.departments.length === 5 && db.departments.find(x => x.name === 'ที่จอดรถ').sort_order === 4, 'dept saved with sort_order 4');
     ok(db.departments.find(x => x.id === 4).sort_order === 5, 'existing dept re-ordered to 5');
     await change(w, d, '#setBranch', 'JJLP');
-    ok(d.querySelectorAll('#staffList .edit-row').length === 2, 'staff filter by branch');
-    await click(w, d, '[data-act=addStaff]');
-    d.querySelector('#staffList .edit-row:last-child .f-nick').value = 'ต้อม';
+    ok(d.querySelectorAll('#staffList .f-active').length === 2, 'กรองรายชื่อตามสาขาได้');
+    ok(!d.querySelector('[data-act=addStaff]'), 'ไม่มีปุ่มเพิ่มพนักงานมือแล้ว (ต้องมาจากระบบเงินเดือน)');
+    /* ซ่อนรายคนเป็นกรณียกเว้น — ติ๊กออกแล้วบันทึก */
+    const cb = d.querySelector('#staffList .f-active');
+    const hideId = Number(cb.dataset.id); cb.checked = false;
     await click(w, d, '[data-act=saveStaff]'); await sleep(80);
-    const added = db.staff.find(x => x.nickname === 'ต้อม');
-    ok(added && added.branch === 'JJLP' && added.name === 'ต้อม' && added.sort_order === 3, 'staff added (name falls back to nickname)');
+    ok(db.staff.find(x => x.id === hideId).active === false, 'ติ๊กออก = ซ่อนรายคนได้');
     await click(w, d, '[data-act=openKioskB]');
     ok(/\?kiosk=JJRD$/.test(w._opened || ''), 'open kiosk link: ' + w._opened);
     ok(errors.length === 0, 'no jsdom errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
@@ -211,10 +212,10 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     const { w, d } = boot('https://x.test/a.html', db);
     await sleep(80);
     await click(w, d, '[data-tab=settings]');
-    const row = d.querySelector('#staffList .edit-row.synced');
-    ok(!!row && row.querySelector('.f-name').disabled && row.querySelector('.f-branch').disabled && !row.querySelector('.f-active').disabled, 'synced row: name/branch locked, "ใช้" editable');
-    ok(d.querySelectorAll('#staffList .edit-row:not(.synced)').length >= 1, 'manual rows still editable');
-    ok(d.body.textContent.includes('รายชื่อดึงอัตโนมัติจากระบบเงินเดือน'), 'payroll hint shown');
+    /* รายชื่อเป็นแบบอ่านอย่างเดียว จัดกลุ่มตามตำแหน่ง (แก้ชื่อทำที่แอป Payroll) */
+    ok(!d.querySelector('#staffList input.f-name, #staffList .f-branch'), 'ไม่มีช่องแก้ชื่อ/สาขาแล้ว');
+    ok(d.querySelectorAll('#staffList .stf-group').length >= 1 && d.querySelectorAll('#staffList .f-active').length >= 1, 'รายชื่อจัดกลุ่มตามตำแหน่ง + ติ๊กซ่อนรายคนได้');
+    ok(d.querySelector('#app').textContent.includes('ซิงก์จากระบบเงินเดือน'), 'บอกว่ารายชื่อมาจากระบบเงินเดือน');
     // การ์ดเลือกตำแหน่ง: ค่าเริ่มต้นตาม CONFIG (ครัว ซ่อน, เสิร์ฟ โชว์) → ติ๊ก เสิร์ฟ ออก แล้วบันทึกลง kpi_settings
     const cbServe = d.querySelector('#posList input[data-pos="เสิร์ฟ"]'), cbKitchen = d.querySelector('#posList input[data-pos="ครัว"]');
     ok(!!cbServe && cbServe.checked && !!cbKitchen && !cbKitchen.checked, 'position card: default from CONFIG (เสิร์ฟ shown, ครัว hidden)');
@@ -243,7 +244,7 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     await sleep(80);
     await click(w, d, '[data-tab=settings]');
     ok(d.body.textContent.includes('ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ'), 'sync fail → warning shown');
-    ok(d.querySelectorAll('#staffList .edit-row').length === 5, 'old staff list still usable');
+    ok(d.querySelectorAll('#staffList .f-active').length === 4, 'ยังเห็นรายชื่อเดิมที่บันทึกไว้');
   }
 
   console.log('\n[8] pure helpers');
