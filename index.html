@@ -334,7 +334,7 @@ function spreadSession(u){
   set('jjmk_inv_sess',lite);    // Invoice
 }
 function clearSession(){
-  ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip']
+  ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip','jjhub_pass']
     .forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
 }
 
@@ -414,6 +414,17 @@ async function doLogin(){
   finally{ btn.disabled=false; btn.textContent='เข้าสู่ระบบ'; }
 }
 function logout(){ clearSession(); ME=null; paintUser(); paintApps(); showLogin(); }
+
+/* ---------- ใบผ่านเข้าแอพที่ใช้บัญชี Supabase Auth (ครัวกลาง / นับสต๊อก) ----------
+   แอพกลุ่มนี้จะล็อกหน้าจอเมื่อเปิดจากลิงก์ตรงๆ (กันลิงก์หลุด/เครื่องกลางในครัว)
+   กดเข้าจากหน้านี้ทั้งที่ล็อกอินแล้ว = ส่งใบผ่านอายุ 2 นาทีไปให้ เข้าได้เลยไม่ต้องพิมพ์ซ้ำ
+   ใบผ่านผูกกับชื่อผู้ใช้ ถ้าไม่ตรงกับบัญชีที่ค้างในเครื่องนั้น แอพจะล็อกไว้เหมือนเดิม */
+document.querySelectorAll('nav a.app[data-app]').forEach(function(el){
+  el.addEventListener('click',function(){
+    if(!ME||['kitchen','stock'].indexOf(el.dataset.app)<0)return;
+    try{ localStorage.setItem('jjhub_pass',JSON.stringify({u:ME.username,t:Date.now()})); }catch(e){}
+  });
+});
 
 /* ---------- เปิดหน้ามา: กู้ session เดิม ---------- */
 (function(){
