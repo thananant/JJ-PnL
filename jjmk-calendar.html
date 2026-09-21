@@ -631,7 +631,6 @@ async function vSync(el){
   await loadToken();
   const base=cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken);
   const mineUrl=base+'&user='+encodeURIComponent(S.user.username);
-  const webcal=u=>u.replace(/^https:/,'webcal:');
   const notifOk=('Notification' in window)&&Notification.permission==='granted';
   el.innerHTML=`
   <div class="card">
@@ -645,9 +644,10 @@ async function vSync(el){
     <div style="margin-top:12px">
       <p class="sm b" style="margin:0 0 2px">🍎 iPhone / iPad</p>
       <ol class="steps">
-        <li>คัดลอก URL ข้างบน แล้วไปที่ <b>การตั้งค่า → แอปปฏิทิน (Calendar) → บัญชี → เพิ่มบัญชี → อื่นๆ → เพิ่มปฏิทินที่ติดตาม</b> (Add Subscribed Calendar)</li>
-        <li>วาง URL → ถัดไป → บันทึก (ตั้งการเตือนของปฏิทินนี้ได้ในหน้าเดียวกัน)</li>
-        <li>หรือกดลิงก์นี้บน iPhone ได้เลย: <a class="hintlink" href="${esc(webcal(mineUrl))}">เพิ่มปฏิทินของฉันทันที (webcal)</a></li>
+        <li>กดปุ่ม <b>คัดลอก</b> ที่ URL ข้างบน (ต้องขึ้นต้นด้วย <b>https://</b>)</li>
+        <li>ไปที่ <b>การตั้งค่า → แอปปฏิทิน (Calendar) → บัญชี → เพิ่มบัญชี → อื่นๆ → เพิ่มปฏิทินที่ติดตาม</b> (Add Subscribed Calendar)</li>
+        <li>วาง URL → <b>ถัดไป</b> → บันทึก (ตั้งการเตือนของปฏิทินนี้ได้ในหน้าเดียวกัน)</li>
+        <li><b style="color:var(--gold)">⚠️ ถ้าขึ้น "การตรวจสอบไม่สำเร็จ"</b> ให้ดูช่อง URL ว่าเป็น <b>https://</b> หรือไม่ — ถ้าเป็น <b>http://</b> ให้แก้เป็น <b>https://</b> แล้วกดค้นหาใหม่ (อย่าเข้าผ่านลิงก์ webcal เพราะ iPhone จะเปลี่ยนเป็น http:// ให้เอง)</li>
       </ol>
       <p class="sm b" style="margin:10px 0 2px">🤖 Android (Google Calendar)</p>
       <ol class="steps">
@@ -656,8 +656,8 @@ async function vSync(el){
         <li>ปฏิทินจะโผล่ในแอป Google Calendar บนมือถืออัตโนมัติ (เปิดการซิงก์ปฏิทินนั้นในแอปด้วย)</li>
       </ol>
     </div>
-    <div class="acts"><button class="btn gh sm" onclick="checkFeed()">🔎 ทดสอบว่าฟีดใช้งานได้</button><span id="feedStatus" class="sm mut"></span></div>
-    <p class="xs mut" style="margin:10px 0 0">* ฟีดนี้ต้อง deploy Edge Function ชื่อ <b>cal-feed</b> ใน Supabase ก่อน (ปิด Verify JWT) — ถ้าทดสอบแล้วไม่ผ่าน แจ้งผู้ดูแลระบบ</p>
+    <div class="acts"><button class="btn gh sm" onclick="checkFeed()">🔎 ทดสอบว่าฟีดใช้งานได้</button><span id="feedStatus" class="sm mut" style="flex:1 1 100%;line-height:1.6"></span></div>
+    <p class="xs mut" style="margin:10px 0 0">* ฟีดนี้ต้อง deploy Edge Function ชื่อ <b>cal-feed</b> ใน Supabase ก่อน แล้ว<b>ปิด Verify JWT</b> (แอปปฏิทินมือถือแนบกุญแจไม่ได้) — กดปุ่มทดสอบข้างบน ระบบจะบอกเองว่าติดตรงไหน</p>
     `:`<div class="empty">ยังไม่พบ token ของฟีด — ต้องรัน <b>jjmk-calendar.sql</b> ใน Supabase ก่อนครับ</div>`}
   </div>
   <div class="card">
@@ -675,12 +675,27 @@ function copyTxt(t){
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('คัดลอกแล้ว ✅')).catch(()=>{prompt('คัดลอก URL นี้',t)});
 }
 async function checkFeed(){
-  const st=$('#feedStatus');st.textContent='กำลังทดสอบ…';
-  try{
-    const r=await fetch(cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken));
-    if(r.ok&&(await r.text()).includes('BEGIN:VCALENDAR')){st.textContent='✅ ฟีดใช้งานได้ พร้อม subscribe';st.style.color='var(--ok)'}
-    else{st.textContent='❌ ฟีดตอบกลับผิดปกติ (HTTP '+r.status+') — ตรวจว่า deploy cal-feed แล้วหรือยัง';st.style.color='var(--bad)'}
-  }catch(e){st.textContent='❌ เชื่อมต่อฟีดไม่ได้ — ยังไม่ได้ deploy cal-feed';st.style.color='var(--bad)'}
+  const st=$('#feedStatus');st.innerHTML='กำลังทดสอบ…';st.style.color='var(--mut)';
+  const set=(h,c)=>{st.innerHTML=h;st.style.color=c};
+  const u=cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken);
+  let a;
+  try{a=await fetch(u)}                       // ยิงแบบเดียวกับที่แอปปฏิทินมือถือยิง (ไม่มี header)
+  catch(e){set('❌ ต่อฟีดไม่ได้ — เช็คอินเทอร์เน็ตแล้วลองใหม่','var(--bad)');return}
+  if(a.ok){
+    const ok=(await a.text()).includes('BEGIN:VCALENDAR');
+    set(ok?'✅ ฟีดใช้งานได้ — เอา URL ไป subscribe ในมือถือได้เลย':'❌ ฟีดตอบกลับไม่ใช่ข้อมูลปฏิทิน — ตรวจโค้ดในฟังก์ชัน cal-feed อีกครั้ง',ok?'var(--ok)':'var(--bad)');
+    return;
+  }
+  if(a.status===403){set('❌ token ไม่ตรงกับในฐานข้อมูล — กดรีเฟรชหน้านี้ 1 ครั้ง ถ้ายังไม่หายให้รัน <b>jjmk-calendar.sql</b> ใหม่','var(--bad)');return}
+  // 401 = ด่านหน้าของ Supabase ปัดตกตั้งแต่ยังไม่ถึงโค้ดเรา — ยิงซ้ำแบบแนบกุญแจเพื่อแยกว่า "ยังไม่ deploy" หรือ "ยังไม่ปิด Verify JWT"
+  let b=null;const k=cfg().key;
+  try{b=await fetch(u,{headers:{apikey:k,Authorization:'Bearer '+k}})}catch(e){}
+  if(b&&(b.ok||b.status===403))
+    set('⚠️ deploy <b>cal-feed</b> แล้ว แต่<b>ยังไม่ได้ปิด Verify JWT</b><br>Supabase → Edge Functions → cal-feed → <b>Settings</b> → ปิด <b>Verify JWT</b> → Save แล้วกดทดสอบใหม่','var(--gold)');
+  else if(b&&b.status===404)
+    set('❌ <b>ยังไม่ได้ deploy ฟังก์ชัน cal-feed</b><br>Supabase → Edge Functions → Deploy a new function → ตั้งชื่อ <b>cal-feed</b> → วางโค้ดที่ได้จากแชท → Deploy → แล้วปิด Verify JWT','var(--bad)');
+  else
+    set('❌ ฟีดตอบกลับ HTTP '+a.status+' — ตรวจว่ามีฟังก์ชันชื่อ <b>cal-feed</b> และ<b>ปิด Verify JWT</b> แล้ว','var(--bad)');
 }
 async function notifPerm(){
   if(!('Notification' in window)){toast('เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน',true);return}
