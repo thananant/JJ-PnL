@@ -36,12 +36,19 @@ function bkkDate(d: string | Date, addDays = 0) {
 function esc(s: unknown) {
   return String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 }
-// RFC 5545: บรรทัดยาวต้องพับ (fold) ต่อบรรทัดขึ้นต้นด้วยช่องว่าง
+// RFC 5545: บรรทัดยาวเกิน 75 ไบต์ต้องพับ (fold) ต่อบรรทัดขึ้นต้นด้วยช่องว่าง
+// นับเป็น "ไบต์" ไม่ใช่จำนวนตัวอักษร — ภาษาไทย 1 ตัว = 3 ไบต์ และเดินทีละตัวอักษรจริง
+// ด้วย for...of เพื่อไม่ให้หั่นกลางอีโมจิ (ของเดิมหั่นทีละ 73 ตัว ทำให้อีโมจิพังและบรรทัดยาวเกินมาตรฐาน)
 function fold(line: string) {
+  const enc = new TextEncoder();
   const out: string[] = [];
-  let s = line;
-  while (s.length > 73) { out.push(s.slice(0, 73)); s = ' ' + s.slice(73); }
-  out.push(s);
+  let cur = '', bytes = 0;
+  for (const ch of line) {
+    const b = enc.encode(ch).length;
+    if (bytes + b > 74) { out.push(cur); cur = ' '; bytes = 1; }   // บรรทัดต่อเริ่มด้วยช่องว่าง 1 ไบต์
+    cur += ch; bytes += b;
+  }
+  out.push(cur);
   return out.join('\r\n');
 }
 
