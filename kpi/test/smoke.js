@@ -369,6 +369,35 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(!d.querySelector('#loginForm') && !!d.querySelector('.k-screen'), 'kiosk ลูกค้าไม่ต้องล็อกอิน');
   }
 
+  console.log('\n[10] สิทธิ์รายหน้าจอ (dash / kiosk ที่ติ๊กไว้ในหน้า JJ Access)');
+  {
+    /* ได้แค่ "ดู" แดชบอร์ด → ไม่มีแท็บตั้งค่า ไม่มีปุ่มหน้าจอลูกค้า และแก้ข้อมูลไม่ได้ */
+    const db = makeDb(); const before = db.departments.length;
+    const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'manager' });
+    await sleep(160);
+    ok(!!d.querySelector('.summary'), 'ดูอย่างเดียว: เข้าแดชบอร์ดได้');
+    ok(d.querySelectorAll('.tab').length === 3 && !d.querySelector('[data-tab=settings]'), 'ไม่มีแท็บตั้งค่า');
+    ok(!d.querySelector('[data-act=openKiosk]'), 'ไม่มีสิทธิ์ kiosk → ซ่อนปุ่มหน้าจอลูกค้า');
+    w.eval("S.tab='settings';renderTab()"); await sleep(80);
+    ok(!d.querySelector('#deptList') && !d.querySelector('#posList'), 'บังคับเปิดแท็บตั้งค่าก็ไม่เข้า');
+    w.eval('saveDepts()'); await sleep(80);
+    ok(db.departments.length === before, 'สั่งบันทึกตรง ๆ ก็ไม่ผ่าน (กันอีกชั้น)');
+  }
+  {
+    /* ได้ ดู+เพิ่ม+แก้ และหน้าจอลูกค้า → ครบทุกแท็บ */
+    const db = makeDb();
+    const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'kpimgr' });
+    await sleep(160);
+    ok(d.querySelectorAll('.tab').length === 4 && !!d.querySelector('[data-act=openKiosk]'), 'มีสิทธิ์แก้ + kiosk → ครบทุกแท็บ');
+  }
+  {
+    /* ยังไม่เคยตั้งสิทธิ์ (apps ว่าง) = ไม่ล็อกใคร — กติกาเดียวกับหน้าศูนย์รวมแอพ */
+    const db = makeDb();
+    const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'boss' });
+    await sleep(160);
+    ok(d.querySelectorAll('.tab').length === 4, 'เจ้าของ/ยังไม่ตั้งสิทธิ์ → เห็นครบ');
+  }
+
   const failures = getFailures(); console.log('\n' + (failures ? failures + ' FAILED' : 'ALL PASSED'));
   process.exit(failures ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(2); });

@@ -38,6 +38,10 @@
 - **ทางเผื่อ (1.5)**: หน้าแรกเวอร์ชันเก่าที่ยังไม่ออกใบผ่าน — ถ้า `document.referrer` เป็นหน้าแรกของเราเองจริง + `jjpnl_auth` ตรงกับฐานข้อมูล ก็ให้ผ่าน
 - **สิทธิ์รายแอป**: `canUseKpi()` กติกาเดียวกับ `canOpen()` ของ hub — admin/owner ผ่านเสมอ · `apps` ว่าง = ไม่ล็อกใคร · นอกนั้นต้องมี `apps.kpi.<หน้าจอ>` ที่มี `v` (หน้าจอในระบบสิทธิ์: `dash` แดชบอร์ด · `kiosk` หน้าจอลูกค้า)
   · ไม่มีสิทธิ์ → หน้า "ยังไม่ได้รับสิทธิ์" ไม่เห็นข้อมูลลูกค้าเลย
+- **สิทธิ์รายหน้าจอ** (2026-09-21 — ต่อยอดจาก `canUseKpi`): `permOf(screen)` / `can(screen, flag)` อ่านแฟล็ก v/a/e/d จาก `apps.kpi`
+  · `dash` ไม่มี `e` → **ซ่อนแท็บตั้งค่า** (`visTabs`) + `renderTab` กันบังคับเปิด + `saveDepts`/`saveStaff`/`saveHidePos` ปฏิเสธอีกชั้น
+  · `kiosk` ไม่มี `v` → ซ่อนปุ่ม 🖥 หน้าจอลูกค้า บนหัว และการ์ดลิงก์ kiosk ในหน้าตั้งค่า
+  · admin/owner = `vaed` เสมอ · `apps` ว่าง = `vaed` (ไม่ล็อกใคร) — กติกาเดียวกับ `canUseKpi`
 - **`?kiosk=` ไม่ต้องล็อกอิน** — จอให้ลูกค้าหน้าร้านกด (ใส่ประตูตรงนี้แท็บเล็ตจะใช้ไม่ได้)
 - ออกจากระบบ = ล้าง session ของแท็บ + ใบผ่าน แล้วกลับหน้าศูนย์รวมแอพ
 
@@ -128,11 +132,11 @@ npm test        # jsdom smoke test (จำลอง Supabase) — ต้อง A
 ```
 `harness.js` = fake Supabase client + DB 45 วัน 2 สาขา (+ตาราง employees/pnl_users จำลอง), `smoke.js` = 9 กลุ่มเทส
 (dashboard ทุกแท็บ, ตารางหาย→hint, kiosk full flow + idle/PIN/offline, สาขาไม่มีพนักงาน, chooser,
-payroll sync, settings แถวซิงก์/ซิงก์ล้ม, helpers, **ล็อกอิน/สิทธิ์**)
+payroll sync, settings แถวซิงก์/ซิงก์ล้ม, helpers, **ล็อกอิน/สิทธิ์**, **สิทธิ์รายหน้าจอ**)
 - harness จำลองว่ากดเข้ามาจากหน้าศูนย์รวมแอพ (ออกใบผ่านให้) — ตัวเลือกใน `boot(url, db, extra)`:
   `noAuth:true` = เปิดลิงก์ตรง ไม่มีใบผ่าน · `as:'manager'` = ใบผ่านของคนอื่น · `authAge:ms` = ใบผ่านเก่า
   · `ticketApp:'payroll'` = ใบผ่านของแอปอื่น · **`sess:'boss'` = แท็บที่ล็อกอินค้างอยู่ (จำลองลากหน้าลง/รีเฟรช)**
-  · บัญชีจำลองอยู่ใน `USERS` (boss=owner, manager=มีสิทธิ์ kpi, nokpi=ไม่มีสิทธิ์) รหัสทุกคน `kpi1234`
+  · บัญชีจำลองอยู่ใน `USERS` (boss=owner, manager=ดูอย่างเดียว `dash:'v'`, nokpi=ไม่มีสิทธิ์, kpimgr=`dash:'vae'`+`kiosk:'v'`) รหัสทุกคน `kpi1234`
 - jsdom ไม่มี `TextEncoder` (เบราว์เซอร์จริงมี) — harness shim ให้แล้วใน `beforeParse`
 หมายเหตุ: fake DB สร้างวันจากเวลาเครื่อง ให้รันด้วย `TZ=Asia/Bangkok` (ใน npm test ใส่ไว้แล้ว)
 ข้อความ jsdom "Not implemented: navigation" ตอนเทส PIN เป็นพฤติกรรมปกติของ jsdom
