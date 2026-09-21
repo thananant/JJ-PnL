@@ -361,14 +361,17 @@ function processImage(file,cb){const reader=new FileReader();
 
 /* ================= ล็อกอิน =================
    3 ทางเข้า (เจ้าของสั่ง 2026-09-21):
-   1) มาจากหน้าศูนย์รวมแอพ (index.html) → หน้าแรกฝาก "ตั๋ว" jjhub_ticket ไว้ (อายุ 3 นาที)
-      แอพนี้กินตั๋วแล้วเข้าได้เลยตามสิทธิ์ใน pnl_users.apps.maint ไม่ต้องกรอกรหัสซ้ำ
+   1) มาจากหน้าศูนย์รวมแอพ (index.html) → หน้าแรกออก "ใบผ่าน" jjsso_ticket ไว้ (อายุ 2 นาที ใช้ครั้งเดียว)
+      แอพนี้กินใบผ่าน แล้วเอาไปตรวจกับ pnl_users จริงอีกชั้น ก่อนพาเข้าตามสิทธิ์ apps.maint
    2) เปิด URL ของแอพนี้ตรง ๆ → ต้องกรอก user/pass ใหม่เสมอ (กันคนที่ได้ลิงก์ไปเข้าเอง)
       - รหัสที่ใช้คือบัญชีกลาง pnl_users ชุดเดียวกับหน้าศูนย์รวมแอพ
       - บัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (app_users) ยังใช้ได้ (ระบบลองให้อัตโนมัติ)
    3) ติ๊ก "จำไว้ในเครื่องนี้ 12 ชม." = ไม่ต้องกรอกซ้ำในเครื่องตัวเองจนกว่าจะหมดอายุ
    เซสชันปกติเก็บใน sessionStorage → รีเฟรช/ลากลงยังอยู่หน้าเดิม แต่ปิดแท็บแล้วต้องล็อกอินใหม่ */
-const SESS_KEY='jjmt_sess', KEEP_KEY='jjmt_keep', TICKET_KEY='jjhub_ticket', KEEP_MS=12*3600*1000;
+const SESS_KEY='jjmt_sess',        // sessionStorage — ใบอนุญาตของแท็บนี้ (ดึงหน้าลง/รีเฟรชยังอยู่)
+  KEEP_KEY='jjmt_keep',            // localStorage — "จำไว้ในเครื่องนี้ 12 ชม."
+  TICKET='jjsso_ticket',           // localStorage — ใบผ่านจากหน้าศูนย์รวมแอพ (มาตรฐานเดียวกับ JJ Social)
+  TICKET_TTL=120000, KEEP_MS=12*3600*1000;
 let PROF=null,BRANCHES=[],CUR_B=null;
 const isAdmin=()=>!!(PROF&&(PROF.role==='admin'||PROF.role==='owner'));   // admin+owner = สิทธิ์เต็ม
 /* สิทธิ์รายหน้าจอจาก pnl_users.apps.maint (v=ดู a=เพิ่ม e=แก้ d=ลบ)
@@ -413,6 +416,15 @@ function saveSession(prof,keep){
   if(keep&&prof.kind==='central')LSS.set(KEEP_KEY,{u:prof.username,h:prof.hash,exp:Date.now()+KEEP_MS});
 }
 /* ---- บัญชีกลาง pnl_users (ชุดเดียวกับหน้าศูนย์รวมแอพ) ---- */
+function fromHub(){   // กดมาจากหน้าศูนย์รวมแอพของเราเอง (เว็บอื่นปลอม referrer ข้ามโดเมนไม่ได้)
+  try{
+    const r=document.referrer;if(!r)return false;
+    const a=new URL(r),me=new URL(location.href);
+    if(a.origin!==me.origin)return false;
+    const base=me.pathname.replace(/[^/]*$/,'');
+    return a.pathname===base||a.pathname===base+'index.html';
+  }catch(e){return false}
+}
 async function centralUser(username){
   const {data,error}=await sb.from('pnl_users').select('username,display_name,role,unit,active,apps,pass_hash')
     .eq('username',username).limit(1);
@@ -470,7 +482,7 @@ function profCanEnter(prof){   // มีสิทธิ์เห็นอย่�
 }
 async function doLogout(){
   try{await sb.auth.signOut()}catch(e){}
-  SS.del(SESS_KEY);LSS.del(KEEP_KEY);PROF=null;
+  SS.del(SESS_KEY);LSS.del(KEEP_KEY);LSS.del(TICKET);PROF=null;
   $('#hdr').style.display='none';$('#main').style.display='none';
   $('#lPass').value='';$('#lMsg').textContent='';$('#login').classList.add('on');
 }
@@ -520,14 +532,32 @@ async function boot(){
   // 1) เซสชันของแท็บนี้ (รีเฟรชแล้วยังอยู่)
   const s=SS.get(SESS_KEY);
   if(s&&s.username){await enterApp(s);return;}
-  // 2) ตั๋วจากหน้าศูนย์รวมแอพ (ใช้ได้ครั้งเดียว อายุ 3 นาที)
-  const tk=LSS.get(TICKET_KEY);
-  if(tk&&tk.app==='maint'&&tk.u&&tk.exp>Date.now()){
-    LSS.del(TICKET_KEY);
-    const prof={kind:'central',username:tk.u,name:tk.n||tk.u,role:tk.role||'staff',unit:tk.unit||'',apps:tk.apps||{}};
-    if(profCanEnter(prof)){saveSession(prof,false);await enterApp(prof);return;}
-    $('#lMsg').style.color='#c62127';
-    $('#lMsg').textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access';
+  // 2) ใบผ่านจากหน้าศูนย์รวมแอพ — ใช้ครั้งเดียว อายุสั้น แล้วตรวจกับฐานข้อมูลจริงอีกชั้น
+  const tk=LSS.get(TICKET);
+  if(tk&&tk.u&&(!tk.app||tk.app==='maint')&&Date.now()-(+tk.t||0)<TICKET_TTL){
+    LSS.del(TICKET);
+    try{
+      const u=await centralUser(tk.u);
+      if(u&&u.active!==false&&u.pass_hash===tk.h){
+        const prof=centralProf(u);
+        if(profCanEnter(prof)){saveSession(prof,false);await enterApp(prof);return;}
+        $('#lMsg').style.color='#c62127';
+        $('#lMsg').textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access';
+      }
+    }catch(e){console.warn('ticket',e);}
+  }
+  // 2.5) เผื่อหน้าศูนย์รวมแอพเวอร์ชันเก่าที่ยังไม่ออกใบผ่าน — กดมาจากหน้าแรกจริง + ใบล็อกอินกลางตรงกับฐานข้อมูล
+  if(fromHub()){
+    const a=LSS.get('jjpnl_auth');
+    if(a&&a.u){
+      try{
+        const u=await centralUser(a.u);
+        if(u&&u.active!==false&&u.pass_hash===a.h){
+          const prof=centralProf(u);
+          if(profCanEnter(prof)){saveSession(prof,false);await enterApp(prof);return;}
+        }
+      }catch(e){console.warn('fromHub',e);}
+    }
   }
   // 3) เคยติ๊ก "จำไว้ในเครื่องนี้" และยังไม่หมดอายุ → เช็ครหัสกับบัญชีกลางอีกรอบ
   const kp=LSS.get(KEEP_KEY);
