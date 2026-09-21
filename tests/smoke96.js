@@ -93,14 +93,17 @@ setTimeout(async()=>{
     +(w.deliveryDate('FarmFresh','2026-09-14').d==='2026-09-16'));
   // 2) สูตรคำนวณ
   w.setTab('order'); await sleep(250); // รอดึงหน่วยซื้อ/ตัวคูณจากบิล
-  const plan=()=>JSON.parse(w.eval('JSON.stringify(orderPlan().map(g=>({sup:g.sup,d:g.dl.d,nOrder:g.nOrder,rows:g.rows.map(r=>({n:r.it.name,have:r.have,need:r.need,order:r.order,packs:r.packs,bu:r.bu}))})))'));
+  const plan=()=>JSON.parse(w.eval('JSON.stringify(orderPlan().map(g=>({sup:g.sup,d:g.dl.d,nOrder:g.nOrder,nx:g.nx,covTxt:g.covTxt,rows:g.rows.map(r=>({n:r.it.name,have:r.have,need:r.need,order:r.order,packs:r.packs,bu:r.bu,cov:r.cov,pre:r.pre,left:r.left,onWay:r.onWay}))})))'));
   const P=plan();
   const sm=P.find(g=>g.sup==='Smilemeat'),ff=P.find(g=>g.sup==='FarmFresh');
   const r1=sm.rows.find(r=>r.n==='หมูสไลด์'),r3=sm.rows.find(r=>r.n==='น้ำแข็ง');
   const r2=ff.rows.find(r=>r.n==='ผักบุ้ง');
   out.push('หมูสไลด์: นับได้ 10 · วันอังคารใช้ 50 → ต้องสั่ง 40: '+(r1.have===10&&r1.need===50&&r1.order===40));
   out.push('แปลงเป็นหน่วยซื้อ: 40 กก. ÷ 12 = 4 ลัง (ปัดขึ้น): '+(r1.packs===4&&r1.bu==='ลัง'));
-  out.push('ผักบุ้ง: นับได้ 2 · วันพุธใช้ 8 → ต้องสั่ง 6: '+(r2.have===2&&r2.need===8&&r2.order===6));
+  // สูตรใหม่: ครอบคลุมถึงก่อนของชุดถัดไปมา (FarmFresh สั่งจันทร์เท่านั้น → ชุดหน้ามาพุธ 23)
+  //   พุธ16(8)+พฤ17(8)+ศ18(9)+ส19(12)+อา20(12)+จ21(8)+อ22(8) = 65 · ใช้ระหว่างรอ (อังคาร 15) = 8 → เหลือ 0 → สั่ง 65
+  out.push('ผักบุ้ง: ของมาพุธ 16 ชุดหน้ามาพุธ 23 → ต้องเผื่อ 7 วัน = 65 · นับได้ 2 ใช้ระหว่างรอ 8 → สั่ง 65: '
+    +(r2.have===2&&r2.need===65&&r2.order===65&&r2.cov.days===7&&r2.pre.sum===8&&r2.left===0));
   out.push('น้ำแข็ง: ยังไม่ได้นับ → order=null (ไม่เดาให้): '+(r3.have===null&&r3.order===null));
   out.push('สรุปรายซัพ: Smilemeat ต้องสั่ง 1 รายการ · FarmFresh 1: '+(sm.nOrder===1&&ff.nOrder===1));
   // 3) หน้าจอ
