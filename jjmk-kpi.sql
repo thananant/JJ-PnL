@@ -253,7 +253,8 @@ grant execute on function public.kpi_sync_staff(text[]) to anon, authenticated;
 
 -- ---------- RPC: พนักงานที่กำลังเข้างานอยู่ตอนนี้ (อ่านตาราง punches + employees — อ่านอย่างเดียว) ----------
 -- นับสแกนของวันทำการปัจจุบัน (ตัดวัน 06:00 เวลาไทย แบบเดียวกับ payroll): จำนวนสแกนคี่ = ยังอยู่ในร้าน
--- หน้าจอลูกค้าใช้กรองรายชื่อ "ชมพนักงาน" — ได้ลิสต์ว่าง/เรียกล้ม แอปจะโชว์ทั้งหมดแทน (กันเครื่องสแกนล่มแล้วหน้าจอว่าง)
+-- หน้าจอลูกค้าใช้กรองรายชื่อ "ชมพนักงาน" — ได้ลิสต์ว่าง/เรียกล้ม แอปจะ **ข้ามคำถามชมพนักงาน** ไปเลย
+-- (แก้ 2026-09-21: ของเดิม fallback เป็นโชว์ทั้งร้าน ทำให้ลูกค้ากดผิดคน — ห้ามเอากลับมา)
 -- punch_date/punch_time ใน punches เป็นวันที่+เวลาไทยตามจริง (worker ไม่ปรับ cutoff ตอนบันทึก)
 create or replace function public.kpi_on_duty(p_branch text)
 returns bigint[]
@@ -262,17 +263,18 @@ stable
 security definer
 set search_path = public
 as $$
-  with tnow as (
-    select (now() at time zone 'Asia/Bangkok') as t
-  ), d as (
-    select case when t::time < time '06:00' then t::date - 1 else t::date end as biz from tnow
+  with d as (
+    select case when (now() at time zone 'Asia/Bangkok')::time < time '06:00'
+                then (now() at time zone 'Asia/Bangkok')::date - 1
+                else (now() at time zone 'Asia/Bangkok')::date end as biz
   ), c as (
     select e.id, count(*) as n
       from employees e
-      join punches p on p.emp_code = e.code
+      join punches p on btrim(p.emp_code) = btrim(e.code)   -- รหัสเครื่องสแกนบางแถวมีช่องว่างติดมา
       cross join d
      where e.active
        and e.branch = p_branch
+       and coalesce(btrim(e.code), '') <> ''                 -- ไม่มีรหัสสแกน = จับคู่ไม่ได้ ไม่ต้องนับ
        and ((p.punch_date::date = d.biz     and p.punch_time::time >= time '06:00')
          or (p.punch_date::date = d.biz + 1 and p.punch_time::time <  time '06:00'))
      group by e.id
