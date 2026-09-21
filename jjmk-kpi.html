@@ -187,7 +187,20 @@ tr:last-child td{border-bottom:0}
 @media (max-width:760px){.edit-row.staff{grid-template-columns:90px 1fr 1fr;grid-auto-rows:auto}.edit-row.staff .f-pos{grid-column:1/3}}
 .edit-row input,.edit-row select{width:100%;min-width:0}
 .edit-row.synced input:disabled,.edit-row.synced select:disabled{opacity:.55}
-#posList{display:flex;flex-wrap:wrap;gap:8px 18px;padding:4px 0}
+#posList{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:8px;padding:4px 0}
+.pos-chk{display:flex;gap:9px;align-items:flex-start;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+.pos-chk input{margin-top:3px;flex:none;width:20px;height:20px}
+.pos-chk.off{opacity:.55}
+.pos-n{font-family:var(--fd);font-size:15px;min-width:0}
+.pos-eg{display:block;font-size:12px;color:var(--mute);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stf-wrap summary{cursor:pointer;color:var(--gold);font-family:var(--fd);font-size:14px;padding:6px 0}
+.stf-group{padding:8px 0;border-bottom:1px solid var(--line)}
+.stf-group:last-child{border-bottom:0}
+.stf-head{font-family:var(--fd);color:var(--gold2);font-size:14px;margin-bottom:6px}
+.chip-off{font-size:11px;color:var(--mute);border:1px solid var(--line2);border-radius:999px;padding:1px 8px;margin-left:8px}
+.stf-names{display:flex;flex-wrap:wrap;gap:6px 14px}
+.stf-name{display:flex;gap:6px;align-items:center;font-size:14px}
+.stf-name.off{opacity:.45;text-decoration:line-through}
 .duty-row{padding:8px 0;border-bottom:1px solid var(--line)}
 .duty-row:last-child{border-bottom:0}
 .duty-d{font-size:13px;color:var(--ink2);margin-top:3px;line-height:1.5}
@@ -644,19 +657,37 @@ async function renderStaff() {
 function deptRowHTML(d) {
   return '<div class="edit-row" data-id="' + (d.id || '') + '"><input class="f-icon" value="' + esc(d.icon || '⭐') + '" maxlength="4" title="ไอคอน (อีโมจิ)" aria-label="ไอคอน"><input class="f-name" value="' + esc(d.name || '') + '" placeholder="ชื่อแผนก" aria-label="ชื่อแผนก"><label class="chk"><input type="checkbox" class="f-active"' + (d.active === false ? '' : ' checked') + '> ใช้</label><div class="arrows"><button data-act="rowUp" title="เลื่อนขึ้น">▲</button><button data-act="rowDown" title="เลื่อนลง">▼</button></div></div>';
 }
-function staffRowHTML(s) {
-  /* แถวที่ผูกกับระบบเงินเดือน (employee_id) ล็อกชื่อ/สาขา — ซิงก์ทับตอน loadMeta อยู่แล้ว ให้แก้ที่แอป Payroll */
-  const dis = s.employee_id ? ' disabled title="ดึงจากระบบเงินเดือน — แก้ชื่อ/ตำแหน่ง/สาขาที่แอป Payroll"' : '';
-  return '<div class="edit-row staff' + (s.employee_id ? ' synced' : '') + '" data-id="' + (s.id || '') + '"><select class="f-branch" aria-label="สาขา"' + dis + '>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (s.branch === b ? ' selected' : '') + '>' + b + '</option>').join('') + '</select><input class="f-nick" value="' + esc(s.nickname || '') + '" placeholder="ชื่อเล่น (โชว์ให้ลูกค้า)"' + dis + '><input class="f-name" value="' + esc(s.name || '') + '" placeholder="ชื่อ-นามสกุล"' + dis + '><input class="f-pos" value="' + esc(s.position || '') + '" placeholder="ตำแหน่ง"' + dis + '><label class="chk"><input type="checkbox" class="f-active"' + (s.active === false ? '' : ' checked') + '> ใช้</label><div class="arrows"><button data-act="rowUp" title="เลื่อนขึ้น">▲</button><button data-act="rowDown" title="เลื่อนลง">▼</button></div></div>';
+/* รายชื่อพนักงานในหน้าตั้งค่า — อ่านอย่างเดียว จัดกลุ่มตามตำแหน่ง (เจ้าของสั่ง 2026-09-21: คุมที่ "ตำแหน่ง" ไม่ใช่รายคน)
+   ชื่อ/ชื่อเล่น/ตำแหน่ง/สาขา มาจากระบบเงินเดือนทั้งหมด แก้ที่แอป Payroll · ที่นี่เหลือแค่ติ๊กซ่อนรายคนไว้เป็นกรณียกเว้น */
+function staffListHTML() {
+  const list = S.staff.filter(s => s.active !== false && (S.setBranch === ALL || s.branch === S.setBranch));
+  if (!list.length) return '<div class="empty">ยังไม่มีรายชื่อ (รอซิงก์จากระบบเงินเดือน)</div>';
+  const g = {};
+  for (const s of list) { const p = (s.position || '').trim() || 'ไม่ระบุตำแหน่ง'; (g[p] = g[p] || []).push(s); }
+  return Object.keys(g).sort().map(pos => {
+    const hidden = kHidePos(pos);
+    return '<div class="stf-group"><div class="stf-head">' + esc(pos) +
+      ' <small>' + g[pos].length + ' คน</small>' +
+      (hidden ? '<span class="chip-off">ซ่อนทั้งตำแหน่ง</span>' : '') + '</div>' +
+      '<div class="stf-names">' + g[pos].map(s =>
+        '<label class="stf-name' + (s.active === false ? ' off' : '') + '"><input type="checkbox" class="f-active" data-id="' + s.id + '"' + (s.active === false ? '' : ' checked') + '>' +
+        '<span>' + esc(s.nickname || s.name) + (s.nickname && s.nickname !== s.name ? ' <small>' + esc(s.name) + '</small>' : '') +
+        (S.setBranch === ALL ? ' <small>· ' + esc(s.branch) + '</small>' : '') + '</span></label>').join('') + '</div></div>';
+  }).join('');
 }
 function posListHTML() {
-  /* ตำแหน่งทั้งหมดจากพนักงาน active ทุกสาขา + ตำแหน่งที่เคยติ๊กซ่อนไว้ (เผื่อช่วงนั้นไม่มีคนในตำแหน่ง) */
+  /* ตำแหน่งทั้งหมดจากพนักงาน active + ตำแหน่งที่เคยติ๊กซ่อนไว้ (เผื่อช่วงนั้นไม่มีคนในตำแหน่ง) */
   const posAll = [];
   for (const s of S.staff) { const p = (s.position || '').trim(); if (s.active && p && posAll.indexOf(p) < 0) posAll.push(p); }
   if (S.hidePos) for (const p of S.hidePos) if (posAll.indexOf(p) < 0) posAll.push(p);
   posAll.sort();
   if (!posAll.length) return '<div class="empty">ยังไม่มีข้อมูลตำแหน่ง (รอซิงก์จากระบบเงินเดือน)</div>';
-  return posAll.map(p => { const n = S.staff.filter(s => s.active && (s.position || '').trim() === p).length; return '<label class="chk pos-chk"><input type="checkbox" data-pos="' + esc(p) + '"' + (kHidePos(p) ? '' : ' checked') + '> ' + esc(p) + ' <small>(' + n + ' คน)</small></label>'; }).join('');
+  return posAll.map(p => {
+    const who = S.staff.filter(s => s.active && (s.position || '').trim() === p);
+    const eg = who.slice(0, 3).map(s => esc(s.nickname || s.name)).join(', ') + (who.length > 3 ? ' …' : '');
+    return '<label class="pos-chk' + (kHidePos(p) ? ' off' : '') + '"><input type="checkbox" data-pos="' + esc(p) + '"' + (kHidePos(p) ? '' : ' checked') + '>' +
+      '<span class="pos-n">' + esc(p) + ' <small>' + who.length + ' คน</small>' + (eg ? '<span class="pos-eg">' + eg + '</span>' : '') + '</span></label>';
+  }).join('');
 }
 async function saveHidePos() {
   if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
@@ -707,8 +738,8 @@ function renderSettings() {
   const staff = S.staff.filter(s => S.setBranch === ALL || s.branch === S.setBranch);
   setMain(
     '<div class="card"><h3>แผนกที่ให้ลูกค้าประเมิน <small>(ใช้ร่วมกันทุกสาขา · ลำดับ = ลำดับหน้าจอ)</small></h3><div id="deptList">' + S.depts.map(deptRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addDept">+ เพิ่มแผนก</button><span class="grow"></span><button class="btn sm" data-act="saveDepts">บันทึกแผนก</button></div><div class="hint">ปิด "ใช้" แทนการลบ เพื่อเก็บประวัติคะแนนเดิมไว้</div></div>' +
-    '<div class="card"><h3>พนักงานให้ลูกค้าเลือก <small>(แสดงเฉพาะสาขาของตัวเอง)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><div id="staffList">' + staff.map(staffRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addStaff">+ เพิ่มพนักงาน</button><span class="grow"></span><button class="btn sm" data-act="saveStaff">บันทึกพนักงาน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ (ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดใน Supabase แล้ว) — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'รายชื่อดึงอัตโนมัติจากระบบเงินเดือน — แถวที่จางให้แก้ชื่อ/ตำแหน่งที่แอป Payroll · พนักงานลาออกระบบปิด "ใช้" ให้เอง · ไม่อยากโชว์บางคนก็ปิด "ใช้" ได้ · ชื่อเล่นคือชื่อที่ลูกค้าเห็นบนหน้าจอ<br>หน้าจอลูกค้าจัดกลุ่มตามตำแหน่ง · โชว์เฉพาะคนที่กำลังเข้างานตามเครื่องสแกน (ไม่มีข้อมูลสแกน = โชว์ทั้งหมด) · ซ่อนทั้งตำแหน่งเลือกได้ที่การ์ดถัดไป</div></div>' +
-    '<div class="card"><h3>ตำแหน่งที่โชว์ในหน้าชมพนักงาน <small>(ติ๊กออก = ทั้งตำแหน่งไม่ขึ้นจอลูกค้า · มีผลทุกสาขา)</small></h3><div id="posList">' + posListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn sm" data-act="saveHidePos">บันทึกตำแหน่ง</button></div><div class="hint">เลือกครั้งเดียวจบ — เก็บในฐานข้อมูล ใช้กับแท็บเล็ตทุกเครื่องทันทีรอบรีเฟรชถัดไป · ตำแหน่งใหม่ที่เพิ่งมีใน payroll จะโชว์อัตโนมัติจนกว่าจะติ๊กออก · อยากซ่อนรายคนใช้ติ๊ก "ใช้" ในรายชื่อด้านบน</div></div>' +
+    '<div class="card"><h3>ตำแหน่งที่ให้ลูกค้าชม <small>(ติ๊กไว้ = ลูกค้าเห็นตำแหน่งนี้ · มีผลทุกสาขา)</small></h3><div id="posList">' + posListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn sm" data-act="saveHidePos">บันทึกตำแหน่ง</button></div><div class="hint">จอลูกค้าจะโชว์เฉพาะ <b>คนในตำแหน่งที่ติ๊กไว้</b> และ <b>ที่สแกนเข้างานอยู่ตอนนั้น</b> เท่านั้น · ตำแหน่งใหม่จากระบบเงินเดือนจะโชว์อัตโนมัติจนกว่าจะติ๊กออก</div></div>' +
+    '<div class="card"><h3>รายชื่อพนักงาน <small>(ซิงก์จากระบบเงินเดือน — ดูอย่างเดียว)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><details class="stf-wrap"><summary>ดูรายชื่อรายคน (ปกติไม่ต้องแตะ)</summary><div id="staffList">' + staffListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn ghost sm" data-act="saveStaff">บันทึกการซ่อนรายคน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'เพิ่ม/แก้ชื่อ/ย้ายสาขา ทำที่แอป Payroll แล้วที่นี่อัปเดตตาม · ติ๊กออกเฉพาะกรณียกเว้นรายคน (เช่น ไม่อยากให้ขึ้นชื่อชั่วคราว) · คนลาออกระบบซ่อนให้เอง</div></details></div>' +
     (can('kiosk') ? '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
     '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' : '') +
     '<div class="card"><h3>ใครเข้างานตอนนี้ <small>(จอลูกค้าโชว์เฉพาะคนที่สแกนเข้างานอยู่จริง)</small> <button class="btn ghost sm" data-act="reloadDuty">🔄 ตรวจใหม่</button></h3><div id="dutyBody"><div class="loading">กำลังตรวจ…</div></div><div class="hint">ดึงจากเครื่องสแกนของระบบเงินเดือน (นับสแกนของวันทำการ ตัด 06:00 — จำนวนคี่ = ยังอยู่ในร้าน) · คนที่ยังไม่ผูกกับระบบเงินเดือน หรือช่วงที่ไม่มีใครสแกนเข้า จะไม่ขึ้นให้ลูกค้ากด</div></div>' +
@@ -729,9 +760,10 @@ async function saveDepts() {
 }
 async function saveStaff() {
   if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
-  const rows = $$('#staffList .edit-row').map((el, i) => ({ id: el.dataset.id ? Number(el.dataset.id) : null, branch: $('.f-branch', el).value, nickname: $('.f-nick', el).value.trim() || null, name: $('.f-name', el).value.trim(), position: $('.f-pos', el).value.trim() || null, active: $('.f-active', el).checked, sort_order: i + 1 }));
-  for (const r of rows) if (!r.name) { if (r.nickname) r.name = r.nickname; else { toast('กรอกชื่อพนักงานให้ครบก่อน'); return; } }
-  try { await saveRows('kpi_staff', rows); await loadMeta(); renderSettings(); toast('บันทึกพนักงานแล้ว'); } catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e), 4000); }
+  const rows = $$('#staffList .f-active').map(el => ({ id: Number(el.dataset.id), active: el.checked }));
+  if (!rows.length) { toast('ยังไม่มีรายชื่อให้บันทึก'); return; }
+  try { await saveRows('kpi_staff', rows); await loadMeta(); renderSettings(); toast('บันทึกแล้ว'); }
+  catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e), 4000); }
 }
 
 /* ===================== dashboard events ===================== */
@@ -754,7 +786,6 @@ function onDashClick(e) {
   else if (a === 'copy') copyText(t.dataset.text);
   else if (a === 'period') { S.staffPeriod = t.dataset.p; renderStaff(); }
   else if (a === 'addDept') { $('#deptList').insertAdjacentHTML('beforeend', deptRowHTML({})); const inp = $('#deptList .edit-row:last-child .f-name'); if (inp) inp.focus(); }
-  else if (a === 'addStaff') { $('#staffList').insertAdjacentHTML('beforeend', staffRowHTML({ branch: CONFIG.BRANCHES[S.setBranch] ? S.setBranch : Object.keys(CONFIG.BRANCHES)[0] })); const inp = $('#staffList .edit-row:last-child .f-nick'); if (inp) inp.focus(); }
   else if (a === 'saveDepts') saveDepts();
   else if (a === 'saveStaff') saveStaff();
   else if (a === 'saveHidePos') saveHidePos();
