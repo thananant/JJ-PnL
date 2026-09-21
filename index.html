@@ -334,22 +334,33 @@ function spreadSession(u){
   set('jjmk_inv_sess',lite);    // Invoice
 }
 function clearSession(){
-  ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip']
+  ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip','jjsso_ticket']
     .forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
 }
 
+/* ---------- ใบผ่านเข้าแอพ (SSO ticket) ----------
+   คลิกเปิดแอพจากหน้านี้ = ออกใบผ่าน อายุ 2 นาที ใช้ครั้งเดียว → แอพปลายทางพาเข้าได้เลยตามสิทธิ์
+   เปิดแอพจากลิงก์ตรง (ไม่มีใบผ่าน) = แอพจะขอรหัสผ่านเอง กันคนที่ได้ลิงก์ไปเข้าใช้ */
+function issueTicket(appKey){
+  if(!ME)return;
+  try{ localStorage.setItem('jjsso_ticket',JSON.stringify(
+    {u:ME.username,h:ME.pass_hash,app:appKey,t:Date.now()})); }catch(e){}
+}
+document.addEventListener('click',function(e){
+  var a=e.target&&e.target.closest?e.target.closest('nav a.app[data-app]'):null;
+  if(a)issueTicket(a.dataset.app);
+},true);
+
 /* ---------- แสดงเฉพาะแอพที่คนนี้มีสิทธิ์ ---------- */
-/* แอพที่ยังใช้บัญชีคนละชุด (นับสต๊อก / ครัวกลาง / ซ่อมบำรุง) ให้แสดงไว้เสมอ —
-   ล็อกอินกลางยังคุมไม่ถึง ต้องไปล็อกอินในแอพนั้นเอง
-   (KPI ย้ายมาใช้บัญชีกลางแล้ว 2026-09-21 จึงคุมสิทธิ์ได้ตามปกติ) */
-var ALWAYS=['stock','kitchen','maint'];
+/* หลักการ: "ติ๊กแอพไหนให้ ก็เห็นแอพนั้น" — ตรงกับที่ตั้งไว้ในหน้า JJ Access เป๊ะ
+   หมายเหตุ: นับสต๊อก / ครัวกลาง / ซ่อมบำรุง ยังใช้บัญชีคนละชุด — ติ๊กที่นี่คุมแค่ว่า
+   "เห็นไอคอนไหม" ส่วนตัวแอพยังขอให้ล็อกอินด้วยบัญชีของมันเองอยู่ */
 function hasSavedLogin(){
   try{ var a=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); return !!(a&&a.u); }catch(e){ return false; }
 }
 function canOpen(key){
   if(!ME)return true;                              // ยังไม่ล็อกอิน = แสดงทั้งหมด
   if(ME.role==='admin'||ME.role==='owner')return true;   // ผู้ดูแลระบบ + เจ้าของ เข้าได้ทุกแอพ
-  if(ALWAYS.indexOf(key)>=0)return true;
   var apps=ME.apps;
   if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return true;  // ยังไม่เคยตั้งสิทธิ์ = ไม่ล็อกใคร
   var a=apps[key];
