@@ -14,7 +14,11 @@ const USERS = [
   { id: 3, username: 'nokpi', display_name: 'พนักงานครัว', role: 'staff', unit: 'JJLP', active: true, pass_hash: pwHash('nokpi', 'kpi1234'), apps: { stock: { count: 'v' } } },
   { id: 4, username: 'ออก', display_name: 'พ้นสภาพ', role: 'staff', unit: 'ALL', active: false, pass_hash: pwHash('ออก', 'kpi1234'), apps: {} }
 ];
-const ticketFor = (username, ageMs) => JSON.stringify({ u: username, h: (USERS.find(x => x.username === username) || {}).pass_hash, t: Date.now() - (ageMs || 0) });
+const userOf = n => USERS.find(x => x.username === n) || {};
+/* ใบผ่านจากหน้าศูนย์รวมแอพ (localStorage · ใช้ครั้งเดียว อายุ 2 นาที) */
+const ticketFor = (username, ageMs, app) => JSON.stringify({ u: username, h: userOf(username).pass_hash, app: app || 'kpi', t: Date.now() - (ageMs || 0) });
+/* ใบอนุญาตของแท็บ (sessionStorage · เหลือรอดตอนลากหน้าลง/รีเฟรช) */
+const sessFor = username => { const u = userOf(username); return JSON.stringify({ username: u.username, display_name: u.display_name, role: u.role, unit: u.unit, apps: u.apps || null, h: u.pass_hash }); };
 let failures = 0;
 function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures++; console.log('  ✗ ' + msg); } }
 
@@ -162,10 +166,12 @@ function boot(url, db, extra) {
       w.TextEncoder = require('util').TextEncoder;   // เบราว์เซอร์จริงมีให้อยู่แล้ว (ใช้ตอน hash รหัสผ่าน) — jsdom ไม่มี
       w.HTMLElement.prototype.requestFullscreen = () => Promise.resolve();
       w.URL.createObjectURL = () => 'blob:x'; w.HTMLAnchorElement.prototype.click = function () { w._download = this.download; };
-      /* ใบผ่านกลาง: ปกติจำลองว่าล็อกอินจากหน้าศูนย์รวมแอพมาแล้ว · noAuth = เปิด URL ตรง ๆ ไม่มีใบผ่าน */
-      if (!(extra && extra.noAuth)) {
-        try { w.localStorage.setItem('jjpnl_auth', ticketFor((extra && extra.as) || 'boss', extra && extra.authAge)); } catch (e) {}
-      }
+      /* ค่าเริ่มต้น: จำลองว่ากดเข้ามาจากหน้าศูนย์รวมแอพ (มีใบผ่าน)
+         · noAuth = เปิด URL ตรง ๆ ไม่มีใบผ่าน · sess = แท็บที่ล็อกอินค้างอยู่ (จำลองการรีเฟรช/ลากหน้าลง) */
+      try {
+        if (extra && extra.sess) w.sessionStorage.setItem('kpi_auth', sessFor(extra.sess));
+        if (!(extra && (extra.noAuth || extra.sess))) w.localStorage.setItem('jjsso_ticket', ticketFor((extra && extra.as) || 'boss', extra && extra.authAge, extra && extra.ticketApp));
+      } catch (e) {}
       if (extra && extra.before) extra.before(w);
     }
   });
@@ -177,4 +183,4 @@ async function click(w, d, sel) { const el = d.querySelector(sel); if (!el) thro
 async function change(w, d, sel, value) { const el = d.querySelector(sel); el.value = value; el.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(40); }
 
 
-module.exports = { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, USERS, ticketFor, failures: () => failures };
+module.exports = { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, USERS, ticketFor, sessFor, failures: () => failures };

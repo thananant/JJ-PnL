@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="theme-color" content="#120E0C">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -691,7 +694,6 @@ function userChipHTML() {
   return '<span class="who">👤 <b>' + esc(ME.display_name || ME.username) + '</b> <a href="javascript:" data-act="logout">ออก</a></span>';
 }
 function onDashClick(e) {
-  authTouch();                       // มีการใช้งาน = ต่ออายุใบผ่าน
   const t = e.target.closest('[data-act]'); if (!t) return; const a = t.dataset.act;
   if (a === 'logout') { logout(); return; }
   if (a === 'tab') { S.tab = t.dataset.tab; lsSet('kpi_tab', S.tab); renderTab(); }   // รีเฟรชแล้วกลับมาหน้าเดิม
@@ -724,8 +726,7 @@ async function dashInit() {
   document.title = 'JJ KPI · แดชบอร์ด';
   try { sbInit(); }
   catch (e) { app.innerHTML = '<main>' + errHTML(e) + '<div class="toolbar"><button class="btn" onclick="location.reload()">ลองใหม่</button></div></main>'; return; }
-  if (!(await authGate())) return;   // ยังไม่ล็อกอิน → แสดงหน้าใส่รหัสแทน
-  await startDash();
+  await authBoot();   // ตัดสินเองว่าเข้าแดชบอร์ดได้เลย หรือต้องใส่รหัสก่อน
 }
 let dashWired = false;
 async function startDash() {
@@ -868,13 +869,16 @@ async function kioskInit(branch) {
   setInterval(async () => { if (K.step === 'idle') { try { await loadMeta(); await kLoadDuty(); renderKiosk(); } catch (e) {} } }, 5 * 60000);
 }
 
-/* ===================== เข้าสู่ระบบ (บัญชีกลาง pnl_users) =====================
-   · เข้าจากหน้าศูนย์รวมแอพที่ล็อกอินไว้แล้ว → ใช้ใบผ่านกลางต่อได้เลย ไม่ต้องกรอกซ้ำ
-   · เปิด URL นี้ตรง ๆ โดยไม่มีใบผ่าน (หรือใบผ่านเกิน 30 นาทีไม่ได้ใช้) → ต้องใส่ชื่อผู้ใช้/รหัสผ่าน
-   · โหมด kiosk (?kiosk=) ไม่ต้องล็อกอิน — เป็นจอให้ลูกค้าหน้าร้านกด */
-const AUTH_KEY = 'jjpnl_auth';           // ใบผ่านกลาง — ชุดเดียวกับ P&L / JJ Access
-const AUTH_IDLE_MS = 30 * 60 * 1000;     // ไม่ได้ใช้เกิน 30 นาที = ใส่รหัสใหม่ (เท่ากับ P&L)
-const SESS_KEYS = ['jjpnl_auth', 'jjpay_sess', 'jjsocial_sess', 'jjcal_sess', 'jjmk_inv_sess', 'jjhub_skip'];
+/* ===================== เข้าสู่ระบบ (มาตรฐานเดียวกับ JJ Social / ซ่อมบำรุง) =====================
+   - เข้าจากหน้าศูนย์รวมแอพ → มี "ใบผ่าน" (jjsso_ticket) อายุ 2 นาที ใช้ครั้งเดียว
+     แอพเอา username+hash ไปตรวจกับ pnl_users จริงอีกชั้นก่อนพาเข้า
+   - เปิดจากลิงก์ตรง (ไม่มีใบผ่าน) → ต้องใส่รหัสผ่านเอง กันคนที่ได้ลิงก์ไปเข้าใช้
+   - ใบอนุญาตของแท็บอยู่ใน sessionStorage → ลากหน้าลง/รีเฟรชบนมือถือยังอยู่ · ปิดแท็บ = หลุดเอง
+   - บัญชี/สิทธิ์มาจากตาราง pnl_users ชุดเดียวกับระบบกลาง (หน้า JJ Access เป็นคนตั้ง)
+   ================================================================================== */
+const SESS = 'kpi_auth';           // sessionStorage — เฉพาะแท็บนี้
+const TICKET = 'jjsso_ticket';     // localStorage — ใบผ่านจากหน้าศูนย์รวมแอพ (ใช้ครั้งเดียว)
+const TICKET_TTL = 120000;         // ใบผ่านอายุ 2 นาที
 let ME = null;
 
 /* sha256 — สูตรเดียวกับ P&L/Payroll/Social ทั้ง repo (ห้ามเปลี่ยน ไม่งั้นรหัสผ่านเดิมใช้ไม่ได้) */
@@ -898,20 +902,25 @@ function sha256hex(str) {
 }
 function pwHash(u, p) { return sha256hex(u + '|' + p + '|JJPNL'); }
 
-function authRead() { try { return JSON.parse(lsGet(AUTH_KEY) || 'null'); } catch (e) { return null; } }
-function authWrite(u) { lsSet(AUTH_KEY, JSON.stringify({ u: u.username, h: u.pass_hash, t: Date.now() })); }
-function authClear() { for (const k of SESS_KEYS) { try { localStorage.removeItem(k); } catch (e) {} } }
-let touchAt = 0;
-function authTouch() {   // ต่ออายุใบผ่านเมื่อมีการใช้งาน (เขียนไม่ถี่เกิน 30 วิ)
-  const now = Date.now(); if (now - touchAt < 30000) return; touchAt = now;
-  const a = authRead(); if (a && a.u) { a.t = now; lsSet(AUTH_KEY, JSON.stringify(a)); }
+function sessGet() { try { return JSON.parse(sessionStorage.getItem(SESS) || 'null'); } catch (e) { return null; } }
+function sessSet(u) { try { sessionStorage.setItem(SESS, JSON.stringify(u)); } catch (e) {} }
+function sessClear() { try { sessionStorage.removeItem(SESS); } catch (e) {} }
+function ticketTake() {            // อ่านใบผ่าน + ทิ้งทันที (ใช้ได้ครั้งเดียว)
+  let t = null;
+  try { t = JSON.parse(localStorage.getItem(TICKET) || 'null'); } catch (e) {}
+  if (t) { try { localStorage.removeItem(TICKET); } catch (e) {} }
+  return t;
 }
-async function fetchUser(username) {
+async function fetchUser(username) {   // select=* กันพังเวลาคอลัมน์ apps/unit ยังไม่มีในฐานข้อมูล
   const r = await sb.from('pnl_users').select('*').eq('username', username);
   if (r.error) throw r.error;
   return (r.data || [])[0] || null;
 }
-/* สิทธิ์เข้าแอพนี้ — กติกาเดียวกับหน้าศูนย์รวมแอพ (index.html canOpen) */
+function useUser(usr) {                // เก็บเฉพาะที่ใช้ + แฮชไว้ตรวจซ้ำตอนรีเฟรช
+  ME = { username: usr.username, display_name: usr.display_name || usr.username, role: usr.role || 'staff', unit: usr.unit || 'ALL', apps: usr.apps || null, h: usr.pass_hash };
+  sessSet(ME);
+}
+/* สิทธิ์เข้าแอพนี้ — กติกาเดียวกับหน้าศูนย์รวมแอพ (canOpen ใน index.html) */
 function canUseKpi(u) {
   if (!u) return false;
   if (u.role === 'admin' || u.role === 'owner') return true;
@@ -921,24 +930,14 @@ function canUseKpi(u) {
   if (!a || typeof a !== 'object') return false;
   return Object.keys(a).some(k => String(a[k] || '').indexOf('v') >= 0);
 }
-async function authGate() {           // true = ผ่านเข้าแดชบอร์ดได้
-  const saved = authRead();
-  if (saved && saved.u && saved.t && Date.now() - saved.t <= AUTH_IDLE_MS) {
-    try {
-      const u = await fetchUser(saved.u);
-      if (u && u.active && u.pass_hash === saved.h) {
-        if (!canUseKpi(u)) { showNoPerm(u); return false; }
-        ME = u; authTouch(); return true;
-      }
-      authClear();                    // บัญชีถูกปิด/เปลี่ยนรหัส → ใบผ่านใช้ไม่ได้แล้ว
-    } catch (e) {
-      /* เช็คกับฐานข้อมูลไม่ได้ (เน็ตล่ม) แต่ใบผ่านยังไม่หมดอายุ → ให้ใช้งานต่อ ไม่ล็อกคนทำงาน */
-      ME = { username: saved.u, display_name: saved.u, role: '', offline: true };
-      return true;
-    }
-  }
-  showLogin();
-  return false;
+function fromHub() {   // กดลิงก์มาจากหน้าศูนย์รวมแอพของเราเอง (เว็บอื่นปลอม referrer ข้ามโดเมนไม่ได้)
+  try {
+    const r = document.referrer; if (!r) return false;
+    const a = new URL(r), me = new URL(location.href);
+    if (a.origin !== me.origin) return false;
+    const base = me.pathname.replace(/[^/]*$/, '');
+    return a.pathname === base || a.pathname === base + 'index.html';
+  } catch (e) { return false; }
 }
 function sealHTML() { return '<div class="seal">JJ</div>'; }
 function showLogin(msg) {
@@ -949,7 +948,7 @@ function showLogin(msg) {
     '<label for="lgP">รหัสผ่าน</label><input id="lgP" type="password" autocomplete="current-password">' +
     '<div class="lg-msg" id="lgMsg">' + esc(msg || '') + '</div>' +
     '<button class="btn" id="lgBtn" type="submit">เข้าสู่ระบบ</button>' +
-    '<div class="hint">ใช้บัญชีเดียวกับหน้าศูนย์รวมแอพ · ถ้าล็อกอินที่หน้าแรกไว้แล้วจะเข้าได้เลยโดยไม่ต้องกรอกซ้ำ</div>' +
+    '<div class="hint">บัญชีเดียวกับหน้าศูนย์รวมแอพ · เข้าจากหน้าแรกที่ล็อกอินไว้แล้วไม่ต้องกรอกซ้ำ</div>' +
     '</form></div>';
   const f = $('#loginForm'); if (f) f.addEventListener('submit', doLogin);
   const u = $('#lgU'); if (u) setTimeout(() => { try { u.focus(); } catch (e) {} }, 60);
@@ -957,31 +956,77 @@ function showLogin(msg) {
 function showNoPerm(u) {
   document.title = 'JJ KPI · ไม่มีสิทธิ์';
   app.innerHTML = '<div class="login-wrap"><div class="card login-card">' + sealHTML() +
-    '<h2>ยังไม่ได้รับสิทธิ์</h2><p class="sub">บัญชี <b>' + esc(u.display_name || u.username) + '</b> ยังไม่ได้รับสิทธิ์เข้าระบบ KPI</p>' +
+    '<h2>ยังไม่ได้รับสิทธิ์</h2><p class="sub">บัญชี <b>' + esc((u && (u.display_name || u.username)) || '') + '</b> ยังไม่ได้รับสิทธิ์ใช้ JJ KPI</p>' +
     '<div class="hint">ให้ผู้ดูแลระบบเปิดสิทธิ์ให้ที่หน้า 🔑 JJ Access → ผู้ใช้ &amp; สิทธิ์</div>' +
-    '<button class="btn" data-act="logout" id="npLogout">เข้าด้วยบัญชีอื่น</button></div></div>';
-  const b = $('#npLogout'); if (b) b.addEventListener('click', logout);
+    '<button class="btn" id="npLogout">เข้าด้วยบัญชีอื่น</button></div></div>';
+  const b = $('#npLogout'); if (b) b.addEventListener('click', () => { sessClear(); ME = null; showLogin(); });
 }
 async function doLogin(e) {
   if (e) e.preventDefault();
   const u = ($('#lgU').value || '').trim(), p = $('#lgP').value || '', msg = $('#lgMsg'), btn = $('#lgBtn');
   msg.textContent = '';
-  if (!u || !p) { msg.textContent = 'ใส่ชื่อผู้ใช้และรหัสผ่านก่อนครับ'; return; }
+  if (!u || !p) { msg.textContent = 'กรอกชื่อผู้ใช้และรหัสผ่านก่อนครับ'; return; }
   btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ…';
   try {
     const usr = await fetchUser(u);
     if (!usr || usr.pass_hash !== pwHash(u, p)) { msg.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
-    if (!usr.active) { msg.textContent = 'บัญชีนี้ถูกปิดการใช้งาน'; return; }
-    ME = usr; authWrite(usr);
-    if (!canUseKpi(usr)) { showNoPerm(usr); return; }
+    if (usr.active === false) { msg.textContent = 'บัญชีนี้ถูกปิดการใช้งาน'; return; }
+    if (!canUseKpi(usr)) { msg.textContent = 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ JJ KPI — แจ้งผู้ดูแลระบบครับ'; return; }
+    useUser(usr);
     await startDash();
   } catch (err) {
-    msg.textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + ((err && err.message) || err);
+    msg.textContent = 'เชื่อมต่อฐานข้อมูลไม่ได้: ' + ((err && err.message) || err);
   } finally {
     if (btn.isConnected) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
   }
 }
-function logout() { authClear(); ME = null; showLogin(); }
+function logout() {
+  sessClear(); ME = null;
+  try { localStorage.removeItem(TICKET); } catch (e) {}
+  location.href = 'index.html';
+}
+
+/* ---------- เปิดหน้ามา: ตัดสินว่าเข้าทางไหน ---------- */
+async function authBoot() {
+  // 1) ใบผ่านจากหน้าศูนย์รวมแอพ — ใช้ได้ครั้งเดียว อายุสั้น แล้วตรวจกับฐานข้อมูลจริงอีกชั้น
+  const t = ticketTake();
+  if (t && t.u && (!t.app || t.app === 'kpi') && Date.now() - (+t.t || 0) < TICKET_TTL) {
+    const usr = await fetchUser(t.u).catch(() => null);
+    if (usr && usr.active !== false && usr.pass_hash === t.h) {
+      if (!canUseKpi(usr)) return showNoPerm(usr);
+      useUser(usr);
+      return startDash();
+    }
+  }
+  // 1.5) เผื่อหน้าศูนย์รวมแอพเวอร์ชันเก่าที่ยังไม่ออกใบผ่าน — กดมาจากหน้าแรกจริง + ใบล็อกอินกลางตรงกับฐานข้อมูล
+  if (!sessGet() && fromHub()) {
+    let a = null; try { a = JSON.parse(localStorage.getItem('jjpnl_auth') || 'null'); } catch (e) {}
+    if (a && a.u) {
+      const usr = await fetchUser(a.u).catch(() => null);
+      if (usr && usr.active !== false && usr.pass_hash === a.h) {
+        if (!canUseKpi(usr)) return showNoPerm(usr);
+        useUser(usr);
+        return startDash();
+      }
+    }
+  }
+  // 2) แท็บนี้ล็อกอินไปแล้ว (ลากหน้าลง/รีเฟรช) — ตรวจซ้ำกันสิทธิ์เปลี่ยน/บัญชีถูกปิด
+  const sv = sessGet();
+  if (sv && sv.username) {
+    let usr;
+    try { usr = await fetchUser(sv.username); }
+    catch (e) { ME = sv; return startDash(); }        // เน็ตสะดุด → ใช้ของเดิมในแท็บไปก่อน ไม่เตะคนทำงานออก
+    if (usr && usr.active !== false && usr.pass_hash === sv.h) {
+      if (!canUseKpi(usr)) return showNoPerm(usr);
+      useUser(usr);
+      return startDash();
+    }
+    sessClear();
+    return showLogin('เซสชันหมดอายุหรือรหัสผ่านถูกเปลี่ยน — เข้าสู่ระบบใหม่ครับ');
+  }
+  // 3) เปิดจากลิงก์ตรง → ต้องใส่รหัส
+  showLogin();
+}
 
 /* ===================== boot ===================== */
 (function boot() {

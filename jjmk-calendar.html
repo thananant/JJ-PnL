@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>JJ Calendar — จริงใจหมูกระทะ</title>
 <meta name="theme-color" content="#0C0A09">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23A31B24'/%3E%3Ctext x='50' y='70' font-size='56' text-anchor='middle'%3E%F0%9F%93%85%3C/text%3E%3C/svg%3E">
@@ -429,6 +432,8 @@ async function doLogin(){
   }catch(e){toast('เชื่อมต่อไม่ได้ — ตรวจว่ารัน jjmk-calendar.sql หรือยัง',true);console.error(e)}
 }
 function logout(){localStorage.removeItem('jjcal_sess');location.reload()}
+/* โหลดหน้าใหม่แบบข้ามแคช — ดึงหน้าลงบนมือถือบางทียังได้ไฟล์เก่า */
+function hardReload(){location.replace(location.pathname+'?v='+Date.now())}
 
 /* ---------- โหลดข้อมูล ---------- */
 async function loadBranches(){
@@ -880,7 +885,7 @@ function notifTick(){
 async function startApp(){
   $('#login').style.display='none';$('#app').style.display='block';
   $('#mineBtn').classList.toggle('on',S.mine);
-  $('#hdUser').innerHTML=`👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:logout()">ออก</a>`;
+  $('#hdUser').innerHTML=`👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:hardReload()">🔄 โหลดใหม่</a> · <a class="hintlink" href="javascript:logout()">ออก</a>`;
   await loadBranches();
   await Promise.all([loadUsers(),loadEvents(true),loadToken()]);
   show(LS.get('jjcal_tab','month'));   // เปิดมาที่หน้าเดิมก่อนรีเฟรช
