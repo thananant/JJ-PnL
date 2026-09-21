@@ -10,6 +10,7 @@
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Sarabun','Noto Sans Lao','Noto Sans Myanmar',sans-serif;-webkit-tap-highlight-color:transparent}
 html[lang="lo"] *{font-family:'Noto Sans Lao','Sarabun',sans-serif}
 html[lang="my"] *{font-family:'Noto Sans Myanmar','Sarabun',sans-serif;line-height:1.55}
+html,body{overscroll-behavior-y:contain}   /* กันเบราว์เซอร์มือถือรีโหลดทั้งหน้าเอง — ใช้ตัวลากลงของแอพแทน */
 body{background:var(--bg);color:var(--ink);font-size:15px;padding-bottom:86px}
 header{position:sticky;top:0;z-index:30;background:linear-gradient(180deg,var(--dk),#690C0F);color:#fff;padding:10px 16px 8px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .hrow{max-width:1220px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -227,8 +228,12 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
 #toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:86px;background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:99;max-width:92vw}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.err{background:var(--red)}
-#ptr{position:fixed;top:10px;left:50%;transform:translateX(-50%) translateY(-64px);background:var(--wine);color:#fff;padding:8px 16px;border-radius:99px;font-size:13px;z-index:99;transition:.2s;pointer-events:none;box-shadow:0 3px 10px rgba(0,0,0,.25)}
-#ptr.on{transform:translateX(-50%) translateY(0)}
+#ptr{position:fixed;top:0;left:50%;transform:translate(-50%,-56px);z-index:320;pointer-events:none;transition:transform .18s}
+#ptr.drag{transition:none}
+#ptr .ptr-c{width:42px;height:42px;border-radius:50%;background:#fff;border:1.5px solid var(--line);box-shadow:0 5px 16px rgba(60,40,20,.18);display:flex;align-items:center;justify-content:center;font-size:21px;color:var(--wine);font-weight:800}
+#ptr.rel .ptr-c{background:var(--wine);border-color:var(--wine);color:#fff}
+#ptr.spin .ptr-c{animation:ptrspin .65s linear infinite}
+@keyframes ptrspin{to{transform:rotate(360deg)}}
 #sideNav{display:none}
 @media(min-width:821px){
   body{padding-left:222px}
@@ -384,7 +389,7 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
 <div id="ovl" class="ovl"><div class="ovlbox" id="ovlBox"></div></div>
 <div id="trBar" data-notr></div>
 <div id="toast"></div>
-<div id="ptr">↓ ลากลงเพื่อรีเฟรช</div>
+<div id="ptr" data-notr><div class="ptr-c">⟳</div></div>
 <script>
 /* ============ JJ เช็คสต๊อก v3 ============
    หน้า: 📋 นับสต๊อก · 🔗 ผูกชื่อ · 🛟 Safety (อัตราใช้/วัน) · 🚚 รอบสั่งซัพ · 📦 รายการสินค้า (ทุกสาขา) · ⚙️ ตั้งค่า แยกหน้าละหัวข้อ (👤 สิทธิ์ผู้ใช้ · 🗂 แผนก · 📐 หน่วยซื้อ↔หน่วยนับ)
@@ -2373,17 +2378,61 @@ function restoreTab(){ // รีเฟรชแล้วกลับหน้า
     S.tab=t; markNav(t);
   }
 }
+const PTR={on:false,y0:0,pull:0,lock:false};
+function ptrInside(el){ // นิ้วอยู่ในกล่องที่เลื่อนอยู่ (ตาราง/กล่องเลือกกลุ่ม) → ปล่อยให้เลื่อนตามปกติ
+  for(let n=el;n&&n!==document.body;n=n.parentElement)if(n.scrollTop>0)return true;
+  return false;
+}
+function ptrRender(){
+  const el=document.getElementById('ptr'); if(!el)return;
+  el.style.transform='translate(-50%, '+(PTR.pull-56)+'px)';
+  el.classList.toggle('rel',PTR.pull>=70);
+  const c=el.querySelector('.ptr-c');
+  if(c&&!el.classList.contains('spin'))c.style.transform='rotate('+Math.round(PTR.pull*3)+'deg)';
+}
+function ptrStart(e){
+  if(PTR.lock||!e.touches||!e.touches[0])return;
+  if(window.scrollY>2)return;                                             // ต้องอยู่บนสุดของหน้า
+  const ov=document.getElementById('ovl');
+  if(ov&&ov.classList.contains('on'))return;                              // กล่องยืนยันเปิดอยู่
+  const lg=document.getElementById('loginOv');
+  if(lg&&getComputedStyle(lg).display!=='none')return;                    // ยังไม่ได้ล็อกอิน
+  if(e.target&&ptrInside(e.target))return;
+  PTR.on=true; PTR.y0=e.touches[0].clientY; PTR.pull=0;
+  const el=document.getElementById('ptr'); if(el)el.classList.add('drag');
+}
+function ptrMove(e){
+  if(!PTR.on||!e.touches||!e.touches[0])return;
+  const dy=e.touches[0].clientY-PTR.y0;
+  if(dy<=0){ PTR.pull=0; ptrRender(); return; }
+  if(window.scrollY<=2){
+    PTR.pull=Math.min(120,dy*0.5);                                        // หนืดครึ่งหนึ่งของนิ้ว
+    if(e.cancelable)e.preventDefault();                                   // กันเบราว์เซอร์รีโหลดทั้งหน้าเอง
+    ptrRender();
+  }
+}
+async function ptrEnd(){
+  if(!PTR.on)return;
+  PTR.on=false;
+  const el=document.getElementById('ptr'); if(el)el.classList.remove('drag');
+  if(PTR.pull<70){ PTR.pull=0; ptrRender(); return; }                     // ลากไม่ถึง = เด้งกลับ เฉย ๆ
+  PTR.lock=true;
+  if(el){ el.classList.add('spin'); el.style.transform='translate(-50%, 16px)'; }
+  try{
+    draftSave();                                                          // ค่านับที่ยังไม่กดบันทึกเก็บไว้ก่อน
+    await loadAll();                                                      // โหลดข้อมูลใหม่ (loadAll คืนค่านับที่ค้างให้เอง)
+    toast('↻ อัปเดตข้อมูลล่าสุดแล้ว');
+  }catch(e){ toast('รีเฟรชไม่สำเร็จ — '+String(e.message||e).slice(0,90),true); }
+  PTR.pull=0; PTR.lock=false;
+  if(el){ el.classList.remove('spin','rel'); el.querySelector('.ptr-c').style.transform=''; ptrRender(); }
+}
 function initPtr(){ // จอสัมผัส (มือถือ/แท็บเล็ต): ลากลงจากบนสุด = รีเฟรชข้อมูล
-  let y0=null,go=false;
-  const el=()=>document.getElementById('ptr');
-  document.addEventListener('touchstart',e=>{y0=(window.scrollY<=0&&e.touches&&e.touches[0])?e.touches[0].clientY:null;go=false;},{passive:true});
-  document.addEventListener('touchmove',e=>{if(y0==null||!e.touches||!e.touches[0])return;
-    const dy=e.touches[0].clientY-y0;
-    go=dy>75&&window.scrollY<=0;
-    const p=el(); if(p){p.classList.toggle('on',dy>14&&window.scrollY<=0);p.textContent=go?'↻ ปล่อยเพื่อรีเฟรช':'↓ ลากลงเพื่อรีเฟรช';}
-  },{passive:true});
-  document.addEventListener('touchend',()=>{const p=el(); if(p)p.classList.remove('on');
-    if(go){go=false;toast('↻ รีเฟรชข้อมูล...');loadAll();} y0=null;},{passive:true});
+  if(!('ontouchstart' in window))return;
+  document.addEventListener('touchstart',ptrStart,{passive:true});
+  document.addEventListener('touchmove',ptrMove,{passive:false});         // passive:false = ห้ามเบราว์เซอร์รีโหลดเอง
+  document.addEventListener('touchend',ptrEnd,{passive:true});
+  document.addEventListener('touchcancel',()=>{ if(!PTR.on)return; PTR.on=false; PTR.pull=0;
+    const el=document.getElementById('ptr'); if(el)el.classList.remove('drag'); ptrRender(); },{passive:true});
 }
 function renderSet(){
   if(S.user&&S.user.role!=='admin'){$('#list').innerHTML='<div class="empty">หน้า Safety สำหรับแอดมินเท่านั้น</div>';return;}

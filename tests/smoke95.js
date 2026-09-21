@@ -17,6 +17,7 @@ const posts=[],patches=[],dels=[];
 let depts=[{id:1,branch_id:BID,name:'ผัก',zone:'หลังร้าน',sort:1},{id:2,branch_id:BID,name:'บาร์น้ำ',zone:'หน้าร้าน',sort:2},{id:3,branch_id:BID,name:'เตรียมของ',zone:null,sort:3}];
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
+    w.ontouchstart=null;   // ทำเป็นจอสัมผัส (ตัวลากลงรีเฟรชทำงานเฉพาะจอสัมผัส — รายละเอียดอยู่ smoke109)
     // ล็อกอินค้างไว้ + จำหน้าเดิม = ตั้งค่า
     w.localStorage.setItem('jjsc_auth',JSON.stringify({u:'admin',h:H('admin','jjmk1234')}));
     w.localStorage.setItem('jjsc_tab','cfgu');
@@ -231,12 +232,12 @@ setTimeout(async()=>{
   // 8) ลากลงเพื่อรีเฟรช (จอสัมผัส): touchstart→move ยาว→end = โหลดใหม่
   let reloaded=false; const orig=w.loadAll; w.loadAll=async()=>{reloaded=true;return orig();};
   const te=(t,y)=>{const e=new w.Event(t,{bubbles:true});if(y!=null)e.touches=[{clientY:y}];else e.touches=[];d.dispatchEvent(e);};
-  te('touchstart',30); te('touchmove',150); te('touchend'); await sleep(80);
-  out.push('ลากลง >75px แล้วปล่อย → รีเฟรชข้อมูล + มีป้าย #ptr: '+(reloaded&&!!d.getElementById('ptr')));
+  te('touchstart',30); te('touchmove',260); te('touchend'); await sleep(80);
+  out.push('ลากลงจนสุดเกณฑ์แล้วปล่อย → รีเฟรชข้อมูล + มีตัวลากลง #ptr: '+(reloaded&&!!d.getElementById('ptr')));
   w.loadAll=orig;
   // ลากสั้น → ไม่รีเฟรช
-  reloaded=false; te('touchstart',30); te('touchmove',60); te('touchend'); await sleep(40);
-  out.push('ลากสั้น <75px ไม่รีเฟรช: '+(reloaded===false));
+  reloaded=false; te('touchstart',30); te('touchmove',80); te('touchend'); await sleep(40);
+  out.push('ลากสั้นไม่ถึงเกณฑ์ ไม่รีเฟรช: '+(reloaded===false));
   // 9) พนักงานทั่วไป: เมนู ตั้งค่า/รอบสั่งซัพ ซ่อน + setTab โดนกัน
   w.eval("S.user={role:'staff',username:'boy',branches:['JJRD'],depts:['ผักสด']};applyAuth()");
   const hid=['set','sched','items','cfg','cfgu','cfgd','cfgn'].every(t=>{const b=d.querySelector('#sideNav [data-t="'+t+'"]');
