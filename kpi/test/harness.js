@@ -5,13 +5,28 @@ const html = fs.readFileSync(__dirname + '/../../jjmk-kpi.html', 'utf8')
   .replace(/<script src="[^"]+"><\/script>/, '') // drop supabase CDN tag
   .replace(/<link[^>]+>/g, '');                     // drop font links
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* บัญชีกลาง pnl_users (จำลอง) — สูตร hash เดียวกับแอป: sha256(user|pass|JJPNL) */
+const crypto = require('crypto');
+const pwHash = (u, p) => crypto.createHash('sha256').update(u + '|' + p + '|JJPNL').digest('hex');
+const USERS = [
+  { id: 1, username: 'boss', display_name: 'เจ้าของร้าน', role: 'owner', unit: 'ALL', active: true, pass_hash: pwHash('boss', 'kpi1234'), apps: {} },
+  { id: 2, username: 'manager', display_name: 'ผู้จัดการ', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('manager', 'kpi1234'), apps: { kpi: { dash: 'v' }, pnl: { dash: 'v' } } },
+  { id: 3, username: 'nokpi', display_name: 'พนักงานครัว', role: 'staff', unit: 'JJLP', active: true, pass_hash: pwHash('nokpi', 'kpi1234'), apps: { stock: { count: 'v' } } },
+  { id: 4, username: 'ออก', display_name: 'พ้นสภาพ', role: 'staff', unit: 'ALL', active: false, pass_hash: pwHash('ออก', 'kpi1234'), apps: {} },
+  { id: 5, username: 'kpimgr', display_name: 'หัวหน้า KPI', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('kpimgr', 'kpi1234'), apps: { kpi: { dash: 'vae', kiosk: 'v' } } }
+];
+const userOf = n => USERS.find(x => x.username === n) || {};
+/* ใบผ่านจากหน้าศูนย์รวมแอพ (localStorage · ใช้ครั้งเดียว อายุ 2 นาที) */
+const ticketFor = (username, ageMs, app) => JSON.stringify({ u: username, h: userOf(username).pass_hash, app: app || 'kpi', t: Date.now() - (ageMs || 0) });
+/* ใบอนุญาตของแท็บ (sessionStorage · เหลือรอดตอนลากหน้าลง/รีเฟรช) */
+const sessFor = username => { const u = userOf(username); return JSON.stringify({ username: u.username, display_name: u.display_name, role: u.role, unit: u.unit, apps: u.apps || null, h: u.pass_hash }); };
 let failures = 0;
 function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures++; console.log('  ✗ ' + msg); } }
 
 /* ---------- fake database ---------- */
 function makeDb(opts) {
   opts = opts || {};
-  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], punches: opts.punches || [], settings: opts.settings || [], nextId: 1 };
+  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], punches: opts.punches || [], settings: opts.settings || [], users: opts.users || USERS.map(u => Object.assign({}, u)), nextId: 1 };
   if (!opts.empty) {
     db.departments = [
       { id: 1, name: 'อาหาร', icon: '🍖', sort_order: 1, active: true },
@@ -47,8 +62,9 @@ function makeDb(opts) {
   }
   const group = (rows, keyFn, init, add) => { const m = {}; for (const r of rows) { const k = keyFn(r); if (!m[k]) m[k] = init(r); add(m[k], r); } return Object.values(m); };
   db.view = t => {
-    if (opts.missing) throw new Error('relation "public.' + t + '" does not exist');
+    if (opts.missing && t !== 'pnl_users') throw new Error('relation "public.' + t + '" does not exist');
     switch (t) {
+      case 'pnl_users': { if (opts.usersMissing) throw new Error('relation "public.pnl_users" does not exist'); return db.users; }
       case 'kpi_departments': return db.departments;
       case 'kpi_staff': return db.staff;
       case 'kpi_settings': return db.settings;
@@ -148,8 +164,15 @@ function boot(url, db, extra) {
     beforeParse(w) {
       w.supabase = { createClient: () => client };
       w.prompt = () => (extra && extra.pin) || null; w.alert = () => {}; w.open = u => { w._opened = u; };
+      w.TextEncoder = require('util').TextEncoder;   // เบราว์เซอร์จริงมีให้อยู่แล้ว (ใช้ตอน hash รหัสผ่าน) — jsdom ไม่มี
       w.HTMLElement.prototype.requestFullscreen = () => Promise.resolve();
       w.URL.createObjectURL = () => 'blob:x'; w.HTMLAnchorElement.prototype.click = function () { w._download = this.download; };
+      /* ค่าเริ่มต้น: จำลองว่ากดเข้ามาจากหน้าศูนย์รวมแอพ (มีใบผ่าน)
+         · noAuth = เปิด URL ตรง ๆ ไม่มีใบผ่าน · sess = แท็บที่ล็อกอินค้างอยู่ (จำลองการรีเฟรช/ลากหน้าลง) */
+      try {
+        if (extra && extra.sess) w.sessionStorage.setItem('kpi_auth', sessFor(extra.sess));
+        if (!(extra && (extra.noAuth || extra.sess))) w.localStorage.setItem('jjsso_ticket', ticketFor((extra && extra.as) || 'boss', extra && extra.authAge, extra && extra.ticketApp));
+      } catch (e) {}
       if (extra && extra.before) extra.before(w);
     }
   });
@@ -161,4 +184,4 @@ async function click(w, d, sel) { const el = d.querySelector(sel); if (!el) thro
 async function change(w, d, sel, value) { const el = d.querySelector(sel); el.value = value; el.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(40); }
 
 
-module.exports = { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures: () => failures };
+module.exports = { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, USERS, ticketFor, sessFor, failures: () => failures };

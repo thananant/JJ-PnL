@@ -1,5 +1,5 @@
 'use strict';
-const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures: getFailures } = require('./harness');
+const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, ticketFor, failures: getFailures } = require('./harness');
 (async () => {
   console.log('\n[1] dashboard — daily / monthly / staff / settings');
   {
@@ -272,6 +272,130 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, failures
     const agg = JSON.parse(r[14]);
     ok(agg.n === 5 && Math.abs(agg.avg - 3.6) < 1e-9 && agg.csat === 0.6 && agg.neg === 1, 'aggDaily merge: ' + r[14]);
     ok(r[15] === '&lt;b&gt;&quot;x&quot;&amp;&#39;', 'esc()');
+  }
+
+  console.log('\n[9] ล็อกอิน — ใบผ่านจากหน้าศูนย์รวมแอพ / เปิดลิงก์ตรงต้องใส่รหัส');
+  {
+    /* เปิดลิงก์แดชบอร์ดตรง ๆ ไม่มีใบผ่าน = ต้องเจอหน้าใส่รหัส ห้ามเห็นข้อมูลลูกค้า */
+    const db = makeDb(); const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { noAuth: true });
+    await sleep(90);
+    ok(!!d.querySelector('#loginForm'), 'ลิงก์ตรง (ไม่มีใบผ่าน) → หน้าเข้าสู่ระบบ');
+    ok(!d.querySelector('.hdr') && !d.querySelector('.summary'), 'ยังไม่เห็นแดชบอร์ด/ข้อมูลลูกค้า');
+
+    d.querySelector('#lgU').value = 'boss'; d.querySelector('#lgP').value = 'ผิด';
+    await click(w, d, '#lgBtn'); await sleep(90);
+    ok(txt(d, '#lgMsg').includes('ไม่ถูกต้อง') && !!d.querySelector('#loginForm'), 'รหัสผิด → แจ้งเตือน ไม่ปล่อยเข้า');
+
+    d.querySelector('#lgU').value = 'boss'; d.querySelector('#lgP').value = 'kpi1234';
+    await click(w, d, '#lgBtn'); await sleep(160);
+    ok(!d.querySelector('#loginForm') && !!d.querySelector('.hdr') && !!d.querySelector('.summary'), 'รหัสถูก → เข้าแดชบอร์ดได้');
+    const sv = JSON.parse(w.sessionStorage.getItem('kpi_auth') || 'null');
+    ok(sv && sv.username === 'boss' && sv.h === pwHash('boss', 'kpi1234'), 'เก็บใบอนุญาตไว้ที่แท็บ (sessionStorage) ไม่ใช่ localStorage');
+    ok(!w.localStorage.getItem('kpi_auth'), 'ไม่เขียนลง localStorage (ปิดแท็บแล้วต้องล็อกอินใหม่)');
+    ok(d.body.textContent.includes('เจ้าของร้าน'), 'แถบบนบอกว่าใครใช้อยู่');
+  }
+  {
+    /* กดไอคอนมาจากหน้าศูนย์รวมแอพ = มีใบผ่าน → เข้าได้เลย และใบผ่านถูกใช้ทิ้ง */
+    const db = makeDb(); const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
+    await sleep(140);
+    ok(!d.querySelector('#loginForm') && !!d.querySelector('.summary'), 'มีใบผ่านจากหน้าแรก → เข้าได้เลยไม่ต้องกรอกซ้ำ');
+    ok(!w.localStorage.getItem('jjsso_ticket'), 'ใบผ่านถูกใช้ทิ้งทันที (ใช้ซ้ำไม่ได้)');
+  }
+  {
+    /* ใบผ่านเก่าเกิน 2 นาที (เช่น คนอื่นไปเจอใบเก่าในเครื่อง) = ใช้ไม่ได้ */
+    const db = makeDb(); const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { authAge: 3 * 60 * 1000 });
+    await sleep(120);
+    ok(!!d.querySelector('#loginForm'), 'ใบผ่านเกิน 2 นาที → ต้องใส่รหัส');
+  }
+  {
+    /* ใบผ่านที่ออกให้แอพอื่น ใช้กับ KPI ไม่ได้ */
+    const db = makeDb(); const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { ticketApp: 'payroll' });
+    await sleep(120);
+    ok(!!d.querySelector('#loginForm'), 'ใบผ่านของแอพอื่น → ใช้กับ KPI ไม่ได้');
+  }
+  {
+    /* บัญชีที่ admin ยังไม่เปิดสิทธิ์ KPI ให้ */
+    const db = makeDb(); const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'nokpi' });
+    await sleep(120);
+    ok(d.body.textContent.includes('ยังไม่ได้รับสิทธิ์') && !d.querySelector('.summary'), 'ไม่มีสิทธิ์ KPI → เข้าไม่ได้');
+  }
+  {
+    /* ผู้จัดการที่ได้สิทธิ์ kpi → เข้าได้ */
+    const db = makeDb(); const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'manager' });
+    await sleep(120);
+    ok(!d.querySelector('#loginForm') && !!d.querySelector('.summary'), 'ผู้จัดการที่มีสิทธิ์ kpi → เข้าได้');
+  }
+  {
+    /* บัญชีถูกปิดใช้งาน แต่ยังถือใบผ่านอยู่ */
+    const db = makeDb(); db.users.find(u => u.username === 'manager').active = false;
+    const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'manager' });
+    await sleep(120);
+    ok(!!d.querySelector('#loginForm'), 'บัญชีถูกปิด → ใบผ่านใช้ไม่ได้');
+  }
+  {
+    /* เปลี่ยนรหัสผ่านจากเครื่องอื่น → ใบผ่านเดิมใช้ไม่ได้ */
+    const db = makeDb(); db.users.find(u => u.username === 'boss').pass_hash = pwHash('boss', 'newpass');
+    const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
+    await sleep(120);
+    ok(!!d.querySelector('#loginForm'), 'รหัสผ่านถูกเปลี่ยน → ใบผ่านเดิมใช้ไม่ได้');
+  }
+  {
+    /* ลากหน้าลงบนมือถือ (pull-to-refresh) = โหลดใหม่ — ต้องไม่ล็อกอินซ้ำ และกลับมาแท็บเดิม */
+    const db = makeDb();
+    const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { sess: 'boss', before(w) { try { w.localStorage.setItem('kpi_tab', 'monthly'); } catch (e) {} } });
+    await sleep(160);
+    ok(!d.querySelector('#loginForm') && !!d.querySelector('.hdr'), 'ลากลง/รีเฟรช → ไม่ต้องล็อกอินซ้ำ (ใบอนุญาตอยู่ที่แท็บ)');
+    const at = d.querySelector('.tab.active');
+    ok(at && at.dataset.tab === 'monthly' && !!d.querySelector('.trend'), 'รีเฟรชแล้วกลับมาแท็บเดิม (รายเดือน)');
+    ok(!w.localStorage.getItem('jjsso_ticket'), 'รีเฟรชไม่ต้องใช้ใบผ่านอีก');
+  }
+  {
+    /* รีเฟรชตอนเน็ต/ฐานข้อมูลล่ม → ไม่เตะคนทำงานออกจากระบบ */
+    const db = makeDb({ usersMissing: true }); const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { sess: 'boss' });
+    await sleep(160);
+    ok(!d.querySelector('#loginForm') && !!d.querySelector('.summary'), 'เน็ตล่มตอนรีเฟรช → ใช้งานต่อได้');
+  }
+  {
+    /* สิทธิ์ถูกถอนระหว่างที่เปิดค้าง → รีเฟรชแล้วเข้าไม่ได้ */
+    const db = makeDb(); db.users.find(u => u.username === 'manager').apps = { pnl: { dash: 'v' } };
+    const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { sess: 'manager' });
+    await sleep(140);
+    ok(d.body.textContent.includes('ยังไม่ได้รับสิทธิ์'), 'สิทธิ์ถูกถอน → รีเฟรชแล้วเข้าไม่ได้');
+  }
+  {
+    /* หน้าจอลูกค้าที่ร้าน (kiosk) ต้องไม่ต้องล็อกอิน */
+    const db = makeDb(); const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html' + '?kiosk=JJRD', db, { noAuth: true });
+    await sleep(120);
+    ok(!d.querySelector('#loginForm') && !!d.querySelector('.k-screen'), 'kiosk ลูกค้าไม่ต้องล็อกอิน');
+  }
+
+  console.log('\n[10] สิทธิ์รายหน้าจอ (dash / kiosk ที่ติ๊กไว้ในหน้า JJ Access)');
+  {
+    /* ได้แค่ "ดู" แดชบอร์ด → ไม่มีแท็บตั้งค่า ไม่มีปุ่มหน้าจอลูกค้า และแก้ข้อมูลไม่ได้ */
+    const db = makeDb(); const before = db.departments.length;
+    const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'manager' });
+    await sleep(160);
+    ok(!!d.querySelector('.summary'), 'ดูอย่างเดียว: เข้าแดชบอร์ดได้');
+    ok(d.querySelectorAll('.tab').length === 3 && !d.querySelector('[data-tab=settings]'), 'ไม่มีแท็บตั้งค่า');
+    ok(!d.querySelector('[data-act=openKiosk]'), 'ไม่มีสิทธิ์ kiosk → ซ่อนปุ่มหน้าจอลูกค้า');
+    w.eval("S.tab='settings';renderTab()"); await sleep(80);
+    ok(!d.querySelector('#deptList') && !d.querySelector('#posList'), 'บังคับเปิดแท็บตั้งค่าก็ไม่เข้า');
+    w.eval('saveDepts()'); await sleep(80);
+    ok(db.departments.length === before, 'สั่งบันทึกตรง ๆ ก็ไม่ผ่าน (กันอีกชั้น)');
+  }
+  {
+    /* ได้ ดู+เพิ่ม+แก้ และหน้าจอลูกค้า → ครบทุกแท็บ */
+    const db = makeDb();
+    const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'kpimgr' });
+    await sleep(160);
+    ok(d.querySelectorAll('.tab').length === 4 && !!d.querySelector('[data-act=openKiosk]'), 'มีสิทธิ์แก้ + kiosk → ครบทุกแท็บ');
+  }
+  {
+    /* ยังไม่เคยตั้งสิทธิ์ (apps ว่าง) = ไม่ล็อกใคร — กติกาเดียวกับหน้าศูนย์รวมแอพ */
+    const db = makeDb();
+    const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'boss' });
+    await sleep(160);
+    ok(d.querySelectorAll('.tab').length === 4, 'เจ้าของ/ยังไม่ตั้งสิทธิ์ → เห็นครบ');
   }
 
   const failures = getFailures(); console.log('\n' + (failures ? failures + ' FAILED' : 'ALL PASSED'));

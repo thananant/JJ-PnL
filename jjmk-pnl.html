@@ -489,6 +489,96 @@ canvas{max-width:100%}
   .brand small{display:none}
   .brand span{font-size:15px}
 </style>
+<style>
+/* JJ Gate — ช่องล็อกอินบนมือถือต้องไม่ต่ำกว่า 16px ไม่งั้น iPhone จะซูมหน้าจอเองตอนกดพิมพ์ */
+@media (max-width:640px){
+  #lgU,#lgP,#liUser,#liPass{font-size:16px !important}
+  .jjgate-note{font-size:13px !important}
+}
+</style>
+<script>
+/* ============================================================
+   JJ Gate — ด่านกันคนเข้าทางลิงก์ตรง (เจ้าของสั่ง 2026-09-21)
+   · เข้าจากหน้าศูนย์รวมแอพ (index.html) หลังล็อกอิน = ผ่านได้เลยตามสิทธิ์
+   · เข้าด้วย URL ตรง / ลิงก์ที่ถูกส่งต่อ = ต้องใส่รหัสผ่านใหม่ทุกครั้ง
+   ใบผ่านมี 2 แบบ:
+   · ใบผ่านครั้งเดียว (localStorage 'jjhub_pass') หน้าศูนย์รวมแอพออกให้ตอนกดไอคอน
+     อายุ 2 นาที · ผูกกับชื่อผู้ใช้ + ชื่อแอพ · ใช้แล้วลบทิ้งทันที
+   · ใบผ่านประจำแท็บ (sessionStorage) — รีเฟรช/กดลากลงยังอยู่ แต่แท็บใหม่ไม่มี
+   *** บล็อกนี้เหมือนกันทุกแอพ (ต่างแค่ชื่อแอพบรรทัดแรก) แก้ที่ไหนต้องแก้ให้ครบทุกไฟล์ ***
+   ============================================================ */
+window.JJGate=(function(){
+  var APP='pnl';                 /* ชื่อแอพนี้ — ต้องตรงกับ data-app ในหน้าศูนย์รวมแอพ */
+  var TAB='jjgate_'+APP, TICKET='jjhub_pass', ALT='jjsso_ticket';
+  var IDLE=30*60*1000;               /* ทิ้งไว้เกิน 30 นาทีแล้วรีเฟรช = ยืนยันรหัสใหม่ (กติกาเดียวกับ P&L) */
+  var TTL=2*60*1000;                 /* ใบผ่านจากหน้าศูนย์รวมแอพ อายุ 2 นาที */
+  function j(s){ try{ return JSON.parse(s||'null'); }catch(e){ return null; } }
+  function readTab(){ try{ return j(sessionStorage.getItem(TAB)); }catch(e){ return null; } }
+  function grant(user){ try{ sessionStorage.setItem(TAB,JSON.stringify({u:user||'',t:Date.now()})); }catch(e){} }
+  /* ใช้ใบผ่านแล้วต้องลบให้เกลี้ยงทั้ง 2 แบบ ไม่งั้นใบที่เหลือจะถูกเอาไปเปิดแท็บใหม่ได้อีก
+     (ลบเฉพาะใบที่จ่าหน้าถึงแอพนี้ — ใบของแอพอื่นต้องไม่โดนลบไปด้วย) */
+  function burn(){
+    try{ localStorage.removeItem(TICKET); }catch(e){}
+    var o=null; try{ o=j(localStorage.getItem(ALT)); }catch(e){}
+    if(!o||!o.app||o.app===APP){ try{ localStorage.removeItem(ALT); }catch(e){} }
+  }
+  function takeTicket(){
+    var t=null; try{ t=j(localStorage.getItem(TICKET)); }catch(e){}
+    if(t&&t.app===APP&&t.u&&t.exp&&t.exp>=Date.now()){ burn(); return t; }
+    /* รับใบผ่านอีกแบบของหน้าศูนย์รวมแอพด้วย (jjsso_ticket — ระบบเดียวกับที่ JJ Social/ซ่อมบำรุงใช้) */
+    var o=null; try{ o=j(localStorage.getItem(ALT)); }catch(e){}
+    if(o&&o.u&&(!o.app||o.app===APP)&&(Date.now()-(+o.t||0))<TTL){ burn(); return {app:APP,u:o.u,exp:Date.now()+TTL}; }
+    return null;
+  }
+  /* เปิดจากไอคอนที่ติดตั้งไว้บนหน้าจอมือถือ (PWA) = เครื่องของเจ้าตัวเอง ไม่ใช่ลิงก์ที่ถูกส่งต่อ → ผ่านได้
+     (ลิงก์ที่ส่งต่อทางแชทจะเปิดในเบราว์เซอร์ธรรมดา ไม่ใช่โหมดนี้ — ยังโดนถามรหัสเหมือนเดิม) */
+  function installed(){
+    try{
+      if(navigator.standalone===true)return true;                                   /* iPhone/iPad */
+      return !!(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches
+             || window.matchMedia&&window.matchMedia('(display-mode: fullscreen)').matches);  /* Android */
+    }catch(e){ return false; }
+  }
+  /* เรียกก่อนจะยอมรับ session ที่ค้างอยู่ในเครื่อง — false = ให้แสดงหน้าล็อกอิน
+     ผ่านได้ 3 ทาง: ใบผ่านประจำแท็บ (รวมถึงการดึงหน้าลงรีเฟรช) · ใบผ่านจากหน้าศูนย์รวมแอพ · เปิดจากไอคอนบนมือถือ */
+  function ok(user){
+    var g=readTab();
+    if(g&&(Date.now()-(g.t||0))<IDLE&&(!user||g.u===user)){ grant(g.u||user); return true; }
+    var t=takeTicket();
+    if(t&&(!user||t.u===user)){ grant(t.u); return true; }
+    if(installed()){ grant(user||''); return true; }
+    return false;
+  }
+  /* ออกใบผ่านก่อนพาไปอีกแอพ (หน้าศูนย์รวมแอพ + ลิงก์ข้ามแอพ) — ไม่รู้ชื่อผู้ใช้ = ไม่ออกให้ */
+  function issue(app,user){
+    if(!app||!user)return false;
+    try{ localStorage.setItem(TICKET,JSON.stringify({app:app,u:user,exp:Date.now()+TTL})); return true; }catch(e){ return false; }
+  }
+  /* แปะข้อความ "เปิดจากลิงก์ตรง" บนหน้าล็อกอินของแอพ + เติมชื่อผู้ใช้ให้ เหลือแค่พิมพ์รหัส */
+  function note(user,userId,passId){
+    try{
+      var u=userId?document.getElementById(userId):null, pw=passId?document.getElementById(passId):null;
+      if(u&&user)u.value=user;
+      var card=(u&&u.closest)?u.closest('.logincard,.lgc,.card,#login,#loginWrap'):null;
+      if(card&&!card.querySelector('.jjgate-note')){
+        var d=document.createElement('div');
+        d.className='jjgate-note';
+        d.style.cssText='margin:0 0 13px;padding:10px 12px;border-radius:11px;font-size:12.5px;line-height:1.55;text-align:left;'+
+          'background:rgba(217,164,65,.13);border:1px solid rgba(217,164,65,.5);color:#C79A3E';
+        d.innerHTML='🔒 <b>เปิดจากลิงก์ตรง</b> — ยืนยันรหัสผ่านอีกครั้งเพื่อความปลอดภัย<br>'+
+          '<span style="opacity:.85">เข้าจาก<a href="index.html" style="color:inherit;font-weight:600"> หน้าศูนย์รวมแอพ </a>จะไม่ต้องกรอกซ้ำ</span>';
+        card.insertBefore(d,card.firstChild);
+      }
+      if(pw)setTimeout(function(){ try{ pw.focus(); }catch(e){} },90);
+    }catch(e){}
+  }
+  /* ต่ออายุใบผ่านของแท็บนี้เมื่อมีการใช้งาน */
+  ['click','keydown','pointerdown','touchstart'].forEach(function(ev){
+    try{ document.addEventListener(ev,function(){ var g=readTab(); if(g&&(Date.now()-(g.t||0))<IDLE)grant(g.u); },{passive:true,capture:true}); }catch(e){}
+  });
+  return {ok:ok,grant:grant,issue:issue,note:note,installed:installed,app:APP};
+})();
+</script>
 </head>
 <body>
 
@@ -1274,17 +1364,24 @@ async function authGate(){
   let probe;
   try{
     const r=await fetch(url+'/rest/v1/pnl_users?select=id&limit=1',{headers:{apikey:key,Authorization:'Bearer '+key}});
-    if(!r.ok) throw 0;
+    if(r.status===404){ // ยังไม่รัน jjmk_pnl_users.sql จริง ๆ -> ใช้แบบเดิม (ไม่มีบัญชีให้ตรวจ)
+      S.user={username:'legacy',display_name:LS.get('jjpnl_user','')||'ไม่ระบุ',role:'admin',perms:{},legacy:true};
+      return true;
+    }
+    if(!r.ok) throw new Error('HTTP '+r.status);
     probe=await r.json();
-  }catch(e){ // ยังไม่รัน jjmk_pnl_users.sql -> ใช้แบบเดิม (ทุกคน = admin)
-    S.user={username:'legacy',display_name:LS.get('jjpnl_user','')||'ไม่ระบุ',role:'admin',perms:{},legacy:true};
-    return true;
+  }catch(e){ // เช็คบัญชีไม่ได้ = ไม่ปล่อยเข้า
+    showLogin(false);
+    const m=document.getElementById('lgMsg'); if(m)m.textContent='เชื่อมต่อฐานข้อมูลไม่ได้ — ลองใหม่อีกครั้ง';
+    return false;
   }
   const saved=LS.get('jjpnl_auth',null);
   const IDLE_MS=30*60*1000; // ไม่ใช้เกิน 30 นาที = ต้องใส่รหัสใหม่
   if(saved&&saved.u){
     if(!saved.t || Date.now()-saved.t>IDLE_MS){
       LS.set('jjpnl_auth',null); // หมดเวลา — เด้งไป login
+    }else if(!JJGate.ok(saved.u)){ // เข้าทางลิงก์ตรง → ยืนยันรหัสใหม่
+      showLogin(false,saved.u); return false;
     }else{
       try{
         const rows=await sel('pnl_users','select=*&username=eq.'+encodeURIComponent(saved.u));
@@ -1325,14 +1422,16 @@ function startIdleWatch(){
   setInterval(idleCheck, 60000);
   touchAuth();
 }
-function showLogin(firstRun){
+function showLogin(firstRun,relock){
   let ov=document.getElementById('loginOv');
   if(!ov){ ov=document.createElement('div'); ov.id='loginOv'; document.body.appendChild(ov); }
   ov.innerHTML=`<div class="logincard">
     <div style="font-family:'Prompt';font-weight:800;font-size:21px">🏮 JJ P&L</div>
-    <div class="sm mut" style="margin:2px 0 14px">${firstRun?'ยังไม่มีผู้ใช้ — สร้างบัญชีผู้ดูแลคนแรก':'เข้าสู่ระบบ จริงใจหมูกระทะ'}</div>
+    <div class="sm mut" style="margin:2px 0 14px">${firstRun?'ยังไม่มีผู้ใช้ — สร้างบัญชีผู้ดูแลคนแรก':
+      relock?'🔒 เปิดจากลิงก์ตรง — ยืนยันรหัสผ่านอีกครั้ง<br><span class="xs">(เข้าจากหน้าศูนย์รวมแอพจะไม่ต้องกรอกซ้ำ)</span>':
+      'เข้าสู่ระบบ จริงใจหมูกระทะ'}</div>
     ${firstRun?`<div class="fld"><label>ชื่อที่แสดง</label><input id="lgName" placeholder="เช่น แพท" autocomplete="off"></div>`:''}
-    <div class="fld"><label>Username</label><input id="lgU" autocomplete="off" name="jj_u_${Date.now()%9999}" data-lpignore="true" data-1p-ignore placeholder="username"></div>
+    <div class="fld"><label>Username</label><input id="lgU" autocomplete="off" name="jj_u_${Date.now()%9999}" data-lpignore="true" data-1p-ignore placeholder="username" value="${relock?esc(relock):''}"></div>
     <div class="fld"><label>Password <span class="xs mut" style="font-weight:500">(พิมพ์เองทุกครั้ง)</span></label>
       <input id="lgP" type="password" autocomplete="new-password" name="jj_p_${Date.now()%9999}" data-lpignore="true" data-1p-ignore
       readonly onfocus="this.removeAttribute('readonly')" placeholder="••••••••"
@@ -1341,7 +1440,7 @@ function showLogin(firstRun){
     <div id="lgMsg" class="xs" style="color:var(--bad);margin-top:8px;min-height:14px"></div>
   </div>`;
   ov.style.display='flex';
-  setTimeout(()=>{const f=document.getElementById(firstRun?'lgName':'lgU'); f&&f.focus();},50);
+  setTimeout(()=>{const f=document.getElementById(firstRun?'lgName':relock?'lgP':'lgU'); f&&f.focus();},50);
 }
 async function doLogin(){
   const u=(document.getElementById('lgU').value||'').trim();
@@ -1353,6 +1452,7 @@ async function doLogin(){
     const usr=rows[0];
     if(!usr||usr.pass_hash!==pwHash(u,p)){msg.textContent='username หรือ password ไม่ถูกต้อง';return;}
     if(!usr.active){msg.textContent='บัญชีนี้ถูกปิดการใช้งาน';return;}
+    JJGate.grant(usr.username);
     setUser(usr);
     api('POST','pnl_activity_log',{username:usr.username,branch:S.br,action:'เข้าสู่ระบบ',detail:''},'return=minimal').catch(()=>{});
     document.getElementById('loginOv').style.display='none';
@@ -1367,6 +1467,7 @@ async function createAdmin(){
   if(!nm||!u||p.length<4){msg.textContent='กรอกให้ครบ (รหัสอย่างน้อย 4 ตัว)';return;}
   try{
     const rows=await api('POST','pnl_users',{username:u,display_name:nm,pass_hash:pwHash(u,p),role:'admin',perms:{}});
+    JJGate.grant(u);
     setUser(rows[0]||{username:u,display_name:nm,role:'admin',perms:{},pass_hash:pwHash(u,p)});
     document.getElementById('loginOv').style.display='none';
     boot();
