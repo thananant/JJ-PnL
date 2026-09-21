@@ -381,7 +381,11 @@ async function loadMeta() {
   /* ซิงก์รายชื่อพนักงานจากระบบเงินเดือน (payroll) ก่อน — พลาดได้ (ยังไม่รัน SQL/เน็ตสะดุด) ใช้รายชื่อเดิมต่อ */
   try { const rs = await sb.rpc('kpi_sync_staff', { p_branches: Object.keys(CONFIG.BRANCHES) }); S.syncOk = !rs.error; } catch (e) { S.syncOk = false; }
   /* ตำแหน่งที่ซ่อนจากหน้าชมพนักงาน (เจ้าของติ๊กในตั้งค่า เก็บใน kpi_settings) — ตารางยังไม่มี/อ่านล้ม → null = ใช้ CONFIG.KIOSK_HIDE_POS แทน */
-  try { const rp = await sb.from('kpi_settings').select('*').eq('key', 'kiosk_hide_pos'); S.hidePos = (!rp.error && rp.data && rp.data[0] && Array.isArray(rp.data[0].value)) ? rp.data[0].value : null; } catch (e) { S.hidePos = null; }
+  try {
+    const rp = await sb.from('kpi_settings').select('*').eq('key', 'kiosk_hide_pos');
+    if (rp.error) { S.hidePos = null; S.posTableOk = !/kpi_settings/.test(rp.error.message || ''); }
+    else { S.hidePos = (rp.data && rp.data[0] && Array.isArray(rp.data[0].value)) ? rp.data[0].value : null; S.posTableOk = true; }
+  } catch (e) { S.hidePos = null; S.posTableOk = false; }
   const r = await Promise.all([
     sb.from('kpi_departments').select('*').order('sort_order').order('id'),
     sb.from('kpi_staff').select('*').order('branch').order('sort_order').order('id')
@@ -431,6 +435,7 @@ const S = {
   setBranch: ALL,
   syncOk: true,
   hidePos: null,
+  posTableOk: true,        // ตาราง kpi_settings มีในฐานข้อมูลหรือยัง (ยังไม่มี = บันทึกตำแหน่งไม่ได้)
   token: 0
 };
 const app = $('#app');
@@ -696,7 +701,7 @@ async function saveHidePos() {
     const r = await sb.from('kpi_settings').upsert([{ key: 'kiosk_hide_pos', value: hidden }]);
     if (r.error) throw r.error;
     await loadMeta(); renderSettings(); toast('บันทึกตำแหน่งแล้ว');
-  } catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e) + ' — ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดแล้ว', 4500); }
+  } catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e) + ' — ต้องรัน kpi_upgrade.sql ใน Supabase ก่อน', 5000); }
 }
 /* ---- การ์ด "ใครเข้างานตอนนี้" (หน้าตั้งค่า) ----
    จอลูกค้าโชว์เฉพาะคนที่เครื่องสแกนบอกว่าเข้างานอยู่ · การ์ดนี้บอกว่าตอนนี้ระบบเห็นใคร และถ้าไม่เห็นเพราะอะไร */
@@ -738,7 +743,8 @@ function renderSettings() {
   const staff = S.staff.filter(s => S.setBranch === ALL || s.branch === S.setBranch);
   setMain(
     '<div class="card"><h3>แผนกที่ให้ลูกค้าประเมิน <small>(ใช้ร่วมกันทุกสาขา · ลำดับ = ลำดับหน้าจอ)</small></h3><div id="deptList">' + S.depts.map(deptRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addDept">+ เพิ่มแผนก</button><span class="grow"></span><button class="btn sm" data-act="saveDepts">บันทึกแผนก</button></div><div class="hint">ปิด "ใช้" แทนการลบ เพื่อเก็บประวัติคะแนนเดิมไว้</div></div>' +
-    '<div class="card"><h3>ตำแหน่งที่ให้ลูกค้าชม <small>(ติ๊กไว้ = ลูกค้าเห็นตำแหน่งนี้ · มีผลทุกสาขา)</small></h3><div id="posList">' + posListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn sm" data-act="saveHidePos">บันทึกตำแหน่ง</button></div><div class="hint">จอลูกค้าจะโชว์เฉพาะ <b>คนในตำแหน่งที่ติ๊กไว้</b> และ <b>ที่สแกนเข้างานอยู่ตอนนั้น</b> เท่านั้น · ตำแหน่งใหม่จากระบบเงินเดือนจะโชว์อัตโนมัติจนกว่าจะติ๊กออก</div></div>' +
+    '<div class="card"><h3>ตำแหน่งที่ให้ลูกค้าชม <small>(ติ๊กไว้ = ลูกค้าเห็นตำแหน่งนี้ · มีผลทุกสาขา)</small></h3><div id="posList">' + posListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn sm" data-act="saveHidePos"' + (S.posTableOk ? '' : ' disabled') + '>บันทึกตำแหน่ง</button></div>' +
+    (S.posTableOk ? '' : '<div class="lg-msg" style="margin:10px 0 0">⚠️ ยังบันทึกไม่ได้ — ฐานข้อมูลยังไม่มีตาราง <code>kpi_settings</code><br>ให้รัน <code>kpi_upgrade.sql</code> (หรือ <code>jjmk-kpi.sql</code> เวอร์ชันล่าสุด) ใน Supabase ก่อน · ระหว่างนี้ระบบใช้ค่าเริ่มต้น: ซ่อน ' + esc(CONFIG.KIOSK_HIDE_POS.join(' / ')) + '</div>') + '<div class="hint">จอลูกค้าจะโชว์เฉพาะ <b>คนในตำแหน่งที่ติ๊กไว้</b> และ <b>ที่สแกนเข้างานอยู่ตอนนั้น</b> เท่านั้น · ตำแหน่งใหม่จากระบบเงินเดือนจะโชว์อัตโนมัติจนกว่าจะติ๊กออก</div></div>' +
     '<div class="card"><h3>รายชื่อพนักงาน <small>(ซิงก์จากระบบเงินเดือน — ดูอย่างเดียว)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><details class="stf-wrap"><summary>ดูรายชื่อรายคน (ปกติไม่ต้องแตะ)</summary><div id="staffList">' + staffListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn ghost sm" data-act="saveStaff">บันทึกการซ่อนรายคน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'เพิ่ม/แก้ชื่อ/ย้ายสาขา ทำที่แอป Payroll แล้วที่นี่อัปเดตตาม · ติ๊กออกเฉพาะกรณียกเว้นรายคน (เช่น ไม่อยากให้ขึ้นชื่อชั่วคราว) · คนลาออกระบบซ่อนให้เอง</div></details></div>' +
     (can('kiosk') ? '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
     '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' : '') +
