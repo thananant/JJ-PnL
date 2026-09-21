@@ -41,6 +41,19 @@ function makeDb(opts) {
       { id: 4, branch: 'JJLP', name: 'มานี', nickname: 'นี', position: 'เสิร์ฟ', sort_order: 1, active: true },
       { id: 5, branch: 'JJLP', name: 'มานะ', nickname: null, position: 'ครัว', sort_order: 2, active: true }
     ];
+    /* พนักงานชุดเดียวกันในระบบเงินเดือน (แอปจะ sync ผูก employee_id ให้เองตอน loadMeta)
+       + สแกนเข้างานวันนี้คนละ 1 ครั้ง (คี่ = ยังอยู่ในร้าน) → จอลูกค้าจึงมีชื่อให้กด */
+    if (!opts.employees) db.employees = [
+      { id: 201, code: 'S201', branch: 'JJRD', nick: 'ชาย', full_name: 'สมชาย ใจดี', position: 'เสิร์ฟ', active: true },
+      { id: 202, code: 'S202', branch: 'JJRD', nick: 'หญิง', full_name: 'สมหญิง', position: 'แคชเชียร์', active: true },
+      { id: 204, code: 'S204', branch: 'JJLP', nick: 'นี', full_name: 'มานี', position: 'เสิร์ฟ', active: true },
+      { id: 205, code: 'S205', branch: 'JJLP', nick: null, full_name: 'มานะ', position: 'ครัว', active: true }
+    ];
+    if (!opts.employees && !opts.punches) {
+      const now = new Date(); const bz = new Date(now); if (now.getHours() < 6) bz.setDate(bz.getDate() - 1);
+      const at = (hh, mm) => new Date(bz.getFullYear(), bz.getMonth(), bz.getDate(), hh, mm);
+      db.punches = db.employees.map(e => ({ emp_code: e.code, ts: at(11, 0) }));
+    }
     // 45 days of data, both branches
     let seed = 7; const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
     const today = new Date(); today.setHours(12, 0, 0, 0);
@@ -102,6 +115,7 @@ function makeDb(opts) {
       return { data: { linked: 0 }, error: null };
     }
     if (name === 'kpi_on_duty') {
+      if (opts.dutyFail) return { data: null, error: { message: 'Could not find the function public.kpi_on_duty(p_branch) in the schema cache' } };
       // จำลอง SQL: นับสแกนวันทำการปัจจุบัน (ตัด 06:00) — จำนวนคี่ = กำลังเข้างาน (รัน TZ=Asia/Bangkok)
       const now = new Date(); const biz = new Date(now); if (now.getHours() < 6) biz.setDate(biz.getDate() - 1);
       const start = new Date(biz.getFullYear(), biz.getMonth(), biz.getDate(), 6);

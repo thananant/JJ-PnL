@@ -177,18 +177,13 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(!db.staff.some(s => s.employee_id === 104) && !db.staff.some(s => s.employee_id === 105), 'JJCK / resigned employees not added');
     ok(db.staff.find(s => s.id === 2).active === false, 'row of departed employee auto-hidden');
     ok(!!db.staff.find(s => s.employee_id === 106) && !!db.staff.find(s => s.employee_id === 107), 'back-of-house staff still synced to DB');
+    /* ไม่มีข้อมูลสแกนเลย → ไม่รู้ว่าใครอยู่ร้าน = ข้ามคำถามชมพนักงาน (ห้ามโชว์ทั้งร้านแบบเดิม ลูกค้ากดผิด) */
     await click(w, d, '.k-start');
+    ok(d.querySelectorAll('.k-dot').length === 3, 'ไม่มีข้อมูลสแกน → มีแต่ 3 แผนก ไม่มีขั้นชมพนักงาน');
     await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
     await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
     await click(w, d, '.k-face[data-s="5"]'); await sleep(350);
-    ok(txt(d, '.k-name') === 'ชมพนักงาน' && (txt(d, '.k-q') || '').includes('อยากชมพนักงานคนไหนเป็นพิเศษ'), 'question 5: อยากชมพนักงาน…');
-    const chips = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent);
-    ok(chips.includes('ชาย') && chips.includes('บอย') && !chips.includes('หญิง'), 'choices from payroll (departed gone): ' + chips.join(','));
-    ok(!chips.includes('สา') && !chips.includes('มีน'), 'สไลด์/ล้างจาน hidden from customers (no punches → show all front-of-house)');
-    const heads = Array.from(d.querySelectorAll('.k-pos-h')).map(x => x.textContent);
-    ok(heads.includes('เสิร์ฟ') && heads.includes('เซอร์วิส') && !heads.some(h => h.includes('สไลด์')), 'grouped by position: ' + heads.join(','));
-    await click(w, d, '[data-act=kNoStaff]'); await sleep(320);
-    ok(!!d.querySelector('.k-check'), 'submit with ไม่ระบุ still works');
+    ok(!!d.querySelector('.k-check') && !d.querySelector('.k-chip'), 'จบที่หน้าขอบคุณ ไม่มีรายชื่อให้กดผิด');
     ok(errors.length === 0, 'no jsdom errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   }
   {
@@ -396,6 +391,64 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { as: 'boss' });
     await sleep(160);
     ok(d.querySelectorAll('.tab').length === 4, 'เจ้าของ/ยังไม่ตั้งสิทธิ์ → เห็นครบ');
+  }
+
+  console.log('\n[11] จอลูกค้า: ชื่อที่ขึ้น = เฉพาะคนที่สแกนเข้างานอยู่จริง');
+  const toStaff = async (w, d) => {   // กดผ่าน 3 แผนกให้ถึงขั้นชมพนักงาน
+    await click(w, d, '.k-start');
+    for (let i = 0; i < 3; i++) { await click(w, d, '.k-face[data-s="5"]'); await sleep(350); }
+  };
+  {
+    /* ค่าเริ่มต้น: JJRD สแกนเข้า 2 คน → ขึ้น 2 ชื่อ */
+    const db = makeDb(); const { w, d } = boot('https://x.test/a.html?kiosk=JJRD', db, { noAuth: true });
+    await sleep(120); await toStaff(w, d);
+    const names = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent).sort();
+    ok(names.join(',') === 'ชาย,หญิง', 'สแกนเข้าอยู่ 2 คน → ขึ้นแค่ 2 ชื่อ: ' + names.join(','));
+  }
+  {
+    /* "หญิง" สแกนออกแล้ว (จำนวนสแกนเป็นคู่) → เหลือชื่อเดียว */
+    const db = makeDb();
+    const now = new Date(); const bz = new Date(now); if (now.getHours() < 6) bz.setDate(bz.getDate() - 1);
+    db.punches.push({ emp_code: 'S202', ts: new Date(bz.getFullYear(), bz.getMonth(), bz.getDate(), 20, 0) });
+    const { w, d } = boot('https://x.test/a.html?kiosk=JJRD', db, { noAuth: true });
+    await sleep(120); await toStaff(w, d);
+    const names = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent);
+    ok(names.length === 1 && names[0] === 'ชาย', 'สแกนออกแล้วหายจากจอ: ' + names.join(','));
+  }
+  {
+    /* พนักงานที่ยังไม่ผูกกับระบบเงินเดือน (กรอกมือ) → ไม่ขึ้น เพราะเช็คไม่ได้ว่าอยู่ร้านไหม */
+    const db = makeDb();
+    db.staff.push({ id: 90, branch: 'JJRD', name: 'พาร์ทไทม์ ไม่มีในเงินเดือน', nickname: 'พาร์ท', position: 'เสิร์ฟ', sort_order: 9, active: true });
+    const { w, d } = boot('https://x.test/a.html?kiosk=JJRD', db, { noAuth: true });
+    await sleep(120); await toStaff(w, d);
+    const names = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent);
+    ok(!names.includes('พาร์ท') && names.length === 2, 'แถวที่ไม่ผูก payroll ไม่ขึ้นจอลูกค้า: ' + names.join(','));
+  }
+  {
+    /* ยังไม่ได้รัน SQL (ไม่มีฟังก์ชัน kpi_on_duty) → ข้ามคำถามชมพนักงาน ไม่ใช่โชว์ทั้งร้าน */
+    const db = makeDb({ dutyFail: true });
+    const { w, d } = boot('https://x.test/a.html?kiosk=JJRD', db, { noAuth: true });
+    await sleep(120);
+    await click(w, d, '.k-start');
+    ok(d.querySelectorAll('.k-dot').length === 3, 'RPC ใช้ไม่ได้ → ไม่มีขั้นชมพนักงาน');
+    for (let i = 0; i < 3; i++) { await click(w, d, '.k-face[data-s="5"]'); await sleep(350); }
+    ok(!!d.querySelector('.k-check') && !d.querySelector('.k-chip'), 'จบที่ขอบคุณ ไม่มีชื่อให้กดผิด');
+  }
+  {
+    /* หน้าตั้งค่ามีการ์ดบอกว่าตอนนี้ระบบเห็นใครเข้างาน */
+    const db = makeDb(); const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
+    await sleep(160);
+    await click(w, d, '[data-tab=settings]'); await sleep(200);
+    const card = d.querySelector('#dutyBody');
+    ok(!!card && /ชาย/.test(card.textContent) && /เข้างานอยู่ 2 คน/.test(card.textContent), 'การ์ดตั้งค่าโชว์คนเข้างาน: ' + (card ? card.textContent.slice(0, 60) : '-'));
+  }
+  {
+    /* ยังไม่ได้รัน SQL → การ์ดบอกสาเหตุให้เจ้าของแก้ได้เอง */
+    const db = makeDb({ dutyFail: true }); const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
+    await sleep(160);
+    await click(w, d, '[data-tab=settings]'); await sleep(200);
+    const card = d.querySelector('#dutyBody');
+    ok(!!card && card.textContent.includes('jjmk-kpi.sql'), 'ยังไม่ได้รัน SQL → การ์ดบอกให้รันไฟล์');
   }
 
   const failures = getFailures(); console.log('\n' + (failures ? failures + ' FAILED' : 'ALL PASSED'));
