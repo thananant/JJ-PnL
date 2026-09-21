@@ -100,7 +100,8 @@
   P&L `jjpnl_view` · Kitchen `jjck_tab` · นับสต๊อก `jjsc_tab` · Payroll (hash routing) ·
   Social `jjsocial_tab` · Calendar `jjcal_tab` · KPI `kpi_tab` · Invoice `jjinv_tab` ·
   Access `jjacc_tab` · Owner `jjowner_view` · ซ่อมบำรุง `jjmt_tab` (แท็บตารางบำรุงรักษา/นับอุปกรณ์)
-- หน้าศูนย์รวมแอป (`index.html`) ใส่ meta no-cache + ปุ่ม 🔄 โหลดใหม่ (ข้ามแคชด้วย `?v=`) กันมือถือ/PWA แคชหน้าเก่าค้าง
+- **ทุกแอปใส่ meta no-cache ใน `<head>`** (`Cache-Control`/`Pragma`/`Expires` — ทำครบทุกไฟล์แล้ว 2026-09-21) เพราะดึงหน้าลง (pull-to-refresh) บนมือถือแล้วยังได้ไฟล์เก่าค้าง · **เขียนแอปใหม่ต้องใส่ด้วยทุกครั้ง**
+- หน้าศูนย์รวมแอป (`index.html`) และ Calendar มีปุ่ม 🔄 โหลดใหม่ (ข้ามแคชด้วย `?v=`) เพิ่มอีกชั้น — `hardReload()`
 
 ## กติกาการส่งงาน — ใช้กับ **ทุกระบบ** ใน repo นี้ (P&L · Owner · KPI · Payroll · นับสต๊อก · ซ่อมบำรุง · Kitchen · Social · Invoice · Calendar · Access)
 
