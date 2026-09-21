@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>ซ่อมบำรุงสาขา — จริงใจหมูกระทะ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -143,6 +146,8 @@
   #login h2{margin:0;font-family:Prompt;font-weight:600;font-size:1.15rem;color:var(--red-deep)}
   #login .lsub{font-size:.8rem;color:var(--ink-soft);margin:2px 0 16px}
   #login input{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:11px;font-family:Sarabun;font-size:.95rem;margin-bottom:9px;text-align:center}
+  #login .lkeep{display:flex;align-items:center;gap:7px;justify-content:center;font-size:.83rem;color:var(--ink-soft);margin:2px 0 4px;cursor:pointer}
+  #login .lkeep input{width:auto;margin:0}
   #login .lmsg{min-height:18px;font-size:.8rem;color:#c62127;margin:4px 0 8px}
   #login.err .lcard{animation:shake .4s}
   @keyframes shake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
@@ -214,12 +219,14 @@
   <div class="lcard">
     <img class="llogo" id="lLogo" alt="">
     <h2>ซ่อมบำรุงสาขา</h2>
-    <div class="lsub">จริงใจหมูกระทะ · ตารางบำรุงรักษาประจำสาขา</div>
+    <div class="lsub">จริงใจหมูกระทะ · ตารางบำรุงรักษา + นับอุปกรณ์</div>
     <input id="lUser" placeholder="ชื่อผู้ใช้ (username)" autocomplete="username">
     <input id="lPass" type="password" placeholder="รหัสผ่าน (password)" autocomplete="current-password">
+    <label class="lkeep"><input type="checkbox" id="lKeep"> จำไว้ในเครื่องนี้ 12 ชั่วโมง</label>
     <div class="lmsg" id="lMsg"></div>
     <button class="act send wide" id="lBtn">เข้าสู่ระบบ</button>
-    <p class="hint" style="margin:12px 0 0">ใช้บัญชีเดียวกับแอพนับสต๊อก — พนักงานใหม่ให้สมัครที่แอพนับสต๊อกและรอผู้ดูแลอนุมัติก่อน</p>
+    <p class="hint" style="margin:12px 0 0">ใช้<b>บัญชีเดียวกับหน้าศูนย์รวมแอพ</b> (หรือบัญชีเดิมของระบบนับสต๊อก/ครัวกลางก็ได้)<br>
+      เข้าจาก <a href="index.html" style="color:var(--red-deep)">🏠 หน้าศูนย์รวมแอพ</a> หลังล็อกอินแล้ว จะเข้าตรงนี้ได้เลยไม่ต้องกรอกซ้ำ</p>
   </div>
 </div>
 
@@ -355,9 +362,81 @@ function processImage(file,cb){const reader=new FileReader();
     im.onerror=()=>cb(null);im.src=reader.result};
   reader.onerror=()=>cb(null);reader.readAsDataURL(file)}
 
-/* ================= login (บัญชีชุดเดียวกับแอพนับสต๊อก) ================= */
+/* ================= ล็อกอิน =================
+   3 ทางเข้า (เจ้าของสั่ง 2026-09-21):
+   1) มาจากหน้าศูนย์รวมแอพ (index.html) → หน้าแรกออก "ใบผ่าน" jjsso_ticket ไว้ (อายุ 2 นาที ใช้ครั้งเดียว)
+      แอพนี้กินใบผ่าน แล้วเอาไปตรวจกับ pnl_users จริงอีกชั้น ก่อนพาเข้าตามสิทธิ์ apps.maint
+   2) เปิด URL ของแอพนี้ตรง ๆ → ต้องกรอก user/pass ใหม่เสมอ (กันคนที่ได้ลิงก์ไปเข้าเอง)
+      - รหัสที่ใช้คือบัญชีกลาง pnl_users ชุดเดียวกับหน้าศูนย์รวมแอพ
+      - บัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (app_users) ยังใช้ได้ (ระบบลองให้อัตโนมัติ)
+   3) ติ๊ก "จำไว้ในเครื่องนี้ 12 ชม." = ไม่ต้องกรอกซ้ำในเครื่องตัวเองจนกว่าจะหมดอายุ
+   เซสชันปกติเก็บใน sessionStorage → รีเฟรช/ลากลงยังอยู่หน้าเดิม แต่ปิดแท็บแล้วต้องล็อกอินใหม่ */
+const SESS_KEY='jjmt_sess',        // sessionStorage — ใบอนุญาตของแท็บนี้ (ดึงหน้าลง/รีเฟรชยังอยู่)
+  KEEP_KEY='jjmt_keep',            // localStorage — "จำไว้ในเครื่องนี้ 12 ชม."
+  TICKET='jjsso_ticket',           // localStorage — ใบผ่านจากหน้าศูนย์รวมแอพ (มาตรฐานเดียวกับ JJ Social)
+  TICKET_TTL=120000, KEEP_MS=12*3600*1000;
 let PROF=null,BRANCHES=[],CUR_B=null;
-const isAdmin=()=>!!(PROF&&(PROF.role==='admin'||PROF.role==='owner'));
+const isAdmin=()=>!!(PROF&&(PROF.role==='admin'||PROF.role==='owner'));   // admin+owner = สิทธิ์เต็ม
+/* สิทธิ์รายหน้าจอจาก pnl_users.apps.maint (v=ดู a=เพิ่ม e=แก้ d=ลบ)
+   บัญชี app_users เดิม / ยังไม่เคยตั้งสิทธิ์ = ไม่ล็อกใคร ทำได้เหมือนเดิม */
+function can(screen,flag){
+  if(!PROF)return false;
+  if(isAdmin())return true;
+  if(PROF.kind!=='central')return true;
+  const apps=PROF.apps;
+  if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return true;
+  const m=apps.maint;
+  if(!m||typeof m!=='object')return false;
+  return String(m[screen]||'').indexOf(flag||'v')>-1;
+}
+const canManage=()=>isAdmin()||can('tasks','a')||can('tasks','e')||can('tasks','d');
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const enc=new TextEncoder().encode(str),l=enc.length,bitLen=l*8,total=(Math.ceil((l+1+8)/64))*64;
+  const M=new Uint8Array(total);M.set(enc);M[l]=0x80;
+  const dv=new DataView(M.buffer);dv.setUint32(total-4,bitLen>>>0);dv.setUint32(total-8,Math.floor(bitLen/4294967296));
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n)),w=new Array(64);
+  for(let i=0;i<total;i+=64){
+    for(let t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+    for(let t=16;t<64;t++){const s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3),s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;}
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){const S1=rr(e,6)^rr(e,11)^rr(e,25),ch=(e&f)^(~e&g),t1=(h+S1+ch+K[t]+w[t])>>>0,
+      S0=rr(a,2)^rr(a,13)^rr(a,22),mj=(a&b)^(a&c)^(b&c),t2=(S0+mj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+const pwHash=(u,p)=>sha256hex(u+'|'+p+'|JJPNL');
+const SS={get(k){try{return JSON.parse(sessionStorage.getItem(k)||'null')}catch(e){return null}},
+  set(k,v){try{sessionStorage.setItem(k,JSON.stringify(v))}catch(e){}},
+  del(k){try{sessionStorage.removeItem(k)}catch(e){}}};
+const LSS={get(k){try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},
+  del(k){try{localStorage.removeItem(k)}catch(e){}}};
+function saveSession(prof,keep){
+  SS.set(SESS_KEY,prof);
+  if(keep&&prof.kind==='central')LSS.set(KEEP_KEY,{u:prof.username,h:prof.hash,exp:Date.now()+KEEP_MS});
+}
+/* ---- บัญชีกลาง pnl_users (ชุดเดียวกับหน้าศูนย์รวมแอพ) ---- */
+function fromHub(){   // กดมาจากหน้าศูนย์รวมแอพของเราเอง (เว็บอื่นปลอม referrer ข้ามโดเมนไม่ได้)
+  try{
+    const r=document.referrer;if(!r)return false;
+    const a=new URL(r),me=new URL(location.href);
+    if(a.origin!==me.origin)return false;
+    const base=me.pathname.replace(/[^/]*$/,'');
+    return a.pathname===base||a.pathname===base+'index.html';
+  }catch(e){return false}
+}
+async function centralUser(username){
+  const {data,error}=await sb.from('pnl_users').select('username,display_name,role,unit,active,apps,pass_hash')
+    .eq('username',username).limit(1);
+  if(error)throw error;
+  return (data&&data[0])||null;
+}
+function centralProf(u){return{kind:'central',username:u.username,name:u.display_name||u.username,
+  role:u.role||'staff',unit:u.unit||'',apps:u.apps||{},hash:u.pass_hash};}
+/* ---- บัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (app_users + Supabase Auth) ---- */
 const CLOCK_SKEW=e=>{const c=(e&&e.code)||'',m=(e&&e.message)||String(e||'');return c==='PGRST303'||/issued at future/i.test(m);};
 async function getProfile(onWait){
   const g=await sb.auth.getUser();const user=g&&g.data&&g.data.user;
@@ -368,34 +447,55 @@ async function getProfile(onWait){
     if(CLOCK_SKEW(error)&&i<7){if(onWait)onWait(i+1,8);await new Promise(r=>setTimeout(r,3000));continue;}
     console.error('getProfile',error);return null;}
   return null;}
-function loginErr(m){$('#lMsg').textContent=m;$('#login').classList.add('err');setTimeout(()=>$('#login').classList.remove('err'),450)}
+function appProf(p){return{kind:'app',username:p.username,name:p.name||p.username,
+  role:p.role||'staff',branch_ids:p.branch_ids||[],apps:null};}
+function loginErr(m){$('#lMsg').style.color='#c62127';$('#lMsg').textContent=m;$('#login').classList.add('err');setTimeout(()=>$('#login').classList.remove('err'),450)}
 function authMsg(e){const s=((e&&e.message)||String(e)).toLowerCase();
   if(s.indexOf('invalid login')>-1)return'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
   if(s.indexOf('network')>-1||s.indexOf('failed to fetch')>-1)return'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่';
   return (e&&e.message)||'เกิดข้อผิดพลาด';}
 async function doLogin(){
-  const u=$('#lUser').value.trim(),p=$('#lPass').value.trim();
+  const u=$('#lUser').value.trim(),p=$('#lPass').value.trim(),keep=$('#lKeep').checked;
   if(!u||!p){loginErr('กรอกชื่อผู้ใช้และรหัสผ่าน');return;}
   const btn=$('#lBtn');btn.disabled=true;btn.textContent='⏳ เข้าสู่ระบบ...';
   try{
+    let usr=null;
+    try{usr=await centralUser(u);}catch(e){console.warn('pnl_users',e);}
+    if(usr){                                   // บัญชีกลาง
+      if(usr.pass_hash!==pwHash(u,p)){loginErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');return;}
+      if(usr.active===false){loginErr('บัญชีนี้ถูกปิดการใช้งาน');return;}
+      const prof=centralProf(usr);
+      if(!profCanEnter(prof)){loginErr('บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access');return;}
+      saveSession(prof,keep);await enterApp(prof);return;
+    }
+    // ไม่มีในบัญชีกลาง → ลองบัญชีเดิมของระบบนับสต๊อก/ครัวกลาง
     const {error}=await sb.auth.signInWithPassword({email:u.toLowerCase()+EMAIL_DOMAIN,password:p});
     if(error)throw error;
-    const prof=await getProfile((n,t)=>{btn.textContent='⏳ รอเซิร์ฟเวอร์... ('+n+'/'+t+')'});
-    if(!prof){await sb.auth.signOut();loginErr('ไม่พบโปรไฟล์ในระบบ');return;}
-    if(prof.status!=='active'){await sb.auth.signOut();loginErr('บัญชีนี้รอผู้ดูแลอนุมัติก่อนใช้งาน');return;}
-    await enterApp(prof);
+    const ap=await getProfile((n,t)=>{btn.textContent='⏳ รอเซิร์ฟเวอร์... ('+n+'/'+t+')'});
+    if(!ap){await sb.auth.signOut();loginErr('ไม่พบโปรไฟล์ในระบบ');return;}
+    if(ap.status!=='active'){await sb.auth.signOut();loginErr('บัญชีนี้รอผู้ดูแลอนุมัติก่อนใช้งาน');return;}
+    const prof=appProf(ap);saveSession(prof,false);await enterApp(prof);
   }catch(e){loginErr(authMsg(e));}
   finally{btn.disabled=false;btn.textContent='เข้าสู่ระบบ';}
 }
-async function doLogout(){try{await sb.auth.signOut()}catch(e){}
-  PROF=null;$('#hdr').style.display='none';$('#main').style.display='none';$('#login').classList.add('on');}
+function profCanEnter(prof){   // มีสิทธิ์เห็นอย่างน้อย 1 หน้าจอไหม
+  const save=PROF;PROF=prof;
+  const ok=isAdmin()||['sched','log','asset','tasks'].some(s=>can(s,'v'));
+  PROF=save;return ok;
+}
+async function doLogout(){
+  try{await sb.auth.signOut()}catch(e){}
+  SS.del(SESS_KEY);LSS.del(KEEP_KEY);LSS.del(TICKET);PROF=null;
+  $('#hdr').style.display='none';$('#main').style.display='none';
+  $('#lPass').value='';$('#lMsg').textContent='';$('#login').classList.add('on');
+}
 $('#lBtn').onclick=doLogin;
 $('#lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 $('#hOut').onclick=doLogout;
 
 /* ================= เข้าแอพ + สาขา ================= */
 function accessibleBranches(){
-  if(isAdmin())return BRANCHES;
+  if(isAdmin()||PROF&&PROF.kind==='central')return BRANCHES;   // บัญชีกลาง: เห็นทุกสาขา
   const ids=(PROF&&PROF.branch_ids)||[];if(!ids.length)return BRANCHES;
   const r=BRANCHES.filter(b=>ids.indexOf(b.id)>-1);return r.length?r:BRANCHES;}
 async function enterApp(prof){
@@ -410,29 +510,72 @@ async function enterApp(prof){
   if(!CUR_B){loginErr('ยังไม่มีสาขาในระบบ');return;}
   $('#login').classList.remove('on');
   $('#hdr').style.display='flex';$('#main').style.display='block';
-  $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(prof.role||'staff');
+  const RN={admin:'ผู้ดูแลระบบ',owner:'เจ้าของ',manager:'ผู้จัดการ',staff:'พนักงาน'};
+  $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(RN[prof.role]||prof.role||'พนักงาน');
   const sel=$('#hBranch');
   if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
     sel.onchange=()=>{CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}
       maintLoad();if(TAB==='asset')astLoad();};}
   else{sel.style.display='none';}
-  $('#hMng').style.display=isAdmin()?'':'none';
+  $('#hMng').style.display=canManage()?'':'none';
   $('#hMng').onclick=()=>{TAB==='asset'?astManageOverlay():maintManageOverlay();};
-  maintLoad();
+  // แท็บที่ไม่มีสิทธิ์ดู → ซ่อนปุ่มไปเลย
+  const seeM=isAdmin()||can('sched','v')||can('log','v'), seeA=isAdmin()||can('asset','v');
+  document.querySelector('[data-tab="maint"]').hidden=!seeM;
+  document.querySelector('[data-tab="asset"]').hidden=!seeA;
+  document.querySelector('.tabbar').style.display=(seeM&&seeA)?'':'none';
+  if(seeM)maintLoad();
   let tb='maint';try{tb=localStorage.getItem('jjmt_tab')||'maint'}catch(e){}
-  setTab(tb==='asset'?'asset':'maint');
+  if(tb==='asset'&&!seeA)tb='maint';
+  if(tb==='maint'&&!seeM)tb='asset';
+  setTab(tb);
 }
 async function boot(){
   $('#hLogo').src=LOGO;$('#lLogo').src=LOGO;
-  const s=await sb.auth.getSession().catch(()=>null);
-  if(s&&s.data&&s.data.session){
-    const prof=await getProfile();
-    if(prof&&prof.status==='active'){await enterApp(prof);return;}
-    try{await sb.auth.signOut()}catch(e){}
+  // 1) เซสชันของแท็บนี้ (รีเฟรชแล้วยังอยู่)
+  const s=SS.get(SESS_KEY);
+  if(s&&s.username){await enterApp(s);return;}
+  // 2) ใบผ่านจากหน้าศูนย์รวมแอพ — ใช้ครั้งเดียว อายุสั้น แล้วตรวจกับฐานข้อมูลจริงอีกชั้น
+  const tk=LSS.get(TICKET);
+  if(tk&&tk.u&&(!tk.app||tk.app==='maint')&&Date.now()-(+tk.t||0)<TICKET_TTL){
+    LSS.del(TICKET);
+    try{
+      const u=await centralUser(tk.u);
+      if(u&&u.active!==false&&u.pass_hash===tk.h){
+        const prof=centralProf(u);
+        if(profCanEnter(prof)){saveSession(prof,false);await enterApp(prof);return;}
+        $('#lMsg').style.color='#c62127';
+        $('#lMsg').textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access';
+      }
+    }catch(e){console.warn('ticket',e);}
   }
+  // 2.5) เผื่อหน้าศูนย์รวมแอพเวอร์ชันเก่าที่ยังไม่ออกใบผ่าน — กดมาจากหน้าแรกจริง + ใบล็อกอินกลางตรงกับฐานข้อมูล
+  if(fromHub()){
+    const a=LSS.get('jjpnl_auth');
+    if(a&&a.u){
+      try{
+        const u=await centralUser(a.u);
+        if(u&&u.active!==false&&u.pass_hash===a.h){
+          const prof=centralProf(u);
+          if(profCanEnter(prof)){saveSession(prof,false);await enterApp(prof);return;}
+        }
+      }catch(e){console.warn('fromHub',e);}
+    }
+  }
+  // 3) เคยติ๊ก "จำไว้ในเครื่องนี้" และยังไม่หมดอายุ → เช็ครหัสกับบัญชีกลางอีกรอบ
+  const kp=LSS.get(KEEP_KEY);
+  if(kp&&kp.u&&kp.exp>Date.now()){
+    try{const u=await centralUser(kp.u);
+      if(u&&u.pass_hash===kp.h&&u.active!==false){
+        const prof=centralProf(u);
+        if(profCanEnter(prof)){saveSession(prof,true);await enterApp(prof);return;}
+      }else LSS.del(KEEP_KEY);
+    }catch(e){console.warn('keep',e);}
+  }else if(kp)LSS.del(KEEP_KEY);
+  // 4) เข้าตรงจาก URL → ต้องกรอกรหัส
+  try{await sb.auth.signOut()}catch(e){}
   $('#login').classList.add('on');setTimeout(()=>$('#lUser').focus(),200);
 }
-
 /* ================= ตารางบำรุงรักษา ================= */
 const MAINT_FREQ=[[1,'ทุกวัน'],[7,'ทุกสัปดาห์'],[14,'ทุก 2 สัปดาห์'],[30,'ทุกเดือน'],[60,'ทุก 2 เดือน'],[90,'ทุก 3 เดือน'],[180,'ทุก 6 เดือน'],[365,'ทุกปี']];
 function maintFreqLabel(n){n=+n||0;const f=MAINT_FREQ.find(x=>x[0]===n);return f?f[1]:'ทุก '+n+' วัน';}
@@ -462,7 +605,7 @@ async function maintLoad(){
 function maintRenderList(){
   const box=$('#mtList'),sum=$('#mtSum');
   renderCal();
-  if(!MAINT_TASKS.length){sum.innerHTML='';box.innerHTML='<div class="rempty">ยังไม่มีงานของสาขานี้'+(isAdmin()?' — กด ⚙️ เพื่อเพิ่มงาน':' — ให้ผู้ดูแลเพิ่มงานก่อน')+'</div>';return;}
+  if(!MAINT_TASKS.length){sum.innerHTML='';box.innerHTML='<div class="rempty">ยังไม่มีงานของสาขานี้'+(canManage()?' — กด ⚙️ เพื่อเพิ่มงาน':' — ให้ผู้ดูแลเพิ่มงานก่อน')+'</div>';return;}
   const rank={over:0,soon:1,ok:2};
   const arr=MAINT_TASKS.map(t=>({t,st:maintStat(t)}))
     .sort((a,b)=>rank[a.st.cls]-rank[b.st.cls]||((a.st.left==null?-9999:a.st.left)-(b.st.left==null?-9999:b.st.left))||((a.t.sort||0)-(b.t.sort||0)));
@@ -479,7 +622,7 @@ function maintRenderList(){
       ${st.lg?`<div class="mtlast">ทำล่าสุด ${fmtDate(st.last)} · 👤 ${escapeHtml(st.lg.by_name||'—')}${st.lg.note?' · '+escapeHtml(st.lg.note):''}</div>`:''}
       ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:''}
       <div class="mtbtns">
-        <button class="act send" data-done="${t.id}">✅ ทำแล้ว — ถ่ายรูปแนบ</button>
+        ${canLog()?`<button class="act send" data-done="${t.id}">✅ ทำแล้ว — ถ่ายรูปแนบ</button>`:''}
         <button class="act ghost" data-hist="${t.id}">🕘 ประวัติ${cnt?' ('+cnt+')':''}</button>
       </div>
     </div>`;}).join('');
@@ -537,7 +680,7 @@ function dayOverlay(ds){
   const ov=document.createElement('div');ov.className='overlay on';
   let body='';
   if(dues.length)body+=`<div class="sub-title" style="margin-top:0">⏰ ครบกำหนด / ค้างทำ (${dues.length})</div>`
-    +dues.map(x=>`<div class="mmrow"><div class="mmn"><b>${escapeHtml(x.t.name)}</b><small>${escapeHtml(maintFreqLabel(x.t.freq_days))}</small></div><button class="act send" style="padding:8px 12px" data-do="${x.t.id}">✅ ทำแล้ว</button></div>`).join('');
+    +dues.map(x=>`<div class="mmrow"><div class="mmn"><b>${escapeHtml(x.t.name)}</b><small>${escapeHtml(maintFreqLabel(x.t.freq_days))}</small></div>${canLog()?`<button class="act send" style="padding:8px 12px" data-do="${x.t.id}">✅ ทำแล้ว</button>`:''}</div>`).join('');
   if(plans.length)body+=`<div class="sub-title"${dues.length?'':' style="margin-top:0"'}>🗓 งานตามรอบ (${plans.length})</div>`
     +plans.map(x=>`<div class="mmrow"><div class="mmn"><b>${escapeHtml(x.t.name)}</b><small>${escapeHtml(maintFreqLabel(x.t.freq_days))}</small></div></div>`).join('');
   if(dones.length)body+=`<div class="sub-title"${(dues.length||plans.length)?'':' style="margin-top:0"'}>✅ งานที่ทำแล้ว (${dones.length})</div>`
@@ -620,7 +763,7 @@ function maintHistOverlay(t){
     return `<div class="mtlog">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
         <b>📅 ${fmtDate(isoFromAny(lg.done_date))}</b>
-        <span style="font-size:.8rem;color:#8a7f74">👤 ${escapeHtml(lg.by_name||'—')}${isAdmin()?` <button data-del="${lg.id}" title="ลบบันทึกนี้" style="border:none;background:none;cursor:pointer">🗑</button>`:''}</span>
+        <span style="font-size:.8rem;color:#8a7f74">👤 ${escapeHtml(lg.by_name||'—')}${(isAdmin()||can('log','d'))?` <button data-del="${lg.id}" title="ลบบันทึกนี้" style="border:none;background:none;cursor:pointer">🗑</button>`:''}</span>
       </div>
       ${lg.note?`<div class="mtdetail">${escapeHtml(lg.note)}</div>`:''}
       ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:'<div class="mtlast">ไม่มีรูปแนบ</div>'}
@@ -644,7 +787,7 @@ function maintHistOverlay(t){
   });
 }
 function maintManageOverlay(){
-  if(!isAdmin()){toast('เฉพาะเจ้าของ/ผู้ดูแล');return;}
+  if(!canManage()){toast('ไม่มีสิทธิ์ตั้งค่างาน');return;}
   const acc=accessibleBranches();
   const bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
   const ov=document.createElement('div');ov.className='overlay on';
@@ -718,6 +861,8 @@ function maintManageOverlay(){
    นับรายเดือน (งวด YYYY-MM) เทียบกับงวดก่อน → รู้ว่าหายกี่ชิ้น คิดเป็นกี่ %
    มีของชำรุด = ต้องแนบรูป 1–10 รูป · ตาราง maint_assets / maint_counts */
 const MAX_PHOTOS=10;
+const canLog=()=>isAdmin()||can('log','a')||can('log','e');       // บันทึกงานบำรุงรักษา
+const canCount=()=>isAdmin()||can('asset','a')||can('asset','e'); // บันทึกการนับอุปกรณ์
 let ASSETS=[],COUNTS={},PD_Y=null,PD_M=null;   // COUNTS[asset_id][period]=row
 function pdStr(){return PD_Y+'-'+String(PD_M+1).padStart(2,'0');}
 function pdLabel(p){if(!p)return'—';const a=String(p).split('-');return TH_MON[+a[1]-1]+' '+(+a[0]+543);}
@@ -771,7 +916,7 @@ function astRender(){
   const p=pdStr();$('#pdTitle').textContent='งวด '+pdLabel(p);
   const box=$('#astList'),sum=$('#astSum');
   if(!ASSETS.length){sum.innerHTML='';
-    box.innerHTML='<div class="rempty">ยังไม่มีอุปกรณ์ของสาขานี้'+(isAdmin()?' — กด ⚙️ เพื่อเพิ่มอุปกรณ์':' — ให้ผู้ดูแลเพิ่มก่อน')+'</div>';return;}
+    box.innerHTML='<div class="rempty">ยังไม่มีอุปกรณ์ของสาขานี้'+(canManage()?' — กด ⚙️ เพื่อเพิ่มอุปกรณ์':' — ให้ผู้ดูแลเพิ่มก่อน')+'</div>';return;}
   const arr=ASSETS.map(a=>({a,st:astStat(a,p)}));
   let counted=0,lossSum=0,brokenSum=0,den=0,haveQty=0;
   arr.forEach(({st})=>{if(!st.cur)return;counted++;brokenSum+=st.broken;haveQty+=st.qty;
@@ -797,7 +942,8 @@ function astRender(){
       <div class="astq" data-cnt="${a.id}">${q}</div>
       <button class="astbtn" data-stat="${a.id}" title="สถิติย้อนหลัง">📈</button>
     </div>`;}).join('');
-  box.querySelectorAll('[data-cnt]').forEach(el=>el.onclick=()=>{const a=ASSETS.find(z=>z.id===el.dataset.cnt);if(a)astCountOverlay(a);});
+  box.querySelectorAll('[data-cnt]').forEach(el=>el.onclick=()=>{const a=ASSETS.find(z=>z.id===el.dataset.cnt);if(!a)return;
+    if(canCount())astCountOverlay(a);else{toast('บัญชีนี้ดูได้อย่างเดียว');astStatOverlay(a);}});
   box.querySelectorAll('[data-stat]').forEach(el=>el.onclick=()=>{const a=ASSETS.find(z=>z.id===el.dataset.stat);if(a)astStatOverlay(a);});
 }
 async function astUploadPhoto(dataUrl,assetId){
@@ -931,7 +1077,7 @@ function astPhotoOverlay(a,r){
   ov.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
 }
 function astManageOverlay(){
-  if(!isAdmin()){toast('เฉพาะเจ้าของ/ผู้ดูแล');return;}
+  if(!canManage()){toast('ไม่มีสิทธิ์จัดการรายการอุปกรณ์');return;}
   const acc=accessibleBranches(),bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
   const ov=document.createElement('div');ov.className='overlay on';
   const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
