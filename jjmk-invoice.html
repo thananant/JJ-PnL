@@ -2,7 +2,9 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#BC2B30">
+<meta name="apple-mobile-web-app-title" content="ใบกำกับภาษี">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -120,8 +122,10 @@
   .logincard h1{font-family:"Mitr";font-size:19px;color:var(--brand);text-align:center;margin:0 0 2px;}
   .logincard .sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:18px;}
   .userchip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);
-    color:#fff;border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap;}
-  .hrow2{display:flex;flex-direction:column;gap:2px;align-items:flex-end;margin-left:auto;}
+    color:#fff;border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+  .hrow2{display:flex;flex-direction:column;gap:2px;align-items:flex-end;margin-left:auto;
+    min-width:0;max-width:52%;}
   .logrow{border-bottom:1px dashed var(--line);padding:8px 2px;font-size:13.5px;}
   .logrow .t{color:var(--muted);font-size:12px;}
   .logrow b{color:var(--brand);}
@@ -138,6 +142,56 @@
   .kv:last-child{border-bottom:none;}
   .switch{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;}
   .sigprev{max-height:70px;max-width:220px;border:1px dashed var(--line);border-radius:8px;padding:4px;background:#fff;}
+
+  /* ===== ใช้งานบนโทรศัพท์ ===== */
+  html{-webkit-text-size-adjust:100%;}
+  html,body{overscroll-behavior-y:contain;}  /* กันรีเฟรชของเบราว์เซอร์ซ้อนกับ "ลากลงเพื่อรีเฟรช" ของแอพ */
+  header .htitle{min-width:0;}
+  @media(max-width:700px){
+    .wrap{padding:0 12px 64px;}
+    header{padding:10px 0;}
+    header .mark{width:38px;height:38px;}
+    header h1{font-size:16px;}
+    header .sub{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .naschip,.userchip{font-size:11px;padding:4px 9px;max-width:100%;}
+    .chipmore{display:none;}   /* ส่วนขยายข้อความ — จอแคบตัดออกให้เหลือบรรทัดเดียว */
+    .tabs{position:sticky;top:0;z-index:20;background:var(--cream);
+      margin-top:12px;padding-top:8px;box-shadow:0 7px 8px -7px rgba(0,0,0,.2);}
+    .tab{padding:9px 11px;font-size:13.5px;}
+    .panel{padding-top:16px;}
+    .card{padding:14px 13px;}
+    /* iOS ซูมหน้าเองถ้าตัวหนังสือในช่องกรอกเล็กกว่า 16px */
+    input,select,textarea{font-size:16px;padding:11px 12px;}
+    .btn{padding:12px 16px;min-height:44px;}
+    .btn-sm{padding:9px 14px;min-height:40px;font-size:13.5px;}
+    .actions{gap:8px;}
+    .toast{bottom:16px;font-size:13.5px;}
+    .codebox{height:170px;font-size:11px;}
+    .logincard{margin-top:5vh;}
+    .setupbox .steps{padding-left:18px;}
+  }
+  @media(max-width:560px){
+    /* ตารางรายการ → การ์ดต่อรายการ (4 ช่องในตารางแคบเกินไปบนมือถือ) */
+    .items thead{display:none;}
+    .items,.items tbody{display:block;width:100%;}
+    .items tr{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;
+      border:1px solid var(--line);border-radius:10px;background:var(--cream);
+      padding:10px 11px;margin-bottom:10px;}
+    .items td{display:block;padding:0;}
+    .items td:nth-child(1),.items td:nth-child(4){grid-column:1/-1;}
+    .items td:nth-child(4){text-align:right;}
+    .items td::before{display:block;font-size:12px;color:var(--muted);
+      font-weight:600;margin-bottom:3px;}
+    .items td:nth-child(1)::before{content:"รายการ";}
+    .items td:nth-child(2)::before{content:"จำนวน";}
+    .items td:nth-child(3)::before{content:"ราคา (รวม VAT)";}
+    .items input{padding:10px 11px;}
+    .items .i-del{color:var(--bad);}
+    .items .i-del::after{content:" ลบรายการนี้";}
+    .inv .top{flex-wrap:wrap;}
+    .inv .actions .btn{flex:1 1 45%;}
+    .kv{font-size:13.5px;}
+  }
 
   /* ===== เอกสารบิล (สำหรับเรนเดอร์เป็น PDF) ===== */
   #pdfStage{position:absolute;left:-12000px;top:0;}
@@ -291,7 +345,7 @@ window.JJGate=(function(){
 
 <header><div class="wrap">
   <div class="mark"><img src="jjmk-payroll/logo.png" alt="โลโก้จริงใจหมูกระทะ"></div>
-  <div><h1>ออกใบกำกับภาษี</h1><div class="sub" id="shopName">จริงใจหมูกระทะ</div></div>
+  <div class="htitle"><h1>ออกใบกำกับภาษี</h1><div class="sub" id="shopName">จริงใจหมูกระทะ</div></div>
   <div class="hrow2">
     <button class="userchip" id="userChip" title="ผู้ใช้ที่ล็อกอิน" style="display:none"></button>
     <button class="naschip" id="nasChip" title="สถานะโฟลเดอร์ NAS">📁 ยังไม่ได้ตั้งโฟลเดอร์ NAS</button>
@@ -675,12 +729,16 @@ var ASSUME_DELIVERED_AFTER_MIN = 30; // ให้ตรงกับค่าใ�
 
 var SESS_KEY = 'jjmk_inv_sess';
 var GATE_RELOCK = null;   // JJ Gate: ชื่อผู้ใช้ที่ต้องยืนยันรหัสใหม่ (เข้าทางลิงก์ตรง)
+var NO_ACCESS = false;    // บัญชีใช้ได้ แต่ไม่ได้รับสิทธิ์เข้าระบบใบกำกับภาษี
 var sb = null, dbReady = false, rpcMissing = false, settings = {}, currentUser = null;
 var activityRows = [];
 var invoices = [], editingBillNo = null;
 var zipDb = null, zipLoading = null, zipResults = [];
 var nasHandle = null, sigDataUrl = null;
 var nasSupported = ('showDirectoryPicker' in window);
+// มือถือ/แท็บเล็ต (นิ้วจิ้ม) — เปิดไฟล์ PDF คนละแบบกับคอมพิวเตอร์
+var IS_TOUCH = (function(){ try{ return window.matchMedia('(pointer:coarse)').matches; }
+  catch(e){ return ('ontouchstart' in window); } })();
 
 // ================= helpers =================
 function $(id){ return document.getElementById(id); }
@@ -932,10 +990,14 @@ async function openPdfPreview(inv, el){
   if(el) el.textContent='⏳ กำลังสร้าง PDF...';
   try{
     var blob=await buildInvoicePdf(inv);
-    var url=URL.createObjectURL(blob);
-    var w=window.open(url,'_blank');
-    if(!w) downloadBlob(inv.bill_no+'.pdf', blob);
-    setTimeout(function(){ URL.revokeObjectURL(url); },60000);
+    // มือถือ: เปิด blob ในแท็บใหม่มักได้หน้าขาว — บันทึกไฟล์ให้เลย (แชร์/พิมพ์ต่อได้)
+    if(IS_TOUCH){ downloadBlob(inv.bill_no+'.pdf', blob); }
+    else{
+      var url=URL.createObjectURL(blob);
+      var w=window.open(url,'_blank');
+      if(!w) downloadBlob(inv.bill_no+'.pdf', blob);
+      setTimeout(function(){ URL.revokeObjectURL(url); },60000);
+    }
   }catch(e){ toast('สร้าง PDF ไม่สำเร็จ: '+e.message,'err'); }
   if(el) el.textContent=orig;
 }
@@ -968,12 +1030,13 @@ function showLogin(msg){
 function renderUserChip(){
   var c=$('userChip');
   if(currentUser){ c.style.display='inline-block';
-    c.innerHTML='👤 '+esc(userName())+' · ออกจากระบบ'; }
+    var RN={admin:'ผู้ดูแลระบบ',owner:'เจ้าของ',manager:'ผู้จัดการ',staff:'พนักงาน'};
+    c.innerHTML='👤 '+esc(userName())+'<span class="chipmore"> · '+esc(RN[currentUser.role]||'พนักงาน')+' · ออกจากระบบ</span>'; }
   else c.style.display='none';
 }
 async function fetchUser(username){
   var r=await sb.from('pnl_users')
-    .select('id,username,display_name,role,active,pass_hash')
+    .select('id,username,display_name,role,active,pass_hash,apps')
     .eq('username',username).limit(1);
   if(r.error) throw new Error(r.error.code==='42P01'?'ยังไม่ได้ติดตั้งตารางผู้ใช้ (pnl_users ของระบบ P&L)':r.error.message);
   return (r.data&&r.data[0])||null;
@@ -988,13 +1051,16 @@ async function doLogin(){
     else if(!usr.active){ $('liMsg').textContent='บัญชีนี้ถูกปิดการใช้งาน'; }
     else{
       JJGate.grant(usr.username);
-      currentUser={username:usr.username,display_name:usr.display_name,role:usr.role};
-      try{ localStorage.setItem(SESS_KEY,JSON.stringify(currentUser)); }catch(e){}
-      $('loginWrap').style.display='none';
-      $('liPass').value='';
-      renderUserChip();
-      logActivity('เข้าสู่ระบบ','', '');
-      startApp();
+      setCurrentUser(usr);
+      if(!anyAccess()){ currentUser=null; $('liMsg').innerHTML=NO_ACCESS_MSG; }
+      else{
+        try{ localStorage.setItem(SESS_KEY,JSON.stringify(currentUser)); }catch(e){}
+        $('loginWrap').style.display='none';
+        $('liPass').value='';
+        renderUserChip();
+        logActivity('เข้าสู่ระบบ','', '');
+        startApp();
+      }
     }
   }catch(e){ $('liMsg').textContent='เข้าสู่ระบบไม่ได้: '+e.message; }
   btn.disabled=false; btn.textContent='เข้าสู่ระบบ';
@@ -1015,9 +1081,52 @@ async function restoreSession(){
   try{
     var usr=await fetchUser(saved.username);
     if(!usr||!usr.active) return false;
-    currentUser={username:usr.username,display_name:usr.display_name,role:usr.role};
+    setCurrentUser(usr);
+    if(!anyAccess()){ currentUser=null; NO_ACCESS=true; return false; }
     return true;
   }catch(e){ return false; }
+}
+
+// ===== สิทธิ์การใช้งาน — อ่านจาก pnl_users.apps.invoice ที่ตั้งไว้ในแอพ 🔑 JJ Access =====
+//  ธง: v=ดู  a=เพิ่ม  e=แก้  d=ลบ · ไม่ได้ตั้งแผนสิทธิ์ไว้เลย = ใช้ได้ทุกอย่าง (เหมือนก่อนมีระบบสิทธิ์)
+var NO_ACCESS_MSG='บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบใบกำกับภาษี — แจ้งผู้ดูแลระบบเปิดสิทธิ์ให้ที่แอพ 🔑 JJ Access';
+function setCurrentUser(usr){
+  currentUser={ username:usr.username, display_name:usr.display_name, role:usr.role,
+    apps:(usr.apps&&typeof usr.apps==='object')?usr.apps:null };
+}
+function isBoss(){ return !!currentUser&&(currentUser.role==='admin'||currentUser.role==='owner'); }
+function invPerms(){
+  var a=currentUser&&currentUser.apps;
+  if(!a||typeof a!=='object') return null;
+  var p=a.invoice;
+  return (p&&typeof p==='object')?p:{};
+}
+function can(screen,flag){
+  if(!currentUser) return false;
+  if(isBoss()) return true;
+  var p=invPerms();
+  if(!p) return true;
+  return String(p[screen]||'').indexOf(flag||'v')>=0;
+}
+function anyAccess(){
+  if(!currentUser) return false;
+  if(isBoss()) return true;
+  var p=invPerms();
+  if(!p) return true;
+  return ['new','list','failed','cancelled','history','settings'].some(function(k){ return can(k,'v'); });
+}
+/* ซ่อนแท็บ/ปุ่มที่บัญชีนี้ไม่มีสิทธิ์ แล้วเด้งไปแท็บแรกที่เข้าได้ */
+function applyPerms(){
+  var tabs=[].slice.call(document.querySelectorAll('.tab[data-tab]')), first=null, activeOk=false;
+  tabs.forEach(function(t){
+    var ok=can(t.dataset.tab,'v');
+    t.style.display=ok?'':'none';
+    if(ok){ if(!first)first=t; if(t.classList.contains('active'))activeOk=true; }
+  });
+  if(!activeOk&&first)first.click();
+  var ib=$('issueBtn');
+  if(!can('new','a')&&!editingBillNo){ ib.disabled=true; ib.title='ไม่มีสิทธิ์ออกบิล'; }
+  else{ ib.disabled=false; ib.title=''; }
 }
 
 // ================= บันทึกประวัติว่าใครทำอะไร (ตาราง inv_activity) =================
@@ -1209,8 +1318,8 @@ function itemRow(name,qty,price){
     '<td><input class="i-qty" type="number" min="0" placeholder="-" value="'+esc(qty||'')+'"></td>'+
     '<td><input class="i-price" type="number" min="0" step="0.01" value="'+esc(price||'')+'"></td>'+
     '<td><button class="btn btn-ghost btn-sm i-del" type="button">✕</button></td>';
-  tr.querySelector('.i-del').onclick=function(){ tr.remove(); recalc(); };
-  tr.querySelectorAll('input').forEach(function(i){ i.oninput=recalc; });
+  tr.querySelector('.i-del').onclick=function(){ tr.remove(); recalc(); saveDraftSoon(); };
+  tr.querySelectorAll('input').forEach(function(i){ i.oninput=function(){ recalc(); saveDraftSoon(); }; });
   $('itemRows').appendChild(tr);
   recalc();
 }
@@ -1276,7 +1385,48 @@ function resetForm(){
   resetCustomerName(); clearAddress();
   $('itemRows').innerHTML=''; itemRow('อาหารและเครื่องดื่ม','','');
   $('cPay').value='เงินสด / QR Payment';
+  clearDraft();
   recalc();
+}
+
+/* ===== ร่างบิลที่กรอกค้างไว้ =====
+   "ลากลงเพื่อรีเฟรช" บนมือถือคือการโหลดหน้าใหม่ — ถ้าไม่เก็บร่างไว้ บิลที่กรอกค้างจะหายทั้งใบ
+   เก็บเฉพาะในเครื่องนี้ (localStorage) ไม่ขึ้น Supabase · ล้างทิ้งทันทีที่ออกบิลสำเร็จ */
+var DRAFT_KEY='jjinv_draft', DRAFT_TTL=12*60*60*1000;
+var DRAFT_FIELDS=['fBranch','cEmail','cPrefix','cName','cSuffix','cOffice','cBranchNo',
+  'cTax','cPhone','cAddrLine','cZip','cProvince','cTambon','cAmphoe','cDiscount','cPay'];
+function clearDraft(){ try{ localStorage.removeItem(DRAFT_KEY); }catch(e){} }
+function draftIsEmpty(d){
+  return !(d.cName||d.cTax||d.cPhone||d.cEmail||d.cAddrLine||
+    (d.items||[]).some(function(it){ return it[0]||it[1]||it[2]; }));
+}
+function saveDraft(){
+  if(editingBillNo){ clearDraft(); return; }          // กำลังแก้บิลเดิม ไม่ต้องเก็บร่าง
+  var d={at:Date.now(),items:[]};
+  DRAFT_FIELDS.forEach(function(id){ var el=$(id); if(el)d[id]=el.value; });
+  document.querySelectorAll('#itemRows tr').forEach(function(tr){
+    d.items.push([tr.querySelector('.i-name').value,
+      tr.querySelector('.i-qty').value, tr.querySelector('.i-price').value]);
+  });
+  if(draftIsEmpty(d)){ clearDraft(); return; }
+  try{ localStorage.setItem(DRAFT_KEY,JSON.stringify(d)); }catch(e){}
+}
+var draftTimer=null;
+function saveDraftSoon(){ clearTimeout(draftTimer); draftTimer=setTimeout(saveDraft,400); }
+/* คืนร่างที่ค้างไว้ตอนเปิดแอพ — คืน true ถ้ามีของให้กู้ */
+function restoreDraft(){
+  var d=null;
+  try{ d=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null'); }catch(e){}
+  if(!d||!d.at||(Date.now()-d.at)>DRAFT_TTL||draftIsEmpty(d)){ clearDraft(); return false; }
+  DRAFT_FIELDS.forEach(function(id){ var el=$(id); if(el&&d[id]!=null)el.value=d[id]; });
+  $('cBranchNoWrap').style.display=($('cOffice').value==='สาขา')?'block':'none';
+  setAreaLabels($('cProvince').value);
+  if(d.items&&d.items.length){
+    $('itemRows').innerHTML='';
+    d.items.forEach(function(it){ itemRow(it[0],it[1],it[2]); });
+  }
+  recalc();
+  return true;
 }
 
 // ================= ฐานข้อมูลรหัสไปรษณีย์ (โหลดครั้งเดียวจาก CDN + cache ในเครื่อง) =================
@@ -1333,6 +1483,8 @@ function validateForm(){
 async function issueOrUpdate(){
   if(!dbReady){ toast('ยังเชื่อมต่อฐานข้อมูลไม่ได้','err'); return; }
   if(!currentUser){ showLogin('เข้าสู่ระบบก่อนทำรายการครับ'); return; }
+  if(editingBillNo? !can('list','e') : !can('new','a')){
+    toast(editingBillNo?'บัญชีนี้ไม่มีสิทธิ์แก้ไขบิล':'บัญชีนี้ไม่มีสิทธิ์ออกบิล','err'); return; }
   var payload=validateForm();
   if(!payload) return;
   var btn=$('issueBtn'), editing=editingBillNo;
@@ -1432,6 +1584,8 @@ function exitEdit(){
 }
 
 async function setStatus(billNo,status,detail){
+  var need=(status===STATUS.CANCELLED)?can('list','d'):can('cancelled','e');
+  if(!need){ toast(status===STATUS.CANCELLED?'บัญชีนี้ไม่มีสิทธิ์ยกเลิกบิล':'บัญชีนี้ไม่มีสิทธิ์เรียกคืนบิล','err'); return false; }
   var r=await sb.from('inv_invoices')
     .update({status:status,status_detail:detail,updated_by:userName(),
       updated_at:new Date().toISOString()})
@@ -1470,9 +1624,9 @@ function invCard(v, withResend){
       '<button class="btn btn-gold btn-sm a-nas" data-no="'+esc(v.bill_no)+'">💾 บันทึกลง NAS</button>'+
       (v.email&&!withResend?'<button class="btn btn-ghost btn-sm a-send" data-no="'+esc(v.bill_no)+'">✉ '+(v.email_status?'ส่งอีเมลซ้ำ':'ส่งอีเมล')+'</button>':'')+
       (cancelled
-        ?'<button class="btn btn-ghost btn-sm a-restore" data-no="'+esc(v.bill_no)+'" style="color:var(--brand)">↩ เรียกคืนบิล</button>'
-        :'<button class="btn btn-ghost btn-sm a-edit" data-no="'+esc(v.bill_no)+'">✎ แก้ไข</button>'+
-         '<button class="btn btn-ghost btn-sm a-cancel" data-no="'+esc(v.bill_no)+'" style="color:var(--bad)">⛔ ยกเลิกบิล</button>')+
+        ?(can('cancelled','e')?'<button class="btn btn-ghost btn-sm a-restore" data-no="'+esc(v.bill_no)+'" style="color:var(--brand)">↩ เรียกคืนบิล</button>':'')
+        :((can('list','e')?'<button class="btn btn-ghost btn-sm a-edit" data-no="'+esc(v.bill_no)+'">✎ แก้ไข</button>':'')+
+          (can('list','d')?'<button class="btn btn-ghost btn-sm a-cancel" data-no="'+esc(v.bill_no)+'" style="color:var(--bad)">⛔ ยกเลิกบิล</button>':'')))+
     '</div>'+
     (withResend?('<div class="actions" style="align-items:flex-end">'+
       '<div style="flex:1;min-width:200px"><label>แก้อีเมลใหม่แล้วส่งซ้ำ</label>'+
@@ -1649,6 +1803,11 @@ $('userChip').onclick=function(){
 $('refreshHistory').onclick=loadHistory;
 $('hSearch').oninput=renderHistory;
 
+/* พิมพ์อะไรในหน้าออกบิลก็เก็บร่างไว้ — ลากลงรีเฟรช/ปิดแท็บแล้วกลับมากรอกต่อได้ */
+['input','change'].forEach(function(ev){
+  $('panel-new').addEventListener(ev,function(){ saveDraftSoon(); });
+});
+
 $('cPhone').addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,10); });
 $('cTax').addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,13); });
 $('cBranchNo').addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,5); });
@@ -1762,13 +1921,20 @@ $('sigRemoveBtn').onclick=async function(){
 };
 
 // ================= init =================
+var draftDone=false;
 function startApp(){
   renderUserChip();
+  applyPerms();
+  if(!draftDone){
+    draftDone=true;
+    if(can('new','a')&&restoreDraft())
+      toast('กู้ร่างบิลที่กรอกค้างไว้ให้แล้ว — กดออกบิลได้เลย หรือแก้ต่อได้');
+  }
   loadSettings();
   loadInvoices();
 }
 (async function init(){
-  $('shopName').textContent=CONFIG.SHOP.senderName+' · '+CONFIG.SHOP.name;
+  $('shopName').innerHTML=esc(CONFIG.SHOP.senderName)+'<span class="chipmore"> · '+esc(CONFIG.SHOP.name)+'</span>';
   var sel=$('fBranch');
   CONFIG.BRANCHES.forEach(function(b){
     var o=document.createElement('option');
@@ -1783,6 +1949,7 @@ function startApp(){
 
   if(await checkDb()){
     if(await restoreSession()){ startApp(); }
+    else if(NO_ACCESS){ showLogin(''); $('liMsg').innerHTML=NO_ACCESS_MSG; }
     else { showLogin(''); if(GATE_RELOCK)JJGate.note(GATE_RELOCK,'liUser','liPass'); }
   }
   // โหลดฐานรหัสไปรษณีย์ล่วงหน้าแบบเงียบๆ
