@@ -11,6 +11,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23A31B24'/%3E%3Ctext x='50' y='70' font-size='56' text-anchor='middle'%3E%F0%9F%93%85%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{
   --red:#FF4046; --red-d:#C62127; --red-t:rgba(255,64,70,.15);
@@ -149,6 +150,16 @@ main{padding:16px clamp(12px,1.6vw,28px) 90px;max-width:1100px;margin:0 auto;pos
 .attgrid input{width:16px;height:16px;accent-color:var(--red);flex:none}
 
 /* ---------- misc ---------- */
+.fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.fbar input{flex:1 1 230px;min-width:150px;padding:9px 12px;font-size:16px}
+.fbar select{flex:0 1 200px;width:auto;padding:9px 30px 9px 12px;font-size:16px}
+.fbar .fcount{font-size:12px;color:var(--mut);flex:none}
+@media(max-width:560px){.fbar input,.fbar select{flex:1 1 100%}}
+.chip.f{cursor:pointer;user-select:none}
+.chip.f:hover{border-color:rgba(255,198,67,.5);color:var(--gold)}
+.chip.f.on{background:var(--red-t);color:var(--red);border-color:rgba(255,64,70,.45)}
+#attChips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
+#rtDot{font-size:9px;margin-right:4px;vertical-align:middle}
 .tapbtn{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px;border-radius:14px;font-weight:700;font-size:15.5px;font-family:'Prompt',sans-serif;text-decoration:none;color:#fff;margin-bottom:9px;transition:.18s;box-shadow:0 3px 18px rgba(0,0,0,.35)}
 .tapbtn .ic{font-size:24px;line-height:1;flex:none}
 .tapbtn .tx{flex:1;min-width:0}
@@ -486,6 +497,7 @@ const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e)
 const S={user:null,tab:'month',
   br:localStorage.getItem('jjcal_br')||'ALL',
   mine:LS.get('jjcal_mine',false),
+  q:'',who:'',              // ตัวกรอง: คำค้น + ดูเฉพาะปฏิทินของใคร (จำไว้ระหว่างรีเฟรช ไม่ข้ามวัน)
   cur:new Date(),           // เดือนที่กำลังดู
   events:[],loaded:false,
   users:[],branches:[{code:'JJLP',name:'ลาดพร้าว'},{code:'JJRD',name:'รัชดา'}],
@@ -496,6 +508,7 @@ const TH_DS=['อา','จ','อ','พ','พฤ','ศ','ส'];
 const TH_M=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const TH_MS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const BR_EXTRA=[{code:'JJCK',name:'ครัวกลาง'},{code:'OFFICE',name:'ออฟฟิศ'}];
+const UNIT_TH={ALL:'ส่วนกลาง',OFFICE:'ออฟฟิศ',JJCK:'ครัวกลาง',JJLP:'ลาดพร้าว',JJRD:'รัชดา'};
 const BR_C={ALL:'#B08BE0',JJLP:'#FFC643',JJRD:'#FF6B6B',JJCK:'#2FE08A',OFFICE:'#58B0FF'};
 const REM_OPTS=[[0,'ไม่เตือน'],[15,'15 นาที'],[30,'30 นาที'],[60,'1 ชั่วโมง'],[120,'2 ชั่วโมง'],[1440,'1 วัน']];
 
@@ -589,8 +602,11 @@ function renderSeg(){
     ...allBranches().map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}>${esc(String(b.name).replace('สาขา',''))}</button>`)].join('');
 }
 async function loadUsers(){
-  try{S.users=await sel('pnl_users','select=username,display_name,role&active=eq.true&order=display_name.asc')||[]}
-  catch(e){S.users=[]}
+  try{S.users=await sel('pnl_users','select=username,display_name,role,unit&active=eq.true&order=display_name.asc')||[]}
+  catch(e){
+    try{S.users=await sel('pnl_users','select=username,display_name,role&active=eq.true&order=display_name.asc')||[]}  // repo ที่ยังไม่มีคอลัมน์ unit
+    catch(e2){S.users=[]}
+  }
 }
 async function loadToken(){
   if(S.feedToken)return S.feedToken;
@@ -609,8 +625,40 @@ function filtered(){
   let out=S.events;
   if(S.br!=='ALL')out=out.filter(e=>e.branch===S.br||e.branch==='ALL');
   if(S.mine)out=out.filter(e=>isMine(e));
+  if(S.who)out=out.filter(e=>e.created_by===S.who||att(e).some(a=>a.username===S.who));
+  if(S.q){
+    const q=S.q.trim().toLowerCase();
+    out=out.filter(e=>[e.title,e.location,e.detail,brLabel(e.branch),e.created_name,e.created_by]
+      .concat(att(e).map(a=>a.display_name||a.username))
+      .some(x=>String(x||'').toLowerCase().includes(q)));
+  }
   return out;
 }
+function filterOn(){return !!(S.q||S.who||S.mine||S.br!=='ALL')}
+function filterBar(){
+  const opts=['<option value="">👥 ทุกคน</option>'].concat(
+    S.users.map(u=>`<option value="${esc(u.username)}" ${S.who===u.username?'selected':''}>${esc(u.display_name||u.username)}${u.unit&&UNIT_TH[u.unit]?' · '+esc(UNIT_TH[u.unit]):''}</option>`)).join('');
+  const n=filtered().length;
+  return `<div class="fbar">
+    <input id="fq" placeholder="🔎 ค้นหาหัวข้อ / สถานที่ / ชื่อคน…" value="${esc(S.q)}" oninput="fQ(this.value)">
+    <select id="fwho" onchange="fWho(this.value)">${opts}</select>
+    ${filterOn()?`<button class="btn gh sm" onclick="fClear()">✖ ล้างตัวกรอง</button><span class="fcount">ตรงกับตัวกรอง ${n} นัด</span>`:''}
+  </div>`;
+}
+let _fqT=null;
+function fQ(v){
+  S.q=v;fSave();clearTimeout(_fqT);
+  _fqT=setTimeout(()=>{show(S.tab);const el=$('#fq');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}},280);
+}
+function fWho(v){S.who=v;fSave();show(S.tab)}
+function fClear(){
+  S.q='';S.who='';S.mine=false;S.br='ALL';
+  localStorage.setItem('jjcal_br','ALL');LS.set('jjcal_mine',false);
+  const mb=$('#mineBtn');if(mb)mb.classList.remove('on');
+  renderSeg();fSave();show(S.tab);
+}
+function fSave(){try{sessionStorage.setItem('jjcal_filter',JSON.stringify({q:S.q,who:S.who}))}catch(e){}}
+function fLoad(){try{const v=JSON.parse(sessionStorage.getItem('jjcal_filter')||'{}');S.q=v.q||'';S.who=v.who||''}catch(e){}}
 function evDays(e){ // รายการวันที่นัดนี้กินถึง (กันเหตุ end ก่อน start ด้วย)
   const out=[];let d=dstart(new Date(e.start_at));
   let last=dstart(new Date(e.end_at));if(last<d)last=d;
@@ -675,7 +723,7 @@ function vMonth(el){
   }
   const todayEvs=(map[todayKey]||[]);
   const bar=todayEvs.length?`<div class="todaybar">📌 <b>วันนี้มีนัด ${todayEvs.length} รายการ</b>${todayEvs.map(e=>`<span class="tchip" data-ev="${e.id}">${e.all_day?'ทั้งวัน':thTime(e.start_at)} · ${esc(e.title)}</span>`).join('')}</div>`:'';
-  el.innerHTML=`${bar}<div class="card">
+  el.innerHTML=`${bar}${filterBar()}<div class="card">
     <div class="mnav">
       <button class="nv" data-nav="-1">‹</button>
       <h2>${TH_M[m]} ${y+543}</h2>
@@ -710,7 +758,10 @@ function openDay(k){
 function vAgenda(el){
   const t0=dstart(new Date()).getTime();
   const ups=filtered().filter(e=>{let en=dstart(new Date(e.end_at));const st=dstart(new Date(e.start_at));if(en<st)en=st;return en.getTime()>=t0});
-  if(!ups.length){el.innerHTML='<div class="empty">ยังไม่มีนัดที่จะถึง<br><br><button class="btn" onclick="openEventForm()">➕ สร้างนัดใหม่</button></div>';return}
+  if(!ups.length){
+    el.innerHTML=filterBar()+'<div class="empty">'+(filterOn()?'ไม่มีนัดที่ตรงกับตัวกรอง<br><br><button class="btn gh" onclick="fClear()">✖ ล้างตัวกรอง</button>':'ยังไม่มีนัดที่จะถึง<br><br><button class="btn" onclick="openEventForm()">➕ สร้างนัดใหม่</button>')+'</div>';
+    return;
+  }
   const groups={};
   ups.forEach(e=>{
     const st=dstart(new Date(e.start_at));
@@ -718,7 +769,7 @@ function vAgenda(el){
     (groups[k]=groups[k]||[]).push(e);
   });
   const todayKey=dkey(new Date());
-  el.innerHTML=Object.keys(groups).sort().map(k=>{
+  el.innerHTML=filterBar()+Object.keys(groups).sort().map(k=>{
     const d=new Date(k+'T00:00:00');
     return `<div class="agrp${k===todayKey?' today':''}">${k===todayKey?'📌 วันนี้ · ':''}${thDate(d)}</div>`+
       groups[k].sort((a,b)=>new Date(a.start_at)-new Date(b.start_at)).map(e=>{
@@ -747,7 +798,10 @@ function openEventForm(id,presetDate){
   const brOpts=[{code:'ALL',name:'ทุกสาขา / ส่วนกลาง'},...allBranches()]
     .map(b=>`<option value="${esc(b.code)}" ${e&&e.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('');
   const remOpts=REM_OPTS.map(([v,t])=>`<option value="${v}" ${(e?e.reminder_min:60)===v?'selected':''}>${t}</option>`).join('');
-  const userCks=S.users.map(u=>`<label><input type="checkbox" class="attck" value="${esc(u.username)}" ${picked.includes(u.username)?'checked':''}> ${esc(u.display_name||u.username)}</label>`).join('');
+  const userCks=S.users.map(u=>`<label data-unit="${esc(u.unit||'')}"><input type="checkbox" class="attck" value="${esc(u.username)}" ${picked.includes(u.username)?'checked':''} onchange="attCount()"> <span>${esc(u.display_name||u.username)}</span>${u.unit&&UNIT_TH[u.unit]?` <span class="xs mut">·${esc(UNIT_TH[u.unit])}</span>`:''}</label>`).join('');
+  const units=[...new Set(S.users.map(u=>u.unit||'').filter(Boolean))];
+  const attChips=units.length>1?`<div id="attChips"><span class="chip f on" data-unit="" onclick="attUnit(this)">ทุกคน (${S.users.length})</span>`+
+    units.map(x=>`<span class="chip f" data-unit="${esc(x)}" onclick="attUnit(this)">${esc(UNIT_TH[x]||x)} (${S.users.filter(u=>u.unit===x).length})</span>`).join('')+`</div>`:'';
   openModal(`<h3>${e?'✏️ แก้ไขนัด':'➕ สร้างนัดใหม่'}</h3>
     <div class="fld"><label>หัวข้อนัด *</label><input id="fTitle" value="${e?esc(e.title):''}" placeholder="เช่น ประชุมผู้จัดการสาขาประจำเดือน"></div>
     <div class="grid2">
@@ -766,19 +820,38 @@ function openEventForm(id,presetDate){
     <div class="fld"><label>สถานที่</label><input id="fLoc" value="${e?esc(e.location||''):''}" placeholder="เช่น ห้องประชุมชั้น 2 สาขารัชดา"></div>
     <div class="fld"><label>รายละเอียด</label><textarea id="fDetail" placeholder="วาระ / สิ่งที่ต้องเตรียม">${e?esc(e.detail||''):''}</textarea></div>
     <div class="fld"><label>👥 ใครต้องเข้าบ้าง</label>
-      <div class="attops"><button class="btn gh sm" onclick="attAll(1)">เลือกทั้งหมด</button><button class="btn gh sm" onclick="attAll(0)">ล้าง</button><input id="attQ" placeholder="ค้นหาชื่อ…" style="flex:1;padding:6px 10px;font-size:13px" oninput="attFilter(this.value)"></div>
+      <div class="attops"><button class="btn gh sm" onclick="attAll(1)">เลือกทั้งหมดที่เห็น</button><button class="btn gh sm" onclick="attAll(0)">ล้าง</button><input id="attQ" placeholder="ค้นหาชื่อ…" style="flex:1;padding:8px 10px;font-size:16px" oninput="attApply()"></div>
+      ${attChips}
       <div class="attgrid" id="attGrid">${userCks||'<span class="xs mut">ไม่พบรายชื่อผู้ใช้</span>'}</div>
-      <p class="xs mut" style="margin:5px 0 0">* ผู้สร้างนัดถูกนับเป็นผู้เข้าร่วมอัตโนมัติ</p>
+      <p class="xs mut" style="margin:5px 0 0"><span id="attCount">เลือกแล้ว ${picked.length} คน</span> · ผู้สร้างนัดถูกนับเป็นผู้เข้าร่วมอัตโนมัติ</p>
     </div>
     <div class="acts">
       <button class="btn" id="fSave" onclick="saveEvent(${e?`'${e.id}'`:'null'})">💾 บันทึกนัด</button>
       <button class="btn gh" onclick="closeModal()">ยกเลิก</button>
     </div>`);
 }
-function attAll(v){document.querySelectorAll('.attck').forEach(c=>{if(c.closest('label').style.display!=='none')c.checked=!!v})}
-function attFilter(q){
-  q=q.trim().toLowerCase();
-  document.querySelectorAll('#attGrid label').forEach(l=>{l.style.display=!q||l.textContent.toLowerCase().includes(q)?'':'none'});
+function attAll(v){
+  document.querySelectorAll('.attck').forEach(c=>{if(c.closest('label').style.display!=='none')c.checked=!!v});
+  attCount();
+}
+function attUnit(el){
+  document.querySelectorAll('#attChips .chip').forEach(c=>c.classList.toggle('on',c===el));
+  attApply();
+}
+function attApply(){   // กรองพร้อมกันทั้งสังกัดที่เลือกไว้และคำค้น
+  const qEl=document.getElementById('attQ');
+  const q=(qEl?qEl.value:'').trim().toLowerCase();
+  const chip=document.querySelector('#attChips .chip.on');
+  const unit=chip?chip.dataset.unit:'';
+  document.querySelectorAll('#attGrid label').forEach(l=>{
+    const okU=!unit||l.dataset.unit===unit;
+    const okQ=!q||l.textContent.toLowerCase().includes(q);
+    l.style.display=(okU&&okQ)?'':'none';
+  });
+}
+function attCount(){
+  const el=document.getElementById('attCount');if(!el)return;
+  el.textContent='เลือกแล้ว '+[...document.querySelectorAll('.attck')].filter(c=>c.checked).length+' คน';
 }
 async function saveEvent(id){
   const title=$('#fTitle').value.trim();
@@ -1045,16 +1118,45 @@ function notifTick(){
   }
 }
 
+/* ---------- เรียลไทม์: เห็นนัดใหม่ของคนอื่นทันที ---------- */
+let _rtLive=false,_rtT=null;
+function rtStart(){
+  try{
+    if(window.supabase&&window.supabase.createClient){
+      const c=cfg();const sb=window.supabase.createClient(c.url,c.key);
+      sb.channel('jjcal-live')
+        .on('postgres_changes',{event:'*',schema:'public',table:'cal_events'},rtEvent)
+        .on('postgres_changes',{event:'*',schema:'public',table:'cal_attendees'},rtEvent)
+        .subscribe(st=>{_rtLive=(st==='SUBSCRIBED');rtDot()});
+    }
+  }catch(e){}
+  setInterval(()=>{if(!_rtLive&&!document.hidden)rtApply()},90000);   // โพลสำรองเมื่อเรียลไทม์ต่อไม่ติด
+  rtDot();
+}
+function rtDot(){
+  const d=$('#rtDot'); if(!d)return;
+  d.textContent=_rtLive?'🟢':'⚪';
+  d.title=_rtLive?'เชื่อมต่อสด — เห็นนัดใหม่ทันที':'ยังไม่ได้เชื่อมต่อสด — อัพเดตให้ทุก 90 วินาที';
+}
+function rtEvent(){clearTimeout(_rtT);_rtT=setTimeout(rtApply,800)}   // รวมหลายเหตุการณ์ที่มาติด ๆ กันเป็นครั้งเดียว
+async function rtApply(){
+  if(document.hidden)return;
+  if($('#modalWrap').classList.contains('on'))return;   // กำลังกรอกฟอร์ม/ดูรายละเอียดอยู่ อย่าเพิ่งดึงพื้นใต้เท้า
+  await loadEvents(true);
+  if(S.tab!=='sync')show(S.tab);
+}
+
 /* ---------- boot ---------- */
 async function startApp(){
   $('#login').style.display='none';$('#app').style.display='block';
   $('#mineBtn').classList.toggle('on',S.mine);
-  $('#hdUser').innerHTML=`👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:hardReload()">🔄 โหลดใหม่</a> · <a class="hintlink" href="javascript:logout()">ออก</a>`;
+  fLoad();
+  $('#hdUser').innerHTML=`<span id="rtDot" title="สถานะการเชื่อมต่อสด">⚪</span>👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:hardReload()">🔄 โหลดใหม่</a> · <a class="hintlink" href="javascript:logout()">ออก</a>`;
   await loadBranches();
   await Promise.all([loadUsers(),loadEvents(true),loadToken()]);
   show(LS.get('jjcal_tab','month'));   // เปิดมาที่หน้าเดิมก่อนรีเฟรช
   notifTick();setInterval(notifTick,30000);
-  setInterval(async()=>{if(!document.hidden){await loadEvents(true);if(S.tab!=='sync')show(S.tab)}},300000);
+  rtStart();
   document.addEventListener('visibilitychange',async()=>{
     if(!document.hidden&&!$('#modalWrap').classList.contains('on')){await loadEvents(true);if(S.tab!=='sync')show(S.tab)}
   });
