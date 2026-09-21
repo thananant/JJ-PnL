@@ -319,7 +319,7 @@ function roleOf(u){ return (u&&ROLES[u.role])?u.role:'staff'; }
 function unitOf(u){ return (u&&UNITS[u.unit])?u.unit:'ALL'; }
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
 
-const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{}};
+const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{},copiedFrom:null};
 
 /* ---------- utils ---------- */
 const $=s=>document.querySelector(s);
@@ -486,10 +486,10 @@ async function quickSet(el){
 }
 
 /* ---------- ฟอร์มตั้งสิทธิ์รายแอพ ---------- */
-function editPerms(id){
+function editPerms(id,keepDraft){
   const u=S.users.find(x=>x.id===id); if(!u)return;
   S.editId=id;
-  S.draft=JSON.parse(JSON.stringify(u.apps||{}));
+  if(!keepDraft){S.draft=JSON.parse(JSON.stringify(u.apps||{}));S.copiedFrom=null;}
   if(isBoss(u)){
     openModal('<h3>⚙️ สิทธิ์ของ '+esc(u.display_name||u.username)+'</h3>'+
       '<div class="empty">บัญชีนี้เป็น <b>'+ROLES[roleOf(u)].ic+' '+esc(ROLES[roleOf(u)].n)+'</b> — เข้าได้ทุกแอพ ทำได้ทุกอย่างโดยอัตโนมัติ<br>'+
@@ -497,14 +497,57 @@ function editPerms(id){
       '<div class="mbtn"><button class="btn" onclick="closeModal()">ปิด</button></div>');
     return;
   }
-  const boxes=APPKEYS.map(k=>appBox(k,u)).join('');
   openModal('<h3>⚙️ สิทธิ์ของ '+esc(u.display_name||u.username)+
       ' <span class="chip">'+esc(u.username)+'</span></h3>'+
     '<p class="sub">ติ๊ก <b>เปิดแอพ</b> เพื่อให้เข้าระบบนั้นได้ แล้วเลือกสิทธิ์รายหน้าจอ — ไม่ติ๊ก "ดู" = ซ่อนหน้านั้นไปเลย<br>'+
     'ติ๊ก เพิ่ม/แก้/ลบ โดยไม่ติ๊ก "ดู" ไม่ได้ (ระบบจะติ๊ก "ดู" ให้อัตโนมัติ)</p>'+
-    '<div style="max-height:56vh;overflow-y:auto;padding-right:4px">'+boxes+'</div>'+
+    '<div class="mbtn" style="justify-content:flex-start;margin:0 0 10px">'+
+      '<button class="btn" onclick="copyFromPick()">📋 คัดลอกสิทธิ์จากคนอื่น</button></div>'+
+    '<div id="permBoxes" style="max-height:52vh;overflow-y:auto;padding-right:4px">'+permBoxesHtml(u)+'</div>'+
     '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
       '<button class="btn pri" onclick="savePerms()">💾 บันทึกสิทธิ์</button></div>');
+}
+/* วาดช่องติ๊กจาก S.draft (ไม่ใช่จากค่าที่บันทึกไว้) — คัดลอกสิทธิ์มาแล้วหน้าจอจะได้อัปเดตตาม */
+function permBoxesHtml(u){
+  const vu=Object.assign({},u,{apps:S.draft});
+  return APPKEYS.map(k=>appBox(k,vu)).join('');
+}
+
+/* ---------- คัดลอกสิทธิ์จากคนอื่น ---------- */
+function permSummary(u){   // สรุปว่าเปิดแอพไหนให้บ้าง (ไว้โชว์ในรายการให้เลือก)
+  if(isBoss(u))return '<span class="chip ok">ทุกแอพ ทุกสิทธิ์</span>';
+  const ks=APPKEYS.filter(k=>appOn(u,k));
+  return ks.length?ks.map(k=>'<span class="chip ok">'+APPS[k].ic+' '+esc(APPS[k].n)+'</span>').join(' ')
+                  :'<span class="chip">— ยังไม่ได้เปิดแอพไหนเลย —</span>';
+}
+function fullApps(){       // สิทธิ์เต็มทุกแอพทุกหน้า (ใช้ตอนคัดลอกจากผู้ดูแล/เจ้าของ)
+  const out={};
+  APPKEYS.forEach(k=>{const a={};Object.keys(APPS[k].s).forEach(sc=>a[sc]='vaed');out[k]=a;});
+  return out;
+}
+function copyFromPick(){
+  const u=S.users.find(x=>x.id===S.editId); if(!u)return;
+  APPKEYS.forEach(k=>{if($('#box_'+k))syncDraft(k);});   // เก็บที่ติ๊กค้างไว้ก่อน เผื่อกดยกเลิก
+  const others=S.users.filter(x=>x.id!==u.id);
+  const rows=others.length?others.map(o=>
+      '<div class="prow" style="align-items:center;gap:10px">'+
+      '<span class="nm" style="flex:1">'+esc(o.display_name||o.username)+
+        ' <span class="chip">'+esc(o.username)+'</span><br>'+permSummary(o)+'</span>'+
+      '<button class="btn sm" onclick="copyFrom('+o.id+')">คัดลอก →</button></div>').join('')
+    :'<div class="empty">ยังไม่มีผู้ใช้คนอื่นให้คัดลอก</div>';
+  openModal('<h3>📋 คัดลอกสิทธิ์มาให้ '+esc(u.display_name||u.username)+'</h3>'+
+    '<p class="sub">เลือกคนที่จะก๊อปสิทธิ์มา — สิทธิ์เดิมของ <b>'+esc(u.display_name||u.username)+'</b> จะถูกแทนที่ทั้งหมด<br>'+
+    'ยังไม่บันทึกจนกว่าจะกด <b>💾 บันทึกสิทธิ์</b> ตรวจดูก่อนได้</p>'+
+    '<div style="max-height:56vh;overflow-y:auto;padding-right:4px">'+rows+'</div>'+
+    '<div class="mbtn"><button class="btn" onclick="editPerms(S.editId,true)">ย้อนกลับ</button></div>');
+}
+function copyFrom(srcId){
+  const src=S.users.find(x=>x.id===srcId), u=S.users.find(x=>x.id===S.editId);
+  if(!src||!u)return;
+  S.draft=isBoss(src)?fullApps():JSON.parse(JSON.stringify(src.apps||{}));
+  S.copiedFrom=src.username;
+  editPerms(S.editId,true);
+  toast('คัดลอกสิทธิ์จาก '+(src.display_name||src.username)+' มาแล้ว — ตรวจดูแล้วกด 💾 บันทึกสิทธิ์');
 }
 function appBox(k,u){
   const A=APPS[k], on=appOn(u,k), scr=Object.keys(A.s);
@@ -567,7 +610,10 @@ async function savePerms(){
   try{
     await upd('pnl_users','id=eq.'+u.id,{apps:S.draft});
     const opened=APPKEYS.filter(k=>S.draft[k]&&Object.values(S.draft[k]).some(v=>v.includes('v')));
-    await alog(u.username,'แก้สิทธิ์','เปิดแอพ: '+(opened.map(k=>APPS[k].n).join(', ')||'— ไม่มี —'));
+    await alog(u.username,S.copiedFrom?'คัดลอกสิทธิ์':'แก้สิทธิ์',
+      (S.copiedFrom?'คัดลอกจาก '+S.copiedFrom+' · ':'')+
+      'เปิดแอพ: '+(opened.map(k=>APPS[k].n).join(', ')||'— ไม่มี —'));
+    S.copiedFrom=null;
     closeModal(); toast('บันทึกสิทธิ์ของ '+(u.display_name||u.username)+' แล้ว ✓'); render();
   }catch(e){toast('บันทึกไม่สำเร็จ: '+e.message,true);}
 }
