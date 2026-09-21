@@ -3,9 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <title>JJ Kitchen — ครัวกลาง จริงใจหมูกระทะ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&family=Noto+Sans+Lao+Looped:wght@400;500;600;700&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -229,6 +226,20 @@ table.t tr.tap:hover{background:#FFF8F3}
 .logincard h1{font-size:20px;margin:0;text-align:center}
 .logincard .lsub{text-align:center;color:var(--mut);font-size:12.5px;margin:2px 0 14px}
 #lgMsg{font-size:12px;color:var(--bad);margin-top:8px;min-height:16px;text-align:center;white-space:pre-wrap}
+/* ---------- 📲 ดึงหน้าลงเพื่อโหลดใหม่ (มือถือ) ---------- */
+#ptr{position:fixed;top:0;left:0;right:0;z-index:70;display:flex;justify-content:center;pointer-events:none;
+  transform:translateY(-60px);transition:transform .22s cubic-bezier(.2,.9,.3,1)}
+#ptr.drag{transition:none}
+#ptr .ptr-c{width:40px;height:40px;border-radius:50%;background:#fff;border:1.5px solid var(--line);
+  box-shadow:0 4px 14px rgba(35,25,20,.18);display:flex;align-items:center;justify-content:center;
+  font-size:21px;color:var(--mut);transition:color .15s,border-color .15s}
+#ptr.rdy .ptr-c{color:var(--red);border-color:var(--red)}
+#ptr.sp .ptr-c{color:var(--red);border-color:var(--red);animation:ptrsp .7s linear infinite}
+@keyframes ptrsp{to{transform:rotate(360deg)}}
+.lkwho{display:flex;align-items:center;justify-content:center;gap:8px;background:#F7F1E3;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;font-size:15px;margin-bottom:8px}
+.lgkeep{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);margin:2px 0 10px;cursor:pointer}
+.lgkeep input{width:18px;height:18px;flex:none;accent-color:var(--red)}
+.lkhint{font-size:12px;color:var(--mut);text-align:center;margin-bottom:12px;line-height:1.45}
 .loginlang{display:flex;gap:5px;justify-content:center;margin-top:12px}
 .loginlang button{padding:6px 12px;border-radius:99px;border:1.5px solid var(--line);font-size:12.5px;font-weight:700;color:var(--mut);background:#fff}
 .loginlang button.on{background:var(--red);border-color:var(--red);color:#fff}
@@ -329,9 +340,11 @@ table.t tr.tap:hover{background:#FFF8F3}
     <img class="lseal" id="lgLogo" alt="">
     <h1>🍳 JJ Kitchen</h1>
     <div class="lsub" id="lgSub">ครัวกลาง จริงใจหมูกระทะ</div>
-    <div class="fld" id="lgNameFld" style="display:none"><label id="lgNameLb">ชื่อ-สกุล (เฉพาะสมัครใหม่)</label><input id="lgName" autocomplete="off"></div>
-    <div class="fld"><label id="lgULb">Username</label><input id="lgU" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('lgP').focus()"></div>
-    <div class="fld"><label id="lgPLb">Password</label><input id="lgP" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div id="lgWho" style="display:none"></div>
+  <div class="fld" id="lgNameFld" style="display:none"><label id="lgNameLb">ชื่อ-สกุล (เฉพาะสมัครใหม่)</label><input id="lgName" autocomplete="off"></div>
+    <div class="fld" id="lgUFld"><label id="lgULb">Username</label><input id="lgU" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('lgP').focus()"></div>
+    <div class="fld"><label id="lgPLb">Password</label><input id="lgP" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')lgSubmit()"></div>
+    <label class="fld lgkeep" id="lgKeepFld" style="display:none"><input type="checkbox" id="lgKeep"><span id="lgKeepLb"></span></label>
     <button class="btn big" id="lgGo" onclick="doLogin()">เข้าสู่ระบบ</button>
     <button class="btn gh big" id="lgSignBtn" style="margin-top:8px" onclick="toggleSignup()">สมัครพนักงานใหม่</button>
     <div id="lgMsg"></div>
@@ -380,7 +393,7 @@ th:{lang_name:'ไทย',
   stt_use_day:'ใช้ต่อวัน (เฉลี่ย)',stt_use_month:'ใช้เดือนนี้',stt_avg7:'เฉลี่ย 7 วัน',stt_avg30:'เฉลี่ย 30 วัน',stt_produced:'ผลิตทั้งเดือน',stt_sent:'ส่งสาขาทั้งเดือน',stt_by_item:'การใช้วัตถุดิบ',stt_by_menu:'การผลิต & ส่งตามเมนู',stt_chart:'มูลค่าผลิตรายวัน',stt_hist:'ประวัติรายวัน',stt_prev:'เดือนก่อน',stt_value:'มูลค่า',stt_use:'ใช้ไป',stt_made:'ผลิต',stt_send:'ส่งสาขา',stt_none:'เดือนนี้ยังไม่มีข้อมูล',
   nav_acc:'บัญชีครัว',ac_rev:'รายรับ — ขายให้สาขา',ac_buy:'ซื้อวัตถุดิบเข้า',ac_exp:'ค่าใช้จ่าย',ac_profit:'กำไร / ขาดทุน',ac_add:'➕ เพิ่มค่าใช้จ่าย',ac_amount:'จำนวนเงิน (บาท)',ac_none:'เดือนนี้ยังไม่มีรายการ',ac_pl:'สรุปบัญชีครัวกลาง',ac_sent_cost:'ต้นทุนของที่ส่งเดือนนี้ (อ้างอิง)',ac_stock_now:'มูลค่าสต๊อกวัตถุดิบตอนนี้ (อ้างอิง)',ac_sell_hint:'💡 ราคาขายสาขา ตั้งได้ที่หน้า เมนู & สูตร (ปุ่มแก้ไข) — เมนูที่ไม่ตั้ง ระบบใช้ต้นทุน/หน่วยแทน',ac_by_branch:'รายรับแยกสาขา',ac_exp_list:'รายการค่าใช้จ่าย',mn_sell:'ราคาขายสาขา/หน่วย (เว้นว่าง = ใช้ต้นทุน)',ac_sell:'ราคาขาย',ai_btn:'🖼 หารูปอัตโนมัติ',ai_hint:'ระบบค้นรูปจากอินเทอร์เน็ต (แหล่งรูปฟรี) ให้เฉพาะรายการที่ยังไม่มีรูป — กด 🔁 ถ้าอยากเปลี่ยนรูป หรือ ✖ ข้าม แล้วกดบันทึก · เปลี่ยนทีหลังได้โดยแตะรูปแล้วถ่าย/เลือกเอง',ai_search:'กำลังค้นหารูป {a}/{b}…',ai_none:'ไม่พบรูป',ai_next:'🔁 เปลี่ยน',ai_skip:'ข้าม',ai_save:'💾 บันทึกรูปทั้งหมด ({n})',ai_saving:'กำลังบันทึก {a}/{b}…',ai_done:'ใส่รูปแล้ว {n} รายการ ✅',ai_all_have:'ทุกรายการมีรูปแล้ว ✅',ai_pick_hint:'แตะรูปเพื่อดูใหญ่',se_lang:'ภาษา / Language',se_sql:'ติดตั้งฐานข้อมูล (ครั้งเดียว)',se_sql_hint:'คัดลอก SQL นี้ไปรันใน Supabase → SQL Editor ครั้งเดียว แล้วกดโหลดใหม่',se_copy_sql:'📋 คัดลอก SQL',se_recalc:'🔄 คำนวณสต๊อกใหม่จากประวัติ',se_recalc_done:'คำนวณสต๊อกใหม่แล้ว ✅',se_backfill:'🌐 เติมคำแปลชื่อที่ขาด',se_backfill_done:'เติมคำแปลแล้ว',se_user:'ผู้ใช้',se_role:'สิทธิ์',se_conn:'การเชื่อมต่อ',se_about:'เกี่ยวกับ',se_about_txt:'JJ Kitchen — ระบบครัวกลาง เชื่อมกับระบบ P&L และระบบนับสต๊อกสาขา ใช้บัญชีผู้ใช้เดียวกับแอพนับสต๊อก',se_copied:'คัดลอกแล้ว ✅',
   setup_title:'ยังไม่ได้ติดตั้งฐานข้อมูลครัวกลาง',setup_txt:'รัน jjmk_kitchen_setup.sql ใน Supabase → SQL Editor ครั้งเดียว (คัดลอกด้านล่าง) แล้วกดโหลดใหม่',setup_retry:'⟳ โหลดใหม่',
-  lg_user:'ชื่อผู้ใช้ (username)',lg_pass:'รหัสผ่าน (password)',lg_noprofile:'ไม่พบข้อมูลผู้ใช้ — ให้ผู้ดูแลเพิ่ม/อนุมัติในแอพนับสต๊อกก่อน',lg_lib:'โหลดไลบรารีไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วรีเฟรชอีกครั้ง',name_th:'ชื่อ (ภาษาไทย — ระบบจะแปลให้อัตโนมัติ)',img_fail:'อ่านรูปไม่สำเร็จ',last45:'แสดงย้อนหลัง 45 วัน — ดูรายเดือนที่หน้า 📈 สถิติ',undo_recv:'↩ ยกเลิกรับของ (คืนสต๊อก)',undo_send:'↩ ยกเลิกส่ง (คืนสต๊อก)',undo_confirm:'ยกเลิกรายการนี้และคืนสต๊อกให้เหมือนเดิม?',no_price_warn:'⚠ บางรายการยังไม่ตั้งราคา — ต้นทุนที่คำนวณจะต่ำกว่าจริง',menu_deleted:'เมนูถูกลบไปแล้ว',wd:['อา','จ','อ','พ','พฤ','ศ','ส'],mo:['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']},
+  lk_title:'🔒 ล็อกหน้าจออยู่',lk_hint:'ใส่รหัสผ่านอีกครั้งเพื่อเข้าใช้ (เพื่อความปลอดภัย คนที่มีแค่ลิงก์จะเข้าไม่ได้)',lk_keep:'จำไว้ในเครื่องนี้ 12 ชั่วโมง (ใช้เฉพาะเครื่องส่วนตัว)',lk_go:'ปลดล็อก',lk_other:'เข้าด้วยบัญชีอื่น',lk_wrong:'รหัสผ่านไม่ถูกต้อง',lk_hub:'เข้าจากหน้ารวมแอพแล้ว ✅',lg_user:'ชื่อผู้ใช้ (username)',lg_pass:'รหัสผ่าน (password)',lg_noprofile:'ไม่พบข้อมูลผู้ใช้ — ให้ผู้ดูแลเพิ่ม/อนุมัติในแอพนับสต๊อกก่อน',lg_lib:'โหลดไลบรารีไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วรีเฟรชอีกครั้ง',name_th:'ชื่อ (ภาษาไทย — ระบบจะแปลให้อัตโนมัติ)',img_fail:'อ่านรูปไม่สำเร็จ',last45:'แสดงย้อนหลัง 45 วัน — ดูรายเดือนที่หน้า 📈 สถิติ',undo_recv:'↩ ยกเลิกรับของ (คืนสต๊อก)',undo_send:'↩ ยกเลิกส่ง (คืนสต๊อก)',undo_confirm:'ยกเลิกรายการนี้และคืนสต๊อกให้เหมือนเดิม?',no_price_warn:'⚠ บางรายการยังไม่ตั้งราคา — ต้นทุนที่คำนวณจะต่ำกว่าจริง',menu_deleted:'เมนูถูกลบไปแล้ว',wd:['อา','จ','อ','พ','พฤ','ศ','ส'],mo:['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']},
 en:{lang_name:'English',
   nav_dash:'Home',nav_plan:'Plan',nav_buy:'Purchasing',nav_produce:'Produce',nav_orders:'Branch Orders',nav_stock:'Stock',nav_menus:'Menus & Recipes',nav_items:'Ingredients',nav_stats:'Stats',nav_set:'Settings',
   app_sub:'Central Kitchen · Jing Jai Mookata',sb_note:'Produce – Cost – Deliver',sec_daily:'Daily work',sec_data:'Data & reports',
@@ -397,7 +410,7 @@ en:{lang_name:'English',
   stt_use_day:'Use per day (avg)',stt_use_month:'Used this month',stt_avg7:'7-day avg',stt_avg30:'30-day avg',stt_produced:'Produced this month',stt_sent:'Delivered this month',stt_by_item:'Ingredient usage',stt_by_menu:'Production & deliveries by menu',stt_chart:'Daily production value',stt_hist:'Daily history',stt_prev:'Last month',stt_value:'Value',stt_use:'Used',stt_made:'Produced',stt_send:'Delivered',stt_none:'No data this month',
   nav_acc:'Accounts',ac_rev:'Revenue — sales to branches',ac_buy:'Ingredient purchases',ac_exp:'Expenses',ac_profit:'Profit / loss',ac_add:'➕ Add expense',ac_amount:'Amount (THB)',ac_none:'Nothing this month yet',ac_pl:'Central kitchen P&L',ac_sent_cost:'Cost of goods sent this month (reference)',ac_stock_now:'Ingredient stock value now (reference)',ac_sell_hint:'💡 Set branch selling prices in Menus & Recipes (edit) — menus without a price use cost/unit',ac_by_branch:'Revenue by branch',ac_exp_list:'Expense entries',mn_sell:'Branch selling price/unit (blank = use cost)',ac_sell:'Sell price',ai_btn:'🖼 Auto-find photos',ai_hint:'Searches the internet (free image sources) for entries without a photo — tap 🔁 to change or ✖ to skip, then save · You can always replace a photo later by tapping it',ai_search:'Searching photos {a}/{b}…',ai_none:'No photo found',ai_next:'🔁 Change',ai_skip:'Skip',ai_save:'💾 Save all photos ({n})',ai_saving:'Saving {a}/{b}…',ai_done:'Added photos to {n} entries ✅',ai_all_have:'Everything already has a photo ✅',ai_pick_hint:'Tap a photo to zoom',se_lang:'Language',se_sql:'Database setup (one time)',se_sql_hint:'Copy this SQL and run once in Supabase → SQL Editor, then reload',se_copy_sql:'📋 Copy SQL',se_recalc:'🔄 Recalculate stock from history',se_recalc_done:'Stock recalculated ✅',se_backfill:'🌐 Fill missing name translations',se_backfill_done:'Translations filled',se_user:'User',se_role:'Role',se_conn:'Connection',se_about:'About',se_about_txt:'JJ Kitchen — central kitchen system linked to the P&L and branch stock apps. Uses the same user accounts as the stock app.',se_copied:'Copied ✅',
   setup_title:'Kitchen database not installed yet',setup_txt:'Run jjmk_kitchen_setup.sql once in Supabase → SQL Editor (copy below), then reload',setup_retry:'⟳ Reload',
-  lg_user:'Username',lg_pass:'Password',lg_noprofile:'No user profile found — ask an admin to add/approve you in the stock app first',lg_lib:'Could not load libraries — check your internet and refresh',name_th:'Name (in Thai — translated automatically)',img_fail:'Could not read the image',last45:'Showing last 45 days — see monthly history in 📈 Stats',undo_recv:'↩ Undo receive (restock)',undo_send:'↩ Undo delivery (restock)',undo_confirm:'Undo this record and restore stock?',no_price_warn:'⚠ Some items have no price yet — the computed cost is lower than real',menu_deleted:'Menu was deleted',wd:['Su','Mo','Tu','We','Th','Fr','Sa'],mo:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']},
+  lk_title:'🔒 Screen locked',lk_hint:'Enter your password again to continue (so a link alone is never enough to get in)',lk_keep:'Remember on this device for 12 hours (personal devices only)',lk_go:'Unlock',lk_other:'Use another account',lk_wrong:'Wrong password',lk_hub:'Signed in from the app hub ✅',lg_user:'Username',lg_pass:'Password',lg_noprofile:'No user profile found — ask an admin to add/approve you in the stock app first',lg_lib:'Could not load libraries — check your internet and refresh',name_th:'Name (in Thai — translated automatically)',img_fail:'Could not read the image',last45:'Showing last 45 days — see monthly history in 📈 Stats',undo_recv:'↩ Undo receive (restock)',undo_send:'↩ Undo delivery (restock)',undo_confirm:'Undo this record and restore stock?',no_price_warn:'⚠ Some items have no price yet — the computed cost is lower than real',menu_deleted:'Menu was deleted',wd:['Su','Mo','Tu','We','Th','Fr','Sa'],mo:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']},
 lo:{lang_name:'ລາວ',
   nav_dash:'ໜ້າຫຼັກ',nav_plan:'ແຜນຜະລິດ',nav_buy:'ສັ່ງຊື້ເຄື່ອງ',nav_produce:'ຜະລິດ',nav_orders:'ອໍເດີສາຂາ',nav_stock:'ສະຕັອກຄົວ',nav_menus:'ເມນູ & ສູດ',nav_items:'ວັດຖຸດິບ',nav_stats:'ສະຖິຕິ',nav_set:'ຕັ້ງຄ່າ',
   app_sub:'ຄົວກາງ ຈິງໃຈໝູກະທະ',sb_note:'ຜະລິດ–ຄິດຕົ້ນທຶນ–ສົ່ງສາຂາ',sec_daily:'ວຽກປະຈຳວັນ',sec_data:'ຂໍ້ມູນ & ລາຍງານ',
@@ -414,7 +427,7 @@ lo:{lang_name:'ລາວ',
   stt_use_day:'ໃຊ້ຕໍ່ວັນ (ສະເລ່ຍ)',stt_use_month:'ໃຊ້ເດືອນນີ້',stt_avg7:'ສະເລ່ຍ 7 ວັນ',stt_avg30:'ສະເລ່ຍ 30 ວັນ',stt_produced:'ຜະລິດທັງເດືອນ',stt_sent:'ສົ່ງສາຂາທັງເດືອນ',stt_by_item:'ການໃຊ້ວັດຖຸດິບ',stt_by_menu:'ການຜະລິດ & ສົ່ງຕາມເມນູ',stt_chart:'ມູນຄ່າຜະລິດລາຍວັນ',stt_hist:'ປະຫວັດລາຍວັນ',stt_prev:'ເດືອນກ່ອນ',stt_value:'ມູນຄ່າ',stt_use:'ໃຊ້ໄປ',stt_made:'ຜະລິດ',stt_send:'ສົ່ງສາຂາ',stt_none:'ເດືອນນີ້ຍັງບໍ່ມີຂໍ້ມູນ',
   nav_acc:'ບັນຊີຄົວ',ac_rev:'ລາຍຮັບ — ຂາຍໃຫ້ສາຂາ',ac_buy:'ຊື້ວັດຖຸດິບເຂົ້າ',ac_exp:'ຄ່າໃຊ້ຈ່າຍ',ac_profit:'ກຳໄລ / ຂາດທຶນ',ac_add:'➕ ເພີ່ມຄ່າໃຊ້ຈ່າຍ',ac_amount:'ຈຳນວນເງິນ (ບາດ)',ac_none:'ເດືອນນີ້ຍັງບໍ່ມີລາຍການ',ac_pl:'ສະຫຼຸບບັນຊີຄົວກາງ',ac_sent_cost:'ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງເດືອນນີ້ (ອ້າງອີງ)',ac_stock_now:'ມູນຄ່າສະຕັອກວັດຖຸດິບຕອນນີ້ (ອ້າງອີງ)',ac_sell_hint:'💡 ລາຄາຂາຍສາຂາ ຕັ້ງໄດ້ທີ່ໜ້າ ເມນູ & ສູດ — ເມນູທີ່ບໍ່ຕັ້ງ ລະບົບໃຊ້ຕົ້ນທຶນ/ຫົວໜ່ວຍແທນ',ac_by_branch:'ລາຍຮັບແຍກສາຂາ',ac_exp_list:'ລາຍການຄ່າໃຊ້ຈ່າຍ',mn_sell:'ລາຄາຂາຍສາຂາ/ຫົວໜ່ວຍ (ເວັ້ນວ່າງ = ໃຊ້ຕົ້ນທຶນ)',ac_sell:'ລາຄາຂາຍ',ai_btn:'🖼 ຊອກຮູບອັດຕະໂນມັດ',ai_hint:'ລະບົບຊອກຮູບຈາກອິນເຕີເນັດ (ແຫຼ່ງຮູບຟຣີ) ໃຫ້ສະເພາະລາຍການທີ່ຍັງບໍ່ມີຮູບ — ກົດ 🔁 ປ່ຽນຮູບ ຫຼື ✖ ຂ້າມ ແລ້ວກົດບັນທຶກ · ປ່ຽນພາຍຫຼັງໄດ້ໂດຍແຕະຮູບ',ai_search:'ກຳລັງຊອກຮູບ {a}/{b}…',ai_none:'ບໍ່ພົບຮູບ',ai_next:'🔁 ປ່ຽນ',ai_skip:'ຂ້າມ',ai_save:'💾 ບັນທຶກຮູບທັງໝົດ ({n})',ai_saving:'ກຳລັງບັນທຶກ {a}/{b}…',ai_done:'ໃສ່ຮູບແລ້ວ {n} ລາຍການ ✅',ai_all_have:'ທຸກລາຍການມີຮູບແລ້ວ ✅',ai_pick_hint:'ແຕະຮູບເພື່ອເບິ່ງໃຫຍ່',se_lang:'ພາສາ / Language',se_sql:'ຕິດຕັ້ງຖານຂໍ້ມູນ (ຄັ້ງດຽວ)',se_sql_hint:'ຄັດລອກ SQL ນີ້ໄປແລ່ນໃນ Supabase → SQL Editor ຄັ້ງດຽວ ແລ້ວກົດໂຫຼດໃໝ່',se_copy_sql:'📋 ຄັດລອກ SQL',se_recalc:'🔄 ຄິດໄລ່ສະຕັອກໃໝ່ຈາກປະຫວັດ',se_recalc_done:'ຄິດໄລ່ສະຕັອກໃໝ່ແລ້ວ ✅',se_backfill:'🌐 ເຕີມຄຳແປຊື່ທີ່ຂາດ',se_backfill_done:'ເຕີມຄຳແປແລ້ວ',se_user:'ຜູ້ໃຊ້',se_role:'ສິດ',se_conn:'ການເຊື່ອມຕໍ່',se_about:'ກ່ຽວກັບ',se_about_txt:'JJ Kitchen — ລະບົບຄົວກາງ ເຊື່ອມກັບລະບົບ P&L ແລະ ລະບົບນັບສະຕັອກສາຂາ ໃຊ້ບັນຊີດຽວກັບແອັບນັບສະຕັອກ',se_copied:'ຄັດລອກແລ້ວ ✅',
   setup_title:'ຍັງບໍ່ໄດ້ຕິດຕັ້ງຖານຂໍ້ມູນຄົວກາງ',setup_txt:'ແລ່ນ jjmk_kitchen_setup.sql ໃນ Supabase → SQL Editor ຄັ້ງດຽວ (ຄັດລອກຂ້າງລຸ່ມ) ແລ້ວກົດໂຫຼດໃໝ່',setup_retry:'⟳ ໂຫຼດໃໝ່',
-  lg_user:'ຊື່ຜູ້ໃຊ້ (username)',lg_pass:'ລະຫັດຜ່ານ (password)',lg_noprofile:'ບໍ່ພົບຂໍ້ມູນຜູ້ໃຊ້ — ໃຫ້ຜູ້ດູແລເພີ່ມ/ອະນຸມັດໃນແອັບນັບສະຕັອກກ່ອນ',lg_lib:'ໂຫຼດໄລບຣາຣີບໍ່ສຳເລັດ — ກວດອິນເຕີເນັດ ແລ້ວໂຫຼດໃໝ່',name_th:'ຊື່ (ພາສາໄທ — ລະບົບຈະແປໃຫ້ອັດຕະໂນມັດ)',img_fail:'ອ່ານຮູບບໍ່ສຳເລັດ',last45:'ສະແດງຍ້ອນຫຼັງ 45 ວັນ — ເບິ່ງລາຍເດືອນທີ່ໜ້າ 📈 ສະຖິຕິ',undo_recv:'↩ ຍົກເລີກຮັບເຄື່ອງ (ຄືນສະຕັອກ)',undo_send:'↩ ຍົກເລີກສົ່ງ (ຄືນສະຕັອກ)',undo_confirm:'ຍົກເລີກລາຍການນີ້ ແລະ ຄືນສະຕັອກຄືເກົ່າ?',no_price_warn:'⚠ ບາງລາຍການຍັງບໍ່ຕັ້ງລາຄາ — ຕົ້ນທຶນທີ່ຄິດໄລ່ຈະຕ່ຳກວ່າຄວາມຈິງ',menu_deleted:'ເມນູຖືກລຶບແລ້ວ',wd:['ອາ','ຈ','ອັງ','ພຸ','ພະ','ສຸ','ເສົາ'],mo:['ມ.ກ.','ກ.ພ.','ມີ.ນ.','ເມ.ສ.','ພ.ພ.','ມິ.ຖ.','ກ.ລ.','ສ.ຫ.','ກ.ຍ.','ຕ.ລ.','ພ.ຈ.','ທ.ວ.']},
+  lk_title:'🔒 ໜ້າຈໍຖືກລັອກ',lk_hint:'ໃສ່ລະຫັດຜ່ານອີກຄັ້ງເພື່ອເຂົ້າໃຊ້ (ຄົນທີ່ມີແຕ່ລິ້ງຈະເຂົ້າບໍ່ໄດ້)',lk_keep:'ຈື່ໄວ້ໃນເຄື່ອງນີ້ 12 ຊົ່ວໂມງ (ໃຊ້ສະເພາະເຄື່ອງສ່ວນຕົວ)',lk_go:'ປົດລັອກ',lk_other:'ເຂົ້າດ້ວຍບັນຊີອື່ນ',lk_wrong:'ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ',lk_hub:'ເຂົ້າຈາກໜ້າລວມແອັບແລ້ວ ✅',lg_user:'ຊື່ຜູ້ໃຊ້ (username)',lg_pass:'ລະຫັດຜ່ານ (password)',lg_noprofile:'ບໍ່ພົບຂໍ້ມູນຜູ້ໃຊ້ — ໃຫ້ຜູ້ດູແລເພີ່ມ/ອະນຸມັດໃນແອັບນັບສະຕັອກກ່ອນ',lg_lib:'ໂຫຼດໄລບຣາຣີບໍ່ສຳເລັດ — ກວດອິນເຕີເນັດ ແລ້ວໂຫຼດໃໝ່',name_th:'ຊື່ (ພາສາໄທ — ລະບົບຈະແປໃຫ້ອັດຕະໂນມັດ)',img_fail:'ອ່ານຮູບບໍ່ສຳເລັດ',last45:'ສະແດງຍ້ອນຫຼັງ 45 ວັນ — ເບິ່ງລາຍເດືອນທີ່ໜ້າ 📈 ສະຖິຕິ',undo_recv:'↩ ຍົກເລີກຮັບເຄື່ອງ (ຄືນສະຕັອກ)',undo_send:'↩ ຍົກເລີກສົ່ງ (ຄືນສະຕັອກ)',undo_confirm:'ຍົກເລີກລາຍການນີ້ ແລະ ຄືນສະຕັອກຄືເກົ່າ?',no_price_warn:'⚠ ບາງລາຍການຍັງບໍ່ຕັ້ງລາຄາ — ຕົ້ນທຶນທີ່ຄິດໄລ່ຈະຕ່ຳກວ່າຄວາມຈິງ',menu_deleted:'ເມນູຖືກລຶບແລ້ວ',wd:['ອາ','ຈ','ອັງ','ພຸ','ພະ','ສຸ','ເສົາ'],mo:['ມ.ກ.','ກ.ພ.','ມີ.ນ.','ເມ.ສ.','ພ.ພ.','ມິ.ຖ.','ກ.ລ.','ສ.ຫ.','ກ.ຍ.','ຕ.ລ.','ພ.ຈ.','ທ.ວ.']},
 my:{lang_name:'မြန်မာ',
   nav_dash:'ပင်မ',nav_plan:'ထုတ်လုပ်မှုအစီအစဉ်',nav_buy:'ကုန်ဝယ်ရန်',nav_produce:'ထုတ်လုပ်ရန်',nav_orders:'ဆိုင်ခွဲအော်ဒါ',nav_stock:'မီးဖိုချောင်စတော့',nav_menus:'မီနူး & ဖော်မြူလာ',nav_items:'ကုန်ကြမ်း',nav_stats:'စာရင်းအင်း',nav_set:'ဆက်တင်',
   app_sub:'ဗဟိုမီးဖိုချောင် · Jing Jai Mookata',sb_note:'ထုတ်လုပ်–ကုန်ကျစရိတ်–ပို့ဆောင်',sec_daily:'နေ့စဉ်အလုပ်',sec_data:'ဒေတာ & အစီရင်ခံစာ',
@@ -431,7 +444,7 @@ my:{lang_name:'မြန်မာ',
   stt_use_day:'တစ်ရက်သုံး (ပျမ်းမျှ)',stt_use_month:'ဤလသုံးပြီး',stt_avg7:'7 ရက်ပျမ်းမျှ',stt_avg30:'30 ရက်ပျမ်းမျှ',stt_produced:'ဤလထုတ်လုပ်မှု',stt_sent:'ဤလပို့ဆောင်မှု',stt_by_item:'ကုန်ကြမ်းသုံးစွဲမှု',stt_by_menu:'မီနူးအလိုက် ထုတ်လုပ်/ပို့ဆောင်',stt_chart:'နေ့စဉ်ထုတ်လုပ်မှုတန်ဖိုး',stt_hist:'နေ့စဉ်မှတ်တမ်း',stt_prev:'ယခင်လ',stt_value:'တန်ဖိုး',stt_use:'သုံးပြီး',stt_made:'ထုတ်လုပ်',stt_send:'ပို့ဆောင်',stt_none:'ဤလတွင် ဒေတာမရှိသေးပါ',
   nav_acc:'စာရင်း',ac_rev:'ဝင်ငွေ — ဆိုင်ခွဲသို့ရောင်း',ac_buy:'ကုန်ကြမ်းဝယ်ယူမှု',ac_exp:'အသုံးစရိတ်',ac_profit:'အမြတ် / အရှုံး',ac_add:'➕ အသုံးစရိတ်ထည့်ရန်',ac_amount:'ငွေပမာဏ (ဘတ်)',ac_none:'ဤလတွင် မှတ်တမ်းမရှိသေး',ac_pl:'ဗဟိုမီးဖိုချောင် အရှုံးအမြတ်',ac_sent_cost:'ဤလပို့သည့်ပစ္စည်း ကုန်ကျစရိတ် (ကိုးကား)',ac_stock_now:'ယခုကုန်ကြမ်းစတော့တန်ဖိုး (ကိုးကား)',ac_sell_hint:'💡 ဆိုင်ခွဲရောင်းဈေးကို မီနူး & ဖော်မြူလာ တွင်သတ်မှတ်ပါ — မသတ်မှတ်လျှင် ကုန်ကျ/ယူနစ်ကိုသုံးမည်',ac_by_branch:'ဆိုင်ခွဲအလိုက်ဝင်ငွေ',ac_exp_list:'အသုံးစရိတ်စာရင်း',mn_sell:'ဆိုင်ခွဲရောင်းဈေး/ယူနစ် (ကွက်လပ် = ကုန်ကျသုံး)',ac_sell:'ရောင်းဈေး',ai_btn:'🖼 ဓာတ်ပုံအလိုအလျောက်ရှာရန်',ai_hint:'ဓာတ်ပုံမရှိသေးသည့်အရာများအတွက် အင်တာနက် (အခမဲ့ပုံရင်းမြစ်) မှရှာပေးသည် — 🔁 နှိပ်၍ပြောင်း သို့ ✖ ကျော်ပြီး သိမ်းပါ · နောက်မှပုံကိုနှိပ်၍ ပြောင်းနိုင်သည်',ai_search:'ဓာတ်ပုံရှာနေသည် {a}/{b}…',ai_none:'ပုံမတွေ့ပါ',ai_next:'🔁 ပြောင်း',ai_skip:'ကျော်',ai_save:'💾 ပုံအားလုံးသိမ်းရန် ({n})',ai_saving:'သိမ်းနေသည် {a}/{b}…',ai_done:'ပုံ {n} ခုထည့်ပြီး ✅',ai_all_have:'အားလုံးပုံရှိပြီးဖြစ်သည် ✅',ai_pick_hint:'ပုံကိုနှိပ်၍ချဲ့ကြည့်ပါ',se_lang:'ဘာသာစကား / Language',se_sql:'ဒေတာဘေ့စ် တပ်ဆင်ခြင်း (တစ်ကြိမ်သာ)',se_sql_hint:'ဤ SQL ကိုကူး၍ Supabase → SQL Editor တွင် တစ်ကြိမ်ရန် ပြီးလျှင် ပြန်ဖွင့်ပါ',se_copy_sql:'📋 SQL ကူးရန်',se_recalc:'🔄 မှတ်တမ်းမှ စတော့ပြန်တွက်ရန်',se_recalc_done:'စတော့ပြန်တွက်ပြီး ✅',se_backfill:'🌐 ဘာသာပြန်လွတ်နေသည်များ ဖြည့်ရန်',se_backfill_done:'ဘာသာပြန်ဖြည့်ပြီး',se_user:'အသုံးပြုသူ',se_role:'ရာထူး',se_conn:'ချိတ်ဆက်မှု',se_about:'အကြောင်း',se_about_txt:'JJ Kitchen — ဗဟိုမီးဖိုချောင်စနစ် P&L နှင့် ဆိုင်ခွဲစတော့စနစ်နှင့် ချိတ်ဆက်ထားသည် စတော့အက်ပ်နှင့် အကောင့်တူသုံးသည်',se_copied:'ကူးပြီးပါပြီ ✅',
   setup_title:'မီးဖိုချောင်ဒေတာဘေ့စ် မတပ်ဆင်ရသေးပါ',setup_txt:'jjmk_kitchen_setup.sql ကို Supabase → SQL Editor တွင် တစ်ကြိမ်ရန် (အောက်တွင်ကူးပါ) ပြီးလျှင် ပြန်ဖွင့်ပါ',setup_retry:'⟳ ပြန်ဖွင့်ရန်',
-  lg_user:'အသုံးပြုသူအမည် (username)',lg_pass:'စကားဝှက် (password)',lg_noprofile:'အသုံးပြုသူမတွေ့ပါ — စတော့အက်ပ်တွင် အက်ဒမင်က ထည့်/အတည်ပြုပေးရန်လိုသည်',lg_lib:'ဆော့ဖ်ဝဲအစိတ်အပိုင်း မဖွင့်နိုင်ပါ — အင်တာနက်စစ်ပြီး ပြန်ဖွင့်ပါ',name_th:'အမည် (ထိုင်းဘာသာ — အလိုအလျောက် ဘာသာပြန်ပေးမည်)',img_fail:'ဓာတ်ပုံဖတ်မရပါ',last45:'နောက်ဆုံး 45 ရက်ပြသည် — လအလိုက်ကို 📈 စာရင်းအင်းတွင်ကြည့်ပါ',undo_recv:'↩ လက်ခံမှုပြန်ဖျက် (စတော့ပြန်ထည့်)',undo_send:'↩ ပို့ဆောင်မှုပြန်ဖျက် (စတော့ပြန်ထည့်)',undo_confirm:'ဤမှတ်တမ်းကိုဖျက်ပြီး စတော့ပြန်ထည့်မလား?',no_price_warn:'⚠ အချို့ပစ္စည်း ဈေးမသတ်မှတ်ရသေး — တွက်ထားသောကုန်ကျမှာ အမှန်ထက်နည်းနေမည်',menu_deleted:'မီနူးဖျက်ပြီးပါပြီ',wd:['နွေ','လာ','ဂါ','ဟူး','တေး','ကြာ','နေ'],mo:['ဇန်','ဖေ','မတ်','ဧပြီ','မေ','ဇွန်','ဇူ','ဩ','စက်','အောက်','နို','ဒီ']}
+  lk_title:'🔒 ဖန်သားပြင်ကို သော့ခတ်ထားသည်',lk_hint:'ဆက်သုံးရန် စကားဝှက်ကို ထပ်ရိုက်ပါ (လင့်ခ်တစ်ခုတည်းနှင့် ဝင်၍မရစေရန်)',lk_keep:'ဤစက်တွင် ၁၂ နာရီ မှတ်ထားရန် (ကိုယ်ပိုင်စက်သာ)',lk_go:'သော့ဖွင့်ရန်',lk_other:'အခြားအကောင့်ဖြင့်ဝင်ရန်',lk_wrong:'စကားဝှက်မှားနေသည်',lk_hub:'အက်ပ်စင်တာမှ ဝင်ပြီးပါပြီ ✅',lg_user:'အသုံးပြုသူအမည် (username)',lg_pass:'စကားဝှက် (password)',lg_noprofile:'အသုံးပြုသူမတွေ့ပါ — စတော့အက်ပ်တွင် အက်ဒမင်က ထည့်/အတည်ပြုပေးရန်လိုသည်',lg_lib:'ဆော့ဖ်ဝဲအစိတ်အပိုင်း မဖွင့်နိုင်ပါ — အင်တာနက်စစ်ပြီး ပြန်ဖွင့်ပါ',name_th:'အမည် (ထိုင်းဘာသာ — အလိုအလျောက် ဘာသာပြန်ပေးမည်)',img_fail:'ဓာတ်ပုံဖတ်မရပါ',last45:'နောက်ဆုံး 45 ရက်ပြသည် — လအလိုက်ကို 📈 စာရင်းအင်းတွင်ကြည့်ပါ',undo_recv:'↩ လက်ခံမှုပြန်ဖျက် (စတော့ပြန်ထည့်)',undo_send:'↩ ပို့ဆောင်မှုပြန်ဖျက် (စတော့ပြန်ထည့်)',undo_confirm:'ဤမှတ်တမ်းကိုဖျက်ပြီး စတော့ပြန်ထည့်မလား?',no_price_warn:'⚠ အချို့ပစ္စည်း ဈေးမသတ်မှတ်ရသေး — တွက်ထားသောကုန်ကျမှာ အမှန်ထက်နည်းနေမည်',menu_deleted:'မီနူးဖျက်ပြီးပါပြီ',wd:['နွေ','လာ','ဂါ','ဟူး','တေး','ကြာ','နေ'],mo:['ဇန်','ဖေ','မတ်','ဧပြီ','မေ','ဇွန်','ဇူ','ဩ','စက်','အောက်','နို','ဒီ']}
 };
 let LANG=(function(){try{const s=localStorage.getItem('jjck_lang')||localStorage.getItem('jjmk_lang');if(s&&I18N[s])return s;
   const n=(navigator.language||'th').slice(0,2);if(I18N[n])return n;}catch(e){}return 'th';})();
@@ -509,13 +522,25 @@ async function dbi(fn){ // wrapper: busy dot + error toast
 const uname2email=u=>u.toLowerCase().trim()+EMAIL_DOMAIN;
 let SIGNUP=false;
 function paintLogin(){
+  const L=!!LOCK;
   document.getElementById('lgSub').textContent=t('app_sub');
   document.getElementById('lgNameLb').textContent=t('lg_name');
   document.getElementById('lgULb').textContent=t('lg_user');
   document.getElementById('lgPLb').textContent=t('lg_pass');
-  document.getElementById('lgNameFld').style.display=SIGNUP?'':'none';
-  document.getElementById('lgGo').textContent=SIGNUP?t('lg_signup'):t('lg_login');
-  document.getElementById('lgSignBtn').textContent=SIGNUP?t('lg_have'):t('lg_signup');
+  document.getElementById('lgNameFld').style.display=(!L&&SIGNUP)?'':'none';
+  document.getElementById('lgUFld').style.display=L?'none':'';
+  const who=document.getElementById('lgWho');
+  who.style.display=L?'':'none';
+  if(L)who.innerHTML='<div class="lkwho">👤 <b>'+esc(LOCK.name)+'</b></div><div class="lkhint">'+esc(t('lk_hint'))+'</div>';
+  const kp=document.getElementById('lgKeepFld');
+  kp.style.display=L?'':'none';
+  document.getElementById('lgKeepLb').textContent=t('lk_keep');
+  const go=document.getElementById('lgGo');
+  go.textContent=L?t('lk_go'):(SIGNUP?t('lg_signup'):t('lg_login'));
+  go.onclick=L?doUnlock:doLogin;
+  const sw=document.getElementById('lgSignBtn');
+  sw.textContent=L?t('lk_other'):(SIGNUP?t('lg_have'):t('lg_signup'));
+  sw.onclick=L?switchUser:toggleSignup;
   const box=document.getElementById('loginLang');box.innerHTML='';
   ['th','en','lo','my'].forEach(l=>{const b=document.createElement('button');b.textContent=I18N[l].lang_name;
     if(l===LANG)b.classList.add('on');b.onclick=()=>setLang(l);box.appendChild(b);});
@@ -534,6 +559,71 @@ async function sbProfile(){
     if(CLOCK_SKEW(error)&&i<9){await new Promise(r=>setTimeout(r,3000));continue;}
     return null;}
   return null;}
+/* ---------- 🔒 ล็อกหน้าจอ — เข้าผ่านลิงก์ตรงๆ ต้องใส่รหัสผ่านซ้ำ ----------
+   เปิดจาก "ศูนย์รวมแอพ" (ใบผ่านสดๆ ชื่อผู้ใช้ตรงกัน) → เข้าได้เลยตามสิทธิ์
+   เปิดจากลิงก์ตรงๆ → ล็อกไว้ก่อน แม้เครื่องนั้นจะเคยล็อกอินค้างไว้
+   (กันกรณีลิงก์หลุด หรือเครื่องกลางในครัวที่ใครก็หยิบมากดได้) */
+const TICKET='jjsso_ticket';   // ใบผ่านจากศูนย์รวมแอพ — มาตรฐานเดียวกับ JJ Social / ซ่อมบำรุง
+const TICKET_TTL=120000;       // อายุ 2 นาที ใช้ได้ครั้งเดียว
+const KEEP_KEY='jjck_keep',KEEP_MS=12*3600*1000;   // "จำไว้ในเครื่องนี้ 12 ชม."
+let LOCK=null;                 // {username,email,name} ระหว่างล็อกหน้าจอ
+function hubTicket(username){
+  let tk=null;
+  try{tk=JSON.parse(localStorage.getItem(TICKET)||'null');localStorage.removeItem(TICKET);}catch(e){}
+  if(!tk||!tk.u||!tk.t)return false;
+  if(tk.app&&tk.app!=='kitchen')return false;      // ใบผ่านออกให้แอพอื่น
+  if(Date.now()-Number(tk.t)>TICKET_TTL)return false;
+  // ใบผ่านต้องเป็นชื่อเดียวกับบัญชีที่ค้างในเครื่อง — กันคนล็อกอินบัญชีตัวเองที่ศูนย์รวมแอพ
+  // แล้วเดินมาใช้สิทธิ์ของคนก่อนหน้าบนเครื่องกลาง
+  return String(tk.u).trim().toLowerCase()===String(username||'').trim().toLowerCase();
+}
+function keepOk(username){      // เคยติ๊ก "จำไว้ในเครื่องนี้" และยังไม่หมดอายุ
+  let k=null;
+  try{k=JSON.parse(localStorage.getItem(KEEP_KEY)||'null');}catch(e){}
+  if(!k||!k.u||!(k.exp>Date.now())){if(k)try{localStorage.removeItem(KEEP_KEY)}catch(e){}return false;}
+  return String(k.u).trim().toLowerCase()===String(username||'').trim().toLowerCase();
+}
+function setKeep(username,on){
+  try{on?localStorage.setItem(KEEP_KEY,JSON.stringify({u:username,exp:Date.now()+KEEP_MS}))
+       :localStorage.removeItem(KEEP_KEY);}catch(e){}
+}
+function unlockedThisTab(){try{return sessionStorage.getItem('jjck_unlocked')==='1'}catch(e){return false}}
+function markUnlocked(){try{sessionStorage.setItem('jjck_unlocked','1')}catch(e){}}
+function lockScreen(prof,email){
+  const un=(email||'').split('@')[0]||prof.username||'';
+  LOCK={username:un,email:email||uname2email(un),name:prof.name||prof.username||un};
+  document.getElementById('loginOv').classList.add('on');
+  paintLogin();
+  setTimeout(()=>{const f=document.getElementById('lgP');f&&f.focus();},60);
+}
+async function doUnlock(){
+  const p=document.getElementById('lgP').value;
+  const msg=document.getElementById('lgMsg');msg.textContent='';
+  if(!p){msg.textContent=t('lg_pass');return;}
+  const btn=document.getElementById('lgGo');btn.disabled=true;
+  try{
+    const {error}=await sb.auth.signInWithPassword({email:LOCK.email,password:p});
+    if(error){msg.textContent=t('lk_wrong');return;}
+    const prof=await sbProfile();
+    if(!prof||prof.status!=='active'){await sb.auth.signOut();LOCK=null;paintLogin();
+      msg.textContent=t(prof?'lg_pending':'lg_noprofile');return;}
+    setKeep(LOCK.username,document.getElementById('lgKeep').checked);
+    LOCK=null;markUnlocked();document.getElementById('lgP').value='';
+    await enterApp(prof);
+  }catch(e){msg.textContent=(e&&e.message)||String(e);}
+  finally{btn.disabled=false;}
+}
+async function switchUser(){ // ปลดบัญชีที่ค้างอยู่ แล้วกลับไปหน้าล็อกอินเต็ม
+  try{await sb.auth.signOut();}catch(e){}
+  setKeep(null,false);
+  LOCK=null;SIGNUP=false;
+  document.getElementById('lgU').value='';document.getElementById('lgP').value='';
+  document.getElementById('lgMsg').textContent='';
+  paintLogin();
+  setTimeout(()=>{const f=document.getElementById('lgU');f&&f.focus();},60);
+}
+function lgSubmit(){LOCK?doUnlock():doLogin();}
+
 async function doLogin(){
   const u=document.getElementById('lgU').value.trim(),p=document.getElementById('lgP').value;
   const msg=document.getElementById('lgMsg');msg.textContent='';
@@ -551,10 +641,11 @@ async function doLogin(){
     const prof=await sbProfile();
     if(!prof){await sb.auth.signOut();msg.textContent=t('lg_noprofile');return;}
     if(prof.status!=='active'){await sb.auth.signOut();msg.textContent=t('lg_pending');return;}
+    markUnlocked();
     await enterApp(prof);
   }catch(e){msg.textContent=(e&&e.message)||String(e);}
 }
-async function doLogout(){try{await sb.auth.signOut();}catch(e){}location.reload();}
+async function doLogout(){setKeep(null,false);try{await sb.auth.signOut();}catch(e){}location.reload();}
 
 /* ---------- สิทธิ์ ---------- */
 function isAdminish(){const r=S.prof&&S.prof.role;return r==='owner'||r==='admin'||r==='manager'||!!(S.prof&&S.prof.perms&&S.prof.perms.manageCentral);}
@@ -2889,86 +2980,62 @@ async function boot(){
     if(!prof){await sb.auth.signOut();showLogin();return;}
     if(prof.status!=='active'){await sb.auth.signOut();showLogin();
       document.getElementById('lgMsg').textContent=t('lg_pending');return;}
-    await enterApp(prof);
+    // มี session ค้างในเครื่อง: เข้าได้เลยเฉพาะที่ปลดล็อกแท็บนี้แล้ว หรือถือใบผ่านสดจากศูนย์รวมแอพ
+    const email=(session.user&&session.user.email)||'';
+    const uname=email.split('@')[0]||prof.username||'';
+    if(unlockedThisTab()||hubTicket(uname)||keepOk(uname)){markUnlocked();await enterApp(prof);return;}
+    lockScreen(prof,email);
   }catch(e){showLogin();
     document.getElementById('lgMsg').textContent=(e&&e.message)||String(e);}
 }
+/* ============================================================
+   📲 ดึงหน้าลงเพื่อโหลดใหม่ (มือถือ) — แอพปิด pull-to-refresh ของเบราว์เซอร์ไว้
+   (overscroll-behavior) จึงทำท่าดึงเองให้เหมือนแอพทั่วไป
+   ============================================================ */
+(function(){
+  if(!('ontouchstart' in window))return;
+  const GO=40;                    // ดึงจนวงกลมลงมาเกินนี้ = โหลดใหม่
+  const bar=document.createElement('div');bar.id='ptr';
+  bar.innerHTML='<div class="ptr-c">⟳</div>';
+  document.body.appendChild(bar);
+  let y0=0,d=0,on=false,busy=false;
+  const pullOf=y=>Math.min(y*0.45,96);   // หน่วงให้ดึงหนืด ไม่กระชาก
+  const atTop=()=>(window.scrollY||document.documentElement.scrollTop||0)<=0;
+  const blocked=()=>busy||document.getElementById('modalWrap').classList.contains('on')||
+    document.getElementById('loginOv').classList.contains('on');
+  const set=px=>{bar.style.transform='translateY('+px+'px)';};
+  document.addEventListener('touchstart',e=>{
+    if(blocked()||e.touches.length!==1||!atTop())return;
+    y0=e.touches[0].clientY;d=0;on=true;
+    bar.classList.add('drag');bar.classList.remove('rdy');
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(!on)return;
+    d=e.touches[0].clientY-y0;
+    if(d<=0){set(-60);return;}            // เลื่อนขึ้น = ปล่อยให้หน้าเลื่อนตามปกติ
+    if(!atTop()){on=false;set(-60);return;}
+    e.preventDefault();                    // กำลังดึงลงจากบนสุด — กันหน้าเด้ง
+    const pull=pullOf(d);
+    set(pull-60);
+    bar.classList.toggle('rdy',pull>=GO);
+  },{passive:false});
+  const end=async()=>{
+    if(!on)return;
+    on=false;bar.classList.remove('drag');
+    if(pullOf(d)<GO||busy){set(-60);bar.classList.remove('rdy');return;}
+    busy=true;bar.classList.add('sp');set(14);
+    try{await reloadAll();}catch(e){}
+    busy=false;bar.classList.remove('sp','rdy');set(-60);
+  };
+  document.addEventListener('touchend',end,{passive:true});
+  document.addEventListener('touchcancel',()=>{on=false;bar.classList.remove('drag','rdy');set(-60);},{passive:true});
+})();
+
 // nav: แถบบน (มือถือ) + sidebar (จอใหญ่)
 document.querySelectorAll('.tabbar button[data-v],.sb-item[data-v]').forEach(b=>{
   b.addEventListener('click',()=>show(b.dataset.v));
 });
 boot();
-
-/* ============================================================
-   ลากหน้าลง = รีเฟรช (pull-to-refresh) — ใช้ได้บนมือถือทุกแบบ
-   จำเป็นเพราะแอปที่ "เพิ่มไปยังหน้าจอโฮม" (PWA) ไม่มีปุ่ม/ท่ารีเฟรชของเบราว์เซอร์
-   แตะที่ยอดสุดของหน้าแล้วลากลงเกิน 70px → ปล่อยนิ้ว = โหลดหน้าใหม่
-   ============================================================ */
-(function(){
-  if(!('ontouchstart' in window))return;              // เฉพาะจอสัมผัส
-  var TH=70, MAX=110, y0=0, dy=0, pulling=false, ready=false, bar=null;
-
-  function el(){
-    if(bar)return bar;
-    bar=document.createElement('div');
-    bar.setAttribute('aria-hidden','true');
-    bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;display:flex;'+
-      'align-items:center;justify-content:center;pointer-events:none;'+
-      'height:0;overflow:hidden;transition:none;'+
-      'font:600 13px/1.2 "Prompt","Sarabun",system-ui,sans-serif;color:#F2CF7A;'+
-      'background:linear-gradient(180deg,rgba(163,27,36,.95),rgba(163,27,36,0));';
-    bar.innerHTML='<span id="__ptrTxt">ลากลงเพื่อรีเฟรช</span>';
-    document.body.appendChild(bar);
-    return bar;
-  }
-  function atTop(){
-    var d=document.scrollingElement||document.documentElement;
-    return (window.pageYOffset||d.scrollTop||0)<=0;
-  }
-  /* ลากอยู่ในกล่องที่เลื่อนได้เอง (ตาราง/ลิสต์) ไม่นับ */
-  function inScrollable(node){
-    for(var n=node;n&&n!==document.body;n=n.parentElement){
-      var st=getComputedStyle(n), oy=st.overflowY;
-      if((oy==='auto'||oy==='scroll')&&n.scrollHeight>n.clientHeight&&n.scrollTop>0)return true;
-    }
-    return false;
-  }
-  /* โหมด kiosk (แท็บเล็ตหน้าร้านให้ลูกค้ากด) ห้ามรีเฟรช — คะแนนที่กดค้างไว้จะหาย */
-  function kiosk(){
-    return document.body.classList.contains('kiosk') ||
-           /[?&]kiosk=/.test(location.search);
-  }
-  document.addEventListener('touchstart',function(e){
-    if(kiosk()){pulling=false;return;}
-    if(e.touches.length!==1||!atTop()||inScrollable(e.target)){pulling=false;return;}
-    y0=e.touches[0].clientY; dy=0; pulling=true; ready=false;
-  },{passive:true});
-
-  document.addEventListener('touchmove',function(e){
-    if(!pulling)return;
-    dy=e.touches[0].clientY-y0;
-    if(dy<=0||!atTop()){ if(bar){bar.style.height='0';} return; }
-    if(e.cancelable)e.preventDefault();                // กันหน้าเด้งตามนิ้ว
-    var h=Math.min(dy*0.5,MAX), b=el();
-    b.style.height=h+'px';
-    ready = dy>TH;
-    var t=b.querySelector('#__ptrTxt');
-    if(t)t.textContent = ready ? 'ปล่อยเพื่อรีเฟรช' : 'ลากลงเพื่อรีเฟรช';
-  },{passive:false});
-
-  document.addEventListener('touchend',function(){
-    if(!pulling)return; pulling=false;
-    var b=el();
-    if(ready){
-      b.style.height='44px';
-      var t=b.querySelector('#__ptrTxt'); if(t)t.textContent='กำลังโหลด…';
-      setTimeout(function(){ location.reload(); },120);
-    }else{
-      b.style.transition='height .2s'; b.style.height='0';
-      setTimeout(function(){ b.style.transition='none'; },220);
-    }
-  },{passive:true});
-})();
 </script>
 </body>
 </html>
