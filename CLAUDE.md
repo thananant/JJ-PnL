@@ -34,6 +34,7 @@
 - Edge Functions deploy โดยวางโค้ดใน Dashboard (ชื่อฟังก์ชัน `social-brain` / `social-webhook` — ตัวหลังปิด Verify JWT)
 - secrets ฝั่ง LINE ของระบบนี้คือ `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` (OA หน้าร้าน) — **คนละตัวกับ `LINE_SECRET`/`LINE_TOKEN` ซึ่งเป็นของระบบอื่น ห้ามใช้ปน**
 - **การเข้าสู่ระบบ (2026-09-21)**: เข้าจากหน้ารวมระบบ `index.html` → hub ออก "ใบผ่าน" `localStorage.jjsso_ticket` (อายุ 2 นาที ใช้ครั้งเดียว) → แอพตรวจกับ `pnl_users` จริงแล้วพาเข้าเลย · เปิดจากลิงก์ตรง = ต้องใส่รหัสผ่านทุกครั้ง · ใบอนุญาตของแท็บอยู่ใน `sessionStorage.jjsocial_auth` (ปิดเบราว์เซอร์ = หลุด) · สิทธิ์รายเมนูอ่านจาก `pnl_users.apps.social` (v=ดู, a/e/d=แก้ไข) — ไม่มีสิทธิ์เลย = เข้าไม่ได้ · รูปแบบนี้ใช้เป็นต้นแบบให้แอพอื่นได้
+- **มือถือ (2026-09-21)**: ดึงหน้าลงจากบนสุด = โหลดข้อมูลใหม่ (`refreshAll()` — ไม่รีโหลดทั้งหน้า) · ปิด pull-to-refresh ของเบราว์เซอร์ด้วย `overscroll-behavior-y:contain` · layout จอ ≤700px: หัวเป็น grid 2 แถว, KPI 2 คอลัมน์, ปุ่มเต็มความกว้าง, เผื่อ safe-area ของ iPhone
 
 ## ระบบปฏิทินองค์กร (JJ Calendar)
 
