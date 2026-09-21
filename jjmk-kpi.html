@@ -188,6 +188,10 @@ tr:last-child td{border-bottom:0}
 .edit-row input,.edit-row select{width:100%;min-width:0}
 .edit-row.synced input:disabled,.edit-row.synced select:disabled{opacity:.55}
 #posList{display:flex;flex-wrap:wrap;gap:8px 18px;padding:4px 0}
+.duty-row{padding:8px 0;border-bottom:1px solid var(--line)}
+.duty-row:last-child{border-bottom:0}
+.duty-d{font-size:13px;color:var(--ink2);margin-top:3px;line-height:1.5}
+.duty-d.mute{color:var(--mute);font-size:12px}
 .pos-chk{white-space:nowrap}
 .chk{display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap}
 .chk input{width:20px;height:20px;min-height:0;padding:0}
@@ -663,6 +667,42 @@ async function saveHidePos() {
     await loadMeta(); renderSettings(); toast('บันทึกตำแหน่งแล้ว');
   } catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e) + ' — ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดแล้ว', 4500); }
 }
+/* ---- การ์ด "ใครเข้างานตอนนี้" (หน้าตั้งค่า) ----
+   จอลูกค้าโชว์เฉพาะคนที่เครื่องสแกนบอกว่าเข้างานอยู่ · การ์ดนี้บอกว่าตอนนี้ระบบเห็นใคร และถ้าไม่เห็นเพราะอะไร */
+async function loadDutyInfo() {
+  const box = $('#dutyBody'); if (!box) return;
+  box.innerHTML = '<div class="loading">กำลังตรวจ…</div>';
+  const rows = [];
+  for (const b of Object.keys(CONFIG.BRANCHES)) {
+    const all = S.staff.filter(s => s.active && s.branch === b);
+    const shown = all.filter(s => !kHidePos(s.position));
+    const linked = shown.filter(s => s.employee_id);
+    const unlinked = shown.filter(s => !s.employee_id);
+    let head, cls, detail = '';
+    try {
+      const r = await sb.rpc('kpi_on_duty', { p_branch: b });
+      if (r.error) throw r.error;
+      const on = new Set((r.data || []).map(Number));
+      const names = linked.filter(s => on.has(Number(s.employee_id))).map(s => s.nickname || s.name);
+      if (names.length) { cls = 'good'; head = 'เข้างานอยู่ ' + names.length + ' คน'; detail = names.map(esc).join(' · '); }
+      else { cls = 'ok'; head = 'ตอนนี้ไม่มีใครสแกนเข้างานค้างไว้'; detail = 'จอลูกค้าจะข้ามคำถามชมพนักงานจนกว่าจะมีคนสแกนเข้า (สแกนออกแล้ว = ไม่นับ)'; }
+    } catch (e) {
+      cls = 'bad';
+      const m = String(e.message || e);
+      head = 'ตรวจไม่ได้';
+      detail = /kpi_on_duty|function|does not exist|schema cache/i.test(m)
+        ? 'ยังไม่ได้รัน <code>jjmk-kpi.sql</code> เวอร์ชันล่าสุดใน Supabase (ไม่พบฟังก์ชัน kpi_on_duty) — จอลูกค้าจะข้ามคำถามชมพนักงานไปก่อน'
+        : esc(m);
+    }
+    rows.push('<div class="duty-row"><div><b>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</b> <span class="' + cls + '">' + head + '</span></div>' +
+      (detail ? '<div class="duty-d">' + detail + '</div>' : '') +
+      '<div class="duty-d mute">พนักงานที่เปิดใช้ ' + all.length + ' คน · โชว์ได้ ' + shown.length +
+      ' (ซ่อนตามตำแหน่ง ' + (all.length - shown.length) + ')' +
+      (unlinked.length ? ' · <span class="bad">ยังไม่ผูกกับระบบเงินเดือน ' + unlinked.length + ' คน จึงไม่ขึ้นจอลูกค้า: ' + unlinked.slice(0, 8).map(s => esc(s.nickname || s.name)).join(', ') + '</span>' : '') +
+      '</div></div>');
+  }
+  box.innerHTML = rows.join('');
+}
 function renderSettings() {
   const staff = S.staff.filter(s => S.setBranch === ALL || s.branch === S.setBranch);
   setMain(
@@ -671,7 +711,9 @@ function renderSettings() {
     '<div class="card"><h3>ตำแหน่งที่โชว์ในหน้าชมพนักงาน <small>(ติ๊กออก = ทั้งตำแหน่งไม่ขึ้นจอลูกค้า · มีผลทุกสาขา)</small></h3><div id="posList">' + posListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn sm" data-act="saveHidePos">บันทึกตำแหน่ง</button></div><div class="hint">เลือกครั้งเดียวจบ — เก็บในฐานข้อมูล ใช้กับแท็บเล็ตทุกเครื่องทันทีรอบรีเฟรชถัดไป · ตำแหน่งใหม่ที่เพิ่งมีใน payroll จะโชว์อัตโนมัติจนกว่าจะติ๊กออก · อยากซ่อนรายคนใช้ติ๊ก "ใช้" ในรายชื่อด้านบน</div></div>' +
     (can('kiosk') ? '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
     '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' : '') +
+    '<div class="card"><h3>ใครเข้างานตอนนี้ <small>(จอลูกค้าโชว์เฉพาะคนที่สแกนเข้างานอยู่จริง)</small> <button class="btn ghost sm" data-act="reloadDuty">🔄 ตรวจใหม่</button></h3><div id="dutyBody"><div class="loading">กำลังตรวจ…</div></div><div class="hint">ดึงจากเครื่องสแกนของระบบเงินเดือน (นับสแกนของวันทำการ ตัด 06:00 — จำนวนคี่ = ยังอยู่ในร้าน) · คนที่ยังไม่ผูกกับระบบเงินเดือน หรือช่วงที่ไม่มีใครสแกนเข้า จะไม่ขึ้นให้ลูกค้ากด</div></div>' +
     '<div class="card"><h3>ค่าตั้งระบบ <small>(แก้ใน CONFIG ต้นไฟล์)</small></h3><div class="kv"><b>วันทำการเริ่ม</b><span>' + pad2(CONFIG.CUTOFF_HOUR) + ':00 (ก่อนเวลานี้นับเป็นวันก่อนหน้า)</span><b>เป้าคะแนน</b><span>' + CONFIG.TARGET.toFixed(2) + ' (ทอง ≥ ' + CONFIG.TARGET.toFixed(1) + ' · ส้ม ≥ ' + (CONFIG.TARGET - 0.5).toFixed(1) + ' · แดง ต่ำกว่านั้น)</span><b>PIN ออก Kiosk</b><span>' + '•'.repeat(CONFIG.KIOSK_PIN.length) + '</span><b>รีเซ็ตเมื่อไม่แตะ</b><span>' + CONFIG.KIOSK_IDLE_SEC + ' วินาที</span><b>ฐานข้อมูล</b><span><code>' + esc(CONFIG.SUPABASE_URL) + '</code> · ตาราง kpi_*</span></div></div>');
+  loadDutyInfo();
 }
 function moveRow(row, dir) { if (!row) return; const sib = dir < 0 ? row.previousElementSibling : row.nextElementSibling; if (!sib) return; if (dir < 0) row.parentNode.insertBefore(row, sib); else row.parentNode.insertBefore(sib, row); }
 async function saveRows(table, rows) {
@@ -716,6 +758,7 @@ function onDashClick(e) {
   else if (a === 'saveDepts') saveDepts();
   else if (a === 'saveStaff') saveStaff();
   else if (a === 'saveHidePos') saveHidePos();
+  else if (a === 'reloadDuty') loadDutyInfo();
   else if (a === 'rowUp' || a === 'rowDown') moveRow(t.closest('.edit-row'), a === 'rowUp' ? -1 : 1);
 }
 function onDashChange(e) {
@@ -747,21 +790,21 @@ async function startDash() {
 }
 
 /* ===================== KIOSK (หน้าจอลูกค้า) ===================== */
-const K = { branch: null, step: 'idle', i: 0, scores: {}, staffId: null, idleT: null, doneT: null, holdT: null, busy: false, device: null, onDuty: null };
+const K = { branch: null, step: 'idle', i: 0, scores: {}, staffId: null, idleT: null, doneT: null, holdT: null, busy: false, device: null, onDuty: null, dutyErr: null };
 function kDepts() { return activeDepts(); }
 function kHidePos(p) {
   const pos = (p || '').trim(); if (!pos) return false;
   if (S.hidePos) return S.hidePos.indexOf(pos) >= 0;          // เจ้าของเลือกเองในตั้งค่า (เทียบตรงตัว)
   return CONFIG.KIOSK_HIDE_POS.some(x => pos.includes(x));    // ยังไม่เคยบันทึก → ค่าเริ่มต้นจาก CONFIG
 }
+/* รายชื่อที่ลูกค้าเห็น = **เฉพาะคนที่เครื่องสแกนบอกว่ากำลังเข้างานอยู่** (เจ้าของสั่ง 2026-09-21 หลังลองใช้จริงแล้วชื่อขึ้นทั้งร้าน กดผิด)
+   - ต้องผูกกับ payroll (`employee_id`) เท่านั้น — แถวกรอกมือเองไม่มีทางรู้ว่าเข้างานไหม จึงไม่โชว์
+   - หาไม่ได้ว่าใครเข้างาน (ยังไม่ได้รัน SQL / เรียก RPC ไม่ผ่าน) → คืนลิสต์ว่าง = **ข้ามคำถามชมพนักงานไปเลย**
+     ห้ามกลับไป fallback "โชว์ทั้งหมด" เด็ดขาด นั่นคือบั๊กที่ทำให้ข้อมูลเพี้ยนมาแล้ว · หน้าตั้งค่ามีการ์ดบอกสาเหตุให้เจ้าของแก้ */
 function kStaff() {
-  let list = S.staff.filter(s => s.active && s.branch === K.branch && !kHidePos(s.position));
-  /* แสดงเฉพาะคนที่กำลังเข้างาน (จากเครื่องสแกน) — แถวกรอกมือไม่มีรหัสสแกนให้โชว์เสมอ · ไม่มีใครสแกน/RPC ล้ม → โชว์ทั้งหมด */
-  if (K.onDuty && K.onDuty.size) {
-    const f = list.filter(s => !s.employee_id || K.onDuty.has(Number(s.employee_id)));
-    if (f.length) list = f;
-  }
-  return list;
+  if (!K.onDuty) return [];
+  return S.staff.filter(s => s.active && s.branch === K.branch && !kHidePos(s.position)
+    && s.employee_id && K.onDuty.has(Number(s.employee_id)));
 }
 function kStaffGroups() {
   const g = {};
@@ -770,8 +813,11 @@ function kStaffGroups() {
     .sort((a, b) => b.staff.length - a.staff.length || (a.pos < b.pos ? -1 : 1));
 }
 async function kLoadDuty() {
-  try { const r = await sb.rpc('kpi_on_duty', { p_branch: K.branch }); K.onDuty = r.error ? null : new Set((r.data || []).map(Number)); }
-  catch (e) { K.onDuty = null; }
+  try {
+    const r = await sb.rpc('kpi_on_duty', { p_branch: K.branch });
+    if (r.error) { K.onDuty = null; K.dutyErr = r.error.message || 'เรียกฟังก์ชันไม่สำเร็จ'; }
+    else { K.onDuty = new Set((r.data || []).map(Number)); K.dutyErr = null; }
+  } catch (e) { K.onDuty = null; K.dutyErr = e.message || String(e); }
 }
 function getDevice(b) { let d = lsGet('kpi_device'); if (!d) { d = b + '-' + Math.random().toString(36).slice(2, 8); lsSet('kpi_device', d); } return d; }
 function kTouch() { clearTimeout(K.idleT); if (K.step === 'rate' || K.step === 'staff') K.idleT = setTimeout(kIdleTimeout, CONFIG.KIOSK_IDLE_SEC * 1000); }
