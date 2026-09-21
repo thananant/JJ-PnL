@@ -149,6 +149,21 @@ main{padding:16px clamp(12px,1.6vw,28px) 90px;max-width:1100px;margin:0 auto;pos
 .attgrid input{width:16px;height:16px;accent-color:var(--red);flex:none}
 
 /* ---------- misc ---------- */
+.tapbtn{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px;border-radius:14px;font-weight:700;font-size:15.5px;font-family:'Prompt',sans-serif;text-decoration:none;color:#fff;margin-bottom:9px;transition:.18s;box-shadow:0 3px 18px rgba(0,0,0,.35)}
+.tapbtn .ic{font-size:24px;line-height:1;flex:none}
+.tapbtn .tx{flex:1;min-width:0}
+.tapbtn .tx small{display:block;font-weight:500;font-size:11.5px;opacity:.85;margin-top:1px}
+.tapbtn .go{font-size:20px;opacity:.7;flex:none}
+.tapbtn:hover{transform:translateY(-2px);filter:brightness(1.08)}
+.tapbtn.ios{background:linear-gradient(135deg,#1F1B18,#3A322C);border:1.5px solid rgba(255,255,255,.18)}
+.tapbtn.goog{background:linear-gradient(135deg,#1A4E85,#2E7BD6)}
+.tapbtn.off{opacity:.5;filter:grayscale(.6)}
+details.manual{border:1px solid var(--line);border-radius:12px;padding:0 12px;margin-top:10px;background:rgba(0,0,0,.18)}
+details.manual>summary{cursor:pointer;padding:10px 0;font-weight:600;font-size:13.5px;color:var(--mut);list-style:none}
+details.manual>summary::-webkit-details-marker{display:none}
+details.manual>summary::before{content:'▸ ';color:var(--gold)}
+details.manual[open]>summary::before{content:'▾ '}
+details.manual>div{padding-bottom:12px}
 #fab{position:fixed;right:18px;bottom:20px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;font-size:28px;line-height:1;box-shadow:0 6px 26px rgba(255,64,70,.55);z-index:45;display:none;align-items:center;justify-content:center;transition:.18s}
 #fab:hover{transform:scale(1.08)}
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(90px);background:rgba(24,19,16,.92);backdrop-filter:blur(10px);border:1px solid rgba(255,64,70,.4);color:#fff;font-size:13.5px;font-weight:600;border-radius:13px;padding:11px 18px;transition:.28s;z-index:99;max-width:88vw;text-align:center;box-shadow:0 6px 30px rgba(0,0,0,.5),0 0 20px rgba(255,64,70,.15)}
@@ -884,56 +899,69 @@ async function vSync(el){
   await loadToken();
   const base=cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken);
   const mineUrl=base+'&user='+encodeURIComponent(S.user.username);
+  // แตะครั้งเดียว: iPhone ใช้ webcal: (เปิดแอปปฏิทินให้เลย) · Android ส่งต่อให้ Google Calendar เพิ่มจาก URL
+  const wc=u=>u.replace(/^https?:/,'webcal:');
+  const gcal=u=>'https://calendar.google.com/calendar/render?cid='+encodeURIComponent(wc(u));
+  const ua=navigator.userAgent||'';
+  const isIOS=/iPad|iPhone|iPod/.test(ua)||(/Mac/.test(ua)&&navigator.maxTouchPoints>1);
+  const isAnd=/Android/.test(ua);
+  const meName=esc(S.user.display_name||S.user.username);
+  const btnIOS=(u,lbl)=>`<a class="tapbtn ios" href="${esc(wc(u))}"><span class="ic">🍎</span><span class="tx">${lbl}<small>iPhone / iPad — เปิดแอปปฏิทินแล้วกด "สมัครรับ"</small></span><span class="go">›</span></a>`;
+  const btnGG=(u,lbl)=>`<a class="tapbtn goog" target="_blank" rel="noopener" href="${esc(gcal(u))}"><span class="ic">🤖</span><span class="tx">${lbl}<small>Android / Google Calendar — กด "เพิ่ม" ในหน้าที่เปิดขึ้น</small></span><span class="go">›</span></a>`;
+  const order=(u,lbl)=>isAnd?btnGG(u,lbl)+btnIOS(u,lbl):btnIOS(u,lbl)+btnGG(u,lbl);
   const notifOk=('Notification' in window)&&Notification.permission==='granted';
   el.innerHTML=`
   <div class="card">
-    <h3>📲 เพิ่มปฏิทินองค์กรลงมือถือ (ซิงก์อัตโนมัติ)</h3>
+    <h3>📲 เพิ่มปฏิทินเข้ามือถือ</h3>
     ${S.feedToken?`
-    <p class="sm" style="margin:0 0 8px">Subscribe ครั้งเดียว — นัดใหม่/แก้ไข/ยกเลิก จะอัพเดตเข้าแอปปฏิทินในมือถือเองทุกชั่วโมง</p>
-    <p class="sm b" style="margin:8px 0 2px;color:var(--gold)">🔗 เฉพาะนัดของฉัน (${esc(S.user.display_name||S.user.username)})</p>
-    <div class="copyline"><input readonly value="${esc(mineUrl)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(mineUrl)}')">คัดลอก</button></div>
-    <p class="sm b" style="margin:8px 0 2px;color:var(--gold)">🔗 นัดทั้งองค์กร (ทุกคน ทุกสาขา)</p>
-    <div class="copyline"><input readonly value="${esc(base)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(base)}')">คัดลอก</button></div>
-    <div style="margin-top:12px">
-      <p class="sm b" style="margin:0 0 2px">🍎 iPhone / iPad</p>
+    <p class="sm" style="margin:0 0 10px">แตะปุ่มเดียวจบ — จากนั้นนัดใหม่/แก้ไข/ยกเลิก จะอัพเดตเข้าแอปปฏิทินในเครื่องเองทุกชั่วโมง</p>
+    <div id="feedStatus" class="sm mut" style="line-height:1.6;margin-bottom:10px">⏳ กำลังตรวจสอบระบบ…</div>
+    <p class="sm b" style="margin:0 0 6px;color:var(--gold)">👤 นัดของฉัน (${meName})</p>
+    <div id="tapMine">${order(mineUrl,'เพิ่มนัดของฉันเข้าปฏิทิน')}</div>
+    <details class="manual"><summary>➕ อยากได้ปฏิทินรวมทั้งองค์กร (ทุกคน ทุกสาขา)</summary><div>
+      ${order(base,'เพิ่มปฏิทินรวมทั้งองค์กร')}
+    </div></details>
+    <details class="manual"><summary>🛟 ปุ่มไม่ทำงาน? ทำเองทีละขั้น (คัดลอก URL)</summary><div>
+      <p class="sm b" style="margin:6px 0 2px;color:var(--gold)">🔗 นัดของฉัน</p>
+      <div class="copyline"><input readonly value="${esc(mineUrl)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(mineUrl)}')">คัดลอก</button></div>
+      <p class="sm b" style="margin:8px 0 2px;color:var(--gold)">🔗 นัดทั้งองค์กร</p>
+      <div class="copyline"><input readonly value="${esc(base)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(base)}')">คัดลอก</button></div>
+      <p class="sm b" style="margin:12px 0 2px">🍎 iPhone / iPad</p>
       <ol class="steps">
-        <li>กดปุ่ม <b>คัดลอก</b> ที่ URL ข้างบน (ต้องขึ้นต้นด้วย <b>https://</b>)</li>
-        <li>ไปที่ <b>การตั้งค่า → แอปปฏิทิน (Calendar) → บัญชี → เพิ่มบัญชี → อื่นๆ → เพิ่มปฏิทินที่ติดตาม</b> (Add Subscribed Calendar)</li>
-        <li>วาง URL → <b>ถัดไป</b> → บันทึก (ตั้งการเตือนของปฏิทินนี้ได้ในหน้าเดียวกัน)</li>
-        <li><b style="color:var(--gold)">⚠️ ถ้าขึ้น "การตรวจสอบไม่สำเร็จ"</b> ให้ดูช่อง URL ว่าเป็น <b>https://</b> หรือไม่ — ถ้าเป็น <b>http://</b> ให้แก้เป็น <b>https://</b> แล้วกดค้นหาใหม่ (อย่าเข้าผ่านลิงก์ webcal เพราะ iPhone จะเปลี่ยนเป็น http:// ให้เอง)</li>
+        <li>กด <b>คัดลอก</b> ที่ URL ข้างบน (ต้องขึ้นต้นด้วย <b>https://</b>)</li>
+        <li><b>การตั้งค่า → แอปปฏิทิน → บัญชี → เพิ่มบัญชี → อื่นๆ → เพิ่มปฏิทินที่ติดตาม</b></li>
+        <li>วาง URL → <b>ถัดไป</b> → บันทึก · ถ้าช่อง URL ขึ้นเป็น <b>http://</b> ให้แก้เป็น <b>https://</b> ก่อน</li>
       </ol>
       <p class="sm b" style="margin:10px 0 2px">🤖 Android (Google Calendar)</p>
       <ol class="steps">
-        <li>เปิดเบราว์เซอร์ไปที่ <b>calendar.google.com</b> (ล็อกอิน Gmail เครื่องตัวเอง)</li>
-        <li>เมนู <b>การตั้งค่า → เพิ่มปฏิทิน → จาก URL</b> → วาง URL ข้างบน → เพิ่มปฏิทิน</li>
-        <li>ปฏิทินจะโผล่ในแอป Google Calendar บนมือถืออัตโนมัติ (เปิดการซิงก์ปฏิทินนั้นในแอปด้วย)</li>
+        <li>เปิด <b>calendar.google.com</b> ในเบราว์เซอร์ (ล็อกอิน Gmail ของตัวเอง)</li>
+        <li><b>การตั้งค่า → เพิ่มปฏิทิน → จาก URL</b> → วาง URL → เพิ่มปฏิทิน</li>
+        <li>ปฏิทินจะโผล่ในแอป Google Calendar บนมือถือเอง (เปิดการซิงก์ปฏิทินนั้นในแอปด้วย)</li>
       </ol>
-    </div>
-    <div class="acts"><button class="btn gh sm" onclick="checkFeed()">🔎 ทดสอบว่าฟีดใช้งานได้</button><span id="feedStatus" class="sm mut" style="flex:1 1 100%;line-height:1.6"></span></div>
-    <p class="xs mut" style="margin:10px 0 0">* ฟีดนี้ต้อง deploy Edge Function ชื่อ <b>cal-feed</b> ใน Supabase ก่อน แล้ว<b>ปิด Verify JWT</b> (แอปปฏิทินมือถือแนบกุญแจไม่ได้) — กดปุ่มทดสอบข้างบน ระบบจะบอกเองว่าติดตรงไหน</p>
-    ${isBoss()?`<div style="margin-top:12px;border-top:1px dashed rgba(255,255,255,.14);padding-top:10px">
-      <p class="sm b" style="margin:0 0 4px">🛠 ติดตั้งฟีด (ทำครั้งเดียว · เฉพาะผู้ดูแล)</p>
-      <p class="xs" style="margin:0 0 6px;color:var(--gold)">⚠️ โค้ดนี้เป็น <b>TypeScript</b> ต้องวางที่หน้า <b>Edge Functions</b> — <b>ไม่ใช่ SQL Editor</b> (วางใน SQL Editor จะขึ้น syntax error ที่บรรทัด //)</p>
+      <div class="acts"><button class="btn gh sm" onclick="checkFeed()">🔎 ทดสอบระบบอีกครั้ง</button></div>
+    </div></details>
+    ${isBoss()?`<details class="manual"><summary>🛠 ติดตั้ง/อัปเดตฟีด (เฉพาะผู้ดูแล · ทำครั้งเดียว)</summary><div>
+      <p class="xs" style="margin:2px 0 6px;color:var(--gold)">⚠️ โค้ดนี้เป็น <b>TypeScript</b> วางที่หน้า <b>Edge Functions</b> — <b>ไม่ใช่ SQL Editor</b> (วางผิดที่จะขึ้น syntax error ที่บรรทัด //)</p>
       <ol class="steps">
-        <li>Supabase → เมนูซ้าย <b>Edge Functions</b> → <b>Deploy a new function</b> → เลือกแบบเขียนในเบราว์เซอร์ (Via Editor)</li>
-        <li>ตั้งชื่อฟังก์ชันว่า <b>cal-feed</b> (ต้องตรงตัว) → ลบโค้ดตัวอย่างในช่องออกให้หมด → กดปุ่มข้างล่างเพื่อคัดลอกโค้ด แล้ววางแทน → <b>Deploy</b></li>
-        <li>เข้าไปที่ฟังก์ชัน <b>cal-feed</b> → <b>Settings</b> → <b>ปิด Verify JWT</b> → Save <span class="xs">(ไม่ปิดจะขึ้น 401 ตลอด เพราะแอปปฏิทินมือถือแนบกุญแจไม่ได้)</span></li>
-        <li>กลับมากด <b>🔎 ทดสอบว่าฟีดใช้งานได้</b> ข้างบน — ต้องขึ้นเขียว ✅</li>
+        <li>Supabase → <b>Edge Functions</b> → <b>Deploy a new function</b> (ถ้ามี <b>cal-feed</b> อยู่แล้วให้กดเข้าไปแก้โค้ดแทน)</li>
+        <li>ชื่อฟังก์ชัน <b>cal-feed</b> (ตรงตัว) → ลบโค้ดเดิมในช่องออกให้หมด → กดปุ่มข้างล่างคัดลอก แล้ววางแทน → <b>Deploy</b></li>
+        <li>ที่ฟังก์ชัน <b>cal-feed</b> → <b>Settings</b> → <b>ปิด Verify JWT</b> → Save</li>
       </ol>
       <button class="btn gh sm" onclick="copyFeedCode()">📋 คัดลอกโค้ด cal-feed</button>
-    </div>`:''}
+    </div></details>`:''}
     `:`<div class="empty">ยังไม่พบ token ของฟีด — ต้องรัน <b>jjmk-calendar.sql</b> ใน Supabase ก่อนครับ</div>`}
   </div>
   <div class="card">
     <h3>🔔 การแจ้งเตือน</h3>
     <ul class="steps" style="list-style:disc">
-      <li><b>เตือนบนมือถือ:</b> นัดที่เพิ่ม/subscribe เข้าแอปปฏิทินมือถือ จะเตือนตามเวลา "แจ้งเตือนล่วงหน้า" ที่ตั้งไว้ในนัด (iPhone ตั้งการเตือนเริ่มต้นของปฏิทินที่ติดตามได้ใน การตั้งค่า → แอปปฏิทิน)</li>
-      <li><b>เตือนในเว็บนี้:</b> ถ้าเปิดหน้านี้ค้างไว้ ระบบจะเด้งเตือนก่อนถึงเวลานัดของคุณโดยอัตโนมัติ</li>
+      <li><b>เตือนบนมือถือ:</b> นัดที่เพิ่มเข้าแอปปฏิทินมือถือแล้ว จะเตือนตามเวลา "แจ้งเตือนล่วงหน้า" ที่ตั้งไว้ในนัด (iPhone ตั้งการเตือนเริ่มต้นของปฏิทินที่ติดตามได้ใน การตั้งค่า → แอปปฏิทิน)</li>
+      <li><b>เตือนในเว็บนี้:</b> ถ้าเปิดหน้านี้ค้างไว้ ระบบจะเด้งเตือนก่อนถึงเวลานัดของคุณเอง</li>
     </ul>
     <div class="acts">
       <button class="btn ${notifOk?'gh':''}" onclick="notifPerm()">${notifOk?'✅ เปิดการแจ้งเตือนในเบราว์เซอร์แล้ว':'🔔 เปิดการแจ้งเตือนในเบราว์เซอร์'}</button>
     </div>
   </div>`;
+  if(S.feedToken)checkFeed();   // ตรวจให้เองตั้งแต่เปิดหน้า จะได้รู้ก่อนกดปุ่มว่าใช้ได้ไหม
 }
 function copyFeedCode(){
   const el=document.getElementById('feedCode');
@@ -955,8 +983,10 @@ function copyTxt(t){
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('คัดลอกแล้ว ✅')).catch(()=>{prompt('คัดลอก URL นี้',t)});
 }
 async function checkFeed(){
-  const st=$('#feedStatus');st.innerHTML='กำลังทดสอบ…';st.style.color='var(--mut)';
-  const set=(h,c)=>{st.innerHTML=h;st.style.color=c};
+  const st=$('#feedStatus');if(!st)return;
+  st.innerHTML='⏳ กำลังตรวจสอบระบบ…';st.style.color='var(--mut)';
+  const taps=on=>document.querySelectorAll('.tapbtn').forEach(a=>a.classList.toggle('off',!on));
+  const set=(h,c)=>{st.innerHTML=h;st.style.color=c;taps(c==='var(--ok)')};
   const u=cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken);
   let a;
   try{a=await fetch(u)}                       // ยิงแบบเดียวกับที่แอปปฏิทินมือถือยิง (ไม่มี header)
@@ -966,14 +996,14 @@ async function checkFeed(){
     if(!tx.includes('BEGIN:VCALENDAR')){set('❌ ฟีดตอบกลับไม่ใช่ข้อมูลปฏิทิน — ตรวจโค้ดในฟังก์ชัน cal-feed อีกครั้ง','var(--bad)');return}
     const n=(tx.match(/BEGIN:VEVENT/g)||[]).length;          // นับนัดที่อยู่ในฟีดจริง
     const emo=/[\uD800-\uDFFF]/.test(tx.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g,''));  // อีโมจิถูกหั่นกลางตัวไหม (fold เวอร์ชันเก่า)
-    set('✅ ฟีดใช้งานได้ · มีนัดในฟีด <b>'+n+'</b> รายการ — เอา URL ไป subscribe ในมือถือได้เลย'+
+    set('✅ <b>ระบบพร้อม</b> · มีนัดในฟีด '+n+' รายการ — แตะปุ่มข้างล่างได้เลย'+
       (emo?'<br><span style="color:var(--gold)">⚠️ เจออีโมจิถูกหั่นกลางตัวในฟีด — โค้ดที่ deploy เป็นเวอร์ชันเก่า กด 📋 คัดลอกโค้ด แล้ววางทับใน Edge Functions</span>':''),'var(--ok)');
     return;
   }
   const body=(await a.text().catch(()=>'')).trim();   // ฟังก์ชันตอบเหตุผลมาเป็นข้อความ — เอามาโชว์เลย
   if(a.status===403){set('❌ token ไม่ตรงกับในฐานข้อมูล — กดรีเฟรชหน้านี้ 1 ครั้ง ถ้ายังไม่หายให้รัน <b>jjmk-calendar.sql</b> ใหม่','var(--bad)');return}
   if(a.status>=500){
-    set('❌ ฟีดทำงานแล้วแต่มีข้อผิดพลาด (HTTP '+a.status+')'+(body?'<br>📄 <b>'+esc(body.slice(0,300))+'</b>':'')+
+    set('⚠️ <b>ปุ่มยังใช้ไม่ได้</b> — ฟีดทำงานแล้วแต่มีข้อผิดพลาด (HTTP '+a.status+')'+(body?'<br>📄 <b>'+esc(body.slice(0,300))+'</b>':'')+
       '<br><span class="xs">ถ้าข้อความไม่ได้บอกสาเหตุ แปลว่าโค้ดที่ deploy เป็นเวอร์ชันเก่า — กด 📋 คัดลอกโค้ด cal-feed แล้ว Deploy ทับ เวอร์ชันใหม่จะบอกเองว่าติดคีย์หรือติดตาราง</span>','var(--bad)');
     return;
   }
