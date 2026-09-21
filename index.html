@@ -334,14 +334,28 @@ function spreadSession(u){
   set('jjmk_inv_sess',lite);    // Invoice
 }
 function clearSession(){
-  ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip']
+  ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip','jjhub_ticket','jjmt_keep']
     .forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
 }
 
+/* ---------- ตั๋วเข้าแอพ (สำหรับแอพที่มีหน้าล็อกอินของตัวเอง เช่น ซ่อมบำรุง) ----------
+   กดไอคอนจากหน้านี้ = ฝากตั๋วอายุ 3 นาทีไว้ให้แอพปลายทางกินแล้วเข้าได้เลยตามสิทธิ์
+   เปิด URL ของแอพตรง ๆ (คนอื่นได้ลิงก์ไป) = ไม่มีตั๋ว ต้องกรอกรหัสเอง */
+function handTicket(el){
+  if(!ME)return;
+  try{ localStorage.setItem('jjhub_ticket',JSON.stringify({
+    app:el.dataset.app, u:ME.username, n:ME.display_name||ME.username,
+    role:ME.role||'staff', unit:ME.unit||'', apps:ME.apps||{}, exp:Date.now()+180000 })); }catch(e){}
+}
+document.querySelectorAll('nav a.app[data-app]').forEach(function(el){
+  el.addEventListener('click',function(){ handTicket(el); });
+});
+
 /* ---------- แสดงเฉพาะแอพที่คนนี้มีสิทธิ์ ---------- */
-/* แอพที่ยังใช้บัญชีคนละชุด (นับสต๊อก / ครัวกลาง / ซ่อมบำรุง) และ KPI ที่ไม่ต้องล็อกอิน
-   ให้แสดงไว้เสมอ — ล็อกอินกลางยังคุมไม่ถึง ต้องไปล็อกอินในแอพนั้นเอง */
-var ALWAYS=['stock','kitchen','maint','kpi'];
+/* แอพที่ยังใช้บัญชีคนละชุด (นับสต๊อก / ครัวกลาง) และ KPI ที่ไม่ต้องล็อกอิน
+   ให้แสดงไว้เสมอ — ล็อกอินกลางยังคุมไม่ถึง ต้องไปล็อกอินในแอพนั้นเอง
+   ซ่อมบำรุง (maint) ต่อล็อกอินกลางแล้ว (2026-09-21) จึงคุมด้วยสิทธิ์ apps.maint ได้ */
+var ALWAYS=['stock','kitchen','kpi'];
 function hasSavedLogin(){
   try{ var a=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); return !!(a&&a.u); }catch(e){ return false; }
 }
