@@ -12,7 +12,8 @@ const USERS = [
   { id: 1, username: 'boss', display_name: 'เจ้าของร้าน', role: 'owner', unit: 'ALL', active: true, pass_hash: pwHash('boss', 'kpi1234'), apps: {} },
   { id: 2, username: 'manager', display_name: 'ผู้จัดการ', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('manager', 'kpi1234'), apps: { kpi: { dash: 'v' }, pnl: { dash: 'v' } } },
   { id: 3, username: 'nokpi', display_name: 'พนักงานครัว', role: 'staff', unit: 'JJLP', active: true, pass_hash: pwHash('nokpi', 'kpi1234'), apps: { stock: { count: 'v' } } },
-  { id: 4, username: 'ออก', display_name: 'พ้นสภาพ', role: 'staff', unit: 'ALL', active: false, pass_hash: pwHash('ออก', 'kpi1234'), apps: {} }
+  { id: 4, username: 'ออก', display_name: 'พ้นสภาพ', role: 'staff', unit: 'ALL', active: false, pass_hash: pwHash('ออก', 'kpi1234'), apps: {} },
+  { id: 5, username: 'kpimgr', display_name: 'หัวหน้า KPI', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('kpimgr', 'kpi1234'), apps: { kpi: { dash: 'vae', kiosk: 'v' } } }
 ];
 const userOf = n => USERS.find(x => x.username === n) || {};
 /* ใบผ่านจากหน้าศูนย์รวมแอพ (localStorage · ใช้ครั้งเดียว อายุ 2 นาที) */

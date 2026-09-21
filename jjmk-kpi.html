@@ -494,12 +494,13 @@ function renderShell() {
   app.innerHTML =
     '<header class="hdr"><div class="seal">JJ</div><div><div class="hdr-title">จริงใจหมูกระทะ</div><div class="hdr-sub">KPI ความพึงพอใจลูกค้า</div></div>' +
     '<div class="hdr-right">' + userChipHTML() + '<select id="branchSel" aria-label="สาขา">' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.branch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '<option value="ALL"' + (S.branch === ALL ? ' selected' : '') + '>ทุกสาขา</option></select>' +
-    '<button class="btn sm" data-act="openKiosk">🖥 หน้าจอลูกค้า</button></div></header>' +
-    '<nav class="tabs">' + TABS.map(t => '<button class="tab' + (S.tab === t.id ? ' active' : '') + '" data-act="tab" data-tab="' + t.id + '">' + t.label + '</button>').join('') + '</nav>' +
+    (can('kiosk') ? '<button class="btn sm" data-act="openKiosk">🖥 หน้าจอลูกค้า</button>' : '') + '</div></header>' +
+    '<nav class="tabs">' + visTabs().map(t => '<button class="tab' + (S.tab === t.id ? ' active' : '') + '" data-act="tab" data-tab="' + t.id + '">' + t.label + '</button>').join('') + '</nav>' +
     '<main id="main"></main>';
   renderTab();
 }
 function renderTab() {
+  if (S.tab === 'settings' && !can('dash', 'e')) S.tab = 'daily';
   $$('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === S.tab));
   if (S.tab === 'daily') renderDaily(); else if (S.tab === 'monthly') renderMonthly(); else if (S.tab === 'staff') renderStaff(); else renderSettings();
 }
@@ -654,6 +655,7 @@ function posListHTML() {
   return posAll.map(p => { const n = S.staff.filter(s => s.active && (s.position || '').trim() === p).length; return '<label class="chk pos-chk"><input type="checkbox" data-pos="' + esc(p) + '"' + (kHidePos(p) ? '' : ' checked') + '> ' + esc(p) + ' <small>(' + n + ' คน)</small></label>'; }).join('');
 }
 async function saveHidePos() {
+  if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
   const hidden = $$('#posList input[type=checkbox]').filter(c => !c.checked).map(c => c.dataset.pos);
   try {
     const r = await sb.from('kpi_settings').upsert([{ key: 'kiosk_hide_pos', value: hidden }]);
@@ -667,8 +669,8 @@ function renderSettings() {
     '<div class="card"><h3>แผนกที่ให้ลูกค้าประเมิน <small>(ใช้ร่วมกันทุกสาขา · ลำดับ = ลำดับหน้าจอ)</small></h3><div id="deptList">' + S.depts.map(deptRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addDept">+ เพิ่มแผนก</button><span class="grow"></span><button class="btn sm" data-act="saveDepts">บันทึกแผนก</button></div><div class="hint">ปิด "ใช้" แทนการลบ เพื่อเก็บประวัติคะแนนเดิมไว้</div></div>' +
     '<div class="card"><h3>พนักงานให้ลูกค้าเลือก <small>(แสดงเฉพาะสาขาของตัวเอง)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><div id="staffList">' + staff.map(staffRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addStaff">+ เพิ่มพนักงาน</button><span class="grow"></span><button class="btn sm" data-act="saveStaff">บันทึกพนักงาน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ (ตรวจว่ารัน jjmk-kpi.sql เวอร์ชันล่าสุดใน Supabase แล้ว) — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'รายชื่อดึงอัตโนมัติจากระบบเงินเดือน — แถวที่จางให้แก้ชื่อ/ตำแหน่งที่แอป Payroll · พนักงานลาออกระบบปิด "ใช้" ให้เอง · ไม่อยากโชว์บางคนก็ปิด "ใช้" ได้ · ชื่อเล่นคือชื่อที่ลูกค้าเห็นบนหน้าจอ<br>หน้าจอลูกค้าจัดกลุ่มตามตำแหน่ง · โชว์เฉพาะคนที่กำลังเข้างานตามเครื่องสแกน (ไม่มีข้อมูลสแกน = โชว์ทั้งหมด) · ซ่อนทั้งตำแหน่งเลือกได้ที่การ์ดถัดไป</div></div>' +
     '<div class="card"><h3>ตำแหน่งที่โชว์ในหน้าชมพนักงาน <small>(ติ๊กออก = ทั้งตำแหน่งไม่ขึ้นจอลูกค้า · มีผลทุกสาขา)</small></h3><div id="posList">' + posListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn sm" data-act="saveHidePos">บันทึกตำแหน่ง</button></div><div class="hint">เลือกครั้งเดียวจบ — เก็บในฐานข้อมูล ใช้กับแท็บเล็ตทุกเครื่องทันทีรอบรีเฟรชถัดไป · ตำแหน่งใหม่ที่เพิ่งมีใน payroll จะโชว์อัตโนมัติจนกว่าจะติ๊กออก · อยากซ่อนรายคนใช้ติ๊ก "ใช้" ในรายชื่อด้านบน</div></div>' +
-    '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
-    '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' +
+    (can('kiosk') ? '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
+    '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' : '') +
     '<div class="card"><h3>ค่าตั้งระบบ <small>(แก้ใน CONFIG ต้นไฟล์)</small></h3><div class="kv"><b>วันทำการเริ่ม</b><span>' + pad2(CONFIG.CUTOFF_HOUR) + ':00 (ก่อนเวลานี้นับเป็นวันก่อนหน้า)</span><b>เป้าคะแนน</b><span>' + CONFIG.TARGET.toFixed(2) + ' (ทอง ≥ ' + CONFIG.TARGET.toFixed(1) + ' · ส้ม ≥ ' + (CONFIG.TARGET - 0.5).toFixed(1) + ' · แดง ต่ำกว่านั้น)</span><b>PIN ออก Kiosk</b><span>' + '•'.repeat(CONFIG.KIOSK_PIN.length) + '</span><b>รีเซ็ตเมื่อไม่แตะ</b><span>' + CONFIG.KIOSK_IDLE_SEC + ' วินาที</span><b>ฐานข้อมูล</b><span><code>' + esc(CONFIG.SUPABASE_URL) + '</code> · ตาราง kpi_*</span></div></div>');
 }
 function moveRow(row, dir) { if (!row) return; const sib = dir < 0 ? row.previousElementSibling : row.nextElementSibling; if (!sib) return; if (dir < 0) row.parentNode.insertBefore(row, sib); else row.parentNode.insertBefore(sib, row); }
@@ -678,11 +680,13 @@ async function saveRows(table, rows) {
   if (ins.length) { const r = await sb.from(table).insert(ins); if (r.error) throw r.error; }
 }
 async function saveDepts() {
+  if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
   const rows = $$('#deptList .edit-row').map((el, i) => ({ id: el.dataset.id ? Number(el.dataset.id) : null, icon: $('.f-icon', el).value.trim() || '⭐', name: $('.f-name', el).value.trim(), active: $('.f-active', el).checked, sort_order: i + 1 }));
   if (rows.some(r => !r.name)) { toast('กรอกชื่อแผนกให้ครบก่อน'); return; }
   try { await saveRows('kpi_departments', rows); await loadMeta(); renderSettings(); toast('บันทึกแผนกแล้ว'); } catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e), 4000); }
 }
 async function saveStaff() {
+  if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
   const rows = $$('#staffList .edit-row').map((el, i) => ({ id: el.dataset.id ? Number(el.dataset.id) : null, branch: $('.f-branch', el).value, nickname: $('.f-nick', el).value.trim() || null, name: $('.f-name', el).value.trim(), position: $('.f-pos', el).value.trim() || null, active: $('.f-active', el).checked, sort_order: i + 1 }));
   for (const r of rows) if (!r.name) { if (r.nickname) r.name = r.nickname; else { toast('กรอกชื่อพนักงานให้ครบก่อน'); return; } }
   try { await saveRows('kpi_staff', rows); await loadMeta(); renderSettings(); toast('บันทึกพนักงานแล้ว'); } catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e), 4000); }
@@ -921,6 +925,18 @@ function useUser(usr) {                // เก็บเฉพาะที่�
   sessSet(ME);
 }
 /* สิทธิ์เข้าแอพนี้ — กติกาเดียวกับหน้าศูนย์รวมแอพ (canOpen ใน index.html) */
+/* สิทธิ์รายหน้าจอ: v=ดู a=เพิ่ม e=แก้ d=ลบ · หน้าจอของแอพนี้ใน JJ Access = dash (แดชบอร์ด), kiosk (หน้าจอลูกค้า) */
+function permOf(screen) {
+  const u = ME; if (!u) return '';
+  if (u.role === 'admin' || u.role === 'owner') return 'vaed';
+  const apps = u.apps;
+  if (!apps || typeof apps !== 'object' || !Object.keys(apps).length) return 'vaed';  // ยังไม่เคยตั้งสิทธิ์ = ไม่ล็อกใคร
+  const a = apps.kpi;
+  if (!a || typeof a !== 'object') return '';
+  return String(a[screen] || '');
+}
+function can(screen, flag) { return permOf(screen).indexOf(flag || 'v') >= 0; }
+function visTabs() { return TABS.filter(t => t.id !== 'settings' || can('dash', 'e')); }   // แท็บตั้งค่า = ต้องมีสิทธิ์ "แก้"
 function canUseKpi(u) {
   if (!u) return false;
   if (u.role === 'admin' || u.role === 'owner') return true;
