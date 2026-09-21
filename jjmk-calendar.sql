@@ -73,3 +73,14 @@ grant select on public.cal_settings to anon, authenticated;
 -- เสร็จแล้วโชว์ token ของฟีด (ใช้ต่อท้าย URL ของ Edge Function cal-feed)
 select 'ติดตั้ง JJ Calendar เรียบร้อย ✅ · token ฟีด: ' ||
   (select val->>'token' from public.cal_settings where id = 'feed') as result;
+
+-- ---------- เรียลไทม์: มีคนเพิ่ม/แก้นัด คนอื่นเห็นทันที ----------
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table public.cal_events;
+  exception when duplicate_object then null; end;
+  begin
+    alter publication supabase_realtime add table public.cal_attendees;
+  exception when duplicate_object then null; end;
+end $$;

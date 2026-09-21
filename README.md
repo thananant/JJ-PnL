@@ -35,6 +35,8 @@
 ## ระบบปฏิทินองค์กร (JJ Calendar — แอพ `jjmk-calendar.html` บน main)
 
 - `jjmk-calendar.sql` — ตาราง `cal_events`/`cal_attendees`/`cal_settings` + สิทธิ์ + token ฟีด (รันซ้ำได้)
+- `jjmk-calendar-realtime.sql` — เปิดเรียลไทม์ให้ `cal_events`/`cal_attendees` (เพิ่มเข้า publication `supabase_realtime`)
+  ไม่รันก็ใช้ได้ แต่คนอื่นจะเห็นนัดใหม่ช้าลงเป็นรอบละ 90 วินาที (รันซ้ำได้)
 - `cal-feed.ts` — โค้ด Edge Function ฟีด ICS สำหรับ subscribe ปฏิทินลงมือถือ
   (deploy ผ่าน Dashboard ตั้งชื่อ `cal-feed` → **ปิด Verify JWT** ไม่งั้นมือถือจะโดน 401)
   · เวอร์ชัน 2026-09-21: token ไม่ตรงตอบ 403 เพื่อให้ปุ่มทดสอบในแอปแยกอาการจาก 401 ของ Verify JWT ได้
