@@ -1,0 +1,121 @@
+// ============================================================
+// cal-feed — ฟีดปฏิทิน ICS ของระบบ JJ Calendar (จริงใจหมูกระทะ)
+//
+// วิธี deploy (ทำครั้งเดียว):
+//   1. Supabase Dashboard → Edge Functions → Deploy a new function
+//   2. ตั้งชื่อฟังก์ชันว่า  cal-feed  แล้ววางโค้ดไฟล์นี้ทั้งไฟล์ → Deploy
+//   3. เข้าไปที่ฟังก์ชัน cal-feed → Settings → **ปิด "Verify JWT"** → Save
+//      (ต้องปิด เพราะแอปปฏิทินบนมือถือแนบ Authorization header ไม่ได้
+//       ถ้าไม่ปิด Supabase จะตอบ 401 ตั้งแต่ยังไม่ถึงโค้ดนี้)
+//
+// วิธีใช้ (แอป jjmk-calendar.html แท็บ "📲 เชื่อมมือถือ" สร้าง URL ให้อัตโนมัติ):
+//   https://<project>.supabase.co/functions/v1/cal-feed?token=XXXX            → นัดทั้งองค์กร
+//   https://<project>.supabase.co/functions/v1/cal-feed?token=XXXX&user=somchai → เฉพาะนัดที่ somchai ต้องเข้า
+//   token ดูได้จากผลลัพธ์ตอนรัน jjmk-calendar.sql หรือ: select val->>'token' from cal_settings where id='feed';
+//
+// รหัสตอบกลับ (ใช้แยกอาการตอนกดปุ่ม "ทดสอบว่าฟีดใช้งานได้" ในแอป):
+//   200 = ปกติ · 403 = token ไม่ตรง · 401 = ยังไม่ได้ปิด Verify JWT หรือยังไม่ได้ deploy
+// ============================================================
+
+const CORS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': '*',
+};
+
+function pad(n: number) { return String(n).padStart(2, '0'); }
+// เวลาแบบระบุเวลา → UTC (Z)
+function utc(d: string | Date) {
+  const x = new Date(d);
+  return `${x.getUTCFullYear()}${pad(x.getUTCMonth() + 1)}${pad(x.getUTCDate())}T${pad(x.getUTCHours())}${pad(x.getUTCMinutes())}00Z`;
+}
+// นัดทั้งวัน → วันที่ตามเวลาไทย (UTC+7 คงที่ ไทยไม่มี DST)
+function bkkDate(d: string | Date, addDays = 0) {
+  const x = new Date(new Date(d).getTime() + (7 * 3600 + addDays * 86400) * 1000);
+  return `${x.getUTCFullYear()}${pad(x.getUTCMonth() + 1)}${pad(x.getUTCDate())}`;
+}
+function esc(s: unknown) {
+  return String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+// RFC 5545: บรรทัดยาวต้องพับ (fold) ต่อบรรทัดขึ้นต้นด้วยช่องว่าง
+function fold(line: string) {
+  const out: string[] = [];
+  let s = line;
+  while (s.length > 73) { out.push(s.slice(0, 73)); s = ' ' + s.slice(73); }
+  out.push(s);
+  return out.join('\r\n');
+}
+
+type Attendee = { username: string; display_name?: string };
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  const url = new URL(req.url);
+  const token = url.searchParams.get('token') || '';
+  const user = (url.searchParams.get('user') || '').trim();
+
+  const SB = Deno.env.get('SUPABASE_URL')!;
+  const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const h = { apikey: KEY, Authorization: 'Bearer ' + KEY };
+
+  // ตรวจ token กับ cal_settings (id='feed') — ไม่ตรงตอบ 403 เพื่อให้แยกจาก 401 ของ Verify JWT ได้
+  const st = await (await fetch(`${SB}/rest/v1/cal_settings?id=eq.feed&select=val`, { headers: h })).json();
+  const good = st?.[0]?.val?.token;
+  if (!good) {
+    return new Response('cal_settings ยังไม่มีแถว feed — รัน jjmk-calendar.sql ใน SQL Editor ก่อน', { status: 500, headers: CORS });
+  }
+  if (token !== good) {
+    return new Response('token ไม่ถูกต้อง — คัดลอก URL จากแท็บ "เชื่อมมือถือ" ในแอปใหม่อีกครั้ง', { status: 403, headers: CORS });
+  }
+
+  // ดึงนัดย้อนหลัง 60 วัน + อนาคตทั้งหมด (ที่ไม่ถูกยกเลิก)
+  const since = new Date(Date.now() - 60 * 86400 * 1000).toISOString();
+  const evs = await (await fetch(
+    `${SB}/rest/v1/cal_events?select=*,cal_attendees(username,display_name)` +
+    `&cancelled=eq.false&start_at=gte.${encodeURIComponent(since)}&order=start_at.asc&limit=2000`,
+    { headers: h },
+  )).json();
+  if (!Array.isArray(evs)) return new Response('อ่านตาราง cal_events ไม่ได้', { status: 500, headers: CORS });
+
+  const list = user
+    ? evs.filter((e) => e.created_by === user || (e.cal_attendees || []).some((a: Attendee) => a.username === user))
+    : evs;
+
+  const calName = user ? `นัด ${user} · จริงใจหมูกระทะ` : 'นัดองค์กร · จริงใจหมูกระทะ';
+  const L: string[] = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//JJ-PnL//JJ Calendar//TH',
+    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    fold('X-WR-CALNAME:' + esc(calName)),
+    'X-WR-TIMEZONE:Asia/Bangkok',
+    'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
+  ];
+  for (const e of list) {
+    L.push('BEGIN:VEVENT', 'UID:' + e.id + '@jj-pnl', 'DTSTAMP:' + utc(e.updated_at || e.created_at));
+    if (e.all_day) {
+      // DTEND ของนัดทั้งวันเป็นแบบ exclusive → +1 วันจากวันสุดท้าย
+      L.push('DTSTART;VALUE=DATE:' + bkkDate(e.start_at), 'DTEND;VALUE=DATE:' + bkkDate(e.end_at, 1));
+    } else {
+      L.push('DTSTART:' + utc(e.start_at), 'DTEND:' + utc(e.end_at));
+    }
+    L.push(fold('SUMMARY:' + esc(e.title)));
+    const loc = [e.branch === 'ALL' ? '' : e.branch, e.location].filter(Boolean).join(' · ');
+    if (loc) L.push(fold('LOCATION:' + esc(loc)));
+    const who = (e.cal_attendees || []).map((a: Attendee) => a.display_name || a.username).join(', ');
+    const desc = [e.detail, who ? 'ผู้เข้าร่วม: ' + who : '', 'สร้างโดย ' + (e.created_name || e.created_by)]
+      .filter(Boolean).join('\n');
+    L.push(fold('DESCRIPTION:' + esc(desc)));
+    if (e.reminder_min > 0) {
+      L.push('BEGIN:VALARM', 'ACTION:DISPLAY', fold('DESCRIPTION:' + esc(e.title)), `TRIGGER:-PT${e.reminder_min}M`, 'END:VALARM');
+    }
+    L.push('END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+
+  return new Response(L.join('\r\n') + '\r\n', {
+    headers: {
+      ...CORS,
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'inline; filename="jj-calendar.ics"',
+      'Cache-Control': 'public, max-age=900',
+    },
+  });
+});

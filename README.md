@@ -35,8 +35,9 @@
 ## ระบบปฏิทินองค์กร (JJ Calendar — แอพ `jjmk-calendar.html` บน main)
 
 - `jjmk-calendar.sql` — ตาราง `cal_events`/`cal_attendees`/`cal_settings` + สิทธิ์ + token ฟีด (รันซ้ำได้)
-  คู่กับ Edge Function `cal-feed` (ฟีด ICS สำหรับ subscribe ลงมือถือ — deploy ผ่าน Dashboard, ปิด Verify JWT
-  · โค้ดส่งให้เจ้าของในแชท 2026-09-10)
+- `cal-feed.ts` — โค้ด Edge Function ฟีด ICS สำหรับ subscribe ปฏิทินลงมือถือ
+  (deploy ผ่าน Dashboard ตั้งชื่อ `cal-feed` → **ปิด Verify JWT** ไม่งั้นมือถือจะโดน 401)
+  · เวอร์ชัน 2026-09-21: token ไม่ตรงตอบ 403 เพื่อให้ปุ่มทดสอบในแอปแยกอาการจาก 401 ของ Verify JWT ได้
 
 branch นี้เก็บเฉพาะไฟล์ SQL — ไม่รวมเข้า main และไม่ merge กับ branch อื่น
 
