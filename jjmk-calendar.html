@@ -332,12 +332,19 @@ function bkkDate(d: string | Date, addDays = 0) {
 function esc(s: unknown) {
   return String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 }
-// RFC 5545: บรรทัดยาวต้องพับ (fold) ต่อบรรทัดขึ้นต้นด้วยช่องว่าง
+// RFC 5545: บรรทัดยาวเกิน 75 ไบต์ต้องพับ (fold) ต่อบรรทัดขึ้นต้นด้วยช่องว่าง
+// นับเป็น "ไบต์" ไม่ใช่จำนวนตัวอักษร — ภาษาไทย 1 ตัว = 3 ไบต์ และเดินทีละตัวอักษรจริง
+// ด้วย for...of เพื่อไม่ให้หั่นกลางอีโมจิ (ของเดิมหั่นทีละ 73 ตัว ทำให้อีโมจิพังและบรรทัดยาวเกินมาตรฐาน)
 function fold(line: string) {
+  const enc = new TextEncoder();
   const out: string[] = [];
-  let s = line;
-  while (s.length > 73) { out.push(s.slice(0, 73)); s = ' ' + s.slice(73); }
-  out.push(s);
+  let cur = '', bytes = 0;
+  for (const ch of line) {
+    const b = enc.encode(ch).length;
+    if (bytes + b > 74) { out.push(cur); cur = ' '; bytes = 1; }   // บรรทัดต่อเริ่มด้วยช่องว่าง 1 ไบต์
+    cur += ch; bytes += b;
+  }
+  out.push(cur);
   return out.join('\r\n');
 }
 
@@ -929,8 +936,12 @@ async function checkFeed(){
   try{a=await fetch(u)}                       // ยิงแบบเดียวกับที่แอปปฏิทินมือถือยิง (ไม่มี header)
   catch(e){set('❌ ต่อฟีดไม่ได้ — เช็คอินเทอร์เน็ตแล้วลองใหม่','var(--bad)');return}
   if(a.ok){
-    const ok=(await a.text()).includes('BEGIN:VCALENDAR');
-    set(ok?'✅ ฟีดใช้งานได้ — เอา URL ไป subscribe ในมือถือได้เลย':'❌ ฟีดตอบกลับไม่ใช่ข้อมูลปฏิทิน — ตรวจโค้ดในฟังก์ชัน cal-feed อีกครั้ง',ok?'var(--ok)':'var(--bad)');
+    const tx=await a.text();
+    if(!tx.includes('BEGIN:VCALENDAR')){set('❌ ฟีดตอบกลับไม่ใช่ข้อมูลปฏิทิน — ตรวจโค้ดในฟังก์ชัน cal-feed อีกครั้ง','var(--bad)');return}
+    const n=(tx.match(/BEGIN:VEVENT/g)||[]).length;          // นับนัดที่อยู่ในฟีดจริง
+    const emo=/[\uD800-\uDFFF]/.test(tx.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g,''));  // อีโมจิถูกหั่นกลางตัวไหม (fold เวอร์ชันเก่า)
+    set('✅ ฟีดใช้งานได้ · มีนัดในฟีด <b>'+n+'</b> รายการ — เอา URL ไป subscribe ในมือถือได้เลย'+
+      (emo?'<br><span style="color:var(--gold)">⚠️ เจออีโมจิถูกหั่นกลางตัวในฟีด — โค้ดที่ deploy เป็นเวอร์ชันเก่า กด 📋 คัดลอกโค้ด แล้ววางทับใน Edge Functions</span>':''),'var(--ok)');
     return;
   }
   if(a.status===403){set('❌ token ไม่ตรงกับในฐานข้อมูล — กดรีเฟรชหน้านี้ 1 ครั้ง ถ้ายังไม่หายให้รัน <b>jjmk-calendar.sql</b> ใหม่','var(--bad)');return}
