@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>JJ Calendar — จริงใจหมูกระทะ</title>
 <meta name="theme-color" content="#0C0A09">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23A31B24'/%3E%3Ctext x='50' y='70' font-size='56' text-anchor='middle'%3E%F0%9F%93%85%3C/text%3E%3C/svg%3E">
@@ -181,17 +184,26 @@ main{padding:16px clamp(12px,1.6vw,28px) 90px;max-width:1100px;margin:0 auto;pos
    ============================================================ */
 window.JJGate=(function(){
   var APP='calendar';                 /* ชื่อแอพนี้ — ต้องตรงกับ data-app ในหน้าศูนย์รวมแอพ */
-  var TAB='jjgate_'+APP, TICKET='jjhub_pass';
+  var TAB='jjgate_'+APP, TICKET='jjhub_pass', ALT='jjsso_ticket';
   var IDLE=30*60*1000;               /* ทิ้งไว้เกิน 30 นาทีแล้วรีเฟรช = ยืนยันรหัสใหม่ (กติกาเดียวกับ P&L) */
   var TTL=2*60*1000;                 /* ใบผ่านจากหน้าศูนย์รวมแอพ อายุ 2 นาที */
   function j(s){ try{ return JSON.parse(s||'null'); }catch(e){ return null; } }
   function readTab(){ try{ return j(sessionStorage.getItem(TAB)); }catch(e){ return null; } }
   function grant(user){ try{ sessionStorage.setItem(TAB,JSON.stringify({u:user||'',t:Date.now()})); }catch(e){} }
+  /* ใช้ใบผ่านแล้วต้องลบให้เกลี้ยงทั้ง 2 แบบ ไม่งั้นใบที่เหลือจะถูกเอาไปเปิดแท็บใหม่ได้อีก
+     (ลบเฉพาะใบที่จ่าหน้าถึงแอพนี้ — ใบของแอพอื่นต้องไม่โดนลบไปด้วย) */
+  function burn(){
+    try{ localStorage.removeItem(TICKET); }catch(e){}
+    var o=null; try{ o=j(localStorage.getItem(ALT)); }catch(e){}
+    if(!o||!o.app||o.app===APP){ try{ localStorage.removeItem(ALT); }catch(e){} }
+  }
   function takeTicket(){
     var t=null; try{ t=j(localStorage.getItem(TICKET)); }catch(e){}
-    if(!t||t.app!==APP||!t.u||!t.exp||t.exp<Date.now())return null;
-    try{ localStorage.removeItem(TICKET); }catch(e){}     /* ใช้ได้ครั้งเดียว */
-    return t;
+    if(t&&t.app===APP&&t.u&&t.exp&&t.exp>=Date.now()){ burn(); return t; }
+    /* รับใบผ่านอีกแบบของหน้าศูนย์รวมแอพด้วย (jjsso_ticket — ระบบเดียวกับที่ JJ Social/ซ่อมบำรุงใช้) */
+    var o=null; try{ o=j(localStorage.getItem(ALT)); }catch(e){}
+    if(o&&o.u&&(!o.app||o.app===APP)&&(Date.now()-(+o.t||0))<TTL){ burn(); return {app:APP,u:o.u,exp:Date.now()+TTL}; }
+    return null;
   }
   /* เปิดจากไอคอนที่ติดตั้งไว้บนหน้าจอมือถือ (PWA) = เครื่องของเจ้าตัวเอง ไม่ใช่ลิงก์ที่ถูกส่งต่อ → ผ่านได้
      (ลิงก์ที่ส่งต่อทางแชทจะเปิดในเบราว์เซอร์ธรรมดา ไม่ใช่โหมดนี้ — ยังโดนถามรหัสเหมือนเดิม) */
@@ -282,6 +294,129 @@ window.JJGate=(function(){
 <div id="modalWrap" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
 <div id="toast"></div>
 
+<script type="text/plain" id="feedCode">// ============================================================
+// cal-feed — ฟีดปฏิทิน ICS ของระบบ JJ Calendar (จริงใจหมูกระทะ)
+//
+// วิธี deploy (ทำครั้งเดียว):
+//   1. Supabase Dashboard → Edge Functions → Deploy a new function
+//   2. ตั้งชื่อฟังก์ชันว่า  cal-feed  แล้ววางโค้ดไฟล์นี้ทั้งไฟล์ → Deploy
+//   3. เข้าไปที่ฟังก์ชัน cal-feed → Settings → **ปิด "Verify JWT"** → Save
+//      (ต้องปิด เพราะแอปปฏิทินบนมือถือแนบ Authorization header ไม่ได้
+//       ถ้าไม่ปิด Supabase จะตอบ 401 ตั้งแต่ยังไม่ถึงโค้ดนี้)
+//
+// วิธีใช้ (แอป jjmk-calendar.html แท็บ "📲 เชื่อมมือถือ" สร้าง URL ให้อัตโนมัติ):
+//   https://<project>.supabase.co/functions/v1/cal-feed?token=XXXX            → นัดทั้งองค์กร
+//   https://<project>.supabase.co/functions/v1/cal-feed?token=XXXX&user=somchai → เฉพาะนัดที่ somchai ต้องเข้า
+//   token ดูได้จากผลลัพธ์ตอนรัน jjmk-calendar.sql หรือ: select val->>'token' from cal_settings where id='feed';
+//
+// รหัสตอบกลับ (ใช้แยกอาการตอนกดปุ่ม "ทดสอบว่าฟีดใช้งานได้" ในแอป):
+//   200 = ปกติ · 403 = token ไม่ตรง · 401 = ยังไม่ได้ปิด Verify JWT หรือยังไม่ได้ deploy
+// ============================================================
+
+const CORS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': '*',
+};
+
+function pad(n: number) { return String(n).padStart(2, '0'); }
+// เวลาแบบระบุเวลา → UTC (Z)
+function utc(d: string | Date) {
+  const x = new Date(d);
+  return `${x.getUTCFullYear()}${pad(x.getUTCMonth() + 1)}${pad(x.getUTCDate())}T${pad(x.getUTCHours())}${pad(x.getUTCMinutes())}00Z`;
+}
+// นัดทั้งวัน → วันที่ตามเวลาไทย (UTC+7 คงที่ ไทยไม่มี DST)
+function bkkDate(d: string | Date, addDays = 0) {
+  const x = new Date(new Date(d).getTime() + (7 * 3600 + addDays * 86400) * 1000);
+  return `${x.getUTCFullYear()}${pad(x.getUTCMonth() + 1)}${pad(x.getUTCDate())}`;
+}
+function esc(s: unknown) {
+  return String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+// RFC 5545: บรรทัดยาวต้องพับ (fold) ต่อบรรทัดขึ้นต้นด้วยช่องว่าง
+function fold(line: string) {
+  const out: string[] = [];
+  let s = line;
+  while (s.length > 73) { out.push(s.slice(0, 73)); s = ' ' + s.slice(73); }
+  out.push(s);
+  return out.join('\r\n');
+}
+
+type Attendee = { username: string; display_name?: string };
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  const url = new URL(req.url);
+  const token = url.searchParams.get('token') || '';
+  const user = (url.searchParams.get('user') || '').trim();
+
+  const SB = Deno.env.get('SUPABASE_URL')!;
+  const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const h = { apikey: KEY, Authorization: 'Bearer ' + KEY };
+
+  // ตรวจ token กับ cal_settings (id='feed') — ไม่ตรงตอบ 403 เพื่อให้แยกจาก 401 ของ Verify JWT ได้
+  const st = await (await fetch(`${SB}/rest/v1/cal_settings?id=eq.feed&select=val`, { headers: h })).json();
+  const good = st?.[0]?.val?.token;
+  if (!good) {
+    return new Response('cal_settings ยังไม่มีแถว feed — รัน jjmk-calendar.sql ใน SQL Editor ก่อน', { status: 500, headers: CORS });
+  }
+  if (token !== good) {
+    return new Response('token ไม่ถูกต้อง — คัดลอก URL จากแท็บ "เชื่อมมือถือ" ในแอปใหม่อีกครั้ง', { status: 403, headers: CORS });
+  }
+
+  // ดึงนัดย้อนหลัง 60 วัน + อนาคตทั้งหมด (ที่ไม่ถูกยกเลิก)
+  const since = new Date(Date.now() - 60 * 86400 * 1000).toISOString();
+  const evs = await (await fetch(
+    `${SB}/rest/v1/cal_events?select=*,cal_attendees(username,display_name)` +
+    `&cancelled=eq.false&start_at=gte.${encodeURIComponent(since)}&order=start_at.asc&limit=2000`,
+    { headers: h },
+  )).json();
+  if (!Array.isArray(evs)) return new Response('อ่านตาราง cal_events ไม่ได้', { status: 500, headers: CORS });
+
+  const list = user
+    ? evs.filter((e) => e.created_by === user || (e.cal_attendees || []).some((a: Attendee) => a.username === user))
+    : evs;
+
+  const calName = user ? `นัด ${user} · จริงใจหมูกระทะ` : 'นัดองค์กร · จริงใจหมูกระทะ';
+  const L: string[] = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//JJ-PnL//JJ Calendar//TH',
+    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    fold('X-WR-CALNAME:' + esc(calName)),
+    'X-WR-TIMEZONE:Asia/Bangkok',
+    'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
+  ];
+  for (const e of list) {
+    L.push('BEGIN:VEVENT', 'UID:' + e.id + '@jj-pnl', 'DTSTAMP:' + utc(e.updated_at || e.created_at));
+    if (e.all_day) {
+      // DTEND ของนัดทั้งวันเป็นแบบ exclusive → +1 วันจากวันสุดท้าย
+      L.push('DTSTART;VALUE=DATE:' + bkkDate(e.start_at), 'DTEND;VALUE=DATE:' + bkkDate(e.end_at, 1));
+    } else {
+      L.push('DTSTART:' + utc(e.start_at), 'DTEND:' + utc(e.end_at));
+    }
+    L.push(fold('SUMMARY:' + esc(e.title)));
+    const loc = [e.branch === 'ALL' ? '' : e.branch, e.location].filter(Boolean).join(' · ');
+    if (loc) L.push(fold('LOCATION:' + esc(loc)));
+    const who = (e.cal_attendees || []).map((a: Attendee) => a.display_name || a.username).join(', ');
+    const desc = [e.detail, who ? 'ผู้เข้าร่วม: ' + who : '', 'สร้างโดย ' + (e.created_name || e.created_by)]
+      .filter(Boolean).join('\n');
+    L.push(fold('DESCRIPTION:' + esc(desc)));
+    if (e.reminder_min > 0) {
+      L.push('BEGIN:VALARM', 'ACTION:DISPLAY', fold('DESCRIPTION:' + esc(e.title)), `TRIGGER:-PT${e.reminder_min}M`, 'END:VALARM');
+    }
+    L.push('END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+
+  return new Response(L.join('\r\n') + '\r\n', {
+    headers: {
+      ...CORS,
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'inline; filename="jj-calendar.ics"',
+      'Cache-Control': 'public, max-age=900',
+    },
+  });
+});
+</script>
+
 <script>
 /* ============================================================
    JJ Calendar — ปฏิทินนัดหมายภายในองค์กร จริงใจหมูกระทะ
@@ -337,7 +472,8 @@ function allBranches(){
 function att(e){return e.cal_attendees||[]}
 function byId(id){return S.events.find(e=>e.id===id)}
 function isMine(e){return e.created_by===S.user.username||att(e).some(a=>a.username===S.user.username)}
-function canEdit(e){return !!(S.user&&(S.user.role==='admin'||S.user.role==='owner'||e.created_by===S.user.username))}
+function isBoss(){return !!S.user&&(S.user.role==='admin'||S.user.role==='owner')}
+function canEdit(e){return !!S.user&&(isBoss()||e.created_by===S.user.username)}
 function nameOf(u){const x=S.users.find(r=>r.username===u);return x?(x.display_name||u):u}
 
 /* ---------- REST ---------- */
@@ -387,6 +523,8 @@ async function doLogin(){
   }catch(e){toast('เชื่อมต่อไม่ได้ — ตรวจว่ารัน jjmk-calendar.sql หรือยัง',true);console.error(e)}
 }
 function logout(){localStorage.removeItem('jjcal_sess');location.reload()}
+/* โหลดหน้าใหม่แบบข้ามแคช — ดึงหน้าลงบนมือถือบางทียังได้ไฟล์เก่า */
+function hardReload(){location.replace(location.pathname+'?v='+Date.now())}
 
 /* ---------- โหลดข้อมูล ---------- */
 async function loadBranches(){
@@ -740,6 +878,17 @@ async function vSync(el){
     </div>
     <div class="acts"><button class="btn gh sm" onclick="checkFeed()">🔎 ทดสอบว่าฟีดใช้งานได้</button><span id="feedStatus" class="sm mut" style="flex:1 1 100%;line-height:1.6"></span></div>
     <p class="xs mut" style="margin:10px 0 0">* ฟีดนี้ต้อง deploy Edge Function ชื่อ <b>cal-feed</b> ใน Supabase ก่อน แล้ว<b>ปิด Verify JWT</b> (แอปปฏิทินมือถือแนบกุญแจไม่ได้) — กดปุ่มทดสอบข้างบน ระบบจะบอกเองว่าติดตรงไหน</p>
+    ${isBoss()?`<div style="margin-top:12px;border-top:1px dashed rgba(255,255,255,.14);padding-top:10px">
+      <p class="sm b" style="margin:0 0 4px">🛠 ติดตั้งฟีด (ทำครั้งเดียว · เฉพาะผู้ดูแล)</p>
+      <p class="xs" style="margin:0 0 6px;color:var(--gold)">⚠️ โค้ดนี้เป็น <b>TypeScript</b> ต้องวางที่หน้า <b>Edge Functions</b> — <b>ไม่ใช่ SQL Editor</b> (วางใน SQL Editor จะขึ้น syntax error ที่บรรทัด //)</p>
+      <ol class="steps">
+        <li>Supabase → เมนูซ้าย <b>Edge Functions</b> → <b>Deploy a new function</b> → เลือกแบบเขียนในเบราว์เซอร์ (Via Editor)</li>
+        <li>ตั้งชื่อฟังก์ชันว่า <b>cal-feed</b> (ต้องตรงตัว) → ลบโค้ดตัวอย่างในช่องออกให้หมด → กดปุ่มข้างล่างเพื่อคัดลอกโค้ด แล้ววางแทน → <b>Deploy</b></li>
+        <li>เข้าไปที่ฟังก์ชัน <b>cal-feed</b> → <b>Settings</b> → <b>ปิด Verify JWT</b> → Save <span class="xs">(ไม่ปิดจะขึ้น 401 ตลอด เพราะแอปปฏิทินมือถือแนบกุญแจไม่ได้)</span></li>
+        <li>กลับมากด <b>🔎 ทดสอบว่าฟีดใช้งานได้</b> ข้างบน — ต้องขึ้นเขียว ✅</li>
+      </ol>
+      <button class="btn gh sm" onclick="copyFeedCode()">📋 คัดลอกโค้ด cal-feed</button>
+    </div>`:''}
     `:`<div class="empty">ยังไม่พบ token ของฟีด — ต้องรัน <b>jjmk-calendar.sql</b> ใน Supabase ก่อนครับ</div>`}
   </div>
   <div class="card">
@@ -752,6 +901,22 @@ async function vSync(el){
       <button class="btn ${notifOk?'gh':''}" onclick="notifPerm()">${notifOk?'✅ เปิดการแจ้งเตือนในเบราว์เซอร์แล้ว':'🔔 เปิดการแจ้งเตือนในเบราว์เซอร์'}</button>
     </div>
   </div>`;
+}
+function copyFeedCode(){
+  const el=document.getElementById('feedCode');
+  if(!el){toast('ไม่พบโค้ดในหน้านี้',true);return}
+  const code=el.textContent.trim();
+  const fallback=()=>{ // คัดลอกอัตโนมัติไม่ได้ → เปิดกล่องให้เลือกเองทั้งก้อน (โค้ดยาวเกินใช้ prompt)
+    openModal('<h3>📋 โค้ด cal-feed</h3><p class="sm mut" style="margin:0 0 8px">กดในกล่องแล้ว Ctrl+A → Ctrl+C (มือถือ: แตะค้าง → เลือกทั้งหมด → คัดลอก) แล้วเอาไปวางที่ <b>Edge Functions</b> ของ Supabase</p>'+
+      '<textarea readonly id="feedCodeBox" style="min-height:220px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px" onclick="this.select()"></textarea>'+
+      '<div class="acts"><button class="btn gh" onclick="closeModal()">ปิด</button></div>');
+    const box=document.getElementById('feedCodeBox');
+    if(box){box.value=code;box.focus();box.select()}
+  };
+  if(!navigator.clipboard){fallback();return}
+  navigator.clipboard.writeText(code)
+    .then(()=>toast('คัดลอกโค้ดแล้ว ✅ เอาไปวางที่ Edge Functions ของ Supabase'))
+    .catch(fallback);
 }
 function copyTxt(t){
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('คัดลอกแล้ว ✅')).catch(()=>{prompt('คัดลอก URL นี้',t)});
@@ -811,7 +976,7 @@ function notifTick(){
 async function startApp(){
   $('#login').style.display='none';$('#app').style.display='block';
   $('#mineBtn').classList.toggle('on',S.mine);
-  $('#hdUser').innerHTML=`👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:logout()">ออก</a>`;
+  $('#hdUser').innerHTML=`👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:hardReload()">🔄 โหลดใหม่</a> · <a class="hintlink" href="javascript:logout()">ออก</a>`;
   await loadBranches();
   await Promise.all([loadUsers(),loadEvents(true),loadToken()]);
   show(LS.get('jjcal_tab','month'));   // เปิดมาที่หน้าเดิมก่อนรีเฟรช
@@ -829,6 +994,77 @@ async function startApp(){
     $('#login').style.display='block';
     if(sess&&sess.username)JJGate.note(sess.username,'liUser','liPass');
   }
+})();
+
+/* ============================================================
+   ลากหน้าลง = รีเฟรช (pull-to-refresh) — ใช้ได้บนมือถือทุกแบบ
+   จำเป็นเพราะแอปที่ "เพิ่มไปยังหน้าจอโฮม" (PWA) ไม่มีปุ่ม/ท่ารีเฟรชของเบราว์เซอร์
+   แตะที่ยอดสุดของหน้าแล้วลากลงเกิน 70px → ปล่อยนิ้ว = โหลดหน้าใหม่
+   ============================================================ */
+(function(){
+  if(!('ontouchstart' in window))return;              // เฉพาะจอสัมผัส
+  var TH=70, MAX=110, y0=0, dy=0, pulling=false, ready=false, bar=null;
+
+  function el(){
+    if(bar)return bar;
+    bar=document.createElement('div');
+    bar.setAttribute('aria-hidden','true');
+    bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;display:flex;'+
+      'align-items:center;justify-content:center;pointer-events:none;'+
+      'height:0;overflow:hidden;transition:none;'+
+      'font:600 13px/1.2 "Prompt","Sarabun",system-ui,sans-serif;color:#F2CF7A;'+
+      'background:linear-gradient(180deg,rgba(163,27,36,.95),rgba(163,27,36,0));';
+    bar.innerHTML='<span id="__ptrTxt">ลากลงเพื่อรีเฟรช</span>';
+    document.body.appendChild(bar);
+    return bar;
+  }
+  function atTop(){
+    var d=document.scrollingElement||document.documentElement;
+    return (window.pageYOffset||d.scrollTop||0)<=0;
+  }
+  /* ลากอยู่ในกล่องที่เลื่อนได้เอง (ตาราง/ลิสต์) ไม่นับ */
+  function inScrollable(node){
+    for(var n=node;n&&n!==document.body;n=n.parentElement){
+      var st=getComputedStyle(n), oy=st.overflowY;
+      if((oy==='auto'||oy==='scroll')&&n.scrollHeight>n.clientHeight&&n.scrollTop>0)return true;
+    }
+    return false;
+  }
+  /* โหมด kiosk (แท็บเล็ตหน้าร้านให้ลูกค้ากด) ห้ามรีเฟรช — คะแนนที่กดค้างไว้จะหาย */
+  function kiosk(){
+    return document.body.classList.contains('kiosk') ||
+           /[?&]kiosk=/.test(location.search);
+  }
+  document.addEventListener('touchstart',function(e){
+    if(kiosk()){pulling=false;return;}
+    if(e.touches.length!==1||!atTop()||inScrollable(e.target)){pulling=false;return;}
+    y0=e.touches[0].clientY; dy=0; pulling=true; ready=false;
+  },{passive:true});
+
+  document.addEventListener('touchmove',function(e){
+    if(!pulling)return;
+    dy=e.touches[0].clientY-y0;
+    if(dy<=0||!atTop()){ if(bar){bar.style.height='0';} return; }
+    if(e.cancelable)e.preventDefault();                // กันหน้าเด้งตามนิ้ว
+    var h=Math.min(dy*0.5,MAX), b=el();
+    b.style.height=h+'px';
+    ready = dy>TH;
+    var t=b.querySelector('#__ptrTxt');
+    if(t)t.textContent = ready ? 'ปล่อยเพื่อรีเฟรช' : 'ลากลงเพื่อรีเฟรช';
+  },{passive:false});
+
+  document.addEventListener('touchend',function(){
+    if(!pulling)return; pulling=false;
+    var b=el();
+    if(ready){
+      b.style.height='44px';
+      var t=b.querySelector('#__ptrTxt'); if(t)t.textContent='กำลังโหลด…';
+      setTimeout(function(){ location.reload(); },120);
+    }else{
+      b.style.transition='height .2s'; b.style.height='0';
+      setTimeout(function(){ b.style.transition='none'; },220);
+    }
+  },{passive:true});
 })();
 </script>
 </body>
