@@ -54,21 +54,38 @@ function fold(line: string) {
 
 type Attendee = { username: string; display_name?: string };
 
-Deno.serve(async (req) => {
+// อ่านข้อมูลจาก Supabase — ลองคีย์ service role ก่อน ถ้าใช้ไม่ได้ค่อยลอง anon
+// (ตาราง cal_* เปิดสิทธิ์อ่านให้ anon อยู่แล้วตาม jjmk-calendar.sql จึงทำงานได้ทั้งสองแบบ)
+async function sbGet(path: string) {
+  const SB = Deno.env.get('SUPABASE_URL') || '';
+  const keys = [
+    ['service_role', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')],
+    ['anon', Deno.env.get('SUPABASE_ANON_KEY')],
+  ].filter(([, k]) => !!k) as [string, string][];
+  if (!keys.length) throw new Error('Edge Function ไม่มีคีย์ของโปรเจกต์ (SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY)');
+  let last = '';
+  for (const [name, k] of keys) {
+    const r = await fetch(SB + path, { headers: { apikey: k, Authorization: 'Bearer ' + k } });
+    if (r.ok) return await r.json();
+    last = `คีย์ ${name} อ่านไม่ได้ (HTTP ${r.status}: ${(await r.text()).slice(0, 160)})`;
+  }
+  throw new Error(last);
+}
+
+async function handle(req: Request) {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   const url = new URL(req.url);
   const token = url.searchParams.get('token') || '';
   const user = (url.searchParams.get('user') || '').trim();
 
-  const SB = Deno.env.get('SUPABASE_URL')!;
-  const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const h = { apikey: KEY, Authorization: 'Bearer ' + KEY };
+  const SB = Deno.env.get('SUPABASE_URL') || '';
+  if (!SB) throw new Error('ไม่พบ SUPABASE_URL ใน Edge Function');
 
   // ตรวจ token กับ cal_settings (id='feed') — ไม่ตรงตอบ 403 เพื่อให้แยกจาก 401 ของ Verify JWT ได้
-  const st = await (await fetch(`${SB}/rest/v1/cal_settings?id=eq.feed&select=val`, { headers: h })).json();
+  const st = await sbGet('/rest/v1/cal_settings?id=eq.feed&select=val');
   const good = st?.[0]?.val?.token;
   if (!good) {
-    return new Response('cal_settings ยังไม่มีแถว feed — รัน jjmk-calendar.sql ใน SQL Editor ก่อน', { status: 500, headers: CORS });
+    throw new Error('ตาราง cal_settings ไม่มีแถว id=feed — รัน jjmk-calendar.sql ใน SQL Editor ก่อน');
   }
   if (token !== good) {
     return new Response('token ไม่ถูกต้อง — คัดลอก URL จากแท็บ "เชื่อมมือถือ" ในแอปใหม่อีกครั้ง', { status: 403, headers: CORS });
@@ -76,12 +93,11 @@ Deno.serve(async (req) => {
 
   // ดึงนัดย้อนหลัง 60 วัน + อนาคตทั้งหมด (ที่ไม่ถูกยกเลิก)
   const since = new Date(Date.now() - 60 * 86400 * 1000).toISOString();
-  const evs = await (await fetch(
-    `${SB}/rest/v1/cal_events?select=*,cal_attendees(username,display_name)` +
+  const evs = await sbGet(
+    `/rest/v1/cal_events?select=*,cal_attendees(username,display_name)` +
     `&cancelled=eq.false&start_at=gte.${encodeURIComponent(since)}&order=start_at.asc&limit=2000`,
-    { headers: h },
-  )).json();
-  if (!Array.isArray(evs)) return new Response('อ่านตาราง cal_events ไม่ได้', { status: 500, headers: CORS });
+  );
+  if (!Array.isArray(evs)) throw new Error('อ่านตาราง cal_events ไม่ได้ (ผลลัพธ์ไม่ใช่รายการ)');
 
   const list = user
     ? evs.filter((e) => e.created_by === user || (e.cal_attendees || []).some((a: Attendee) => a.username === user))
@@ -125,4 +141,14 @@ Deno.serve(async (req) => {
       'Cache-Control': 'public, max-age=900',
     },
   });
+}
+
+Deno.serve(async (req) => {
+  try {
+    return await handle(req);
+  } catch (err) {
+    // ตอบสาเหตุจริงกลับไปเป็นข้อความ เพื่อให้ปุ่มทดสอบในแอปบอกได้ว่าติดตรงไหน
+    const msg = err instanceof Error ? err.message : String(err);
+    return new Response('cal-feed ผิดพลาด: ' + msg, { status: 500, headers: CORS });
+  }
 });
