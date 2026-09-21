@@ -153,9 +153,31 @@ th{color:var(--mute);font-weight:500;font-size:12px}
 td.r,th.r{text-align:right}
 td.face-cell{font-size:18px;text-align:center}
 tr:last-child td{border-bottom:0}
-.recent-scroll{max-height:min(70vh,620px);overflow:auto}
-.recent-scroll thead th{position:sticky;top:0;background:var(--card);z-index:1}
-.card h3 .btn{float:right;margin-top:-4px}
+/* ---- สกรอลบาร์ให้เข้าธีม (เดิมใช้ของระบบ ดูแปลกแยกบนพื้นเข้ม) ---- */
+*{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:999px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--goldDim)}
+::-webkit-scrollbar-button{display:none}       /* ปุ่มลูกศรหัว-ท้ายแบบเก่า */
+::-webkit-scrollbar-corner{background:transparent}
+
+/* ---- รายการล่าสุด ---- */
+.rc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.rc-head h3{margin:0}
+.rc-more{width:100%;margin-top:10px}
+@media (max-width:620px){                       /* จอแคบ: ตารางแปลงเป็นการ์ดต่อรายการ */
+  .rc-tbl thead{display:none}
+  .rc-tbl td.face-cell{display:none}            /* ใช้เซลล์รวม .rc-faces แทน ไม่งั้นอีโมจิซ้ำสองชุด */
+  .rc-tbl tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .rc-tbl td{border:0;padding:0;white-space:nowrap}
+  .rc-tbl td.rc-time{font-family:var(--fd);font-size:15px;color:var(--gold2)}
+  .rc-tbl td.rc-branch{font-size:12px;color:var(--mute)}
+  .rc-tbl td.rc-staff{margin-left:auto;color:var(--ink2);font-size:13px}
+  .rc-tbl td.rc-faces{flex:0 0 100%;display:flex;gap:14px;flex-wrap:wrap;font-size:20px;line-height:1.1}
+  .rc-tbl .rc-f{display:inline-flex;align-items:center;gap:3px}
+}
+@media (min-width:621px){ .rc-tbl .rc-faces{display:none} }   /* จอกว้าง: ใช้คอลัมน์แยกตามแผนกตามปกติ */
 
 /* trend svg */
 .trend{width:100%;height:auto;display:block}
@@ -555,9 +577,23 @@ function recentHTML(rows) {
   recentRows = rows;
   const depts = activeDepts(); const total = rows.length; if (!total) return '';
   const last = (S.recentAll ? rows : rows.slice(-RECENT_STEP)).slice().reverse();
-  return '<div class="card" id="recentCard"><h3>รายการล่าสุด <small>(ทั้งหมด ' + total + ' ครั้ง' + (last.length < total ? ' · แสดงล่าสุด ' + last.length : '') + ')</small>' + (total > RECENT_STEP ? '<button class="btn ghost sm" data-act="toggleRecent">' + (S.recentAll ? 'ย่อลง' : 'ดูทั้งหมด ' + total + ' ครั้ง') + '</button>' : '') + '</h3><div class="tbl recent-scroll"><table><thead><tr><th>เวลา</th>' + (S.branch === ALL ? '<th>สาขา</th>' : '') + depts.map(d => '<th title="' + esc(d.name) + '" style="text-align:center">' + esc(d.icon) + '</th>').join('') + '<th>พนักงาน</th></tr></thead><tbody>' +
-    last.map(r => { const m = {}; for (const s of (r.kpi_scores || [])) m[s.department_id] = s.score; return '<tr><td>' + bkkTime(r.created_at) + '</td>' + (S.branch === ALL ? '<td>' + esc(r.branch) + '</td>' : '') + depts.map(d => '<td class="face-cell">' + (m[d.id] ? FACES[m[d.id] - 1].e : '<small>–</small>') + '</td>').join('') + '<td>' + esc(staffName(r.staff_id) || '–') + '</td></tr>'; }).join('') +
-    '</tbody></table></div></div>';
+  const face = sc => sc ? FACES[sc - 1].e : '–';
+  const body = last.map(r => {
+    const m = {}; for (const sc of (r.kpi_scores || [])) m[sc.department_id] = sc.score;
+    return '<tr><td class="rc-time">' + bkkTime(r.created_at) + '</td>' +
+      (S.branch === ALL ? '<td class="rc-branch">' + esc(r.branch) + '</td>' : '') +
+      depts.map(d => '<td class="face-cell">' + (m[d.id] ? FACES[m[d.id] - 1].e : '<small>–</small>') + '</td>').join('') +
+      '<td class="rc-staff">' + esc(staffName(r.staff_id) || '–') + '</td>' +
+      /* เซลล์รวมหน้ายิ้ม + ชื่อแผนก — โผล่เฉพาะจอแคบ (แถวตารางกลายเป็นการ์ด) */
+      '<td class="rc-faces">' + depts.map(d => '<span class="rc-f">' + esc(d.icon) + ' ' + face(m[d.id]) + '</span>').join('') + '</td></tr>';
+  }).join('');
+  return '<div class="card" id="recentCard">' +
+    '<div class="rc-head"><h3>รายการล่าสุด <small>(ทั้งหมด ' + total + ' ครั้ง' + (last.length < total ? ' · แสดงล่าสุด ' + last.length : '') + ')</small></h3></div>' +
+    '<div class="tbl rc-tbl"><table><thead><tr><th>เวลา</th>' + (S.branch === ALL ? '<th>สาขา</th>' : '') +
+    depts.map(d => '<th title="' + esc(d.name) + '" style="text-align:center">' + esc(d.icon) + '</th>').join('') +
+    '<th>พนักงาน</th><th class="rc-faces"></th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+    (total > RECENT_STEP ? '<button class="btn ghost sm rc-more" data-act="toggleRecent">' + (S.recentAll ? 'ย่อลง เหลือ ' + RECENT_STEP + ' รายการ' : 'ดูทั้งหมด ' + total + ' ครั้ง') + '</button>' : '') +
+    '</div>';
 }
 async function renderDaily(silent) {
   const token = ++S.token;

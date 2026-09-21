@@ -4,12 +4,17 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
   console.log('\n[1] dashboard — daily / monthly / staff / settings');
   {
     const db = makeDb();
-    const bizToday = db.responses[0].biz_date;                 // แถวแรกที่ harness สร้าง = JJRD ของวันนี้
-    for (let i = 0; i < 40; i++) {                             // ดันให้เกิน 30 ครั้ง ปุ่ม "ดูทั้งหมด" จะโผล่แน่
+    /* วันทำการที่แดชบอร์ดเปิดมาโชว์ (ตัด 05:00 เวลาไทย — รัน npm test ด้วย TZ=Asia/Bangkok)
+       ต้องคิดเองแบบเดียวกับแอป ไม่งั้นเทสจะพังเองตอนรันหลังเที่ยงคืน */
+    const bz = new Date(); bz.setHours(bz.getHours() - 5);
+    const bizToday = bz.getFullYear() + '-' + String(bz.getMonth() + 1).padStart(2, '0') + '-' + String(bz.getDate()).padStart(2, '0');
+    const addResp = (dept, score) => {
       const id = db.nextId++;
       db.responses.push({ id, branch: 'JJRD', biz_date: bizToday, created_at: new Date().toISOString(), device: 'JJRD-x', staff_id: null });
-      db.scores.push({ response_id: id, department_id: 1, score: 5 });
-    }
+      db.scores.push({ response_id: id, department_id: dept, score: score });
+    };
+    for (let i = 0; i < 40; i++) addResp(1, 5);                // ดันให้เกิน 30 ครั้ง ปุ่ม "ดูทั้งหมด" จะโผล่แน่
+    addResp(1, 3);                                             // ข้อมูลเก่าที่ยังมีคะแนน 😐 → กราฟต้องคง 5 แท่ง
     const { w, d, client, errors } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
     await sleep(80);
     ok(!!d.querySelector('.hdr'), 'header rendered');
