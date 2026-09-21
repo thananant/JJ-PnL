@@ -153,6 +153,9 @@ th{color:var(--mute);font-weight:500;font-size:12px}
 td.r,th.r{text-align:right}
 td.face-cell{font-size:18px;text-align:center}
 tr:last-child td{border-bottom:0}
+.recent-scroll{max-height:min(70vh,620px);overflow:auto}
+.recent-scroll thead th{position:sticky;top:0;background:var(--card);z-index:1}
+.card h3 .btn{float:right;margin-top:-4px}
 
 /* trend svg */
 .trend{width:100%;height:auto;display:block}
@@ -435,6 +438,7 @@ const S = {
   setBranch: ALL,
   syncOk: true,
   hidePos: null,
+  recentAll: false,        // กาง "รายการล่าสุด" ดูครบทั้งวันหรือยัง
   posTableOk: true,        // ตาราง kpi_settings มีในฐานข้อมูลหรือยัง (ยังไม่มี = บันทึกตำแหน่งไม่ได้)
   token: 0
 };
@@ -543,9 +547,13 @@ function hourlyHTML(rows) {
   const max = Math.max(1, Math.max.apply(null, bk.map(b => b.n)));
   return '<div class="hours">' + bk.map(b => { const avg = b.cnt ? b.sum / b.cnt : null; return '<div class="hour-col" title="' + pad2(b.h) + ':00 · ' + b.n + ' ครั้ง' + (avg !== null ? ' · เฉลี่ย ' + avg.toFixed(2) : '') + '"><div class="hour-bar-w"><div class="hour-bar ' + scoreClass(avg) + '" style="height:' + Math.round(b.n / max * 100) + '%"></div></div><div class="hour-lbl">' + pad2(b.h) + '</div></div>'; }).join('') + '</div><div class="hint">ความสูง = จำนวนครั้ง · สี = คะแนนเฉลี่ยในชั่วโมงนั้น</div>';
 }
+const RECENT_STEP = 30;          // แสดงกี่แถวก่อนกด "ดูทั้งหมด"
+let recentRows = [];
 function recentHTML(rows) {
-  const depts = activeDepts(); const last = rows.slice(-15).reverse(); if (!last.length) return '';
-  return '<div class="card"><h3>รายการล่าสุด</h3><div class="tbl"><table><thead><tr><th>เวลา</th>' + (S.branch === ALL ? '<th>สาขา</th>' : '') + depts.map(d => '<th title="' + esc(d.name) + '" style="text-align:center">' + esc(d.icon) + '</th>').join('') + '<th>พนักงาน</th></tr></thead><tbody>' +
+  recentRows = rows;
+  const depts = activeDepts(); const total = rows.length; if (!total) return '';
+  const last = (S.recentAll ? rows : rows.slice(-RECENT_STEP)).slice().reverse();
+  return '<div class="card" id="recentCard"><h3>รายการล่าสุด <small>(ทั้งหมด ' + total + ' ครั้ง' + (last.length < total ? ' · แสดงล่าสุด ' + last.length : '') + ')</small>' + (total > RECENT_STEP ? '<button class="btn ghost sm" data-act="toggleRecent">' + (S.recentAll ? 'ย่อลง' : 'ดูทั้งหมด ' + total + ' ครั้ง') + '</button>' : '') + '</h3><div class="tbl recent-scroll"><table><thead><tr><th>เวลา</th>' + (S.branch === ALL ? '<th>สาขา</th>' : '') + depts.map(d => '<th title="' + esc(d.name) + '" style="text-align:center">' + esc(d.icon) + '</th>').join('') + '<th>พนักงาน</th></tr></thead><tbody>' +
     last.map(r => { const m = {}; for (const s of (r.kpi_scores || [])) m[s.department_id] = s.score; return '<tr><td>' + bkkTime(r.created_at) + '</td>' + (S.branch === ALL ? '<td>' + esc(r.branch) + '</td>' : '') + depts.map(d => '<td class="face-cell">' + (m[d.id] ? FACES[m[d.id] - 1].e : '<small>–</small>') + '</td>').join('') + '<td>' + esc(staffName(r.staff_id) || '–') + '</td></tr>'; }).join('') +
     '</tbody></table></div></div>';
 }
@@ -796,6 +804,7 @@ function onDashClick(e) {
   else if (a === 'saveStaff') saveStaff();
   else if (a === 'saveHidePos') saveHidePos();
   else if (a === 'reloadDuty') loadDutyInfo();
+  else if (a === 'toggleRecent') { S.recentAll = !S.recentAll; const el = $('#recentCard'); if (el) el.outerHTML = recentHTML(recentRows); }
   else if (a === 'rowUp' || a === 'rowDown') moveRow(t.closest('.edit-row'), a === 'rowUp' ? -1 : 1);
 }
 function onDashChange(e) {

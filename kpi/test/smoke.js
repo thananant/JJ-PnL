@@ -3,7 +3,14 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
 (async () => {
   console.log('\n[1] dashboard — daily / monthly / staff / settings');
   {
-    const db = makeDb(); const { w, d, client, errors } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
+    const db = makeDb();
+    const bizToday = db.responses[0].biz_date;                 // แถวแรกที่ harness สร้าง = JJRD ของวันนี้
+    for (let i = 0; i < 40; i++) {                             // ดันให้เกิน 30 ครั้ง ปุ่ม "ดูทั้งหมด" จะโผล่แน่
+      const id = db.nextId++;
+      db.responses.push({ id, branch: 'JJRD', biz_date: bizToday, created_at: new Date().toISOString(), device: 'JJRD-x', staff_id: null });
+      db.scores.push({ response_id: id, department_id: 1, score: 5 });
+    }
+    const { w, d, client, errors } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
     await sleep(80);
     ok(!!d.querySelector('.hdr'), 'header rendered');
     ok(d.querySelectorAll('.tab').length === 4, '4 tabs');
@@ -13,7 +20,14 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(!!d.querySelector('.hours') && d.querySelectorAll('.hour-col').length === 18, 'hourly chart 11:00 → 04:00 = 18 columns');
     ok(d.querySelector('.hist') && d.querySelector('.hist').children.length === 5, 'histogram keeps 5 buckets (old 😐 data still shown)');
     ok(d.querySelectorAll('.lb-row').length >= 1, 'staff leaderboard (today) has rows');
-    ok(!!d.querySelector('table') && d.querySelectorAll('tbody tr').length <= 15, 'recent list (≤15 rows)');
+    const nRecent = d.querySelectorAll('#recentCard tbody tr').length;
+    ok(nRecent === 30, 'รายการล่าสุดแสดง ' + nRecent + ' แถว (เดิมตัน 15)');
+    ok(d.querySelector('#recentCard h3').textContent.includes('ทั้งหมด'), 'บอกจำนวนครั้งทั้งหมดของวันนั้น');
+    await click(w, d, '[data-act=toggleRecent]'); await sleep(60);
+    const nAll = d.querySelectorAll('#recentCard tbody tr').length;
+    ok(nAll > nRecent, 'กด "ดูทั้งหมด" แล้วเห็นครบ ' + nAll + ' แถว');
+    await click(w, d, '[data-act=toggleRecent]'); await sleep(60);
+    ok(d.querySelectorAll('#recentCard tbody tr').length === nRecent, 'กดย่อลงกลับมาเท่าเดิม');
     ok(d.querySelector('#app').textContent.includes('วันนี้'), 'today label');
     await click(w, d, '[data-act=prevDay]');
     ok(noErr(d) && d.querySelector('[data-act=today]'), 'prev day → "วันนี้" button appears');
