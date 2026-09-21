@@ -80,7 +80,7 @@ function makeDb(opts) {
       case 'pnl_users': { if (opts.usersMissing) throw new Error('relation "public.pnl_users" does not exist'); return db.users; }
       case 'kpi_departments': return db.departments;
       case 'kpi_staff': return db.staff;
-      case 'kpi_settings': return db.settings;
+      case 'kpi_settings': { if (opts.noSettingsTable) throw new Error("Could not find the table 'public.kpi_settings' in the schema cache"); return db.settings; }
       case 'kpi_responses': return db.responses.map(r => Object.assign({}, r, { kpi_scores: db.scores.filter(s => s.response_id === r.id).map(s => ({ department_id: s.department_id, score: s.score })) }));
       case 'kpi_daily': {
         const joined = db.scores.map(s => { const r = db.responses.find(x => x.id === s.response_id); return { branch: r.branch, biz_date: r.biz_date, department_id: s.department_id, score: s.score }; });

@@ -452,6 +452,19 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(!!card && card.textContent.includes('jjmk-kpi.sql'), 'ยังไม่ได้รัน SQL → การ์ดบอกให้รันไฟล์');
   }
 
+  console.log('\n[12] ยังไม่ได้รัน SQL (ไม่มีตาราง kpi_settings) → บอกล่วงหน้า ไม่ปล่อยให้กดแล้วเด้ง error');
+  {
+    const db = makeDb({ noSettingsTable: true });
+    const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
+    await sleep(160);
+    await click(w, d, '[data-tab=settings]'); await sleep(200);
+    const A = d.querySelector('#app').textContent;
+    ok(A.includes('kpi_settings') && A.includes('kpi_upgrade.sql'), 'การ์ดตำแหน่งบอกว่าต้องรัน SQL ตัวไหน');
+    ok(d.querySelector('[data-act=saveHidePos]').disabled, 'ปุ่มบันทึกตำแหน่งกดไม่ได้ (กันกดแล้วเด้ง error)');
+    ok(!!d.querySelector('#posList input[data-pos]'), 'ยังเลือกดูตำแหน่งได้ตามค่าเริ่มต้นใน CONFIG');
+    ok(!!d.querySelector('#deptList') && noErr(d), 'ส่วนอื่นของหน้าตั้งค่ายังใช้ได้ปกติ');
+  }
+
   const failures = getFailures(); console.log('\n' + (failures ? failures + ' FAILED' : 'ALL PASSED'));
   process.exit(failures ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(2); });
