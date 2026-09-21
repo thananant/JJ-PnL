@@ -778,7 +778,7 @@ async function loadAll(){
     catch(e2){ S.deptOk=false; prods=await selAll(base+'&deleted_at=is.null&branch_id=eq.'+bid+'&order=sort'); }
   }
   const cd=($('#cd')&&$('#cd').value)||bizToday();
-  const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows,unitRows]=await Promise.all([
+  const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows,lcfgRows,unitRows,recvRows]=await Promise.all([
     selAll('pnl_stock_names?select=*&order=id').catch(()=>selAll('pnl_stock_map?select=*&order=id')).catch(()=>[]),
     selAll('stock_current?select=product_id,qty,updated_at&branch_id=eq.'+bid).catch(()=>[]),
     selAll('suppliers?select=name,order_mode,schedule,lead_days,cycle_days,min_cases,cutoff,line_group_id&order=name')
@@ -789,13 +789,20 @@ async function loadAll(){
     selAll('sc_depts?select=*&branch_id=eq.'+bid+'&order=sort,name').then(r=>{S.deptTbl=true;return r;}).catch(()=>{S.deptTbl=false;return null;}),
     selAll('line_groups?select=*&order=seen_at.desc.nullslast').catch(()=>selAll('line_groups?select=*')).catch(()=>[]), // กลุ่มไลน์ที่บอทเห็น (ของแอพนับเดิม)
     selAll('sc_config?select=*').catch(()=>[]),
+    selAll('config?select=key,value').catch(()=>null),   // config ของแอพนับเดิม (remind_line_group = กลุ่มแอดมิน)
     // รายชื่อหน่วยกลาง — ยังไม่รัน sql/jjmk_stockcheck_units.sql = ไม่มีตาราง (ยังใช้หน่วยจากข้อมูลได้)
-    selAll('sc_units?select=*&order=sort,name').then(r=>{S.unitTbl=true;return r;}).catch(()=>{S.unitTbl=false;return [];})
+    selAll('sc_units?select=*&order=sort,name').then(r=>{S.unitTbl=true;return r;}).catch(()=>{S.unitTbl=false;return [];}),
+    // ใบสั่งที่ส่งไปแล้ว 10 วันล่าสุด — ใช้หัก "ของที่กำลังมา" ออกจากยอดสั่งรอบนี้
+    selAll('stock_receipts?select=product_id,order_date,ordered&branch_id=eq.'+bid
+      +'&order_date=gte.'+addDays(cd,-10)+'&order_date=lte.'+cd+'&order=order_date').catch(()=>[])
   ]);
   S.depts=deptRows||[];
   S.units=unitRows||[]; uDirty();
+  S.recv={}; (recvRows||[]).forEach(r=>{ const q=num(r.ordered); if(!r.product_id||!q)return;
+    (S.recv[r.product_id]=S.recv[r.product_id]||{})[r.order_date]=q; });
   S.lineGroups=lineRows||[]; // [{group_id,name,seen_at}]
   S.cfg={}; (cfgRows||[]).forEach(r=>{S.cfg[r.k]=r.v;});
+  S.lcfgOk=!!lcfgRows; S.lcfg={}; (lcfgRows||[]).forEach(r=>{S.lcfg[r.key]=r.value;});
   S.sups=sups;
   S.map={}; map.forEach(r=>{ if(r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-')S.map[r.product_id]=r; });
   S.mapRows=map.filter(r=>r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-');
@@ -865,14 +872,47 @@ const MON_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','ม�
 function thDate(ds){const d=new Date(ds+'T12:00:00'); if(isNaN(+d))return ds||'-';
   return d.getDate()+' '+MON_TH[d.getMonth()]+' '+(d.getFullYear()+543)+' ('+dowTH(ds)+')';}
 function rateOn(it,ds){const g=dayGrp(ds);return num(g===1?it.rate_fri:g===2?it.rate_we:it.rate_wk);}
-function deliveryDate(sup,cd){ // ของจะมาส่งวันไหน ถ้าสั่งวันนี้
+const dowKey=ds=>DOW_EN[new Date(ds+'T12:00:00').getDay()];
+const supAhead=x=>Math.max(0,Math.min(6,parseInt(x&&x.order_ahead,10)||0));
+function deliveryDate(sup,cd){ // ของจะมาส่งวันไหน ถ้าสั่งวันนี้ (รวมโหมด "สั่งล่วงหน้า N วัน")
   const x=supSched(sup);
-  if(!x)return {d:addDays(cd,1),mode:'any',lead:1,unset:true};
+  if(!x)return {d:addDays(cd,1),od:cd,ahead:0,mode:'any',lead:1,unset:true};
   const m=supModeOf(x);
-  if(m==='fixed'){const dd=(x.schedule||{})[DOW_EN[new Date(cd+'T12:00:00').getDay()]];
-    return dd?{d:nextDow(cd,dd),mode:'fixed'}:{d:'',mode:'fixed'};}
+  if(m==='fixed'){
+    const ah=supAhead(x);
+    for(let k=0;k<=ah;k++){ const od=addDays(cd,k),dd=(x.schedule||{})[dowKey(od)];
+      if(dd)return {d:nextDow(od,dd),od:od,ahead:k,mode:'fixed'}; }   // สั่งวันนี้แทนวันสั่งจริงที่จะถึงใน N วัน
+    return {d:'',od:'',ahead:0,mode:'fixed'};
+  }
   const l=parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1;
-  return {d:addDays(cd,l),mode:'any',lead:l};
+  return {d:addDays(cd,l),od:cd,ahead:0,mode:'any',lead:l};
+}
+function nextDeliveryAfter(sup,od,curD){ // ของ "ชุดถัดไป" จะมาวันไหน (หลังชุดที่สั่งรอบนี้)
+  const x=supSched(sup); if(!x||!curD)return addDays(curD||od,1);
+  if(supModeOf(x)==='fixed'){
+    for(let k=1;k<=8;k++){ const d2=addDays(od,k),dd=(x.schedule||{})[dowKey(d2)];
+      if(dd){ const del=nextDow(d2,dd); if(del>curD)return del; } }
+    return addDays(curD,1);
+  }
+  return addDays(curD,1);   // สั่งได้ทุกวัน = พรุ่งนี้สั่งใหม่ได้ ของชุดนี้ครอบคลุม 1 วัน
+}
+function sumRate(it,from,to){ // ยอดใช้รวมช่วง [from, to) — to ไม่รวม
+  let s=0,n=0; if(!from||!to)return {sum:0,days:0};
+  for(let d2=from; d2<to && n<31; d2=addDays(d2,1),n++) s+=rateOn(it,d2);
+  return {sum:+s.toFixed(3),days:n};
+}
+function covRange(from,days){ // "ส,อา" — ช่วงวันที่ของชุดนี้ต้องครอบคลุม
+  const out=[]; for(let i=0,d2=from;i<days&&i<14;i++,d2=addDays(d2,1))out.push(dowTH(d2));
+  return out.join(',');
+}
+function inTransit(sup,it,cd,delD){ // ของที่สั่งไว้แล้วและจะมาถึงก่อนชุดนี้ (จาก stock_receipts ของระบบเดิม)
+  const rc=(S.recv||{})[it.id]; if(!rc||!delD)return 0;
+  let s=0;
+  Object.keys(rc).forEach(od=>{ if(od>=cd)return;                       // ใบสั่งของวันก่อนหน้า
+    const dd=(deliveryDate(sup,od)||{}).d;
+    if(dd&&dd>cd&&dd<delD)s+=num(rc[od]);                               // ยังไม่ถึงตอนนับ แต่มาก่อนชุดนี้
+  });
+  return +s.toFixed(3);
 }
 function orderPlan(){ // คิดใบสั่งของทุกซัพของสาขานี้ ณ วันขายที่เลือก
   const cd=($('#cd')&&$('#cd').value)||bizToday();
@@ -883,17 +923,25 @@ function orderPlan(){ // คิดใบสั่งของทุกซัพ�
   });
   return Object.values(g).map(x=>{
     const dl=deliveryDate(x.sup,cd);
+    const nx=dl.d?nextDeliveryAfter(x.sup,dl.od||cd,dl.d):'';   // ของชุดถัดไปมาวันไหน
+    const gap=addDays(cd,1);                                     // นับตอนปิดร้าน = ยอดของวันขายนี้ถูกใช้ไปแล้ว
     const rows=x.rows.map(it=>{
       const have=counted(it)?(it.out?0:num(it.qty)):null;
-      const need=dl.d?rateOn(it,dl.d):0;                 // ยอดใช้ของวันที่ของมาส่ง
-      const order=(have==null||!need)?null:Math.max(0,+(need-have).toFixed(3));
+      const cov=dl.d?sumRate(it,dl.d,nx||addDays(dl.d,1)):{sum:0,days:0};  // ต้องใช้ตั้งแต่วันของมา ถึงก่อนชุดหน้ามา
+      const pre=dl.d?sumRate(it,gap,dl.d):{sum:0,days:0};                  // ใช้ไประหว่างรอของมาส่ง
+      const need=cov.sum;
+      const onWay=inTransit(x.sup,it,cd,dl.d);                             // ของที่สั่งไว้แล้วกำลังมาก่อนชุดนี้
+      const left=have==null?null:Math.max(0,+(have-pre.sum+onWay).toFixed(3));  // ของที่จะเหลือตอนของชุดนี้มาถึง
+      const order=(have==null||!need)?null:Math.max(0,+(need-left).toFixed(3));
       const b=buOf(billName(it));                         // หน่วยซื้อจากบิล (ถ้ามี)
       const bu=b?b.top:'';
       const c=bu&&!uSame(bu,it.unit)?(S.conv||{})[String(billName(it)).trim()+'|'+bu]:null;  // ชื่อพ้อง = หน่วยเดียวกัน ไม่ต้องแปลง
       const packs=(order&&c&&c.f)?Math.ceil(order/c.f):null;
-      return {it,have,need,order,bu,factor:c?c.f:null,packs};
+      return {it,have,need,order,bu,factor:c?c.f:null,packs,cov,pre,left,onWay};
     }).sort((a,b2)=>((b2.order>0?1:0)-(a.order>0?1:0))||cmpItem(a.it,b2.it)); // ต้องสั่งขึ้นบน ที่เหลือลำดับเดียวกับเมนูอื่น
-    return {sup:x.sup,dl,rows,
+    const covDays=rows.length?(rows[0].cov.days||0):0;
+    return {sup:x.sup,dl,rows,nx,covDays,
+      covTxt:(dl.d&&covDays)?('ครอบคลุม '+covDays+' วัน ('+covRange(dl.d,covDays)+')'):'',
       nOrder:rows.filter(r=>r.order>0).length,
       nNoCount:rows.filter(r=>r.have==null&&r.need>0).length,
       nNoRate:rows.filter(r=>!r.need).length};
@@ -947,7 +995,10 @@ async function sendLine(sp){ // ส่งใบสั่งเข้ากลุ
     const j=await r.json().catch(()=>({}));
     if(!r.ok||j.ok===false)throw new Error(j.error||j.message||('HTTP '+r.status));
     await logReceipts(sp);   // บันทึก "สั่งจริง" ให้ระบบเดิมใช้ต่อ (หน้ารับของ/รายงานการใช้ของ)
-    toast('✅ ส่งใบสั่ง '+sp+' เข้ากลุ่มไลน์แล้ว · บันทึกยอดสั่งเรียบร้อย');
+    const pp=await prepayAlert(sp,(orderPlan()||[]).find(x=>x.sup===sp));   // ซัพจ่ายก่อนส่ง → เตือนกลุ่มแอดมิน
+    toast('✅ ส่งใบสั่ง '+sp+' เข้ากลุ่มไลน์แล้ว · บันทึกยอดสั่งเรียบร้อย'
+      +(pp===true?' · เตือนแอดมินให้โอนก่อนแล้ว 💸'
+        :pp==='nogrp'?' · ⚠ ซัพนี้ต้องจ่ายก่อนส่ง แต่ยังไม่ได้ตั้งกลุ่มแจ้งเตือนแอดมิน (⚙️ ตั้งค่า › ซัพพลายเออร์)':''),pp==='nogrp');
     render();
   }catch(e){toast('ส่งไลน์ไม่สำเร็จ — '+String(e.message||e).slice(0,110),true);}
 }
@@ -1005,7 +1056,7 @@ async function sendAllGo(){
   const list=plan.filter(g=>test||(lineOf(g.sup)&&lineOf(g.sup).group_id));
   if(!list.length){toast('ไม่มีซัพที่ส่งได้ (ยังไม่ผูกกลุ่มไลน์)',true);return;}
   const btn=document.getElementById('sendGo'); if(btn){btn.disabled=true;btn.textContent='⏳ กำลังส่ง...';}
-  let ok=0,fail=[],skip=plan.length-list.length;
+  let ok=0,fail=[],pre=0,noGrp=0,skip=plan.length-list.length;
   for(const g of list){
     const to=test?tg:lineOf(g.sup).group_id;
     const txt=orderText(g.sup); // ส่งข้อความชุดเดียวกับของจริง (กลุ่มทดสอบไม่ต้องติดป้าย)
@@ -1017,12 +1068,16 @@ async function sendAllGo(){
       if(!r.ok||j.ok===false)throw new Error(j.error||j.message||('HTTP '+r.status));
       ok++;
       if(!test)await logReceipts(g.sup); // โหมดทดสอบไม่บันทึกยอดสั่ง
+      const pp=await prepayAlert(g.sup,g,test?tg:'');   // ซัพจ่ายก่อนส่ง → เตือนกลุ่มแอดมิน (โหมดทดสอบยิงเข้ากลุ่มทดสอบ)
+      if(pp===true)pre++; else if(pp==='nogrp')noGrp++;
     }catch(e){fail.push(g.sup);}
   }
   modalClose();
   toast((test?'🧪 ทดสอบ: ':'')+'ส่งไลน์สำเร็จ '+ok+' ซัพ'
     +(fail.length?(' · ❌ ไม่สำเร็จ '+fail.length+' ('+fail.slice(0,3).join(', ')+')'):'')
-    +(skip?(' · ข้ามที่ยังไม่ผูกกลุ่ม '+skip):'')+(test?' · ไม่ได้บันทึกยอดสั่ง':''),!!fail.length);
+    +(skip?(' · ข้ามที่ยังไม่ผูกกลุ่ม '+skip):'')+(pre?(' · เตือนจ่ายก่อนส่ง '+pre+' ซัพ 💸'):'')
+    +(noGrp?(' · ⚠ ต้องจ่ายก่อนส่ง '+noGrp+' ซัพ แต่ยังไม่ได้ตั้งกลุ่มแจ้งเตือนแอดมิน'):'')
+    +(test?' · ไม่ได้บันทึกยอดสั่ง':''),!!fail.length||!!noGrp);
   render();
 }
 function copyOrder(sp){
@@ -1058,14 +1113,20 @@ function renderOrder(){
       return '<div class="lrow ordrow '+cls+'" style="'+G+'">'+imgCell(r.it)
         +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(r.it.name)+'</div>'
         +'<div class="s">'+(r.it.name!==billName(r.it)?'<span class="cn">🧾 '+esc(billName(r.it))+'</span>':'')+'</div></div>'
-        +'<span class="lbl" data-l="นับได้"><span style="font-size:13px">'+(r.have==null?'–':fq(r.have)+' '+esc(r.it.unit||''))+'</span></span>'
-        +'<span class="lbl" data-l="ต้องมีวันส่ง"><span style="font-size:13px">'+(r.need?fq(r.need)+' '+esc(r.it.unit||''):'–')+'</span></span>'
+        +'<span class="lbl" data-l="นับได้"><span style="font-size:13px">'+(r.have==null?'–':fq(r.have)+' '+esc(r.it.unit||''))+'</span>'
+        +((r.have!=null&&(r.pre.sum>0||r.onWay>0))?('<div style="font-size:10.5px;color:var(--mut)">'
+          +(r.pre.sum>0?('− ใช้ระหว่างรอ '+fq(r.pre.sum)):'')+(r.onWay>0?(' + กำลังมา '+fq(r.onWay)):'')
+          +' = เหลือ '+fq(r.left)+'</div>'):'')+'</span>'
+        +'<span class="lbl" data-l="ต้องใช้ช่วงนี้"><span style="font-size:13px">'+(r.need?fq(r.need)+' '+esc(r.it.unit||''):'–')+'</span>'
+        +((r.cov&&r.cov.days>1)?('<div style="font-size:10.5px;color:var(--mut)">'+r.cov.days+' วัน ('+esc(covRange(g.dl.d,r.cov.days))+')</div>'):'')+'</span>'
         +'<span class="lbl" data-l="สั่งเพิ่ม">'+val
         +(r.packs!=null?'<div style="font-size:11px;color:var(--mut)">≈ '+fq(r.packs)+' '+esc(r.bu)+'</div>':'')+'</span></div>';
     }).join('');
     const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleOrd(\''+esk+'\')">'
       +'<div><b>'+(open?'▾':'▸')+' 🏷 '+esc(key)+'</b> '
       +'<span style="font-size:11.5px;color:var(--mut)">'+(due?('ส่ง '+esc(g.dl.d)+' ('+dowTH(g.dl.d)+')'+(g.dl.mode==='any'?(' · สั่งวันนี้ +'+g.dl.lead+' วัน'):' · วันสั่งตายตัว')):'วันนี้ไม่ใช่รอบสั่งของซัพนี้')
+      +(g.dl.ahead>0?(' · <b style="color:var(--wine)">สั่งล่วงหน้า '+g.dl.ahead+' วัน</b> (วันสั่งจริง '+dowTH(g.dl.od)+')'):'')
+      +(g.covTxt?(' · <b>'+esc(g.covTxt)+'</b>'+(g.nx?(' — ชุดหน้ามา '+dowTH(g.nx)):'')):'')
       +(g.dl.unset?' · ⚠ ยังไม่ตั้งรอบสั่ง (เดาว่าพรุ่งนี้)':'')+'</span></div>'
       +'<div class="hbtns">'
       +'<span style="font-size:12px;font-weight:700;color:'+(g.nOrder?'var(--red)':'var(--green)')+'">'+(g.nOrder?('ต้องสั่ง '+g.nOrder+' รายการ'):'ไม่ต้องสั่ง')+'</span>'
@@ -1078,7 +1139,10 @@ function renderOrder(){
   }).join('');
   const totOrder=plan.reduce((a,g)=>a+g.nOrder,0);
   $('#list').innerHTML='<div class="dhead">🛒 สั่งของ · สาขา'+BR_NAME[S.br]+' · วันขาย '+esc(cd)+' ('+dowTH(cd)+')</div>'
-    +'<div class="note"><b>ต้องสั่ง = ยอดใช้ของวันที่ของมาส่ง − ยอดที่นับได้</b> · วันขายตัดรอบ 6 โมงเช้า · ตั้งอัตราใช้ที่ 🛟 Safety · รอบส่งที่ 🚚 รอบสั่งซัพ</div>'
+    +'<div class="note"><b>ต้องสั่ง = ยอดใช้ตั้งแต่วันที่ของมาส่ง จนถึงก่อนของชุดถัดไปมา − ของที่จะเหลือตอนของมาถึง</b>'
+    +'<div style="font-size:11.5px;margin-top:3px">ของที่จะเหลือ = ยอดนับได้ − ยอดใช้ระหว่างรอของมาส่ง + ของที่สั่งไว้แล้วกำลังมา · '
+    +'เช่น สั่งศุกร์ ของมาเสาร์ ชุดหน้ามาจันทร์ → ต้องเผื่อ เสาร์+อาทิตย์</div>'
+    +'<div style="font-size:11.5px;margin-top:2px">วันขายตัดรอบ 6 โมงเช้า · ตั้งอัตราใช้ที่ 🛟 Safety · รอบส่ง/สั่งล่วงหน้า ที่ 🚚 รอบสั่งซัพ</div></div>'
     +'<div class="lrow" style="grid-template-columns:1fr auto"><div><input class="di" id="ordQ" value="'+esc(S.ordQ||'')+'" placeholder="🔍 ค้นหาสินค้าในใบสั่ง" oninput="ordSearch(this.value)"></div>'
     +'<div style="font-size:13px;white-space:nowrap;padding-left:10px">รวมต้องสั่ง <b style="color:var(--red)">'+totOrder+'</b> รายการ</div>'
     +(plan.some(g=>g.nOrder)?'<div><button class="outb" style="background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700;white-space:nowrap" onclick="sendAllOpen()">📤 ส่งทั้งหมด</button></div>':'<div></div>')+'</div>'
@@ -1231,20 +1295,30 @@ function renderLink(){
 function supObj(n){const e=S.supEdit=S.supEdit||{};
   if(!e[n]){const x=supSched(n)||{};
     e[n]={exists:!!supSched(n),mode:supModeOf(x),
-      lead:(parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1),schedule:{...(x.schedule||{})}};}
+      lead:(parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1),schedule:{...(x.schedule||{})},
+      ahead:supAhead(x),prepay:!!x.prepay};}
   return e[n];}
 function supSetMode(i,v){supObj(S.supList[i]).mode=v;render();}
 function supSetLead(i,v){supObj(S.supList[i]).lead=Math.max(1,parseInt(v,10)||1);render();}
 function supSetDay(i,k,v){const o=supObj(S.supList[i]);if(v)o.schedule[k]=v;else delete o.schedule[k];render();}
+function supSetAhead(i,v){supObj(S.supList[i]).ahead=Math.max(0,Math.min(6,parseInt(v,10)||0));render();}
+function supSetPrepay(i,v){supObj(S.supList[i]).prepay=!!v;render();}
 async function supSave(i){
   const n=S.supList[i],o=supObj(n);
-  const body={order_mode:o.mode,lead_days:o.lead,schedule:o.schedule};
+  const body={order_mode:o.mode,lead_days:o.lead,schedule:o.schedule,order_ahead:o.ahead|0,prepay:!!o.prepay};
+  let warn='';
   try{
     const x0=supSched(n);
     if(!x0){toast('ไม่พบซัพ "'+n+'" ในตาราง suppliers ของระบบเดิม — เพิ่มชื่อซัพที่แอพนับเดิมก่อนครับ',true);return;}
-    await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x0.name),body,'return=minimal');
+    try{ await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x0.name),body,'return=minimal'); }
+    catch(e1){   // ยังไม่ได้รัน sql/jjmk_stockcheck_supflags.sql → ไม่มีคอลัมน์ใหม่ ให้บันทึกส่วนที่เหลือไปก่อน
+      if(!/order_ahead|prepay|PGRST204|column/i.test(String(e1.message||e1)))throw e1;
+      delete body.order_ahead; delete body.prepay;
+      await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x0.name),body,'return=minimal');
+      warn=' — แต่ "สั่งล่วงหน้า/จ่ายก่อนส่ง" ยังไม่ได้ เพราะยังไม่ได้รัน sql/jjmk_stockcheck_supflags.sql';
+    }
     o.exists=true; Object.assign(x0,body);
-    toast('✅ บันทึกรอบสั่ง '+n+' — โฟลว์สั่งของแอพนับใช้ค่านี้ด้วย'); render();
+    toast((warn?'⚠ ':'✅ ')+'บันทึกรอบสั่ง '+n+(warn||' — โฟลว์สั่งของแอพนับใช้ค่านี้ด้วย'),!!warn); render();
   }catch(e){toast('บันทึกไม่สำเร็จ — '+errMsg(e),true);}
 }
 function schedCard(){
@@ -1252,6 +1326,10 @@ function schedCard(){
   if(!S.supList.length)return '';
   const rows=S.supList.map((n,i)=>{
     const o=supObj(n);
+    const extra='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px">'
+      +(o.mode==='fixed'?('<span style="font-size:12px;color:var(--mut)">สั่งล่วงหน้า <input class="ri" style="max-width:56px;display:inline-block" type="text" inputmode="numeric" value="'+o.ahead+'" onchange="supSetAhead('+i+',this.value)"> วัน '
+        +'<span style="font-size:11px">(0 = สั่งวันจริง · 1 = ขึ้นให้สั่งก่อน 1 วัน ไม่ต้องลุ้นเวลาตัดรอบ)</span></span>'):'')
+      +'<label style="font-size:12px;white-space:nowrap"><input type="checkbox" '+(o.prepay?'checked':'')+' onchange="supSetPrepay('+i+',this.checked)"> 💸 ต้องจ่ายก่อนส่ง</label></div>';
     const detail=o.mode==='any'
       ?'ส่งหลังสั่ง <input class="ri" style="max-width:64px;display:inline-block" type="text" inputmode="numeric" value="'+o.lead+'" onchange="supSetLead('+i+',this.value)"> วัน <span style="font-size:11px;color:var(--mut)">(1 = สั่งวันนี้ได้พรุ่งนี้)</span>'
       :'<div style="display:flex;gap:6px;flex-wrap:wrap">'+DOW_EN.slice(1).concat(['sun']).map(k=>{
@@ -1264,7 +1342,7 @@ function schedCard(){
     return '<div class="lrow" style="grid-template-columns:150px 160px 1fr 90px">'
       +'<div><b>'+esc(n)+'</b>'+(o.exists?'':'<div style="font-size:10.5px;color:var(--amber)">ยังไม่มีในตารางซัพ — กด 💾 เพื่อสร้าง</div>')+'</div>'
       +'<div><select class="zsel" style="margin-left:0" onchange="supSetMode('+i+',this.value)"><option value="any"'+(o.mode==='any'?' selected':'')+'>สั่งได้ทุกวัน</option><option value="fixed"'+(o.mode==='fixed'?' selected':'')+'>วันสั่งตายตัว</option></select></div>'
-      +'<div>'+detail+'</div>'
+      +'<div>'+detail+extra+'</div>'
       +'<div><button class="outb" onclick="supSave('+i+')">💾</button></div></div>';
   }).join('');
   const nFound=S.supList.filter(n=>supSched(n)).length;
@@ -1519,11 +1597,71 @@ function lineCard(){
       +gList.filter(g=>!gUse[g.group_id]).length+' กลุ่ม</b>'
       +(gList.filter(g=>!gUse[g.group_id]).length?(' — '+gList.filter(g=>!gUse[g.group_id]).slice(0,6).map(g=>esc(lgLabel(g))).join(' · ')
         +(gList.filter(g=>!gUse[g.group_id]).length>6?' …':'')):'')+'</div>':'')
+    +admGrpCard(gTag)
     +'<div class="note" style="margin:0 15px 10px;border-color:#B9CBE0;background:#EFF4FA;color:#33517A">กลุ่มใหม่: สร้างกลุ่ม → เชิญบอทเข้ากลุ่ม → <b>พิมพ์อะไรก็ได้ในกลุ่ม 1 ข้อความ</b> (บอทถึงจะรู้จักกลุ่ม) → กลับมากด 🔄 ดึงกลุ่มไลน์ใหม่ แล้วกลุ่มจะโผล่ใน dropdown</div>'
     +'<div class="hd2" style="'+G+'"><span>ซัพ</span><span>กลุ่มไลน์</span><span>สินค้า</span><span></span></div>'
     +(rows||'<div class="empty">ยังไม่มีซัพ</div>')+'</div>';
 }
+function admGrpCard(gTag){ // กลุ่มไลน์ที่จะได้ข้อความ "ต้องจ่ายก่อนของออก"
+  const gid=adminGroup(),g=(S.lineGroups||[]).find(x=>String(x.group_id)===gid);
+  const pre=(S.sups||[]).filter(x=>x&&x.prepay).map(x=>x.name);
+  return '<div class="lrow" style="grid-template-columns:minmax(150px,1.6fr) minmax(200px,1.3fr);gap:8px;align-items:center;'
+    +'border-left:3px solid #E0B44A;background:#FFFBF0">'
+    +'<div><b>💸 กลุ่มแจ้งเตือนแอดมิน</b>'
+    +'<div style="font-size:11.5px;color:var(--mut);margin-top:2px">ซัพที่ติ๊ก "ต้องจ่ายก่อนส่ง" พอกดส่งใบสั่ง ระบบจะยิงข้อความเตือนโอนเงินเข้ากลุ่มนี้อีก 1 ข้อความ'
+    +(pre.length?(' · ตอนนี้ '+pre.length+' ซัพ: <b>'+pre.slice(0,5).map(esc).join(' · ')+(pre.length>5?' …':'')+'</b>')
+      :' · ยังไม่มีซัพไหนติ๊กไว้ (ติ๊กได้ที่หน้า 🚚 รอบสั่งซัพ)')+'</div>'
+    +'<div style="font-size:11.5px;font-weight:'+(gid?'400':'700')+';color:'+(gid?'var(--green)':(pre.length?'var(--red)':'var(--mut)'))+';margin-top:2px">'
+    +(gid?('✓ '+esc(g?lgLabel(g):gid)):(pre.length?'⚠ ยังไม่ได้ตั้งกลุ่ม — ซัพจ่ายก่อนส่งจะไม่มีใครได้รับเตือน':'— ยังไม่ได้ตั้งกลุ่ม —'))+'</div></div>'
+    +'<span class="lbl" data-l="กลุ่มไลน์">'+gPick('adm',gid,!!gid||!pre.length,gTag)   // กรอบแดงเฉพาะตอนมีซัพจ่ายก่อนส่งแต่ยังไม่ได้ตั้งกลุ่ม
+    +(gid?'<div><button class="outb" style="padding:3px 8px;font-size:11.5px;margin-top:3px" onclick="admGrpTest()">🔔 ทดสอบ</button></div>':'')
+    +'</span></div>';
+}
+async function admGrpTest(){
+  const gid=adminGroup(); if(!gid){toast('เลือกกลุ่มแจ้งเตือนแอดมินก่อนครับ',true);return;}
+  try{
+    const r=await fetch(lineEndpoint(),{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY},
+      body:JSON.stringify({to:gid,text:'🔔 ทดสอบจากระบบเช็คสต๊อก JJ — กลุ่มนี้จะได้รับข้อความเตือน "ต้องจ่ายก่อนของออก" ครับ'})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||j.ok===false)throw new Error(j.error||j.message||('HTTP '+r.status));
+    toast('✅ ส่งข้อความทดสอบเข้ากลุ่มแจ้งเตือนแอดมินแล้ว');
+  }catch(e){toast('ส่งไม่สำเร็จ — '+String(e.message||e).slice(0,110),true);}
+}
 const LGSYNC_MS=6*3600*1000;   // เช็คชื่อกลุ่มให้เองอย่างน้อยทุก 6 ชม. (กดปุ่ม 🔄 บังคับได้ตลอด)
+const adminGroup=()=>String((S.lcfg||{}).remind_line_group||'').trim();
+async function adminGrpSave(v){ // เก็บที่ config.remind_line_group (ใช้ร่วมกับบอทเตือนรอบสั่งของระบบเดิม)
+  const gid=String(v||'').trim();
+  try{
+    await api('POST','config?on_conflict=key',[{key:'remind_line_group',value:gid}],'resolution=merge-duplicates,return=minimal');
+    (S.lcfg=S.lcfg||{}).remind_line_group=gid;
+    toast(gid?('✅ ตั้งกลุ่มแจ้งเตือนแอดมินแล้ว'):'ยกเลิกกลุ่มแจ้งเตือนแอดมินแล้ว'); render();
+  }catch(e){ toast('บันทึกไม่สำเร็จ — '+errMsg(e),true); }
+}
+function prepayText(sp,g){ // ข้อความเตือนแอดมิน "ต้องโอนก่อนของออก"
+  const cd=($('#cd')&&$('#cd').value)||bizToday();
+  const n=g?g.rows.filter(r=>r.order>0).length:0;
+  return '💸 ต้องจ่ายก่อนของออก\n'
+    +'🏪 สาขา'+BR_NAME[S.br]+'\n'
+    +'🏷️ '+sp+'\n'
+    +'📅 สั่งวันที่ '+thDate(cd)+'\n'
+    +(g&&g.dl&&g.dl.d?('🚚 ส่งวันที่ '+thDate(g.dl.d)+'\n'):'')
+    +'📦 รวม '+n+' รายการ\n'
+    +'\nอย่าลืมโอนก่อนของออกนะครับ 🙏';
+}
+async function prepayAlert(sp,g,to){ // ยิงเตือนเข้ากลุ่มแอดมิน (ถ้าซัพนี้ตั้งว่าจ่ายก่อนส่ง)
+  const x=supSched(sp); if(!x||!x.prepay)return false;
+  const gid=to||adminGroup();
+  if(!gid)return 'nogrp';   // ต้องจ่ายก่อนส่ง แต่ยังไม่ได้ตั้งกลุ่มแอดมิน → ไปเตือนท้าย toast สรุป
+  try{
+    const r=await fetch(lineEndpoint(),{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY},
+      body:JSON.stringify({to:gid,text:prepayText(sp,g)})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||j.ok===false)throw new Error(j.error||j.message||('HTTP '+r.status));
+    return true;
+  }catch(e){ toast('เตือนจ่ายก่อนส่งเข้ากลุ่มแอดมินไม่สำเร็จ — '+String(e.message||e).slice(0,80),true); return false; }
+}
 async function syncLineGroups(auto){ // ดึงกลุ่มที่บอทอยู่ + อัปเดตชื่อกลุ่ม (Edge Function ของระบบเดิม)
   if(S._lgSyncing)return; S._lgSyncing=true;
   if(!auto)toast('⏳ กำลังดึงชื่อกลุ่มจากไลน์...');
@@ -1609,12 +1747,13 @@ async function supDel(name){
   }catch(e){toast('ลบไม่สำเร็จ — '+errMsg(e),true);}
 }
 /* ---- ตัวเลือกกลุ่มไลน์: พิมพ์ค้นหาได้ + ป้ายบอกว่ากลุ่มนี้ผูกกี่ซัพ ---- */
+const gpArg=i=>typeof i==='number'?String(i):"'"+String(i).replace(/'/g,"\\'")+"'";   // แถวซัพ = เลข · กลุ่มแอดมิน = 'adm'
 function gpRows(i,cur){ // รายการกลุ่มในกล่อง (กรองตามคำค้น)
   const q=String(S.gpQ||'').trim().toLowerCase();
   const gList=S._gpList||[],tag=S._gpTag||(()=>'');
   const hit=g=>!q||lgLabel(g).toLowerCase().includes(q)||String(g.group_id||'').toLowerCase().includes(q);
   const show=gList.filter(hit);
-  const item=(gid,html,on)=>'<button class="gpitem'+(on?' on':'')+'" onclick="gpPick('+i+',\''+esc(String(gid)).replace(/'/g,"\\'")+'\')">'+html+'</button>';
+  const item=(gid,html,on)=>'<button class="gpitem'+(on?' on':'')+'" onclick="gpPick('+gpArg(i)+',\''+esc(String(gid)).replace(/'/g,"\\'")+'\')">'+html+'</button>';
   return (q?'':item('','<span class="gpn">— ไม่ผูกกลุ่ม —</span>',!cur))
     +(show.length?show.map(g=>item(g.group_id,'<span class="gpn">'+esc(lgLabel(g))+'</span>'+tag(g.group_id),
         String(cur||'')===String(g.group_id))).join(''):'<div class="empty" style="padding:10px">ไม่พบกลุ่ม "'+esc(q)+'"</div>');
@@ -1625,21 +1764,23 @@ function gPick(i,cur,ok,tag){ // ปุ่ม + กล่องเลือก�
   const label=cur?(g?('<span class="gpn">'+esc(lgLabel(g))+'</span>'+tag(cur)):('<span class="gpn">'+esc(cur)+'</span> <span class="gpf">· ไม่พบในรายชื่อกลุ่ม</span>'))
     :'<span class="gpn" style="color:var(--mut)">— ไม่ผูกกลุ่ม —</span>';
   return '<div class="gpick">'
-    +'<button class="gpbtn'+(ok?'':' needlink')+'" id="gpb_'+i+'" onclick="gpOpen('+i+')">'+label+'<span class="cv">▼</span></button>'
+    +'<button class="gpbtn'+(ok?'':' needlink')+'" id="gpb_'+i+'" onclick="gpOpen('+gpArg(i)+')">'+label+'<span class="cv">▼</span></button>'
     +(open?'<div class="gpmenu" id="gpMenu">'
       +'<input class="di" id="gpQ" value="'+esc(S.gpQ||'')+'" placeholder="🔍 พิมพ์ชื่อกลุ่มไลน์" oninput="gpSearch(this.value)" onclick="event.stopPropagation()">'
       +'<div id="gpList">'+gpRows(i,cur)+'</div></div>':'')
     +'</div>';
 }
-function gpOpen(i){ S.gpOpen=(S.gpOpen===i?null:i); S.gpQ=''; render();
+function gpOpen(i){ S.gpOpen=(String(S.gpOpen)===String(i)?null:i); S.gpQ=''; render();
   setTimeout(()=>{ const e=document.getElementById('gpQ');
     if(e){ e.focus(); try{ e.closest('.gpmenu').scrollIntoView({block:'nearest'}); }catch(x){} } },30); }
 function gpSearch(v){ // กรองในกล่องโดยไม่วาดทั้งหน้า (ช่องค้นหาจะได้ไม่หลุดโฟกัส)
   S.gpQ=v; const i=S.gpOpen; if(i==null)return;
-  const sp=(S._lineSups||[])[i],g=sp?lineOf(sp):null;
-  const el=document.getElementById('gpList'); if(el)el.innerHTML=gpRows(i,g&&g.group_id);
+  let cur='';
+  if(i==='adm')cur=adminGroup();
+  else{ const sp=(S._lineSups||[])[i],g=sp?lineOf(sp):null; cur=g&&g.group_id; }
+  const el=document.getElementById('gpList'); if(el)el.innerHTML=gpRows(i,cur);
 }
-function gpPick(i,gid){ S.gpOpen=null; S.gpQ=''; lineSave(i,gid); }
+function gpPick(i,gid){ S.gpOpen=null; S.gpQ=''; if(i==='adm')adminGrpSave(gid); else lineSave(i,gid); }
 async function lineSave(i,gid){ // เขียนลง suppliers.line_group_id (ชุดเดียวกับแอพนับเดิม)
   const sp=(S._lineSups||[])[i]; if(!sp)return;
   const gi=String(gid!=null?gid:((document.getElementById('lgi_'+i)||{}).value||'')).trim();
