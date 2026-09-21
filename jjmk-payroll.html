@@ -5302,6 +5302,77 @@ if(AUTH){
   setTimeout(()=>{ const el = document.getElementById('liUser'); if(el) el.focus(); }, 60);
 }
 
+
+/* ============================================================
+   ลากหน้าลง = รีเฟรช (pull-to-refresh) — ใช้ได้บนมือถือทุกแบบ
+   จำเป็นเพราะแอปที่ "เพิ่มไปยังหน้าจอโฮม" (PWA) ไม่มีปุ่ม/ท่ารีเฟรชของเบราว์เซอร์
+   แตะที่ยอดสุดของหน้าแล้วลากลงเกิน 70px → ปล่อยนิ้ว = โหลดหน้าใหม่
+   ============================================================ */
+(function(){
+  if(!('ontouchstart' in window))return;              // เฉพาะจอสัมผัส
+  var TH=70, MAX=110, y0=0, dy=0, pulling=false, ready=false, bar=null;
+
+  function el(){
+    if(bar)return bar;
+    bar=document.createElement('div');
+    bar.setAttribute('aria-hidden','true');
+    bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;display:flex;'+
+      'align-items:center;justify-content:center;pointer-events:none;'+
+      'height:0;overflow:hidden;transition:none;'+
+      'font:600 13px/1.2 "Prompt","Sarabun",system-ui,sans-serif;color:#F2CF7A;'+
+      'background:linear-gradient(180deg,rgba(163,27,36,.95),rgba(163,27,36,0));';
+    bar.innerHTML='<span id="__ptrTxt">ลากลงเพื่อรีเฟรช</span>';
+    document.body.appendChild(bar);
+    return bar;
+  }
+  function atTop(){
+    var d=document.scrollingElement||document.documentElement;
+    return (window.pageYOffset||d.scrollTop||0)<=0;
+  }
+  /* ลากอยู่ในกล่องที่เลื่อนได้เอง (ตาราง/ลิสต์) ไม่นับ */
+  function inScrollable(node){
+    for(var n=node;n&&n!==document.body;n=n.parentElement){
+      var st=getComputedStyle(n), oy=st.overflowY;
+      if((oy==='auto'||oy==='scroll')&&n.scrollHeight>n.clientHeight&&n.scrollTop>0)return true;
+    }
+    return false;
+  }
+  /* โหมด kiosk (แท็บเล็ตหน้าร้านให้ลูกค้ากด) ห้ามรีเฟรช — คะแนนที่กดค้างไว้จะหาย */
+  function kiosk(){
+    return document.body.classList.contains('kiosk') ||
+           /[?&]kiosk=/.test(location.search);
+  }
+  document.addEventListener('touchstart',function(e){
+    if(kiosk()){pulling=false;return;}
+    if(e.touches.length!==1||!atTop()||inScrollable(e.target)){pulling=false;return;}
+    y0=e.touches[0].clientY; dy=0; pulling=true; ready=false;
+  },{passive:true});
+
+  document.addEventListener('touchmove',function(e){
+    if(!pulling)return;
+    dy=e.touches[0].clientY-y0;
+    if(dy<=0||!atTop()){ if(bar){bar.style.height='0';} return; }
+    if(e.cancelable)e.preventDefault();                // กันหน้าเด้งตามนิ้ว
+    var h=Math.min(dy*0.5,MAX), b=el();
+    b.style.height=h+'px';
+    ready = dy>TH;
+    var t=b.querySelector('#__ptrTxt');
+    if(t)t.textContent = ready ? 'ปล่อยเพื่อรีเฟรช' : 'ลากลงเพื่อรีเฟรช';
+  },{passive:false});
+
+  document.addEventListener('touchend',function(){
+    if(!pulling)return; pulling=false;
+    var b=el();
+    if(ready){
+      b.style.height='44px';
+      var t=b.querySelector('#__ptrTxt'); if(t)t.textContent='กำลังโหลด…';
+      setTimeout(function(){ location.reload(); },120);
+    }else{
+      b.style.transition='height .2s'; b.style.height='0';
+      setTimeout(function(){ b.style.transition='none'; },220);
+    }
+  },{passive:true});
+})();
 </script>
 </body>
 </html>
