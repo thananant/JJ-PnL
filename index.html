@@ -334,9 +334,22 @@ function spreadSession(u){
   set('jjmk_inv_sess',lite);    // Invoice
 }
 function clearSession(){
-  ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip']
+  ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip','jjsso_ticket']
     .forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
 }
+
+/* ---------- ใบผ่านเข้าแอพ (SSO ticket) ----------
+   คลิกเปิดแอพจากหน้านี้ = ออกใบผ่าน อายุ 2 นาที ใช้ครั้งเดียว → แอพปลายทางพาเข้าได้เลยตามสิทธิ์
+   เปิดแอพจากลิงก์ตรง (ไม่มีใบผ่าน) = แอพจะขอรหัสผ่านเอง กันคนที่ได้ลิงก์ไปเข้าใช้ */
+function issueTicket(appKey){
+  if(!ME)return;
+  try{ localStorage.setItem('jjsso_ticket',JSON.stringify(
+    {u:ME.username,h:ME.pass_hash,app:appKey,t:Date.now()})); }catch(e){}
+}
+document.addEventListener('click',function(e){
+  var a=e.target&&e.target.closest?e.target.closest('nav a.app[data-app]'):null;
+  if(a)issueTicket(a.dataset.app);
+},true);
 
 /* ---------- แสดงเฉพาะแอพที่คนนี้มีสิทธิ์ ---------- */
 /* แอพที่ยังใช้บัญชีคนละชุด (นับสต๊อก / ครัวกลาง / ซ่อมบำรุง) และ KPI ที่ไม่ต้องล็อกอิน
