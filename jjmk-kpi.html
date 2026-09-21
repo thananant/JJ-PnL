@@ -481,8 +481,10 @@ function summaryHTML(agg, responses, compare) {
     '</div></div>';
 }
 function histHTML(a) {
-  const max = Math.max(1, Math.max.apply(null, a.hist));
-  return '<div class="hist">' + a.hist.map((c, i) => '<div class="hist-col"><div class="hist-n">' + (c || '') + '</div><div class="hist-bar-w"><div class="hist-bar s' + (i + 1) + '" style="height:' + Math.round(c / max * 100) + '%"></div></div><div class="hist-lbl">' + FACES[i].e + '</div></div>').join('') + '</div>';
+  /* หน้าจอลูกค้าเหลือ 4 ระดับแล้ว (ไม่มี 😐) — ช่อง 😐 จึงโชว์เฉพาะช่วงที่ยังมีข้อมูลเก่าอยู่จริง ไม่งั้นซ่อนทิ้ง */
+  const cols = FACES.map((f, i) => ({ f: f, i: i, c: a.hist[i] || 0 })).filter(x => !x.f.hide || x.c > 0);
+  const max = Math.max(1, Math.max.apply(null, cols.map(x => x.c)));
+  return '<div class="hist">' + cols.map(x => '<div class="hist-col"><div class="hist-n">' + (x.c || '') + '</div><div class="hist-bar-w"><div class="hist-bar s' + (x.i + 1) + '" style="height:' + Math.round(x.c / max * 100) + '%"></div></div><div class="hist-lbl">' + x.f.e + '</div></div>').join('') + '</div>';
 }
 function deptCardsHTML(byDept, prevByDept, prevLabel) {
   const depts = S.depts.filter(d => d.active || (byDept[d.id] && byDept[d.id].n));

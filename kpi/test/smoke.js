@@ -18,7 +18,7 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(d.querySelectorAll('.dept').length === 3, 'daily shows 3 active departments (inactive one without data hidden)');
     ok(/\d\.\d\d/.test(txt(d, '.gauge-num')), 'gauge shows average ' + txt(d, '.gauge-num'));
     ok(!!d.querySelector('.hours') && d.querySelectorAll('.hour-col').length === 18, 'hourly chart 11:00 → 04:00 = 18 columns');
-    ok(d.querySelector('.hist') && d.querySelector('.hist').children.length === 5, 'histogram keeps 5 buckets (old 😐 data still shown)');
+    ok(d.querySelector('.hist') && d.querySelector('.hist').children.length === 5, 'กราฟยังมี 5 แท่งเมื่อข้อมูลเก่ามีคะแนน 😐 อยู่');
     ok(d.querySelectorAll('.lb-row').length >= 1, 'staff leaderboard (today) has rows');
     const nRecent = d.querySelectorAll('#recentCard tbody tr').length;
     ok(nRecent === 30, 'รายการล่าสุดแสดง ' + nRecent + ' แถว (เดิมตัน 15)');
@@ -77,6 +77,17 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     await click(w, d, '[data-act=openKioskB]');
     ok(/\?kiosk=JJRD$/.test(w._opened || ''), 'open kiosk link: ' + w._opened);
     ok(errors.length === 0, 'no jsdom errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
+  }
+
+  {
+    /* ข้อมูลใหม่ล้วน (ไม่มีคะแนน 😐 เพราะจอลูกค้าเหลือ 4 ปุ่มแล้ว) → กราฟต้องเหลือ 4 แท่ง ไม่ทิ้งช่องว่าง */
+    const db = makeDb();
+    for (const sc of db.scores) if (sc.score === 3) sc.score = 4;
+    const { d } = boot('https://x.test/a.html', db);
+    await sleep(160);
+    const bars = d.querySelector('.hist').children.length;
+    ok(bars === 4, 'ไม่มีคะแนน 😐 ในช่วงที่ดู → กราฟเหลือ 4 แท่ง (ได้ ' + bars + ')');
+    ok(!d.querySelector('.hist').textContent.includes('😐'), 'ไม่มีหน้ายิ้มเฉยๆ ค้างในกราฟ');
   }
 
   console.log('\n[2] dashboard — missing tables');
