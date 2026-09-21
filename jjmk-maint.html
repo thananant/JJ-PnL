@@ -77,6 +77,38 @@
   .cbadge.plan{background:#fff6dd;color:#9a6700}
   .callegend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:.72rem;color:var(--ink-soft)}
   .callegend .cbadge{font-size:.66rem}
+  /* แท็บสลับหน้า */
+  .tabbar{display:flex;gap:8px;margin-bottom:12px}
+  .tabbtn{flex:1;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 8px;font-family:Prompt;
+    font-weight:600;font-size:.92rem;cursor:pointer;color:var(--ink-soft);box-shadow:var(--shadow)}
+  .tabbtn.on{background:var(--red-deep);color:#fff;border-color:var(--red-deep)}
+  /* 📦 นับอุปกรณ์ */
+  .stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-bottom:12px}
+  .stile{border:1px solid var(--line);border-radius:12px;padding:8px 11px;background:#fff}
+  .stile small{display:block;font-size:.71rem;color:var(--ink-soft)}
+  .stile b{font-family:Prompt;font-weight:600;font-size:1.1rem}
+  .stile.bad b{color:#c62127}.stile.good b{color:#1a7f37}.stile.warn b{color:#9a6700}
+  .astrow{display:flex;align-items:center;gap:8px;padding:10px 2px;border-bottom:1px dashed rgba(0,0,0,.1)}
+  .astrow .an{flex:1;min-width:0;cursor:pointer}
+  .astrow .an b{font-family:Prompt;font-weight:600;display:block;line-height:1.25}
+  .astrow .an small{color:var(--ink-soft);font-size:.76rem}
+  .astq{flex:none;text-align:right;cursor:pointer;min-width:84px}
+  .astq .q{font-family:Prompt;font-weight:600;font-size:1.05rem;display:block;line-height:1.2}
+  .astq .d{font-size:.73rem;display:block}
+  .astq .d.loss{color:#c62127}.astq .d.ok{color:#1a7f37}.astq .d.non{color:#9a6700}
+  .astbtn{flex:none;border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;cursor:pointer;font-size:.9rem}
+  .acbox{border-radius:10px;padding:9px 12px;font-size:.85rem;margin-bottom:10px;line-height:1.45}
+  .acbox:empty{display:none;padding:0;margin:0}
+  .acbox.bad{background:#fdeaea;color:#c62127}
+  .acbox.good{background:#e8f7ec;color:#1a7f37}
+  .acbox.warn{background:#fff6dd;color:#9a6700}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .htab{width:100%;border-collapse:collapse;font-size:.84rem}
+  .htab th,.htab td{padding:7px 5px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  .htab th:first-child,.htab td:first-child{text-align:left}
+  .htab th{font-family:Prompt;font-weight:600;font-size:.76rem;color:var(--ink-soft)}
+  .htab td.loss{color:#c62127;font-weight:600}
+  .htab tr.cur td{background:#fffaf0}
   /* สรุป + การ์ดงาน */
   .mtsum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
   .mtsum .mchip{font-family:Prompt;font-weight:600;font-size:.82rem;padding:5px 12px;border-radius:999px;background:#f3ece0;color:#6b5f52}
@@ -132,7 +164,11 @@
 </header>
 
 <main id="main" style="display:none">
-  <div class="wrap">
+  <div class="tabbar">
+    <button class="tabbtn on" data-tab="maint">🗓 ตารางบำรุงรักษา</button>
+    <button class="tabbtn" data-tab="asset">📦 นับอุปกรณ์</button>
+  </div>
+  <div id="viewMaint"><div class="wrap">
     <div class="card calcard">
       <div class="calhead">
         <button class="calnav" id="calPrev">‹</button>
@@ -154,6 +190,22 @@
       <div class="mtsum" id="mtSum"></div>
       <div id="mtList"><div class="rempty">กำลังโหลด...</div></div>
       <p class="hint" style="margin:10px 0 0">ทำเสร็จแล้วกด “✅ ทำแล้ว” พร้อมถ่ายรูปแนบ · แตะรูปหรือ “🕘 ประวัติ” เพื่อเปิดดูรูปย้อนหลังได้ทุกครั้งที่เคยทำ</p>
+    </div>
+  </div></div>
+
+  <div id="viewAsset" style="display:none">
+    <div class="card">
+      <div class="calhead">
+        <button class="calnav" id="pdPrev">‹</button>
+        <b id="pdTitle">—</b>
+        <div style="display:flex;gap:6px">
+          <button class="caltoday" id="pdNow">งวดนี้</button>
+          <button class="calnav" id="pdNext">›</button>
+        </div>
+      </div>
+      <div class="stiles" id="astSum"></div>
+      <div id="astList"><div class="rempty">กำลังโหลด...</div></div>
+      <p class="hint" style="margin:10px 0 0">แตะชื่ออุปกรณ์เพื่อนับของงวดนี้ · ระบบเทียบกับงวดก่อนให้อัตโนมัติว่าหายกี่ชิ้น คิดเป็นกี่ % · มีของชำรุดต้องแนบรูป 1–10 รูป · กด 📈 ดูสถิติย้อนหลังและคาดการณ์เดือนหน้า</p>
     </div>
   </div>
 </main>
@@ -361,11 +413,14 @@ async function enterApp(prof){
   $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(prof.role||'staff');
   const sel=$('#hBranch');
   if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
-    sel.onchange=()=>{CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}maintLoad();};}
+    sel.onchange=()=>{CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}
+      maintLoad();if(TAB==='asset')astLoad();};}
   else{sel.style.display='none';}
   $('#hMng').style.display=isAdmin()?'':'none';
-  $('#hMng').onclick=maintManageOverlay;
+  $('#hMng').onclick=()=>{TAB==='asset'?astManageOverlay():maintManageOverlay();};
   maintLoad();
+  let tb='maint';try{tb=localStorage.getItem('jjmt_tab')||'maint'}catch(e){}
+  setTab(tb==='asset'?'asset':'maint');
 }
 async function boot(){
   $('#hLogo').src=LOGO;$('#lLogo').src=LOGO;
@@ -522,7 +577,7 @@ function maintDoneOverlay(t){
     <div class="sheet-body">
       <div class="field"><label>วันที่ทำ</label><input type="date" class="md_d" value="${todayISO()}"></div>
       <div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input class="md_n" placeholder="เช่น จ้างช่างมาล้าง / เปลี่ยนไส้กรองใหม่"></div>
-      <div class="field"><label>รูปถ่ายหลังทำ (อย่างน้อย 1 รูป)</label>
+      <div class="field"><label>รูปถ่ายหลังทำ (1–10 รูป)</label>
         <input type="file" class="md_f" accept="image/*" multiple style="display:none">
         <div class="mtthumbs md_prev"></div>
         <button class="act ghost wide md_add" style="margin-top:6px">📸 ถ่ายรูป / เลือกรูป</button>
@@ -538,7 +593,10 @@ function maintDoneOverlay(t){
   function renderPrev(){prev.innerHTML=imgs.map((d,i)=>`<img src="${d}" data-i="${i}" title="แตะเพื่อลบรูปนี้" alt="">`).join('');
     prev.querySelectorAll('img').forEach(im=>im.onclick=()=>{imgs.splice(+im.dataset.i,1);renderPrev();});}
   ov.querySelector('.md_add').onclick=()=>fin.click();
-  fin.onchange=()=>{[...fin.files].forEach(f=>processImage(f,d=>{if(d){imgs.push(d);renderPrev();}else toast('อ่านรูปไม่สำเร็จ 1 รูป');}));fin.value='';};
+  fin.onchange=()=>{const files=[...fin.files],room=MAX_PHOTOS-imgs.length;fin.value='';
+    if(room<=0){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
+    if(files.length>room)toast('แนบได้อีก '+room+' รูป (สูงสุด '+MAX_PHOTOS+')');
+    files.slice(0,room).forEach(f=>processImage(f,d=>{if(d){imgs.push(d);renderPrev();}else toast('อ่านรูปไม่สำเร็จ 1 รูป');}));};
   save.onclick=async()=>{
     const d=ov.querySelector('.md_d').value||todayISO(),note=ov.querySelector('.md_n').value.trim();
     if(!imgs.length){toast('แนบรูปถ่ายอย่างน้อย 1 รูปก่อนบันทึก');return;}
@@ -655,6 +713,303 @@ function maintManageOverlay(){
   };
   renderList();
 }
+
+/* ================= 📦 นับอุปกรณ์ + สถิติอัตราเสียหาย =================
+   นับรายเดือน (งวด YYYY-MM) เทียบกับงวดก่อน → รู้ว่าหายกี่ชิ้น คิดเป็นกี่ %
+   มีของชำรุด = ต้องแนบรูป 1–10 รูป · ตาราง maint_assets / maint_counts */
+const MAX_PHOTOS=10;
+let ASSETS=[],COUNTS={},PD_Y=null,PD_M=null;   // COUNTS[asset_id][period]=row
+function pdStr(){return PD_Y+'-'+String(PD_M+1).padStart(2,'0');}
+function pdLabel(p){if(!p)return'—';const a=String(p).split('-');return TH_MON[+a[1]-1]+' '+(+a[0]+543);}
+function pdShort(p){const a=String(p).split('-');return TH_MON[+a[1]-1].slice(0,3)+' '+String(+a[0]+543).slice(2);}
+function nf(n){n=+n||0;return Number.isInteger(n)?String(n):(Math.round(n*100)/100).toString();}
+function astPhotos(r){return (r&&Array.isArray(r.photos))?r.photos.filter(u=>typeof u==='string'):[];}
+function astStat(a,p){
+  const rows=COUNTS[a.id]||{},cur=rows[p]||null;
+  const prevP=Object.keys(rows).filter(k=>k<p).sort().pop()||null;
+  const prev=prevP?rows[prevP]:null;
+  const base=prev?(+prev.qty||0):null;
+  const added=cur?(+cur.added||0):0, broken=cur?(+cur.broken||0):0;
+  const qty=cur?(+cur.qty||0):null;
+  let loss=null,rate=null;
+  if(cur&&base!==null){const den=base+added;loss=den-qty;rate=den>0?(loss/den*100):0;}
+  return {cur,prevP,base,added,broken,qty,loss,rate};
+}
+/* สถิติย้อนหลัง + คาดการณ์งวดหน้า */
+function astHistory(a,upto){
+  const rows=COUNTS[a.id]||{};
+  const ps=Object.keys(rows).filter(k=>!upto||k<=upto).sort();
+  const out=[];let prevQty=null;
+  ps.forEach(p=>{const r=rows[p],qty=+r.qty||0,added=+r.added||0;
+    const base=prevQty,den=base===null?null:base+added;
+    out.push({p,r,base,added,qty,broken:+r.broken||0,
+      loss:den===null?null:den-qty, rate:(den&&den>0)?((den-qty)/den*100):(den===null?null:0)});
+    prevQty=qty;});
+  return out;
+}
+function astForecast(hist){          // ค่าเฉลี่ยของหายต่อเดือน + คาดการณ์เดือนหน้า
+  const L=hist.filter(x=>x.loss!=null);
+  if(!L.length)return{avg:null,next:null,rate:null};
+  const avg=L.reduce((s,x)=>s+x.loss,0)/L.length;
+  const den=L.reduce((s,x)=>s+(x.base+x.added),0);
+  const rate=den>0?(L.reduce((s,x)=>s+x.loss,0)/den*100):0;
+  const last=hist[hist.length-1];
+  return{avg,rate,next:Math.max(0,Math.round((last.qty-avg)*100)/100)};
+}
+async function astLoad(){
+  if(PD_Y===null){const n=new Date();PD_Y=n.getFullYear();PD_M=n.getMonth();}
+  const box=$('#astList');box.innerHTML='<div class="rempty">กำลังโหลด...</div>';
+  const [as,cs]=await Promise.all([
+    sb.from('maint_assets').select('*').eq('branch_id',CUR_B).is('deleted_at',null).order('sort'),
+    sb.from('maint_counts').select('*').eq('branch_id',CUR_B).order('period',{ascending:false}).limit(3000)]);
+  if(as.error){box.innerHTML='<div class="rempty">โหลดไม่ได้: '+escapeHtml(as.error.message)+' (ยังไม่ได้รัน SQL ตารางอุปกรณ์?)</div>';$('#astSum').innerHTML='';return;}
+  ASSETS=as.data||[];COUNTS={};
+  ((cs&&cs.data)||[]).forEach(r=>{(COUNTS[r.asset_id]=COUNTS[r.asset_id]||{})[r.period]=r;});
+  astRender();
+}
+function astRender(){
+  const p=pdStr();$('#pdTitle').textContent='งวด '+pdLabel(p);
+  const box=$('#astList'),sum=$('#astSum');
+  if(!ASSETS.length){sum.innerHTML='';
+    box.innerHTML='<div class="rempty">ยังไม่มีอุปกรณ์ของสาขานี้'+(isAdmin()?' — กด ⚙️ เพื่อเพิ่มอุปกรณ์':' — ให้ผู้ดูแลเพิ่มก่อน')+'</div>';return;}
+  const arr=ASSETS.map(a=>({a,st:astStat(a,p)}));
+  let counted=0,lossSum=0,brokenSum=0,den=0,haveQty=0;
+  arr.forEach(({st})=>{if(!st.cur)return;counted++;brokenSum+=st.broken;haveQty+=st.qty;
+    if(st.loss!=null){lossSum+=st.loss;den+=st.base+st.added;}});
+  const rate=den>0?(lossSum/den*100):0;
+  sum.innerHTML=`<div class="stile"><small>นับแล้ว</small><b>${counted}<span style="font-size:.7em;color:#8a7f74"> / ${ASSETS.length}</span></b></div>
+    <div class="stile"><small>ของที่มีงวดนี้</small><b>${nf(haveQty)}</b></div>
+    <div class="stile ${lossSum>0?'bad':'good'}"><small>หาย/ชำรุดงวดนี้</small><b>${nf(lossSum)}</b></div>
+    <div class="stile ${rate>3?'bad':rate>0?'warn':'good'}"><small>อัตราเสียหาย</small><b>${rate.toFixed(1)}%</b></div>
+    <div class="stile"><small>แจ้งชำรุด (มีรูป)</small><b>${nf(brokenSum)}</b></div>`;
+  box.innerHTML=arr.map(({a,st})=>{
+    const unit=escapeHtml(a.unit||'ชิ้น');
+    const meta=[a.cat?escapeHtml(a.cat):'',st.base===null?'ยังไม่มียอดงวดก่อน':'งวดก่อน '+nf(st.base)+' '+unit,
+      st.added?('+ซื้อเพิ่ม '+nf(st.added)):''].filter(Boolean).join(' · ');
+    let q='<span class="q" style="color:#9a6700">—</span><span class="d non">ยังไม่นับ</span>';
+    if(st.cur){const d=st.loss==null?'<span class="d non">ตั้งต้น</span>'
+      :st.loss>0?`<span class="d loss">−${nf(st.loss)} · ${st.rate.toFixed(1)}%</span>`
+      :st.loss<0?`<span class="d non">+${nf(-st.loss)} เกินยอด</span>`:'<span class="d ok">ครบ</span>';
+      q=`<span class="q">${nf(st.qty)}</span>${d}`;}
+    const ph=astPhotos(st.cur).length;
+    return `<div class="astrow">
+      <div class="an" data-cnt="${a.id}"><b>${escapeHtml(a.name)}${ph?' <span style="font-size:.78rem">📷'+ph+'</span>':''}</b><small>${meta}</small></div>
+      <div class="astq" data-cnt="${a.id}">${q}</div>
+      <button class="astbtn" data-stat="${a.id}" title="สถิติย้อนหลัง">📈</button>
+    </div>`;}).join('');
+  box.querySelectorAll('[data-cnt]').forEach(el=>el.onclick=()=>{const a=ASSETS.find(z=>z.id===el.dataset.cnt);if(a)astCountOverlay(a);});
+  box.querySelectorAll('[data-stat]').forEach(el=>el.onclick=()=>{const a=ASSETS.find(z=>z.id===el.dataset.stat);if(a)astStatOverlay(a);});
+}
+async function astUploadPhoto(dataUrl,assetId){
+  const blob=await (await fetch(dataUrl)).blob();
+  const path='a/'+CUR_B+'/'+assetId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
+  const up=await sb.storage.from('maint-photos').upload(path,blob,{contentType:'image/jpeg'});
+  if(up.error)throw up.error;
+  return sb.storage.from('maint-photos').getPublicUrl(path).data.publicUrl;
+}
+function astCountOverlay(a){
+  const p=pdStr(),st=astStat(a,p),cur=st.cur,unit=escapeHtml(a.unit||'ชิ้น');
+  const ov=document.createElement('div');ov.className='overlay on';
+  ov.innerHTML=`<div class="sheet">
+    <div class="sheet-head"><h3>📦 ${escapeHtml(a.name)}</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <p class="hint" style="margin:0 0 10px">งวด <b>${pdLabel(p)}</b> · ${st.base===null
+        ?'ยังไม่มียอดงวดก่อน — ครั้งแรกถือเป็นยอดตั้งต้น'
+        :'ยอดงวดก่อน ('+pdLabel(st.prevP)+') = <b>'+nf(st.base)+'</b> '+unit}</p>
+      <div class="frow">
+        <div class="field"><label>นับได้จริง (${unit})</label><input class="ac_q" inputmode="decimal" value="${cur?nf(cur.qty):''}" placeholder="0"></div>
+        <div class="field"><label>ซื้อเพิ่มในงวด</label><input class="ac_a" inputmode="decimal" value="${cur&&+cur.added?nf(cur.added):''}" placeholder="0"></div>
+      </div>
+      <div class="acbox"></div>
+      <div class="frow">
+        <div class="field"><label>ชำรุด / เสียหาย</label><input class="ac_b" inputmode="decimal" value="${cur&&+cur.broken?nf(cur.broken):''}" placeholder="0"></div>
+        <div class="field"><label>วันที่นับ</label><input type="date" class="ac_d" value="${cur?isoFromAny(cur.count_date):todayISO()}"></div>
+      </div>
+      <div class="field"><label>รูปของที่เสียหาย (1–${MAX_PHOTOS} รูป · บังคับเมื่อมีของชำรุด)</label>
+        <input type="file" class="ac_f" accept="image/*" multiple style="display:none">
+        <div class="mtthumbs ac_prev"></div>
+        <button class="act ghost wide ac_add" style="margin-top:6px">📸 ถ่ายรูป / เลือกรูป</button>
+      </div>
+      <div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input class="ac_n" value="${cur&&cur.note?escapeHtml(cur.note):''}" placeholder="เช่น จานแตก 2 ใบตอนล้าง"></div>
+      <button class="act send wide ac_save">💾 บันทึกการนับ</button>
+      <p class="hint" style="margin:8px 0 0">นับงวดเดิมซ้ำได้ ระบบจะทับยอดเดิมให้ (เก็บผู้บันทึกล่าสุด)</p>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  const keep=astPhotos(cur).slice(),imgs=[],prev=ov.querySelector('.ac_prev'),fin=ov.querySelector('.ac_f'),
+    qEl=ov.querySelector('.ac_q'),aEl=ov.querySelector('.ac_a'),bEl=ov.querySelector('.ac_b'),save=ov.querySelector('.ac_save');
+  function renderPrev(){
+    prev.innerHTML=keep.map((u,i)=>`<img src="${escapeHtml(u)}" data-k="${i}" title="แตะเพื่อเอารูปนี้ออก" alt="">`).join('')
+      +imgs.map((d,i)=>`<img src="${d}" data-n="${i}" title="แตะเพื่อเอารูปนี้ออก" alt="">`).join('');
+    prev.querySelectorAll('[data-k]').forEach(im=>im.onclick=()=>{keep.splice(+im.dataset.k,1);renderPrev();});
+    prev.querySelectorAll('[data-n]').forEach(im=>im.onclick=()=>{imgs.splice(+im.dataset.n,1);renderPrev();});}
+  ov.querySelector('.ac_add').onclick=()=>fin.click();
+  fin.onchange=()=>{const room=MAX_PHOTOS-(keep.length+imgs.length);
+    const files=[...fin.files];fin.value='';
+    if(room<=0){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
+    if(files.length>room)toast('แนบได้อีก '+room+' รูป (สูงสุด '+MAX_PHOTOS+')');
+    files.slice(0,room).forEach(f=>processImage(f,d=>{if(d){imgs.push(d);renderPrev();}else toast('อ่านรูปไม่สำเร็จ 1 รูป');}));};
+  function calc(){
+    const q=parseFloat(qEl.value),ad=parseFloat(aEl.value)||0,box=ov.querySelector('.acbox');
+    if(st.base===null||isNaN(q)){box.className='acbox';box.innerHTML='';return;}
+    const den=st.base+ad,loss=den-q,rate=den>0?(loss/den*100):0;
+    box.className='acbox '+(loss>0?'bad':loss<0?'warn':'good');
+    box.innerHTML=loss>0?`⚠️ หาย/ชำรุด <b>${nf(loss)}</b> ${unit} (${rate.toFixed(1)}%) — ระบุจำนวนชำรุดและแนบรูปด้วย`
+      :loss<0?`ℹ️ นับได้เกินยอดที่ควรมี <b>${nf(-loss)}</b> ${unit} (ลืมลงซื้อเพิ่มหรือเปล่า?)`
+      :`✅ ครบตามยอด (${nf(q)} ${unit}) ไม่มีของหาย`;
+    if(loss>0&&!bEl.dataset.touched)bEl.value=nf(loss);
+    if(loss<=0&&!bEl.dataset.touched)bEl.value='';}
+  qEl.oninput=calc;aEl.oninput=calc;bEl.oninput=()=>{bEl.dataset.touched='1';};
+  renderPrev();calc();
+  save.onclick=async()=>{
+    const qty=parseFloat(qEl.value);
+    if(isNaN(qty)||qty<0){toast('กรอกจำนวนที่นับได้ก่อน');qEl.focus();return;}
+    const added=parseFloat(aEl.value)||0,broken=parseFloat(bEl.value)||0,tot=keep.length+imgs.length;
+    if(broken>0&&tot<1){toast('มีของชำรุด '+nf(broken)+' — ต้องแนบรูปอย่างน้อย 1 รูป');return;}
+    if(tot>MAX_PHOTOS){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
+    save.disabled=true;save.textContent='⏳ กำลังบันทึก...';
+    try{
+      const urls=keep.slice();
+      for(const im of imgs){save.textContent='⏳ อัปโหลดรูป '+(urls.length-keep.length+1)+'/'+imgs.length+'...';
+        urls.push(await astUploadPhoto(im,a.id));}
+      const row={asset_id:a.id,branch_id:CUR_B,period:p,count_date:ov.querySelector('.ac_d').value||todayISO(),
+        qty,added,broken,by_name:(PROF&&(PROF.name||PROF.username))||'',note:ov.querySelector('.ac_n').value.trim()||null,photos:urls};
+      const res=cur?await sb.from('maint_counts').update(row).eq('id',cur.id)
+                  :await sb.from('maint_counts').insert(Object.assign({id:uid('mc')},row));
+      if(res.error)throw res.error;
+      toast('บันทึกการนับ “'+a.name+'” แล้ว ✓');x();astLoad();
+    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e));save.disabled=false;save.textContent='💾 บันทึกการนับ';}
+  };
+}
+function astStatOverlay(a){
+  const hist=astHistory(a).slice(-12),fc=astForecast(hist),unit=escapeHtml(a.unit||'ชิ้น'),p=pdStr();
+  const totLoss=hist.filter(x=>x.loss!=null).reduce((s,x)=>s+x.loss,0);
+  const totBroken=hist.reduce((s,x)=>s+x.broken,0);
+  const ov=document.createElement('div');ov.className='overlay on';
+  const rows=hist.length?hist.slice().reverse().map(x=>`<tr class="${x.p===p?'cur':''}">
+      <td>${pdShort(x.p)}</td><td>${x.base==null?'—':nf(x.base)}</td><td>${x.added?'+'+nf(x.added):'—'}</td>
+      <td><b>${nf(x.qty)}</b></td><td class="${x.loss>0?'loss':''}">${x.loss==null?'—':(x.loss>0?'−'+nf(x.loss):x.loss<0?'+'+nf(-x.loss):'0')}</td>
+      <td class="${x.rate>0?'loss':''}">${x.rate==null?'—':x.rate.toFixed(1)+'%'}</td>
+      <td>${astPhotos(x.r).length?'<button class="astbtn" data-ph="'+x.p+'">📷'+astPhotos(x.r).length+'</button>':'—'}</td>
+    </tr>`).join(''):'';
+  ov.innerHTML=`<div class="sheet">
+    <div class="sheet-head"><h3>📈 ${escapeHtml(a.name)}</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <div class="stiles">
+        <div class="stile"><small>ล่าสุดมี</small><b>${hist.length?nf(hist[hist.length-1].qty):'—'}</b></div>
+        <div class="stile ${fc.avg>0?'bad':'good'}"><small>หายเฉลี่ย/เดือน</small><b>${fc.avg==null?'—':nf(Math.round(fc.avg*100)/100)}</b></div>
+        <div class="stile ${fc.rate>3?'bad':fc.rate>0?'warn':'good'}"><small>อัตราเสียหายเฉลี่ย</small><b>${fc.rate==null?'—':fc.rate.toFixed(1)+'%'}</b></div>
+        <div class="stile warn"><small>คาดเดือนหน้าเหลือ</small><b>${fc.next==null?'—':nf(fc.next)}</b></div>
+      </div>
+      ${hist.length?`<table class="htab">
+        <tr><th>งวด</th><th>ต้นงวด</th><th>ซื้อเพิ่ม</th><th>นับได้</th><th>หาย</th><th>%</th><th>รูป</th></tr>
+        ${rows}</table>
+      <p class="hint" style="margin:10px 0 0">รวม ${hist.length} งวด · หายรวม <b>${nf(totLoss)}</b> ${unit} · แจ้งชำรุดพร้อมรูป <b>${nf(totBroken)}</b> ${unit}<br>
+        คาดการณ์เดือนหน้า = ยอดล่าสุด − ค่าเฉลี่ยการหายต่อเดือน (ยังไม่รวมของที่จะซื้อเพิ่ม)</p>`
+      :'<div class="rempty">ยังไม่มีประวัติการนับของอุปกรณ์นี้</div>'}
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  ov.querySelectorAll('[data-ph]').forEach(b=>b.onclick=()=>{
+    const r=(COUNTS[a.id]||{})[b.dataset.ph];if(!r)return;astPhotoOverlay(a,r);});
+}
+function astPhotoOverlay(a,r){
+  const ph=astPhotos(r);
+  const ov=document.createElement('div');ov.className='overlay on';ov.style.zIndex='260';
+  ov.innerHTML=`<div class="sheet">
+    <div class="sheet-head"><h3>📷 ${escapeHtml(a.name)} · ${pdLabel(r.period)}</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <p class="hint" style="margin:0 0 8px">นับได้ ${nf(r.qty)} · ชำรุด ${nf(r.broken)} · 👤 ${escapeHtml(r.by_name||'—')} · ${fmtDate(isoFromAny(r.count_date))}</p>
+      ${r.note?`<div class="mtdetail" style="margin-bottom:8px">${escapeHtml(r.note)}</div>`:''}
+      <div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')||'<div class="rempty">ไม่มีรูป</div>'}</div>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  ov.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
+}
+function astManageOverlay(){
+  if(!isAdmin()){toast('เฉพาะเจ้าของ/ผู้ดูแล');return;}
+  const acc=accessibleBranches(),bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
+  const ov=document.createElement('div');ov.className='overlay on';
+  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  ov.innerHTML=`<div class="sheet">
+    <div class="sheet-head"><h3>⚙️ จัดการรายการอุปกรณ์</h3><button class="x" data-x>✕</button></div>
+    <div class="sheet-body">
+      <div class="sub-title" style="margin-top:0"><span class="am_mode">➕ เพิ่มอุปกรณ์ใหม่</span></div>
+      <div class="field"><label>ชื่ออุปกรณ์</label><input class="am_n" placeholder="เช่น กระทะย่าง / จานเมลามีน / แก้วน้ำ"></div>
+      <div class="frow">
+        <div class="field"><label>หน่วยนับ</label><input class="am_u" placeholder="ชิ้น" value="ชิ้น"></div>
+        <div class="field"><label>หมวด (ไม่บังคับ)</label><input class="am_c" placeholder="เช่น ครัว / หน้าร้าน"></div>
+      </div>
+      <div class="field am_brwrap"><label>ใช้กับสาขา</label><div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 2px">${bChecks}</div></div>
+      <button class="act send wide am_save">➕ เพิ่มอุปกรณ์</button>
+      <div class="sub-title">📦 อุปกรณ์ของ ${escapeHtml(bname)}</div>
+      <div class="am_list"></div>
+      <p class="hint">🗑 ลบ = ซ่อนจากรายการนับ (ประวัติการนับและรูปเก่ายังอยู่)</p>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const x=()=>ov.remove();
+  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+  const fN=ov.querySelector('.am_n'),fU=ov.querySelector('.am_u'),fC=ov.querySelector('.am_c'),
+    saveBtn=ov.querySelector('.am_save'),modeEl=ov.querySelector('.am_mode'),brWrap=ov.querySelector('.am_brwrap');
+  let editId=null;
+  function resetForm(){editId=null;fN.value='';fU.value='ชิ้น';fC.value='';brWrap.style.display='';
+    modeEl.textContent='➕ เพิ่มอุปกรณ์ใหม่';saveBtn.textContent='➕ เพิ่มอุปกรณ์';}
+  function renderList(){
+    const wrap=ov.querySelector('.am_list');
+    wrap.innerHTML=ASSETS.length?ASSETS.map(a=>`<div class="mmrow">
+        <div class="mmn"><b>${escapeHtml(a.name)}</b><small>${escapeHtml(a.unit||'ชิ้น')}${a.cat?' · '+escapeHtml(a.cat):''}</small></div>
+        <button data-ed="${a.id}">✏️</button><button data-rm="${a.id}">🗑</button>
+      </div>`).join(''):'<div class="rempty">ยังไม่มีอุปกรณ์ของสาขานี้</div>';
+    wrap.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>{const a=ASSETS.find(z=>z.id===b.dataset.ed);if(!a)return;
+      editId=a.id;fN.value=a.name;fU.value=a.unit||'ชิ้น';fC.value=a.cat||'';brWrap.style.display='none';
+      modeEl.textContent='✏️ แก้ไข: '+a.name;saveBtn.textContent='💾 บันทึกการแก้ไข';fN.focus();});
+    wrap.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{const a=ASSETS.find(z=>z.id===b.dataset.rm);if(!a)return;
+      if(!confirm('ลบ “'+a.name+'” ออกจากรายการนับของสาขานี้?'))return;
+      const {error}=await sb.from('maint_assets').update({deleted_at:new Date().toISOString()}).eq('id',a.id);
+      if(error){toast('ลบไม่ได้: '+error.message);return;}
+      toast('ลบแล้ว');await astLoad();renderList();if(editId===a.id)resetForm();});
+  }
+  saveBtn.onclick=async()=>{
+    const name=fN.value.trim(),unit=fU.value.trim()||'ชิ้น',cat=fC.value.trim();
+    if(!name){toast('กรอกชื่ออุปกรณ์ก่อน');fN.focus();return;}
+    saveBtn.disabled=true;
+    try{
+      if(editId){const {error}=await sb.from('maint_assets').update({name,unit,cat:cat||null}).eq('id',editId);
+        if(error)throw error;toast('บันทึกการแก้ไขแล้ว ✓');}
+      else{
+        const bids=[...ov.querySelectorAll('.am_br:checked')].map(c=>c.value);
+        if(!bids.length){toast('เลือกอย่างน้อย 1 สาขา');saveBtn.disabled=false;return;}
+        const base=Math.max(0,...ASSETS.map(a=>a.sort||0));
+        const rows=bids.map((bid,i)=>({id:uid('ma'),branch_id:bid,name,unit,cat:cat||null,sort:base+10+i}));
+        const {error}=await sb.from('maint_assets').insert(rows);
+        if(error)throw error;toast('เพิ่มอุปกรณ์แล้ว ✓ ('+bids.length+' สาขา)');}
+      resetForm();await astLoad();renderList();
+    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e));}
+    finally{saveBtn.disabled=false;}
+  };
+  renderList();
+}
+$('#pdPrev').onclick=()=>{PD_M--;if(PD_M<0){PD_M=11;PD_Y--;}astRender();};
+$('#pdNext').onclick=()=>{PD_M++;if(PD_M>11){PD_M=0;PD_Y++;}astRender();};
+$('#pdNow').onclick=()=>{const n=new Date();PD_Y=n.getFullYear();PD_M=n.getMonth();astRender();};
+
+/* ================= แท็บ ================= */
+let TAB='maint';
+function setTab(t){
+  TAB=t;
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  $('#viewMaint').style.display=t==='maint'?'':'none';
+  $('#viewAsset').style.display=t==='asset'?'':'none';
+  $('#hMng').title=t==='asset'?'จัดการรายการอุปกรณ์':'จัดการงานบำรุงรักษา';
+  try{localStorage.setItem('jjmt_tab',t)}catch(e){}
+  if(t==='asset')astLoad();
+}
+document.querySelectorAll('.tabbtn').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+
 
 boot();
 </script>
