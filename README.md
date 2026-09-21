@@ -14,6 +14,9 @@
 - `jjmk-social.html` — ระบบฟังเสียงลูกค้า + แชทบอท (JJ Social)
 - `jjmk-kpi.html` — 📊 ระบบวัดความพึงพอใจลูกค้า (JJ KPI): ลูกค้ากดหน้าร้านผ่านแท็บเล็ต
   (`?kiosk=JJRD` / `?kiosk=JJLP`) · ไม่มี param = แดชบอร์ดเจ้าของ · ย้ายมาจาก repo `thananant/JJ-KPI` (2026-09-06)
+  · **แดชบอร์ดต้องล็อกอินด้วยบัญชีกลาง `pnl_users`** (2026-09-21 — เข้าจากหน้าศูนย์รวมแอพได้เลยด้วยใบผ่าน
+  `jjsso_ticket` · เปิดลิงก์ตรงต้องกรอกรหัสใหม่เสมอ · รีเฟรช/ลากหน้าลงบนมือถือยังอยู่หน้าเดิม)
+  · จอ kiosk ของลูกค้าหน้าร้านไม่ต้องล็อกอินเหมือนเดิม
   อ่าน `kpi/CLAUDE.md` ก่อนแก้ทุกครั้ง · เทสอยู่ `kpi/test/`
 - `jjmk-payroll.html` — 💰 **ระบบเงินเดือน (JJ Payroll)** ย้ายมาจาก repo `thananant/JJ-Payroll` (2026-09-06):
   เปิดที่ https://thananant.github.io/JJ-PnL/jjmk-payroll.html · ไฟล์ประกอบ (worker/tools/docs/logo)
