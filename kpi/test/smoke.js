@@ -342,6 +342,25 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(!d.querySelector('#loginForm') && !!d.querySelector('.k-screen'), 'kiosk ลูกค้าไม่ต้องล็อกอิน');
   }
   {
+    /* ลากหน้าลงบนมือถือ (pull-to-refresh) = โหลดหน้าใหม่ — ห้ามให้ล็อกอินซ้ำ และต้องกลับมาแท็บเดิม */
+    const db = makeDb();
+    const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { before(w) { try { w.localStorage.setItem('kpi_tab', 'monthly'); } catch (e) {} } });
+    await sleep(140);
+    ok(!d.querySelector('#loginForm'), 'รีเฟรช/ลากลง → ไม่ต้องล็อกอินซ้ำ (ใบผ่านยังอยู่)');
+    const at = d.querySelector('.tab.active');
+    ok(at && at.dataset.tab === 'monthly' && !!d.querySelector('.trend'), 'รีเฟรชแล้วกลับมาแท็บเดิม (รายเดือน)');
+  }
+  {
+    /* ล็อกอินเองจากหน้าใส่รหัส → ก็ต้องเข้าแท็บที่ค้างไว้เหมือนกัน */
+    const db = makeDb();
+    const { w, d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db, { noAuth: true, before(w) { try { w.localStorage.setItem('kpi_tab', 'staff'); } catch (e) {} } });
+    await sleep(80);
+    d.querySelector('#lgU').value = 'boss'; d.querySelector('#lgP').value = 'kpi1234';
+    await click(w, d, '#lgBtn'); await sleep(160);
+    const at2 = d.querySelector('.tab.active');
+    ok(at2 && at2.dataset.tab === 'staff', 'ล็อกอินแล้วเข้าแท็บที่ค้างไว้ (พนักงาน)');
+  }
+  {
     /* เน็ต/ฐานข้อมูลล่มแต่ใบผ่านยังสด → ไม่ล็อกคนทำงานออก */
     const db = makeDb({ usersMissing: true }); const { d } = boot('https://thananant.github.io/JJ-PnL/jjmk-kpi.html', db);
     await sleep(120);
