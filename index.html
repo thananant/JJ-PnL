@@ -339,16 +339,15 @@ function clearSession(){
 }
 
 /* ---------- แสดงเฉพาะแอพที่คนนี้มีสิทธิ์ ---------- */
-/* แอพที่ยังใช้บัญชีคนละชุด (นับสต๊อก / ครัวกลาง / ซ่อมบำรุง) และ KPI ที่ไม่ต้องล็อกอิน
-   ให้แสดงไว้เสมอ — ล็อกอินกลางยังคุมไม่ถึง ต้องไปล็อกอินในแอพนั้นเอง */
-var ALWAYS=['stock','kitchen','maint','kpi'];
+/* หลักการ: "ติ๊กแอพไหนให้ ก็เห็นแอพนั้น" — ตรงกับที่ตั้งไว้ในหน้า JJ Access เป๊ะ
+   หมายเหตุ: นับสต๊อก / ครัวกลาง / ซ่อมบำรุง ยังใช้บัญชีคนละชุด — ติ๊กที่นี่คุมแค่ว่า
+   "เห็นไอคอนไหม" ส่วนตัวแอพยังขอให้ล็อกอินด้วยบัญชีของมันเองอยู่ */
 function hasSavedLogin(){
   try{ var a=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); return !!(a&&a.u); }catch(e){ return false; }
 }
 function canOpen(key){
   if(!ME)return true;                              // ยังไม่ล็อกอิน = แสดงทั้งหมด
   if(ME.role==='admin'||ME.role==='owner')return true;   // ผู้ดูแลระบบ + เจ้าของ เข้าได้ทุกแอพ
-  if(ALWAYS.indexOf(key)>=0)return true;
   var apps=ME.apps;
   if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return true;  // ยังไม่เคยตั้งสิทธิ์ = ไม่ล็อกใคร
   var a=apps[key];
