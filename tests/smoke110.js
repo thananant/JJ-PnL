@@ -1,10 +1,11 @@
-// smoke110: jjmk-stockcheck — หน้า 🛟 Safety จัดกลุ่ม แผนก → ซัพ → ชื่อสินค้า (ก–ฮ)
+// smoke110: jjmk-stockcheck — หน้า 🛟 Safety แยกการ์ดตามแผนก · ในแผนกเรียง ซัพ → ชื่อสินค้า (ก–ฮ)
+//   (ชื่อซัพอยู่ใต้ชื่อสินค้าในแถวเหมือนเดิม ไม่มีหัวกลุ่มซัพคั่น)
 // fixture JJRD:
 //   ครัว      : กุ้งขาว(CPF) · ไข่ไก่(CPF) · ข้าวสาร(FarmFresh) · พริก(ตลาดสด)
 //   บาร์น้ำ    : น้ำแข็ง(ตลาดสด) · โค้ก(ไม่ระบุซัพ)
 //   ยังไม่จัดแผนก : ผักบุ้ง(FarmFresh)   ← สินค้าที่ยังไม่ได้ตั้งแผนก ต้องอยู่การ์ดท้ายสุด
 // คาด: แผนกเรียง ครัว → บาร์น้ำ → ยังไม่จัดแผนก · ในแผนกเรียงซัพ (ไทยก่อนอังกฤษ · ไม่ระบุซัพท้ายสุด)
-//      ในกลุ่มซัพเรียงชื่อสินค้าตามตัวอักษรล้วน
+//      ซัพเดียวกันเรียงชื่อสินค้าตามตัวอักษร
 const fs=require('fs');
 const {JSDOM}=require('jsdom');
 const crypto=require('crypto');
@@ -55,39 +56,35 @@ setTimeout(async()=>{
   const head=c=>c.querySelector('.h').textContent.replace(/\s+/g,' ').trim();
   out.push('แยกการ์ดตามแผนก 3 การ์ด เรียงตามตัวอักษร (ครัว → บาร์น้ำ) และที่ยังไม่จัดแผนกอยู่ท้ายสุด: '
     +(cards.length===3&&head(cards[0]).includes('ครัว')&&head(cards[1]).includes('บาร์น้ำ')&&head(cards[2]).includes('ยังไม่จัดแผนก')));
-  const subs=c=>[...c.querySelectorAll('.subh')].map(x=>x.childNodes[0].textContent.replace('🏷','').trim());
-  out.push('ในแผนกครัวมีหัวกลุ่มซัพ 3 กลุ่ม เรียงตามตัวอักษร (ไทยก่อน): '
-    +(subs(cards[0]).join()==='ตลาดสด,CPF,FarmFresh'));
-  out.push('หัวกลุ่มบอกจำนวนรายการของซัพนั้น (CPF 2 รายการ): '
-    +[...cards[0].querySelectorAll('.subh')].some(x=>x.textContent.includes('CPF')&&x.textContent.includes('2 รายการ')));
-  // ลำดับสินค้าในแผนกครัว: ตลาดสด(พริก) · CPF(กุ้งขาว, ไข่ไก่) · FarmFresh(ข้าวสาร)
-  const seq=c=>[...c.querySelectorAll('.subh,.row2')].map(x=>x.classList.contains('subh')
-    ?'— '+x.childNodes[0].textContent.replace('🏷','').trim()
-    :x.querySelector('.nm .t').textContent.trim());
-  const kitchen=seq(cards[0]);
-  out.push('เรียง ซัพ → ชื่อสินค้าตามตัวอักษรในกลุ่ม: '
-    +(JSON.stringify(kitchen)===JSON.stringify(['— ตลาดสด','พริก','— CPF','กุ้งขาว','ไข่ไก่','— FarmFresh','ข้าวสาร'])));
-  out.push('สินค้าที่ไม่ระบุซัพอยู่กลุ่มท้ายสุดของแผนก: '
-    +(JSON.stringify(seq(cards[1]))===JSON.stringify(['— ตลาดสด','น้ำแข็ง','— (ไม่ระบุซัพ)','โค้ก'])));
-  out.push('แถวสินค้าไม่ต้องซ้ำชื่อซัพแล้ว (ย้ายไปอยู่หัวกลุ่ม) แต่ยังโชว์ชื่อบิลถ้าต่างจากชื่อนับ: '
-    +(!cards[0].querySelector('.row2 .nm .s')?.textContent.includes('CPF')
-      &&cards[0].textContent.includes('🧾 บิล: ไข่ไก่เบอร์ 2')));
+  out.push('ไม่มีหัวกลุ่มซัพคั่นกลางตาราง (ชื่อซัพอยู่ในแถวเหมือนเดิม): '
+    +(d.querySelectorAll('#list .subh').length===0));
+  // ลำดับสินค้าในแผนกครัว: ตลาดสด(พริก) → CPF(กุ้งขาว, ไข่ไก่) → FarmFresh(ข้าวสาร)
+  const seq=c=>[...c.querySelectorAll('.row2')].map(x=>x.querySelector('.nm .t').textContent.trim());
+  const supSeq=c=>[...c.querySelectorAll('.row2')].map(x=>x.querySelector('.nm .s').textContent.replace(/.*· /,'').trim());
+  out.push('เรียงตามซัพก่อน (ไทยก่อนอังกฤษ): '+(supSeq(cards[0]).join()==='ตลาดสด,CPF,CPF,FarmFresh'));
+  out.push('ซัพเดียวกันเรียงชื่อสินค้าตามตัวอักษร: '
+    +(JSON.stringify(seq(cards[0]))===JSON.stringify(['พริก','กุ้งขาว','ไข่ไก่','ข้าวสาร'])));
+  out.push('สินค้าที่ไม่ระบุซัพอยู่ท้ายสุดของแผนก: '
+    +(JSON.stringify(seq(cards[1]))===JSON.stringify(['น้ำแข็ง','โค้ก'])));
+  out.push('แถวยังโชว์ชื่อซัพใต้ชื่อสินค้า + ชื่อบิลถ้าต่างจากชื่อนับ: '
+    +(cards[0].textContent.includes('🧾 บิล: ไข่ไก่เบอร์ 2')
+      &&[...cards[0].querySelectorAll('.row2 .nm .s')].some(x=>x.textContent.includes('CPF'))));
   // ช่องกรอกอัตราใช้ยังอยู่ครบและแก้ได้
   const rowE=[...cards[0].querySelectorAll('.row2')].find(x=>x.querySelector('.nm .t').textContent.trim()==='กุ้งขาว');
   const ri=rowE.querySelectorAll('input.ri');
   out.push('ทุกแถวยังมีช่อง จ–พฤ / ศ / ส–อา + ช่องเลือกแผนก: '
     +(ri.length===3&&ri[0].value==='4'&&!!rowE.querySelector('select.zsel')));
   ri[0].value='12'; ri[0].dispatchEvent(new w.Event('change')); await sleep(120);
-  out.push('แก้ค่าแล้วจำไว้ (ยังอยู่กลุ่มเดิม ไม่กระโดดที่): '
+  out.push('แก้ค่าแล้วจำไว้ (ลำดับไม่กระโดดที่): '
     +(w.eval("(S.all.find(x=>x.id==='p2')||{}).dirty.rate_wk")===12
-      &&seq([...d.querySelectorAll('#list .card')][0])[3]==='กุ้งขาว'));
+      &&seq([...d.querySelectorAll('#list .card')][0])[1]==='กุ้งขาว'));
   // ค้นหาแล้วยังจัดกลุ่มเหมือนเดิม
   d.getElementById('q').value='ไข่';
   d.getElementById('q').dispatchEvent(new w.Event('input'));
   await sleep(200);
   const c0=[...d.querySelectorAll('#list .card')];
-  out.push('ค้นหาแล้วเหลือเฉพาะที่ตรง แต่ยังมีหัวกลุ่มซัพกำกับ: '
-    +(c0.length===1&&c0[0].querySelectorAll('.row2').length===1&&subs(c0[0]).join()==='CPF'));
+  out.push('ค้นหาแล้วเหลือเฉพาะที่ตรง: '
+    +(c0.length===1&&c0[0].querySelectorAll('.row2').length===1&&seq(c0[0]).join()==='ไข่ไก่'));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
