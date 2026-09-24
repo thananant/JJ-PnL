@@ -1,4 +1,4 @@
-// smoke113: jjmk-stockcheck — หน้า 🛟 Safety: คอลัมน์ "หน่วยนับ" ดูได้ + เปลี่ยนได้ตรงนั้นเลย
+// smoke113: jjmk-stockcheck — หน้า 🛟 Safety: คอลัมน์ "หน่วยนับ" ดู/เปลี่ยนได้ + ปุ่ม 🗑 เลิกใช้สินค้า
 // fixture JJRD: กุ้งขาว(กก.) · ไข่ไก่(แผง) · พริก(ยังไม่ตั้งหน่วย) · ลาดพร้าวมี "กุ้งขาว" ชื่อเดียวกัน
 // กติกาเดิมของระบบ: หน่วยนับใช้ชื่อเดียวกันทั้ง 2 สาขา → PATCH by name + ตามไปแก้ pnl_stock_map.stock_unit
 const fs=require('fs');
@@ -107,6 +107,29 @@ setTimeout(async()=>{
   // ช่องกรอกอัตราใช้ยังทำงานเหมือนเดิม
   const ri=rowOf('ไข่ไก่').querySelectorAll('input.ri.rk');
   out.push('ยังมีช่องอัตราใช้ 3 ช่องต่อแถวเหมือนเดิม: '+(ri.length===3&&ri[0].value==='2'));
+  /* ---- ปุ่ม 🗑 เลิกใช้สินค้าที่ไม่ใช้แล้ว ---- */
+  out.push('ทุกแถวมีปุ่ม 🗑 เลิกใช้: '
+    +([...d.querySelectorAll('#list .row2')].every(r=>!!r.querySelector('button.delx'))
+      &&d.querySelector('#list .hd2').children.length===8));
+  // กดยกเลิกตอนถาม = ไม่ลบ
+  patches.length=0; w.__cfm=false;
+  rowOf('พริก').querySelector('button.delx').click(); await sleep(200);
+  out.push('กด 🗑 แล้วยกเลิก → ไม่ลบอะไร: '+(patches.length===0&&!!rowOf('พริก')));
+  w.__cfm=true;
+  // ลบจริง = soft delete เฉพาะสาขานี้ (PATCH deleted_at ด้วย id ของแถวสาขานี้)
+  patches.length=0;
+  const n0=d.querySelectorAll('#list .row2').length;
+  rowOf('พริก').querySelector('button.delx').click(); await sleep(250);
+  const pd=patches.find(x=>x.url.includes('products?id=eq.'));
+  out.push('กดยืนยัน → ซ่อนสินค้าด้วย deleted_at (ไม่ได้ลบข้อมูลทิ้ง) เฉพาะแถวของสาขานี้: '
+    +(!!pd&&!!pd.body.deleted_at&&decodeURIComponent(pd.url).includes('id=eq.p3')));
+  out.push('หายจากหน้าจอทันที + ขึ้นข้อความยืนยัน: '
+    +(!rowOf('พริก')&&d.querySelectorAll('#list .row2').length===n0-1
+      &&d.getElementById('toast').textContent.includes('เลิกใช้')));
+  out.push('ตัวนับรายการในตัวกรองลดลงตาม: '
+    +d.querySelector('#list .lrow div:last-child').textContent.replace(/\s+/g,' ').includes('แสดง 2/2'));
+  out.push('ลบแล้วไม่หลุดจาก S.all/S.items (คำนวณหน้าอื่นไม่เพี้ยน): '
+    +(w.eval("S.all.some(x=>x.name==='พริก')")===false&&w.eval("S.items.length")===2));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },250);
