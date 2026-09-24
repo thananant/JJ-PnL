@@ -343,7 +343,7 @@ window.JJGate=(function(){
   <input id="lgP" type="password" placeholder="รหัสผ่าน" autocomplete="current-password">
   <button id="lgBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
   <div id="lgMsg"></div>
-  <div class="lgskip">ใช้บัญชีของระบบนับสต๊อก/ครัวกลาง? <a href="javascript:" onclick="skipLogin()">ดูแอพทั้งหมด</a></div>
+  <div class="lgskip">ยังไม่มีบัญชีกลาง? <a href="javascript:" onclick="skipLogin()">ดูแอพทั้งหมด</a></div>
 </div></div>
 
 <script>
@@ -425,7 +425,7 @@ function spreadSession(u){
 }
 function clearSession(){
   ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip',
-   'jjhub_pass','jjsso_ticket','jjmt_keep']
+   'jjhub_pass','jjsso_ticket','jjmt_keep','jjck_keep']
     .forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
 }
 
@@ -444,8 +444,8 @@ document.addEventListener('click',function(e){
 
 /* ---------- แสดงเฉพาะแอพที่คนนี้มีสิทธิ์ ---------- */
 /* หลักการ: "ติ๊กแอพไหนให้ ก็เห็นแอพนั้น" — ตรงกับที่ตั้งไว้ในหน้า JJ Access เป๊ะ
-   หมายเหตุ: นับสต๊อก / ครัวกลาง / ซ่อมบำรุง ยังใช้บัญชีคนละชุด — ติ๊กที่นี่คุมแค่ว่า
-   "เห็นไอคอนไหม" ส่วนตัวแอพยังขอให้ล็อกอินด้วยบัญชีของมันเองอยู่ */
+   ตั้งแต่ 2026-09-24 ทุกแอพใช้บัญชีกลาง pnl_users ชุดเดียวกันหมดแล้ว (นับสต๊อก/ครัวกลางย้ายมาแล้ว)
+   ติ๊กที่นี่จึงคุมทั้ง "เห็นไอคอนไหม" และ "เข้าแอพนั้นได้ไหม" */
 function hasSavedLogin(){
   try{ var a=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); return !!(a&&a.u); }catch(e){ return false; }
 }
@@ -485,7 +485,7 @@ function paintUser(){
 
 /* ---------- กดไอคอนแอพ = ออกใบผ่านครั้งเดียวให้แอพนั้น (JJ Gate) ----------
    คนที่เข้าแอพด้วย URL ตรงจะไม่มีใบผ่าน → แอพบังคับให้ใส่รหัสผ่านใหม่
-   แอพที่ใช้บัญชีคนละชุด (นับสต๊อก/ครัวกลาง/ซ่อมบำรุง/KPI) ไม่ได้ใช้ใบผ่านนี้ ออกให้ก็ไม่มีผล */
+   ออกทั้ง 2 แบบพร้อมกัน: jjhub_pass (JJ Gate) + jjsso_ticket (นับสต๊อก/ครัวกลาง/ซ่อมบำรุง/KPI/Social) */
 document.addEventListener('click',function(e){
   var t=e.target, a=(t&&t.closest)?t.closest('nav a.app[data-app]'):null;
   if(!a||!ME||!ME.username)return;
@@ -497,7 +497,7 @@ function showLogin(){
   document.getElementById('login').classList.add('on');
   setTimeout(function(){ var el=document.getElementById('lgU'); if(el)el.focus(); },80);
 }
-function skipLogin(){   // คนที่ใช้บัญชีของระบบนับสต๊อก/ครัวกลาง — ข้ามไปดูแอพทั้งหมด
+function skipLogin(){   // ทางออกฉุกเฉิน: ยังไม่มีบัญชีกลาง — ข้ามไปดูไอคอนแอพทั้งหมด (แอพปลายทางยังถามรหัสเอง)
   try{ localStorage.setItem('jjhub_skip','1'); }catch(e){}
   document.getElementById('login').classList.remove('on');
   ME=null; paintApps(); paintUser();
