@@ -79,6 +79,9 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .hd2{font-size:11px;color:var(--mut);font-weight:700;border-bottom:1px solid #F2EBDB;padding:7px 15px}
 .row2{border-bottom:1px solid #F5EFE1}
 .row2:last-child{border-bottom:0}
+.subh{padding:7px 15px;background:#FBF6EA;border-top:1px solid #EFE2C8;border-bottom:1px solid #EFE2C8;font-size:12.5px;font-weight:800;color:var(--wine);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.subh .n{font-weight:400;font-size:11px;color:var(--mut)}
+.subh:first-child{border-top:0}
 .nm .t{font-weight:700;font-size:14.5px}
 .nm .s{font-size:11.5px;color:var(--mut)}
 .nm .s .cn{color:var(--blue)}
@@ -1982,6 +1985,7 @@ function cmpName(a,b){
   return (pa-pb)||na.localeCompare(nb2,'th');
 }
 const cmpItem=(a,b)=>cmpName(a&&a.name,b&&b.name);
+const cmpNameTH=(a,b)=>String((a&&a.name)||'').localeCompare(String((b&&b.name)||''),'th',{numeric:true}); // เรียงตามตัวอักษรล้วน (ใช้ในหน้า Safety ที่จัดกลุ่มตามซัพอยู่แล้ว)
 const onlySome=n=>nBr(n)<Object.keys(STK_BR).length; // มีบางสาขา
 async function fillBillUnits(){ // เติมหน่วยซื้อจากบิลให้ทุกตัวที่ยังไม่ตรง
   const todo=S.all.map(it=>({it,m:S.map[it.id],b:buOf(billName(it))}))
@@ -2441,19 +2445,27 @@ function renderSet(){
   const ds={};
   S.items.filter(matchesAll).forEach(it=>{const k=deptOf(it);(ds[k]=ds[k]||[]).push(it);});
   function matchesAll(it){return matches(it);}
-  const keys=Object.keys(ds);
+  const keys=Object.keys(ds).sort((a,b)=>   // แผนกเรียงตามตัวอักษร · ที่ยังไม่จัดแผนกไว้ท้ายสุด
+    (a==='ยังไม่จัดแผนก'?1:0)-(b==='ยังไม่จัดแผนก'?1:0)||a.localeCompare(b,'th'));
+  const NOSUP='(ไม่ระบุซัพ)';
+  const supOf=it=>String(it.sup||'').trim()||NOSUP;
   $('#list').innerHTML='<div class="dhead">🛟 Safety · อัตราใช้ต่อวัน + แผนก · สาขา'+BR_NAME[S.br]+'</div>'
 
-    +'<div class="note">จ–พฤ / ศ / ส–อา = ใช้ของกี่หน่วยต่อวัน (ช่องเหลือง = กลุ่มของวันนี้) · ค่าลงช่องเดิมของแอพนับ → ระบบคำนวณสั่งของ + ส่ง LINE ซัพใช้ต่อได้เลย · แผนกเลือกจากรายชื่อในหน้า ⚙️ ตั้งค่า › แผนก (เพิ่ม/ลบ/แก้ชื่อที่นั่น) · <b>แผนกแยกกันคนละสาขา</b> · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ'+(S.deptOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ก่อนถึงตั้งแผนกได้')+'</div>'
+    +'<div class="note">จ–พฤ / ศ / ส–อา = ใช้ของกี่หน่วยต่อวัน (ช่องเหลือง = กลุ่มของวันนี้) · ค่าลงช่องเดิมของแอพนับ → ระบบคำนวณสั่งของ + ส่ง LINE ซัพใช้ต่อได้เลย · แผนกเลือกจากรายชื่อในหน้า ⚙️ ตั้งค่า › แผนก (เพิ่ม/ลบ/แก้ชื่อที่นั่น) · <b>แผนกแยกกันคนละสาขา</b> · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ · <b>เรียง: แผนก → ซัพ → ชื่อสินค้า (ก–ฮ)</b>'+(S.deptOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ก่อนถึงตั้งแผนกได้')+'</div>'
     +(keys.length?keys.map(k=>{
-      const rows=ds[k].slice().sort(cmpItem).map(it=>{
+      const bySup={};   // ในแผนก: จัดกลุ่มตามซัพก่อน แล้วค่อยเรียงชื่อสินค้าตามตัวอักษรในกลุ่ม
+      ds[k].forEach(it=>{const sp=supOf(it);(bySup[sp]=bySup[sp]||[]).push(it);});
+      const sups=Object.keys(bySup).sort((a,b)=>(a===NOSUP?1:0)-(b===NOSUP?1:0)||a.localeCompare(b,'th'));
+      const rows=sups.map(sp=>'<div class="subh">🏷 '+esc(sp)+'<span class="n">'+bySup[sp].length+' รายการ</span></div>'
+        +bySup[sp].slice().sort(cmpNameTH).map(it=>{
         const cn=it.name!==billName(it);
         const ri=(f,i)=>'<span class="lbl" data-l="'+['จ–พฤ/วัน','ศ/วัน','ส–อา/วัน','safety','max'][i]+'"><input class="ri'+(it.dirty[f]!==undefined?' dirty':'')+'" type="text" inputmode="decimal" value="'+fq(it[f])+'" style="'+(i<3?hl(i):'')+'" onchange="setF(\''+it.id+'\',\''+f+'\',this.value)"></span>';
         return '<div class="row2">'+imgCell(it)
-          +'<div class="nm"><div class="t">'+esc(it.name)+'</div><div class="s">'+(cn?'<span class="cn">🧾 บิล: '+esc(billName(it))+'</span> · ':'')+esc(it.sup||'')+'</div></div>'
+          +'<div class="nm"><div class="t">'+esc(it.name)+'</div>'
+          +(cn?'<div class="s"><span class="cn">🧾 บิล: '+esc(billName(it))+'</span></div>':'')+'</div>'
           +'<span class="lbl" data-l="แผนก"><select class="zsel'+(it.dirty.dept!==undefined?' dirty':'')+'" style="margin-left:0;width:100%;max-width:150px" '+(S.deptOk?'':'disabled')+' onchange="setF(\''+it.id+'\',\'dept\',this.value)"><option value="">– แผนก –</option>'+deptOpts(it.dirty.dept!==undefined?(it.dirty.dept||''):deptOf(it))+'</select></span>'
           +ri('rate_wk',0)+ri('rate_fri',1)+ri('rate_we',2)+'</div>';
-      }).join('');
+      }).join('')).join('');
       const z0=(ds[k].find(i=>i.zone)||{}).zone||'';
       const zsel=(S.zoneOk&&ds[k][0].dept)?'<select class="zsel" onchange="setZone(\''+esc(k).replace(/'/g,"\\'")+'\',this.value)"><option value="">โซน…</option><option'+(z0==='หน้าร้าน'?' selected':'')+'>หน้าร้าน</option><option'+(z0==='หลังร้าน'?' selected':'')+'>หลังร้าน</option></select>':'';
       return '<div class="card"><div class="h">'+(DEPT_IC[k]||'🗂')+' '+esc(k)+zsel+' <span class="n">'+ds[k].length+' รายการ</span></div>'
