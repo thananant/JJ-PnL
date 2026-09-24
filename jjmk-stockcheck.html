@@ -75,7 +75,7 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .lhd{display:grid;grid-template-columns:46px minmax(160px,1fr) minmax(160px,1fr) 130px;gap:10px;padding:7px 15px;font-size:11px;color:var(--mut);font-weight:700;border-bottom:1px solid #F2EBDB}
 .okt{color:var(--green);font-weight:700;font-size:12.5px}
 .wat{color:var(--amber);font-weight:700;font-size:12.5px}
-.hd2,.row2{display:grid;grid-template-columns:46px minmax(190px,1fr) 150px 90px 90px 90px;gap:10px;align-items:center;padding:8px 15px}
+.hd2,.row2{display:grid;grid-template-columns:46px minmax(170px,1fr) 132px 104px 86px 86px 86px;gap:9px;align-items:center;padding:8px 15px}
 .hd2{font-size:11px;color:var(--mut);font-weight:700;border-bottom:1px solid #F2EBDB;padding:7px 15px}
 .row2{border-bottom:1px solid #F5EFE1}
 .row2:last-child{border-bottom:0}
@@ -2483,12 +2483,13 @@ function renderSet(){
         return '<div class="row2">'+imgCell(it)
           +'<div class="nm"><div class="t">'+esc(it.name)+'</div><div class="s">'+(cn?'<span class="cn">🧾 บิล: '+esc(billName(it))+'</span> · ':'')+esc(it.sup||'')+'</div></div>'
           +'<span class="lbl" data-l="แผนก"><select class="zsel'+(it.dirty.dept!==undefined?' dirty':'')+'" style="margin-left:0;width:100%;max-width:150px" '+(S.deptOk?'':'disabled')+' onchange="setF(\''+it.id+'\',\'dept\',this.value)"><option value="">– แผนก –</option>'+deptOpts(it.dirty.dept!==undefined?(it.dirty.dept||''):deptOf(it))+'</select></span>'
+          +'<span class="lbl" data-l="หน่วยนับ"><select class="zsel" style="margin-left:0;width:100%" onchange="unitPick(\''+it.id+'\',this.value,this)">'+unitOpts(it.unit)+'</select></span>'
           +ri('rate_wk',0)+ri('rate_fri',1)+ri('rate_we',2)+'</div>';
       }).join('');
       const z0=(ds[k].find(i=>i.zone)||{}).zone||'';
       const zsel=(S.zoneOk&&ds[k][0].dept)?'<select class="zsel" onchange="setZone(\''+esc(k).replace(/'/g,"\\'")+'\',this.value)"><option value="">โซน…</option><option'+(z0==='หน้าร้าน'?' selected':'')+'>หน้าร้าน</option><option'+(z0==='หลังร้าน'?' selected':'')+'>หลังร้าน</option></select>':'';
       return '<div class="card"><div class="h">'+(DEPT_IC[k]||'🗂')+' '+esc(k)+zsel+' <span class="n">'+ds[k].length+' รายการ</span></div>'
-        +'<div class="hd2"><span></span><span>สินค้า</span><span>แผนก</span><span style="text-align:center">จ–พฤ/วัน</span><span style="text-align:center">ศ/วัน</span><span style="text-align:center">ส–อา/วัน</span></div>'
+        +'<div class="hd2"><span></span><span>สินค้า</span><span>แผนก</span><span>หน่วยนับ</span><span style="text-align:center">จ–พฤ/วัน</span><span style="text-align:center">ศ/วัน</span><span style="text-align:center">ส–อา/วัน</span></div>'
         +rows+'</div>';
     }).join('')
     :'<div class="empty">'+((fd||fs||fq2)?'ไม่มีรายการที่ตรงกับตัวกรอง — กด ✕ ล้างตัวกรอง':'ไม่มีรายการ')+'</div>');
@@ -2514,6 +2515,33 @@ function riFocus(){
   const el=riList()[n]; if(!el)return;
   el.focus(); try{el.select();}catch(x){}
   try{el.scrollIntoView({block:'nearest'});}catch(x){}
+}
+function unitOpts(cur){ // หน่วยให้เลือก: จากรายการหน่วย + ที่ใช้จริงในข้อมูล (+ หน่วยปัจจุบันเสมอ)
+  const c=String(cur||'').trim();
+  const l=unitAll().map(u=>u.name);
+  if(c&&!l.some(n=>uKey(n)===uKey(c)))l.unshift(c);
+  return (c?'':'<option value="">– ยังไม่ตั้งหน่วย –</option>')
+    +l.map(n=>'<option value="'+esc(n)+'"'+(uKey(n)===uKey(c)?' selected':'')+'>'+esc(n)+'</option>').join('')
+    +'<option value="__new">➕ หน่วยใหม่…</option>';
+}
+async function unitPick(id,v,el){ // เปลี่ยนหน่วยนับจากหน้า Safety — เซฟทันที (ไม่ต้องกดบันทึก)
+  const it=S.all.find(x=>x.id===id); if(!it){render();return;}
+  const old=String(it.unit||'').trim();
+  let nn=String(v||'').trim();
+  if(nn==='__new'){ nn=uKey(ask('หน่วยนับใหม่ของ "'+it.name+'"\n(เช่น กก. · ถุง · ลัง · ขวด)','')||''); if(!nn){render();return;} }
+  if(!nn||uKey(nn)===uKey(old)){render();return;}
+  const n2=nBr(it.name); // สินค้าชื่อนี้มีกี่สาขา — หน่วยนับใช้ชื่อเดียวกันทั้ง 2 สาขา
+  if(!cfm('เปลี่ยนหน่วยนับของ "'+it.name+'"\n'+(old||'(ยังไม่ตั้ง)')+' → '+nn
+    +(n2>1?'\n\n⚠ สินค้าชื่อนี้มี '+n2+' สาขา จะเปลี่ยนให้เหมือนกันทั้งหมด':'')
+    +'\n\n(ยอดนับ/อัตราใช้ที่กรอกไว้เป็นตัวเลขเดิม ไม่ได้แปลงหน่วยให้ — ถ้าเปลี่ยนหน่วยคนละขนาด ต้องแก้ตัวเลขเอง)')){render();return;}
+  try{
+    await api('PATCH','products?name=eq.'+encodeURIComponent(it.name)+'&deleted_at=is.null',{unit:nn},'return=minimal');
+    await api('PATCH','pnl_stock_map?product_name=eq.'+encodeURIComponent(it.name),{stock_unit:nn},'return=minimal').catch(()=>{});
+    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(x=>{if(x.name===it.name)x.unit=nn;}));
+    (S.mapRows||[]).forEach(x=>{if(x.product_name===it.name)x.stock_unit=nn;});
+    if(!unitFind(nn))await unitAdopt(nn);   // หน่วยใหม่ → เพิ่มเข้ารายการหน่วยให้ด้วย
+    uDirty(); toast('✅ '+it.name+' → หน่วยนับ '+nn); render();
+  }catch(e){ toast('เปลี่ยนหน่วยไม่สำเร็จ — '+errMsg(e),true); render(); }
 }
 function setFilDept(v){S.setDept=v;render();}
 function setFilSup(v){S.setSup=v;render();}
