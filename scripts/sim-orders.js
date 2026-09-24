@@ -26,7 +26,7 @@ const num=v=>{const n=parseFloat(String(v??'').replace(/,/g,''));return isNaN(n)
 const addDays=(ds,n)=>{const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);const p=x=>String(x).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());};
 // ---- ซัพ: รวมจากทุกแถว (กติกาเดียวกันทั้ง 2 สาขา) ----
 const sups={};
-snap.forEach(r=>{const n=(r.sup_name||r.sup||'').trim(); if(!n||sups[n])return;
+snap.forEach(r=>{const n=(r.sup_name||'').trim(); if(!n||sups[n])return;   // เฉพาะซัพที่มีในตาราง suppliers จริง (sup_name ว่าง = ไม่มี → เอนจินจะเดาเอง)
   let sch={}; try{sch=JSON.parse(r.schedule||'{}')||{};}catch(e){}
   sups[n]={name:n,order_mode:r.order_mode||'any',schedule:sch,lead_days:parseInt(r.lead_days,10)||1,
     order_ahead:parseInt(r.order_ahead,10)||0,prepay:String(r.prepay).toLowerCase()==='true',
