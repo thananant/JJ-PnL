@@ -2479,7 +2479,7 @@ function renderSet(){
     +(keys.length?keys.map(k=>{
       const rows=ds[k].slice().sort(cmpSupName).map(it=>{   // ในแผนก: เรียงตามซัพ แล้วค่อยชื่อสินค้า ก–ฮ
         const cn=it.name!==billName(it);
-        const ri=(f,i)=>'<span class="lbl" data-l="'+['จ–พฤ/วัน','ศ/วัน','ส–อา/วัน','safety','max'][i]+'"><input class="ri'+(it.dirty[f]!==undefined?' dirty':'')+'" type="text" inputmode="decimal" value="'+fq(it[f])+'" style="'+(i<3?hl(i):'')+'" onchange="setF(\''+it.id+'\',\''+f+'\',this.value)"></span>';
+        const ri=(f,i)=>'<span class="lbl" data-l="'+['จ–พฤ/วัน','ศ/วัน','ส–อา/วัน','safety','max'][i]+'"><input class="ri rk'+(it.dirty[f]!==undefined?' dirty':'')+'" type="text" inputmode="decimal" value="'+fq(it[f])+'" style="'+(i<3?hl(i):'')+'" onfocus="riSel(this)" onkeydown="riKey(event,this)" onchange="setF(\''+it.id+'\',\''+f+'\',this.value)"></span>';
         return '<div class="row2">'+imgCell(it)
           +'<div class="nm"><div class="t">'+esc(it.name)+'</div><div class="s">'+(cn?'<span class="cn">🧾 บิล: '+esc(billName(it))+'</span> · ':'')+esc(it.sup||'')+'</div></div>'
           +'<span class="lbl" data-l="แผนก"><select class="zsel'+(it.dirty.dept!==undefined?' dirty':'')+'" style="margin-left:0;width:100%;max-width:150px" '+(S.deptOk?'':'disabled')+' onchange="setF(\''+it.id+'\',\'dept\',this.value)"><option value="">– แผนก –</option>'+deptOpts(it.dirty.dept!==undefined?(it.dirty.dept||''):deptOf(it))+'</select></span>'
@@ -2497,6 +2497,24 @@ function renderSet(){
 }
 const NOSUP='(ไม่ระบุซัพ)';
 const supLabel=it=>String((it&&it.sup)||'').trim()||NOSUP;
+/* ---- ช่องกรอกอัตราใช้: แตะแล้วเลือกทั้งช่อง · Enter = ไปช่องขวา ครบ 3 ช่องแล้วลงบรรทัดถัดไป ---- */
+let RI_NEXT=-1;
+const riList=()=>[...document.querySelectorAll('#list input.ri.rk')];
+function riSel(el){ try{el.select();}catch(x){} setTimeout(()=>{try{el.select();}catch(x){}},0); } // iOS ต้องเลือกซ้ำอีกที
+function riKey(e,el){
+  if(e.key!=='Enter'&&e.keyCode!==13)return;
+  e.preventDefault();
+  const i=riList().indexOf(el);
+  RI_NEXT=(i<0?-1:i+1);      // จำ "ลำดับที่" ไว้ เพราะ onchange จะวาดหน้าใหม่ ตัวอ้างอิงเดิมจะหลุด
+  el.blur();                 // ปล่อยโฟกัส = ยิง onchange เก็บค่าก่อน
+  setTimeout(riFocus,0);
+}
+function riFocus(){
+  const n=RI_NEXT; RI_NEXT=-1; if(n<0)return;
+  const el=riList()[n]; if(!el)return;
+  el.focus(); try{el.select();}catch(x){}
+  try{el.scrollIntoView({block:'nearest'});}catch(x){}
+}
 function setFilDept(v){S.setDept=v;render();}
 function setFilSup(v){S.setSup=v;render();}
 function setFilQ(v){S.setQ=v;S._setQfocus=true;render();}
