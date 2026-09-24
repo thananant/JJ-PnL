@@ -822,6 +822,7 @@ async function loadAll(){
   draftApply(cd); // ค่านับที่ยังไม่ได้กดบันทึก (จำไว้ตอนรีเฟรช)
   if(S.authOn&&S.user&&S.user.role==='admin')S.users=await api('GET','sc_users?select=*&order=id').catch(()=>null);
   S.dept=null; S.allBr=null; S.nameBrN=null;
+  S.setDept=''; S.setSup=''; S.setQ='';   // ตัวกรองหน้า Safety — เปลี่ยนสาขา/โหลดใหม่ = เริ่มใหม่ (กันกรองแล้วว่างเปล่า)
   render();
   ensureAllProducts(); // รายการทุกสาขา (ใช้จัดลำดับให้เหมือนกันทุกเมนู)
   trPrewarmSoon(2500); // ข้อมูลสินค้ามาแล้ว → แปลชื่อสินค้าทุกภาษาไว้ล่วงหน้า
@@ -2443,14 +2444,38 @@ function renderSet(){
   if(S.user&&S.user.role!=='admin'){$('#list').innerHTML='<div class="empty">หน้า Safety สำหรับแอดมินเท่านั้น</div>';return;}
   const G=dayGrp($('#cd').value||bizToday());
   const hl=i=>i===G?'background:#FFF9E4':'';
-  const ds={};
-  S.items.filter(matchesAll).forEach(it=>{const k=deptOf(it);(ds[k]=ds[k]||[]).push(it);});
+  const all=S.items.filter(matchesAll);
   function matchesAll(it){return matches(it);}
+  // ---- ตัวกรองของหน้านี้: แผนก · ซัพ · ค้นหาชื่อ ----
+  const fq2=String(S.setQ||'').trim().toLowerCase();
+  const fd=String(S.setDept||''),fs=String(S.setSup||'');
+  const cnt=(arr,f)=>{const o={};arr.forEach(it=>{const k=f(it);o[k]=(o[k]||0)+1;});return o;};
+  const dCnt=cnt(all,deptOf),sCnt=cnt(all,supLabel);
+  const sortLast=(last)=>(a,b)=>(a===last?1:0)-(b===last?1:0)||a.localeCompare(b,'th');
+  const dOpts=Object.keys(dCnt).sort(sortLast('ยังไม่จัดแผนก'));
+  const sOpts=Object.keys(sCnt).sort(sortLast(NOSUP));
+  const shown=all.filter(it=>(!fd||deptOf(it)===fd)&&(!fs||supLabel(it)===fs)
+    &&(!fq2||String(it.name||'').toLowerCase().includes(fq2)||String(billName(it)).toLowerCase().includes(fq2)));
+  const ds={};
+  shown.forEach(it=>{const k=deptOf(it);(ds[k]=ds[k]||[]).push(it);});
+  const opt=(v,lb,cur)=>'<option value="'+esc(v)+'"'+(String(cur)===String(v)?' selected':'')+'>'+esc(lb)+'</option>';
+  const filBar='<div class="lrow" style="grid-template-columns:minmax(140px,1fr) minmax(140px,1fr) minmax(150px,1.3fr) auto;gap:8px;align-items:center">'
+    +'<span class="lbl" data-l="แผนก"><select class="zsel" style="margin-left:0;width:100%" onchange="setFilDept(this.value)">'
+      +opt('','🗂 ทุกแผนก ('+all.length+')',fd)
+      +dOpts.map(k=>opt(k,(DEPT_IC[k]||'🗂')+' '+k+' ('+dCnt[k]+')',fd)).join('')+'</select></span>'
+    +'<span class="lbl" data-l="ซัพ"><select class="zsel" style="margin-left:0;width:100%" onchange="setFilSup(this.value)">'
+      +opt('','🏷 ทุกซัพ ('+sOpts.length+' ซัพ)',fs)
+      +sOpts.map(k=>opt(k,'🏷 '+k+' ('+sCnt[k]+')',fs)).join('')+'</select></span>'
+    +'<span class="lbl" data-l="ค้นหา"><input class="di" id="setQ" value="'+esc(S.setQ||'')+'" placeholder="🔍 ค้นหาชื่อสินค้า/ชื่อบิล" oninput="setFilQ(this.value)"></span>'
+    +'<div style="font-size:12.5px;white-space:nowrap">แสดง <b>'+shown.length+'</b>/'+all.length+' รายการ'
+    +((fd||fs||fq2)?' <button class="outb" style="padding:3px 9px;font-size:11.5px" onclick="setFilClear()">✕ ล้างตัวกรอง</button>':'')
+    +'</div></div>';
   const keys=Object.keys(ds).sort((a,b)=>   // แผนกเรียงตามตัวอักษร · ที่ยังไม่จัดแผนกไว้ท้ายสุด
     (a==='ยังไม่จัดแผนก'?1:0)-(b==='ยังไม่จัดแผนก'?1:0)||a.localeCompare(b,'th'));
   $('#list').innerHTML='<div class="dhead">🛟 Safety · อัตราใช้ต่อวัน + แผนก · สาขา'+BR_NAME[S.br]+'</div>'
 
     +'<div class="note">จ–พฤ / ศ / ส–อา = ใช้ของกี่หน่วยต่อวัน (ช่องเหลือง = กลุ่มของวันนี้) · ค่าลงช่องเดิมของแอพนับ → ระบบคำนวณสั่งของ + ส่ง LINE ซัพใช้ต่อได้เลย · แผนกเลือกจากรายชื่อในหน้า ⚙️ ตั้งค่า › แผนก (เพิ่ม/ลบ/แก้ชื่อที่นั่น) · <b>แผนกแยกกันคนละสาขา</b> · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ · <b>เรียง: แผนก → ซัพ → ชื่อสินค้า (ก–ฮ)</b>'+(S.deptOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ก่อนถึงตั้งแผนกได้')+'</div>'
+    +filBar
     +(keys.length?keys.map(k=>{
       const rows=ds[k].slice().sort(cmpSupName).map(it=>{   // ในแผนก: เรียงตามซัพ แล้วค่อยชื่อสินค้า ก–ฮ
         const cn=it.name!==billName(it);
@@ -2466,8 +2491,16 @@ function renderSet(){
         +'<div class="hd2"><span></span><span>สินค้า</span><span>แผนก</span><span style="text-align:center">จ–พฤ/วัน</span><span style="text-align:center">ศ/วัน</span><span style="text-align:center">ส–อา/วัน</span></div>'
         +rows+'</div>';
     }).join('')
-    :'<div class="empty">ไม่มีรายการ</div>');
+    :'<div class="empty">'+((fd||fs||fq2)?'ไม่มีรายการที่ตรงกับตัวกรอง — กด ✕ ล้างตัวกรอง':'ไม่มีรายการ')+'</div>');
+  if(S._setQfocus){ const e=document.getElementById('setQ');
+    if(e){e.focus();try{e.setSelectionRange(e.value.length,e.value.length);}catch(x){}} S._setQfocus=false; }
 }
+const NOSUP='(ไม่ระบุซัพ)';
+const supLabel=it=>String((it&&it.sup)||'').trim()||NOSUP;
+function setFilDept(v){S.setDept=v;render();}
+function setFilSup(v){S.setSup=v;render();}
+function setFilQ(v){S.setQ=v;S._setQfocus=true;render();}
+function setFilClear(){S.setDept='';S.setSup='';S.setQ='';render();}
 /* ---- รอบสั่ง–ส่งของซัพ (ใช้ตาราง suppliers ร่วมกับแอพนับ) ---- */
 const DOW_EN=['sun','mon','tue','wed','thu','fri','sat'];
 const DOW_SH={mon:'จันทร์',tue:'อังคาร',wed:'พุธ',thu:'พฤหัสบดี',fri:'ศุกร์',sat:'เสาร์',sun:'อาทิตย์'}; // ใช้ชื่อเต็ม ไม่ใช้ตัวย่อ
