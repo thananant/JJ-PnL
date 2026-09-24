@@ -78,9 +78,16 @@ setTimeout(async()=>{
   await enter(ris()[2]);
   out.push('Enter ครั้งที่ 3 (ครบ 3 ช่อง) → ลงแถวถัดไป ช่องแรกเลย: '
     +(at()===3&&rowOf(d.activeElement)!==firstRow&&selAll(d.activeElement)));
+  out.push('ตัวเลขที่พิมพ์ยังอยู่บนจอหลังบันทึก (ไม่เด้งกลับเป็นค่าเดิม) + ช่องขึ้นสีเหลืองว่ายังไม่ได้เซฟ: '
+    +(ris()[0].value==='11'&&ris()[1].value==='22'&&ris()[2].value==='33'
+      &&ris()[0].className.includes('dirty')));
   out.push('ค่าที่พิมพ์ถูกเก็บครบทั้ง 3 ช่อง: '
     +(JSON.stringify(w.eval("JSON.stringify((S.all.find(x=>x.name==='พริก')||{}).dirty)"))
       ==='"{\\"rate_wk\\":11,\\"rate_fri\\":22,\\"rate_we\\":33}"'));
+  // ทศนิยมก็ต้องคงอยู่ (เคสจริง: พิมพ์ 3.5 แล้วเด้งกลับเป็นค่าเดิม)
+  const dec=ris()[3]; dec.focus(); typ(dec,'3.5'); await sleep(120);
+  out.push('พิมพ์ทศนิยม 3.5 แล้วค่าไม่เพี้ยน/ไม่เด้งกลับ: '
+    +(ris()[3].value==='3.5'&&w.eval("(S.all.find(x=>x.name==='กุ้งขาว')||{}).dirty.rate_wk")===3.5));
   // ข้ามการ์ด (แผนกถัดไป) ก็ต่อเนื่องตามที่เห็นบนจอ
   const lastOfCard1=d.querySelectorAll('#list .card')[0].querySelectorAll('input.ri.rk').length-1;
   ris()[lastOfCard1].focus(); await sleep(60);
