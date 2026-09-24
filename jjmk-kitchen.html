@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>JJ Kitchen — ครัวกลาง จริงใจหมูกระทะ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&family=Noto+Sans+Lao+Looped:wght@400;500;600;700&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -363,7 +366,7 @@ table.t tr.tap:hover{background:#FFF8F3}
 /* ============================================================
    JJ Kitchen — ครัวกลาง จริงใจหมูกระทะ  (Supabase + GitHub Pages)
    ผลิตอาหารส่งสาขา · สูตร/BOM · แผนผลิต · สั่งซื้อ · ต้นทุน/หน่วย · สถิติการใช้
-   ใช้ล็อกอินเดียวกับแอพนับสต๊อก (Supabase Auth + app_users)
+   ใช้บัญชีกลาง pnl_users ชุดเดียวกับหน้าศูนย์รวมแอพ (2026-09-24 — เลิกใช้ Supabase Auth + app_users)
    ตาราง ck_* — รัน jjmk_kitchen_setup.sql ใน SQL Editor ครั้งเดียวก่อนใช้
    ============================================================ */
 
@@ -548,20 +551,83 @@ function paintLogin(){
   ['th','en','lo','my'].forEach(l=>{const b=document.createElement('button');b.textContent=I18N[l].lang_name;
     if(l===LANG)b.classList.add('on');b.onclick=()=>setLang(l);box.appendChild(b);});
 }
-function toggleSignup(){SIGNUP=!SIGNUP;paintLogin();document.getElementById('lgMsg').textContent=SIGNUP?t('lg_hint'):'';}
+function toggleSignup(){   /* บัญชีสร้างรวมที่ JJ Access แล้ว — ปุ่มสมัครเองเลิกใช้ */
+  document.getElementById('lgMsg').innerHTML='บัญชีใช้ร่วมกับทุกระบบแล้ว — ขอให้ผู้ดูแลเพิ่มให้ที่ <b>🔑 JJ Access</b>';
+}
 function showLogin(){document.getElementById('loginOv').classList.add('on');paintLogin();
   setTimeout(()=>{const f=document.getElementById('lgU');f&&f.focus();},60);}
 function hideLogin(){document.getElementById('loginOv').classList.remove('on');}
 const CLOCK_SKEW=e=>{const c=(e&&e.code)||'',m=(e&&e.message)||String(e||'');return c==='PGRST303'||/issued at future/i.test(m);};
-async function sbProfile(){
-  const g=await sb.auth.getUser();const user=g&&g.data&&g.data.user;
-  if(!user)return null;
-  for(let i=0;i<10;i++){
-    const {data,error}=await sb.from('app_users').select('*').eq('auth_uid',user.id).maybeSingle();
-    if(!error)return data||null;
-    if(CLOCK_SKEW(error)&&i<9){await new Promise(r=>setTimeout(r,3000));continue;}
-    return null;}
-  return null;}
+/* ===== บัญชีกลาง pnl_users (ชุดเดียวกับหน้าศูนย์รวมแอพ) — เลิกใช้ Supabase Auth + app_users แล้ว 2026-09-24 =====
+   สิทธิ์แปลงมาเป็นรูปแบบที่แอพนี้ใช้อยู่เดิม (prof.role / prof.branch_ids) จะได้ไม่ต้องรื้อทั้งแอพ */
+const CK_SESS='jjck_sess';                 // sessionStorage — ใบอนุญาตของแท็บนี้
+function pwHash(u,p){ return sha256hex(u+'|'+p+'|JJPNL'); }
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const enc=new TextEncoder().encode(str), l=enc.length, bitLen=l*8;
+  const total=(Math.ceil((l+1+8)/64))*64, M=new Uint8Array(total); M.set(enc); M[l]=0x80;
+  const dv=new DataView(M.buffer);
+  dv.setUint32(total-4,bitLen>>>0); dv.setUint32(total-8,Math.floor(bitLen/4294967296));
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n)), w=new Array(64);
+  for(let i=0;i<total;i+=64){
+    for(let t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+    for(let t=16;t<64;t++){
+      const s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3), s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);
+      w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;
+    }
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){
+      const S1=rr(e,6)^rr(e,11)^rr(e,25), ch=(e&f)^(~e&g), t1=(h+S1+ch+K[t]+w[t])>>>0;
+      const S0=rr(a,2)^rr(a,13)^rr(a,22), mj=(a&b)^(a&c)^(b&c), t2=(S0+mj)>>>0;
+      h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+    }
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+/* ผู้ใช้ต้องได้รับสิทธิ์แอพครัวกลาง — ยังไม่เคยตั้งสิทธิ์เลย (apps ว่าง) = ไม่ล็อกใคร */
+function kitchenAllowed(u){
+  const apps=(u&&u.apps&&typeof u.apps==='object')?u.apps:{};
+  if(u.role==='admin'||u.role==='owner')return true;
+  if(!Object.keys(apps).length)return true;
+  const k=apps.kitchen;
+  return !!(k&&typeof k==='object'&&Object.keys(k).some(x=>String(k[x]||'').indexOf('v')>=0));
+}
+/* บัญชีกลาง → โปรไฟล์แบบที่แอพนี้ใช้อยู่เดิม
+   role: ผู้ดูแล/เจ้าของ = owner · ผู้จัดการ หรือมีสิทธิ์หน้าตั้งค่า = manager · ที่เหลือ = warehouse (ทำงานครัวได้ แต่ไม่ใช่ผู้ดูแล) */
+function mapCentralProf(u){
+  const apps=(u&&u.apps&&typeof u.apps==='object')?u.apps:{};
+  const k=apps.kitchen&&typeof apps.kitchen==='object'?apps.kitchen:null;
+  const see=x=>!!(k&&String(k[x]||'').indexOf('v')>=0);
+  const role = (u.role==='admin'||u.role==='owner') ? 'owner'
+             : (u.role==='manager'||see('set')||see('acc')) ? 'manager' : 'warehouse';
+  return {username:u.username, name:u.display_name||u.username, role, status:'active',
+          auth_uid:'central:'+u.username, branch_ids:[], perms:{}, central:true,
+          unit:u.unit||'ALL', apps:apps, kitchenPerm:k, pass_hash:u.pass_hash};
+}
+async function centralUser(username){
+  const {data,error}=await sb.from('pnl_users')
+    .select('username,display_name,role,unit,active,apps,pass_hash')
+    .eq('active',true).eq('username',username).maybeSingle();
+  if(error)throw error;
+  return data||null;
+}
+async function sbProfile(){                 // อ่านโปรไฟล์จากใบอนุญาตของแท็บนี้
+  let sess=null;
+  try{ sess=JSON.parse(sessionStorage.getItem(CK_SESS)||'null'); }catch(e){}
+  if(!sess||!sess.u)return null;
+  const u=await centralUser(sess.u).catch(()=>null);
+  if(!u||u.pass_hash!==sess.h)return null;
+  return kitchenAllowed(u)?mapCentralProf(u):null;
+}
 /* ---------- 🔒 ล็อกหน้าจอ — เข้าผ่านลิงก์ตรงๆ ต้องใส่รหัสผ่านซ้ำ ----------
    เปิดจาก "ศูนย์รวมแอพ" (ใบผ่านสดๆ ชื่อผู้ใช้ตรงกัน) → เข้าได้เลยตามสิทธิ์
    เปิดจากลิงก์ตรงๆ → ล็อกไว้ก่อน แม้เครื่องนั้นจะเคยล็อกอินค้างไว้
@@ -593,8 +659,8 @@ function setKeep(username,on){
 function unlockedThisTab(){try{return sessionStorage.getItem('jjck_unlocked')==='1'}catch(e){return false}}
 function markUnlocked(){try{sessionStorage.setItem('jjck_unlocked','1')}catch(e){}}
 function lockScreen(prof,email){
-  const un=(email||'').split('@')[0]||prof.username||'';
-  LOCK={username:un,email:email||uname2email(un),name:prof.name||prof.username||un};
+  const un=prof.username||(email||'').split('@')[0]||'';
+  LOCK={username:un,email:'',name:prof.name||prof.username||un};
   document.getElementById('loginOv').classList.add('on');
   paintLogin();
   setTimeout(()=>{const f=document.getElementById('lgP');f&&f.focus();},60);
@@ -605,19 +671,19 @@ async function doUnlock(){
   if(!p){msg.textContent=t('lg_pass');return;}
   const btn=document.getElementById('lgGo');btn.disabled=true;
   try{
-    const {error}=await sb.auth.signInWithPassword({email:LOCK.email,password:p});
-    if(error){msg.textContent=t('lk_wrong');return;}
-    const prof=await sbProfile();
-    if(!prof||prof.status!=='active'){await sb.auth.signOut();LOCK=null;paintLogin();
-      msg.textContent=t(prof?'lg_pending':'lg_noprofile');return;}
+    const usr=await centralUser(LOCK.username).catch(()=>null);
+    if(!usr||usr.pass_hash!==pwHash(LOCK.username,p)){msg.textContent=t('lk_wrong');return;}
+    if(!kitchenAllowed(usr)){LOCK=null;paintLogin();
+      msg.textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ระบบครัวกลาง';return;}
+    try{ sessionStorage.setItem(CK_SESS,JSON.stringify({u:usr.username,h:usr.pass_hash})); }catch(e){}
     setKeep(LOCK.username,document.getElementById('lgKeep').checked);
     LOCK=null;markUnlocked();document.getElementById('lgP').value='';
-    await enterApp(prof);
+    await enterApp(mapCentralProf(usr));
   }catch(e){msg.textContent=(e&&e.message)||String(e);}
   finally{btn.disabled=false;}
 }
 async function switchUser(){ // ปลดบัญชีที่ค้างอยู่ แล้วกลับไปหน้าล็อกอินเต็ม
-  try{await sb.auth.signOut();}catch(e){}
+  try{ sessionStorage.removeItem(CK_SESS); }catch(e){}
   setKeep(null,false);
   LOCK=null;SIGNUP=false;
   document.getElementById('lgU').value='';document.getElementById('lgP').value='';
@@ -631,24 +697,30 @@ async function doLogin(){
   const u=document.getElementById('lgU').value.trim(),p=document.getElementById('lgP').value;
   const msg=document.getElementById('lgMsg');msg.textContent='';
   if(!u||!p){msg.textContent=t('need_name');return;}
+  const btn=document.getElementById('lgGo'); if(btn)btn.disabled=true;
   try{
-    if(SIGNUP){
-      const nm=document.getElementById('lgName').value.trim()||u;
-      const {error}=await sb.auth.signUp({email:uname2email(u),password:p,options:{data:{name:nm}}});
-      if(error)throw error;
-      await sb.auth.signOut();
-      msg.textContent=t('lg_wait');SIGNUP=false;paintLogin();return;
+    let usr=null;
+    try{ usr=await centralUser(u); }
+    catch(e){ msg.textContent='เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง'; return; }
+    if(!usr||usr.pass_hash!==pwHash(u,p)){ msg.textContent=t('lk_wrong'); return; }
+    if(!kitchenAllowed(usr)){
+      msg.textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ระบบครัวกลาง — แจ้งผู้ดูแลให้เปิดสิทธิ์ที่ JJ Access';
+      return;
     }
-    const {error}=await sb.auth.signInWithPassword({email:uname2email(u),password:p});
-    if(error)throw error;
-    const prof=await sbProfile();
-    if(!prof){await sb.auth.signOut();msg.textContent=t('lg_noprofile');return;}
-    if(prof.status!=='active'){await sb.auth.signOut();msg.textContent=t('lg_pending');return;}
-    markUnlocked();
-    await enterApp(prof);
+    try{ sessionStorage.setItem(CK_SESS,JSON.stringify({u:usr.username,h:usr.pass_hash})); }catch(e){}
+    const keep=document.getElementById('lgKeep');
+    setKeep(usr.username, !!(keep&&keep.checked));
+    markUnlocked(); LOCK=null;
+    document.getElementById('lgP').value='';
+    await enterApp(mapCentralProf(usr));
   }catch(e){msg.textContent=(e&&e.message)||String(e);}
+  finally{ if(btn)btn.disabled=false; }
 }
-async function doLogout(){setKeep(null,false);try{await sb.auth.signOut();}catch(e){}location.reload();}
+async function doLogout(){
+  setKeep(null,false);
+  try{ sessionStorage.removeItem(CK_SESS); }catch(e){}
+  location.reload();
+}
 
 /* ---------- สิทธิ์ ---------- */
 function isAdminish(){const r=S.prof&&S.prof.role;return r==='owner'||r==='admin'||r==='manager'||!!(S.prof&&S.prof.perms&&S.prof.perms.manageCentral);}
@@ -844,7 +916,7 @@ function unitOptions(sel){return UNITS.map(u=>'<option value="'+u+'" '+(u===sel?
 /* ---------- SQL ติดตั้ง (ฝังไว้ให้คัดลอก — เหมือน jjmk_kitchen_setup.sql ในรีโป) ---------- */
 const KITCHEN_SQL=[
 '-- jjmk_kitchen_setup.sql — ติดตั้งระบบครัวกลาง JJ Kitchen (รันครั้งเดียวใน Supabase SQL Editor)',
-'-- ตาราง ck_* ทั้งหมด + RLS (ล็อกอินแล้วทำได้ทุกอย่าง / anon อ่านได้อย่างเดียว เพื่อให้แอพ P&L ดึงข้อมูลได้)',
+'-- ตาราง ck_* ทั้งหมด + RLS (แอพเข้าผ่านบัญชีกลาง pnl_users ด้วย anon key — ตรวจสิทธิ์ที่ตัวแอพ/JJ Access)',
 'create table if not exists ck_items (',
 '  id text primary key, name text not null, i18n jsonb, cat text default \'อื่นๆ\',',
 '  unit text default \'กก.\', buy_unit text, buy_qty numeric default 1, price numeric,',
@@ -925,35 +997,37 @@ const KITCHEN_SQL=[
 '  end if;',
 '  return v;',
 'end $fn$;',
-'revoke execute on function ck_add_qty(text,text,numeric) from public, anon;',
-'grant execute on function ck_add_qty(text,text,numeric) to authenticated;',
+'revoke execute on function ck_add_qty(text,text,numeric) from public;',
+'grant execute on function ck_add_qty(text,text,numeric) to anon, authenticated;',
 '',
-'-- สิทธิ์: ผู้ใช้ที่ล็อกอินและถูกอนุมัติ (app_users.status=active) ทำได้ทุกอย่าง / anon อ่านอย่างเดียว',
+'-- สิทธิ์: แอพเข้าผ่านบัญชีกลาง pnl_users (anon key) เหมือนแอพอื่นในเครือ — สิทธิ์รายคนตรวจที่ตัวแอพ (JJ Access)',
 'do $$ declare tb text; begin',
 '  foreach tb in array array[\'ck_items\',\'ck_sups\',\'ck_recipes\',\'ck_recipe_items\',\'ck_plans\',\'ck_pos\',\'ck_po_items\',\'ck_productions\',\'ck_prod_items\',\'ck_orders\',\'ck_order_items\',\'ck_moves\',\'ck_price_log\',\'ck_settings\',\'ck_expenses\'] loop',
 '    execute format(\'alter table %I enable row level security\', tb);',
-'    if not exists (select 1 from pg_policies where tablename=tb and policyname=\'ck_auth_all\') then',
-'      execute format(\'create policy ck_auth_all on %I for all to authenticated using (true) with check (exists (select 1 from app_users au where au.auth_uid = auth.uid() and au.status = \'\'active\'\'))\', tb);',
+'    execute format(\'drop policy if exists ck_auth_all on %I\', tb);',
+'    execute format(\'drop policy if exists ck_anon_read on %I\', tb);',
+'    if not exists (select 1 from pg_policies where tablename=tb and policyname=\'ck_all\') then',
+'      execute format(\'create policy ck_all on %I for all to anon, authenticated using (true) with check (true)\', tb);',
 '    end if;',
-'    if not exists (select 1 from pg_policies where tablename=tb and policyname=\'ck_anon_read\') then',
-'      execute format(\'create policy ck_anon_read on %I for select to anon using (true)\', tb);',
-'    end if;',
-'    execute format(\'grant select on %I to anon\', tb);',
-'    execute format(\'grant select, insert, update, delete on %I to authenticated\', tb);',
+'    execute format(\'grant select, insert, update, delete on %I to anon, authenticated\', tb);',
 '  end loop;',
 'end $$;',
-'grant usage, select on all sequences in schema public to authenticated;',
+'grant usage, select on all sequences in schema public to anon, authenticated;',
 '',
 '-- รูปภาพ: ใช้ bucket product-images เดิมของแอพนับสต๊อก (มีอยู่แล้ว) — ถ้ายังไม่มีให้สร้าง',
 'insert into storage.buckets (id, name, public) values (\'product-images\',\'product-images\',true)',
 'on conflict (id) do nothing;',
 'do $$ begin',
 '  if not exists (select 1 from pg_policies where schemaname=\'storage\' and tablename=\'objects\' and policyname=\'ck_img_up\') then',
-'    create policy ck_img_up on storage.objects for insert to authenticated',
+'    create policy ck_img_up on storage.objects for insert to anon, authenticated',
 '      with check (bucket_id = \'product-images\');',
 '  end if;',
 '  if not exists (select 1 from pg_policies where schemaname=\'storage\' and tablename=\'objects\' and policyname=\'ck_img_read\') then',
 '    create policy ck_img_read on storage.objects for select to anon, authenticated',
+'      using (bucket_id = \'product-images\');',
+'  end if;',
+'  if not exists (select 1 from pg_policies where schemaname=\'storage\' and tablename=\'objects\' and policyname=\'ck_img_del\') then',
+'    create policy ck_img_del on storage.objects for delete to anon, authenticated',
 '      using (bucket_id = \'product-images\');',
 '  end if;',
 'end $$;'
@@ -2977,17 +3051,24 @@ async function boot(){
   applyChrome();paintLogin();
   if(!sb){showLogin();document.getElementById('lgMsg').textContent=t('lg_lib');return;}
   try{
-    const {data:{session}}=await sb.auth.getSession();
-    if(!session){showLogin();return;}
+    /* 1) ใบผ่านสดจากหน้าศูนย์รวมแอพ — กินแล้วลบทิ้ง ตรวจกับ pnl_users จริงอีกชั้น */
+    let tk=null;
+    try{ tk=JSON.parse(localStorage.getItem(TICKET)||'null'); }catch(e){}
+    if(tk&&tk.u&&(!tk.app||tk.app==='kitchen')&&(!tk.t||Date.now()-Number(tk.t)<=TICKET_TTL)){
+      try{ localStorage.removeItem(TICKET); }catch(e){}
+      const usr=await centralUser(tk.u).catch(()=>null);
+      const okHash=usr&&(usr.pass_hash===tk.h||!tk.h);
+      if(usr&&okHash&&kitchenAllowed(usr)){
+        try{ sessionStorage.setItem(CK_SESS,JSON.stringify({u:usr.username,h:usr.pass_hash})); }catch(e){}
+        markUnlocked(); await enterApp(mapCentralProf(usr)); return;
+      }
+    }
+    /* 2) ใบอนุญาตของแท็บนี้ (รีเฟรช/ลากหน้าลงแล้วยังอยู่) */
     const prof=await sbProfile();
-    if(!prof){await sb.auth.signOut();showLogin();return;}
-    if(prof.status!=='active'){await sb.auth.signOut();showLogin();
-      document.getElementById('lgMsg').textContent=t('lg_pending');return;}
-    // มี session ค้างในเครื่อง: เข้าได้เลยเฉพาะที่ปลดล็อกแท็บนี้แล้ว หรือถือใบผ่านสดจากศูนย์รวมแอพ
-    const email=(session.user&&session.user.email)||'';
-    const uname=email.split('@')[0]||prof.username||'';
-    if(unlockedThisTab()||hubTicket(uname)||keepOk(uname)){markUnlocked();await enterApp(prof);return;}
-    lockScreen(prof,email);
+    if(!prof){ showLogin(); return; }
+    const uname=prof.username||'';
+    if(unlockedThisTab()||keepOk(uname)){ markUnlocked(); await enterApp(prof); return; }
+    lockScreen(prof,'');      // เคยล็อกอินในแท็บนี้แต่ยังไม่ปลดล็อก → ขอรหัสซ้ำ
   }catch(e){showLogin();
     document.getElementById('lgMsg').textContent=(e&&e.message)||String(e);}
 }

@@ -6,11 +6,16 @@
 - `jjmk-pnl.html` — ระบบบัญชีรายรับ–รายจ่าย (P&L)
 - `jjmk-owner.html` — หน้าเจ้าของ (Owner Executive): ยอดขายทั้งปี กำไรสะสม งบรายเดือน การผ่อนชำระ (เข้าได้เฉพาะบัญชี admin)
 - `jjmk-stockcheck.html` — ระบบนับสต๊อกสาขา (แทน `jjmk-stock-beta.html` เดิมที่เลิกใช้แล้ว 2026-09-17)
+  · **ล็อกอินด้วยบัญชีกลาง `pnl_users` แล้ว (2026-09-24 — เลิกใช้ตาราง `sc_users`)** · สาขาที่เห็นมาจาก `unit` ของบัญชี
+  · จัดการผู้ใช้/สิทธิ์ย้ายไปที่ 🔑 JJ Access ทั้งหมด
 - `jjmk-maint.html` — 🛠 ระบบซ่อมบำรุงสาขา · ใช้บัญชีเดียวกับแอพนับสต๊อก · 2 แท็บ:
   **🗓 ตารางบำรุงรักษา** (งานประจำ+ปฏิทิน · พนักงานบันทึกงาน+รูปถ่าย) และ
   **📦 นับอุปกรณ์** (2026-09-21: นับรายเดือนต่อสาขา เทียบงวดก่อน → ของหาย/อัตราเสียหาย% ·
   คาดการณ์เดือนหน้า · ของชำรุดต้องแนบรูป 1–10 รูป · ตาราง `maint_assets`/`maint_counts`)
 - `jjmk-kitchen.html` — ระบบครัวกลาง (JJ Kitchen)
+  · **ล็อกอินด้วยบัญชีกลาง `pnl_users` แล้ว (2026-09-24 — เลิกใช้ Supabase Auth + `app_users`)**
+  · ⚠️ ต้องรัน `jjmk_kitchen_central.sql` (branch `sql`) ครั้งเดียว ไม่งั้นบันทึกข้อมูลไม่ได้
+  · เปิดจากศูนย์รวมแอพ = เข้าได้เลย · เปิดลิงก์ตรง = ใส่รหัสใหม่ · รีเฟรช/ลากหน้าลงยังอยู่หน้าเดิม
 - `jjmk-social.html` — ระบบฟังเสียงลูกค้า + แชทบอท (JJ Social)
 - `jjmk-kpi.html` — 📊 ระบบวัดความพึงพอใจลูกค้า (JJ KPI): ลูกค้ากดหน้าร้านผ่านแท็บเล็ต
   (`?kiosk=JJRD` / `?kiosk=JJLP`) · ไม่มี param = แดชบอร์ดเจ้าของ · ย้ายมาจาก repo `thananant/JJ-KPI` (2026-09-06)
@@ -60,6 +65,7 @@
 - `jjmk_maint_assets.sql` — ตารางนับอุปกรณ์ + สถิติอัตราเสียหาย (`maint_assets`/`maint_counts`) + อุปกรณ์ตั้งต้น
 - `jjmk-kpi.sql` — ติดตั้งตารางระบบวัดความพึงพอใจลูกค้า (JJ KPI, ตาราง prefix `kpi_`)
 - `jjmk-access.sql` — ระบบสิทธิ์กลาง (JJ Access): คอลัมน์ `pnl_users.apps` + ตาราง `pnl_access_log`
+- `jjmk_kitchen_central.sql` — ย้ายครัวกลางมาใช้บัญชีกลาง: เปิดสิทธิ์เขียน `ck_*` + `ck_add_qty` + bucket `product-images` ให้ role `anon`
 - `jjmk-calendar.sql` — ติดตั้งตารางปฏิทินองค์กร (JJ Calendar, ตาราง prefix `cal_`)
   · คู่กับ Edge Function `cal-feed` (ฟีด ICS สำหรับ subscribe ลงมือถือ — deploy ผ่าน Dashboard, ปิด Verify JWT)
 - `jjmk-payroll/*.sql` — migration ทั้งหมดของระบบเงินเดือน (15 ไฟล์ รันซ้ำได้ · Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`)
