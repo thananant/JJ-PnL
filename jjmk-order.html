@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>JJ สั่งอาหาร QR · พนักงาน</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+:root{--red:#C62127;--dk:#7E1013;--wine:#6B0F12;--ink:#2E2119;--mut:#8A7A66;--line:#E8DFCC;--card:#FFFDF7;--bg:#F6F1E5;--green:#1F7A43;--amber:#A66A00;--blue:#5B7FA6;--gold:#E5B03C;--r:16px}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Sarabun',sans-serif;-webkit-tap-highlight-color:transparent}
+html,body{overscroll-behavior-y:contain}
+body{background:var(--bg);color:var(--ink);font-size:15px;padding-bottom:40px}
+header{position:sticky;top:0;z-index:30;background:linear-gradient(180deg,var(--dk),#690C0F);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 8px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.hrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{font-family:'Prompt';font-weight:700;font-size:17px}
+.seg{display:flex;gap:6px;margin-left:auto}
+.seg button{border:1.5px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;border-radius:99px;padding:6px 14px;font-weight:700;cursor:pointer}
+.seg button.on{background:#fff;color:var(--wine);border-color:#fff}
+.tabs{display:flex;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none}
+.tabs button{flex:none;border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:8px 13px;font-weight:700;font-size:14px;cursor:pointer;position:relative}
+.tabs button.on{background:var(--gold);color:var(--wine)}
+.badge{position:absolute;top:-6px;right:-4px;background:var(--red);color:#fff;border-radius:99px;font-size:11px;padding:1px 6px;font-weight:800;border:2px solid #690C0F}
+main{padding:12px 16px;max-width:1100px;margin:0 auto}
+.note{background:#FFF9EA;border:1.5px dashed #E5C97A;border-radius:12px;padding:9px 12px;font-size:13px;color:#6B5A2E;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.tile{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center;cursor:pointer;min-height:84px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative}
+.tile .no{font-family:'Prompt';font-weight:700;font-size:20px}
+.tile .t{font-size:12px;font-weight:700} .tile .p{font-size:11px;color:var(--mut)}
+.tile.open{border-color:var(--green);background:#EEF7F0} .tile.open .t{color:var(--green)}
+.tile.warn{border-color:var(--amber);background:#FFF6E5} .tile.warn .t{color:var(--amber)}
+.tile.over{border-color:var(--red);background:#FCEFEF} .tile.over .t{color:var(--red)}
+.tile .nb{position:absolute;top:-7px;right:-7px;background:var(--red);color:#fff;border-radius:99px;font-size:12px;font-weight:800;padding:2px 7px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
+.card h3{font-family:'Prompt';font-size:15px;color:var(--wine);margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 .sp{flex:1}
+.ord{border-left:4px solid var(--blue);padding-left:10px}
+.ord.cooking{border-color:var(--amber)} .ord.served{border-color:var(--green);opacity:.75} .ord.cancelled{border-color:#999;opacity:.6} .ord.call{border-color:var(--red)}
+.ord .it{font-size:15px;padding:2px 0}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.b{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 11px;font-weight:700;font-size:13px;cursor:pointer;color:var(--ink)}
+.b.pri{background:var(--red);color:#fff;border-color:var(--red)} .b.ok{background:var(--green);color:#fff;border-color:var(--green)} .b.warn{background:var(--amber);color:#fff;border-color:var(--amber)}
+.b.gray{color:var(--mut)}
+.tag{font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;color:#fff;background:var(--blue)}
+.tag.cooking{background:var(--amber)} .tag.served{background:var(--green)} .tag.cancelled{background:#888} .tag.call{background:var(--red)}
+input,select,textarea{border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;font-size:15px;background:#fff;width:100%}
+label.ck{display:inline-flex;gap:6px;align-items:center;font-size:14px;margin-right:12px}
+label.ck input{width:auto}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.row>*{flex:1;min-width:120px}
+.mrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)}
+.mrow .nm{font-weight:700} .mrow .sub{font-size:12px;color:var(--mut)}
+.mrow.off{opacity:.5}
+#ovl{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
+#ovl.on{display:flex}
+.box{background:#fff;border-radius:20px;padding:18px;width:100%;max-width:440px;max-height:92vh;overflow:auto}
+.box h3{font-family:'Prompt';color:var(--wine);font-size:18px;margin-bottom:10px}
+.pk{display:flex;gap:8px;margin:8px 0}
+.pk button{flex:1;border:2px solid var(--line);background:#fff;border-radius:14px;padding:14px 8px;font-family:'Prompt';font-weight:700;font-size:16px;cursor:pointer}
+.pk button.on{border-color:var(--wine);background:#FFF6E8;color:var(--wine)}
+#qrc{display:flex;justify-content:center;margin:10px 0} #qrc canvas,#qrc img{border-radius:12px;border:6px solid #fff;box-shadow:0 4px 18px rgba(0,0,0,.15)}
+.big{font-family:'Prompt';font-size:34px;font-weight:700;text-align:center;color:var(--wine)}
+.lnk{font-size:12px;color:var(--mut);word-break:break-all;text-align:center;margin:6px 0}
+#loginOv{position:fixed;inset:0;background:linear-gradient(180deg,#7E1013,#4E090B);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+#loginOv.on{display:flex}
+.lg{background:#fff;border-radius:22px;padding:24px;width:100%;max-width:360px;text-align:center}
+.lg h2{font-family:'Prompt';color:var(--wine);margin-bottom:6px}
+.lg input{font-size:26px;text-align:center;letter-spacing:8px;margin:12px 0}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#2E2119;color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;z-index:120;pointer-events:none;max-width:92vw;text-align:center}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)} #toast.err{background:var(--red)}
+@media print{header,.tabs,#toast{display:none!important} #ovl{position:static;background:none;display:block} .box{max-width:none;box-shadow:none} .btns,.noprint{display:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow"><div class="brand">📱 JJ สั่งอาหาร QR</div>
+    <div class="seg" id="brSeg"></div></div>
+  <div class="tabs" id="tabs"></div>
+</header>
+<main id="main"><div class="note">กำลังโหลด...</div></main>
+<div id="ovl" onclick="if(event.target===this)closeBox()"><div class="box" id="box"></div></div>
+<div id="loginOv"><div class="lg"><h2>📱 JJ สั่งอาหาร QR</h2><div style="color:var(--mut);font-size:13px">ใส่รหัสพนักงาน</div>
+  <input id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" onkeydown="if(event.key==='Enter')login()">
+  <button class="b pri" style="width:100%;padding:12px;font-size:16px" onclick="login()">เข้าใช้งาน</button><div id="lgErr" style="color:var(--red);font-size:13px;margin-top:8px"></div></div></div>
+<div id="toast"></div>
+<script>
+const CONFIG={URL:'https://aikyxvluaiubdidqxwnd.supabase.co',KEY:'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'};
+const BR_NAME={JJRD:'รัชดา',JJLP:'ลาดพร้าว'};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S={br:localStorage.getItem('jjqr_br')||'JJRD',tab:localStorage.getItem('jjqr_tab')||'tables',cfg:{},sessions:[],orders:[],menu:[],
+  seenNew:null,box:null,pkPick:null,ordFilter:'active',menuEdit:null,pollT:null};
+function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2800);}
+async function api(method,path,body,prefer){
+  const r=await fetch(CONFIG.URL+'/rest/v1/'+path,{method,headers:{apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY,'Content-Type':'application/json',...(prefer?{Prefer:prefer}:{})},body:body?JSON.stringify(body):undefined});
+  const t=await r.text(); if(!r.ok)throw new Error(t||('HTTP '+r.status)); return t?JSON.parse(t):[];
+}
+const cfgGet=(k,d)=>{const v=S.cfg[k];if(v==null||v==='')return d;try{return JSON.parse(v);}catch(e){return v;}};
+const tablesOf=br=>parseInt((cfgGet('tables',{})||{})[br],10)||0;
+const minutes=()=>parseInt(cfgGet('minutes',110),10)||110;
+const packages=()=>{const p=cfgGet('packages',[]);return Array.isArray(p)&&p.length?p:[{code:'standard',name:'Standard',color:'#5B7FA6'},{code:'premium',name:'Premium',color:'#E5B03C'}];};
+const pkName=c=>{const p=packages().find(x=>x.code===c);return p?p.name:c;};
+const menuUrl=tok=>(cfgGet('menu_url','')||new URL('jjmk-menu.html',location.href).href)+'?s='+encodeURIComponent(tok);
+/* ---- ล็อกอินด้วยรหัสพนักงาน (เก็บใน qr_settings.pin) ---- */
+async function loadCfg(){ const rows=await api('GET','qr_settings?select=key,value'); S.cfg={}; rows.forEach(r=>S.cfg[r.key]=r.value); }
+async function boot(){
+  try{ await loadCfg(); }catch(e){ $('#main').innerHTML='<div class="note">⚠ โหลดตั้งค่าไม่ได้ — ต้องรัน sql/jjmk_qr_order.sql ก่อน ('+esc(e.message)+')</div>'; return; }
+  const saved=localStorage.getItem('jjqr_pin');
+  if(saved&&saved===String(cfgGet('pin','1234'))){ start(); } else { $('#loginOv').classList.add('on'); setTimeout(()=>$('#pin').focus(),50); }
+}
+function login(){
+  const v=$('#pin').value.trim();
+  if(v!==String(cfgGet('pin','1234'))){$('#lgErr').textContent='รหัสไม่ถูกต้อง';$('#pin').value='';return;}
+  localStorage.setItem('jjqr_pin',v); $('#loginOv').classList.remove('on'); start();
+}
+function logout(){localStorage.removeItem('jjqr_pin');location.reload();}
+async function start(){ renderHead(); await refresh(); if(!S.pollT)S.pollT=setInterval(()=>{if(document.visibilityState==='visible')refresh(true);},5000); }
+/* ---- โหลดข้อมูลสาขานี้ ---- */
+async function refresh(quiet){
+  try{
+    const since=new Date(Date.now()-12*3600*1000).toISOString();   // ออเดอร์ 12 ชม.ล่าสุด
+    const [ss,oo,mm]=await Promise.all([
+      api('GET','qr_sessions?select=*&branch=eq.'+S.br+'&started_at=gte.'+since+'&order=started_at.desc'),
+      api('GET','qr_orders?select=*&branch=eq.'+S.br+'&created_at=gte.'+since+'&order=created_at.desc'),
+      api('GET','qr_menu_items?select=*&order=sort,name')]);
+    S.sessions=ss; S.orders=oo; S.menu=mm;
+    const nNew=oo.filter(o=>o.status==='new').length;
+    if(S.seenNew!=null&&nNew>S.seenNew)beep();
+    S.seenNew=nNew;
+    render();
+  }catch(e){ if(!quiet)toast('โหลดไม่สำเร็จ — '+String(e.message).slice(0,100),true); }
+}
+function beep(){ try{const c=new (window.AudioContext||window.webkitAudioContext)();const o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.value=.15;o.start();setTimeout(()=>{o.frequency.value=1175;},150);setTimeout(()=>{o.stop();c.close();},400);}catch(e){} }
+/* ---- helper ---- */
+const openSess=()=>S.sessions.filter(s=>s.status==='open');                    // รอบที่ยังเปิด (รวมที่หมดเวลาแล้วแต่ยังไม่ปิด)
+const sessOfTable=n=>openSess().find(s=>s.table_no===n)||null;
+const remain=s=>new Date(s.expires_at).getTime()-Date.now();
+const mmss=ms=>{const m=Math.floor(Math.abs(ms)/60000),s=Math.floor(Math.abs(ms)/1000)%60;return (ms<0?'-':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');};
+const hhmm=d=>new Date(d).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+const newOf=sid=>S.orders.filter(o=>o.session_id===sid&&o.status==='new').length;
+/* ---- หัว + แท็บ ---- */
+function renderHead(){
+  $('#brSeg').innerHTML=Object.keys(BR_NAME).map(b=>'<button class="'+(S.br===b?'on':'')+'" onclick="setBr(\''+b+'\')">'+BR_NAME[b]+'</button>').join('');
+  const nNew=S.orders.filter(o=>o.status==='new').length;
+  const T=[['tables','🪑 โต๊ะ'],['orders','🧾 ออเดอร์'],['menu','🍽 เมนู'],['settings','⚙️ ตั้งค่า']];
+  $('#tabs').innerHTML=T.map(([k,l])=>'<button class="'+(S.tab===k?'on':'')+'" onclick="setTab(\''+k+'\')">'+l+(k==='orders'&&nNew?'<span class="badge">'+nNew+'</span>':'')+'</button>').join('');
+}
+function setBr(b){S.br=b;localStorage.setItem('jjqr_br',b);S.seenNew=null;refresh();}
+function setTab(t){S.tab=t;localStorage.setItem('jjqr_tab',t);render();}
+function render(){
+  renderHead();
+  const R={tables:renderTables,orders:renderOrders,menu:renderMenu,settings:renderSettings};
+  if(!R[S.tab])S.tab='tables';
+  R[S.tab]();
+  if(S.box)renderBox();   // กล่อง QR เปิดอยู่ → อัปเดตออเดอร์/เวลาในกล่อง
+}
+/* ---- 🪑 โต๊ะ ---- */
+function renderTables(){
+  const n=tablesOf(S.br);
+  if(!n){$('#main').innerHTML='<div class="note">⚠ ยังไม่ตั้งจำนวนโต๊ะของสาขา'+BR_NAME[S.br]+' — ไปที่ ⚙️ ตั้งค่า</div>';return;}
+  const open=openSess();
+  let html='<div class="note">แตะโต๊ะที่ว่าง → เลือกแพ็กเกจ → ได้ QR ให้ลูกค้าสแกน (จับเวลา '+minutes()+' นาทีตั้งแต่สร้าง) · เปิดอยู่ <b>'+open.length+'</b>/'+n+' โต๊ะ · แตะโต๊ะที่เปิดอยู่เพื่อดู QR/ออเดอร์/ต่อเวลา/ปิดโต๊ะ</div><div class="grid">';
+  for(let i=1;i<=n;i++){
+    const s=sessOfTable(i);
+    if(!s){html+='<div class="tile" onclick="openTable('+i+')"><div class="no">'+i+'</div><div class="p">ว่าง</div></div>';continue;}
+    const ms=remain(s),cls=ms<=0?'over':ms<10*60000?'warn':'open',nb=newOf(s.id);
+    html+='<div class="tile '+cls+'" onclick="openTable('+i+')">'+(nb?'<span class="nb">'+nb+'</span>':'')+'<div class="no">'+i+'</div><div class="t">'+(ms<=0?'หมดเวลา':mmss(ms))+'</div><div class="p">'+esc(pkName(s.package))+'</div></div>';
+  }
+  $('#main').innerHTML=html+'</div>';
+}
+function openTable(n){
+  const s=sessOfTable(n);
+  S.box={type:s?'sess':'new',table:n,sid:s?s.id:null}; S.pkPick=null; renderBox(); $('#ovl').classList.add('on');
+}
+function closeBox(){S.box=null;$('#ovl').classList.remove('on');}
+function renderBox(){
+  const b=S.box; if(!b)return;
+  if(b.type==='new'){
+    $('#box').innerHTML='<h3>🪑 โต๊ะ '+b.table+' · '+BR_NAME[S.br]+'</h3><div style="font-size:14px;color:var(--mut)">เลือกแพ็กเกจของโต๊ะนี้ (เปลี่ยนทีหลังไม่ได้ ต้องปิดโต๊ะแล้วสร้างใหม่)</div>'
+      +'<div class="pk">'+packages().map(p=>'<button class="'+(S.pkPick===p.code?'on':'')+'" style="border-color:'+(S.pkPick===p.code?p.color:'')+'" onclick="S.pkPick=\''+esc(p.code)+'\';renderBox()">'+esc(p.name)+'</button>').join('')+'</div>'
+      +'<div style="font-size:13px;color:var(--mut);margin-bottom:10px">⏱ เวลา '+minutes()+' นาที เริ่มนับทันทีที่กดสร้าง</div>'
+      +'<div class="btns"><button class="b gray" onclick="closeBox()">ยกเลิก</button><button class="b pri" id="genBtn" '+(S.pkPick?'':'disabled')+' onclick="genQR()">✨ สร้าง QR</button></div>';
+    return;
+  }
+  const s=S.sessions.find(x=>x.id===b.sid); if(!s){closeBox();return;}
+  const ms=remain(s),url=menuUrl(s.token);
+  const ords=S.orders.filter(o=>o.session_id===s.id);
+  $('#box').innerHTML='<h3>🪑 โต๊ะ '+s.table_no+' · '+esc(pkName(s.package))+'<span class="sp"></span><span class="tag '+(ms<=0?'cancelled':'served')+'">'+(ms<=0?'หมดเวลา':'เหลือ '+mmss(ms))+'</span></h3>'
+    +'<div id="qrc"></div><div class="big">โต๊ะ '+s.table_no+'</div>'
+    +'<div style="text-align:center;font-size:13px;color:var(--mut)">เริ่ม '+hhmm(s.started_at)+' · หมดเวลา '+hhmm(s.expires_at)+' · '+esc(pkName(s.package))+'</div>'
+    +'<div class="lnk">'+esc(url)+'</div>'
+    +'<div class="btns noprint"><button class="b" onclick="window.open(\''+esc(url)+'\',\'_blank\')">🔗 เปิดลิงก์</button><button class="b" onclick="copyLink(\''+esc(url)+'\')">📋 คัดลอก</button><button class="b" onclick="window.print()">🖨 พิมพ์</button>'
+    +'<button class="b warn" onclick="extend('+s.id+',15)">+15 นาที</button><button class="b pri" onclick="closeSess('+s.id+')">ปิดโต๊ะ</button></div>'
+    +'<h3 style="margin-top:12px">🧾 ออเดอร์โต๊ะนี้ ('+ords.length+')</h3>'+(ords.length?ords.map(ordHtml).join(''):'<div style="color:var(--mut);font-size:13px">ยังไม่มีออเดอร์</div>');
+  drawQR(url);
+}
+function drawQR(url){
+  const el=$('#qrc'); if(!el)return;
+  if(window.QRCode&&QRCode.toCanvas){const c=document.createElement('canvas');el.appendChild(c);QRCode.toCanvas(c,url,{width:240,margin:1,color:{dark:'#6B0F12'}},()=>{});}
+  else{const img=document.createElement('img');img.width=240;img.height=240;img.alt='QR';img.src='https://api.qrserver.com/v1/create-qr-code/?size=240x240&data='+encodeURIComponent(url);el.appendChild(img);}
+}
+function copyLink(u){ (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('คัดลอกลิงก์แล้ว'),()=>prompt('คัดลอกลิงก์',u)); }
+const mkToken=()=>{const a=new Uint8Array(9);(crypto.getRandomValues?crypto.getRandomValues(a):a.forEach((_,i)=>a[i]=Math.random()*256));return Array.from(a,x=>x.toString(36).padStart(2,'0')).join('').slice(0,14);};
+async function genQR(){
+  const b=S.box; if(!b||!S.pkPick)return;
+  if(sessOfTable(b.table)){toast('โต๊ะนี้เปิดอยู่แล้ว',true);return;}
+  const btn=$('#genBtn'); if(btn){btn.disabled=true;btn.textContent='⏳';}
+  try{
+    const now=new Date(),exp=new Date(now.getTime()+minutes()*60000);
+    const rows=await api('POST','qr_sessions',{token:mkToken(),branch:S.br,table_no:b.table,package:S.pkPick,started_at:now.toISOString(),expires_at:exp.toISOString(),status:'open',created_by:'staff'},'return=representation');
+    const s=rows[0]; S.sessions.unshift(s);
+    S.box={type:'sess',table:b.table,sid:s.id}; render();
+    toast('✅ สร้าง QR โต๊ะ '+b.table+' ('+pkName(s.package)+') · หมดเวลา '+hhmm(s.expires_at));
+  }catch(e){toast('สร้างไม่สำเร็จ — '+String(e.message).slice(0,100),true);if(btn){btn.disabled=false;btn.textContent='✨ สร้าง QR';}}
+}
+async function extend(id,min){
+  const s=S.sessions.find(x=>x.id===id); if(!s)return;
+  const base=Math.max(new Date(s.expires_at).getTime(),Date.now());
+  const exp=new Date(base+min*60000).toISOString();
+  try{ await api('PATCH','qr_sessions?id=eq.'+id,{expires_at:exp},'return=minimal'); s.expires_at=exp; toast('⏱ ต่อเวลาโต๊ะ '+s.table_no+' อีก '+min+' นาที → '+hhmm(exp)); render(); }
+  catch(e){toast('ต่อเวลาไม่สำเร็จ — '+String(e.message).slice(0,80),true);}
+}
+async function closeSess(id){
+  const s=S.sessions.find(x=>x.id===id); if(!s)return;
+  if(!confirm('ปิดโต๊ะ '+s.table_no+'? ลูกค้าจะสั่งเพิ่มไม่ได้ และ QR นี้ใช้ไม่ได้อีก'))return;
+  try{ await api('PATCH','qr_sessions?id=eq.'+id,{status:'closed',closed_at:new Date().toISOString()},'return=minimal'); s.status='closed'; closeBox(); toast('✅ ปิดโต๊ะ '+s.table_no+' แล้ว'); render(); }
+  catch(e){toast('ปิดไม่สำเร็จ — '+String(e.message).slice(0,80),true);}
+}
+/* ---- 🧾 ออเดอร์ ---- */
+const STAT={new:'ใหม่',cooking:'กำลังทำ',served:'เสิร์ฟแล้ว',cancelled:'ยกเลิก'};
+function ordHtml(o){
+  const call=o.kind==='call';
+  return '<div class="card ord '+(call?'call':esc(o.status))+'"><h3>'+(call?'🙋 เรียกพนักงาน':'#'+o.id)+' · โต๊ะ '+o.table_no+'<span class="sp"></span><span style="font-weight:500;font-size:12px;color:var(--mut)">'+hhmm(o.created_at)+'</span> <span class="tag '+(call?'call':esc(o.status))+'">'+esc(call?(o.status==='served'?'รับทราบแล้ว':'รอ'):(STAT[o.status]||o.status))+'</span></h3>'
+    +(o.items||[]).map(i=>'<div class="it">• <b>'+esc(i.name)+'</b> × '+i.qty+' '+esc(i.unit||'')+'</div>').join('')
+    +(o.note?'<div style="color:var(--amber);font-size:14px;margin-top:4px">📝 '+esc(o.note)+'</div>':'')
+    +(o.status==='served'||o.status==='cancelled'?'':'<div class="btns">'
+      +(call?'<button class="b ok" onclick="setStat('+o.id+',\'served\')">✅ รับทราบ</button>'
+        :(o.status==='new'?'<button class="b warn" onclick="setStat('+o.id+',\'cooking\')">🔥 กำลังทำ</button>':'')+'<button class="b ok" onclick="setStat('+o.id+',\'served\')">✅ เสิร์ฟแล้ว</button><button class="b gray" onclick="setStat('+o.id+',\'cancelled\')">✕ ยกเลิก</button>')+'</div>')+'</div>';
+}
+function renderOrders(){
+  const f=S.ordFilter;
+  const list=S.orders.filter(o=>f==='all'||(f==='active'?(o.status==='new'||o.status==='cooking'):o.status===f));
+  const cnt=k=>S.orders.filter(o=>k==='active'?(o.status==='new'||o.status==='cooking'):o.status===k).length;
+  $('#main').innerHTML='<div class="row" style="margin-bottom:10px">'
+    +[['active','⏳ ค้างอยู่ ('+cnt('active')+')'],['served','✅ เสิร์ฟแล้ว ('+cnt('served')+')'],['cancelled','✕ ยกเลิก'],['all','ทั้งหมด ('+S.orders.length+')']].map(([k,l])=>'<button class="b'+(f===k?' pri':'')+'" onclick="S.ordFilter=\''+k+'\';render()">'+l+'</button>').join('')+'</div>'
+    +(list.length?list.map(ordHtml).join(''):'<div class="note">ไม่มีออเดอร์ในกลุ่มนี้ · หน้านี้อัปเดตเองทุก 5 วินาที มีออเดอร์ใหม่จะมีเสียงเตือน</div>');
+}
+async function setStat(id,st){
+  const o=S.orders.find(x=>x.id===id); if(!o)return;
+  if(st==='cancelled'&&!confirm('ยกเลิกออเดอร์ #'+id+' โต๊ะ '+o.table_no+'?'))return;
+  try{ await api('PATCH','qr_orders?id=eq.'+id,{status:st,updated_at:new Date().toISOString()},'return=minimal'); o.status=st; S.seenNew=S.orders.filter(x=>x.status==='new').length; render(); }
+  catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message).slice(0,80),true);}
+}
+/* ---- 🍽 เมนู ---- */
+function renderMenu(){
+  const pks=packages();
+  const cats=[...new Set(S.menu.map(m=>m.category||'อื่น ๆ'))];
+  const e=S.menuEdit||{name:'',category:cats[0]||'',packages:pks.map(p=>p.code),unit_label:'จาน',max_per_order:'',image_url:'',sort:0};
+  const form='<div class="card"><h3>'+(e.id?'✏️ แก้ไขเมนู':'➕ เพิ่มเมนูฝั่งลูกค้า')+'</h3>'
+    +'<div class="row"><input id="mName" placeholder="ชื่อเมนู (ที่ลูกค้าเห็น)" value="'+esc(e.name)+'"><input id="mCat" list="catList" placeholder="หมวด เช่น หมู / ผัก / ซีฟู้ด" value="'+esc(e.category)+'"><datalist id="catList">'+cats.map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist></div>'
+    +'<div class="row"><input id="mUnit" placeholder="หน่วย เช่น จาน" value="'+esc(e.unit_label)+'"><input id="mMax" type="number" min="1" placeholder="สั่งได้ครั้งละไม่เกิน (ว่าง = ไม่จำกัด)" value="'+esc(e.max_per_order??'')+'"><input id="mSort" type="number" placeholder="ลำดับ" value="'+esc(e.sort??0)+'"></div>'
+    +'<div class="row"><input id="mImg" placeholder="ลิงก์รูป (ถ้ามี)" value="'+esc(e.image_url||'')+'"></div>'
+    +'<div style="margin-bottom:8px">สั่งได้ในแพ็กเกจ: '+pks.map(p=>'<label class="ck"><input type="checkbox" class="mPk" value="'+esc(p.code)+'" '+((e.packages||[]).includes(p.code)?'checked':'')+'> '+esc(p.name)+'</label>').join('')+'</div>'
+    +'<div class="btns"><button class="b pri" onclick="menuSave()">💾 บันทึก</button>'+(e.id?'<button class="b gray" onclick="S.menuEdit=null;render()">ยกเลิก</button>':'')+'</div></div>';
+  const list=cats.map(c=>'<div class="card"><h3>'+esc(c)+'<span class="sp"></span><span style="font-size:12px;color:var(--mut);font-weight:400">'+S.menu.filter(m=>(m.category||'อื่น ๆ')===c).length+' เมนู</span></h3>'
+    +S.menu.filter(m=>(m.category||'อื่น ๆ')===c).map(m=>'<div class="mrow'+(m.active?'':' off')+'"><div><div class="nm">'+esc(m.name)+(m.active?'':' <span class="tag cancelled">ปิดขาย</span>')+'</div><div class="sub">'+(m.packages||[]).map(pkName).map(esc).join(' · ')+' · '+esc(m.unit_label)+(m.max_per_order?' · ไม่เกิน '+m.max_per_order+'/ครั้ง':'')+'</div></div>'
+      +'<div class="btns" style="margin:0"><button class="b" onclick="menuEditRow('+m.id+')">✏️</button><button class="b" onclick="menuToggle('+m.id+')">'+(m.active?'ปิดขาย':'เปิดขาย')+'</button><button class="b gray" onclick="menuDel('+m.id+')">🗑</button></div></div>').join('')+'</div>').join('');
+  $('#main').innerHTML='<div class="note">เมนูชุดเดียวใช้ทั้ง 2 สาขา · ติ๊กแพ็กเกจที่สั่งเมนูนั้นได้ (เช่น เนื้อวากิว = Premium เท่านั้น) · ปิดขายชั่วคราวได้โดยไม่ต้องลบ</div>'+form+(list||'<div class="note">ยังไม่มีเมนู — เพิ่มด้านบน</div>');
+}
+function menuEditRow(id){const m=S.menu.find(x=>x.id===id);if(m){S.menuEdit={...m};render();window.scrollTo({top:0});}}
+async function menuSave(){
+  const body={name:$('#mName').value.trim(),category:$('#mCat').value.trim()||'อื่น ๆ',unit_label:$('#mUnit').value.trim()||'จาน',
+    max_per_order:$('#mMax').value?parseInt($('#mMax').value,10):null,image_url:$('#mImg').value.trim()||null,sort:parseInt($('#mSort').value,10)||0,
+    packages:[...document.querySelectorAll('.mPk:checked')].map(x=>x.value)};
+  if(!body.name){toast('ใส่ชื่อเมนูก่อนครับ',true);return;}
+  if(!body.packages.length){toast('เลือกแพ็กเกจอย่างน้อย 1 อย่าง',true);return;}
+  try{
+    if(S.menuEdit&&S.menuEdit.id){ await api('PATCH','qr_menu_items?id=eq.'+S.menuEdit.id,body,'return=minimal'); Object.assign(S.menu.find(x=>x.id===S.menuEdit.id),body); toast('✅ แก้ไข '+body.name+' แล้ว'); }
+    else{ const r=await api('POST','qr_menu_items',body,'return=representation'); S.menu.push(r[0]||{...body,id:Date.now(),active:true}); toast('✅ เพิ่มเมนู '+body.name+' แล้ว'); }
+    S.menuEdit=null; render();
+  }catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message).slice(0,100),true);}
+}
+async function menuToggle(id){const m=S.menu.find(x=>x.id===id);if(!m)return;
+  try{await api('PATCH','qr_menu_items?id=eq.'+id,{active:!m.active},'return=minimal');m.active=!m.active;render();}catch(e){toast('ไม่สำเร็จ — '+String(e.message).slice(0,80),true);}}
+async function menuDel(id){const m=S.menu.find(x=>x.id===id);if(!m||!confirm('ลบเมนู "'+m.name+'"?'))return;
+  try{await api('DELETE','qr_menu_items?id=eq.'+id,null,'return=minimal');S.menu=S.menu.filter(x=>x.id!==id);render();toast('ลบแล้ว');}catch(e){toast('ลบไม่สำเร็จ — '+String(e.message).slice(0,80),true);}}
+/* ---- ⚙️ ตั้งค่า ---- */
+function renderSettings(){
+  const t=cfgGet('tables',{}),pks=packages();
+  $('#main').innerHTML='<div class="card"><h3>🪑 จำนวนโต๊ะ</h3><div class="row">'+Object.keys(BR_NAME).map(b=>'<label>'+BR_NAME[b]+'<input id="tb_'+b+'" type="number" min="1" max="200" value="'+(t[b]||'')+'"></label>').join('')+'</div>'
+    +'<h3>⏱ เวลาต่อโต๊ะ (นาที)</h3><input id="cMin" type="number" min="10" max="600" value="'+minutes()+'" style="max-width:160px">'
+    +'<h3 style="margin-top:12px">🎫 แพ็กเกจ</h3>'+pks.map((p,i)=>'<div class="row"><input id="pkc_'+i+'" value="'+esc(p.code)+'" placeholder="รหัส (a-z)"><input id="pkn_'+i+'" value="'+esc(p.name)+'" placeholder="ชื่อที่ลูกค้าเห็น"><input id="pkl_'+i+'" type="color" value="'+esc(p.color||'#5B7FA6')+'" style="max-width:60px"></div>').join('')
+    +'<div style="font-size:12px;color:var(--mut)">รหัสแพ็กเกจต้องคงเดิม (เมนูผูกไว้กับรหัส) เปลี่ยนได้แค่ชื่อ/สี</div>'
+    +'<h3 style="margin-top:12px">🔗 ลิงก์หน้าลูกค้า</h3><input id="cUrl" value="'+esc(cfgGet('menu_url','')||'')+'" placeholder="'+esc(new URL('jjmk-menu.html',location.href).href)+' (ว่าง = ใช้ที่อยู่เดียวกับหน้านี้)">'
+    +'<h3 style="margin-top:12px">🔐 รหัสพนักงาน</h3><input id="cPin" value="'+esc(cfgGet('pin','1234'))+'" style="max-width:160px">'
+    +'<div class="btns" style="margin-top:14px"><button class="b pri" onclick="cfgSave()">💾 บันทึกตั้งค่า</button><button class="b gray" onclick="logout()">ออกจากระบบ</button></div></div>'
+    +'<div class="note">รอบโต๊ะที่เปิดอยู่ใช้เวลาที่ตั้งตอนสร้าง การเปลี่ยนเวลาที่นี่มีผลกับ QR ที่สร้างใหม่เท่านั้น</div>';
+}
+async function cfgSave(){
+  const tables={}; Object.keys(BR_NAME).forEach(b=>{tables[b]=parseInt($('#tb_'+b).value,10)||0;});
+  const pks=packages().map((p,i)=>({code:($('#pkc_'+i).value||p.code).trim().toLowerCase(),name:$('#pkn_'+i).value.trim()||p.code,color:$('#pkl_'+i).value}));
+  const rows=[{key:'tables',value:JSON.stringify(tables)},{key:'minutes',value:String(parseInt($('#cMin').value,10)||110)},{key:'packages',value:JSON.stringify(pks)},
+    {key:'menu_url',value:$('#cUrl').value.trim()},{key:'pin',value:$('#cPin').value.trim()||'1234'}];
+  try{ await api('POST','qr_settings?on_conflict=key',rows.map(r=>({...r,updated_at:new Date().toISOString()})),'resolution=merge-duplicates,return=minimal');
+    rows.forEach(r=>S.cfg[r.key]=r.value); localStorage.setItem('jjqr_pin',S.cfg.pin); toast('✅ บันทึกตั้งค่าแล้ว'); render(); }
+  catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message).slice(0,100),true);}
+}
+setInterval(()=>{ if(S.tab==='tables'&&!S.box)renderTables(); else if(S.box)renderBox(); },1000);   // นาฬิกาเดิน
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.seenNew!=null)refresh(true);});
+boot();
+</script>
+</body>
+</html>
