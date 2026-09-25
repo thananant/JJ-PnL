@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>จริงใจหมูกระทะ · สั่งอาหาร</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--red:#C62127;--dk:#7E1013;--wine:#6B0F12;--ink:#2E2119;--mut:#8A7A66;--line:#E8DFCC;--card:#FFFDF7;--bg:#F6F1E5;--green:#1F7A43;--amber:#A66A00;--blue:#5B7FA6;--gold:#E5B03C;--r:16px}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Sarabun',sans-serif;-webkit-tap-highlight-color:transparent}
+html,body{overscroll-behavior-y:contain}
+body{background:var(--bg);color:var(--ink);font-size:15px;padding-bottom:110px}
+header{position:sticky;top:0;z-index:30;background:linear-gradient(180deg,var(--dk),#690C0F);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.brand{font-family:'Prompt';font-weight:700;font-size:18px;display:flex;align-items:center;gap:8px}
+.brand small{font-weight:500;font-size:12px;opacity:.85}
+.tblrow{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.chip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);border-radius:99px;padding:4px 11px;font-size:13px;font-weight:600}
+.chip.pk{background:var(--gold);color:var(--wine);border-color:var(--gold)}
+.timer{margin-left:auto;font-family:'Prompt';font-weight:700;font-size:20px;letter-spacing:1px;background:rgba(0,0,0,.25);border-radius:12px;padding:3px 12px}
+.timer.warn{background:var(--amber)} .timer.over{background:#333}
+.cats{position:sticky;top:0;z-index:25;display:flex;gap:8px;overflow-x:auto;padding:10px 16px;background:var(--bg);border-bottom:3px solid var(--gold);scrollbar-width:none}
+.cats::-webkit-scrollbar{display:none}
+.cat{flex:none;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:7px 14px;font-weight:600;font-size:14px;color:var(--mut);cursor:pointer}
+.cat.on{background:var(--wine);color:#fff;border-color:var(--wine)}
+main{padding:12px 16px;max-width:720px;margin:0 auto}
+h2{font-family:'Prompt';font-size:16px;color:var(--wine);margin:14px 0 8px;display:flex;align-items:center;gap:8px}
+h2:after{content:'';flex:1;height:2px;background:var(--gold);opacity:.5}
+.item{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
+.item.sel{border-color:var(--wine);background:#FFF9F0}
+.pimg{width:56px;height:56px;border-radius:12px;background:#EFE7D6;display:flex;align-items:center;justify-content:center;font-size:24px;object-fit:cover}
+.nm{font-weight:700;font-size:15px} .nm small{display:block;font-weight:400;color:var(--mut);font-size:12px}
+.qty{display:flex;align-items:center;gap:6px}
+.qty button{width:40px;height:40px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font-size:22px;font-weight:700;color:var(--wine);cursor:pointer}
+.qty button.plus{background:var(--wine);color:#fff;border-color:var(--wine)}
+.qty b{min-width:26px;text-align:center;font-size:18px}
+.cartbar{position:fixed;left:0;right:0;bottom:0;z-index:40;padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+.cartbar .in{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:10px}
+.cartbar .st{flex:1;font-size:13px;color:var(--mut)} .cartbar .st b{color:var(--ink);font-size:15px}
+.btn{border:0;border-radius:14px;padding:12px 18px;font-family:'Prompt';font-weight:700;font-size:15px;color:#fff;background:var(--red);cursor:pointer;box-shadow:0 4px 12px rgba(198,33,39,.3)}
+.btn:disabled{background:#BBB;box-shadow:none}
+.btn.o{background:#fff;color:var(--wine);border:1.5px solid var(--wine);box-shadow:none;font-size:13px;padding:9px 12px}
+.msg{background:var(--card);border:2px dashed var(--line);border-radius:var(--r);padding:22px 16px;text-align:center;color:var(--mut);margin:20px 0;font-size:15px}
+.msg b{display:block;color:var(--wine);font-family:'Prompt';font-size:18px;margin-bottom:6px}
+.ord{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;font-size:14px}
+.ord .h{display:flex;justify-content:space-between;font-weight:700;margin-bottom:4px} .ord .h span{font-weight:500;color:var(--mut);font-size:12px}
+.tag{font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;color:#fff;background:var(--blue)}
+.tag.cooking{background:var(--amber)} .tag.served{background:var(--green)} .tag.cancelled{background:#888} .tag.call{background:var(--red)}
+#ovl{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:none;align-items:flex-end;justify-content:center}
+#ovl.on{display:flex}
+.sheet{background:#fff;width:100%;max-width:720px;border-radius:22px 22px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
+.sheet h3{font-family:'Prompt';color:var(--wine);margin-bottom:10px}
+.line{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line)}
+textarea{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10px;font-size:15px;margin:10px 0;min-height:60px}
+#toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#2E2119;color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;z-index:70;pointer-events:none;max-width:92vw;text-align:center}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)} #toast.err{background:var(--red)}
+.foot{color:var(--mut);font-size:12px;text-align:center;padding:16px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🔥 จริงใจหมูกระทะ <small id="brName"></small></div>
+  <div class="tblrow"><span class="chip" id="tblChip">โต๊ะ –</span><span class="chip pk" id="pkChip">–</span><span class="timer" id="timer">--:--</span></div>
+</header>
+<div class="cats" id="cats"></div>
+<main id="main"><div class="msg">กำลังโหลด...</div></main>
+<div class="cartbar" id="cartbar" style="display:none"><div class="in">
+  <div class="st" id="cartSt">ยังไม่ได้เลือก</div>
+  <button class="btn o" id="callBtn" onclick="callStaff()">🙋 เรียกพนักงาน</button>
+  <button class="btn" id="sendBtn" onclick="openCart()" disabled>ส่งออเดอร์</button>
+</div></div>
+<div id="ovl" onclick="if(event.target===this)closeSheet()"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+<script>
+const CONFIG={URL:'https://aikyxvluaiubdidqxwnd.supabase.co',KEY:'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'};
+const BR_NAME={JJRD:'สาขารัชดา',JJLP:'สาขาลาดพร้าว'};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S={token:new URLSearchParams(location.search).get('s')||'',info:null,cart:{},cat:'',skew:0,fetchedAt:0,sending:false,pollT:null};
+function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2600);}
+async function rpc(fn,args){
+  const r=await fetch(CONFIG.URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'Content-Type':'application/json',apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY},body:JSON.stringify(args)});
+  const t=await r.text(); let j=null; try{j=t?JSON.parse(t):null;}catch(e){}
+  if(!r.ok)throw new Error((j&&(j.message||j.error))||('HTTP '+r.status));
+  return j;
+}
+async function load(){
+  if(!S.token){$('#main').innerHTML='<div class="msg"><b>ไม่พบ QR</b>กรุณาสแกน QR ที่พนักงานสร้างให้ที่โต๊ะ</div>';return;}
+  try{
+    const j=await rpc('qr_session_info',{p_token:S.token});
+    if(!j||!j.ok){$('#main').innerHTML='<div class="msg"><b>'+esc((j&&j.error)||'โหลดไม่สำเร็จ')+'</b>ลองสแกน QR ใหม่ หรือเรียกพนักงาน</div>';return;}
+    S.info=j; S.skew=new Date(j.now).getTime()-Date.now(); S.fetchedAt=Date.now();
+    // ตัดของในตะกร้าที่ไม่มีในเมนูแล้ว
+    Object.keys(S.cart).forEach(id=>{if(!j.menu.some(m=>String(m.id)===id))delete S.cart[id];});
+    render();
+  }catch(e){ if(!S.info)$('#main').innerHTML='<div class="msg"><b>โหลดไม่สำเร็จ</b>'+esc(e.message||e)+'</div>'; }
+}
+const nowSrv=()=>Date.now()+S.skew;
+const remainMs=()=>S.info?new Date(S.info.session.expires_at).getTime()-nowSrv():0;
+const isOpen=()=>!!(S.info&&S.info.session.status==='open'&&remainMs()>0);
+const pkName=code=>{const p=(S.info&&S.info.packages||[]).find(x=>x.code===code);return p?p.name:code;};
+function tick(){
+  const el=$('#timer'); if(!S.info)return;
+  const ms=remainMs();
+  if(S.info.session.status!=='open'){el.textContent='ปิดโต๊ะแล้ว';el.className='timer over';}
+  else if(ms<=0){el.textContent='หมดเวลา';el.className='timer over'; if(!S._overRendered){S._overRendered=true;render();}}
+  else{const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60;el.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');el.className='timer'+(ms<10*60000?' warn':'');}
+}
+function render(){
+  const j=S.info,ss=j.session;
+  $('#brName').textContent=BR_NAME[ss.branch]||ss.branch;
+  $('#tblChip').textContent='โต๊ะ '+ss.table_no;
+  $('#pkChip').textContent=pkName(ss.package);
+  tick();
+  const open=isOpen();
+  $('#cartbar').style.display=open?'':'none';
+  const cats=[...new Set(j.menu.map(m=>m.category||'อื่น ๆ'))];
+  if(S.cat!=='__orders'&&(!S.cat||!cats.includes(S.cat)))S.cat=cats[0]||'';   // '__orders' = แท็บที่สั่งไป (ไม่ใช่หมวดเมนู)
+  $('#cats').innerHTML=cats.map(c=>'<button class="cat'+(c===S.cat?' on':'')+'" onclick="pickCat(\''+esc(c).replace(/'/g,"\\'")+'\')">'+esc(c)+'</button>').join('')
+    +'<button class="cat'+(S.cat==='__orders'?' on':'')+'" onclick="pickCat(\'__orders\')">🧾 ที่สั่งไป ('+j.orders.length+')</button>';
+  let html='';
+  if(!open){
+    html+='<div class="msg"><b>'+(ss.status!=='open'?'โต๊ะนี้ปิดแล้ว':'หมดเวลาสั่งอาหารแล้ว')+'</b>'
+      +(ss.status==='open'?'ครบ '+Math.round((new Date(ss.expires_at)-new Date(ss.started_at))/60000)+' นาทีแล้ว หากต้องการต่อเวลา กรุณาเรียกพนักงาน':'ขอบคุณที่ใช้บริการครับ')+'</div>';
+  }
+  if(S.cat==='__orders'||!open){
+    html+='<h2>🧾 รายการที่สั่งไปแล้ว</h2>'+(j.orders.length?j.orders.map(ordHtml).join(''):'<div class="msg">ยังไม่มีรายการ</div>');
+  }else{
+    const list=j.menu.filter(m=>(m.category||'อื่น ๆ')===S.cat);
+    html+='<h2>'+esc(S.cat)+'</h2>'+(list.length?list.map(itemHtml).join(''):'<div class="msg">ยังไม่มีเมนูในหมวดนี้</div>');
+  }
+  html+='<div class="foot">แพ็กเกจ '+esc(pkName(ss.package))+' · เริ่ม '+new Date(ss.started_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+' · หมดเวลา '+new Date(ss.expires_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+'</div>';
+  $('#main').innerHTML=html;
+  cartBar();
+}
+function itemHtml(m){
+  const q=S.cart[m.id]||0;
+  return '<div class="item'+(q?' sel':'')+'">'+(m.image?'<img class="pimg" src="'+esc(m.image)+'" alt="">':'<div class="pimg">🍽</div>')
+    +'<div class="nm">'+esc(m.name)+'<small>'+(m.max?('สั่งได้ครั้งละไม่เกิน '+m.max+' '+esc(m.unit||'')):'')+'</small></div>'
+    +'<div class="qty"><button onclick="qty('+m.id+',-1)" aria-label="ลด">−</button><b>'+q+'</b><button class="plus" onclick="qty('+m.id+',1)" aria-label="เพิ่ม">+</button></div></div>';
+}
+const STAT={new:'รับออเดอร์แล้ว',cooking:'กำลังทำ',served:'เสิร์ฟแล้ว',cancelled:'ยกเลิก'};
+function ordHtml(o){
+  const t=new Date(o.at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  return '<div class="ord"><div class="h"><div>'+(o.kind==='call'?'🙋 เรียกพนักงาน':'ออเดอร์ #'+o.id)+' <span>'+t+'</span></div><span class="tag '+esc(o.kind==='call'?'call':o.status)+'">'+esc(o.kind==='call'?(o.status==='served'?'รับทราบแล้ว':'แจ้งแล้ว'):(STAT[o.status]||o.status))+'</span></div>'
+    +(o.items||[]).map(i=>'<div>• '+esc(i.name)+' × '+i.qty+' '+esc(i.unit||'')+'</div>').join('')
+    +(o.note?'<div style="color:var(--mut);font-size:13px">📝 '+esc(o.note)+'</div>':'')+'</div>';
+}
+function pickCat(c){S.cat=c;render();document.documentElement.scrollTop=0;}
+function qty(id,d){
+  const m=S.info.menu.find(x=>x.id===id); if(!m||!isOpen())return;
+  let q=(S.cart[id]||0)+d; if(q<0)q=0; if(m.max&&q>m.max){q=m.max;toast('เมนูนี้สั่งได้ครั้งละไม่เกิน '+m.max+' '+(m.unit||''));}
+  if(q)S.cart[id]=q; else delete S.cart[id];
+  render();
+}
+const cartList=()=>Object.keys(S.cart).map(id=>{const m=S.info.menu.find(x=>String(x.id)===id);return m?{id:m.id,name:m.name,qty:S.cart[id],unit:m.unit}:null;}).filter(Boolean);
+function cartBar(){
+  const l=cartList(),n=l.reduce((a,x)=>a+x.qty,0);
+  $('#cartSt').innerHTML=n?('เลือกแล้ว <b>'+l.length+' เมนู · '+n+' รายการ</b>'):'แตะ + เพื่อเลือกเมนู';
+  $('#sendBtn').disabled=!n||S.sending;
+}
+function openCart(){
+  const l=cartList(); if(!l.length)return;
+  $('#sheet').innerHTML='<h3>ยืนยันออเดอร์ · โต๊ะ '+S.info.session.table_no+'</h3>'
+    +l.map(x=>'<div class="line"><span>'+esc(x.name)+'</span><b>× '+x.qty+' '+esc(x.unit||'')+'</b></div>').join('')
+    +'<textarea id="note" placeholder="หมายเหตุถึงครัว (ถ้ามี) เช่น ไม่ใส่ผัก"></textarea>'
+    +'<div style="display:flex;gap:10px"><button class="btn o" style="flex:1" onclick="closeSheet()">แก้ไข</button><button class="btn" style="flex:2" id="confirmBtn" onclick="sendOrder()">✅ ส่งออเดอร์</button></div>';
+  $('#ovl').classList.add('on');
+}
+function closeSheet(){$('#ovl').classList.remove('on');}
+async function sendOrder(){
+  if(S.sending)return; const l=cartList(); if(!l.length)return;
+  S.sending=true; const b=$('#confirmBtn'); if(b){b.disabled=true;b.textContent='⏳ กำลังส่ง...';}
+  try{
+    const j=await rpc('qr_place_order',{p_token:S.token,p_items:l.map(x=>({id:x.id,name:x.name,qty:x.qty})),p_note:($('#note')&&$('#note').value)||null});
+    if(!j||!j.ok)throw new Error((j&&j.error)||'ส่งไม่สำเร็จ');
+    S.cart={}; closeSheet(); toast('✅ ส่งออเดอร์แล้ว ครัวกำลังจัดให้ครับ');
+    await load(); S.cat='__orders'; render();
+  }catch(e){ toast(String(e.message||e),true); if(b){b.disabled=false;b.textContent='✅ ส่งออเดอร์';} if(/หมดเวลา|ปิด/.test(String(e.message)))load(); }
+  S.sending=false; cartBar();
+}
+async function callStaff(){
+  if(!isOpen())return;
+  const note=prompt('ต้องการอะไรครับ? (เช่น ขอน้ำแข็ง · เปลี่ยนเตา · เช็คบิล)','เรียกพนักงาน'); if(note==null)return;
+  try{ const j=await rpc('qr_place_order',{p_token:S.token,p_items:[],p_note:note||'เรียกพนักงาน'});
+    if(!j||!j.ok)throw new Error((j&&j.error)||'ส่งไม่สำเร็จ');
+    toast('🙋 แจ้งพนักงานแล้ว รอสักครู่นะครับ'); load();
+  }catch(e){toast(String(e.message||e),true);}
+}
+load();
+setInterval(tick,1000);
+S.pollT=setInterval(()=>{if(document.visibilityState==='visible')load();},15000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')load();});
+</script>
+</body>
+</html>
