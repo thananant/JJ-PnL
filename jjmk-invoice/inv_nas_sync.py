@@ -17,8 +17,11 @@ NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ย
   2) Task Scheduler → User-defined script (user: root) รันครั้งเดียว:
        python3 "/volume1/Tax invoice/_sync/inv_nas_sync.py" --install
      แล้วเปิดไฟล์ _sync/inv_nas_sync.log ต้องเห็นบรรทัด "พร้อมใช้งาน"
-  3) Task Scheduler → User-defined script (user: root) ทุกวัน ทุก 5 นาที:
+  3) Task Scheduler → User-defined script (user: root) ทุกวัน ทุก 5 นาที (เวลาสิ้นสุด 23:55):
        python3 "/volume1/Tax invoice/_sync/inv_nas_sync.py"
+  4) 🔒 ล็อกโฟลเดอร์ _sync ให้แก้ไขได้เฉพาะ administrators (File Station → คุณสมบัติ → สิทธิ์)
+     สคริปต์นี้รันด้วย root — ถ้าเครื่องพนักงานที่ map โฟลเดอร์บิลไว้แก้ไฟล์ในนี้ได้ = สั่งงาน NAS ได้ทั้งเครื่อง
+  * ไฟล์ที่ถูกเขียนทับ (บิลแก้ไข/ยกเลิก) เก็บฉบับก่อนหน้าไว้ในโฟลเดอร์ _ฉบับก่อนหน้า ของเดือนนั้น 10 ฉบับล่าสุด
 
 คำสั่งเสริม
   --install        ติดตั้งไลบรารีสร้าง PDF (fpdf2 + uharfbuzz) ลงโฟลเดอร์ _lib ข้างไฟล์นี้
@@ -148,9 +151,14 @@ def q(v):
     return urllib.parse.quote(str(v), safe='')
 
 
+BILL_RE = r'^[A-Za-z0-9_-]{1,32}$'     # เลขบิลที่รับ — กันชื่อไฟล์หลุดออกนอกโฟลเดอร์
+
+
 def fetch_pending(limit):
+    # บิลใหม่ก่อน (บิลเก่าที่ค้างเยอะหรือเสียจะไม่ขวางบิลวันนี้) · เลขบิลผิดรูปแบบไม่เข้าคิวเลย
     return sb_req('GET', '/rest/v1/inv_invoices?select=*&nas_path=is.null'
-                         '&order=issued_at.asc&limit=%d' % limit) or []
+                         '&bill_no=match.' + q(BILL_RE) +
+                         '&order=issued_at.desc&limit=%d' % limit) or []
 
 
 def fetch_one(bill_no):
@@ -357,22 +365,36 @@ class Sheet(object):
         return self.pdf.get_string_width(s)
 
 
+A4_W, A4_H = 595.28, 841.89
+
+
 def build_pdf(inv):
     fpdf = load_fpdf()
     ensure_fonts()
-    pdf = fpdf.FPDF(unit='pt', format='A4')
-    pdf.set_auto_page_break(False)
-    pdf.set_margins(0, 0, 0)
-    pdf.add_font('Prompt', '', os.path.join(FONT_DIR, FONTS['R']))
-    pdf.add_font('Prompt', 'B', os.path.join(FONT_DIR, FONTS['B']))
-    pdf.add_font('PromptSB', '', os.path.join(FONT_DIR, FONTS['SB']))
-    pdf.set_text_shaping(True)          # HarfBuzz วางสระบน/ล่าง + วรรณยุกต์ไทยให้ถูกตำแหน่ง
-    pdf.set_title('ใบเสร็จรับเงิน / ใบกำกับภาษี ' + str(inv.get('bill_no') or ''))
-    pdf.set_creator('JJ Invoice · inv_nas_sync.py')
     copies = ['ต้นฉบับ'] + (['สำเนา'] if WITH_COPY else [])
-    for label in copies:
-        pdf.add_page()
-        draw_sheet(pdf, inv, label)
+
+    def make(page_h):
+        pdf = fpdf.FPDF(unit='pt', format=(A4_W, page_h))
+        pdf.set_auto_page_break(False)
+        pdf.set_margins(0, 0, 0)
+        pdf.add_font('Prompt', '', os.path.join(FONT_DIR, FONTS['R']))
+        pdf.add_font('Prompt', 'B', os.path.join(FONT_DIR, FONTS['B']))
+        pdf.add_font('PromptSB', '', os.path.join(FONT_DIR, FONTS['SB']))
+        pdf.set_text_shaping(True)          # HarfBuzz วางสระบน/ล่าง + วรรณยุกต์ไทยให้ถูกตำแหน่ง
+        pdf.set_title('ใบเสร็จรับเงิน / ใบกำกับภาษี ' + str(inv.get('bill_no') or ''))
+        pdf.set_creator('JJ Invoice · inv_nas_sync.py')
+        # วันที่ในไฟล์ผูกกับข้อมูลบิล → บิลเดิมสร้างซ้ำได้ไฟล์เหมือนเดิมทุกไบต์ (ไม่ต้องเก็บฉบับซ้ำ)
+        pdf.set_creation_date(bkk(inv.get('updated_at') or inv.get('issued_at')))
+        end = 0
+        for label in copies:
+            pdf.add_page()
+            end = max(end, draw_sheet(pdf, inv, label))
+        return pdf, end
+
+    pdf, end = make(A4_H)
+    if end > A4_H - 10:
+        # รายการเยอะจนล้น A4 — ขยายหน้าให้ยาวพอ ดีกว่าตัดยอดรวม/ลายเซ็นทิ้ง (พิมพ์แบบย่อให้พอดีหน้าได้)
+        pdf, end = make(end + 32)
     return bytes(pdf.output())
 
 
@@ -602,23 +624,63 @@ def draw_sheet(pdf, inv, copy_label):
             pdf.set_text_color(236, 196, 196)
             stamp()
         pdf.set_text_color(*INK)
+    return y
 
 
 # ------------------------------------------------------------------ เก็บไฟล์
 def safe_bill(bill_no):
-    return re.match(r'^[A-Za-z0-9_-]{1,32}$', str(bill_no or '')) is not None
+    return re.match(BILL_RE, str(bill_no or '')) is not None
+
+
+KEEP_VERSIONS = 10               # เก็บฉบับก่อนหน้าไว้กี่ฉบับต่อบิล
+VERSIONS_DIR = '_ฉบับก่อนหน้า'
+
+
+def keep_version(folder, bill_no, path):
+    """ก่อนเขียนทับ (บิลถูกแก้/ยกเลิก/สั่งสร้างใหม่) ย้ายฉบับเดิมไปเก็บไว้ ย้อนดูได้ 10 ฉบับล่าสุด"""
+    if os.path.islink(path) or not os.path.isfile(path):
+        return
+    vdir = os.path.join(folder, VERSIONS_DIR)
+    if os.path.islink(vdir):
+        return
+    os.makedirs(vdir, exist_ok=True)
+    stamp = datetime.datetime.now(BKK).strftime('%Y%m%d-%H%M%S')
+    os.replace(path, os.path.join(vdir, '%s.%s.pdf' % (bill_no, stamp)))
+    old = sorted(f for f in os.listdir(vdir) if f.startswith(bill_no + '.') and f.endswith('.pdf'))
+    for f in old[:-KEEP_VERSIONS]:
+        try:
+            os.remove(os.path.join(vdir, f))
+        except OSError:
+            pass
 
 
 def write_pdf(bill_no, iso, data):
+    if not safe_bill(bill_no):
+        raise RuntimeError('เลขบิลผิดรูปแบบ')
+    base = os.path.realpath(base_dir())
     ym = ym_of(iso)
-    folder = os.path.join(base_dir(), ym)
+    folder = os.path.join(base, ym)
+    # สคริปต์รันด้วย root — ห้ามเดินตามลิงก์ลัด (symlink) ที่ใครวางไว้ในโฟลเดอร์ ออกไปเขียนไฟล์ระบบ
+    if os.path.islink(folder):
+        raise RuntimeError('โฟลเดอร์ %s เป็นลิงก์ลัด — ไม่เขียนเพื่อความปลอดภัย' % ym)
     os.makedirs(folder, exist_ok=True)
+    if os.path.realpath(folder) != folder:
+        raise RuntimeError('โฟลเดอร์ %s ชี้ออกนอกโฟลเดอร์เก็บบิล — ไม่เขียนเพื่อความปลอดภัย' % ym)
     path = os.path.join(folder, bill_no + '.pdf')
+    rel = ym + '/' + bill_no + '.pdf'
+    if os.path.isfile(path) and not os.path.islink(path):
+        with open(path, 'rb') as f:
+            if f.read() == data:
+                return rel             # ไฟล์เดิมเหมือนกันทุกไบต์ — ไม่ต้องเขียนซ้ำ
     tmp = path + '.part'
-    with open(tmp, 'wb') as f:
+    if os.path.lexists(tmp):
+        os.unlink(tmp)                 # ลบของค้าง (ถ้าเป็นลิงก์ลัดก็ลบแค่ตัวลิงก์)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o664)
+    with os.fdopen(fd, 'wb') as f:
         f.write(data)
+    keep_version(folder, bill_no, path)
     os.replace(tmp, path)          # เขียนเสร็จทั้งไฟล์ก่อนค่อยสลับชื่อ — ไม่มีไฟล์ครึ่ง ๆ ค้างใน NAS
-    return ym + '/' + bill_no + '.pdf'
+    return rel
 
 
 def process(inv, force=False):

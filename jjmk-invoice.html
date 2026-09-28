@@ -712,8 +712,14 @@ window.JJGate=(function(){
               กด OK → เลือก task นี้แล้วกด <b>Run</b> → รอ 2-3 นาที → เปิดไฟล์
               <code>_sync/inv_nas_sync.log</code> ต้องเห็น <b>พร้อมใช้งาน ✅</b></li>
           <li>สร้างอีก task: User-defined script · ชื่อ <code>เก็บใบกำกับภาษีลง NAS</code> · ผู้ใช้ <b>root</b> ·
-              Schedule: <b>ทุกวัน</b> · Frequency <b>ทุก 5 นาที</b> (เวลาเริ่ม 00:00 · สิ้นสุด 23:55) · Run command:<br>
+              แท็บกำหนดเวลา: ทำซ้ำ <b>รายวัน</b> · เวลาเริ่มต้น 00:00 · ติ๊ก <b>ทำงานต่อภายในวันเดียวกัน</b> →
+              ทำซ้ำ <b>ทุก 5 นาที</b> · การใช้งานครั้งล่าสุด <b>23:55</b> (อันล่างสุด) · Run command:<br>
               <code>python3 "/volume1/Tax invoice/_sync/inv_nas_sync.py"</code></li>
+          <li><b>🔒 ล็อกโฟลเดอร์ <code>_sync</code> (สำคัญ)</b>: File Station → คลิกขวา <code>_sync</code> → คุณสมบัติ →
+              แท็บสิทธิ์ (Permission) → ให้<b>แก้ไขได้เฉพาะกลุ่ม administrators</b> · บัญชีพนักงาน/กลุ่ม users
+              ให้เป็น "ไม่มีสิทธิ์" · ติ๊ก "ใช้กับโฟลเดอร์ย่อยและไฟล์ทั้งหมด"
+              <span class="detail">(สคริปต์รันด้วย root — ถ้าเครื่องพนักงานที่ map โฟลเดอร์บิลไว้ติดไวรัสแล้วแก้ไฟล์ในนี้ได้
+              = สั่งงาน NAS ได้ทั้งเครื่อง · สคริปต์ยังทำงานปกติเพราะ root ไม่ติดสิทธิ์นี้)</span></li>
           <li>กลับมาดูหน้านี้ ภายใน 5 นาที "สถานะ NAS" จะขึ้น 🟢 และบิลที่รอจะทยอยเข้า NAS
               <span class="detail">(อยากเห็นหน้าตาไฟล์ก่อน: รันคำสั่งเดิมต่อท้าย <code>--test</code>
               ได้ไฟล์ตัวอย่างในโฟลเดอร์ <code>_test</code>)</span></li>
@@ -1036,9 +1042,25 @@ function renderNasStatus(){
 /* ===== NAS เก็บไฟล์เอง (สคริปต์บน Synology รายงานตัวทุกรอบที่ inv_settings) ===== */
 function nasSyncAgeMin(){
   var t=Date.parse(settings.nas_sync_last||'');
-  return isNaN(t)?null:Math.max(0,(Date.now()-t)/60000);
+  return isNaN(t)?null:(Date.now()-t)/60000;          // ติดลบ = เวลาในอนาคต (ผิดปกติ)
 }
-function nasSyncActive(){ var a=nasSyncAgeMin(); return a!==null && a<=NAS_SYNC_STALE_MIN; }
+function nasSyncError(){ return /^ผิดพลาด/.test(String(settings.nas_sync_info||'')); }
+/* NAS ทำงานจริง = รายงานตัวภายใน 30 นาที · เวลาไม่ล้ำอนาคต · ไม่ได้รายงานว่าพัง
+   (ไม่เข้าเงื่อนไข = ดาวน์โหลดไฟล์ให้เหมือนเดิม ไฟล์จะได้ไม่หายไปไหน) */
+function nasSyncActive(){
+  var a=nasSyncAgeMin();
+  return a!==null && a>=-10 && a<=NAS_SYNC_STALE_MIN && !nasSyncError();
+}
+/* อ่านสถานะ NAS ล่าสุด (เฉพาะ 2 ค่านี้ ไม่แตะค่าอื่นที่ผู้ใช้อาจกำลังแก้อยู่ในหน้าตั้งค่า) */
+async function refreshNasSync(){
+  if(!dbReady) return;
+  try{
+    var r=await sb.from('inv_settings').select('key,value').in('key',['nas_sync_last','nas_sync_info']);
+    if(!r.error)(r.data||[]).forEach(function(x){
+      if(x.key==='nas_sync_last'||x.key==='nas_sync_info') settings[x.key]=x.value; });
+  }catch(e){}
+  renderNasStatus(); renderMissingNas();
+}
 function nasBtnLabel(){ return (!nasHandle && nasSyncActive())?'🔄 ให้ NAS เก็บใหม่':'💾 บันทึกลง NAS'; }
 function agoText(min){
   if(min<1) return 'เมื่อสักครู่';
@@ -1046,20 +1068,27 @@ function agoText(min){
   if(min<48*60) return Math.round(min/60)+' ชั่วโมงที่แล้ว';
   return Math.round(min/1440)+' วันที่แล้ว';
 }
+var nasHelpAuto=false;     // กางขั้นตอนติดตั้งให้เองตอนยังไม่ได้ติดตั้ง — ติดตั้งแล้วค่อยพับให้
 function renderNasSync(){
   var el=$('nasSyncState'); if(!el) return;
   var a=nasSyncAgeMin(), info=String(settings.nas_sync_info||'');
+  var help=$('nasHelp');
+  if(a===null){ if(!help.open){ help.open=true; nasHelpAuto=true; } }
+  else if(nasHelpAuto){ help.open=false; nasHelpAuto=false; }
   if(a===null){
     el.textContent='⚪ ยังไม่ได้ติดตั้งบน NAS'; el.style.color='var(--muted)';
-    $('nasHelp').open=true;
+  }else if(a<-10){
+    el.textContent='🔴 เวลาที่ NAS รายงานมาล้ำอนาคต — เช็คนาฬิกาของ NAS (ระหว่างนี้แอปจะดาวน์โหลดไฟล์ให้แทน)';
+    el.style.color='var(--bad)';
   }else if(a>NAS_SYNC_STALE_MIN){
     el.textContent='🔴 NAS ไม่ได้รายงานตัวมา '+agoText(a)+' — NAS ปิดอยู่ หรือ Task Scheduler หยุดทำงาน';
     el.style.color='var(--bad)';
-  }else if(/^ผิดพลาด/.test(info)){
-    el.textContent='🟠 NAS ทำงานแต่ติดปัญหา ('+agoText(a)+') — '+info.replace(/^ผิดพลาด:\s*/,'');
+  }else if(nasSyncError()){
+    el.textContent='🟠 NAS ทำงานแต่ติดปัญหา ('+agoText(Math.max(0,a))+') — '+info.replace(/^ผิดพลาด:\s*/,'')+
+      ' · ระหว่างนี้แอปจะดาวน์โหลดไฟล์ให้แทน';
     el.style.color='var(--warn)';
   }else{
-    el.textContent='🟢 ทำงานอยู่ · รายงานตัวล่าสุด '+agoText(a)+(info?(' · '+info):'');
+    el.textContent='🟢 ทำงานอยู่ · รายงานตัวล่าสุด '+agoText(Math.max(0,a))+(info?(' · '+info):'');
     el.style.color='var(--ok)';
   }
 }
@@ -1137,13 +1166,19 @@ async function storePdf(billNo, blob, iso){
       if(await ensureNasPermission()) return await saveToNas(billNo+'.pdf', blob, iso);
       throw new Error('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์');
     }catch(e){
+      await refreshNasSync();
       toast('เขียนลงโฟลเดอร์ NAS ไม่สำเร็จ ('+e.message+')'+
         (nasSyncActive()?' — NAS จะเก็บให้เองภายใน 5 นาที':' — ดาวน์โหลดให้แทน'),'err');
-      if(nasSyncActive()) return null;
+      if(nasSyncActive()){
+        // ส่งเข้าคิวของ NAS (บิลที่เคยเก็บแล้วจะมี nas_path ค้างอยู่ ต้องล้างก่อน NAS ถึงจะเห็น)
+        try{ await sb.from('inv_invoices').update({nas_path:null}).eq('bill_no',billNo); }catch(e2){}
+        return null;
+      }
     }
   }
   // 2) NAS ดึงไปสร้างเองทุก 5 นาที (nas_path ว่าง = คิวของ NAS) — ไม่ต้องดาวน์โหลดรกเครื่อง
-  else if(nasSyncActive()){
+  //    อ่านสถานะ NAS สด ๆ ก่อนตัดสินใจ (แอปที่เปิดค้างไว้นาน ค่าที่โหลดไว้อาจเก่าแล้ว)
+  else if((await refreshNasSync(), nasSyncActive())){
     toast('บันทึกบิลแล้ว — NAS จะเก็บไฟล์ PDF ให้เองภายใน 5 นาที','ok');
     return null;
   }
@@ -1930,6 +1965,8 @@ function bindCards(scope){
     b.disabled=true; b.innerHTML='<span class="spin"></span>';
     // เครื่องนี้ไม่ได้ผูกโฟลเดอร์ แต่ NAS เก็บเองอยู่ → สั่งให้ NAS สร้างไฟล์ใบนี้ใหม่ในรอบถัดไป
     if(!nasHandle && nasSyncActive()){
+      if(!can('list','e')){ toast('บัญชีนี้ไม่มีสิทธิ์สั่งเก็บไฟล์ใหม่ (ต้องมีสิทธิ์แก้ไขบิล)','err');
+        b.disabled=false; b.textContent=nasBtnLabel(); return; }
       var rq=await sb.from('inv_invoices').update({nas_path:null}).eq('bill_no',v.bill_no);
       if(rq.error) toast('ผิดพลาด: '+rq.error.message,'err');
       else{ logActivity('สั่ง NAS เก็บไฟล์ใหม่',v.bill_no,'');
@@ -2081,7 +2118,7 @@ document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
   try{ localStorage.setItem('jjinv_tab', t.dataset.tab); }catch(e){}   // จำหน้าที่เปิดอยู่ — รีเฟรชแล้วกลับมาหน้าเดิม
   if(t.dataset.tab==='list'||t.dataset.tab==='cancelled'||t.dataset.tab==='failed')loadInvoices();
   if(t.dataset.tab==='history')loadHistory();
-  if(t.dataset.tab==='settings'){ loadCounters(); loadSettings(); }   // สถานะ NAS ล่าสุด
+  if(t.dataset.tab==='settings'){ loadCounters(); refreshNasSync(); }   // สถานะ NAS ล่าสุด (ไม่ทับช่องที่กำลังกรอก)
 }; });
 /* เปิดแอพมาที่หน้าเดิมก่อนรีเฟรช (ถ้าไม่มีที่จำไว้ = หน้าออกบิลใหม่ตามเดิม) */
 (function(){
@@ -2284,6 +2321,8 @@ function startApp(){
   }
   loadSettings();
   loadInvoices();
+  // เปิดแอปค้างไว้ทั้งวัน — อัปเดตสถานะ NAS ทุก 5 นาที (ไม่งั้นผ่านไป 30 นาทีจะนึกว่า NAS ดับ)
+  if(!startApp._nasTimer) startApp._nasTimer=setInterval(refreshNasSync, 5*60000);
 }
 (async function init(){
   $('shopName').innerHTML=esc(CONFIG.SHOP.senderName)+'<span class="chipmore"> · '+esc(CONFIG.SHOP.name)+'</span>';
