@@ -686,6 +686,77 @@ window.JJGate=(function(){
     </div>
 
     <div class="card">
+      <h2>🌐 เชื่อม NAS ตรง — ออกบิลจากมือถือ/เครื่องไหนก็เก็บไฟล์ลง NAS</h2>
+      <div class="detail" style="margin-bottom:10px;line-height:1.7">
+        วิธีข้างบน (เลือกโฟลเดอร์) ใช้ได้เฉพาะคอมที่ map ไดรฟ์ NAS ไว้ · วิธีนี้แอปจะ<b>ส่งไฟล์ไปที่ NAS โดยตรง</b>
+        ผ่านตัวรับไฟล์เล็ก ๆ ที่วางไว้บน NAS — มือถือ แท็บเล็ต หรือคอมเครื่องไหนก็เก็บเข้า NAS ได้เหมือนกัน
+        <br><b>ตั้งที่ NAS ครั้งเดียว</b> แล้วใส่รหัสเชื่อมในแต่ละเครื่องที่จะใช้ออกบิล
+      </div>
+
+      <details id="nasHelp" class="setupbox">
+        <summary>📋 ขั้นตอนตั้งค่าตัวรับไฟล์บน Synology (ทำครั้งเดียว) — กดเพื่อดู</summary>
+        <ol class="steps">
+          <li>DSM → <b>Package Center</b> → ติดตั้ง <b>Web Station</b> (ถ้ายังไม่มี) →
+              ในหน้า Web Station ติดตั้ง <b>PHP</b> แล้วสร้าง <b>Web Service</b> ชนิด PHP ชี้ไปโฟลเดอร์ <code>web</code></li>
+          <li>ตั้ง <b>ชื่อโดเมน + ใบรับรอง HTTPS</b>: Control Panel → <b>External Access</b> → DDNS
+              (เช่น <code>ชื่อร้าน.synology.me</code>) → Control Panel → <b>Security → Certificate</b>
+              ขอใบรับรอง <b>Let's Encrypt</b> ฟรี
+              <span class="detail">(ต้องเป็น https เท่านั้น เบราว์เซอร์ไม่ยอมให้เว็บ https ยิงไปที่ http)</span></li>
+          <li>เปิดพอร์ต <b>443</b> ที่เราเตอร์ชี้มาที่ NAS (port forwarding)</li>
+          <li>กด <b>คัดลอกโค้ด</b> ข้างล่าง → สร้างไฟล์ชื่อ <code>inv-nas.php</code> ในโฟลเดอร์ <code>web</code> ของ NAS
+              (File Station → อัพโหลด หรือ Text Editor) → วางโค้ดลงไป</li>
+          <li>แก้ในไฟล์ 2 ที่: <code>$TOKEN</code> = รหัสลับที่สุ่มเอง (ยาว ≥16 ตัว) ·
+              <code>$BASE_DIR</code> = พาธโฟลเดอร์เก็บบิล เช่น <code>/volume1/Tax invoice</code>
+              <span class="detail">(ดูพาธจริงที่ File Station → คลิกขวาโฟลเดอร์ → คุณสมบัติ)</span></li>
+          <li>ทดสอบ: เปิด <code>https://ชื่อร้าน.synology.me/inv-nas.php</code> ในเบราว์เซอร์
+              ต้องขึ้น <code>{"ok":true,...}</code> → แล้วเอา URL นี้กับรหัสลับมาใส่ข้างล่าง</li>
+        </ol>
+        <div class="actions" style="border:none;padding-top:4px">
+          <button class="btn btn-gold btn-sm" id="copyNasCodeBtn">📋 คัดลอกโค้ดตัวรับไฟล์ (PHP)</button>
+          <button class="btn btn-ghost btn-sm" id="showNasCodeBtn">แสดงโค้ด (คัดลอกเอง)</button>
+        </div>
+        <textarea id="nasCodeBox" class="codebox" readonly style="display:none"></textarea>
+      </details>
+
+      <div class="row">
+        <div><label>URL ตัวรับไฟล์บน NAS</label>
+          <input id="nasUrl" placeholder="https://ชื่อร้าน.synology.me/inv-nas.php"></div>
+        <div><label>รหัสลับ (ตรงกับ $TOKEN ในไฟล์)</label>
+          <input id="nasToken" type="password" autocomplete="off" placeholder="รหัสลับที่ตั้งไว้"></div>
+      </div>
+      <div class="actions" style="border:none;padding-top:0">
+        <button class="btn btn-primary btn-sm" id="saveNasNetBtn">บันทึกในเครื่องนี้</button>
+        <button class="btn btn-ghost btn-sm" id="testNasNetBtn">ทดสอบเชื่อมต่อ</button>
+        <button class="btn btn-ghost btn-sm" id="clearNasNetBtn" style="color:var(--bad)">ล้างการตั้งค่า</button>
+      </div>
+      <div class="detail" id="nasNetStatus" style="margin-top:8px"></div>
+
+      <div class="notice" style="margin:14px 0 10px">
+        🔐 <b>รหัสลับเก็บไว้ในเครื่องนี้เท่านั้น ไม่ขึ้น Supabase</b> — เพราะหน้าเว็บนี้เปิดสาธารณะ
+        ถ้าเก็บในฐานข้อมูลคนอื่นจะอ่านไปยิงไฟล์เข้า NAS ได้ · เครื่องใหม่ให้ใช้ "รหัสเชื่อม" ข้างล่างแทนการพิมพ์ใหม่
+      </div>
+      <div class="row">
+        <div><label>รหัสเชื่อม (คัดลอกไปวางในเครื่อง/มือถืออื่น)</label>
+          <input id="pairBox" placeholder="วางรหัสเชื่อมที่คัดลอกมาที่นี่"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <button class="btn btn-gold btn-sm" id="copyPairBtn" style="flex:1">📋 คัดลอกรหัสเชื่อม</button>
+          <button class="btn btn-primary btn-sm" id="applyPairBtn" style="flex:1">ใช้รหัสนี้</button>
+        </div>
+      </div>
+      <div class="detail" style="margin-bottom:14px">
+        รหัสเชื่อมมีรหัสลับอยู่ข้างใน — ส่งผ่านช่องทางที่ไว้ใจได้เท่านั้น อย่าโพสต์ในกลุ่มแชท
+      </div>
+
+      <div class="kv"><span>บิลที่ยังไม่มีไฟล์ใน NAS</span><b id="missingCount">—</b></div>
+      <div class="actions" style="border:none;padding-top:4px">
+        <button class="btn btn-gold btn-sm" id="syncNasBtn">📤 เก็บบิลที่ยังไม่มีไฟล์ลง NAS</button>
+      </div>
+      <div class="detail" id="syncNasInfo" style="margin-top:8px">
+        บิลที่ออกจากเครื่องที่ยังไม่ได้ตั้ง NAS จะค้างอยู่ตรงนี้ — เปิดแอปจากเครื่องที่ตั้งแล้วกดปุ่มนี้ครั้งเดียว เก็บให้ครบ
+      </div>
+    </div>
+
+    <div class="card">
       <h2>✉️ ส่งอีเมลหาลูกค้าอัตโนมัติ + ตรวจการตีกลับ</h2>
       <div class="detail" style="margin-bottom:10px;line-height:1.7">
         ส่งจาก <b>Gmail ของร้าน</b> ผ่าน Google Apps Script (ฟรี ไม่ต้องใช้บัตร ไม่ต้องบอกรหัสผ่านใคร):
@@ -765,6 +836,106 @@ window.JJGate=(function(){
 </div>
 
 <div id="pdfStage"></div>
+<script type="text/plain" id="nasCodeSrc">
+<?php
+/** ตัวรับไฟล์ PDF ใบกำกับภาษี → เก็บลง NAS (จริงใจหมูกระทะ)
+ *  วางไฟล์นี้ชื่อ inv-nas.php ไว้ใน Web Station ของ Synology
+ *  แล้วเอา URL (https://<ชื่อ NAS>.synology.me/inv-nas.php) ไปใส่ในหน้าตั้งค่าของแอป
+ *
+ *  แก้ 3 บรรทัดข้างล่างก่อนใช้งาน
+ */
+
+// ---- 1) รหัสลับ: สุ่มยาว ๆ อย่างน้อย 24 ตัว (ต้องตรงกับที่ใส่ในแอป) ----
+$TOKEN = 'เปลี่ยนเป็นรหัสลับของคุณ';
+
+// ---- 2) โฟลเดอร์ปลายทางบน NAS (ดูพาธจริงได้ที่ File Station > คลิกขวาโฟลเดอร์ > คุณสมบัติ) ----
+$BASE_DIR = '/volume1/Tax invoice';
+
+// ---- 3) ที่อยู่ของแอป (ห้ามใส่ * — กันคนอื่นยิงไฟล์เข้า NAS) ----
+$ALLOW_ORIGIN = 'https://thananant.github.io';
+
+// =====================================================================
+$MAX_PDF = 10 * 1024 * 1024;   // ไฟล์ใหญ่สุด 10MB
+
+header('Access-Control-Allow-Origin: ' . $ALLOW_ORIGIN);
+header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-store');
+
+function out($a) { echo json_encode($a, JSON_UNESCAPED_UNICODE); exit; }
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+  header('Access-Control-Allow-Methods: POST, OPTIONS');
+  header('Access-Control-Allow-Headers: Content-Type');
+  header('Access-Control-Max-Age: 86400');
+  http_response_code(204); exit;
+}
+
+// เปิดด้วยเบราว์เซอร์เฉย ๆ = บอกแค่ว่าไฟล์ทำงานอยู่ (ไม่บอกอะไรเพิ่ม)
+if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+  out(['ok' => true, 'message' => 'ตัวรับไฟล์ใบกำกับภาษีพร้อมใช้งาน']);
+
+if ($TOKEN === 'เปลี่ยนเป็นรหัสลับของคุณ' || strlen($TOKEN) < 16)
+  out(['ok' => false, 'message' => 'ยังไม่ได้ตั้งรหัสลับในไฟล์ inv-nas.php (ต้องยาวอย่างน้อย 16 ตัว)']);
+
+$raw = file_get_contents('php://input');
+if ($raw === false || strlen($raw) > $MAX_PDF * 2)
+  out(['ok' => false, 'message' => 'ไฟล์ใหญ่เกินกำหนด']);
+
+$req = json_decode($raw, true);
+if (!is_array($req)) out(['ok' => false, 'message' => 'รูปแบบข้อมูลไม่ถูกต้อง']);
+
+$tok = isset($req['token']) && is_string($req['token']) ? $req['token'] : '';
+if (!hash_equals($TOKEN, $tok)) {
+  http_response_code(403);
+  out(['ok' => false, 'message' => 'รหัสลับไม่ถูกต้อง']);
+}
+
+// ปุ่ม "ทดสอบเชื่อมต่อ" ในแอป
+if (isset($req['action']) && $req['action'] === 'ping') {
+  $writable = is_dir($BASE_DIR) && is_writable($BASE_DIR);
+  out(['ok' => $writable, 'dir' => $BASE_DIR,
+       'message' => $writable ? 'เชื่อมต่อได้ เขียนไฟล์ลงโฟลเดอร์นี้ได้'
+                              : 'เชื่อมต่อได้ แต่เขียนโฟลเดอร์นี้ไม่ได้ — เช็คพาธและสิทธิ์ของโฟลเดอร์']);
+}
+
+// ---- ตรวจชื่อไฟล์แบบเข้มงวด (กันเขียนหลุดออกนอกโฟลเดอร์) ----
+$bill = isset($req['bill_no']) && is_string($req['bill_no']) ? $req['bill_no'] : '';
+$ym   = isset($req['ym'])      && is_string($req['ym'])      ? $req['ym']      : '';
+if (!preg_match('/^[A-Za-z0-9_-]{1,32}$/', $bill))
+  out(['ok' => false, 'message' => 'เลขบิลไม่ถูกต้อง']);
+if (!preg_match('/^[0-9]{4}-[0-9]{2}$/', $ym))
+  out(['ok' => false, 'message' => 'เดือนไม่ถูกต้อง']);
+
+// ---- ตรวจว่าเป็นไฟล์ PDF จริง ----
+$pdf = isset($req['pdf']) && is_string($req['pdf']) ? base64_decode($req['pdf'], true) : false;
+if ($pdf === false || strlen($pdf) < 100)
+  out(['ok' => false, 'message' => 'ไฟล์ PDF ไม่ถูกต้อง']);
+if (strlen($pdf) > $MAX_PDF)
+  out(['ok' => false, 'message' => 'ไฟล์ PDF ใหญ่เกิน 10MB']);
+if (substr($pdf, 0, 5) !== '%PDF-')
+  out(['ok' => false, 'message' => 'ไฟล์ที่ส่งมาไม่ใช่ PDF']);
+
+// ---- เขียนลง NAS แยกโฟลเดอร์รายเดือน ----
+if (!is_dir($BASE_DIR))
+  out(['ok' => false, 'message' => 'ไม่พบโฟลเดอร์ ' . $BASE_DIR . ' — แก้ $BASE_DIR ในไฟล์ inv-nas.php']);
+
+$dir = $BASE_DIR . '/' . $ym;
+if (!is_dir($dir) && !@mkdir($dir, 0775, true))
+  out(['ok' => false, 'message' => 'สร้างโฟลเดอร์ ' . $ym . ' ไม่ได้ — เช็คสิทธิ์ของโฟลเดอร์']);
+
+$path = $dir . '/' . $bill . '.pdf';
+$tmp  = $path . '.part';
+if (@file_put_contents($tmp, $pdf) === false)
+  out(['ok' => false, 'message' => 'เขียนไฟล์ไม่ได้ — เช็คสิทธิ์ของโฟลเดอร์บน NAS']);
+if (!@rename($tmp, $path)) {
+  @unlink($tmp);
+  out(['ok' => false, 'message' => 'บันทึกไฟล์ไม่สำเร็จ']);
+}
+@chmod($path, 0664);
+
+out(['ok' => true, 'path' => $ym . '/' . $bill . '.pdf', 'bytes' => strlen($pdf)]);
+</script>
 <script type="text/plain" id="gasCodeSrc">
 /** ตัวส่งอีเมลใบกำกับภาษี + ตรวจการตีกลับ (จริงใจหมูกระทะ)
  *  วิธีใช้: วางโค้ดนี้ใน https://script.new ของ Gmail ร้าน
@@ -894,6 +1065,10 @@ var activityRows = [];
 var invoices = [], editingBillNo = null;
 var zipDb = null, zipLoading = null, zipResults = [];
 var nasHandle = null, sigDataUrl = null;
+// ตัวรับไฟล์บน NAS — {url, token} เก็บใน localStorage ของเครื่องนี้เท่านั้น
+// (ห้ามเก็บใน Supabase: หน้าเว็บนี้เปิดสาธารณะ ใครก็อ่าน anon key ไปดึงค่าได้)
+var NASNET_KEY = 'jjinv_nasnet';
+var nasNet = null;
 var nasSupported = ('showDirectoryPicker' in window);
 // มือถือ/แท็บเล็ต (นิ้วจิ้ม) — เปิดไฟล์ PDF คนละแบบกับคอมพิวเตอร์
 var IS_TOUCH = (function(){ try{ return window.matchMedia('(pointer:coarse)').matches; }
@@ -968,15 +1143,59 @@ function idbDel(k){ return idbOpen().then(function(db){ return new Promise(funct
 function renderNasStatus(){
   var chip=$('nasChip'), name=$('nasName');
   if(!nasSupported){ $('nasUnsupported').style.display='block'; }
-  if(nasHandle){
-    chip.className='naschip on';
-    chip.textContent='📁 NAS: '+nasHandle.name;
-    name.textContent=nasHandle.name;
+  name.textContent=nasHandle?nasHandle.name:'— ยังไม่ได้เลือก —';
+  if(nasHandle){ chip.className='naschip on'; chip.textContent='📁 NAS: '+nasHandle.name; }
+  else if(nasNet){ chip.className='naschip on'; chip.textContent='🌐 ส่งเข้า NAS ตรง'; }
+  else{ chip.className='naschip';
+    chip.textContent=nasSupported?'📁 ยังไม่ได้ตั้งโฟลเดอร์ NAS':'📥 โหมดดาวน์โหลดไฟล์'; }
+  renderNasNet();
+}
+function renderNasNet(){
+  var st=$('nasNetStatus'); if(!st) return;
+  if(nasNet){
+    $('nasUrl').value=nasNet.url;
+    $('nasToken').value=nasNet.token;
+    st.innerHTML='✅ เครื่องนี้ส่งไฟล์เข้า NAS ที่ <code>'+esc(nasNet.url)+'</code> แล้ว';
+    $('nasHelp').open=false;
   }else{
-    chip.className='naschip';
-    chip.textContent=nasSupported?'📁 ยังไม่ได้ตั้งโฟลเดอร์ NAS':'📥 โหมดดาวน์โหลดไฟล์';
-    name.textContent='— ยังไม่ได้เลือก —';
+    st.innerHTML='⚠ เครื่องนี้ยังไม่ได้ตั้งค่า — ไฟล์จะดาวน์โหลดลงเครื่องแทน (ถ้าไม่ได้เลือกโฟลเดอร์ NAS ไว้)';
+    $('nasHelp').open=true;
   }
+}
+/* นับบิลที่ยังไม่มีไฟล์ใน NAS (ออกจากเครื่องที่ยังไม่ได้ตั้งค่า) */
+function missingNas(){
+  return invoices.filter(function(v){ return !v.nas_path && v.status!==STATUS.CANCELLED; });
+}
+function renderMissingNas(){
+  var el=$('missingCount'); if(!el) return;
+  var n=missingNas().length;
+  el.textContent=n?(n+' ใบ'):'ครบแล้ว ✓';
+  el.style.color=n?'var(--warn)':'var(--ok)';
+  var b=$('syncNasBtn'); if(b) b.disabled=!n||!(nasHandle||nasNet);
+}
+/* เก็บบิลที่ค้างทั้งหมดลง NAS ทีเดียว */
+async function syncMissingNas(){
+  var rows=missingNas(), btn=$('syncNasBtn'), info=$('syncNasInfo');
+  if(!rows.length){ toast('ไม่มีบิลค้าง — เก็บครบแล้ว','ok'); return; }
+  if(!nasHandle&&!nasNet){ toast('ตั้งค่าที่เก็บไฟล์ NAS ก่อน','err'); return; }
+  btn.disabled=true;
+  var done=0, fail=0;
+  for(var i=0;i<rows.length;i++){
+    var v=rows[i];
+    info.textContent='กำลังเก็บ '+(i+1)+'/'+rows.length+' — '+v.bill_no+' ...';
+    try{
+      var path=await storePdf(v.bill_no, await buildInvoicePdf(v), v.issued_at);
+      if(!path){ fail++; continue; }
+      await sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
+        updated_at:new Date().toISOString()}).eq('bill_no',v.bill_no);
+      done++;
+    }catch(e){ fail++; }
+  }
+  logActivity('เก็บไฟล์ค้างลง NAS','', 'สำเร็จ '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' ใบ'):''));
+  info.textContent='เก็บสำเร็จ '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' ใบ (ลองกดซ้ำอีกครั้ง)'):'');
+  toast('เก็บไฟล์ลง NAS สำเร็จ '+done+' ใบ', fail?'err':'ok');
+  btn.disabled=false;
+  loadInvoices();
 }
 async function pickNas(){
   if(!nasSupported){ toast('เบราว์เซอร์นี้ไม่รองรับ — ใช้ Chrome/Edge บนคอมพิวเตอร์','err'); return; }
@@ -1003,6 +1222,55 @@ async function saveToNas(filename, blob, iso){
   await w.write(blob); await w.close();
   return ym+'/'+filename;
 }
+// ===== ส่งไฟล์ไปเก็บที่ NAS โดยตรง (ใช้ได้ทุกเครื่อง รวมมือถือ) =====
+function loadNasNet(){
+  try{ var o=JSON.parse(localStorage.getItem(NASNET_KEY)||'null');
+    nasNet=(o&&o.url&&o.token)?o:null; }catch(e){ nasNet=null; }
+  return nasNet;
+}
+function saveNasNet(url,token){
+  url=String(url||'').trim(); token=String(token||'').trim();
+  if(!url||!token) throw new Error('กรอก URL และรหัสลับให้ครบ');
+  if(!/^https:\/\//i.test(url)) throw new Error('URL ต้องขึ้นต้นด้วย https:// (เบราว์เซอร์ไม่ยอมให้ยิงไป http)');
+  nasNet={url:url,token:token};
+  localStorage.setItem(NASNET_KEY,JSON.stringify(nasNet));
+  return nasNet;
+}
+function clearNasNet(){ nasNet=null; try{ localStorage.removeItem(NASNET_KEY); }catch(e){} }
+/* รหัสเชื่อม = base64 ของ {u,t} — เอาไปวางในเครื่องอื่นแทนการพิมพ์ใหม่ */
+function pairCode(){
+  if(!nasNet) return '';
+  try{ return 'JJNAS1.'+btoa(unescape(encodeURIComponent(JSON.stringify({u:nasNet.url,t:nasNet.token})))); }
+  catch(e){ return ''; }
+}
+function applyPairCode(code){
+  code=String(code||'').trim();
+  if(code.indexOf('JJNAS1.')!==0) throw new Error('รหัสเชื่อมไม่ถูกต้อง');
+  var o;
+  try{ o=JSON.parse(decodeURIComponent(escape(atob(code.slice(7))))); }
+  catch(e){ throw new Error('รหัสเชื่อมเสียหาย — คัดลอกมาใหม่'); }
+  return saveNasNet(o&&o.u, o&&o.t);
+}
+async function nasNetPost(body){
+  if(!nasNet) throw new Error('ยังไม่ได้ตั้งค่าตัวรับไฟล์บน NAS');
+  body.token=nasNet.token;
+  var r;
+  try{
+    // ใช้ text/plain เพื่อไม่ให้เบราว์เซอร์ยิง preflight (OPTIONS) ก่อน
+    r=await fetch(nasNet.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},
+      body:JSON.stringify(body)});
+  }catch(e){ throw new Error('ต่อ NAS ไม่ได้ — เช็ค URL / อินเทอร์เน็ต / ใบรับรอง https'); }
+  var j=null;
+  try{ j=JSON.parse(await r.text()); }catch(e){}
+  if(!j) throw new Error('NAS ตอบกลับผิดรูปแบบ (HTTP '+r.status+') — URL ชี้ผิดไฟล์หรือเปล่า');
+  if(!j.ok) throw new Error(j.message||('NAS ปฏิเสธ (HTTP '+r.status+')'));
+  return j;
+}
+async function sendToNasNet(billNo, blob, iso){
+  var j=await nasNetPost({bill_no:billNo, ym:ymOf(iso), pdf:await blobToBase64(blob)});
+  return j.path||null;
+}
+
 function downloadBlob(filename, blob){
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a'); a.href=url; a.download=filename;
@@ -1011,18 +1279,21 @@ function downloadBlob(filename, blob){
 }
 // บันทึกไฟล์บิล: ลง NAS ถ้าตั้งไว้ ไม่งั้นดาวน์โหลด — คืน path หรือ null
 async function storePdf(billNo, blob, iso){
+  // 1) โฟลเดอร์ NAS ที่ผูกไว้กับเครื่องนี้ — เร็วสุด ไม่ต้องผ่านอินเทอร์เน็ต
   if(nasHandle){
-    var ok=await ensureNasPermission();
-    if(!ok){ toast('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์ NAS — ดาวน์โหลดไฟล์ให้แทน','err');
-      downloadBlob(billNo+'.pdf', blob); return null; }
     try{
-      var path=await saveToNas(billNo+'.pdf', blob, iso);
-      return path;
+      if(await ensureNasPermission()) return await saveToNas(billNo+'.pdf', blob, iso);
+      throw new Error('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์');
     }catch(e){
-      toast('เขียนไฟล์ลง NAS ไม่สำเร็จ ('+e.message+') — ดาวน์โหลดให้แทน','err');
-      downloadBlob(billNo+'.pdf', blob); return null;
+      toast('เขียนลงโฟลเดอร์ NAS ไม่สำเร็จ ('+e.message+')'+(nasNet?' — ลองส่งผ่าน NAS ตรงแทน':''),'err');
     }
   }
+  // 2) ส่งตรงเข้า NAS — ใช้ได้ทุกเครื่องรวมมือถือ
+  if(nasNet){
+    try{ return await sendToNasNet(billNo, blob, iso); }
+    catch(e){ toast('ส่งไฟล์เข้า NAS ไม่สำเร็จ ('+e.message+') — ดาวน์โหลดให้แทน','err'); }
+  }
+  // 3) ไม่ได้ตั้งอะไรไว้ / ทั้งสองทางล้มเหลว → ดาวน์โหลดไฟล์ให้
   downloadBlob(billNo+'.pdf', blob);
   return null;
 }
@@ -1904,6 +2175,7 @@ function renderList(){
   fp.className='pill'+(failed.length?'':' zero'); fp.style.background='var(--bad)';
   var cp=$('cancelCount'); cp.textContent=cancelled.length;
   cp.className='pill'+(cancelled.length?'':' zero');
+  renderMissingNas();
 }
 
 // ================= ตั้งค่า: เลขบิล =================
@@ -2073,6 +2345,71 @@ $('showGasBtn').onclick=function(){
   else{ ta.value=gasCodeText(); ta.style.display='block';
     this.textContent='ซ่อนโค้ด'; ta.scrollIntoView({block:'nearest'}); }
 };
+function nasCodeText(){ return ($('nasCodeSrc').textContent||'').replace(/^\n/,''); }
+async function copyText(text, box, okMsg){
+  var ok=false;
+  try{ await navigator.clipboard.writeText(text); ok=true; }
+  catch(e){
+    if(box){ box.style.display='block'; box.value=text; box.focus(); box.select();
+      try{ ok=document.execCommand('copy'); }catch(e2){} }
+  }
+  toast(ok?okMsg:'คัดลอกอัตโนมัติไม่ได้ — กด Ctrl+A แล้ว Ctrl+C เอง', ok?'ok':'err');
+  return ok;
+}
+$('copyNasCodeBtn').onclick=function(){
+  copyText(nasCodeText(), $('nasCodeBox'), 'คัดลอกโค้ดแล้ว — เอาไปสร้างไฟล์ inv-nas.php บน NAS');
+};
+$('showNasCodeBtn').onclick=function(){
+  var ta=$('nasCodeBox'), open=(ta.style.display!=='none');
+  if(open){ ta.style.display='none'; this.textContent='แสดงโค้ด (คัดลอกเอง)'; }
+  else{ ta.value=nasCodeText(); ta.style.display='block';
+    this.textContent='ซ่อนโค้ด'; ta.scrollIntoView({block:'nearest'}); }
+};
+$('saveNasNetBtn').onclick=function(){
+  try{
+    saveNasNet($('nasUrl').value, $('nasToken').value);
+    renderNasStatus(); renderMissingNas();
+    logActivity('ตั้งค่า NAS ตรง','', nasNet.url);
+    toast('บันทึกแล้ว — เครื่องนี้จะส่งไฟล์เข้า NAS โดยตรง','ok');
+  }catch(e){ toast(e.message,'err'); }
+};
+$('testNasNetBtn').onclick=async function(){
+  var st=$('nasNetStatus');
+  try{ saveNasNet($('nasUrl').value, $('nasToken').value); }
+  catch(e){ toast(e.message,'err'); return; }
+  this.disabled=true; st.innerHTML='<span class="spin" style="border-color:#0002;border-top-color:#888"></span> กำลังทดสอบ...';
+  try{
+    var j=await nasNetPost({action:'ping'});
+    renderNasStatus(); renderMissingNas();          // วาดสถานะก่อน แล้วค่อยทับด้วยผลทดสอบ
+    st.innerHTML='✅ '+esc(j.message||'เชื่อมต่อได้')+(j.dir?(' — โฟลเดอร์ <code>'+esc(j.dir)+'</code>'):'');
+    toast('ต่อ NAS ได้','ok');
+  }catch(e){
+    st.innerHTML='❌ '+esc(e.message);
+    toast('ทดสอบไม่ผ่าน: '+e.message,'err');
+  }
+  this.disabled=false;
+};
+$('clearNasNetBtn').onclick=function(){
+  if(!confirm('ล้างการตั้งค่า NAS ตรงของเครื่องนี้?')) return;
+  clearNasNet(); $('nasUrl').value=''; $('nasToken').value='';
+  renderNasStatus(); renderMissingNas(); toast('ล้างการตั้งค่าแล้ว');
+};
+$('copyPairBtn').onclick=function(){
+  var c=pairCode();
+  if(!c){ toast('ยังไม่ได้ตั้งค่า — บันทึก URL กับรหัสลับก่อน','err'); return; }
+  $('pairBox').value=c;
+  copyText(c, null, 'คัดลอกรหัสเชื่อมแล้ว — เอาไปวางในเครื่อง/มือถืออื่น');
+};
+$('applyPairBtn').onclick=function(){
+  try{
+    applyPairCode($('pairBox').value);
+    $('pairBox').value='';
+    renderNasStatus(); renderMissingNas();
+    toast('ใช้รหัสเชื่อมแล้ว — เครื่องนี้ส่งไฟล์เข้า NAS ได้เลย','ok');
+  }catch(e){ toast(e.message,'err'); }
+};
+$('syncNasBtn').onclick=syncMissingNas;
+
 $('sigUploadBtn').onclick=function(){ $('sigFile').click(); };
 $('sigFile').onchange=function(){ handleSigFile(this.files[0]); this.value=''; };
 $('sigRemoveBtn').onclick=async function(){
@@ -2104,6 +2441,7 @@ function startApp(){
 
   try{ nasHandle=await idbGet('nasDir')||null; }catch(e){}
   try{ sigDataUrl=await idbGet('sigDataUrl')||null; }catch(e){}
+  loadNasNet();
   renderNasStatus(); renderSig();
 
   if(await checkDb()){
