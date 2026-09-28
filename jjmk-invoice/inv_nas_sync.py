@@ -171,6 +171,12 @@ def mark_saved(inv, rel, force=False):
     return bool(rows)
 
 
+def requeue(bill_no):
+    """ส่งบิลกลับเข้าคิว (nas_path = null) — ใช้เมื่อไฟล์ที่เพิ่งเขียนอาจเป็นฉบับเก่า"""
+    sb_req('PATCH', '/rest/v1/inv_invoices?bill_no=eq.' + q(bill_no), {'nas_path': None},
+           prefer='return=minimal')
+
+
 def heartbeat(info):
     """บอกแอปว่า NAS ทำงานล่าสุดเมื่อไหร่ (แสดงในหน้าตั้งค่า) — เก็บแค่ตัวหนังสือ"""
     try:
@@ -626,6 +632,9 @@ def process(inv, force=False):
         log('เก็บ %s (%d KB)%s' % (rel, len(data) // 1024 + 1,
                                    ' · ยกเลิก' if inv.get('status') == STATUS_CANCELLED else ''))
         return True
+    # บิลถูกแก้ระหว่างที่กำลังสร้างไฟล์ (หรือคอมที่ผูกโฟลเดอร์เพิ่งเก็บฉบับใหม่ไป แล้วเราเขียนฉบับเก่าทับ)
+    # → ส่งกลับเข้าคิว รอบหน้าสร้างใหม่จากข้อมูลล่าสุดทับให้ ไฟล์ใน NAS จะไม่ค้างเป็นฉบับเก่า
+    requeue(bill)
     log('เขียน %s แล้ว แต่บิลถูกแก้ระหว่างทาง — รอบหน้าจะสร้างใหม่จากข้อมูลล่าสุด' % rel)
     return False
 
