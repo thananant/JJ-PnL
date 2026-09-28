@@ -549,7 +549,7 @@ function paintLogin(){
   who.style.display=L?'':'none';
   if(L)who.innerHTML='<div class="lkwho">👤 <b>'+esc(LOCK.name)+'</b></div><div class="lkhint">'+esc(t('lk_hint'))+'</div>';
   const kp=document.getElementById('lgKeepFld');
-  kp.style.display=L?'':'none';
+  kp.style.display=(L||!SIGNUP)?'':'none';
   document.getElementById('lgKeepLb').textContent=t('lk_keep');
   const go=document.getElementById('lgGo');
   go.textContent=L?t('lk_go'):(SIGNUP?t('lg_signup'):t('lg_login'));
@@ -656,14 +656,18 @@ function hubTicket(username){
   // แล้วเดินมาใช้สิทธิ์ของคนก่อนหน้าบนเครื่องกลาง
   return String(tk.u).trim().toLowerCase()===String(username||'').trim().toLowerCase();
 }
-function keepOk(username){      // เคยติ๊ก "จำไว้ในเครื่องนี้" และยังไม่หมดอายุ
+function keepRead(){            // "จำไว้ในเครื่องนี้" ที่ยังไม่หมดอายุ — ต้องมี hash ไว้ตรวจกับ pnl_users ใหม่ทุกครั้ง
   let k=null;
   try{k=JSON.parse(localStorage.getItem(KEEP_KEY)||'null');}catch(e){}
-  if(!k||!k.u||!(k.exp>Date.now())){if(k)try{localStorage.removeItem(KEEP_KEY)}catch(e){}return false;}
-  return String(k.u).trim().toLowerCase()===String(username||'').trim().toLowerCase();
+  if(!k||!k.u||!k.h||!(k.exp>Date.now())){if(k)try{localStorage.removeItem(KEEP_KEY)}catch(e){}return null;}
+  return k;
 }
-function setKeep(username,on){
-  try{on?localStorage.setItem(KEEP_KEY,JSON.stringify({u:username,exp:Date.now()+KEEP_MS}))
+function keepOk(username){
+  const k=keepRead();
+  return !!k&&String(k.u).trim().toLowerCase()===String(username||'').trim().toLowerCase();
+}
+function setKeep(username,on,hash){
+  try{(on&&hash)?localStorage.setItem(KEEP_KEY,JSON.stringify({u:username,h:hash,exp:Date.now()+KEEP_MS}))
        :localStorage.removeItem(KEEP_KEY);}catch(e){}
 }
 function unlockedThisTab(){try{return sessionStorage.getItem('jjck_unlocked')==='1'}catch(e){return false}}
@@ -686,7 +690,7 @@ async function doUnlock(){
     if(!kitchenAllowed(usr)){LOCK=null;paintLogin();
       msg.textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ระบบครัวกลาง';return;}
     try{ sessionStorage.setItem(CK_SESS,JSON.stringify({u:usr.username,h:usr.pass_hash})); }catch(e){}
-    setKeep(LOCK.username,document.getElementById('lgKeep').checked);
+    setKeep(LOCK.username,document.getElementById('lgKeep').checked,usr.pass_hash);
     LOCK=null;markUnlocked();document.getElementById('lgP').value='';
     await enterApp(mapCentralProf(usr));
   }catch(e){msg.textContent=(e&&e.message)||String(e);}
@@ -719,7 +723,7 @@ async function doLogin(){
     }
     try{ sessionStorage.setItem(CK_SESS,JSON.stringify({u:usr.username,h:usr.pass_hash})); }catch(e){}
     const keep=document.getElementById('lgKeep');
-    setKeep(usr.username, !!(keep&&keep.checked));
+    setKeep(usr.username, !!(keep&&keep.checked), usr.pass_hash);
     markUnlocked(); LOCK=null;
     document.getElementById('lgP').value='';
     await enterApp(mapCentralProf(usr));
@@ -3151,21 +3155,33 @@ async function boot(){
     /* 1) ใบผ่านสดจากหน้าศูนย์รวมแอพ — กินแล้วลบทิ้ง ตรวจกับ pnl_users จริงอีกชั้น */
     let tk=null;
     try{ tk=JSON.parse(localStorage.getItem(TICKET)||'null'); }catch(e){}
-    if(tk&&tk.u&&(!tk.app||tk.app==='kitchen')&&(!tk.t||Date.now()-Number(tk.t)<=TICKET_TTL)){
+    // ต้องมีทั้ง hash และเวลาออกใบ — ใบที่พิมพ์เองในคอนโซล ({u:'admin'}) ห้ามผ่าน
+    if(tk&&tk.u&&tk.h&&tk.t&&(!tk.app||tk.app==='kitchen')&&Date.now()-Number(tk.t)<=TICKET_TTL){
       try{ localStorage.removeItem(TICKET); }catch(e){}
       const usr=await centralUser(tk.u).catch(()=>null);
-      const okHash=usr&&(usr.pass_hash===tk.h||!tk.h);
-      if(usr&&okHash&&kitchenAllowed(usr)){
+      if(usr&&usr.pass_hash===tk.h&&kitchenAllowed(usr)){
         try{ sessionStorage.setItem(CK_SESS,JSON.stringify({u:usr.username,h:usr.pass_hash})); }catch(e){}
         markUnlocked(); await enterApp(mapCentralProf(usr)); return;
       }
     }
     /* 2) ใบอนุญาตของแท็บนี้ (รีเฟรช/ลากหน้าลงแล้วยังอยู่) */
     const prof=await sbProfile();
-    if(!prof){ showLogin(); return; }
-    const uname=prof.username||'';
-    if(unlockedThisTab()||keepOk(uname)){ markUnlocked(); await enterApp(prof); return; }
-    lockScreen(prof,'');      // เคยล็อกอินในแท็บนี้แต่ยังไม่ปลดล็อก → ขอรหัสซ้ำ
+    if(prof){
+      if(unlockedThisTab()||keepOk(prof.username)){ markUnlocked(); await enterApp(prof); return; }
+      lockScreen(prof,''); return;   // เคยล็อกอินในแท็บนี้แต่ยังไม่ปลดล็อก → ขอรหัสซ้ำ
+    }
+    /* 3) ติ๊ก "จำไว้ในเครื่องนี้ 12 ชม." ไว้ — ตรวจรหัสกับ pnl_users ใหม่ทุกครั้ง (รหัสเปลี่ยน/ถูกปิดสิทธิ์ = ใช้ไม่ได้) */
+    const kp=keepRead();
+    if(kp){
+      const usr=await centralUser(kp.u).catch(()=>null);
+      if(usr&&usr.pass_hash===kp.h&&kitchenAllowed(usr)){
+        try{ sessionStorage.setItem(CK_SESS,JSON.stringify({u:usr.username,h:usr.pass_hash})); }catch(e){}
+        markUnlocked(); await enterApp(mapCentralProf(usr)); return;
+      }
+      setKeep(null,false);
+    }
+    /* 4) เปิดลิงก์ตรง → ต้องกรอกรหัส */
+    showLogin();
   }catch(e){showLogin();
     document.getElementById('lgMsg').textContent=(e&&e.message)||String(e);}
 }
