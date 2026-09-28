@@ -724,11 +724,23 @@ function pwHash(u,p){ return sha256hex(u+'|'+p+'|JJPNL'); }
 
 /* ---------- สิทธิ์ผู้ใช้ ---------- */
 const MENU_LABEL={dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',usage:'ข้อมูลการใช้ของ',ck:'ครัวกลาง',sum:'สรุปเดือน',recon:'ตรวจสอบเงิน',pv:'ใบสำคัญจ่าย',etc:'อื่นๆ',set:'ตั้งค่า'};
-function permOf(v){
-  const u=S.user; if(!u)return 'edit';
-  if(u.role==='admin')return 'edit';
+/* สิทธิ์รายหน้า: ตั้งจากหน้า JJ Access (jjmk-admin.html) ลง pnl_users.apps.pnl = {หน้า:'vaed'} (v=เห็น a=เพิ่ม e=แก้ d=ลบ)
+   ถ้าบัญชีนั้นยังไม่เคยตั้งใน JJ Access (ไม่มี apps.pnl) จึงใช้ perms ชุดเก่าของหน้าตั้งค่า→ผู้ใช้
+   ผลลัพธ์แบบเดิม: 'edit' (เห็น+เพิ่ม/แก้/ลบ อย่างใดอย่างหนึ่ง) · 'view' (เห็นอย่างเดียว) · 'none' (ซ่อน) */
+function flagsToPerm(fl){
+  fl=String(fl||''); if(!fl.includes('v'))return 'none';
+  return /[aed]/.test(fl)?'edit':'view';
+}
+function permToFlags(pm){ return pm==='edit'?'vaed':(pm==='view'?'v':''); }
+function appsPnl(u){ const a=u&&u.apps&&typeof u.apps==='object'?u.apps.pnl:null; return (a&&typeof a==='object'&&Object.keys(a).length)?a:null; }
+function permOfUser(u,v){
+  if(!u)return 'edit';
+  if(u.role==='admin'||u.role==='owner')return 'edit';
+  const ap=appsPnl(u);
+  if(ap)return flagsToPerm(ap[v]);
   return (u.perms||{})[v]||'none';
 }
+function permOf(v){ return permOfUser(S.user,v); }
 function firstAllowedTab(){ return VIEWS.find(v=>permOf(v)!=='none')||'dash'; }
 function applyNav(){
   document.querySelectorAll('.tabbar button[data-v],.sb-item[data-v]').forEach(b=>{
@@ -1265,7 +1277,7 @@ function saveSetup(){
 async function userLoad(){
   const el=document.getElementById('userList'); if(!el)return;
   try{
-    const rows=await sel('pnl_users','select=id,username,display_name,role,active,perms&order=id');
+    const rows=await sel('pnl_users','select=id,username,display_name,role,active,perms,apps&order=id');
     S._users=rows;
     el.innerHTML='<div class="twrap"><table>'+rows.map(u=>`<tr style="${u.active?'':'opacity:.45'}">
       <td><div class="b sm">${esc(u.display_name)}</div><div class="xs mut">${esc(u.username)} · ${u.role==='admin'?'ผู้ดูแล':'พนักงาน'}${u.active?'':' · ปิดใช้งาน'}</div></td>
@@ -1275,7 +1287,7 @@ async function userLoad(){
 function userModal(id){
   const u=id?(S._users||[]).find(x=>x.id===id):{username:'',display_name:'',role:'staff',active:true,perms:{}};
   if(!u)return;
-  const pm=u.perms||{};
+  const pm={}; VIEWS.forEach(v=>{ pm[v]=permOfUser(Object.assign({},u,{role:'staff'}),v); }); // สิทธิ์ที่มีผลจริง (JJ Access ก่อน แล้วค่อย perms เก่า)
   openModal(`<h3>${id?'แก้ไขผู้ใช้':'เพิ่มผู้ใช้ใหม่'}</h3>
     <div class="grid2">
       <div class="fld"><label>ชื่อที่แสดง</label><input id="umName" value="${esc(u.display_name)}" placeholder="เช่น บอย"></div>
@@ -1291,7 +1303,7 @@ function userModal(id){
       <input type="checkbox" id="umActive" ${u.active?'checked':''} style="width:18px;height:18px">เปิดใช้งานบัญชีนี้</label>
     <div id="umPerms" style="opacity:${u.role==='admin'?.35:1}">
       <div class="pgrid">
-        <span class="ph" style="text-align:left">เมนู</span><span class="ph">แก้ไข</span><span class="ph">ดูอย่างเดียว</span><span class="ph">ซ่อน</span>
+        <span class="ph" style="text-align:left">เมนู <span class="xs mut" style="font-weight:400">(ตั้งจากหน้า JJ Access ได้เช่นกัน — ใช้ค่าล่าสุดที่บันทึก)</span></span><span class="ph">แก้ไข</span><span class="ph">ดูอย่างเดียว</span><span class="ph">ซ่อน</span>
         ${VIEWS.map(v=>{const cur=pm[v]||'none';
           return `<span class="pr sm">${MENU_LABEL[v]||v}</span>
           <label class="pr"><input type="radio" name="pm_${v}" value="edit" ${cur==='edit'?'checked':''}></label>
@@ -1310,17 +1322,18 @@ async function userSave(id){
   const role=document.getElementById('umRole').value;
   const active=document.getElementById('umActive').checked;
   if(!name||!uname){toast('ใส่ชื่อและ username ก่อนครับ',true);return;}
-  const perms={};
-  VIEWS.forEach(v=>{const r=document.querySelector(`input[name="pm_${v}"]:checked`); perms[v]=r?r.value:'none';});
+  const perms={}, pnlFlags={};
+  VIEWS.forEach(v=>{const r=document.querySelector(`input[name="pm_${v}"]:checked`); perms[v]=r?r.value:'none'; const fl=permToFlags(perms[v]); if(fl)pnlFlags[v]=fl;});
+  const withApps=u=>Object.assign({},(u&&u.apps&&typeof u.apps==='object')?u.apps:{},{pnl:pnlFlags}); // ให้หน้า JJ Access เห็นค่าเดียวกัน
   try{
     if(id){
-      const body={display_name:name,role,active,perms};
+      const body={display_name:name,role,active,perms,apps:withApps((S._users||[]).find(x=>x.id===id))};
       if(pass){ const u=(S._users||[]).find(x=>x.id===id); body.pass_hash=pwHash(u.username,pass); }
       await upd('pnl_users','id=eq.'+id,body);
       if(S.user&&S.user.id===id){ if(pass)LS.set('jjpnl_auth',{u:S.user.username,h:body.pass_hash}); }
     }else{
       if(pass.length<4){toast('รหัสผ่านอย่างน้อย 4 ตัวครับ',true);return;}
-      await ins('pnl_users',{username:uname,display_name:name,pass_hash:pwHash(uname,pass),role,active,perms});
+      await ins('pnl_users',{username:uname,display_name:name,pass_hash:pwHash(uname,pass),role,active,perms,apps:withApps(null)});
     }
     closeModal(); toast('บันทึกผู้ใช้แล้ว'); userLoad();
   }catch(e){ toast('บันทึกไม่สำเร็จ: '+e.message,true); }
@@ -1395,7 +1408,7 @@ async function authGate(){
   return false;
 }
 function setUser(u){
-  S.user={id:u.id,username:u.username,display_name:u.display_name,role:u.role,perms:u.perms||{}};
+  S.user={id:u.id,username:u.username,display_name:u.display_name,role:u.role,perms:u.perms||{},apps:(u.apps&&typeof u.apps==='object')?u.apps:{}};
   LS.set('jjpnl_auth',{u:u.username,h:u.pass_hash,t:Date.now()});
   startIdleWatch();
 }
