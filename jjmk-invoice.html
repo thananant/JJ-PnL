@@ -976,7 +976,23 @@ var GATE_RELOCK = null;   // JJ Gate: ชื่อผู้ใช้ที่ต
 var NO_ACCESS = false;    // บัญชีใช้ได้ แต่ไม่ได้รับสิทธิ์เข้าระบบใบกำกับภาษี
 var sb = null, dbReady = false, rpcMissing = false, settings = {}, currentUser = null;
 var activityRows = [];
-var invoices = [], editingBillNo = null;
+var invoices = [], editingBillNo = null, editingId = null;
+/* แถวล่าสุดของบิลจากฐานข้อมูล (หาด้วย id) — ตั้งแต่มีปุ่มแก้เลขชน เลขบิลของแถวเปลี่ยนได้ รายการที่เปิดค้างไว้
+   ในเครื่องอื่นอาจยังเห็นเลขเดิม → ก่อนแก้/ยกเลิก/ส่งอีเมล/เก็บไฟล์ ต้องเช็คว่าเลขบนจอยังเป็นของแถวนี้จริง
+   ไม่ตรง = ไม่ทำอะไรเลย (ไม่งั้นจะไปเขียนทับบิลระบบเดิมที่เพิ่งเข้ามาใช้เลขนั้น) */
+async function freshInv(v, quiet){
+  if(!v){ if(!quiet) toast('ไม่พบบิลนี้ — โหลดรายการใหม่แล้วลองอีกครั้ง','err'); return null; }
+  if(v.id===undefined||v.id===null) return v;
+  var r=await sb.from('inv_invoices').select('*').eq('id',v.id).limit(1);
+  if(r.error){ if(!quiet) toast('ผิดพลาด: '+r.error.message,'err'); return null; }
+  var x=(r.data||[])[0];
+  if(!x||x.bill_no!==v.bill_no){
+    if(!quiet) toast('บิล '+v.bill_no+' ถูกเปลี่ยนเลข/แก้ไขจากเครื่องอื่นแล้ว — โหลดรายการใหม่ให้แล้ว ลองอีกครั้ง','err');
+    loadInvoices(); return null;
+  }
+  return x;
+}
+function invRow(q, v){ q=q.eq('bill_no',v.bill_no); return (v.id===undefined||v.id===null)?q:q.eq('id',v.id); }
 var zipDb = null, zipLoading = null, zipResults = [];
 var nasHandle = null, sigDataUrl = null;
 // NAS เก็บไฟล์เอง: สคริปต์ jjmk-invoice/inv_nas_sync.py บน Synology ดึงบิลที่ nas_path ว่างไปสร้าง PDF
@@ -1141,8 +1157,8 @@ async function syncMissingNas(){
     try{
       var path=await storePdf(v.bill_no, await buildInvoicePdf(v), v.issued_at);
       if(!path){ fail++; continue; }
-      await sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
-        updated_at:new Date().toISOString()}).eq('bill_no',v.bill_no);
+      await invRow(sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
+        updated_at:new Date().toISOString()}), v);
       done++;
     }catch(e){ fail++; }
   }
@@ -1590,6 +1606,7 @@ function mailContent(inv, opts){
 async function sendInvoiceEmail(inv, blob, opts){
   opts=opts||{};
   if(!settings.gas_endpoint){ toast('ยังไม่ได้ตั้งค่า URL ตัวส่งอีเมล (หน้าตั้งค่า)','err'); return false; }
+  inv=await freshInv(inv); if(!inv) return false;
   if(!inv.email){ toast('บิลนี้ไม่มีอีเมลลูกค้า','err'); return false; }
   try{
     var mailBlob=blob;
@@ -1618,12 +1635,11 @@ async function sendInvoiceEmail(inv, blob, opts){
       logActivity('ส่งอีเมลไม่ออก',inv.bill_no,'ไปที่ '+inv.email+' — '+(res.message||''));
       toast('ส่งอีเมลไม่สำเร็จ: '+(res.message||''),'err');
     }
-    await sb.from('inv_invoices').update(patch).eq('bill_no',inv.bill_no);
+    await invRow(sb.from('inv_invoices').update(patch), inv);
     return !!res.ok;
   }catch(e){
-    try{ await sb.from('inv_invoices').update({email_status:EMAIL_STATUS.ERROR,
-      email_status_detail:'ส่งไม่ออก: '+e.message,updated_at:new Date().toISOString()})
-      .eq('bill_no',inv.bill_no); }catch(e2){}
+    try{ await invRow(sb.from('inv_invoices').update({email_status:EMAIL_STATUS.ERROR,
+      email_status_detail:'ส่งไม่ออก: '+e.message,updated_at:new Date().toISOString()}), inv); }catch(e2){}
     toast('ส่งอีเมลไม่สำเร็จ: '+e.message,'err');
     return false;
   }
@@ -1926,13 +1942,14 @@ async function issueOrUpdate(){
   try{
     var inv=null;
     if(editing){
-      var before=findInv(editing);
+      var before=await freshInv({id:editingId, bill_no:editing}, true);
+      if(!before) throw new Error('บิล '+editing+' ถูกเปลี่ยนเลข/แก้ไขจากเครื่องอื่นแล้ว — กดยกเลิกการแก้ไข แล้วเปิดบิลจากรายการใหม่');
       delete payload.branch_prefix;   // บิลที่ออกไปแล้ว เลขกับสาขาต้องไปด้วยกันเสมอ (ช่องสาขาถูกล็อกตอนแก้ไข)
       payload.status_detail=withNote(before&&before.status_detail, NOTE_EDIT, 'แก้ไขล่าสุด '+fmtDT(null)+' โดย '+userName());
       payload.updated_by=userName();
       payload.updated_at=new Date().toISOString();
       payload.nas_path=null;        // ไฟล์ใน NAS เป็นฉบับเก่า — ให้เก็บใหม่ (เครื่องนี้หรือ NAS สร้างทับให้)
-      var u=await sb.from('inv_invoices').update(payload).eq('bill_no',editing).select().single();
+      var u=await sb.from('inv_invoices').update(payload).eq('id',before.id).eq('bill_no',editing).select().single();
       if(u.error) throw new Error(u.error.message);
       inv=u.data;
       logActivity('แก้ไขบิล',editing,'ยอดรวม '+fmt(inv.grand_total)+' บาท');
@@ -1966,8 +1983,7 @@ async function issueOrUpdate(){
       blob=await buildInvoicePdf(inv);
       var path=await storePdf(inv.bill_no, blob, inv.issued_at);
       if(path){
-        await sb.from('inv_invoices').update({nas_path:path,updated_at:new Date().toISOString()})
-          .eq('bill_no',inv.bill_no);
+        await invRow(sb.from('inv_invoices').update({nas_path:path,updated_at:new Date().toISOString()}), inv);
         toast('บันทึก '+path+' ลง NAS เรียบร้อย','ok');
       }
     }catch(e){
@@ -1986,10 +2002,10 @@ async function issueOrUpdate(){
   btn.disabled=false; btn.textContent=label;
 }
 
-function startEdit(billNo){
-  var v=invoices.filter(function(x){ return x.bill_no===billNo; })[0];
-  if(!v){ toast('ไม่พบบิล','err'); return; }
-  editingBillNo=billNo;
+async function startEdit(billNo){
+  var v=await freshInv(findInv(billNo));
+  if(!v) return;
+  editingBillNo=billNo; editingId=(v.id===undefined?null:v.id);
   document.querySelector('.tab[data-tab="new"]').click();
   if(v.branch_prefix)$('fBranch').value=v.branch_prefix;
   $('fBranch').disabled=true;      // เลขบิลผูกกับสาขาแล้ว ย้ายสาขาไม่ได้ (ต้องยกเลิกแล้วออกใหม่)
@@ -2013,7 +2029,7 @@ function startEdit(billNo){
   toast('โหลดบิล '+billNo+' มาแก้ไขแล้ว','ok');
 }
 function exitEdit(){
-  editingBillNo=null;
+  editingBillNo=null; editingId=null;
   $('fBranch').disabled=false;
   $('editBanner').style.display='none';
   $('issueBtn').textContent='ออกบิล + PDF ลง NAS + ส่งอีเมล';
@@ -2023,13 +2039,15 @@ function exitEdit(){
 async function setStatus(billNo,status,detail){
   var need=(status===STATUS.CANCELLED)?can('list','d'):can('cancelled','e');
   if(!need){ toast(status===STATUS.CANCELLED?'บัญชีนี้ไม่มีสิทธิ์ยกเลิกบิล':'บัญชีนี้ไม่มีสิทธิ์เรียกคืนบิล','err'); return false; }
-  var cur=findInv(billNo);
-  var r=await sb.from('inv_invoices')
-    .update({status:status,status_detail:withNote(cur&&cur.status_detail, NOTE_STATUS, detail),updated_by:userName(),
+  var cur=await freshInv(findInv(billNo));      // หมายเหตุล่าสุดจากฐานข้อมูล ไม่ใช่ของที่ค้างในเครื่อง
+  if(!cur) return false;
+  var r=await invRow(sb.from('inv_invoices')
+    .update({status:status,status_detail:withNote(cur.status_detail, NOTE_STATUS, detail),updated_by:userName(),
       updated_at:new Date().toISOString(),
-      nas_path:null})             // ให้ NAS สร้างไฟล์ใหม่ (ประทับ/เอาตรา "ยกเลิก" ออก)
-    .eq('bill_no',billNo);
+      nas_path:null}), cur)       // ให้ NAS สร้างไฟล์ใหม่ (ประทับ/เอาตรา "ยกเลิก" ออก)
+    .select('id');
   if(r.error){ toast('ผิดพลาด: '+r.error.message,'err'); return false; }
+  if(!(r.data||[]).length){ toast('ไม่พบบิล '+billNo+' แล้ว — โหลดรายการใหม่ให้แล้ว ลองอีกครั้ง','err'); loadInvoices(); return false; }
   logActivity(status===STATUS.CANCELLED?'ยกเลิกบิล':'เรียกคืนบิล',billNo,'');
   return true;
 }
@@ -2084,7 +2102,7 @@ function bindCards(scope){
     if(!nasHandle && nasSyncActive()){
       if(!can('list','e')){ toast('บัญชีนี้ไม่มีสิทธิ์สั่งเก็บไฟล์ใหม่ (ต้องมีสิทธิ์แก้ไขบิล)','err');
         b.disabled=false; b.textContent=nasBtnLabel(); return; }
-      var rq=await sb.from('inv_invoices').update({nas_path:null}).eq('bill_no',v.bill_no);
+      var rq=await invRow(sb.from('inv_invoices').update({nas_path:null}), v);
       if(rq.error) toast('ผิดพลาด: '+rq.error.message,'err');
       else{ logActivity('สั่ง NAS เก็บไฟล์ใหม่',v.bill_no,'');
         toast('NAS จะเก็บไฟล์ '+v.bill_no+' ใหม่ภายใน 5 นาที','ok'); loadInvoices(); }
@@ -2092,11 +2110,13 @@ function bindCards(scope){
       return;
     }
     try{
+      v=await freshInv(v);          // สร้างไฟล์จากข้อมูลล่าสุด — เลขนี้อาจถูกย้ายไปแล้วจากเครื่องอื่น
+      if(!v){ b.disabled=false; b.textContent=nasBtnLabel(); return; }
       var blob=await buildInvoicePdf(v);
       var path=await storePdf(v.bill_no, blob, v.issued_at);
       if(path){
-        await sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
-          updated_at:new Date().toISOString()}).eq('bill_no',v.bill_no);
+        await invRow(sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
+          updated_at:new Date().toISOString()}), v);
         logActivity('บันทึก PDF ลง NAS',v.bill_no,path);
         toast('บันทึก '+path+' แล้ว','ok'); loadInvoices();
       }
@@ -2107,6 +2127,7 @@ function bindCards(scope){
     var v=findInv(b.dataset.no); if(!v)return;
     if(!settings.gas_endpoint){
       // ยังไม่ได้ตั้งตัวส่งอัตโนมัติ → เปิดร่างอีเมลให้แนบไฟล์เอง
+      v=await freshInv(v); if(!v) return;
       var m=mailContent(v);
       location.href='mailto:'+encodeURIComponent(v.email)+
         '?subject='+encodeURIComponent(m.subject)+'&body='+encodeURIComponent(m.body);
@@ -2124,9 +2145,10 @@ function bindCards(scope){
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('รูปแบบอีเมลใหม่ไม่ถูกต้อง','err'); return; }
     if(!settings.gas_endpoint){ toast('ตั้งค่า URL ตัวส่งอีเมลในหน้าตั้งค่าก่อน','err'); return; }
     btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+    v=await freshInv(v);
+    if(!v){ btn.disabled=false; btn.textContent='ส่งซ้ำ'; return; }
     if(email!==v.email){
-      var r=await sb.from('inv_invoices').update({email:email,updated_at:new Date().toISOString()})
-        .eq('bill_no',v.bill_no);
+      var r=await invRow(sb.from('inv_invoices').update({email:email,updated_at:new Date().toISOString()}), v);
       if(r.error){ toast('ผิดพลาด: '+r.error.message,'err');
         btn.disabled=false; btn.textContent='ส่งซ้ำ'; return; }
       v.email=email;
@@ -2508,6 +2530,25 @@ function impCheckText(json){
     throw new Error('ตัวหนังสือภาษาไทยในไฟล์เพี้ยน'+(bad?(' (เช่น "'+bad+'…")'):'')+
       ' — ให้ดาวน์โหลดจาก Google Sheets เป็น Microsoft Excel (.xlsx) แล้วเลือกไฟล์นั้นแทน');
 }
+function impDiffers(e,r){ return Math.abs(Number(e.grand_total)-r.grand_total)>0.009 || impStr(e.customer_name)!==r.customer_name; }
+/* ตัวนับต้องอยู่ที่เลขสูงสุดของไฟล์ตั้งแต่ก่อนเริ่มนำเข้า — ไม่งั้นระหว่างนำเข้า ใครออกบิลจากแอปจะได้เลขที่อยู่ในไฟล์ */
+async function impBumpCounters(rows){
+  var maxBy={}, moved=[];
+  rows.forEach(function(r){ var n=billSeq(r.bill_no,r.branch_prefix);
+    if(n!==null&&(maxBy[r.branch_prefix]===undefined||n>maxBy[r.branch_prefix])) maxBy[r.branch_prefix]=n; });
+  for(var p in maxBy){
+    var c=await sb.from('inv_counters').select('prefix,last_no').eq('prefix',p).limit(1);
+    if(c.error) throw new Error('อ่านตัวนับเลขบิลไม่ได้: '+c.error.message);
+    var row=(c.data||[]).filter(function(x){ return x.prefix===p; })[0], last=row?Number(row.last_no):null;
+    if(last===null||last<maxBy[p]){
+      var u=await sb.from('inv_counters').upsert({prefix:p,last_no:maxBy[p]});
+      if(u.error) throw new Error('เลื่อนตัวนับเลขบิลไม่ได้: '+u.error.message);
+      logActivity('เลื่อนเลขบิลอัตโนมัติ','', p+' '+(last===null?'(ยังไม่มี)':last)+' → '+maxBy[p]+' ก่อนนำเข้าบิลระบบเดิม');
+      moved.push(p);
+    }
+  }
+  return moved;
+}
 async function impParse(file){
   if(!/\.xlsx?$/i.test(file.name||''))
     throw new Error('ใช้ไฟล์ Excel (.xlsx) เท่านั้น — ไฟล์ CSV ทำให้ภาษาไทยเพี้ยน (Google Sheets: ไฟล์ → ดาวน์โหลด → Microsoft Excel)');
@@ -2540,7 +2581,7 @@ async function impParse(file){
     (q.data||[]).forEach(function(x){ existing[x.bill_no]=x; });
   }
   rows.forEach(function(r){ var e=existing[r.bill_no]; if(!e) return;
-    var differs=Math.abs(Number(e.grand_total)-r.grand_total)>0.009 || impStr(e.customer_name)!==r.customer_name;
+    var differs=impDiffers(e,r);
     if(e.created_by===IMP_BY){ prevImported++; if(differs) prevChanged++; return; }
     if(differs) conflicts.push({no:r.bill_no, old:r, now:e}); });
   // บิลที่ออกจากแอปนี้ แต่เลขอยู่ในช่วงเลขของระบบเดิม (ออกก่อนตั้งเลขต่อ) → เลขไม่เรียงตามเวลา แจ้งให้รู้
@@ -2567,7 +2608,8 @@ function impConflictHtml(){
       ' · แอปนี้ = '+esc(c.now.customer_name||'-')+' '+fmt(c.now.grand_total); }).join('<br>')+
     (imp.conflicts.length>20?('<br>… และอีก '+(imp.conflicts.length-20)+' ใบ'):'')+
     '<br><b>วิธีแก้:</b> กดปุ่มด้านล่าง — แอปจะย้ายบิลของแอปนี้ไปใช้เลขใหม่ (ถัดจากเลขล่าสุด) '+
-    'ส่งอีเมลฉบับเลขใหม่ให้ลูกค้าคนนั้น แล้วนำเข้าบิลของระบบเดิมที่เลขเดิม · NAS สร้างไฟล์ใหม่ให้ทั้งคู่ (ไฟล์เก่าเก็บไว้ใน _ฉบับก่อนหน้า)'+
+    'ส่งอีเมลฉบับเลขใหม่ให้ลูกค้าคนนั้นทันที แล้วนำเข้าบิลของระบบเดิมที่เลขเดิม · NAS สร้าง PDF ให้ทั้งคู่ '+
+    'และย้ายไฟล์เดิมของเลขนั้น (ของบิลที่ย้ายออก) ไปเก็บใน _ฉบับก่อนหน้า ของเดือนนั้น — ต้องใช้สคริปต์ NAS ตัวล่าสุด'+
     '<br>❗ อย่ากด "ยกเลิกบิล" เอง — บิลที่ยกเลิกยังจองเลขไว้ บิลของระบบเดิมจะเข้าระบบไม่ได้'+
     '<div style="margin-top:8px"><button class="btn btn-primary btn-sm" id="impFixBtn">🔧 แก้เลขชน '+imp.conflicts.length+' ใบ</button></div></div>';
 }
@@ -2636,7 +2678,7 @@ $('impGoBtn').onclick=async function(){
   if(!confirm('นำเข้าบิลจากระบบเดิม '+todo.length+' ใบ ?\n\n⚠ ปิดระบบเดิมแล้วใช่ไหม — ถ้าระบบเดิมยังออกบิลอยู่ เลขจะชนกับแอปนี้\n\n'+
     'บิลที่มีเลขนี้ในระบบแล้วจะข้าม ไม่เขียนทับ')) return;
   var b=this, pv=$('impPreview'); b.disabled=true;
-  var added=0, prefixes={};
+  var added=0, prefixes={}, late=[];
   todo.forEach(function(x){ prefixes[x.branch_prefix]=1; });
   async function moveCounters(){
     var moved=[];
@@ -2644,19 +2686,35 @@ $('impGoBtn').onclick=async function(){
     return moved;
   }
   try{
+    await impBumpCounters(todo);
     for(var i=0;i<todo.length;i+=100){
       b.innerHTML='<span class="spin"></span> '+Math.min(i+100,todo.length)+'/'+todo.length;
       var part=todo.slice(i,i+100);
       var r=await sb.from('inv_invoices').upsert(part,{onConflict:'bill_no',ignoreDuplicates:true}).select('bill_no');
       if(r.error) throw new Error(r.error.message);
+      var got={}; (r.data||[]).forEach(function(x){ got[x.bill_no]=1; });
       added+=(r.data||[]).length;
-      part.forEach(function(x){ imp.existing[x.bill_no]=imp.existing[x.bill_no]||x; });   // ชุดนี้เข้าแล้ว (หรือมีอยู่แล้ว)
+      var missed=[];
+      part.forEach(function(x){ if(got[x.bill_no]) imp.existing[x.bill_no]=x; else missed.push(x); });
+      if(missed.length){
+        // ถูกข้ามเพราะมีเลขนี้แล้ว ทั้งที่ตอนดูตัวอย่างยังไม่มี (ออกจากแอประหว่างรอนำเข้า) → ตรวจแบบเดียวกับตอนดูตัวอย่าง
+        var q=await sb.from('inv_invoices').select('bill_no,customer_name,grand_total,created_by,status')
+          .in('bill_no',missed.map(function(x){ return x.bill_no; }));
+        if(q.error) throw new Error(q.error.message);
+        (q.data||[]).forEach(function(e){
+          var o=missed.filter(function(x){ return x.bill_no===e.bill_no; })[0]; if(!o) return;
+          imp.existing[e.bill_no]=e;
+          if(e.created_by!==IMP_BY && impDiffers(e,o)){ imp.conflicts.push({no:o.bill_no, old:o, now:e}); late.push(o.bill_no); }
+        });
+      }
     }
     var moved=await moveCounters();
     logActivity('นำเข้าบิลจากระบบเดิม','', 'เพิ่ม '+added+' ใบ จากไฟล์ '+imp.file+(moved.length?(' · '+moved.join(' · ')):''));
     toast('นำเข้า '+added+' ใบแล้ว — NAS จะทยอยสร้างไฟล์ PDF ให้','ok');
     pv.innerHTML='<b style="color:var(--ok)">✓ นำเข้า '+added+' ใบ</b>'+(moved.length?(' · เลขบิลต่อไป: '+esc(moved.join(' · '))):'')+
-      ' · NAS จะสร้าง PDF ของบิลเก่าให้ทีละ 100 ใบทุก 5 นาที'+impConflictHtml();
+      ' · NAS จะสร้าง PDF ของบิลเก่าให้ทีละ 100 ใบทุก 5 นาที'+
+      (late.length?('<br><span style="color:var(--bad)">⚠ ข้าม '+late.length+' ใบ เพราะระหว่างรอนำเข้ามีคนออกบิลจากแอปนี้ได้เลขเดียวกัน: '+
+        late.map(esc).join(', ')+' — แก้ด้วยปุ่มด้านล่าง</span>'):'')+impConflictHtml();
     impBindFix();
     b.style.display='none';
     loadInvoices(); loadCounters();
@@ -2683,6 +2741,8 @@ async function impFixConflicts(){
   if(!list.length) return;
   if(!confirm('แก้เลขชน '+list.length+' ใบ ?\n\n'+list.slice(0,10).map(function(c){ return c.no+' ('+(c.now.customer_name||'-')+')'; }).join('\n')+
     '\n\nบิลของแอปนี้จะย้ายไปเลขใหม่ + ส่งอีเมลฉบับเลขใหม่ให้ลูกค้า\nแล้วนำเข้าบิลของระบบเดิมที่เลขเดิม')) return;
+  // เครื่องนี้เปิดแก้ไขบิลที่จะถูกย้ายเลขค้างไว้ → ออกจากโหมดแก้ไขก่อน (กันบันทึกทับบิลระบบเดิมที่จะเข้ามาแทน)
+  if(editingBillNo && list.some(function(c){ return c.no===editingBillNo; })) exitEdit();
   var b=$('impFixBtn'); if(b){ b.disabled=true; b.innerHTML='<span class="spin"></span> กำลังแก้...'; }
   var done=[], fail=[];
   for(var i=0;i<list.length;i++){
@@ -2697,6 +2757,7 @@ async function impFixConflicts(){
   impBindFix();
   loadInvoices(); loadCounters();
 }
+var IMP_MUST_SEND='ต้องส่งฉบับเลขใหม่ให้ลูกค้า (แทน ';
 async function impFixOne(c){
   var q=await sb.from('inv_invoices').select('*').eq('bill_no',c.no).limit(1);
   if(q.error) throw new Error(q.error.message);
@@ -2705,11 +2766,15 @@ async function impFixOne(c){
   if(a){
     var branch=CONFIG.BRANCHES.filter(function(x){ return x.prefix===c.old.branch_prefix; })[0]||{prefix:c.old.branch_prefix,start:1};
     var nb=await nextBillNo(branch), u=null;
+    var mustSend=!!(a.email && a.status!==STATUS.CANCELLED);
+    var patch={bill_no:null,
+      status_detail:withNote(a.status_detail, /^ย้ายจากเลข/, 'ย้ายจากเลข '+c.no+' (เลขชนกับบิลระบบเดิม) เมื่อ '+fmtDT(null)+' โดย '+userName()),
+      nas_path:null, updated_by:userName(), updated_at:new Date().toISOString()};
+    // จดไว้ในแถวเลยว่ายังต้องส่งฉบับเลขใหม่ — ถ้าขั้นต่อไปสะดุด (เน็ตหลุด/ปิดแท็บ) รายการบิลจะขึ้น "ยังไม่ส่ง" ให้เห็น
+    if(mustSend){ patch.email_status=null; patch.email_status_detail=IMP_MUST_SEND+c.no+')'; }
     for(var t=0;t<5;t++){
-      u=await sb.from('inv_invoices').update({bill_no:nb.billNo,
-        status_detail:withNote(a.status_detail, /^ย้ายจากเลข/, 'ย้ายจากเลข '+c.no+' (เลขชนกับบิลระบบเดิม) เมื่อ '+fmtDT(null)+' โดย '+userName()),
-        nas_path:null, updated_by:userName(), updated_at:new Date().toISOString()})
-        .eq('id',a.id).eq('bill_no',c.no).select().single();
+      patch.bill_no=nb.billNo;
+      u=await sb.from('inv_invoices').update(patch).eq('id',a.id).eq('bill_no',c.no).select().single();
       if(!u.error) break;
       if(u.error.code==='23505' && !nb.viaRpc){
         nb.seq++; var s=String(nb.seq); while(s.length<4)s='0'+s; nb.billNo=nb.prefix+s; continue; }
@@ -2717,21 +2782,35 @@ async function impFixOne(c){
     }
     if(!u||u.error) throw new Error('ย้ายเลขไม่สำเร็จ');
     moved=u.data;
-    logActivity('ย้ายเลขบิล (เลขชนกับระบบเดิม)',moved.bill_no,c.no+' → '+moved.bill_no+' · '+(moved.customer_name||'-'));
+    logActivity('ย้ายเลขบิล (เลขชนกับระบบเดิม)',moved.bill_no,c.no+' → '+moved.bill_no+' · '+(moved.customer_name||'-')+
+      (a.nas_path?(' · ไฟล์เดิม '+a.nas_path):''));
     msg=c.no+' ('+(moved.customer_name||'-')+') → ย้ายไป '+moved.bill_no;
+    if(a.nas_path) msg+=' · ไฟล์เดิม '+a.nas_path+' NAS จะย้ายไปเก็บใน _ฉบับก่อนหน้า ตอนสร้างไฟล์บิลระบบเดิมเลขนี้';
+  }else{
+    // ลองรอบก่อนย้ายเลขไปแล้วแต่ขั้นต่อไปสะดุด → หาบิลที่ย้ายออกจากเลขนี้ที่ยังไม่ได้ส่งฉบับเลขใหม่
+    var mq=await sb.from('inv_invoices').select('*').eq('email_status_detail',IMP_MUST_SEND+c.no+')').limit(1);
+    if(!mq.error && mq.data && mq.data[0]){ moved=mq.data[0]; msg=c.no+' → ย้ายไป '+moved.bill_no+' แล้วรอบก่อน'; }
+  }
+  // แจ้งลูกค้าของบิลที่ย้ายทันที (ก่อนนำเข้าบิลเดิม) — ลูกค้าต้องได้เลขใหม่แม้ขั้นนำเข้าจะสะดุด
+  if(moved && moved.email && moved.status!==STATUS.CANCELLED){
+    if(settings.gas_endpoint){
+      var ok=await sendInvoiceEmail(moved,null,{replaced:c.no});
+      msg+=ok?(' · ส่งอีเมลเลขใหม่ถึง '+moved.email+' แล้ว'):' · ⚠ ส่งอีเมลเลขใหม่ไม่สำเร็จ — กด ✉ ส่งอีเมล ที่บิล '+moved.bill_no+' ในรายการบิล';
+    }else msg+=' · ⚠ ยังไม่ได้ตั้งตัวส่งอีเมล — ส่งบิล '+moved.bill_no+' ให้ลูกค้าเอง (ในรายการบิลขึ้น "ยังไม่ส่ง")';
   }
   var ins=await sb.from('inv_invoices').upsert([c.old],{onConflict:'bill_no',ignoreDuplicates:true}).select('bill_no');
-  if(ins.error) throw new Error((msg?msg+' แต่':'')+'นำเข้าบิลระบบเดิมไม่สำเร็จ: '+ins.error.message+' (กดนำเข้าไฟล์เดิมอีกครั้งได้)');
+  if(ins.error) throw new Error((msg?msg+' · ':'')+'แต่นำเข้าบิลระบบเดิม '+c.no+' ไม่สำเร็จ ('+ins.error.message+
+    ') — กดแก้เลขชนอีกครั้ง หรือเลือกไฟล์เดิมแล้วนำเข้าใหม่ (บิลที่ย้ายแล้วไม่ย้ายซ้ำ)');
+  if(!(ins.data||[]).length){
+    // มีบิลเลขนี้อยู่แล้ว (เครื่องอื่นเพิ่งออกเลขนี้/นำเข้าไปแล้ว) — ไม่ทับ ให้เลือกไฟล์ใหม่แล้วตรวจอีกรอบ
+    var chk=await sb.from('inv_invoices').select('bill_no,created_by').eq('bill_no',c.no).limit(1);
+    var ex=(chk.data||[])[0];
+    if(!ex||ex.created_by!==IMP_BY) throw new Error((msg?msg+' · ':'')+'แต่มีบิลเลข '+c.no+' อีกใบอยู่แล้ว — เลือกไฟล์เดิมใหม่เพื่อตรวจอีกรอบ');
+    return (msg||c.no)+' · บิลระบบเดิม '+c.no+' มีในระบบแล้ว';
+  }
   imp.existing[c.no]=c.old;
   logActivity('นำเข้าบิลจากระบบเดิม',c.no,'หลังแก้เลขชน · '+(c.old.customer_name||'-'));
-  msg=(msg||c.no)+' · นำเข้าบิลระบบเดิม '+c.no+' แล้ว';
-  if(moved && moved.status!==STATUS.CANCELLED && moved.email && settings.gas_endpoint){
-    var ok=await sendInvoiceEmail(moved,null,{replaced:c.no});
-    msg+=ok?(' · ส่งอีเมลเลขใหม่ถึง '+moved.email+' แล้ว'):' · ส่งอีเมลไม่สำเร็จ (ส่งซ้ำได้จากรายการบิล)';
-  }else if(moved && moved.status!==STATUS.CANCELLED && moved.email){
-    msg+=' · ยังไม่ได้ตั้งตัวส่งอีเมล — ส่งบิลเลขใหม่ให้ลูกค้าเองจากรายการบิล';
-  }
-  return msg;
+  return (msg||c.no)+' · นำเข้าบิลระบบเดิม '+c.no+' แล้ว';
 }
 
 $('sigUploadBtn').onclick=function(){ $('sigFile').click(); };

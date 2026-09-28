@@ -926,6 +926,30 @@ def keep_version(folder, bill_no, path):
             pass
 
 
+MONTH_RE = r'^\d{4}-\d{2}$'
+
+
+def retire_other_months(base, ym, bill_no):
+    """เลขบิลไม่ซ้ำกันทั้งระบบ → ไฟล์ <เลขบิล>.pdf ต้องมีที่เดียว คือโฟลเดอร์เดือนของบิลนั้น
+    ถ้าเจอชื่อเดียวกันในเดือนอื่น = ไฟล์ค้างของบิลที่ถูกย้ายเลข (ปุ่มแก้เลขชนในแอป: บิลของแอปย้ายไปเลขใหม่
+    แล้วบิลระบบเดิมเลขนั้นซึ่งออกคนละเดือนเข้ามาแทน) → ย้ายไปเก็บใน _ฉบับก่อนหน้า ของเดือนนั้น ไม่ลบทิ้ง"""
+    try:
+        months = os.listdir(base)
+    except OSError:
+        return
+    for m in months:
+        if m == ym or not re.match(MONTH_RE, m):
+            continue
+        folder = os.path.join(base, m)
+        if os.path.islink(folder) or not os.path.isdir(folder):
+            continue
+        path = os.path.join(folder, bill_no + '.pdf')
+        if os.path.isfile(path) and not os.path.islink(path):
+            keep_version(folder, bill_no, path)
+            log('ย้าย %s/%s.pdf ไปเก็บใน %s/%s — เลขนี้เป็นของบิลเดือน %s แล้ว (ไฟล์เดิมเป็นของบิลที่ถูกย้ายเลข)'
+                % (m, bill_no, m, VERSIONS_DIR, ym))
+
+
 def write_pdf(bill_no, iso, data):
     if not safe_bill(bill_no):
         raise RuntimeError('เลขบิลผิดรูปแบบ')
@@ -943,6 +967,7 @@ def write_pdf(bill_no, iso, data):
     if os.path.isfile(path) and not os.path.islink(path):
         with open(path, 'rb') as f:
             if f.read() == data:
+                retire_other_months(base, ym, bill_no)
                 return rel             # ไฟล์เดิมเหมือนกันทุกไบต์ — ไม่ต้องเขียนซ้ำ
     tmp = path + '.part'
     if os.path.lexists(tmp):
@@ -952,6 +977,7 @@ def write_pdf(bill_no, iso, data):
         f.write(data)
     keep_version(folder, bill_no, path)
     os.replace(tmp, path)          # เขียนเสร็จทั้งไฟล์ก่อนค่อยสลับชื่อ — ไม่มีไฟล์ครึ่ง ๆ ค้างใน NAS
+    retire_other_months(base, ym, bill_no)
     return rel
 
 
