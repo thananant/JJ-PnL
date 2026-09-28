@@ -125,3 +125,7 @@ grant usage, select on sequence public.inv_invoices_id_seq to anon, authenticate
 grant usage, select on sequence public.inv_activity_id_seq to anon, authenticated;
 
 grant execute on function public.inv_next_bill_no(text, integer) to anon, authenticated;
+
+-- ---------- บอกให้ Supabase อ่านโครงสร้างตารางใหม่ ----------
+-- (ถ้าไม่สั่ง บางทีแอปจะยังฟ้อง "Could not find the 'created_by' column ... in the schema cache")
+notify pgrst, 'reload schema';
