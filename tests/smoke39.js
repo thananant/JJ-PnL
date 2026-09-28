@@ -18,6 +18,7 @@ function run(mode){ // 'admin' | 'legacy'
     beforeParse(w){
     w.localStorage.setItem('jjpnl_m',JSON.stringify('2026-08')); // ล็อกเดือนทดสอบ ไม่ให้ขึ้นกับวันที่จริง
       if(mode==='admin') w.localStorage.setItem('jjpnl_auth',JSON.stringify({u:'admin',h:H('admin','jjmk1234'),t:Date.now()}));
+      try{const _a=JSON.parse(w.localStorage.getItem('jjpnl_auth'));w.sessionStorage.setItem('jjgate_pnl',JSON.stringify({u:_a.u,t:Date.now()}));}catch(e){} // JJ Gate: ใบผ่านประจำแท็บ (main มีด่านกันลิงก์ตรง)
       w.fetch=async(url,opt)=>{
         const method=opt&&opt.method||'GET';
         const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),headers:{get:()=>null},json:async()=>v});

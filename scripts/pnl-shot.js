@@ -17,6 +17,18 @@ const routes=u=>{
   if(u.includes('pnl_suppliers'))return SUPS;
   if(u.includes('pnl_expense_daily'))return EXP;
   if(u.includes('pnl_income_daily'))return INC;
+  if(u.includes('pnl_supply_balance'))return [
+    {item_id:1,branch:'JJRD',name:'จานกลม 9 นิ้ว',cat:'ภาชนะ',unit:'ใบ',safety:50,qty:63,last_out_d:'2026-08-20',deleted_at:null,sort:1},
+    {item_id:2,branch:'JJRD',name:'ชามซุป',cat:'ภาชนะ',unit:'ใบ',safety:40,qty:12,last_out_d:'2026-08-18',deleted_at:null,sort:2},
+    {item_id:3,branch:'JJRD',name:'ช้อน',cat:'ภาชนะ',unit:'คัน',safety:60,qty:75,last_out_d:null,deleted_at:null,sort:3},
+    {item_id:4,branch:'JJRD',name:'เตาไฟฟ้า',cat:'เครื่องใช้ไฟฟ้า',unit:'เครื่อง',safety:2,qty:1,note:'ยี่ห้อ Otto',last_out_d:'2026-08-02',deleted_at:null,sort:5},
+    {item_id:5,branch:'JJRD',name:'เสื้อพนักงาน (L)',cat:'ยูนิฟอร์ม',unit:'ตัว',safety:5,qty:8,last_out_d:'2026-08-11',deleted_at:null,sort:6}];
+  if(u.includes('pnl_supply_moves'))return [
+    {id:5,item_id:1,branch:'JJRD',d:'2026-08-20',kind:'out',qty:30,who:'บอย',by_user:'boy',note:'โต๊ะ 5 แตก',created_at:'2026-08-20T10:00:00Z'},
+    {id:4,item_id:2,branch:'JJRD',d:'2026-08-18',kind:'out',qty:8,who:'น้องเฟิร์น',by_user:'admin',note:null,created_at:'2026-08-18T10:00:00Z'},
+    {id:3,item_id:4,branch:'JJRD',d:'2026-08-15',kind:'adj',qty:-1,who:'พี่แอน',by_user:'admin',note:'นับจริงขาด 1',created_at:'2026-08-15T10:00:00Z'},
+    {id:2,item_id:5,branch:'JJRD',d:'2026-08-11',kind:'out',qty:2,who:'น้องใหม่',by_user:'admin',note:'พนักงานเข้าใหม่',created_at:'2026-08-11T10:00:00Z'},
+    {id:1,item_id:1,branch:'JJRD',d:'2026-08-01',kind:'in',qty:93,who:'แอด',by_user:'admin',note:'ซื้อแม็คโคร',created_at:'2026-08-01T10:00:00Z'}];
   if(u.includes('pnl_fixed_items'))return [{id:1,name:'เงินเดือนพนักงานหน้าสาขา',group_name:'พนักงาน',amount:813102,sort:1},
     {id:2,name:'พนักงานเบิก 15',group_name:'พนักงาน',amount:74500,sort:2},
     {id:3,name:'ค่าเช่าพื้นที่',group_name:'รายเดือน',amount:120000,sort:3},
