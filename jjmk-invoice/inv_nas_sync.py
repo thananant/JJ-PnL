@@ -311,14 +311,37 @@ def fmt(n):
     return '{:,.2f}'.format(d)
 
 
+def js_str(f):
+    """String(number) ของ JavaScript — ตัวเลขชุดสั้นที่สุดเดียวกับ repr() แต่รูปแบบตามกติกา JS
+    (เลขเต็มถึง 21 หลัก · ทศนิยมถึง 0.000001 · นอกนั้น 1e+21 / 1e-7)"""
+    if f != f:
+        return 'NaN'
+    if f == _INF or f == -_INF:
+        return 'Infinity' if f > 0 else '-Infinity'
+    if f == 0:
+        return '0'
+    t = Decimal(repr(abs(f))).as_tuple()
+    digits = ''.join(str(d) for d in t.digits)
+    n = len(digits) + t.exponent                 # ตำแหน่งจุดทศนิยม (n ในสเปก Number::toString)
+    digits = digits.rstrip('0')
+    k = len(digits)
+    if k <= n <= 21:
+        s = digits + '0' * (n - k)
+    elif 0 < n <= 21:
+        s = digits[:n] + '.' + digits[n:]
+    elif -6 < n <= 0:
+        s = '0.' + '0' * (-n) + digits
+    else:
+        e = n - 1
+        s = digits[0] + ('.' + digits[1:] if k > 1 else '') + 'e' + ('+' if e >= 0 else '-') + str(abs(e))
+    return ('-' if f < 0 else '') + s
+
+
 def fmt_qty(v):
     """จำนวนในตาราง — แอปแสดง it.qty ตามที่เก็บไว้ (String ของตัวเลข)"""
     if isinstance(v, str):
         return v.strip()
-    f = num(v)
-    if f == f and abs(f) < 1e21 and f == int(f):
-        return str(int(f))
-    return repr(f) if 1e-4 <= abs(f) < 1e16 else ('%g' % f)
+    return js_str(num(v))
 
 
 def bkk(iso):
@@ -469,10 +492,24 @@ def _nice_break(s, i):
     return b in TH_LEAD or a in '-/,' or _is_thai(a) != _is_thai(b)
 
 
+def _over(s, room, measure):
+    """measure(s) > room — วัดส่วนหน้าที่ยาวขึ้นทีละเท่าก่อน ข้อความยาวมาก ๆ จะวัดแค่ราว ๆ หนึ่งบรรทัด
+    (วัดทั้งก้อนทุกบรรทัด = ช้าแบบกำลังสอง: ชื่อรายการ 8,000 ตัวอักษรเคยใช้ 17 วินาที)"""
+    n = 64
+    while n < len(s):
+        if measure(s[:n]) > room:
+            return True
+        n *= 2
+    return measure(s) > room
+
+
 def _fit(word, head, room, measure, thai_only=False):
     """จุดตัดในคำที่ยาวที่สุดที่ head+word[:k] ยังกว้างไม่เกิน room (ไม่มีเลย = 0)
     thai_only = ตัดได้เฉพาะจุดที่ติดตัวอักษรไทย (ไม่หั่นกลางตัวเลข/คำอังกฤษ)"""
-    cuts = [i for i in range(1, len(word)) if can_break(word, i) and
+    lim = 32                                    # ตัดหลังตัวที่ lim ไม่ได้แน่ ๆ (ส่วนหน้ายาว lim ก็เกินแล้ว)
+    while lim < len(word) and measure(head + word[:lim]) <= room:
+        lim *= 2
+    cuts = [i for i in range(1, min(lim, len(word))) if can_break(word, i) and
             (not thai_only or _is_thai(word[i - 1]) or _is_thai(word[i]))]
     lo, hi, best = 0, len(cuts) - 1, -1
     while lo <= hi:
@@ -523,13 +560,13 @@ def wrap_text(text, width, measure, first=None, newlines=False):
                 continue
             # คำเดียวยาวเกินบรรทัด → เติมบรรทัดปัจจุบันให้เต็มก่อน แล้วตัดกลางคำตรงจุดที่ตัดได้
             head = (cur + ' ') if cur else ''
-            while word and measure(head + word) > room():
+            while word and _over(head + word, room(), measure):
                 k = _fit(word, head, room(), measure, thai_only=fits_line)
                 if k:
                     out.append(head + word[:k])
                     word, head = word[k:], ''
                 elif head or room() < width:
-                    out.append(head.rstrip())
+                    out.append(head[:-1])        # head = cur + ' ' (ไม่ใช้ rstrip() — จะกิน NBSP ท้ายคำไปด้วย)
                     head = ''
                 else:                            # พยางค์เดียวก็ยังกว้างเกิน — ยอมล้นแต่ไม่ตัดผิดที่
                     k = next((i for i in range(1, len(word)) if can_break(word, i)), len(word))

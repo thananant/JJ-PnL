@@ -823,10 +823,12 @@ window.JJGate=(function(){
         ไฟล์ที่ export จากชีต <code>Invoices</code> ของระบบออกใบกำกับภาษีเดิม (Google Sheet / Apps Script) ·
         นำเข้าแล้วค้นหา ดู พิมพ์ ส่งอีเมลซ้ำ ได้เหมือนบิลที่ออกจากแอปนี้ · <b>NAS สร้างไฟล์ PDF ของบิลเก่าเก็บให้ครบ</b>
         · <b>เลขบิลของแอปนี้จะต่อจากเลขล่าสุดของระบบเดิมให้เอง</b> · บิลที่มีเลขนี้ในระบบแล้วจะข้าม ไม่เขียนทับ
-        · กดนำเข้าซ้ำได้ (เช่น export ใหม่หลังระบบเดิมออกบิลเพิ่ม)
+        <br>⚠️ <b>ปิดระบบเดิมก่อนนำเข้า</b> (ให้ทุกคนออกบิลจากแอปนี้แทน) แล้วค่อย export ไฟล์ล่าสุดมา —
+        ถ้าสองระบบออกบิลพร้อมกัน จะได้เลขเดียวกันคนละลูกค้า · นำเข้าซ้ำได้ ใบที่มีแล้วจะข้าม
+        · ใช้ไฟล์ <b>.xlsx</b> (Google Sheets: ไฟล์ → ดาวน์โหลด → Microsoft Excel) — ไฟล์ CSV ภาษาไทยจะเพี้ยน
         <br>🔒 ไฟล์ถูกอ่านในเครื่องนี้เท่านั้น — ไม่อัพโหลดไฟล์ขึ้นที่ไหน เก็บแค่ข้อมูลบิล (ตัวหนังสือ) ลงตารางเดียวกับบิลใหม่
       </div>
-      <input type="file" id="impFile" accept=".xlsx,.xls,.csv" style="display:none">
+      <input type="file" id="impFile" accept=".xlsx,.xls" style="display:none">
       <div class="actions" style="border:none;padding-top:0">
         <button class="btn btn-primary btn-sm" id="impPickBtn">เลือกไฟล์ Excel</button>
         <button class="btn btn-gold btn-sm" id="impGoBtn" style="display:none"></button>
@@ -1553,12 +1555,31 @@ async function gasSend(payload){
   try{ return JSON.parse(text); }
   catch(e){ return {ok:false,message:gasHtmlReason(text,res.status)}; }
 }
+/* หมายเหตุใน status_detail คั่นด้วย " · " — แก้ไข/ยกเลิก/เรียกคืน แทนที่เฉพาะส่วนของตัวเอง
+   ส่วนอื่น (นำเข้าจากระบบเดิม · PDF เดิม · ย้ายจากเลข …) ต้องอยู่ต่อ ไม่งั้นร่องรอยบิลหาย */
+function withNote(old, drop, add){
+  var keep=String(old||'').split(' · ').filter(function(s){ return s && !drop.test(s); });
+  if(add) keep.push(add);
+  return keep.join(' · ');
+}
+var NOTE_EDIT=/^แก้ไขล่าสุด/, NOTE_STATUS=/^(ยกเลิกเมื่อ|เรียกคืนบิลเมื่อ)/;
+// บิลนี้เคยถูกแก้ไข/ย้ายเลข → อีเมลทุกครั้งต่อจากนี้ต้องบอกว่าเป็นฉบับแก้ไข (รวมส่งซ้ำ)
+function billEditInfo(inv){
+  var d=String((inv&&inv.status_detail)||''), m=/(?:^| · )ย้ายจากเลข (\S+)/.exec(d);
+  return { edited: /(?:^| · )(แก้ไขล่าสุด|ย้ายจากเลข)/.test(d), replaced: m?m[1]:'' };
+}
 function mailContent(inv, opts){
-  var edited=!!(opts&&opts.edited);
+  opts=opts||{};
+  var info=billEditInfo(inv);
+  var replaced=opts.replaced||info.replaced;
+  var edited=!!(opts.edited||info.edited||replaced);
   return {
-    subject:'ใบเสร็จรับเงิน/ใบกำกับภาษี เลขที่ '+inv.bill_no+(edited?' (ฉบับแก้ไข)':'')+' - '+CONFIG.SHOP.senderName,
+    subject:'ใบเสร็จรับเงิน/ใบกำกับภาษี เลขที่ '+inv.bill_no+
+      (replaced?(' (ฉบับแก้ไข แทนเลขที่ '+replaced+')'):(edited?' (ฉบับแก้ไข)':''))+' - '+CONFIG.SHOP.senderName,
     body:'เรียน '+(inv.customer_name||'ลูกค้า')+'\n\n'+
-      (edited?'ใบเสร็จรับเงิน/ใบกำกับภาษีฉบับนี้เป็นฉบับแก้ไข ใช้แทนฉบับที่ส่งไปก่อนหน้า\n\n':'')+
+      (replaced?('ใบเสร็จรับเงิน/ใบกำกับภาษีเลขที่ '+replaced+' ที่ส่งไปก่อนหน้า เปลี่ยนเป็นเลขที่ '+inv.bill_no+
+        ' เนื่องจากเลขที่ซ้ำในระบบ'+(opts.replaced?' รายการและยอดเงินเหมือนเดิม':'')+' โปรดใช้ฉบับนี้แทน\n\n')
+       :(edited?'ใบเสร็จรับเงิน/ใบกำกับภาษีฉบับนี้เป็นฉบับแก้ไข หากได้รับฉบับก่อนหน้าไปแล้ว โปรดใช้ฉบับนี้แทน\n\n':''))+
       'แนบใบเสร็จรับเงิน/ใบกำกับภาษีเลขที่ '+inv.bill_no+
       ' ยอดรวมทั้งสิ้น '+fmt(inv.grand_total)+' บาท (รวม VAT 7%)\n\n'+
       'ขอบคุณที่ใช้บริการ\n'+CONFIG.SHOP.senderName+
@@ -1586,9 +1607,10 @@ async function sendInvoiceEmail(inv, blob, opts){
       if(opts.resend){ rc++; patch.resend_count=rc; }
       patch.email_status=EMAIL_STATUS.SENDING;
       patch.email_status_detail=(opts.resend?('ส่งซ้ำแล้ว (ครั้งที่ '+rc+') รอตรวจการตีกลับ')
-        :(opts.edited?'แก้ไขแล้ว ส่งใหม่ รอตรวจการตีกลับ':'ส่งแล้ว รอตรวจการตีกลับ'))+' โดย '+userName();
+        :(opts.replaced?('ส่งฉบับเลขใหม่ (แทน '+opts.replaced+') รอตรวจการตีกลับ')
+        :(opts.edited?'แก้ไขแล้ว ส่งใหม่ รอตรวจการตีกลับ':'ส่งแล้ว รอตรวจการตีกลับ')))+' โดย '+userName();
       patch.email_sent_at=new Date().toISOString();
-      logActivity(opts.resend?'ส่งอีเมลซ้ำ':'ส่งอีเมล',inv.bill_no,'ไปที่ '+inv.email);
+      logActivity(opts.resend?'ส่งอีเมลซ้ำ':'ส่งอีเมล',inv.bill_no,'ไปที่ '+inv.email+(m.subject.indexOf('ฉบับแก้ไข')>=0?' (ฉบับแก้ไข)':''));
       toast('ส่งอีเมลไปที่ '+inv.email+' แล้ว — ระบบจะตรวจว่าถึงปลายทางภายใน '+ASSUME_DELIVERED_AFTER_MIN+' นาที','ok');
     }else{
       patch.email_status=EMAIL_STATUS.ERROR;
@@ -1661,13 +1683,16 @@ async function checkDb(){
 /* กันเลขบิลถอยหลัง/ซ้ำ — ถ้าตัวนับตามหลังเลขที่มีอยู่แล้วในระบบ (เช่น เพิ่งนำเข้าบิลจากระบบเดิม
    หรือมีคนตั้งเลขผิด) เลื่อนตัวนับขึ้นไปที่เลขสูงสุดก่อน ใบต่อไปจะต่อจากเลขนั้นเสมอ */
 function billSeq(billNo, prefix){
-  var n=parseInt(String(billNo||'').slice(String(prefix).length),10);
-  return isNaN(n)?null:n;
+  var s=String(billNo||''), p=String(prefix||'');
+  if(!p||s.indexOf(p)!==0) return null;            // เลขของสาขาอื่น (เช่น JJRD… ที่ branch_prefix ถูกแก้เป็น JJLP) ไม่นับ
+  var rest=s.slice(p.length);
+  return /^\d+$/.test(rest)?parseInt(rest,10):null;
 }
 async function syncCounterWithBills(prefix){
   try{
-    var q=await sb.from('inv_invoices').select('bill_no').eq('branch_prefix',prefix)
-      .order('bill_no',{ascending:false}).limit(20);
+    // ค้นจากตัวเลขบิลเอง ไม่ใช่ branch_prefix — เลขกับสาขาต้องไม่หลุดจากกัน
+    var q=await sb.from('inv_invoices').select('bill_no').like('bill_no',prefix+'%')
+      .order('bill_no',{ascending:false}).limit(50);
     if(q.error||!q.data||!q.data.length) return null;
     var maxNo=null;
     q.data.forEach(function(r){ var n=billSeq(r.bill_no,prefix); if(n!==null&&(maxNo===null||n>maxNo))maxNo=n; });
@@ -1693,13 +1718,10 @@ async function nextBillNo(branch){
   rpcMissing=true;
   // สำรอง: อ่านเลขสูงสุดจากตารางแล้ว +1
   var q=await sb.from('inv_invoices').select('bill_no')
-    .eq('branch_prefix',branch.prefix).order('bill_no',{ascending:false}).limit(1);
+    .like('bill_no',branch.prefix+'%').order('bill_no',{ascending:false}).limit(50);
   var next=branch.start;
-  if(!q.error && q.data && q.data.length){
-    var m=String(q.data[0].bill_no).replace(branch.prefix,'');
-    var n=parseInt(m,10);
-    if(!isNaN(n)) next=Math.max(n+1,branch.start);
-  }
+  if(!q.error && q.data) q.data.forEach(function(r){
+    var n=billSeq(r.bill_no,branch.prefix); if(n!==null) next=Math.max(next,n+1); });
   var s=String(next); while(s.length<4)s='0'+s;
   return { billNo:branch.prefix+s, viaRpc:false, seq:next, prefix:branch.prefix };
 }
@@ -1871,7 +1893,9 @@ async function lookupZip(zip){
 function validateForm(){
   var tax=val('cTax'), phone=val('cPhone'), email=val('cEmail'), items=getItems();
   if(tax.length!==13){ toast('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก','err'); $('cTax').focus(); return null; }
-  if(phone.length<9||phone.length>10){ toast('เบอร์โทรศัพท์ต้องมี 9-10 หลัก','err'); $('cPhone').focus(); return null; }
+  // บิลเก่าจากระบบเดิมบางใบไม่มีเบอร์โทร — แก้ไขบิลแบบนั้นเว้นว่างได้ (ห้ามบังคับให้พนักงานเดาเบอร์ใส่ใบกำกับภาษี)
+  var orig=editingBillNo?findInv(editingBillNo):null, phoneOptional=!!(orig&&!orig.phone);
+  if(phone?(phone.length<9||phone.length>10):!phoneOptional){ toast('เบอร์โทรศัพท์ต้องมี 9-10 หลัก','err'); $('cPhone').focus(); return null; }
   if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('รูปแบบอีเมลไม่ถูกต้อง','err'); $('cEmail').focus(); return null; }
   if(!items.length){ toast('กรุณาเพิ่มอย่างน้อย 1 รายการ','err'); return null; }
   var totals=computeTotals(items, $('cDiscount').value);
@@ -1879,7 +1903,7 @@ function validateForm(){
   return {
     branch_prefix: $('fBranch').value,
     customer_name: buildCustomerName()||'-',
-    tax_id: tax, phone: phone, email: email||null,
+    tax_id: tax, phone: phone||null, email: email||null,
     address: buildAddress()||'-',
     items: items,
     gross: totals.gross, discount: totals.discount, net: totals.net,
@@ -1902,7 +1926,9 @@ async function issueOrUpdate(){
   try{
     var inv=null;
     if(editing){
-      payload.status_detail='แก้ไขล่าสุด '+fmtDT(null)+' โดย '+userName();
+      var before=findInv(editing);
+      delete payload.branch_prefix;   // บิลที่ออกไปแล้ว เลขกับสาขาต้องไปด้วยกันเสมอ (ช่องสาขาถูกล็อกตอนแก้ไข)
+      payload.status_detail=withNote(before&&before.status_detail, NOTE_EDIT, 'แก้ไขล่าสุด '+fmtDT(null)+' โดย '+userName());
       payload.updated_by=userName();
       payload.updated_at=new Date().toISOString();
       payload.nas_path=null;        // ไฟล์ใน NAS เป็นฉบับเก่า — ให้เก็บใหม่ (เครื่องนี้หรือ NAS สร้างทับให้)
@@ -1966,6 +1992,7 @@ function startEdit(billNo){
   editingBillNo=billNo;
   document.querySelector('.tab[data-tab="new"]').click();
   if(v.branch_prefix)$('fBranch').value=v.branch_prefix;
+  $('fBranch').disabled=true;      // เลขบิลผูกกับสาขาแล้ว ย้ายสาขาไม่ได้ (ต้องยกเลิกแล้วออกใหม่)
   resetCustomerName();
   $('cName').value=(v.customer_name==='-'?'':v.customer_name)||'';
   $('cTax').value=(v.tax_id==='-'?'':v.tax_id)||'';
@@ -1987,6 +2014,7 @@ function startEdit(billNo){
 }
 function exitEdit(){
   editingBillNo=null;
+  $('fBranch').disabled=false;
   $('editBanner').style.display='none';
   $('issueBtn').textContent='ออกบิล + PDF ลง NAS + ส่งอีเมล';
   resetForm();
@@ -1995,8 +2023,9 @@ function exitEdit(){
 async function setStatus(billNo,status,detail){
   var need=(status===STATUS.CANCELLED)?can('list','d'):can('cancelled','e');
   if(!need){ toast(status===STATUS.CANCELLED?'บัญชีนี้ไม่มีสิทธิ์ยกเลิกบิล':'บัญชีนี้ไม่มีสิทธิ์เรียกคืนบิล','err'); return false; }
+  var cur=findInv(billNo);
   var r=await sb.from('inv_invoices')
-    .update({status:status,status_detail:detail,updated_by:userName(),
+    .update({status:status,status_detail:withNote(cur&&cur.status_detail, NOTE_STATUS, detail),updated_by:userName(),
       updated_at:new Date().toISOString(),
       nas_path:null})             // ให้ NAS สร้างไฟล์ใหม่ (ประทับ/เอาตรา "ยกเลิก" ออก)
     .eq('bill_no',billNo);
@@ -2463,34 +2492,84 @@ function impMapRow(r){
     nas_path:null                     // ให้ NAS สร้าง PDF ของบิลเก่าเก็บไว้ด้วย
   }};
 }
+/* ไฟล์ CSV (UTF-8 ไม่มี BOM / ANSI ของ Windows) ภาษาไทยจะกลายเป็น "à¸..." ทั้งไฟล์ แต่หัวคอลัมน์เป็นอังกฤษเลยผ่าน
+   → ถ้าเจอรูปแบบนี้ หรือทั้งไฟล์ไม่มีตัวอักษรไทยเลย = ไฟล์เพี้ยน ห้ามนำเข้า (นำเข้าแล้วแก้คืนไม่ได้ เพราะไม่เขียนทับ) */
+var IMP_GARBLED=/à¸|à¹|Ã.|â€|\uFFFD/;
+function impCheckText(json){
+  var thai=0, bad='';
+  json.forEach(function(r){
+    ['CustomerName','Address','Status','PaymentMethod'].forEach(function(k){
+      var s=impStr(r[k]); if(!s) return;
+      if(/[\u0E00-\u0E7F]/.test(s)) thai++;
+      if(!bad && IMP_GARBLED.test(s)) bad=s.slice(0,24);
+    });
+  });
+  if(bad || (json.length>=5 && !thai))
+    throw new Error('ตัวหนังสือภาษาไทยในไฟล์เพี้ยน'+(bad?(' (เช่น "'+bad+'…")'):'')+
+      ' — ให้ดาวน์โหลดจาก Google Sheets เป็น Microsoft Excel (.xlsx) แล้วเลือกไฟล์นั้นแทน');
+}
 async function impParse(file){
+  if(!/\.xlsx?$/i.test(file.name||''))
+    throw new Error('ใช้ไฟล์ Excel (.xlsx) เท่านั้น — ไฟล์ CSV ทำให้ภาษาไทยเพี้ยน (Google Sheets: ไฟล์ → ดาวน์โหลด → Microsoft Excel)');
   var X=await loadXlsxLib();
   var wb=X.read(await file.arrayBuffer(),{type:'array'});
   var ws=wb.Sheets.Invoices||wb.Sheets[wb.SheetNames[0]];
   var json=X.utils.sheet_to_json(ws,{raw:true,defval:null});
   if(!json.length||!('BillNo' in json[0])||!('Timestamp' in json[0]))
     throw new Error('ไม่ใช่ไฟล์ของระบบเดิม — ต้องเป็นชีต Invoices ที่มีคอลัมน์ Timestamp, BillNo, CustomerName ...');
-  var rows=[], skipped=[], seen={};
+  impCheckText(json);
+  var rows=[], skipped=[], seen={}, oddStatus={};
   json.forEach(function(r){
     if(!r.BillNo&&!r.Timestamp) return;                                 // แถวว่าง
     var m=impMapRow(r);
     if(m.skip){ skipped.push(m.skip); return; }
     if(seen[m.row.bill_no]){ skipped.push(m.row.bill_no+': เลขซ้ำในไฟล์ (ใช้แถวแรก)'); return; }
+    var st=impStr(r.Status);
+    if(st && st!=='ยกเลิก' && !IMP_EMAIL_ST[st]) oddStatus[st]=(oddStatus[st]||0)+1;
     seen[m.row.bill_no]=1; rows.push(m.row);
   });
-  // เลขไหนมีในระบบแล้ว — ข้อมูลตรงกัน = ข้าม · ไม่ตรง = เลขชน (ต้องให้คนดู)
-  var existing={}, conflicts=[];
+  /* เลขไหนมีในระบบแล้ว:
+     · นำเข้าจากระบบเดิมไปแล้ว (created_by = ระบบเดิม) → ข้าม ต่อให้ข้อมูลต่างกัน (อาจถูกแก้ในแอปภายหลัง — ห้ามทับ)
+     · ออกจากแอปนี้ ลูกค้า/ยอดตรงกัน → ข้าม
+     · ออกจากแอปนี้ แต่ลูกค้า/ยอดไม่ตรง → "เลขชน" = สองระบบใช้เลขเดียวกันคนละใบ ต้องแก้ด้วยปุ่มแก้เลขชน */
+  var existing={}, conflicts=[], prevImported=0, prevChanged=0;
   for(var i=0;i<rows.length;i+=100){
     var chunk=rows.slice(i,i+100).map(function(x){ return x.bill_no; });
-    var q=await sb.from('inv_invoices').select('bill_no,customer_name,grand_total,created_by').in('bill_no',chunk);
+    var q=await sb.from('inv_invoices').select('bill_no,customer_name,grand_total,created_by,status').in('bill_no',chunk);
     if(q.error) throw new Error('ตรวจกับฐานข้อมูลไม่ได้: '+q.error.message);
     (q.data||[]).forEach(function(x){ existing[x.bill_no]=x; });
   }
-  rows.forEach(function(r){ var e=existing[r.bill_no];
-    if(e && (Math.abs(Number(e.grand_total)-r.grand_total)>0.009 || impStr(e.customer_name)!==r.customer_name))
-      conflicts.push({no:r.bill_no, old:r, now:e}); });
-  imp={rows:rows, skipped:skipped, existing:existing, conflicts:conflicts, file:file.name};
+  rows.forEach(function(r){ var e=existing[r.bill_no]; if(!e) return;
+    var differs=Math.abs(Number(e.grand_total)-r.grand_total)>0.009 || impStr(e.customer_name)!==r.customer_name;
+    if(e.created_by===IMP_BY){ prevImported++; if(differs) prevChanged++; return; }
+    if(differs) conflicts.push({no:r.bill_no, old:r, now:e}); });
+  // บิลที่ออกจากแอปนี้ แต่เลขอยู่ในช่วงเลขของระบบเดิม (ออกก่อนตั้งเลขต่อ) → เลขไม่เรียงตามเวลา แจ้งให้รู้
+  var maxBy={}, early=[];
+  rows.forEach(function(r){ var n=billSeq(r.bill_no,r.branch_prefix);
+    if(n!==null&&(maxBy[r.branch_prefix]===undefined||n>maxBy[r.branch_prefix])) maxBy[r.branch_prefix]=n; });
+  for(var p in maxBy){
+    var a=await sb.from('inv_invoices').select('bill_no,created_by,status').like('bill_no',p+'%').limit(5000);
+    if(a.error) continue;
+    (a.data||[]).forEach(function(x){ var n=billSeq(x.bill_no,p);
+      if(n!==null && n<=maxBy[p] && x.created_by!==IMP_BY && !seen[x.bill_no] && x.status!==STATUS.CANCELLED) early.push(x.bill_no); });
+  }
+  var newest=rows.reduce(function(m,r){ return (!m||r.issued_at>m)?r.issued_at:m; },null);
+  imp={rows:rows, skipped:skipped, existing:existing, conflicts:conflicts, file:file.name,
+    prevImported:prevImported, prevChanged:prevChanged, early:early.sort(), newest:newest, oddStatus:oddStatus};
   return imp;
+}
+function impFresh(){ return imp.rows.filter(function(r){ return !imp.existing[r.bill_no]; }); }
+function impConflictHtml(){
+  if(!imp.conflicts.length) return '';
+  return '<div class="alert" style="margin:8px 0;line-height:1.7">⚠ <b>เลขชนกัน '+imp.conflicts.length+' ใบ</b> — '+
+    'เลขเดียวกันถูกใช้ทั้งในระบบเดิมและในแอปนี้ แต่คนละลูกค้า (สองระบบออกบิลพร้อมกัน) · ใบกำกับภาษีห้ามมีเลขซ้ำ<br>'+
+    imp.conflicts.slice(0,20).map(function(c){ return '• '+esc(c.no)+': ระบบเดิม = '+esc(c.old.customer_name)+' '+fmt(c.old.grand_total)+
+      ' · แอปนี้ = '+esc(c.now.customer_name||'-')+' '+fmt(c.now.grand_total); }).join('<br>')+
+    (imp.conflicts.length>20?('<br>… และอีก '+(imp.conflicts.length-20)+' ใบ'):'')+
+    '<br><b>วิธีแก้:</b> กดปุ่มด้านล่าง — แอปจะย้ายบิลของแอปนี้ไปใช้เลขใหม่ (ถัดจากเลขล่าสุด) '+
+    'ส่งอีเมลฉบับเลขใหม่ให้ลูกค้าคนนั้น แล้วนำเข้าบิลของระบบเดิมที่เลขเดิม · NAS สร้างไฟล์ใหม่ให้ทั้งคู่ (ไฟล์เก่าเก็บไว้ใน _ฉบับก่อนหน้า)'+
+    '<br>❗ อย่ากด "ยกเลิกบิล" เอง — บิลที่ยกเลิกยังจองเลขไว้ บิลของระบบเดิมจะเข้าระบบไม่ได้'+
+    '<div style="margin-top:8px"><button class="btn btn-primary btn-sm" id="impFixBtn">🔧 แก้เลขชน '+imp.conflicts.length+' ใบ</button></div></div>';
 }
 function impPreviewHtml(){
   var by={};
@@ -2500,7 +2579,7 @@ function impPreviewHtml(){
     if(p.min===null||n<p.min)p.min=n; if(p.max===null||n>p.max)p.max=n;
     if(!p.from||r.issued_at<p.from)p.from=r.issued_at; if(!p.to||r.issued_at>p.to)p.to=r.issued_at;
   });
-  var fresh=imp.rows.filter(function(r){ return !imp.existing[r.bill_no]; }).length;
+  var fresh=impFresh().length;
   var h='<b>'+esc(imp.file)+'</b> — อ่านได้ '+imp.rows.length+' ใบ · <b>นำเข้าใหม่ '+fresh+' ใบ</b> · มีในระบบแล้ว '+
     (imp.rows.length-fresh)+' ใบ (ข้าม)'+(imp.skipped.length?(' · อ่านไม่ได้ '+imp.skipped.length+' แถว'):'')+'<br>';
   Object.keys(by).sort().forEach(function(p){ var s=by[p], gaps=[];
@@ -2509,16 +2588,29 @@ function impPreviewHtml(){
       ' · รวม '+fmt(s.sum)+' บาท'+(gaps.length?(' · <span style="color:var(--warn)">เลขที่ไม่มีในไฟล์: '+gaps.join(', ')+'</span>'):'')+
       ' → ใบต่อไปของแอปนี้ = <b>'+esc(p)+(s.max+1)+'</b> (หรือเลขที่สูงกว่าถ้ามีในระบบแล้ว)<br>';
   });
-  if(imp.conflicts.length){
-    h+='<div class="alert" style="margin:8px 0">⚠ <b>เลขชนกัน '+imp.conflicts.length+' ใบ</b> — เลขเดียวกันแต่ลูกค้า/ยอดไม่ตรงกับที่มีในระบบ '+
-      '(มักเกิดจากออกบิลในแอปนี้ก่อนตั้งเลขต่อจากระบบเดิม) · ระบบจะไม่เขียนทับ ให้ยกเลิกบิลในแอปนี้แล้วออกใหม่:<br>'+
-      imp.conflicts.slice(0,20).map(function(c){ return esc(c.no)+': ในไฟล์ = '+esc(c.old.customer_name)+' '+fmt(c.old.grand_total)+
-        ' · ในระบบ = '+esc(c.now.customer_name)+' '+fmt(c.now.grand_total); }).join('<br>')+'</div>';
-  }
+  // ตัวอย่างชื่อลูกค้า — ไฟล์เพี้ยนจะเห็นทันทีก่อนกดนำเข้า
+  var sample=imp.rows.slice().sort(function(a,b){ return a.issued_at<b.issued_at?1:-1; }).slice(0,3)
+    .map(function(r){ return esc(r.bill_no)+' '+esc(r.customer_name); });
+  if(sample.length) h+='<span style="color:var(--muted)">ตัวอย่างบิลล่าสุด: '+sample.join(' · ')+'</span><br>';
+  if(imp.prevImported) h+='<span style="color:var(--muted)">นำเข้าไว้แล้วก่อนหน้านี้ '+imp.prevImported+' ใบ'+
+    (imp.prevChanged?(' (ในจำนวนนี้ '+imp.prevChanged+' ใบถูกแก้ในแอปภายหลัง — คงฉบับที่แก้ไว้ ไม่ทับ)'):'')+'</span><br>';
+  var ageH=imp.newest?(Date.now()-Date.parse(imp.newest))/3600000:null;
+  if(ageH!==null && ageH<72)
+    h+='<div class="alert" style="margin:8px 0">⚠ บิลล่าสุดในไฟล์ออกเมื่อ <b>'+fmtDT(imp.newest)+'</b> — ระบบเดิมยังใช้งานอยู่ '+
+      '<b>ปิดระบบเดิมก่อน</b> (ให้ทุกคนออกบิลจากแอปนี้แทน) ไม่งั้นสองระบบจะออกเลขเดียวกันคนละลูกค้า</div>';
+  if(imp.early.length)
+    h+='<span style="color:var(--warn)">บิลที่ออกจากแอปนี้ก่อนตั้งเลขต่อจากระบบเดิม (เลขไม่เรียงตามเวลา): '+
+      imp.early.slice(0,10).map(esc).join(', ')+(imp.early.length>10?' …':'')+
+      ' — ถ้ายังไม่ได้ให้ลูกค้า ยกเลิกแล้วออกใหม่ได้ (ใบใหม่จะได้เลขต่อจากระบบเดิม)</span><br>';
+  var odd=Object.keys(imp.oddStatus);
+  if(odd.length) h+='<span style="color:var(--warn)">สถานะที่แอปไม่รู้จัก (นำเข้าเป็น "ออกแล้ว"): '+
+    odd.map(function(k){ return esc(k)+' '+imp.oddStatus[k]+' ใบ'; }).join(' · ')+'</span><br>';
+  h+=impConflictHtml();
   if(imp.skipped.length) h+='<span style="color:var(--warn)">อ่านไม่ได้: '+imp.skipped.slice(0,10).map(esc).join(' · ')+'</span><br>';
   return h;
 }
 function impCanRun(){ return isBoss()||can('settings','e'); }
+function impBindFix(){ var b=$('impFixBtn'); if(b) b.onclick=impFixConflicts; }
 $('impPickBtn').onclick=function(){
   if(!impCanRun()){ toast('บัญชีนี้ไม่มีสิทธิ์นำเข้าข้อมูล','err'); return; }
   $('impFile').click();
@@ -2531,43 +2623,116 @@ $('impFile').onchange=async function(){
   pv.innerHTML='<span class="spin" style="border-color:#0002;border-top-color:#888"></span> กำลังอ่านไฟล์...';
   try{
     await impParse(f);
-    pv.innerHTML=impPreviewHtml();
-    var fresh=imp.rows.filter(function(r){ return !imp.existing[r.bill_no]; }).length;
-    if(fresh){ go.textContent='นำเข้า '+fresh+' ใบ'; go.style.display=''; }
-    else pv.innerHTML+='<b style="color:var(--ok)">✓ บิลทุกใบในไฟล์นี้มีในระบบแล้ว</b>';
+    pv.innerHTML=impPreviewHtml(); impBindFix();
+    var fresh=impFresh().length;
+    if(fresh){ go.textContent='นำเข้า '+fresh+' ใบ'; go.style.display=''; go.disabled=false; }
+    else if(!imp.conflicts.length) pv.innerHTML+='<b style="color:var(--ok)">✓ บิลทุกใบในไฟล์นี้มีในระบบแล้ว</b>';
   }catch(e){ pv.innerHTML='<span style="color:var(--bad)">❌ '+esc(e.message)+'</span>'; }
 };
 $('impGoBtn').onclick=async function(){
   if(!impCanRun()){ toast('บัญชีนี้ไม่มีสิทธิ์นำเข้าข้อมูล','err'); return; }
-  var todo=imp.rows.filter(function(r){ return !imp.existing[r.bill_no]; });
+  var todo=impFresh();
   if(!todo.length) return;
-  if(!confirm('นำเข้าบิลจากระบบเดิม '+todo.length+' ใบ ?\nบิลที่มีเลขนี้ในระบบแล้วจะข้าม ไม่เขียนทับ')) return;
+  if(!confirm('นำเข้าบิลจากระบบเดิม '+todo.length+' ใบ ?\n\n⚠ ปิดระบบเดิมแล้วใช่ไหม — ถ้าระบบเดิมยังออกบิลอยู่ เลขจะชนกับแอปนี้\n\n'+
+    'บิลที่มีเลขนี้ในระบบแล้วจะข้าม ไม่เขียนทับ')) return;
   var b=this, pv=$('impPreview'); b.disabled=true;
   var added=0, prefixes={};
+  todo.forEach(function(x){ prefixes[x.branch_prefix]=1; });
+  async function moveCounters(){
+    var moved=[];
+    for(var p in prefixes){ var n=await syncCounterWithBills(p); if(n!==null) moved.push(p+' → ใบต่อไป '+p+(n+1)); }
+    return moved;
+  }
   try{
     for(var i=0;i<todo.length;i+=100){
       b.innerHTML='<span class="spin"></span> '+Math.min(i+100,todo.length)+'/'+todo.length;
-      var r=await sb.from('inv_invoices').upsert(todo.slice(i,i+100),{onConflict:'bill_no',ignoreDuplicates:true}).select('bill_no');
+      var part=todo.slice(i,i+100);
+      var r=await sb.from('inv_invoices').upsert(part,{onConflict:'bill_no',ignoreDuplicates:true}).select('bill_no');
       if(r.error) throw new Error(r.error.message);
       added+=(r.data||[]).length;
+      part.forEach(function(x){ imp.existing[x.bill_no]=imp.existing[x.bill_no]||x; });   // ชุดนี้เข้าแล้ว (หรือมีอยู่แล้ว)
     }
-    todo.forEach(function(x){ prefixes[x.branch_prefix]=1; });
-    var moved=[];
-    for(var p in prefixes){ var n=await syncCounterWithBills(p); if(n!==null) moved.push(p+' → ใบต่อไป '+p+(n+1)); }
+    var moved=await moveCounters();
     logActivity('นำเข้าบิลจากระบบเดิม','', 'เพิ่ม '+added+' ใบ จากไฟล์ '+imp.file+(moved.length?(' · '+moved.join(' · ')):''));
     toast('นำเข้า '+added+' ใบแล้ว — NAS จะทยอยสร้างไฟล์ PDF ให้','ok');
     pv.innerHTML='<b style="color:var(--ok)">✓ นำเข้า '+added+' ใบ</b>'+(moved.length?(' · เลขบิลต่อไป: '+esc(moved.join(' · '))):'')+
-      ' · NAS จะสร้าง PDF ของบิลเก่าให้ทีละ 100 ใบทุก 5 นาที';
+      ' · NAS จะสร้าง PDF ของบิลเก่าให้ทีละ 100 ใบทุก 5 นาที'+impConflictHtml();
+    impBindFix();
     b.style.display='none';
-    imp.rows.forEach(function(x){ imp.existing[x.bill_no]=imp.existing[x.bill_no]||x; });
     loadInvoices(); loadCounters();
   }catch(e){
+    // ชุดที่เข้าไปแล้วต้องมีร่องรอยในประวัติ + ตัวนับต้องขยับตาม แม้จะสะดุดกลางทาง
+    if(added){
+      var mv=[]; try{ mv=await moveCounters(); }catch(e2){}
+      logActivity('นำเข้าบิลจากระบบเดิม (ไม่ครบ)','', 'เพิ่ม '+added+' ใบ จากไฟล์ '+imp.file+' แล้วสะดุด: '+e.message+
+        (mv.length?(' · '+mv.join(' · ')):''));
+    }
     toast('นำเข้าไม่สำเร็จ: '+e.message,'err');
     pv.innerHTML+='<br><span style="color:var(--bad)">❌ นำเข้าไม่สำเร็จ ('+esc(e.message)+') — เพิ่มไปแล้ว '+added+' ใบ กดนำเข้าอีกครั้งได้เลย (ใบที่เข้าแล้วจะข้าม)</span>';
-    b.textContent='นำเข้าอีกครั้ง';
+    var left=impFresh().length;
+    b.textContent='นำเข้าอีกครั้ง ('+left+' ใบที่เหลือ)';
   }
   b.disabled=false;
 };
+/* แก้เลขชน: บิลของแอปนี้ย้ายไปเลขใหม่ (ออกเลขผ่านตัวนับเหมือนออกบิลปกติ) → เลขเดิมว่าง → นำเข้าบิลระบบเดิม
+   → ส่งอีเมลฉบับเลขใหม่ให้ลูกค้าของบิลที่ย้าย · ต้องนำเข้าบิลใหม่ให้ครบก่อน ไม่งั้นเลขใหม่อาจไปชนบิลในไฟล์ที่ยังไม่เข้า */
+async function impFixConflicts(){
+  if(!impCanRun()){ toast('บัญชีนี้ไม่มีสิทธิ์นำเข้าข้อมูล','err'); return; }
+  if(impFresh().length){ toast('กด "นำเข้า" บิลใหม่ให้ครบก่อน แล้วค่อยแก้เลขชน','err'); return; }
+  var list=imp.conflicts.slice();
+  if(!list.length) return;
+  if(!confirm('แก้เลขชน '+list.length+' ใบ ?\n\n'+list.slice(0,10).map(function(c){ return c.no+' ('+(c.now.customer_name||'-')+')'; }).join('\n')+
+    '\n\nบิลของแอปนี้จะย้ายไปเลขใหม่ + ส่งอีเมลฉบับเลขใหม่ให้ลูกค้า\nแล้วนำเข้าบิลของระบบเดิมที่เลขเดิม')) return;
+  var b=$('impFixBtn'); if(b){ b.disabled=true; b.innerHTML='<span class="spin"></span> กำลังแก้...'; }
+  var done=[], fail=[];
+  for(var i=0;i<list.length;i++){
+    var c=list[i];
+    try{ done.push(await impFixOne(c)); imp.conflicts=imp.conflicts.filter(function(x){ return x.no!==c.no; }); }
+    catch(e){ fail.push(c.no+': '+e.message); }
+  }
+  var pv=$('impPreview');
+  pv.innerHTML='<b style="color:var(--ok)">✓ แก้เลขชนแล้ว '+done.length+' ใบ</b>'+
+    (done.length?('<br>'+done.map(esc).join('<br>')):'')+
+    (fail.length?('<br><span style="color:var(--bad)">❌ ไม่สำเร็จ: '+fail.map(esc).join(' · ')+'</span>'):'')+impConflictHtml();
+  impBindFix();
+  loadInvoices(); loadCounters();
+}
+async function impFixOne(c){
+  var q=await sb.from('inv_invoices').select('*').eq('bill_no',c.no).limit(1);
+  if(q.error) throw new Error(q.error.message);
+  var a=(q.data||[])[0], moved=null, msg='';
+  if(a && a.created_by===IMP_BY) return c.no+' นำเข้าไว้แล้ว';
+  if(a){
+    var branch=CONFIG.BRANCHES.filter(function(x){ return x.prefix===c.old.branch_prefix; })[0]||{prefix:c.old.branch_prefix,start:1};
+    var nb=await nextBillNo(branch), u=null;
+    for(var t=0;t<5;t++){
+      u=await sb.from('inv_invoices').update({bill_no:nb.billNo,
+        status_detail:withNote(a.status_detail, /^ย้ายจากเลข/, 'ย้ายจากเลข '+c.no+' (เลขชนกับบิลระบบเดิม) เมื่อ '+fmtDT(null)+' โดย '+userName()),
+        nas_path:null, updated_by:userName(), updated_at:new Date().toISOString()})
+        .eq('id',a.id).eq('bill_no',c.no).select().single();
+      if(!u.error) break;
+      if(u.error.code==='23505' && !nb.viaRpc){
+        nb.seq++; var s=String(nb.seq); while(s.length<4)s='0'+s; nb.billNo=nb.prefix+s; continue; }
+      throw new Error('ย้ายเลขไม่สำเร็จ: '+u.error.message);
+    }
+    if(!u||u.error) throw new Error('ย้ายเลขไม่สำเร็จ');
+    moved=u.data;
+    logActivity('ย้ายเลขบิล (เลขชนกับระบบเดิม)',moved.bill_no,c.no+' → '+moved.bill_no+' · '+(moved.customer_name||'-'));
+    msg=c.no+' ('+(moved.customer_name||'-')+') → ย้ายไป '+moved.bill_no;
+  }
+  var ins=await sb.from('inv_invoices').upsert([c.old],{onConflict:'bill_no',ignoreDuplicates:true}).select('bill_no');
+  if(ins.error) throw new Error((msg?msg+' แต่':'')+'นำเข้าบิลระบบเดิมไม่สำเร็จ: '+ins.error.message+' (กดนำเข้าไฟล์เดิมอีกครั้งได้)');
+  imp.existing[c.no]=c.old;
+  logActivity('นำเข้าบิลจากระบบเดิม',c.no,'หลังแก้เลขชน · '+(c.old.customer_name||'-'));
+  msg=(msg||c.no)+' · นำเข้าบิลระบบเดิม '+c.no+' แล้ว';
+  if(moved && moved.status!==STATUS.CANCELLED && moved.email && settings.gas_endpoint){
+    var ok=await sendInvoiceEmail(moved,null,{replaced:c.no});
+    msg+=ok?(' · ส่งอีเมลเลขใหม่ถึง '+moved.email+' แล้ว'):' · ส่งอีเมลไม่สำเร็จ (ส่งซ้ำได้จากรายการบิล)';
+  }else if(moved && moved.status!==STATUS.CANCELLED && moved.email){
+    msg+=' · ยังไม่ได้ตั้งตัวส่งอีเมล — ส่งบิลเลขใหม่ให้ลูกค้าเองจากรายการบิล';
+  }
+  return msg;
+}
 
 $('sigUploadBtn').onclick=function(){ $('sigFile').click(); };
 $('sigFile').onchange=function(){ handleSigFile(this.files[0]); this.value=''; };
