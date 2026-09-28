@@ -11,23 +11,32 @@ NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ย
   → Supabase เก็บแค่ตัวหนังสือ ไม่มีไฟล์ใด ๆ ขึ้นไป
 
 วิธีติดตั้ง (ทำครั้งเดียว — ขั้นตอนละเอียดอยู่ในหน้า ⚙ ตั้งค่า ของแอปใบกำกับภาษี)
-  1) สร้างโฟลเดอร์ย่อยชื่อ _sync ในโฟลเดอร์เก็บบิล แล้ววางไฟล์นี้ลงไป
-       เช่น  /volume1/Tax invoice/_sync/inv_nas_sync.py
-     (ถ้ามีลายเซ็น วาง signature.png ไว้ในโฟลเดอร์ _sync เดียวกัน)
+  🔒 สคริปต์นี้รันด้วย root → เก็บไว้ในโฟลเดอร์แชร์ที่ "เฉพาะ administrators" เข้าได้ แยกจากโฟลเดอร์เก็บบิล
+     (ถ้าเก็บในโฟลเดอร์ที่เครื่องพนักงาน map ไว้ ใครแก้ไฟล์นี้ได้ = สั่งงาน NAS ได้ทั้งเครื่อง)
+  1) Control Panel → Shared Folder → สร้างโฟลเดอร์แชร์ชื่อ scripts
+       สิทธิ์: administrators = อ่าน/เขียน · ผู้ใช้อื่นทุกคน = ไม่มีสิทธิ์ (No access)
+     สร้างโฟลเดอร์ย่อย inv_sync แล้ววางไฟล์นี้ลงไป → /volume1/scripts/inv_sync/inv_nas_sync.py
+     (ถ้ามีลายเซ็น วาง signature.png ไว้ในโฟลเดอร์ inv_sync เดียวกัน)
   2) Task Scheduler → User-defined script (user: root) รันครั้งเดียว:
-       python3 "/volume1/Tax invoice/_sync/inv_nas_sync.py" --install
-     แล้วเปิดไฟล์ _sync/inv_nas_sync.log ต้องเห็นบรรทัด "พร้อมใช้งาน"
+       python3 "/volume1/scripts/inv_sync/inv_nas_sync.py" --install --base "/volume1/Tax invoice"
+     แล้วเปิดไฟล์ inv_sync/inv_nas_sync.log ต้องเห็นบรรทัด "พร้อมใช้งาน"
   3) Task Scheduler → User-defined script (user: root) ทุกวัน ทุก 5 นาที (เวลาสิ้นสุด 23:55):
-       python3 "/volume1/Tax invoice/_sync/inv_nas_sync.py"
-  4) 🔒 ล็อกโฟลเดอร์ _sync ให้แก้ไขได้เฉพาะ administrators (File Station → คุณสมบัติ → สิทธิ์)
-     สคริปต์นี้รันด้วย root — ถ้าเครื่องพนักงานที่ map โฟลเดอร์บิลไว้แก้ไฟล์ในนี้ได้ = สั่งงาน NAS ได้ทั้งเครื่อง
+       python3 "/volume1/scripts/inv_sync/inv_nas_sync.py" --base "/volume1/Tax invoice"
+     --base = โฟลเดอร์เก็บบิล (ใส่เครื่องหมายคำพูดครอบเสมอ เพราะชื่อมีเว้นวรรค)
+  * แบบเดิมยังใช้ได้ ไม่ต้องย้ายก็ได้: ไฟล์อยู่ที่ /volume1/Tax invoice/_sync/inv_nas_sync.py
+    แล้วรัน  python3 "/volume1/Tax invoice/_sync/inv_nas_sync.py"  (ไม่ใส่ --base = เก็บลงโฟลเดอร์แม่ของ _sync)
+    แต่ต้องล็อกโฟลเดอร์ _sync ให้แก้ไขได้เฉพาะ administrators (File Station → คุณสมบัติ → สิทธิ์)
+    ย้ายมาแบบแนะนำ: ก๊อปทั้งโฟลเดอร์ _sync (มี _lib / fonts / signature.png) ไปเป็น /volume1/scripts/inv_sync
+    → แก้คำสั่งใน Task Scheduler เป็นแบบข้อ 3 → รัน --check ดูว่าบรรทัด "โฟลเดอร์เก็บบิล" ถูก → ลบ _sync เดิมทิ้ง
   * ไฟล์ที่ถูกเขียนทับ (บิลแก้ไข/ยกเลิก) เก็บฉบับก่อนหน้าไว้ในโฟลเดอร์ _ฉบับก่อนหน้า ของเดือนนั้น 10 ฉบับล่าสุด
+  * หน้า "สำเนา" ทำตามสวิตช์ "แนบหน้า สำเนา" ในแอป (อ่านจาก inv_settings รอบละครั้ง) — บังคับเองได้ที่ WITH_COPY
 
-คำสั่งเสริม
+คำสั่งเสริม (ใส่ --base "<โฟลเดอร์เก็บบิล>" ต่อท้ายได้ทุกคำสั่ง)
   --install        ติดตั้งไลบรารีสร้าง PDF (fpdf2 + uharfbuzz) ลงโฟลเดอร์ _lib ข้างไฟล์นี้
-  --check          ตรวจความพร้อมทุกข้อ (Python / ไลบรารี / ฟอนต์ / โฟลเดอร์ / Supabase / ลายเซ็น)
+  --check          ตรวจความพร้อมทุกข้อ (Python / ไลบรารี / ฟอนต์ / โฟลเดอร์เก็บบิลที่ใช้อยู่ / Supabase / ลายเซ็น)
   --test           สร้างบิลตัวอย่างลงโฟลเดอร์ _test (ไม่แตะข้อมูลจริง) ไว้เปิดดูว่าตัวหนังสือไทยถูกต้อง
   --force JJRD1006 สร้างไฟล์บิลใบนั้นใหม่ทันที
+  --base "<path>"  โฟลเดอร์เก็บบิล (ชนะ BASE_DIR และกฎโฟลเดอร์แม่ของ _sync)
 
 ที่มาของไฟล์: https://github.com/thananant/JJ-PnL/blob/main/jjmk-invoice/inv_nas_sync.py
 """
@@ -35,13 +44,16 @@ import os
 import sys
 import re
 import json
+import math
 import time
 import datetime
 import platform
 import subprocess
+import unicodedata
 import urllib.request
 import urllib.parse
 import urllib.error
+from decimal import Decimal, Context, ROUND_HALF_UP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB_DIR = os.path.join(HERE, '_lib')
@@ -49,11 +61,12 @@ if os.path.isdir(LIB_DIR):
     sys.path.insert(0, LIB_DIR)
 
 # ====================== ตั้งค่า (ปกติไม่ต้องแก้) ======================
-# โฟลเดอร์เก็บบิล · เว้นว่าง = ถ้าไฟล์นี้อยู่ในโฟลเดอร์ที่ชื่อขึ้นต้นด้วย _ (เช่น _sync)
-# จะเก็บลงโฟลเดอร์แม่ของมัน ไม่งั้นเก็บลงโฟลเดอร์เดียวกับไฟล์นี้
+# โฟลเดอร์เก็บบิล — ลำดับที่ใช้: --base "<path>" ในคำสั่ง > BASE_DIR ข้างล่าง >
+# ถ้าไฟล์นี้อยู่ในโฟลเดอร์ที่ชื่อขึ้นต้นด้วย _ (เช่น _sync) เก็บลงโฟลเดอร์แม่ของมัน ไม่งั้นเก็บลงโฟลเดอร์เดียวกับไฟล์นี้
 # สคริปต์แยกโฟลเดอร์รายเดือนให้เอง เช่น 2026-09/JJRD1006.pdf (เหมือนที่แอปเก็บ)
 BASE_DIR = ''
-WITH_COPY = False        # True = แนบหน้า "สำเนา" ต่อท้ายทุกไฟล์ (หน้าแรกเป็นต้นฉบับเสมอ)
+WITH_COPY = None         # None = ทำตามสวิตช์ "แนบหน้า สำเนา" ในแอป (inv_settings: pdf_with_copy = '1' / '0')
+                         # True / False = บังคับแนบ / ไม่แนบหน้า "สำเนา" ทุกไฟล์ (หน้าแรกเป็นต้นฉบับเสมอ)
 MAX_PER_RUN = 100        # เก็บสูงสุดกี่ใบต่อรอบ (รอบแรกที่มีบิลเก่าค้างเยอะจะทยอยเก็บ)
 # ======================================================================
 
@@ -116,12 +129,50 @@ def log(msg):
         pass
 
 
+# ค่าที่ได้จากคำสั่งรอบนี้ (main() ตั้งให้ แล้วล้างทิ้งเมื่อจบ)
+_OPT = {'base': None}        # --base "<path>"
+_RUN = {'copy': None}        # สวิตช์ "แนบหน้า สำเนา" ที่อ่านจากแอปแล้วในรอบนี้ (None = ยังไม่ได้อ่าน)
+
+
 def base_dir():
+    if _OPT['base']:
+        return _OPT['base']
     if BASE_DIR:
         return BASE_DIR
     if os.path.basename(HERE).startswith('_'):
         return os.path.dirname(HERE)
     return HERE
+
+
+def base_source():
+    """บอกว่าโฟลเดอร์เก็บบิลได้มาจากไหน (แสดงใน --check)"""
+    if _OPT['base']:
+        return 'ตั้งด้วย --base'
+    if BASE_DIR:
+        return 'ตั้งใน BASE_DIR'
+    if os.path.basename(HERE).startswith('_'):
+        return 'โฟลเดอร์แม่ของ %s' % os.path.basename(HERE)
+    return 'โฟลเดอร์เดียวกับสคริปต์'
+
+
+def take_base_arg(argv):
+    """ดึง --base "<path>" (หรือ --base=<path>) ออกจากคำสั่ง คืน (path หรือ None, คำสั่งที่เหลือ)"""
+    rest, base, i = [], None, 0
+    while i < len(argv):
+        a = argv[i]
+        if a == '--base' or a.startswith('--base='):
+            if a == '--base':
+                v = argv[i + 1] if i + 1 < len(argv) else ''
+                i += 1
+            else:
+                v = a[len('--base='):]
+            if not v.strip() or v.startswith('--'):
+                raise ValueError('--base ต้องตามด้วยโฟลเดอร์เก็บบิล เช่น --base "/volume1/Tax invoice"')
+            base = os.path.abspath(os.path.expanduser(v))
+        else:
+            rest.append(a)
+        i += 1
+    return base, rest
 
 
 def now_iso():
@@ -185,6 +236,26 @@ def requeue(bill_no):
            prefer='return=minimal')
 
 
+def fetch_copy_setting():
+    """สวิตช์ "แนบหน้า สำเนา" ในแอป (inv_settings: pdf_with_copy = '1' เปิด / '0' หรือไม่มี = ปิด)"""
+    rows = sb_req('GET', '/rest/v1/inv_settings?select=key,value&key=eq.pdf_with_copy') or []
+    v = rows[0].get('value') if rows and isinstance(rows[0], dict) else None
+    return str(v).strip().lower() in ('1', 'true')
+
+
+def want_copy():
+    """แนบหน้า "สำเนา" ไหม — WITH_COPY บังคับได้ · ไม่งั้นทำตามแอป (อ่านรอบละครั้ง อ่านไม่ได้ = ไม่แนบ)"""
+    if WITH_COPY is not None:
+        return bool(WITH_COPY)
+    if _RUN['copy'] is None:
+        try:
+            _RUN['copy'] = fetch_copy_setting()
+        except Exception as e:
+            _RUN['copy'] = False
+            log('อ่านสวิตช์ "แนบหน้า สำเนา" จากแอปไม่ได้ (%s) — รอบนี้ไม่แนบหน้าสำเนา' % e)
+    return _RUN['copy']
+
+
 def heartbeat(info):
     """บอกแอปว่า NAS ทำงานล่าสุดเมื่อไหร่ (แสดงในหน้าตั้งค่า) — เก็บแค่ตัวหนังสือ"""
     try:
@@ -206,17 +277,48 @@ def num(v, default=0.0):
         return default
 
 
+JS_EPSILON = 2.220446049250313e-16      # Number.EPSILON ของ JavaScript
+_INF = float('inf')
+_DEC = Context(prec=400)                 # พอสำหรับทุกค่าของ double — quantize ไม่ล้น
+
+
+def js_round(x):
+    """Math.round ของ JavaScript: ใกล้สุด ถ้าเท่ากันพอดีปัดไปทาง +∞ (round() ของ Python ปัดเข้าเลขคู่ — ห้ามใช้)
+    ลบ 0.5 ออกแบบนี้ได้ผลตรงทุกบิต ไม่พลาดแบบ floor(x + 0.5) ที่ 0.49999999999999994 หรือเลขเกิน 2^52"""
+    if x != x or x == _INF or x == -_INF:
+        return x
+    f = math.floor(x)
+    r = float(f + 1 if x - f >= 0.5 else f)
+    if r == 0 and (x < 0 or math.copysign(1.0, x) < 0):
+        return -0.0                      # JS: Math.round(-0.2) = -0
+    return r
+
+
 def round2(n):
-    return round(num(n) + 1e-9, 2)
+    # แอป: Math.round((Number(n)+Number.EPSILON)*100)/100 — คำนวณแบบ double ลำดับเดียวกันทุกขั้น
+    return js_round((num(n) + JS_EPSILON) * 100) / 100
 
 
 def fmt(n):
-    return '{:,.2f}'.format(round2(n))
+    """แอป: Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})
+    เบราว์เซอร์ปัดจากเลขทศนิยมที่สั้นที่สุดของค่านั้น (1.005 → "1.01") แบบครึ่งปัดออกจากศูนย์"""
+    v = num(n)
+    if v != v or v == 0:
+        v = 0.0                          # n||0 : 0 / -0 / NaN → 0
+    if v == _INF or v == -_INF:
+        return '∞' if v > 0 else '-∞'
+    d = Decimal(repr(v)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP, context=_DEC)
+    return '{:,.2f}'.format(d)
 
 
 def fmt_qty(v):
+    """จำนวนในตาราง — แอปแสดง it.qty ตามที่เก็บไว้ (String ของตัวเลข)"""
+    if isinstance(v, str):
+        return v.strip()
     f = num(v)
-    return str(int(f)) if f == int(f) else ('%g' % f)
+    if f == f and abs(f) < 1e21 and f == int(f):
+        return str(int(f))
+    return repr(f) if 1e-4 <= abs(f) < 1e16 else ('%g' % f)
 
 
 def bkk(iso):
@@ -275,9 +377,12 @@ def read_thai(n):
 
 
 def baht_text(v):
+    # แอป: num=round2(num); b=Math.floor(num); sa=Math.round((num-b)*100)
     v = round2(v)
-    b = int(v)
-    sa = int(round((v - b) * 100))
+    if v != v or v == _INF or v == -_INF:
+        return 'ถ้วน'
+    b = math.floor(v)
+    sa = int(js_round((v - b) * 100))
     if b == 0 and sa == 0:
         return 'ศูนย์บาทถ้วน'
     t = (read_thai(b) + 'บาท') if b > 0 else ''
@@ -328,6 +433,113 @@ def find_signature():
     return None
 
 
+# ------------------------------------------------------------------ ตัดบรรทัดภาษาไทย
+# fpdf2 ตัดข้อความไทยที่ไม่มีเว้นวรรคตรงตัวอักษรไหนก็ได้ → บรรทัดใหม่ขึ้นต้นด้วยสระบน/ล่าง/วรรณยุกต์
+# หรือสระหน้า (เ แ โ ใ ไ) ค้างท้ายบรรทัดแยกจากพยัญชนะของมัน เช่น "...กระดูกหมูแ" / "ละน้ำจิ้ม"
+# ทุกข้อความหลายบรรทัดในบิลจึงตัดด้วย wrap_text() ตัวเดียวนี้ แล้ววาดทีละบรรทัดด้วย cell()
+TH_NO_START = frozenset(
+    [chr(c) for c in (0x0E30, 0x0E31, 0x0E32, 0x0E33, 0x0E45, 0x0E46, 0x0E2F)] +   # ะ ั า ำ ๅ ๆ ฯ
+    [chr(c) for c in range(0x0E34, 0x0E3B)] +      # ิ ี ึ ื ุ ู ฺ
+    [chr(c) for c in range(0x0E47, 0x0E4F)])       # ็ ่ ้ ๊ ๋ ์ ํ ๎
+TH_LEAD = frozenset(chr(c) for c in range(0x0E40, 0x0E45))     # เ แ โ ใ ไ — ต้องอยู่กับพยัญชนะตัวถัดไป
+_NO_START_PUNCT = frozenset(')]},.:;!?%')
+_NO_END_PUNCT = frozenset('([{')
+_WS = re.compile(r'[ \t\r\n\f]+')            # ช่องว่างแบบ HTML (ช่องว่างติดกันหลายตัว = ตัวเดียว)
+
+
+def _is_thai(ch):
+    return '฀' <= ch <= '๿'
+
+
+def can_break(s, i):
+    """ตัดบรรทัดก่อนตัวที่ i ของคำ s (ที่ไม่มีเว้นวรรค) ได้ไหม"""
+    if i <= 0 or i >= len(s):
+        return False
+    a, b = s[i - 1], s[i]
+    if b in TH_NO_START or b in _NO_START_PUNCT or unicodedata.category(b).startswith('M'):
+        return False
+    if a in TH_LEAD or a in _NO_END_PUNCT:
+        return False
+    return True
+
+
+def _nice_break(s, i):
+    """จุดตัดที่ดูเป็นธรรมชาติกว่า: หน้าสระหน้า (ขึ้นพยางค์ใหม่แน่นอน) · หลัง - / , · ตรงรอยต่อไทย/ไม่ใช่ไทย"""
+    a, b = s[i - 1], s[i]
+    return b in TH_LEAD or a in '-/,' or _is_thai(a) != _is_thai(b)
+
+
+def _fit(word, head, room, measure, thai_only=False):
+    """จุดตัดในคำที่ยาวที่สุดที่ head+word[:k] ยังกว้างไม่เกิน room (ไม่มีเลย = 0)
+    thai_only = ตัดได้เฉพาะจุดที่ติดตัวอักษรไทย (ไม่หั่นกลางตัวเลข/คำอังกฤษ)"""
+    cuts = [i for i in range(1, len(word)) if can_break(word, i) and
+            (not thai_only or _is_thai(word[i - 1]) or _is_thai(word[i]))]
+    lo, hi, best = 0, len(cuts) - 1, -1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if measure(head + word[:cuts[mid]]) <= room:
+            best, lo = mid, mid + 1
+        else:
+            hi = mid - 1
+    if best < 0:
+        return 0
+    k = cuts[best]
+    for j in range(best, -1, -1):               # ถอยไปหาจุดตัดที่สวยกว่า ถ้าไม่ทำให้บรรทัดสั้นลงเกินไป
+        if cuts[j] < k * 0.6:
+            break
+        if _nice_break(word, cuts[j]):
+            return cuts[j]
+    return k
+
+
+def wrap_text(text, width, measure, first=None, newlines=False):
+    """ตัดข้อความเป็นบรรทัดที่กว้างไม่เกิน width (วัดด้วย measure) คืน list ของบรรทัด (อย่างน้อย 1 บรรทัด)
+    first     = ความกว้างของบรรทัดแรก ถ้าไม่เท่าบรรทัดอื่น (มีป้ายนำหน้า) — บรรทัดต่อไปชิดซ้ายเต็มกว้าง
+    newlines  = True ขึ้นบรรทัดใหม่ตาม \\n (ที่อยู่ ที่แอปแสดงเป็น <br>) · False ถือเป็นเว้นวรรคแบบหน้าเว็บ
+    ตัดที่เว้นวรรคก่อนเสมอ · คำเดียวยาวเกินบรรทัดค่อยตัดกลางคำ เฉพาะจุดที่ can_break() ยอม"""
+    out = []
+
+    def room():
+        return first if (first is not None and not out) else width
+
+    text = '' if text is None else str(text)
+    paras = text.replace('\r\n', '\n').replace('\r', '\n').split('\n') if newlines else [text]
+    for para in paras:
+        cur = ''
+        for word in _WS.split(para):
+            if not word:
+                continue
+            cand = (cur + ' ' + word) if cur else word
+            if measure(cand) <= room():
+                cur = cand
+                continue
+            fits_line = measure(word) <= width
+            # บรรทัดแรกที่มีแค่ป้าย (เช่น "ที่อยู่ :") + ข้อความไทยติดกันยาว → ต่อท้ายป้ายเลยแบบเบราว์เซอร์
+            # ไม่ปล่อยป้ายลอยอยู่บรรทัดเดียว (ตัวเลข/อังกฤษล้วน เช่นเลขภาษี ยังขึ้นบรรทัดใหม่ทั้งก้อน)
+            label_only = not cur and room() < width and any(_is_thai(c) for c in word)
+            if fits_line and not label_only:
+                out.append(cur)                  # ทั้งคำไปบรรทัดใหม่ (บรรทัดแรกอาจเหลือแค่ป้าย)
+                cur = word
+                continue
+            # คำเดียวยาวเกินบรรทัด → เติมบรรทัดปัจจุบันให้เต็มก่อน แล้วตัดกลางคำตรงจุดที่ตัดได้
+            head = (cur + ' ') if cur else ''
+            while word and measure(head + word) > room():
+                k = _fit(word, head, room(), measure, thai_only=fits_line)
+                if k:
+                    out.append(head + word[:k])
+                    word, head = word[k:], ''
+                elif head or room() < width:
+                    out.append(head.rstrip())
+                    head = ''
+                else:                            # พยางค์เดียวก็ยังกว้างเกิน — ยอมล้นแต่ไม่ตัดผิดที่
+                    k = next((i for i in range(1, len(word)) if can_break(word, i)), len(word))
+                    out.append(word[:k])
+                    word = word[k:]
+            cur = head + word
+        out.append(cur)
+    return out
+
+
 # ------------------------------------------------------------------ วาดบิล (เลย์เอาต์เดียวกับ buildSheetNode ในแอป)
 class Sheet(object):
     def __init__(self, pdf):
@@ -340,25 +552,36 @@ class Sheet(object):
             self.pdf.set_font('Prompt', 'B' if style == 'B' else '', size)
 
     def put(self, x, y, w, h, s, style='', size=None, color=INK, align='L'):
-        """ข้อความบรรทัดเดียว จัดกึ่งกลางแนวตั้งในกล่องสูง h"""
+        """ข้อความบรรทัดเดียว จัดกึ่งกลางแนวตั้งในกล่องสูง h (ตัวหนังสือเริ่มที่ x + c_margin)"""
         self.font(style, size)
         self.pdf.set_text_color(*color)
         self.pdf.set_xy(x, y)
         self.pdf.cell(w, h, s, align=align)
 
-    def lines(self, w, s, style, size):
-        from fpdf.enums import MethodReturnValue
-        self.font(style, size)
-        out = self.pdf.multi_cell(w, size * 1.5, s, dry_run=True, output=MethodReturnValue.LINES)
-        return out or ['']
+    def text_at(self, x, y, h, s, style='', size=None, color=INK):
+        """ข้อความบรรทัดเดียวที่ตัวอักษรตัวแรกเริ่มตรง x พอดี (ไม่มีระยะ c_margin ของ cell)"""
+        cm = self.pdf.c_margin
+        self.put(x - cm, y, self.width(s, style, size) + cm * 2, h, s, style, size, color)
 
-    def para(self, x, y, w, s, style='', size=None, color=INK, lh=None, align='L'):
-        """ข้อความหลายบรรทัด ตัดบรรทัดเอง คืนความสูงที่ใช้"""
+    def wrap(self, s, w, style='', size=None, first=None, newlines=False):
+        """ตัดบรรทัดตามความกว้างตัวหนังสือจริง (วัดแบบจัดรูปอักษรไทยด้วย HarfBuzz)"""
         self.font(style, size)
-        self.pdf.set_text_color(*color)
-        self.pdf.set_xy(x, y)
-        self.pdf.multi_cell(w, lh or size * 1.5, s, align=align)
-        return self.pdf.get_y() - y
+        return wrap_text(s, w, self.pdf.get_string_width, first=first, newlines=newlines)
+
+    def lines(self, w, s, style, size, newlines=False):
+        """บรรทัดของข้อความในกล่องกว้าง w (หักระยะ c_margin สองข้างแบบ cell)"""
+        return self.wrap(s, w - self.pdf.c_margin * 2, style, size, newlines=newlines)
+
+    def draw_lines(self, x, y, w, lines, style='', size=None, color=INK, lh=None, align='L'):
+        lh = lh or size * 1.5
+        for i, t in enumerate(lines):
+            if t:
+                self.put(x, y + i * lh, w, lh, t, style, size, color, align)
+        return len(lines) * lh
+
+    def para(self, x, y, w, s, style='', size=None, color=INK, lh=None, align='L', newlines=False):
+        """ข้อความหลายบรรทัดในกล่องกว้าง w ตัดบรรทัดด้วย wrap_text คืนความสูงที่ใช้"""
+        return self.draw_lines(x, y, w, self.lines(w, s, style, size, newlines), style, size, color, lh, align)
 
     def width(self, s, style, size):
         self.font(style, size)
@@ -368,19 +591,27 @@ class Sheet(object):
 A4_W, A4_H = 595.28, 841.89
 
 
-def build_pdf(inv):
+def new_pdf(page_h=A4_H):
+    """PDF เปล่าหน้ากว้าง A4 พร้อมฟอนต์ Prompt + จัดรูปอักษรไทย (ใช้วัดความกว้างตัวหนังสือในเทสต์ได้ด้วย)"""
     fpdf = load_fpdf()
     ensure_fonts()
-    copies = ['ต้นฉบับ'] + (['สำเนา'] if WITH_COPY else [])
+    pdf = fpdf.FPDF(unit='pt', format=(A4_W, page_h))
+    pdf.set_auto_page_break(False)
+    pdf.set_margins(0, 0, 0)
+    pdf.add_font('Prompt', '', os.path.join(FONT_DIR, FONTS['R']))
+    pdf.add_font('Prompt', 'B', os.path.join(FONT_DIR, FONTS['B']))
+    pdf.add_font('PromptSB', '', os.path.join(FONT_DIR, FONTS['SB']))
+    pdf.set_text_shaping(True)          # HarfBuzz วางสระบน/ล่าง + วรรณยุกต์ไทยให้ถูกตำแหน่ง
+    return pdf
+
+
+def build_pdf(inv):
+    load_fpdf()
+    ensure_fonts()
+    copies = ['ต้นฉบับ'] + (['สำเนา'] if want_copy() else [])
 
     def make(page_h):
-        pdf = fpdf.FPDF(unit='pt', format=(A4_W, page_h))
-        pdf.set_auto_page_break(False)
-        pdf.set_margins(0, 0, 0)
-        pdf.add_font('Prompt', '', os.path.join(FONT_DIR, FONTS['R']))
-        pdf.add_font('Prompt', 'B', os.path.join(FONT_DIR, FONTS['B']))
-        pdf.add_font('PromptSB', '', os.path.join(FONT_DIR, FONTS['SB']))
-        pdf.set_text_shaping(True)          # HarfBuzz วางสระบน/ล่าง + วรรณยุกต์ไทยให้ถูกตำแหน่ง
+        pdf = new_pdf(page_h)
         pdf.set_title('ใบเสร็จรับเงิน / ใบกำกับภาษี ' + str(inv.get('bill_no') or ''))
         pdf.set_creator('JJ Invoice · inv_nas_sync.py')
         # วันที่ในไฟล์ผูกกับข้อมูลบิล → บิลเดิมสร้างซ้ำได้ไฟล์เหมือนเดิมทุกไบต์ (ไม่ต้องเก็บฉบับซ้ำ)
@@ -446,24 +677,25 @@ def draw_sheet(pdf, inv, copy_label):
     S.put(X0, y, W, th, 'ใบเสร็จรับเงิน / ใบกำกับภาษี', 'B', P(15), WHITE, 'C')
     y += th
 
-    # ---------- ลูกค้า (ป้ายสีแดง + ข้อความต่อท้าย ตัดบรรทัดแบบในเว็บ) ----------
-    rows = [('ลูกค้า :', inv.get('customer_name') or '-')]
+    # ---------- ลูกค้า (ป้ายสีแดง + ข้อความต่อท้าย บรรทัดที่ล้นกลับไปชิดซ้ายแบบในเว็บ) ----------
+    rows = [('ลูกค้า :', inv.get('customer_name') or '-', False)]
     if inv.get('phone'):
-        rows.append(('เบอร์โทร :', str(inv.get('phone'))))
-    rows.append(('ที่อยู่ :', str(inv.get('address') or '-').replace('\r', '')))
-    rows.append(('เลขประจำตัวผู้เสียภาษีอากร :', inv.get('tax_id') or '-'))
+        rows.append(('เบอร์โทร :', str(inv.get('phone')), False))
+    rows.append(('ที่อยู่ :', str(inv.get('address') or '-'), True))       # ขึ้นบรรทัดใหม่ตาม \n (<br> ในเว็บ)
+    rows.append(('เลขประจำตัวผู้เสียภาษีอากร :', inv.get('tax_id') or '-', False))
     lhc = FS * 1.7
-    pdf.set_left_margin(X0 + padx)
-    pdf.set_right_margin(pdf.w - (X0 + W - padx))
-    pdf.set_xy(X0 + padx, y + P(8))
-    for lbl, val in rows:
-        S.font('B', FS); pdf.set_text_color(*RED)
-        pdf.write(lhc, lbl + ' ')
-        S.font('', FS); pdf.set_text_color(*INK)
-        pdf.write(lhc, str(val))
-        pdf.ln(lhc)
-    y = pdf.get_y() + P(8)
-    pdf.set_margins(0, 0, 0)
+    cx0 = X0 + padx + pdf.c_margin              # ตำแหน่งเดิมของ write() — บิลธรรมดาหน้าตาเหมือนเดิมทุกพิกเซล
+    cw_full = W - padx * 2 - pdf.c_margin * 2
+    yc = y + P(8)
+    for lbl, val, nl in rows:
+        lw = S.width(lbl + ' ', 'B', FS)
+        vl = S.wrap(str(val), cw_full, '', FS, first=cw_full - lw, newlines=nl)
+        S.text_at(cx0, yc, lhc, lbl, 'B', FS, RED)
+        for i, t in enumerate(vl):
+            if t:
+                S.text_at(cx0 + (lw if i == 0 else 0), yc, lhc, t, '', FS, INK)
+            yc += lhc
+    y = yc + P(8)
     pdf.line(X0, y, X0 + W, y)
 
     # ---------- ตารางรายการ ----------
@@ -505,7 +737,7 @@ def draw_sheet(pdf, inv, copy_label):
             pdf.line(x, y, x, y + rh)
             if val:
                 if i == 1:
-                    S.para(x + cpx, y + cpy, cw[i] - cpx * 2, val, '', FS, INK, lh=line_h)
+                    S.draw_lines(x + cpx, y + cpy, cw[i] - cpx * 2, name_lines, '', FS, INK, lh=line_h)
                 else:
                     S.put(x + cpx, y, cw[i] - cpx * 2, rh, val, '', FS, INK, aligns[i])
             x += cw[i]
@@ -538,9 +770,12 @@ def draw_sheet(pdf, inv, copy_label):
     pdf.line(cx + box * 0.22, cy + box * 0.52, cx + box * 0.43, cy + box * 0.75)   # เครื่องหมายถูก
     pdf.line(cx + box * 0.43, cy + box * 0.75, cx + box * 0.80, cy + box * 0.25)
     pdf.set_line_width(P(1))
-    S.put(cx + box + P(5), py, bw - lw - box - P(14), line_h,
-          str(inv.get('payment_method') or 'เงินสด / QR Payment'), '', FS, INK)
-    ny = py + line_h + P(6)
+    # วิธีชำระยาว ๆ ตัดบรรทัดอยู่ในคอลัมน์ซ้ายหลังช่องติ๊ก (เดิมวิ่งเข้าไปใต้ตารางยอดรวมจนมองไม่เห็น)
+    tx = cx + box + P(5)
+    pay_w = bx + bw - tx
+    pay_lines = S.lines(pay_w, str(inv.get('payment_method') or 'เงินสด / QR Payment'), '', FS)
+    S.draw_lines(tx, py, pay_w, pay_lines, '', FS, INK, lh=line_h)
+    ny = py + len(pay_lines) * line_h + P(6)
     nh = S.para(bx, ny, bw, '(ใบเสร็จรับเงินฉบับนี้จะสมบูรณ์ต่อเมื่อได้รับการชำระเงินเรียบร้อยแล้วเท่านั้น)',
                 '', P(11), NOTE, lh=P(11) * 1.5)
     left_bottom = ny + nh + P(8)
@@ -598,7 +833,7 @@ def draw_sheet(pdf, inv, copy_label):
           'นับจากวันได้รับเอกสาร หากพ้นกำหนด ทางบริษัทฯ จะไม่รับผิดชอบใดๆทั้งสิ้น')
     fl = S.lines(flw - padx * 2, ft, '', ffs)
     fth = len(fl) * ffs * 1.5
-    S.para(X0 + padx, y + foot_h - P(8) - fth, flw - padx * 2, ft, '', ffs, MUTED, lh=ffs * 1.5)
+    S.draw_lines(X0 + padx, y + foot_h - P(8) - fth, flw - padx * 2, fl, '', ffs, MUTED, lh=ffs * 1.5)
     y += foot_h
 
     # ---------- กรอบนอก ----------
@@ -717,6 +952,9 @@ def sample_invoice(status='ออกแล้ว', bill='TEST0001'):
 
 
 def cmd_test():
+    if not os.path.isdir(base_dir()):
+        log('ไม่พบโฟลเดอร์เก็บบิล %s — เช็ค --base หรือ BASE_DIR' % base_dir())
+        return 1
     folder = os.path.join(base_dir(), '_test')
     os.makedirs(folder, exist_ok=True)
     for inv, name in ((sample_invoice(), 'TEST0001.pdf'),
@@ -748,8 +986,9 @@ def cmd_check():
     except Exception as e:
         ok = row(False, str(e)) and ok
     bd = base_dir()
+    log('[ข้อมูล] โฟลเดอร์เก็บบิลที่ใช้: %s (%s)' % (bd, base_source()))
     if not os.path.isdir(bd):
-        ok = row(False, 'ไม่พบโฟลเดอร์เก็บบิล %s' % bd) and ok
+        ok = row(False, 'ไม่พบโฟลเดอร์เก็บบิล %s — เช็ค --base "<โฟลเดอร์>" ในคำสั่ง' % bd) and ok
     else:
         try:
             t = os.path.join(bd, '.inv_nas_sync_write_test')
@@ -759,11 +998,19 @@ def cmd_check():
             row(True, 'โฟลเดอร์เก็บบิล %s (เขียนได้)' % bd)
         except Exception as e:
             ok = row(False, 'เขียนโฟลเดอร์ %s ไม่ได้ (%s) — ตั้ง Task ให้รันด้วย user root' % (bd, e)) and ok
+        rb = os.path.realpath(bd)
+        if os.path.realpath(HERE) == rb or os.path.realpath(HERE).startswith(rb.rstrip(os.sep) + os.sep):
+            log('[คำแนะนำ] สคริปต์อยู่ในโฟลเดอร์เก็บบิล — แนะนำย้ายไปโฟลเดอร์แชร์ที่เฉพาะ administrators '
+                'เข้าได้ (เช่น /volume1/scripts/inv_sync) แล้วรันด้วย --base (ดูวิธีที่หัวไฟล์นี้)')
     try:
         n = len(fetch_pending(1000))
         row(True, 'ต่อ Supabase ได้ — บิลรอเก็บไฟล์ %d ใบ' % n)
     except Exception as e:
         ok = row(False, str(e)) and ok
+    if WITH_COPY is not None:
+        log('[ข้อมูล] หน้าสำเนา: %s (บังคับไว้ที่ WITH_COPY)' % ('แนบ' if WITH_COPY else 'ไม่แนบ'))
+    else:
+        log('[ข้อมูล] หน้าสำเนา: %s (ตามสวิตช์ "แนบหน้า สำเนา" ในแอป)' % ('แนบ' if want_copy() else 'ไม่แนบ'))
     sig = find_signature()
     log(('[ผ่าน] ลายเซ็น %s' % os.path.basename(sig)) if sig else
         '[ไม่บังคับ] ไม่มี signature.png ในโฟลเดอร์นี้ — บิลจะเว้นช่องให้เซ็นเอง')
@@ -872,6 +1119,20 @@ def run_sync():
 
 
 def main(argv):
+    try:
+        base, argv = take_base_arg(list(argv))
+    except ValueError as e:
+        log(str(e))
+        return 1
+    _OPT['base'] = base
+    _RUN['copy'] = None                  # อ่านสวิตช์หน้าสำเนาจากแอปใหม่ทุกรอบ (รอบละครั้ง)
+    try:
+        return _main(argv)
+    finally:
+        _OPT['base'] = None
+
+
+def _main(argv):
     if '--install' in argv:
         return cmd_install()
     if '--check' in argv:
@@ -883,7 +1144,8 @@ def main(argv):
             log('สร้างบิลตัวอย่างไม่ได้: %s' % e)
             return 1
     if not os.path.isdir(base_dir()):
-        log('ไม่พบโฟลเดอร์เก็บบิล %s — วางสคริปต์ไว้ในโฟลเดอร์ _sync ของโฟลเดอร์เก็บบิล' % base_dir())
+        log('ไม่พบโฟลเดอร์เก็บบิล %s — ใส่ --base "<โฟลเดอร์เก็บบิล>" ในคำสั่ง '
+            '(หรือวางสคริปต์ไว้ในโฟลเดอร์ _sync ของโฟลเดอร์เก็บบิล)' % base_dir())
         return 1
     if '--force' in argv:
         i = argv.index('--force')
