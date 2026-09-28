@@ -701,28 +701,31 @@ window.JJGate=(function(){
         <ol class="steps">
           <li>กด <b>⬇ ดาวน์โหลด inv_nas_sync.py</b> ข้างล่าง (ถ้ามีลายเซ็นในเครื่องนี้ กด
               <b>⬇ ดาวน์โหลดลายเซ็น</b> ด้วย)</li>
-          <li><b>File Station</b> → เข้าโฟลเดอร์เก็บบิล (เช่น <code>Tax invoice</code>) → สร้างโฟลเดอร์ย่อยชื่อ
-              <code>_sync</code> → อัพโหลด <code>inv_nas_sync.py</code> (และ <code>signature.png</code>) ลงไป
-              <span class="detail">(ดูพาธเต็มได้ที่ คลิกขวาไฟล์ → คุณสมบัติ เช่น
-              <code>/volume1/Tax invoice/_sync/inv_nas_sync.py</code>)</span></li>
+          <li><b>🔒 เก็บสคริปต์ไว้ในโฟลเดอร์ที่พนักงานแก้ไม่ได้</b> — Control Panel → Shared Folder → สร้าง
+              ชื่อ <code>scripts</code> → หน้าสิทธิ์: <b>administrators = อ่าน/เขียน</b> · คนอื่น/กลุ่ม users = <b>ไม่มีสิทธิ์</b>
+              <span class="detail">(ถ้ามีโฟลเดอร์แบบนี้อยู่แล้ว เช่น ที่เก็บสคริปต์สำรองข้อมูลของ P&amp;L ใช้อันนั้นได้เลย ·
+              สคริปต์รันด้วย root — ถ้าวางไว้ในโฟลเดอร์บิลที่เครื่องพนักงาน map ไว้ ใครแก้ไฟล์ได้ = สั่งงาน NAS ได้ทั้งเครื่อง)</span></li>
+          <li><b>File Station</b> → <code>scripts</code> → สร้างโฟลเดอร์ <code>inv_sync</code> → อัพโหลด
+              <code>inv_nas_sync.py</code> (และ <code>signature.png</code>) ลงไป
+              <span class="detail">(ดูพาธเต็มได้ที่ คลิกขวา → คุณสมบัติ · ตัวอย่างข้างล่างใช้ <code>/volume1/scripts/inv_sync</code>
+              และโฟลเดอร์เก็บบิล <code>/volume1/Tax invoice</code> — เปลี่ยนให้ตรงของจริง)</span></li>
           <li><b>Control Panel → Task Scheduler</b> → สร้าง → Scheduled Task → <b>User-defined script</b> ·
-              ชื่อ <code>ติดตั้งตัวเก็บบิล</code> · ผู้ใช้ <b>root</b> · แท็บ Schedule เลือกวันเดียว (รันครั้งเดียว) ·
-              แท็บ Task Settings ช่อง Run command:<br>
-              <code>python3 "/volume1/Tax invoice/_sync/inv_nas_sync.py" --install</code><br>
+              ชื่อ <code>ติดตั้งตัวเก็บบิล</code> · ผู้ใช้ <b>root</b> · แท็บกำหนดเวลา: ทำงานในวันต่อไปนี้ (ครั้งเดียว) ·
+              แท็บการตั้งค่างาน ช่อง Run command:<br>
+              <code>python3 "/volume1/scripts/inv_sync/inv_nas_sync.py" --base "/volume1/Tax invoice" --install</code><br>
               กด OK → เลือก task นี้แล้วกด <b>Run</b> → รอ 2-3 นาที → เปิดไฟล์
-              <code>_sync/inv_nas_sync.log</code> ต้องเห็น <b>พร้อมใช้งาน ✅</b></li>
+              <code>inv_sync/inv_nas_sync.log</code> ต้องเห็น <b>พร้อมใช้งาน ✅</b></li>
           <li>สร้างอีก task: User-defined script · ชื่อ <code>เก็บใบกำกับภาษีลง NAS</code> · ผู้ใช้ <b>root</b> ·
               แท็บกำหนดเวลา: ทำซ้ำ <b>รายวัน</b> · เวลาเริ่มต้น 00:00 · ติ๊ก <b>ทำงานต่อภายในวันเดียวกัน</b> →
               ทำซ้ำ <b>ทุก 5 นาที</b> · การใช้งานครั้งล่าสุด <b>23:55</b> (อันล่างสุด) · Run command:<br>
-              <code>python3 "/volume1/Tax invoice/_sync/inv_nas_sync.py"</code></li>
-          <li><b>🔒 ล็อกโฟลเดอร์ <code>_sync</code> (สำคัญ)</b>: File Station → คลิกขวา <code>_sync</code> → คุณสมบัติ →
-              แท็บสิทธิ์ (Permission) → ให้<b>แก้ไขได้เฉพาะกลุ่ม administrators</b> · บัญชีพนักงาน/กลุ่ม users
-              ให้เป็น "ไม่มีสิทธิ์" · ติ๊ก "ใช้กับโฟลเดอร์ย่อยและไฟล์ทั้งหมด"
-              <span class="detail">(สคริปต์รันด้วย root — ถ้าเครื่องพนักงานที่ map โฟลเดอร์บิลไว้ติดไวรัสแล้วแก้ไฟล์ในนี้ได้
-              = สั่งงาน NAS ได้ทั้งเครื่อง · สคริปต์ยังทำงานปกติเพราะ root ไม่ติดสิทธิ์นี้)</span></li>
+              <code>python3 "/volume1/scripts/inv_sync/inv_nas_sync.py" --base "/volume1/Tax invoice"</code></li>
           <li>กลับมาดูหน้านี้ ภายใน 5 นาที "สถานะ NAS" จะขึ้น 🟢 และบิลที่รอจะทยอยเข้า NAS
-              <span class="detail">(อยากเห็นหน้าตาไฟล์ก่อน: รันคำสั่งเดิมต่อท้าย <code>--test</code>
-              ได้ไฟล์ตัวอย่างในโฟลเดอร์ <code>_test</code>)</span></li>
+              <span class="detail">(อยากเห็นหน้าตาไฟล์ก่อน: รันคำสั่งในข้อ 4 ต่อท้ายด้วย <code>--test</code>
+              ได้ไฟล์ตัวอย่างในโฟลเดอร์ <code>_test</code> ของโฟลเดอร์เก็บบิล)</span></li>
+          <li><span class="detail">เคยติดตั้งแบบเก่าไว้ในโฟลเดอร์ <code>_sync</code> ของโฟลเดอร์บิล: File Station
+              ย้ายโฟลเดอร์ <code>_sync</code> ทั้งโฟลเดอร์ไปไว้ใน <code>scripts</code> (ไลบรารี/ฟอนต์ย้ายตามไปด้วย ไม่ต้อง --install ใหม่)
+              แล้วแก้ Run command ของ task ทุก 5 นาทีเป็น
+              <code>python3 "/volume1/scripts/_sync/inv_nas_sync.py" --base "/volume1/Tax invoice"</code></span></li>
         </ol>
         <div class="actions" style="border:none;padding-top:4px">
           <button class="btn btn-gold btn-sm" id="dlNasScriptBtn">⬇ ดาวน์โหลด inv_nas_sync.py</button>
@@ -733,7 +736,7 @@ window.JJGate=(function(){
         <textarea id="nasCodeBox" class="codebox" readonly style="display:none"></textarea>
         <div class="detail" style="margin-top:8px">
           ลายเซ็นเก็บอยู่ในเบราว์เซอร์ของแต่ละเครื่อง NAS มองไม่เห็น — ต้องวาง <code>signature.png</code>
-          ไว้ใน <code>_sync</code> ด้วย บิลที่ NAS สร้างถึงจะมีลายเซ็น (ไม่มี = เว้นช่องให้เซ็นเอง)
+          ไว้โฟลเดอร์เดียวกับสคริปต์ด้วย บิลที่ NAS สร้างถึงจะมีลายเซ็น (ไม่มี = เว้นช่องให้เซ็นเอง)
         </div>
       </details>
 
@@ -807,8 +810,28 @@ window.JJGate=(function(){
 
     <div class="card">
       <h2>🔢 เลขที่บิลปัจจุบัน</h2>
-      <div class="detail" style="margin-bottom:8px">เลขบิลรันต่อจากระบบเดิมอัตโนมัติ — แก้เฉพาะเมื่อต้องการข้าม/ตั้งเลขใหม่</div>
+      <div class="detail" style="margin-bottom:8px">
+        เลขบิลห้ามซ้ำและห้ามย้อนหลัง — ถ้าเลขที่ตั้งไว้ต่ำกว่าเลขที่มีอยู่แล้วในระบบ แอปจะเลื่อนขึ้นให้เองตอนออกบิล
+        · แก้เองเฉพาะเมื่อต้องการข้ามเลข (เช่น ต่อจากเลขล่าสุดของระบบเดิม)
+      </div>
       <div id="counterBox"><div class="detail">กำลังโหลด...</div></div>
+    </div>
+
+    <div class="card" id="importCard">
+      <h2>📥 นำเข้าบิลจากระบบเดิม (ไฟล์ Excel)</h2>
+      <div class="detail" style="margin-bottom:10px;line-height:1.7">
+        ไฟล์ที่ export จากชีต <code>Invoices</code> ของระบบออกใบกำกับภาษีเดิม (Google Sheet / Apps Script) ·
+        นำเข้าแล้วค้นหา ดู พิมพ์ ส่งอีเมลซ้ำ ได้เหมือนบิลที่ออกจากแอปนี้ · <b>NAS สร้างไฟล์ PDF ของบิลเก่าเก็บให้ครบ</b>
+        · <b>เลขบิลของแอปนี้จะต่อจากเลขล่าสุดของระบบเดิมให้เอง</b> · บิลที่มีเลขนี้ในระบบแล้วจะข้าม ไม่เขียนทับ
+        · กดนำเข้าซ้ำได้ (เช่น export ใหม่หลังระบบเดิมออกบิลเพิ่ม)
+        <br>🔒 ไฟล์ถูกอ่านในเครื่องนี้เท่านั้น — ไม่อัพโหลดไฟล์ขึ้นที่ไหน เก็บแค่ข้อมูลบิล (ตัวหนังสือ) ลงตารางเดียวกับบิลใหม่
+      </div>
+      <input type="file" id="impFile" accept=".xlsx,.xls,.csv" style="display:none">
+      <div class="actions" style="border:none;padding-top:0">
+        <button class="btn btn-primary btn-sm" id="impPickBtn">เลือกไฟล์ Excel</button>
+        <button class="btn btn-gold btn-sm" id="impGoBtn" style="display:none"></button>
+      </div>
+      <div id="impPreview" class="detail" style="margin-top:8px;line-height:1.7"></div>
     </div>
 
     <div class="card">
@@ -1446,6 +1469,7 @@ function applyPerms(){
   var ib=$('issueBtn');
   if(!can('new','a')&&!editingBillNo){ ib.disabled=true; ib.title='ไม่มีสิทธิ์ออกบิล'; }
   else{ ib.disabled=false; ib.title=''; }
+  var ic=$('importCard'); if(ic) ic.style.display=(isBoss()||can('settings','e'))?'':'none';
 }
 
 // ================= บันทึกประวัติว่าใครทำอะไร (ตาราง inv_activity) =================
@@ -1491,18 +1515,50 @@ function blobToBase64(blob){ return new Promise(function(res,rej){
   r.readAsDataURL(blob);
 }); }
 // POST แบบ text/plain เพื่อเลี่ยง CORS preflight (Apps Script ไม่รองรับ OPTIONS)
-async function gasSend(payload){
-  var res=await fetch(settings.gas_endpoint,{method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(payload)});
-  var text=await res.text();
-  try{ return JSON.parse(text); }
-  catch(e){ return {ok:false,message:'ตอบกลับไม่ใช่ JSON — เช็คว่า URL ลงท้าย /exec และ Deploy สิทธิ์ Anyone'}; }
+/* URL ตัวส่งอีเมล: ตัดช่องว่าง/ขึ้นบรรทัดที่ติดมาตอนคัดลอก แล้วตรวจรูปแบบ — คืน {url} หรือ {error} */
+function cleanGasUrl(u){
+  u=String(u||'').replace(/\s+/g,'');
+  if(!u) return {url:''};
+  if(/\/dev(\?.*)?$/.test(u)) return {error:'ใช้ URL ที่ลงท้าย /exec (ตัวที่ลงท้าย /dev ใช้ได้แค่คนเขียนสคริปต์)'};
+  if(!/^https:\/\/script\.google\.com\/(a\/macros\/[^\/]+|macros)\/s\/[A-Za-z0-9_-]{20,}\/exec$/.test(u))
+    return {error:'URL ไม่ถูกต้อง — ต้องเป็น https://script.google.com/macros/s/…/exec (คัดลอกจากหน้า Deploy)'};
+  return {url:u};
 }
-function mailContent(inv){
+/* Google ตอบเป็นหน้าเว็บแทน JSON → อ่านข้อความในหน้านั้นมาบอกว่าติดอะไร */
+function gasHtmlReason(html, status){
+  var t=String(html||'').replace(/<(script|style)[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ')
+    .replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
+  if(/function not found: doPost|ไม่พบฟังก์ชันสคริปต์: doPost/i.test(t))
+    return 'ในสคริปต์ไม่มี doPost — วางโค้ดใหม่ทั้งหมด กดบันทึก 💾 แล้ว Deploy → จัดการ → แก้ไข → เวอร์ชันใหม่';
+  if(/authoriz|ให้สิทธิ์|การอนุญาต/i.test(t))
+    return 'ยังไม่ได้อนุญาตสิทธิ์ — ใน Apps Script เลือกฟังก์ชัน setup กด ▶ เรียกใช้ แล้วกดอนุญาต จากนั้น Deploy เวอร์ชันใหม่';
+  if(/accounts\.google|sign in|ลงชื่อเข้าใช้|เข้าสู่ระบบ/i.test(t+html))
+    return 'ผู้มีสิทธิ์เข้าถึงยังไม่ใช่ "ทุกคน" — Deploy → จัดการการทำให้ใช้งานได้ → ✏️ แก้ไข → ผู้มีสิทธิ์เข้าถึง: ทุกคน → เวอร์ชันใหม่ → Deploy';
+  if(status===404||/unable to open the file|ไม่สามารถเปิดไฟล์|not found/i.test(t))
+    return 'ไม่พบตัวส่งอีเมลที่ URL นี้ (URL ผิด หรือ Deployment ถูกลบ) — คัดลอก Web app URL ใหม่จากหน้า Deploy';
+  return 'Google ตอบกลับว่า: '+(t.slice(0,160)||('HTTP '+status));
+}
+async function gasSend(payload){
+  var c=cleanGasUrl(settings.gas_endpoint);
+  if(c.error) return {ok:false,message:c.error};
+  var res, text;
+  try{
+    res=await fetch(c.url,{method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload)});
+    text=await res.text();
+  }catch(e){
+    return {ok:false,message:'ต่อตัวส่งอีเมลไม่ได้ — มักเกิดจาก "ผู้มีสิทธิ์เข้าถึง" ไม่ใช่ ทุกคน หรือ URL ผิด (Deploy → จัดการ → แก้ไข)'};
+  }
+  try{ return JSON.parse(text); }
+  catch(e){ return {ok:false,message:gasHtmlReason(text,res.status)}; }
+}
+function mailContent(inv, opts){
+  var edited=!!(opts&&opts.edited);
   return {
-    subject:'ใบเสร็จรับเงิน/ใบกำกับภาษี เลขที่ '+inv.bill_no+' - '+CONFIG.SHOP.senderName,
+    subject:'ใบเสร็จรับเงิน/ใบกำกับภาษี เลขที่ '+inv.bill_no+(edited?' (ฉบับแก้ไข)':'')+' - '+CONFIG.SHOP.senderName,
     body:'เรียน '+(inv.customer_name||'ลูกค้า')+'\n\n'+
+      (edited?'ใบเสร็จรับเงิน/ใบกำกับภาษีฉบับนี้เป็นฉบับแก้ไข ใช้แทนฉบับที่ส่งไปก่อนหน้า\n\n':'')+
       'แนบใบเสร็จรับเงิน/ใบกำกับภาษีเลขที่ '+inv.bill_no+
       ' ยอดรวมทั้งสิ้น '+fmt(inv.grand_total)+' บาท (รวม VAT 7%)\n\n'+
       'ขอบคุณที่ใช้บริการ\n'+CONFIG.SHOP.senderName+
@@ -1520,7 +1576,7 @@ async function sendInvoiceEmail(inv, blob, opts){
     if(!mailBlob || localStorage.getItem('jjmk_inv_withcopy')==='1'){
       mailBlob=await buildInvoicePdf(inv,true);
     }
-    var m=mailContent(inv);
+    var m=mailContent(inv, opts);
     var res=await gasSend({action:'send',billNo:inv.bill_no,email:inv.email,
       subject:m.subject,body:m.body,filename:inv.bill_no+'.pdf',
       pdfBase64:await blobToBase64(mailBlob)});
@@ -1567,6 +1623,10 @@ async function loadSettings(){
   }catch(e){}
   $('gasEndpoint').value=settings.gas_endpoint||'';
   renderGasStatus();
+  if(settings.pdf_with_copy==='1'||settings.pdf_with_copy==='0'){      // ค่ากลางชนะค่าในเครื่อง
+    $('optCopy').checked=(settings.pdf_with_copy==='1');
+    try{ localStorage.setItem('jjmk_inv_withcopy',settings.pdf_with_copy); }catch(e){}
+  }
   renderNasStatus(); renderMissingNas();     // สถานะ NAS มาจาก inv_settings (nas_sync_last/nas_sync_info)
 }
 async function saveSetting(key,value){
@@ -1598,7 +1658,35 @@ async function checkDb(){
   }catch(e){ showOffline(e.message); return false; }
 }
 
+/* กันเลขบิลถอยหลัง/ซ้ำ — ถ้าตัวนับตามหลังเลขที่มีอยู่แล้วในระบบ (เช่น เพิ่งนำเข้าบิลจากระบบเดิม
+   หรือมีคนตั้งเลขผิด) เลื่อนตัวนับขึ้นไปที่เลขสูงสุดก่อน ใบต่อไปจะต่อจากเลขนั้นเสมอ */
+function billSeq(billNo, prefix){
+  var n=parseInt(String(billNo||'').slice(String(prefix).length),10);
+  return isNaN(n)?null:n;
+}
+async function syncCounterWithBills(prefix){
+  try{
+    var q=await sb.from('inv_invoices').select('bill_no').eq('branch_prefix',prefix)
+      .order('bill_no',{ascending:false}).limit(20);
+    if(q.error||!q.data||!q.data.length) return null;
+    var maxNo=null;
+    q.data.forEach(function(r){ var n=billSeq(r.bill_no,prefix); if(n!==null&&(maxNo===null||n>maxNo))maxNo=n; });
+    if(maxNo===null) return null;
+    var c=await sb.from('inv_counters').select('prefix,last_no').eq('prefix',prefix).limit(1);
+    if(c.error) return null;
+    var row=(c.data||[]).filter(function(x){ return x.prefix===prefix; })[0];
+    var last=row?Number(row.last_no):null;
+    if(last===null||last<maxNo){
+      var u=await sb.from('inv_counters').upsert({prefix:prefix,last_no:maxNo});
+      if(!u.error) logActivity('เลื่อนเลขบิลอัตโนมัติ','',
+        prefix+' '+(last===null?'(ยังไม่มี)':last)+' → '+maxNo+' เพราะมีบิลเลขนี้ในระบบแล้ว');
+      return maxNo;
+    }
+    return last;
+  }catch(e){ return null; }
+}
 async function nextBillNo(branch){
+  await syncCounterWithBills(branch.prefix);
   // ทางหลัก: RPC atomic กันเลขซ้ำ
   var r=await sb.rpc('inv_next_bill_no',{p_prefix:branch.prefix,p_start:branch.start});
   if(!r.error && r.data) return { billNo:r.data, viaRpc:true };
@@ -2204,13 +2292,18 @@ $('testNasBtn').onclick=async function(){
 $('clearNasBtn').onclick=async function(){
   nasHandle=null; await idbDel('nasDir'); renderNasStatus(); toast('ล้างการตั้งค่า NAS แล้ว');
 };
-$('optCopy').onchange=function(){
-  localStorage.setItem('jjmk_inv_withcopy',this.checked?'1':'0');
+$('optCopy').onchange=async function(){
+  var v=this.checked?'1':'0';
+  localStorage.setItem('jjmk_inv_withcopy',v);
+  // เก็บเป็นค่ากลางด้วย — ทุกเครื่องและสคริปต์บน NAS จะแนบหน้า "สำเนา" ตามนี้เหมือนกัน
+  if(await saveSetting('pdf_with_copy',v))
+    toast(this.checked?'แนบหน้า "สำเนา" ทุกไฟล์ (ทุกเครื่อง + NAS)':'ไม่แนบหน้า "สำเนา" แล้ว (ทุกเครื่อง + NAS)','ok');
 };
 $('saveGasBtn').onclick=async function(){
-  var u=val('gasEndpoint');
-  if(u && !/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(u)){
-    toast('URL ต้องเป็นของ Google Apps Script (ลงท้าย /exec)','err'); return; }
+  var c=cleanGasUrl($('gasEndpoint').value);
+  if(c.error){ toast(c.error,'err'); return; }
+  var u=c.url;
+  $('gasEndpoint').value=u;                // ตัดช่องว่างที่ติดมาตอนคัดลอกให้เห็นเลย
   if(await saveSetting('gas_endpoint',u)){
     logActivity('ตั้งค่าตัวส่งอีเมล','', u?'ตั้ง URL ใหม่':'ปิดการส่งอัตโนมัติ');
     toast(u?'บันทึก URL ตัวส่งอีเมลแล้ว — ใช้ได้ทุกเครื่อง':'ปิดการส่งอีเมลอัตโนมัติแล้ว','ok');
@@ -2271,7 +2364,7 @@ $('dlNasScriptBtn').onclick=async function(){
   try{
     var code=await nasCodeText();
     downloadBlob('inv_nas_sync.py', new Blob([code],{type:'text/x-python;charset=utf-8'}));
-    toast('ดาวน์โหลด inv_nas_sync.py แล้ว — อัพโหลดไปไว้ในโฟลเดอร์ _sync บน NAS','ok');
+    toast('ดาวน์โหลด inv_nas_sync.py แล้ว — อัพโหลดไปไว้ในโฟลเดอร์สคริปต์บน NAS (เช่น scripts/inv_sync)','ok');
   }catch(e){ toast(e.message,'err'); }
 };
 $('copyNasCodeBtn').onclick=async function(){
@@ -2295,13 +2388,186 @@ $('dlSigBtn').onclick=function(){
     c.toBlob(function(b){
       if(!b){ toast('แปลงลายเซ็นไม่สำเร็จ','err'); return; }
       downloadBlob('signature.png', b);
-      toast('ดาวน์โหลด signature.png แล้ว — วางไว้ในโฟลเดอร์ _sync บน NAS','ok');
+      toast('ดาวน์โหลด signature.png แล้ว — วางไว้โฟลเดอร์เดียวกับสคริปต์บน NAS','ok');
     },'image/png');
   };
   img.onerror=function(){ toast('อ่านรูปลายเซ็นไม่ได้','err'); };
   img.src=sigDataUrl;
 };
 $('syncNasBtn').onclick=syncMissingNas;
+
+// ================= นำเข้าบิลจากระบบเดิม (Excel ที่ export จากชีต Invoices ของ Apps Script) =================
+// ไฟล์อ่านในเบราว์เซอร์ล้วน ๆ ไม่อัพโหลดไฟล์ขึ้นที่ไหน · ข้อมูลลูกค้าไม่ผ่านแชท/GitHub
+var XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+var imp={rows:[], skipped:[], existing:{}, conflicts:[], file:''};
+function loadXlsxLib(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(loadXlsxLib._p) return loadXlsxLib._p;
+  loadXlsxLib._p=new Promise(function(res,rej){
+    var s=document.createElement('script'); s.src=XLSX_URL;
+    s.onload=function(){ if(window.XLSX) res(window.XLSX); else rej(new Error('โหลดตัวอ่าน Excel ไม่สำเร็จ')); };
+    s.onerror=function(){ loadXlsxLib._p=null; rej(new Error('โหลดตัวอ่าน Excel ไม่สำเร็จ (เช็คอินเทอร์เน็ต)')); };
+    document.head.appendChild(s);
+  });
+  return loadXlsxLib._p;
+}
+/* เวลาในชีตเดิมเป็นเวลาไทยแบบไม่มีโซนเวลา → แปลงเป็น UTC (ISO) */
+function impTime(v){
+  if(v===null||v===undefined||v==='') return null;
+  var ms, m;
+  if(typeof v==='number') ms=Math.round((v-25569)*86400000);           // เลขวันที่ของ Excel
+  else{
+    var s=String(v).trim();
+    if((m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s))){
+      var y=+m[3]; if(y>2400) y-=543;                                  // ปี พ.ศ.
+      ms=Date.UTC(y,+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0),+(m[6]||0));
+    }else if((m=/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(s.replace(/\.\d+$/,''))))
+      ms=Date.UTC(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0));
+    else{ var t=Date.parse(s); return isNaN(t)?null:new Date(t).toISOString(); }   // มีโซนเวลาในตัวแล้ว
+  }
+  if(isNaN(ms)) return null;
+  return new Date(ms-7*3600000).toISOString();
+}
+function impDigits(v){ if(v===null||v===undefined) return ''; if(typeof v==='number') return String(Math.round(v)); return String(v).replace(/\D/g,''); }
+/* ชีตเดิมเก็บเลขภาษี/เบอร์โทรบางแถวเป็น "ตัวเลข" เลข 0 หน้าสุดเลยหายไป — เติมกลับ */
+function impTax(v){ var d=impDigits(v); if(!d) return '-'; if(typeof v==='number'&&d.length<13) d=('0000000000000'+d).slice(-13); return d; }
+function impPhone(v){ var d=impDigits(v); if(!d) return null; if(typeof v==='number'&&d.charAt(0)!=='0') d='0'+d; return d; }
+function impNum(v){ var n=Number(typeof v==='string'?v.replace(/,/g,''):v); return isNaN(n)?0:round2(n); }
+function impStr(v){ return (v===null||v===undefined)?'':String(v).trim(); }
+var IMP_EMAIL_ST={'ส่งถึงแล้ว':EMAIL_STATUS.DELIVERED,'ส่งไม่สำเร็จ':EMAIL_STATUS.FAILED,
+  'ผิดพลาด':EMAIL_STATUS.ERROR,'กำลังส่ง':EMAIL_STATUS.SENDING};
+var IMP_BY='ระบบเดิม (Apps Script)';
+function impMapRow(r){
+  var bill=impStr(r.BillNo).toUpperCase();
+  if(!/^[A-Z]{2,8}\d{3,6}$/.test(bill)) return {skip:'เลขบิลผิดรูปแบบ: '+(impStr(r.BillNo)||'(ว่าง)')};
+  var prefix=bill.replace(/\d+$/,'');
+  var issued=impTime(r.Timestamp);
+  if(!issued) return {skip:bill+': ไม่มีวันที่ออกบิล'};
+  var items=null;
+  try{ items=JSON.parse(r.ItemsJSON||'[]'); }catch(e){}
+  if(!Array.isArray(items)||!items.length) items=[{name:'อาหารและเครื่องดื่ม',qty:'',price:impNum(r.GrandTotal)}];
+  items=items.map(function(it){ it=it||{}; var q=it.qty;
+    return {name:impStr(it.name)||'อาหารและเครื่องดื่ม', qty:(q===''||q===null||q===undefined)?'':Number(q), price:impNum(it.price)}; });
+  var st=impStr(r.Status), cancelled=(st==='ยกเลิก'), pdf=impStr(r.PdfUrl), sd=impStr(r.StatusDetail);
+  return {row:{
+    bill_no:bill, branch_prefix:prefix, issued_at:issued,
+    customer_name:impStr(r.CustomerName)||'-', tax_id:impTax(r.TaxID), phone:impPhone(r.CustomerPhone),
+    email:impStr(r.Email)||null, address:impStr(r.Address)||'-', items:items,
+    gross:impNum(r.Gross), discount:impNum(r.Discount), net:impNum(r.Net), vat:impNum(r.VAT),
+    grand_total:impNum(r.GrandTotal), payment_method:impStr(r.PaymentMethod)||'เงินสด / QR Payment',
+    status:cancelled?STATUS.CANCELLED:STATUS.ISSUED,
+    status_detail:'นำเข้าจากระบบเดิม'+(cancelled&&sd?(' · '+sd):'')+(pdf?(' · PDF เดิม: '+pdf):''),
+    email_status:cancelled?null:(IMP_EMAIL_ST[st]||null), email_status_detail:cancelled?null:(sd||null),
+    email_sent_at:impTime(r.SentAt), resend_count:Math.max(0,Math.round(Number(r.ResendCount)||0)),
+    created_by:IMP_BY, updated_by:IMP_BY, created_at:issued, updated_at:impTime(r.LastUpdated)||issued,
+    nas_path:null                     // ให้ NAS สร้าง PDF ของบิลเก่าเก็บไว้ด้วย
+  }};
+}
+async function impParse(file){
+  var X=await loadXlsxLib();
+  var wb=X.read(await file.arrayBuffer(),{type:'array'});
+  var ws=wb.Sheets.Invoices||wb.Sheets[wb.SheetNames[0]];
+  var json=X.utils.sheet_to_json(ws,{raw:true,defval:null});
+  if(!json.length||!('BillNo' in json[0])||!('Timestamp' in json[0]))
+    throw new Error('ไม่ใช่ไฟล์ของระบบเดิม — ต้องเป็นชีต Invoices ที่มีคอลัมน์ Timestamp, BillNo, CustomerName ...');
+  var rows=[], skipped=[], seen={};
+  json.forEach(function(r){
+    if(!r.BillNo&&!r.Timestamp) return;                                 // แถวว่าง
+    var m=impMapRow(r);
+    if(m.skip){ skipped.push(m.skip); return; }
+    if(seen[m.row.bill_no]){ skipped.push(m.row.bill_no+': เลขซ้ำในไฟล์ (ใช้แถวแรก)'); return; }
+    seen[m.row.bill_no]=1; rows.push(m.row);
+  });
+  // เลขไหนมีในระบบแล้ว — ข้อมูลตรงกัน = ข้าม · ไม่ตรง = เลขชน (ต้องให้คนดู)
+  var existing={}, conflicts=[];
+  for(var i=0;i<rows.length;i+=100){
+    var chunk=rows.slice(i,i+100).map(function(x){ return x.bill_no; });
+    var q=await sb.from('inv_invoices').select('bill_no,customer_name,grand_total,created_by').in('bill_no',chunk);
+    if(q.error) throw new Error('ตรวจกับฐานข้อมูลไม่ได้: '+q.error.message);
+    (q.data||[]).forEach(function(x){ existing[x.bill_no]=x; });
+  }
+  rows.forEach(function(r){ var e=existing[r.bill_no];
+    if(e && (Math.abs(Number(e.grand_total)-r.grand_total)>0.009 || impStr(e.customer_name)!==r.customer_name))
+      conflicts.push({no:r.bill_no, old:r, now:e}); });
+  imp={rows:rows, skipped:skipped, existing:existing, conflicts:conflicts, file:file.name};
+  return imp;
+}
+function impPreviewHtml(){
+  var by={};
+  imp.rows.forEach(function(r){
+    var p=by[r.branch_prefix]||(by[r.branch_prefix]={n:0,min:null,max:null,nums:{},from:null,to:null,sum:0});
+    var n=billSeq(r.bill_no,r.branch_prefix); p.n++; p.nums[n]=1; p.sum+=r.grand_total;
+    if(p.min===null||n<p.min)p.min=n; if(p.max===null||n>p.max)p.max=n;
+    if(!p.from||r.issued_at<p.from)p.from=r.issued_at; if(!p.to||r.issued_at>p.to)p.to=r.issued_at;
+  });
+  var fresh=imp.rows.filter(function(r){ return !imp.existing[r.bill_no]; }).length;
+  var h='<b>'+esc(imp.file)+'</b> — อ่านได้ '+imp.rows.length+' ใบ · <b>นำเข้าใหม่ '+fresh+' ใบ</b> · มีในระบบแล้ว '+
+    (imp.rows.length-fresh)+' ใบ (ข้าม)'+(imp.skipped.length?(' · อ่านไม่ได้ '+imp.skipped.length+' แถว'):'')+'<br>';
+  Object.keys(by).sort().forEach(function(p){ var s=by[p], gaps=[];
+    for(var n=s.min;n<=s.max&&gaps.length<12;n++) if(!s.nums[n]) gaps.push(n);
+    h+='• <b>'+esc(p)+'</b> '+s.n+' ใบ · เลข '+s.min+'–'+s.max+' · '+fmtDate(s.from)+' ถึง '+fmtDate(s.to)+
+      ' · รวม '+fmt(s.sum)+' บาท'+(gaps.length?(' · <span style="color:var(--warn)">เลขที่ไม่มีในไฟล์: '+gaps.join(', ')+'</span>'):'')+
+      ' → ใบต่อไปของแอปนี้ = <b>'+esc(p)+(s.max+1)+'</b> (หรือเลขที่สูงกว่าถ้ามีในระบบแล้ว)<br>';
+  });
+  if(imp.conflicts.length){
+    h+='<div class="alert" style="margin:8px 0">⚠ <b>เลขชนกัน '+imp.conflicts.length+' ใบ</b> — เลขเดียวกันแต่ลูกค้า/ยอดไม่ตรงกับที่มีในระบบ '+
+      '(มักเกิดจากออกบิลในแอปนี้ก่อนตั้งเลขต่อจากระบบเดิม) · ระบบจะไม่เขียนทับ ให้ยกเลิกบิลในแอปนี้แล้วออกใหม่:<br>'+
+      imp.conflicts.slice(0,20).map(function(c){ return esc(c.no)+': ในไฟล์ = '+esc(c.old.customer_name)+' '+fmt(c.old.grand_total)+
+        ' · ในระบบ = '+esc(c.now.customer_name)+' '+fmt(c.now.grand_total); }).join('<br>')+'</div>';
+  }
+  if(imp.skipped.length) h+='<span style="color:var(--warn)">อ่านไม่ได้: '+imp.skipped.slice(0,10).map(esc).join(' · ')+'</span><br>';
+  return h;
+}
+function impCanRun(){ return isBoss()||can('settings','e'); }
+$('impPickBtn').onclick=function(){
+  if(!impCanRun()){ toast('บัญชีนี้ไม่มีสิทธิ์นำเข้าข้อมูล','err'); return; }
+  $('impFile').click();
+};
+$('impFile').onchange=async function(){
+  var f=this.files[0]; this.value='';
+  if(!f) return;
+  var pv=$('impPreview'), go=$('impGoBtn');
+  go.style.display='none';
+  pv.innerHTML='<span class="spin" style="border-color:#0002;border-top-color:#888"></span> กำลังอ่านไฟล์...';
+  try{
+    await impParse(f);
+    pv.innerHTML=impPreviewHtml();
+    var fresh=imp.rows.filter(function(r){ return !imp.existing[r.bill_no]; }).length;
+    if(fresh){ go.textContent='นำเข้า '+fresh+' ใบ'; go.style.display=''; }
+    else pv.innerHTML+='<b style="color:var(--ok)">✓ บิลทุกใบในไฟล์นี้มีในระบบแล้ว</b>';
+  }catch(e){ pv.innerHTML='<span style="color:var(--bad)">❌ '+esc(e.message)+'</span>'; }
+};
+$('impGoBtn').onclick=async function(){
+  if(!impCanRun()){ toast('บัญชีนี้ไม่มีสิทธิ์นำเข้าข้อมูล','err'); return; }
+  var todo=imp.rows.filter(function(r){ return !imp.existing[r.bill_no]; });
+  if(!todo.length) return;
+  if(!confirm('นำเข้าบิลจากระบบเดิม '+todo.length+' ใบ ?\nบิลที่มีเลขนี้ในระบบแล้วจะข้าม ไม่เขียนทับ')) return;
+  var b=this, pv=$('impPreview'); b.disabled=true;
+  var added=0, prefixes={};
+  try{
+    for(var i=0;i<todo.length;i+=100){
+      b.innerHTML='<span class="spin"></span> '+Math.min(i+100,todo.length)+'/'+todo.length;
+      var r=await sb.from('inv_invoices').upsert(todo.slice(i,i+100),{onConflict:'bill_no',ignoreDuplicates:true}).select('bill_no');
+      if(r.error) throw new Error(r.error.message);
+      added+=(r.data||[]).length;
+    }
+    todo.forEach(function(x){ prefixes[x.branch_prefix]=1; });
+    var moved=[];
+    for(var p in prefixes){ var n=await syncCounterWithBills(p); if(n!==null) moved.push(p+' → ใบต่อไป '+p+(n+1)); }
+    logActivity('นำเข้าบิลจากระบบเดิม','', 'เพิ่ม '+added+' ใบ จากไฟล์ '+imp.file+(moved.length?(' · '+moved.join(' · ')):''));
+    toast('นำเข้า '+added+' ใบแล้ว — NAS จะทยอยสร้างไฟล์ PDF ให้','ok');
+    pv.innerHTML='<b style="color:var(--ok)">✓ นำเข้า '+added+' ใบ</b>'+(moved.length?(' · เลขบิลต่อไป: '+esc(moved.join(' · '))):'')+
+      ' · NAS จะสร้าง PDF ของบิลเก่าให้ทีละ 100 ใบทุก 5 นาที';
+    b.style.display='none';
+    imp.rows.forEach(function(x){ imp.existing[x.bill_no]=imp.existing[x.bill_no]||x; });
+    loadInvoices(); loadCounters();
+  }catch(e){
+    toast('นำเข้าไม่สำเร็จ: '+e.message,'err');
+    pv.innerHTML+='<br><span style="color:var(--bad)">❌ นำเข้าไม่สำเร็จ ('+esc(e.message)+') — เพิ่มไปแล้ว '+added+' ใบ กดนำเข้าอีกครั้งได้เลย (ใบที่เข้าแล้วจะข้าม)</span>';
+    b.textContent='นำเข้าอีกครั้ง';
+  }
+  b.disabled=false;
+};
 
 $('sigUploadBtn').onclick=function(){ $('sigFile').click(); };
 $('sigFile').onchange=function(){ handleSigFile(this.files[0]); this.value=''; };
