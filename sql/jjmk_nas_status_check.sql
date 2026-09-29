@@ -7,10 +7,11 @@ select key, value,
        case when key='nas_sync_last' then now() - (value::timestamptz) end as "นานแค่ไหนแล้ว"
 from inv_settings where key in ('nas_sync_last','nas_sync_info');
 
-select branch, to_char(issued_at,'YYYY-MM') as เดือน,
+select upper(coalesce(substring(bill_no from '^[A-Za-z]+'),'อื่นๆ')) as สาขา,   -- สาขาอ่านจากตัวอักษรหน้าเลขบิล (เหมือนสคริปต์ NAS)
+       to_char(issued_at at time zone 'Asia/Bangkok','YYYY-MM') as เดือน,
        count(*) filter (where nas_path is not null) as "เก็บลง NAS แล้ว",
        count(*) filter (where nas_path is null)     as "รอ NAS เก็บ",
-       count(*) filter (where status='cancelled')   as ยกเลิก
+       count(*) filter (where status='ยกเลิก')   as ยกเลิก
 from inv_invoices group by 1,2 order by 1,2 desc;
 
 select nas_path from inv_invoices where nas_path is not null order by updated_at desc limit 5; -- ตัวอย่างโฟลเดอร์ที่ใช้อยู่
