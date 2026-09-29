@@ -90,5 +90,5 @@ do $$ begin
   execute 'grant select, insert, update, delete on pnl_settings to anon, authenticated';
 end $$;
 
--- เสร็จแล้ว: เปิด https://thananant.github.io/JJ-PnL/ แล้วกด "พนักงานใหม่? สมัครที่นี่"
+-- เสร็จแล้ว: เปิด https://thananant.github.io/JJ-PnL/ แล้วกดปุ่ม "🙋 สมัครพนักงานใหม่" ใต้ปุ่มเข้าสู่ระบบ
 -- ใบสมัครจะไปโผล่ที่ JJ Access -> แท็บ "รออนุมัติ"
