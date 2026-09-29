@@ -72,5 +72,23 @@ returns integer language sql stable security definer set search_path = public as
 $$;
 grant execute on function pnl_pending_count() to anon, authenticated;
 
+-- 5) ค่าตั้งของระบบกลาง (ตั้งจากในแอพได้ ไม่ต้องเข้า Supabase) ------------------
+--    ใช้เก็บ line_group_id = กลุ่ม LINE ที่จะให้แจ้งเตือนตอนมีคนสมัครใหม่
+--    ⚠️ ตารางนี้ anon อ่านได้ **ห้ามเอาค่าลับ (token/รหัสผ่าน) มาเก็บที่นี่**
+create table if not exists pnl_settings (
+  id         text primary key,
+  val        text,
+  updated_at timestamptz default now(),
+  updated_by text
+);
+
+do $$ begin
+  execute 'alter table pnl_settings enable row level security';
+  if not exists (select 1 from pg_policies where schemaname='public' and tablename='pnl_settings' and policyname='pnl_settings_all') then
+    execute 'create policy pnl_settings_all on pnl_settings for all to anon, authenticated using (true) with check (true)';
+  end if;
+  execute 'grant select, insert, update, delete on pnl_settings to anon, authenticated';
+end $$;
+
 -- เสร็จแล้ว: เปิด https://thananant.github.io/JJ-PnL/ แล้วกด "พนักงานใหม่? สมัครที่นี่"
 -- ใบสมัครจะไปโผล่ที่ JJ Access -> แท็บ "รออนุมัติ"
