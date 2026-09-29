@@ -1323,7 +1323,15 @@ async function vBot(el){
     <option value="draft" ${mode[chn]==='draft'?'selected':''}>ร่างให้ตรวจ — บอทร่าง คนกดส่ง</option>
     <option value="faq" ${mode[chn]==='faq'?'selected':''}>ตอบออโต้เฉพาะคำถามพบบ่อย — ที่เหลือส่งให้คน</option>
     <option value="auto" ${mode[chn]==='auto'?'selected':''}>ตอบอัตโนมัติทุกเรื่อง</option></select>`;
+  const aiMode=bot.ai_mode==='best'?'best':'free';
   el.innerHTML=`
+  <div class="card"><h3>🧠 โหมด AI <span class="sp">ใช้ทั้งวิเคราะห์รีวิว สรุปรายวัน และแชทบอท</span></h3>
+    <div class="fld" style="margin-bottom:6px"><select id="btAi">
+      <option value="free" ${aiMode==='free'?'selected':''}>💚 ประหยัด (ฟรี) — Gemini โควต้าฟรีรายวัน → วิเคราะห์เบื้องต้นจากคำสำคัญ</option>
+      <option value="best" ${aiMode==='best'?'selected':''}>💎 คุณภาพสูงสุด (มีค่าใช้จ่าย) — Claude ก่อน ถ้าเครดิตหมดถอยไปโหมดฟรีเอง</option>
+    </select></div>
+    <div class="xs mut">โหมดประหยัด = ไม่มีค่าใช้จ่ายเลย · ถ้าโควต้า Gemini ของวันนั้นหมด ระบบใช้การวิเคราะห์เบื้องต้นแทน (ผลขึ้นป้าย [เบื้องต้น]) แล้วกลับมาใช้ Gemini เองวันถัดไป</div>
+  </div>
   <div class="grid g2">
     <div class="card"><h3>🤖 โหมดตอบอัตโนมัติรายช่องทาง</h3>
       <div class="fld"><label>💬 LINE OA</label>${modeSel('line')}</div>
@@ -1397,7 +1405,8 @@ async function candMut(i,add){
 function faqRow(f,i){return `<div class="faqrow"><input placeholder="คำถาม เช่น มีที่จอดรถไหม" value="${esc(f.q||'')}" data-fq="${i}"><input placeholder="คำตอบ" value="${esc(f.a||'')}" data-fa="${i}"><button class="icb" onclick="this.parentElement.remove()">✕</button></div>`}
 function addFaq(){$('#faqList').insertAdjacentHTML('beforeend',faqRow({},Date.now()))}
 async function saveBot(){
-  const bot={
+  const bot={...(S.settings.bot||{}),   // เก็บค่าอื่นที่ไม่มีในหน้านี้ไว้ด้วย
+    ai_mode:$('#btAi').value==='best'?'best':'free',
     mode:{line:$('#bm_line').value,facebook:$('#bm_facebook').value,instagram:$('#bm_instagram').value},
     persona:$('#btPersona').value.trim(),
     fallback_text:$('#btFallback').value.trim(),
@@ -1576,6 +1585,23 @@ async function vSet(el){
   el.innerHTML='<div class="spin"></div>';
   await loadStaff();
   el.innerHTML=`
+  ${isAdmin()?`<div class="card"><h3>🩺 สถานะระบบ &amp; ค่าใช้จ่าย <span class="sp">ตรวจสด ณ ตอนเปิดหน้านี้</span>
+    <button class="btn gh sm" style="margin-left:auto" onclick="renderHealth()">⟳ ตรวจใหม่</button></h3>
+    <div id="healthBox"><div class="spin"></div></div>
+  </div>
+  <div class="card"><h3>🧩 โค้ด Edge Functions <span class="sp">วางใน Supabase — ไม่ต้องหาจากที่อื่น</span></h3>
+    <div class="twrap"><table>
+      <tr><th>ฟังก์ชัน</th><th>เวอร์ชันในแอป</th><th></th></tr>
+      <tr><td><b>social-brain</b><div class="xs mut">สมองระบบ: วิเคราะห์ · สรุป · ดึงรีวิว · ตอบกลับ</div></td>
+        <td class="num">${esc(fnVersion('fnBrain'))}</td>
+        <td class="right"><button class="btn sm" onclick="copyFn('fnBrain','social-brain')">📋 คัดลอกโค้ด</button></td></tr>
+      <tr><td><b>social-webhook</b><div class="xs mut">รับข้อความ LINE/Facebook/IG + ปลายทางเชื่อม Google</div></td>
+        <td class="num">${esc(fnVersion('fnWebhook'))}</td>
+        <td class="right"><button class="btn sm" onclick="copyFn('fnWebhook','social-webhook')">📋 คัดลอกโค้ด</button></td></tr>
+    </table></div>
+    <div class="xs mut" style="margin-top:8px;line-height:1.7">วิธีวาง: Supabase → <b>Edge Functions</b> → กดชื่อฟังก์ชัน → แท็บ <b>Code</b> → ลบของเดิมทั้งหมด → วาง → <b>Deploy</b><br>
+    ⚠️ <b>social-webhook</b> ต้อง<b>ปิด Verify JWT</b> (หน้า Details ของฟังก์ชัน) ไม่งั้น LINE/Facebook/Google ยิงเข้ามาไม่ได้ · เสร็จแล้วกด ⟳ ตรวจใหม่ ด้านบน ต้องขึ้น ✅ ตรงเวอร์ชัน</div>
+  </div>`:''}
   <div class="card"><h3>👥 รายชื่อพนักงาน <span class="sp">ช่วยให้ AI จับชื่อในรีวิวได้แม่น + ใช้สรุปใครทำดี</span></h3>
     <div class="twrap"><table><tr><th>ชื่อ</th><th>ชื่อเล่น/สะกดอื่น</th><th>สาขา</th><th>กะ</th><th></th></tr>
       ${S.staff.map(s=>`<tr style="${s.active?'':'opacity:.45'}">
@@ -1592,9 +1618,109 @@ async function vSet(el){
       <button class="btn gh sm" onclick="importModal()">📥 นำเข้ารีวิวจากไฟล์</button>
     </div>
     <div class="xs mut" style="margin-top:8px">ปกติระบบวิเคราะห์อัตโนมัติทันทีที่มีรีวิวเข้า และสรุปรายวันเวลา 06:10 (ถ้าเปิด pg_cron ตามคู่มือ)<br>
-    🧠 โหมด AI เลือกเองอัตโนมัติ: <b>Claude</b> (ถ้ามีเครดิต) → <b>Gemini</b> (โควต้าฟรีรายวัน) → <b>วิเคราะห์เบื้องต้นจากคำสำคัญ</b> (ฟรี ไม่จำกัด — ผลจะขึ้นป้าย [เบื้องต้น])</div>
+    🧠 เลือกโหมด AI (ประหยัด/คุณภาพสูงสุด) ได้ที่หน้า <a class="hintlink" href="javascript:show('bot')">ตั้งค่าแชทบอท</a></div>
   </div>
   `;
+  if(isAdmin())renderHealth();
+}
+
+/* ---------- สถานะระบบ & ค่าใช้จ่าย ---------- */
+function fnVersion(id){
+  const t=(document.getElementById(id)||{}).textContent||'';
+  const m=t.match(/const VERSION = "([^"]+)"/); return m?m[1]:'—';
+}
+async function copyFn(id,name){
+  const code=((document.getElementById(id)||{}).textContent||'').replace(/^\n/,'');
+  if(!code){toast('ไม่พบโค้ดในแอป',true);return}
+  try{await navigator.clipboard.writeText(code)}
+  catch(e){  // เบราว์เซอร์ไม่ให้ใช้ clipboard API → ใช้วิธีเลือกข้อความแทน
+    const ta=document.createElement('textarea');ta.value=code;ta.style.cssText='position:fixed;top:-2000px';
+    document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(_){}ta.remove();
+  }
+  toast(`คัดลอกโค้ด ${name} แล้ว ✓ (${code.split('\n').length} บรรทัด) — ไปวางใน Supabase ได้เลย`);
+}
+function hRow(st,title,detail,cost){
+  const ic={ok:'✅',warn:'⚠️',bad:'❌',off:'⚪'}[st]||'⚪';
+  const cc=cost?`<span class="chip ${/เสียเงิน/.test(cost)?'neg':/ฟรี/.test(cost)?'pos':''}" style="margin-left:auto">${esc(cost)}</span>`:'';
+  return `<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px dashed var(--line)">
+    <div style="font-size:17px;line-height:1.2">${ic}</div>
+    <div style="flex:1;min-width:0"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>${esc(title)}</b>${cc}</div>
+    <div class="xs mut" style="margin-top:2px;line-height:1.6">${detail}</div></div></div>`;
+}
+async function renderHealth(){
+  const box=document.getElementById('healthBox'); if(!box)return;
+  box.innerHTML='<div class="spin"></div>';
+  const want=fnVersion('fnBrain'), wantW=fnVersion('fnWebhook');
+  const {url,key}=cfg(); const rows=[];
+  rows.push(hRow('ok','แอป + ฐานข้อมูล (GitHub Pages + Supabase)',
+    'เปิดแอปได้และอ่านข้อมูลได้ปกติ · แพ็กเกจฟรีของ Supabase: ฐานข้อมูล 500 MB · เรียกฟังก์ชัน 500,000 ครั้ง/เดือน — ร้าน 2 สาขาใช้ไม่ถึง','ฟรี'));
+  // --- social-brain ---
+  let st=null,brainErr='';
+  try{st=await brain('status',{})}catch(e){brainErr=e.message||String(e)}
+  if(st&&st.ok){
+    rows.push(hRow(st.version===want?'ok':'warn','สมองระบบ (social-brain)',
+      st.version===want?`เวอร์ชัน ${esc(st.version)} ตรงกับล่าสุด`
+        :`ที่ deploy อยู่เป็นเวอร์ชัน ${esc(st.version||'เก่า')} · ล่าสุดคือ ${esc(want)} → กด 📋 คัดลอกโค้ดด้านล่างไปวางทับแล้ว Deploy`,'ฟรี'));
+  }else{
+    const old=/unknown action/i.test(brainErr), none=/404|not found/i.test(brainErr);
+    rows.push(hRow(none?'bad':'warn','สมองระบบ (social-brain)',
+      none?'ยังไม่ได้สร้างฟังก์ชันชื่อ <b>social-brain</b> ใน Supabase → สร้างแล้ววางโค้ดจากปุ่มด้านล่าง'
+        :old?'ยังเป็นเวอร์ชันเก่า (ก่อนมีหน้าสถานะนี้) → วางโค้ดล่าสุดจากปุ่มด้านล่างแล้ว Deploy'
+        :'เรียกไม่ได้: '+esc(brainErr.slice(0,120)),'ฟรี'));
+  }
+  // --- social-webhook ---
+  let wh=null,whCode=0;
+  try{const r=await fetch(url+'/functions/v1/social-webhook',{cache:'no-store'});whCode=r.status;
+    if(r.ok){try{wh=await r.json()}catch(_){wh={old:true}}}}catch(e){whCode=-1}
+  if(wh&&wh.version){
+    rows.push(hRow(wh.version===wantW?'ok':'warn','ตัวรับข้อความ (social-webhook)',
+      wh.version===wantW?`เวอร์ชัน ${esc(wh.version)} ตรงกับล่าสุด · Verify JWT ปิดแล้ว (ถูกต้อง)`
+        :`ที่ deploy อยู่เป็นเวอร์ชัน ${esc(wh.version)} · ล่าสุดคือ ${esc(wantW)} → วางโค้ดใหม่แล้ว Deploy`,'ฟรี'));
+  }else{
+    rows.push(hRow(whCode===404?'bad':'warn','ตัวรับข้อความ (social-webhook)',
+      whCode===404?'ยังไม่ได้สร้างฟังก์ชันชื่อ <b>social-webhook</b> → สร้างแล้ววางโค้ดจากปุ่มด้านล่าง'
+        :whCode===401?'<b>Verify JWT ยังเปิดอยู่</b> → เข้า Details ของฟังก์ชันแล้วปิด ไม่งั้น LINE/Facebook/Google ยิงเข้ามาไม่ได้'
+        :'ยังเป็นเวอร์ชันเก่า หรือยังไม่ได้ปิด Verify JWT → วางโค้ดล่าสุดจากปุ่มด้านล่าง, Deploy, แล้วเช็คว่าปิด Verify JWT','ฟรี'));
+  }
+  if(st&&st.ok){
+    const sc=st.secrets||{}, g=st.google||{};
+    // --- AI ---
+    if(st.ai_mode==='best'){
+      rows.push(hRow(sc.anthropic?(st.claude_paused_min?'warn':'ok'):'bad','AI — โหมดคุณภาพสูงสุด (Claude)',
+        !sc.anthropic?'ยังไม่ได้ตั้ง secret <b>ANTHROPIC_API_KEY</b> → ระบบใช้โหมดฟรีแทนไปก่อน'
+          :st.claude_paused_min?`Claude ใช้ไม่ได้ชั่วคราว (เครดิตหมด/คีย์ผิด) — ใช้ Gemini แทนอยู่ · ลองใหม่อัตโนมัติในอีก ${st.claude_paused_min} นาที · เติมเครดิตที่ console.anthropic.com`
+          :'ใช้ Claude วิเคราะห์ก่อน ถ้าเครดิตหมดจะถอยไป Gemini ฟรีเอง','เสียเงินตามใช้'));
+    }else{
+      rows.push(hRow(sc.gemini?'ok':'warn','AI — โหมดประหยัด (ฟรี)',
+        sc.gemini?'ใช้ Gemini (โควต้าฟรีรายวัน) → ถ้าโควต้าวันนั้นหมด ใช้วิเคราะห์เบื้องต้นแทน · ไม่เรียก Claude เลย'
+          :'ไม่มี secret <b>GEMINI_API_KEY</b> → ใช้แค่วิเคราะห์เบื้องต้นจากคำสำคัญ (ยังใช้ได้ แต่ไม่ฉลาดเท่า) · ขอคีย์ฟรีที่ aistudio.google.com','ฟรี'));
+    }
+    rows.push(hRow(st.pending_analysis>0?'warn':'ok','งาน AI ค้าง',
+      st.pending_analysis>0?`ค้างวิเคราะห์ <b>${st.pending_analysis}</b> รายการ — cron ทยอยทำให้ทุก 15 นาที หรือกด 🧠 วิเคราะห์ทั้งหมดที่ค้าง`
+        :'ไม่มีงานค้าง'+(st.last_analyzed?' · วิเคราะห์ล่าสุด '+timeago(st.last_analyzed):''),''));
+    // --- Google ---
+    if(g.gbp_connected&&g.gbp_last_sync){
+      rows.push(hRow('ok','รีวิว Google — Google Business Profile','ได้รีวิวครบทุกอัน + ตอบกลับจากแอปได้ · ซิงค์ล่าสุด '+timeago(g.gbp_last_sync),'ฟรี'));
+    }else{
+      const pl=g.places>0&&sc.google_places;
+      rows.push(hRow(pl?'ok':'bad','รีวิว Google — '+(g.gbp_connected?'Business Profile (รอ Google อนุมัติ) + Place ID ชั่วคราว':'Place ID'),
+        (g.gbp_connected?'เชื่อมบัญชีแล้วแต่ Google ยังไม่ปลดโควต้า API → ระหว่างรอใช้ Place ID แทน · ':'')+
+        (pl?`ดึงรีวิวล่าสุดอัตโนมัติทุก 3 ชม. (${g.places} สาขา) — จำกัดความถี่ไว้ให้อยู่ในโควต้าฟรี 1,000 ครั้ง/เดือนของ Google`+(g.places_last_poll?' · ดึงล่าสุด '+timeago(g.places_last_poll):'')
+          :!sc.google_places?'ยังไม่มี secret <b>GOOGLE_MAPS_API_KEY</b>':'ยังไม่ได้ใส่ Place ID ในหน้าเชื่อมต่อช่องทาง'),
+        pl?'ฟรีในโควต้า':''));
+    }
+  }
+  // --- LINE / Facebook ---
+  if(wh&&wh.version){
+    rows.push(hRow(wh.line?'ok':'off','LINE OA',
+      wh.line?'ตั้งค่าครบ · บอทตอบกลับผ่าน reply ซึ่ง LINE ไม่นับโควต้า · แอดมินกดส่งจากแอปนับเป็นข้อความ push (ใช้โควต้ารายเดือนของแพ็กเกจ OA)'
+        :'ยังไม่เชื่อม → ตั้ง secret <b>LINE_CHANNEL_SECRET</b> + <b>LINE_CHANNEL_ACCESS_TOKEN</b> ของ OA หน้าร้าน แล้วใส่ Webhook URL ในหน้าเชื่อมต่อช่องทาง','ฟรี'));
+    rows.push(hRow(wh.facebook?'ok':'off','Facebook / Instagram',
+      wh.facebook?'ตั้งค่าครบ · Messenger/คอมเมนต์/รีวิวเพจ เข้าระบบแบบเรียลไทม์'
+        :'ยังไม่เชื่อม → ตั้ง secret <b>FB_APP_SECRET</b> + <b>FB_PAGE_TOKEN</b> + <b>FB_VERIFY_TOKEN</b> แล้วใส่ Webhook URL','ฟรี'));
+  }
+  box.innerHTML=rows.join('')+
+    `<div class="xs mut" style="margin-top:10px;line-height:1.7">สรุป: ถ้าใช้<b>โหมด AI ประหยัด</b> + <b>Google Business Profile</b> (หรือ Place ID ตามความถี่ที่ตั้งไว้) ระบบนี้<b>ไม่มีค่าใช้จ่ายรายเดือน</b> · ที่เสียเงินได้มีแค่ Claude (ถ้าเลือกโหมดคุณภาพสูงสุด) และแพ็กเกจ LINE OA ถ้าแอดมินส่งข้อความเองเกินโควต้าแพ็กเกจฟรี</div>`;
 }
 function staffModal(id){
   const s=id?S.staff.find(x=>x.id===id):{name:'',aliases:[],branch:'',shift:'all',active:true};
@@ -1780,5 +1906,1263 @@ authBoot().catch(e=>{console.error(e);showLogin('เชื่อมต่อฐ�
   },{passive:true});
 })();
 </script>
+<!-- ===== โค้ด Edge Functions สำหรับปุ่ม 📋 คัดลอก (ฝังจาก branch claude/social-listening-system-342kax — อย่าแก้ตรงนี้ แก้ที่ .ts แล้วฝังใหม่) ===== -->
+<script type="text/plain" id="fnBrain">
+// ============================================================
+// JJ Social — social-brain
+// วิเคราะห์เสียงลูกค้าด้วย Claude API + สรุปรายวัน + ดึงรีวิว Google + ส่งคำตอบ
+// deploy: supabase functions deploy social-brain
+// เรียกด้วย POST body: {action: analyze|summary|poll_google|chat_test|send_chat|send_reply|cron, ...}
+// ============================================================
+import Anthropic from "npm:@anthropic-ai/sdk";
+import { z } from "npm:zod";
+import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+// เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
+const VERSION = "2026-09-29";
+const SB_URL = Deno.env.get("SUPABASE_URL")!;
+const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+const LINE_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? ""; // ของ OA หน้าร้าน (คนละตัวกับ LINE_TOKEN เดิม)
+const FB_PAGE_TOKEN = Deno.env.get("FB_PAGE_TOKEN") ?? "";
+
+const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+const sb = createClient(SB_URL, SB_SERVICE);
+const anthropic = new Anthropic();
+
+// ===== ระบบ AI 3 ชั้น: Claude (ถ้ามีเครดิต) → Gemini (โควต้าฟรี) → กติกาเบื้องต้น (ฟรีเสมอ) =====
+let claudeDownUntil = 0; // เจอปัญหาเครดิต/คีย์ → พัก Claude 10 นาที ไม่ยิงซ้ำทุกรายการ
+// โหมด AI: 'free' = ใช้ Gemini (โควต้าฟรี) → กติกาเบื้องต้น · 'best' = ลอง Claude ก่อน (มีค่าใช้จ่าย)
+let AI_MODE: "free" | "best" = "free";
+const useClaude = () => AI_MODE === "best" && Date.now() > claudeDownUntil;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function geminiJson(system: string, user: string, maxTokens = 2500): Promise<any | null> {
+  if (!GEMINI_KEY) return null;
+  for (const model of ["gemini-2.5-flash", "gemini-2.0-flash"]) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: "user", parts: [{ text: user }] }],
+            generationConfig: { responseMimeType: "application/json", maxOutputTokens: maxTokens, temperature: 0.4 },
+          }),
+        });
+        if (r.status === 429) { await sleep(16000); continue; } // ชนโควต้าต่อนาที → พักแล้วลองอีกครั้ง
+        if (!r.ok) { console.error("gemini", model, r.status, (await r.text()).slice(0, 180)); break; }
+        const d = await r.json();
+        const t = (d.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
+        try { return JSON.parse(t); } catch { break; }
+      } catch (e) { console.error("gemini", e); break; }
+    }
+  }
+  return null;
+}
+
+// ---------- วิเคราะห์เบื้องต้นตามคำสำคัญ (ไม่ใช้ AI — ฟรี ไม่จำกัด) ----------
+const LEX = {
+  pos: ["อร่อย", "นุ่ม", "สด", "คุ้ม", "ดี", "เยี่ยม", "ประทับใจ", "ชอบ", "แนะนำ", "ไว", "เร็ว", "สะอาด", "น่ารัก", "สุภาพ", "ครบ", "เด็ด", "ฟิน", "กลับมา", "ถูกใจ", "เพลิน"],
+  neg: ["แย่", "ช้า", "นาน", "สกปรก", "เหม็น", "แพง", "ไม่สะอาด", "ไม่อร่อย", "เค็ม", "จืด", "เหนียว", "แข็ง", "หมด", "ไม่เติม", "ผิดหวัง", "แมลง", "ท้องเสีย", "ปวดท้อง", "คราบ", "ไม่โอเค", "ติดกระทะ", "แฉะ", "ไม่คุ้ม", "รอคิวนาน", "ไม่มีพนักงาน", "เศษ"],
+};
+const DANGER = ["ท้องเสีย", "อาหารเป็นพิษ", "แมลง", "หนอน", "ปวดท้อง", "อ้วก", "อาเจียน", "เส้นผม"];
+const TOPIC_KW: Record<string, string[]> = {
+  "รสชาติอาหาร": ["อร่อย", "รสชาติ", "เค็ม", "หวาน", "จืด", "เผ็ด", "น้ำจิ้ม", "แจ่ว", "นุ่ม", "เหนียว", "แข็ง", "ติดกระทะ"],
+  "คุณภาพวัตถุดิบ": ["สด", "ไม่สด", "วัตถุดิบ", "เนื้อ", "หมู", "ผัก", "เศษ", "คุณภาพ", "แฮม", "กุ้ง"],
+  "ความหลากหลายของอาหาร": ["หลากหลาย", "เมนู", "ของครบ", "ตัวเลือก", "บาร์", "ของเยอะ"],
+  "บริการพนักงาน": ["พนักงาน", "บริการ", "เสิร์ฟ", "พูดจา", "ยิ้ม", "สุภาพ", "เรียก", "ใส่ใจ", "ดูแล", "เช็ด", "เก็บโต๊ะ"],
+  "ความรวดเร็ว/การรอคิว": ["รอ", "คิว", "ช้า", "นาน", "ไว", "เติมของ", "หมดเร็ว", "เติมช้า"],
+  "ความสะอาด": ["สะอาด", "สกปรก", "คราบ", "เหม็น", "แมลง", "เลอะ", "เปื้อน"],
+  "ราคา/ความคุ้มค่า": ["ราคา", "คุ้ม", "แพง", "ถูก", "บาท", "vat", "net", "ค่าบริการ"],
+  "บรรยากาศ/สถานที่": ["บรรยากาศ", "ร้อน", "แอร์", "เพลง", "ที่นั่ง", "โต๊ะ", "แน่น", "คับแคบ", "ควัน"],
+  "ที่จอดรถ": ["จอดรถ", "ที่จอด"],
+  "โปรโมชั่น": ["โปรโมชั่น", "ส่วนลด", "โปร ", "ฟรี"],
+};
+function splitSegs(t: string): string[] {
+  const s = t.split(/\n+|\s{2,}/).map((x) => x.trim()).filter((x) => x.length > 3);
+  return s.length ? s : [t];
+}
+function ruleAnalyze(r: any, staff: any[]): z.infer<typeof Analysis> {
+  const text = String(r.text ?? "");
+  const segs = splitSegs(text);
+  const issues: any[] = [], praises: any[] = [], topicsSet = new Set<string>(), staffOut: any[] = [];
+  let posN = 0, negN = 0;
+  for (const seg of segs) {
+    const p = LEX.pos.filter((w) => seg.includes(w)).length;
+    const ng = LEX.neg.filter((w) => seg.includes(w)).length;
+    posN += p; negN += ng;
+    const segTopics = Object.entries(TOPIC_KW).filter(([, kws]) => kws.some((w) => seg.includes(w))).map(([t]) => t);
+    segTopics.forEach((t) => topicsSet.add(t));
+    const detail = seg.slice(0, 140);
+    if (ng > p) for (const t of (segTopics.length ? segTopics : ["อื่นๆ"])) issues.push({ topic: t, detail, severity: DANGER.some((w) => seg.includes(w)) ? 3 : 2 });
+    else if (p > 0) for (const t of segTopics) praises.push({ topic: t, detail });
+    for (const st of staff) {
+      const names = [st.name, ...(st.aliases ?? [])].filter(Boolean);
+      if (names.some((nm: string) => nm.length > 1 && seg.includes(nm)) && !staffOut.find((x) => x.name === st.name))
+        staffOut.push({ name: st.name, sentiment: ng > p ? "neg" : p > 0 ? "pos" : "neu", detail });
+    }
+  }
+  const seenI = new Set(), seenP = new Set();
+  const issues2 = issues.filter((i) => !seenI.has(i.topic) && seenI.add(i.topic)).slice(0, 6);
+  const praises2 = praises.filter((p) => !seenP.has(p.topic) && seenP.add(p.topic)).slice(0, 6);
+  let score = r.rating != null ? Number(r.rating) * 20 : 50;
+  score += 4 * posN - 6 * negN;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  const sentiment: "pos" | "neu" | "neg" = r.rating != null
+    ? (Number(r.rating) >= 4 && negN <= posN ? "pos" : Number(r.rating) <= 2 ? "neg" : score >= 60 ? "pos" : score <= 45 ? "neg" : "neu")
+    : (score >= 62 ? "pos" : score <= 45 ? "neg" : "neu");
+  let slot = "unknown";
+  if (/ดึก|ตี\s?[1-5]|เที่ยงคืน|[3-5]\s?ทุ่ม|2[2-3]:|เกือบปิด/.test(text)) slot = "late";
+  else if (/เย็น|ค่ำ|[1-2]\s?ทุ่ม|1[89]:|20:|มื้อค่ำ/.test(text)) slot = "dinner";
+  else if (/บ่าย|1[5-7]:/.test(text)) slot = "afternoon";
+  else if (/เที่ยง|กลางวัน|1[12]:/.test(text)) slot = "lunch";
+  const issueTopics = issues2.map((i) => i.topic), praiseTopics = praises2.map((p) => p.topic);
+  const summary = `[เบื้องต้น] ${sentiment === "pos" ? "ลูกค้าพอใจ" : sentiment === "neg" ? "ลูกค้าไม่พอใจ" : "ความเห็นกลางๆ"}${praiseTopics.length ? " · ชม: " + praiseTopics.join(", ") : ""}${issueTopics.length ? " · ติ: " + issueTopics.join(", ") : ""}`;
+  const reply = sentiment === "neg"
+    ? `ขออภัยอย่างยิ่งสำหรับประสบการณ์ครั้งนี้ครับ ทางร้านขอน้อมรับ${issueTopics.length ? "เรื่อง" + issueTopics.join("และ") : "ทุกคำติชม"}ไปปรับปรุงโดยเร็วที่สุด และขอโอกาสดูแลให้ดีขึ้นในครั้งหน้านะครับ 🙏`
+    : sentiment === "pos"
+      ? "ขอบคุณมากๆ เลยครับ 🙏 ทีมงานดีใจสุดๆ แล้วมาให้เราดูแลอีกนะครับ"
+      : "ขอบคุณสำหรับคำติชมครับ ทางร้านจะนำไปพัฒนาให้ดียิ่งขึ้นครับ 🙏";
+  return { sentiment, ai_score: score, topics: [...topicsSet], issues: issues2, praises: praises2, staff: staffOut, visit_slot: slot as any, branch: r.branch ?? "unknown", summary, reply };
+}
+function normAnalysis(j: any): z.infer<typeof Analysis> | null {
+  if (!j || typeof j !== "object") return null;
+  try {
+    return {
+      sentiment: ["pos", "neu", "neg"].includes(j.sentiment) ? j.sentiment : "neu",
+      ai_score: Math.max(0, Math.min(100, Number(j.ai_score ?? j.score ?? 50) || 50)),
+      topics: Array.isArray(j.topics) ? j.topics.map(String) : [],
+      issues: Array.isArray(j.issues) ? j.issues.map((i: any) => ({ topic: String(i?.topic ?? "อื่นๆ"), detail: String(i?.detail ?? ""), severity: Number(i?.severity) || 1 })) : [],
+      praises: Array.isArray(j.praises) ? j.praises.map((p: any) => ({ topic: String(p?.topic ?? "อื่นๆ"), detail: String(p?.detail ?? "") })) : [],
+      staff: Array.isArray(j.staff) ? j.staff.map((s: any) => ({ name: String(s?.name ?? ""), sentiment: ["pos", "neu", "neg"].includes(s?.sentiment) ? s.sentiment : "neu", detail: String(s?.detail ?? "") })).filter((s: any) => s.name) : [],
+      visit_slot: ["lunch", "afternoon", "dinner", "late", "unknown"].includes(j.visit_slot) ? j.visit_slot : "unknown",
+      branch: String(j.branch ?? "unknown"),
+      summary: String(j.summary ?? ""),
+      reply: String(j.reply ?? ""),
+    };
+  } catch { return null; }
+}
+const GEMINI_SCHEMA_ANALYSIS = `\n\nตอบเป็น JSON ล้วนตามโครงสร้างนี้เท่านั้น (ห้ามมีข้อความอื่น):
+{"sentiment":"pos|neu|neg","ai_score":0-100,"topics":["หัวข้อ"],"issues":[{"topic":"หัวข้อ","detail":"รายละเอียด","severity":1-3}],"praises":[{"topic":"หัวข้อ","detail":"รายละเอียด"}],"staff":[{"name":"ชื่อ","sentiment":"pos|neu|neg","detail":"รายละเอียด"}],"visit_slot":"lunch|afternoon|dinner|late|unknown","branch":"รหัสสาขาหรือ unknown","summary":"สรุป 1 บรรทัด","reply":"ร่างคำตอบ"}`;
+const GEMINI_SCHEMA_DIGEST = `\n\nตอบเป็น JSON ล้วนตามโครงสร้างนี้เท่านั้น:
+{"headline":"...","problems":[{"topic":"...","detail":"...","count":1,"severity":1-3,"action":"..."}],"praises":[{"topic":"...","detail":"...","count":1}],"staff_good":[{"name":"...","detail":"..."}],"staff_fix":[{"name":"...","detail":"..."}],"time_slots":[{"slot":"lunch|afternoon|dinner|late","verdict":"..."}],"actions":["..."]}`;
+function ruleDigest(set: any[]): z.infer<typeof Digest> {
+  const ic: Record<string, { n: number; sev: number; ex: string }> = {}, pc: Record<string, { n: number; ex: string }> = {};
+  const sg: Record<string, number> = {}, sbad: Record<string, number> = {};
+  const slots: Record<string, { n: number; sum: number }> = {};
+  let pos = 0, neg = 0;
+  for (const r of set) {
+    if (r.sentiment === "pos") pos++; if (r.sentiment === "neg") neg++;
+    (r.issues ?? []).forEach((i: any) => { const k = i?.topic ?? "อื่นๆ"; ic[k] = ic[k] ?? { n: 0, sev: 1, ex: i?.detail ?? "" }; ic[k].n++; ic[k].sev = Math.max(ic[k].sev, Number(i?.severity) || 1); });
+    (r.praises ?? []).forEach((p: any) => { const k = p?.topic ?? "อื่นๆ"; pc[k] = pc[k] ?? { n: 0, ex: p?.detail ?? "" }; pc[k].n++; });
+    (r.staff ?? []).forEach((s: any) => { if (s?.sentiment === "neg") sbad[s.name] = (sbad[s.name] ?? 0) + 1; else if (s?.sentiment === "pos") sg[s.name] = (sg[s.name] ?? 0) + 1; });
+    const sl = r.visit_slot ?? "unknown";
+    if (sl !== "unknown") { slots[sl] = slots[sl] ?? { n: 0, sum: 0 }; slots[sl].n++; slots[sl].sum += Number(r.ai_score) || 0; }
+  }
+  const probs = Object.entries(ic).sort((a, b) => b[1].n - a[1].n).slice(0, 5)
+    .map(([t, v]) => ({ topic: t, detail: `ถูกพูดถึง ${v.n} ครั้ง เช่น "${v.ex.slice(0, 80)}"`, count: v.n, severity: v.sev, action: `ตรวจสอบและปรับปรุงเรื่อง "${t}" กับทีมหน้าร้าน` }));
+  return {
+    headline: `สรุปเบื้องต้น (โหมดฟรี): ${set.length} รายการ · ชม ${pos} · ตำหนิ ${neg}${probs[0] ? ` · เรื่องที่ถูกตำหนิบ่อยสุด: ${probs[0].topic}` : ""}`,
+    problems: probs,
+    praises: Object.entries(pc).sort((a, b) => b[1].n - a[1].n).slice(0, 5).map(([t, v]) => ({ topic: t, detail: v.ex.slice(0, 100), count: v.n })),
+    staff_good: Object.entries(sg).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => ({ name: n, detail: `ถูกชม ${c} ครั้ง` })),
+    staff_fix: Object.entries(sbad).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => ({ name: n, detail: `ถูกตำหนิ ${c} ครั้ง` })),
+    time_slots: Object.entries(slots).map(([sl, v]) => ({ slot: sl, verdict: `พึงพอใจเฉลี่ย ${Math.round(v.sum / v.n)}/100 จาก ${v.n} รีวิว` })),
+    actions: probs.slice(0, 3).map((p) => p.action),
+  };
+}
+function markClaudeDown(e: unknown) {
+  const msg = String((e as any)?.message ?? e);
+  if (/credit|billing|api.?key|authentication|401|invalid_request_error/i.test(msg)) claudeDownUntil = Date.now() + 10 * 60000;
+  console.error("claude", msg.slice(0, 160));
+}
+
+// ===== Google Business Profile — รีวิวครบทุกอัน + ตอบกลับจากระบบ =====
+const GBP_CLIENT_ID = Deno.env.get("GBP_CLIENT_ID") ?? "";
+const GBP_CLIENT_SECRET = Deno.env.get("GBP_CLIENT_SECRET") ?? "";
+// refresh token เก็บแบบเข้ารหัส AES-GCM (กุญแจมาจาก service key) — คนที่มีแค่ anon key อ่านไม่ได้
+async function aesKey() {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SB_SERVICE));
+  return crypto.subtle.importKey("raw", h, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+async function decryptRT(enc: string): Promise<string | null> {
+  try {
+    const [ivb, ctb] = enc.split(".");
+    const iv = Uint8Array.from(atob(ivb), (c) => c.charCodeAt(0));
+    const ct = Uint8Array.from(atob(ctb), (c) => c.charCodeAt(0));
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, await aesKey(), ct);
+    return new TextDecoder().decode(pt);
+  } catch { return null; }
+}
+async function gbpAccessToken(): Promise<{ token?: string; reason?: string }> {
+  if (!GBP_CLIENT_ID || !GBP_CLIENT_SECRET) return { reason: "ยังไม่ได้ตั้ง secrets GBP_CLIENT_ID / GBP_CLIENT_SECRET" };
+  const settings = await getSettings();
+  const enc = settings.channels?.gbp?.rt_enc;
+  if (!enc) return { reason: "ยังไม่ได้เชื่อมต่อบัญชี Google ของร้าน — กดปุ่มเชื่อมต่อในหน้าเชื่อมต่อช่องทาง" };
+  const rt = await decryptRT(enc);
+  if (!rt) return { reason: "อ่าน token ไม่ได้ — กดเชื่อมต่อบัญชีใหม่อีกครั้ง" };
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: GBP_CLIENT_ID, client_secret: GBP_CLIENT_SECRET, refresh_token: rt, grant_type: "refresh_token" }),
+  });
+  const d = await r.json();
+  if (!r.ok || !d.access_token) return { reason: "ขอสิทธิ์เข้าถึงไม่ได้: " + JSON.stringify(d).slice(0, 180) };
+  return { token: d.access_token };
+}
+const STAR: Record<string, number | null> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+
+async function gbpSync(full = false) {
+  const at = await gbpAccessToken();
+  if (!at.token) return { ok: false, reason: at.reason };
+  const H = { Authorization: `Bearer ${at.token}` };
+  const settings = await getSettings();
+  const gbp = settings.channels?.gbp ?? {};
+  // ครั้งแรก: หา account + สาขา แล้วจับคู่สาขาอัตโนมัติจากชื่อ
+  if (!gbp.account) {
+    const ar = await fetch("https://mybusinessaccountmanagement.googleapis.com/v1/accounts", { headers: H });
+    const ad = await ar.json();
+    if (!ar.ok || !ad.accounts?.length) return { ok: false, reason: "หาบัญชีธุรกิจไม่เจอ: " + JSON.stringify(ad).slice(0, 200) + " — ถ้าเพิ่งขอสิทธิ์ Business Profile API อาจยังไม่ได้รับอนุมัติ" };
+    gbp.account = ad.accounts[0].name; // accounts/123
+  }
+  if (!gbp.locations?.length) {
+    const branchesArr = await getBranches();
+    const lr = await fetch(`https://mybusinessbusinessinformation.googleapis.com/v1/${gbp.account}/locations?readMask=name,title&pageSize=100`, { headers: H });
+    const ld = await lr.json();
+    if (!lr.ok || !ld.locations?.length) return { ok: false, reason: "หาสาขาไม่เจอ: " + JSON.stringify(ld).slice(0, 200) };
+    gbp.locations = ld.locations.map((l: any) => {
+      const hit = branchesArr.find((b) => l.title?.includes(String(b.name).replace("สาขา", "")) || l.title?.includes(b.name));
+      return { id: l.name, title: l.title, branch: hit?.code ?? null }; // id = locations/456
+    });
+  }
+  let added = 0, upgraded = 0, seen = 0;
+  for (const loc of gbp.locations) {
+    const locPath = `${gbp.account}/${loc.id}`;
+    let pageToken = "";
+    for (let page = 0; page < (full ? 40 : 1); page++) {
+      const rr = await fetch(`https://mybusiness.googleapis.com/v4/${locPath}/reviews?pageSize=50${pageToken ? "&pageToken=" + pageToken : ""}`, { headers: H });
+      const rd = await rr.json();
+      if (!rr.ok) return { ok: false, reason: "ดึงรีวิวไม่ได้: " + JSON.stringify(rd).slice(0, 200) };
+      const reviews = rd.reviews ?? [];
+      seen += reviews.length;
+      for (const rv of reviews) {
+        const ext = "gbp_" + rv.reviewId;
+        const author = rv.reviewer?.displayName ?? "";
+        const epoch = rv.createTime ? Math.floor(Date.parse(rv.createTime) / 1000) : null;
+        // รวมกับแถวเดิมที่เคยดึงผ่าน Places (กันซ้ำข้ามแหล่ง — เก็บผลวิเคราะห์/การตอบเดิมไว้)
+        let old: any = null;
+        if (epoch && author) {
+          const { data } = await sb.from("social_mentions").select("id")
+            .eq("channel", "google").like("external_id", "g\\_%")
+            .eq("author_name", author)
+            .gte("posted_at", new Date((epoch - 43200) * 1000).toISOString())
+            .lte("posted_at", new Date((epoch + 43200) * 1000).toISOString()).limit(1);
+          old = data?.[0] ?? null;
+        }
+        if (old) {
+          await sb.from("social_mentions").update({ external_id: ext, raw: { gbp: locPath, review: rv } }).eq("id", old.id);
+          upgraded++;
+        } else {
+          const ins: any = {
+            channel: "google", kind: "review", external_id: ext,
+            branch: loc.branch ?? null, author_name: author || null,
+            text: rv.comment ?? "", rating: STAR[rv.starRating ?? ""] ?? null,
+            posted_at: rv.createTime ?? new Date().toISOString(),
+            raw: { gbp: locPath, review: rv },
+          };
+          if (rv.reviewReply?.comment) { ins.reply_status = "sent"; ins.reply_text = rv.reviewReply.comment; ins.replied_by = "ร้าน (เคยตอบไว้แล้ว)"; }
+          const { data, error } = await sb.from("social_mentions")
+            .upsert(ins, { onConflict: "channel,external_id", ignoreDuplicates: true }).select("id");
+          if (error) return { ok: false, reason: "บันทึกไม่ได้: " + error.message };
+          added += (data ?? []).length;
+        }
+      }
+      pageToken = rd.nextPageToken ?? "";
+      if (!pageToken) break;
+    }
+  }
+  gbp.connected = true; gbp.last_sync = new Date().toISOString();
+  settings.channels = { ...(settings.channels ?? {}), gbp };
+  await sb.from("social_settings").upsert({ id: "channels", val: settings.channels, updated_at: new Date().toISOString() });
+  return { ok: true, added, upgraded, seen, locations: gbp.locations };
+}
+
+const TOPICS = ["รสชาติอาหาร", "คุณภาพวัตถุดิบ", "ความหลากหลายของอาหาร", "บริการพนักงาน",
+  "ความรวดเร็ว/การรอคิว", "ความสะอาด", "ราคา/ความคุ้มค่า", "บรรยากาศ/สถานที่",
+  "ที่จอดรถ", "โปรโมชั่น", "อื่นๆ"];
+
+const Analysis = z.object({
+  sentiment: z.enum(["pos", "neu", "neg"]),
+  ai_score: z.number(),                      // 0-100 ความพึงพอใจ
+  topics: z.array(z.string()),
+  issues: z.array(z.object({ topic: z.string(), detail: z.string(), severity: z.number() })), // severity 1-3
+  praises: z.array(z.object({ topic: z.string(), detail: z.string() })),
+  staff: z.array(z.object({ name: z.string(), sentiment: z.enum(["pos", "neu", "neg"]), detail: z.string() })),
+  visit_slot: z.enum(["lunch", "afternoon", "dinner", "late", "unknown"]),
+  branch: z.string(),                        // รหัสสาขา หรือ "unknown"
+  summary: z.string(),                       // สรุป 1 บรรทัด ภาษาไทย
+  reply: z.string(),                         // ร่างคำตอบสำหรับตอบรีวิว/คอมเมนต์นี้
+});
+
+const Digest = z.object({
+  headline: z.string(),                      // สรุปภาพรวม 1-2 ประโยค
+  problems: z.array(z.object({ topic: z.string(), detail: z.string(), count: z.number(), severity: z.number(), action: z.string() })),
+  praises: z.array(z.object({ topic: z.string(), detail: z.string(), count: z.number() })),
+  staff_good: z.array(z.object({ name: z.string(), detail: z.string() })),
+  staff_fix: z.array(z.object({ name: z.string(), detail: z.string() })),
+  time_slots: z.array(z.object({ slot: z.string(), verdict: z.string() })),
+  actions: z.array(z.string()),              // สิ่งที่ควรทำ เรียงตามความสำคัญ
+});
+
+const ChatReply = z.object({
+  reply: z.string(),
+  needs_human: z.boolean(),
+  reason: z.string(),
+});
+
+// อ่านผลลัพธ์ structured output: ใช้ parsed_output ก่อน ถ้าไม่มีให้ parse จาก text block
+function parsedOf<T>(res: any): T | null {
+  if (res?.parsed_output) return res.parsed_output as T;
+  try {
+    const t = (res?.content ?? []).find((b: any) => b.type === "text");
+    return t?.text ? JSON.parse(t.text) as T : null;
+  } catch { return null; }
+}
+
+async function getSettings() {
+  const { data } = await sb.from("social_settings").select("id,val");
+  const m: Record<string, any> = {};
+  (data ?? []).forEach((r: any) => (m[r.id] = r.val || {}));
+  AI_MODE = m.bot?.ai_mode === "best" ? "best" : "free";   // ตั้งต้น = โหมดฟรี
+  return m;
+}
+async function getBranches(): Promise<{ code: string; name: string }[]> {
+  try {
+    const { data } = await sb.from("pnl_branches").select("*");
+    const rows = (data ?? []).map((r: any) => ({
+      code: r.code ?? r.id ?? "", name: r.name ?? r.display_name ?? r.code ?? "",
+    })).filter((r: any) => r.code);
+    if (rows.length) return rows;
+  } catch { /* ไม่มีตารางก็ใช้ค่าตั้งต้น */ }
+  return [{ code: "JJRD", name: "สาขารัชดา" }, { code: "JJLP", name: "สาขาลาดพร้าว" }];
+}
+async function getStaff() {
+  const { data } = await sb.from("social_staff").select("name,aliases,branch,shift").eq("active", true);
+  return data ?? [];
+}
+
+// ---------- วิเคราะห์รายชิ้น ----------
+async function analyzeMentions(ids?: number[], limit = 8) {
+  let q = sb.from("social_mentions")
+    .select("id,channel,kind,branch,author_name,text,rating,posted_at")
+    .is("analyzed_at", null).order("id", { ascending: true }).limit(limit);
+  if (ids?.length) q = sb.from("social_mentions")
+    .select("id,channel,kind,branch,author_name,text,rating,posted_at").in("id", ids);
+  const { data: rows, error } = await q;
+  if (error) throw error;
+  if (!rows?.length) return { analyzed: 0 };
+
+  const [settings, branches, staff] = await Promise.all([getSettings(), getBranches(), getStaff()]);
+  const shop = settings.shop ?? {};
+  const staffTxt = staff.map((s: any) =>
+    `- ${s.name}${s.aliases?.length ? ` (ชื่ออื่น: ${s.aliases.join(", ")})` : ""}${s.branch ? ` สาขา ${s.branch}` : ""}${s.shift && s.shift !== "all" ? ` กะ${s.shift === "am" ? "เช้า" : "เย็น"}` : ""}`).join("\n");
+
+  const system = `คุณคือนักวิเคราะห์เสียงลูกค้า (social listening) ของร้าน "${shop.name ?? "จริงใจหมูกระทะ"}"
+${shop.info ?? ""}
+
+สาขาที่มี (ใช้รหัสในช่อง branch): ${branches.map((b) => `${b.code}=${b.name}`).join(", ")} · ถ้าไม่แน่ใจให้ตอบ "unknown"
+${staffTxt ? "รายชื่อพนักงานที่รู้จัก (ช่วยจับชื่อในรีวิว):\n" + staffTxt : ""}
+
+หัวข้อ (topics) ให้เลือกจากรายการนี้เป็นหลัก: ${TOPICS.join(", ")}
+visit_slot = ช่วงเวลาที่ลูกค้าน่าจะมาใช้บริการ (จากเนื้อหา): lunch(ก่อน 15:00) / afternoon(15:00-18:00) / dinner(18:00-21:00) / late(หลัง 21:00) / unknown
+ai_score: 0-100 (0=แย่มาก 100=ประทับใจมาก) ให้สอดคล้องกับดาวถ้ามี
+issues.severity: 1=เล็กน้อย 2=ควรแก้ 3=เร่งด่วน (เช่น ความปลอดภัยอาหาร/ท้องเสีย = 3 เสมอ)
+staff: ใส่เฉพาะที่มีการเอ่ยถึงพนักงานจริง ๆ (ชื่อหรือคำบรรยายที่ระบุตัวได้ เช่น "พี่ผู้ชายเก็บโต๊ะ")
+reply: ร่างคำตอบภาษาไทยสุภาพในนามร้าน ขอบคุณ/ขอโทษตามเนื้อหา ไม่แก้ตัว ไม่สัญญาสิ่งที่ไม่แน่ใจ ถ้าเป็นรีวิวลบให้เชิญติดต่อร้านโดยตรง`;
+
+  let n = 0;
+  const errs: string[] = [];
+  const prov = { claude: 0, gemini: 0, rules: 0 };
+  const branchCodes = branches.map((b) => b.code);
+  for (const r of rows) {
+    const user = `ช่องทาง: ${r.channel} (${r.kind})${r.rating != null ? ` · ให้ดาว ${r.rating}/5` : ""}${r.branch ? ` · สาขาที่ระบบระบุ: ${r.branch}` : ""}
+โพสต์เมื่อ: ${r.posted_at}
+ผู้เขียน: ${r.author_name ?? "ไม่ระบุ"}
+ข้อความ:
+"""${(r.text ?? "").slice(0, 4000)}"""`;
+    // ชั้น 1: Claude (ข้ามถ้าเพิ่งเจอปัญหาเครดิต/คีย์)
+    let a: z.infer<typeof Analysis> | null = null;
+    let used: "claude" | "gemini" | "rules" = "rules";
+    if (useClaude()) {
+      try {
+        const res = await anthropic.messages.parse({
+          model: "claude-opus-5",
+          max_tokens: 3000,
+          output_config: { effort: "low", format: zodOutputFormat(Analysis) },
+          system, messages: [{ role: "user", content: user }],
+        });
+        if (res.stop_reason !== "refusal") a = parsedOf<z.infer<typeof Analysis>>(res);
+        if (a) used = "claude";
+      } catch (e) { markClaudeDown(e); }
+    }
+    // ชั้น 2: Gemini (โควต้าฟรี)
+    if (!a && GEMINI_KEY) {
+      a = normAnalysis(await geminiJson(system + GEMINI_SCHEMA_ANALYSIS, user, 2500));
+      if (a) { used = "gemini"; await sleep(6500); } // เว้นจังหวะไม่ให้ชนโควต้าฟรีต่อนาที
+    }
+    // ชั้น 3: กติกาเบื้องต้น (ฟรีเสมอ)
+    if (!a) { a = ruleAnalyze(r, staff); used = "rules"; }
+    prov[used]++;
+    try {
+      await sb.from("social_mentions").update({
+        sentiment: a.sentiment,
+        ai_score: Math.max(0, Math.min(100, a.ai_score)),
+        topics: a.topics, issues: a.issues, praises: a.praises, staff: a.staff,
+        visit_slot: a.visit_slot,
+        branch: r.branch ?? (branchCodes.includes(a.branch) ? a.branch : null),
+        ai_summary: a.summary, ai_reply: a.reply,
+        analyzed_at: new Date().toISOString(),
+      }).eq("id", r.id);
+      n++;
+    } catch (e) {
+      console.error("analyze", r.id, e);
+      errs.push(`#${r.id}: ${String((e as any)?.message ?? e).slice(0, 180)}`);
+    }
+  }
+  return { analyzed: n, total: rows.length, providers: prov, errors: errs.length ? errs.slice(0, 3) : undefined };
+}
+
+// ---------- สรุปรายวัน/รายสัปดาห์ ----------
+async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily") {
+  // ไม่ระบุวัน = สรุป "เมื่อวาน" ตามเวลาไทย (cron รันตอน 06:10)
+  const dKey = dateStr ??
+    new Date(Date.now() + 7 * 3600000 - 86400000).toISOString().slice(0, 10);
+  const end = new Date(dKey + "T23:59:59.999+07:00");
+  const days = span === "weekly" ? 7 : 1;
+  const start = new Date(new Date(dKey + "T00:00:00+07:00").getTime() - (days - 1) * 86400000);
+
+  const { data: rows } = await sb.from("social_mentions")
+    .select("channel,kind,branch,author_name,text,rating,sentiment,ai_score,topics,issues,praises,staff,visit_slot,ai_summary,posted_at")
+    .gte("posted_at", start.toISOString()).lte("posted_at", end.toISOString())
+    .not("analyzed_at", "is", null).order("posted_at");
+  if (!rows?.length) return { ok: false, reason: "ไม่มีข้อมูลช่วงนี้" };
+
+  const branches: string[] = ["ALL", ...new Set<string>(rows.map((r: any) => String(r.branch ?? "")).filter((x: string) => !!x))];
+  const results: Record<string, unknown> = {};
+  for (const br of branches) {
+    const set = br === "ALL" ? rows : rows.filter((r: any) => r.branch === br);
+    if (!set.length) continue;
+    const lines = set.map((r: any) =>
+      `[${r.channel}${r.branch ? "/" + r.branch : ""}${r.rating != null ? ` ${r.rating}★` : ""} ${r.sentiment ?? ""} slot=${r.visit_slot ?? "?"}] ${r.ai_summary ?? (r.text ?? "").slice(0, 160)}${r.staff?.length ? " · พนักงาน: " + r.staff.map((s: any) => `${s.name}(${s.sentiment})`).join(",") : ""}${r.issues?.length ? " · ปัญหา: " + r.issues.map((i: any) => i.topic + (i.severity >= 3 ? "!!" : "")).join(",") : ""}`);
+    const digSystem = `คุณคือผู้ช่วยผู้บริหารร้านหมูกระทะ สรุปเสียงลูกค้า${span === "weekly" ? "รอบ 7 วัน" : "รายวัน"}เป็นภาษาไทย ให้เจ้าของร้านอ่านแล้วรู้ทันทีว่า มีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี/มีปัญหา และควรทำอะไรต่อ อ้างอิงเฉพาะข้อมูลที่ให้ อย่าแต่งเพิ่ม นับ count จากจำนวนรีวิวที่พูดถึงเรื่องนั้นจริง`;
+    const digUser = `ข้อมูล ${set.length} รายการ (${br === "ALL" ? "ทุกสาขา" : "สาขา " + br}):\n` + lines.join("\n");
+    let d: z.infer<typeof Digest> | null = null;
+    if (useClaude()) {
+      try {
+        const res = await anthropic.messages.parse({
+          model: "claude-opus-5",
+          max_tokens: 6000,
+          output_config: { effort: "medium", format: zodOutputFormat(Digest) },
+          system: digSystem,
+          messages: [{ role: "user", content: digUser }],
+        });
+        d = parsedOf<z.infer<typeof Digest>>(res);
+      } catch (e) { markClaudeDown(e); }
+    }
+    if (!d && GEMINI_KEY) {
+      const s = Digest.safeParse(await geminiJson(digSystem + GEMINI_SCHEMA_DIGEST, digUser, 4000));
+      if (s.success) d = s.data;
+    }
+    if (!d) d = ruleDigest(set); // โหมดฟรี ไม่ใช้ AI
+    const stat = {
+      count: set.length,
+      avg_rating: avg(set.map((r: any) => r.rating).filter((x: any) => x != null)),
+      avg_score: avg(set.map((r: any) => r.ai_score).filter((x: any) => x != null)),
+      pos: set.filter((r: any) => r.sentiment === "pos").length,
+      neg: set.filter((r: any) => r.sentiment === "neg").length,
+    };
+    await sb.from("social_daily").upsert({
+      d: dKey, branch: br, kind: span, data: { ...d, stat },
+      created_at: new Date().toISOString(),
+    });
+    results[br] = d;
+  }
+  return { ok: true, date: dKey, branches: Object.keys(results) };
+}
+function avg(a: number[]) { return a.length ? Math.round(a.reduce((s, x) => s + Number(x), 0) / a.length * 100) / 100 : null; }
+
+// ---------- ดึงรีวิว Google (Places API) ----------
+// placesIn: ส่งรายการ place มากับคำสั่งได้เลย (ปุ่มในแอป) — ฟังก์ชันจะบันทึกลง settings ให้เอง
+// throttleH = ดึงอัตโนมัติได้ทุกกี่ชั่วโมง (กดปุ่มในแอป = 0 คือดึงทันที)
+// Google คิดเงิน Place Details ที่ขอ field "reviews" ที่ SKU แพงสุด (ฟรีแค่ 1,000 ครั้ง/เดือน)
+// ทุก 3 ชม. × 2 สาขา = ~480 ครั้ง/เดือน → อยู่ในโควต้าฟรี
+async function pollGoogle(placesIn?: { place_id: string; branch: string }[], throttleH = 0) {
+  if (!GOOGLE_KEY) return { ok: false, reason: "ยังไม่ได้ตั้ง secret GOOGLE_API_KEY (หรือ GOOGLE_MAPS_API_KEY)" };
+  const settings = await getSettings();
+  if (throttleH > 0) {
+    const last = Date.parse(settings.channels?.google_last_poll ?? "") || 0;
+    const waitMs = throttleH * 3600000 - (Date.now() - last);
+    if (waitMs > 0) return { ok: true, added: 0, skipped: true,
+      reason: `ประหยัดโควต้าฟรีของ Google — รอบถัดไปอีก ${Math.ceil(waitMs / 60000)} นาที` };
+  }
+  const places: { place_id: string; branch: string }[] =
+    (placesIn?.length ? placesIn : settings.channels?.google_places) ?? [];
+  if (!places.length) return { ok: false, reason: "ยังไม่ได้ใส่ place_id ในหน้าเชื่อมต่อ" };
+  settings.channels = { ...(settings.channels ?? {}), google_places: places };
+  let added = 0;
+  const errors: string[] = [];
+  const diag: any[] = []; // รายงานละเอียดต่อสาขา ให้หน้าแอปโชว์ตอนแก้ปัญหา
+  for (const p of places) {
+    const r = await fetch(`https://places.googleapis.com/v1/places/${p.place_id}?languageCode=th`, {
+      headers: { "X-Goog-Api-Key": GOOGLE_KEY, "X-Goog-FieldMask": "reviews,rating,userRatingCount" },
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      console.error("places", p.place_id, r.status, t);
+      errors.push(`${p.branch}: Google ตอบ ${r.status} — ${t.slice(0, 220)}`);
+      diag.push({ branch: p.branch, http: r.status, error: t.slice(0, 220) });
+      continue;
+    }
+    const d = await r.json();
+    // รวมรีวิวจาก 2 แหล่ง: (New) = 5 อันเด่น + Legacy sort=newest = 5 อันล่าสุด
+    // external_id สร้างจาก เวลา+ชื่อผู้เขียน เพื่อกันซ้ำข้ามทั้งสองแหล่ง
+    const revs: { epoch: number | null; author: string; text: string; rating: number | null; raw: unknown }[] =
+      (d.reviews ?? []).map((rv: any) => ({
+        epoch: rv.publishTime ? Math.floor(Date.parse(rv.publishTime) / 1000) : null,
+        author: rv.authorAttribution?.displayName ?? "",
+        text: rv.text?.text ?? rv.originalText?.text ?? "",
+        rating: rv.rating ?? null, raw: rv,
+      }));
+    let newestApi = 0;
+    try {
+      const lr = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${p.place_id}&fields=reviews&reviews_sort=newest&language=th&key=${GOOGLE_KEY}`);
+      const ld = lr.ok ? await lr.json() : null;
+      if (ld?.status === "OK") {
+        for (const rv of ld.result?.reviews ?? []) {
+          revs.push({ epoch: rv.time ?? null, author: rv.author_name ?? "", text: rv.text ?? "", rating: rv.rating ?? null, raw: rv });
+          newestApi++;
+        }
+      } else if (ld?.status) console.error("legacy places", p.place_id, ld.status);
+    } catch (e) { console.error("legacy places", e); } // ไม่ได้เปิด Legacy Places API ก็ข้ามไป
+    let inserted = 0, dup = 0, insErr = "";
+    for (const rv of revs) {
+      const { data, error } = await sb.from("social_mentions").upsert({
+        channel: "google", kind: "review",
+        external_id: `g_${p.place_id}_${rv.epoch ?? "x"}_${rv.author.slice(0, 40)}`,
+        branch: p.branch || null,
+        author_name: rv.author || null,
+        text: rv.text,
+        rating: rv.rating,
+        url: `https://www.google.com/maps/place/?q=place_id:${p.place_id}`,
+        posted_at: rv.epoch ? new Date(rv.epoch * 1000).toISOString() : new Date().toISOString(),
+        raw: rv.raw,
+      }, { onConflict: "channel,external_id", ignoreDuplicates: true }).select("id");
+      if (error) { insErr = error.message; console.error("insert", error); }
+      else if ((data ?? []).length) inserted++;
+      else dup++;
+    }
+    added += inserted;
+    diag.push({
+      branch: p.branch, http: 200,
+      place_rating: d.rating ?? null, place_review_count: d.userRatingCount ?? null,
+      reviews_from_google: revs.length, newest_api: newestApi, inserted, duplicated: dup,
+      insert_error: insErr || undefined,
+    });
+    // เก็บคะแนนรวมไว้โชว์ในหน้าเชื่อมต่อ
+    settings.channels.google_stat = settings.channels.google_stat ?? {};
+    settings.channels.google_stat[p.place_id] = {
+      rating: d.rating ?? null, count: d.userRatingCount ?? null, at: new Date().toISOString(),
+    };
+  }
+  settings.channels.google_last_poll = new Date().toISOString();
+  await sb.from("social_settings").upsert({ id: "channels", val: settings.channels, updated_at: new Date().toISOString() });
+  return { ok: true, added, diag, errors: errors.length ? errors : undefined };
+}
+
+// ---------- เรียนรู้คำถามที่ลูกค้าถามซ้ำ → เสนอเป็น FAQ ให้คนอนุมัติ ----------
+const LearnFaq = z.object({
+  items: z.array(z.object({ q: z.string(), a: z.string(), count: z.number() })),
+});
+async function learnFaq() {
+  const since = new Date(Date.now() - 14 * 86400000).toISOString();
+  const { data: rows } = await sb.from("social_chat_log")
+    .select("channel,thread_id,direction,text,meta,created_at")
+    .gte("created_at", since).order("created_at").limit(1500);
+  if (!rows?.length) return { ok: false, reason: "ยังไม่มีบทสนทนาให้เรียนรู้" };
+  const settings = await getSettings();
+  const faq = settings.shop?.faq ?? [];
+  // จับคู่ คำถามลูกค้า + คำตอบจริงของร้าน (ถ้ามี)
+  const lines: string[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r: any = rows[i];
+    if (r.direction !== "in") continue;
+    const nxt: any = rows.slice(i + 1, i + 5).find((x: any) =>
+      x.thread_id === r.thread_id && x.direction === "out" && !x.meta?.draft);
+    lines.push(`ถาม: ${String(r.text).slice(0, 150)}${nxt ? `\nตอบ(โดยร้าน): ${String(nxt.text).slice(0, 200)}` : ""}`);
+  }
+  if (!lines.length) return { ok: false, reason: "ยังไม่มีคำถามจากลูกค้า" };
+  const sys = `คุณคือผู้ช่วยจัดคลังคำถามที่พบบ่อย (FAQ) ของร้านอาหาร
+วิเคราะห์บทสนทนา แล้วจับกลุ่มคำถามที่ถูกถามซ้ำๆ (ความหมายเดียวกันนับรวมเป็นข้อเดียว) เสนอเป็น FAQ ใหม่ พร้อมร่างคำตอบ
+- อิงคำตอบที่ร้านเคยตอบจริงเป็นหลัก ถ้าไม่เคยตอบให้ใส่ a = "(ร้านยังไม่เคยตอบ — เติมคำตอบก่อนใช้)"
+- เรียงตามความถี่ count มาก→น้อย เอาเฉพาะที่ถูกถามอย่างน้อย 2 ครั้ง สูงสุด 12 ข้อ
+- อย่าเสนอซ้ำกับ FAQ ที่มีอยู่แล้ว: ${faq.map((f: any) => f.q).join(" | ") || "—"}`;
+  const userTxt = lines.slice(-400).join("\n---\n");
+  let items: { q: string; a: string; count: number }[] | null = null;
+  if (useClaude()) {
+    try {
+      const res = await anthropic.messages.parse({
+        model: "claude-opus-5", max_tokens: 4000,
+        output_config: { effort: "low", format: zodOutputFormat(LearnFaq) },
+        system: sys, messages: [{ role: "user", content: userTxt }],
+      });
+      const p = parsedOf<z.infer<typeof LearnFaq>>(res);
+      if (p) items = p.items;
+    } catch (e) { markClaudeDown(e); }
+  }
+  if (!items && GEMINI_KEY) {
+    const j = await geminiJson(sys + `\n\nตอบเป็น JSON ล้วน: {"items":[{"q":"...","a":"...","count":2}]}`, userTxt, 3000);
+    if (j?.items && Array.isArray(j.items))
+      items = j.items.map((x: any) => ({ q: String(x?.q ?? ""), a: String(x?.a ?? ""), count: Number(x?.count) || 1 })).filter((x: any) => x.q);
+  }
+  if (!items) return { ok: false, reason: "AI ไม่พร้อมใช้งานตอนนี้ — ลองใหม่ภายหลัง" };
+  await sb.from("social_settings").upsert({
+    id: "faq_candidates", val: { items, updated_at: new Date().toISOString() },
+    updated_at: new Date().toISOString(),
+  });
+  return { ok: true, count: items.length };
+}
+
+// ---------- ทดสอบแชทบอทจากหน้าแอป ----------
+async function chatTest(history: { role: string; text: string }[]) {
+  const settings = await getSettings();
+  const bot = settings.bot ?? {}, shop = settings.shop ?? {};
+  const faq = (shop.faq ?? []).map((f: any) => `ถาม: ${f.q}\nตอบ: ${f.a}`).join("\n\n");
+  const system = `${bot.persona ?? "คุณคือแอดมินร้านอาหาร ตอบสุภาพ"}
+
+ข้อมูลร้าน:
+- ชื่อร้าน: ${shop.name ?? ""}
+- ${shop.info ?? ""}
+- เวลาเปิด-ปิด: ${shop.hours ?? ""}
+${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
+
+กติกา:
+- ตอบเฉพาะเรื่องของร้านเท่านั้น
+- ห้ามแต่งข้อมูลที่ไม่รู้ ถ้าไม่มีในข้อมูลร้านให้บอกว่าเดี๋ยวแอดมินมายืนยัน และตั้ง needs_human = true
+- เรื่องร้องเรียนรุนแรง/ขอเงินคืน/คำเหล่านี้: ${(bot.escalate_keywords ?? []).join(", ")} → needs_human = true`;
+  const messages: Anthropic.MessageParam[] = history.slice(-12).map((h) => ({
+    role: h.role === "user" ? "user" as const : "assistant" as const, content: h.text,
+  }));
+  let out: z.infer<typeof ChatReply> | null = null;
+  if (useClaude()) {
+    try {
+      const res = await anthropic.messages.parse({
+        model: "claude-opus-5", max_tokens: 1024,
+        output_config: { effort: "low", format: zodOutputFormat(ChatReply) },
+        system, messages,
+      });
+      if (res.stop_reason === "refusal") return { reply: "", needs_human: true, reason: "refusal" };
+      out = parsedOf<z.infer<typeof ChatReply>>(res);
+    } catch (e) { markClaudeDown(e); }
+  }
+  if (!out && GEMINI_KEY) {
+    const hist = messages.map((m) => `${m.role === "user" ? "ลูกค้า" : "ร้าน"}: ${m.content}`).join("\n");
+    const j = await geminiJson(system + `\n\nตอบเป็น JSON ล้วน: {"reply":"ข้อความตอบลูกค้า","needs_human":true/false,"reason":"เหตุผลสั้นๆ"}`, hist, 800);
+    if (j && typeof j.reply === "string") out = { reply: j.reply, needs_human: !!j.needs_human, reason: String(j.reason ?? "") };
+  }
+  return out ?? { reply: bot.fallback_text ?? "", needs_human: true, reason: "ai-unavailable" };
+}
+
+// ---------- ส่งข้อความแชท (แอดมินกดส่งร่าง) ----------
+async function sendChat(channel: string, threadId: string, text: string, by: string) {
+  let ok = false;
+  if (channel === "line") {
+    const r = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LINE_TOKEN}` },
+      body: JSON.stringify({ to: threadId, messages: [{ type: "text", text }] }),
+    });
+    ok = r.ok; if (!ok) console.error("line push", await r.text());
+  } else if (channel === "facebook" || channel === "instagram") {
+    const r = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${FB_PAGE_TOKEN}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient: { id: threadId }, messaging_type: "RESPONSE", message: { text } }),
+    });
+    ok = r.ok; if (!ok) console.error("fb send", await r.text());
+  } else return { ok: false, reason: "ช่องทางนี้ยังส่งจากระบบไม่ได้" };
+  if (ok) await sb.from("social_chat_log").insert({
+    channel, thread_id: threadId, direction: "out", author: by, text, meta: { manual: true },
+  });
+  return { ok };
+}
+
+// ---------- ตอบกลับรีวิว/คอมเมนต์ ----------
+async function sendReply(id: number, text: string, by: string) {
+  const { data: m } = await sb.from("social_mentions").select("*").eq("id", id).single();
+  if (!m) return { ok: false, reason: "ไม่พบรายการ" };
+  let ok = false, reason = "";
+  if (m.channel === "facebook" && m.kind === "comment" && m.external_id) {
+    const r = await fetch(`https://graph.facebook.com/v21.0/${m.external_id}/comments?access_token=${FB_PAGE_TOKEN}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    });
+    ok = r.ok; if (!ok) reason = await r.text();
+  } else if (m.channel === "instagram" && m.kind === "comment" && m.external_id) {
+    const r = await fetch(`https://graph.facebook.com/v21.0/${m.external_id}/replies?access_token=${FB_PAGE_TOKEN}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    });
+    ok = r.ok; if (!ok) reason = await r.text();
+  } else if (m.channel === "google" && String(m.external_id ?? "").startsWith("gbp_")) {
+    // ตอบรีวิว Google ผ่าน Business Profile API
+    const at = await gbpAccessToken();
+    if (!at.token) return { ok: false, reason: at.reason };
+    const locPath = m.raw?.gbp;
+    if (!locPath) return { ok: false, reason: "ไม่พบข้อมูลสาขาของรีวิวนี้ — กด 'ซิงค์รีวิวทั้งหมด' อีกครั้งก่อน" };
+    const rid = String(m.external_id).slice(4);
+    const r = await fetch(`https://mybusiness.googleapis.com/v4/${locPath}/reviews/${rid}/reply`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${at.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ comment: text }),
+    });
+    ok = r.ok; if (!ok) reason = await r.text();
+  } else {
+    return { ok: false, reason: "ช่องทางนี้ต้องไปตอบที่แพลตฟอร์มโดยตรง (กดคัดลอกคำตอบ แล้วเปิดลิงก์ต้นทาง)" };
+  }
+  if (ok) await sb.from("social_mentions").update({
+    reply_status: "sent", reply_text: text, replied_by: by, replied_at: new Date().toISOString(),
+  }).eq("id", id);
+  return { ok, reason };
+}
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method !== "POST") return new Response("jjmk social-brain ok v" + VERSION, { headers: CORS });
+  try {
+    const b = await req.json();
+    await getSettings().catch(() => null);   // อ่านโหมด AI (ฟรี/คุณภาพสูงสุด) ก่อนทุกครั้ง
+    let out: unknown;
+    switch (b.action) {
+      case "analyze":     out = await analyzeMentions(b.ids, b.limit ?? 8); break;
+      case "summary": {
+        out = await makeSummary(b.date, b.span ?? "daily");
+        await learnFaq().catch(() => null); // อัพเดตคลังคำถามซ้ำไปพร้อมสรุปรายวัน
+        break;
+      }
+      case "learn_faq":   out = await learnFaq(); break;
+      case "poll_google": {
+        const g: any = await pollGoogle(b.places);
+        if (g.added) g.analyze = await analyzeMentions(undefined, 20); // วิเคราะห์ต่อทันที ไม่ต้องรอ cron
+        out = g;
+        break;
+      }
+      case "chat_test":   out = await chatTest(b.history ?? []); break;
+      case "send_chat":   out = await sendChat(b.channel, b.thread_id, b.text, b.by ?? "admin"); break;
+      case "send_reply":  out = await sendReply(b.id, b.text, b.by ?? "admin"); break;
+      case "gbp_auth_url": {
+        if (!GBP_CLIENT_ID || !GBP_CLIENT_SECRET) {
+          out = { ok: false, reason: "ต้องตั้ง secrets GBP_CLIENT_ID และ GBP_CLIENT_SECRET ก่อน (ดูขั้นตอนใน README-SOCIAL.md)" };
+          break;
+        }
+        out = { ok: true, url: "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
+          client_id: GBP_CLIENT_ID,
+          redirect_uri: `${SB_URL}/functions/v1/social-webhook`,
+          response_type: "code",
+          scope: "https://www.googleapis.com/auth/business.manage",
+          access_type: "offline", prompt: "consent", state: "jjgbp",
+        }).toString() };
+        break;
+      }
+      case "gbp_sync": out = await gbpSync(!!b.full); break;
+      case "status": {   // หน้า "สถานะระบบ" ในแอป — บอกแค่ว่าตั้งค่าแล้วหรือยัง ไม่ส่งค่าลับออกไป
+        const st = await getSettings();
+        const ch = st.channels ?? {};
+        const { count: pending } = await sb.from("social_mentions")
+          .select("id", { count: "exact", head: true }).is("analyzed_at", null);
+        const { data: lastA } = await sb.from("social_mentions").select("analyzed_at")
+          .not("analyzed_at", "is", null).order("analyzed_at", { ascending: false }).limit(1);
+        out = {
+          ok: true, version: VERSION, ai_mode: AI_MODE,
+          secrets: {
+            anthropic: !!Deno.env.get("ANTHROPIC_API_KEY"), gemini: !!GEMINI_KEY,
+            google_places: !!GOOGLE_KEY, gbp_oauth: !!(GBP_CLIENT_ID && GBP_CLIENT_SECRET),
+            line_token: !!LINE_TOKEN, fb_page_token: !!FB_PAGE_TOKEN,
+          },
+          claude_paused_min: claudeDownUntil > Date.now() ? Math.ceil((claudeDownUntil - Date.now()) / 60000) : 0,
+          google: {
+            gbp_connected: !!ch.gbp?.rt_enc, gbp_last_sync: ch.gbp?.last_sync ?? null,
+            places: (ch.google_places ?? []).length, places_last_poll: ch.google_last_poll ?? null,
+          },
+          pending_analysis: pending ?? 0, last_analyzed: lastA?.[0]?.analyzed_at ?? null,
+        };
+        break;
+      }
+      case "cron": {
+        const st = await getSettings();
+        // 1) Google Business Profile (ฟรี ได้รีวิวครบ) — ถ้ายังไม่ได้รับอนุมัติ/ยังไม่เชื่อม
+        // 2) ถอยไป Places API แบบประหยัด (ทุก 3 ชม.) ให้อยู่ในโควต้าฟรี ไม่มีค่าใช้จ่าย
+        let g: any = st.channels?.gbp?.rt_enc
+          ? await gbpSync(false).catch((e) => ({ ok: false, reason: String(e) }))
+          : { ok: false, reason: "ยังไม่ได้เชื่อมบัญชี Google Business" };
+        if (!g.ok) {
+          const p = await pollGoogle(undefined, 3).catch((e) => ({ ok: false, reason: String(e) }));
+          g = { gbp: g.reason, places: p };
+        }
+        const a = await analyzeMentions(undefined, 20);
+        out = { google: g, analyze: a };
+        break;
+      }
+      default: return json({ error: "unknown action" }, 400);
+    }
+    return json(out);
+  } catch (e) {
+    console.error(e);
+    return json({ error: String(e) }, 500);
+  }
+});
+function json(x: unknown, status = 200) {
+  return new Response(JSON.stringify(x), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS },
+  });
+}
+</script>
+<script type="text/plain" id="fnWebhook">
+// ============================================================
+// JJ Social — social-webhook
+// จุดรับข้อมูลจากทุกช่องทาง: LINE OA / Facebook / Instagram / generic
+// deploy: supabase functions deploy social-webhook --no-verify-jwt
+// (ตรวจลายเซ็นของแต่ละแพลตฟอร์มเองในโค้ดนี้)
+// ============================================================
+import Anthropic from "npm:@anthropic-ai/sdk";
+import { z } from "npm:zod";
+import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+// เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
+const VERSION = "2026-09-29";
+const SB_URL = Deno.env.get("SUPABASE_URL")!;
+const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// ใช้ชื่อเฉพาะของ JJ Social — อย่าสับสนกับ LINE_SECRET/LINE_TOKEN ซึ่งเป็นของ OA ระบบอื่น
+const LINE_SECRET = Deno.env.get("LINE_CHANNEL_SECRET") ?? "";
+const LINE_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
+const FB_APP_SECRET = Deno.env.get("FB_APP_SECRET") ?? "";
+const FB_VERIFY = Deno.env.get("FB_VERIFY_TOKEN") ?? "jjmk-social";
+const FB_PAGE_TOKEN = Deno.env.get("FB_PAGE_TOKEN") ?? "";
+const GENERIC_KEY = Deno.env.get("WEBHOOK_SHARED_KEY") ?? "";
+
+const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+const sb = createClient(SB_URL, SB_SERVICE);
+const anthropic = new Anthropic(); // อ่าน ANTHROPIC_API_KEY จาก secrets
+
+// AI 2 ชั้น: Claude (ถ้ามีเครดิต) → Gemini (โควต้าฟรี) → ข้อความสำรอง
+let claudeDownUntil = 0;
+// โหมด AI เดียวกับ social-brain: 'free' = Gemini (โควต้าฟรี) · 'best' = ลอง Claude ก่อน (เสียเงิน)
+let AI_MODE: "free" | "best" = "free";
+const useClaude = () => AI_MODE === "best" && Date.now() > claudeDownUntil;
+function markClaudeDown(e: unknown) {
+  const msg = String((e as any)?.message ?? e);
+  if (/credit|billing|api.?key|authentication|401|invalid_request_error/i.test(msg)) claudeDownUntil = Date.now() + 10 * 60000;
+  console.error("claude", msg.slice(0, 160));
+}
+async function geminiJson(system: string, user: string, maxTokens = 800): Promise<any | null> {
+  if (!GEMINI_KEY) return null;
+  for (const model of ["gemini-2.5-flash", "gemini-2.0-flash"]) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: "user", parts: [{ text: user }] }],
+          generationConfig: { responseMimeType: "application/json", maxOutputTokens: maxTokens, temperature: 0.4 },
+        }),
+      });
+      if (!r.ok) { console.error("gemini", model, r.status); continue; }
+      const d = await r.json();
+      const t = (d.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
+      try { return JSON.parse(t); } catch { continue; }
+    } catch (e) { console.error("gemini", e); }
+  }
+  return null;
+}
+
+const ChatReply = z.object({
+  reply: z.string(),        // ข้อความตอบลูกค้า (ภาษาเดียวกับลูกค้า)
+  needs_human: z.boolean(), // true = เรื่องร้องเรียนรุนแรง/ขอเงินคืน/เกินขอบเขตบอท
+  reason: z.string(),
+});
+
+// อ่านผลลัพธ์ structured output: ใช้ parsed_output ก่อน ถ้าไม่มีให้ parse จาก text block
+function parsedOf<T>(res: any): T | null {
+  if (res?.parsed_output) return res.parsed_output as T;
+  try {
+    const t = (res?.content ?? []).find((b: any) => b.type === "text");
+    return t?.text ? JSON.parse(t.text) as T : null;
+  } catch { return null; }
+}
+
+// ===== Google Business Profile OAuth (ปุ่มเชื่อมต่อบัญชีร้าน) =====
+const GBP_CLIENT_ID = Deno.env.get("GBP_CLIENT_ID") ?? "";
+const GBP_CLIENT_SECRET = Deno.env.get("GBP_CLIENT_SECRET") ?? "";
+async function aesKey() {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SB_SERVICE));
+  return crypto.subtle.importKey("raw", h, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+async function encryptRT(rt: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aesKey(), new TextEncoder().encode(rt)));
+  return btoa(String.fromCharCode(...iv)) + "." + btoa(String.fromCharCode(...ct));
+}
+const APP_URL = "https://thananant.github.io/JJ-PnL/jjmk-social.html";
+function gbpPage(ok: boolean, msg: string): Response {
+  // เด้งกลับเข้าแอปพร้อมผลลัพธ์ — แอปจะโชว์ข้อความแจ้งเอง
+  const clean = msg.replace(/<[^>]*>/g, " ").slice(0, 160);
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `${APP_URL}#gbp=${ok ? "ok" : "err:" + encodeURIComponent(clean)}` },
+  });
+}
+async function gbpOauth(u: URL): Promise<Response> {
+  try {
+    const code = u.searchParams.get("code") ?? "";
+    const r = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code, client_id: GBP_CLIENT_ID, client_secret: GBP_CLIENT_SECRET,
+        redirect_uri: `${SB_URL}/functions/v1/social-webhook`, grant_type: "authorization_code",
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.refresh_token)
+      return gbpPage(false, "Google ตอบกลับ: " + JSON.stringify(d).slice(0, 280) + "<br>ลองกดเชื่อมต่อจากแอปใหม่อีกครั้ง");
+    const enc = await encryptRT(d.refresh_token);
+    const { data: cur } = await sb.from("social_settings").select("val").eq("id", "channels").maybeSingle();
+    const val = { ...(cur?.val ?? {}), gbp: { ...((cur?.val ?? {}).gbp ?? {}), rt_enc: enc, connected: true, connected_at: new Date().toISOString(), account: null, locations: null } };
+    await sb.from("social_settings").upsert({ id: "channels", val, updated_at: new Date().toISOString() });
+    return gbpPage(true, "ปิดหน้านี้ได้เลย แล้วกลับไปที่แอป JJ Social → หน้า \"เชื่อมต่อช่องทาง\" → กด \"⟳ ซิงค์รีวิวทั้งหมด\"");
+  } catch (e) {
+    return gbpPage(false, String(e).slice(0, 300));
+  }
+}
+
+function bg(p: Promise<unknown>) {
+  // @ts-ignore: EdgeRuntime มีเฉพาะบน Supabase Edge Runtime
+  if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(p.catch((e) => console.error(e)));
+  else p.catch((e) => console.error(e));
+}
+
+async function hmacSha256(key: string, body: string, out: "base64" | "hex") {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(key),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(body)));
+  if (out === "base64") return btoa(String.fromCharCode(...sig));
+  return [...sig].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function safeEq(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+async function getSettings() {
+  const { data } = await sb.from("social_settings").select("id,val");
+  const m: Record<string, any> = {};
+  (data ?? []).forEach((r: any) => (m[r.id] = r.val || {}));
+  AI_MODE = m.bot?.ai_mode === "best" ? "best" : "free";   // ตั้งต้น = โหมดฟรี
+  return m;
+}
+
+// เก็บ mention (รีวิว/คอมเมนต์) + ส่งไปวิเคราะห์ต่อเบื้องหลัง
+async function saveMention(row: Record<string, unknown>) {
+  const { data, error } = await sb.from("social_mentions")
+    .upsert(row, { onConflict: "channel,external_id", ignoreDuplicates: true })
+    .select("id");
+  if (error) { console.error("saveMention", error); return; }
+  const ids = (data ?? []).map((r: any) => r.id);
+  if (ids.length) {
+    bg(fetch(`${SB_URL}/functions/v1/social-brain`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SB_SERVICE}` },
+      body: JSON.stringify({ action: "analyze", ids }),
+    }));
+  }
+}
+
+// ---------- แชทบอท ----------
+// strictFaq = โหมด "ตอบออโต้เฉพาะคำถามพบบ่อย": ตอบเองเฉพาะที่มีคำตอบใน FAQ/ข้อมูลร้าน นอกนั้นส่งให้คน
+async function botAnswer(channel: string, threadId: string, settings: Record<string, any>, strictFaq = false) {
+  const bot = settings.bot ?? {}, shop = settings.shop ?? {};
+  const { data: hist } = await sb.from("social_chat_log")
+    .select("direction,text,meta").eq("channel", channel).eq("thread_id", threadId)
+    .order("created_at", { ascending: false }).limit(14);
+  const turns = (hist ?? []).reverse().filter((t: any) => !t.meta?.draft); // ร่างที่ยังไม่ส่ง ไม่นับเป็นบทสนทนา
+  const messages: Anthropic.MessageParam[] = [];
+  for (const t of turns) {
+    const role = t.direction === "in" ? "user" as const : "assistant" as const;
+    if (!messages.length && role !== "user") continue; // ข้อความแรกต้องเป็นฝั่งลูกค้า
+    messages.push({ role, content: t.text });
+  }
+  if (!messages.length || messages[messages.length - 1].role !== "user") return null;
+
+  const kw: string[] = bot.escalate_keywords ?? [];
+  const faq = (shop.faq ?? []).map((f: any) => `ถาม: ${f.q}\nตอบ: ${f.a}`).join("\n\n");
+  const system = `${bot.persona ?? "คุณคือแอดมินร้านอาหาร ตอบสุภาพ"}
+
+ข้อมูลร้าน:
+- ชื่อร้าน: ${shop.name ?? "จริงใจหมูกระทะ"}
+- ${shop.info ?? ""}
+- เวลาเปิด-ปิด: ${shop.hours ?? ""}
+${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
+
+กติกา:
+- ตอบเฉพาะเรื่องของร้านเท่านั้น ไม่ตอบเรื่องอื่น
+- ห้ามแต่งข้อมูลที่ไม่รู้ (ราคา/โปรโมชั่น/วันหยุด) ถ้าไม่มีในข้อมูลร้าน ให้บอกว่าเดี๋ยวแอดมินมายืนยันอีกที และตั้ง needs_human = true
+- ถ้าลูกค้าร้องเรียนรุนแรง เจ็บป่วย ขอเงินคืน หรือพูดถึงคำเหล่านี้: ${kw.join(", ")} ให้ตั้ง needs_human = true${strictFaq ? `
+- โหมดเข้มงวด: ตอบอัตโนมัติเฉพาะคำถามที่ตรงหรือใกล้เคียงกับ "คำถามที่พบบ่อย" หรือข้อมูลร้านข้างต้นเท่านั้น — คำถามอื่นทุกกรณี (รวมถึงจอง/สั่งอาหาร/เรื่องเฉพาะบุคคล) ให้ตั้ง needs_human = true` : ""}`;
+
+  let out: z.infer<typeof ChatReply> | null = null;
+  if (useClaude()) {
+    try {
+      const res = await anthropic.messages.parse({
+        model: "claude-opus-5",
+        max_tokens: 1024,
+        output_config: { effort: "low", format: zodOutputFormat(ChatReply) },
+        system,
+        messages,
+      });
+      if (res.stop_reason === "refusal") return { reply: "", needs_human: true, reason: "refusal" };
+      out = parsedOf<z.infer<typeof ChatReply>>(res);
+    } catch (e) { markClaudeDown(e); }
+  }
+  if (!out && GEMINI_KEY) {
+    const hist = messages.map((m) => `${m.role === "user" ? "ลูกค้า" : "ร้าน"}: ${m.content}`).join("\n");
+    const j = await geminiJson(system + `\n\nตอบเป็น JSON ล้วน: {"reply":"ข้อความตอบลูกค้า","needs_human":true/false,"reason":"เหตุผลสั้นๆ"}`, hist);
+    if (j && typeof j.reply === "string") out = { reply: j.reply, needs_human: !!j.needs_human, reason: String(j.reason ?? "") };
+  }
+  // AI ใช้ไม่ได้ทั้งคู่ → ส่งต่อให้คน (โหมดร่าง/ออโต้จะใช้ข้อความสำรองเอง)
+  return out ?? { reply: "", needs_human: true, reason: "ai-unavailable" };
+}
+
+async function sendLine(replyToken: string | null, userId: string, text: string) {
+  const msg = { messages: [{ type: "text", text }] };
+  if (replyToken) {
+    const r = await fetch("https://api.line.me/v2/bot/message/reply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${LINE_TOKEN}` },
+      body: JSON.stringify({ replyToken, ...msg }),
+    });
+    if (r.ok) return true;
+  }
+  const r2 = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${LINE_TOKEN}` },
+    body: JSON.stringify({ to: userId, ...msg }),
+  });
+  return r2.ok;
+}
+async function sendMessenger(userId: string, text: string) {
+  const r = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${FB_PAGE_TOKEN}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recipient: { id: userId }, messaging_type: "RESPONSE", message: { text } }),
+  });
+  return r.ok;
+}
+
+async function handleChat(opts: {
+  channel: string; threadId: string; authorName?: string; text: string;
+  replyToken?: string | null; externalId?: string;
+}) {
+  const { channel, threadId, text } = opts;
+  await sb.from("social_chat_log").insert({
+    channel, thread_id: threadId, direction: "in",
+    author: opts.authorName ?? null, text, meta: opts.externalId ? { external_id: opts.externalId } : null,
+  });
+  const settings = await getSettings();
+  const mode = settings.bot?.mode?.[channel] ?? "off"; // off | draft | faq | auto
+  if (mode === "off") return;
+  const autoLike = mode === "auto" || mode === "faq";
+
+  const out = await botAnswer(channel, threadId, settings, mode === "faq").catch((e) => {
+    console.error("botAnswer", e); return null;
+  });
+  if (!out) return;
+
+  if (mode === "draft" || out.needs_human || !out.reply) {
+    // โหมดร่าง หรือบอทขอส่งต่อคน: เก็บร่างไว้ให้แอดมินกดส่งในแอป
+    await sb.from("social_chat_log").insert({
+      channel, thread_id: threadId, direction: "out", author: "bot",
+      text: out.reply || (settings.bot?.fallback_text ?? ""),
+      meta: { draft: true, needs_human: out.needs_human, reason: out.reason },
+    });
+    if (autoLike && out.needs_human && settings.bot?.fallback_text) {
+      // โหมดออโต้แต่ต้องส่งต่อคน: ตอบขอเวลาไว้ก่อน
+      const ok = channel === "line"
+        ? await sendLine(opts.replyToken ?? null, threadId, settings.bot.fallback_text)
+        : await sendMessenger(threadId, settings.bot.fallback_text);
+      if (ok) await sb.from("social_chat_log").insert({
+        channel, thread_id: threadId, direction: "out", author: "bot",
+        text: settings.bot.fallback_text, meta: { auto: true, fallback: true },
+      });
+    }
+    return;
+  }
+  // โหมด auto / faq: ส่งเอง
+  const ok = channel === "line"
+    ? await sendLine(opts.replyToken ?? null, threadId, out.reply)
+    : await sendMessenger(threadId, out.reply);
+  await sb.from("social_chat_log").insert({
+    channel, thread_id: threadId, direction: "out", author: "bot",
+    text: out.reply, meta: { auto: true, sent: ok },
+  });
+}
+
+// ---------- LINE ----------
+async function handleLine(body: string) {
+  const data = JSON.parse(body);
+  for (const ev of data.events ?? []) {
+    if (ev.type !== "message") continue;
+    const threadId = ev.source?.userId ?? "unknown";
+    const text = ev.message?.type === "text" ? (ev.message.text ?? "")
+      : `[${ev.message?.type ?? "message"}]`;
+    let authorName: string | undefined;
+    try {
+      const p = await fetch(`https://api.line.me/v2/bot/profile/${threadId}`, {
+        headers: { Authorization: `Bearer ${LINE_TOKEN}` },
+      });
+      if (p.ok) authorName = (await p.json()).displayName;
+    } catch { /* ไม่มีชื่อก็ไม่เป็นไร */ }
+    await handleChat({
+      channel: "line", threadId, authorName, text,
+      replyToken: ev.replyToken ?? null, externalId: ev.message?.id,
+    });
+  }
+}
+
+// ---------- Facebook / Instagram ----------
+async function handleMeta(body: string) {
+  const data = JSON.parse(body);
+  const isIG = data.object === "instagram";
+  const channel = isIG ? "instagram" : "facebook";
+  for (const entry of data.entry ?? []) {
+    // แชท Messenger / IG DM
+    for (const m of entry.messaging ?? []) {
+      if (!m.message || m.message.is_echo) continue;
+      const text = m.message.text ?? "[แนบไฟล์/สติกเกอร์]";
+      await handleChat({
+        channel, threadId: m.sender.id, text, externalId: m.message.mid,
+      });
+    }
+    // คอมเมนต์ / รีวิวเพจ
+    for (const ch of entry.changes ?? []) {
+      const v = ch.value ?? {};
+      if (ch.field === "feed" && v.item === "comment" && v.verb === "add") {
+        if (v.from?.id && String(v.from.id) === String(entry.id)) continue; // คอมเมนต์ของเพจเอง
+        await saveMention({
+          channel, kind: "comment", external_id: v.comment_id,
+          thread_id: v.post_id ?? null, // เก็บ post id ไว้ทำสถิติอัตราตอบรายโพสต์
+          author_name: v.from?.name ?? null, author_id: v.from?.id ?? null,
+          text: v.message ?? "", url: v.permalink_url ?? null,
+          posted_at: v.created_time ? new Date(v.created_time * 1000).toISOString() : new Date().toISOString(),
+          raw: v,
+        });
+      }
+      if (ch.field === "ratings") {
+        await saveMention({
+          channel: "facebook", kind: "review",
+          external_id: `rating_${v.review_id ?? v.created_time ?? crypto.randomUUID()}`,
+          author_name: v.reviewer_name ?? null,
+          text: v.review_text ?? (v.recommendation_type ? `แนะนำ: ${v.recommendation_type}` : ""),
+          rating: v.rating ?? (v.recommendation_type === "positive" ? 5 : v.recommendation_type === "negative" ? 1 : null),
+          posted_at: v.created_time ? new Date(v.created_time * 1000).toISOString() : new Date().toISOString(),
+          raw: v,
+        });
+      }
+      if (isIG && ch.field === "comments" && v.id) {
+        await saveMention({
+          channel: "instagram", kind: "comment", external_id: v.id,
+          thread_id: v.media?.id ?? null,
+          author_name: v.from?.username ?? null, author_id: v.from?.id ?? null,
+          text: v.text ?? "", raw: v,
+        });
+      }
+    }
+  }
+}
+
+// ---------- ช่องทางอื่น (Wongnai/Grab/LINE MAN/TikTok — ยิงเข้ามาเอง) ----------
+async function handleGeneric(body: string) {
+  const d = JSON.parse(body);
+  const rows = Array.isArray(d) ? d : [d];
+  for (const r of rows) {
+    await saveMention({
+      channel: r.channel ?? "other", kind: r.kind ?? "review",
+      external_id: r.external_id ?? null, branch: r.branch ?? null,
+      author_name: r.author_name ?? null, text: r.text ?? "",
+      rating: r.rating ?? null, url: r.url ?? null,
+      posted_at: r.posted_at ?? new Date().toISOString(), raw: r,
+    });
+  }
+}
+
+Deno.serve(async (req) => {
+  const u = new URL(req.url);
+  const ch = u.searchParams.get("ch") ?? "";
+
+  if (req.method === "GET") {
+    // ปลายทาง OAuth ของ Google Business Profile
+    if (u.searchParams.get("state") === "jjgbp" && u.searchParams.get("code")) return gbpOauth(u);
+    // Meta webhook verification
+    if (u.searchParams.get("hub.mode") === "subscribe") {
+      if (u.searchParams.get("hub.verify_token") === FB_VERIFY)
+        return new Response(u.searchParams.get("hub.challenge") ?? "", { status: 200 });
+      return new Response("bad verify token", { status: 403 });
+    }
+    // หน้า "สถานะระบบ" ในแอปเรียกดู — บอกแค่ว่าตั้งค่าครบหรือยัง (true/false) ไม่ส่งค่าลับออกไป
+    return new Response(JSON.stringify({
+      ok: true, app: "jjmk social-webhook", version: VERSION,
+      line: !!(LINE_SECRET && LINE_TOKEN), facebook: !!(FB_APP_SECRET && FB_PAGE_TOKEN),
+      generic: !!GENERIC_KEY, gbp_oauth: !!(GBP_CLIENT_ID && GBP_CLIENT_SECRET),
+    }), { status: 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+  }
+  if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+
+  const body = await req.text();
+  try {
+    if (ch === "line") {
+      const sig = req.headers.get("x-line-signature") ?? "";
+      const want = await hmacSha256(LINE_SECRET, body, "base64");
+      if (!LINE_SECRET || !safeEq(sig, want)) return new Response("bad signature", { status: 401 });
+      bg(handleLine(body));
+      return new Response("ok"); // LINE ต้องได้ 200 เร็ว
+    }
+    if (ch === "facebook" || ch === "instagram") {
+      const sig = req.headers.get("x-hub-signature-256") ?? "";
+      const want = "sha256=" + await hmacSha256(FB_APP_SECRET, body, "hex");
+      if (!FB_APP_SECRET || !safeEq(sig, want)) return new Response("bad signature", { status: 401 });
+      bg(handleMeta(body));
+      return new Response("ok");
+    }
+    if (ch === "generic") {
+      if (!GENERIC_KEY || req.headers.get("x-webhook-key") !== GENERIC_KEY)
+        return new Response("bad key", { status: 401 });
+      await handleGeneric(body);
+      return new Response("ok");
+    }
+    return new Response("unknown channel", { status: 400 });
+  } catch (e) {
+    console.error(e);
+    return new Response("error", { status: 500 });
+  }
+});
+</script>
+<!-- ===== /โค้ด Edge Functions ===== -->
 </body>
 </html>
