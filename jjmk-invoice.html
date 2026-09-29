@@ -1155,19 +1155,29 @@ async function syncMissingNas(){
   if(!nasHandle){ toast('เครื่องนี้ยังไม่ได้เลือกโฟลเดอร์ NAS (การ์ดข้างบน)','err'); return; }
   btn.disabled=true;
   var done=0, fail=0;
+  var skip=0;
   for(var i=0;i<rows.length;i++){
-    var v=rows[i];
-    info.textContent='กำลังเก็บ '+(i+1)+'/'+rows.length+' — '+v.bill_no+' ...';
+    info.textContent='กำลังเก็บ '+(i+1)+'/'+rows.length+' — '+rows[i].bill_no+' ...';
     try{
+      // รายการในเครื่องอาจเก่า (บิลถูกย้ายเลข/แก้/เก็บไปแล้วจากเครื่องอื่น) — อ่านแถวล่าสุดก่อนทุกใบ
+      var v=await freshInv(rows[i], true);
+      if(!v||v.nas_path){ skip++; continue; }
       var path=await storePdf(v, await buildInvoicePdf(v));
       if(!path){ fail++; continue; }
-      await invRow(sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
-        updated_at:new Date().toISOString()}), v);
+      var q=invRow(sb.from('inv_invoices').update({nas_path:path}), v).is('nas_path',null);
+      if(v.updated_at) q=q.eq('updated_at',v.updated_at);
+      var u=await q.select('id');
+      if(u.error||!(u.data||[]).length){
+        // บิลถูกแก้ระหว่างเก็บ → ส่งกลับเข้าคิว ให้สร้างใหม่จากข้อมูลล่าสุด (แบบเดียวกับสคริปต์ NAS)
+        try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), v); }catch(e2){}
+        fail++; continue;
+      }
       done++;
     }catch(e){ fail++; }
   }
-  logActivity('เก็บไฟล์ค้างลง NAS','', 'สำเร็จ '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' ใบ'):''));
-  info.textContent='เก็บสำเร็จ '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' ใบ (ลองกดซ้ำอีกครั้ง)'):'');
+  logActivity('เก็บไฟล์ค้างลง NAS','', 'สำเร็จ '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' ใบ'):'')+(skip?(' · ข้าม '+skip+' ใบ (เปลี่ยนจากเครื่องอื่นแล้ว)'):''));
+  info.textContent='เก็บสำเร็จ '+done+' ใบ'+(fail?(' · ไม่สำเร็จ '+fail+' ใบ (ลองกดซ้ำอีกครั้ง)'):'')+
+    (skip?(' · ข้าม '+skip+' ใบ ที่เปลี่ยนจากเครื่องอื่นแล้ว'):'');
   toast('เก็บไฟล์ลง NAS สำเร็จ '+done+' ใบ', fail?'err':'ok');
   btn.disabled=false;
   loadInvoices();
@@ -1210,36 +1220,62 @@ async function nasEntries(dir){          // [ชื่อ, handle] ของท�
   for(;;){ var r=await it.next(); if(r.done) break; out.push(r.value); }
   return out;
 }
-async function nasTryRemove(dir, name){ try{ await dir.removeEntry(name); return true; }catch(e){ return false; } }
+// ลบไฟล์ในโฟลเดอร์: 'ok' ลบแล้ว · 'none' ไม่มีไฟล์นี้ · 'fail' มีแต่ลบไม่ได้ (เช่น มีคนเปิดค้างอยู่ / ไม่มีสิทธิ์)
+async function nasTryRemove(dir, name){
+  try{ await dir.removeEntry(name); return 'ok'; }
+  catch(e){ return (e&&e.name==='NotFoundError')?'none':'fail'; }
+}
+async function nasTryRmdir(dir, name){ try{ await dir.removeEntry(name); }catch(e){} }   // ลบได้เฉพาะโฟลเดอร์ที่ว่างแล้ว
+async function nasDirOrNull(dir, name){ try{ return await dir.getDirectoryHandle(name); }catch(e){ return null; } }
+// เก็บไฟล์ + ลบใบเดิมที่อื่น → {path, left:[ไฟล์เดิมที่ลบไม่ได้]}
 async function saveToNas(inv, blob){
   var dirs=nasDirs(inv), name=inv.bill_no+'.pdf';
   var dir=await nasSubdir(dirs,true);
   var fh=await dir.getFileHandle(name,{create:true});
   var w=await fh.createWritable();
   await w.write(blob); await w.close();
-  try{ await nasRemoveOthers(inv, dirs, name); }catch(e){}   // ลบไม่ได้ไม่เป็นไร สคริปต์ NAS เก็บกวาดซ้ำให้
-  return dirs.concat(name).join('/');
+  var left=[];
+  try{ left=await nasRemoveOthers(inv, dirs, name); }catch(e){ left=['(ตรวจไฟล์เดิมไม่ได้: '+e.message+')']; }
+  return {path:dirs.concat(name).join('/'), left:left};
 }
-// ลบ <เลขบิล>.pdf ที่อยู่ที่อื่น: ใบก่อนยกเลิก/เรียกคืน · เดือนอื่นของสาขาเดียวกัน (หลังแก้เลขชน) · โครงเก่า YYYY-MM/
+/* ลบ <เลขบิล>.pdf ที่อยู่ที่อื่น (ตรงกับ remove_other_copies ของสคริปต์ NAS):
+   ใบก่อนยกเลิก/เรียกคืน · เดือนอื่นของสาขาเดียวกัน (หลังแก้เลขชน) · โครงเก่า YYYY-MM/ + _ฉบับก่อนหน้า/
+   คืนรายการไฟล์ที่มีอยู่แต่ลบไม่ได้ */
 async function nasRemoveOthers(inv, keep, name){
-  var keepKey=keep.join('/'), bdir=null;
-  try{ bdir=await nasHandle.getDirectoryHandle(nasBranch(inv.bill_no)); }catch(e){}
+  var keepKey=keep.join('/'), br=nasBranch(inv.bill_no), left=[];
+  async function rm(dir, fname, shown){ if(await nasTryRemove(dir,fname)==='fail') left.push(shown); }
+  var bdir=await nasDirOrNull(nasHandle, br);
   if(bdir){
     var months=await nasEntries(bdir);
     for(var i=0;i<months.length;i++){
       var mm=months[i][0], mh=months[i][1];
       if(mh.kind!=='directory'||!/^[0-9]{6}$/.test(mm)) continue;
-      if([keep[0],mm].join('/')!==keepKey) await nasTryRemove(mh,name);
-      var ch=null; try{ ch=await mh.getDirectoryHandle(NAS_CANCEL_DIR); }catch(e){}
+      if([br,mm].join('/')!==keepKey) await rm(mh, name, br+'/'+mm+'/'+name);
+      var ch=await nasDirOrNull(mh, NAS_CANCEL_DIR);
       if(ch){
-        if([keep[0],mm,NAS_CANCEL_DIR].join('/')!==keepKey) await nasTryRemove(ch,name);
-        await nasTryRemove(mh,NAS_CANCEL_DIR);              // ลบได้เฉพาะตอนว่างแล้ว
+        if([br,mm,NAS_CANCEL_DIR].join('/')!==keepKey) await rm(ch, name, br+'/'+mm+'/'+NAS_CANCEL_DIR+'/'+name);
+        await nasTryRmdir(mh, NAS_CANCEL_DIR);
       }
     }
   }
-  var old=ymOf(inv.issued_at), od=null;
-  try{ od=await nasHandle.getDirectoryHandle(old); }catch(e){}
-  if(od){ await nasTryRemove(od,name); await nasTryRemove(nasHandle,old); }
+  var tops=await nasEntries(nasHandle);
+  for(var j=0;j<tops.length;j++){
+    var top=tops[j][0], th=tops[j][1];
+    if(th.kind!=='directory'||!/^[0-9]{4}-[0-9]{2}$/.test(top)) continue;
+    await rm(th, name, top+'/'+name);
+    var vh=await nasDirOrNull(th, '_ฉบับก่อนหน้า');
+    if(vh){
+      var vs=await nasEntries(vh);
+      for(var k=0;k<vs.length;k++){
+        var f=vs[k][0];
+        if(vs[k][1].kind==='file' && f.indexOf(inv.bill_no+'.')===0 && /\.pdf$/.test(f))
+          await rm(vh, f, top+'/_ฉบับก่อนหน้า/'+f);
+      }
+      await nasTryRmdir(th, '_ฉบับก่อนหน้า');
+    }
+    await nasTryRmdir(nasHandle, top);
+  }
+  return left;
 }
 function downloadBlob(filename, blob){
   var url=URL.createObjectURL(blob);
@@ -1253,7 +1289,20 @@ async function storePdf(inv, blob){
   // 1) โฟลเดอร์ NAS ที่ผูกไว้กับเครื่องนี้ (คอมที่ map ไดรฟ์) — เก็บทันที
   if(nasHandle){
     try{
-      if(await ensureNasPermission()) return await saveToNas(inv, blob);
+      if(await ensureNasPermission()){
+        var sv=await saveToNas(inv, blob);
+        if(!sv.left.length) return sv.path;
+        // เก็บใบใหม่แล้ว แต่ใบเดิมบางไฟล์ลบไม่ได้ → ห้ามติ๊กว่าเก็บเรียบร้อย ไม่งั้นไฟล์ซ้ำค้างถาวร
+        var msg='เก็บใบใหม่แล้ว แต่ลบไฟล์เดิม '+sv.left.join(', ')+' ไม่ได้ (อาจมีคนเปิดไฟล์ค้างไว้)';
+        await refreshNasSync();
+        if(nasSyncActive()){
+          try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), inv); }catch(e2){}
+          toast(msg+' — NAS จะเก็บกวาดให้ภายใน 5 นาที','err');
+          return null;
+        }
+        toast(msg+' — ปิดไฟล์แล้วลบเองใน File Station','err');
+        return sv.path;
+      }
       throw new Error('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์');
     }catch(e){
       await refreshNasSync();

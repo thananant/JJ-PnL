@@ -45,6 +45,7 @@ NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ย
 import os
 import sys
 import re
+import stat
 import json
 import math
 import time
@@ -929,70 +930,103 @@ def bill_parts(bill_no, iso, cancelled):
     return [bill_branch(bill_no), mmyyyy_of(iso)] + ([CANCEL_DIR] if cancelled else [])
 
 
-def open_dir(base, parts):
-    """เปิด/สร้างโฟลเดอร์ย่อยทีละชั้น — สคริปต์รันด้วย root ห้ามเดินตามลิงก์ลัด (symlink) ออกไปเขียนที่อื่น"""
-    folder = base
-    for p in parts:
-        folder = os.path.join(folder, p)
-        if os.path.islink(folder):
-            raise RuntimeError('โฟลเดอร์ %s เป็นลิงก์ลัด — ไม่เขียนเพื่อความปลอดภัย' % '/'.join(parts))
-        os.makedirs(folder, exist_ok=True)
-    if os.path.realpath(folder) != folder:
-        raise RuntimeError('โฟลเดอร์ %s ชี้ออกนอกโฟลเดอร์เก็บบิล — ไม่เขียนเพื่อความปลอดภัย' % '/'.join(parts))
-    return folder
+# ทุกการเปิด/เขียน/ลบ ทำผ่าน "ที่จับโฟลเดอร์" (dir fd) ที่เปิดทีละชั้นแบบห้ามเป็นลิงก์ลัด (O_NOFOLLOW)
+# สคริปต์รันด้วย root แต่โฟลเดอร์เก็บบิลถูก map ไว้ที่เครื่องพนักงาน — ถ้าเช็คด้วยชื่อ path แล้วค่อยลงมือทีหลัง
+# คนที่สลับโฟลเดอร์เป็นลิงก์ลัดได้ทันเวลาจะพา root ไปเขียน/ลบไฟล์นอกโฟลเดอร์ได้ ทำแบบนี้แล้วปิดช่องนั้น
+_DIRFLAGS = os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+_NOFOLLOW = getattr(os, 'O_NOFOLLOW', 0)
 
 
-def _real_dir(path):
-    return os.path.isdir(path) and not os.path.islink(path)
+def _sub(dfd, name, create=False):
+    """เปิดโฟลเดอร์ย่อย name ใต้ dfd (สร้างให้ถ้า create) — ลิงก์ลัด/ไม่ใช่โฟลเดอร์ = OSError"""
+    if create:
+        try:
+            os.mkdir(name, 0o775, dir_fd=dfd)
+        except FileExistsError:
+            pass
+    return os.open(name, _DIRFLAGS, dir_fd=dfd)
 
 
-def remove_other_copies(base, bill_no, keep):
-    """1 บิล = 1 ไฟล์ — ลบ <เลขบิล>.pdf ที่อยู่ที่อื่นทิ้งหลังเก็บใบใหม่แล้ว:
+def _sub_or_none(dfd, name):
+    try:
+        return _sub(dfd, name)
+    except OSError:
+        return None
+
+
+def remove_other_copies(bfd, bill_no, keep_parts):
+    """1 บิล = 1 ไฟล์ — ลบ <เลขบิล>.pdf ที่อยู่ที่อื่นทิ้งหลังเก็บใบใหม่แล้ว (bfd = ที่จับโฟลเดอร์เก็บบิล):
     · ใบเดิมอีกฝั่งของโฟลเดอร์ ยกเลิก (บิลเพิ่งถูกยกเลิก หรือเพิ่งเรียกคืน)
     · เดือนอื่นของสาขาเดียวกัน (ปุ่มแก้เลขชนในแอป: บิลของแอปย้ายเลขออก บิลระบบเดิมเลขนั้นคนละเดือนเข้ามาแทน)
     · โครงเก่า YYYY-MM/ และฉบับที่เคยเก็บไว้ใน _ฉบับก่อนหน้า (ย้ายมาโครงใหม่ ไม่ต้องมีของซ้ำ)
     ลบเฉพาะไฟล์ชื่อตรงเลขบิลเป๊ะ ในโฟลเดอร์ตามโครงเท่านั้น · ไม่เดินตามลิงก์ลัด · โฟลเดอร์ที่ว่างแล้วลบทิ้ง"""
     name = bill_no + '.pdf'
-    cands, empties = [], []
-    try:
-        tops = os.listdir(base)
-    except OSError:
-        return
-    bdir = os.path.join(base, bill_branch(bill_no))
-    if _real_dir(bdir):
-        for mm in os.listdir(bdir):
-            mdir = os.path.join(bdir, mm)
-            if not re.match(MMYYYY_RE, mm) or not _real_dir(mdir):
-                continue
-            cands.append(os.path.join(mdir, name))
-            cdir = os.path.join(mdir, CANCEL_DIR)
-            if _real_dir(cdir):
-                cands.append(os.path.join(cdir, name))
-                empties.append(cdir)
-    for top in tops:
-        odir = os.path.join(base, top)
-        if not re.match(OLD_MONTH_RE, top) or not _real_dir(odir):
-            continue
-        cands.append(os.path.join(odir, name))
-        vdir = os.path.join(odir, OLD_VERSIONS_DIR)
-        if _real_dir(vdir):
-            cands += [os.path.join(vdir, f) for f in os.listdir(vdir)
-                      if f.startswith(bill_no + '.') and f.endswith('.pdf')]
-            empties.append(vdir)
-        empties.append(odir)
-    for c in cands:
-        if c == keep or not os.path.lexists(c) or os.path.isdir(c):
-            continue
+    keep = tuple(keep_parts)
+    br = bill_branch(bill_no)
+
+    def unlink(dfd, fname, shown):
         try:
-            os.remove(c)               # ถ้าเป็นลิงก์ลัด ลบแค่ตัวลิงก์ ไม่แตะไฟล์ปลายทาง
-            log('ลบไฟล์เดิม %s' % os.path.relpath(c, base))
+            st = os.lstat(fname, dir_fd=dfd)
+        except OSError:
+            return
+        if stat.S_ISDIR(st.st_mode):
+            return
+        try:
+            os.unlink(fname, dir_fd=dfd)   # ถ้าเป็นลิงก์ลัด ลบแค่ตัวลิงก์ ไม่แตะไฟล์ปลายทาง
+            log('ลบไฟล์เดิม %s' % shown)
         except OSError as e:
-            log('ลบไฟล์เดิม %s ไม่ได้: %s' % (os.path.relpath(c, base), e))
-    for d in empties:
+            log('ลบไฟล์เดิม %s ไม่ได้: %s' % (shown, e))
+
+    def rmdir(dfd, dname):
         try:
-            os.rmdir(d)                # ลบได้เฉพาะโฟลเดอร์ที่ว่างแล้ว
+            os.rmdir(dname, dir_fd=dfd)    # ลบได้เฉพาะโฟลเดอร์ที่ว่างแล้ว
         except OSError:
             pass
+
+    b = _sub_or_none(bfd, br)
+    if b is not None:
+        try:
+            for mm in os.listdir(b):
+                if not re.match(MMYYYY_RE, mm):
+                    continue
+                mfd = _sub_or_none(b, mm)
+                if mfd is None:
+                    continue
+                try:
+                    if (br, mm) != keep:
+                        unlink(mfd, name, '%s/%s/%s' % (br, mm, name))
+                    cfd = _sub_or_none(mfd, CANCEL_DIR)
+                    if cfd is not None:
+                        try:
+                            if (br, mm, CANCEL_DIR) != keep:
+                                unlink(cfd, name, '%s/%s/%s/%s' % (br, mm, CANCEL_DIR, name))
+                        finally:
+                            os.close(cfd)
+                        rmdir(mfd, CANCEL_DIR)
+                finally:
+                    os.close(mfd)
+        finally:
+            os.close(b)
+    for top in os.listdir(bfd):
+        if not re.match(OLD_MONTH_RE, top):
+            continue
+        ofd = _sub_or_none(bfd, top)
+        if ofd is None:
+            continue
+        try:
+            unlink(ofd, name, '%s/%s' % (top, name))
+            vfd = _sub_or_none(ofd, OLD_VERSIONS_DIR)
+            if vfd is not None:
+                try:
+                    for f in os.listdir(vfd):
+                        if f.startswith(bill_no + '.') and f.endswith('.pdf'):
+                            unlink(vfd, f, '%s/%s/%s' % (top, OLD_VERSIONS_DIR, f))
+                finally:
+                    os.close(vfd)
+                rmdir(ofd, OLD_VERSIONS_DIR)
+        finally:
+            os.close(ofd)
+        rmdir(bfd, top)
 
 
 def write_pdf(bill_no, iso, data, cancelled=False):
@@ -1000,22 +1034,38 @@ def write_pdf(bill_no, iso, data, cancelled=False):
         raise RuntimeError('เลขบิลผิดรูปแบบ')
     base = os.path.realpath(base_dir())
     parts = bill_parts(bill_no, iso, cancelled)
-    folder = open_dir(base, parts)
-    path = os.path.join(folder, bill_no + '.pdf')
-    rel = '/'.join(parts + [bill_no + '.pdf'])
-    same = False
-    if os.path.isfile(path) and not os.path.islink(path):
-        with open(path, 'rb') as f:
-            same = (f.read() == data)  # ไฟล์เดิมเหมือนกันทุกไบต์ — ไม่ต้องเขียนซ้ำ
-    if not same:
-        tmp = path + '.part'
-        if os.path.lexists(tmp):
-            os.unlink(tmp)             # ลบของค้าง (ถ้าเป็นลิงก์ลัดก็ลบแค่ตัวลิงก์)
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o664)
-        with os.fdopen(fd, 'wb') as f:
-            f.write(data)
-        os.replace(tmp, path)          # ใบใหม่แทนใบเดิม — เขียนเสร็จทั้งไฟล์ก่อนค่อยสลับชื่อ ไม่มีไฟล์ครึ่ง ๆ ค้าง
-    remove_other_copies(base, bill_no, path)
+    name = bill_no + '.pdf'
+    rel = '/'.join(parts + [name])
+    fds = [os.open(base, _DIRFLAGS)]
+    try:
+        for p in parts:
+            try:
+                fds.append(_sub(fds[-1], p, create=True))
+            except OSError:
+                raise RuntimeError('โฟลเดอร์ %s เป็นลิงก์ลัดหรือไม่ใช่โฟลเดอร์ — ไม่เขียนเพื่อความปลอดภัย' % '/'.join(parts))
+        fd = fds[-1]
+        same = False
+        try:
+            if stat.S_ISREG(os.lstat(name, dir_fd=fd).st_mode):
+                with os.fdopen(os.open(name, os.O_RDONLY | _NOFOLLOW, dir_fd=fd), 'rb') as f:
+                    same = (f.read() == data)  # ไฟล์เดิมเหมือนกันทุกไบต์ — ไม่ต้องเขียนซ้ำ
+        except FileNotFoundError:
+            pass
+        if not same:
+            tmp = name + '.part'
+            try:
+                os.unlink(tmp, dir_fd=fd)      # ลบของค้าง (ถ้าเป็นลิงก์ลัดก็ลบแค่ตัวลิงก์)
+            except FileNotFoundError:
+                pass
+            wfd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW, 0o664, dir_fd=fd)
+            with os.fdopen(wfd, 'wb') as f:
+                f.write(data)
+            # ใบใหม่แทนใบเดิม — เขียนเสร็จทั้งไฟล์ก่อนค่อยสลับชื่อ ไม่มีไฟล์ครึ่ง ๆ ค้าง
+            os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+        remove_other_copies(fds[0], bill_no, parts)
+    finally:
+        for x in reversed(fds):
+            os.close(x)
     return rel
 
 
