@@ -1863,6 +1863,31 @@ function periodRange(p){
 }
 const periodRangeLabel = p => { const r = periodRange(p);
   return dayLabel(r.from)+' – '+dayLabel(r.to); };
+/* ---- รอบจ่ายพนักงานออฟฟิศ (เจ้าของสั่ง 2026-09-29): ตัดรอบรายเดือน 1 → สิ้นเดือน · จ่ายสิ้นเดือน ----
+   ใช้คีย์งวด 'YYYY-MM' ชุดเดียวกับหน้าร้าน (adjustments/advances/deposit/loan/sso ไม่ต้องย้ายข้อมูล) แต่ช่วงวันต่างกัน:
+     หน้าร้าน '2026-10' = 26 ก.ย. – 25 ต.ค. จ่าย 5 พ.ย.
+     ออฟฟิศ  '2026-11' = 1 – 30 พ.ย. จ่าย 30 พ.ย.
+   เริ่มงวด OFFICE_MONTHLY_START = "งวดเปลี่ยนผ่าน" ต่อจากงวดเก่าที่จบ 25 ก.ย. → 26 ก.ย. – 31 ต.ค. (36 วัน) จ่าย 31 ต.ค.
+   รายเดือนได้เงินเดือนเต็ม + วันที่เกินเดือนปกติ (26–30 ก.ย. = 5 วัน) × เงินเดือน÷30 (calcPay: transExtra)
+   งวดก่อน OFFICE_MONTHLY_START คิดแบบเดิมทุกอย่าง · "ออฟฟิศ" = employees.branch === 'OFFICE'
+   ⚠️ จุดที่รู้ว่าเป็นพนักงานคนไหน ต้องใช้ periodOfE / periodRangeE เสมอ (periodOf/periodRange เปล่า = รอบหน้าร้าน) */
+const OFFICE_MONTHLY_START = '2026-10';
+const isOfficeCycle = e => !!e && e.branch === 'OFFICE';
+const lastDayOf = p => { const [y,m] = p.split('-').map(Number); return localYMD(new Date(y, m, 0)); };
+function periodOfE(e, day){
+  if(!isOfficeCycle(e)) return periodOf(day);
+  const k = day.slice(0,7);
+  return k >= OFFICE_MONTHLY_START ? k : periodOf(day);
+}
+function periodRangeE(e, p){
+  const r = periodRange(p);
+  if(!isOfficeCycle(e) || !p || p < OFFICE_MONTHLY_START) return r;
+  const to = lastDayOf(p);
+  const from = p === OFFICE_MONTHLY_START ? r.from : p + '-01';
+  const transExtra = Math.max(0, daysBetween(from, p + '-01') - 1);   // วันที่เกินจากเดือนปกติ (งวดเปลี่ยนผ่าน)
+  return { from, to, pay:to, adv:r.adv, office:true, transExtra };
+}
+const periodRangeLabelE = (e, p) => { const r = periodRangeE(e, p); return dayLabel(r.from)+' – '+dayLabel(r.to); };
 const dInPeriod = (day, p) => periodOf(day) === p;
 const daysBetween = (a,b) => Math.round((new Date(b+'T12:00:00') - new Date(a+'T12:00:00'))/86400000) + 1;
 const wdOf = d => new Date(d+'T12:00:00').getDay();
@@ -2171,10 +2196,11 @@ function fullHours(tin, tout){
   return Math.max(0, Math.floor((e - s) / 3600000));
 }
 const singleLabel = k => k==='in' ? 'ลืมตอกเข้า' : k==='out' ? 'ลืมตอกออก' : 'ตอกครั้งเดียว';
-function empShiftsInPeriod(emp, period){ return (shifts[emp.code]||[]).filter(s=>periodOf(s.day)===period); }
+function empShiftsInPeriod(emp, period){ return (shifts[emp.code]||[]).filter(s=>periodOfE(emp, s.day)===period); }
 function allPeriods(){
   const set = new Set();
-  for(const c in shifts) for(const s of shifts[c]) set.add(periodOf(s.day));
+  const byCode = {}; for(const e of employees) byCode[e.code] = e;
+  for(const c in shifts) for(const s of shifts[c]) set.add(periodOfE(byCode[c], s.day));
   return [...set].sort().reverse();
 }
 function refreshPeriodSelectors(){
@@ -2201,7 +2227,7 @@ function calcPay(emp, period){
   const fullHrs = ss.reduce((a,s)=>a+(s.fullHours||0),0);
   /* ---- เบี้ยวันหยุดพิเศษ : ต้องมาทำงาน + ไม่สาย + ไม่ออกก่อน + ไม่ลืมตอก ---- */
   const dRate = dailyRate(emp);
-  const rgH = periodRange(period);
+  const rgH = periodRangeE(emp, period);
   const holiInPeriod = Object.entries(holidays)
     .filter(([d]) => d >= rgH.from && d <= rgH.to)
     .map(([day,h]) => ({ day, ...h })).sort((a,b)=>a.day<b.day?-1:1);
@@ -2234,8 +2260,9 @@ function calcPay(emp, period){
 
   /* ---- เบี้ยไม่หยุด : เฉพาะรายเดือนที่ใช้สิทธิ์แบบนับวัน ---- */
   days += paidHoli.length;   // ออฟฟิศ: วันหยุดพิเศษนับเป็นวันทำงานปกติ
-  const rg = periodRange(period);
+  const rg = periodRangeE(emp, period);
   const dip = daysBetween(rg.from, rg.to);
+  const transExtra = rg.transExtra || 0;   // ออฟฟิศ งวดเปลี่ยนผ่าน: วันที่เกินเดือนปกติ จ่ายเพิ่มตามวัน
   /* ---- เข้า/ออกระหว่างงวด (มีวันเริ่มงาน/วันสิ้นสุด) : รายเดือนคิดเป็นรายวันแทนเหมาเดือน
      ครอบคลุมถึงคนที่เริ่มงานหลังงวดจบ / ออกไปก่อนงวดเริ่ม แต่มีสแกนหลงมาในงวดด้วย
      ไม่ได้กรอกวันเริ่มงาน -> ใช้วันสแกนแรกในระบบแทน (คนเข้าใหม่กลางงวดคิดรายวันอัตโนมัติ) ---- */
@@ -2306,7 +2333,7 @@ function calcPay(emp, period){
   const singleFine = fineOvs.single ? Math.max(0, +fineOvs.single.amount) : singleFine0;
   const mustFine   = fineOvs.must   ? Math.max(0, +fineOvs.must.amount)   : mustFine0;
   const base = emp.mode==='hourly' ? fullHrs * +emp.rate
-             : emp.type==='monthly' ? (days>0? (prorate? Math.round(days * dRate) : +emp.rate) : 0)
+             : emp.type==='monthly' ? (days>0? (prorate? Math.round(days * dRate) : +emp.rate + Math.round(transExtra * dRate)) : 0)
              : days * +emp.rate;
   const advs   = advances.filter(a=>a.empId===emp.id && a.period===period);
   const advSum = advs.reduce((a,x)=>a+ +x.amount,0);
@@ -2319,7 +2346,7 @@ function calcPay(emp, period){
            base, adds, dedu, addSum, deduSum, missFine, lateAuto, singleFine, advs, advSum,
            dRate, holiDays, holiBonus, paidHoli, holiWorked, holiInPeriod, mustViol, mustFine,
            dep, mou, eloan, sso, tip, offDue, offUsed, noOffDays, noOffBonus, wkOffWorked,
-           crossDays, byBranch, dip,
+           crossDays, byBranch, dip, rg, transExtra,
            prorate, partialStart, partialEnd, effStart,
            fineOvs, missFine0, lateAuto0, singleFine0, mustFine0, mustPerDay, mustX,
            net: base + addSum - deduSum };
@@ -2327,9 +2354,9 @@ function calcPay(emp, period){
 
 /* ---- ยอดที่เบิกได้กลางเดือน = min(เพดาน, ครึ่งของค่าแรงที่ทำมาถึงวันเบิก) - ที่เบิกไปแล้ว ---- */
 function advQuota(emp, period){
-  const r = periodRange(period);
+  const r = periodRangeE(emp, period);
   const upto = r.adv;                       // วันที่ 15 ของงวดนี้
-  const ss = (shifts[emp.code]||[]).filter(s=>periodOf(s.day)===period && s.day <= upto);
+  const ss = (shifts[emp.code]||[]).filter(s=>periodOfE(emp, s.day)===period && s.day <= upto);
   const earned = emp.mode==='hourly'
     ? ss.reduce((a,s)=>a+(s.fullHours||0),0) * +emp.rate
     : emp.type==='monthly'
@@ -2359,7 +2386,7 @@ function depositCalc(emp, period){
   if(!target || emp.depOn===false)
     return { ...base, ded:0, collected:+(emp.depOpen||0),
              remain:Math.max(0, target-(+(emp.depOpen||0))), done: !target || (+(emp.depOpen||0))>=target };
-  const pds = [...new Set((shifts[emp.code]||[]).map(x=>periodOf(x.day)))].sort();
+  const pds = [...new Set((shifts[emp.code]||[]).map(x=>periodOfE(emp, x.day)))].sort();
   if(period && !pds.includes(period)) pds.push(period);
   pds.sort();
   let collected = +(emp.depOpen||0), ded = 0, override = null;
@@ -2367,7 +2394,7 @@ function depositCalc(emp, period){
     if(period && pd > period) break;
     if(settings.depStart && pd < settings.depStart) continue;   // เริ่มหักตั้งแต่งวดที่ตั้งไว้
     const ov = depositEntries.find(x=>x.empId===emp.id && x.period===pd);
-    const hasWork = (shifts[emp.code]||[]).some(x=>periodOf(x.day)===pd);
+    const hasWork = (shifts[emp.code]||[]).some(x=>periodOfE(emp, x.day)===pd);
     let d = ov ? Math.max(0, +ov.amount)
                : hasWork ? Math.min(+(emp.depMonthly||0), Math.max(0, target - collected)) : 0;
     if(pd === period){ ded = d; override = ov||null; }
@@ -2536,14 +2563,14 @@ function mouCalc(emp, period){
   const L = mouLoans.find(x=>x.empId===emp.id);
   if(!L || !+L.amount) return { loan:L||null, ded:0, collected:0, target:0, remain:0, done:true, override:null };
   const target = +L.amount;
-  const pds = [...new Set((shifts[emp.code]||[]).map(x=>periodOf(x.day)))];
+  const pds = [...new Set((shifts[emp.code]||[]).map(x=>periodOfE(emp, x.day)))];
   if(period && !pds.includes(period)) pds.push(period);
   const list = pds.filter(p=>!L.startPeriod || p >= L.startPeriod).sort();
   let collected = +(L.opening||0), ded = 0, override = null;
   for(const pd of list){
     if(period && pd > period) break;
     const ov = mouEntries.find(x=>x.empId===emp.id && x.period===pd);
-    const hasWork = (shifts[emp.code]||[]).some(x=>periodOf(x.day)===pd);
+    const hasWork = (shifts[emp.code]||[]).some(x=>periodOfE(emp, x.day)===pd);
     const remain = Math.max(0, target - collected);
     let d = ov ? Math.max(0, +ov.amount)
                : hasWork ? (remain <= +(L.finalMax||3000) ? remain : Math.min(+(L.monthly||2000), remain)) : 0;
@@ -3010,7 +3037,7 @@ function loanCalc(emp, period){
   const L = loans.find(x=>x.empId===emp.id);
   if(!L || !+L.amount) return { loan:L||null, ded:0, dedMid:0, dedPay:0, collected:0, target:0, remain:0, done:true, override:null };
   const target = +L.amount;
-  const pds = [...new Set((shifts[emp.code]||[]).map(x=>periodOf(x.day)))];
+  const pds = [...new Set((shifts[emp.code]||[]).map(x=>periodOfE(emp, x.day)))];
   if(period && !pds.includes(period)) pds.push(period);
   const list = pds.filter(p=>!L.startPeriod || p >= L.startPeriod).sort();
   let collected = +(L.opening||0), ded = 0, override = null;
@@ -3018,7 +3045,7 @@ function loanCalc(emp, period){
     if(period && pd > period) break;
     const ov = loanEntries.find(x=>x.empId===emp.id && x.period===pd);
     const remain = Math.max(0, target - collected);
-    const hasWork = (shifts[emp.code]||[]).some(x=>periodOf(x.day)===pd);
+    const hasWork = (shifts[emp.code]||[]).some(x=>periodOfE(emp, x.day)===pd);
     const d = ov ? Math.max(0, +ov.amount) : (hasWork ? Math.min(+(L.monthly||0), remain) : 0);
     if(pd === period){ ded = d; override = ov||null; }
     collected += d;
@@ -3909,7 +3936,7 @@ function renderDetail(){
       <button class="btn btn-light btn-sm${e.active && missingInfo(e).length?' btn-alert':(e.active && e.bankName==='เงินสด')?' btn-cash':''}" title="${e.active && missingInfo(e).length?'⚠️ ข้อมูลไม่ครบ: '+missingInfo(e).join(' / '):(e.active && e.bankName==='เงินสด')?'💵 รับเงินสด':''}" onclick="openEmpForm(${e.id})">✎ แก้ไขข้อมูล${e.active && missingInfo(e).length?' ⚠️':(e.active && e.bankName==='เงินสด')?' 💵':''}</button>
       <button class="btn btn-ember btn-sm" onclick="openSlip(${e.id},'${period}')">🧾 ใบสรุปเงินเดือน</button>
     </div></div></div>
-    <div class="muted" style="margin:8px 0 0">${period? 'งวด '+periodRangeLabel(period)+' · จ่าย '+dayLabel(periodRange(period).pay) : ''}</div>
+    <div class="muted" style="margin:8px 0 0">${period? 'งวด '+periodRangeLabelE(e, period)+' · จ่าย '+dayLabel(periodRangeE(e, period).pay)+(isOfficeCycle(e) && period >= OFFICE_MONTHLY_START ? ' · รอบออฟฟิศ (1–สิ้นเดือน)' : '') : ''}</div>
 
     <div class="stats" style="margin-top:14px">
       <div class="stat"><div class="v">${p.days}</div><div class="l">วันทำงาน (${period?periodLabel(period):'–'})</div></div>
@@ -4127,7 +4154,7 @@ async function setOTHours(empId, day, val){
   const rate = otRateOf(e, day);
   if(!rate) return toast('❌ พนักงานคนนี้ยังไม่มีอัตราค่าแรง คิด OT ไม่ได้');
   const hours = Math.max(0, Math.round((+String(val).trim().replace(',', '.') || 0) * 100) / 100);
-  const period = periodOf(day);
+  const period = periodOfE(e, day);
   const cur = otOf(empId, period, day);
   const amount = Math.round(hours * rate);
   try{
@@ -4157,7 +4184,7 @@ async function setOTHours(empId, day, val){
 function stepOT(empId, day, delta){
   const e = employees.find(x=>x.id===empId);
   const rate = otRateOf(e, day);
-  const cur = otOf(empId, periodOf(day), day);
+  const cur = otOf(empId, periodOfE(e, day), day);
   const h = cur ? (otHours(cur) ?? (rate ? Math.round(cur.amount / rate * 100) / 100 : 0)) : 0;
   setOTHours(empId, day, Math.max(0, h + delta));
 }
@@ -4252,7 +4279,7 @@ function openSlip(empId, period){
 /* สร้าง HTML สลิป 1 คน — ใช้ทั้งดูรายคน และพิมพ์รวมทั้งสาขา (pageBreak = ขึ้นหน้าใหม่ต่อคน) */
 function buildSlip(e, period, compact){
   const p = calcPay(e, period);
-  const r = periodRange(period);
+  const r = periodRangeE(e, period);
   const ss = empShiftsInPeriod(e, period);
   const isH = e.mode==='hours', isHr = e.mode==='hourly';
 
@@ -4697,7 +4724,7 @@ async function quickAdv(empId, period){
   if(amount > q.left && !confirm('⚠️ เกินเพดานสิทธิ์ของ '+e.nick+' ('+THB(q.left)+' บาท)\nยืนยันบันทึกเบิก '+THB(amount)+' บาท?')) return;
   const { data, error } = await db.from('advances').insert({
     employee_id:empId, period, amount,
-    taken_date: localYMD(new Date()) <= periodRange(period).to ? localYMD(new Date()) : periodRange(period).adv,
+    taken_date: localYMD(new Date()) <= periodRangeE(e, period).to ? localYMD(new Date()) : periodRangeE(e, period).adv,
     note: ''
   }).select().single();
   if(error) return dbErr(error,'บันทึกการเบิก');
@@ -5032,7 +5059,7 @@ function dayMap(period, branch){
   const m = {}; // day -> [{e, s, wb}]
   for(const e of employees){
     for(const s of (shifts[e.code]||[])){
-      if(periodOf(s.day)!==period) continue;
+      if(periodOfE(e, s.day)!==period) continue;
       const wb = s.workBranch || e.branch || '';
       if(branch && wb !== branch) continue;
       (m[s.day] = m[s.day]||[]).push({e, s, wb});
@@ -5134,7 +5161,8 @@ function renderPayroll(){
   const af = (document.getElementById('payActive')||{}).value || '';
   const r = periodRange(period);
   document.getElementById('payPeriodInfo').innerHTML =
-    `รอบ <b>${periodRangeLabel(period)}</b> · จ่าย <b>${dayLabel(r.pay)}</b> · เบิกกลางเดือนได้ <b>${dayLabel(r.adv)}</b>`;
+    `รอบ <b>${periodRangeLabel(period)}</b> · จ่าย <b>${dayLabel(r.pay)}</b> · เบิกกลางเดือนได้ <b>${dayLabel(r.adv)}</b>` +
+    (period >= OFFICE_MONTHLY_START ? ` · <span class="chip chip-amber">ออฟฟิศ: ${periodRangeLabelE({branch:'OFFICE'}, period)} · จ่าย ${dayLabel(lastDayOf(period))}</span>` : '');
   const flagOk = (p) => !ff ||
     (ff==='single' && p.singleCount>0) || (ff==='late' && p.missMin>0) ||
     (ff==='adv' && p.advSum>0) || (ff==='bonus' && (p.holiBonus>0||p.noOffBonus>0)) ||
@@ -5503,7 +5531,8 @@ function updPeriodHint(){
   const el = document.getElementById('periodHint'); if(!el) return;
   const p = allPeriods()[0] || periodOf(localYMD(new Date()));
   const r = periodRange(p);
-  el.innerHTML = `ตัวอย่าง <b>${periodLabel(p)}</b> = ${dayLabel(r.from)} ถึง ${dayLabel(r.to)} · เบิกได้ ${dayLabel(r.adv)} · จ่าย ${dayLabel(r.pay)}`;
+  el.innerHTML = `ตัวอย่าง <b>${periodLabel(p)}</b> = ${dayLabel(r.from)} ถึง ${dayLabel(r.to)} · เบิกได้ ${dayLabel(r.adv)} · จ่าย ${dayLabel(r.pay)}` +
+    `<br>พนักงานสาขา <b>ออฟฟิศ</b> ตั้งแต่งวด ${periodLabel(OFFICE_MONTHLY_START)}: ตัดรอบ 1 → สิ้นเดือน จ่ายสิ้นเดือน (งวดแรกเป็นงวดเปลี่ยนผ่าน ${periodRangeLabelE({branch:'OFFICE'}, OFFICE_MONTHLY_START)})`;
 }
 
 /* ================= ประวัติการทำรายการ (หน้า #audit) ================= */
