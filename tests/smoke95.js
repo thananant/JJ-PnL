@@ -10,6 +10,7 @@ const html=fs.readFileSync('jjmk-stockcheck.html','utf8');
 const patched=html.replace(/<link href="https:\/\/fonts[^>]*>/g,'');
 const BID='b19f0a17b4472';
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
+const HP=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJPNL').digest('hex'); // บัญชีกลาง pnl_users (main ย้ายล็อกอินมาใช้ 28 ก.ย.)
 const users=[
   {id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true},
   {id:2,username:'boy',pass_hash:H('boy','1234'),display_name:'บอย',role:'staff',branches:['JJRD'],depts:['ผัก'],active:true}];
@@ -20,6 +21,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
     w.ontouchstart=null;   // ทำเป็นจอสัมผัส (ตัวลากลงรีเฟรชทำงานเฉพาะจอสัมผัส — รายละเอียดอยู่ smoke109)
     // ล็อกอินค้างไว้ + จำหน้าเดิม = ตั้งค่า
     w.localStorage.setItem('jjsc_auth',JSON.stringify({u:'admin',h:H('admin','jjmk1234')}));
+    try{w.sessionStorage.setItem('jjsc_sess',JSON.stringify({u:'admin',h:HP('admin','jjmk1234')}));}catch(e){} // main: เซสชันบัญชีกลาง
     w.localStorage.setItem('jjsc_tab','cfgu');
     w.fetch=async(url,opt)=>{
       const method=opt&&opt.method||'GET';
@@ -30,6 +32,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(method==='PATCH'){patches.push({url,body:JSON.parse(opt.body)});return T([]);}
       if(method==='DELETE'){dels.push(url);const m2=url.match(/id=eq\.(\d+)/);if(m2)depts=depts.filter(x=>String(x.id)!==m2[1]);return T([]);}
       if(url.includes('sc_depts'))return T(depts.filter(x=>x.branch_id===BID));
+      if(url.includes('pnl_users'))return T([{id:1,username:'admin',pass_hash:HP('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',unit:'ALL',active:true,apps:{}}]);
       if(url.includes('sc_users')){
         const um=url.match(/username=eq\.([^&]+)/);
         if(um)return T(users.filter(x=>x.username===decodeURIComponent(um[1])));
@@ -82,14 +85,7 @@ setTimeout(async()=>{
   out.push('มีแถบเลือกหัวข้อในหน้า (สำหรับจอเล็ก) 4 ปุ่ม: '+(d.querySelectorAll('#list .subtabs .stb').length===4));
   out.push('เมนูข้าง: มีปุ่ม ⚙️ ตั้งค่า + 🚚 รอบสั่งซัพ: '
     +(!!d.querySelector('#sideNav [data-t="cfg"]')&&!!d.querySelector('#sideNav [data-t="sched"]')));
-  // 2) สิทธิ์ผู้ใช้: เลือกระดับ ผู้จัดการ/พนักงานทั่วไป ได้ + เซฟ role
-  const rsel=d.querySelector('select[data-uf="role"][data-id="2"]');
-  out.push('มีช่องเลือกระดับ (ผู้จัดการ/พนักงานทั่วไป) และ boy = พนักงานทั่วไป: '
-    +(!!rsel&&rsel.value==='staff'&&rsel.textContent.includes('ผู้จัดการ')&&!!d.getElementById('nuR')));
-  rsel.value='admin';
-  await w.userSave(2); await sleep(40);
-  const pu=patches.find(p=>p.url.includes('sc_users?id=eq.2'));
-  out.push('อัปเกรด boy → ผู้จัดการ: PATCH role=admin: '+(!!pu&&pu.body.role==='admin'));
+  // 2) (ตัดออก 30 ก.ย.) สิทธิ์ผู้ใช้ย้ายไปหน้า JJ Access — นับสต๊อกไม่มี userSave/sc_users อีก
   // 3) หน้า 🗂 แผนก (แยกหน้า, แยกสาขา): พับรายละเอียด + เพิ่ม/ลบ/แก้ชื่อ/ย้าย
   w.setTab('cfgd'); await sleep(30);
   out.push('หน้าแผนกแยกหน้า มีเฉพาะการ์ดแผนก + บอกว่าแยกสาขา: '

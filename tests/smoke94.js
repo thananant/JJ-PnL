@@ -9,6 +9,7 @@ const patched=html.replace(/<link href="https:\/\/fonts[^>]*>/g,'');
 const BID='b19f0a17b4472';
 const crypto=require('crypto');
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
+const HP=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJPNL').digest('hex'); // บัญชีกลาง pnl_users (main ย้ายล็อกอินมาใช้ 28 ก.ย.)
 const users=[
   {id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true},
   {id:2,username:'boy',pass_hash:H('boy','1234'),display_name:'บอย',role:'staff',branches:['JJRD'],depts:['ครัว'],active:true}];
@@ -20,6 +21,10 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v)});
       if(method==='POST'){posts.push({url,rows:JSON.parse(opt.body)});return T([]);}
       if(method==='PATCH'){patches.push({url,body:JSON.parse(opt.body)});return T([]);}
+      if(url.includes('pnl_users')){const um=url.match(/username=eq\.([^&]+)/);const PU=[
+        {id:1,username:'admin',pass_hash:HP('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',unit:'ALL',active:true,apps:{}},
+        {id:2,username:'boy',pass_hash:HP('boy','1234'),display_name:'บอย',role:'staff',unit:'JJRD',active:true,apps:{stock:{count:'vae'}}}];
+        return T(um?PU.filter(x=>x.username===decodeURIComponent(um[1])):PU);}
       if(url.includes('sc_users')){
         const um=url.match(/username=eq\.([^&]+)/);
         if(um)return T(users.filter(x=>x.username===decodeURIComponent(um[1])));
@@ -168,10 +173,8 @@ setTimeout(async()=>{
   const ps=patches.find(p=>p.url.includes('suppliers?name=eq.Smilemeat'));
   out.push('ตั้ง Smilemeat ส่งหลังสั่ง 2 วัน → PATCH suppliers: '+(!!ps&&ps.body.lead_days===2&&ps.body.order_mode==='any'));
   w.setTab('cfg'); await sleep(30);
-  out.push('หน้าตั้งค่า: การ์ดสิทธิ์ผู้ใช้ เห็น admin+boy: '+(list().includes('สิทธิ์การใช้งานพนักงาน')&&list().includes('boy')));
-  await w.userSave(2); await sleep(30);
-  const pu=patches.find(p=>p.url.includes('sc_users?id=eq.2'));
-  out.push('userSave boy → PATCH branches JJRD + depts ครัว: '+(!!pu&&JSON.stringify(pu.body.branches)==='["JJRD"]'&&JSON.stringify(pu.body.depts)==='["ครัว"]'&&pu.body.active===true));
+  out.push('หน้าตั้งค่า: สิทธิ์ผู้ใช้ย้ายไป JJ Access (หน้านี้แค่บอกทาง): '+list().includes('JJ Access'));
+  // (ตัดออก 30 ก.ย.) userSave/sc_users ย้ายไป JJ Access
   // 10) พนักงาน boy: เห็นเฉพาะรัชดา + นับได้เฉพาะแผนกครัว + เข้า Safety ไม่ได้
   w.logout(); await sleep(30);
   out.push('ออกแล้วเด้ง login: '+d.getElementById('loginOv').classList.contains('on'));
@@ -179,7 +182,7 @@ setTimeout(async()=>{
   await w.doLogin(); await sleep(300);
   out.push('boy: ปุ่มสาขามีแค่รัชดา: '+(d.querySelectorAll('#brSeg button').length===1&&d.querySelector('#brSeg button').textContent==='รัชดา'));
   w.setTab('count'); await sleep(50);
-  out.push('boy: pills มีครัว ไม่มีบาร์น้ำ: '+(pills().includes('ครัว')&&!pills().includes('บาร์น้ำ')));
+  out.push('boy (บัญชีกลาง ไม่แยกแผนก): pills เห็นทั้งครัวและบาร์น้ำ: '+(pills().includes('ครัว')&&pills().includes('บาร์น้ำ')));
   out.push('boy: เมนู Safety ซ่อน + setTab(set) โดนกัน: '+(d.querySelector('#sideNav [data-t="set"]').style.display==='none'&&(w.setTab('set'),w.eval('S.tab')!=='set')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);

@@ -12,12 +12,14 @@ const html=fs.readFileSync('jjmk-stockcheck.html','utf8');
 const patched=html.replace(/<link href="https:\/\/fonts[^>]*>/g,'');
 const BID='b19f0a17b4472';
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
+const HP=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJPNL').digest('hex'); // บัญชีกลาง pnl_users (main ย้ายล็อกอินมาใช้ 28 ก.ย.)
 const sent=[],receipts=[],supPosts=[],supPatches=[],supDels=[],syncs=[];
 let lineGroups=[{group_id:'C123',name:'กลุ่มสั่งของ Smilemeat',seen_at:'2026-09-01'}];
 const users=[{id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true}];
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
     w.localStorage.setItem('jjsc_auth',JSON.stringify({u:'admin',h:H('admin','jjmk1234')}));
+    try{w.sessionStorage.setItem('jjsc_sess',JSON.stringify({u:'admin',h:HP('admin','jjmk1234')}));}catch(e){} // main: เซสชันบัญชีกลาง
     w.localStorage.setItem('jjsc_tab','dash');
     w.localStorage.setItem('jjsc_lgsync',String(Date.now()));   // เพิ่งซิงก์ → ยังไม่ต้องออโต้ (เทสต์ออโต้อยู่ท้ายไฟล์)
     w.fetch=async(url,opt)=>{
@@ -32,6 +34,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('line_groups')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}
       if(method==='DELETE'){supDels.push(url);return T([]);}
       if(method!=='GET')return T([]);
+      if(url.includes('pnl_users'))return T([{id:1,username:'admin',pass_hash:HP('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',unit:'ALL',active:true,apps:{}}]);
       if(url.includes('sc_users')){
         const um=url.match(/username=eq\.([^&]+)/);
         return T(um?users.filter(x=>x.username===decodeURIComponent(um[1])):users);
@@ -113,7 +116,7 @@ setTimeout(async()=>{
   out.push('จับคู่ชื่อซัพทนตัวพิมพ์/ช่องว่างต่างกัน (products.sup "Smilemeat" ↔ suppliers "smilemeat "): '
     +(w.eval("!!supSched('Smilemeat')")&&w.eval("lineOf('Smilemeat').group_id")==='C123'));
   out.push('แถวหมูสไลด์โชว์ 40 กก. + ≈ 4 ลัง · น้ำแข็งขึ้น "ยังไม่นับ": '
-    +(list().includes('40')&&list().includes('4 ลัง')&&list().includes('ยังไม่นับ')));
+    +([...d.querySelectorAll('#list input.oq')].some(i=>i.value==='40')&&list().includes('4 ลัง')&&list().includes('ยังไม่นับ'))); // 30 ก.ย.: ยอดสั่งอยู่ในช่องพิมพ์ (แก้เองได้)
   out.push('ข้อความใบสั่ง: ร้าน/สาขา/ซัพ/สั่งวันที่/ส่งวันที่ (พ.ศ.) แล้วค่อยรายการ: '
     +(()=>{const t=w.orderText('Smilemeat'),L=t.split('\n');
       return L[0]==='🛒 จริงใจหมูกระทะ'&&L[1]==='🏪 สาขารัชดา'&&L[2]==='🏷️ Smilemeat'

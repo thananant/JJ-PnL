@@ -5,6 +5,7 @@ const {chromium}=require('playwright');
 const crypto=require('crypto');
 const BID='b19f0a17b4472';
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
+const HP=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJPNL').digest('hex');
 const CATS=['เนื้อสัตว์','ผัก','ของแห้ง','เครื่องดื่ม','ของใช้'];
 const SUPS=['Smilemeat','FarmFresh','Makro','CPF','ตลาดสด'];
 const PRODS=[];
@@ -13,6 +14,7 @@ for(let i=1;i<=42;i++)PRODS.push({id:'p'+i,branch_id:BID,cat_label:CATS[i%5],
   unit:['กก.','ถุง','ลัง','ขวด'][i%4],sup:SUPS[i%5],rate_wk:5+i%20,rate_fri:8+i%20,rate_we:12+i%20,
   dept:['ครัว','ผัก','บาร์น้ำ'][i%3],zone:'หลังร้าน',image_url:null,sort:i});
 const routes=u=>{
+  if(u.includes('pnl_users'))return [{id:1,username:'admin',pass_hash:HP('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',unit:'ALL',active:true,apps:{}}]; // บัญชีกลาง (salt JJPNL)
   if(u.includes('sc_users'))return [{id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true}];
   if(u.includes('sc_depts'))return [{id:1,name:'ครัว',sort:1},{id:2,name:'ผัก',sort:2},{id:3,name:'บาร์น้ำ',sort:3}];
   if(u.includes('sc_units'))return [];
@@ -51,6 +53,7 @@ const routes=u=>{
     return r.continue();
   });
   const pg=await ctx.newPage();
+  await pg.addInitScript(hp=>{try{sessionStorage.setItem('jjsc_sess',JSON.stringify({u:'admin',h:hp}));}catch(e){}},HP('admin','jjmk1234')); // เซสชันประจำแท็บของบัญชีกลาง
   await pg.addInitScript(h=>{localStorage.setItem('jjsc_auth',JSON.stringify({u:'admin',h}));
     localStorage.setItem('JJSC_NOPREWARM','1');},H('admin','jjmk1234'));
   await pg.goto('file://'+process.cwd()+'/jjmk-stockcheck.html');
