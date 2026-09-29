@@ -1324,10 +1324,27 @@ async function startApp(){
     if(!document.hidden&&!$('#modalWrap').classList.contains('on')){await loadEvents(true);if(S.tab!=='sync')show(S.tab)}
   });
 }
-(function init(){
+(async function init(){
   const sess=LS.get('jjcal_sess',null);
   /* JJ Gate — เข้าทางลิงก์ตรง = ต้องใส่รหัสใหม่ */
-  if(sess&&sess.username&&JJGate.ok(sess.username)){S.user=sess;startApp()}
+  if(sess&&sess.username&&JJGate.ok(sess.username)){
+    /* ตรวจบัญชีกับ pnl_users ทุกครั้งที่เปิด/รีเฟรช (2026-09-29) — เดิมเชื่อ session ในเครื่องอย่างเดียว
+       ทำให้คนที่ถูกกด 🚪 ออกงาน / ลบบัญชี / ลดระดับ ใน JJ Access ยังใช้ปฏิทินต่อได้ถ้าเปิดแท็บค้างไว้
+       เน็ตล่ม/อ่านไม่ได้ = ใช้ข้อมูลเดิมไปก่อน (แอพโหลดนัดไม่ได้อยู่ดี จะขึ้นข้อผิดพลาดของมันเอง) */
+    try{
+      const rows=await sel('pnl_users',`select=*&username=eq.${encodeURIComponent(sess.username)}&limit=1`);
+      const u=rows&&rows[0];
+      if(!u||u.active===false||(u.status!=null&&u.status!=='active')){
+        localStorage.removeItem('jjcal_sess');
+        $('#login').style.display='block';
+        toast(u?'บัญชีนี้ถูกปิดการใช้งาน — แจ้งผู้ดูแลระบบครับ':'ไม่พบบัญชีนี้แล้ว — เข้าสู่ระบบใหม่ครับ',true);
+        return;
+      }
+      S.user={username:u.username,display_name:u.display_name,role:u.role};   // ระดับ/ชื่อล่าสุดจากฐานข้อมูล
+      LS.set('jjcal_sess',S.user);
+    }catch(e){ S.user=sess; }
+    startApp();
+  }
   else{
     $('#login').style.display='block';
     if(sess&&sess.username)JJGate.note(sess.username,'liUser','liPass');
