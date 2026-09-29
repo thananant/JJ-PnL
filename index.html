@@ -540,8 +540,8 @@ window.JJGate=(function(){
 <div id="signup"></div>
 <div id="waitBox"></div>
 <script>JJLogin.mount('login',{submit:'doLogin()',sub:'เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกแอพที่ได้รับสิทธิ์',
-  note:'<b style="color:#E5B03C">พนักงานใหม่?</b> <a href="javascript:" onclick="showSignup()">สมัครที่นี่</a>'+
-       '<br>ยังไม่มีบัญชีกลาง? <a href="javascript:" onclick="skipLogin()">ดูแอพทั้งหมด</a>'});</script>
+  extra:'<button type="button" class="jjlg-btn2" onclick="showSignup()">🙋 สมัครพนักงานใหม่</button>',
+  note:'ยังไม่มีบัญชี? กดปุ่มสมัคร แล้วรอผู้ดูแลอนุมัติ'});</script>
 
 <script>
 (function(){
@@ -694,11 +694,11 @@ function showLogin(){
   document.getElementById('login').classList.add('on');
   setTimeout(function(){ var el=document.getElementById('lgU'); if(el)el.focus(); },80);
 }
-function skipLogin(){   // ทางออกฉุกเฉิน: ยังไม่มีบัญชีกลาง — ข้ามไปดูไอคอนแอพทั้งหมด (แอพปลายทางยังถามรหัสเอง)
-  try{ localStorage.setItem('jjhub_skip','1'); }catch(e){}
-  document.getElementById('login').classList.remove('on');
-  ME=null; paintApps(); paintUser();
-}
+/* เดิมมีปุ่ม "ดูแอพทั้งหมด" ให้ข้ามล็อกอิน (flag jjhub_skip) — เจ้าของสั่งเอาออก 2026-09-29
+   เหตุผล: ไม่อยากให้คนนอกเห็นว่าร้านมีแอพอะไรบ้าง · ตอนนี้ทุกแอพใช้บัญชีกลางแล้ว
+   จึงไม่มีใครที่ "ไม่มีบัญชีกลาง" อีก — ทางออกฉุกเฉินนี้หมดความจำเป็น
+   ล้าง flag เก่าที่ค้างในเครื่องด้วย ไม่งั้นมือถือที่เคยกดไว้จะยังเห็นไอคอนโดยไม่ต้องล็อกอิน */
+try{ localStorage.removeItem('jjhub_skip'); }catch(e){}
 async function fetchUser(username){
   var r=await fetch(CFG.URL+'/rest/v1/pnl_users?select=*&active=is.true&username=eq.'+encodeURIComponent(username),
     {headers:{apikey:CFG.KEY,Authorization:'Bearer '+CFG.KEY}});
@@ -729,7 +729,6 @@ async function doLogin(){
     if(usr.status==='pending'||usr.status==='rejected'){ showWait(usr); return; }
     if(usr.active===false){ msg.textContent='บัญชีนี้ถูกปิดการใช้งาน — แจ้งผู้ดูแลระบบครับ'; return; }
     ME=usr; spreadSession(usr);
-    try{ localStorage.removeItem('jjhub_skip'); }catch(e){}
     document.getElementById('login').classList.remove('on');
     paintApps(); paintUser(); paintPending();
   }catch(e){ msg.textContent='เข้าสู่ระบบไม่สำเร็จ: '+e.message; }
@@ -986,12 +985,12 @@ async function paintPending(){
 (function(){
   document.getElementById('lgP').addEventListener('keydown',function(e){ if(e.key==='Enter')doLogin(); });
   document.getElementById('lgU').addEventListener('keydown',function(e){ if(e.key==='Enter')document.getElementById('lgP').focus(); });
-  var saved=null, skip=false;
-  try{ saved=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); skip=localStorage.getItem('jjhub_skip')==='1'; }catch(e){}
-  if(!saved||!saved.u){ if(!skip)showLogin(); paintApps(); return; }
+  var saved=null;
+  try{ saved=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); }catch(e){}
+  if(!saved||!saved.u){ showLogin(); paintApps(); return; }
   fetchUser(saved.u).then(function(usr){
     if(usr&&usr.pass_hash===saved.h&&userReady(usr)){ ME=usr; spreadSession(usr); paintUser(); paintPending(); }
-    else if(!skip){ showLogin(); }         // รหัสเปลี่ยน/บัญชีถูกปิด → ให้ล็อกอินใหม่
+    else { showLogin(); }                  // รหัสเปลี่ยน/บัญชีถูกปิด → ให้ล็อกอินใหม่
     paintApps();
   }).catch(function(){ paintApps(); });    // เน็ตล่ม → แสดงทุกแอพไว้ก่อน ไม่ล็อกคนใช้งาน
 })();
