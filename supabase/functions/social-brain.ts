@@ -21,6 +21,9 @@ const anthropic = new Anthropic();
 
 // ===== ระบบ AI 3 ชั้น: Claude (ถ้ามีเครดิต) → Gemini (โควต้าฟรี) → กติกาเบื้องต้น (ฟรีเสมอ) =====
 let claudeDownUntil = 0; // เจอปัญหาเครดิต/คีย์ → พัก Claude 10 นาที ไม่ยิงซ้ำทุกรายการ
+// โหมด AI: 'free' = ใช้ Gemini (โควต้าฟรี) → กติกาเบื้องต้น · 'best' = ลอง Claude ก่อน (มีค่าใช้จ่าย)
+let AI_MODE: "free" | "best" = "free";
+const useClaude = () => AI_MODE === "best" && Date.now() > claudeDownUntil;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function geminiJson(system: string, user: string, maxTokens = 2500): Promise<any | null> {
@@ -319,6 +322,7 @@ async function getSettings() {
   const { data } = await sb.from("social_settings").select("id,val");
   const m: Record<string, any> = {};
   (data ?? []).forEach((r: any) => (m[r.id] = r.val || {}));
+  AI_MODE = m.bot?.ai_mode === "best" ? "best" : "free";   // ตั้งต้น = โหมดฟรี
   return m;
 }
 async function getBranches(): Promise<{ code: string; name: string }[]> {
@@ -378,7 +382,7 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
     // ชั้น 1: Claude (ข้ามถ้าเพิ่งเจอปัญหาเครดิต/คีย์)
     let a: z.infer<typeof Analysis> | null = null;
     let used: "claude" | "gemini" | "rules" = "rules";
-    if (Date.now() > claudeDownUntil) {
+    if (useClaude()) {
       try {
         const res = await anthropic.messages.parse({
           model: "claude-opus-5",
@@ -442,7 +446,7 @@ async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily")
     const digSystem = `คุณคือผู้ช่วยผู้บริหารร้านหมูกระทะ สรุปเสียงลูกค้า${span === "weekly" ? "รอบ 7 วัน" : "รายวัน"}เป็นภาษาไทย ให้เจ้าของร้านอ่านแล้วรู้ทันทีว่า มีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี/มีปัญหา และควรทำอะไรต่อ อ้างอิงเฉพาะข้อมูลที่ให้ อย่าแต่งเพิ่ม นับ count จากจำนวนรีวิวที่พูดถึงเรื่องนั้นจริง`;
     const digUser = `ข้อมูล ${set.length} รายการ (${br === "ALL" ? "ทุกสาขา" : "สาขา " + br}):\n` + lines.join("\n");
     let d: z.infer<typeof Digest> | null = null;
-    if (Date.now() > claudeDownUntil) {
+    if (useClaude()) {
       try {
         const res = await anthropic.messages.parse({
           model: "claude-opus-5",
@@ -478,9 +482,18 @@ function avg(a: number[]) { return a.length ? Math.round(a.reduce((s, x) => s + 
 
 // ---------- ดึงรีวิว Google (Places API) ----------
 // placesIn: ส่งรายการ place มากับคำสั่งได้เลย (ปุ่มในแอป) — ฟังก์ชันจะบันทึกลง settings ให้เอง
-async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
+// throttleH = ดึงอัตโนมัติได้ทุกกี่ชั่วโมง (กดปุ่มในแอป = 0 คือดึงทันที)
+// Google คิดเงิน Place Details ที่ขอ field "reviews" ที่ SKU แพงสุด (ฟรีแค่ 1,000 ครั้ง/เดือน)
+// ทุก 3 ชม. × 2 สาขา = ~480 ครั้ง/เดือน → อยู่ในโควต้าฟรี
+async function pollGoogle(placesIn?: { place_id: string; branch: string }[], throttleH = 0) {
   if (!GOOGLE_KEY) return { ok: false, reason: "ยังไม่ได้ตั้ง secret GOOGLE_API_KEY (หรือ GOOGLE_MAPS_API_KEY)" };
   const settings = await getSettings();
+  if (throttleH > 0) {
+    const last = Date.parse(settings.channels?.google_last_poll ?? "") || 0;
+    const waitMs = throttleH * 3600000 - (Date.now() - last);
+    if (waitMs > 0) return { ok: true, added: 0, skipped: true,
+      reason: `ประหยัดโควต้าฟรีของ Google — รอบถัดไปอีก ${Math.ceil(waitMs / 60000)} นาที` };
+  }
   const places: { place_id: string; branch: string }[] =
     (placesIn?.length ? placesIn : settings.channels?.google_places) ?? [];
   if (!places.length) return { ok: false, reason: "ยังไม่ได้ใส่ place_id ในหน้าเชื่อมต่อ" };
@@ -550,6 +563,7 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[]) {
       rating: d.rating ?? null, count: d.userRatingCount ?? null, at: new Date().toISOString(),
     };
   }
+  settings.channels.google_last_poll = new Date().toISOString();
   await sb.from("social_settings").upsert({ id: "channels", val: settings.channels, updated_at: new Date().toISOString() });
   return { ok: true, added, diag, errors: errors.length ? errors : undefined };
 }
@@ -583,7 +597,7 @@ async function learnFaq() {
 - อย่าเสนอซ้ำกับ FAQ ที่มีอยู่แล้ว: ${faq.map((f: any) => f.q).join(" | ") || "—"}`;
   const userTxt = lines.slice(-400).join("\n---\n");
   let items: { q: string; a: string; count: number }[] | null = null;
-  if (Date.now() > claudeDownUntil) {
+  if (useClaude()) {
     try {
       const res = await anthropic.messages.parse({
         model: "claude-opus-5", max_tokens: 4000,
@@ -628,7 +642,7 @@ ${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
     role: h.role === "user" ? "user" as const : "assistant" as const, content: h.text,
   }));
   let out: z.infer<typeof ChatReply> | null = null;
-  if (Date.now() > claudeDownUntil) {
+  if (useClaude()) {
     try {
       const res = await anthropic.messages.parse({
         model: "claude-opus-5", max_tokens: 1024,
@@ -720,6 +734,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("jjmk social-brain ok", { headers: CORS });
   try {
     const b = await req.json();
+    await getSettings().catch(() => null);   // อ่านโหมด AI (ฟรี/คุณภาพสูงสุด) ก่อนทุกครั้ง
     let out: unknown;
     switch (b.action) {
       case "analyze":     out = await analyzeMentions(b.ids, b.limit ?? 8); break;
@@ -755,9 +770,15 @@ Deno.serve(async (req) => {
       case "gbp_sync": out = await gbpSync(!!b.full); break;
       case "cron": {
         const st = await getSettings();
-        const g = st.channels?.gbp?.rt_enc
+        // 1) Google Business Profile (ฟรี ได้รีวิวครบ) — ถ้ายังไม่ได้รับอนุมัติ/ยังไม่เชื่อม
+        // 2) ถอยไป Places API แบบประหยัด (ทุก 3 ชม.) ให้อยู่ในโควต้าฟรี ไม่มีค่าใช้จ่าย
+        let g: any = st.channels?.gbp?.rt_enc
           ? await gbpSync(false).catch((e) => ({ ok: false, reason: String(e) }))
-          : await pollGoogle().catch((e) => ({ ok: false, reason: String(e) }));
+          : { ok: false, reason: "ยังไม่ได้เชื่อมบัญชี Google Business" };
+        if (!g.ok) {
+          const p = await pollGoogle(undefined, 3).catch((e) => ({ ok: false, reason: String(e) }));
+          g = { gbp: g.reason, places: p };
+        }
         const a = await analyzeMentions(undefined, 20);
         out = { google: g, analyze: a };
         break;

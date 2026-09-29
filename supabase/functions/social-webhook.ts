@@ -25,6 +25,9 @@ const anthropic = new Anthropic(); // อ่าน ANTHROPIC_API_KEY จาก s
 
 // AI 2 ชั้น: Claude (ถ้ามีเครดิต) → Gemini (โควต้าฟรี) → ข้อความสำรอง
 let claudeDownUntil = 0;
+// โหมด AI เดียวกับ social-brain: 'free' = Gemini (โควต้าฟรี) · 'best' = ลอง Claude ก่อน (เสียเงิน)
+let AI_MODE: "free" | "best" = "free";
+const useClaude = () => AI_MODE === "best" && Date.now() > claudeDownUntil;
 function markClaudeDown(e: unknown) {
   const msg = String((e as any)?.message ?? e);
   if (/credit|billing|api.?key|authentication|401|invalid_request_error/i.test(msg)) claudeDownUntil = Date.now() + 10 * 60000;
@@ -134,6 +137,7 @@ async function getSettings() {
   const { data } = await sb.from("social_settings").select("id,val");
   const m: Record<string, any> = {};
   (data ?? []).forEach((r: any) => (m[r.id] = r.val || {}));
+  AI_MODE = m.bot?.ai_mode === "best" ? "best" : "free";   // ตั้งต้น = โหมดฟรี
   return m;
 }
 
@@ -186,7 +190,7 @@ ${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
 - โหมดเข้มงวด: ตอบอัตโนมัติเฉพาะคำถามที่ตรงหรือใกล้เคียงกับ "คำถามที่พบบ่อย" หรือข้อมูลร้านข้างต้นเท่านั้น — คำถามอื่นทุกกรณี (รวมถึงจอง/สั่งอาหาร/เรื่องเฉพาะบุคคล) ให้ตั้ง needs_human = true` : ""}`;
 
   let out: z.infer<typeof ChatReply> | null = null;
-  if (Date.now() > claudeDownUntil) {
+  if (useClaude()) {
     try {
       const res = await anthropic.messages.parse({
         model: "claude-opus-5",
