@@ -92,6 +92,15 @@ aside nav button:hover:not(.active){color:var(--brand-deep);background:var(--emb
   50%{background:#fff;color:var(--blue);border-color:var(--blue);box-shadow:0 0 0 6px rgba(25,113,194,0)}
 }
 .btn-cash{animation:blinkCash 1.2s ease-in-out infinite;border:1.5px solid var(--blue)!important;font-weight:700}
+/* พนักงานที่ยังไม่มีตำแหน่ง — ช่องชื่อกระพริบแดง (noPos ในสคริปต์) */
+@keyframes blinkNoPos{
+  0%,100%{background:var(--red-soft);box-shadow:inset 3px 0 0 var(--red)}
+  50%{background:#f7b9aa;box-shadow:inset 3px 0 0 var(--red)}
+}
+.no-pos{animation:blinkNoPos 1s ease-in-out infinite}
+span.no-pos{border-radius:5px;padding:0 4px}
+.nopos-tag{display:inline-block;animation:blinkAlert 1s ease-in-out infinite;border:1.5px solid var(--red);border-radius:6px;
+  padding:1px 7px;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer}
 
 main{max-width:1240px;margin:0 auto;padding:22px}
 main:has(#page-cal.active){max-width:none}   /* หน้าปฏิทินใช้เต็มความกว้างจอ */
@@ -3567,15 +3576,26 @@ const modeLabel = e => e.mode==='hourly'
   : (e.shiftId ? `<span class="chip chip-blue">${(shiftDefs.find(s=>s.id===e.shiftId)||{}).name||'?'}</span>`
                : `<span class="chip chip-gray">🔍 อัตโนมัติ</span>`);
 
-/* ข้อมูลส่วนตัวที่ยังขาด (ใช้เตือนปุ่มแก้ไขกระพริบแดง) */
+/* ข้อมูลที่ยังขาด (ใช้เตือนปุ่มแก้ไขกระพริบแดง) */
 function missingInfo(e){
   const m = [];
+  if(noPos(e)) m.push('ตำแหน่ง');
   if(!e.birth) m.push('วันเกิด');
   if(!e.phone) m.push('เบอร์โทร');
   if(!e.bankName) m.push('ธนาคาร');
   else if(e.bankName !== 'เงินสด' && !e.bankAcc) m.push('เลขบัญชี');
   return m;
 }
+/* ยังไม่ได้ระบุตำแหน่ง → ช่องชื่อกระพริบแดง + ป้าย "ไม่มีตำแหน่ง" (เจ้าของสั่ง 2026-09-29)
+   ใช้ที่หน้าวันนี้ · รายชื่อพนักงาน · หัวหน้ารายละเอียด */
+const noPos = e => !!e && !String(e.position||'').trim();
+const noPosCls = e => noPos(e) ? ' no-pos' : '';
+const noPosTip = e => noPos(e) ? ' title="⚠️ ยังไม่ได้ระบุตำแหน่ง"' : '';
+/* กดป้ายแล้วไปหน้าพนักงานก่อนค่อยเปิดฟอร์ม — สิทธิ์บันทึกเช็คตามหน้าที่เปิดอยู่ (emp) */
+function fixPos(id){ go('emp'); if(curPage() === 'emp') openEmpForm(id); }
+const noPosTag = e => (canSee('emp') && canDo('emp','e'))
+  ? `<span class="nopos-tag" title="กดเพื่อเติมตำแหน่ง" onclick="event.stopPropagation();fixPos(${e.id})">⚠️ ไม่มีตำแหน่ง</span>`
+  : '<span class="nopos-tag" style="cursor:default">⚠️ ไม่มีตำแหน่ง</span>';
 const empMatch = (e, q) => !q ||
   (e.nick+' '+e.full+' '+e.dept+' '+e.code+' '+(e.position||'')).toLowerCase().includes(q);
 /* เติมรายการแผนกใน dropdown ให้เหลือเฉพาะแผนกของสาขาที่เลือก */
@@ -3639,11 +3659,11 @@ function renderEmp(){
       const miss = e.active ? missingInfo(e) : [];
       const isCash = e.active && !miss.length && e.bankName === 'เงินสด';
       return `<tr>
-        <td class="clickable" onclick="openDetail(${e.id})"><b style="color:var(--ember-deep)">${e.nick}</b></td>
+        <td class="clickable${e.active?noPosCls(e):''}"${e.active?noPosTip(e):''} onclick="openDetail(${e.id})"><b style="color:var(--ember-deep)">${e.nick}</b></td>
         <td class="clickable" onclick="openDetail(${e.id})">${e.full||'<span class="muted">–</span>'}</td>
         <td>${branchChip(e)}</td>
         <td><span class="dept-chip">${e.dept||'–'}</span></td>
-        <td>${e.position? '<span class="muted">'+e.position+'</span>' : '<span class="muted">–</span>'}</td>
+        <td>${!noPos(e)? '<span class="muted">'+e.position+'</span>' : e.active ? noPosTag(e) : '<span class="muted">–</span>'}</td>
         <td>${modeLabel(e)}</td>
         <td class="num">${THB(e.rate)}${e.mode==='hourly'?'/ชม.':e.type==='monthly'?'/ด.':'/วัน'}</td>
         <td class="num">${days||'–'}</td>
@@ -4022,7 +4042,7 @@ function renderDetail(){
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 4px">
       ${branchChip(e)}
       <span class="dept-chip">${e.dept||'–'}</span>
-      ${e.position? '<span class="muted">'+e.position+'</span>' : ''}
+      ${!noPos(e)? '<span class="muted">'+e.position+'</span>' : e.active ? noPosTag(e) : ''}
       ${modeLabel(e)}
       ${e.type==='monthly'?'<span class="chip chip-blue">รายเดือน '+THB(e.rate)+' บ.</span>':'<span class="chip chip-gray">รายวัน '+THB(e.rate)+' บ.</span>'}
       <span class="muted">รหัส ${e.code}</span>
@@ -5038,10 +5058,10 @@ function renderToday(){
     tIn+=came.length; tLate+=late.length; tOff+=noShow.length;
     came.sort((a,c)=>a.r.in-c.r.in);
 
-    html += `<div class="card" style="margin:0">
+    html += `<div class="card" style="margin:0;min-width:0">
       <div class="section-title" style="margin-top:0">${(BR[b]||{}).t||b}
         ${isHoli? '<span class="chip chip-green">🎌 '+isHoli.name+'</span>':''}</div>
-      <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px">
+      <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:10px">
         <div class="stat" style="padding:10px"><div class="v" style="color:var(--green)">${came.length}</div><div class="l">เข้าทำงาน</div></div>
         <div class="stat" style="padding:10px"><div class="v" style="color:${late.length?'var(--amber)':'inherit'}">${late.length}</div><div class="l">สาย</div></div>
         <div class="stat" style="padding:10px"><div class="v" style="color:${noShow.length?'var(--red)':'inherit'}">${noShow.length}</div><div class="l">หยุด/ยังไม่มา</div></div>
@@ -5059,7 +5079,7 @@ function renderToday(){
         let s = '';
         if(incoming.length) s += `<div style="font-size:12px;margin-bottom:6px;background:#f3f0fb;border:1px solid #d9d0f2;border-radius:8px;padding:6px 10px">
           🔀 <b style="color:#6741d9">มาจากสาขาอื่น ${incoming.length} คน:</b>
-          ${incoming.map(({e,r})=>`<span class="clickable" onclick="openDetail(${e.id})"><b>${e.nick}</b> <span class="muted">(จาก${(BR[e.branch]||{}).t||'?'} · เข้า ${fmtT(r.in)})</span></span>`).join(' · ')}</div>`;
+          ${incoming.map(({e,r})=>`<span class="clickable${noPosCls(e)}"${noPosTip(e)} onclick="openDetail(${e.id})"><b>${e.nick}</b> <span class="muted">(จาก${(BR[e.branch]||{}).t||'?'} · เข้า ${fmtT(r.in)})</span></span>`).join(' · ')}</div>`;
         if(outgoing.length) s += `<div style="font-size:12px;margin-bottom:6px;background:#faf7f1;border:1px solid var(--line);border-radius:8px;padding:6px 10px">
           ➡️ <b class="muted">ไปช่วยสาขาอื่น ${outgoing.length} คน:</b>
           ${outgoing.map(({e,wb})=>`<span class="clickable" onclick="openDetail(${e.id})">${e.nick} <span class="muted">(ไป${(BR[wb]||{}).t||wb})</span></span>`).join(' · ')}</div>`;
@@ -5078,8 +5098,8 @@ function renderToday(){
           if(cross) notes.push('<span class="chip chip-violet">มาจาก'+((BR[e.branch]||{}).t||'')+'</span>');
           return `<tr${lm>0?' style="background:#fdf6e3"':''}>
             <td><b>${fmtT(r.in)}</b></td>
-            <td class="clickable" onclick="openDetail(${e.id})"><b style="color:var(--ember-deep)">${e.nick}</b></td>
-            <td><span class="muted" style="font-size:11px">${e.position||'–'}</span></td>
+            <td class="clickable${noPosCls(e)}"${noPosTip(e)} onclick="openDetail(${e.id})"><b style="color:var(--ember-deep)">${e.nick}</b></td>
+            <td>${noPos(e) ? noPosTag(e) : '<span class="muted" style="font-size:11px">'+e.position+'</span>'}</td>
             <td>${notes.join(' ')}</td>
           </tr>`;
         };
@@ -5111,8 +5131,8 @@ function renderToday(){
             const dg = byDept[d];
             // สรุปตำแหน่งในแผนก เช่น "หัวหน้ากะ 1 · พนักงาน 3"
             const posCnt = {};
-            dg.forEach(x=>{ const p=x.e.position||'–'; posCnt[p]=(posCnt[p]||0)+1; });
-            const posLine = Object.entries(posCnt).map(([p,n])=>p+' '+n).join(' · ');
+            dg.forEach(x=>{ const p=noPos(x.e)?'–':x.e.position; posCnt[p]=(posCnt[p]||0)+1; });
+            const posLine = Object.entries(posCnt).map(([p,n])=>p==='–' ? '<b style="color:var(--red)">⚠️ ไม่มีตำแหน่ง '+n+'</b>' : p+' '+n).join(' · ');
             rows += `<tr class="grp-dept"><td colspan="4">${d} (${dg.length}) <span style="font-weight:400">— ${posLine}</span></td></tr>`;
             dg.sort((a,c)=> (a.e.position||'ฮ').localeCompare(c.e.position||'ฮ','th') || a.r.in-c.r.in)
               .forEach(x=>{ rows += personRow(x); });
@@ -5131,12 +5151,12 @@ function renderToday(){
           return Object.keys(byD).sort((a,b)=>a.localeCompare(b,'th')).map(d=>
             `<div style="display:flex;gap:6px;align-items:baseline">
               <span class="dept-chip" style="flex-shrink:0">${d}</span>
-              <span>${byD[d].map(e=>`<span class="clickable" style="color:var(--red)" onclick="openDetail(${e.id})">${e.nick}</span>`).join('<span class="muted"> · </span>')}</span>
+              <span>${byD[d].map(e=>`<span class="clickable${noPosCls(e)}"${noPosTip(e)} style="color:var(--red)" onclick="openDetail(${e.id})">${e.nick}</span>`).join('<span class="muted"> · </span>')}</span>
             </div>`).join('');
         })()}
         </div></div>`:''}
       ${offWd.length? `<div style="font-size:12px"><b class="muted">🛌 วันหยุดประจำ (${offWd.length}):</b>
-        <span class="muted">${offWd.map(e=>e.nick).join(' · ')}</span></div>`:''}
+        <span class="muted">${offWd.map(e=>noPos(e)?`<span class="no-pos"${noPosTip(e)}>${e.nick}</span>`:e.nick).join(' · ')}</span></div>`:''}
     </div>`;
   }
   html += '</div>';
