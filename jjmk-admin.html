@@ -119,6 +119,10 @@ label.fld span{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;
 }
 
 .quick{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}
+.brscope{margin-top:10px;padding:9px 11px;border:1px dashed #4A3B31;border-radius:10px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.brscope .bst{flex-basis:100%;font-size:12.5px;color:var(--ink2)}
+.brscope label{display:inline-flex;align-items:center;gap:5px;font-size:14px;cursor:pointer}
+.brscope input{width:18px;height:18px}
 .quick button{font-size:11.5px;padding:4px 10px;border-radius:99px;border:1px solid var(--line2);background:#1B1512;color:var(--ink2);cursor:pointer;font-family:var(--fd)}
 .quick button:hover{border-color:var(--gold);color:var(--gold2)}
 
@@ -560,6 +564,11 @@ const isBoss=u=>!!u&&(u.role==='admin'||u.role==='owner');   // เข้าไ�
 function roleOf(u){ return (u&&ROLES[u.role])?u.role:'staff'; }
 function unitOf(u){ return (u&&UNITS[u.unit])?u.unit:'ALL'; }
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
+/* จำกัด "เห็นเฉพาะสาขา" รายแอพ (เจ้าของสั่ง 2026-09-29) — เก็บเป็น apps.<แอพ>._br = 'JJLP,JJRD'
+   ไม่ติ๊กเลย/ติ๊กครบทุกสาขา = ไม่จำกัด · เพิ่มแอพเข้า BR_SCOPED ได้ก็ต่อเมื่อตัวแอพนั้นรองรับ _br แล้ว (ตอนนี้: เงินเดือน) */
+const BR_SCOPED={payroll:true};
+const BR_LIST=[['JJLP','ลาดพร้าว'],['JJRD','รัชดา'],['JJCK','ครัวกลาง'],['OFFICE','ออฟฟิศ']];
+function brOf(u,app){ const a=(u.apps||{})[app]; return a&&a._br?String(a._br).split(',').filter(Boolean):[]; }
 
 const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['pending','users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{},copiedFrom:null,pend:[],pendApps:{},pendCopy:{}};
 
@@ -931,7 +940,9 @@ async function viewUsers(){
     const apps=APPKEYS.filter(k=>appOn(u,k));
     const chips=isBoss(u)
       ? '<span class="chip adm">ทุกแอพ</span>'
-      : (apps.length?apps.map(k=>'<span class="chip ok">'+APPS[k].ic+' '+esc(APPS[k].n)+'</span>').join(' ')
+      : (apps.length?apps.map(k=>{ const br=brOf(u,k);
+          return '<span class="chip ok">'+APPS[k].ic+' '+esc(APPS[k].n)+
+            (br.length?' · '+esc(br.map(b=>(BR_LIST.find(x=>x[0]===b)||[b,b])[1]).join('/')):'')+'</span>'; }).join(' ')
                     :'<span class="chip off">ยังไม่ได้เปิดแอพไหนเลย</span>');
     const R=ROLES[roleOf(u)], UN=UNITS[unitOf(u)];
     return '<tr>'+
@@ -1070,8 +1081,15 @@ function appBox(k,u){
       '<span class="cc"><input type="radio" name="hide_'+k+'_'+sc+'" data-k="'+k+'" data-s="'+sc+'"'+
       (cur===''?' checked':'')+' onclick="hideScr(\''+k+'\',\''+sc+'\')"></span></div>';
   }).join('');
+  let brRow='';
+  if(BR_SCOPED[k]){
+    const cur=brOf(u,k);
+    brRow='<div class="brscope"><div class="bst">🏪 <b>เห็นเฉพาะพนักงานสาขา</b> — ไม่ติ๊กเลย = เห็นทุกสาขา</div>'+
+      BR_LIST.map(b=>'<label><input type="checkbox" data-br="'+b[0]+'"'+(cur.includes(b[0])?' checked':'')+
+        ' onchange="syncDraft(\''+k+'\')"> '+b[1]+'</label>').join('')+'</div>';
+  }
   return '<div class="appbox'+(on?' open':'')+'" id="box_'+k+'">'+head+
-    '<div class="appbody"><p class="sub" style="margin:8px 0 2px">'+esc(A.d)+'</p>'+quick+hd+body+'</div></div>';
+    '<div class="appbody"><p class="sub" style="margin:8px 0 2px">'+esc(A.d)+'</p>'+quick+hd+body+brRow+'</div></div>';
 }
 function flagChg(el){
   const k=el.dataset.k, sc=el.dataset.s, f=el.dataset.f;
@@ -1101,6 +1119,10 @@ function syncDraft(k){
     if(fl)out[sc]=fl;
     const rd=box.querySelector('input[type=radio][data-s="'+sc+'"]'); if(rd)rd.checked=(fl==='');
   });
+  if(BR_SCOPED[k] && Object.keys(out).length){
+    const br=[...box.querySelectorAll('input[data-br]')].filter(c=>c.checked).map(c=>c.dataset.br);
+    if(br.length && br.length<BR_LIST.length) out._br=br.join(',');
+  }
   if(Object.keys(out).length)S.draft[k]=out; else delete S.draft[k];
   const n=Object.values(out).filter(v=>v.includes('v')).length;
   const c=$('#cnt_'+k); if(c)c.textContent=n?(n+'/'+Object.keys(A.s).length+' หน้า'):'ปิด';

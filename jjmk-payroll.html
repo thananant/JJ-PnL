@@ -557,6 +557,7 @@ window.JJGate=(function(){
   </nav>
   <div class="side-foot">
     <div id="whoBox" style="font-size:12px;color:#d8cfc4;padding:0 4px 6px"></div>
+    <div id="permNote" style="font-size:11.5px;color:#b8aa98;padding:0 4px 6px"></div>
     <div style="font-size:11.5px;color:#8a8076;padding:0 4px 2px"><span class="dot" id="connDot"></span><span id="connTxt">เชื่อมต่อแล้ว</span></div>
     <div id="lastScan" style="font-size:11.5px;color:#8a8076;padding:0 4px 2px"></div>
     <button class="btn btn-ghost" title="ล้างแคชในเครื่อง แล้วโหลดใหม่ทั้งหมดจากฐานข้อมูล" onclick="refreshAll()">🔄 รีเฟรชข้อมูล</button>
@@ -1473,15 +1474,16 @@ async function doLogin(){
   errEl.textContent = ''; document.getElementById('liBtn').disabled = true;
   try{
     const { data, error } = await db.from('pnl_users')
-      .select('id,username,display_name,role,active,pass_hash')
+      .select('*')
       .eq('username', u).limit(1);
     if(error) throw error;
     const usr = (data||[])[0];
     if(!usr || usr.pass_hash !== pwHash(u,p)){ errEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
     if(!usr.active){ errEl.textContent = 'บัญชีนี้ถูกปิดการใช้งาน'; return; }
     JJGate.grant(usr.username);
-    AUTH = { username:usr.username, display_name:usr.display_name||usr.username, role:usr.role||'' };
+    AUTH = { username:usr.username, display_name:usr.display_name||usr.username, role:usr.role||'', unit:usr.unit||'', apps:usr.apps||null };
     try{ localStorage.setItem('jjpay_sess', JSON.stringify(AUTH)); }catch(_){}
+    applyUser(AUTH);
     auditWrite('login','','เข้าสู่ระบบ');
     document.getElementById('loginBg').style.display = 'none';
     renderWho();
@@ -1499,6 +1501,91 @@ function logout(){
 function renderWho(){
   const el = document.getElementById('whoBox'); if(!el) return;
   el.innerHTML = AUTH ? `👤 ${AUTH.display_name}${AUTH.role==='admin'?' · ผู้ดูแล':''} <a href="javascript:logout()" style="color:#b8aa98">ออก</a>` : '';
+}
+
+/* ================= สิทธิ์รายหน้าจอ + รายสาขา (เจ้าของสั่ง 2026-09-29) =================
+   ตั้งที่หน้า 🔑 JJ Access → ผู้ใช้ & สิทธิ์ → ⚙️ → กล่อง JJ Payroll  (เก็บใน pnl_users.apps.payroll)
+     { <หน้าจอ>: 'vaed', ..., _br: 'JJLP,JJCK' }   v=ดู a=เพิ่ม e=แก้ d=ลบ · ไม่มี v = ซ่อนหน้านั้น
+     _br = สาขาที่เห็น (ไม่ตั้ง = ทุกสาขา) — เห็นเฉพาะพนักงานที่สังกัดสาขาเหล่านั้น
+   - ผู้ดูแลระบบ/เจ้าของ (role admin|owner) = ทุกหน้า ทุกสาขา ทุกสิทธิ์
+   - apps ว่างทั้งก้อน (ยังไม่เคยตั้งสิทธิ์) = ทุกหน้า ทุกสาขา (กติกากลาง: กันล็อกคนใช้งานโดยไม่ตั้งใจ)
+   - ตั้งสิทธิ์แอปอื่นไว้แต่ไม่ได้เปิด payroll ให้ = เข้าแอปนี้ไม่ได้
+   - กันการบันทึกที่จุดเดียว: ตัวครอบ db.from ด้านล่าง ดูสิทธิ์ของ "หน้าที่เปิดอยู่" ก่อนเขียนทุกครั้ง */
+let PERM = null;       // null = ไม่จำกัดหน้าจอ · {} = สิทธิ์รายหน้าจอของ payroll
+let SCOPE = null;      // null = ทุกสาขา · ['JJLP',...] = เฉพาะสาขาเหล่านี้
+let NO_ACCESS = false; // มีบัญชีแต่ไม่ได้รับสิทธิ์ payroll เลย
+const ALL_BR = ['JJLP','JJRD','JJCK','OFFICE'];
+const PAGES = ['today','emp','detail','payroll','cal','adv','loan','dep','sso','mou','shift','holi','audit','settings'];
+const isBoss = u => !!u && (u.role === 'admin' || u.role === 'owner');
+function applyUser(u){
+  PERM = null; SCOPE = null; NO_ACCESS = false;
+  if(!u || isBoss(u)) return;
+  const apps = (u.apps && typeof u.apps === 'object') ? u.apps : null;
+  if(!apps || !Object.keys(apps).length) return;              // ยังไม่เคยตั้งสิทธิ์ = ไม่จำกัด
+  const a = (apps.payroll && typeof apps.payroll === 'object') ? apps.payroll : {};
+  PERM = {}; PAGES.forEach(pg => { if(typeof a[pg] === 'string') PERM[pg] = a[pg]; });
+  if(!PAGES.some(pg => String(PERM[pg]||'').includes('v'))) NO_ACCESS = true;
+  const br = String(a._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
+  if(br.length) SCOPE = br;
+}
+const canSee = pg => !PERM || String(PERM[pg]||'').includes('v');
+const canDo = (pg, f) => !PERM || String(PERM[pg]||'').includes(f);
+const myBranches = () => SCOPE ? ALL_BR.filter(b=>SCOPE.includes(b)) : ALL_BR.slice();
+const curPage = () => { const el = document.querySelector('.page.active'); return el ? el.id.replace('page-','') : ''; };
+/* สาขาของพนักงานไว้คุมการมองเห็น: ใช้ที่ตั้งไว้ในข้อมูลพนักงาน · ยังไม่ได้ตั้ง (Worker สร้างให้อัตโนมัติ)
+   → เดาจากเครื่องสแกนที่ใช้ล่าสุด ผู้จัดการสาขาจะได้เห็นพนักงานใหม่ของตัวเอง */
+let lastSnOf = {};
+function buildLastSn(){ lastSnOf = {}; for(const p of punches){ if(p.sn) lastSnOf[p.code] = p.sn; } }
+const homeBranch = e => (e && e.branch) || (e && devBranch[lastSnOf[e.code]]) || '';
+const inScope = e => !SCOPE || SCOPE.includes(homeBranch(e));
+function scopeEmployees(){ if(!SCOPE) return; buildLastSn(); employees = employees.filter(inScope); }
+/* ซ่อนเมนู/ตัวเลือกสาขาที่ไม่มีสิทธิ์ */
+function applyPermUI(){
+  document.querySelectorAll('aside nav button[data-page]').forEach(b => { b.hidden = !canSee(b.dataset.page); });
+  if(SCOPE){
+    document.querySelectorAll('select option').forEach(o => {
+      if(ALL_BR.includes(o.value)) o.hidden = o.disabled = !SCOPE.includes(o.value);
+    });
+    const fb = document.getElementById('fBranch');      // ฟอร์มพนักงาน: ห้ามสร้างคนนอกสาขาตัวเอง/ไม่มีสาขา
+    if(fb) [...fb.options].forEach(o => { if(o.value === '') o.hidden = o.disabled = true; });
+  }
+  const box = document.getElementById('permNote');
+  if(box) box.innerHTML = (PERM || SCOPE)
+    ? '🔒 สิทธิ์: ' + (SCOPE ? 'เห็นเฉพาะ ' + SCOPE.map(b=>(BR[b]||{t:b}).t).join(', ') : 'ทุกสาขา')
+    : '';
+  if(NO_ACCESS){
+    document.querySelector('main').innerHTML = '<div class="card" style="max-width:520px;margin:40px auto;text-align:center">' +
+      '<h2 class="font-display" style="font-size:18px;margin-bottom:8px">ยังไม่ได้รับสิทธิ์ใช้ระบบเงินเดือน</h2>' +
+      '<p class="muted">บัญชี <b>' + (AUTH ? AUTH.display_name : '') + '</b> ยังไม่ได้เปิดหน้าไหนในระบบนี้ให้ — ให้ผู้ดูแลระบบตั้งสิทธิ์ที่หน้า 🔑 JJ Access</p>' +
+      '<p style="margin-top:14px"><a href="javascript:logout()">เข้าด้วยบัญชีอื่น</a></p></div>';
+  }
+}
+/* อ่านสิทธิ์ล่าสุดจากฐานข้อมูลทุกครั้งที่เปิดแอป (admin แก้สิทธิ์แล้วมีผลทันทีที่รีเฟรช) */
+async function refreshMe(){
+  try{
+    const { data, error } = await _dbFrom('pnl_users').select('*').eq('username', AUTH.username).limit(1);
+    if(error) throw error;
+    const u = (data||[])[0];
+    if(!u || u.active === false){ try{ localStorage.removeItem('jjpay_sess'); }catch(_){} location.reload(); return false; }
+    AUTH = { username:u.username, display_name:u.display_name||u.username, role:u.role||'', unit:u.unit||'', apps:u.apps||null };
+    try{ localStorage.setItem('jjpay_sess', JSON.stringify(AUTH)); }catch(_){}
+  }catch(e){ console.warn('อ่านสิทธิ์ล่าสุดไม่ได้ ใช้ค่าที่จำไว้', e); }
+  applyUser(AUTH);
+  return true;
+}
+function permDenied(op){
+  const pg = curPage();
+  const f = op === 'insert' ? 'a' : op === 'delete' ? 'd' : 'e';
+  if(!PERM || !pg) return false;
+  if(op === 'upsert') return !(canDo(pg,'a') || canDo(pg,'e'));
+  return !canDo(pg, f);
+}
+/* ตัวแทนคำสั่งเขียนที่ถูกปฏิเสธ: เรียกต่อ .select()/.single()/.eq() ได้เหมือนของจริง แล้วคืน error */
+function deniedQuery(op){
+  const res = { data:null, error:{ message:'ไม่มีสิทธิ์' + ({insert:'เพิ่ม',update:'แก้ไข',upsert:'บันทึก',delete:'ลบ'}[op]||'แก้ไข') + 'ในหน้านี้ — ติดต่อผู้ดูแลระบบ' } };
+  toast('🔒 ' + res.error.message);
+  const q = new Proxy(function(){}, { get:(t,k) => k === 'then' ? ((ok,er) => Promise.resolve(res).then(ok,er)) : () => q, apply:() => q });
+  return q;
 }
 
 /* ================= AUDIT — จดทุกการเขียนข้อมูลว่าใครทำ (ตาราง payroll_audit) =================
@@ -1529,6 +1616,7 @@ db.from = (table) => {
     if(typeof b[op] !== 'function') continue;
     const orig = b[op].bind(b);
     b[op] = (...args) => {
+      if(permDenied(op)) return deniedQuery(op);
       const q = orig(...args);
       const origThen = q.then.bind(q);
       q.then = (onOk, onErr) => origThen((res)=>{
@@ -1742,6 +1830,7 @@ async function loadAll(){
     }
 
     await loadPunches();
+    scopeEmployees();
     seenSet = null; // ให้ realtime สร้างชุดกันซ้ำใหม่จากข้อมูลล่าสุด
     recomputeAll(); renderShifts(); renderAll();
     conn(true, 'เชื่อมต่อแล้ว · '+employees.length+' คน');
@@ -1907,6 +1996,7 @@ const minLabel = m => m>=60 ? Math.floor(m/60)+' ชม. '+(m%60?(m%60)+' น.':
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',2200); }
 function go(p){
   if(!document.getElementById('page-'+p)) p = 'today';
+  if(!canSee(p)) p = PAGES.find(canSee) || 'today';
   try{ if(location.hash !== '#'+p) history.replaceState(null, '', '#'+p); }catch(_){}
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
@@ -2084,7 +2174,9 @@ function recomputeAll(){
   tipMemo = {};   // จำนวนคนหารทิปขึ้นกับวันทำงาน — คำนวณใหม่ทุกครั้งที่ข้อมูลตอกเปลี่ยน
   shifts = {};
   const byEmpDay = {};
+  const okCodes = SCOPE ? new Set(employees.map(e=>e.code)) : null;
   for(const p of punches){
+    if(okCodes && !okCodes.has(p.code)) continue;
     const dt = new Date(p.date+'T'+p.time+':00');
     let day = p.date;
     if(dt.getHours() < settings.cutoff){
@@ -3620,7 +3712,7 @@ function openEmpForm(id){
   document.getElementById('fKbiz').checked = e? !!e.kbizAdded : false;
   document.getElementById('fSso').checked = e? !!e.ssoOn : false;
   document.getElementById('fSsoId').value = e? (e.ssoId||'') : '';
-  document.getElementById('fBranch').value = e? (e.branch||'') : '';
+  document.getElementById('fBranch').value = e? (e.branch||(SCOPE?homeBranch(e):'')) : (SCOPE? myBranches()[0] : '');
   const curDept = e? (e.dept||'') : '';
   const depts = orgDepts();
   if(curDept && !depts.includes(curDept)) depts.unshift(curDept);
@@ -4779,7 +4871,7 @@ function openAdvSheet(){
   if(!period) return toast('❌ ยังไม่มีข้อมูลงวด');
   const r = periodRange(period);
   const bf = document.getElementById('advBranch').value;
-  const branches = bf ? [bf] : ['JJLP','JJRD','JJCK','OFFICE'];
+  const branches = bf ? [bf] : myBranches();
 
   const page = (b) => {
     const list = employees.filter(e=>e.active && e.branch===b)
@@ -4915,7 +5007,7 @@ function renderToday(){
     return Math.max(0, Math.round((r.in - best.s)/60000) - (best.sh.inGrace||0));
   };
 
-  const branches = ['JJLP','JJRD','JJCK','OFFICE'];
+  const branches = myBranches();
   let html = '<div style="display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));align-items:start">';
   let tIn=0, tLate=0, tOff=0;
 
@@ -5114,7 +5206,7 @@ function renderCalendar(){
   grid.innerHTML = html;
   const mBr = {};
   Object.values(dm).forEach(a=>a.forEach(({wb})=>{ mBr[wb||'?']=(mBr[wb||'?']||0)+1; }));
-  const brSum = !bf ? ['JJLP','JJRD','JJCK','OFFICE'].filter(b=>mBr[b])
+  const brSum = !bf ? myBranches().filter(b=>mBr[b])
       .map(b=>`${(BR[b]||{}).t} ${mBr[b].toLocaleString()}`).join(' · ') : '';
   document.getElementById('calSummary').innerHTML =
     totDays? `เปิดงาน ${totDays} วัน · รวม ${totMan.toLocaleString()} คน-วัน · เฉลี่ย ${(totMan/totDays).toFixed(1)} คน/วัน${brSum? ' &nbsp;|&nbsp; '+brSum:''}` : '';
@@ -5443,14 +5535,17 @@ function startRealtime(){
     // พนักงานใหม่ที่ Worker สร้างให้อัตโนมัติ
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'employees' }, (payload)=>{
       if(!employees.find(e=>e.id===payload.new.id)){
-        employees.push(fromDbEmp(payload.new));
-        rtQueue++; scheduleRtRefresh();
+        const ne = fromDbEmp(payload.new);
+        if(!SCOPE || inScope(ne)){ employees.push(ne); rtQueue++; scheduleRtRefresh(); }
       }
     })
     // แก้ไขพนักงานจากเครื่องอื่น/คนอื่น
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'employees' }, (payload)=>{
       const i = employees.findIndex(e=>e.id===payload.new.id);
-      if(i>=0){ employees[i] = fromDbEmp(payload.new); rtQueue++; scheduleRtRefresh(); }
+      const ne = fromDbEmp(payload.new);
+      const ok = !SCOPE || inScope(ne);
+      if(i>=0){ if(ok) employees[i] = ne; else employees.splice(i,1); rtQueue++; scheduleRtRefresh(); }
+      else if(ok && SCOPE){ employees.push(ne); rtQueue++; scheduleRtRefresh(); }   // ย้ายเข้าสาขาที่ดูแลอยู่
     })
     // ประวัติการทำรายการ — รีเฟรชหน้า audit ถ้าเปิดค้างอยู่
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'payroll_audit' }, ()=>{
@@ -5609,11 +5704,16 @@ window.addEventListener('hashchange', ()=>{
   const p = location.hash.replace('#','');
   if(p && document.getElementById('page-'+p) && !document.getElementById('page-'+p).classList.contains('active')) go(p);
 });
-function startApp(){
+async function startApp(){
+  if(!(await refreshMe())) return;
+  applyPermUI();
+  if(NO_ACCESS){ busy(false); return; }
   loadAll().then(()=>{
+    applyPermUI();
     startRealtime(); updPeriodHint(); renderOrg(); renderMwDays();
     const p0 = location.hash.replace('#','');
     if(p0 && p0 !== 'today' && document.getElementById('page-'+p0)) go(p0);
+    else if(!canSee('today')) go('today');   // go() พาไปหน้าแรกที่มีสิทธิ์ดูให้เอง
   });
 }
 if(AUTH){
