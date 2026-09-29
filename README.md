@@ -58,6 +58,11 @@
   · **เข้าได้เฉพาะบัญชี admin** (ไอคอนในหน้าศูนย์รวมแอพซ่อนจากพนักงาน)
   · SQL ติดตั้ง: `jjmk-access.sql` ที่ branch `sql`
 
+🧑‍💼 **สมัครเป็นพนักงาน (2026-09-29):** พนักงานใหม่กด "สมัครที่นี่" ที่หน้าแรกได้เอง
+(ชื่อ–สกุล · ชื่อเล่น · วันเกิด → คิดอายุให้ · เพศ · เบอร์โทร · ที่อยู่ 2 แบบ · ตั้งชื่อผู้ใช้/รหัสเอง)
+· ระหว่างรออนุมัติล็อกอินได้แต่เห็นแค่หน้ารออนุมัติ · admin อนุมัติ + ติ๊กสิทธิ์ที่ 🔑 JJ Access แท็บ **⏳ รออนุมัติ**
+· ต้องรัน `jjmk-signup.sql` (branch `sql`) ครั้งเดียว · แจ้ง LINE ผ่าน Edge Function `signup-notify` (ไม่ deploy ก็ใช้ได้ แค่ไม่มีแจ้งเตือน)
+
 🎨 **หน้าล็อกอิน (2026-09-28):** ทุกแอพใช้หน้าตาเดียวกันหมด — พื้นแดงเข้ม การ์ดขอบทอง
 พร้อม **ไอคอนประจำแอพ** ชุดเดียวกับหน้าศูนย์รวมแอพ + โลโก้ร้าน จะได้รู้ทันทีว่ากำลังเข้าแอพไหน
 (โค้ดคือบล็อก `window.JJLogin` ฝังไว้ทั้ง 13 ไฟล์ · แก้ที่ไหนต้องแก้ให้ครบทุกไฟล์ — ดู `CLAUDE.md`)
@@ -76,6 +81,7 @@
 - `jjmk_maint_assets.sql` — ตารางนับอุปกรณ์ + สถิติอัตราเสียหาย (`maint_assets`/`maint_counts`) + อุปกรณ์ตั้งต้น
 - `jjmk-kpi.sql` — ติดตั้งตารางระบบวัดความพึงพอใจลูกค้า (JJ KPI, ตาราง prefix `kpi_`)
 - `jjmk-access.sql` — ระบบสิทธิ์กลาง (JJ Access): คอลัมน์ `pnl_users.apps` + ตาราง `pnl_access_log`
+- `jjmk-signup.sql` — ระบบสมัครพนักงาน: `pnl_users.status` + ตาราง `pnl_profiles` + `pnl_pending_count()` · คู่กับ Edge Function `signup-notify` (แจ้ง LINE)
 - `jjmk_kitchen_central.sql` — ย้ายครัวกลางมาใช้บัญชีกลาง: เปิดสิทธิ์เขียน `ck_*` + `ck_add_qty` + bucket `product-images` ให้ role `anon`
 - `jjmk-calendar.sql` — ติดตั้งตารางปฏิทินองค์กร (JJ Calendar, ตาราง prefix `cal_`)
   · คู่กับ Edge Function `cal-feed` (ฟีด ICS สำหรับ subscribe ลงมือถือ — deploy ผ่าน Dashboard, ปิด Verify JWT)
