@@ -4,7 +4,7 @@
 
 ## ภาษาและผู้ใช้
 - คุยกับ Pattrick เป็น**ภาษาไทย** กระชับ ไม่ต้องอธิบายศัพท์เทคนิคเกินจำเป็น
-- deliverable: **ไฟล์ SQL ที่ต้องรันใน Supabase → ส่งเป็นไฟล์ในแชทเสมอ** (user ไม่ไปหาไฟล์ที่อื่น) · **ทุกอย่างที่ขึ้น GitHub (แอพ/deploy main) → push เองเลย ไม่ต้องส่งไฟล์มาในแชท** · ไฟล์เทสต์อยู่ฝั่งเรา ไม่ต้องส่งเว้นแต่ถูกขอ
+- deliverable: **SQL ที่ต้องรันใน Supabase → วางเป็น code block ในแชทให้ copy-paste รันได้เลย (user เคาะ 30 ก.ย. 2569: ไม่ส่งเป็นไฟล์ ไม่ push ขึ้น GitHub)** — ทดสอบบน PostgreSQL local ก่อนวางเสมอ · **ทุกอย่างที่ขึ้น GitHub (แอพ/deploy main) → push เองเลย ไม่ต้องส่งไฟล์มาในแชท** · ไฟล์เทสต์อยู่ฝั่งเรา ไม่ต้องส่งเว้นแต่ถูกขอ
 - ทุกอย่างที่ user ต้องรัน (SQL) ต้อง **idempotent รันซ้ำได้** และมี "ตรวจผล" ท้ายไฟล์ · ถ้า user ถามผลจากฐานข้อมูล เราเข้าถึง Supabase ไม่ได้ — ให้ SQL อ่านอย่างเดียวไปรัน แล้วขอผล/CSV กลับมา
 
 ## โครงโค้ด (ไฟล์เดียว ~435KB)
@@ -31,7 +31,7 @@
 - ห้ามแตะ OCR Worker (`jjmk-pnl-ocr-worker.js` อยู่บน Cloudflare) เว้นแต่ถูกขอ
 
 ## SQL
-- อยู่ใน `sql/` ทุกไฟล์ idempotent · จำลองก่อนส่งด้วย PostgreSQL local (`sql/local_test_schema.sql` = สคีมาที่ใช้ทดสอบ; `pnl_suppliers.id` เป็น identity ต้อง `overriding system value` ตอน seed)
+- ร่างไว้ใน `sql/` (ไม่ commit ไฟล์ SQL ใหม่ — ส่งเนื้อหาในแชทแทน) ทุกไฟล์ idempotent · จำลองก่อนส่งด้วย PostgreSQL local (`sql/local_test_schema.sql` = สคีมาที่ใช้ทดสอบ; `pnl_suppliers.id` เป็น identity ต้อง `overriding system value` ตอน seed)
 - ตารางใหม่ต้องมี RLS + policy + grant ตามแบบ `sql/jjmk_pnl_unitconv.sql`
 
 ## ตอบ user
