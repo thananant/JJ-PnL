@@ -109,7 +109,7 @@ const nav=(d,v)=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display!=='no
     d.querySelector('input[name="pm_income"][value="edit"]').checked=true;
     await w.userSave(2); await new Promise(r=>setTimeout(r,200));
     const p=patches.find(x=>x.url.startsWith('pnl_users?id=eq.2'));
-    out.push('[admin] PATCH perms: ck=view income=edit: '+!!(p&&p.body.perms.ck==='view'&&p.body.perms.income==='edit'));
+    out.push('[admin] PATCH perms เก่าถูกล้างเป็น {} (สิทธิ์อยู่ที่ apps.pnl แหล่งเดียว): '+!!(p&&p.body.perms&&Object.keys(p.body.perms).length===0));
     out.push('[admin] PATCH apps.pnl: ck=v income=vaed dash=v exp=vaed, ไม่มี sum: '+!!(p&&p.body.apps&&p.body.apps.pnl&&p.body.apps.pnl.ck==='v'&&p.body.apps.pnl.income==='vaed'&&p.body.apps.pnl.dash==='v'&&p.body.apps.pnl.exp==='vaed'&&!('sum' in p.body.apps.pnl)));
     out.push('[admin] apps ของแอพอื่น (payroll) ไม่หาย: '+!!(p&&p.body.apps.payroll&&p.body.apps.payroll.today==='v'));
     // เปิดหน้าต่างของบอส (owner) แล้วกดบันทึกโดยไม่แก้อะไร → role ต้องยังเป็น owner

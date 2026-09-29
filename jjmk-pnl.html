@@ -936,7 +936,7 @@ async function loadCore(){
 function mkey(b,m){ return b+'|'+m; }
 /* ---------- สาขา "ส่วนกลาง" (ออฟฟิศ) — มีเฉพาะรายจ่าย ---------- */
 function isCen(code){ const b=S.core&&S.core.branches&&S.core.branches.find(x=>x.code===code); return !!(b&&b.is_central); }
-const CEN_HIDE=['income','usage','actual','ck']; // แท็บที่ไม่เกี่ยวกับส่วนกลาง
+const CEN_HIDE=['income','usage','actual','ck','sup']; // แท็บที่ไม่เกี่ยวกับส่วนกลาง (ของใช้เป็นของสาขาร้าน)
 async function loadMonth(b,m,force){
   const k=mkey(b,m);
   if(S.cache[k] && !force) return S.cache[k];
@@ -1358,8 +1358,8 @@ async function userSave(id){
   const role=document.getElementById('umRole').value;
   const active=document.getElementById('umActive').checked;
   if(!name||!uname){toast('ใส่ชื่อและ username ก่อนครับ',true);return;}
-  const perms={}, pnlFlags={};
-  VIEWS.forEach(v=>{const r=document.querySelector(`input[name="pm_${v}"]:checked`); perms[v]=r?r.value:'none'; const fl=permToFlags(perms[v]); if(fl)pnlFlags[v]=fl;});
+  const perms={}, pnlFlags={}; // perms เก่าเลิกใช้แล้ว (ล้างเป็น {}) — สิทธิ์อยู่ที่ apps.pnl แหล่งเดียว ให้ JJ Access "ปิดแอพนี้" ปิดได้จริง
+  VIEWS.forEach(v=>{const r=document.querySelector(`input[name="pm_${v}"]:checked`); const fl=permToFlags(r?r.value:'none'); if(fl)pnlFlags[v]=fl;});
   const withApps=u=>Object.assign({},(u&&u.apps&&typeof u.apps==='object')?u.apps:{},{pnl:pnlFlags}); // ให้หน้า JJ Access เห็นค่าเดียวกัน
   try{
     if(id){
@@ -1676,7 +1676,7 @@ function splBrOf(code){ return (BRNAME[code]||code).replace(/^สาขา/,'');
 function splCatIdx(c){ const k=SPL_CATS.indexOf(c||'อื่นๆ'); return k<0?SPL_CATS.length-0.5:k; } // หมวดนอกลิสต์ต่อท้ายก่อน 'อื่นๆ'
 function splRO(){ return !!(S.user&&permOf('sup')!=='edit'); }                // บัญชีดูอย่างเดียว
 function splWho(){ const n=(S.user&&S.user.display_name)||''; return n==='ไม่ระบุ'?'':n; }
-function splErr(e,pre){ if(String(e&&e.message).includes('view-only'))return; toast((pre||'บันทึกไม่สำเร็จ')+': '+(e&&e.message||e),true); }
+function splErr(e,pre){ const m=String(e&&e.message||e); if(m.includes('view-only'))return; toast((pre||'บันทึกไม่สำเร็จ')+': '+(m.includes('23505')||m.includes('duplicate')?'มีชื่อนี้ในสาขานี้แล้ว':m),true); }
 async function splFresh(it){ // ยอดสดจาก view (ถ้าอ่านไม่ได้ใช้ค่าในเครื่องต่อ)
   try{ const b=await selQ('pnl_supply_balance','select=qty,last_out_d,safety&item_id=eq.'+it.item_id); if(b&&b[0]){ it.qty=num(b[0].qty); it.last_out_d=b[0].last_out_d; if(b[0].safety!=null)it.safety=num(b[0].safety); } }catch(e){}
   return it;
@@ -1868,7 +1868,7 @@ function splItemModal(id){
   const it=id?(S.spl.items||[]).find(x=>x.item_id===id):null;
   if(id&&!it)return;
   const brs=splBranches(); const cats=[...new Set([...SPL_CATS,...(S.spl.items||[]).map(i=>i.cat).filter(Boolean)])];
-  const curBr=it?it.branch:(S.br!=='ALL'?S.br:(brs[0]||'JJRD'));
+  const curBr=it?it.branch:(brs.includes(S.br)?S.br:(brs[0]||'JJRD')); // สาขาที่เลือกอยู่ไม่ใช่สาขาร้าน (ทุกสาขา/ส่วนกลาง) → สาขาแรก
   openModal(`<h3>${it?'✎ แก้ไขของใช้':'＋ เพิ่มของใช้'}</h3>
     <div class="fld"><label>ชื่อของ</label><input id="siName" value="${esc(it?it.name:'')}" placeholder="เช่น จานกลม 9 นิ้ว"></div>
     <div class="grid2">
@@ -1899,6 +1899,11 @@ async function splItemSave(id){
   if(safety<0){toast('safety ต้องไม่ติดลบ',true);return;}
   try{
     if(id){
+      if(it0&&name!==it0.name){
+        const ex=await selQ('pnl_supply_items','select=id,deleted_at&branch=eq.'+encodeURIComponent(it0.branch)+'&name=eq.'+encodeURIComponent(name)+'&id=neq.'+id);
+        if(ex.some(x=>!x.deleted_at)){toast('มี "'+name+'" อยู่แล้วในสาขานี้ — ใช้ชื่ออื่นครับ',true);return;}
+        if(ex.length){toast('ชื่อ "'+name+'" เคยเลิกใช้ไปแล้ว — กด "เพิ่มของใช้" ชื่อนี้เพื่อกู้คืนรายการเดิม หรือใช้ชื่ออื่น',true);return;}
+      }
       await upd('pnl_supply_items','id=eq.'+id,{name,cat,unit,safety,note});
       if(it0)Object.assign(it0,{name,cat,unit,safety,note});
       closeModal(); toast('บันทึกแล้ว'); splRender();
@@ -1919,8 +1924,14 @@ async function splItemSave(id){
       const rows=todo.map(b=>({branch:b,name,cat,unit,safety,note}));
       const made=rows.length?await ins('pnl_supply_items',rows):[];
       const targets=[...(Array.isArray(made)?made:[]),...restored];
-      if(init>0&&targets.length){
-        await ins('pnl_supply_moves',targets.map(r=>({item_id:r.id,branch:r.branch,d:todayStr(),kind:'in',qty:init,who:splWho()||null,by_user:(S.user&&S.user.username)||null,note:'ยอดตั้งต้น'})));
+      const madeArr=Array.isArray(made)?made:[];
+      if(init>0&&madeArr.length){
+        await ins('pnl_supply_moves',madeArr.map(r=>({item_id:r.id,branch:r.branch,d:todayStr(),kind:'in',qty:init,who:splWho()||null,by_user:(S.user&&S.user.username)||null,note:'ยอดตั้งต้น'})));
+      }
+      if(safRaw!==''||init>0) for(const x of restored){ // ของที่กู้คืนมีประวัติเก่า → ช่อง "ที่มีอยู่ตอนนี้" = ปรับยอดให้เท่าที่กรอก
+        if(!(init>0)&&safRaw==='')continue;
+        const b=await selQ('pnl_supply_balance','select=qty&item_id=eq.'+x.id); const cur=num(b&&b[0]&&b[0].qty); const diff=splR(init-cur);
+        if(init>0&&diff!==0) await ins('pnl_supply_moves',{item_id:x.id,branch:x.branch,d:todayStr(),kind:'adj',qty:diff,who:splWho()||null,by_user:(S.user&&S.user.username)||null,note:'กู้คืนรายการ · นับได้ '+splQ(init)+' (เดิม '+splQ(cur)+')'});
       }
       closeModal(); toast((restored.length?'กู้คืน ':'เพิ่ม ')+name+' แล้ว'+(targets.length>1?' ('+targets.length+' สาขา)':''));
       await show('sup');

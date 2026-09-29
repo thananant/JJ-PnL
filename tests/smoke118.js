@@ -64,7 +64,9 @@ function mk(me){
         if(path.startsWith('pnl_supply_balance')){const br=(path.match(/branch=eq\.([A-Z]+)/)||[])[1];const q=path.match(/item_id=eq\.(\d+)/);let r=bal.filter(b=>!br||b.branch===br);if(path.includes('deleted_at=is.null'))r=r.filter(b=>!b.deleted_at);if(q)r=r.filter(b=>b.item_id===+q[1]);return T(r);}
         if(path.startsWith('pnl_supply_items')){ // ค้นชื่อซ้ำ (รวมที่เลิกใช้)
           const nm=decodeURIComponent((path.match(/name=eq\.([^&]+)/)||[])[1]||'');const brs=((path.match(/branch=in\.\(([^)]*)\)/)||[])[1]||'').split(',').filter(Boolean);
-          return T(items.filter(x=>x.name===nm&&(!brs.length||brs.includes(x.branch))));}
+          const br1=(path.match(/branch=eq\.([A-Z]+)/)||[])[1]; const neq=+(path.match(/id=neq\.(\d+)/)||[])[1];
+          items.push(...bal.filter(b=>!items.some(x=>x.id===b.item_id)).map(b=>({id:b.item_id,branch:b.branch,name:b.name,deleted_at:b.deleted_at})));
+          return T(items.filter(x=>x.name===nm&&(!brs.length||brs.includes(x.branch))&&(!br1||x.branch===br1)&&(!neq||x.id!==neq)));}
         if(path.startsWith('pnl_supply_moves')){const br=(path.match(/branch=eq\.([A-Z]+)/)||[])[1];const it=path.match(/item_id=eq\.(\d+)/);let r=moves.filter(m=>!br||m.branch===br);
           if(it)r=r.filter(m=>m.item_id===+it[1]);
           if(path.includes('kind=eq.out'))r=r.filter(m=>m.kind==='out');
@@ -72,7 +74,7 @@ function mk(me){
           if(path.includes('order=created_at.desc'))r=[...r].sort((a,b)=>a.created_at<b.created_at?1:-1);
           const lim=+(path.match(/limit=(\d+)/)||[])[1]; const off=+(path.match(/offset=(\d+)/)||[])[1]||0; if(lim)r=r.slice(off,off+lim);
           return T(r);}
-        if(path.startsWith('pnl_branches'))return T([{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]);
+        if(path.startsWith('pnl_branches'))return T([{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'},{code:'OFC',name:'ออฟฟิศ',is_central:true}]);
         if(path.startsWith('pnl_suppliers'))return T([{id:1,name:'FarmFresh',category:'อาหาร',active:true,sort:1,vat_type:'NON-VAT'}]);
         return T([]);
       };
@@ -150,8 +152,12 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
     const rp=patches.find(x=>x.path==='pnl_supply_items?id=eq.7');
     out.push('[A] กู้คืนของที่เลิกใช้: PATCH deleted_at=null + safety 6, ไม่ POST แถวใหม่: '+!!(rp&&rp.body.deleted_at===null&&rp.body.safety===6&&posts.filter(p=>p.t==='items').length===nItems));
     const im=posts.filter(p=>p.t==='moves').pop();
-    out.push('[A] ยอดตั้งต้น 10 ลงให้รายการที่กู้คืน (item 7): '+!!(im&&im.rows[0].item_id===7&&im.rows[0].qty===10&&im.rows[0].kind==='in'));
+    out.push('[A] กู้คืน + "ที่มีอยู่ตอนนี้" 10 → ปรับยอด (adj) จากประวัติเก่า 0 เป็น 10 ไม่ใช่บวกทับ: '+!!(im&&im.rows[0].item_id===7&&im.rows[0].qty===10&&im.rows[0].kind==='adj'&&/กู้คืน/.test(im.rows[0].note)));
     out.push('[A] toast บอกว่ากู้คืน: '+d.getElementById('toast').textContent.includes('กู้คืน'));
+    // เปลี่ยนชื่อชนกับของที่มีอยู่ → แจ้ง ไม่ PATCH
+    w.splItemModal(1); await wait(50); d.getElementById('siName').value='ถังขยะ'; const nP=patches.length; await w.splItemSave(1); await wait(60);
+    out.push('[A] เปลี่ยนชื่อตะเกียบเป็น "ถังขยะ" (มีอยู่แล้ว) → แจ้ง ไม่ PATCH: '+(patches.length===nP&&d.getElementById('toast').textContent.includes('อยู่แล้ว')));
+    w.closeModal();
     // เพิ่มชื่อที่มีอยู่แล้ว → แจ้งซ้ำ ไม่ POST
     w.splItemModal(null); await wait(50); d.getElementById('siName').value='ตะเกียบ'; const nI2=posts.filter(p=>p.t==='items').length; await w.splItemSave(null); await wait(60);
     out.push('[A] เพิ่มชื่อซ้ำ (ตะเกียบ) → แจ้ง "มีอยู่แล้ว" ไม่ POST: '+(posts.filter(p=>p.t==='items').length===nI2&&d.getElementById('toast').textContent.includes('อยู่แล้ว')));
@@ -166,6 +172,11 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
     const catsAll=[...v.querySelectorAll('tr.spl-cat td')];
     out.push('[A] ทุกสาขา: 5 หัวหมวด (ไม่ซ้ำข้ามสาขา) + colspan 6 + ยูนิฟอร์มมีทั้ง 2 สาขาใต้หัวเดียว: '+(catsAll.length===5&&catsAll[0].getAttribute('colspan')==='6'&&v.querySelector('table tr').children.length===6));
     // activity log อ่านออก
+    w.pickBranch('OFC'); await wait(300);
+    out.push('[A] สาขาส่วนกลาง: เมนูของใช้ถูกซ่อน + เด้งไปรายจ่าย: '+(d.querySelector('.sb-item[data-v="sup"]').style.display==='none'&&w.eval('S.tab')==='exp'));
+    w.pickBranch('ALL'); await wait(300);
+    w.splItemModal(null); await wait(30);
+    out.push('[A] ทุกสาขา: หน้าต่างเพิ่มของเลือกสาขาแรก (JJRD) ไม่ใช่ ALL: '+(d.getElementById('siBr').value==='JJRD')); w.closeModal();
     out.push('[A] activity log ใช้ชื่ออ่านออก + มี kind/who: '+logs.some(l=>l.action.includes('ของใช้/อุปกรณ์')&&/kind=/.test(l.detail)));
     out.push('errors: '+JSON.stringify(w.errors));
   }
