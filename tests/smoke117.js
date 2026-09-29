@@ -52,7 +52,7 @@ setTimeout(async()=>{
   out.push('เมนู sup อยู่ใน VIEWS + sidebar: '+(w.eval('VIEWS').includes('sup')&&!!d.querySelector('.sb-item[data-v="sup"]')&&!!d.querySelector('.tabbar button[data-v="sup"]')));
   await w.show('sup'); await wait(300);
   const v=d.getElementById('view-sup'); const txt=v.textContent;
-  out.push('หัวข้อหน้า = ของใช้/อุปกรณ์: '+(d.getElementById('pageTitle').textContent==='ของใช้/อุปกรณ์'));
+  out.push('หัวข้อหน้า = ของใช้/อุปกรณ์: '+(d.getElementById('pageTitle').textContent==='ของใช้/อุปกรณ์ (ฝั่งโกดัง)'));
   out.push('โชว์เฉพาะสาขารัชดา 3 รายการ (ไม่มีของลาดพร้าว): '+(v.querySelectorAll('tr[data-id]').length===3));
   out.push('KPI ต่ำกว่า safety = 1 (ชามซุป 12<40): '+(v.querySelector('.kpi.hero .kpi-v').textContent==='1'));
   const rowLow=v.querySelector('tr[data-id="2"]'), rowOk=v.querySelector('tr[data-id="1"]'), rowEq=v.querySelector('tr[data-id="3"]');
