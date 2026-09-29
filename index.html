@@ -422,6 +422,37 @@ window.JJGate=(function(){
   window.JJLogin=JJLogin;
 })();
 </script>
+<style id="jjsuCSS">
+#signup,#waitBox{display:none}
+#signup.on,#waitBox.on{display:block}
+#signup .jjlg-card{text-align:left}
+.jjsu-sec{font-size:13px;font-weight:700;color:#E5B03C;margin:18px 0 2px;display:flex;align-items:center;gap:7px}
+.jjsu-sec::after{content:"";flex:1;height:1px;background:rgba(229,176,60,.22)}
+.jjsu-g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.jjsu-req{color:#FF9E9E}
+.jjsu-age{background:rgba(229,176,60,.1);border:1px dashed rgba(229,176,60,.4);border-radius:10px;
+  padding:9px 12px;font-size:13px;color:#F0D9A8;margin-top:10px;line-height:1.5}
+.jjsu-pills{display:flex;gap:8px;margin-top:2px}
+.jjsu-pills.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.jjsu-pill{flex:1;min-height:46px;border-radius:12px;border:1.5px solid rgba(229,176,60,.3);
+  background:rgba(0,0,0,.28);color:#D8BFA6;font-size:14.5px;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:6px 4px;text-align:center;line-height:1.25}
+.jjsu-pill.on{background:rgba(229,176,60,.16);border-color:#E5B03C;color:#FFE9BC}
+.jjsu-copy{display:flex;align-items:center;gap:9px;font-size:13px;color:#D8BFA6;margin-top:11px;
+  background:rgba(229,176,60,.08);border:1px solid rgba(229,176,60,.22);border-radius:11px;padding:10px 12px;cursor:pointer}
+#signup .jjsu-copy input{width:20px!important;height:20px!important;flex:0 0 20px;padding:0!important;
+  accent-color:#E5B03C;border-radius:5px!important;-webkit-appearance:auto;appearance:auto}
+#signup textarea{width:100%;min-height:72px;border-radius:13px;padding:11px 14px;font-size:16px;line-height:1.5;
+  background:rgba(0,0,0,.34);border:1.5px solid rgba(229,176,60,.3);color:#FFF6E6;outline:none;
+  font-family:'Sarabun',sans-serif;resize:vertical}
+#signup textarea:focus{border-color:#E5B03C;box-shadow:0 0 0 3px rgba(229,176,60,.16)}
+#signup textarea::placeholder{color:#8C7561}
+.jjsu-err{outline:2px solid #FF6B6B!important;outline-offset:1px}
+.jjsu-ok{text-align:center;padding:14px 4px 4px}
+.jjsu-ok .big{font-size:48px;line-height:1}
+.icon .badge.num{background:#D8272E;border-color:#FFD9A0;color:#fff;font-weight:800;font-size:11.5px;
+  min-width:24px;width:auto;padding:0 6px}
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -506,7 +537,11 @@ window.JJGate=(function(){
 </div>
 
 <div id="login"></div>
-<script>JJLogin.mount('login',{submit:'doLogin()',note:'ยังไม่มีบัญชีกลาง? <a href=\"javascript:\" onclick=\"skipLogin()\">ดูแอพทั้งหมด</a>',sub:'เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกแอพที่ได้รับสิทธิ์'});</script>
+<div id="signup"></div>
+<div id="waitBox"></div>
+<script>JJLogin.mount('login',{submit:'doLogin()',sub:'เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกแอพที่ได้รับสิทธิ์',
+  extra:'<button type="button" class="jjlg-btn2" onclick="showSignup()">🙋 สมัครพนักงานใหม่</button>',
+  note:'ยังไม่มีบัญชี? กดปุ่มสมัคร แล้วรอผู้ดูแลอนุมัติ'});</script>
 
 <script>
 (function(){
@@ -594,8 +629,11 @@ function clearSession(){
 /* ใบอนุญาตรายแท็บของแอพที่เปิดต่อจากหน้านี้ (แท็บเดียวกัน = sessionStorage ชุดเดียวกัน)
    ไม่ล้าง = คนถัดไปที่ล็อกอินในแท็บนี้แล้วกดเข้าแอพ จะได้ตัวตน/สิทธิ์ของคนก่อนหน้า */
 function clearTabSessions(){
-  ['jjmt_sess','jjsocial_auth','jjck_sess','jjsc_sess']
-    .forEach(function(k){ try{ sessionStorage.removeItem(k); }catch(e){} });
+  try{
+    var ks=['jjmt_sess','jjsocial_auth','jjck_sess','jjsc_sess','kpi_auth'];
+    for(var i=0;i<sessionStorage.length;i++){ var k=sessionStorage.key(i); if(k&&k.indexOf('jjgate_')===0)ks.push(k); }
+    ks.forEach(function(k){ try{ sessionStorage.removeItem(k); }catch(e){} });
+  }catch(e){}
 }
 
 /* ---------- ใบผ่านเข้าแอพ (SSO ticket) ----------
@@ -666,11 +704,11 @@ function showLogin(){
   document.getElementById('login').classList.add('on');
   setTimeout(function(){ var el=document.getElementById('lgU'); if(el)el.focus(); },80);
 }
-function skipLogin(){   // ทางออกฉุกเฉิน: ยังไม่มีบัญชีกลาง — ข้ามไปดูไอคอนแอพทั้งหมด (แอพปลายทางยังถามรหัสเอง)
-  try{ localStorage.setItem('jjhub_skip','1'); }catch(e){}
-  document.getElementById('login').classList.remove('on');
-  ME=null; paintApps(); paintUser();
-}
+/* เดิมมีปุ่ม "ดูแอพทั้งหมด" ให้ข้ามล็อกอิน (flag jjhub_skip) — เจ้าของสั่งเอาออก 2026-09-29
+   เหตุผล: ไม่อยากให้คนนอกเห็นว่าร้านมีแอพอะไรบ้าง · ตอนนี้ทุกแอพใช้บัญชีกลางแล้ว
+   จึงไม่มีใครที่ "ไม่มีบัญชีกลาง" อีก — ทางออกฉุกเฉินนี้หมดความจำเป็น
+   ล้าง flag เก่าที่ค้างในเครื่องด้วย ไม่งั้นมือถือที่เคยกดไว้จะยังเห็นไอคอนโดยไม่ต้องล็อกอิน */
+try{ localStorage.removeItem('jjhub_skip'); }catch(e){}
 async function fetchUser(username){
   var r=await fetch(CFG.URL+'/rest/v1/pnl_users?select=*&active=is.true&username=eq.'+encodeURIComponent(username),
     {headers:{apikey:CFG.KEY,Authorization:'Bearer '+CFG.KEY}});
@@ -678,6 +716,16 @@ async function fetchUser(username){
   var rows=await r.json();
   return rows&&rows[0]?rows[0]:null;
 }
+/* อ่านบัญชีทุกสถานะ — ไว้แยก "รออนุมัติ / ถูกปิด" ออกจาก "รหัสผิด" */
+async function fetchUserAny(username){
+  var r=await fetch(CFG.URL+'/rest/v1/pnl_users?select=*&username=eq.'+encodeURIComponent(username),
+    {headers:{apikey:CFG.KEY,Authorization:'Bearer '+CFG.KEY}});
+  if(!r.ok)throw new Error('เชื่อมต่อฐานข้อมูลไม่ได้');
+  var rows=await r.json();
+  return rows&&rows[0]?rows[0]:null;
+}
+/* บัญชีใช้งานได้จริงไหม (ยังไม่ได้รัน jjmk-signup.sql = ไม่มีคอลัมน์ status = ถือว่าใช้ได้) */
+function userReady(u){ return !!u && u.active!==false && (u.status==null||u.status==='active'); }
 async function doLogin(){
   var u=(document.getElementById('lgU').value||'').trim(),
       p=document.getElementById('lgP').value||'',
@@ -686,27 +734,273 @@ async function doLogin(){
   if(!u||!p){ msg.textContent='ใส่ชื่อผู้ใช้และรหัสผ่านก่อนครับ'; return; }
   btn.disabled=true; btn.textContent='กำลังเข้าสู่ระบบ…';
   try{
-    var usr=await fetchUser(u);
+    var usr=await fetchUserAny(u);
     if(!usr||usr.pass_hash!==pwHash(u,p)){ msg.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
+    if(usr.status==='pending'||usr.status==='rejected'){ showWait(usr); return; }
+    if(usr.active===false){ msg.textContent='บัญชีนี้ถูกปิดการใช้งาน — แจ้งผู้ดูแลระบบครับ'; return; }
     clearTabSessions(); ME=usr; spreadSession(usr);
-    try{ localStorage.removeItem('jjhub_skip'); }catch(e){}
     document.getElementById('login').classList.remove('on');
-    paintApps(); paintUser();
+    paintApps(); paintUser(); paintPending();
   }catch(e){ msg.textContent='เข้าสู่ระบบไม่สำเร็จ: '+e.message; }
   finally{ btn.disabled=false; btn.textContent='เข้าสู่ระบบ'; }
 }
 function logout(){ clearSession(); ME=null; paintUser(); paintApps(); showLogin(); }
 
+/* ============================================================
+   สมัครเป็นพนักงาน (เจ้าของสั่ง 2026-09-29) — แบบ 2: หน้าเดียวยาว แบ่งหัวข้อ
+   กรอกเสร็จ = สร้างบัญชีสถานะ pending (ล็อกอินได้ แต่เห็นแค่หน้ารออนุมัติ)
+   admin อนุมัติ + ติ๊กสิทธิ์ให้ที่ JJ Access -> สถานะเป็น active แล้วใช้งานได้จริง
+   ต้องรัน jjmk-signup.sql ก่อน 1 ครั้ง (ตาราง pnl_profiles + คอลัมน์ status)
+   ============================================================ */
+var SU={gender:'',unit:''};
+var UNITS=[['JJLP','ลาดพร้าว'],['JJRD','รัชดา'],['JJCK','ครัวกลาง'],['OFFICE','ออฟฟิศ']];
+
+function suEsc(v){ return String(v==null?'':v).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function suField(id,label,req,attr,ph){
+  return '<div class="jjlg-f"><label for="'+id+'">'+label+(req?' <span class="jjsu-req">*</span>':'')+'</label>'+
+    '<input id="'+id+'" type="text" '+(attr||'')+' placeholder="'+suEsc(ph||'')+'"></div>';
+}
+function suPills(name,list,cur,grid){
+  return '<div class="jjsu-pills'+(grid?' g2':'')+'">'+list.map(function(x){
+    return '<div class="jjsu-pill'+(cur===x[0]?' on':'')+'" data-p="'+name+'" data-v="'+suEsc(x[0])+'">'+suEsc(x[1])+'</div>';
+  }).join('')+'</div>';
+}
+function suHtml(){
+  var addr=function(p,t){
+    return '<div class="jjlg-f"><label for="su_'+p+'">'+t+' <span class="jjsu-req">*</span></label>'+
+      '<textarea id="su_'+p+'" placeholder="บ้านเลขที่ หมู่ ซอย ถนน ตำบล/แขวง อำเภอ/เขต"></textarea></div>'+
+      '<div class="jjsu-g2"><div class="jjlg-f"><label for="su_'+p+'_pv">จังหวัด</label>'+
+      '<input id="su_'+p+'_pv" type="text" placeholder="กรุงเทพมหานคร"></div>'+
+      '<div class="jjlg-f"><label for="su_'+p+'_zip">รหัสไปรษณีย์</label>'+
+      '<input id="su_'+p+'_zip" type="tel" inputmode="numeric" maxlength="5" placeholder="10310"></div></div>';
+  };
+  return '<div class="jjlg-in"><div class="jjlg-card">'+
+    '<div class="jjlg-ic" style="background:linear-gradient(145deg,#C62127,#6B0F12)">👤</div>'+
+    '<h1 class="jjlg-app">สมัครเป็นพนักงาน</h1>'+
+    '<div class="jjlg-sub">จริงใจหมูกระทะ · กรอกข้อมูลแล้วรอผู้ดูแลอนุมัติ<br>ช่องที่มี <span class="jjsu-req">*</span> ต้องกรอกทุกช่อง</div>'+
+
+    '<div class="jjsu-sec">1 · ข้อมูลส่วนตัว</div>'+
+    '<div class="jjsu-g2">'+suField('su_fn','ชื่อจริง',1,'autocomplete="given-name"','สมชาย')+
+      suField('su_ln','นามสกุล',1,'autocomplete="family-name"','ใจดี')+'</div>'+
+    suField('su_nick','ชื่อเล่น',1,'','ชาย')+
+    '<div class="jjlg-f"><label for="su_bd">วันเดือนปีเกิด <span class="jjsu-req">*</span></label>'+
+      '<input id="su_bd" type="date" max="'+new Date().toISOString().slice(0,10)+'"></div>'+
+    '<div class="jjsu-age" id="su_age">🎂 เลือกวันเกิดแล้วระบบจะคิดอายุให้เอง</div>'+
+    '<div class="jjlg-f"><label>เพศ <span class="jjsu-req">*</span></label>'+
+      suPills('gender',[['ชาย','ชาย'],['หญิง','หญิง'],['อื่น ๆ','อื่น ๆ']],'')+'</div>'+
+    '<div class="jjlg-f"><label for="su_tel">เบอร์โทรศัพท์ <span class="jjsu-req">*</span></label>'+
+      '<input id="su_tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="12" placeholder="081-234-5678"></div>'+
+
+    '<div class="jjsu-sec">2 · ที่อยู่</div>'+
+    addr('reg','ที่อยู่ตามทะเบียนบ้าน')+
+    '<label class="jjsu-copy"><input type="checkbox" id="su_same" checked onchange="suSame()"> ที่อยู่ปัจจุบันเหมือนทะเบียนบ้าน</label>'+
+    '<div id="su_nowbox" style="display:none">'+addr('now','ที่อยู่ปัจจุบัน')+'</div>'+
+
+    '<div class="jjsu-sec">3 · บัญชีเข้าใช้งาน</div>'+
+    '<div class="jjlg-f"><label for="su_u">ชื่อผู้ใช้ (ใช้ตอนเข้าระบบ) <span class="jjsu-req">*</span></label>'+
+      '<input id="su_u" type="text" autocapitalize="none" spellcheck="false" autocomplete="off" placeholder="เช่น somchai"></div>'+
+    '<div class="jjsu-g2">'+
+      '<div class="jjlg-f"><label for="su_p">รหัสผ่าน <span class="jjsu-req">*</span></label>'+
+        '<input id="su_p" type="password" autocomplete="new-password" placeholder="อย่างน้อย 6 ตัว"></div>'+
+      '<div class="jjlg-f"><label for="su_p2">ยืนยันรหัสผ่าน <span class="jjsu-req">*</span></label>'+
+        '<input id="su_p2" type="password" autocomplete="new-password" placeholder="พิมพ์ซ้ำอีกครั้ง"></div></div>'+
+    '<div class="jjlg-f"><label>สาขาที่จะทำงาน <span style="font-weight:400;color:#9E8874">(ไม่บังคับ)</span></label>'+
+      suPills('unit',UNITS,'',1)+'</div>'+
+
+    '<div class="jjlg-msg" id="su_msg"></div>'+
+    '<button class="jjlg-btn" id="su_go" type="button" onclick="suSubmit()">ส่งใบสมัคร</button>'+
+    '<button class="jjlg-btn2" type="button" onclick="hideSignup()">ยกเลิก · กลับหน้าเข้าสู่ระบบ</button>'+
+    '<div class="jjlg-note">ส่งแล้วผู้ดูแลจะตรวจและอนุมัติให้ — เข้าใช้งานได้หลังได้รับอนุมัติ</div>'+
+    '</div></div>';
+}
+function showSignup(){
+  var box=document.getElementById('signup');
+  box.innerHTML=suHtml(); box.classList.add('on');
+  document.getElementById('login').classList.remove('on');
+  SU={gender:'',unit:''};
+  box.addEventListener('click',function(e){
+    var p=e.target&&e.target.closest?e.target.closest('.jjsu-pill'):null; if(!p)return;
+    var k=p.dataset.p;
+    [].forEach.call(box.querySelectorAll('.jjsu-pill[data-p="'+k+'"]'),function(x){x.classList.remove('on');});
+    if(SU[k]===p.dataset.v){ SU[k]=''; }          // กดซ้ำ = ยกเลิก (เฉพาะช่องไม่บังคับ)
+    else { SU[k]=p.dataset.v; p.classList.add('on'); }
+  });
+  document.getElementById('su_bd').addEventListener('change',suAge);
+  document.getElementById('su_tel').addEventListener('input',function(){
+    var v=this.value.replace(/\D/g,'').slice(0,10), o=v;
+    if(v.length>6)o=v.slice(0,3)+'-'+v.slice(3,6)+'-'+v.slice(6);
+    else if(v.length>3)o=v.slice(0,3)+'-'+v.slice(3);
+    this.value=o;
+  });
+  window.scrollTo(0,0);
+  setTimeout(function(){ var f=document.getElementById('su_fn'); if(f)f.focus(); },80);
+}
+function hideSignup(){
+  document.getElementById('signup').classList.remove('on');
+  document.getElementById('signup').innerHTML='';
+  document.getElementById('login').classList.add('on');
+}
+function suAgeOf(ymd){
+  if(!ymd)return null;
+  var b=new Date(ymd+'T00:00:00'); if(isNaN(b))return null;
+  var t=new Date(), a=t.getFullYear()-b.getFullYear();
+  var m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate()))a--;
+  return a;
+}
+function suAge(){
+  var v=document.getElementById('su_bd').value, a=suAgeOf(v), el=document.getElementById('su_age');
+  if(a==null){ el.innerHTML='🎂 เลือกวันเกิดแล้วระบบจะคิดอายุให้เอง'; return; }
+  var TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var d=new Date(v+'T00:00:00');
+  el.innerHTML='🎂 เกิด <b>'+d.getDate()+' '+TH[d.getMonth()]+' '+(d.getFullYear()+543)+'</b> · อายุ <b>'+a+' ปี</b>'+
+    '<div style="font-size:11.5px;opacity:.75;margin-top:3px">ระบบคิดอายุให้เอง ไม่ต้องกรอก — ถ้าปีไม่ตรงให้แก้วันเกิด</div>';
+}
+function suSame(){
+  var on=document.getElementById('su_same').checked;
+  document.getElementById('su_nowbox').style.display=on?'none':'';
+}
+function suV(id){ var e=document.getElementById(id); return e?(e.value||'').trim():''; }
+function suBad(id,msg){
+  var e=document.getElementById(id);
+  if(e){ e.classList.add('jjsu-err'); e.scrollIntoView({block:'center',behavior:'smooth'});
+         setTimeout(function(){ try{e.focus();}catch(x){} },250); }
+  document.getElementById('su_msg').textContent=msg;
+  return false;
+}
+function suClearErr(){ [].forEach.call(document.querySelectorAll('.jjsu-err'),function(e){e.classList.remove('jjsu-err');}); }
+async function suSubmit(){
+  suClearErr();
+  var msg=document.getElementById('su_msg'); msg.textContent='';
+  if(!suV('su_fn'))   return suBad('su_fn','กรอกชื่อจริงด้วยครับ');
+  if(!suV('su_ln'))   return suBad('su_ln','กรอกนามสกุลด้วยครับ');
+  if(!suV('su_nick')) return suBad('su_nick','กรอกชื่อเล่นด้วยครับ');
+  var bd=suV('su_bd'), age=suAgeOf(bd);
+  if(!bd||age==null) return suBad('su_bd','เลือกวันเดือนปีเกิดด้วยครับ');
+  if(age<15||age>80) return suBad('su_bd','วันเกิดดูไม่ถูกต้อง (คิดอายุได้ '+age+' ปี)');
+  if(!SU.gender){ msg.textContent='เลือกเพศด้วยครับ'; return false; }
+  var tel=suV('su_tel').replace(/\D/g,'');
+  if(tel.length<9)   return suBad('su_tel','เบอร์โทรศัพท์ไม่ครบ');
+  if(!suV('su_reg')) return suBad('su_reg','กรอกที่อยู่ตามทะเบียนบ้านด้วยครับ');
+  var same=document.getElementById('su_same').checked;
+  if(!same&&!suV('su_now')) return suBad('su_now','กรอกที่อยู่ปัจจุบัน หรือติ๊กว่าเหมือนทะเบียนบ้าน');
+  var un=suV('su_u').toLowerCase();
+  if(!/^[a-z0-9._-]{3,20}$/.test(un))
+    return suBad('su_u','ชื่อผู้ใช้ใช้ได้เฉพาะ a–z 0–9 . _ - ยาว 3–20 ตัว (เช่น somchai)');
+  var pw=suV('su_p');
+  if(pw.length<6)        return suBad('su_p','รหัสผ่านอย่างน้อย 6 ตัว');
+  if(pw!==suV('su_p2'))  return suBad('su_p2','รหัสผ่าน 2 ช่องไม่ตรงกัน');
+
+  var btn=document.getElementById('su_go'); btn.disabled=true; btn.textContent='กำลังส่ง…';
+  try{
+    var dup=await fetch(CFG.URL+'/rest/v1/pnl_users?select=username&username=eq.'+encodeURIComponent(un),
+      {headers:{apikey:CFG.KEY,Authorization:'Bearer '+CFG.KEY}}).then(function(r){return r.json();});
+    if(dup&&dup.length){ btn.disabled=false; btn.textContent='ส่งใบสมัคร';
+      return suBad('su_u','ชื่อผู้ใช้นี้มีคนใช้แล้ว ลองชื่ออื่นครับ'); }
+
+    var nick=suV('su_nick');
+    var r1=await fetch(CFG.URL+'/rest/v1/pnl_users',{method:'POST',
+      headers:{apikey:CFG.KEY,Authorization:'Bearer '+CFG.KEY,'Content-Type':'application/json',Prefer:'return=minimal'},
+      body:JSON.stringify({username:un, display_name:nick||suV('su_fn'), pass_hash:pwHash(un,pw),
+        role:'staff', unit:SU.unit||'ALL', active:false, status:'pending', apps:{}, perms:{}})});
+    if(!r1.ok) throw new Error(await r1.text());
+
+    var body={username:un, first_name:suV('su_fn'), last_name:suV('su_ln'), nickname:nick,
+      birth_date:bd, gender:SU.gender, phone:suV('su_tel'),
+      addr_reg:suV('su_reg'), addr_reg_province:suV('su_reg_pv'), addr_reg_zip:suV('su_reg_zip'),
+      addr_same:same, want_unit:SU.unit||''};
+    body.addr_now         = same?suV('su_reg')      :suV('su_now');
+    body.addr_now_province= same?suV('su_reg_pv')   :suV('su_now_pv');
+    body.addr_now_zip     = same?suV('su_reg_zip')  :suV('su_now_zip');
+    var r2=await fetch(CFG.URL+'/rest/v1/pnl_profiles',{method:'POST',
+      headers:{apikey:CFG.KEY,Authorization:'Bearer '+CFG.KEY,'Content-Type':'application/json',Prefer:'return=minimal'},
+      body:JSON.stringify(body)});
+    if(!r2.ok) throw new Error(await r2.text());
+
+    suNotify(un, suV('su_fn')+' '+suV('su_ln'), nick, SU.unit);   // แจ้ง LINE (ล้มเหลวก็ไม่เป็นไร)
+    suDone(un);
+  }catch(e){
+    btn.disabled=false; btn.textContent='ส่งใบสมัคร';
+    var t=String((e&&e.message)||e);
+    if(/pnl_profiles|status/.test(t)&&/does not exist|column|relation/i.test(t))
+      msg.innerHTML='ยังไม่ได้ติดตั้งระบบสมัคร — แจ้งผู้ดูแลให้รัน <b>jjmk-signup.sql</b> ก่อนครับ';
+    else msg.textContent='ส่งไม่สำเร็จ: '+t.slice(0,160);
+  }
+}
+/* แจ้งเตือน LINE ผ่าน Edge Function signup-notify — ไม่มีก็ข้ามไปเงียบ ๆ */
+function suNotify(username,fullname,nick,unit){
+  try{
+    fetch(CFG.URL+'/functions/v1/signup-notify',{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:CFG.KEY},
+      body:JSON.stringify({username:username,name:fullname,nickname:nick,unit:unit})}).catch(function(){});
+  }catch(e){}
+}
+function suDone(un){
+  document.getElementById('signup').innerHTML=
+    '<div class="jjlg-in"><div class="jjlg-card"><div class="jjsu-ok">'+
+    '<div class="big">📨</div>'+
+    '<h1 class="jjlg-app" style="margin-top:10px">ส่งใบสมัครแล้ว</h1>'+
+    '<div class="jjlg-sub" style="margin-top:8px">ผู้ดูแลจะตรวจและอนุมัติให้<br>'+
+    'เมื่ออนุมัติแล้วเข้าใช้งานด้วยชื่อผู้ใช้<br><b style="color:#FFE9BC;font-size:16px">'+suEsc(un)+'</b> ได้เลย</div>'+
+    '</div><button class="jjlg-btn" type="button" onclick="hideSignup()">กลับหน้าเข้าสู่ระบบ</button>'+
+    '<div class="jjlg-note">ลองเข้าสู่ระบบดูได้เลย — ถ้ายังไม่อนุมัติจะเห็นหน้ารออนุมัติ</div></div></div>';
+  window.scrollTo(0,0);
+}
+/* ---------- หน้ารออนุมัติ / ถูกปฏิเสธ ---------- */
+function showWait(usr){
+  document.getElementById('login').classList.remove('on');
+  document.getElementById('signup').classList.remove('on');
+  var rej=usr.status==='rejected';
+  var box=document.getElementById('waitBox');
+  box.innerHTML='<div class="jjlg-in"><div class="jjlg-card"><div class="jjsu-ok">'+
+    '<div class="big">'+(rej?'🚫':'⏳')+'</div>'+
+    '<h1 class="jjlg-app" style="margin-top:10px">'+(rej?'ใบสมัครไม่ได้รับอนุมัติ':'รอผู้ดูแลอนุมัติ')+'</h1>'+
+    '<div class="jjlg-sub" style="margin-top:8px">'+
+      (rej?('บัญชี <b>'+suEsc(usr.username)+'</b> ไม่ได้รับอนุมัติ'+
+            (usr.reject_reason?'<br>เหตุผล: '+suEsc(usr.reject_reason):'')+'<br>สอบถามผู้ดูแลได้ครับ')
+         :('ใบสมัครของ <b>'+suEsc(usr.display_name||usr.username)+'</b> ส่งถึงผู้ดูแลแล้ว<br>'+
+           'อนุมัติเมื่อไหร่จะเข้าใช้งานได้ทันที<br>ลองเข้าสู่ระบบใหม่อีกครั้งภายหลัง'))+
+    '</div></div>'+
+    '<button class="jjlg-btn" type="button" onclick="location.reload()">ลองใหม่อีกครั้ง</button>'+
+    '<button class="jjlg-btn2" type="button" onclick="waitBack()">กลับหน้าเข้าสู่ระบบ</button>'+
+    '</div></div>';
+  box.classList.add('on');
+  window.scrollTo(0,0);
+}
+function waitBack(){
+  var b=document.getElementById('waitBox'); b.classList.remove('on'); b.innerHTML='';
+  document.getElementById('lgP').value='';
+  document.getElementById('login').classList.add('on');
+}
+/* ---------- ตัวเลขใบสมัครที่รออนุมัติ บนไอคอน JJ Access ---------- */
+async function paintPending(){
+  var a=document.getElementById('appAdmin'); if(!a)return;
+  var old=a.querySelector('.badge.num'); if(old)old.remove();
+  if(!ME||!(ME.role==='admin'||ME.role==='owner'))return;
+  try{
+    var n=await fetch(CFG.URL+'/rest/v1/rpc/pnl_pending_count',{method:'POST',
+      headers:{apikey:CFG.KEY,Authorization:'Bearer '+CFG.KEY,'Content-Type':'application/json'},body:'{}'})
+      .then(function(r){ return r.ok?r.json():0; });
+    n=Number(n)||0; if(!n)return;
+    var ic=a.querySelector('.icon'); if(!ic)return;
+    var b=document.createElement('span'); b.className='badge num';
+    b.title='ใบสมัครรออนุมัติ '+n+' ใบ'; b.textContent=n>99?'99+':String(n);
+    ic.appendChild(b);
+  }catch(e){}
+}
+
+
 /* ---------- เปิดหน้ามา: กู้ session เดิม ---------- */
 (function(){
   document.getElementById('lgP').addEventListener('keydown',function(e){ if(e.key==='Enter')doLogin(); });
   document.getElementById('lgU').addEventListener('keydown',function(e){ if(e.key==='Enter')document.getElementById('lgP').focus(); });
-  var saved=null, skip=false;
-  try{ saved=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); skip=localStorage.getItem('jjhub_skip')==='1'; }catch(e){}
-  if(!saved||!saved.u){ if(!skip)showLogin(); paintApps(); return; }
+  var saved=null;
+  try{ saved=JSON.parse(localStorage.getItem('jjpnl_auth')||'null'); }catch(e){}
+  if(!saved||!saved.u){ showLogin(); paintApps(); return; }
   fetchUser(saved.u).then(function(usr){
-    if(usr&&usr.pass_hash===saved.h){ ME=usr; spreadSession(usr); paintUser(); }
-    else if(!skip){ showLogin(); }         // รหัสเปลี่ยน/บัญชีถูกปิด → ให้ล็อกอินใหม่
+    if(usr&&usr.pass_hash===saved.h&&userReady(usr)){ ME=usr; spreadSession(usr); paintUser(); paintPending(); }
+    else { showLogin(); }                  // รหัสเปลี่ยน/บัญชีถูกปิด → ให้ล็อกอินใหม่
     paintApps();
   }).catch(function(){ paintApps(); });    // เน็ตล่ม → แสดงทุกแอพไว้ก่อน ไม่ล็อกคนใช้งาน
 })();
