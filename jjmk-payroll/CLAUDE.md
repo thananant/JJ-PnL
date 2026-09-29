@@ -26,6 +26,10 @@
   - อ่านสิทธิ์ใหม่จาก `pnl_users` ทุกครั้งที่เปิดแอป (`refreshMe`) — admin แก้สิทธิ์แล้วมีผลเมื่อรีเฟรช · บัญชีถูกปิด = เด้งออก
   - เทส `jjmk-payroll/test/perm.js`
 - **ประวัติการทำรายการ (audit — 2026-09-10)**: ตาราง `payroll_audit` + หน้า 🕘 `#audit` · ดักที่ **wrapper ของ `db.from()` จุดเดียว** — ทุก insert/update/upsert/delete ที่สำเร็จถูกจดอัตโนมัติ (ใคร/ทำอะไร/ตารางไหน/รายละเอียด≤800ตัว/หน้าไหน/เมื่อไหร่) → โค้ดบันทึกใหม่ในอนาคต**ไม่ต้องทำอะไรเพิ่ม** · `AUDIT_SKIP` กันจดตัวเองและ pnl_users · flag `auditReady` — ยังไม่รัน `jj_audit.sql` แอปทำงานปกติแค่ไม่จด · login/logout ก็ถูกจด · หน้า audit โยงชื่อพนักงานจาก employee_id/emp_code ใน detail ให้อ่านง่าย
+  - **แก้ 2026-09-29 (เจ้าของถาม "ทำไมไม่มีประวัติอะไรเลย")**: ① ล็อกอินไม่เคยถูกจด — `doLogin` เรียก `auditWrite` ก่อน `loadAll` ตั้ง `auditReady` จึงหายทุกครั้ง
+    → ตอนนี้ตั้ง `auditPendingLogin` แล้ว `auditOpen()` จดหลังโหลดเสร็จ ② เข้าจากหน้าศูนย์รวมแอพไม่เคยถูกจด → จด `open` "🚪 เปิดแอป" ครั้งเดียวต่อแท็บ
+    (`sessionStorage.jjpay_opened`) ③ insert ล้มเดิมเงียบ → `auditFail()` เก็บ `auditLastErr` + toast ครั้งเดียว + แถบแดงในหน้าประวัติ
+    · ตารางว่างหลังเพิ่งรัน SQL = ปกติ (จดตั้งแต่ติดตั้ง ไม่มีย้อนหลัง) · ปุ่ม 📋 คัดลอก SQL อยู่ในการ์ด "ยังไม่ได้ติดตั้ง" (`#sqlAudit`) · เทส `test/audit.js`
 
 ## ธุรกิจ / กฎเงินเดือน (สำคัญมาก — อย่าเปลี่ยนโดยไม่ถาม)
 
@@ -81,7 +85,7 @@
 - `loans` — พนักงานยืมเงิน unique ต่อคน: amount, monthly, deduct_on(mid/payroll), start_period, opening, loan_date, note · `loan_entries` — override ผ่อนรายงวด unique(employee_id, period)
 - `sso_entries` — ประกันสังคม override รายงวด: unique(employee_id, period) · employees เพิ่ม sso_on, sso_id · payroll_settings เพิ่ม sso_rate/sso_min/sso_max/sso_account
 - `tips` — ทิปรวมต่อสาขาต่องวด: period, branch, amount, member_ids (csv เลือกคนเอง · ว่าง = อัตโนมัติ), unique(period, branch)
-- `payroll_audit` — ประวัติการทำรายการ: username, display_name, action(insert/update/upsert/delete/login/logout), tbl, detail, page, at · (`pnl_users` เป็นของแอป P&L — payroll อ่านตอนล็อกอินเท่านั้น)
+- `payroll_audit` — ประวัติการทำรายการ: username, display_name, action(insert/update/upsert/delete/login/open/logout), tbl, detail, page, at · (`pnl_users` เป็นของแอป P&L — payroll อ่านตอนล็อกอินเท่านั้น)
 - ทุกตาราง RLS เปิดแบบ allow-all + อยู่ใน publication `supabase_realtime`
 - **ระบบ JJ KPI อ่านตาราง `employees` + `punches`** (อ่านอย่างเดียว 2 RPC: `kpi_sync_staff` ใช้ employees
   id, branch, nick, full_name, position, active · `kpi_on_duty` ใช้ punches emp_code, punch_date, punch_time เทียบ employees.code
