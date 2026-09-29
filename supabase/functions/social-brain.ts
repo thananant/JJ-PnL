@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-09-29.4";
+const VERSION = "2026-09-29.5";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -470,14 +470,15 @@ async function saveChannels(patch: (ch: Record<string, any>) => void) {
   return ch;
 }
 // บันทึกผลซิงค์ (สำเร็จ/ล้มเหลว) ให้หน้าสถานะระบบเห็น — ไม่งั้นซิงค์พังแล้วหน้าจอยังเขียวอยู่
-async function gbpSync(full = false) {
-  const res: any = await gbpSyncInner(full).catch((e) => ({ ok: false, reason: scrub(e) }));
+async function gbpSync(full = false, resume = false) {
+  const res: any = await gbpSyncInner(full, resume).catch((e) => ({ ok: false, reason: scrub(e) }));
   if (res.reason) res.reason = scrub(res.reason);
   await saveChannels((ch) => {
     const g = { ...(ch.gbp ?? {}) };
     g.last_attempt = new Date().toISOString();
     if (res.ok) { delete g.last_error; delete g.last_error_at; }
     else { g.last_error = String(res.reason ?? "").slice(0, 300); g.last_error_at = g.last_attempt; }
+    if (Array.isArray(res.unmapped)) g.unmapped = res.unmapped; // ให้หน้าสถานะบอกว่า "ยังไม่เลือกสาขา" ไม่ใช่ "รออนุมัติ"
     ch.gbp = g;
   }).catch((e) => console.error("gbp state", scrub(e)));
   return res;
@@ -502,7 +503,12 @@ async function gbpDiscover(H: Record<string, string>) {
   if (!locs.length) return { reason: "หาสาขาไม่เจอในทุกบัญชี (" + ad.accounts.length + " บัญชี)" + (lastErr ? ": " + lastErr : "") };
   return { locs };
 }
-async function gbpSyncInner(full: boolean) {
+// สาขาที่เจ้าของเลือกไว้ตอนนี้ (อ่านสดทุกหน้า — ระหว่างซิงค์ยาว ๆ เจ้าของอาจเปลี่ยนเป็น "ไม่ดึง")
+async function liveBranch(locId: string): Promise<string | null | undefined> {
+  const { data } = await sb.from("social_settings").select("val").eq("id", "channels").maybeSingle();
+  return (data?.val?.gbp?.locations ?? []).find((l: any) => l.id === locId)?.branch;
+}
+async function gbpSyncInner(full: boolean, resume = false) {
   const t0 = Date.now();
   const at = await gbpAccessToken();
   if (!at.token) return { ok: false, reason: at.reason };
@@ -524,8 +530,13 @@ async function gbpSyncInner(full: boolean) {
       ch.gbp = { ...cur, account: gbp.account, locations: gbp.locations, rediscover: false };
     });
   }
-  // ซิงค์ย้อนหลังทั้งหมดทำต่อจากจุดเดิมได้ (หน้า Google ของแต่ละโปรไฟล์) — รอบเดียวไม่ทันใน 150 วิ ก็กดต่อ/วนต่อ
-  const prog: Record<string, { token?: string; done?: boolean }> = full ? { ...(gbp.full_progress?.locs ?? {}) } : {};
+  // ซิงค์ย้อนหลังทั้งหมดทำต่อจากจุดเดิมได้ (หน้า Google ของแต่ละโปรไฟล์) — รอบเดียวไม่ทันใน 150 วิ แอปวนต่อให้ (resume)
+  // กดซิงค์ทั้งหมดใหม่เอง หรือค้างเกิน 2 ชม. = เริ่มใหม่ทุกโปรไฟล์ (ของที่มีแล้วข้ามเร็ว) ไม่ใช้จุดค้างเก่า
+  const fp = gbp.full_progress;
+  const useSaved = full && resume && fp?.locs && Date.now() - (Date.parse(fp.at ?? "") || 0) < 2 * 3600000;
+  const prog: Record<string, { token?: string; done?: boolean; fails?: number; error?: string }> = useSaved ? { ...fp.locs } : {};
+  // โปรไฟล์ที่ประวัติย้อนหลังยังดึงไม่ครบ (พังกลางทาง/เพิ่งเลือกสาขา) — เคลียร์เมื่อซิงค์ทั้งหมดดึงโปรไฟล์นั้นได้จนจบ
+  const gaps: Record<string, { title: string; reason: string; at: string }> = { ...(gbp.history_gaps ?? {}) };
   let added = 0, upgraded = 0, seen = 0, marked = 0, partial = false, okLocs = 0;
   const locErr: Record<string, { error: string; at: string }> = {};
   const unmapped: string[] = [], failedBranches = new Set<string>();
@@ -536,17 +547,30 @@ async function gbpSyncInner(full: boolean) {
     if (full && prog[loc.id]?.done) { okLocs++; continue; }
     if (partial) continue; // หมดเวลารอบนี้แล้ว — โปรไฟล์ที่เหลือทำรอบหน้า
     const locPath = `${loc.account ?? gbp.account}/${loc.id}`;
-    let pageToken = full ? (prog[loc.id]?.token ?? "") : "", failed = false;
+    let pageToken = full ? (prog[loc.id]?.token ?? "") : "", failed = false, dropped = false;
     for (let page = 0; full || page < 1; page++) {
       if (Date.now() - t0 > 100000) { partial = true; break; } // ใกล้ 150 วิ → พอก่อน จุดที่ค้างถูกจำไว้
+      if (page > 0) {
+        const lb = await liveBranch(loc.id);
+        if (!lb || lb === "skip") { dropped = true; break; } // เจ้าของเพิ่งเปลี่ยนเป็นไม่ดึง/ไม่ระบุ → หยุดดึงโปรไฟล์นี้
+        loc.branch = lb;
+      }
       const rr = await fetch(`https://mybusiness.googleapis.com/v4/${locPath}/reviews?pageSize=50${pageToken ? "&pageToken=" + pageToken : ""}`, { headers: H });
       const rd = await rr.json().catch(() => ({}));
       if (!rr.ok && full && page === 0 && pageToken) { pageToken = ""; page = -1; continue; } // จุดที่จำไว้หมดอายุ → เริ่มโปรไฟล์นี้ใหม่ (ของที่มีแล้วข้ามเร็ว)
       if (!rr.ok) {
         // โปรไฟล์เดียวพัง (ยังไม่ยืนยัน/ถูกระงับ) ไม่ให้ทุกสาขาหยุดไปด้วย — สาขานั้นไปใช้ Place ID แทน (runCron)
-        locErr[loc.id] = { error: scrub(JSON.stringify(rd)).slice(0, 200), at: new Date().toISOString() };
+        const err = scrub(JSON.stringify(rd)).slice(0, 200);
+        locErr[loc.id] = { error: err, at: new Date().toISOString() };
         failedBranches.add(loc.branch);
         failed = true;
+        if (full) {
+          // 403/404 = ใช้ไม่ได้ถาวร · อื่น ๆ (429/5xx) = ชั่วคราว → จำหน้าที่ค้างไว้ ลองใหม่รอบหน้า (สูงสุด 3 ครั้ง)
+          const fails = (prog[loc.id]?.fails ?? 0) + 1;
+          const permanent = rr.status === 403 || rr.status === 404 || fails >= 3;
+          prog[loc.id] = permanent ? { done: true, error: err } : { token: pageToken, fails, error: err };
+          if (permanent) gaps[loc.id] = { title: loc.title ?? loc.id, reason: err, at: new Date().toISOString() };
+        }
         break;
       }
       const reviews = rd.reviews ?? [];
@@ -606,27 +630,46 @@ async function gbpSyncInner(full: boolean) {
       if (full) prog[loc.id] = { token: pageToken };
       if (!pageToken) break;
     }
-    // โปรไฟล์ที่ดึงจนหมด (หรือพังถาวร) นับว่าเสร็จในรอบซิงค์ทั้งหมดนี้
-    if (full && (failed || (!partial && !prog[loc.id]?.token))) prog[loc.id] = { done: true };
+    // โปรไฟล์ที่ดึงจนหน้าสุดท้าย = ประวัติครบ · เจ้าของเปลี่ยนเป็นไม่ดึงระหว่างทาง = จบ (ไม่ถือว่าขาด)
+    if (full && !failed && (dropped || (!partial && !prog[loc.id]?.token))) {
+      prog[loc.id] = { done: true };
+      delete gaps[loc.id];
+    }
     if (!failed) okLocs++;
   }
   const errList = Object.entries(locErr);
-  if (!okLocs && errList.length) {
-    const names = errList.map(([id]) => gbp.locations.find((l: any) => l.id === id)?.title ?? id);
-    return { ok: false, reason: "ดึงรีวิวไม่ได้ทุกสาขา (" + names.join(", ") + "): " + errList[0][1].error, failed_branches: [...failedBranches] };
-  }
-  if (!okLocs && unmapped.length)
+  if (!okLocs && !errList.length && unmapped.length)
     return { ok: false, reason: "ยังไม่ได้เลือกสาขาให้โปรไฟล์ Google (" + unmapped.join(", ") + ") → หน้าเชื่อมต่อช่องทาง เลือกสาขาหรือ \"ไม่ดึง\" แล้วกด 💾 บันทึกสาขา", unmapped };
   const allDone = full && gbp.locations.every((l: any) => l.branch === "skip" || !l.branch || prog[l.id]?.done);
-  const last_sync = new Date().toISOString();
+  // ซิงค์ทั้งหมด: ยังมีโปรไฟล์ที่พังแบบชั่วคราวและยังลองใหม่ได้ → ให้แอปวนต่อ (ไม่ใช่ "ล้มเหลว")
+  const retryable = full && gbp.locations.some((l: any) => l.branch && l.branch !== "skip" && !prog[l.id]?.done && prog[l.id]?.fails);
+  for (const id of Object.keys(gaps)) { // โปรไฟล์ที่เจ้าของเปลี่ยนเป็นไม่ดึง/ไม่ระบุแล้ว ไม่ต้องเตือนว่าขาด
+    const l = gbp.locations.find((x: any) => x.id === id);
+    if (!l || !l.branch || l.branch === "skip") delete gaps[id];
+  }
+  const now = new Date().toISOString();
+  // บันทึกเสมอ (แม้ทุกโปรไฟล์พัง) — จุดที่ค้าง/ช่องโหว่ของประวัติต้องไม่หาย
   await saveChannels((ch) => {
     const cur = ch.gbp ?? {};
     if (cur.rt_enc !== startRt) return; // ระหว่างซิงค์มีการเชื่อมบัญชีใหม่ → ไม่เอาข้อมูลของบัญชีเก่าไปทับ
-    const next: any = { ...cur, connected: true, last_sync, loc_errors: locErr, unmapped };
-    if (full) next.full_progress = allDone ? null : { at: last_sync, locs: prog };
+    const next: any = { ...cur, loc_errors: locErr, unmapped };
+    if (okLocs) { next.connected = true; next.last_sync = now; }
+    if (full) {
+      next.full_progress = allDone ? null : { at: now, locs: prog };
+      // เก็บช่องโหว่ของรอบนี้ + ของที่เจ้าของเพิ่งเพิ่มระหว่างซิงค์ (โปรไฟล์ที่เพิ่งเลือกสาขา)
+      const mapped = (id: string) => { const l = (cur.locations ?? []).find((x: any) => x.id === id); return !!l?.branch && l.branch !== "skip"; };
+      next.history_gaps = { ...Object.fromEntries(Object.entries(cur.history_gaps ?? {})
+        .filter(([id]) => mapped(id) && !(prog[id]?.done && !gaps[id]))), ...gaps };
+    }
     ch.gbp = next; // รายชื่อโปรไฟล์/การจับคู่: ใช้ของล่าสุดในฐานข้อมูลเสมอ (เจ้าของอาจกดบันทึกสาขาระหว่างซิงค์)
   });
+  const gapList = full && Object.keys(gaps).length ? Object.values(gaps).map((g) => g.title) : undefined;
+  if (!okLocs && errList.length && !retryable) {
+    const names = errList.map(([id]) => gbp.locations.find((l: any) => l.id === id)?.title ?? id);
+    return { ok: false, reason: "ดึงรีวิวไม่ได้ทุกสาขา (" + names.join(", ") + "): " + errList[0][1].error, failed_branches: [...failedBranches], history_gaps: gapList };
+  }
   return { ok: true, added, upgraded, seen, marked, partial: full && !allDone,
+    history_gaps: gapList,
     loc_errors: errList.length ? locErr : undefined, failed_branches: [...failedBranches],
     unmapped: unmapped.length ? unmapped : undefined, locations: gbp.locations };
 }
@@ -1337,7 +1380,7 @@ Deno.serve(async (req) => {
         }).toString() };
         break;
       }
-      case "gbp_sync": out = await gbpSync(!!b.full); break;
+      case "gbp_sync": out = await gbpSync(!!b.full, !!b.resume); break;
       case "status": {   // หน้า "สถานะระบบ" ในแอป — บอกแค่ว่าตั้งค่าแล้วหรือยัง/ใช้งานได้ไหม ไม่ส่งค่าลับออกไป
         const st = m0 ?? await getSettings();
         const ch = st.channels ?? {};
@@ -1376,6 +1419,7 @@ Deno.serve(async (req) => {
             gbp_reconnect: /invalid_grant/.test(String(ch.gbp?.last_error ?? "")),
             places: Array.isArray(ch.google_places) ? ch.google_places.length : 0, places_last_poll: ch.google_last_poll ?? null,
             gbp_full_pending: !!ch.gbp?.full_progress, gbp_unmapped: Array.isArray(ch.gbp?.unmapped) ? ch.gbp.unmapped.length : 0,
+            gbp_history_gaps: Object.values(ch.gbp?.history_gaps ?? {}).map((g: any) => String(g?.title ?? "").slice(0, 80)),
             places_last_result: ch.google_last_result ? { ...ch.google_last_result,
               diag: (ch.google_last_result.diag ?? []).map((d: any) => ({ ...d, http: Number(d.http) || 0, newest_api: Number(d.newest_api) || 0 })) } : null,
             gbp_loc_errors: ch.gbp?.loc_errors ?? null,
