@@ -980,7 +980,11 @@ async function loadAll(){
   const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows,lcfgRows,unitRows,recvRows]=await Promise.all([
     selAll('pnl_stock_names?select=*&order=id').catch(()=>selAll('pnl_stock_map?select=*&order=id')).catch(()=>[]),
     selAll('stock_current?select=product_id,qty,updated_at&branch_id=eq.'+bid).catch(()=>[]),
-    selAll('suppliers?select=name,order_mode,schedule,lead_days,cycle_days,min_cases,cutoff,line_group_id&order=name')
+    /* ต้องอ่าน order_ahead + prepay ด้วย (แก้ 2026-09-29) — เดิมไม่ได้อ่าน แอพนี้เลยไม่รู้ว่าซัพต้อง "สั่งล่วงหน้า"
+       (วันส่งของไม่ตรงกับครัวกลางที่อ่านค่านี้) · ไม่เตือน "จ่ายก่อนส่ง" · และกด 💾 ที่หน้ารอบสั่งซัพ = เขียน 0/ไม่ติ๊ก ทับค่าจริง
+       ยังไม่ได้รัน jjmk_stockcheck_supflags.sql (ไม่มีคอลัมน์) = ตกไปใช้ชุดเดิม */
+    selAll('suppliers?select=name,order_mode,schedule,lead_days,cycle_days,min_cases,cutoff,line_group_id,order_ahead,prepay&order=name')
+      .catch(()=>selAll('suppliers?select=name,order_mode,schedule,lead_days,cycle_days,min_cases,cutoff,line_group_id&order=name'))
       .catch(()=>selAll('suppliers?select=name,order_mode,schedule,lead_days&order=name')).catch(()=>[]),
     // ยอดที่นับไปแล้วของ "วันขายนี้" — ตี 6 ขึ้นวันใหม่ = ว่างเอง (รีเซ็ตอัตโนมัติ)
     selAll('stock_counts?select=product_id,qty,out_of_stock,created_at&branch_id=eq.'+bid+'&count_date=eq.'+encodeURIComponent(cd)+'&order=created_at.desc').catch(()=>[]),
@@ -1500,15 +1504,19 @@ function supObj(n){const e=S.supEdit=S.supEdit||{};
 function supSetMode(i,v){supObj(S.supList[i]).mode=v;render();}
 function supSetLead(i,v){supObj(S.supList[i]).lead=Math.max(1,parseInt(v,10)||1);render();}
 function supSetDay(i,k,v){const o=supObj(S.supList[i]);if(v)o.schedule[k]=v;else delete o.schedule[k];render();}
-function supSetAhead(i,v){supObj(S.supList[i]).ahead=Math.max(0,Math.min(6,parseInt(v,10)||0));render();}
-function supSetPrepay(i,v){supObj(S.supList[i]).prepay=!!v;render();}
+function supSetAhead(i,v){const o=supObj(S.supList[i]);o.ahead=Math.max(0,Math.min(6,parseInt(v,10)||0));o.aheadSet=true;render();}
+function supSetPrepay(i,v){const o=supObj(S.supList[i]);o.prepay=!!v;o.prepaySet=true;render();}
 async function supSave(i){
   const n=S.supList[i],o=supObj(n);
-  const body={order_mode:o.mode,lead_days:o.lead,schedule:o.schedule,order_ahead:o.ahead|0,prepay:!!o.prepay};
+  const body={order_mode:o.mode,lead_days:o.lead,schedule:o.schedule};
   let warn='';
   try{
     const x0=supSched(n);
     if(!x0){toast('ไม่พบซัพ "'+n+'" ในตาราง suppliers ของระบบเดิม — เพิ่มชื่อซัพที่แอพนับเดิมก่อนครับ',true);return;}
+    /* ส่ง "สั่งล่วงหน้า/จ่ายก่อนส่ง" เฉพาะเมื่ออ่านค่าจริงมาได้ หรือผู้ใช้เพิ่งแก้ช่องนั้น
+       — ห้ามส่งค่าตั้งต้น (0/ไม่ติ๊ก) ทับของจริงที่ไม่ได้อ่านมา (เคยล้างค่าที่ตั้งไว้ในตาราง suppliers ที่ใช้ร่วมกัน) */
+    if(('order_ahead' in x0)||o.aheadSet) body.order_ahead=o.ahead|0;
+    if(('prepay' in x0)||o.prepaySet)     body.prepay=!!o.prepay;
     try{ await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x0.name),body,'return=minimal'); }
     catch(e1){   // ยังไม่ได้รัน sql/jjmk_stockcheck_supflags.sql → ไม่มีคอลัมน์ใหม่ ให้บันทึกส่วนที่เหลือไปก่อน
       if(!/order_ahead|prepay|PGRST204|column/i.test(String(e1.message||e1)))throw e1;
