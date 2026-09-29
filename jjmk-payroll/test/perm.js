@@ -27,6 +27,9 @@ setTimeout(async ()=>{ try{
   console.log('[ซ่อนเมนู + พาไปหน้าที่มีสิทธิ์]');
   E(`applyPermUI()`);
   ok(d.querySelector('button[data-page=settings]').hidden && !d.querySelector('button[data-page=emp]').hidden,'เมนูตั้งค่าถูกซ่อน · เมนูพนักงานยังอยู่');
+  const grp=t=>[...d.querySelectorAll('aside nav .nav-grp')].find(h=>h.textContent.trim()===t);
+  ok(grp('ตั้งค่า').hidden && grp('MOU').hidden && !grp('เงิน').hidden && !grp('ข้อมูลเข้างาน').hidden,'หัวกลุ่มเมนูที่ไม่มีเมนูให้เห็นเลย (ตั้งค่า/MOU) ถูกซ่อน · กลุ่มที่มีสิทธิ์ยังอยู่');
+  ok([...d.querySelectorAll('aside nav button[data-page]')].length===14,'เมนูครบ 14 หน้าหลังจัดกลุ่ม');
   ok([...d.querySelectorAll('#fBranch option')].every(o=>['JJRD','JJCK'].includes(o.value)?!o.disabled:o.disabled),'ฟอร์มพนักงานเลือกได้เฉพาะรัชดา/ครัวกลาง (ห้ามไม่ระบุสาขา)');
   E(`go('settings')`); ok(E(`curPage()`)==='today','เปิดหน้าตั้งค่าตรง ๆ (#settings) → เด้งไปหน้าที่มีสิทธิ์');
   E(`applyUser({role:'staff',apps:{payroll:{adv:'v'}}}); go('today')`); ok(E(`curPage()`)==='adv','ไม่มีสิทธิ์หน้าวันนี้ → เปิดหน้าแรกที่มีสิทธิ์ (เบิกกลางเดือน)');

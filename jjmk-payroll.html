@@ -41,10 +41,13 @@ aside{width:242px;flex-shrink:0;background:#fff;color:var(--ink);display:flex;fl
 .brand .flame img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .brand h1{font-size:16.5px;font-weight:600;color:var(--brand-deep)}
 .brand small{display:block;font-weight:400;color:var(--ink-soft);font-size:11.5px}
-aside nav{display:flex;flex-direction:column;gap:3px;padding:6px 12px;flex:1;overflow-y:auto}
-aside nav button{font-family:'Prompt',sans-serif;background:none;border:none;color:var(--ink-soft);padding:11px 14px;font-size:14.5px;cursor:pointer;text-align:left;border-radius:12px;white-space:nowrap;transition:.15s}
+aside nav{display:flex;flex-direction:column;gap:2px;padding:6px 12px;flex:1;overflow-y:auto}
+aside nav button{font-family:'Prompt',sans-serif;background:none;border:none;color:var(--ink-soft);padding:9px 14px;font-size:14.5px;cursor:pointer;text-align:left;border-radius:12px;white-space:nowrap;transition:.15s}
 aside nav button.active{color:#fff;background:var(--brand-grad);box-shadow:0 6px 14px rgba(255,90,31,.32);font-weight:500}
 aside nav button:hover:not(.active){color:var(--brand-deep);background:var(--ember-soft)}
+/* หัวกลุ่มเมนู (เจ้าของสั่ง 2026-09-29) — ทุกเมนูในกลุ่มไม่มีสิทธิ์ = ซ่อนหัวกลุ่ม (applyPermUI) */
+aside nav .nav-grp{font-family:'Prompt',sans-serif;font-size:11.5px;font-weight:600;color:#b3a698;letter-spacing:.04em;padding:12px 14px 3px}
+aside nav .nav-grp:first-child{padding-top:2px}
 .side-foot{padding:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .side-foot .btn{width:100%;justify-content:flex-start}
 .content{flex:1;min-width:0}
@@ -54,6 +57,9 @@ aside nav button:hover:not(.active){color:var(--brand-deep);background:var(--emb
   aside nav{flex-direction:row;overflow-x:auto;padding:6px 10px}
   aside nav button{border-left:none;border-bottom:3px solid transparent;border-radius:9px 9px 0 0;padding:9px 13px}
   aside nav button.active{border-left:none;border-bottom-color:var(--ember)}
+  aside nav .nav-grp,aside nav .nav-grp:first-child{flex:none;display:flex;align-items:center;padding:0 2px 0 12px;margin-left:4px;border-left:1px solid var(--line);white-space:nowrap;font-size:11px}
+  aside nav .nav-grp:first-child{border-left:none;margin-left:0;padding-left:2px}
+  aside nav .nav-grp[hidden]{display:none}
   .side-foot{flex-direction:row}
   .side-foot .btn{width:auto}
   main{padding:12px}
@@ -549,20 +555,25 @@ window.JJGate=(function(){
     <div><h1>JJMK Payroll <small>จริงใจหมูกระทะ · ระบบเงินเดือน</small></h1></div>
   </div>
   <nav>
+    <div class="nav-grp">ข้อมูลเข้างาน</div>
     <button class="active" data-page="today" onclick="go('today')">📊 วันนี้</button>
+    <button data-page="cal" onclick="go('cal')">📅 ปฏิทินเข้างาน</button>
+    <div class="nav-grp">ข้อมูลพนักงาน</div>
     <button data-page="emp" onclick="go('emp')">👥 พนักงาน</button>
     <button data-page="detail" onclick="go('detail')">🪪 ข้อมูลพนักงาน</button>
+    <div class="nav-grp">เงิน</div>
     <button data-page="payroll" onclick="go('payroll')">💰 สรุปเงินเดือน</button>
-    <button data-page="cal" onclick="go('cal')">📅 ปฏิทินเข้างาน</button>
-    <button data-page="adv" onclick="go('adv')">💵 เบิกกลางเดือน</button>
-    <button data-page="loan" onclick="go('loan')">💳 พนักงานยืมเงิน</button>
+    <button data-page="adv" onclick="go('adv')">💵 เบิกเงินกลางเดือน</button>
+    <button data-page="loan" onclick="go('loan')">💳 ยืมเงิน</button>
     <button data-page="dep" onclick="go('dep')">🛡️ เงินประกัน</button>
-    <button data-page="sso" onclick="go('sso')">🏥 ประกันสังคม</button>
+    <div class="nav-grp">MOU</div>
     <button data-page="mou" onclick="go('mou')">📄 เอกสาร MOU</button>
+    <button data-page="sso" onclick="go('sso')">🏥 ประกันสังคม</button>
+    <div class="nav-grp">ตั้งค่า</div>
+    <button data-page="settings" onclick="go('settings')">⚙️ ตั้งค่า</button>
     <button data-page="shift" onclick="go('shift')">🕐 กะการทำงาน</button>
     <button data-page="holi" onclick="go('holi')">🎌 วันหยุดพิเศษ</button>
     <button data-page="audit" onclick="go('audit')">🕘 ประวัติการทำรายการ</button>
-    <button data-page="settings" onclick="go('settings')">⚙️ ตั้งค่า</button>
   </nav>
   <div class="side-foot">
     <div id="whoBox" style="font-size:12px;color:#d8cfc4;padding:0 4px 6px"></div>
@@ -1551,6 +1562,12 @@ function scopeEmployees(){ if(!SCOPE) return; buildLastSn(); employees = employe
 /* ซ่อนเมนู/ตัวเลือกสาขาที่ไม่มีสิทธิ์ */
 function applyPermUI(){
   document.querySelectorAll('aside nav button[data-page]').forEach(b => { b.hidden = !canSee(b.dataset.page); });
+  // หัวกลุ่มเมนู: ทุกเมนูในกลุ่มถูกซ่อน = ซ่อนหัวกลุ่มด้วย
+  document.querySelectorAll('aside nav .nav-grp').forEach(h => {
+    let n = h.nextElementSibling, any = false;
+    while(n && !n.classList.contains('nav-grp')){ if(n.matches('button[data-page]') && !n.hidden) any = true; n = n.nextElementSibling; }
+    h.hidden = !any;
+  });
   if(SCOPE){
     document.querySelectorAll('select option').forEach(o => {
       if(ALL_BR.includes(o.value)) o.hidden = o.disabled = !SCOPE.includes(o.value);
