@@ -558,6 +558,7 @@ window.JJGate=(function(){
   <div class="side-foot">
     <div id="whoBox" style="font-size:12px;color:#d8cfc4;padding:0 4px 6px"></div>
     <div style="font-size:11.5px;color:#8a8076;padding:0 4px 2px"><span class="dot" id="connDot"></span><span id="connTxt">เชื่อมต่อแล้ว</span></div>
+    <div id="lastScan" style="font-size:11.5px;color:#8a8076;padding:0 4px 2px"></div>
     <button class="btn btn-ghost" title="ล้างแคชในเครื่อง แล้วโหลดใหม่ทั้งหมดจากฐานข้อมูล" onclick="refreshAll()">🔄 รีเฟรชข้อมูล</button>
     <button class="btn btn-ghost" onclick="saveJSON()">💾 ดาวน์โหลดสำรอง</button>
   </div>
@@ -1794,19 +1795,43 @@ async function fetchPunchRange(from){
   return out;
 }
 
+/* วันแรกที่ต้องโหลดสดจากฐานข้อมูลทุกครั้ง (ก่อนหน้านั้นใช้แคชในเครื่อง) — เอาวันที่เก่าสุดของ:
+   ① วันเปิดงวดปัจจุบัน
+   ② วันเปิดงวดก่อนหน้า ถ้ายังไม่ถึงวันจ่ายของงวดนั้น — ช่วงปิดงวด (26 → วันที่ 5) มีคนแก้เวลาย้อนหลัง
+      ของงวดที่กำลังปิดจากหลายเครื่อง ต้องเห็นของล่าสุดเสมอ
+   ③ วันสุดท้ายที่เครื่องนี้เคยโหลดไว้ — เครื่องปิดไปหลายวัน/ข้ามงวด ช่วงที่ไม่เคยโหลดต้องไม่หายเงียบ
+      (เคยเป็นบั๊ก: เปิดครั้งสุดท้าย 24/9 แล้วมาเปิดอีกทีหลัง 26/9 → 25/9 หายจากงวด ก.ย. จนกว่าจะกด 🔄) */
+function liveFromDate(cached, today){
+  today = today || localYMD(new Date());
+  const cur = periodOf(today);
+  let from = periodRange(cur).from;
+  const [y,m] = cur.split('-').map(Number);
+  const pd = new Date(y, m-2, 1);
+  const prev = pd.getFullYear()+'-'+String(pd.getMonth()+1).padStart(2,'0');
+  const pr = periodRange(prev);
+  if(today <= pr.pay && pr.from < from) from = pr.from;
+  if(cached && cached.length){
+    let last = '';
+    for(const p of cached) if(p.date > last) last = p.date;
+    if(last && last < from) from = last;   // โหลดวันสุดท้ายซ้ำด้วย (ตอนนั้นอาจยังไม่ครบวัน)
+  }
+  return from;
+}
+
 async function loadPunches(){
   const d = new Date(); d.setMonth(d.getMonth() - (settings.loadMonths||6));
   const since = localYMD(d);
-  const curFrom = periodRange(periodOf(localYMD(new Date()))).from;   // วันเปิดงวดปัจจุบัน (26 เดือนก่อน)
   let cached = null;
   try{
     const c = await idbGet('punches');
     if(c && c.ver === PCACHE_VER && Array.isArray(c.rows) && c.rows.length) cached = c.rows;
   }catch(_){ cached = null; }
   if(cached){
-    const old = cached.filter(p=>p.date >= since && p.date < curFrom);
-    busy(true, 'โหลดข้อมูลตอกบัตรงวดปัจจุบัน… (ก่อนหน้านั้นใช้แคชในเครื่อง)');
-    const fresh = await fetchPunchRange(curFrom);
+    let liveFrom = liveFromDate(cached);
+    if(liveFrom < since) liveFrom = since;
+    const old = cached.filter(p=>p.date >= since && p.date < liveFrom);
+    busy(true, 'โหลดข้อมูลตอกบัตรตั้งแต่ '+dayLabel(liveFrom)+'… (ก่อนหน้านั้นใช้แคชในเครื่อง)');
+    const fresh = await fetchPunchRange(liveFrom);
     punches = old.concat(fresh);
   } else {
     busy(true, 'โหลดข้อมูลตอกบัตรครั้งแรกของเครื่องนี้ — ครั้งต่อไปจะเร็วขึ้นมาก…');
@@ -2014,8 +2039,23 @@ function detectShift(day, ts, emp){
 }
 const closestTo = (arr, target) => arr.reduce((a,b)=> Math.abs(b-target) < Math.abs(a-target) ? b : a);
 
+/* บรรทัด "สแกนล่าสุด" มุมล่างซ้าย — ไม่มีสแกนใหม่เกิน 24 ชม. ขึ้นสีแดง (เครื่องสแกน/Worker อาจหยุดส่ง) */
+function updLastScan(){
+  const el = document.getElementById('lastScan'); if(!el) return;
+  let best = null;
+  for(const p of punches) if(!best || p.date > best.date || (p.date === best.date && p.time > best.time)) best = p;
+  if(!best){ el.textContent = ''; return; }
+  const ts = new Date(best.date+'T'+(best.time||'00:00')+':00');
+  const hrs = (Date.now() - ts.getTime()) / 3600000;
+  const stale = hrs > 24;
+  el.style.color = stale ? '#ff8a80' : '#8a8076';
+  el.textContent = (stale ? '⚠️ ' : '') + 'สแกนล่าสุด ' + dayLabel(best.date) + ' ' + (best.time||'') +
+    (stale ? ' — ไม่มีข้อมูลใหม่ ' + Math.floor(hrs/24) + ' วัน เช็คเครื่องสแกน' : '');
+}
+
 function recomputeAll(){
   if(typeof savePunchCacheSoon === 'function') savePunchCacheSoon();   // ข้อมูลตอกเปลี่ยนเมื่อไร อัปเดตแคชตาม (debounce)
+  updLastScan();
   tipMemo = {};   // จำนวนคนหารทิปขึ้นกับวันทำงาน — คำนวณใหม่ทุกครั้งที่ข้อมูลตอกเปลี่ยน
   shifts = {};
   const byEmpDay = {};

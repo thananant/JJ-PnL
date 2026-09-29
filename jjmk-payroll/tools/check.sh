@@ -1,13 +1,16 @@
 #!/bin/bash
-# ตรวจ syntax ของ script ใน jjmk-payroll.html แบบเร็ว
+# ตรวจ syntax ของ <script> ทุกก้อน (inline) ใน jjmk-payroll.html
 cd "$(dirname "$0")/../.."
 python3 - << 'PY'
 import re, subprocess, tempfile, sys
 html = open('jjmk-payroll.html', encoding='utf-8').read()
-b = re.findall(r'<script>(.*?)</script>', html, re.S)
-assert len(b) == 1, f'พบ script {len(b)} บล็อก (ต้องมี 1)'
-with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as f:
-    f.write(b[0]); tmp = f.name
-r = subprocess.run(['node','--check',tmp], capture_output=True, text=True)
-sys.exit(('พัง:\n'+r.stderr) if r.returncode else print('syntax OK'))
+blocks = re.findall(r'<script>(.*?)</script>', html, re.S)
+bad = []
+for i, b in enumerate(blocks):
+    with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as f:
+        f.write(b); tmp = f.name
+    r = subprocess.run(['node','--check',tmp], capture_output=True, text=True)
+    if r.returncode: bad.append(f'ก้อนที่ {i+1}:\n' + r.stderr)
+if bad: sys.exit('พัง:\n' + '\n'.join(bad))
+print(f'syntax OK ({len(blocks)} ก้อน)')
 PY
