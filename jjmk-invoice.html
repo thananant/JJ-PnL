@@ -617,7 +617,7 @@ window.JJGate=(function(){
       </div>
     </div>
 
-    <button class="btn btn-primary" id="issueBtn" style="width:100%">ออกบิล + PDF ลง NAS + ส่งอีเมล</button>
+    <button class="btn btn-primary" id="issueBtn" style="width:100%">ส่ง</button>
     <div class="detail" style="text-align:center;margin-top:8px">
       ข้อมูลบิลเก็บใน Supabase (เฉพาะตัวหนังสือ) · ไฟล์ PDF เก็บลงโฟลเดอร์ NAS เท่านั้น ไม่อัพโหลดไฟล์ใดๆ ขึ้น Supabase<br>
       ใส่อีเมลลูกค้าไว้ = ระบบส่ง PDF ต้นฉบับให้ทันที แล้วตรวจว่าอีเมลถึงปลายทางภายใน 30 นาที
@@ -668,7 +668,8 @@ window.JJGate=(function(){
       <h2>📁 โฟลเดอร์ NAS สำหรับเก็บไฟล์ PDF</h2>
       <div class="detail" style="margin-bottom:10px">
         แนะนำให้ mount/map ไดรฟ์ NAS ไว้ในเครื่องก่อน (เช่น SMB drive ของ Synology)
-        แล้วกดเลือกโฟลเดอร์นั้น — ไฟล์บิลจะถูกบันทึกอัตโนมัติแยกโฟลเดอร์รายเดือน เช่น <code>2026-09/JJRD1006.pdf</code>
+        แล้วกดเลือกโฟลเดอร์นั้น — ไฟล์บิลจะถูกบันทึกอัตโนมัติแยกโฟลเดอร์ สาขา/เดือนปี เช่น <code>JJRD/092026/JJRD1006.pdf</code>
+        (บิลยกเลิกอยู่ในโฟลเดอร์ย่อย <code>ยกเลิก</code>)
       </div>
       <div id="nasUnsupported" class="notice" style="display:none">
         ⚠ เบราว์เซอร์นี้ไม่รองรับการบันทึกไฟล์ลงโฟลเดอร์โดยตรง (ต้องใช้ Chrome / Edge บนคอมพิวเตอร์)
@@ -690,8 +691,10 @@ window.JJGate=(function(){
       <div class="detail" style="margin-bottom:10px;line-height:1.7">
         ให้ NAS รันสคริปต์ทุก 5 นาที (Task Scheduler แบบเดียวกับสคริปต์สำรองข้อมูลของ P&amp;L):
         NAS <b>ดึงข้อมูลบิลที่ยังไม่มีไฟล์</b>จาก Supabase มาสร้าง PDF แล้วเก็บลงโฟลเดอร์เอง
-        แยกโฟลเดอร์รายเดือนเหมือนเดิม · <b>ไม่ต้องเปิดพอร์ต ไม่ต้องตั้งอะไรในเครื่องที่ใช้ออกบิล</b>
-        · บิลที่แก้ไข/ยกเลิก/เรียกคืน NAS สร้างไฟล์ใหม่ทับให้เอง
+        แยกโฟลเดอร์ <b>สาขา/เดือนปี</b> เช่น <code>JJRD/092026/JJRD1244.pdf</code> (ชื่อไฟล์ = เลขบิล เรียงตามเลขเอง)
+        · <b>ไม่ต้องเปิดพอร์ต ไม่ต้องตั้งอะไรในเครื่องที่ใช้ออกบิล</b>
+        · บิลที่แก้ไข = ลบใบเดิมทิ้งแล้วเก็บใบใหม่ · บิลที่ยกเลิก = ลบใบเดิม แล้วเก็บใบที่มีตรา "ยกเลิก" ในโฟลเดอร์ย่อย
+        <code>ยกเลิก</code> ของเดือนนั้น · เรียกคืน = ย้ายกลับ (NAS ทำให้เอง)
       </div>
       <div class="kv"><span>สถานะ NAS</span><b id="nasSyncState">—</b></div>
       <div class="kv"><span>บิลที่รอเก็บไฟล์ลง NAS</span><b id="missingCount">—</b></div>
@@ -840,7 +843,7 @@ window.JJGate=(function(){
       <h2>ℹ️ วิธีเก็บข้อมูลของระบบนี้</h2>
       <div class="detail" style="line-height:1.8">
         • ข้อมูลบิล (ชื่อลูกค้า รายการ ยอดเงิน) → ตาราง <code>inv_invoices</code> ใน Supabase (ตัวหนังสือล้วน)<br>
-        • ไฟล์ PDF ใบกำกับภาษี → โฟลเดอร์ NAS ที่เลือกไว้ (แยกโฟลเดอร์รายเดือน)<br>
+        • ไฟล์ PDF ใบกำกับภาษี → NAS แยกโฟลเดอร์ สาขา/เดือนปี (บิลยกเลิกอยู่ในโฟลเดอร์ย่อย ยกเลิก)<br>
         • <b>ไม่มีไฟล์รูป/PDF ใดๆ ถูกอัพโหลดขึ้น Supabase ทั้งสิ้น</b><br>
         • อีเมลหาลูกค้าส่งจาก Gmail ร้านผ่าน Apps Script (แนบ PDF ต้นฉบับ) + ตรวจการตีกลับอัตโนมัติ<br>
         • เปิดดู/พิมพ์บิลย้อนหลังได้ตลอด — ระบบสร้าง PDF สดจากข้อมูลในตาราง
@@ -977,6 +980,7 @@ var NO_ACCESS = false;    // บัญชีใช้ได้ แต่ไม�
 var sb = null, dbReady = false, rpcMissing = false, settings = {}, currentUser = null;
 var activityRows = [];
 var invoices = [], editingBillNo = null, editingId = null;
+var ISSUE_LABEL='ส่ง';   // ปุ่มล่างสุดของฟอร์ม (ออกบิลใหม่ + บันทึกการแก้ไข) — เจ้าของสั่ง 2026-09-29 ให้เขียนแค่ "ส่ง"
 /* แถวล่าสุดของบิลจากฐานข้อมูล (หาด้วย id) — ตั้งแต่มีปุ่มแก้เลขชน เลขบิลของแถวเปลี่ยนได้ รายการที่เปิดค้างไว้
    ในเครื่องอื่นอาจยังเห็นเลขเดิม → ก่อนแก้/ยกเลิก/ส่งอีเมล/เก็บไฟล์ ต้องเช็คว่าเลขบนจอยังเป็นของแถวนี้จริง
    ไม่ตรง = ไม่ทำอะไรเลย (ไม่งั้นจะไปเขียนทับบิลระบบเดิมที่เพิ่งเข้ามาใช้เลขนั้น) */
@@ -1155,7 +1159,7 @@ async function syncMissingNas(){
     var v=rows[i];
     info.textContent='กำลังเก็บ '+(i+1)+'/'+rows.length+' — '+v.bill_no+' ...';
     try{
-      var path=await storePdf(v.bill_no, await buildInvoicePdf(v), v.issued_at);
+      var path=await storePdf(v, await buildInvoicePdf(v));
       if(!path){ fail++; continue; }
       await invRow(sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
         updated_at:new Date().toISOString()}), v);
@@ -1185,13 +1189,57 @@ async function ensureNasPermission(){
     return p==='granted';
   }catch(e){ return false; }
 }
-async function saveToNas(filename, blob, iso){
-  var ym=ymOf(iso);
-  var dir=await nasHandle.getDirectoryHandle(ym,{create:true});
-  var fh=await dir.getFileHandle(filename,{create:true});
+/* โครงโฟลเดอร์ใน NAS (เจ้าของสั่ง 2026-09-29 · ตรงกับสคริปต์ inv_nas_sync.py เป๊ะ):
+   <สาขา>/<MMYYYY>/<เลขบิล>.pdf เช่น JJRD/092026/JJRD1244.pdf · บิลยกเลิก → <สาขา>/<MMYYYY>/ยกเลิก/<เลขบิล>.pdf
+   ชื่อไฟล์ = เลขบิล (เรียงตามเลขเอง) · 1 บิลมีไฟล์เดียว: แก้ไข = ทับใบเดิม · ยกเลิก/เรียกคืน = ลบใบเดิมอีกฝั่งทิ้ง */
+var NAS_CANCEL_DIR='ยกเลิก';
+function nasBranch(billNo){ var m=/^[A-Za-z]+/.exec(String(billNo||'')); return m?m[0].toUpperCase():'อื่นๆ'; }
+function nasMonth(iso){ var p=bkkParts(iso); return p.month+p.year; }
+function nasDirs(inv){
+  var d=[nasBranch(inv.bill_no), nasMonth(inv.issued_at)];
+  if(inv.status===STATUS.CANCELLED) d.push(NAS_CANCEL_DIR);
+  return d;
+}
+async function nasSubdir(parts, create){
+  var d=nasHandle;
+  for(var i=0;i<parts.length;i++) d=await d.getDirectoryHandle(parts[i],{create:!!create});
+  return d;
+}
+async function nasEntries(dir){          // [ชื่อ, handle] ของทุกอย่างในโฟลเดอร์ (ไม่ใช้ for-await ให้เบราว์เซอร์เก่าอ่านไฟล์นี้ได้)
+  var out=[], it=dir.entries();
+  for(;;){ var r=await it.next(); if(r.done) break; out.push(r.value); }
+  return out;
+}
+async function nasTryRemove(dir, name){ try{ await dir.removeEntry(name); return true; }catch(e){ return false; } }
+async function saveToNas(inv, blob){
+  var dirs=nasDirs(inv), name=inv.bill_no+'.pdf';
+  var dir=await nasSubdir(dirs,true);
+  var fh=await dir.getFileHandle(name,{create:true});
   var w=await fh.createWritable();
   await w.write(blob); await w.close();
-  return ym+'/'+filename;
+  try{ await nasRemoveOthers(inv, dirs, name); }catch(e){}   // ลบไม่ได้ไม่เป็นไร สคริปต์ NAS เก็บกวาดซ้ำให้
+  return dirs.concat(name).join('/');
+}
+// ลบ <เลขบิล>.pdf ที่อยู่ที่อื่น: ใบก่อนยกเลิก/เรียกคืน · เดือนอื่นของสาขาเดียวกัน (หลังแก้เลขชน) · โครงเก่า YYYY-MM/
+async function nasRemoveOthers(inv, keep, name){
+  var keepKey=keep.join('/'), bdir=null;
+  try{ bdir=await nasHandle.getDirectoryHandle(nasBranch(inv.bill_no)); }catch(e){}
+  if(bdir){
+    var months=await nasEntries(bdir);
+    for(var i=0;i<months.length;i++){
+      var mm=months[i][0], mh=months[i][1];
+      if(mh.kind!=='directory'||!/^[0-9]{6}$/.test(mm)) continue;
+      if([keep[0],mm].join('/')!==keepKey) await nasTryRemove(mh,name);
+      var ch=null; try{ ch=await mh.getDirectoryHandle(NAS_CANCEL_DIR); }catch(e){}
+      if(ch){
+        if([keep[0],mm,NAS_CANCEL_DIR].join('/')!==keepKey) await nasTryRemove(ch,name);
+        await nasTryRemove(mh,NAS_CANCEL_DIR);              // ลบได้เฉพาะตอนว่างแล้ว
+      }
+    }
+  }
+  var old=ymOf(inv.issued_at), od=null;
+  try{ od=await nasHandle.getDirectoryHandle(old); }catch(e){}
+  if(od){ await nasTryRemove(od,name); await nasTryRemove(nasHandle,old); }
 }
 function downloadBlob(filename, blob){
   var url=URL.createObjectURL(blob);
@@ -1200,11 +1248,12 @@ function downloadBlob(filename, blob){
   setTimeout(function(){ URL.revokeObjectURL(url); },60000);
 }
 // บันทึกไฟล์บิล — คืน path ที่เก็บ (เก็บเองแล้ว) หรือ null (ยังไม่อยู่ใน NAS)
-async function storePdf(billNo, blob, iso){
+async function storePdf(inv, blob){
+  var billNo=inv.bill_no;
   // 1) โฟลเดอร์ NAS ที่ผูกไว้กับเครื่องนี้ (คอมที่ map ไดรฟ์) — เก็บทันที
   if(nasHandle){
     try{
-      if(await ensureNasPermission()) return await saveToNas(billNo+'.pdf', blob, iso);
+      if(await ensureNasPermission()) return await saveToNas(inv, blob);
       throw new Error('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์');
     }catch(e){
       await refreshNasSync();
@@ -1212,7 +1261,7 @@ async function storePdf(billNo, blob, iso){
         (nasSyncActive()?' — NAS จะเก็บให้เองภายใน 5 นาที':' — ดาวน์โหลดให้แทน'),'err');
       if(nasSyncActive()){
         // ส่งเข้าคิวของ NAS (บิลที่เคยเก็บแล้วจะมี nas_path ค้างอยู่ ต้องล้างก่อน NAS ถึงจะเห็น)
-        try{ await sb.from('inv_invoices').update({nas_path:null}).eq('bill_no',billNo); }catch(e2){}
+        try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), inv); }catch(e2){}
         return null;
       }
     }
@@ -1936,7 +1985,7 @@ async function issueOrUpdate(){
   var payload=validateForm();
   if(!payload) return;
   var btn=$('issueBtn'), editing=editingBillNo;
-  var label=editing?'บันทึกการแก้ไข + สร้าง PDF ใหม่':'ออกบิล + PDF ลง NAS + ส่งอีเมล';
+  var label=ISSUE_LABEL;
   btn.disabled=true;
   btn.innerHTML='<span class="spin"></span> '+(editing?'กำลังบันทึก...':'กำลังออกบิล...');
   try{
@@ -1981,7 +2030,7 @@ async function issueOrUpdate(){
     var blob=null;
     try{
       blob=await buildInvoicePdf(inv);
-      var path=await storePdf(inv.bill_no, blob, inv.issued_at);
+      var path=await storePdf(inv, blob);
       if(path){
         await invRow(sb.from('inv_invoices').update({nas_path:path,updated_at:new Date().toISOString()}), inv);
         toast('บันทึก '+path+' ลง NAS เรียบร้อย','ok');
@@ -2024,7 +2073,7 @@ async function startEdit(billNo){
   recalc();
   $('editBillNo').textContent=billNo;
   $('editBanner').style.display='flex';
-  $('issueBtn').textContent='บันทึกการแก้ไข + สร้าง PDF ใหม่';
+  $('issueBtn').textContent=ISSUE_LABEL;
   window.scrollTo(0,0);
   toast('โหลดบิล '+billNo+' มาแก้ไขแล้ว','ok');
 }
@@ -2032,7 +2081,7 @@ function exitEdit(){
   editingBillNo=null; editingId=null;
   $('fBranch').disabled=false;
   $('editBanner').style.display='none';
-  $('issueBtn').textContent='ออกบิล + PDF ลง NAS + ส่งอีเมล';
+  $('issueBtn').textContent=ISSUE_LABEL;
   resetForm();
 }
 
@@ -2113,7 +2162,7 @@ function bindCards(scope){
       v=await freshInv(v);          // สร้างไฟล์จากข้อมูลล่าสุด — เลขนี้อาจถูกย้ายไปแล้วจากเครื่องอื่น
       if(!v){ b.disabled=false; b.textContent=nasBtnLabel(); return; }
       var blob=await buildInvoicePdf(v);
-      var path=await storePdf(v.bill_no, blob, v.issued_at);
+      var path=await storePdf(v, blob);
       if(path){
         await invRow(sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
           updated_at:new Date().toISOString()}), v);
@@ -2336,8 +2385,9 @@ $('testNasBtn').onclick=async function(){
   if(!(await ensureNasPermission())){ toast('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์','err'); return; }
   try{
     var blob=new Blob(['ทดสอบเขียนไฟล์จากระบบใบกำกับภาษี '+fmtDT(null)],{type:'text/plain'});
-    var path=await saveToNas('_test-jjmk-invoice.txt',blob,new Date().toISOString());
-    toast('เขียนไฟล์ทดสอบสำเร็จ: '+path,'ok');
+    var fh=await nasHandle.getFileHandle('_test-jjmk-invoice.txt',{create:true});
+    var w=await fh.createWritable(); await w.write(blob); await w.close();
+    toast('เขียนไฟล์ทดสอบสำเร็จ: _test-jjmk-invoice.txt','ok');
   }catch(e){ toast('เขียนไม่สำเร็จ: '+e.message,'err'); }
 };
 $('clearNasBtn').onclick=async function(){
@@ -2609,7 +2659,7 @@ function impConflictHtml(){
     (imp.conflicts.length>20?('<br>… และอีก '+(imp.conflicts.length-20)+' ใบ'):'')+
     '<br><b>วิธีแก้:</b> กดปุ่มด้านล่าง — แอปจะย้ายบิลของแอปนี้ไปใช้เลขใหม่ (ถัดจากเลขล่าสุด) '+
     'ส่งอีเมลฉบับเลขใหม่ให้ลูกค้าคนนั้นทันที แล้วนำเข้าบิลของระบบเดิมที่เลขเดิม · NAS สร้าง PDF ให้ทั้งคู่ '+
-    'และย้ายไฟล์เดิมของเลขนั้น (ของบิลที่ย้ายออก) ไปเก็บใน _ฉบับก่อนหน้า ของเดือนนั้น — ต้องใช้สคริปต์ NAS ตัวล่าสุด'+
+    'และลบไฟล์เดิมของเลขนั้น (ของบิลที่ย้ายออก) ทิ้งให้เอง — ต้องใช้สคริปต์ NAS ตัวล่าสุด'+
     '<br>❗ อย่ากด "ยกเลิกบิล" เอง — บิลที่ยกเลิกยังจองเลขไว้ บิลของระบบเดิมจะเข้าระบบไม่ได้'+
     '<div style="margin-top:8px"><button class="btn btn-primary btn-sm" id="impFixBtn">🔧 แก้เลขชน '+imp.conflicts.length+' ใบ</button></div></div>';
 }
@@ -2785,7 +2835,7 @@ async function impFixOne(c){
     logActivity('ย้ายเลขบิล (เลขชนกับระบบเดิม)',moved.bill_no,c.no+' → '+moved.bill_no+' · '+(moved.customer_name||'-')+
       (a.nas_path?(' · ไฟล์เดิม '+a.nas_path):''));
     msg=c.no+' ('+(moved.customer_name||'-')+') → ย้ายไป '+moved.bill_no;
-    if(a.nas_path) msg+=' · ไฟล์เดิม '+a.nas_path+' NAS จะย้ายไปเก็บใน _ฉบับก่อนหน้า ตอนสร้างไฟล์บิลระบบเดิมเลขนี้';
+    if(a.nas_path) msg+=' · ไฟล์เดิม '+a.nas_path+' NAS จะลบทิ้งตอนสร้างไฟล์บิลระบบเดิมเลขนี้';
   }else{
     // ลองรอบก่อนย้ายเลขไปแล้วแต่ขั้นต่อไปสะดุด → หาบิลที่ย้ายออกจากเลขนี้ที่ยังไม่ได้ส่งฉบับเลขใหม่
     var mq=await sb.from('inv_invoices').select('*').eq('email_status_detail',IMP_MUST_SEND+c.no+')').limit(1);

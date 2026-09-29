@@ -7,7 +7,9 @@ inv_nas_sync.py — ตัวเก็บไฟล์ PDF ใบกำกับ�
 NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ยังไม่มีไฟล์จาก Supabase มาสร้าง PDF เก็บเอง
   → ไม่ต้องเปิดพอร์ต / ไม่ต้องทำ DDNS / ไม่ต้องตั้งอะไรในเครื่องที่ใช้ออกบิล
   → ออกบิลจากมือถือหรือเครื่องไหนก็ได้ ไฟล์เข้า NAS ภายใน 5 นาที
-  → บิลที่ถูกแก้ไข / ยกเลิก / เรียกคืน แอปจะสั่งให้ NAS สร้างไฟล์ใหม่ทับให้เอง
+  → เก็บเป็น <สาขา>/<MMYYYY>/<เลขบิล>.pdf เช่น JJRD/092026/JJRD1244.pdf (ชื่อไฟล์ = เลขบิล เรียงตามเลขเอง)
+  → บิลที่ถูกแก้ไข = ลบใบเดิมทิ้งแล้วเก็บใบใหม่ · บิลยกเลิก = ลบใบเดิม แล้วเก็บใบที่มีตรา "ยกเลิก"
+    ลงโฟลเดอร์ย่อย ยกเลิก/ ของเดือนนั้น · เรียกคืน = ย้ายกลับ (แอปสั่งให้ NAS ทำเองทั้งหมด)
   → Supabase เก็บแค่ตัวหนังสือ ไม่มีไฟล์ใด ๆ ขึ้นไป
 
 วิธีติดตั้ง (ทำครั้งเดียว — ขั้นตอนละเอียดอยู่ในหน้า ⚙ ตั้งค่า ของแอปใบกำกับภาษี)
@@ -28,7 +30,7 @@ NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ย
     แต่ต้องล็อกโฟลเดอร์ _sync ให้แก้ไขได้เฉพาะ administrators (File Station → คุณสมบัติ → สิทธิ์)
     ย้ายมาแบบแนะนำ: ก๊อปทั้งโฟลเดอร์ _sync (มี _lib / fonts / signature.png) ไปเป็น /volume1/scripts/inv_sync
     → แก้คำสั่งใน Task Scheduler เป็นแบบข้อ 3 → รัน --check ดูว่าบรรทัด "โฟลเดอร์เก็บบิล" ถูก → ลบ _sync เดิมทิ้ง
-  * ไฟล์ที่ถูกเขียนทับ (บิลแก้ไข/ยกเลิก) เก็บฉบับก่อนหน้าไว้ในโฟลเดอร์ _ฉบับก่อนหน้า ของเดือนนั้น 10 ฉบับล่าสุด
+  * ไฟล์ที่เคยเก็บแบบเดิม (YYYY-MM/ และ _ฉบับก่อนหน้า) สคริปต์ย้ายเข้าโครงใหม่ให้เองแล้วลบของเดิมทิ้ง
   * หน้า "สำเนา" ทำตามสวิตช์ "แนบหน้า สำเนา" ในแอป (อ่านจาก inv_settings รอบละครั้ง) — บังคับเองได้ที่ WITH_COPY
 
 คำสั่งเสริม (ใส่ --base "<โฟลเดอร์เก็บบิล>" ต่อท้ายได้ทุกคำสั่ง)
@@ -904,81 +906,132 @@ def safe_bill(bill_no):
     return re.match(BILL_RE, str(bill_no or '')) is not None
 
 
-KEEP_VERSIONS = 10               # เก็บฉบับก่อนหน้าไว้กี่ฉบับต่อบิล
-VERSIONS_DIR = '_ฉบับก่อนหน้า'
+# โครงโฟลเดอร์ (เจ้าของสั่ง 2026-09-29): <สาขา>/<MMYYYY>/<เลขบิล>.pdf  เช่น JJRD/092026/JJRD1244.pdf
+#   บิลยกเลิก → <สาขา>/<MMYYYY>/ยกเลิก/<เลขบิล>.pdf · ชื่อไฟล์ = เลขบิล จึงเรียงตามเลขบิลเอง
+#   แก้ไข = เขียนทับใบเดิม · ยกเลิก/เรียกคืน = ลบใบเดิมทิ้งแล้วเก็บใบใหม่อีกฝั่ง → 1 บิล มีไฟล์เดียวเสมอ
+CANCEL_DIR = 'ยกเลิก'
+BRANCH_OTHER = 'อื่นๆ'
+MMYYYY_RE = r'^[0-9]{6}$'
+OLD_MONTH_RE = r'^[0-9]{4}-[0-9]{2}$'       # โครงเก่า (ก่อน 2026-09-29): YYYY-MM/<เลขบิล>.pdf
+OLD_VERSIONS_DIR = '_ฉบับก่อนหน้า'          # โครงเก่าเก็บฉบับก่อนหน้าไว้ที่นี่ — ตอนนี้ลบทิ้งตามเจ้าของสั่ง
 
 
-def keep_version(folder, bill_no, path):
-    """ก่อนเขียนทับ (บิลถูกแก้/ยกเลิก/สั่งสร้างใหม่) ย้ายฉบับเดิมไปเก็บไว้ ย้อนดูได้ 10 ฉบับล่าสุด"""
-    if os.path.islink(path) or not os.path.isfile(path):
+def bill_branch(bill_no):
+    m = re.match(r'[A-Za-z]+', str(bill_no or ''))
+    return m.group(0).upper() if m else BRANCH_OTHER
+
+
+def mmyyyy_of(iso):
+    return bkk(iso).strftime('%m%Y')
+
+
+def bill_parts(bill_no, iso, cancelled):
+    return [bill_branch(bill_no), mmyyyy_of(iso)] + ([CANCEL_DIR] if cancelled else [])
+
+
+def open_dir(base, parts):
+    """เปิด/สร้างโฟลเดอร์ย่อยทีละชั้น — สคริปต์รันด้วย root ห้ามเดินตามลิงก์ลัด (symlink) ออกไปเขียนที่อื่น"""
+    folder = base
+    for p in parts:
+        folder = os.path.join(folder, p)
+        if os.path.islink(folder):
+            raise RuntimeError('โฟลเดอร์ %s เป็นลิงก์ลัด — ไม่เขียนเพื่อความปลอดภัย' % '/'.join(parts))
+        os.makedirs(folder, exist_ok=True)
+    if os.path.realpath(folder) != folder:
+        raise RuntimeError('โฟลเดอร์ %s ชี้ออกนอกโฟลเดอร์เก็บบิล — ไม่เขียนเพื่อความปลอดภัย' % '/'.join(parts))
+    return folder
+
+
+def _real_dir(path):
+    return os.path.isdir(path) and not os.path.islink(path)
+
+
+def remove_other_copies(base, bill_no, keep):
+    """1 บิล = 1 ไฟล์ — ลบ <เลขบิล>.pdf ที่อยู่ที่อื่นทิ้งหลังเก็บใบใหม่แล้ว:
+    · ใบเดิมอีกฝั่งของโฟลเดอร์ ยกเลิก (บิลเพิ่งถูกยกเลิก หรือเพิ่งเรียกคืน)
+    · เดือนอื่นของสาขาเดียวกัน (ปุ่มแก้เลขชนในแอป: บิลของแอปย้ายเลขออก บิลระบบเดิมเลขนั้นคนละเดือนเข้ามาแทน)
+    · โครงเก่า YYYY-MM/ และฉบับที่เคยเก็บไว้ใน _ฉบับก่อนหน้า (ย้ายมาโครงใหม่ ไม่ต้องมีของซ้ำ)
+    ลบเฉพาะไฟล์ชื่อตรงเลขบิลเป๊ะ ในโฟลเดอร์ตามโครงเท่านั้น · ไม่เดินตามลิงก์ลัด · โฟลเดอร์ที่ว่างแล้วลบทิ้ง"""
+    name = bill_no + '.pdf'
+    cands, empties = [], []
+    try:
+        tops = os.listdir(base)
+    except OSError:
         return
-    vdir = os.path.join(folder, VERSIONS_DIR)
-    if os.path.islink(vdir):
-        return
-    os.makedirs(vdir, exist_ok=True)
-    stamp = datetime.datetime.now(BKK).strftime('%Y%m%d-%H%M%S')
-    os.replace(path, os.path.join(vdir, '%s.%s.pdf' % (bill_no, stamp)))
-    old = sorted(f for f in os.listdir(vdir) if f.startswith(bill_no + '.') and f.endswith('.pdf'))
-    for f in old[:-KEEP_VERSIONS]:
+    bdir = os.path.join(base, bill_branch(bill_no))
+    if _real_dir(bdir):
+        for mm in os.listdir(bdir):
+            mdir = os.path.join(bdir, mm)
+            if not re.match(MMYYYY_RE, mm) or not _real_dir(mdir):
+                continue
+            cands.append(os.path.join(mdir, name))
+            cdir = os.path.join(mdir, CANCEL_DIR)
+            if _real_dir(cdir):
+                cands.append(os.path.join(cdir, name))
+                empties.append(cdir)
+    for top in tops:
+        odir = os.path.join(base, top)
+        if not re.match(OLD_MONTH_RE, top) or not _real_dir(odir):
+            continue
+        cands.append(os.path.join(odir, name))
+        vdir = os.path.join(odir, OLD_VERSIONS_DIR)
+        if _real_dir(vdir):
+            cands += [os.path.join(vdir, f) for f in os.listdir(vdir)
+                      if f.startswith(bill_no + '.') and f.endswith('.pdf')]
+            empties.append(vdir)
+        empties.append(odir)
+    for c in cands:
+        if c == keep or not os.path.lexists(c) or os.path.isdir(c):
+            continue
         try:
-            os.remove(os.path.join(vdir, f))
+            os.remove(c)               # ถ้าเป็นลิงก์ลัด ลบแค่ตัวลิงก์ ไม่แตะไฟล์ปลายทาง
+            log('ลบไฟล์เดิม %s' % os.path.relpath(c, base))
+        except OSError as e:
+            log('ลบไฟล์เดิม %s ไม่ได้: %s' % (os.path.relpath(c, base), e))
+    for d in empties:
+        try:
+            os.rmdir(d)                # ลบได้เฉพาะโฟลเดอร์ที่ว่างแล้ว
         except OSError:
             pass
 
 
-MONTH_RE = r'^\d{4}-\d{2}$'
-
-
-def retire_other_months(base, ym, bill_no):
-    """เลขบิลไม่ซ้ำกันทั้งระบบ → ไฟล์ <เลขบิล>.pdf ต้องมีที่เดียว คือโฟลเดอร์เดือนของบิลนั้น
-    ถ้าเจอชื่อเดียวกันในเดือนอื่น = ไฟล์ค้างของบิลที่ถูกย้ายเลข (ปุ่มแก้เลขชนในแอป: บิลของแอปย้ายไปเลขใหม่
-    แล้วบิลระบบเดิมเลขนั้นซึ่งออกคนละเดือนเข้ามาแทน) → ย้ายไปเก็บใน _ฉบับก่อนหน้า ของเดือนนั้น ไม่ลบทิ้ง"""
-    try:
-        months = os.listdir(base)
-    except OSError:
-        return
-    for m in months:
-        if m == ym or not re.match(MONTH_RE, m):
-            continue
-        folder = os.path.join(base, m)
-        if os.path.islink(folder) or not os.path.isdir(folder):
-            continue
-        path = os.path.join(folder, bill_no + '.pdf')
-        if os.path.isfile(path) and not os.path.islink(path):
-            keep_version(folder, bill_no, path)
-            log('ย้าย %s/%s.pdf ไปเก็บใน %s/%s — เลขนี้เป็นของบิลเดือน %s แล้ว (ไฟล์เดิมเป็นของบิลที่ถูกย้ายเลข)'
-                % (m, bill_no, m, VERSIONS_DIR, ym))
-
-
-def write_pdf(bill_no, iso, data):
+def write_pdf(bill_no, iso, data, cancelled=False):
     if not safe_bill(bill_no):
         raise RuntimeError('เลขบิลผิดรูปแบบ')
     base = os.path.realpath(base_dir())
-    ym = ym_of(iso)
-    folder = os.path.join(base, ym)
-    # สคริปต์รันด้วย root — ห้ามเดินตามลิงก์ลัด (symlink) ที่ใครวางไว้ในโฟลเดอร์ ออกไปเขียนไฟล์ระบบ
-    if os.path.islink(folder):
-        raise RuntimeError('โฟลเดอร์ %s เป็นลิงก์ลัด — ไม่เขียนเพื่อความปลอดภัย' % ym)
-    os.makedirs(folder, exist_ok=True)
-    if os.path.realpath(folder) != folder:
-        raise RuntimeError('โฟลเดอร์ %s ชี้ออกนอกโฟลเดอร์เก็บบิล — ไม่เขียนเพื่อความปลอดภัย' % ym)
+    parts = bill_parts(bill_no, iso, cancelled)
+    folder = open_dir(base, parts)
     path = os.path.join(folder, bill_no + '.pdf')
-    rel = ym + '/' + bill_no + '.pdf'
+    rel = '/'.join(parts + [bill_no + '.pdf'])
+    same = False
     if os.path.isfile(path) and not os.path.islink(path):
         with open(path, 'rb') as f:
-            if f.read() == data:
-                retire_other_months(base, ym, bill_no)
-                return rel             # ไฟล์เดิมเหมือนกันทุกไบต์ — ไม่ต้องเขียนซ้ำ
-    tmp = path + '.part'
-    if os.path.lexists(tmp):
-        os.unlink(tmp)                 # ลบของค้าง (ถ้าเป็นลิงก์ลัดก็ลบแค่ตัวลิงก์)
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o664)
-    with os.fdopen(fd, 'wb') as f:
-        f.write(data)
-    keep_version(folder, bill_no, path)
-    os.replace(tmp, path)          # เขียนเสร็จทั้งไฟล์ก่อนค่อยสลับชื่อ — ไม่มีไฟล์ครึ่ง ๆ ค้างใน NAS
-    retire_other_months(base, ym, bill_no)
+            same = (f.read() == data)  # ไฟล์เดิมเหมือนกันทุกไบต์ — ไม่ต้องเขียนซ้ำ
+    if not same:
+        tmp = path + '.part'
+        if os.path.lexists(tmp):
+            os.unlink(tmp)             # ลบของค้าง (ถ้าเป็นลิงก์ลัดก็ลบแค่ตัวลิงก์)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o664)
+        with os.fdopen(fd, 'wb') as f:
+            f.write(data)
+        os.replace(tmp, path)          # ใบใหม่แทนใบเดิม — เขียนเสร็จทั้งไฟล์ก่อนค่อยสลับชื่อ ไม่มีไฟล์ครึ่ง ๆ ค้าง
+    remove_other_copies(base, bill_no, path)
     return rel
+
+
+OLD_PATH_FILTER = 'nas_path=match.' + q('^[0-9]{4}-[0-9]{2}/')
+
+
+def requeue_old_layout():
+    """บิลที่เคยเก็บแบบโครงเก่า (nas_path = YYYY-MM/...) → ส่งกลับเข้าคิว ให้สร้างในโครงใหม่แล้วลบไฟล์เดิมทิ้ง
+    อ่านดูก่อน มีจริงค่อยแก้ — รอบปกติที่ไม่มีอะไรต้องย้าย จะไม่เขียนอะไรลงฐานข้อมูล"""
+    if not sb_req('GET', '/rest/v1/inv_invoices?select=bill_no&limit=1&' + OLD_PATH_FILTER):
+        return 0
+    rows = sb_req('PATCH', '/rest/v1/inv_invoices?select=bill_no&' + OLD_PATH_FILTER,
+                  {'nas_path': None}, prefer='return=representation') or []
+    if rows:
+        log('ย้ายไปโครงโฟลเดอร์ใหม่ (สาขา/เดือนปี): ส่ง %d ใบกลับเข้าคิว' % len(rows))
+    return len(rows)
 
 
 def process(inv, force=False):
@@ -987,7 +1040,7 @@ def process(inv, force=False):
         log('ข้าม — เลขบิลผิดรูปแบบ: %r' % bill)
         return False
     data = build_pdf(inv)
-    rel = write_pdf(bill, inv.get('issued_at'), data)
+    rel = write_pdf(bill, inv.get('issued_at'), data, cancelled=inv.get('status') == STATUS_CANCELLED)
     if mark_saved(inv, rel, force=force):
         log('เก็บ %s (%d KB)%s' % (rel, len(data) // 1024 + 1,
                                    ' · ยกเลิก' if inv.get('status') == STATUS_CANCELLED else ''))
@@ -1146,6 +1199,10 @@ def run_sync():
         heartbeat('ผิดพลาด: ' + str(e))
         return 1
     t0 = time.time()
+    try:
+        requeue_old_layout()
+    except Exception as e:
+        log('ส่งบิลโครงเก่ากลับเข้าคิวไม่ได้: %s' % e)
     try:
         rows = fetch_pending(MAX_PER_RUN)
     except Exception as e:
