@@ -44,8 +44,14 @@ Deno.serve(async (req) => {
 
   try {
     const b = await req.json().catch(() => ({} as Record<string, string>));
-    const token = Deno.env.get("LINE_TOKEN");
-    if (!token) return new Response("skip: ยังไม่ได้ตั้ง secret LINE_TOKEN", { headers: CORS });
+    const token = (Deno.env.get("LINE_TOKEN") || "").trim();
+    if (!token) {
+      // บอกให้รู้ว่าฟังก์ชันนี้ "เห็น" secret ชื่ออะไรบ้าง (ชื่ออย่างเดียว ไม่ส่งค่าออกไป)
+      // ตั้ง secret ไว้แล้วแต่ยังไม่เห็น = ต้องกด Deploy ฟังก์ชันใหม่อีกรอบ
+      const seen = ["LINE_TOKEN", "LINE_GROUP_ID", "LINE_CHANNEL_ACCESS_TOKEN", "LINE_SECRET", "LINE_CHANNEL_SECRET"]
+        .filter((k) => (Deno.env.get(k) || "").trim() !== "");
+      return new Response("skip: อ่าน LINE_TOKEN ไม่เจอ | เห็น: " + (seen.join(", ") || "-"), { headers: CORS });
+    }
     const to = await groupId();
     if (!to) return new Response("skip: ยังไม่ได้เลือกกลุ่ม LINE", { headers: CORS });
 
