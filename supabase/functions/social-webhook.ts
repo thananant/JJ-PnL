@@ -9,6 +9,8 @@ import { z } from "npm:zod";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+// เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
+const VERSION = "2026-09-29";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // ใช้ชื่อเฉพาะของ JJ Social — อย่าสับสนกับ LINE_SECRET/LINE_TOKEN ซึ่งเป็นของ OA ระบบอื่น
@@ -387,7 +389,12 @@ Deno.serve(async (req) => {
         return new Response(u.searchParams.get("hub.challenge") ?? "", { status: 200 });
       return new Response("bad verify token", { status: 403 });
     }
-    return new Response("jjmk social-webhook ok", { status: 200 });
+    // หน้า "สถานะระบบ" ในแอปเรียกดู — บอกแค่ว่าตั้งค่าครบหรือยัง (true/false) ไม่ส่งค่าลับออกไป
+    return new Response(JSON.stringify({
+      ok: true, app: "jjmk social-webhook", version: VERSION,
+      line: !!(LINE_SECRET && LINE_TOKEN), facebook: !!(FB_APP_SECRET && FB_PAGE_TOKEN),
+      generic: !!GENERIC_KEY, gbp_oauth: !!(GBP_CLIENT_ID && GBP_CLIENT_SECRET),
+    }), { status: 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
   }
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
 

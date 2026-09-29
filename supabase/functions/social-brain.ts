@@ -9,6 +9,8 @@ import { z } from "npm:zod";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+// เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
+const VERSION = "2026-09-29";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -731,7 +733,7 @@ const CORS = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  if (req.method !== "POST") return new Response("jjmk social-brain ok", { headers: CORS });
+  if (req.method !== "POST") return new Response("jjmk social-brain ok v" + VERSION, { headers: CORS });
   try {
     const b = await req.json();
     await getSettings().catch(() => null);   // อ่านโหมด AI (ฟรี/คุณภาพสูงสุด) ก่อนทุกครั้ง
@@ -768,6 +770,29 @@ Deno.serve(async (req) => {
         break;
       }
       case "gbp_sync": out = await gbpSync(!!b.full); break;
+      case "status": {   // หน้า "สถานะระบบ" ในแอป — บอกแค่ว่าตั้งค่าแล้วหรือยัง ไม่ส่งค่าลับออกไป
+        const st = await getSettings();
+        const ch = st.channels ?? {};
+        const { count: pending } = await sb.from("social_mentions")
+          .select("id", { count: "exact", head: true }).is("analyzed_at", null);
+        const { data: lastA } = await sb.from("social_mentions").select("analyzed_at")
+          .not("analyzed_at", "is", null).order("analyzed_at", { ascending: false }).limit(1);
+        out = {
+          ok: true, version: VERSION, ai_mode: AI_MODE,
+          secrets: {
+            anthropic: !!Deno.env.get("ANTHROPIC_API_KEY"), gemini: !!GEMINI_KEY,
+            google_places: !!GOOGLE_KEY, gbp_oauth: !!(GBP_CLIENT_ID && GBP_CLIENT_SECRET),
+            line_token: !!LINE_TOKEN, fb_page_token: !!FB_PAGE_TOKEN,
+          },
+          claude_paused_min: claudeDownUntil > Date.now() ? Math.ceil((claudeDownUntil - Date.now()) / 60000) : 0,
+          google: {
+            gbp_connected: !!ch.gbp?.rt_enc, gbp_last_sync: ch.gbp?.last_sync ?? null,
+            places: (ch.google_places ?? []).length, places_last_poll: ch.google_last_poll ?? null,
+          },
+          pending_analysis: pending ?? 0, last_analyzed: lastA?.[0]?.analyzed_at ?? null,
+        };
+        break;
+      }
       case "cron": {
         const st = await getSettings();
         // 1) Google Business Profile (ฟรี ได้รีวิวครบ) — ถ้ายังไม่ได้รับอนุมัติ/ยังไม่เชื่อม
