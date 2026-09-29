@@ -147,6 +147,7 @@ label.fld span{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;
 .empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13px;line-height:1.7}
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(90px);background:#2B221D;border:1px solid var(--goldDim);color:var(--ink);padding:11px 20px;border-radius:11px;font-size:13.5px;z-index:90;transition:transform .25s;box-shadow:0 8px 26px rgba(0,0,0,.5);max-width:90vw;text-align:center}
 #toast.on{transform:translateX(-50%) translateY(0)}
+#toast:empty{opacity:0;pointer-events:none}   /* ว่าง = ไม่ต้องโผล่ (เห็นตอนถ่ายภาพทั้งหน้า) */
 #toast.err{border-color:var(--bad);color:#FFC9CC}
 .spin{width:26px;height:26px;border:3px solid var(--line2);border-top-color:var(--gold);border-radius:50%;animation:sp .8s linear infinite;margin:30px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -159,6 +160,45 @@ a.back:hover{color:var(--gold2)}
   #lgU,#lgP,#liUser,#liPass{font-size:16px !important}
   .jjgate-note{font-size:13px !important}
 }
+
+/* ===== แท็บ "รออนุมัติ" (ใบสมัครพนักงานใหม่ 2026-09-29) ===== */
+.pcount{display:inline-block;margin-left:7px;background:#D9A441;color:#2A1A08;border-radius:99px;
+  padding:1px 8px;font-size:12px;font-weight:800;vertical-align:middle}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-bottom:13px;overflow:hidden}
+.pchead{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--line);background:var(--card2)}
+.pav{width:44px;height:44px;border-radius:13px;flex:0 0 44px;display:flex;align-items:center;justify-content:center;
+  font-size:19px;font-weight:800;color:#fff;background:linear-gradient(145deg,#C72A34,#6E1016)}
+.pnm{font-family:var(--fd);font-size:16.5px;font-weight:700;line-height:1.3}
+.pnm small{font-weight:400;color:var(--mut);font-size:13px;margin-left:5px}
+.pwhen{margin-left:auto;font-size:12px;color:var(--mut);text-align:right;line-height:1.6;white-space:nowrap}
+.pbadge{display:inline-block;background:rgba(217,164,65,.15);border:1px solid rgba(217,164,65,.45);
+  color:var(--gold2);border-radius:99px;padding:2px 10px;font-size:12px;font-weight:700}
+.pbody{padding:13px 15px}
+.pgrid2{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 18px}
+.pkv{border-bottom:1px dashed var(--line);padding-bottom:6px;min-width:0}
+.pkv .k{font-size:11.5px;color:var(--mut);margin-bottom:2px}
+.pkv .v{font-size:14.5px;color:var(--ink);line-height:1.45;word-break:break-word}
+.pkv.w3{grid-column:span 3}
+.psec{font-size:13px;font-weight:700;color:var(--gold);margin:16px 0 9px;display:flex;align-items:center;gap:7px}
+.psec::after{content:"";flex:1;height:1px;background:var(--line)}
+.prow{display:flex;gap:9px 11px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.prow .lb{font-size:13px;color:var(--ink2);white-space:nowrap}
+.prow .zsel{width:auto!important;min-width:170px;max-width:260px;flex:0 1 auto;margin-left:0}
+.prow .zsel.cp{margin-left:auto;min-width:220px}
+@media(max-width:700px){.prow{gap:7px}.prow .zsel,.prow .zsel.cp{flex:1 1 100%;max-width:none;margin-left:0}}
+.papps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.papp{display:flex;align-items:center;gap:7px;background:var(--bg2);border:1px solid var(--line);
+  border-radius:10px;padding:8px 10px;font-size:13.5px;cursor:pointer;user-select:none}
+.papp.on{border-color:var(--gold);background:rgba(217,164,65,.1)}
+.papp input{width:16px;height:16px;flex:0 0 16px;accent-color:var(--gold)}
+.pbtns{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap}
+.btn.okb{background:linear-gradient(180deg,#2FA35A,#177A3C);border-color:#177A3C;color:#fff}
+.btn.nob{background:transparent;border-color:#6A4340;color:#E88C86}
+.phint{font-size:12.5px;color:var(--mut);margin-top:9px;line-height:1.65}
+@media(max-width:820px){.pgrid2{grid-template-columns:1fr 1fr}.pkv.w3{grid-column:span 2}.papps{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.pgrid2{grid-template-columns:1fr}.pkv.w3{grid-column:span 1}
+  .pwhen{margin-left:0;text-align:left;white-space:normal}
+  .pchead{flex-wrap:wrap}.pbtns .btn{flex:1 1 100%}}
 </style>
 <script>
 /* ============================================================
@@ -423,6 +463,7 @@ window.JJGate=(function(){
 
 <div class="wrap">
   <div class="tabs">
+    <button id="tb_pending" onclick="go('pending')">⏳ รออนุมัติ<span id="pendN" class="pcount" hidden>0</span></button>
     <button id="tb_users" class="on" onclick="go('users')">👥 ผู้ใช้ &amp; สิทธิ์</button>
     <button id="tb_survey" onclick="go('survey')">🔍 สำรวจบัญชีเดิม</button>
     <button id="tb_matrix" onclick="go('matrix')">🗂 ตารางสรุปสิทธิ์</button>
@@ -453,7 +494,7 @@ const CONFIG={
 const APPS={
   pnl:{n:'JJ P&L',ic:'📒',f:'jjmk-pnl.html',d:'บัญชีรายรับ–รายจ่าย',s:{
     dash:'แดชบอร์ด',income:'รายรับ',exp:'รายจ่าย',detail:'บันทึกข้อมูลบิล',vatrep:'รายละเอียดบิล',
-    usage:'ข้อมูลการใช้ของ',sup:'ของใช้/อุปกรณ์',ck:'ครัวกลาง',sum:'สรุปเดือน',recon:'ตรวจสอบเงิน',pv:'ใบสำคัญจ่าย',
+    usage:'ข้อมูลการใช้ของ',sup:'ของใช้/อุปกรณ์ (ฝั่งโกดัง)',ck:'ครัวกลาง',sum:'สรุปเดือน',recon:'ตรวจสอบเงิน',pv:'ใบสำคัญจ่าย',
     etc:'อื่นๆ',set:'ตั้งค่า'}},
   owner:{n:'JJ Owner',ic:'👑',f:'jjmk-owner.html',d:'สรุปผู้บริหาร (ปกติเปิดให้เฉพาะ admin)',s:{
     overview:'ภาพรวมทั้งปี',pl:'งบกำไรขาดทุน',manual:'ใส่ยอดขาย/กำไรเอง',inst:'ผ่อนชำระ'}},
@@ -503,7 +544,7 @@ function roleOf(u){ return (u&&ROLES[u.role])?u.role:'staff'; }
 function unitOf(u){ return (u&&UNITS[u.unit])?u.unit:'ALL'; }
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
 
-const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{},copiedFrom:null};
+const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['pending','users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{},copiedFrom:null,pend:[],pendApps:{},pendCopy:{}};
 
 /* ---------- utils ---------- */
 const $=s=>document.querySelector(s);
@@ -588,14 +629,15 @@ function countScreens(u,app){
 /* ============ Render หลัก ============ */
 function go(t){
   S.tab=t; try{localStorage.setItem('jjacc_tab',t);}catch(e){}   // จำหน้าที่เปิดอยู่ — รีเฟรชแล้วกลับมาหน้าเดิม
-  ['users','survey','matrix','log'].forEach(x=>{const b=$('#tb_'+x);if(b)b.classList.toggle('on',x===t);});
+  ['pending','users','survey','matrix','log'].forEach(x=>{const b=$('#tb_'+x);if(b)b.classList.toggle('on',x===t);});
   render();
 }
 async function render(){
   const el=$('#main');
   el.innerHTML='<div class="spin"></div>';
   try{
-    if(S.tab==='users')      el.innerHTML=await viewUsers();
+    if(S.tab==='pending')    el.innerHTML=await viewPending();
+    else if(S.tab==='users') el.innerHTML=await viewUsers();
     else if(S.tab==='survey')el.innerHTML=await viewSurvey();
     else if(S.tab==='matrix')el.innerHTML=await viewMatrix();
     else                     el.innerHTML=await viewLog();
@@ -609,6 +651,187 @@ async function loadUsers(force){
   if(S.users.length&&!force)return S.users;
   S.users=await sel('pnl_users','select=*&order=role.desc,username&limit=1000');
   return S.users;
+}
+
+
+/* ============================================================
+   แท็บ "⏳ รออนุมัติ" — ใบสมัครพนักงานใหม่จากหน้าศูนย์รวมแอพ (เจ้าของสั่ง 2026-09-29)
+   พนักงานกรอกใบสมัครเอง -> บัญชีสถานะ pending -> admin ตั้งระดับ/ประจำที่/ติ๊กแอพ -> อนุมัติ
+   ต้องรัน jjmk-signup.sql ก่อน 1 ครั้ง (คอลัมน์ pnl_users.status + ตาราง pnl_profiles)
+   ============================================================ */
+const NEED_SQL=e=>/status|pnl_profiles/i.test(String((e&&e.message)||e))&&
+  /does not exist|column|relation|schema cache/i.test(String((e&&e.message)||e));
+const GENDER_IC={'ชาย':'👨','หญิง':'👩'};
+
+function pendApps(k){            // ติ๊กแอพ 1 ตัว = ให้สิทธิ์ ดู/เพิ่ม/แก้ ทุกหน้าจอของแอพนั้น (ไม่ให้ลบ)
+  const a={}; Object.keys(APPS[k].s).forEach(sc=>a[sc]='vae'); return a;
+}
+function thDate(d){
+  if(!d)return '—';
+  const x=new Date(d+'T00:00:00'); if(isNaN(x))return esc(d);
+  const M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return x.getDate()+' '+M[x.getMonth()]+' '+(x.getFullYear()+543);
+}
+function thWhen(ts){
+  if(!ts)return '—';
+  const x=new Date(ts); if(isNaN(x))return esc(ts);
+  const M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const p=n=>String(n).padStart(2,'0');
+  return x.getDate()+' '+M[x.getMonth()]+' '+p(x.getHours())+':'+p(x.getMinutes());
+}
+function fullAddr(p,which){
+  const a=p?p['addr_'+which]:'', pv=p?p['addr_'+which+'_province']:'', z=p?p['addr_'+which+'_zip']:'';
+  const t=[a,pv,z].filter(Boolean).join(' ').trim();
+  return t||'—';
+}
+async function viewPending(){
+  let us=[];
+  try{
+    us=await sel('pnl_users',"select=*&status=eq.pending&order=created_at.asc&limit=200");
+  }catch(e){
+    if(NEED_SQL(e))return '<div class="card"><div class="empty">ยังไม่ได้ติดตั้งระบบสมัครพนักงาน<br>'+
+      '<span style="font-size:12.5px">รัน <b>jjmk-signup.sql</b> ใน Supabase ก่อน 1 ครั้ง '+
+      '(เพิ่มคอลัมน์ <code>pnl_users.status</code> และตาราง <code>pnl_profiles</code>)</span></div></div>';
+    throw e;
+  }
+  S.pend=us; S.pendApps={}; S.pendCopy={};
+  setPendCount(us.length);
+  if(!us.length)return '<div class="card"><div class="empty">🎉 ไม่มีใบสมัครค้างอยู่<br>'+
+    '<span style="font-size:12.5px">ใบสมัครใหม่จากหน้าศูนย์รวมแอพจะมาโผล่ที่นี่</span></div></div>';
+
+  let profs={};
+  try{
+    const names=us.map(u=>'"'+String(u.username).replace(/"/g,'')+'"').join(',');
+    const rows=await sel('pnl_profiles_v','select=*&username=in.('+encodeURIComponent(names)+')&limit=200');
+    (rows||[]).forEach(p=>profs[p.username]=p);
+  }catch(e){}
+  await loadUsers();   // ไว้ใช้ตอนคัดลอกสิทธิ์
+
+  return '<div class="card" style="padding:13px 15px;margin-bottom:13px">'+
+      '<b>มีใบสมัครรออนุมัติ '+us.length+' ใบ</b>'+
+      '<div style="font-size:12.5px;color:var(--mut);margin-top:4px;line-height:1.65">'+
+      'ตั้ง <b>ระดับ</b> + <b>ประจำที่</b> แล้วติ๊กว่าให้เข้าแอพไหนได้ → กดอนุมัติ · '+
+      'ระหว่างที่ยังไม่อนุมัติ เขาล็อกอินได้แต่เห็นแค่หน้ารออนุมัติ เข้าแอพไหนไม่ได้เลย</div></div>'+
+    us.map(u=>pendCard(u,profs[u.username])).join('');
+}
+function pendCard(u,p){
+  const nick=(p&&p.nickname)||u.display_name||u.username;
+  const full=p?((p.first_name||'')+' '+(p.last_name||'')).trim():(u.display_name||u.username);
+  const uOpts=Object.keys(UNITS).map(k=>'<option value="'+k+'"'+(u.unit===k?' selected':'')+'>'+
+    UNITS[k].ic+' '+esc(UNITS[k].n)+'</option>').join('');
+  const rOpts=Object.keys(ROLES).map(k=>'<option value="'+k+'"'+(k==='staff'?' selected':'')+'>'+
+    ROLES[k].ic+' '+esc(ROLES[k].n)+'</option>').join('');
+  const apps=APPKEYS.map(k=>'<label class="papp" id="pa_'+u.id+'_'+k+'">'+
+    '<input type="checkbox" data-pu="'+u.id+'" data-pk="'+k+'" onchange="pendTick(this)">'+
+    APPS[k].ic+' '+esc(APPS[k].n)+'</label>').join('');
+  const others=(S.users||[]).filter(x=>x.status!=='pending'&&x.username!==u.username);
+  const copyOpts='<option value="">— คัดลอกสิทธิ์จากคนอื่น —</option>'+others.map(o=>
+    '<option value="'+o.id+'">'+esc(o.display_name||o.username)+' ('+esc(o.username)+')</option>').join('');
+  const kv=(k,v,w)=>'<div class="pkv'+(w?' w3':'')+'"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>';
+
+  return '<div class="pcard" id="pc_'+u.id+'">'+
+    '<div class="pchead">'+
+      '<div class="pav">'+esc(String(nick).slice(0,1))+'</div>'+
+      '<div style="min-width:0"><div class="pnm">'+esc(full)+
+        (p&&p.gender?' <small>('+((GENDER_IC[p.gender]||'')+p.gender)+')</small>':'')+'</div>'+
+        '<div style="font-size:12.5px;color:var(--mut)">ขอชื่อผู้ใช้ <b style="color:var(--gold2)">'+esc(u.username)+'</b>'+
+        (p&&p.want_unit&&UNITS[p.want_unit]?' · อยากทำที่'+esc(UNITS[p.want_unit].n):'')+'</div></div>'+
+      '<div class="pwhen"><span class="pbadge">รออนุมัติ</span><br>สมัครเมื่อ '+thWhen(u.created_at)+'</div>'+
+    '</div>'+
+    '<div class="pbody">'+
+      '<div class="pgrid2">'+
+        kv('ชื่อ–นามสกุล',esc(full))+
+        kv('ชื่อเล่น',esc((p&&p.nickname)||'—'))+
+        kv('เบอร์โทรศัพท์',p&&p.phone?'<a href="tel:'+esc(String(p.phone).replace(/\D/g,''))+'" style="color:var(--gold2);text-decoration:none">'+esc(p.phone)+'</a>':'—')+
+        kv('วันเดือนปีเกิด',thDate(p&&p.birth_date))+
+        kv('อายุ',(p&&p.age!=null)?esc(p.age)+' ปี':'—')+
+        kv('เพศ',esc((p&&p.gender)||'—'))+
+        kv('ที่อยู่ตามทะเบียนบ้าน',esc(fullAddr(p,'reg')),1)+
+        kv('ที่อยู่ปัจจุบัน',(p&&p.addr_same)?'<span style="color:var(--mut)">— เหมือนทะเบียนบ้าน —</span>':esc(fullAddr(p,'now')),1)+
+      '</div>'+
+      (p?'':'<div class="phint">⚠️ ไม่พบข้อมูลส่วนตัวของใบสมัครนี้ (อาจสมัครก่อนติดตั้งระบบ หรือส่งไม่ครบ)</div>')+
+      '<div class="psec">อนุมัติแล้วให้เป็นอะไร</div>'+
+      '<div class="prow"><span class="lb">ระดับ</span>'+
+        '<select class="zsel" id="pr_'+u.id+'">'+rOpts+'</select>'+
+        '<span class="lb" style="margin-left:6px">ประจำที่</span>'+
+        '<select class="zsel" id="pu_'+u.id+'">'+uOpts+'</select>'+
+        '<select class="zsel cp" onchange="pendCopyFrom('+u.id+',this.value);this.selectedIndex=0">'+copyOpts+'</select>'+
+      '</div>'+
+      '<div class="psec">เข้าแอพไหนได้บ้าง</div>'+
+      '<div class="papps">'+apps+'</div>'+
+      '<div class="phint">ติ๊กแล้วได้สิทธิ์ <b>ดู / เพิ่ม / แก้</b> ทุกหน้าจอของแอพนั้น (ยังลบไม่ได้) — '+
+        'อนุมัติเสร็จไปปรับละเอียดรายหน้าจอต่อที่แท็บ 👥 ผู้ใช้ &amp; สิทธิ์ ได้ · '+
+        'ถ้าเลือก <b>ผู้ดูแลระบบ</b> หรือ <b>เจ้าของ</b> จะได้ทุกแอพอยู่แล้ว ไม่ต้องติ๊ก</div>'+
+      '<div class="pbtns">'+
+        '<button class="btn okb" onclick="pendApprove('+u.id+')">✅ อนุมัติ + เปิดใช้งาน</button>'+
+        '<button class="btn nob" onclick="pendReject('+u.id+')">✕ ไม่อนุมัติ</button>'+
+      '</div>'+
+    '</div></div>';
+}
+function setPendCount(n){
+  const b=$('#pendN'); if(!b)return;
+  b.textContent=n>99?'99+':String(n); b.hidden=!n;
+}
+function pendTick(el){
+  const id=+el.dataset.pu, k=el.dataset.pk;
+  S.pendApps[id]=S.pendApps[id]||{};
+  if(el.checked)S.pendApps[id][k]=true; else delete S.pendApps[id][k];
+  const box=$('#pa_'+id+'_'+k); if(box)box.classList.toggle('on',el.checked);
+  S.pendCopy[id]=null;   // ติ๊กเองแล้ว = ไม่ใช้ชุดที่คัดลอกมา
+}
+function pendCopyFrom(id,srcId){
+  if(!srcId)return;
+  const src=(S.users||[]).find(x=>String(x.id)===String(srcId)); if(!src)return;
+  const apps=isBoss(src)?fullApps():JSON.parse(JSON.stringify(src.apps||{}));
+  S.pendCopy[id]=apps; S.pendApps[id]={};
+  APPKEYS.forEach(k=>{
+    const on=!!(apps[k]&&Object.values(apps[k]).some(v=>String(v).includes('v')));
+    if(on)S.pendApps[id][k]=true;
+    const box=$('#pa_'+id+'_'+k); if(box){box.classList.toggle('on',on);
+      const cb=box.querySelector('input'); if(cb)cb.checked=on;}
+  });
+  const r=$('#pr_'+id); if(r&&ROLES[src.role]&&src.role!=='admin'&&src.role!=='owner')r.value=src.role;
+  const un=$('#pu_'+id); if(un&&UNITS[src.unit])un.value=src.unit;
+  toast('คัดลอกสิทธิ์จาก '+(src.display_name||src.username)+' มาแล้ว — ตรวจดูก่อนกดอนุมัติ');
+}
+async function pendApprove(id){
+  const u=(S.pend||[]).find(x=>x.id===id); if(!u)return;
+  const role=($('#pr_'+id)||{}).value||'staff';
+  const unit=($('#pu_'+id)||{}).value||'ALL';
+  const boss=(role==='admin'||role==='owner');
+  let apps;
+  if(boss)apps=fullApps();
+  else if(S.pendCopy[id])apps=S.pendCopy[id];
+  else { apps={}; Object.keys(S.pendApps[id]||{}).forEach(k=>{apps[k]=pendApps(k);}); }
+  const n=boss?APPKEYS.length:Object.keys(apps).length;
+  if(!boss&&!n&&!confirm('ยังไม่ได้ติ๊กแอพไหนเลย\n\nอนุมัติแล้วเขาจะล็อกอินได้แต่ไม่เห็นแอพอะไรเลย — ไปติ๊กให้ทีหลังได้ที่แท็บผู้ใช้ & สิทธิ์\n\nอนุมัติเลยไหม?'))return;
+  try{
+    await upd('pnl_users','id=eq.'+id,{status:'active',active:true,role:role,unit:unit,apps:apps,
+      approved_by:(S.user&&S.user.username)||'?',approved_at:new Date().toISOString(),reject_reason:null});
+    await alog(u.username,'อนุมัติพนักงานใหม่',
+      'ระดับ '+((ROLES[role]||{}).n||role)+' · ประจำที่ '+((UNITS[unit]||{}).n||unit)+' · เปิดให้ '+n+' แอพ');
+    toast('✅ อนุมัติ '+(u.display_name||u.username)+' แล้ว — เข้าใช้งานได้เลย');
+    S.users=[]; render();
+  }catch(e){ toast('อนุมัติไม่สำเร็จ — '+String(e.message||e).slice(0,120),true); }
+}
+async function pendReject(id){
+  const u=(S.pend||[]).find(x=>x.id===id); if(!u)return;
+  const why=prompt('ไม่อนุมัติใบสมัครของ '+(u.display_name||u.username)+'\n\nเหตุผล (พิมพ์ให้เขาอ่าน เว้นว่างก็ได้):','');
+  if(why===null)return;
+  try{
+    await upd('pnl_users','id=eq.'+id,{status:'rejected',active:false,
+      reject_reason:(why||'').slice(0,200),approved_by:(S.user&&S.user.username)||'?',approved_at:new Date().toISOString()});
+    await alog(u.username,'ไม่อนุมัติใบสมัคร',why||'(ไม่ระบุเหตุผล)');
+    toast('บันทึกแล้ว — ไม่อนุมัติ '+(u.display_name||u.username));
+    render();
+  }catch(e){ toast('บันทึกไม่สำเร็จ — '+String(e.message||e).slice(0,120),true); }
+}
+/* นับใบสมัครค้างตอนเปิดแอพ — จะได้เห็นตัวเลขบนแท็บโดยไม่ต้องกดเข้าไป */
+async function refreshPendCount(){
+  try{
+    const r=await sel('pnl_users','select=id&status=eq.pending&limit=200');
+    setPendCount((r||[]).length);
+  }catch(e){ setPendCount(0); }
 }
 
 /* ---------- แท็บ 1: ผู้ใช้ & สิทธิ์ ---------- */
@@ -866,7 +1089,8 @@ async function viewSurvey(){
     catch(e){S.scErr=e.message;S.sc=[];}
   }
   if(S.au===null&&!S.auErr){
-    try{S.au=await sel('app_users','select=*&order=id&limit=1000');}
+    try{ S.au=await sel('app_users','select=*&limit=1000');   /* ตารางนี้ไม่มีคอลัมน์ id — ห้ามใส่ order=id */
+      S.au.sort((a,b)=>String(a.username||a.name||'').localeCompare(String(b.username||b.name||''),'th')); }
     catch(e){S.auErr=e.message;S.au=[];}
   }
   const known=new Set(us.map(u=>u.username.toLowerCase()));
@@ -916,28 +1140,29 @@ async function viewSurvey(){
   }
 
   return '<div class="card"><h3>🔍 บัญชีระบบไหนมีใครบ้าง</h3>'+
-    '<p class="sub">ตอนนี้ร้านมีชุดบัญชีแยกกัน 3 ชุด — หน้านี้เอาไว้ดูภาพรวมก่อนตัดสินใจรวมบัญชี</p>'+
+    '<p class="sub">ทุกแอพย้ายมาใช้ <b>บัญชีกลาง</b> ชุดเดียวหมดแล้ว (2026-09-24) — หน้านี้เหลือไว้ดูบัญชีเก่าที่ยังค้างในฐานข้อมูล</p>'+
     '<div class="grid2" style="gap:14px">'+
       '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">📒</span><span class="nm">บัญชีกลาง (pnl_users)</span><span class="cnt">'+us.length+' คน</span></div>'+
       '<div class="appbody" style="display:block"><p class="sub" style="margin:8px 0">ใช้ร่วมกันแล้วโดย: P&amp;L · Owner · Payroll · Social · Calendar · Invoice</p>'+
       '<div class="twrap"><table><tr><th>ชื่อ</th><th>ระดับ</th><th>สถานะ</th><th>ประจำที่ · แอพ</th></tr>'+pnlRows+'</table></div></div></div>'+
-      '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">🔐</span><span class="nm">ระบบที่ยังแยกบัญชี</span><span class="cnt">'+(us.length+(S.sc||[]).length+(S.au||[]).length)+' บัญชีรวมทุกที่</span></div>'+
+      '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">🔐</span><span class="nm">บัญชีเก่าที่ยังค้างอยู่</span><span class="cnt">'+((S.sc||[]).length+(S.au||[]).length)+' รายการ</span></div>'+
       '<div class="appbody" style="display:block">'+
-        '<p class="sub" style="margin:8px 0 10px">ทั้งร้านมีที่เก็บบัญชี 3 ที่ — ตัวเลขคือจำนวนที่ดึงมาได้จริงตอนนี้:</p>'+
+        '<p class="sub" style="margin:8px 0 10px">ทุกแอพเช็ครหัสกับ <code>pnl_users</code> อย่างเดียวแล้ว — ตารางข้างล่างคือบัญชีชุดเก่าที่ยังค้างในฐานข้อมูล ไม่ได้ใช้ล็อกอินที่ไหนอีก (ยกเว้นที่ระบุไว้):</p>'+
         '<div style="font-size:13px;line-height:2.2">'+
-        '<div>📒 <b>บัญชีกลาง</b> <code>pnl_users</code> — <b class="gold-txt">'+us.length+' คน</b> <span style="color:var(--mut)">(P&amp;L · Owner · Payroll · Social · Calendar · Invoice)</span></div>'+
-        '<div>📦 <b>นับสต๊อก</b> <code>sc_users</code> — '+(S.scErr?'<span class="chip off">อ่านไม่ได้</span>':'<b class="gold-txt">'+S.sc.length+' คน</b>')+'</div>'+
-        '<div>🍳 <b>ครัวกลาง</b> + 🛠️ <b>ซ่อมบำรุง</b> <code>app_users</code> — '+(S.auErr?'<span class="chip off">อ่านไม่ได้</span>':'<b class="gold-txt">'+S.au.length+' คน</b>')+'</div>'+
-        '<div>📊 <b>KPI</b> — ไม่มีล็อกอิน (แท็บเล็ตหน้าร้าน)</div></div>'+
-        (S.scErr||S.auErr?'<p class="sub" style="margin:10px 0 0;color:#F2A0A5">อ่านบางตารางไม่ได้ — ยังไม่ได้รัน <b>jjmk-access.sql</b> เวอร์ชันล่าสุดใน Supabase (เปิดสิทธิ์อ่านให้หน้านี้)</p>':'')+
+        '<div>📒 <b>บัญชีกลาง</b> <code>pnl_users</code> — <b class="gold-txt">'+us.length+' คน</b> <span style="color:var(--mut)">(ใช้กับทุกแอพ)</span></div>'+
+        '<div>📦 <b>นับสต๊อก</b> <code>sc_users</code> — '+(S.scErr?'<span class="chip off">อ่านไม่ได้</span>':'<b class="gold-txt">'+S.sc.length+' รายการ</b>')+' <span style="color:var(--mut)">(เลิกใช้แล้ว 2026-09-24)</span></div>'+
+        '<div>🍳 <b>ครัวกลาง</b> + 🛠️ <b>ซ่อมบำรุง</b> <code>app_users</code> — '+(S.auErr?'<span class="chip off">อ่านไม่ได้</span>':'<b class="gold-txt">'+S.au.length+' รายการ</b>')+' <span style="color:var(--mut)">(ครัวกลางเลิกใช้แล้ว · ซ่อมบำรุงยังรับเป็นตัวสำรอง)</span></div>'+
+        '<div>📊 <b>KPI</b> — ใช้บัญชีกลางแล้ว (จอ kiosk หน้าร้านไม่ต้องล็อกอินเหมือนเดิม)</div></div>'+
+        (S.scErr||S.auErr?'<p class="sub" style="margin:10px 0 0;color:var(--mut)">อ่านบางตารางไม่ได้ — ไม่กระทบการใช้งาน เพราะไม่มีแอพไหนใช้ตารางนั้นล็อกอินแล้ว<br><span style="font-size:11.5px">'+esc(String(S.scErr||S.auErr).slice(0,140))+'</span></p>':'')+
       '</div></div>'+
     '</div></div>'+
-    '<div class="card"><h3>📦 บัญชีระบบนับสต๊อก (sc_users)</h3>'+
-    '<p class="sub">กด <b>⬇ นำเข้า</b> เพื่อสร้างบัญชีกลางชื่อเดียวกัน (ต้องตั้งรหัสผ่านใหม่) แล้วค่อยติ๊กสิทธิ์ในแท็บ "ผู้ใช้ &amp; สิทธิ์"</p>'+
+    '<div class="card"><h3>📦 บัญชีเก่าของระบบนับสต๊อก (sc_users)</h3>'+
+    '<p class="sub"><b>เลิกใช้ล็อกอินแล้ว</b> — แอพนับสต๊อกเช็ครหัสกับบัญชีกลางตั้งแต่ 2026-09-24 · เหลือไว้เผื่อมีใครยังไม่มีบัญชีกลาง<br>'+
+    'กด <b>⬇ นำเข้า</b> เพื่อสร้างบัญชีกลางชื่อเดียวกัน (ต้องตั้งรหัสผ่านใหม่) แล้วค่อยติ๊กสิทธิ์ในแท็บ "ผู้ใช้ &amp; สิทธิ์"</p>'+
     scBlock+'</div>'+
-    '<div class="card"><h3>🍳🛠️ บัญชีครัวกลาง + ซ่อมบำรุง (app_users)</h3>'+
-    '<p class="sub">สองระบบนี้ล็อกอินผ่าน Supabase Auth (อีเมล <code>ชื่อผู้ใช้@jjmk.local</code>) — คนละชุดกับบัญชีกลาง<br>'+
-    'กด <b>⬇ นำเข้า</b> เพื่อสร้างบัญชีกลางชื่อเดียวกัน · บัญชี Supabase Auth เดิมยังใช้เข้า 2 ระบบนั้นได้ตามปกติจนกว่าจะย้ายระบบเสร็จ</p>'+
+    '<div class="card"><h3>🍳🛠️ บัญชีเก่าของครัวกลาง + ซ่อมบำรุง (app_users)</h3>'+
+    '<p class="sub"><b>ครัวกลางเลิกใช้แล้ว</b> (ย้ายมาบัญชีกลาง 2026-09-24) · <b>ซ่อมบำรุง</b> ยังรับบัญชีชุดนี้เป็นตัวสำรองในหน้าล็อกอิน<br>'+
+    'กด <b>⬇ นำเข้า</b> เพื่อสร้างบัญชีกลางชื่อเดียวกัน (ต้องตั้งรหัสผ่านใหม่) แล้วติ๊กสิทธิ์ให้ในแท็บ "ผู้ใช้ &amp; สิทธิ์"</p>'+
     auBlock+'</div>';
 }
 function importSc(username,display,role){
@@ -1026,6 +1251,7 @@ async function doLogin(){
 }
 function setUser(u){
   S.user=u;
+  refreshPendCount();          // ตัวเลขใบสมัครค้างบนแท็บ "รออนุมัติ"
   const R=ROLES[roleOf(u)], UN=UNITS[unitOf(u)];
   $('#uchip').innerHTML=R.ic+' <b>'+esc(u.display_name||u.username)+'</b> · '+esc(R.n)+
     (unitOf(u)!=='ALL'?' · '+esc(UN.n):'')+
