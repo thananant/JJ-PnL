@@ -46,6 +46,7 @@ import os
 import sys
 import re
 import stat
+import errno
 import json
 import math
 import time
@@ -947,6 +948,46 @@ def _sub(dfd, name, create=False):
     return os.open(name, _DIRFLAGS, dir_fd=dfd)
 
 
+def _sub_checked(dfd, name, shown):
+    """_sub แบบสร้างให้ + ข้อความผิดพลาดตามสาเหตุจริง (ลิงก์ลัด ≠ ดิสก์เต็ม/อ่านอย่างเดียว/โควตาเต็ม)"""
+    try:
+        return _sub(dfd, name, create=True)
+    except OSError as e:
+        if e.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise RuntimeError('โฟลเดอร์ %s เป็นลิงก์ลัดหรือไม่ใช่โฟลเดอร์ — ไม่เขียนเพื่อความปลอดภัย' % shown)
+        raise RuntimeError('สร้าง/เปิดโฟลเดอร์ %s ไม่ได้: %s' % (shown, e.strerror or e))
+
+
+def _same_file(fd, name, data):
+    """ไฟล์เดิมมีเนื้อหาเหมือน data ทุกไบต์ไหม — เปิดแบบไม่บล็อก + เช็คชนิด/ขนาดจากไฟล์ที่เปิดได้จริง
+    (กันคนวาง FIFO ให้สคริปต์ค้างถาวร หรือไฟล์ใหญ่หลาย GB ให้อ่านจนหน่วยความจำหมด) · สงสัย = ถือว่าไม่เหมือน"""
+    try:
+        rfd = os.open(name, os.O_RDONLY | _NOFOLLOW | getattr(os, 'O_NONBLOCK', 0), dir_fd=fd)
+    except OSError:
+        return False
+    with os.fdopen(rfd, 'rb') as f:
+        try:
+            st = os.fstat(f.fileno())
+            if not stat.S_ISREG(st.st_mode) or st.st_size != len(data):
+                return False
+            return f.read(len(data) + 1) == data
+        except OSError:
+            return False
+
+
+def _write_atomic(fd, name, data):
+    """เขียนไฟล์ใหม่ทั้งไฟล์ลง .part ก่อน แล้วค่อยสลับชื่อทับ — ไม่มีไฟล์ครึ่ง ๆ ค้าง · ไม่เดินตามลิงก์ลัด"""
+    tmp = name + '.part'
+    try:
+        os.unlink(tmp, dir_fd=fd)          # ลบของค้าง (ถ้าเป็นลิงก์ลัดก็ลบแค่ตัวลิงก์)
+    except FileNotFoundError:
+        pass
+    wfd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW, 0o664, dir_fd=fd)
+    with os.fdopen(wfd, 'wb') as f:
+        f.write(data)
+    os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+
+
 def _sub_or_none(dfd, name):
     try:
         return _sub(dfd, name)
@@ -1038,30 +1079,11 @@ def write_pdf(bill_no, iso, data, cancelled=False):
     rel = '/'.join(parts + [name])
     fds = [os.open(base, _DIRFLAGS)]
     try:
-        for p in parts:
-            try:
-                fds.append(_sub(fds[-1], p, create=True))
-            except OSError:
-                raise RuntimeError('โฟลเดอร์ %s เป็นลิงก์ลัดหรือไม่ใช่โฟลเดอร์ — ไม่เขียนเพื่อความปลอดภัย' % '/'.join(parts))
+        for i, p in enumerate(parts):
+            fds.append(_sub_checked(fds[-1], p, '/'.join(parts[:i + 1])))
         fd = fds[-1]
-        same = False
-        try:
-            if stat.S_ISREG(os.lstat(name, dir_fd=fd).st_mode):
-                with os.fdopen(os.open(name, os.O_RDONLY | _NOFOLLOW, dir_fd=fd), 'rb') as f:
-                    same = (f.read() == data)  # ไฟล์เดิมเหมือนกันทุกไบต์ — ไม่ต้องเขียนซ้ำ
-        except FileNotFoundError:
-            pass
-        if not same:
-            tmp = name + '.part'
-            try:
-                os.unlink(tmp, dir_fd=fd)      # ลบของค้าง (ถ้าเป็นลิงก์ลัดก็ลบแค่ตัวลิงก์)
-            except FileNotFoundError:
-                pass
-            wfd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW, 0o664, dir_fd=fd)
-            with os.fdopen(wfd, 'wb') as f:
-                f.write(data)
-            # ใบใหม่แทนใบเดิม — เขียนเสร็จทั้งไฟล์ก่อนค่อยสลับชื่อ ไม่มีไฟล์ครึ่ง ๆ ค้าง
-            os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+        if not _same_file(fd, name, data):  # เหมือนเดิมทุกไบต์ = ไม่ต้องเขียนซ้ำ
+            _write_atomic(fd, name, data)    # ใบใหม่แทนใบเดิม
         remove_other_copies(fds[0], bill_no, parts)
     finally:
         for x in reversed(fds):
@@ -1122,11 +1144,18 @@ def cmd_test():
         log('ไม่พบโฟลเดอร์เก็บบิล %s — เช็ค --base หรือ BASE_DIR' % base_dir())
         return 1
     folder = os.path.join(base_dir(), '_test')
-    os.makedirs(folder, exist_ok=True)
-    for inv, name in ((sample_invoice(), 'TEST0001.pdf'),
-                      (sample_invoice(STATUS_CANCELLED, 'TEST0002'), 'TEST0002-ยกเลิก.pdf')):
-        with open(os.path.join(folder, name), 'wb') as f:
-            f.write(build_pdf(inv))
+    samples = [(build_pdf(sample_invoice()), 'TEST0001.pdf'),
+               (build_pdf(sample_invoice(STATUS_CANCELLED, 'TEST0002')), 'TEST0002-ยกเลิก.pdf')]
+    bfd = os.open(os.path.realpath(base_dir()), _DIRFLAGS)   # เขียนผ่านที่จับโฟลเดอร์ ไม่เดินตามลิงก์ลัด (เหมือนบิลจริง)
+    try:
+        tfd = _sub_checked(bfd, '_test', '_test')
+        try:
+            for data, name in samples:
+                _write_atomic(tfd, name, data)
+        finally:
+            os.close(tfd)
+    finally:
+        os.close(bfd)
     log('สร้างบิลตัวอย่างแล้วที่ %s — เปิดดูว่าตัวหนังสือไทยถูกต้อง' % folder)
     return 0
 
@@ -1157,10 +1186,19 @@ def cmd_check():
         ok = row(False, 'ไม่พบโฟลเดอร์เก็บบิล %s — เช็ค --base "<โฟลเดอร์>" ในคำสั่ง' % bd) and ok
     else:
         try:
-            t = os.path.join(bd, '.inv_nas_sync_write_test')
-            with open(t, 'w') as f:
-                f.write('ok')
-            os.remove(t)
+            t = '.inv_nas_sync_write_test'
+            bfd = os.open(os.path.realpath(bd), _DIRFLAGS)    # ทดสอบเขียนผ่านที่จับโฟลเดอร์ ไม่เดินตามลิงก์ลัด
+            try:
+                try:
+                    os.unlink(t, dir_fd=bfd)
+                except FileNotFoundError:
+                    pass
+                wfd = os.open(t, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW, 0o600, dir_fd=bfd)
+                with os.fdopen(wfd, 'w') as f:
+                    f.write('ok')
+                os.unlink(t, dir_fd=bfd)
+            finally:
+                os.close(bfd)
             row(True, 'โฟลเดอร์เก็บบิล %s (เขียนได้)' % bd)
         except Exception as e:
             ok = row(False, 'เขียนโฟลเดอร์ %s ไม่ได้ (%s) — ตั้ง Task ให้รันด้วย user root' % (bd, e)) and ok

@@ -1164,14 +1164,7 @@ async function syncMissingNas(){
       if(!v||v.nas_path){ skip++; continue; }
       var path=await storePdf(v, await buildInvoicePdf(v));
       if(!path){ fail++; continue; }
-      var q=invRow(sb.from('inv_invoices').update({nas_path:path}), v).is('nas_path',null);
-      if(v.updated_at) q=q.eq('updated_at',v.updated_at);
-      var u=await q.select('id');
-      if(u.error||!(u.data||[]).length){
-        // บิลถูกแก้ระหว่างเก็บ → ส่งกลับเข้าคิว ให้สร้างใหม่จากข้อมูลล่าสุด (แบบเดียวกับสคริปต์ NAS)
-        try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), v); }catch(e2){}
-        fail++; continue;
-      }
+      if(!(await markStored(v, path, true))){ fail++; continue; }   // บิลถูกแก้ระหว่างเก็บ → คืนคิวแล้ว
       done++;
     }catch(e){ fail++; }
   }
@@ -1283,6 +1276,17 @@ function downloadBlob(filename, blob){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); },60000);
 }
+/* ติ๊กว่าเก็บไฟล์แล้ว — เฉพาะเมื่อบิลยังเป็นฉบับเดียวกับที่ใช้สร้างไฟล์ (updated_at เดิม) · แก้แค่ nas_path
+   (แบบเดียวกับ mark_saved ของสคริปต์ NAS) · ระหว่างเก็บมีคนแก้/ยกเลิกจากเครื่องอื่น → คืนคิว ให้สร้างใหม่จากข้อมูลล่าสุด */
+async function markStored(inv, path, onlyIfMissing){
+  var q=invRow(sb.from('inv_invoices').update({nas_path:path}), inv);
+  if(onlyIfMissing) q=q.is('nas_path',null);
+  if(inv.updated_at) q=q.eq('updated_at',inv.updated_at);
+  var u=await q.select('id');
+  if(!u.error && (u.data||[]).length) return true;
+  try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), inv); }catch(e){}
+  return false;
+}
 // บันทึกไฟล์บิล — คืน path ที่เก็บ (เก็บเองแล้ว) หรือ null (ยังไม่อยู่ใน NAS)
 async function storePdf(inv, blob){
   var billNo=inv.bill_no;
@@ -1293,15 +1297,13 @@ async function storePdf(inv, blob){
         var sv=await saveToNas(inv, blob);
         if(!sv.left.length) return sv.path;
         // เก็บใบใหม่แล้ว แต่ใบเดิมบางไฟล์ลบไม่ได้ → ห้ามติ๊กว่าเก็บเรียบร้อย ไม่งั้นไฟล์ซ้ำค้างถาวร
-        var msg='เก็บใบใหม่แล้ว แต่ลบไฟล์เดิม '+sv.left.join(', ')+' ไม่ได้ (อาจมีคนเปิดไฟล์ค้างไว้)';
+        // คืนคิวไว้ (nas_path ว่าง): NAS ทำงาน = เก็บกวาดให้เอง · ไม่งั้นบิลค้างอยู่ในตัวนับ "รอเก็บ" ให้กดเก็บซ้ำได้
+        try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), inv); }catch(e2){}
+        logActivity('ลบไฟล์เดิมใน NAS ไม่ได้',billNo,sv.left.join(', '));
         await refreshNasSync();
-        if(nasSyncActive()){
-          try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), inv); }catch(e2){}
-          toast(msg+' — NAS จะเก็บกวาดให้ภายใน 5 นาที','err');
-          return null;
-        }
-        toast(msg+' — ปิดไฟล์แล้วลบเองใน File Station','err');
-        return sv.path;
+        toast('เก็บใบใหม่แล้ว แต่ลบไฟล์เดิม '+sv.left.join(', ')+' ไม่ได้ (อาจมีคนเปิดไฟล์ค้างไว้) — '+
+          (nasSyncActive()?'NAS จะเก็บกวาดให้ภายใน 5 นาที':'ปิดไฟล์นั้นแล้วกด 💾 บันทึกลง NAS ที่บิลนี้อีกครั้ง'),'err');
+        return null;
       }
       throw new Error('ไม่ได้รับสิทธิ์เขียนโฟลเดอร์');
     }catch(e){
@@ -2080,10 +2082,7 @@ async function issueOrUpdate(){
     try{
       blob=await buildInvoicePdf(inv);
       var path=await storePdf(inv, blob);
-      if(path){
-        await invRow(sb.from('inv_invoices').update({nas_path:path,updated_at:new Date().toISOString()}), inv);
-        toast('บันทึก '+path+' ลง NAS เรียบร้อย','ok');
-      }
+      if(path && await markStored(inv, path)) toast('บันทึก '+path+' ลง NAS เรียบร้อย','ok');
     }catch(e){
       toast('บิลบันทึกแล้ว แต่สร้าง/เก็บ PDF ไม่สำเร็จ: '+e.message,'err');
     }
@@ -2213,10 +2212,11 @@ function bindCards(scope){
       var blob=await buildInvoicePdf(v);
       var path=await storePdf(v, blob);
       if(path){
-        await invRow(sb.from('inv_invoices').update({nas_path:path,updated_by:userName(),
-          updated_at:new Date().toISOString()}), v);
-        logActivity('บันทึก PDF ลง NAS',v.bill_no,path);
-        toast('บันทึก '+path+' แล้ว','ok'); loadInvoices();
+        if(await markStored(v, path)){
+          logActivity('บันทึก PDF ลง NAS',v.bill_no,path);
+          toast('บันทึก '+path+' แล้ว','ok');
+        }else toast('บิล '+v.bill_no+' ถูกแก้จากเครื่องอื่นระหว่างเก็บไฟล์ — กดบันทึกอีกครั้ง (หรือรอ NAS เก็บให้)','err');
+        loadInvoices();
       }
     }catch(e){ toast('ผิดพลาด: '+e.message,'err'); }
     b.disabled=false; b.textContent=nasBtnLabel();
