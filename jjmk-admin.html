@@ -920,9 +920,20 @@ async function testFn(){
       box.innerHTML='❌ <b>ยังไม่ได้ปิด Verify JWT</b><br>ฟังก์ชัน deploy แล้ว แต่ Supabase ปัดตกตั้งแต่ด่านหน้า — ทำข้อ 3'; return;
     }
     if(/^skip/.test(t)){
-      box.innerHTML=/กลุ่ม/.test(t)
-        ? '⚠️ <b>ยังไม่ได้ใส่ไอดีกลุ่ม</b><br>ใส่ในช่องข้างบนแล้วกด 💾 บันทึกกลุ่ม ก่อนครับ'
-        : '⚠️ <b>deploy แล้ว แต่ยังไม่ได้ตั้ง secret <code>LINE_TOKEN</code></b><br>ใส่ที่ Edge Functions → Secrets (ดูขั้นตอนข้อ 4)';
+      if(/กลุ่ม/.test(t)){
+        box.innerHTML='⚠️ <b>ยังไม่ได้ใส่ไอดีกลุ่ม</b><br>ใส่ในช่องข้างบนแล้วกด 💾 บันทึกกลุ่ม ก่อนครับ'; return;
+      }
+      /* ฟังก์ชันบอกมาด้วยว่ามันเห็น secret ชื่ออะไรบ้าง (ชื่ออย่างเดียว ไม่มีค่า) */
+      const m=/เห็น:\s*(.*)$/.exec(t), seen=m?m[1].trim():'';
+      const other=seen&&seen!=='-';
+      box.innerHTML='⚠️ <b>ฟังก์ชันอ่าน secret <code>LINE_TOKEN</code> ไม่เจอ</b><br>'+
+        (other
+          ? 'แต่เห็นตัวอื่นอยู่ (<span style="font-size:12px;color:var(--mut)">'+esc(seen)+'</span>) '+
+            'แปลว่าโปรเจกต์ถูกแล้ว — ปกติเกิดจาก<b>ตั้ง secret หลัง deploy</b><br>'+
+            '👉 กลับไปที่ฟังก์ชัน <code>signup-notify</code> แล้วกด <b>Deploy</b> ซ้ำอีกรอบ แล้วกดทดสอบใหม่<br>'+
+            '<span style="font-size:12px;color:var(--mut)">ถ้ายังไม่ได้ ให้เช็คว่าชื่อสะกด <code>LINE_TOKEN</code> เป๊ะ ไม่มีเว้นวรรคหน้า/หลัง และค่าไม่ว่าง</span>'
+          : 'และไม่เห็น secret ของ LINE เลยสักตัว — ใส่ที่ Edge Functions → Secrets (ดูขั้นตอนข้อ 4)<br>'+
+            '<span style="font-size:12px;color:var(--mut)">ตั้งแล้วต้องกด Deploy ฟังก์ชันซ้ำอีกรอบ</span>');
       return;
     }
     if(/^sent/.test(t)){
@@ -1573,8 +1584,14 @@ Deno.serve(async (req) => {
 
   try {
     const b = await req.json().catch(() => ({} as Record<string, string>));
-    const token = Deno.env.get("LINE_TOKEN");
-    if (!token) return new Response("skip: ยังไม่ได้ตั้ง secret LINE_TOKEN", { headers: CORS });
+    const token = (Deno.env.get("LINE_TOKEN") || "").trim();
+    if (!token) {
+      // บอกให้รู้ว่าฟังก์ชันนี้ "เห็น" secret ชื่ออะไรบ้าง (ชื่ออย่างเดียว ไม่ส่งค่าออกไป)
+      // ตั้ง secret ไว้แล้วแต่ยังไม่เห็น = ต้องกด Deploy ฟังก์ชันใหม่อีกรอบ
+      const seen = ["LINE_TOKEN", "LINE_GROUP_ID", "LINE_CHANNEL_ACCESS_TOKEN", "LINE_SECRET", "LINE_CHANNEL_SECRET"]
+        .filter((k) => (Deno.env.get(k) || "").trim() !== "");
+      return new Response("skip: อ่าน LINE_TOKEN ไม่เจอ | เห็น: " + (seen.join(", ") || "-"), { headers: CORS });
+    }
     const to = await groupId();
     if (!to) return new Response("skip: ยังไม่ได้เลือกกลุ่ม LINE", { headers: CORS });
 

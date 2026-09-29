@@ -88,9 +88,12 @@
       for f in index.html jjmk-pnl.html jjmk-owner.html jjmk-admin.html jjmk-payroll.html \
                jjmk-calendar.html jjmk-invoice.html jjmk-social.html jjmk-maint.html \
                jjmk-kpi.html jjmk-stockcheck.html jjmk-kitchen.html jjmk-order.html; do
-        printf "%-22s %s\n" $f "$(grep -c 'window.JJLogin' $f)"; done
+        printf "%-22s def=%s use=%s\n" $f "$(grep -c 'window.JJLogin=JJLogin' $f)" \
+          "$(grep -c 'JJLogin\.\(mount\|wrap\)' $f)"; done
       ```
-      ต้องได้ **2 ทุกไฟล์** (1 = บล็อกหาย เหลือแต่ที่เรียกใช้ · 0 = หายทั้งคู่)
+      ต้องได้ **`def=1` ทุกไฟล์** (0 = บล็อก JJ Login หายไปทั้งก้อน) และ **`use≥1`** (0 = หน้าล็อกอินไม่ถูกเรียกใช้)
+      · *(เดิมเขียนว่านับ `window.JJLogin` แล้วต้องได้ 2 ทุกไฟล์ — **ผิด** เพราะเลข 2 มาจาก `JJGate.note()`
+      ซึ่งมีเฉพาะ 7 ไฟล์ที่ฝัง JJ Gate · อีก 6 ไฟล์ได้ 1 ตามปกติ ไม่ใช่ไฟล์เสีย)*
     - **วิธีกู้**: `git diff 2266081^ 2266081 -- <ไฟล์> | git apply --3way` (commit 2266081 = PR #59 ที่ใส่ JJ Login ครั้งแรก) — merge เข้ากับงานใหม่ของ commit ที่มาทับได้เอง ไม่ต้องเลือกว่าจะทิ้งของใคร
   - **ครัวกลาง (`jjmk-kitchen.html`)**: เลิกใช้ Supabase Auth (`signInWithPassword` + อีเมลปลอม `@jjmk.local`) และตาราง `app_users` · เซสชันประจำแท็บ `sessionStorage.jjck_sess` · "จำไว้ในเครื่องนี้ 12 ชม." = `jjck_keep` · role แปลงเป็นของเดิมในแอป: admin/owner→`owner` · manager หรือมีสิทธิ์หน้า `set`/`acc`→`manager` · ที่เหลือ→`warehouse`
   - **ต้องรัน `jjmk_kitchen_central.sql` (branch `sql`) ครั้งเดียว** ไม่งั้นครัวกลางบันทึกอะไรไม่ได้ — RLS เดิมของตาราง `ck_*` บังคับ `authenticated` + เช็ค `app_users.auth_uid` ซึ่งบัญชีกลาง (ยิงผ่าน anon key) ทำไม่ได้ · ไฟล์เปิด `ck_*` + `ck_add_qty` + bucket `product-images` ให้ role `anon` (แพตเทิร์นเดียวกับ `jjmk_maint_access.sql`)
