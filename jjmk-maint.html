@@ -51,7 +51,7 @@
   .field label{display:block;font-size:.8rem;color:var(--ink-soft);margin-bottom:4px;font-weight:600}
   .field input,.field select{width:100%;padding:11px;border:1.5px solid var(--line);border-radius:10px;font-family:Sarabun;font-size:16px;background:#fff}
   .overlay,.sheet-body{overscroll-behavior:contain}
-  html:has(body>.overlay.on){overscroll-behavior-y:none}     /* เปิดหน้าต่างอยู่ = ดึงหน้าลงแบบเบราว์เซอร์ไม่ทำงาน */
+  html:has(body>.overlay.on){overscroll-behavior-y:none;overflow:hidden}     /* เปิดหน้าต่างอยู่ = ดึงหน้าลงแบบเบราว์เซอร์ไม่ทำงาน */
   .phwait{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:9px;
     border:1px dashed var(--line);font-size:.8rem;color:var(--ink-soft)}
   .phcount{font-size:.75rem;color:var(--ink-soft);margin-top:4px}
@@ -642,7 +642,8 @@ function appProf(p){return{kind:'app',username:p.username,name:p.name||p.usernam
 async function refreshApp(s,strict){   // ตรวจเซสชันบัญชีเดิม: session ของ Supabase ยังเป็นคนเดิม + ยัง active
   try{
     const g=await sb.auth.getSession();
-    if(!(g&&g.data&&g.data.session))return null;
+    if(!(g&&g.data&&g.data.session)){const e=g&&g.error;      // เน็ตล่มตอนต่ออายุ token ≠ ออกจากระบบ
+      return (!strict&&e&&(e.name==='AuthRetryableFetchError'||e.status===0))?s:null;}
     const ap=await getProfile();
     if(!ap)return strict?null:s;
     if(ap.status!=='active'||ap.username!==s.username)return null;
@@ -895,7 +896,7 @@ async function uploadAll(st,prefix,onProg){
 /* ================= ตารางบำรุงรักษา ================= */
 const MAINT_FREQ=[[1,'ทุกวัน'],[7,'ทุกสัปดาห์'],[14,'ทุก 2 สัปดาห์'],[30,'ทุกเดือน'],[60,'ทุก 2 เดือน'],[90,'ทุก 3 เดือน'],[180,'ทุก 6 เดือน'],[365,'ทุกปี']];
 function maintFreqLabel(n){n=+n||0;const f=MAINT_FREQ.find(x=>x[0]===n);return f?f[1]:'ทุก '+n+' วัน';}
-let MAINT_TASKS=[],MAINT_LOGS={},TASK_NAME={},MT_SEQ=0;
+let MAINT_TASKS=[],MAINT_LOGS={},TASK_NAME={},MT_SEQ=0,MT_ERR=null;
 function maintPhotos(lg){return (lg&&Array.isArray(lg.photos))?lg.photos.filter(u=>typeof u==='string'):[];}
 function maintStat(t){
   const lg=(MAINT_LOGS[t.id]||[])[0];
@@ -917,8 +918,8 @@ async function maintLoad(){
       .order('done_date',{ascending:false}).order('created_at',{ascending:false}).order('id'))]);
   if(seq!==MT_SEQ||bid!==CUR_B)return;            // สลับสาขาระหว่างรอ → ทิ้งผลเก่า
   const err=tk.error||lgs.error;
-  if(err){MAINT_TASKS=[];MAINT_LOGS={};$('#mtSum').innerHTML='';renderCal();
-    box.innerHTML='<div class="rempty">โหลดข้อมูลไม่ได้: '+escapeHtml(err.message||String(err))+'<br>ดึงหน้าลงเพื่อลองใหม่</div>';return;}
+  MT_ERR=err?(err.message||String(err)):null;
+  if(err){MAINT_TASKS=[];MAINT_LOGS={};maintRenderList();return;}
   const all=tk.data||[];TASK_NAME={};all.forEach(t=>TASK_NAME[t.id]=t.name);
   MAINT_TASKS=all.filter(t=>!t.deleted_at);MAINT_LOGS={};
   (lgs.data||[]).forEach(r=>{(MAINT_LOGS[r.task_id]=MAINT_LOGS[r.task_id]||[]).push(r);});
@@ -927,6 +928,7 @@ async function maintLoad(){
 function maintRenderList(){
   const box=$('#mtList'),sum=$('#mtSum');
   renderCal();
+  if(MT_ERR){sum.innerHTML='';box.innerHTML='<div class="rempty">โหลดข้อมูลไม่ได้: '+escapeHtml(MT_ERR)+'<br>ดึงหน้าลงเพื่อลองใหม่</div>';return;}
   if(!MAINT_TASKS.length){sum.innerHTML='';box.innerHTML='<div class="rempty">ยังไม่มีงานของสาขานี้'+(canT('a')?' — กด ⚙️ เพื่อเพิ่มงาน':' — ให้ผู้ดูแลเพิ่มงานก่อน')+'</div>';return;}
   const rank={over:0,soon:1,ok:2};
   const arr=MAINT_TASKS.map(t=>({t,st:maintStat(t)}))
@@ -1091,6 +1093,7 @@ function maintHistOverlay(t){
 }
 function maintManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์ตั้งค่างาน');return;}
+  if(MT_ERR){toast('โหลดรายการงานไม่ได้ — ดึงหน้าลงเพื่อลองใหม่ก่อน');return;}
   const acc=accessibleBranches(),canA=canT('a'),canE=canT('e'),canD=canT('d');
   const bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
   const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${escapeHtml(b.id)}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
@@ -1163,7 +1166,7 @@ function maintManageOverlay(){
 /* ================= 📦 นับอุปกรณ์ + สถิติอัตราเสียหาย =================
    นับรายเดือน (งวด YYYY-MM) เทียบกับงวดก่อน → รู้ว่าหายกี่ชิ้น คิดเป็นกี่ %
    มีของชำรุด = ต้องแนบรูป 1–10 รูป · ตาราง maint_assets / maint_counts */
-let ASSETS=[],COUNTS={},PD_Y=null,PD_M=null,PD_MANUAL=false,AST_SEQ=0;   // COUNTS[asset_id][period]=row
+let ASSETS=[],COUNTS={},PD_Y=null,PD_M=null,PD_MANUAL=false,AST_SEQ=0,AST_ERR=null;   // COUNTS[asset_id][period]=row
 function curPeriod(){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}
 function pdStr(){return PD_Y+'-'+String(PD_M+1).padStart(2,'0');}
 function pdIdx(p){const a=String(p).split('-');return (+a[0])*12+(+a[1]-1);}
@@ -1216,8 +1219,8 @@ async function astLoad(){
     fetchAll(()=>db().from('maint_counts').select('*').eq('branch_id',bid).order('period',{ascending:false}).order('id'))]);
   if(seq!==AST_SEQ||bid!==CUR_B)return;           // สลับสาขาระหว่างรอ → ทิ้งผลเก่า
   const err=as.error||cs.error;
-  if(err){ASSETS=[];COUNTS={};$('#astSum').innerHTML='';
-    box.innerHTML='<div class="rempty">โหลดข้อมูลไม่ได้: '+escapeHtml(err.message||String(err))+'<br>ดึงหน้าลงเพื่อลองใหม่ (ยังไม่ได้รัน SQL ตารางอุปกรณ์?)</div>';return;}
+  AST_ERR=err?((err.message||String(err))+(/42P01|does not exist|schema cache/i.test((err.code||'')+' '+(err.message||''))?' (ยังไม่ได้รัน SQL ตารางอุปกรณ์?)':'')):null;
+  if(err){ASSETS=[];COUNTS={};astRender();return;}
   ASSETS=as.data||[];COUNTS={};
   (cs.data||[]).forEach(r=>{(COUNTS[r.asset_id]=COUNTS[r.asset_id]||{})[r.period]=r;});
   astRender();
@@ -1226,6 +1229,7 @@ function astRender(){
   const p=pdStr();$('#pdTitle').textContent='งวด '+pdLabel(p);
   $('#pdNext').disabled=p>=curPeriod();
   const box=$('#astList'),sum=$('#astSum');
+  if(AST_ERR){sum.innerHTML='';box.innerHTML='<div class="rempty">โหลดข้อมูลไม่ได้: '+escapeHtml(AST_ERR)+'<br>ดึงหน้าลงเพื่อลองใหม่</div>';return;}
   if(!ASSETS.length){sum.innerHTML='';
     box.innerHTML='<div class="rempty">ยังไม่มีอุปกรณ์ของสาขานี้'+(canT('a')?' — กด ⚙️ เพื่อเพิ่มอุปกรณ์':' — ให้ผู้ดูแลเพิ่มก่อน')+'</div>';return;}
   const arr=ASSETS.map(a=>({a,st:astStat(a,p)}));
@@ -1262,22 +1266,36 @@ function astRender(){
     else{toast(has?'บัญชีนี้แก้ยอดที่นับแล้วไม่ได้ (ดูได้อย่างเดียว)':'บัญชีนี้ดูได้อย่างเดียว');astStatOverlay(a);}});
   box.querySelectorAll('[data-stat]').forEach(el=>el.onclick=()=>{const a=ASSETS.find(z=>z.id===el.dataset.stat);if(a)astStatOverlay(a);});
 }
-/* บันทึกยอดนับ: แถวเดิม = update · ไม่มี = insert · อีกเครื่องบันทึกงวดนี้ไปก่อน (ชน unique) = ถามก่อนทับ */
-async function saveCount(row,curId){
-  if(curId){
-    const r=await db().from('maint_counts').update(row).eq('id',curId).select('id');
-    if(r.error||(r.data&&r.data.length))return r;
+/* บันทึกยอดนับ — ยอดในเครื่องอาจเก่า (อีกเครื่องเพิ่งนับ/แก้งวดเดียวกัน):
+   · แถวเดิมถูกแก้ไปแล้ว หรือ insert ชน unique (asset_id,period) → ต้องมีสิทธิ์ "แก้" + ถามก่อนทับ
+   · ทับแล้วรูปที่อีกเครื่องเพิ่งแนบไว้ยังอยู่ (ไม่ดึงรูปที่ผู้ใช้ตั้งใจเอาออกกลับมา) */
+async function saveCount(row,cur){
+  const ask=old=>{
+    if(!canCountEdit()){astLoad();
+      return{error:{message:'มีคนบันทึกยอดงวดนี้ไปแล้ว (นับได้ '+nf(old.qty)+' โดย '+(old.by_name||'—')+') — บัญชีนี้แก้ยอดที่นับแล้วไม่ได้'},cancelled:true};}
+    if(!confirm('มีคนบันทึกยอดงวดนี้ไว้: นับได้ '+nf(old.qty)+' · ชำรุด '+nf(old.broken)+' โดย '+(old.by_name||'—')
+      +'\nต้องการแทนที่ด้วยยอดของคุณ (นับได้ '+nf(row.qty)+') ไหม?')){astLoad();
+      return{error:{message:'ยกเลิก — ยอดเดิมยังอยู่'},cancelled:true};}
+    const mine=cur?astPhotos(cur):[];
+    const theirs=astPhotos(old).filter(u=>row.photos.indexOf(u)<0&&mine.indexOf(u)<0);
+    return db().from('maint_counts').update(Object.assign({},row,{photos:row.photos.concat(theirs).slice(0,MAX_PHOTOS)})).eq('id',old.id);
+  };
+  if(cur&&cur.id){
+    const fr=await db().from('maint_counts').select('*').eq('id',cur.id).limit(1);
+    if(fr.error)return fr;
+    const fresh=fr.data&&fr.data[0];
+    if(fresh){
+      const diff=['qty','added','broken','by_name','note','count_date'].some(k=>String(fresh[k]==null?'':fresh[k])!==String(cur[k]==null?'':cur[k]))
+        ||JSON.stringify(astPhotos(fresh))!==JSON.stringify(astPhotos(cur));
+      return diff?ask(fresh):db().from('maint_counts').update(row).eq('id',cur.id);
+    }
+    if(!canCountNew())return{error:{message:'ยอดเดิมหายไปแล้ว — ดึงหน้าลงเพื่อโหลดใหม่'}};
   }
-  let r=await db().from('maint_counts').insert(Object.assign({id:uid('mc')},row));
+  const r=await db().from('maint_counts').insert(Object.assign({id:uid('mc')},row));
   if(r.error&&(r.error.code==='23505'||/duplicate key|unique/i.test(r.error.message||''))){
     const ex=await db().from('maint_counts').select('*').eq('asset_id',row.asset_id).eq('period',row.period).limit(1);
     const old=ex.data&&ex.data[0];
-    if(!old)return r;
-    if(!confirm('มีคนบันทึกยอดงวดนี้ไปแล้ว: นับได้ '+nf(old.qty)+' โดย '+(old.by_name||'—')+'\nต้องการแทนที่ด้วยยอดของคุณ ('+nf(row.qty)+') ไหม?'))
-      return{error:{message:'ยกเลิก — ยอดเดิมยังอยู่ (ดึงหน้าลงเพื่อดูยอดล่าสุด)'},cancelled:true};
-    const keep=astPhotos(old).filter(u=>row.photos.indexOf(u)<0);
-    row=Object.assign({},row,{photos:row.photos.concat(keep).slice(0,MAX_PHOTOS)});
-    r=await db().from('maint_counts').update(row).eq('id',old.id);
+    return old?ask(old):r;
   }
   return r;
 }
@@ -1343,7 +1361,7 @@ function astCountOverlay(a){
       const urls=await uploadAll(pk,'a/'+bid+'/'+a.id,(n,all)=>{save.textContent='⏳ อัปโหลดรูป '+n+'/'+all+'...';});
       const row={asset_id:a.id,branch_id:bid,period:p,count_date:d,qty,added:added||0,broken:broken||0,
         by_name:(PROF&&(PROF.name||PROF.username))||'',note:ov.querySelector('.ac_n').value.trim()||null,photos:urls};
-      const res=await saveCount(row,cur&&cur.id);
+      const res=await saveCount(row,cur);
       if(res.error)throw res.error;
       toast('บันทึกการนับ “'+a.name+'” แล้ว ✓');delete ov.dataset.busy;closeNow();if(bid===CUR_B)astLoad();
     }catch(e){toast('บันทึกไม่ได้: '+errText(e));
@@ -1392,6 +1410,7 @@ function astPhotoOverlay(a,r){
 }
 function astManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์จัดการรายการอุปกรณ์');return;}
+  if(AST_ERR){toast('โหลดรายการอุปกรณ์ไม่ได้ — ดึงหน้าลงเพื่อลองใหม่ก่อน');return;}
   const acc=accessibleBranches(),bname=(acc.find(b=>b.id===CUR_B)||{}).name||'',canA=canT('a'),canE=canT('e'),canD=canT('d');
   const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${escapeHtml(b.id)}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
   const {ov}=openSheet(`<div class="sheet">
@@ -1473,7 +1492,9 @@ let LAST_DAY=todayISO();
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden||!PROF)return;
   const d=todayISO();
-  if(d!==LAST_DAY){LAST_DAY=d;if(seeMaint())maintRenderList();}               // ข้ามวัน → สถานะ/ปฏิทินอัปเดต
+  if(d!==LAST_DAY){const o=LAST_DAY;LAST_DAY=d;                              // ข้ามวัน → สถานะ/ปฏิทินอัปเดต
+    if(CAL_Y!==null&&CAL_Y+'-'+String(CAL_M+1).padStart(2,'0')===o.slice(0,7)){const n=new Date();CAL_Y=n.getFullYear();CAL_M=n.getMonth();}
+    if(seeMaint())maintRenderList();}
   if(TAB==='asset'&&!PD_MANUAL&&pdStr()!==curPeriod())astLoad();          // ข้ามเดือน → งวดนี้ขยับตาม
 });
 window.addEventListener('beforeunload',e=>{
@@ -1482,6 +1503,13 @@ window.addEventListener('beforeunload',e=>{
 
 
 boot();
+/* กลับมาจากประวัติเบราว์เซอร์ (ย้อนกลับ/ไปข้างหน้า) หน้าไม่ได้โหลดใหม่ → PROF ในหน่วยความจำอาจเป็นคนก่อนหน้า
+   ถ้าเซสชันของแท็บไม่ตรงแล้ว หรือมีใบผ่านใหม่รออยู่ ให้โหลดหน้าใหม่ให้ boot() ตัดสินใหม่ */
+window.addEventListener('pageshow',e=>{
+  if(!e.persisted||!PROF)return;
+  const s=SS.get(SESS_KEY),tk=LSS.get(TICKET);
+  if(!s||s.username!==PROF.username||(tk&&tk.u&&(!tk.app||tk.app==='maint')))location.reload();
+});
 
 /* ============================================================
    ลากหน้าลง = รีเฟรช (pull-to-refresh) — ใช้ได้บนมือถือทุกแบบ
