@@ -123,6 +123,13 @@ label.fld span{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;
 .brscope .bst{flex-basis:100%;font-size:12.5px;color:var(--ink2)}
 .brscope label{display:inline-flex;align-items:center;gap:5px;font-size:14px;cursor:pointer}
 .brscope input{width:18px;height:18px}
+
+/* ตัวกรองรายชื่อผู้ใช้ (แท็บ ผู้ใช้ & สิทธิ์) */
+.ufbar{display:grid;grid-template-columns:minmax(170px,1.5fr) repeat(4,minmax(118px,1fr)) auto;gap:8px;align-items:center;margin:2px 0 12px}
+.ufbar .on{border-color:var(--gold);background:#2A2012;color:var(--gold2)}
+.ufbar .btn{white-space:nowrap}
+@media(max-width:900px){.ufbar{grid-template-columns:1fr 1fr}.ufbar #ufQ,.ufbar .btn{grid-column:1/-1}}
+@media(max-width:700px){.ufbar input,.ufbar select{font-size:16px}.ufbar .btn{min-height:44px}}
 .quick button{font-size:11.5px;padding:4px 10px;border-radius:99px;border:1px solid var(--line2);background:#1B1512;color:var(--ink2);cursor:pointer;font-family:var(--fd)}
 .quick button:hover{border-color:var(--gold);color:var(--gold2)}
 
@@ -1017,8 +1024,73 @@ async function refreshPendCount(){
 }
 
 /* ---------- แท็บ 1: ผู้ใช้ & สิทธิ์ ---------- */
+/* ---------- ตัวกรองรายชื่อผู้ใช้ (เจ้าของสั่ง 2026-09-29) ----------
+   กรองในหน้าจอเลย ไม่ดึงข้อมูลใหม่ · เก็บใน sessionStorage = รีเฟรช/ลากลงแล้วยังอยู่ ปิดแท็บแล้วหาย */
+const UF_KEY='jjacc_ufilter';
+const UF_ST={on:'✅ ใช้งานอยู่',off:'⛔ ปิดใช้งาน',pending:'⏳ รออนุมัติ',rejected:'✖️ ไม่อนุมัติ'};
+function stOf(u){ return u.status==='pending'?'pending':u.status==='rejected'?'rejected':u.active===false?'off':'on'; }
+function ufGet(){
+  try{ const f=JSON.parse(sessionStorage.getItem(UF_KEY)||'{}');
+    if(!f||typeof f!=='object')return {};
+    return { q:String(f.q||''), role:ROLES[f.role]?f.role:'', unit:UNITS[f.unit]?f.unit:'',
+      app:(f.app==='_none'||APPS[f.app])?f.app:'', st:UF_ST[f.st]?f.st:'' };   // กันค่าเสียจากเวอร์ชันเก่า
+  }catch(e){ return {}; }
+}
+function ufMatch(u,f){
+  const q=String(f.q||'').trim().toLowerCase();
+  if(q && (String(u.display_name||'')+' '+String(u.username||'')).toLowerCase().indexOf(q)<0)return false;
+  if(f.role && roleOf(u)!==f.role)return false;
+  if(f.unit && unitOf(u)!==f.unit)return false;
+  if(f.st && stOf(u)!==f.st)return false;
+  if(f.app==='_none')return !APPKEYS.some(k=>appOn(u,k));
+  if(f.app && !appOn(u,f.app))return false;      // ผู้ดูแลระบบ/เจ้าของ = เข้าได้ทุกแอพ จึงติดทุกตัวกรองแอพ
+  return true;
+}
+function ufActive(f){ return !!(String(f.q||'').trim()||f.role||f.unit||f.app||f.st); }
+function ufBar(us,f){
+  const cnt=fn=>us.filter(fn).length;
+  const opt=(v,label,n,cur)=>'<option value="'+v+'"'+(cur===v?' selected':'')+'>'+label+' ('+n+')</option>';
+  const on=v=>v?' class="on"':'';
+  return '<div class="ufbar">'+
+    '<input id="ufQ" type="search" placeholder="🔍 ค้นหาชื่อ / ชื่อผู้ใช้" autocomplete="off" value="'+esc(f.q||'')+'" oninput="ufApply()"'+on(String(f.q||'').trim())+'>'+
+    '<select id="ufRole" onchange="ufApply()"'+on(f.role)+'><option value="">ทุกระดับ</option>'+
+      Object.keys(ROLES).map(k=>opt(k,ROLES[k].ic+' '+esc(ROLES[k].n),cnt(u=>roleOf(u)===k),f.role)).join('')+'</select>'+
+    '<select id="ufUnit" onchange="ufApply()"'+on(f.unit)+'><option value="">ทุกที่ (ประจำที่)</option>'+
+      Object.keys(UNITS).map(k=>opt(k,UNITS[k].ic+' '+esc(UNITS[k].n),cnt(u=>unitOf(u)===k),f.unit)).join('')+'</select>'+
+    '<select id="ufApp" onchange="ufApply()"'+on(f.app)+'><option value="">ทุกแอพ</option>'+
+      APPKEYS.map(k=>opt(k,APPS[k].ic+' เข้า '+esc(APPS[k].n)+' ได้',cnt(u=>appOn(u,k)),f.app)).join('')+
+      opt('_none','🚫 ยังไม่ได้เปิดแอพไหนเลย',cnt(u=>!APPKEYS.some(k=>appOn(u,k))),f.app)+'</select>'+
+    '<select id="ufSt" onchange="ufApply()"'+on(f.st)+'><option value="">ทุกสถานะ</option>'+
+      Object.keys(UF_ST).map(k=>opt(k,UF_ST[k],cnt(u=>stOf(u)===k),f.st)).join('')+'</select>'+
+    '<button class="btn sm" id="ufClr" onclick="ufClear()"'+(ufActive(f)?'':' hidden')+'>✕ ล้างตัวกรอง</button>'+
+  '</div>';
+}
+function ufCountHtml(shown,total,f){
+  return ufActive(f)?'แสดง '+shown+' จาก '+total+' บัญชี':total+' บัญชี';
+}
+function ufApply(){
+  const g=id=>{ const el=$('#'+id); return el?el.value:''; };
+  const f={q:g('ufQ'),role:g('ufRole'),unit:g('ufUnit'),app:g('ufApp'),st:g('ufSt')};
+  try{ sessionStorage.setItem(UF_KEY,JSON.stringify(f)); }catch(e){}
+  let shown=0;
+  document.querySelectorAll('tr[data-uid]').forEach(tr=>{
+    const u=S.users.find(x=>String(x.id)===tr.dataset.uid);
+    const ok=!!u&&ufMatch(u,f); tr.hidden=!ok; if(ok)shown++;
+  });
+  ['ufQ','ufRole','ufUnit','ufApp','ufSt'].forEach(id=>{ const el=$('#'+id); if(el)el.classList.toggle('on',!!String(el.value).trim()); });
+  const c=$('#ufCount'); if(c)c.textContent=ufCountHtml(shown,S.users.length,f);
+  const n=$('#ufNone'); if(n)n.hidden=!!shown||!S.users.length;
+  const b=$('#ufClr'); if(b)b.hidden=!ufActive(f);
+}
+function ufClear(){
+  ['ufQ','ufRole','ufUnit','ufApp','ufSt'].forEach(id=>{ const el=$('#'+id); if(el)el.value=''; });
+  ufApply();
+}
+
 async function viewUsers(){
   const us=await loadUsers(true);
+  const f=ufGet();
+  let shown=0;
   const rows=us.map(u=>{
     const apps=APPKEYS.filter(k=>appOn(u,k));
     const chips=isBoss(u)
@@ -1028,11 +1100,12 @@ async function viewUsers(){
             (br.length?' · '+esc(br.map(b=>(BR_LIST.find(x=>x[0]===b)||[b,b])[1]).join('/')):'')+'</span>'; }).join(' ')
                     :'<span class="chip off">ยังไม่ได้เปิดแอพไหนเลย</span>');
     const R=ROLES[roleOf(u)], UN=UNITS[unitOf(u)];
-    return '<tr>'+
+    const ok=ufMatch(u,f); if(ok)shown++;
+    return '<tr data-uid="'+u.id+'"'+(ok?'':' hidden')+'>'+
       '<td><b>'+esc(u.display_name||u.username)+'</b>'+
         '<div style="font-size:11.5px;color:var(--mut)">'+esc(u.username)+'</div></td>'+
       '<td>'+pickCell(u,'role')+
-        (u.active===false?' <span class="chip off">ปิดใช้งาน</span>':'')+'</td>'+
+        ({pending:' <span class="chip adm">⏳ รออนุมัติ</span>',rejected:' <span class="chip off">ไม่อนุมัติ</span>',off:' <span class="chip off">ปิดใช้งาน</span>'}[stOf(u)]||'')+'</td>'+
       '<td>'+pickCell(u,'unit')+'</td>'+
       '<td style="line-height:2">'+chips+'</td>'+
       '<td style="text-align:right;white-space:nowrap">'+
@@ -1041,11 +1114,15 @@ async function viewUsers(){
     '</tr>';
   }).join('');
   return '<div class="card">'+
-    '<h3>👥 ผู้ใช้ทั้งหมด <span class="chip">'+us.length+' บัญชี</span>'+
+    '<h3>👥 ผู้ใช้ทั้งหมด <span class="chip" id="ufCount">'+ufCountHtml(shown,us.length,f)+'</span>'+
       '<button class="btn pri sm" style="margin-left:auto" onclick="editUser(null)">+ เพิ่มผู้ใช้</button></h3>'+
     '<p class="sub">บัญชีเดียวใช้เข้าได้ทุกระบบที่เปิดสิทธิ์ให้ · <b>กดที่ช่อง &quot;ระดับ&quot; หรือ &quot;ประจำที่&quot; ในตารางเพื่อเปลี่ยนได้ทันที</b> · <b>✏️</b> = แก้ชื่อ/รหัสผ่าน · <b>⚙️ ตั้งสิทธิ์</b> = เลือกว่าเข้าแอพไหนได้ และในแต่ละหน้าจอทำอะไรได้ (ดู/เพิ่ม/แก้/ลบ)<br><span style="color:var(--goldDim)">🛡️ ผู้ดูแลระบบ · 👑 เจ้าของ</span> = เข้าได้ทุกแอพอัตโนมัติ ไม่ต้องตั้งสิทธิ์รายแอพ</p>'+
+    (us.length?ufBar(us,f):'')+
     '<div class="twrap"><table><tr><th>ชื่อ</th><th>ระดับ</th><th>ประจำที่</th><th>แอพที่เข้าได้</th><th></th></tr>'+
-    (rows||'<tr><td colspan="5" class="empty">ยังไม่มีผู้ใช้</td></tr>')+'</table></div></div>';
+    (rows||'<tr><td colspan="5" class="empty">ยังไม่มีผู้ใช้</td></tr>')+
+    '<tr id="ufNone"'+(shown||!us.length?' hidden':'')+'><td colspan="5" class="empty">ไม่พบผู้ใช้ที่ตรงกับตัวกรอง — '+
+      '<a href="javascript:ufClear()" style="color:var(--gold2)">ล้างตัวกรอง</a></td></tr>'+
+    '</table></div></div>';
 }
 
 /* ---------- เปลี่ยนระดับ/ประจำที่ ได้จากตารางเลย (ไม่ต้องเปิดฟอร์ม) ---------- */
