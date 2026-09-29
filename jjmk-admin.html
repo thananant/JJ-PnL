@@ -166,6 +166,67 @@ a.back{color:var(--ink2);text-decoration:none;font-size:12.5px}
 a.back:hover{color:var(--gold2)}
 </style>
 <style>
+/* ===== มือถือ (เจ้าของแจ้ง 2026-09-29: "ขนาดแปลก เวลาเปิดในโทรศัพท์") =====
+   1) เปิดจากไอคอนบนหน้าจอโฮม: index.html ตั้งแถบสถานะแบบโปร่ง (black-translucent) ทั้งแอพ
+      -> หัวของหน้านี้ต้องเว้นที่ให้แถบสถานะ iPhone ไม่งั้นนาฬิกา/สัญญาณทับชื่อแอพ
+   2) ตาราง class="mc" = จอแคบกลายเป็นการ์ดต่อแถว (ป้ายชื่อคอลัมน์ติดให้เองด้วย mcLabel())
+      ตาราง class="mx" (ตารางสรุปสิทธิ์) = ยังเป็นตาราง เลื่อนแนวนอนได้ คอลัมน์ชื่อค้างไว้ซ้ายสุด */
+header.top{padding-top:calc(12px + env(safe-area-inset-top))}
+@media(max-width:700px){
+  header.top{position:static;padding-bottom:10px;margin-bottom:12px}
+  .top .wrap{flex-wrap:wrap;row-gap:8px;padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+  .brand{font-size:16px}
+  .brand small{display:none}
+  .who{margin-left:0;width:100%;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;font-size:13px}
+  .who a.back{white-space:nowrap;font-size:13px}
+  /* แถบแท็บค้างไว้บนสุดตอนเลื่อน (กติกามือถือใน CLAUDE.md) — ใต้แถบสถานะ iPhone พอดี */
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+    margin:0 -14px 14px;padding:6px 14px 8px;position:sticky;top:env(safe-area-inset-top);z-index:15;
+    background:var(--bg);box-shadow:0 6px 10px -8px rgba(0,0,0,.7)}
+  /* พื้นทึบหลังแถบสถานะ iPhone — เลื่อนหน้าแล้วเนื้อหาไม่โผล่ไปใต้นาฬิกา/สัญญาณ */
+  body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top);
+    background:var(--bg);z-index:30;pointer-events:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs button{flex:none;min-height:44px}
+  .card{padding:13px}
+  .btn{min-height:40px}
+  /* ช่องกรอก/ช่องเลือกทุกช่อง (รวมในหน้าต่างเด้ง) ต้อง 16px ขึ้นไป ไม่งั้น iPhone ซูมหน้าเองตอนแตะ */
+  #main input:not([type=checkbox]):not([type=radio]),#main select,#main textarea,
+  #modal input:not([type=checkbox]):not([type=radio]),#modal select,#modal textarea{font-size:16px}
+  .zsel{min-height:44px}
+}
+@media(max-width:760px){
+  .twrap{overflow:visible}
+  table.mc,table.mc tbody{display:block}
+  table.mc tr.mh{display:none}
+  table.mc tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 12px;
+    padding:13px;margin-bottom:10px;border:1px solid var(--line);border-radius:13px;background:var(--card2)}
+  table.mc tr[hidden]{display:none!important}        /* ตัวกรองซ่อนแถวด้วย hidden — ต้องชนะ display:grid */
+  table.mc td{display:block;padding:0;border:0;min-width:0;grid-column:span 1;word-break:break-word}
+  table.mc td:first-child,table.mc td:last-child,table.mc td[colspan]{grid-column:1/-1}
+  table.mc td[data-l]:not([data-l=""])::before{content:attr(data-l);display:block;font-size:11px;
+    color:var(--mut);margin-bottom:4px;font-family:var(--fd);font-weight:500}
+  table.mc td:last-child{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  table.mc td:last-child::before{flex-basis:100%;margin-bottom:0}
+  table.mc td:last-child .btn{flex:1 1 auto;min-height:44px;font-size:14px}
+  table.mc .inlinesel{width:100%;min-width:0;min-height:44px;font-size:16px}
+  table.mc td.empty{display:block}
+  /* ผู้ใช้ & สิทธิ์: ชื่อ (เต็ม) / ระดับ | ประจำที่ / แอพที่เข้าได้ (เต็ม) / ปุ่ม (เต็ม) */
+  table.mc.mc-users td:first-child[data-l]::before{display:none}   /* ชื่อคนเห็นชัดอยู่แล้ว ไม่ต้องมีป้าย "ชื่อ" */
+  table.mc-users td:first-child b{font-size:16px}
+  table.mc-users td:nth-child(4){grid-column:1/-1}
+  table.mc-users td:nth-child(4) .chip{font-size:12px;padding:3px 10px}
+  table.mc-users td:last-child .chip{flex:1;text-align:center;padding:10px}
+  /* ตารางสรุปสิทธิ์: คอลัมน์ชื่อค้างไว้ซ้ายตอนเลื่อน */
+  table.mx th:first-child,table.mx td:first-child{position:sticky;left:0;z-index:1;background:var(--card);
+    box-shadow:6px 0 8px -6px rgba(0,0,0,.6)}
+  .twrap:has(table.mx){overflow-x:auto}
+}
+@media(max-width:480px){
+  /* จอแคบมาก: ระดับ / ประจำที่ วางคนละบรรทัด ไม่งั้นชื่อในช่องเลือกโดนตัด ("ผู้ดูแลระ…") */
+  table.mc-users td:nth-child(2),table.mc-users td:nth-child(3){grid-column:1/-1}
+}
+
 /* JJ Gate — ช่องล็อกอินบนมือถือต้องไม่ต่ำกว่า 16px ไม่งั้น iPhone จะซูมหน้าจอเองตอนกดพิมพ์ */
 @media (max-width:640px){
   #lgU,#lgP,#liUser,#liPass{font-size:16px !important}
@@ -675,6 +736,32 @@ function go(t){
   ['pending','users','survey','matrix','log'].forEach(x=>{const b=$('#tb_'+x);if(b)b.classList.toggle('on',x===t);});
   render();
 }
+/* มือถือ: ตาราง class="mc" แสดงเป็นการ์ดต่อแถว — ติดป้ายชื่อคอลัมน์ (data-l) ให้ทุกช่องจากแถวหัวตาราง
+   เรียกเองทุกครั้งที่เนื้อหาใน #main เปลี่ยน (MutationObserver ข้างล่าง) จะได้ไม่ต้องไล่แก้ทุก view */
+function mcLabel(root){
+  (root||document).querySelectorAll('table.mc').forEach(t=>{
+    const head=t.querySelector('tr'); if(!head||!head.querySelector('th'))return;
+    head.classList.add('mh');
+    const names=[...head.children].map(th=>th.textContent.trim());
+    t.querySelectorAll('tr').forEach(tr=>{
+      if(tr===head)return;
+      let i=0;
+      [...tr.children].forEach(td=>{
+        const span=Number(td.getAttribute('colspan')||1);
+        if(span===1&&!td.hasAttribute('data-l'))td.setAttribute('data-l',names[i]||'');
+        i+=span;
+      });
+    });
+  });
+}
+(function(){
+  let q=0;
+  const run=()=>{ q=0; try{ mcLabel($('#main')); }catch(e){} };
+  const start=()=>{ const m=$('#main'); if(!m)return;
+    new MutationObserver(()=>{ if(!q)q=requestAnimationFrame(run); }).observe(m,{childList:true,subtree:true}); };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start); else start();
+})();
+
 async function render(){
   const el=$('#main');
   el.innerHTML='<div class="spin"></div>';
@@ -1139,7 +1226,7 @@ async function viewUsers(){
       '<button class="btn pri sm" style="margin-left:auto" onclick="editUser(null)">+ เพิ่มผู้ใช้</button></h3>'+
     '<p class="sub">บัญชีเดียวใช้เข้าได้ทุกระบบที่เปิดสิทธิ์ให้ · <b>กดที่ช่อง &quot;ระดับ&quot; หรือ &quot;ประจำที่&quot; ในตารางเพื่อเปลี่ยนได้ทันที</b> · <b>✏️</b> = แก้ชื่อ/รหัสผ่าน · <b>⚙️ ตั้งสิทธิ์</b> = เลือกว่าเข้าแอพไหนได้ และในแต่ละหน้าจอทำอะไรได้ (ดู/เพิ่ม/แก้/ลบ)<br><span style="color:var(--goldDim)">🛡️ ผู้ดูแลระบบ · 👑 เจ้าของ</span> = เข้าได้ทุกแอพอัตโนมัติ ไม่ต้องตั้งสิทธิ์รายแอพ</p>'+
     (us.length?ufBar(us,f):'')+
-    '<div class="twrap"><table><tr><th>ชื่อ</th><th>ระดับ</th><th>ประจำที่</th><th>แอพที่เข้าได้</th><th></th></tr>'+
+    '<div class="twrap"><table class="mc mc-users"><tr><th>ชื่อ</th><th>ระดับ</th><th>ประจำที่</th><th>แอพที่เข้าได้</th><th></th></tr>'+
     (rows||'<tr><td colspan="5" class="empty">ยังไม่มีผู้ใช้</td></tr>')+
     '<tr id="ufNone"'+(shown||!us.length?' hidden':'')+'><td colspan="5" class="empty">ไม่พบผู้ใช้ที่ตรงกับตัวกรอง — '+
       '<a href="javascript:ufClear()" style="color:var(--gold2)">ล้างตัวกรอง</a></td></tr>'+
@@ -1471,7 +1558,7 @@ async function viewSurvey(){
   }else if(!S.sc.length){
     scBlock='<div class="empty">ไม่พบบัญชีในระบบนับสต๊อก</div>';
   }else{
-    scBlock='<div class="twrap"><table><tr><th>ชื่อ</th><th>บทบาท</th><th>สาขา/แผนก</th><th>สถานะบัญชีกลาง</th><th></th></tr>'+
+    scBlock='<div class="twrap"><table class="mc"><tr><th>ชื่อ</th><th>บทบาท</th><th>สาขา/แผนก</th><th>สถานะบัญชีกลาง</th><th></th></tr>'+
       S.sc.map(u=>{
         const dup=known.has(String(u.username||'').toLowerCase());
         return '<tr><td><b>'+esc(u.display_name||u.username)+'</b><div style="font-size:11.5px;color:var(--mut)">'+esc(u.username)+'</div></td>'+
@@ -1490,7 +1577,7 @@ async function viewSurvey(){
   }else if(!S.au.length){
     auBlock='<div class="empty">ไม่พบบัญชีในระบบครัวกลาง/ซ่อมบำรุง</div>';
   }else{
-    auBlock='<div class="twrap"><table><tr><th>ชื่อ</th><th>บทบาท</th><th>สาขา</th><th>สถานะ</th><th>บัญชีกลาง</th><th></th></tr>'+
+    auBlock='<div class="twrap"><table class="mc"><tr><th>ชื่อ</th><th>บทบาท</th><th>สาขา</th><th>สถานะ</th><th>บัญชีกลาง</th><th></th></tr>'+
       S.au.map(u=>{
         const un=String(u.username||u.name||'').trim();
         const dup=known.has(un.toLowerCase());
@@ -1509,7 +1596,7 @@ async function viewSurvey(){
     '<div class="grid2" style="gap:14px">'+
       '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">📒</span><span class="nm">บัญชีกลาง (pnl_users)</span><span class="cnt">'+us.length+' คน</span></div>'+
       '<div class="appbody" style="display:block"><p class="sub" style="margin:8px 0">ใช้ร่วมกันแล้วโดย: P&amp;L · Owner · Payroll · Social · Calendar · Invoice</p>'+
-      '<div class="twrap"><table><tr><th>ชื่อ</th><th>ระดับ</th><th>สถานะ</th><th>ประจำที่ · แอพ</th></tr>'+pnlRows+'</table></div></div></div>'+
+      '<div class="twrap"><table class="mc"><tr><th>ชื่อ</th><th>ระดับ</th><th>สถานะ</th><th>ประจำที่ · แอพ</th></tr>'+pnlRows+'</table></div></div></div>'+
       '<div class="appbox open" style="margin:0"><div class="apphead" style="cursor:default"><span class="ic">🔐</span><span class="nm">บัญชีเก่าที่ยังค้างอยู่</span><span class="cnt">'+((S.sc||[]).length+(S.au||[]).length)+' รายการ</span></div>'+
       '<div class="appbody" style="display:block">'+
         '<p class="sub" style="margin:8px 0 10px">ทุกแอพเช็ครหัสกับ <code>pnl_users</code> อย่างเดียวแล้ว — ตารางข้างล่างคือบัญชีชุดเก่าที่ยังค้างในฐานข้อมูล ไม่ได้ใช้ล็อกอินที่ไหนอีก (ยกเว้นที่ระบุไว้):</p>'+
@@ -1565,7 +1652,7 @@ async function viewMatrix(){
     }).join('')+'</tr>').join('');
   return '<div class="card"><h3>🗂 ใครเข้าแอพไหนได้บ้าง</h3>'+
     '<p class="sub"><span style="color:var(--ok)">●</span> เข้าได้ทุกหน้า · <span style="color:var(--warn)">◐</span> เข้าได้บางหน้า · – เข้าไม่ได้ · แสดงเฉพาะบัญชีที่เปิดใช้งาน</p>'+
-    '<div class="twrap"><table>'+head+rows+'</table></div>'+
+    '<div class="twrap"><table class="mx">'+head+rows+'</table></div>'+
     '<p class="sub" style="margin:12px 0 0">'+APPKEYS.map(k=>APPS[k].ic+' '+esc(APPS[k].n)).join(' · ')+'</p></div>';
 }
 
@@ -1582,7 +1669,7 @@ async function viewLog(){
       '<td>'+esc(r.action)+'</td><td style="font-size:12px;color:var(--ink2)">'+esc(r.detail||'')+'</td></tr>';
   }).join('');
   return '<div class="card"><h3>📜 ประวัติการแก้สิทธิ์ <span class="chip">'+rows.length+' รายการล่าสุด</span></h3>'+
-    '<div class="twrap"><table><tr><th>เวลา</th><th>คนแก้</th><th>บัญชีที่ถูกแก้</th><th>ทำอะไร</th><th>รายละเอียด</th></tr>'+
+    '<div class="twrap"><table class="mc"><tr><th>เวลา</th><th>คนแก้</th><th>บัญชีที่ถูกแก้</th><th>ทำอะไร</th><th>รายละเอียด</th></tr>'+
     (body||'<tr><td colspan="5" class="empty">ยังไม่มีประวัติ</td></tr>')+'</table></div></div>';
 }
 
