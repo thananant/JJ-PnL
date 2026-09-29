@@ -85,6 +85,8 @@
   .tabbtn{flex:1;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 8px;font-family:Prompt;
     font-weight:600;font-size:.92rem;cursor:pointer;color:var(--ink-soft);box-shadow:var(--shadow)}
   .tabbtn.on{background:var(--red-deep);color:#fff;border-color:var(--red-deep)}
+  .tabbtn .tb_b{font-weight:500;opacity:.8}
+  .tabbtn .tb_b:empty{display:none}
   /* 📦 นับอุปกรณ์ */
   .stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-bottom:12px}
   .stile{border:1px solid var(--line);border-radius:12px;padding:8px 11px;background:#fff}
@@ -334,7 +336,7 @@
 <main id="main" style="display:none">
   <div class="tabbar">
     <button class="tabbtn on" data-tab="maint">🗓 ตารางบำรุงรักษา</button>
-    <button class="tabbtn" data-tab="asset">📦 นับอุปกรณ์</button>
+    <button class="tabbtn" data-tab="asset">📦 นับอุปกรณ์<span class="tb_b" id="tabBranch"></span></button>
   </div>
   <div id="viewMaint"><div class="wrap">
     <div class="card calcard">
@@ -645,6 +647,11 @@ $('#lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 $('#hOut').onclick=doLogout;
 
 /* ================= เข้าแอพ + สาขา ================= */
+function paintTabBranch(){
+  const el=$('#tabBranch');if(!el)return;
+  const b=(BRANCHES.find(x=>x.id===CUR_B)||{}).name||'';
+  el.textContent=b?' · '+b:'';
+}
 function accessibleBranches(){
   if(isAdmin()||PROF&&PROF.kind==='central')return BRANCHES;   // บัญชีกลาง: เห็นทุกสาขา
   const ids=(PROF&&PROF.branch_ids)||[];if(!ids.length)return BRANCHES;
@@ -666,11 +673,12 @@ async function enterApp(prof){
   const sel=$('#hBranch');
   if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
     sel.onchange=()=>{CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}
-      maintLoad();if(TAB==='asset')astLoad();};}
+      paintTabBranch();maintLoad();if(TAB==='asset')astLoad();};}
   else{sel.style.display='none';}
   $('#hMng').style.display=canManage()?'':'none';
   $('#hMng').onclick=()=>{TAB==='asset'?astManageOverlay():maintManageOverlay();};
   // แท็บที่ไม่มีสิทธิ์ดู → ซ่อนปุ่มไปเลย
+  paintTabBranch();
   const seeM=isAdmin()||can('sched','v')||can('log','v'), seeA=isAdmin()||can('asset','v');
   document.querySelector('[data-tab="maint"]').hidden=!seeM;
   document.querySelector('[data-tab="asset"]').hidden=!seeA;
