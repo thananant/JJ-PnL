@@ -589,6 +589,13 @@ function clearSession(){
   ['jjpnl_auth','jjpay_sess','jjsocial_sess','jjcal_sess','jjmk_inv_sess','jjhub_skip',
    'jjhub_pass','jjsso_ticket','jjmt_keep','jjck_keep']
     .forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
+  clearTabSessions();
+}
+/* ใบอนุญาตรายแท็บของแอพที่เปิดต่อจากหน้านี้ (แท็บเดียวกัน = sessionStorage ชุดเดียวกัน)
+   ไม่ล้าง = คนถัดไปที่ล็อกอินในแท็บนี้แล้วกดเข้าแอพ จะได้ตัวตน/สิทธิ์ของคนก่อนหน้า */
+function clearTabSessions(){
+  ['jjmt_sess','jjsocial_auth','jjck_sess','jjsc_sess']
+    .forEach(function(k){ try{ sessionStorage.removeItem(k); }catch(e){} });
 }
 
 /* ---------- ใบผ่านเข้าแอพ (SSO ticket) ----------
@@ -681,7 +688,7 @@ async function doLogin(){
   try{
     var usr=await fetchUser(u);
     if(!usr||usr.pass_hash!==pwHash(u,p)){ msg.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
-    ME=usr; spreadSession(usr);
+    clearTabSessions(); ME=usr; spreadSession(usr);
     try{ localStorage.removeItem('jjhub_skip'); }catch(e){}
     document.getElementById('login').classList.remove('on');
     paintApps(); paintUser();

@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -21,10 +21,14 @@
   header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;padding:10px 14px;
     background:linear-gradient(170deg,#611014,#3F080B 85%);color:#fbeee0;box-shadow:0 2px 14px rgba(63,8,11,.28)}
   header .hlogo{width:38px;height:38px;border-radius:50%;object-fit:cover;background:#fff;border:2px solid var(--gold-line);flex:none}
-  header .htit{font-family:Prompt;font-weight:600;font-size:1.02rem;line-height:1.15}
+  header .htit{font-family:Prompt;font-weight:600;font-size:1.02rem;line-height:1.15;flex:1 1 auto;min-width:0}
+  header .htit,header .htit small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   header .htit small{display:block;font-family:Sarabun;font-weight:400;font-size:.68rem;opacity:.75}
-  header .hsp{flex:1}
-  header select{max-width:44vw;padding:7px 9px;border-radius:10px;border:1px solid rgba(255,255,255,.3);
+  header .hsp{display:none}
+  header .hbtn,header .hlogo{flex:none}
+  @media(max-width:400px){header{gap:7px;padding:8px 10px}header .hlogo{display:none}
+    header .htit{font-size:.92rem}header .hbtn{padding:7px 9px}}
+  header select{flex:0 1 auto;min-width:0;max-width:40vw;padding:7px 9px;border-radius:10px;border:1px solid rgba(255,255,255,.3);
     background:rgba(255,255,255,.1);color:#fbeee0;font-family:Prompt;font-weight:600;font-size:.85rem}
   header select option{color:#222;background:#fff}
   header .hbtn{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;
@@ -45,7 +49,15 @@
   .act.wide{width:100%}
   .field{margin-bottom:10px}
   .field label{display:block;font-size:.8rem;color:var(--ink-soft);margin-bottom:4px;font-weight:600}
-  .field input,.field select{width:100%;padding:11px;border:1.5px solid var(--line);border-radius:10px;font-family:Sarabun;font-size:.95rem;background:#fff}
+  .field input,.field select{width:100%;padding:11px;border:1.5px solid var(--line);border-radius:10px;font-family:Sarabun;font-size:16px;background:#fff}
+  .overlay,.sheet-body{overscroll-behavior:contain}
+  html:has(body>.overlay.on){overscroll-behavior-y:none}     /* เปิดหน้าต่างอยู่ = ดึงหน้าลงแบบเบราว์เซอร์ไม่ทำงาน */
+  .phwait{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:9px;
+    border:1px dashed var(--line);font-size:.8rem;color:var(--ink-soft)}
+  .phcount{font-size:.75rem;color:var(--ink-soft);margin-top:4px}
+  .phcount:empty{display:none}
+  .htab small.gap{display:block;font-size:.66rem;color:#9a6700;font-weight:400}
+  .calnav:disabled{opacity:.35}
   /* overlay + sheet */
   .overlay{position:fixed;inset:0;z-index:100;background:rgba(42,23,19,.55);display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
   .overlay.on{display:flex}
@@ -392,7 +404,9 @@
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const EMAIL_DOMAIN='@jjmk.local';
-const sb=window.supabase.createClient(SB_URL,SB_ANON);
+const sb=window.supabase?window.supabase.createClient(SB_URL,SB_ANON):null;        // บัญชีเดิม (มี session ของ Supabase Auth)
+const sbA=window.supabase?window.supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:false,autoRefreshToken:false,
+  detectSessionInUrl:false,storageKey:'jjmt-anon'}}):null;                                  // บัญชีกลาง (role anon เสมอ)
 const LOGO=
   "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPDg4MD"
 + "Q0PERYTDxAVEQ0NExoTFRcYGRkZDxIbHRsYHRYYGRj/2wBDAQQEBAYFBgsGBgsYEA0QGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYG"
@@ -497,7 +511,7 @@ const LOGO=
 
 /* ================= helpers ================= */
 const $=s=>document.querySelector(s);
-function escapeHtml(s){return(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2100)}
 let uidN=0;const uid=p=>(p||'i')+Date.now().toString(36)+(uidN++);
 function todayISO(){const d=new Date();const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
@@ -507,42 +521,57 @@ function addDaysISO(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate
 function diffDaysISO(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
 function processImage(file,cb){const reader=new FileReader();
   reader.onload=()=>{const im=new Image();
-    im.onload=()=>{let w=im.width,h=im.height;const sc=Math.min(1,1280/Math.max(w,h));
-      w=Math.max(1,Math.round(w*sc));h=Math.max(1,Math.round(h*sc));
-      const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
-      ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(im,0,0,w,h);
-      try{cb(cv.toDataURL('image/jpeg',.78))}catch(e){cb(null)}};
+    im.onload=()=>{let out=null;
+      try{let w=im.width,h=im.height;const sc=Math.min(1,1280/Math.max(w,h));
+        w=Math.max(1,Math.round(w*sc));h=Math.max(1,Math.round(h*sc));
+        const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
+        ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(im,0,0,w,h);
+        out=cv.toDataURL('image/jpeg',.78);}catch(e){out=null;}
+      cb(out&&out.length>30?out:null);};
     im.onerror=()=>cb(null);im.src=reader.result};
   reader.onerror=()=>cb(null);reader.readAsDataURL(file)}
 
 /* ================= ล็อกอิน =================
-   3 ทางเข้า (เจ้าของสั่ง 2026-09-21):
-   1) มาจากหน้าศูนย์รวมแอพ (index.html) → หน้าแรกออก "ใบผ่าน" jjsso_ticket ไว้ (อายุ 2 นาที ใช้ครั้งเดียว)
-      แอพนี้กินใบผ่าน แล้วเอาไปตรวจกับ pnl_users จริงอีกชั้น ก่อนพาเข้าตามสิทธิ์ apps.maint
-   2) เปิด URL ของแอพนี้ตรง ๆ → ต้องกรอก user/pass ใหม่เสมอ (กันคนที่ได้ลิงก์ไปเข้าเอง)
-      - รหัสที่ใช้คือบัญชีกลาง pnl_users ชุดเดียวกับหน้าศูนย์รวมแอพ
-      - บัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (app_users) ยังใช้ได้ (ระบบลองให้อัตโนมัติ)
-   3) ติ๊ก "จำไว้ในเครื่องนี้ 12 ชม." = ไม่ต้องกรอกซ้ำในเครื่องตัวเองจนกว่าจะหมดอายุ
-   เซสชันปกติเก็บใน sessionStorage → รีเฟรช/ลากลงยังอยู่หน้าเดิม แต่ปิดแท็บแล้วต้องล็อกอินใหม่ */
-const SESS_KEY='jjmt_sess',        // sessionStorage — ใบอนุญาตของแท็บนี้ (ดึงหน้าลง/รีเฟรชยังอยู่)
+   ทางเข้า (เจ้าของสั่ง 2026-09-21) — ตรวจตามลำดับนี้ทุกครั้งที่เปิด/รีเฟรช:
+   1) ใบผ่านจากหน้าศูนย์รวมแอพ (jjsso_ticket อายุ 2 นาที ใช้ครั้งเดียว) → ตรวจกับ pnl_users จริงแล้วพาเข้า
+      ต้องมาก่อนเซสชันเดิมของแท็บเสมอ: หน้าแรกกับแอพนี้ใช้แท็บเดียวกัน ถ้าคนถัดไปล็อกอินที่หน้าแรก
+      แล้วกดเข้ามา ต้องได้ตัวตนของคนใหม่ ไม่ใช่คนเก่าที่ค้างอยู่ในแท็บ
+   2) เซสชันของแท็บนี้ (sessionStorage) → ดึงหน้าลง/รีเฟรชแล้วยังอยู่ · ตรวจกับฐานข้อมูลซ้ำทุกครั้ง
+      (บัญชีถูกปิด/เปลี่ยนรหัส = หลุด · สิทธิ์ถูกแก้ = ได้สิทธิ์ใหม่ทันที · เน็ตล่ม = ใช้ของเดิมไปก่อน)
+   3) กดมาจากหน้าแรกเวอร์ชันเก่าที่ยังไม่ออกใบผ่าน (referrer โดเมนเดียวกัน + ใบล็อกอินกลางตรงกับฐานข้อมูล)
+   4) ติ๊ก "จำไว้ในเครื่องนี้ 12 ชม." ไว้ และยังไม่หมดอายุ (ไม่ต่ออายุให้เอง)
+   5) นอกนั้น = เปิด URL ตรง → ต้องกรอกรหัสเสมอ (กันคนที่ได้ลิงก์ไปเข้าเอง)
+   บัญชีกลาง (pnl_users) ใช้ client แยกที่ไม่มี session ของ Supabase Auth (ทำงานเป็น role anon เสมอ)
+   ไม่ไปปนกับ session ของบัญชีเดิม (app_users) ที่แอพนับสต๊อก/ครัวกลางในเครื่องเดียวกันใช้อยู่ */
+const SESS_KEY='jjmt_sess',        // sessionStorage — ใบอนุญาตของแท็บนี้
+  OUT_KEY='jjmt_out',              // sessionStorage — เพิ่งกดออกจากระบบในแท็บนี้ (ห้ามพาเข้าอัตโนมัติ)
   KEEP_KEY='jjmt_keep',            // localStorage — "จำไว้ในเครื่องนี้ 12 ชม."
   TICKET='jjsso_ticket',           // localStorage — ใบผ่านจากหน้าศูนย์รวมแอพ (มาตรฐานเดียวกับ JJ Social)
   TICKET_TTL=120000, KEEP_MS=12*3600*1000;
 let PROF=null,BRANCHES=[],CUR_B=null;
+const db=()=>(PROF&&PROF.kind==='central')?sbA:sb;           // client ที่ใช้อ่าน/เขียนข้อมูลของคนที่ล็อกอินอยู่
 const isAdmin=()=>!!(PROF&&(PROF.role==='admin'||PROF.role==='owner'));   // admin+owner = สิทธิ์เต็ม
 /* สิทธิ์รายหน้าจอจาก pnl_users.apps.maint (v=ดู a=เพิ่ม e=แก้ d=ลบ)
-   บัญชี app_users เดิม / ยังไม่เคยตั้งสิทธิ์ = ไม่ล็อกใคร ทำได้เหมือนเดิม */
+   บัญชีกลางที่ยังไม่เคยตั้งสิทธิ์เลย (apps ว่าง) = ไม่ล็อกใคร
+   บัญชีเดิม app_users = ดู/บันทึก/นับได้ แต่ตั้งค่างาน-อุปกรณ์และลบ เฉพาะเจ้าของ/แอดมิน (เหมือนก่อนมีล็อกอินกลาง) */
 function can(screen,flag){
   if(!PROF)return false;
   if(isAdmin())return true;
-  if(PROF.kind!=='central')return true;
+  flag=flag||'v';
+  if(PROF.kind!=='central')return screen!=='tasks'&&flag!=='d';
   const apps=PROF.apps;
   if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return true;
   const m=apps.maint;
   if(!m||typeof m!=='object')return false;
-  return String(m[screen]||'').indexOf(flag||'v')>-1;
+  return String(m[screen]||'').indexOf(flag)>-1;
 }
-const canManage=()=>isAdmin()||can('tasks','a')||can('tasks','e')||can('tasks','d');
+const canT=f=>isAdmin()||can('tasks',f);                    // ตั้งค่างาน/อุปกรณ์: a=เพิ่ม e=แก้ d=ลบ
+const canManage=()=>canT('a')||canT('e')||canT('d');
+const canLog=()=>isAdmin()||can('log','a');                 // บันทึกงานบำรุงรักษา (สร้างบันทึกใหม่)
+const canCountNew=()=>isAdmin()||can('asset','a');          // นับอุปกรณ์งวดที่ยังไม่มียอด
+const canCountEdit=()=>isAdmin()||can('asset','e');         // แก้ยอดที่มีคนนับไว้แล้ว
+const seeMaint=()=>isAdmin()||can('sched','v')||can('log','v')||can('tasks','v');
+const seeAsset=()=>isAdmin()||can('asset','v');
 function sha256hex(str){
   const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
   let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
@@ -568,10 +597,11 @@ const LSS={get(k){try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},
   del(k){try{localStorage.removeItem(k)}catch(e){}}};
 function saveSession(prof,keep){
-  SS.set(SESS_KEY,prof);
-  if(keep&&prof.kind==='central')LSS.set(KEEP_KEY,{u:prof.username,h:prof.hash,exp:Date.now()+KEEP_MS});
+  SS.set(SESS_KEY,prof);SS.del(OUT_KEY);
+  if(keep)LSS.set(KEEP_KEY,prof.kind==='central'
+    ?{kind:'central',u:prof.username,h:prof.hash,exp:Date.now()+KEEP_MS}
+    :{kind:'app',u:prof.username,exp:Date.now()+KEEP_MS});
 }
-/* ---- บัญชีกลาง pnl_users (ชุดเดียวกับหน้าศูนย์รวมแอพ) ---- */
 function fromHub(){   // กดมาจากหน้าศูนย์รวมแอพของเราเอง (เว็บอื่นปลอม referrer ข้ามโดเมนไม่ได้)
   try{
     const r=document.referrer;if(!r)return false;
@@ -581,14 +611,21 @@ function fromHub(){   // กดมาจากหน้าศูนย์รว�
     return a.pathname===base||a.pathname===base+'index.html';
   }catch(e){return false}
 }
+/* ---- บัญชีกลาง pnl_users (ชุดเดียวกับหน้าศูนย์รวมแอพ) — อ่านด้วย client anon เสมอ ---- */
 async function centralUser(username){
-  const {data,error}=await sb.from('pnl_users').select('username,display_name,role,unit,active,apps,pass_hash')
-    .eq('username',username).limit(1);
+  const {data,error}=await sbA.from('pnl_users').select('*').eq('username',username).limit(1);
   if(error)throw error;
   return (data&&data[0])||null;
 }
 function centralProf(u){return{kind:'central',username:u.username,name:u.display_name||u.username,
   role:u.role||'staff',unit:u.unit||'',apps:u.apps||{},hash:u.pass_hash};}
+async function refreshCentral(s){      // ตรวจเซสชันบัญชีกลางกับฐานข้อมูล: null = ให้ล็อกอินใหม่
+  try{
+    const u=await centralUser(s.username);
+    if(!u||u.active===false||!s.hash||u.pass_hash!==s.hash)return null;
+    return centralProf(u);
+  }catch(e){return s;}                 // เน็ตล่ม → ใช้ของเดิมไปก่อน (กันล็อกคนใช้งาน)
+}
 /* ---- บัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (app_users + Supabase Auth) ---- */
 const CLOCK_SKEW=e=>{const c=(e&&e.code)||'',m=(e&&e.message)||String(e||'');return c==='PGRST303'||/issued at future/i.test(m);};
 async function getProfile(onWait){
@@ -602,48 +639,67 @@ async function getProfile(onWait){
   return null;}
 function appProf(p){return{kind:'app',username:p.username,name:p.name||p.username,
   role:p.role||'staff',branch_ids:p.branch_ids||[],apps:null};}
+async function refreshApp(s,strict){   // ตรวจเซสชันบัญชีเดิม: session ของ Supabase ยังเป็นคนเดิม + ยัง active
+  try{
+    const g=await sb.auth.getSession();
+    if(!(g&&g.data&&g.data.session))return null;
+    const ap=await getProfile();
+    if(!ap)return strict?null:s;
+    if(ap.status!=='active'||ap.username!==s.username)return null;
+    return appProf(ap);
+  }catch(e){return strict?null:s;}
+}
+function showLogin(msg){
+  $('#hdr').style.display='none';$('#main').style.display='none';
+  const m=$('#lMsg');if(m){m.style.color='#c62127';m.textContent=msg||'';}
+  $('#login').classList.add('on');setTimeout(()=>{const u=$('#lUser');if(u)u.focus();},200);
+}
 function loginErr(m){$('#lMsg').style.color='#c62127';$('#lMsg').textContent=m;$('#login').classList.add('err');setTimeout(()=>$('#login').classList.remove('err'),450)}
 function authMsg(e){const s=((e&&e.message)||String(e)).toLowerCase();
   if(s.indexOf('invalid login')>-1)return'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
   if(s.indexOf('network')>-1||s.indexOf('failed to fetch')>-1)return'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่';
   return (e&&e.message)||'เกิดข้อผิดพลาด';}
+const NO_RIGHT='บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access';
+let LOGIN_BUSY=false;
 async function doLogin(){
-  const u=$('#lUser').value.trim(),p=$('#lPass').value.trim(),keep=$('#lKeep').checked;
-  if(!u||!p){loginErr('กรอกชื่อผู้ใช้และรหัสผ่าน');return;}
-  const btn=$('#lBtn');btn.disabled=true;btn.textContent='⏳ เข้าสู่ระบบ...';
+  if(LOGIN_BUSY||!sb)return;
+  const u=$('#lUser').value.trim(),pRaw=$('#lPass').value,keep=$('#lKeep').checked;
+  if(!u||!pRaw){loginErr('กรอกชื่อผู้ใช้และรหัสผ่าน');return;}
+  LOGIN_BUSY=true;const btn=$('#lBtn');btn.disabled=true;btn.textContent='⏳ เข้าสู่ระบบ...';
   try{
     let usr=null;
     try{usr=await centralUser(u);}catch(e){console.warn('pnl_users',e);}
-    if(usr){                                   // บัญชีกลาง
-      if(usr.pass_hash!==pwHash(u,p)){loginErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');return;}
+    if(usr){                                   // บัญชีกลาง — รหัสไม่ตัดช่องว่าง (ตรงกับหน้าแรก/JJ Access)
+      if(usr.pass_hash!==pwHash(u,pRaw)){loginErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');return;}
       if(usr.active===false){loginErr('บัญชีนี้ถูกปิดการใช้งาน');return;}
       const prof=centralProf(usr);
-      if(!profCanEnter(prof)){loginErr('บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access');return;}
+      if(!profCanEnter(prof)){loginErr(NO_RIGHT);return;}
       saveSession(prof,keep);await enterApp(prof);return;
     }
-    // ไม่มีในบัญชีกลาง → ลองบัญชีเดิมของระบบนับสต๊อก/ครัวกลาง
-    const {error}=await sb.auth.signInWithPassword({email:u.toLowerCase()+EMAIL_DOMAIN,password:p});
+    // ไม่มีในบัญชีกลาง → ลองบัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (ระบบเดิมตัดช่องว่างหัวท้ายรหัส)
+    const {error}=await sb.auth.signInWithPassword({email:u.toLowerCase()+EMAIL_DOMAIN,password:pRaw.trim()});
     if(error)throw error;
     const ap=await getProfile((n,t)=>{btn.textContent='⏳ รอเซิร์ฟเวอร์... ('+n+'/'+t+')'});
-    if(!ap){await sb.auth.signOut();loginErr('ไม่พบโปรไฟล์ในระบบ');return;}
-    if(ap.status!=='active'){await sb.auth.signOut();loginErr('บัญชีนี้รอผู้ดูแลอนุมัติก่อนใช้งาน');return;}
-    const prof=appProf(ap);saveSession(prof,false);await enterApp(prof);
+    if(!ap){await localSignOut();loginErr('ไม่พบโปรไฟล์ในระบบ');return;}
+    if(ap.status!=='active'){await localSignOut();loginErr('บัญชีนี้รอผู้ดูแลอนุมัติก่อนใช้งาน');return;}
+    const prof=appProf(ap);saveSession(prof,keep);await enterApp(prof);
   }catch(e){loginErr(authMsg(e));}
-  finally{btn.disabled=false;btn.textContent='เข้าสู่ระบบ';}
+  finally{LOGIN_BUSY=false;btn.disabled=false;btn.textContent='เข้าสู่ระบบ';}
 }
 function profCanEnter(prof){   // มีสิทธิ์เห็นอย่างน้อย 1 หน้าจอไหม
   const save=PROF;PROF=prof;
-  const ok=isAdmin()||['sched','log','asset','tasks'].some(s=>can(s,'v'));
+  const ok=seeMaint()||seeAsset();
   PROF=save;return ok;
 }
+/* ออกเฉพาะเครื่องนี้ — ไม่เตะบัญชีเดิมออกจากเครื่องอื่นที่ใช้แอพนับสต๊อก/ครัวกลางอยู่ */
+async function localSignOut(){try{await sb.auth.signOut({scope:'local'})}catch(e){}}
 async function doLogout(){
-  try{await sb.auth.signOut()}catch(e){}
-  SS.del(SESS_KEY);LSS.del(KEEP_KEY);LSS.del(TICKET);PROF=null;
-  $('#hdr').style.display='none';$('#main').style.display='none';
-  $('#lPass').value='';$('#lMsg').textContent='';$('#login').classList.add('on');
+  if(PROF&&PROF.kind==='app')await localSignOut();
+  SS.del(SESS_KEY);SS.set(OUT_KEY,1);LSS.del(KEEP_KEY);LSS.del(TICKET);PROF=null;
+  document.querySelectorAll('body>.overlay').forEach(o=>o.remove());
+  $('#lPass').value='';showLogin('');
 }
-/* ปุ่มล็อกอินผูกจาก JJLogin.mount() แล้ว */
-$('#lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+/* ปุ่มล็อกอิน + Enter ผูกจาก JJLogin.mount() แล้ว — อย่าผูกซ้ำ (จะล็อกอินซ้อน 2 รอบ) */
 $('#hOut').onclick=doLogout;
 
 /* ================= เข้าแอพ + สาขา ================= */
@@ -658,58 +714,73 @@ function accessibleBranches(){
   const r=BRANCHES.filter(b=>ids.indexOf(b.id)>-1);return r.length?r:BRANCHES;}
 async function enterApp(prof){
   PROF=prof;
-  const {data,error}=await sb.from('branches').select('*').order('sort');
-  if(error){loginErr('โหลดสาขาไม่ได้: '+error.message);return;}
-  BRANCHES=data||[];
+  let res;
+  try{res=await db().from('branches').select('*').order('sort');}catch(e){res={error:e};}
+  if(res.error){showLogin('โหลดรายชื่อสาขาไม่ได้: '+((res.error&&res.error.message)||res.error)+' — ดึงหน้าลงเพื่อลองใหม่');return;}
+  BRANCHES=res.data||[];
+  if(!BRANCHES.length){showLogin(prof.kind==='central'
+    ?'บัญชีกลางยังอ่านรายชื่อสาขาไม่ได้ — ให้ผู้ดูแลรัน SQL เปิดสิทธิ์อ่านตาราง branches (ส่งให้ในแชทแล้ว)'
+    :'ยังไม่มีสาขาในระบบ');return;}
   const acc=accessibleBranches();
   let saved=null;try{saved=localStorage.getItem('jjmt_branch')}catch(e){}
   CUR_B=(saved&&acc.some(b=>b.id===saved))?saved
-    :((prof.branch_ids&&prof.branch_ids[0]&&acc.some(b=>b.id===prof.branch_ids[0]))?prof.branch_ids[0]:(acc[0]&&acc[0].id));
-  if(!CUR_B){loginErr('ยังไม่มีสาขาในระบบ');return;}
+    :((prof.branch_ids&&prof.branch_ids[0]&&acc.some(b=>b.id===prof.branch_ids[0]))?prof.branch_ids[0]:acc[0].id);
   $('#login').classList.remove('on');
   $('#hdr').style.display='flex';$('#main').style.display='block';
   const RN={admin:'ผู้ดูแลระบบ',owner:'เจ้าของ',manager:'ผู้จัดการ',staff:'พนักงาน'};
   $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(RN[prof.role]||prof.role||'พนักงาน');
   const sel=$('#hBranch');
-  if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
+  if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${escapeHtml(b.id)}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
     sel.onchange=()=>{CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}
-      paintTabBranch();maintLoad();if(TAB==='asset')astLoad();};}
+      document.querySelectorAll('body>.overlay').forEach(o=>{if(!o.dataset.busy)o.remove();});
+      paintTabBranch();if(seeMaint())maintLoad();if(TAB==='asset')astLoad();};}
   else{sel.style.display='none';}
   $('#hMng').style.display=canManage()?'':'none';
   $('#hMng').onclick=()=>{TAB==='asset'?astManageOverlay():maintManageOverlay();};
-  // แท็บที่ไม่มีสิทธิ์ดู → ซ่อนปุ่มไปเลย
   paintTabBranch();
-  const seeM=isAdmin()||can('sched','v')||can('log','v'), seeA=isAdmin()||can('asset','v');
+  // แท็บที่ไม่มีสิทธิ์ดู → ซ่อนปุ่มไปเลย
+  const seeM=seeMaint(), seeA=seeAsset();
   document.querySelector('[data-tab="maint"]').hidden=!seeM;
   document.querySelector('[data-tab="asset"]').hidden=!seeA;
   document.querySelector('.tabbar').style.display=(seeM&&seeA)?'':'none';
   if(seeM)maintLoad();
   let tb='maint';try{tb=localStorage.getItem('jjmt_tab')||'maint'}catch(e){}
+  if(tb!=='asset'&&tb!=='maint')tb='maint';
   if(tb==='asset'&&!seeA)tb='maint';
   if(tb==='maint'&&!seeM)tb='asset';
   setTab(tb);
 }
 async function boot(){
   ['hLogo','lLogo'].forEach(id=>{const el=document.getElementById(id);if(el)el.src=LOGO;});  /* หน้าล็อกอินใช้โลโก้ของ JJ Login แล้ว */
-  // 1) เซสชันของแท็บนี้ (รีเฟรชแล้วยังอยู่)
-  const s=SS.get(SESS_KEY);
-  if(s&&s.username){await enterApp(s);return;}
-  // 2) ใบผ่านจากหน้าศูนย์รวมแอพ — ใช้ครั้งเดียว อายุสั้น แล้วตรวจกับฐานข้อมูลจริงอีกชั้น
+  if(!sb||!sbA){showLogin('โหลดระบบไม่สำเร็จ (เน็ตช้าหรือหลุด) — ดึงหน้าลงเพื่อลองใหม่');
+    const b=$('#lBtn');if(b){b.disabled=true;}return;}
+  // 1) ใบผ่านจากหน้าศูนย์รวมแอพ — มาก่อนเซสชันเดิมของแท็บเสมอ
   const tk=LSS.get(TICKET);
-  if(tk&&tk.u&&(!tk.app||tk.app==='maint')&&Date.now()-(+tk.t||0)<TICKET_TTL){
+  if(tk&&tk.u&&(!tk.app||tk.app==='maint')){
     LSS.del(TICKET);
-    try{
-      const u=await centralUser(tk.u);
-      if(u&&u.active!==false&&u.pass_hash===tk.h){
-        const prof=centralProf(u);
-        if(profCanEnter(prof)){saveSession(prof,false);await enterApp(prof);return;}
-        $('#lMsg').style.color='#c62127';
-        $('#lMsg').textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access';
-      }
-    }catch(e){console.warn('ticket',e);}
+    if(Date.now()-(+tk.t||0)<TICKET_TTL){
+      SS.del(SESS_KEY);                  // มีใบผ่านใหม่ = ทิ้งตัวตนเดิมของแท็บทุกกรณี
+      try{
+        const u=await centralUser(tk.u);
+        if(u&&u.active!==false&&u.pass_hash===tk.h){
+          const prof=centralProf(u);
+          if(profCanEnter(prof)){saveSession(prof,false);await enterApp(prof);return;}
+          showLogin(NO_RIGHT);return;
+        }
+      }catch(e){console.warn('ticket',e);}
+    }
   }
-  // 2.5) เผื่อหน้าศูนย์รวมแอพเวอร์ชันเก่าที่ยังไม่ออกใบผ่าน — กดมาจากหน้าแรกจริง + ใบล็อกอินกลางตรงกับฐานข้อมูล
-  if(fromHub()){
+  // 2) เซสชันของแท็บนี้ — ตรวจกับฐานข้อมูลซ้ำทุกครั้ง
+  const s=SS.get(SESS_KEY);
+  if(s&&s.username){
+    const p=s.kind==='central'?await refreshCentral(s):await refreshApp(s,false);
+    if(p&&profCanEnter(p)){SS.set(SESS_KEY,p);await enterApp(p);return;}
+    SS.del(SESS_KEY);
+    showLogin(p?NO_RIGHT:'เซสชันหมดอายุ หรือบัญชี/รหัสผ่านถูกเปลี่ยน — เข้าสู่ระบบใหม่');return;
+  }
+  const out=!!SS.get(OUT_KEY);           // เพิ่งกดออกในแท็บนี้ → ห้ามพาเข้าอัตโนมัติ
+  // 3) กดมาจากหน้าแรกเวอร์ชันเก่าที่ยังไม่ออกใบผ่าน
+  if(!out&&fromHub()){
     const a=LSS.get('jjpnl_auth');
     if(a&&a.u){
       try{
@@ -721,24 +792,110 @@ async function boot(){
       }catch(e){console.warn('fromHub',e);}
     }
   }
-  // 3) เคยติ๊ก "จำไว้ในเครื่องนี้" และยังไม่หมดอายุ → เช็ครหัสกับบัญชีกลางอีกรอบ
+  // 4) "จำไว้ในเครื่องนี้" — ยังไม่หมดอายุ + ตรวจกับฐานข้อมูลอีกรอบ (ไม่ต่ออายุให้เอง)
   const kp=LSS.get(KEEP_KEY);
-  if(kp&&kp.u&&kp.exp>Date.now()){
-    try{const u=await centralUser(kp.u);
-      if(u&&u.pass_hash===kp.h&&u.active!==false){
-        const prof=centralProf(u);
-        if(profCanEnter(prof)){saveSession(prof,true);await enterApp(prof);return;}
-      }else LSS.del(KEEP_KEY);
+  if(!out&&kp&&kp.u&&kp.exp>Date.now()){
+    try{
+      let prof=null;
+      if(kp.kind==='app')prof=await refreshApp({kind:'app',username:kp.u},true);
+      else{const u=await centralUser(kp.u);
+        if(u&&u.pass_hash===kp.h&&u.active!==false)prof=centralProf(u);}
+      if(prof&&profCanEnter(prof)){SS.set(SESS_KEY,prof);await enterApp(prof);return;}
+      if(!prof)LSS.del(KEEP_KEY);
     }catch(e){console.warn('keep',e);}
-  }else if(kp)LSS.del(KEEP_KEY);
-  // 4) เข้าตรงจาก URL → ต้องกรอกรหัส
-  try{await sb.auth.signOut()}catch(e){}
-  $('#login').classList.add('on');setTimeout(()=>$('#lUser').focus(),200);
+  }else if(kp&&!(kp.exp>Date.now()))LSS.del(KEEP_KEY);
+  // 5) เข้าตรงจาก URL → ต้องกรอกรหัส
+  showLogin('');
 }
+
+/* ================= ของใช้ร่วม: ดึงข้อมูลครบ / ตัวเลข / รูปถ่าย / หน้าต่าง ================= */
+const MAX_PHOTOS=10;
+/* Supabase คืนได้ครั้งละไม่เกิน 1000 แถว → ดึงเป็นหน้า ๆ จนครบ (q ต้องสร้าง query ใหม่ทุกครั้ง) */
+async function fetchAll(q){
+  const out=[];
+  for(let from=0;from<200000;from+=1000){
+    let r;try{r=await q().range(from,from+999);}catch(e){return{data:null,error:e};}
+    if(r.error)return{data:null,error:r.error};
+    const d=r.data||[];out.push(...d);if(d.length<1000)break;
+  }
+  return{data:out,error:null};
+}
+/* ช่องตัวเลข: "1,200" → 1200 · ว่าง → null · พิมพ์ผิด/ติดลบ → NaN */
+function numIn(v){
+  const s=String(v==null?'':v).trim().replace(/,/g,'');
+  if(s==='')return null;
+  return /^\d+(\.\d+)?$/.test(s)?Number(s):NaN;
+}
+function errText(e){
+  const m=(e&&e.message)||String(e||'');
+  if(/row-level security|permission denied|not allowed|42501/i.test(m))
+    return 'ไม่มีสิทธิ์บันทึกลงฐานข้อมูล — ให้ผู้ดูแลรัน SQL jjmk_maint_access.sql';
+  if(/failed to fetch|network|load failed|timeout/i.test(m))
+    return 'เน็ตหลุด — กดบันทึกอีกครั้งได้เลย (รูปที่อัปโหลดแล้วไม่ต้องอัปซ้ำ)';
+  return m||'เกิดข้อผิดพลาด';
+}
+/* หน้าต่างแบบแผ่นล่าง + ติดธง "มีข้อมูลยังไม่บันทึก" (กันดึงหน้าลง/รีเฟรชแล้วข้อมูลหาย) */
+function openSheet(html,zIndex){
+  const ov=document.createElement('div');ov.className='overlay on';
+  if(zIndex)ov.style.zIndex=String(zIndex);
+  ov.innerHTML=html;document.body.appendChild(ov);
+  const close=()=>{
+    if(ov.dataset.busy){toast('กำลังบันทึก รอสักครู่');return;}
+    if(ov.dataset.dirty&&!confirm('ข้อมูลที่กรอกไว้ยังไม่ได้บันทึก — ปิดหน้าต่างเลยไหม?'))return;
+    ov.remove();};
+  const xb=ov.querySelector('[data-x]');if(xb)xb.onclick=close;
+  ov.onclick=e=>{if(e.target===ov)close();};
+  ov.addEventListener('input',()=>{ov.dataset.dirty='1';});
+  return{ov,close,done:()=>ov.remove()};
+}
+/* ตัวเลือกรูป: เพดาน MAX_PHOTOS นับรวมรูปเดิม + รูปใหม่ + รูปที่กำลังย่ออยู่ */
+function photoPicker(ov,sel,keepUrls){
+  const st={keep:(keepUrls||[]).slice(),imgs:[],pending:0,busy:false};   // imgs = [{d:dataURL, url:หลังอัปโหลด}]
+  const fin=ov.querySelector(sel.file),prev=ov.querySelector(sel.prev),add=ov.querySelector(sel.add);
+  st.total=()=>st.keep.length+st.imgs.length+st.pending;
+  function render(){
+    prev.innerHTML=st.keep.map((u,i)=>`<img src="${escapeHtml(u)}" data-k="${i}" alt="">`).join('')
+      +st.imgs.map((x,i)=>`<img src="${x.d}" data-n="${i}" alt="">`).join('')
+      +(st.pending?`<span class="phwait">⏳ ${st.pending}</span>`:'');
+    prev.querySelectorAll('img').forEach(im=>im.onclick=()=>{
+      if(st.busy){toast('กำลังบันทึก รอสักครู่');return;}
+      if(!confirm('เอารูปนี้ออก?'))return;
+      if(im.dataset.k!=null)st.keep.splice(+im.dataset.k,1);else st.imgs.splice(+im.dataset.n,1);
+      ov.dataset.dirty='1';render();});
+    const hint=ov.querySelector(sel.count);if(hint)hint.textContent=st.total()?`แนบแล้ว ${st.total()}/${MAX_PHOTOS} รูป · แตะรูปเพื่อเอาออก`:'';
+  }
+  add.onclick=()=>{if(st.busy)return;fin.click();};
+  fin.onchange=()=>{
+    const files=[...fin.files];fin.value='';
+    const room=MAX_PHOTOS-st.total();
+    if(room<=0){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
+    if(files.length>room)toast('แนบได้อีก '+room+' รูป (สูงสุด '+MAX_PHOTOS+')');
+    files.slice(0,room).forEach(f=>{st.pending++;
+      processImage(f,d=>{st.pending--;if(d)st.imgs.push({d,url:null});else toast('อ่านรูปไม่สำเร็จ 1 รูป — ลองถ่ายใหม่');render();});});
+    ov.dataset.dirty='1';render();};
+  st.render=render;render();
+  return st;
+}
+async function uploadPhoto(dataUrl,prefix){
+  const blob=await (await fetch(dataUrl)).blob();
+  const path=prefix+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
+  const up=await db().storage.from('maint-photos').upload(path,blob,{contentType:'image/jpeg'});
+  if(up.error)throw up.error;
+  return db().storage.from('maint-photos').getPublicUrl(path).data.publicUrl;
+}
+/* อัปโหลดเฉพาะรูปที่ยังไม่ขึ้น — กดบันทึกซ้ำหลังเน็ตหลุดจะไม่อัปรูปเดิมซ้ำ (จำสถานะไว้ที่รูปแต่ละใบ) */
+async function uploadAll(st,prefix,onProg){
+  const urls=st.keep.slice();let n=0;
+  for(const x of st.imgs){n++;if(onProg)onProg(n,st.imgs.length);
+    if(!x.url)x.url=await uploadPhoto(x.d,prefix);
+    urls.push(x.url);}
+  return urls;
+}
+
 /* ================= ตารางบำรุงรักษา ================= */
 const MAINT_FREQ=[[1,'ทุกวัน'],[7,'ทุกสัปดาห์'],[14,'ทุก 2 สัปดาห์'],[30,'ทุกเดือน'],[60,'ทุก 2 เดือน'],[90,'ทุก 3 เดือน'],[180,'ทุก 6 เดือน'],[365,'ทุกปี']];
 function maintFreqLabel(n){n=+n||0;const f=MAINT_FREQ.find(x=>x[0]===n);return f?f[1]:'ทุก '+n+' วัน';}
-let MAINT_TASKS=[],MAINT_LOGS={};
+let MAINT_TASKS=[],MAINT_LOGS={},TASK_NAME={},MT_SEQ=0;
 function maintPhotos(lg){return (lg&&Array.isArray(lg.photos))?lg.photos.filter(u=>typeof u==='string'):[];}
 function maintStat(t){
   const lg=(MAINT_LOGS[t.id]||[])[0];
@@ -752,19 +909,25 @@ function maintStat(t){
   return{cls,lg,last,due,left,txt};
 }
 async function maintLoad(){
+  const seq=++MT_SEQ,bid=CUR_B;
   const box=$('#mtList');box.innerHTML='<div class="rempty">กำลังโหลด...</div>';
   const [tk,lgs]=await Promise.all([
-    sb.from('maint_tasks').select('*').eq('branch_id',CUR_B).is('deleted_at',null).order('sort'),
-    sb.from('maint_logs').select('*').eq('branch_id',CUR_B).order('done_date',{ascending:false}).order('created_at',{ascending:false}).limit(600)]);
-  if(tk.error){box.innerHTML='<div class="rempty">โหลดไม่ได้: '+escapeHtml(tk.error.message)+' (ยังไม่ได้รัน SQL jjmk_maint_setup?)</div>';return;}
-  MAINT_TASKS=tk.data||[];MAINT_LOGS={};
-  ((lgs&&lgs.data)||[]).forEach(r=>{(MAINT_LOGS[r.task_id]=MAINT_LOGS[r.task_id]||[]).push(r);});
+    db().from('maint_tasks').select('*').eq('branch_id',bid).order('sort'),
+    fetchAll(()=>db().from('maint_logs').select('*').eq('branch_id',bid)
+      .order('done_date',{ascending:false}).order('created_at',{ascending:false}).order('id'))]);
+  if(seq!==MT_SEQ||bid!==CUR_B)return;            // สลับสาขาระหว่างรอ → ทิ้งผลเก่า
+  const err=tk.error||lgs.error;
+  if(err){MAINT_TASKS=[];MAINT_LOGS={};$('#mtSum').innerHTML='';renderCal();
+    box.innerHTML='<div class="rempty">โหลดข้อมูลไม่ได้: '+escapeHtml(err.message||String(err))+'<br>ดึงหน้าลงเพื่อลองใหม่</div>';return;}
+  const all=tk.data||[];TASK_NAME={};all.forEach(t=>TASK_NAME[t.id]=t.name);
+  MAINT_TASKS=all.filter(t=>!t.deleted_at);MAINT_LOGS={};
+  (lgs.data||[]).forEach(r=>{(MAINT_LOGS[r.task_id]=MAINT_LOGS[r.task_id]||[]).push(r);});
   maintRenderList();
 }
 function maintRenderList(){
   const box=$('#mtList'),sum=$('#mtSum');
   renderCal();
-  if(!MAINT_TASKS.length){sum.innerHTML='';box.innerHTML='<div class="rempty">ยังไม่มีงานของสาขานี้'+(canManage()?' — กด ⚙️ เพื่อเพิ่มงาน':' — ให้ผู้ดูแลเพิ่มงานก่อน')+'</div>';return;}
+  if(!MAINT_TASKS.length){sum.innerHTML='';box.innerHTML='<div class="rempty">ยังไม่มีงานของสาขานี้'+(canT('a')?' — กด ⚙️ เพื่อเพิ่มงาน':' — ให้ผู้ดูแลเพิ่มงานก่อน')+'</div>';return;}
   const rank={over:0,soon:1,ok:2};
   const arr=MAINT_TASKS.map(t=>({t,st:maintStat(t)}))
     .sort((a,b)=>rank[a.st.cls]-rank[b.st.cls]||((a.st.left==null?-9999:a.st.left)-(b.st.left==null?-9999:b.st.left))||((a.t.sort||0)-(b.t.sort||0)));
@@ -773,7 +936,7 @@ function maintRenderList(){
     +(n.soon?`<span class="mchip soon">🟡 ใกล้ถึงกำหนด ${n.soon}</span>`:'')
     +`<span class="mchip ok">🟢 เรียบร้อย ${n.ok}</span>`;
   box.innerHTML=arr.map(({t,st})=>{
-    const ph=maintPhotos(st.lg).slice(0,4),cnt=(MAINT_LOGS[t.id]||[]).length;
+    const ph=maintPhotos(st.lg).slice(0,4),cnt=(MAINT_LOGS[t.id]||[]).length,id=escapeHtml(t.id);
     return `<div class="mtcard ${st.cls}">
       <div class="mtrow1"><b>${escapeHtml(t.name)}</b><span class="mtfreq">${escapeHtml(maintFreqLabel(t.freq_days))}</span></div>
       ${t.detail?`<div class="mtdetail">${escapeHtml(t.detail)}</div>`:''}
@@ -781,8 +944,8 @@ function maintRenderList(){
       ${st.lg?`<div class="mtlast">ทำล่าสุด ${fmtDate(st.last)} · 👤 ${escapeHtml(st.lg.by_name||'—')}${st.lg.note?' · '+escapeHtml(st.lg.note):''}</div>`:''}
       ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:''}
       <div class="mtbtns">
-        ${canLog()?`<button class="act send" data-done="${t.id}">✅ ทำแล้ว — ถ่ายรูปแนบ</button>`:''}
-        <button class="act ghost" data-hist="${t.id}">🕘 ประวัติ${cnt?' ('+cnt+')':''}</button>
+        ${canLog()?`<button class="act send" data-done="${id}">✅ ทำแล้ว — ถ่ายรูปแนบ</button>`:''}
+        <button class="act ghost" data-hist="${id}">🕘 ประวัติ${cnt?' ('+cnt+')':''}</button>
       </div>
     </div>`;}).join('');
   box.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
@@ -791,6 +954,7 @@ function maintRenderList(){
 }
 /* ================= ปฏิทินรายเดือน (ตารางวัน) ================= */
 const TH_MON=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const TH_MON_S=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const TH_WD=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
 let CAL_Y=null,CAL_M=null;   // เดือนที่กำลังแสดง (0-11)
 function calData(rs,re){     // สร้างข้อมูลช่วงวันที่ [rs..re]: done=ทำแล้ว, due=ครบกำหนด/ค้าง, plan=รอบถัดไป
@@ -798,13 +962,15 @@ function calData(rs,re){     // สร้างข้อมูลช่วงว
   const tById={};MAINT_TASKS.forEach(t=>tById[t.id]=t);
   Object.keys(MAINT_LOGS).forEach(tid=>{(MAINT_LOGS[tid]||[]).forEach(lg=>{
     const d=isoFromAny(lg.done_date);if(d<rs||d>re)return;
-    (done[d]=done[d]||[]).push({lg,t:tById[tid]||{name:'(งานที่ถูกลบไปแล้ว)',freq_days:0}});});});
-  MAINT_TASKS.forEach(t=>{const st=maintStat(t);
+    (done[d]=done[d]||[]).push({lg,t:tById[tid]||{name:(TASK_NAME[tid]||'งานที่ถูกลบ')+' (ลบงานแล้ว)',freq_days:0}});});});
+  MAINT_TASKS.forEach(t=>{const st=maintStat(t),f=+t.freq_days||0;
     if(!st.due||st.left<=0){                        // ยังไม่เคยทำ / เกินกำหนด / ครบวันนี้ → ป้ายที่วันนี้
       if(today>=rs&&today<=re)(due[today]=due[today]||[]).push({t,kind:'due'});}
-    if(st.due&&st.left>0&&t.freq_days>0){           // รอบถัดไปในอนาคต ตามจังหวะความถี่
-      let d=st.due,guard=0;
-      while(d<=re&&guard++<62){if(d>=rs)(due[d]=due[d]||[]).push({t,kind:'plan'});d=addDaysISO(d,t.freq_days);}}
+    if(f<=0)return;
+    // รอบถัดไป: ยังไม่ถึงกำหนด = นับจากวันครบกำหนด · ค้าง/ครบวันนี้ = ถ้าทำวันนี้ รอบต่อไปคือวันนี้+ความถี่
+    let d=(st.due&&st.left>0)?st.due:addDaysISO(today,f);
+    if(d<rs)d=addDaysISO(d,Math.ceil(diffDaysISO(d,rs)/f)*f);   // กระโดดถึงต้นช่วงเลย ไม่วนทีละรอบ
+    for(let g=0;d<=re&&g<400;g++){(due[d]=due[d]||[]).push({t,kind:'plan'});d=addDaysISO(d,f);}
   });
   return{done,due};
 }
@@ -836,10 +1002,9 @@ function dayOverlay(ds){
   const dues=(due[ds]||[]).filter(x=>x.kind==='due'),
     plans=(due[ds]||[]).filter(x=>x.kind==='plan'),
     dones=done[ds]||[];
-  const ov=document.createElement('div');ov.className='overlay on';
   let body='';
   if(dues.length)body+=`<div class="sub-title" style="margin-top:0">⏰ ครบกำหนด / ค้างทำ (${dues.length})</div>`
-    +dues.map(x=>`<div class="mmrow"><div class="mmn"><b>${escapeHtml(x.t.name)}</b><small>${escapeHtml(maintFreqLabel(x.t.freq_days))}</small></div>${canLog()?`<button class="act send" style="padding:8px 12px" data-do="${x.t.id}">✅ ทำแล้ว</button>`:''}</div>`).join('');
+    +dues.map(x=>`<div class="mmrow"><div class="mmn"><b>${escapeHtml(x.t.name)}</b><small>${escapeHtml(maintFreqLabel(x.t.freq_days))}</small></div>${canLog()?`<button class="act send" style="padding:8px 12px" data-do="${escapeHtml(x.t.id)}">✅ ทำแล้ว</button>`:''}</div>`).join('');
   if(plans.length)body+=`<div class="sub-title"${dues.length?'':' style="margin-top:0"'}>🗓 งานตามรอบ (${plans.length})</div>`
     +plans.map(x=>`<div class="mmrow"><div class="mmn"><b>${escapeHtml(x.t.name)}</b><small>${escapeHtml(maintFreqLabel(x.t.freq_days))}</small></div></div>`).join('');
   if(dones.length)body+=`<div class="sub-title"${(dues.length||plans.length)?'':' style="margin-top:0"'}>✅ งานที่ทำแล้ว (${dones.length})</div>`
@@ -849,184 +1014,163 @@ function dayOverlay(ds){
       ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:'<div class="mtlast">ไม่มีรูปแนบ</div>'}
     </div>`}).join('');
   if(!body)body='<div class="rempty">วันนี้ไม่มีงานตามรอบ และยังไม่มีบันทึก</div>';
-  ov.innerHTML=`<div class="sheet">
+  const {ov,done:closeNow}=openSheet(`<div class="sheet">
     <div class="sheet-head"><h3>🗓 วัน${TH_WD[new Date(ds+'T12:00:00').getDay()]}ที่ ${fmtDate(ds)}</h3><button class="x" data-x>✕</button></div>
-    <div class="sheet-body">${body}</div></div>`;
-  document.body.appendChild(ov);
-  const x=()=>ov.remove();
-  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+    <div class="sheet-body">${body}</div></div>`);
   ov.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
-  ov.querySelectorAll('[data-do]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(z=>z.id===b.dataset.do);if(t){x();maintDoneOverlay(t);}});
+  ov.querySelectorAll('[data-do]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(z=>z.id===b.dataset.do);if(t){closeNow();maintDoneOverlay(t);}});
 }
 
 function maintLightbox(url){
-  const ov=document.createElement('div');ov.className='overlay on';
+  const ov=document.createElement('div');ov.className='overlay on lightbox';
   ov.style.cssText='z-index:300;background:rgba(12,7,5,.9);align-items:center';
   ov.innerHTML=`<img src="${escapeHtml(url)}" style="max-width:96vw;max-height:92vh;margin:auto;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5)" alt="">`;
   ov.onclick=()=>ov.remove();document.body.appendChild(ov);
 }
-async function maintUploadPhoto(dataUrl,taskId){
-  const blob=await (await fetch(dataUrl)).blob();
-  const path='m/'+CUR_B+'/'+taskId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
-  const up=await sb.storage.from('maint-photos').upload(path,blob,{contentType:'image/jpeg'});
-  if(up.error)throw up.error;
-  return sb.storage.from('maint-photos').getPublicUrl(path).data.publicUrl;
-}
 function maintDoneOverlay(t){
-  const ov=document.createElement('div');ov.className='overlay on';
-  ov.innerHTML=`<div class="sheet">
+  const bid=t.branch_id||CUR_B,today=todayISO();   // ล็อกสาขา/งานไว้ตั้งแต่เปิดหน้าต่าง
+  const {ov,done:closeNow}=openSheet(`<div class="sheet">
     <div class="sheet-head"><h3>✅ ${escapeHtml(t.name)}</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
-      <div class="field"><label>วันที่ทำ</label><input type="date" class="md_d" value="${todayISO()}"></div>
+      <div class="field"><label>วันที่ทำ</label><input type="date" class="md_d" value="${today}" max="${today}"></div>
       <div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input class="md_n" placeholder="เช่น จ้างช่างมาล้าง / เปลี่ยนไส้กรองใหม่"></div>
-      <div class="field"><label>รูปถ่ายหลังทำ (1–10 รูป)</label>
+      <div class="field"><label>รูปถ่ายหลังทำ (1–${MAX_PHOTOS} รูป)</label>
         <input type="file" class="md_f" accept="image/*" multiple style="display:none">
-        <div class="mtthumbs md_prev"></div>
+        <div class="mtthumbs md_prev"></div><div class="phcount md_cnt"></div>
         <button class="act ghost wide md_add" style="margin-top:6px">📸 ถ่ายรูป / เลือกรูป</button>
       </div>
       <button class="act send wide md_save" style="margin-top:6px">💾 บันทึกงาน + รูป</button>
       <p class="hint" style="margin:8px 0 0">บันทึกแล้วรูปจะขึ้นในตารางและประวัติทันที ให้เจ้าของ/ผู้ดูแลเปิดดูได้ทุกเครื่อง</p>
-    </div></div>`;
-  document.body.appendChild(ov);
-  const x=()=>ov.remove();
-  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
-  const fin=ov.querySelector('.md_f'),prev=ov.querySelector('.md_prev'),save=ov.querySelector('.md_save');
-  const imgs=[];
-  function renderPrev(){prev.innerHTML=imgs.map((d,i)=>`<img src="${d}" data-i="${i}" title="แตะเพื่อลบรูปนี้" alt="">`).join('');
-    prev.querySelectorAll('img').forEach(im=>im.onclick=()=>{imgs.splice(+im.dataset.i,1);renderPrev();});}
-  ov.querySelector('.md_add').onclick=()=>fin.click();
-  fin.onchange=()=>{const files=[...fin.files],room=MAX_PHOTOS-imgs.length;fin.value='';
-    if(room<=0){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
-    if(files.length>room)toast('แนบได้อีก '+room+' รูป (สูงสุด '+MAX_PHOTOS+')');
-    files.slice(0,room).forEach(f=>processImage(f,d=>{if(d){imgs.push(d);renderPrev();}else toast('อ่านรูปไม่สำเร็จ 1 รูป');}));};
+    </div></div>`);
+  const pk=photoPicker(ov,{file:'.md_f',prev:'.md_prev',add:'.md_add',count:'.md_cnt'},[]);
+  const save=ov.querySelector('.md_save');
   save.onclick=async()=>{
-    const d=ov.querySelector('.md_d').value||todayISO(),note=ov.querySelector('.md_n').value.trim();
-    if(!imgs.length){toast('แนบรูปถ่ายอย่างน้อย 1 รูปก่อนบันทึก');return;}
-    save.disabled=true;save.textContent='⏳ กำลังอัปโหลดรูป...';
+    if(pk.busy)return;
+    const d=ov.querySelector('.md_d').value||today,note=ov.querySelector('.md_n').value.trim();
+    if(d>todayISO()){toast('วันที่ทำต้องไม่เกินวันนี้');return;}
+    if(pk.pending){toast('รอรูปโหลดให้เสร็จก่อน');return;}
+    if(!pk.imgs.length){toast('แนบรูปถ่ายอย่างน้อย 1 รูปก่อนบันทึก');return;}
+    if(pk.total()>MAX_PHOTOS){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
+    pk.busy=true;ov.dataset.busy='1';save.disabled=true;save.textContent='⏳ กำลังอัปโหลดรูป...';
     try{
-      const urls=[];
-      for(const im of imgs){urls.push(await maintUploadPhoto(im,t.id));save.textContent='⏳ อัปโหลดรูป '+urls.length+'/'+imgs.length+'...';}
-      const {error}=await sb.from('maint_logs').insert({id:uid('ml'),task_id:t.id,branch_id:CUR_B,
+      const urls=await uploadAll(pk,'m/'+bid+'/'+t.id,(n,all)=>{save.textContent='⏳ อัปโหลดรูป '+n+'/'+all+'...';});
+      const {error}=await db().from('maint_logs').insert({id:uid('ml'),task_id:t.id,branch_id:bid,
         done_date:d,by_name:(PROF&&(PROF.name||PROF.username))||'',note:note||null,photos:urls});
       if(error)throw error;
-      toast('บันทึก “'+t.name+'” แล้ว ✓');x();maintLoad();
-    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e)+' (ยังไม่ได้รัน SQL jjmk_maint_setup?)');
-      save.disabled=false;save.textContent='💾 บันทึกงาน + รูป';}
+      toast('บันทึก “'+t.name+'” แล้ว ✓');delete ov.dataset.busy;closeNow();if(bid===CUR_B)maintLoad();
+    }catch(e){toast('บันทึกไม่ได้: '+errText(e));
+      pk.busy=false;delete ov.dataset.busy;save.disabled=false;save.textContent='💾 บันทึกงาน + รูป';}
   };
 }
 function maintHistOverlay(t){
-  const logs=MAINT_LOGS[t.id]||[];
-  const ov=document.createElement('div');ov.className='overlay on';
+  const logs=MAINT_LOGS[t.id]||[],canDel=isAdmin()||can('log','d');
   const rows=logs.length?logs.map(lg=>{
     const ph=maintPhotos(lg);
     return `<div class="mtlog">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
         <b>📅 ${fmtDate(isoFromAny(lg.done_date))}</b>
-        <span style="font-size:.8rem;color:#8a7f74">👤 ${escapeHtml(lg.by_name||'—')}${(isAdmin()||can('log','d'))?` <button data-del="${lg.id}" title="ลบบันทึกนี้" style="border:none;background:none;cursor:pointer">🗑</button>`:''}</span>
+        <span style="font-size:.8rem;color:#8a7f74">👤 ${escapeHtml(lg.by_name||'—')}${canDel?` <button data-del="${escapeHtml(lg.id)}" title="ลบบันทึกนี้" style="border:none;background:none;cursor:pointer">🗑</button>`:''}</span>
       </div>
       ${lg.note?`<div class="mtdetail">${escapeHtml(lg.note)}</div>`:''}
       ${ph.length?`<div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')}</div>`:'<div class="mtlast">ไม่มีรูปแนบ</div>'}
     </div>`;}).join(''):'<div class="rempty">ยังไม่เคยบันทึกงานนี้</div>';
-  ov.innerHTML=`<div class="sheet">
+  const {ov,done:closeNow}=openSheet(`<div class="sheet">
     <div class="sheet-head"><h3>🕘 ${escapeHtml(t.name)}</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
       <p class="hint" style="margin:0 0 8px">${escapeHtml(maintFreqLabel(t.freq_days))} · ทำไปแล้ว ${logs.length} ครั้ง · แตะรูปเพื่อขยายเต็มจอ</p>
       ${rows}
-    </div></div>`;
-  document.body.appendChild(ov);
-  const x=()=>ov.remove();
-  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+    </div></div>`);
   ov.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
   ov.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
     if(!confirm('ลบบันทึกนี้? (รูปในประวัติครั้งนี้จะหายจากตาราง)'))return;
-    const {error}=await sb.from('maint_logs').delete().eq('id',b.dataset.del);
-    if(error){toast('ลบไม่ได้: '+error.message);return;}
-    toast('ลบบันทึกแล้ว');x();await maintLoad();
+    const {error}=await db().from('maint_logs').delete().eq('id',b.dataset.del);
+    if(error){toast('ลบไม่ได้: '+errText(error));return;}
+    toast('ลบบันทึกแล้ว');closeNow();await maintLoad();
     const nt=MAINT_TASKS.find(z=>z.id===t.id);if(nt)maintHistOverlay(nt);
   });
 }
 function maintManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์ตั้งค่างาน');return;}
-  const acc=accessibleBranches();
+  const acc=accessibleBranches(),canA=canT('a'),canE=canT('e'),canD=canT('d');
   const bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
-  const ov=document.createElement('div');ov.className='overlay on';
-  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
-  ov.innerHTML=`<div class="sheet">
+  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${escapeHtml(b.id)}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  const {ov}=openSheet(`<div class="sheet">
     <div class="sheet-head"><h3>⚙️ จัดการงานบำรุงรักษา</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
-      <div class="sub-title" style="margin-top:0"><span class="mm_mode">➕ เพิ่มงานใหม่</span></div>
-      <div class="field"><label>ชื่องาน</label><input class="mm_n" placeholder="เช่น ล้างฟิลเตอร์แอร์"></div>
-      <div class="field"><label>รายละเอียด (ไม่บังคับ)</label><input class="mm_d" placeholder="เช่น ถอดฟิลเตอร์ทุกตัวมาล้าง ผึ่งให้แห้ง"></div>
-      <div class="field"><label>ความถี่</label><select class="mm_f">${MAINT_FREQ.map(f=>`<option value="${f[0]}" ${f[0]===30?'selected':''}>${f[1]}</option>`).join('')}<option value="custom">กำหนดเอง…</option></select></div>
-      <div class="field mm_brwrap"><label>ใช้กับสาขา</label><div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 2px">${bChecks}</div></div>
-      <button class="act send wide mm_save">➕ เพิ่มงาน</button>
+      <div class="mm_form"${(canA||canE)?'':' hidden'}>
+        <div class="sub-title" style="margin-top:0"><span class="mm_mode">➕ เพิ่มงานใหม่</span></div>
+        <div class="field"><label>ชื่องาน</label><input class="mm_n" placeholder="เช่น ล้างฟิลเตอร์แอร์"></div>
+        <div class="field"><label>รายละเอียด (ไม่บังคับ)</label><input class="mm_d" placeholder="เช่น ถอดฟิลเตอร์ทุกตัวมาล้าง ผึ่งให้แห้ง"></div>
+        <div class="field"><label>ความถี่</label><select class="mm_f">${MAINT_FREQ.map(f=>`<option value="${f[0]}" ${f[0]===30?'selected':''}>${f[1]}</option>`).join('')}<option value="custom">กำหนดเอง…</option></select></div>
+        <div class="field mm_brwrap"><label>ใช้กับสาขา</label><div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 2px">${bChecks}</div></div>
+        <button class="act send wide mm_save">➕ เพิ่มงาน</button>
+      </div>
       <div class="sub-title">🛠 งานของ ${escapeHtml(bname)}</div>
       <div class="mm_list"></div>
-      <p class="hint">🗑 ลบงาน = ซ่อนจากตาราง (ประวัติและรูปเก่ายังอยู่)</p>
-    </div></div>`;
-  document.body.appendChild(ov);
-  const x=()=>ov.remove();
-  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
-  const fN=ov.querySelector('.mm_n'),fD=ov.querySelector('.mm_d'),fF=ov.querySelector('.mm_f'),
+      <p class="hint">${canD?'🗑 ลบงาน = ซ่อนจากตาราง (ประวัติและรูปเก่ายังอยู่)':''}</p>
+    </div></div>`);
+  const form=ov.querySelector('.mm_form'),fN=ov.querySelector('.mm_n'),fD=ov.querySelector('.mm_d'),fF=ov.querySelector('.mm_f'),
     saveBtn=ov.querySelector('.mm_save'),modeEl=ov.querySelector('.mm_mode'),brWrap=ov.querySelector('.mm_brwrap');
-  let editId=null;
+  let editId=null,prevF=fF.value;
   function ensureFreqOpt(v){if(![...fF.options].some(o=>o.value===String(v))){
-    const o=document.createElement('option');o.value=v;o.textContent=maintFreqLabel(v);fF.insertBefore(o,fF.lastElementChild);}fF.value=String(v);}
-  fF.onchange=()=>{if(fF.value!=='custom')return;
-    const v=parseInt(prompt('ทำทุกกี่วัน? (เช่น 45)'),10);
-    if(v>0)ensureFreqOpt(v);else fF.value='30';};
-  function resetForm(){editId=null;fN.value='';fD.value='';fF.value='30';brWrap.style.display='';
-    modeEl.textContent='➕ เพิ่มงานใหม่';saveBtn.textContent='➕ เพิ่มงาน';}
+    const o=document.createElement('option');o.value=v;o.textContent=maintFreqLabel(v);fF.insertBefore(o,fF.lastElementChild);}fF.value=String(v);prevF=fF.value;}
+  fF.onchange=()=>{
+    if(fF.value!=='custom'){prevF=fF.value;return;}
+    const v=parseInt(prompt('ทำทุกกี่วัน? (1–3650 วัน เช่น 45)'),10);
+    if(v>=1&&v<=3650)ensureFreqOpt(v);else fF.value=prevF;};      // ยกเลิก/พิมพ์ผิด = คืนค่าเดิม
+  function resetForm(){editId=null;fN.value='';fD.value='';fF.value='30';prevF='30';brWrap.style.display='';
+    modeEl.textContent='➕ เพิ่มงานใหม่';saveBtn.textContent='➕ เพิ่มงาน';form.hidden=!canA;}
   function renderList(){
     const wrap=ov.querySelector('.mm_list');
     wrap.innerHTML=MAINT_TASKS.length?MAINT_TASKS.map(t=>`<div class="mmrow">
         <div class="mmn"><b>${escapeHtml(t.name)}</b><small>${escapeHtml(maintFreqLabel(t.freq_days))}${t.detail?' · '+escapeHtml(t.detail):''}</small></div>
-        <button data-ed="${t.id}">✏️</button><button data-rm="${t.id}">🗑</button>
+        ${canE?`<button data-ed="${escapeHtml(t.id)}">✏️</button>`:''}${canD?`<button data-rm="${escapeHtml(t.id)}">🗑</button>`:''}
       </div>`).join(''):'<div class="rempty">ยังไม่มีงานของสาขานี้</div>';
     wrap.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>{const t=MAINT_TASKS.find(z=>z.id===b.dataset.ed);if(!t)return;
-      editId=t.id;fN.value=t.name;fD.value=t.detail||'';ensureFreqOpt(t.freq_days);brWrap.style.display='none';
+      editId=t.id;form.hidden=false;fN.value=t.name;fD.value=t.detail||'';ensureFreqOpt(t.freq_days);brWrap.style.display='none';
       modeEl.textContent='✏️ แก้ไข: '+t.name;saveBtn.textContent='💾 บันทึกการแก้ไข';fN.focus();});
     wrap.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{const t=MAINT_TASKS.find(z=>z.id===b.dataset.rm);if(!t)return;
       if(!confirm('ลบงาน “'+t.name+'” ออกจากสาขานี้?'))return;
-      const {error}=await sb.from('maint_tasks').update({deleted_at:new Date().toISOString()}).eq('id',t.id);
-      if(error){toast('ลบไม่ได้: '+error.message);return;}
+      const {error}=await db().from('maint_tasks').update({deleted_at:new Date().toISOString()}).eq('id',t.id);
+      if(error){toast('ลบไม่ได้: '+errText(error));return;}
       toast('ลบงานแล้ว');await maintLoad();renderList();if(editId===t.id)resetForm();});
   }
   saveBtn.onclick=async()=>{
     const name=fN.value.trim(),detail=fD.value.trim(),freq=parseInt(fF.value,10);
     if(!name){toast('กรอกชื่องานก่อน');fN.focus();return;}
-    if(!(freq>0)){toast('เลือกความถี่ก่อน');return;}
+    if(!(freq>=1)){toast('เลือกความถี่ก่อน');return;}
+    if(editId?!canE:!canA){toast('ไม่มีสิทธิ์');return;}
     saveBtn.disabled=true;
     try{
       if(editId){
-        const {error}=await sb.from('maint_tasks').update({name,detail:detail||null,freq_days:freq}).eq('id',editId);
+        const {error}=await db().from('maint_tasks').update({name,detail:detail||null,freq_days:freq}).eq('id',editId);
         if(error)throw error;toast('บันทึกการแก้ไขแล้ว ✓');
       }else{
         const bids=[...ov.querySelectorAll('.mm_br:checked')].map(c=>c.value);
         if(!bids.length){toast('เลือกอย่างน้อย 1 สาขา');saveBtn.disabled=false;return;}
         const base=Math.max(0,...MAINT_TASKS.map(t=>t.sort||0));
         const rows=bids.map((bid,i)=>({id:uid('mt'),branch_id:bid,name,detail:detail||null,freq_days:freq,sort:base+10+i}));
-        const {error}=await sb.from('maint_tasks').insert(rows);
+        const {error}=await db().from('maint_tasks').insert(rows);
         if(error)throw error;toast('เพิ่มงานแล้ว ✓ ('+bids.length+' สาขา)');
       }
-      resetForm();await maintLoad();renderList();
-    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e));}
+      delete ov.dataset.dirty;resetForm();await maintLoad();renderList();
+    }catch(e){toast('บันทึกไม่ได้: '+errText(e));}
     finally{saveBtn.disabled=false;}
   };
-  renderList();
+  resetForm();renderList();
 }
 
 /* ================= 📦 นับอุปกรณ์ + สถิติอัตราเสียหาย =================
    นับรายเดือน (งวด YYYY-MM) เทียบกับงวดก่อน → รู้ว่าหายกี่ชิ้น คิดเป็นกี่ %
    มีของชำรุด = ต้องแนบรูป 1–10 รูป · ตาราง maint_assets / maint_counts */
-const MAX_PHOTOS=10;
-const canLog=()=>isAdmin()||can('log','a')||can('log','e');       // บันทึกงานบำรุงรักษา
-const canCount=()=>isAdmin()||can('asset','a')||can('asset','e'); // บันทึกการนับอุปกรณ์
-let ASSETS=[],COUNTS={},PD_Y=null,PD_M=null;   // COUNTS[asset_id][period]=row
+let ASSETS=[],COUNTS={},PD_Y=null,PD_M=null,PD_MANUAL=false,AST_SEQ=0;   // COUNTS[asset_id][period]=row
+function curPeriod(){const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}
 function pdStr(){return PD_Y+'-'+String(PD_M+1).padStart(2,'0');}
-function pdLabel(p){if(!p)return'—';const a=String(p).split('-');return TH_MON[+a[1]-1]+' '+(+a[0]+543);}
-function pdShort(p){const a=String(p).split('-');return TH_MON[+a[1]-1].slice(0,3)+' '+String(+a[0]+543).slice(2);}
-function nf(n){n=+n||0;return Number.isInteger(n)?String(n):(Math.round(n*100)/100).toString();}
+function pdIdx(p){const a=String(p).split('-');return (+a[0])*12+(+a[1]-1);}
+function pdLabel(p){if(!p)return'—';const a=String(p).split('-');return (TH_MON[+a[1]-1]||'?')+' '+(+a[0]+543);}
+function pdShort(p){const a=String(p).split('-');return (TH_MON_S[+a[1]-1]||'?')+' '+String(+a[0]+543).slice(2);}
+const r2=n=>Math.round(n*100)/100;                       // ตัดเศษทศนิยมลอย (0.1+0.2 ≠ 0.3)
+function nf(n){n=+n||0;return Number.isInteger(n)?String(n):String(r2(n));}
 function astPhotos(r){return (r&&Array.isArray(r.photos))?r.photos.filter(u=>typeof u==='string'):[];}
 function astStat(a,p){
   const rows=COUNTS[a.id]||{},cur=rows[p]||null;
@@ -1035,60 +1179,71 @@ function astStat(a,p){
   const base=prev?(+prev.qty||0):null;
   const added=cur?(+cur.added||0):0, broken=cur?(+cur.broken||0):0;
   const qty=cur?(+cur.qty||0):null;
+  const months=prevP?Math.max(1,pdIdx(p)-pdIdx(prevP)):null;
   let loss=null,rate=null;
-  if(cur&&base!==null){const den=base+added;loss=den-qty;rate=den>0?(loss/den*100):0;}
-  return {cur,prevP,base,added,broken,qty,loss,rate};
+  if(cur&&base!==null){const den=base+added;loss=r2(den-qty);rate=den>0?(loss/den*100):0;}
+  return {cur,prevP,base,added,broken,qty,loss,rate,months};
 }
-/* สถิติย้อนหลัง + คาดการณ์งวดหน้า */
-function astHistory(a,upto){
+/* สถิติย้อนหลัง — แต่ละงวดเทียบกับงวดที่นับก่อนหน้า (ถ้าเว้นไปหลายเดือน months>1) */
+function astHistory(a){
   const rows=COUNTS[a.id]||{};
-  const ps=Object.keys(rows).filter(k=>!upto||k<=upto).sort();
-  const out=[];let prevQty=null;
-  ps.forEach(p=>{const r=rows[p],qty=+r.qty||0,added=+r.added||0;
-    const base=prevQty,den=base===null?null:base+added;
-    out.push({p,r,base,added,qty,broken:+r.broken||0,
-      loss:den===null?null:den-qty, rate:(den&&den>0)?((den-qty)/den*100):(den===null?null:0)});
-    prevQty=qty;});
+  const out=[];let prev=null;
+  Object.keys(rows).sort().forEach(p=>{const r=rows[p],qty=+r.qty||0,added=+r.added||0;
+    const base=prev?prev.qty:null,den=base===null?null:base+added,loss=den===null?null:r2(den-qty);
+    out.push({p,r,base,added,qty,broken:+r.broken||0,months:prev?Math.max(1,pdIdx(p)-pdIdx(prev.p)):null,
+      loss,rate:den===null?null:(den>0?loss/den*100:0)});
+    prev={p,qty};});
   return out;
 }
-function astForecast(hist){          // ค่าเฉลี่ยของหายต่อเดือน + คาดการณ์เดือนหน้า
+/* ค่าเฉลี่ยต่อ "เดือนจริง" + คาดการณ์เดือนหน้า (งวดที่เว้น 2 เดือนนับเป็น 2 เดือน ไม่ใช่ 1) */
+function astForecast(hist){
   const L=hist.filter(x=>x.loss!=null);
   if(!L.length)return{avg:null,next:null,rate:null};
-  const avg=L.reduce((s,x)=>s+x.loss,0)/L.length;
-  const den=L.reduce((s,x)=>s+(x.base+x.added),0);
-  const rate=den>0?(L.reduce((s,x)=>s+x.loss,0)/den*100):0;
+  const tot=L.reduce((s,x)=>s+x.loss,0),mon=L.reduce((s,x)=>s+x.months,0);
+  const avg=mon>0?tot/mon:0;
+  const avgBase=L.reduce((s,x)=>s+(x.base+x.added),0)/L.length;
+  const rate=avgBase>0?(avg/avgBase*100):0;
   const last=hist[hist.length-1];
-  return{avg,rate,next:Math.max(0,Math.round((last.qty-avg)*100)/100)};
+  return{avg,rate,next:Math.max(0,r2(last.qty-avg))};
 }
 async function astLoad(){
-  if(PD_Y===null){const n=new Date();PD_Y=n.getFullYear();PD_M=n.getMonth();}
+  if(PD_Y===null||!PD_MANUAL){const n=new Date();PD_Y=n.getFullYear();PD_M=n.getMonth();}  // ข้ามเดือน → ขยับตาม
+  const seq=++AST_SEQ,bid=CUR_B;
+  $('#pdTitle').textContent='งวด '+pdLabel(pdStr());
   const box=$('#astList');box.innerHTML='<div class="rempty">กำลังโหลด...</div>';
   const [as,cs]=await Promise.all([
-    sb.from('maint_assets').select('*').eq('branch_id',CUR_B).is('deleted_at',null).order('sort'),
-    sb.from('maint_counts').select('*').eq('branch_id',CUR_B).order('period',{ascending:false}).limit(3000)]);
-  if(as.error){box.innerHTML='<div class="rempty">โหลดไม่ได้: '+escapeHtml(as.error.message)+' (ยังไม่ได้รัน SQL ตารางอุปกรณ์?)</div>';$('#astSum').innerHTML='';return;}
+    db().from('maint_assets').select('*').eq('branch_id',bid).is('deleted_at',null).order('sort'),
+    fetchAll(()=>db().from('maint_counts').select('*').eq('branch_id',bid).order('period',{ascending:false}).order('id'))]);
+  if(seq!==AST_SEQ||bid!==CUR_B)return;           // สลับสาขาระหว่างรอ → ทิ้งผลเก่า
+  const err=as.error||cs.error;
+  if(err){ASSETS=[];COUNTS={};$('#astSum').innerHTML='';
+    box.innerHTML='<div class="rempty">โหลดข้อมูลไม่ได้: '+escapeHtml(err.message||String(err))+'<br>ดึงหน้าลงเพื่อลองใหม่ (ยังไม่ได้รัน SQL ตารางอุปกรณ์?)</div>';return;}
   ASSETS=as.data||[];COUNTS={};
-  ((cs&&cs.data)||[]).forEach(r=>{(COUNTS[r.asset_id]=COUNTS[r.asset_id]||{})[r.period]=r;});
+  (cs.data||[]).forEach(r=>{(COUNTS[r.asset_id]=COUNTS[r.asset_id]||{})[r.period]=r;});
   astRender();
 }
 function astRender(){
   const p=pdStr();$('#pdTitle').textContent='งวด '+pdLabel(p);
+  $('#pdNext').disabled=p>=curPeriod();
   const box=$('#astList'),sum=$('#astSum');
   if(!ASSETS.length){sum.innerHTML='';
-    box.innerHTML='<div class="rempty">ยังไม่มีอุปกรณ์ของสาขานี้'+(canManage()?' — กด ⚙️ เพื่อเพิ่มอุปกรณ์':' — ให้ผู้ดูแลเพิ่มก่อน')+'</div>';return;}
+    box.innerHTML='<div class="rempty">ยังไม่มีอุปกรณ์ของสาขานี้'+(canT('a')?' — กด ⚙️ เพื่อเพิ่มอุปกรณ์':' — ให้ผู้ดูแลเพิ่มก่อน')+'</div>';return;}
   const arr=ASSETS.map(a=>({a,st:astStat(a,p)}));
-  let counted=0,lossSum=0,brokenSum=0,den=0,haveQty=0;
+  let counted=0,lossSum=0,surplus=0,brokenSum=0,den=0,haveQty=0;
   arr.forEach(({st})=>{if(!st.cur)return;counted++;brokenSum+=st.broken;haveQty+=st.qty;
-    if(st.loss!=null){lossSum+=st.loss;den+=st.base+st.added;}});
+    if(st.loss!=null){den+=st.base+st.added;          // ของเกินของตัวหนึ่ง ห้ามไปหักของหายของอีกตัว
+      if(st.loss>0)lossSum+=st.loss;else surplus-=st.loss;}});
+  lossSum=r2(lossSum);surplus=r2(surplus);
   const rate=den>0?(lossSum/den*100):0;
   sum.innerHTML=`<div class="stile"><small>นับแล้ว</small><b>${counted}<span style="font-size:.7em;color:#8a7f74"> / ${ASSETS.length}</span></b></div>
     <div class="stile"><small>ของที่มีงวดนี้</small><b>${nf(haveQty)}</b></div>
-    <div class="stile ${lossSum>0?'bad':'good'}"><small>หาย/ชำรุดงวดนี้</small><b>${nf(lossSum)}</b></div>
+    <div class="stile ${lossSum>0?'bad':'good'}"><small>หาย/ชำรุดงวดนี้</small><b>${nf(lossSum)}</b>${surplus?`<small>เกินยอด +${nf(surplus)}</small>`:''}</div>
     <div class="stile ${rate>3?'bad':rate>0?'warn':'good'}"><small>อัตราเสียหาย</small><b>${rate.toFixed(1)}%</b></div>
     <div class="stile"><small>แจ้งชำรุด (มีรูป)</small><b>${nf(brokenSum)}</b></div>`;
   box.innerHTML=arr.map(({a,st})=>{
-    const unit=escapeHtml(a.unit||'ชิ้น');
-    const meta=[a.cat?escapeHtml(a.cat):'',st.base===null?'ยังไม่มียอดงวดก่อน':'งวดก่อน '+nf(st.base)+' '+unit,
+    const unit=escapeHtml(a.unit||'ชิ้น'),id=escapeHtml(a.id);
+    const meta=[a.cat?escapeHtml(a.cat):'',st.base===null?'ยังไม่มียอดงวดก่อน'
+      :'งวดก่อน '+nf(st.base)+' '+unit+(st.months>1?' ('+st.months+' เดือนก่อน)':''),
       st.added?('+ซื้อเพิ่ม '+nf(st.added)):''].filter(Boolean).join(' · ');
     let q='<span class="q" style="color:#9a6700">—</span><span class="d non">ยังไม่นับ</span>';
     if(st.cur){const d=st.loss==null?'<span class="d non">ตั้งต้น</span>'
@@ -1097,27 +1252,44 @@ function astRender(){
       q=`<span class="q">${nf(st.qty)}</span>${d}`;}
     const ph=astPhotos(st.cur).length;
     return `<div class="astrow">
-      <div class="an" data-cnt="${a.id}"><b>${escapeHtml(a.name)}${ph?' <span style="font-size:.78rem">📷'+ph+'</span>':''}</b><small>${meta}</small></div>
-      <div class="astq" data-cnt="${a.id}">${q}</div>
-      <button class="astbtn" data-stat="${a.id}" title="สถิติย้อนหลัง">📈</button>
+      <div class="an" data-cnt="${id}"><b>${escapeHtml(a.name)}${ph?' <span style="font-size:.78rem">📷'+ph+'</span>':''}</b><small>${meta}</small></div>
+      <div class="astq" data-cnt="${id}">${q}</div>
+      <button class="astbtn" data-stat="${id}" title="สถิติย้อนหลัง">📈</button>
     </div>`;}).join('');
   box.querySelectorAll('[data-cnt]').forEach(el=>el.onclick=()=>{const a=ASSETS.find(z=>z.id===el.dataset.cnt);if(!a)return;
-    if(canCount())astCountOverlay(a);else{toast('บัญชีนี้ดูได้อย่างเดียว');astStatOverlay(a);}});
+    const has=!!(COUNTS[a.id]||{})[pdStr()];
+    if(has?canCountEdit():canCountNew())astCountOverlay(a);
+    else{toast(has?'บัญชีนี้แก้ยอดที่นับแล้วไม่ได้ (ดูได้อย่างเดียว)':'บัญชีนี้ดูได้อย่างเดียว');astStatOverlay(a);}});
   box.querySelectorAll('[data-stat]').forEach(el=>el.onclick=()=>{const a=ASSETS.find(z=>z.id===el.dataset.stat);if(a)astStatOverlay(a);});
 }
-async function astUploadPhoto(dataUrl,assetId){
-  const blob=await (await fetch(dataUrl)).blob();
-  const path='a/'+CUR_B+'/'+assetId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
-  const up=await sb.storage.from('maint-photos').upload(path,blob,{contentType:'image/jpeg'});
-  if(up.error)throw up.error;
-  return sb.storage.from('maint-photos').getPublicUrl(path).data.publicUrl;
+/* บันทึกยอดนับ: แถวเดิม = update · ไม่มี = insert · อีกเครื่องบันทึกงวดนี้ไปก่อน (ชน unique) = ถามก่อนทับ */
+async function saveCount(row,curId){
+  if(curId){
+    const r=await db().from('maint_counts').update(row).eq('id',curId).select('id');
+    if(r.error||(r.data&&r.data.length))return r;
+  }
+  let r=await db().from('maint_counts').insert(Object.assign({id:uid('mc')},row));
+  if(r.error&&(r.error.code==='23505'||/duplicate key|unique/i.test(r.error.message||''))){
+    const ex=await db().from('maint_counts').select('*').eq('asset_id',row.asset_id).eq('period',row.period).limit(1);
+    const old=ex.data&&ex.data[0];
+    if(!old)return r;
+    if(!confirm('มีคนบันทึกยอดงวดนี้ไปแล้ว: นับได้ '+nf(old.qty)+' โดย '+(old.by_name||'—')+'\nต้องการแทนที่ด้วยยอดของคุณ ('+nf(row.qty)+') ไหม?'))
+      return{error:{message:'ยกเลิก — ยอดเดิมยังอยู่ (ดึงหน้าลงเพื่อดูยอดล่าสุด)'},cancelled:true};
+    const keep=astPhotos(old).filter(u=>row.photos.indexOf(u)<0);
+    row=Object.assign({},row,{photos:row.photos.concat(keep).slice(0,MAX_PHOTOS)});
+    r=await db().from('maint_counts').update(row).eq('id',old.id);
+  }
+  return r;
 }
 function astCountOverlay(a){
-  const p=pdStr(),st=astStat(a,p),cur=st.cur,unit=escapeHtml(a.unit||'ชิ้น');
-  const ov=document.createElement('div');ov.className='overlay on';
-  ov.innerHTML=`<div class="sheet">
+  const p=pdStr(),st=astStat(a,p),cur=st.cur,unit=escapeHtml(a.unit||'ชิ้น'),today=todayISO();
+  const bid=a.branch_id||CUR_B;                   // ล็อกสาขาไว้ตั้งแต่เปิดหน้าต่าง
+  if(p>curPeriod()){toast('ยังนับงวดล่วงหน้าไม่ได้');return;}
+  const {ov,done:closeNow}=openSheet(`<div class="sheet">
     <div class="sheet-head"><h3>📦 ${escapeHtml(a.name)}</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
+      ${p<curPeriod()?`<div class="acbox warn">⚠️ กำลังบันทึกของงวด <b>${pdLabel(p)}</b> (ไม่ใช่เดือนปัจจุบัน)</div>`:''}
+      ${cur?`<div class="acbox warn">✏️ งวดนี้มียอดแล้ว: นับได้ <b>${nf(cur.qty)}</b> โดย ${escapeHtml(cur.by_name||'—')} (${fmtDate(isoFromAny(cur.count_date))}) — บันทึกอีกครั้ง = แก้ยอดเดิม</div>`:''}
       <p class="hint" style="margin:0 0 10px">งวด <b>${pdLabel(p)}</b> · ${st.base===null
         ?'ยังไม่มียอดงวดก่อน — ครั้งแรกถือเป็นยอดตั้งต้น'
         :'ยอดงวดก่อน ('+pdLabel(st.prevP)+') = <b>'+nf(st.base)+'</b> '+unit}</p>
@@ -1125,182 +1297,165 @@ function astCountOverlay(a){
         <div class="field"><label>นับได้จริง (${unit})</label><input class="ac_q" inputmode="decimal" value="${cur?nf(cur.qty):''}" placeholder="0"></div>
         <div class="field"><label>ซื้อเพิ่มในงวด</label><input class="ac_a" inputmode="decimal" value="${cur&&+cur.added?nf(cur.added):''}" placeholder="0"></div>
       </div>
-      <div class="acbox"></div>
+      <div class="acbox ac_calc"></div>
       <div class="frow">
         <div class="field"><label>ชำรุด / เสียหาย</label><input class="ac_b" inputmode="decimal" value="${cur&&+cur.broken?nf(cur.broken):''}" placeholder="0"></div>
-        <div class="field"><label>วันที่นับ</label><input type="date" class="ac_d" value="${cur?isoFromAny(cur.count_date):todayISO()}"></div>
+        <div class="field"><label>วันที่นับ</label><input type="date" class="ac_d" value="${cur?escapeHtml(isoFromAny(cur.count_date)):today}" max="${today}"></div>
       </div>
       <div class="field"><label>รูปของที่เสียหาย (1–${MAX_PHOTOS} รูป · บังคับเมื่อมีของชำรุด)</label>
         <input type="file" class="ac_f" accept="image/*" multiple style="display:none">
-        <div class="mtthumbs ac_prev"></div>
+        <div class="mtthumbs ac_prev"></div><div class="phcount ac_cnt"></div>
         <button class="act ghost wide ac_add" style="margin-top:6px">📸 ถ่ายรูป / เลือกรูป</button>
       </div>
       <div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input class="ac_n" value="${cur&&cur.note?escapeHtml(cur.note):''}" placeholder="เช่น จานแตก 2 ใบตอนล้าง"></div>
       <button class="act send wide ac_save">💾 บันทึกการนับ</button>
-      <p class="hint" style="margin:8px 0 0">นับงวดเดิมซ้ำได้ ระบบจะทับยอดเดิมให้ (เก็บผู้บันทึกล่าสุด)</p>
-    </div></div>`;
-  document.body.appendChild(ov);
-  const x=()=>ov.remove();
-  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
-  const keep=astPhotos(cur).slice(),imgs=[],prev=ov.querySelector('.ac_prev'),fin=ov.querySelector('.ac_f'),
-    qEl=ov.querySelector('.ac_q'),aEl=ov.querySelector('.ac_a'),bEl=ov.querySelector('.ac_b'),save=ov.querySelector('.ac_save');
-  function renderPrev(){
-    prev.innerHTML=keep.map((u,i)=>`<img src="${escapeHtml(u)}" data-k="${i}" title="แตะเพื่อเอารูปนี้ออก" alt="">`).join('')
-      +imgs.map((d,i)=>`<img src="${d}" data-n="${i}" title="แตะเพื่อเอารูปนี้ออก" alt="">`).join('');
-    prev.querySelectorAll('[data-k]').forEach(im=>im.onclick=()=>{keep.splice(+im.dataset.k,1);renderPrev();});
-    prev.querySelectorAll('[data-n]').forEach(im=>im.onclick=()=>{imgs.splice(+im.dataset.n,1);renderPrev();});}
-  ov.querySelector('.ac_add').onclick=()=>fin.click();
-  fin.onchange=()=>{const room=MAX_PHOTOS-(keep.length+imgs.length);
-    const files=[...fin.files];fin.value='';
-    if(room<=0){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
-    if(files.length>room)toast('แนบได้อีก '+room+' รูป (สูงสุด '+MAX_PHOTOS+')');
-    files.slice(0,room).forEach(f=>processImage(f,d=>{if(d){imgs.push(d);renderPrev();}else toast('อ่านรูปไม่สำเร็จ 1 รูป');}));};
+    </div></div>`);
+  const pk=photoPicker(ov,{file:'.ac_f',prev:'.ac_prev',add:'.ac_add',count:'.ac_cnt'},astPhotos(cur));
+  const qEl=ov.querySelector('.ac_q'),aEl=ov.querySelector('.ac_a'),bEl=ov.querySelector('.ac_b'),save=ov.querySelector('.ac_save');
+  if(cur)bEl.dataset.touched='1';                  // ยอดชำรุดที่บันทึกไว้ ห้ามเขียนทับอัตโนมัติ
   function calc(){
-    const q=parseFloat(qEl.value),ad=parseFloat(aEl.value)||0,box=ov.querySelector('.acbox');
-    if(st.base===null||isNaN(q)){box.className='acbox';box.innerHTML='';return;}
-    const den=st.base+ad,loss=den-q,rate=den>0?(loss/den*100):0;
-    box.className='acbox '+(loss>0?'bad':loss<0?'warn':'good');
+    const q=numIn(qEl.value),ad=numIn(aEl.value)||0,box=ov.querySelector('.ac_calc');
+    if(st.base===null||q===null||isNaN(q)||isNaN(ad)){box.className='acbox ac_calc';box.innerHTML='';return;}
+    const den=st.base+ad,loss=r2(den-q),rate=den>0?(loss/den*100):0;
+    box.className='acbox ac_calc '+(loss>0?'bad':loss<0?'warn':'good');
     box.innerHTML=loss>0?`⚠️ หาย/ชำรุด <b>${nf(loss)}</b> ${unit} (${rate.toFixed(1)}%) — ระบุจำนวนชำรุดและแนบรูปด้วย`
       :loss<0?`ℹ️ นับได้เกินยอดที่ควรมี <b>${nf(-loss)}</b> ${unit} (ลืมลงซื้อเพิ่มหรือเปล่า?)`
       :`✅ ครบตามยอด (${nf(q)} ${unit}) ไม่มีของหาย`;
-    if(loss>0&&!bEl.dataset.touched)bEl.value=nf(loss);
-    if(loss<=0&&!bEl.dataset.touched)bEl.value='';}
-  qEl.oninput=calc;aEl.oninput=calc;bEl.oninput=()=>{bEl.dataset.touched='1';};
-  renderPrev();calc();
+    if(!bEl.dataset.touched){                       // เติมให้เฉพาะตอนผู้ใช้ยังไม่ได้แก้ช่องชำรุดเอง
+      if(loss>0){bEl.value=nf(loss);bEl.dataset.auto='1';}
+      else if(bEl.dataset.auto){bEl.value='';delete bEl.dataset.auto;}}
+  }
+  qEl.oninput=calc;aEl.oninput=calc;bEl.oninput=()=>{bEl.dataset.touched='1';delete bEl.dataset.auto;};
+  calc();
   save.onclick=async()=>{
-    const qty=parseFloat(qEl.value);
-    if(isNaN(qty)||qty<0){toast('กรอกจำนวนที่นับได้ก่อน');qEl.focus();return;}
-    const added=parseFloat(aEl.value)||0,broken=parseFloat(bEl.value)||0,tot=keep.length+imgs.length;
-    if(broken>0&&tot<1){toast('มีของชำรุด '+nf(broken)+' — ต้องแนบรูปอย่างน้อย 1 รูป');return;}
-    if(tot>MAX_PHOTOS){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
-    save.disabled=true;save.textContent='⏳ กำลังบันทึก...';
+    if(pk.busy)return;
+    const qty=numIn(qEl.value),added=numIn(aEl.value),broken=numIn(bEl.value),d=ov.querySelector('.ac_d').value||today;
+    if(qty===null||isNaN(qty)){toast('กรอกจำนวนที่นับได้เป็นตัวเลข (0 ขึ้นไป)');qEl.focus();return;}
+    if(isNaN(added)){toast('ช่องซื้อเพิ่มต้องเป็นตัวเลข 0 ขึ้นไป');aEl.focus();return;}
+    if(isNaN(broken)){toast('ช่องชำรุดต้องเป็นตัวเลข 0 ขึ้นไป');bEl.focus();return;}
+    if(d>todayISO()){toast('วันที่นับต้องไม่เกินวันนี้');return;}
+    if(p>curPeriod()){toast('ยังนับงวดล่วงหน้าไม่ได้');return;}
+    if(pk.pending){toast('รอรูปโหลดให้เสร็จก่อน');return;}
+    if((broken||0)>0&&pk.total()<1){toast('มีของชำรุด '+nf(broken)+' — ต้องแนบรูปอย่างน้อย 1 รูป');return;}
+    if(pk.total()>MAX_PHOTOS){toast('แนบได้ไม่เกิน '+MAX_PHOTOS+' รูป');return;}
+    pk.busy=true;ov.dataset.busy='1';save.disabled=true;save.textContent='⏳ กำลังบันทึก...';
     try{
-      const urls=keep.slice();
-      for(const im of imgs){save.textContent='⏳ อัปโหลดรูป '+(urls.length-keep.length+1)+'/'+imgs.length+'...';
-        urls.push(await astUploadPhoto(im,a.id));}
-      const row={asset_id:a.id,branch_id:CUR_B,period:p,count_date:ov.querySelector('.ac_d').value||todayISO(),
-        qty,added,broken,by_name:(PROF&&(PROF.name||PROF.username))||'',note:ov.querySelector('.ac_n').value.trim()||null,photos:urls};
-      const res=cur?await sb.from('maint_counts').update(row).eq('id',cur.id)
-                  :await sb.from('maint_counts').insert(Object.assign({id:uid('mc')},row));
+      const urls=await uploadAll(pk,'a/'+bid+'/'+a.id,(n,all)=>{save.textContent='⏳ อัปโหลดรูป '+n+'/'+all+'...';});
+      const row={asset_id:a.id,branch_id:bid,period:p,count_date:d,qty,added:added||0,broken:broken||0,
+        by_name:(PROF&&(PROF.name||PROF.username))||'',note:ov.querySelector('.ac_n').value.trim()||null,photos:urls};
+      const res=await saveCount(row,cur&&cur.id);
       if(res.error)throw res.error;
-      toast('บันทึกการนับ “'+a.name+'” แล้ว ✓');x();astLoad();
-    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e));save.disabled=false;save.textContent='💾 บันทึกการนับ';}
+      toast('บันทึกการนับ “'+a.name+'” แล้ว ✓');delete ov.dataset.busy;closeNow();if(bid===CUR_B)astLoad();
+    }catch(e){toast('บันทึกไม่ได้: '+errText(e));
+      pk.busy=false;delete ov.dataset.busy;save.disabled=false;save.textContent='💾 บันทึกการนับ';}
   };
 }
 function astStatOverlay(a){
   const hist=astHistory(a).slice(-12),fc=astForecast(hist),unit=escapeHtml(a.unit||'ชิ้น'),p=pdStr();
-  const totLoss=hist.filter(x=>x.loss!=null).reduce((s,x)=>s+x.loss,0);
+  const totLoss=r2(hist.filter(x=>x.loss>0).reduce((s,x)=>s+x.loss,0));
   const totBroken=hist.reduce((s,x)=>s+x.broken,0);
-  const ov=document.createElement('div');ov.className='overlay on';
   const rows=hist.length?hist.slice().reverse().map(x=>`<tr class="${x.p===p?'cur':''}">
-      <td>${pdShort(x.p)}</td><td>${x.base==null?'—':nf(x.base)}</td><td>${x.added?'+'+nf(x.added):'—'}</td>
+      <td>${pdShort(x.p)}${x.months>1?`<small class="gap">${x.months} ด.</small>`:''}</td><td>${x.base==null?'—':nf(x.base)}</td><td>${x.added?'+'+nf(x.added):'—'}</td>
       <td><b>${nf(x.qty)}</b></td><td class="${x.loss>0?'loss':''}">${x.loss==null?'—':(x.loss>0?'−'+nf(x.loss):x.loss<0?'+'+nf(-x.loss):'0')}</td>
       <td class="${x.rate>0?'loss':''}">${x.rate==null?'—':x.rate.toFixed(1)+'%'}</td>
-      <td>${astPhotos(x.r).length?'<button class="astbtn" data-ph="'+x.p+'">📷'+astPhotos(x.r).length+'</button>':'—'}</td>
+      <td>${astPhotos(x.r).length?'<button class="astbtn" data-ph="'+escapeHtml(x.p)+'">📷'+astPhotos(x.r).length+'</button>':'—'}</td>
     </tr>`).join(''):'';
-  ov.innerHTML=`<div class="sheet">
+  const {ov}=openSheet(`<div class="sheet">
     <div class="sheet-head"><h3>📈 ${escapeHtml(a.name)}</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
       <div class="stiles">
         <div class="stile"><small>ล่าสุดมี</small><b>${hist.length?nf(hist[hist.length-1].qty):'—'}</b></div>
-        <div class="stile ${fc.avg>0?'bad':'good'}"><small>หายเฉลี่ย/เดือน</small><b>${fc.avg==null?'—':nf(Math.round(fc.avg*100)/100)}</b></div>
-        <div class="stile ${fc.rate>3?'bad':fc.rate>0?'warn':'good'}"><small>อัตราเสียหายเฉลี่ย</small><b>${fc.rate==null?'—':fc.rate.toFixed(1)+'%'}</b></div>
+        <div class="stile ${fc.avg>0?'bad':'good'}"><small>หายเฉลี่ย/เดือน</small><b>${fc.avg==null?'—':nf(r2(fc.avg))}</b></div>
+        <div class="stile ${fc.rate>3?'bad':fc.rate>0?'warn':'good'}"><small>อัตราเสียหายเฉลี่ย/เดือน</small><b>${fc.rate==null?'—':fc.rate.toFixed(1)+'%'}</b></div>
         <div class="stile warn"><small>คาดเดือนหน้าเหลือ</small><b>${fc.next==null?'—':nf(fc.next)}</b></div>
       </div>
-      ${hist.length?`<table class="htab">
+      ${hist.length?`<div style="overflow-x:auto"><table class="htab">
         <tr><th>งวด</th><th>ต้นงวด</th><th>ซื้อเพิ่ม</th><th>นับได้</th><th>หาย</th><th>%</th><th>รูป</th></tr>
-        ${rows}</table>
+        ${rows}</table></div>
       <p class="hint" style="margin:10px 0 0">รวม ${hist.length} งวด · หายรวม <b>${nf(totLoss)}</b> ${unit} · แจ้งชำรุดพร้อมรูป <b>${nf(totBroken)}</b> ${unit}<br>
-        คาดการณ์เดือนหน้า = ยอดล่าสุด − ค่าเฉลี่ยการหายต่อเดือน (ยังไม่รวมของที่จะซื้อเพิ่ม)</p>`
+        ค่าเฉลี่ยคิดต่อเดือนจริง (งวดที่เว้นไปหลายเดือนหารตามจำนวนเดือน) · คาดการณ์เดือนหน้า = ยอดล่าสุด − ค่าเฉลี่ยการหายต่อเดือน (ยังไม่รวมของที่จะซื้อเพิ่ม)</p>`
       :'<div class="rempty">ยังไม่มีประวัติการนับของอุปกรณ์นี้</div>'}
-    </div></div>`;
-  document.body.appendChild(ov);
-  const x=()=>ov.remove();
-  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+    </div></div>`);
   ov.querySelectorAll('[data-ph]').forEach(b=>b.onclick=()=>{
     const r=(COUNTS[a.id]||{})[b.dataset.ph];if(!r)return;astPhotoOverlay(a,r);});
 }
 function astPhotoOverlay(a,r){
   const ph=astPhotos(r);
-  const ov=document.createElement('div');ov.className='overlay on';ov.style.zIndex='260';
-  ov.innerHTML=`<div class="sheet">
+  const {ov}=openSheet(`<div class="sheet">
     <div class="sheet-head"><h3>📷 ${escapeHtml(a.name)} · ${pdLabel(r.period)}</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
       <p class="hint" style="margin:0 0 8px">นับได้ ${nf(r.qty)} · ชำรุด ${nf(r.broken)} · 👤 ${escapeHtml(r.by_name||'—')} · ${fmtDate(isoFromAny(r.count_date))}</p>
       ${r.note?`<div class="mtdetail" style="margin-bottom:8px">${escapeHtml(r.note)}</div>`:''}
       <div class="mtthumbs">${ph.map(u=>`<img src="${escapeHtml(u)}" loading="lazy" data-full="${escapeHtml(u)}" alt="">`).join('')||'<div class="rempty">ไม่มีรูป</div>'}</div>
-    </div></div>`;
-  document.body.appendChild(ov);
-  const x=()=>ov.remove();
-  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
+    </div></div>`,260);
   ov.querySelectorAll('[data-full]').forEach(im=>im.onclick=()=>maintLightbox(im.dataset.full));
 }
 function astManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์จัดการรายการอุปกรณ์');return;}
-  const acc=accessibleBranches(),bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
-  const ov=document.createElement('div');ov.className='overlay on';
-  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
-  ov.innerHTML=`<div class="sheet">
+  const acc=accessibleBranches(),bname=(acc.find(b=>b.id===CUR_B)||{}).name||'',canA=canT('a'),canE=canT('e'),canD=canT('d');
+  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${escapeHtml(b.id)}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  const {ov}=openSheet(`<div class="sheet">
     <div class="sheet-head"><h3>⚙️ จัดการรายการอุปกรณ์</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
-      <div class="sub-title" style="margin-top:0"><span class="am_mode">➕ เพิ่มอุปกรณ์ใหม่</span></div>
-      <div class="field"><label>ชื่ออุปกรณ์</label><input class="am_n" placeholder="เช่น กระทะย่าง / จานเมลามีน / แก้วน้ำ"></div>
-      <div class="frow">
-        <div class="field"><label>หน่วยนับ</label><input class="am_u" placeholder="ชิ้น" value="ชิ้น"></div>
-        <div class="field"><label>หมวด (ไม่บังคับ)</label><input class="am_c" placeholder="เช่น ครัว / หน้าร้าน"></div>
+      <div class="am_form"${(canA||canE)?'':' hidden'}>
+        <div class="sub-title" style="margin-top:0"><span class="am_mode">➕ เพิ่มอุปกรณ์ใหม่</span></div>
+        <div class="field"><label>ชื่ออุปกรณ์</label><input class="am_n" placeholder="เช่น กระทะย่าง / จานเมลามีน / แก้วน้ำ"></div>
+        <div class="frow">
+          <div class="field"><label>หน่วยนับ</label><input class="am_u" placeholder="ชิ้น" value="ชิ้น"></div>
+          <div class="field"><label>หมวด (ไม่บังคับ)</label><input class="am_c" placeholder="เช่น ครัว / หน้าร้าน"></div>
+        </div>
+        <div class="field am_brwrap"><label>ใช้กับสาขา</label><div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 2px">${bChecks}</div></div>
+        <button class="act send wide am_save">➕ เพิ่มอุปกรณ์</button>
       </div>
-      <div class="field am_brwrap"><label>ใช้กับสาขา</label><div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 2px">${bChecks}</div></div>
-      <button class="act send wide am_save">➕ เพิ่มอุปกรณ์</button>
       <div class="sub-title">📦 อุปกรณ์ของ ${escapeHtml(bname)}</div>
       <div class="am_list"></div>
-      <p class="hint">🗑 ลบ = ซ่อนจากรายการนับ (ประวัติการนับและรูปเก่ายังอยู่)</p>
-    </div></div>`;
-  document.body.appendChild(ov);
-  const x=()=>ov.remove();
-  ov.querySelector('[data-x]').onclick=x;ov.onclick=e=>{if(e.target===ov)x();};
-  const fN=ov.querySelector('.am_n'),fU=ov.querySelector('.am_u'),fC=ov.querySelector('.am_c'),
+      <p class="hint">${canD?'🗑 ลบ = ซ่อนจากรายการนับ (ประวัติการนับและรูปเก่ายังอยู่)':''}</p>
+    </div></div>`);
+  const form=ov.querySelector('.am_form'),fN=ov.querySelector('.am_n'),fU=ov.querySelector('.am_u'),fC=ov.querySelector('.am_c'),
     saveBtn=ov.querySelector('.am_save'),modeEl=ov.querySelector('.am_mode'),brWrap=ov.querySelector('.am_brwrap');
   let editId=null;
   function resetForm(){editId=null;fN.value='';fU.value='ชิ้น';fC.value='';brWrap.style.display='';
-    modeEl.textContent='➕ เพิ่มอุปกรณ์ใหม่';saveBtn.textContent='➕ เพิ่มอุปกรณ์';}
+    modeEl.textContent='➕ เพิ่มอุปกรณ์ใหม่';saveBtn.textContent='➕ เพิ่มอุปกรณ์';form.hidden=!canA;}
   function renderList(){
     const wrap=ov.querySelector('.am_list');
     wrap.innerHTML=ASSETS.length?ASSETS.map(a=>`<div class="mmrow">
         <div class="mmn"><b>${escapeHtml(a.name)}</b><small>${escapeHtml(a.unit||'ชิ้น')}${a.cat?' · '+escapeHtml(a.cat):''}</small></div>
-        <button data-ed="${a.id}">✏️</button><button data-rm="${a.id}">🗑</button>
+        ${canE?`<button data-ed="${escapeHtml(a.id)}">✏️</button>`:''}${canD?`<button data-rm="${escapeHtml(a.id)}">🗑</button>`:''}
       </div>`).join(''):'<div class="rempty">ยังไม่มีอุปกรณ์ของสาขานี้</div>';
     wrap.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>{const a=ASSETS.find(z=>z.id===b.dataset.ed);if(!a)return;
-      editId=a.id;fN.value=a.name;fU.value=a.unit||'ชิ้น';fC.value=a.cat||'';brWrap.style.display='none';
+      editId=a.id;form.hidden=false;fN.value=a.name;fU.value=a.unit||'ชิ้น';fC.value=a.cat||'';brWrap.style.display='none';
       modeEl.textContent='✏️ แก้ไข: '+a.name;saveBtn.textContent='💾 บันทึกการแก้ไข';fN.focus();});
     wrap.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{const a=ASSETS.find(z=>z.id===b.dataset.rm);if(!a)return;
       if(!confirm('ลบ “'+a.name+'” ออกจากรายการนับของสาขานี้?'))return;
-      const {error}=await sb.from('maint_assets').update({deleted_at:new Date().toISOString()}).eq('id',a.id);
-      if(error){toast('ลบไม่ได้: '+error.message);return;}
+      const {error}=await db().from('maint_assets').update({deleted_at:new Date().toISOString()}).eq('id',a.id);
+      if(error){toast('ลบไม่ได้: '+errText(error));return;}
       toast('ลบแล้ว');await astLoad();renderList();if(editId===a.id)resetForm();});
   }
   saveBtn.onclick=async()=>{
     const name=fN.value.trim(),unit=fU.value.trim()||'ชิ้น',cat=fC.value.trim();
     if(!name){toast('กรอกชื่ออุปกรณ์ก่อน');fN.focus();return;}
+    if(editId?!canE:!canA){toast('ไม่มีสิทธิ์');return;}
     saveBtn.disabled=true;
     try{
-      if(editId){const {error}=await sb.from('maint_assets').update({name,unit,cat:cat||null}).eq('id',editId);
+      if(editId){const {error}=await db().from('maint_assets').update({name,unit,cat:cat||null}).eq('id',editId);
         if(error)throw error;toast('บันทึกการแก้ไขแล้ว ✓');}
       else{
         const bids=[...ov.querySelectorAll('.am_br:checked')].map(c=>c.value);
         if(!bids.length){toast('เลือกอย่างน้อย 1 สาขา');saveBtn.disabled=false;return;}
         const base=Math.max(0,...ASSETS.map(a=>a.sort||0));
         const rows=bids.map((bid,i)=>({id:uid('ma'),branch_id:bid,name,unit,cat:cat||null,sort:base+10+i}));
-        const {error}=await sb.from('maint_assets').insert(rows);
+        const {error}=await db().from('maint_assets').insert(rows);
         if(error)throw error;toast('เพิ่มอุปกรณ์แล้ว ✓ ('+bids.length+' สาขา)');}
-      resetForm();await astLoad();renderList();
-    }catch(e){toast('บันทึกไม่ได้: '+((e&&e.message)||e));}
+      delete ov.dataset.dirty;resetForm();await astLoad();renderList();
+    }catch(e){toast('บันทึกไม่ได้: '+errText(e));}
     finally{saveBtn.disabled=false;}
   };
-  renderList();
+  resetForm();renderList();
 }
-$('#pdPrev').onclick=()=>{PD_M--;if(PD_M<0){PD_M=11;PD_Y--;}astRender();};
-$('#pdNext').onclick=()=>{PD_M++;if(PD_M>11){PD_M=0;PD_Y++;}astRender();};
-$('#pdNow').onclick=()=>{const n=new Date();PD_Y=n.getFullYear();PD_M=n.getMonth();astRender();};
+$('#pdPrev').onclick=()=>{PD_MANUAL=true;PD_M--;if(PD_M<0){PD_M=11;PD_Y--;}astRender();};
+$('#pdNext').onclick=()=>{if(pdStr()>=curPeriod())return;
+  PD_MANUAL=true;PD_M++;if(PD_M>11){PD_M=0;PD_Y++;}if(pdStr()===curPeriod())PD_MANUAL=false;astRender();};
+$('#pdNow').onclick=()=>{PD_MANUAL=false;const n=new Date();PD_Y=n.getFullYear();PD_M=n.getMonth();astRender();};
 
 /* ================= แท็บ ================= */
 let TAB='maint';
@@ -1314,6 +1469,16 @@ function setTab(t){
   if(t==='asset')astLoad();
 }
 document.querySelectorAll('.tabbtn').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+let LAST_DAY=todayISO();
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden||!PROF)return;
+  const d=todayISO();
+  if(d!==LAST_DAY){LAST_DAY=d;if(seeMaint())maintRenderList();}               // ข้ามวัน → สถานะ/ปฏิทินอัปเดต
+  if(TAB==='asset'&&!PD_MANUAL&&pdStr()!==curPeriod())astLoad();          // ข้ามเดือน → งวดนี้ขยับตาม
+});
+window.addEventListener('beforeunload',e=>{
+  if(document.querySelector('body>.overlay[data-dirty],body>.overlay[data-busy]')){e.preventDefault();e.returnValue='';}
+});
 
 
 boot();
@@ -1359,6 +1524,7 @@ boot();
   }
   document.addEventListener('touchstart',function(e){
     if(kiosk()){pulling=false;return;}
+    if(document.querySelector('body>.overlay.on')){pulling=false;return;}   /* เปิดหน้าต่างนับ/บันทึกอยู่ */
     if(e.touches.length!==1||!atTop()||inScrollable(e.target)){pulling=false;return;}
     y0=e.touches[0].clientY; dy=0; pulling=true; ready=false;
   },{passive:true});
