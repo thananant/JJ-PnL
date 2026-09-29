@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-# ประกอบ app.js กลับเข้า index.html + ตรวจ syntax ทั้งก้อน
-import re, pathlib, subprocess, sys, tempfile
+# ประกอบ app.js กลับเข้า <script> ก้อนท้ายสุดของ jjmk-payroll.html + ตรวจ syntax ทุกก้อน
+import pathlib, subprocess, sys
 root = pathlib.Path(__file__).resolve().parent.parent
-html = (root.parent/'jjmk-payroll.html').read_text(encoding='utf-8')
+page = root.parent/'jjmk-payroll.html'
+html = page.read_text(encoding='utf-8')
 js = (root/'app.js').read_text(encoding='utf-8')
 r = subprocess.run(['node','--check',str(root/'app.js')], capture_output=True, text=True)
 if r.returncode: sys.exit('app.js พัง:\n' + r.stderr)
-m = re.search(r'<script>\n.*\n</script>\n</body>\n</html>', html, re.S)
-assert m, 'ไม่พบบล็อก <script> ท้ายไฟล์'
-out = html[:m.start()] + '<script>\n' + js + '\n</script>\n</body>\n</html>'
-(root.parent/'jjmk-payroll.html').write_text(out, encoding='utf-8')
-with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as f:
-    f.write(re.search(r'<script>\n(.*)\n</script>', out, re.S).group(1)); tmp = f.name
-r = subprocess.run(['node','--check',tmp], capture_output=True, text=True)
-if r.returncode: sys.exit('inline script พัง:\n' + r.stderr)
+tail = '\n</script>\n</body>\n</html>'
+end = html.rindex(tail)
+start = html.rindex('<script>\n', 0, end) + len('<script>\n')
+out = html[:start] + js + html[end:]
+page.write_text(out, encoding='utf-8')
+r = subprocess.run(['bash', str(root/'tools'/'check.sh')], capture_output=True, text=True)
+if r.returncode: sys.exit('ตรวจหลังประกอบไม่ผ่าน:\n' + r.stdout + r.stderr)
 print(f'ประกอบแล้ว -> jjmk-payroll.html ({len(out.encode("utf-8")):,} bytes) · syntax OK')
