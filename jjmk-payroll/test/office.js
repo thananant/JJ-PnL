@@ -40,6 +40,21 @@ setTimeout(()=>{ try{
   // เข้างานใหม่กลางงวดเปลี่ยนผ่าน → คิดรายวันตามจริง ไม่ได้ส่วนเกิน
   E(`offE.type='monthly'; offE.rate=18000; offE.startDate='2026-09-10';`); c=C('offE','2026-09');
   ok(c.base===Math.round(c.days*600),'ออฟฟิศเริ่มงานกลางงวด → คิดรายวันตามวันที่ทำจริง (ได้ '+c.base+')');
+  // สลิปจริง (สร้างกะจากเวลาสแกนแบบเดียวกับแอป): หัวสลิปต้องบอกรอบ/วันจ่ายของออฟฟิศ + แยกที่มาค่าแรงช่วงเปลี่ยนรอบ
+  // (เจ้าของเห็นสลิปออฟฟิศขึ้น "จ่าย 5 ต.ค." ตอนหน้าเว็บยังเป็นเวอร์ชันเก่า เลยล็อกไว้ด้วยเทส)
+  E(`shiftDefs=[fromDbShift({id:1,name:'กะ',start_time:'10:00',end_time:'19:00',in_grace:5,out_grace:0,sort_order:1})];
+     var sO=fromDbEmp({id:11,code:'SO',nick:'ออฟ',branch:'OFFICE',wage_type:'monthly',rate:20000,work_mode:'hours',target_hours:9,active:true,shift_id:1,deposit_on:false});
+     var sS=fromDbEmp({id:12,code:'SS',nick:'ร้าน',branch:'JJLP',wage_type:'monthly',rate:20000,active:true,shift_id:1,deposit_on:false,must_work_exempt:true});
+     employees=[sO,sS]; punches=[];
+     ['2026-08-26','2026-08-27','2026-09-01','2026-09-22','2026-09-28'].forEach(d=>['SO','SS'].forEach(c=>{punches.push({code:c,date:d,time:'10:05',sn:''});punches.push({code:c,date:d,time:'19:10',sn:''});}));
+     recomputeAll();`);
+  const txt=js=>E(`(()=>{const d=document.createElement('div'); d.innerHTML=${js}; return d.textContent.replace(/\\s+/g,' ');})()`);
+  const slip=txt(`buildSlip(sO,'2026-09',true)`);
+  ok(slip.includes('รอบ 26 ส.ค. – 30 ก.ย.') && slip.includes('จ่ายวันที่ 30 ก.ย.') && !slip.includes('5 ต.ค.'),'สลิปออฟฟิศ ก.ย.: หัวสลิป 26 ส.ค.–30 ก.ย. จ่าย 30 ก.ย. (ไม่มี 5 ต.ค.)');
+  ok(slip.includes('เหมาเดือน 20,000 + 6 วัน 26–31 ส.ค.') && slip.includes('24,000.00'),'สลิปบอกที่มาค่าแรง: เหมาเดือน 20,000 + 6 วัน 26–31 ส.ค. = 24,000');
+  ok(slip.includes('28 ก.ย.'),'วันที่ 28 ก.ย. อยู่ในสลิปออฟฟิศงวด ก.ย.');
+  const slipS=txt(`buildSlip(sS,'2026-09',true)`);
+  ok(slipS.includes('รอบ 26 ส.ค. – 25 ก.ย.') && slipS.includes('จ่ายวันที่ 5 ต.ค.') && slipS.includes('(เหมาเดือน)') && !slipS.includes('28 ก.ย.'),'สลิปหน้าร้าน ก.ย. ไม่เปลี่ยน: 26 ส.ค.–25 ก.ย. จ่าย 5 ต.ค. (28 ก.ย. ไปอยู่งวด ต.ค.)');
 }catch(e){ console.log('CRASH',e.message); fail++; }
  console.log(errs.length?('jsdom errors: '+errs.slice(0,3).join(' | ')):'');
  console.log(fail?fail+' FAILED':'ALL PASSED'); process.exit(fail?1:0);
