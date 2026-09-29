@@ -1073,7 +1073,7 @@ window.JJGate=(function(){
       <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">การกระทำ:
         <select id="audAct" onchange="renderAudit()" style="width:auto;min-width:120px">
           <option value="">ทั้งหมด</option><option value="insert">เพิ่ม</option><option value="update">แก้ไข</option>
-          <option value="upsert">บันทึก</option><option value="delete">ลบ</option><option value="login">เข้าสู่ระบบ</option>
+          <option value="upsert">บันทึก</option><option value="delete">ลบ</option><option value="login">เข้าสู่ระบบ</option><option value="open">เปิดแอป</option>
         </select>
       </label>
       <input id="audQ" placeholder="ค้นหา ชื่อพนักงาน/รายละเอียด…" style="width:220px;font-size:16px" oninput="clearTimeout(this._h);this._h=setTimeout(renderAudit,300)">
@@ -1595,7 +1595,7 @@ async function doLogin(){
     AUTH = { username:usr.username, display_name:usr.display_name||usr.username, role:usr.role||'', unit:usr.unit||'', apps:usr.apps||null };
     try{ localStorage.setItem('jjpay_sess', JSON.stringify(AUTH)); }catch(_){}
     applyUser(AUTH);
-    auditWrite('login','','เข้าสู่ระบบ');
+    auditPendingLogin = true;       // จดหลังโหลดข้อมูลเสร็จ (ตอนนี้ยังไม่รู้ว่าตารางประวัติมีไหม — เดิมจดตรงนี้เลยหายทุกครั้ง)
     document.getElementById('loginBg').style.display = 'none';
     renderWho();
     startApp();
@@ -1710,6 +1710,12 @@ function deniedQuery(op){
    ไม่ต้องแก้จุดบันทึกทีละที่ · ถ้ายังไม่รัน jj_audit.sql แอปทำงานปกติ แค่ไม่จด */
 const AUDIT_SKIP = new Set(['payroll_audit','pnl_users']);
 const _dbFrom = db.from.bind(db);
+let auditPendingLogin = false, auditLastErr = '';
+function auditFail(e){   // จดไม่ได้ไม่ล้มงานหลัก แต่ต้องบอกให้รู้ (เดิมเงียบ — หน้าประวัติว่างโดยไม่รู้สาเหตุ)
+  const first = !auditLastErr;
+  auditLastErr = String((e && e.message) || e || 'ไม่ทราบสาเหตุ');
+  if(first) toast('⚠️ จดประวัติการทำรายการไม่สำเร็จ: ' + auditLastErr);
+}
 function auditWrite(action, tbl, detail){
   if(!auditReady || !AUTH) return;
   try{
@@ -1717,8 +1723,16 @@ function auditWrite(action, tbl, detail){
       username: AUTH.username, display_name: AUTH.display_name||'',
       action, tbl, detail: String(detail||'').slice(0,800),
       page: (location.hash||'').slice(0,40),
-    }).then(()=>{});
-  }catch(_){ /* จดไม่ได้ไม่ต้องล้มงานหลัก */ }
+    }).then(r => { if(r && r.error) auditFail(r.error); }, auditFail);
+  }catch(e){ auditFail(e); }
+}
+/* จดว่าใครเปิดแอป — ครั้งเดียวต่อแท็บ (รีเฟรช/ลากลงไม่จดซ้ำ) · พิมพ์รหัสในแอป = "เข้าสู่ระบบ" · มาจากหน้าศูนย์รวมแอพ = "เปิดแอป" */
+function auditOpen(){
+  if(!auditReady || !AUTH) return;
+  const login = auditPendingLogin; auditPendingLogin = false;
+  try{ if(!login && sessionStorage.getItem('jjpay_opened') === AUTH.username) return;
+       sessionStorage.setItem('jjpay_opened', AUTH.username); }catch(_){}
+  auditWrite(login ? 'login' : 'open', '', login ? 'เข้าสู่ระบบ (พิมพ์รหัสในแอป)' : 'เปิดแอป');
 }
 function auditDetailOf(op, args, q){
   let d = '';
@@ -5915,7 +5929,7 @@ const AUD_TBL_TH = { employees:'ข้อมูลพนักงาน', punche
   mou_entries:'หัก MOU รายงวด', doc_borrows:'สมุดยืมเอกสาร', fine_entries:'แก้รายการหักอัตโนมัติ', loans:'พนักงานยืมเงิน',
   loan_entries:'ผ่อนเงินยืมรายงวด', sso_entries:'ประกันสังคม', tips:'ทิปประจำงวด', shifts:'กะการทำงาน',
   devices:'เครื่องสแกน', org_positions:'แผนก/ตำแหน่ง' };
-const AUD_ACT_TH = { insert:'➕ เพิ่ม', update:'✏️ แก้ไข', upsert:'💾 บันทึก', delete:'🗑️ ลบ', login:'🔓 เข้าสู่ระบบ', logout:'🔒 ออกจากระบบ' };
+const AUD_ACT_TH = { insert:'➕ เพิ่ม', update:'✏️ แก้ไข', upsert:'💾 บันทึก', delete:'🗑️ ลบ', login:'🔓 เข้าสู่ระบบ', open:'🚪 เปิดแอป', logout:'🔒 ออกจากระบบ' };
 const audEsc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function audEmpNames(detail){
   const names = new Set();
@@ -5973,7 +5987,8 @@ async function renderAudit(){
     }
     return true;
   });
-  box.innerHTML = `<div class="card" style="padding:0"><div class="tbl-wrap"><table>
+  box.innerHTML = (auditLastErr ? `<div class="warn-note" style="background:var(--red-soft);border-color:#f3c4b5;color:#a03014">⚠️ <b>จดประวัติล่าสุดไม่สำเร็จ:</b> ${audEsc(auditLastErr)}</div>` : '') +
+  `<div class="card" style="padding:0"><div class="tbl-wrap"><table>
     <tr><th style="white-space:nowrap">เวลา</th><th>ผู้ใช้</th><th style="white-space:nowrap">การกระทำ</th><th style="white-space:nowrap">ส่วน</th><th>พนักงานที่เกี่ยวข้อง</th><th>รายละเอียด</th></tr>
     ${shown.map(r=>{
       const emp = audEmpNames(r.detail);
@@ -5985,7 +6000,8 @@ async function renderAudit(){
         <td>${audEsc(emp)}</td>
         <td style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--ink-soft)" title="${audEsc(r.detail)}">${audEsc(r.detail)}</td>
       </tr>`;
-    }).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--ink-soft)">ยังไม่มีรายการ${fu||fa||fq?'ตามเงื่อนไขที่กรอง':''}</td></tr>`}
+    }).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--ink-soft)">ยังไม่มีรายการ${fu||fa||fq?'ตามเงื่อนไขที่กรอง':
+      '<br><span style="font-size:12.5px">ระบบเริ่มจดตั้งแต่ติดตั้งตารางประวัติ — ก่อนหน้านั้นไม่มีบันทึก · ลองแก้ข้อมูลสักอย่าง (เช่น ใส่ OT) แล้วกด 🔄 โหลดใหม่</span>'}</td></tr>`}
   </table></div></div>
   <div style="font-size:12px;color:var(--ink-soft);margin-top:8px">แสดง ${shown.length} จาก ${rows.length} รายการล่าสุด (เก็บสูงสุด 400 รายการต่อการแสดงผล · ระบบจดอัตโนมัติทุกการบันทึก/แก้ไข/ลบ)</div>`;
 }
@@ -6001,6 +6017,7 @@ async function startApp(){
   if(NO_ACCESS){ busy(false); return; }
   loadAll().then(()=>{
     applyPermUI();
+    auditOpen();
     startRealtime(); updPeriodHint(); renderOrg(); renderMwDays();
     const p0 = location.hash.replace('#','');
     if(p0 && p0 !== 'today' && document.getElementById('page-'+p0)) go(p0);
