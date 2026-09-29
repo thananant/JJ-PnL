@@ -289,6 +289,8 @@ header.top{padding-top:calc(12px + env(safe-area-inset-top))}
 .fnres{margin-top:10px;font-size:13px;line-height:1.7;padding:10px 13px;border-radius:11px;
   background:var(--bg2);border:1px solid var(--line);display:none}
 .fnres.on{display:block}
+.rqstate{margin-top:10px;font-size:13px;line-height:1.7;padding:9px 13px;border-radius:11px;
+  background:rgba(255,255,255,.04);border:1px dashed var(--line)}
 
 .jjf{text-align:left}
 .jjf label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin:0 0 5px 2px}
@@ -930,6 +932,7 @@ function setupCard(){
       '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">'+
         '<button class="btn okb" onclick="saveGid()">💾 บันทึกกลุ่ม</button>'+
         '<button class="btn" onclick="testFn()">🔎 ทดสอบส่งข้อความ</button></div>'+
+      '<div class="rqstate" id="rqState">'+rqStateHtml()+'</div>'+
       '<div class="fnres" id="fnRes"></div>'+
       '<div class="warnbox" style="margin-top:14px">ต้องทำครั้งเดียวก่อนใช้งาน — '+
         '<a href="javascript:" onclick="document.getElementById(\'fnSteps\').classList.toggle(\'open\')" '+
@@ -945,17 +948,38 @@ function setupCard(){
           '<li>Edge Functions → <b>Secrets</b> → เพิ่ม <code>LINE_TOKEN</code> อย่างเดียว<br>'+
             '<span style="color:var(--mut);font-size:12.5px">= Channel access token ของบอท (ค่าเดียวกับใน Cloudflare Worker ของระบบเงินเดือน) · '+
             '<b>ไอดีกลุ่มไม่ต้องใส่ที่นั่น</b> ใส่ในช่องข้างบนนี้ได้เลย</span></li>'+
+          '<li>กลับมาที่หน้านี้ → กด <b>🔎 ทดสอบส่งข้อความ</b><br>'+
+            '<span style="color:var(--mut);font-size:12.5px">ขึ้น ✅ = แจ้งเตือนใช้ได้ และ<b>ปุ่ม 🔑 ลืมรหัสผ่านจะโผล่ที่หน้าศูนย์รวมแอพเอง</b> '+
+            '(ปุ่มซ่อนไว้จนกว่าจะทดสอบผ่าน — กันฟังก์ชันรุ่นเก่าส่งข้อความผิดเข้ากลุ่ม)</span></li>'+
         '</ol>'+
         '<button class="btn" style="margin-top:10px" onclick="copyFn()">📋 คัดลอกโค้ด</button>'+
       '</div></div>'+
     '</div></div>';
 }
+/* ปุ่ม "ลืมรหัสผ่าน" ที่หน้าศูนย์รวมแอพโชว์ไหม — อ่านจากธง reset_ready (ตั้งตอนกด 🔎 ทดสอบผ่าน)
+   เจ้าของเคย deploy แล้วงงว่าทำไมปุ่มไม่โผล่ (2026-09-29) เพราะขั้นตอนเดิมไม่ได้บอกว่าต้องกดทดสอบ */
+const RQ_MIN='2026-09-29.3';   // ต้องตรงกับ RESET_MIN ใน index.html (ธงต่ำกว่านี้ = หน้าแรกยังซ่อนปุ่ม)
+function rqStateHtml(){
+  const v=(S.lineCfg&&S.lineCfg.ready)||'', need=fnVer();
+  if(!v||verCmp(v,RQ_MIN)<0)return '⏳ ปุ่ม <b>🔑 ลืมรหัสผ่าน</b> ที่หน้าศูนย์รวมแอพ <b>ยังซ่อนอยู่</b> — '+
+    'deploy ฟังก์ชันแล้วกด <b>🔎 ทดสอบส่งข้อความ</b> ระบบจะเปิดให้เอง';
+  return '✅ ปุ่ม <b>🔑 ลืมรหัสผ่าน</b> เปิดอยู่ที่หน้าศูนย์รวมแอพ '+
+    '<span style="font-size:12px;color:var(--mut)">(โค้ดที่ deploy อยู่ v'+esc(v)+')</span>'+
+    (need&&verCmp(v,need)<0?'<br><span style="font-size:12px;color:var(--mut)">มีโค้ดรุ่นใหม่กว่า (v'+esc(need)+
+      ') — กด 📋 คัดลอกโค้ด ไป Deploy ทับเมื่อสะดวก แล้วกดทดสอบอีกครั้ง</span>':'');
+}
+function paintRqState(){
+  const el=document.getElementById('rqState'); if(el)el.innerHTML=rqStateHtml();
+}
 /* โหลดค่าที่ตั้งไว้ + รายชื่อกลุ่มที่บอทเคยเห็น (ตาราง line_groups ของระบบนับสต๊อก) */
 async function loadLineCfg(){
-  S.lineCfg={gid:''}; S.lineGroups=[];
+  S.lineCfg={gid:'',ready:''}; S.lineGroups=[];
   try{
-    const r=await sel('pnl_settings',"select=val&id=eq.line_group_id");
-    if(r&&r[0])S.lineCfg.gid=String(r[0].val||'').trim();
+    const r=await sel('pnl_settings',"select=id,val&id=in.(line_group_id,reset_ready)");
+    (r||[]).forEach(x=>{
+      if(x.id==='line_group_id')S.lineCfg.gid=String(x.val||'').trim();
+      if(x.id==='reset_ready')S.lineCfg.ready=String(x.val||'').trim();
+    });
   }catch(e){}
   try{
     S.lineGroups=await sel('line_groups','select=group_id,name,seen_at&order=seen_at.desc.nullslast&limit=200');
@@ -977,7 +1001,7 @@ async function saveGid(){
     const body={id:'line_group_id',val:v,updated_at:new Date().toISOString(),
       updated_by:(S.user&&S.user.username)||'?'};
     await api('POST','pnl_settings?on_conflict=id',body,'resolution=merge-duplicates,return=minimal');
-    S.lineCfg={gid:v};
+    S.lineCfg.gid=v;
     await alog('(ระบบ)', v?'ตั้งกลุ่ม LINE แจ้งคนสมัครใหม่':'ยกเลิกกลุ่ม LINE แจ้งคนสมัครใหม่', v);
     box.innerHTML=v?'✅ บันทึกแล้ว — กด <b>🔎 ทดสอบส่งข้อความ</b> ดูว่าเข้ากลุ่มถูกไหม'
                   :'✅ ล้างค่าแล้ว — จะไม่มีแจ้งเตือน LINE';
@@ -1057,6 +1081,7 @@ async function testFn(){
       const v=(/\|\s*v([0-9.\-]+)/.exec(t)||[])[1]||'', need=fnVer();
       const fresh=!!v&&verCmp(v,need)>=0;
       await setResetFlag(fresh?v:'');
+      if(S.lineCfg){ S.lineCfg.ready=fresh?v:''; paintRqState(); }
       box.innerHTML='✅ <b>แจ้งเตือนใบสมัครใช้งานได้</b> — ลองดูในกลุ่ม LINE จะมีข้อความทดสอบเด้งเข้าไป<br>'+
         (fresh
           ? '✅ <b>ระบบลืมรหัสผ่านเปิดใช้แล้ว</b> — ปุ่ม 🔑 ลืมรหัสผ่าน โผล่ที่หน้าศูนย์รวมแอพแล้ว'+
