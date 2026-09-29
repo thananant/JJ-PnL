@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-09-29.3";
+const VERSION = "2026-09-29.4";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -61,6 +61,10 @@ const GEM_FP = GEMINI_KEY ? await sha8(GEMINI_KEY) : "";
 let gemLastCall = 0;
 let gemUsedDelta = 0;    // จำนวนคำขอ Gemini ที่ยังไม่ได้บันทึกลงฐานข้อมูล
 let aihDirty = false;
+// ทำไมคำขอล่าสุดไม่ได้ผล: 'content' = Gemini ตอบแต่ใช้ไม่ได้ (บล็อก/ไม่ครบ — ส่งซ้ำก็ไม่ผ่าน)
+// 'transient' = ล่ม/ช้า/เน็ตหลุด/ชนโควต้าต่อนาที (ลองใหม่ทีหลังได้) · ใช้ตัดสินว่าจะติดป้าย "AI ไม่ผ่าน" หรือแค่รอรอบหน้า
+let gemLastFail: "" | "content" | "transient" = "";
+let gemKeyCleared = false; // เจ้าของแก้คีย์/เปิด API แล้วกดตรวจใหม่ → ล้างสถานะ "คีย์ใช้ไม่ได้" ทั้งในเครื่องและในฐานข้อมูล
 const AIH: { gemini: any; claude: any } = { gemini: {}, claude: {} };
 function laParts(t: number) {
   const f = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -123,8 +127,10 @@ async function flushAiHealth() {
     g.used = Math.max(g.used ?? 0, used);
     const down: Record<string, number> = {}, why: Record<string, string> = {};
     for (const src of [cg, g]) for (const [m, u] of Object.entries(src.down ?? {})) {
+      if (src === cg && gemKeyCleared && (cg.why?.[m] ?? "quota") === "key" && !(g.down?.[m] > Date.now())) continue;
       if (Number(u) > Date.now() && Number(u) > (down[m] ?? 0)) { down[m] = Number(u); why[m] = src.why?.[m] ?? "quota"; }
     }
+    gemKeyCleared = false;
     const cl = notFuture(cg.last);
     const cc = notFuture(cur.claude);
     const val = {
@@ -158,8 +164,16 @@ function looseJson(t: string): any | null {
   if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch { /* */ } }
   return null;
 }
+// ล้างสถานะ "คีย์ใช้ไม่ได้" (ใช้ตอนกดตรวจสถานะ) — ถ้าคีย์ยังเสียจริง คำขอถัดไปจะติดสถานะกลับมาเอง
+function gemClearKeyDown() {
+  const g = gemState();
+  for (const m of Object.keys(g.down)) if (g.why[m] === "key") { delete g.down[m]; delete g.why[m]; gemKeyCleared = true; aihDirty = true; }
+}
 async function geminiJson(system: string, user: string, maxTokens = 2500): Promise<any | null> {
+  gemLastFail = "transient";
   if (!GEMINI_KEY) return null;
+  let sawContent = false, sawTransient = false;
+  const done = () => { gemLastFail = sawContent && !sawTransient ? "content" : "transient"; return null; };
   for (const model of GEMINI_MODELS) {
     if (Number(gemState().down[model] ?? 0) > Date.now()) continue; // รุ่นนี้หมดโควต้าวันนี้/ใช้ไม่ได้
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -183,13 +197,14 @@ async function geminiJson(system: string, user: string, maxTokens = 2500): Promi
             },
           }),
         });
-      } catch (e) { noteGem(model, 0, "เชื่อมต่อไม่ได้: " + scrub(e)); break; }
+      } catch (e) { sawTransient = true; noteGem(model, 0, "เชื่อมต่อไม่ได้: " + scrub(e)); break; }
       if (r.ok) {
         gemUsedDelta++;
         const d = await r.json().catch(() => null);
         const t = (d?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
         const j = looseJson(t);
-        if (j) { noteGem(model, 200, ""); return j; }
+        if (j) { noteGem(model, 200, ""); gemLastFail = ""; return j; }
+        sawContent = true;
         noteGem(model, 200, "ตอบไม่เป็น JSON (" + (d?.candidates?.[0]?.finishReason ?? d?.promptFeedback?.blockReason ?? "ว่าง") + ")");
         break; // ลองรุ่นถัดไป
       }
@@ -204,28 +219,30 @@ async function geminiJson(system: string, user: string, maxTokens = 2500): Promi
         }
         noteGem(model, 429, "ชนโควต้าต่อนาที");
         if (attempt === 0) { await sleep(Math.min(Math.max(retry, 5), 20) * 1000); continue; }
+        sawTransient = true;
         break;
       }
       if (r.status === 400 && /API key not valid|API_KEY_INVALID/i.test(txt)) {
         for (const m of GEMINI_MODELS) gemDown(m, 3600000, "key");
         noteGem(model, 400, "GEMINI_API_KEY ไม่ถูกต้อง — สร้างคีย์ใหม่ที่ aistudio.google.com/apikey");
-        return null;
+        sawTransient = true; return done();
       }
       if (r.status === 403) {
         for (const m of GEMINI_MODELS) gemDown(m, 3600000, "key");
         noteGem(model, 403, "คีย์ไม่มีสิทธิ์ใช้ Gemini API (ถูกจำกัด API หรือยังไม่เปิด Generative Language API): " + txt.slice(0, 140));
-        return null;
+        sawTransient = true; return done();
       }
       if (r.status === 404 || (r.status === 400 && /not found|not supported|no longer|unavailable/i.test(txt))) {
         gemDown(model, 6 * 3600000, "unsupported"); // โปรเจกต์นี้ใช้รุ่นนี้ไม่ได้ → ข้ามไปรุ่นถัดไป
         noteGem(model, r.status, "รุ่นนี้ใช้ไม่ได้กับคีย์นี้: " + txt.slice(0, 140));
         break;
       }
-      noteGem(model, r.status, txt.slice(0, 180)); // 5xx ฯลฯ → ลองรุ่นถัดไป
+      if (r.status === 400) sawContent = true; else sawTransient = true; // 400 = ข้อความนี้เอง · 5xx ฯลฯ = ชั่วคราว
+      noteGem(model, r.status, txt.slice(0, 180)); // ลองรุ่นถัดไป
       break;
     }
   }
-  return null;
+  return done();
 }
 // ทำไม Gemini ใช้ไม่ได้ตอนนี้: 'quota' = โควต้าวันนี้หมด (รอรีเซ็ต) · 'key' = คีย์ผิด/ไม่มีสิทธิ์ · 'unsupported' = ไม่มีรุ่นที่ใช้ได้
 function gemWhy(): "ok" | "no_key" | "quota" | "key" | "unsupported" {
@@ -252,9 +269,11 @@ function noteClaudeOk() {
 }
 
 // จับคู่คำถามลูกค้ากับ FAQ แบบไม่ใช้ AI (ฟรี) — ใช้ตอน AI ไม่ว่าง
+// ทำข้อความให้เทียบกันได้: ตัวเล็ก ตัดช่องว่าง/เครื่องหมาย และคำลงท้าย (เฉพาะท้ายประโยค)
+const faqNorm = (t: string) => String(t ?? "").toLowerCase().replace(/[\s\p{P}\p{S}ๆ]+/gu, "")
+  .replace(/(ครับ|คับ|ค่ะ|คะ|นะ|จ้า|จ้ะ|ป่ะ|มั้ย|ไหม|หรอ|เหรอ|บ้าง|หน่อย)+$/, "");
 function bigrams(t: string) {
-  const s = String(t ?? "").toLowerCase().replace(/[\s\p{P}\p{S}ๆ]+/gu, "")
-    .replace(/(ครับ|คับ|ค่ะ|คะ|นะ|จ้า|จ้ะ|ป่ะ|มั้ย|ไหม|หรอ|เหรอ|บ้าง|หน่อย)+$/, ""); // ตัดคำลงท้ายเฉพาะท้ายประโยค
+  const s = faqNorm(t);
   const out = new Map<string, number>();
   for (let i = 0; i < s.length - 1; i++) { const k = s.slice(i, i + 2); out.set(k, (out.get(k) ?? 0) + 1); }
   return out;
@@ -279,13 +298,14 @@ function faqMatch(text: string, faq: { q: string; a: string }[]): { q: string; a
 }
 // คำที่ทำให้ความหมายกลับ/เป็นเรื่องร้องเรียน — ถ้าลูกค้าพูดแต่คำถามใน FAQ ไม่มี ห้ามตอบเอง
 const FAQ_NEG = ["ไม่", "ยกเลิก", "แย่", "ทำไม", "ช้า", "ผิด", "เสีย", "หาย", "โกง", "คืนเงิน", "ร้องเรียน", "แพง"];
-// ตรงเป๊ะ (คำถามใน FAQ อยู่ในข้อความครบ + ไม่มีคำปฏิเสธเกินมา) = ตอบเองได้ · คล้าย ๆ = เก็บเป็นร่างให้คนกดส่ง
+// ตรงเป๊ะ (ข้อความเหมือนคำถามใน FAQ หลังตัดช่องว่าง/คำลงท้าย) = ตอบเองได้ · คล้าย ๆ = เก็บเป็นร่างให้คนกดส่ง
+// (เทียบแบบคล้ายอย่างเดียวไม่พอ — "เปิดกี่โมง" มีคำว่า "ปิดกี่โมง" อยู่ข้างในทั้งก้อน)
 function faqReply(text: string, faq: { q: string; a: string }[], escalate: string[]) {
   if ((escalate ?? []).some((k) => k && text.includes(k))) return null;
   const hit = faqMatch(text, faq);
   if (!hit) return null;
   const negExtra = FAQ_NEG.some((w) => text.includes(w) && !hit.q.includes(w));
-  const sure = hit.cover >= 0.999 && hit.score >= 0.8 && !negExtra;
+  const sure = faqNorm(text) === faqNorm(hit.q) && !negExtra;
   return { reply: hit.a, needs_human: !sure, reason: `${sure ? "faq-match" : "faq-match-uncertain"} ${hit.score.toFixed(2)}: ${hit.q}` };
 }
 
@@ -490,32 +510,42 @@ async function gbpSyncInner(full: boolean) {
   const settings = await getSettings();
   const startRt = settings.channels?.gbp?.rt_enc;
   const gbp = settings.channels?.gbp ?? {};
-  if (!gbp.locations?.length) {
+  // ครั้งแรก หรือเพิ่งเชื่อมบัญชีใหม่: หาโปรไฟล์ใหม่ แล้วคงการจับคู่สาขาเดิม (รวม "ไม่ดึง") ของโปรไฟล์ที่ id ตรงกัน
+  if (!gbp.locations?.length || gbp.rediscover) {
     const d: any = await gbpDiscover(H);
     if (!d.locs) return { ok: false, reason: d.reason };
     gbp.account = d.locs[0].account;
     gbp.locations = d.locs;
-    // บันทึกรายชื่อสาขาทันที ให้หน้าเชื่อมต่อโชว์ให้จับคู่/เลือก "ไม่ดึง" ได้ แม้สาขาไหนดึงรีวิวไม่ผ่าน
-    // (เฉพาะกรณียังเป็นบัญชีเดิม และยังไม่มีใครบันทึกรายชื่อไว้)
     await saveChannels((ch) => {
       const cur = ch.gbp ?? {};
-      if (cur.rt_enc === startRt && !cur.locations?.length) ch.gbp = { ...cur, account: gbp.account, locations: gbp.locations };
+      if (cur.rt_enc !== startRt) return; // ระหว่างนี้มีการเชื่อมบัญชีใหม่อีกรอบ → ไม่ทับ
+      const saved = new Map((cur.locations ?? []).map((l: any) => [l.id, l.branch]));
+      gbp.locations = d.locs.map((l: any) => saved.has(l.id) ? { ...l, branch: saved.get(l.id) ?? l.branch } : l);
+      ch.gbp = { ...cur, account: gbp.account, locations: gbp.locations, rediscover: false };
     });
   }
-  let added = 0, upgraded = 0, seen = 0, marked = 0, partial = false;
+  // ซิงค์ย้อนหลังทั้งหมดทำต่อจากจุดเดิมได้ (หน้า Google ของแต่ละโปรไฟล์) — รอบเดียวไม่ทันใน 150 วิ ก็กดต่อ/วนต่อ
+  const prog: Record<string, { token?: string; done?: boolean }> = full ? { ...(gbp.full_progress?.locs ?? {}) } : {};
+  let added = 0, upgraded = 0, seen = 0, marked = 0, partial = false, okLocs = 0;
   const locErr: Record<string, { error: string; at: string }> = {};
-  let okLocs = 0;
+  const unmapped: string[] = [], failedBranches = new Set<string>();
   for (const loc of gbp.locations) {
     if (loc.branch === "skip") continue; // เจ้าของเลือก "ไม่ดึง" (โปรไฟล์ซ้ำ/ไม่ใช่ของร้าน)
+    // ยังไม่ได้เลือกสาขา = ยังไม่ดึง (กันรีวิวของโปรไฟล์ที่ไม่ใช่ของร้านไหลเข้าระบบก่อนเจ้าของได้เลือก)
+    if (!loc.branch) { unmapped.push(loc.title ?? loc.id); continue; }
+    if (full && prog[loc.id]?.done) { okLocs++; continue; }
+    if (partial) continue; // หมดเวลารอบนี้แล้ว — โปรไฟล์ที่เหลือทำรอบหน้า
     const locPath = `${loc.account ?? gbp.account}/${loc.id}`;
-    let pageToken = "", failed = false;
-    for (let page = 0; page < (full ? 40 : 1); page++) {
-      if (Date.now() - t0 > 110000) { partial = true; break; } // ใกล้ 150 วิ → พอก่อน กดซิงค์ซ้ำได้ (ของที่มีแล้วจะข้ามเร็ว)
+    let pageToken = full ? (prog[loc.id]?.token ?? "") : "", failed = false;
+    for (let page = 0; full || page < 1; page++) {
+      if (Date.now() - t0 > 100000) { partial = true; break; } // ใกล้ 150 วิ → พอก่อน จุดที่ค้างถูกจำไว้
       const rr = await fetch(`https://mybusiness.googleapis.com/v4/${locPath}/reviews?pageSize=50${pageToken ? "&pageToken=" + pageToken : ""}`, { headers: H });
       const rd = await rr.json().catch(() => ({}));
+      if (!rr.ok && full && page === 0 && pageToken) { pageToken = ""; page = -1; continue; } // จุดที่จำไว้หมดอายุ → เริ่มโปรไฟล์นี้ใหม่ (ของที่มีแล้วข้ามเร็ว)
       if (!rr.ok) {
-        // สาขาเดียวพัง (ยังไม่ยืนยัน/ถูกระงับ/ไม่ใช่ของร้าน) ไม่ให้ทุกสาขาหยุดไปด้วย
+        // โปรไฟล์เดียวพัง (ยังไม่ยืนยัน/ถูกระงับ) ไม่ให้ทุกสาขาหยุดไปด้วย — สาขานั้นไปใช้ Place ID แทน (runCron)
         locErr[loc.id] = { error: scrub(JSON.stringify(rd)).slice(0, 200), at: new Date().toISOString() };
+        failedBranches.add(loc.branch);
         failed = true;
         break;
       }
@@ -547,11 +577,10 @@ async function gbpSyncInner(full: boolean) {
         if (epoch && author) {
           let q = sb.from("social_mentions").select("id")
             .eq("channel", "google").like("external_id", "g\\_%")
-            .eq("author_name", author)
+            .eq("author_name", author).eq("branch", loc.branch)
             .gte("posted_at", new Date((epoch - 43200) * 1000).toISOString())
             .lte("posted_at", new Date((epoch + 43200) * 1000).toISOString());
           if (rating != null) q = q.eq("rating", rating);
-          if (loc.branch) q = q.eq("branch", loc.branch);
           const { data } = await q.limit(1);
           old = data?.[0] ?? null;
         }
@@ -561,7 +590,7 @@ async function gbpSyncInner(full: boolean) {
         } else {
           const ins: any = {
             channel: "google", kind: "review", external_id: ext,
-            branch: loc.branch ?? null, author_name: author || null,
+            branch: loc.branch, author_name: author || null,
             text: rv.comment ?? "", rating,
             posted_at: rv.createTime ?? new Date().toISOString(),
             raw: { gbp: locPath, review: rv },
@@ -574,25 +603,32 @@ async function gbpSyncInner(full: boolean) {
         }
       }
       pageToken = rd.nextPageToken ?? "";
+      if (full) prog[loc.id] = { token: pageToken };
       if (!pageToken) break;
     }
+    // โปรไฟล์ที่ดึงจนหมด (หรือพังถาวร) นับว่าเสร็จในรอบซิงค์ทั้งหมดนี้
+    if (full && (failed || (!partial && !prog[loc.id]?.token))) prog[loc.id] = { done: true };
     if (!failed) okLocs++;
-    if (partial) break;
   }
   const errList = Object.entries(locErr);
   if (!okLocs && errList.length) {
     const names = errList.map(([id]) => gbp.locations.find((l: any) => l.id === id)?.title ?? id);
-    return { ok: false, reason: "ดึงรีวิวไม่ได้ทุกสาขา (" + names.join(", ") + "): " + errList[0][1].error };
+    return { ok: false, reason: "ดึงรีวิวไม่ได้ทุกสาขา (" + names.join(", ") + "): " + errList[0][1].error, failed_branches: [...failedBranches] };
   }
+  if (!okLocs && unmapped.length)
+    return { ok: false, reason: "ยังไม่ได้เลือกสาขาให้โปรไฟล์ Google (" + unmapped.join(", ") + ") → หน้าเชื่อมต่อช่องทาง เลือกสาขาหรือ \"ไม่ดึง\" แล้วกด 💾 บันทึกสาขา", unmapped };
+  const allDone = full && gbp.locations.every((l: any) => l.branch === "skip" || !l.branch || prog[l.id]?.done);
   const last_sync = new Date().toISOString();
   await saveChannels((ch) => {
     const cur = ch.gbp ?? {};
     if (cur.rt_enc !== startRt) return; // ระหว่างซิงค์มีการเชื่อมบัญชีใหม่ → ไม่เอาข้อมูลของบัญชีเก่าไปทับ
-    ch.gbp = { ...cur, connected: true, last_sync, loc_errors: locErr,
-      // รายชื่อสาขา/การจับคู่: ใช้ของล่าสุดในฐานข้อมูลเสมอ (เจ้าของอาจกดบันทึกสาขาระหว่างซิงค์)
-      ...(cur.locations?.length ? {} : { account: gbp.account, locations: gbp.locations }) };
+    const next: any = { ...cur, connected: true, last_sync, loc_errors: locErr, unmapped };
+    if (full) next.full_progress = allDone ? null : { at: last_sync, locs: prog };
+    ch.gbp = next; // รายชื่อโปรไฟล์/การจับคู่: ใช้ของล่าสุดในฐานข้อมูลเสมอ (เจ้าของอาจกดบันทึกสาขาระหว่างซิงค์)
   });
-  return { ok: true, added, upgraded, seen, marked, partial, loc_errors: errList.length ? locErr : undefined, locations: gbp.locations };
+  return { ok: true, added, upgraded, seen, marked, partial: full && !allDone,
+    loc_errors: errList.length ? locErr : undefined, failed_branches: [...failedBranches],
+    unmapped: unmapped.length ? unmapped : undefined, locations: gbp.locations };
 }
 
 const TOPICS = ["รสชาติอาหาร", "คุณภาพวัตถุดิบ", "ความหลากหลายของอาหาร", "บริการพนักงาน",
@@ -726,7 +762,9 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
     // ชั้น 2: Gemini (โควต้าฟรี) — ตัดเบอร์โทร/อีเมล/ชื่อผู้เขียนออกก่อนส่ง
     if (!a && gemAvailable() && (mode === "pending" || gemUsedToday() < UPGRADE_DAILY_CAP)) {
       const userG = `${head}\nข้อความ:\n"""${maskPII(body)}"""`;
-      a = normAnalysis(await geminiJson(system + GEMINI_SCHEMA_ANALYSIS, userG, 2500));
+      const gj = await geminiJson(system + GEMINI_SCHEMA_ANALYSIS, userG, 2500);
+      a = normAnalysis(gj);
+      if (gj && !a) gemLastFail = "content";
       if (a) used = "gemini";
     }
     if (!a && mode === "upgrade") {
@@ -735,7 +773,9 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
         reason = !GEMINI_KEY ? "no_ai" : gemAvailable() ? "cap" : gemWhy();
         break;
       }
-      // Gemini ว่างแต่ตอบรายการนี้ไม่ได้ (ถูกบล็อก/ตอบไม่ครบ) → ย้ายออกจากคิวอัพเกรด ไม่ให้ขวางรายการอื่นทุกรอบ
+      // Gemini ล่ม/ช้า/เน็ตหลุด = ชั่วคราว → หยุดไว้ รอบหน้าค่อยลองใหม่ (ห้ามติดป้ายถาวร)
+      if (gemLastFail !== "content") { deferred = rows.length - i; reason = "busy"; break; }
+      // Gemini ตอบแต่ใช้ไม่ได้กับรายการนี้ (ถูกบล็อก/ตอบไม่ครบ) → ย้ายออกจากคิวอัพเกรด ไม่ให้ขวางรายการอื่นทุกรอบ
       await sb.from("social_mentions").update({ ai_summary: "[เบื้องต้น·AI ไม่ผ่าน]" + String(r.ai_summary ?? "").replace(/^\[เบื้องต้น\]/, "") }).eq("id", r.id);
       skipped++;
       continue;
@@ -749,11 +789,13 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
         ai_score: Math.max(0, Math.min(100, a.ai_score)),
         topics: a.topics, issues: a.issues, praises: a.praises, staff: a.staff,
         visit_slot: a.visit_slot,
-        branch: r.branch ?? (branchCodes.includes(a.branch) ? a.branch : null),
         ai_summary: a.summary, ai_reply: a.reply,
         analyzed_at: new Date().toISOString(),
       }).eq("id", r.id);
       if (ue) throw ue;
+      // สาขาที่ AI เดา: เติมเฉพาะแถวที่ยังไม่มีสาขาจริง ๆ (ระหว่างวิเคราะห์ เจ้าของอาจเพิ่งกำหนดสาขาให้แล้ว)
+      if (!r.branch && branchCodes.includes(a.branch))
+        await sb.from("social_mentions").update({ branch: a.branch }).eq("id", r.id).is("branch", null);
       n++;
     } catch (e) {
       console.error("analyze", r.id, e);
@@ -828,7 +870,7 @@ function avg(a: number[]) { return a.length ? Math.round(a.reduce((s, x) => s + 
 // throttleH = ดึงอัตโนมัติได้ทุกกี่ชั่วโมง (กดปุ่มในแอป = 0 คือดึงทันที)
 // Google คิดเงิน Place Details ที่ขอ field "reviews" ที่ SKU แพงสุด (ฟรีแค่ 1,000 ครั้ง/เดือน)
 // ทุก 3 ชม. × 2 สาขา = ~480 ครั้ง/เดือน → อยู่ในโควต้าฟรี
-async function pollGoogle(placesIn?: { place_id: string; branch: string }[], throttleH = 0, manual = false) {
+async function pollGoogle(placesIn?: { place_id: string; branch: string }[], throttleH = 0, manual = false, onlyBranches?: string[]) {
   if (!GOOGLE_KEY) return { ok: false, reason: "ยังไม่ได้ตั้ง secret GOOGLE_API_KEY (หรือ GOOGLE_MAPS_API_KEY)" };
   const settings = await getSettings();
   if (throttleH > 0) {
@@ -839,8 +881,12 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[], thr
       return manual ? { ok: false, reason } : { ok: true, added: 0, skipped: true, reason };
     }
   }
-  const places: { place_id: string; branch: string }[] =
-    (placesIn?.length ? placesIn : settings.channels?.google_places) ?? [];
+  const saved: { place_id: string; branch: string }[] = Array.isArray(settings.channels?.google_places) ? settings.channels.google_places : [];
+  let places: { place_id: string; branch: string }[] = placesIn?.length ? placesIn : saved;
+  if (onlyBranches) {
+    places = places.filter((p) => onlyBranches.includes(p.branch));
+    if (!places.length) return { ok: true, added: 0, skipped: true, reason: "ไม่มี Place ID ของสาขาที่ Business Profile ดึงไม่ได้" };
+  }
   if (!places.length) return { ok: false, reason: "ยังไม่ได้ใส่ place_id ในหน้าเชื่อมต่อ" };
   const stats: Record<string, unknown> = {};
   let added = 0;
@@ -1170,8 +1216,11 @@ async function runCron() {
       ? await gbpSync(false).catch((e) => ({ ok: false, reason: String(e) }))
       : { ok: false, reason: "ยังไม่ได้เชื่อมบัญชี Google Business" };
     if (!g.ok) {
-      const p = await pollGoogle(undefined, 3).catch((e) => ({ ok: false, reason: String(e) }));
+      const p = await pollGoogle(undefined, 3).catch((e) => ({ ok: false, reason: scrub(e) }));
       g = { gbp: g.reason, places: p };
+    } else if (g.failed_branches?.length) {
+      // บางโปรไฟล์ดึงไม่ได้ → สาขานั้นใช้ Place ID แทน (ประหยัดโควต้าเหมือนเดิม: ทุก 3 ชม.)
+      g.places = await pollGoogle(undefined, 3, false, g.failed_branches).catch((e) => ({ ok: false, reason: scrub(e) }));
     }
     const left = () => 120000 - (Date.now() - t0); // ฟังก์ชันถูกตัดที่ 150 วิ เผื่อไว้
     const a = await analyzeMentions(undefined, 20, Math.max(10000, left() - 15000));
@@ -1238,6 +1287,17 @@ Deno.serve(async (req) => {
     switch (b.action) {
       case "analyze":     out = await analyzeMentions(b.ids, Math.min(b.limit ?? 8, 20), 95000); break;
       case "upgrade_rules": out = await analyzeMentions(undefined, Math.min(b.limit ?? 8, 20), 95000, "upgrade"); break;
+      case "reset_ai_failed": {   // ให้ AI ลองรายการที่เคยอ่านไม่ผ่านอีกครั้ง
+        const TAG = "[เบื้องต้น·AI ไม่ผ่าน]";
+        const { data } = await sb.from("social_mentions").select("id,ai_summary").like("ai_summary", TAG + "%").limit(500);
+        let n = 0;
+        for (const r of data ?? []) {
+          const { error } = await sb.from("social_mentions").update({ ai_summary: "[เบื้องต้น]" + String(r.ai_summary).slice(TAG.length) }).eq("id", r.id);
+          if (!error) n++;
+        }
+        out = { ok: true, reset: n };
+        break;
+      }
       case "summary": {
         // cron เรียกแบบไม่ส่ง wait → ทำเบื้องหลังแล้วตอบทันที · กดจากแอป (wait:true) → รอผล
         if (b.wait) out = await runSummary(b.date, b.span ?? "daily");
@@ -1282,14 +1342,17 @@ Deno.serve(async (req) => {
         const st = m0 ?? await getSettings();
         const ch = st.channels ?? {};
         // ยังไม่เคยเรียก Gemini ใน 6 ชม. → ลองยิงสั้น ๆ 1 ครั้ง ให้รู้ว่าคีย์/รุ่นใช้ได้จริง
+        // กดตรวจใหม่หลังแก้คีย์/เปิด API → ลองใหม่ทันที ไม่ต้องรอ 1 ชม.
+        if (GEMINI_KEY && gemWhy() === "key") gemClearKeyDown();
         const gl = AIH.gemini.last;
-        if (GEMINI_KEY && gemAvailable() && (!gl || Date.now() - Date.parse(gl.at) > 6 * 3600000))
+        if (GEMINI_KEY && gemAvailable() && (!gl || [400, 403].includes(Number(gl.status)) || Date.now() - Date.parse(gl.at) > 6 * 3600000))
           await geminiJson("ตอบเป็น JSON เท่านั้น", 'ตอบกลับ {"ok":true}', 50);
-        const [cnt, lastA, rulesN, line, fb] = await Promise.all([
+        const [cnt, lastA, rulesN, line, fb, failN] = await Promise.all([
           sb.from("social_mentions").select("id", { count: "exact", head: true }).is("analyzed_at", null),
           sb.from("social_mentions").select("analyzed_at").not("analyzed_at", "is", null).order("analyzed_at", { ascending: false }).limit(1),
           sb.from("social_mentions").select("id", { count: "exact", head: true }).like("ai_summary", "[เบื้องต้น]%"),
           lineStatus(), fbStatus(),
+          sb.from("social_mentions").select("id", { count: "exact", head: true }).like("ai_summary", "[เบื้องต้น·AI ไม่ผ่าน]%"),
         ]);
         const g = gemState();
         out = {
@@ -1311,14 +1374,15 @@ Deno.serve(async (req) => {
             gbp_connected: !!ch.gbp?.rt_enc, gbp_last_sync: ch.gbp?.last_sync ?? null,
             gbp_last_error: ch.gbp?.last_error ? scrub(ch.gbp.last_error) : null, gbp_last_error_at: ch.gbp?.last_error_at ?? null,
             gbp_reconnect: /invalid_grant/.test(String(ch.gbp?.last_error ?? "")),
-            places: (ch.google_places ?? []).length, places_last_poll: ch.google_last_poll ?? null,
+            places: Array.isArray(ch.google_places) ? ch.google_places.length : 0, places_last_poll: ch.google_last_poll ?? null,
+            gbp_full_pending: !!ch.gbp?.full_progress, gbp_unmapped: Array.isArray(ch.gbp?.unmapped) ? ch.gbp.unmapped.length : 0,
             places_last_result: ch.google_last_result ? { ...ch.google_last_result,
               diag: (ch.google_last_result.diag ?? []).map((d: any) => ({ ...d, http: Number(d.http) || 0, newest_api: Number(d.newest_api) || 0 })) } : null,
             gbp_loc_errors: ch.gbp?.loc_errors ?? null,
           },
           cron: st.cron ?? null,
           line, facebook: fb,
-          pending_analysis: cnt.count ?? 0, rules_only: rulesN.count ?? 0,
+          pending_analysis: cnt.count ?? 0, rules_only: rulesN.count ?? 0, ai_failed: failN.count ?? 0,
           last_analyzed: lastA.data?.[0]?.analyzed_at ?? null,
         };
         break;

@@ -10,7 +10,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-09-29.3";
+const VERSION = "2026-09-29.4";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // ใช้ชื่อเฉพาะของ JJ Social — อย่าสับสนกับ LINE_SECRET/LINE_TOKEN ซึ่งเป็นของ OA ระบบอื่น
@@ -62,6 +62,10 @@ const GEM_FP = GEMINI_KEY ? await sha8(GEMINI_KEY) : "";
 let gemLastCall = 0;
 let gemUsedDelta = 0;    // จำนวนคำขอ Gemini ที่ยังไม่ได้บันทึกลงฐานข้อมูล
 let aihDirty = false;
+// ทำไมคำขอล่าสุดไม่ได้ผล: 'content' = Gemini ตอบแต่ใช้ไม่ได้ (บล็อก/ไม่ครบ — ส่งซ้ำก็ไม่ผ่าน)
+// 'transient' = ล่ม/ช้า/เน็ตหลุด/ชนโควต้าต่อนาที (ลองใหม่ทีหลังได้) · ใช้ตัดสินว่าจะติดป้าย "AI ไม่ผ่าน" หรือแค่รอรอบหน้า
+let gemLastFail: "" | "content" | "transient" = "";
+let gemKeyCleared = false; // เจ้าของแก้คีย์/เปิด API แล้วกดตรวจใหม่ → ล้างสถานะ "คีย์ใช้ไม่ได้" ทั้งในเครื่องและในฐานข้อมูล
 const AIH: { gemini: any; claude: any } = { gemini: {}, claude: {} };
 function laParts(t: number) {
   const f = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -124,8 +128,10 @@ async function flushAiHealth() {
     g.used = Math.max(g.used ?? 0, used);
     const down: Record<string, number> = {}, why: Record<string, string> = {};
     for (const src of [cg, g]) for (const [m, u] of Object.entries(src.down ?? {})) {
+      if (src === cg && gemKeyCleared && (cg.why?.[m] ?? "quota") === "key" && !(g.down?.[m] > Date.now())) continue;
       if (Number(u) > Date.now() && Number(u) > (down[m] ?? 0)) { down[m] = Number(u); why[m] = src.why?.[m] ?? "quota"; }
     }
+    gemKeyCleared = false;
     const cl = notFuture(cg.last);
     const cc = notFuture(cur.claude);
     const val = {
@@ -159,8 +165,16 @@ function looseJson(t: string): any | null {
   if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch { /* */ } }
   return null;
 }
+// ล้างสถานะ "คีย์ใช้ไม่ได้" (ใช้ตอนกดตรวจสถานะ) — ถ้าคีย์ยังเสียจริง คำขอถัดไปจะติดสถานะกลับมาเอง
+function gemClearKeyDown() {
+  const g = gemState();
+  for (const m of Object.keys(g.down)) if (g.why[m] === "key") { delete g.down[m]; delete g.why[m]; gemKeyCleared = true; aihDirty = true; }
+}
 async function geminiJson(system: string, user: string, maxTokens = 2500): Promise<any | null> {
+  gemLastFail = "transient";
   if (!GEMINI_KEY) return null;
+  let sawContent = false, sawTransient = false;
+  const done = () => { gemLastFail = sawContent && !sawTransient ? "content" : "transient"; return null; };
   for (const model of GEMINI_MODELS) {
     if (Number(gemState().down[model] ?? 0) > Date.now()) continue; // รุ่นนี้หมดโควต้าวันนี้/ใช้ไม่ได้
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -184,13 +198,14 @@ async function geminiJson(system: string, user: string, maxTokens = 2500): Promi
             },
           }),
         });
-      } catch (e) { noteGem(model, 0, "เชื่อมต่อไม่ได้: " + scrub(e)); break; }
+      } catch (e) { sawTransient = true; noteGem(model, 0, "เชื่อมต่อไม่ได้: " + scrub(e)); break; }
       if (r.ok) {
         gemUsedDelta++;
         const d = await r.json().catch(() => null);
         const t = (d?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
         const j = looseJson(t);
-        if (j) { noteGem(model, 200, ""); return j; }
+        if (j) { noteGem(model, 200, ""); gemLastFail = ""; return j; }
+        sawContent = true;
         noteGem(model, 200, "ตอบไม่เป็น JSON (" + (d?.candidates?.[0]?.finishReason ?? d?.promptFeedback?.blockReason ?? "ว่าง") + ")");
         break; // ลองรุ่นถัดไป
       }
@@ -205,28 +220,30 @@ async function geminiJson(system: string, user: string, maxTokens = 2500): Promi
         }
         noteGem(model, 429, "ชนโควต้าต่อนาที");
         if (attempt === 0) { await sleep(Math.min(Math.max(retry, 5), 20) * 1000); continue; }
+        sawTransient = true;
         break;
       }
       if (r.status === 400 && /API key not valid|API_KEY_INVALID/i.test(txt)) {
         for (const m of GEMINI_MODELS) gemDown(m, 3600000, "key");
         noteGem(model, 400, "GEMINI_API_KEY ไม่ถูกต้อง — สร้างคีย์ใหม่ที่ aistudio.google.com/apikey");
-        return null;
+        sawTransient = true; return done();
       }
       if (r.status === 403) {
         for (const m of GEMINI_MODELS) gemDown(m, 3600000, "key");
         noteGem(model, 403, "คีย์ไม่มีสิทธิ์ใช้ Gemini API (ถูกจำกัด API หรือยังไม่เปิด Generative Language API): " + txt.slice(0, 140));
-        return null;
+        sawTransient = true; return done();
       }
       if (r.status === 404 || (r.status === 400 && /not found|not supported|no longer|unavailable/i.test(txt))) {
         gemDown(model, 6 * 3600000, "unsupported"); // โปรเจกต์นี้ใช้รุ่นนี้ไม่ได้ → ข้ามไปรุ่นถัดไป
         noteGem(model, r.status, "รุ่นนี้ใช้ไม่ได้กับคีย์นี้: " + txt.slice(0, 140));
         break;
       }
-      noteGem(model, r.status, txt.slice(0, 180)); // 5xx ฯลฯ → ลองรุ่นถัดไป
+      if (r.status === 400) sawContent = true; else sawTransient = true; // 400 = ข้อความนี้เอง · 5xx ฯลฯ = ชั่วคราว
+      noteGem(model, r.status, txt.slice(0, 180)); // ลองรุ่นถัดไป
       break;
     }
   }
-  return null;
+  return done();
 }
 // ทำไม Gemini ใช้ไม่ได้ตอนนี้: 'quota' = โควต้าวันนี้หมด (รอรีเซ็ต) · 'key' = คีย์ผิด/ไม่มีสิทธิ์ · 'unsupported' = ไม่มีรุ่นที่ใช้ได้
 function gemWhy(): "ok" | "no_key" | "quota" | "key" | "unsupported" {
@@ -253,9 +270,11 @@ function noteClaudeOk() {
 }
 
 // จับคู่คำถามลูกค้ากับ FAQ แบบไม่ใช้ AI (ฟรี) — ใช้ตอน AI ไม่ว่าง
+// ทำข้อความให้เทียบกันได้: ตัวเล็ก ตัดช่องว่าง/เครื่องหมาย และคำลงท้าย (เฉพาะท้ายประโยค)
+const faqNorm = (t: string) => String(t ?? "").toLowerCase().replace(/[\s\p{P}\p{S}ๆ]+/gu, "")
+  .replace(/(ครับ|คับ|ค่ะ|คะ|นะ|จ้า|จ้ะ|ป่ะ|มั้ย|ไหม|หรอ|เหรอ|บ้าง|หน่อย)+$/, "");
 function bigrams(t: string) {
-  const s = String(t ?? "").toLowerCase().replace(/[\s\p{P}\p{S}ๆ]+/gu, "")
-    .replace(/(ครับ|คับ|ค่ะ|คะ|นะ|จ้า|จ้ะ|ป่ะ|มั้ย|ไหม|หรอ|เหรอ|บ้าง|หน่อย)+$/, ""); // ตัดคำลงท้ายเฉพาะท้ายประโยค
+  const s = faqNorm(t);
   const out = new Map<string, number>();
   for (let i = 0; i < s.length - 1; i++) { const k = s.slice(i, i + 2); out.set(k, (out.get(k) ?? 0) + 1); }
   return out;
@@ -280,13 +299,14 @@ function faqMatch(text: string, faq: { q: string; a: string }[]): { q: string; a
 }
 // คำที่ทำให้ความหมายกลับ/เป็นเรื่องร้องเรียน — ถ้าลูกค้าพูดแต่คำถามใน FAQ ไม่มี ห้ามตอบเอง
 const FAQ_NEG = ["ไม่", "ยกเลิก", "แย่", "ทำไม", "ช้า", "ผิด", "เสีย", "หาย", "โกง", "คืนเงิน", "ร้องเรียน", "แพง"];
-// ตรงเป๊ะ (คำถามใน FAQ อยู่ในข้อความครบ + ไม่มีคำปฏิเสธเกินมา) = ตอบเองได้ · คล้าย ๆ = เก็บเป็นร่างให้คนกดส่ง
+// ตรงเป๊ะ (ข้อความเหมือนคำถามใน FAQ หลังตัดช่องว่าง/คำลงท้าย) = ตอบเองได้ · คล้าย ๆ = เก็บเป็นร่างให้คนกดส่ง
+// (เทียบแบบคล้ายอย่างเดียวไม่พอ — "เปิดกี่โมง" มีคำว่า "ปิดกี่โมง" อยู่ข้างในทั้งก้อน)
 function faqReply(text: string, faq: { q: string; a: string }[], escalate: string[]) {
   if ((escalate ?? []).some((k) => k && text.includes(k))) return null;
   const hit = faqMatch(text, faq);
   if (!hit) return null;
   const negExtra = FAQ_NEG.some((w) => text.includes(w) && !hit.q.includes(w));
-  const sure = hit.cover >= 0.999 && hit.score >= 0.8 && !negExtra;
+  const sure = faqNorm(text) === faqNorm(hit.q) && !negExtra;
   return { reply: hit.a, needs_human: !sure, reason: `${sure ? "faq-match" : "faq-match-uncertain"} ${hit.score.toFixed(2)}: ${hit.q}` };
 }
 
@@ -343,9 +363,10 @@ async function gbpOauth(u: URL): Promise<Response> {
     const { data: cur, error: re } = await sb.from("social_settings").select("val").eq("id", "channels").maybeSingle();
     if (re) return gbpPage(false, "บันทึกการเชื่อมต่อไม่ได้ (อ่านการตั้งค่าไม่ได้) — ลองกดเชื่อมต่อใหม่อีกครั้ง");
     const old = (cur?.val ?? {}).gbp ?? {};
-    // บัญชีใหม่ = เริ่มนับใหม่ทั้งหมด (สาขา/ผลซิงค์/ข้อผิดพลาดของบัญชีเดิมไม่เกี่ยวแล้ว)
-    const { last_error: _e, last_error_at: _ea, loc_errors: _le, last_sync: _ls, ...keep } = old;
-    const val = { ...(cur?.val ?? {}), gbp: { ...keep, rt_enc: enc, connected: true, connected_at: new Date().toISOString(), account: null, locations: null } };
+    // เชื่อมใหม่: ล้างผลซิงค์/ข้อผิดพลาดเดิม แต่คงรายการโปรไฟล์ + การจับคู่สาขา ("ไม่ดึง" ด้วย) ไว้
+    // ซิงค์รอบหน้าจะหาโปรไฟล์ใหม่ (rediscover) แล้วใช้การจับคู่เดิมกับโปรไฟล์ที่ id ตรงกัน
+    const { last_error: _e, last_error_at: _ea, loc_errors: _le, last_sync: _ls, full_progress: _fp, unmapped: _um, ...keep } = old;
+    const val = { ...(cur?.val ?? {}), gbp: { ...keep, rt_enc: enc, connected: true, connected_at: new Date().toISOString(), rediscover: true } };
     const { error: ue } = await sb.from("social_settings").upsert({ id: "channels", val, updated_at: new Date().toISOString() });
     if (ue) return gbpPage(false, "บันทึกการเชื่อมต่อไม่ได้: " + scrub(ue.message));
     return gbpPage(true, "ปิดหน้านี้ได้เลย แล้วกลับไปที่แอป JJ Social → หน้า \"เชื่อมต่อช่องทาง\" → กด \"⟳ ซิงค์รีวิวทั้งหมด\"");
@@ -477,29 +498,31 @@ ${faq ? "\nคำถามที่พบบ่อย:\n" + faq : ""}
 type Sent = { ok: boolean; via?: string; err?: string };
 async function sendLine(replyToken: string | null, userId: string, text: string): Promise<Sent> {
   const msg = { messages: [{ type: "text", text }] };
-  if (replyToken) {
-    const r = await fetch("https://api.line.me/v2/bot/message/reply", {
-      method: "POST",
+  try {
+    if (replyToken) {
+      const r = await fetch("https://api.line.me/v2/bot/message/reply", {
+        method: "POST", signal: AbortSignal.timeout(10000),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${LINE_TOKEN}` },
+        body: JSON.stringify({ replyToken, ...msg }),
+      });
+      if (r.ok) return { ok: true, via: "reply" };
+      console.error("line reply", r.status, scrub(await r.text()).slice(0, 200));
+    }
+    const r2 = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST", signal: AbortSignal.timeout(10000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${LINE_TOKEN}` },
-      body: JSON.stringify({ replyToken, ...msg }),
+      body: JSON.stringify({ to: userId, ...msg }),
     });
-    if (r.ok) return { ok: true, via: "reply" };
-    console.error("line reply", r.status, scrub(await r.text()).slice(0, 200));
-  }
-  const r2 = await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${LINE_TOKEN}` },
-    body: JSON.stringify({ to: userId, ...msg }),
-  });
-  if (r2.ok) return { ok: true, via: "push" };
-  const t = scrub(await r2.text()).slice(0, 160);
-  console.error("line push", r2.status, t);
-  return { ok: false, err: `LINE ${r2.status}${r2.status === 429 ? " (โควต้า push เดือนนี้หมด)" : ""}: ${t}` };
+    if (r2.ok) return { ok: true, via: "push" };
+    const t = scrub(await r2.text()).slice(0, 160);
+    console.error("line push", r2.status, t);
+    return { ok: false, err: `LINE ${r2.status}${r2.status === 429 ? " (โควต้า push เดือนนี้หมด)" : ""}: ${t}` };
+  } catch (e) { return { ok: false, err: "เชื่อมต่อ LINE ไม่ได้: " + scrub(e).slice(0, 120) }; }
 }
 async function sendMessenger(userId: string, text: string): Promise<Sent> {
   try {
     const r = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${FB_PAGE_TOKEN}`, {
-      method: "POST",
+      method: "POST", signal: AbortSignal.timeout(10000),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipient: { id: userId }, messaging_type: "RESPONSE", message: { text } }),
     });
@@ -582,7 +605,7 @@ async function handleLine(body: string) {
     await handleChat({
       channel: "line", threadId, authorName, text,
       replyToken: ev.replyToken ?? null, externalId: ev.message?.id, noBot: !isText,
-    });
+    }).catch((e) => console.error("line event", scrub(e)));
   }
   await flushAiHealth();
 }
@@ -599,7 +622,7 @@ async function handleMeta(body: string) {
       const text = m.message.text ?? "[แนบไฟล์/สติกเกอร์]";
       await handleChat({
         channel, threadId: m.sender.id, text, externalId: m.message.mid, noBot: !m.message.text,
-      });
+      }).catch((e) => console.error("meta event", scrub(e)));
     }
     // คอมเมนต์ (รีวิวเพจ/ratings — Meta ปิดไปแล้วตั้งแต่ 2025 จึงไม่ได้รับอีก)
     for (const ch of entry.changes ?? []) {
