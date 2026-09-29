@@ -2418,11 +2418,24 @@ function allPeriods(){
 }
 function refreshPeriodSelectors(){
   const ps = allPeriods();
-  for(const id of ['periodSel','adjPeriod','detailPeriodSel','calPeriodSel','advPeriodSel','depPeriodSel','mouPeriodSel','loanPeriodSel','ssoPeriodSel']){
+  for(const id of ['periodSel','adjPeriod','detailPeriodSel','advPeriodSel','depPeriodSel','mouPeriodSel','loanPeriodSel','ssoPeriodSel']){
     const sel = document.getElementById(id); const cur = sel.value;
     sel.innerHTML = ps.map(p=>`<option value="${p}">${periodLabel(p)}</option>`).join('') || '<option value="">– ยังไม่มีข้อมูล –</option>';
     if(ps.includes(cur)) sel.value = cur;
   }
+  fillCalMonths();
+}
+/* ปฏิทินเข้างานดูเป็น "เดือนปฏิทิน" 1–สิ้นเดือน (เจ้าของถาม 2026-09-29: ทำไมข้อมูลมีถึงแค่วันที่ 25)
+   เดิมใช้ตัวเลือกงวด 26–25 แต่วาดตารางวันที่ 1–สิ้นเดือน → 26–สิ้นเดือนว่าง และ 26–31 ของเดือนก่อนไม่ถูกวาด */
+const MONTHS_FULL_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const monthLabel = m => { const [y,mo] = m.split('-'); return MONTHS_FULL_TH[+mo-1]+' '+(+y+543); };
+function fillCalMonths(){
+  const sel = document.getElementById('calPeriodSel'); if(!sel) return;
+  const cur = sel.value, set = new Set([bizToday().slice(0,7)]);
+  for(const c in shifts) for(const x of shifts[c]) set.add(x.day.slice(0,7));
+  const ms = [...set].sort().reverse();
+  sel.innerHTML = ms.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
+  sel.value = ms.includes(cur) ? cur : bizToday().slice(0,7);
 }
 
 /* ================= PAY CALC ================= */
@@ -5412,11 +5425,11 @@ function renderToday(){
 
 /* ================= CALENDAR PAGE ================= */
 let calSelDay = null;
-function dayMap(period, branch){
+function dayMap(period, branch, byMonth){   // byMonth = นับตามเดือนปฏิทิน (หน้าปฏิทิน) แทนงวดเงินเดือน
   const m = {}; // day -> [{e, s, wb}]
   for(const e of employees){
     for(const s of (shifts[e.code]||[])){
-      if(periodOfE(e, s.day)!==period) continue;
+      if(byMonth ? s.day.slice(0,7)!==period : periodOfE(e, s.day)!==period) continue;
       const wb = s.workBranch || e.branch || '';
       if(branch && wb !== branch) continue;
       (m[s.day] = m[s.day]||[]).push({e, s, wb});
@@ -5427,12 +5440,12 @@ function dayMap(period, branch){
 const BR_SHORT = { JJLP:'ลพ.', JJRD:'รช.', JJCK:'ครก.', OFFICE:'ออฟ' };
 const BR_COLOR = { JJLP:'#1971c2', JJRD:'#6741d9', JJCK:'#2f9e44', OFFICE:'#b7791f' };
 function renderCalendar(){
-  const period = document.getElementById('calPeriodSel').value || allPeriods()[0] || '';
+  const period = document.getElementById('calPeriodSel').value || bizToday().slice(0,7);   // เดือนปฏิทิน 'YYYY-MM'
   const grid = document.getElementById('calGrid');
   if(!period){ grid.innerHTML = '<div class="empty" style="grid-column:1/-1">ยังไม่มีข้อมูล</div>';
     document.getElementById('calSummary').textContent=''; document.getElementById('calDayPanel').innerHTML=''; return; }
   const bf = document.getElementById('calBranch').value;
-  const dm = dayMap(period, bf);
+  const dm = dayMap(period, bf, true);
   const [y, mo] = period.split('-').map(Number);
   const first = new Date(y, mo-1, 1);
   const daysIn = new Date(y, mo, 0).getDate();
@@ -5474,7 +5487,8 @@ function renderCalendar(){
   const brSum = !bf ? myBranches().filter(b=>mBr[b])
       .map(b=>`${(BR[b]||{}).t} ${mBr[b].toLocaleString()}`).join(' · ') : '';
   document.getElementById('calSummary').innerHTML =
-    totDays? `เปิดงาน ${totDays} วัน · รวม ${totMan.toLocaleString()} คน-วัน · เฉลี่ย ${(totMan/totDays).toFixed(1)} คน/วัน${brSum? ' &nbsp;|&nbsp; '+brSum:''}` : '';
+    (totDays? `เปิดงาน ${totDays} วัน · รวม ${totMan.toLocaleString()} คน-วัน · เฉลี่ย ${(totMan/totDays).toFixed(1)} คน/วัน${brSum? ' &nbsp;|&nbsp; '+brSum:''}` : 'ยังไม่มีข้อมูลเดือนนี้')
+    + ` <span style="font-size:12px">· นับตามวันที่ 1–${daysIn} (งวดเงินเดือนคือ 26–25 ดูที่หน้าสรุปเงินเดือน)</span>`;
   renderCalDay(dm);
 }
 function renderCalDay(dm){

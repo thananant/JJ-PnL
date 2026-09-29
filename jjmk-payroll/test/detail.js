@@ -69,6 +69,20 @@ let fail=0; const ok=(c,m)=>{console.log((c?'  ✓ ':'  ✗ ')+m); if(!c) fail++
     d.querySelector('aside nav button[data-page=detail]').click();
     ok(E(`detailEmpId`)===null && cards().length===3,'กดเมนู "ข้อมูลพนักงาน" = กลับหน้ารวม');
   });
+  console.log('[ปฏิทินเข้างาน = เดือนปฏิทิน 1–สิ้นเดือน]');
+  const d3=mkDom();
+  await run(d3, async (w,d,E)=>{
+    E(SEED);
+    E(`punches=[['2026-08-27','A'],['2026-09-01','A'],['2026-09-24','A'],['2026-09-24','C'],['2026-09-28','A'],['2026-09-30','C'],['2026-10-02','A']]
+         .flatMap(([dd,c])=>[{code:c,date:dd,time:'09:50',sn:c==='A'?'SN_RD':'SN_LP'},{code:c,date:dd,time:'19:00',sn:c==='A'?'SN_RD':'SN_LP'}]);
+       recomputeAll(); fillCalMonths(); document.getElementById('calPeriodSel').value='2026-09'; go('cal');`);
+    const cellCnt=day=>{ const c=[...d.querySelectorAll('#calGrid .cell:not(.empty)')].find(x=>x.querySelector('.dnum').textContent===String(day)); return c? c.querySelector('.cnt').textContent.replace(/[^0-9]/g,'') : null; };
+    ok(cellCnt(24)==='2' && cellCnt(28)==='1' && cellCnt(30)==='1','ก.ย. เห็นครบถึงสิ้นเดือน (26–30 ไม่ว่างแล้ว)');
+    ok(d.querySelectorAll('#calGrid .cell:not(.empty)').length===30 && /เปิดงาน 4 วัน · รวม 5 คน-วัน/.test(d.getElementById('calSummary').textContent),'วาด 30 วัน · นับเฉพาะวันในเดือน 1/24/28/30 (ไม่รวม 27 ส.ค./2 ต.ค.)');
+    ok([...d.querySelectorAll('#calPeriodSel option')].map(o=>o.textContent).join()==='ตุลาคม 2569,กันยายน 2569,สิงหาคม 2569','ตัวเลือกเป็นชื่อเดือน ไม่ใช่งวด');
+    d.getElementById('calPeriodSel').value='2026-08'; E(`renderCalendar()`);
+    ok(cellCnt(27)==='1','ส.ค. เห็นวันที่ 27 (เดิมไปอยู่ในงวด ก.ย. แต่ไม่ถูกวาดที่ไหนเลย)');
+  });
   console.log('[รีเฟรชแล้วอยู่หน้าเดิม]');
   const d2=mkDom({id:3,tab:'money'});
   await run(d2, async (w,d,E)=>{
