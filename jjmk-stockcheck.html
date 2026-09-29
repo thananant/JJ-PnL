@@ -78,6 +78,12 @@ main{max-width:1220px;margin:0 auto;padding:14px 16px}
 .lhd{display:grid;grid-template-columns:46px minmax(160px,1fr) minmax(160px,1fr) 130px;gap:10px;padding:7px 15px;font-size:11px;color:var(--mut);font-weight:700;border-bottom:1px solid #F2EBDB}
 .okt{color:var(--green);font-weight:700;font-size:12.5px}
 .wat{color:var(--amber);font-weight:700;font-size:12.5px}
+#list .oq{width:78px;padding:5px 7px;font-size:15px;font-weight:700;color:var(--red);text-align:right;border:1.5px solid var(--line);border-radius:9px;background:#fff}
+#list .oq.ov{border-color:var(--wine);background:#FFF7E6}
+#list .oq:focus{outline:none;border-color:var(--red)}
+#list .oqr{font-size:11px;color:var(--mut);margin-top:2px}
+#list .ordrow .lbl{min-width:0;overflow-wrap:anywhere}
+#list .oqr button{border:none;background:none;color:var(--wine);font-weight:700;cursor:pointer;padding:0 2px;font-size:11px}
 .hd2,.row2{display:grid;grid-template-columns:44px minmax(120px,1fr) 112px 92px 76px 76px 76px 32px;gap:7px;align-items:center;padding:8px 12px}
 .delx{border:1px solid #E4A6A6;background:#fff;color:var(--red);border-radius:9px;padding:5px 0;width:30px;font-size:13px;cursor:pointer}
 .delx:hover{background:#FCEFEF}
@@ -1146,6 +1152,32 @@ function inTransit(sup,it,cd,delD){ // ของที่สั่งไว้�
   });
   return +s.toFixed(3);
 }
+/* ---- ✏️ แก้ยอดสั่งเอง (ทับค่าแนะนำ) — จำต่อ สาขา+วันขาย ใน localStorage jjsc_ordovr · เปลี่ยนวันขาย/สาขา = เริ่มใหม่ ----
+   ค่าแนะนำยังคิดเหมือนเดิม (r.sug) · r.order = ค่าที่จะสั่งจริง (ถ้าแก้เอง r.ovr=true) · ใบสั่งไลน์/คัดลอก/stock_receipts ใช้ r.order */
+function ovrKey(){ return S.br+'|'+(($('#cd')&&$('#cd').value)||bizToday()); }
+function ovrMap(){
+  const k=ovrKey(); if(S._ovr&&S._ovr.key===k)return S._ovr.map;
+  let m={}; try{ const o=JSON.parse(localStorage.getItem('jjsc_ordovr')||'null'); if(o&&o.key===k&&o.map&&typeof o.map==='object')m=o.map; }catch(e){}
+  S._ovr={key:k,map:m}; return m;
+}
+function ovrSave(){ try{ localStorage.setItem('jjsc_ordovr',JSON.stringify(S._ovr)); }catch(e){} }
+function ordSet(pid,v,sug){ // พิมพ์ในช่อง "สั่งเพิ่ม": ว่าง หรือเท่าค่าแนะนำ = กลับไปใช้ค่าแนะนำ
+  const m=ovrMap(); const raw=String(v==null?'':v).trim();
+  if(raw===''){ delete m[pid]; }
+  else{ const n=+num(raw).toFixed(3); if(n<0){toast('ยอดสั่งต้องไม่ติดลบ',true);render();return;}
+    const sg=(sug===''||sug==null)?null:+num(sug).toFixed(3);
+    if(sg!=null&&n===sg)delete m[pid]; else m[pid]=n; }
+  ovrSave(); render(); setTimeout(oqFocus,0);
+}
+function ordReset(sp){ const m=ovrMap(); let n=0; S.all.forEach(it=>{ if((String(it.sup||'').trim()||'(ไม่ระบุซัพ)')===sp&&m[it.id]!=null){delete m[it.id];n++;} }); ovrSave(); render(); if(n)toast('กลับไปใช้ค่าแนะนำแล้ว '+n+' รายการ'); }
+function ordResetOne(pid){ const m=ovrMap(); delete m[pid]; ovrSave(); render(); }
+let OQ_NEXT=-1;
+function oqList(){ return [...document.querySelectorAll('#list input.oq')]; }
+function oqKey(e,el){ // Enter = เก็บค่าแล้วไปช่องถัดไป
+  if(e.key!=='Enter'&&e.keyCode!==13)return;
+  e.preventDefault(); const i=oqList().indexOf(el); OQ_NEXT=(i<0?-1:i+1); el.blur(); setTimeout(oqFocus,0);
+}
+function oqFocus(){ const n=OQ_NEXT; OQ_NEXT=-1; if(n<0)return; const el=oqList()[n]; if(!el)return; el.focus(); try{el.select();}catch(x){} try{el.scrollIntoView({block:'nearest'});}catch(x){} }
 function orderPlan(){ // คิดใบสั่งของทุกซัพของสาขานี้ ณ วันขายที่เลือก
   const cd=($('#cd')&&$('#cd').value)||bizToday();
   const g={};
@@ -1164,17 +1196,20 @@ function orderPlan(){ // คิดใบสั่งของทุกซัพ�
       const need=cov.sum;
       const onWay=inTransit(x.sup,it,cd,dl.d);                             // ของที่สั่งไว้แล้วกำลังมาก่อนชุดนี้
       const left=have==null?null:Math.max(0,+(have-pre.sum+onWay).toFixed(3));  // ของที่จะเหลือตอนของชุดนี้มาถึง
-      const order=(have==null||!need)?null:Math.max(0,+(need-left).toFixed(3));
+      const sug=(have==null||!need)?null:Math.max(0,+(need-left).toFixed(3));   // ค่าแนะนำจากสูตร
+      const ov=ovrMap()[it.id];                                                    // แก้เองไว้ไหม
+      const order=(ov!=null&&isFinite(+ov))?+ov:sug;
       const b=buOf(billName(it));                         // หน่วยซื้อจากบิล (ถ้ามี)
       const bu=b?b.top:'';
       const c=bu&&!uSame(bu,it.unit)?(S.conv||{})[String(billName(it)).trim()+'|'+bu]:null;  // ชื่อพ้อง = หน่วยเดียวกัน ไม่ต้องแปลง
       const packs=(order&&c&&c.f)?Math.ceil(order/c.f):null;
-      return {it,have,need,order,bu,factor:c?c.f:null,packs,cov,pre,left,onWay};
+      return {it,have,need,order,sug,ovr:(ov!=null&&isFinite(+ov)),bu,factor:c?c.f:null,packs,cov,pre,left,onWay};
     }).sort((a,b2)=>((b2.order>0?1:0)-(a.order>0?1:0))||cmpItem(a.it,b2.it)); // ต้องสั่งขึ้นบน ที่เหลือลำดับเดียวกับเมนูอื่น
     const covDays=rows.length?(rows[0].cov.days||0):0;
     return {sup:x.sup,dl,rows,nx,covDays,
       covTxt:(dl.d&&covDays)?('ครอบคลุม '+covDays+' วัน ('+covRange(dl.d,covDays)+')'):'',
       nOrder:rows.filter(r=>r.order>0).length,
+      nOvr:rows.filter(r=>r.ovr).length,
       nNoCount:rows.filter(r=>r.have==null&&r.need>0).length,
       nNoRate:rows.filter(r=>!r.need).length};
   }).sort((a,b2)=>(b2.nOrder-a.nOrder)||a.sup.localeCompare(b2.sup,'th'));
@@ -1329,7 +1364,7 @@ function renderOrder(){
   const plan=orderPlan();
   S.ordOpen=S.ordOpen||{};
   const q=(S.ordQ||'').trim().toLowerCase();
-  const G='grid-template-columns:40px minmax(150px,1.4fr) 92px 92px 108px';
+  const G='grid-template-columns:40px minmax(150px,1.4fr) 92px 96px 124px';
   const secs=plan.map(g=>{
     const key=g.sup,esk=esc(key).replace(/'/g,"\\'");
     const open=!!q||(S.ordOpen[key]!==undefined?S.ordOpen[key]:(g.nOrder>0)); // ค้นหา = กางให้เองทุกซัพ
@@ -1338,10 +1373,12 @@ function renderOrder(){
     const rows=g.rows.filter(r=>!q||r.it.name.toLowerCase().includes(q)||String(billName(r.it)).toLowerCase().includes(q));
     const body=rows.map(r=>{
       const cls=r.order>0?'':'dim';
-      const val=r.have==null?'<span class="wat">ยังไม่นับ</span>'
-        :(!r.need?'<span style="color:var(--mut)">ยังไม่ตั้งอัตราใช้</span>'
-          :(r.order>0?'<b style="color:var(--red);font-size:15px">'+fq(r.order)+'</b> '+esc(r.it.unit||'')
-            :'<span class="okt">พอแล้ว</span>'));
+      const pid=esc(String(r.it.id)).replace(/'/g,''), sugAttr=(r.sug==null?'':String(r.sug));
+      const note=r.ovr?('<div class="oqr">✏️ แก้เอง · แนะนำ '+(r.sug==null?'–':fq(r.sug))+' <button type="button" onclick="ordResetOne(\''+pid+'\')" title="กลับไปใช้ค่าแนะนำ">↺</button></div>')
+        :(r.have==null?'<div class="oqr"><span class="wat">ยังไม่นับ</span></div>'
+          :(!r.need?'<div class="oqr">ยังไม่ตั้งอัตราใช้</div>'
+            :(r.order>0?'':'<div class="oqr"><span class="okt">พอแล้ว</span></div>')));
+      const val='<span style="white-space:nowrap"><input class="oq'+(r.ovr?' ov':'')+'" type="number" inputmode="decimal" step="any" min="0" data-pid="'+pid+'" data-sug="'+sugAttr+'" value="'+(r.order>0?String(r.order):'')+'" placeholder="0" onfocus="riSel(this)" onkeydown="oqKey(event,this)" onchange="ordSet(this.dataset.pid,this.value,this.dataset.sug)"> <span style="font-size:12.5px">'+esc(r.it.unit||'')+'</span></span>'+note;
       return '<div class="lrow ordrow '+cls+'" style="'+G+'">'+imgCell(r.it)
         +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(r.it.name)+'</div>'
         +'<div class="s">'+(r.it.name!==billName(r.it)?'<span class="cn">🧾 '+esc(billName(r.it))+'</span>':'')+'</div></div>'
@@ -1362,7 +1399,8 @@ function renderOrder(){
       +(g.covTxt?(' · <b>'+esc(g.covTxt)+'</b>'+(g.nx?(' — ชุดหน้ามา '+dowTH(g.nx)):'')):'')
       +(g.dl.unset?' · ⚠ ยังไม่ตั้งรอบสั่ง (เดาว่าพรุ่งนี้)':'')+'</span></div>'
       +'<div class="hbtns">'
-      +'<span style="font-size:12px;font-weight:700;color:'+(g.nOrder?'var(--red)':'var(--green)')+'">'+(g.nOrder?('ต้องสั่ง '+g.nOrder+' รายการ'):'ไม่ต้องสั่ง')+'</span>'
+      +'<span style="font-size:12px;font-weight:700;color:'+(g.nOrder?'var(--red)':'var(--green)')+'">'+(g.nOrder?('ต้องสั่ง '+g.nOrder+' รายการ'):'ไม่ต้องสั่ง')+(g.nOvr?' <span style="color:var(--wine)">· ✏️ แก้เอง '+g.nOvr+'</span>':'')+'</span>'
+      +(g.nOvr?'<button class="outb" onclick="event.stopPropagation();ordReset(\''+esk+'\')" title="กลับไปใช้ค่าแนะนำทั้งซัพนี้">↺ ค่าแนะนำ</button>':'')
       +(g.nOrder?'<button class="outb" onclick="event.stopPropagation();copyOrder(\''+esk+'\')">📋 คัดลอก</button>'
         +'<button class="outb" style="background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700" onclick="event.stopPropagation();sendLine(\''+esk+'\')">'
         +(lineOf(key)&&lineOf(key).group_id?'📤 ส่งเข้าไลน์':'📤 ส่งไลน์ (ยังไม่ผูกกลุ่ม)')+'</button>':'')+'</div></div>';
@@ -1375,7 +1413,7 @@ function renderOrder(){
     +'<div class="note"><b>ต้องสั่ง = ยอดใช้ตั้งแต่วันที่ของมาส่ง จนถึงก่อนของชุดถัดไปมา − ของที่จะเหลือตอนของมาถึง</b>'
     +'<div style="font-size:11.5px;margin-top:3px">ของที่จะเหลือ = ยอดนับได้ − ยอดใช้ระหว่างรอของมาส่ง + ของที่สั่งไว้แล้วกำลังมา · '
     +'เช่น สั่งศุกร์ ของมาเสาร์ ชุดหน้ามาจันทร์ → ต้องเผื่อ เสาร์+อาทิตย์</div>'
-    +'<div style="font-size:11.5px;margin-top:2px">วันขายตัดรอบ 6 โมงเช้า · ตั้งอัตราใช้ที่ 🛟 Safety · รอบส่ง/สั่งล่วงหน้า ที่ 🚚 รอบสั่งซัพ</div></div>'
+    +'<div style="font-size:11.5px;margin-top:2px">วันขายตัดรอบ 6 โมงเช้า · ตั้งอัตราใช้ที่ 🛟 Safety · รอบส่ง/สั่งล่วงหน้า ที่ 🚚 รอบสั่งซัพ · <b>ช่อง "สั่งเพิ่ม" เป็นค่าแนะนำ พิมพ์ทับได้</b> (Enter ไปช่องถัดไป · ลบว่าง = กลับค่าแนะนำ)</div></div>'
     +(n=>n.length?'<div class="note" style="background:#EAF3FC;border-color:#9CC3E8;color:#1F4E7A"><b>📅 วันขายดีจากปฏิทิน: '+esc(n.join(' · '))+'</b>'
       +'<div style="font-size:11.5px;margin-top:3px">วันนั้นคิดยอดใช้แบบ<b>เสาร์–อาทิตย์</b>แล้ว — ใบสั่งที่ครอบคลุมวันนั้นจะสั่งเผื่อให้เอง (ตั้งวันพิเศษที่ JJ Calendar แท็บ 🎌)</div></div>':'')
       (spdNames(STK_BR[S.br],addDays(cd,1),addDays(cd,14)))
