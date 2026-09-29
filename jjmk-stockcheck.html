@@ -623,6 +623,31 @@ async function centralUser(username){
 }
 const CONFIG={URL:'https://aikyxvluaiubdidqxwnd.supabase.co',KEY:'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'};
 const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};
+/* SPD-BEGIN วันพิเศษจากปฏิทิน — บล็อกนี้ต้องเหมือนกันทุกไบต์ใน jjmk-stockcheck.html + jjmk-kitchen.html (ซิงก์ด้วยสคริปต์ อย่าแก้มือทีละไฟล์)
+   ที่มา: ตาราง cal_special_days ของ JJ Calendar (แท็บ 🎌 วันพิเศษ) · เจ้าของตัดสินใจ 2026-09-29: "วันขายดี = คิดยอดใช้วันนั้นแบบเสาร์–อาทิตย์"
+   order_rate_group: 2 = ส–อา (rate_we) · 1 = ศุกร์ (rate_fri) · 0 = วันธรรมดา (rate_wk) · order_branches null = ทุกสาขา
+   ไม่มีวันพิเศษ / ยังไม่รัน SQL / อ่านไม่ได้ = ตัวเลขเหมือนเดิมทุกหลัก (spdHit คืน null) */
+var SPD={rows:[],off:false};
+function spdSet(rows){SPD.rows=(rows||[]).filter(function(r){return r&&!r.cancelled&&r.day_from&&r.day_to&&(r.order_rate_group===0||r.order_rate_group===1||r.order_rate_group===2);});}
+function spdCode(bid){for(var k in STK_BR){if(STK_BR[k]===bid)return k;}return '';}
+function spdFor(r,code){return !(r.order_branches&&r.order_branches.length)||r.order_branches.indexOf(code)>=0;}
+/* วันพิเศษที่มีผลกับสาขานี้ในวัน ds → {g:กลุ่มวันที่ใช้แทน, r:แถว} · ไม่มี = null
+   หลายแถวทับกัน: แถวที่เจาะจงสาขาชนะแถวทุกสาขา · เท่ากันเอากลุ่มเลขมากกว่า */
+function spdHit(bid,ds){
+  if(SPD.off||!ds||!SPD.rows.length)return null;
+  var code=spdCode(bid),best=null;
+  for(var i=0;i<SPD.rows.length;i++){var r=SPD.rows[i];
+    if(r.day_from>ds||r.day_to<ds||!spdFor(r,code))continue;
+    var sc=(r.order_branches&&r.order_branches.length?10:0)+r.order_rate_group;
+    if(!best||sc>best.sc)best={sc:sc,g:r.order_rate_group,r:r};}
+  return best;}
+function spdBaseline(fn){SPD.off=true;try{return fn();}finally{SPD.off=false;}}
+/* ชื่อวันพิเศษของสาขานี้ที่อยู่ในช่วง [from,to] — ไว้บอกเหตุผลบนจอ (ไม่ใช้คิดตัวเลข) */
+function spdNames(bid,from,to){
+  var code=spdCode(bid),out=[];
+  SPD.rows.forEach(function(r){if(r.day_to<from||r.day_from>to||!spdFor(r,code))return;if(out.indexOf(r.name)<0)out.push(r.name);});
+  return out;}
+/* SPD-END */
 const BR_NAME={JJRD:'รัชดา',JJLP:'ลาดพร้าว'};
 const DEPT_IC={'บาร์น้ำ':'🥤','ครัว':'🍳','ครัวกลาง':'🍲','หน้าเตา':'🔥','ล้างจาน':'🧽','ของหวาน':'🍧','ผัก':'🥬','เนื้อสัตว์':'🥩'};
 const S={br:localStorage.getItem('jjsc_br')||'JJRD',tab:'dash',items:[],all:[],map:{},cur:{},q:'',dept:null,deptOk:true,imgTarget:null};
@@ -977,7 +1002,7 @@ async function loadAll(){
     catch(e2){ S.deptOk=false; prods=await selAll(base+'&deleted_at=is.null&branch_id=eq.'+bid+'&order=sort'); }
   }
   const cd=($('#cd')&&$('#cd').value)||bizToday();
-  const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows,lcfgRows,unitRows,recvRows]=await Promise.all([
+  const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows,lcfgRows,unitRows,recvRows,spdRows]=await Promise.all([
     selAll('pnl_stock_names?select=*&order=id').catch(()=>selAll('pnl_stock_map?select=*&order=id')).catch(()=>[]),
     selAll('stock_current?select=product_id,qty,updated_at&branch_id=eq.'+bid).catch(()=>[]),
     /* ต้องอ่าน order_ahead + prepay ด้วย (แก้ 2026-09-29) — เดิมไม่ได้อ่าน แอพนี้เลยไม่รู้ว่าซัพต้อง "สั่งล่วงหน้า"
@@ -997,8 +1022,12 @@ async function loadAll(){
     selAll('sc_units?select=*&order=sort,name').then(r=>{S.unitTbl=true;return r;}).catch(()=>{S.unitTbl=false;return [];}),
     // ใบสั่งที่ส่งไปแล้ว 10 วันล่าสุด — ใช้หัก "ของที่กำลังมา" ออกจากยอดสั่งรอบนี้
     selAll('stock_receipts?select=product_id,order_date,ordered&branch_id=eq.'+bid
-      +'&order_date=gte.'+addDays(cd,-10)+'&order_date=lte.'+cd+'&order=order_date').catch(()=>[])
+      +'&order_date=gte.'+addDays(cd,-10)+'&order_date=lte.'+cd+'&order=order_date').catch(()=>[]),
+    // 🎌 วันขายดีจากปฏิทิน (cal_special_days) — ยังไม่รัน SQL / อ่านไม่ได้ = ไม่มีวันพิเศษ ตัวเลขเหมือนเดิม
+    selAll('cal_special_days?select=id,name,day_from,day_to,order_rate_group,order_branches,cancelled&cancelled=eq.false'
+      +'&order_rate_group=not.is.null&day_to=gte.'+addDays(cd,-12)+'&day_from=lte.'+addDays(cd,50)).catch(()=>[])
   ]);
+  spdSet(spdRows);
   S.depts=deptRows||[];
   S.units=unitRows||[]; uDirty();
   S.recv={}; (recvRows||[]).forEach(r=>{ const q=num(r.ordered); if(!r.product_id||!q)return;
@@ -1074,7 +1103,7 @@ const dowTH=ds=>DOW_SH[DOW_EN[new Date(ds+'T12:00:00').getDay()]]||'';
 const MON_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 function thDate(ds){const d=new Date(ds+'T12:00:00'); if(isNaN(+d))return ds||'-';
   return d.getDate()+' '+MON_TH[d.getMonth()]+' '+(d.getFullYear()+543)+' ('+dowTH(ds)+')';}
-function rateOn(it,ds){const g=dayGrp(ds);return num(g===1?it.rate_fri:g===2?it.rate_we:it.rate_wk);}
+function rateOn(it,ds){const h=spdHit(it.branch_id,ds),g=h?h.g:dayGrp(ds);return num(g===1?it.rate_fri:g===2?it.rate_we:it.rate_wk);}   // วันขายดีในปฏิทิน = ใช้อัตรา ส–อา (ต้องตรงกับ brRateOn ของครัวกลาง)
 const dowKey=ds=>DOW_EN[new Date(ds+'T12:00:00').getDay()];
 const supAhead=x=>Math.max(0,Math.min(6,parseInt(x&&x.order_ahead,10)||0));
 function deliveryDate(sup,cd){ // ของจะมาส่งวันไหน ถ้าสั่งวันนี้ (รวมโหมด "สั่งล่วงหน้า N วัน")
@@ -1321,7 +1350,8 @@ function renderOrder(){
           +(r.pre.sum>0?('− ใช้ระหว่างรอ '+fq(r.pre.sum)):'')+(r.onWay>0?(' + กำลังมา '+fq(r.onWay)):'')
           +' = เหลือ '+fq(r.left)+'</div>'):'')+'</span>'
         +'<span class="lbl" data-l="ต้องใช้ช่วงนี้"><span style="font-size:13px">'+(r.need?fq(r.need)+' '+esc(r.it.unit||''):'–')+'</span>'
-        +((r.cov&&r.cov.days>1)?('<div style="font-size:10.5px;color:var(--mut)">'+r.cov.days+' วัน ('+esc(covRange(g.dl.d,r.cov.days))+')</div>'):'')+'</span>'
+        +((r.cov&&r.cov.days>1)?('<div style="font-size:10.5px;color:var(--mut)">'+r.cov.days+' วัน ('+esc(covRange(g.dl.d,r.cov.days))+')</div>'):'')
+        +((r.cov&&r.cov.days&&g.dl.d)?(n=>n.length?'<div style="font-size:10.5px;color:#2F6FB0;font-weight:600">📅 '+esc(n.join(' · '))+' คิดแบบ ส–อา</div>':'')(spdNames(r.it.branch_id,g.dl.d,addDays(g.dl.d,r.cov.days-1))):'')+'</span>'
         +'<span class="lbl" data-l="สั่งเพิ่ม">'+val
         +(r.packs!=null?'<div style="font-size:11px;color:var(--mut)">≈ '+fq(r.packs)+' '+esc(r.bu)+'</div>':'')+'</span></div>';
     }).join('');
@@ -1346,6 +1376,9 @@ function renderOrder(){
     +'<div style="font-size:11.5px;margin-top:3px">ของที่จะเหลือ = ยอดนับได้ − ยอดใช้ระหว่างรอของมาส่ง + ของที่สั่งไว้แล้วกำลังมา · '
     +'เช่น สั่งศุกร์ ของมาเสาร์ ชุดหน้ามาจันทร์ → ต้องเผื่อ เสาร์+อาทิตย์</div>'
     +'<div style="font-size:11.5px;margin-top:2px">วันขายตัดรอบ 6 โมงเช้า · ตั้งอัตราใช้ที่ 🛟 Safety · รอบส่ง/สั่งล่วงหน้า ที่ 🚚 รอบสั่งซัพ</div></div>'
+    +(n=>n.length?'<div class="note" style="background:#EAF3FC;border-color:#9CC3E8;color:#1F4E7A"><b>📅 วันขายดีจากปฏิทิน: '+esc(n.join(' · '))+'</b>'
+      +'<div style="font-size:11.5px;margin-top:3px">วันนั้นคิดยอดใช้แบบ<b>เสาร์–อาทิตย์</b>แล้ว — ใบสั่งที่ครอบคลุมวันนั้นจะสั่งเผื่อให้เอง (ตั้งวันพิเศษที่ JJ Calendar แท็บ 🎌)</div></div>':'')
+      (spdNames(STK_BR[S.br],addDays(cd,1),addDays(cd,14)))
     +'<div class="lrow" style="grid-template-columns:1fr auto"><div><input class="di" id="ordQ" value="'+esc(S.ordQ||'')+'" placeholder="🔍 ค้นหาสินค้าในใบสั่ง" oninput="ordSearch(this.value)"></div>'
     +'<div style="font-size:13px;white-space:nowrap;padding-left:10px">รวมต้องสั่ง <b style="color:var(--red)">'+totOrder+'</b> รายการ</div>'
     +(plan.some(g=>g.nOrder)?'<div><button class="outb" style="background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700;white-space:nowrap" onclick="sendAllOpen()">📤 ส่งทั้งหมด</button></div>':'<div></div>')+'</div>'
