@@ -628,7 +628,7 @@ window.JJGate=(function(){
     <div class="nav-grp">ตั้งค่า</div>
     <button data-page="settings" onclick="go('settings')">⚙️ ตั้งค่า</button>
     <button data-page="shift" onclick="go('shift')">🕐 กะการทำงาน</button>
-    <button data-page="holi" onclick="go('holi')">🎌 วันหยุดพิเศษ</button>
+    <button data-page="holi" onclick="go('holi')">🎌 วันหยุดพิเศษ<span id="calBadge" class="chip chip-amber" style="margin-left:6px;padding:0 7px;display:none"></span></button>
     <button data-page="audit" onclick="go('audit')">🕘 ประวัติการทำรายการ</button>
   </nav>
   <div class="side-foot">
@@ -904,9 +904,11 @@ window.JJGate=(function(){
 
 <!-- ============ HOLIDAYS ============ -->
 <div class="page" id="page-holi">
+  <div id="calDayCards"></div>
   <div class="card">
     <h2 class="font-display" style="font-size:18px;margin-bottom:6px">วันหยุดพิเศษ</h2>
-    <p class="muted" style="margin-bottom:14px">ตั้งปีละครั้ง แต่ละปีไม่เหมือนกัน — พนักงานที่<b>มาทำงาน</b>ในวันเหล่านี้จะได้ค่าแรงคูณตามที่กำหนด</p>
+    <p class="muted" style="margin-bottom:14px">ตั้งปีละครั้ง แต่ละปีไม่เหมือนกัน — พนักงานที่<b>มาทำงาน</b>ในวันเหล่านี้จะได้ค่าแรงคูณตามที่กำหนด
+      <br>💡 ลงวันพิเศษที่ <a href="jjmk-calendar.html" style="color:inherit;text-decoration:underline dotted">JJ Calendar แท็บ 🎌</a> ได้ด้วย — จะขึ้นเป็นการ์ด "📅 จากปฏิทิน รอยืนยัน" ด้านบน ต้องกดยืนยันก่อนถึงจะใช้คิดเงิน</p>
     <div class="toolbar">
       <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">ปี:
         <select id="holiYear" onchange="renderHoli()" style="width:auto;min-width:110px"></select>
@@ -1786,6 +1788,7 @@ let kbizReady = false;     // true เมื่อรัน jj_kbiz_added.sql �
 let fineEntries = [];      // แก้ไขรายการหักอัตโนมัติรายงวด {id, empId, period, kind, amount}
 let fineReady = false;     // true เมื่อรัน jj_work_dates.sql แล้ว (ตาราง fine_entries)
 let holidays = {};   // 'YYYY-MM-DD' -> {name, mult}
+let calDays = [], calDaysReady = false;   // 🎌 วันพิเศษจากปฏิทิน (cal_special_days) — ใช้ทำการ์ดยืนยันในหน้า 🎌 เท่านั้น · calcPay ไม่อ่าน
 let devBranch = {};  // device_sn -> branch
 let orgPos = [];     // โครงสร้าง {id, dept, name} จากตาราง org_positions
 const orgDepts = () => [...new Set(orgPos.map(o=>o.dept))].sort((a,b)=>a.localeCompare(b,'th'));
@@ -1890,6 +1893,7 @@ async function loadAll(){
     try{ const fe = await db.from('fine_entries').select('*');
          if(!fe.error){ fineEntries = (fe.data||[]).map(fromDbFine); fineReady = true; }
     }catch(_){ fineReady = false; /* ยังไม่รัน jj_work_dates.sql */ }
+    await calLoad();   // 🎌 วันพิเศษจากปฏิทิน — ยังไม่รัน jjmk-calendar-days.sql = ไม่มีการ์ด แอปทำงานปกติ
     try{
       const [ml, me, bo] = await Promise.all([
         db.from('mou_loans').select('*'),
@@ -4615,6 +4619,7 @@ function renderHoli(){
         </td></tr>`;
     }).join('')
     : '<tr><td colspan="6"><div class="empty">ยังไม่มีวันหยุดพิเศษในปีนี้ — กด ＋ เพิ่มวันหยุด</div></td></tr>') + '</tbody>';
+  renderCalDayCards();
 }
 function openHoliForm(day){
   const h = day? holidays[day] : null;
@@ -4646,6 +4651,183 @@ async function delHoli(id){
   if(error) return dbErr(error, 'ลบวันหยุด');
   for(const d in holidays) if(holidays[d].id===id) delete holidays[d];
   renderHoli(); renderAll(); toast('ลบแล้ว');
+}
+
+/* ================= 🎌 วันพิเศษจากปฏิทิน (JJ Calendar) → กดยืนยันก่อนถึงมีผลกับเงินเดือน =================
+   เจ้าของสั่ง 2026-09-29: "ทุกระบบใช้ปฏิทินเป็นหลัก" + วันจ่ายค่าแรง ×2 ต้อง "กดยืนยันในเงินเดือนก่อน"
+   · calcPay ไม่ได้แก้เลย — ยังคิดจาก holidays เหมือนเดิม การ์ดนี้แค่เขียน holidays ให้เมื่อกด ✅
+     ผ่านตัวดัก db.from ตัวเดียวกับหน้า 🎌 = เช็คสิทธิ์หน้า holi + จดประวัติ payroll_audit อัตโนมัติ
+   · ลำดับยืนยัน: ติ๊กปฏิทินก่อนแบบมีเงื่อนไข updated_at (ปฏิทินถูกแก้ระหว่างนี้ = ไม่เขียนอะไรเลย) → ค่อยเขียน holidays
+     เขียน holidays ค้างครึ่งทาง = การ์ดโผล่อีกรอบเอง (calPending เทียบของจริงกับปฏิทินทุกครั้ง)
+   · เอาออกเฉพาะวันที่ยังตรงกับที่ปฏิทินเคยใส่ (pay_snapshot) — วันที่แก้มือในหน้านี้ไม่แตะ
+   · เทส test/holi.js */
+async function calLoad(){
+  try{
+    const from = (new Date().getFullYear()-2) + '-01-01';
+    const r = await db.from('cal_special_days')
+      .select('id,name,day_from,day_to,pay_multiplier,pay_status,pay_snapshot,cancelled,updated_at,updated_by,created_name')
+      .or('pay_multiplier.not.is.null,pay_snapshot.not.is.null').gte('day_to', from).order('day_from');
+    if(r.error) throw r.error;
+    calDays = r.data || []; calDaysReady = true;
+  }catch(_){ calDays = []; calDaysReady = false; }
+  calBadge();
+}
+function calDaysOf(r){
+  const out = []; if(!r || !r.day_from || !r.day_to) return out;
+  for(let d = new Date(r.day_from+'T12:00:00'); localYMD(d) <= r.day_to && out.length < 40; d.setDate(d.getDate()+1)) out.push(localYMD(d));
+  return out;
+}
+/* ปฏิทินอยากได้อะไร เทียบกับ holidays ตอนนี้ → ต้องเพิ่ม / เปลี่ยน / เอาออก วันไหน */
+function calDayDiff(r){
+  const want = {};
+  if(!r.cancelled && r.pay_multiplier) calDaysOf(r).forEach(d => want[d] = { name:r.name, mult:+r.pay_multiplier });
+  const adds = [], changes = [], removes = [];
+  for(const d of Object.keys(want).sort()){
+    const h = holidays[d];
+    if(!h) adds.push({ day:d, ...want[d] });
+    else if(h.name !== want[d].name || +h.mult !== want[d].mult) changes.push({ day:d, id:h.id, from:{ name:h.name, mult:+h.mult }, to:want[d] });
+  }
+  const snap = r.pay_snapshot || null;
+  if(snap && Array.isArray(snap.days)) for(const d of snap.days.slice().sort()){
+    if(want[d]) continue;
+    const h = holidays[d];
+    if(h && h.name === snap.name && +h.mult === +snap.mult) removes.push({ day:d, id:h.id, name:h.name, mult:+h.mult });
+  }
+  return { adds, changes, removes, want };
+}
+function calPending(){
+  return calDays.filter(r => {
+    if(r.pay_status === 'pending') return true;
+    if(r.pay_status === 'confirmed' && !r.cancelled){ const d = calDayDiff(r); return d.adds.length || d.changes.length || d.removes.length; }
+    return false;
+  });
+}
+const calCanAct = () => canDo('holi','e') || canDo('holi','a');
+function calBadge(){
+  const b = document.getElementById('calBadge'); if(!b) return;
+  const n = calDaysReady ? calPending().length : 0;
+  b.textContent = n ? n : ''; b.style.display = n ? '' : 'none';
+}
+/* เงินเปลี่ยนเท่าไร: วันที่ผ่านมาแล้วคิดจริงด้วย calcPay (ลองใส่ค่าใหม่ชั่วคราวแล้วคืนค่าเดิม) · วันข้างหน้าประมาณจากคนที่มีสิทธิ์ได้ */
+function calPreview(r){
+  const d = calDayDiff(r), today = localYMD(new Date());
+  const touched = [...d.adds, ...d.changes, ...d.removes].map(x => x.day);
+  const out = { past:[], fut:null, none:!touched.length };
+  if(!touched.length) return out;
+  const emps = employees.filter(e => e.active !== false);
+  const past = touched.filter(x => x <= today), fut = touched.filter(x => x > today);
+  if(past.length){
+    const keys = {};
+    for(const e of emps) for(const day of past) keys[e.id+'|'+periodOfE(e, day)] = { e, p:periodOfE(e, day) };
+    const before = {};
+    for(const k in keys) before[k] = calcPay(keys[k].e, keys[k].p);
+    const saved = holidays; holidays = Object.assign({}, holidays);
+    try{
+      d.adds.forEach(x => holidays[x.day] = { name:x.name, mult:x.mult, id:0 });
+      d.changes.forEach(x => holidays[x.day] = { name:x.to.name, mult:x.to.mult, id:x.id });
+      d.removes.forEach(x => delete holidays[x.day]);
+      const per = {};
+      for(const k in keys){
+        const a = calcPay(keys[k].e, keys[k].p), b = before[k], dn = a.net - b.net;
+        if(!dn) continue;
+        const P = per[keys[k].p] = per[keys[k].p] || { plus:0, minus:0, nPlus:0, nMinus:0 };
+        if(dn > 0){ P.plus += dn; P.nPlus++; } else { P.minus += dn; P.nMinus++; }
+      }
+      out.past = Object.keys(per).sort().map(p => ({ p, ...per[p] }));
+    } finally { holidays = saved; }
+  }
+  if(fut.length){
+    const mult = !r.cancelled && r.pay_multiplier ? +r.pay_multiplier : 0;
+    const addDays = fut.filter(x => d.want[x]);
+    const inJob = (e, x) => !(e.startDate && x < e.startDate) && !(e.endDate && x > e.endDate);
+    let maxBonus = 0; const store = new Set(), office = new Set();
+    for(const x of addDays) for(const e of emps){
+      if(e.mode === 'hourly' || !inJob(e, x)) continue;
+      if(e.holidayPay){ store.add(e.id); maxBonus += Math.round(dailyRate(e) * (mult - 1)); }
+      else if(!isOffWd(e, x)){ office.add(e.id); }
+    }
+    out.fut = { days:addDays.length, gone:fut.length - addDays.length, store:store.size, office:office.size, maxBonus, mult };
+  }
+  return out;
+}
+function renderCalDayCards(){
+  const box = document.getElementById('calDayCards'); if(!box) return;
+  calBadge();
+  if(!calDaysReady){ box.innerHTML = ''; return; }
+  const list = calPending();
+  if(!list.length){ box.innerHTML = ''; return; }
+  const can = calCanAct(), focus = (()=>{ try{ return localStorage.getItem('jjpay_calfocus') || ''; }catch(_){ return ''; } })();
+  const fmtDay = x => dayLabel(x) + ' <span class="muted">' + x + '</span>';
+  box.innerHTML = list.map(r => {
+    const d = calDayDiff(r), pv = calPreview(r);
+    const title = r.cancelled ? '🗑 ปฏิทินยกเลิกวันนี้แล้ว' : (!r.pay_multiplier ? '💰 ปฏิทินเอาค่าแรงพิเศษออก' : (r.pay_status === 'confirmed' ? '⚠️ ไม่ตรงกับปฏิทิน' : '📅 จากปฏิทิน รอยืนยัน'));
+    const rows = [
+      ...d.adds.map(x => `<li>＋ เพิ่ม ${fmtDay(x.day)} · ${audEsc(x.name)} <b>×${x.mult}</b></li>`),
+      ...d.changes.map(x => `<li>✎ ${fmtDay(x.day)} · เดิม ${audEsc(x.from.name)} ×${x.from.mult} → <b>${audEsc(x.to.name)} ×${x.to.mult}</b></li>`),
+      ...d.removes.map(x => `<li>－ เอาออก ${fmtDay(x.day)} · ${audEsc(x.name)} ×${x.mult}</li>`),
+    ].join('') || '<li class="muted">ตรงกับตารางด้านล่างอยู่แล้ว — กดยืนยันเพื่อปิดรายการ</li>';
+    const money = [
+      ...pv.past.map(x => `<div><b>${periodLabel(x.p)}</b>: ${x.nPlus ? `<span style="color:var(--green)">+฿${THB(x.plus)} (${x.nPlus} คน)</span> ` : ''}${x.nMinus ? `<span style="color:var(--red)">−฿${THB(-x.minus)} (${x.nMinus} คน)</span>` : ''} <span class="muted">— สลิปงวดนี้จะเปลี่ยน</span></div>`),
+      pv.fut && pv.fut.days ? `<div><b>วันข้างหน้า ${pv.fut.days} วัน (ประมาณ)</b>: หน้าร้าน ${pv.fut.store} คน ได้เพิ่มรวมไม่เกิน <b>฿${THB(pv.fut.maxBonus)}</b> ถ้ามาครบ ไม่สาย ไม่ออกก่อน ไม่ลืมตอก · ออฟฟิศ ${pv.fut.office} คน ได้หยุดนับเป็นวันทำงาน (ไม่ได้ ×${pv.fut.mult})<br><b>วันนี้เป็นวันห้ามหยุด — หน้าร้านขาดงาน = หัก 2 เท่าของค่าแรงวัน</b></div>` : '',
+      pv.fut && pv.fut.gone ? `<div>วันข้างหน้า ${pv.fut.gone} วัน: จะไม่มีเบี้ย และไม่เป็นวันห้ามหยุดแล้ว</div>` : '',
+      !pv.past.length && !(pv.fut && (pv.fut.days || pv.fut.gone)) && !pv.none ? '<div class="muted">ไม่มีผลกับยอดเงินงวดที่ผ่านมา</div>' : '',
+    ].join('');
+    return `<div class="card" id="cal-${audEsc(r.id)}" style="border:2px solid ${focus === r.id ? 'var(--ember,#E07A2C)' : '#E0B34C'};background:#FFF9EC">
+      <h3 style="margin:0 0 4px;font-size:16px">${title} · ${audEsc(r.name)}</h3>
+      <div class="muted" style="font-size:13px;margin-bottom:6px">${r.day_from === r.day_to ? dayLabel(r.day_from) : dayLabel(r.day_from) + ' – ' + dayLabel(r.day_to)}${r.created_name ? ' · ลงโดย ' + audEsc(r.created_name) : ''}${r.updated_by ? ' · แก้ล่าสุด ' + audEsc(r.updated_by) : ''}</div>
+      <ul style="margin:0 0 8px 18px;padding:0;font-size:14px;line-height:1.7">${rows}</ul>
+      <div style="font-size:13.5px;line-height:1.7;background:#fff;border:1px solid #F0DDB0;border-radius:10px;padding:8px 10px">${money || '<span class="muted">ไม่มีผลกับยอดเงิน</span>'}</div>
+      ${can ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-ember" style="min-height:44px" onclick="calConfirm('${audEsc(r.id)}')">✅ ยืนยัน ใช้คิดเงิน</button>
+        <button class="btn btn-light" style="min-height:44px" onclick="calDecline('${audEsc(r.id)}')">✖ ไม่ใช้กับเงินเดือน</button></div>`
+        : '<div class="muted" style="margin-top:8px">🔒 ต้องมีสิทธิ์แก้ไขหน้าวันหยุดพิเศษถึงจะยืนยันได้</div>'}
+    </div>`;
+  }).join('');
+  if(focus){ const el = document.getElementById('cal-' + focus); if(el) setTimeout(() => el.scrollIntoView({ block:'center' }), 60);
+             try{ localStorage.removeItem('jjpay_calfocus'); }catch(_){} }
+}
+async function calConfirm(id){
+  const r = calDays.find(x => x.id === id); if(!r) return;
+  if(!calCanAct()) return toast('🔒 ไม่มีสิทธิ์แก้วันหยุดพิเศษ');
+  const d = calDayDiff(r);
+  if(d.removes.length && !canDo('holi','d')) return toast('🔒 ต้องมีสิทธิ์ลบในหน้าวันหยุดพิเศษ (มีวันที่ต้องเอาออก)');
+  if(!confirm('ยืนยันใช้ "' + r.name + '" คิดเงินเดือน?\n' +
+     [d.adds.length ? 'เพิ่ม ' + d.adds.length + ' วัน' : '', d.changes.length ? 'เปลี่ยน ' + d.changes.length + ' วัน' : '', d.removes.length ? 'เอาออก ' + d.removes.length + ' วัน' : ''].filter(Boolean).join(' · ') +
+     '\n(กฎเดิมของหน้านี้ทุกข้อ: หน้าร้านได้ ×' + (r.pay_multiplier || '-') + ' · ออฟฟิศได้หยุด · วันห้ามหยุด)')) return;
+  const payOn = !r.cancelled && !!r.pay_multiplier;
+  const next = payOn ? { pay_status:'confirmed', pay_snapshot:{ days:Object.keys(d.want).sort(), mult:+r.pay_multiplier, name:r.name } }
+                     : { pay_status:'none', pay_snapshot:null };
+  next.pay_decided_by = (AUTH && AUTH.username) || '?';
+  next.pay_decided_at = new Date().toISOString();
+  /* 1) ติ๊กปฏิทินก่อน แบบมีเงื่อนไข — ปฏิทินถูกแก้ระหว่างเปิดหน้านี้ = ไม่เขียนอะไรเลย */
+  const u = await db.from('cal_special_days').update(next).eq('id', r.id).eq('updated_at', r.updated_at).select('id');
+  if(u.error) return dbErr(u.error, 'ยืนยันวันพิเศษ');
+  if(!u.data || !u.data.length){ toast('⚠️ ปฏิทินเพิ่งถูกแก้ — โหลดใหม่ให้แล้ว ตรวจอีกครั้งก่อนยืนยัน'); await calLoad(); renderHoli(); return; }
+  /* 2) เขียน holidays — ตัวดักเดียวกับหน้านี้ (เช็คสิทธิ์ + จดประวัติ) */
+  const ups = [...d.adds, ...d.changes.map(c => ({ day:c.day, ...c.to }))].map(x => ({ day:x.day, name:x.name, multiplier:x.mult }));
+  if(ups.length){
+    const { data, error } = await db.from('holidays').upsert(ups, { onConflict:'day' }).select();
+    if(error){ await calLoad(); renderHoli(); return dbErr(error, 'บันทึกวันหยุด (กดยืนยันซ้ำได้)'); }
+    (data || []).forEach(h => holidays[h.day] = { name:h.name || 'วันหยุดพิเศษ', mult:+h.multiplier, id:h.id });
+  }
+  for(const x of d.removes){
+    const { error } = await db.from('holidays').delete().eq('id', x.id);
+    if(error){ await calLoad(); renderHoli(); return dbErr(error, 'ลบวันหยุด (กดยืนยันซ้ำได้)'); }
+    delete holidays[x.day];
+  }
+  await calLoad(); renderHoli(); renderAll();
+  toast(payOn ? '✅ ยืนยันแล้ว — ใช้คิดเงินเดือนแล้ว' : '✅ เอาออกจากเงินเดือนแล้ว');
+}
+async function calDecline(id){
+  const r = calDays.find(x => x.id === id); if(!r) return;
+  if(!calCanAct()) return toast('🔒 ไม่มีสิทธิ์แก้วันหยุดพิเศษ');
+  if(!confirm('ไม่ใช้ "' + r.name + '" กับเงินเดือน?\nตารางวันหยุดพิเศษด้านล่างไม่เปลี่ยน · ปฏิทินจะขึ้นว่า "เงินเดือนไม่ใช้"')) return;
+  const u = await db.from('cal_special_days').update({ pay_status:'declined', pay_decided_by:(AUTH && AUTH.username) || '?', pay_decided_at:new Date().toISOString() })
+    .eq('id', r.id).eq('updated_at', r.updated_at).select('id');
+  if(u.error) return dbErr(u.error, 'บันทึก');
+  if(!u.data || !u.data.length) toast('⚠️ ปฏิทินเพิ่งถูกแก้ — โหลดใหม่ให้แล้ว');
+  else toast('บันทึกแล้ว — ไม่ใช้กับเงินเดือน');
+  await calLoad(); renderHoli();
 }
 
 /* ================= PAYSLIP ================= */
@@ -5924,7 +6106,7 @@ function updPeriodHint(){
 }
 
 /* ================= ประวัติการทำรายการ (หน้า #audit) ================= */
-const AUD_TBL_TH = { employees:'ข้อมูลพนักงาน', punches:'เวลาสแกน', adjustments:'เพิ่ม/หักเงิน', advances:'เบิกกลางเดือน',
+const AUD_TBL_TH = { cal_special_days:'วันพิเศษจากปฏิทิน', employees:'ข้อมูลพนักงาน', punches:'เวลาสแกน', adjustments:'เพิ่ม/หักเงิน', advances:'เบิกกลางเดือน',
   holidays:'วันหยุดพิเศษ', payroll_settings:'ตั้งค่า', deposit_entries:'เงินประกัน', mou_loans:'เงินยืม MOU',
   mou_entries:'หัก MOU รายงวด', doc_borrows:'สมุดยืมเอกสาร', fine_entries:'แก้รายการหักอัตโนมัติ', loans:'พนักงานยืมเงิน',
   loan_entries:'ผ่อนเงินยืมรายงวด', sso_entries:'ประกันสังคม', tips:'ทิปประจำงวด', shifts:'กะการทำงาน',

@@ -76,6 +76,12 @@
 - `adjustments` — เพิ่ม/หักเงินรายงวด: employee_id, kind(add/deduct), reason, amount, period
 - `advances` — เบิกกลางเดือน: employee_id, amount, adv_date, period
 - `holidays` — วันหยุดพิเศษ: day, name, multiplier
+  - **วันพิเศษจากปฏิทิน (2026-09-29)**: เจ้าของลงวันจ่ายค่าแรงที่ JJ Calendar แท็บ 🎌 (ตาราง `cal_special_days`) → หน้า 🎌 ของแอปนี้ขึ้นการ์ด
+    **"📅 จากปฏิทิน รอยืนยัน"** พร้อมพรีวิวเงิน (วันที่ผ่านมาแล้วคิดจริงด้วย `calcPay` แล้วคืนค่า · วันข้างหน้าประมาณสูงสุด) + ตัวเลขบนเมนู 🎌
+    · **มีผลกับเงินก็ต่อเมื่อกด ✅** (เจ้าของสั่ง) → `calConfirm` ติ๊กปฏิทินแบบมีเงื่อนไข `updated_at` ก่อน แล้วค่อยเขียน `holidays` ผ่านตัวดัก `db.from`
+      (เช็คสิทธิ์หน้า `holi` + จดประวัติ) · ✖ = `calDecline` · **`calcPay` ไม่ได้แก้เลย** ยังคิดจาก `holidays` ตามเดิม (กฎเดิมทุกข้อ: หน้าร้านได้ ×N · ออฟฟิศได้หยุด · วันห้ามหยุด)
+    · `calDayDiff` เอาออกเฉพาะวันที่ยังตรงกับ `pay_snapshot` ที่ปฏิทินเคยใส่ — วันที่แก้มือในหน้า 🎌 ไม่แตะ · ยังไม่รัน SQL = ไม่มีการ์ด แอปปกติ
+    · เทส `test/holi.js` ส่วน A ล็อกกฎเดิมของวันหยุดพิเศษ (ผ่านกับไฟล์ก่อนแก้) · ส่วน B การ์ด/ยืนยัน/ไม่ใช้/สิทธิ์/พรีวิว
 - `payroll_settings` — แถวเดียว: cutoff, cut_day, pay_day, late_rate, single_fine, grace, default_wage, month_div, no_off_bonus, hourly_*, must_work_days('5,6,0'), must_work_fine, **dep_start, ot_rate**
 - `deposit_entries` — override เงินประกันรายงวด: unique(employee_id, period)
 - `mou_loans` — unique ต่อคน: amount, monthly, final_max, start_period, opening, doc_passport, doc_pink, doc_complete, note, returned_at
