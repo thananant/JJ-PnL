@@ -82,7 +82,16 @@
   - **นับสต๊อก (`jjmk-stockcheck.html`)**: เดิม hash ใช้ salt `JJSC` คนละตัวกับบัญชีกลาง (`JJPNL`) → เอา user/pass กลางไปกรอกยังไงก็ไม่ผ่าน · ตอนนี้ใช้ `pwHash(u,p)=sha256(u+'|'+p+'|JJPNL')` เหมือนกันแล้ว · เซสชันประจำแท็บ `sessionStorage.jjsc_sess` · `unit` ของบัญชีกำหนดสาขาที่เห็น (JJLP→ลาดพร้าว · JJRD→รัชดา · ALL/OFFICE/JJCK→ทุกสาขา) · มีสิทธิ์หน้า `cfg`/`set`/`items`/`sched` = เป็นผู้ดูแลในแอป · หน้า "จัดการผู้ใช้" เดิมเอาออกแล้ว ชี้ไป 🔑 JJ Access แทน
     - ⚠️ **ล็อกอินของไฟล์นี้เคยหายไปแล้ว 1 ครั้ง** — commit `6c515b2` (2026-09-24) เขียนทับ `jjmk-stockcheck.html` ด้วยสำเนาเก่าจาก session ที่ทำงานขนานกัน ทำให้กลับไปใช้ `sc_users`+salt `JJSC` และ **"โหมดเปิด" ที่ไม่ต้องล็อกอินเลย** (กู้คืนแล้ว 2026-09-28)
     - **แก้ไฟล์แอปไหนก็ต้อง `git fetch`+rebase บน `origin/main` ก่อน commit ทุกครั้ง** ไฟล์เดียวใหญ่ ๆ แบบนี้ทับกันง่ายมาก · เช็คหลัง merge ว่า `initAuth()` ยังเรียก `showLogin()` และ `pwHash` ยังเป็น salt `JJPNL`
-    - ⚠️ **เกิดซ้ำอีก 2026-09-29**: commit `63c5497` เขียนทับ `jjmk-admin.html` + `jjmk-pnl.html` ด้วยสำเนาเก่า ทำให้ **JJ Login หลุดไปจาก 2 ไฟล์นั้น** (กู้คืนแล้ว) · **ทุกครั้งที่จะ commit ให้เช็คก่อนว่าไฟล์ที่แก้ยังมีของเดิมครบ** เช่น `grep -c 'window.JJLogin' *.html` ต้องได้ 2 ทุกไฟล์ที่ควรมี
+    - ⚠️ **เกิดซ้ำแล้ว 3 ครั้ง** — `63c5497` (เขียนทับ `jjmk-admin.html`+`jjmk-pnl.html`) · `0d262eb` (เขียนทับ `jjmk-pnl.html` อีกรอบ) ทั้งคู่ทำให้ **JJ Login หลุดหายไป** (กู้คืนแล้วทั้งหมด)
+    - **เช็คทุกครั้งก่อน commit** ว่าไฟล์ที่แก้ยังมีของเดิมครบ:
+      ```
+      for f in index.html jjmk-pnl.html jjmk-owner.html jjmk-admin.html jjmk-payroll.html \
+               jjmk-calendar.html jjmk-invoice.html jjmk-social.html jjmk-maint.html \
+               jjmk-kpi.html jjmk-stockcheck.html jjmk-kitchen.html jjmk-order.html; do
+        printf "%-22s %s\n" $f "$(grep -c 'window.JJLogin' $f)"; done
+      ```
+      ต้องได้ **2 ทุกไฟล์** (1 = บล็อกหาย เหลือแต่ที่เรียกใช้ · 0 = หายทั้งคู่)
+    - **วิธีกู้**: `git diff 2266081^ 2266081 -- <ไฟล์> | git apply --3way` (commit 2266081 = PR #59 ที่ใส่ JJ Login ครั้งแรก) — merge เข้ากับงานใหม่ของ commit ที่มาทับได้เอง ไม่ต้องเลือกว่าจะทิ้งของใคร
   - **ครัวกลาง (`jjmk-kitchen.html`)**: เลิกใช้ Supabase Auth (`signInWithPassword` + อีเมลปลอม `@jjmk.local`) และตาราง `app_users` · เซสชันประจำแท็บ `sessionStorage.jjck_sess` · "จำไว้ในเครื่องนี้ 12 ชม." = `jjck_keep` · role แปลงเป็นของเดิมในแอป: admin/owner→`owner` · manager หรือมีสิทธิ์หน้า `set`/`acc`→`manager` · ที่เหลือ→`warehouse`
   - **ต้องรัน `jjmk_kitchen_central.sql` (branch `sql`) ครั้งเดียว** ไม่งั้นครัวกลางบันทึกอะไรไม่ได้ — RLS เดิมของตาราง `ck_*` บังคับ `authenticated` + เช็ค `app_users.auth_uid` ซึ่งบัญชีกลาง (ยิงผ่าน anon key) ทำไม่ได้ · ไฟล์เปิด `ck_*` + `ck_add_qty` + bucket `product-images` ให้ role `anon` (แพตเทิร์นเดียวกับ `jjmk_maint_access.sql`)
   - ~~ปุ่ม "ดูแอปทั้งหมด" ... อย่าตัดออก~~ **เจ้าของสั่งเอาออกแล้ว 2026-09-29** (ดูหัวข้อสมัครพนักงาน)
@@ -122,7 +131,13 @@
 - **`userReady(u)`** = `active!==false && (status==null || status==='active')` — `status` เป็น null (ยังไม่รัน SQL) ถือว่าใช้ได้ **อย่าตัดเงื่อนไขนี้ออก** ไม่งั้นบัญชีเดิมทั้งหมดจะเข้าไม่ได้
 - **ฝั่ง admin**: `jjmk-admin.html` แท็บ **⏳ รออนุมัติ** (`viewPending()`) — โชว์ข้อมูลส่วนตัวครบ + เลือกระดับ/ประจำที่ + ติ๊กแอพ + ปุ่มคัดลอกสิทธิ์จากคนอื่น · ติ๊กแอพ 1 ตัว = ให้ `vae` (ดู/เพิ่ม/แก้ ไม่ให้ลบ) ทุกหน้าจอของแอพนั้น · อนุมัติแล้วลง `pnl_access_log`
 - ตัวเลขใบสมัครค้าง: บนแท็บใน JJ Access (`refreshPendCount()`) และบนไอคอน 🔑 JJ Access ที่หน้าศูนย์รวมแอพ (`paintPending()` → RPC `pnl_pending_count`)
-- **แจ้ง LINE**: Edge Function **`signup-notify`** (deploy ผ่าน Dashboard · **ปิด Verify JWT**) ใช้ secrets `LINE_TOKEN` + `LINE_GROUP_ID` **ชุดเดียวกับ Cloudflare Worker ของระบบเงินเดือน** (คนละตัวกับ `LINE_CHANNEL_*` ของ JJ Social) · ไม่ deploy = สมัครได้ปกติ แค่ไม่มีแจ้งเตือน (`suNotify()` เรียกแบบ fail-soft)
+- **แจ้ง LINE**: Edge Function **`signup-notify`** (deploy ผ่าน Dashboard · **ปิด Verify JWT**) · ไม่ deploy = สมัครได้ปกติ แค่ไม่มีแจ้งเตือน (`suNotify()` เรียกแบบ fail-soft)
+  - **secret มีตัวเดียวคือ `LINE_TOKEN`** = Channel access token ของบอทร้าน (ค่าเดียวกับ Cloudflare Worker ของระบบเงินเดือน · คนละตัวกับ `LINE_CHANNEL_*` ของ JJ Social)
+  - **ไอดีกลุ่มตั้งจากในแอพ** (เจ้าของสั่ง 2026-09-29: *"อยากใส่ line group id ในระบบ"*) — ช่องกรอกอยู่ในการ์ด 🔔 ของแท็บ ⏳ รออนุมัติ · เก็บที่ `pnl_settings.line_group_id` · ฟังก์ชันอ่านจากตารางก่อน ไม่มีค่อยตกไปใช้ secret `LINE_GROUP_ID`
+  - มี dropdown ให้เลือกจาก **`line_groups`** (ตารางที่ระบบนับสต๊อกจดไว้ว่าบอทอยู่กลุ่มไหนบ้าง) เผื่อหาไอดีไม่เจอ — **ระวัง ส่วนใหญ่เป็นกลุ่มซัพพลายเออร์** เลือกผิดข้อมูลผู้สมัครจะไปโผล่ที่ร้านค้า
+  - ตรวจรูปแบบก่อนบันทึก (`^[CRU][0-9a-f]{32}$`) · บันทึกแล้วลง `pnl_access_log`
+  - ⚠️ **`pnl_settings` เปิดให้ anon อ่าน/เขียนเหมือนตาราง `pnl_*` อื่น — ห้ามเอา token หรือรหัสผ่านมาเก็บที่นี่** (ไอดีกลุ่มอย่างเดียวส่งข้อความไม่ได้ ต้องมี token ด้วย)
+  - หาไอดีกลุ่มยังไง (เจ้าของเคยติดจริง 2026-09-29): พิมพ์ `groupid` ในกลุ่มแล้วบอทตอบ — **ใช้ไม่ได้ถ้า webhook ของ LINE ไม่ได้ชี้มาที่ Cloudflare Worker** (LINE ตั้ง webhook ได้ URL เดียว · ตอนนี้ชี้ไปที่ `line-order` ของระบบนับสต๊อก ทำให้ `device_log` หยุดรับตั้งแต่ 2026-07-19) → ให้ดู `line_groups` แทน หรืออ่านไอดีท้าย URL ของหน้าแชทใน manager.line.biz
 - ⚠️ **โค้ด `signup-notify` เป็น TypeScript วางที่ Edge Functions เท่านั้น** — วางใน SQL Editor จะขึ้น `syntax error at or near "//"` (เจ้าของพลาดจริงแล้ว 2026-09-29 · ซ้ำรอยโค้ดฟีดปฏิทินตอน 2026-09-21)
   - **ขั้นตอนติดตั้งอยู่ในแอพแล้ว** — การ์ด "🔔 แจ้งเตือน LINE เมื่อมีคนสมัครใหม่" ท้ายแท็บ ⏳ รออนุมัติ (เห็นเฉพาะ `isBoss()`) มีทั้งคำเตือนว่าห้ามวางใน SQL Editor · ขั้นตอน 1–5 · ปุ่ม 📋 คัดลอกโค้ด · ปุ่ม 🔎 ทดสอบที่แยกอาการให้ (`404`=ยังไม่ deploy · `401`=ยังไม่ปิด Verify JWT · `skip:`=ยังไม่ตั้ง Secrets · `sent`=ใช้ได้ · `LINE ตอบกลับ`=token ผิด/บอทไม่อยู่ในกลุ่ม)
   - โค้ดฝังเป็น `<script type="text/plain" id="fnSignupNotify">` ท้าย `jjmk-admin.html` — **แก้ `signup-notify.ts` ที่ branch `sql` แล้วต้องฝังใหม่ให้ตรงกันทุกตัวอักษร** (เทสเทียบไบต์ต่อไบต์กับไฟล์บน branch นั้น)

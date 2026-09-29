@@ -220,6 +220,15 @@ a.back:hover{color:var(--gold2)}
 .fnres{margin-top:10px;font-size:13px;line-height:1.7;padding:10px 13px;border-radius:11px;
   background:var(--bg2);border:1px solid var(--line);display:none}
 .fnres.on{display:block}
+
+.jjf{text-align:left}
+.jjf label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin:0 0 5px 2px}
+.jjf input{width:100%;height:46px;border-radius:11px;padding:0 13px;font-size:16px;
+  background:var(--bg2);border:1px solid var(--line2);color:var(--ink);outline:none;font-family:var(--fb)}
+.jjf input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(217,164,65,.15)}
+.jjf input::placeholder{color:var(--mut)}
+#fnSteps .sb{display:none}
+#fnSteps.open .sb{display:block!important}
 </style>
 <script>
 /* ============================================================
@@ -570,7 +579,7 @@ const BR_SCOPED={payroll:true};
 const BR_LIST=[['JJLP','ลาดพร้าว'],['JJRD','รัชดา'],['JJCK','ครัวกลาง'],['OFFICE','ออฟฟิศ']];
 function brOf(u,app){ const a=(u.apps||{})[app]; return a&&a._br?String(a._br).split(',').filter(Boolean):[]; }
 
-const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['pending','users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{},copiedFrom:null,pend:[],pendApps:{},pendCopy:{}};
+const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['pending','users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{},copiedFrom:null,pend:[],pendApps:{},pendCopy:{},lineCfg:null,lineGroups:[]};
 
 /* ---------- utils ---------- */
 const $=s=>document.querySelector(s);
@@ -717,10 +726,11 @@ async function viewPending(){
   }catch(e){
     if(NEED_SQL(e))return '<div class="card"><div class="empty">ยังไม่ได้ติดตั้งระบบสมัครพนักงาน<br>'+
       '<span style="font-size:12.5px">รัน <b>jjmk-signup.sql</b> ใน Supabase ก่อน 1 ครั้ง '+
-      '(เพิ่มคอลัมน์ <code>pnl_users.status</code> และตาราง <code>pnl_profiles</code>)</span></div></div>'+setupCard();
+      '(เพิ่มคอลัมน์ <code>pnl_users.status</code> และตาราง <code>pnl_profiles</code>)</span></div></div>';
     throw e;
   }
   S.pend=us; S.pendApps={}; S.pendCopy={};
+  await loadLineCfg();
   setPendCount(us.length);
   if(!us.length)return '<div class="card"><div class="empty">🎉 ไม่มีใบสมัครค้างอยู่<br>'+
     '<span style="font-size:12.5px">ใบสมัครใหม่จากหน้าศูนย์รวมแอพจะมาโผล่ที่นี่</span></div></div>'+setupCard();
@@ -801,27 +811,85 @@ function pendCard(u,p){
    ขั้นตอนติดตั้งจึงอยู่ในแอพ พร้อมปุ่มคัดลอกและปุ่มทดสอบ */
 function setupCard(){
   if(!isBoss(S.user))return '';
-  return '<div class="setup" id="fnCard">'+
+  const cur=(S.lineCfg&&S.lineCfg.gid)||'';
+  const list=(S.lineGroups||[]);
+  const opts=list.length
+    ? '<option value="">— เลือกจากกลุ่มที่บอทอยู่ ('+list.length+' กลุ่ม) —</option>'+
+      list.map(g=>'<option value="'+esc(g.group_id)+'">'+esc(g.name||('กลุ่ม '+String(g.group_id).slice(0,10)+'…'))+'</option>').join('')
+    : '';
+  return '<div class="setup open" id="fnCard">'+
     '<div class="sh" onclick="document.getElementById(\'fnCard\').classList.toggle(\'open\')">'+
-      '🔔 แจ้งเตือน LINE เมื่อมีคนสมัครใหม่ <span class="ar">(ไม่ตั้งก็ใช้งานได้ปกติ — กดเพื่อดูวิธี)</span></div>'+
+      '🔔 แจ้งเตือน LINE เมื่อมีคนสมัครใหม่ '+
+      '<span class="ar">'+(cur?'(ตั้งกลุ่มไว้แล้ว)':'(ยังไม่ได้ตั้ง — ไม่ตั้งก็ใช้งานได้ปกติ)')+'</span></div>'+
     '<div class="sb">'+
-      '<div class="warnbox">⚠️ โค้ดนี้เป็น <b>TypeScript ของ Edge Functions</b> — '+
-        '<b>ห้ามเอาไปวางใน SQL Editor</b> จะขึ้น <code>syntax error at or near "//"</code><br>'+
-        'ส่วนที่ต้องวางใน SQL Editor คือไฟล์ <b>jjmk-signup.sql</b> คนละอันกัน</div>'+
-      '<ol>'+
-        '<li>เปิด Supabase → <b>Edge Functions</b> → <b>Deploy a new function</b> ตั้งชื่อ <code>signup-notify</code></li>'+
-        '<li>กดปุ่ม <b>📋 คัดลอกโค้ด</b> ข้างล่าง แล้ววางทับโค้ดตัวอย่างทั้งหมด → <b>Deploy</b></li>'+
-        '<li>เข้าไปที่ฟังก์ชัน → <b>Settings</b> → <b>ปิด Verify JWT</b> (สำคัญ ไม่ปิดจะโดนปัดตกตั้งแต่ด่านหน้า)</li>'+
-        '<li>Edge Functions → <b>Secrets</b> → เพิ่ม <code>LINE_TOKEN</code> และ <code>LINE_GROUP_ID</code><br>'+
-          '<span style="color:var(--mut);font-size:12.5px">ใช้ค่าเดียวกับที่ตั้งไว้ใน Cloudflare Worker ของระบบเงินเดือน '+
-          '(ตัวที่ส่งรายงานเข้าสู่กลุ่ม LINE อยู่แล้ว)</span></li>'+
-        '<li>กด <b>🔎 ทดสอบ</b> — ถ้าผ่านจะมีข้อความทดสอบเด้งเข้ากลุ่ม LINE ทันที</li>'+
-      '</ol>'+
+      '<div class="psec">กลุ่ม LINE ที่จะให้แจ้งเตือน</div>'+
+      '<div class="jjf"><label for="lgid">LINE Group ID</label>'+
+        '<input id="lgid" type="text" spellcheck="false" autocapitalize="none" '+
+        'placeholder="วางไอดีกลุ่มที่นี่ เช่น C1234abcd…" value="'+esc(cur)+'"></div>'+
+      (opts?'<div class="jjf" style="margin-top:9px"><label for="lgpick">หาไอดีไม่เจอ? เลือกจากรายชื่อกลุ่มแทน</label>'+
+        '<select class="zsel" id="lgpick" style="width:100%" onchange="if(this.value)document.getElementById(\'lgid\').value=this.value">'+
+        opts+'</select></div>':'')+
       '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">'+
-        '<button class="btn" onclick="copyFn()">📋 คัดลอกโค้ด</button>'+
-        '<button class="btn" onclick="testFn()">🔎 ทดสอบ</button></div>'+
+        '<button class="btn okb" onclick="saveGid()">💾 บันทึกกลุ่ม</button>'+
+        '<button class="btn" onclick="testFn()">🔎 ทดสอบส่งข้อความ</button></div>'+
       '<div class="fnres" id="fnRes"></div>'+
+      '<div class="warnbox" style="margin-top:14px">ต้องทำครั้งเดียวก่อนใช้งาน — '+
+        '<a href="javascript:" onclick="document.getElementById(\'fnSteps\').classList.toggle(\'open\')" '+
+        'style="color:var(--gold2)">ดูขั้นตอนติดตั้งฟังก์ชัน</a></div>'+
+      '<div class="setup" id="fnSteps" style="margin-top:0;border:0;background:transparent"><div class="sb" style="padding:0">'+
+        '<div class="warnbox">⚠️ โค้ดข้างล่างเป็น <b>TypeScript ของ Edge Functions</b> — '+
+          '<b>ห้ามเอาไปวางใน SQL Editor</b> จะขึ้น <code>syntax error at or near "//"</code><br>'+
+          'ส่วนที่ต้องวางใน SQL Editor คือไฟล์ <b>jjmk-signup.sql</b> คนละอันกัน</div>'+
+        '<ol>'+
+          '<li>Supabase → <b>Edge Functions</b> → <b>Deploy a new function</b> ตั้งชื่อ <code>signup-notify</code></li>'+
+          '<li>กด <b>📋 คัดลอกโค้ด</b> แล้ววางทับโค้ดตัวอย่างทั้งหมด → <b>Deploy</b></li>'+
+          '<li>เข้าฟังก์ชัน → <b>Settings</b> → <b>ปิด Verify JWT</b></li>'+
+          '<li>Edge Functions → <b>Secrets</b> → เพิ่ม <code>LINE_TOKEN</code> อย่างเดียว<br>'+
+            '<span style="color:var(--mut);font-size:12.5px">= Channel access token ของบอท (ค่าเดียวกับใน Cloudflare Worker ของระบบเงินเดือน) · '+
+            '<b>ไอดีกลุ่มไม่ต้องใส่ที่นั่น</b> ใส่ในช่องข้างบนนี้ได้เลย</span></li>'+
+        '</ol>'+
+        '<button class="btn" style="margin-top:10px" onclick="copyFn()">📋 คัดลอกโค้ด</button>'+
+      '</div></div>'+
     '</div></div>';
+}
+/* โหลดค่าที่ตั้งไว้ + รายชื่อกลุ่มที่บอทเคยเห็น (ตาราง line_groups ของระบบนับสต๊อก) */
+async function loadLineCfg(){
+  S.lineCfg={gid:''}; S.lineGroups=[];
+  try{
+    const r=await sel('pnl_settings',"select=val&id=eq.line_group_id");
+    if(r&&r[0])S.lineCfg.gid=String(r[0].val||'').trim();
+  }catch(e){}
+  try{
+    S.lineGroups=await sel('line_groups','select=group_id,name,seen_at&order=seen_at.desc.nullslast&limit=200');
+  }catch(e){
+    try{ S.lineGroups=await sel('line_groups','select=group_id,name&limit=200'); }catch(e2){}
+  }
+}
+async function saveGid(){
+  const el=document.getElementById('lgid'); if(!el)return;
+  const v=(el.value||'').trim();
+  const box=document.getElementById('fnRes'); box.className='fnres on';
+  if(v&&!/^[CRU][0-9a-f]{32}$/i.test(v)){
+    box.innerHTML='❌ ไอดีกลุ่มไม่ถูกรูปแบบ — ต้องขึ้นต้นด้วย <b>C</b> แล้วตามด้วยตัวเลข/ตัวอักษร a–f อีก 32 ตัว'+
+      '<br><span style="font-size:12px;color:var(--mut)">ที่ใส่มา '+v.length+' ตัวอักษร</span>';
+    return;
+  }
+  box.innerHTML='⏳ กำลังบันทึก…';
+  try{
+    const body={id:'line_group_id',val:v,updated_at:new Date().toISOString(),
+      updated_by:(S.user&&S.user.username)||'?'};
+    await api('POST','pnl_settings?on_conflict=id',body,'resolution=merge-duplicates,return=minimal');
+    S.lineCfg={gid:v};
+    await alog('(ระบบ)', v?'ตั้งกลุ่ม LINE แจ้งคนสมัครใหม่':'ยกเลิกกลุ่ม LINE แจ้งคนสมัครใหม่', v);
+    box.innerHTML=v?'✅ บันทึกแล้ว — กด <b>🔎 ทดสอบส่งข้อความ</b> ดูว่าเข้ากลุ่มถูกไหม'
+                  :'✅ ล้างค่าแล้ว — จะไม่มีแจ้งเตือน LINE';
+    toast('บันทึกกลุ่ม LINE แล้ว');
+  }catch(e){
+    const t=String(e.message||e);
+    box.innerHTML=/pnl_settings/.test(t)&&/does not exist|relation|schema cache/i.test(t)
+      ? '❌ ยังไม่มีตาราง <code>pnl_settings</code> — รัน <b>jjmk-signup.sql</b> เวอร์ชันล่าสุดใน SQL Editor ก่อนครับ'
+      : '❌ บันทึกไม่สำเร็จ — <span style="font-size:12px;color:var(--mut)">'+esc(t.slice(0,160))+'</span>';
+  }
 }
 function copyFn(){
   const el=document.getElementById('fnSignupNotify'); if(!el)return;
@@ -852,7 +920,10 @@ async function testFn(){
       box.innerHTML='❌ <b>ยังไม่ได้ปิด Verify JWT</b><br>ฟังก์ชัน deploy แล้ว แต่ Supabase ปัดตกตั้งแต่ด่านหน้า — ทำข้อ 3'; return;
     }
     if(/^skip/.test(t)){
-      box.innerHTML='⚠️ <b>deploy แล้ว แต่ยังไม่ได้ตั้ง Secrets</b><br>เพิ่ม <code>LINE_TOKEN</code> + <code>LINE_GROUP_ID</code> ตามข้อ 4'; return;
+      box.innerHTML=/กลุ่ม/.test(t)
+        ? '⚠️ <b>ยังไม่ได้ใส่ไอดีกลุ่ม</b><br>ใส่ในช่องข้างบนแล้วกด 💾 บันทึกกลุ่ม ก่อนครับ'
+        : '⚠️ <b>deploy แล้ว แต่ยังไม่ได้ตั้ง secret <code>LINE_TOKEN</code></b><br>ใส่ที่ Edge Functions → Secrets (ดูขั้นตอนข้อ 4)';
+      return;
     }
     if(/^sent/.test(t)){
       box.innerHTML='✅ <b>ใช้งานได้แล้ว</b> — ลองดูในกลุ่ม LINE จะมีข้อความทดสอบเด้งเข้าไป'; return;
@@ -1460,10 +1531,13 @@ function logout(){localStorage.removeItem('jjpnl_auth');location.reload();}
 // วางที่ Supabase -> Edge Functions -> New function ชื่อ "signup-notify"
 // ⚠️ ต้อง "ปิด Verify JWT" ของฟังก์ชันนี้ (Settings ของฟังก์ชัน) ไม่งั้นจะโดนปัดตกตั้งแต่ด่านหน้า
 //
-// Secrets ที่ต้องตั้ง (Edge Functions -> Secrets) — ใช้ค่าเดียวกับที่ตั้งไว้ใน Cloudflare Worker ของระบบเงินเดือน:
-//   LINE_TOKEN     = Channel access token ของ LINE OA ที่ใช้ส่งรายงานอยู่แล้ว
-//   LINE_GROUP_ID  = Cxxxxxxxx... กลุ่ม LINE ที่จะให้แจ้งเตือน
-// ไม่ตั้ง 2 ตัวนี้ = ฟังก์ชันตอบ ok เฉย ๆ (การสมัครยังทำงานปกติ แค่ไม่มีแจ้งเตือน)
+// Secret ที่ต้องตั้ง (Edge Functions -> Secrets) — มีตัวเดียว:
+//   LINE_TOKEN = Channel access token ของ LINE OA ที่ใช้ส่งรายงานอยู่แล้ว
+//                (ค่าเดียวกับที่ตั้งใน Cloudflare Worker ของระบบเงินเดือน)
+//
+// ส่วน "จะส่งเข้ากลุ่มไหน" เลือกได้จากในแอพเลย: JJ Access -> แท็บรออนุมัติ -> การ์ดแจ้งเตือน LINE
+//   (เก็บที่ pnl_settings.line_group_id) · ถ้าไม่ได้ตั้งในแอพ จะใช้ secret LINE_GROUP_ID แทน
+// ไม่ตั้งอะไรเลย = ฟังก์ชันตอบ ok เฉย ๆ (การสมัครยังทำงานปกติ แค่ไม่มีแจ้งเตือน)
 
 const UNIT: Record<string, string> = {
   JJLP: "สาขาลาดพร้าว", JJRD: "สาขารัชดา", JJCK: "ครัวกลาง", OFFICE: "ออฟฟิศ", ALL: "ส่วนกลาง",
@@ -1475,16 +1549,34 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// กลุ่มที่จะส่ง — เอาจากที่ตั้งไว้ในแอพก่อน (pnl_settings) ไม่มีค่อยใช้ secret
+async function groupId(): Promise<string> {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_ANON_KEY");
+  if (url && key) {
+    try {
+      const r = await fetch(url + "/rest/v1/pnl_settings?select=val&id=eq.line_group_id", {
+        headers: { apikey: key, Authorization: "Bearer " + key },
+      });
+      if (r.ok) {
+        const rows = await r.json();
+        const v = rows && rows[0] ? String(rows[0].val || "").trim() : "";
+        if (v) return v;
+      }
+    } catch (_) { /* อ่านไม่ได้ก็ตกไปใช้ secret */ }
+  }
+  return (Deno.env.get("LINE_GROUP_ID") || "").trim();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
     const b = await req.json().catch(() => ({} as Record<string, string>));
     const token = Deno.env.get("LINE_TOKEN");
-    const to = Deno.env.get("LINE_GROUP_ID");
-    if (!token || !to) {
-      return new Response("skip: ยังไม่ได้ตั้ง LINE_TOKEN / LINE_GROUP_ID", { headers: CORS });
-    }
+    if (!token) return new Response("skip: ยังไม่ได้ตั้ง secret LINE_TOKEN", { headers: CORS });
+    const to = await groupId();
+    if (!to) return new Response("skip: ยังไม่ได้เลือกกลุ่ม LINE", { headers: CORS });
 
     const parts = [
       "🧑‍💼 มีคนสมัครเป็นพนักงานใหม่",
