@@ -1963,6 +1963,9 @@ const periodRangeLabel = p => { const r = periodRange(p);
    ⚠️ จุดที่รู้ว่าเป็นพนักงานคนไหน ต้องใช้ periodOfE / periodRangeE เสมอ (periodOf/periodRange เปล่า = รอบหน้าร้าน) */
 const OFFICE_MONTHLY_START = '2026-09';
 const isOfficeCycle = e => !!e && e.branch === 'OFFICE';
+/* ช่วงวันที่เกินเดือนปกติในงวดเปลี่ยนผ่าน แบบสั้นพอให้สลิปครึ่งหน้าไม่ล้น เช่น "26–31 ส.ค." */
+const transSpan = (from, n) => { const to = addDaysYMD(from, n-1); return from.slice(0,7)===to.slice(0,7) ? (+from.slice(8))+'–'+dayLabel(to) : dayLabel(from)+'–'+dayLabel(to); };
+const addDaysYMD = (d, n) => { const x = new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return localYMD(x); };
 const lastDayOf = p => { const [y,m] = p.split('-').map(Number); return localYMD(new Date(y, m, 0)); };
 function periodOfE(e, day){
   if(!isOfficeCycle(e)) return periodOf(day);
@@ -4078,7 +4081,7 @@ function renderDetail(){
       <div>
         <div class="section-title">เงินเดือนงวด ${period?periodLabel(period):''}</div>
         <div class="tbl-wrap"><table><tbody>
-          <tr><td>ค่าแรง ${isHr?'('+p.fullHrs+' ชม. × '+THB(e.rate)+')':e.type==='monthly'?(p.prorate?'('+p.days+' วัน × '+THB(Math.round(p.dRate))+' — เข้า/ออกระหว่างงวด คิดรายวัน)':'(เหมาเดือน)'):'('+p.days+' วัน × '+THB(e.rate)+')'}</td><td class="num">${THB2(p.base)}</td></tr>
+          <tr><td>ค่าแรง ${isHr?'('+p.fullHrs+' ชม. × '+THB(e.rate)+')':e.type==='monthly'?(p.prorate?'('+p.days+' วัน × '+THB(Math.round(p.dRate))+' — เข้า/ออกระหว่างงวด คิดรายวัน)':p.transExtra?'(เหมาเดือน '+THB(e.rate)+' + '+p.transExtra+' วัน '+transSpan(p.rg.from,p.transExtra)+')':'(เหมาเดือน)'):'('+p.days+' วัน × '+THB(e.rate)+')'}</td><td class="num">${THB2(p.base)}</td></tr>
           ${p.noOffBonus? `<tr><td style="color:var(--green)">＋ เบี้ยไม่หยุด (${p.noOffDays} วัน × ${THB(Math.round(p.dRate))})</td><td class="num" style="color:var(--green)">${THB2(p.noOffBonus)}</td></tr>`:''}
           ${p.holiBonus? `<tr><td style="color:var(--green)">＋ เบี้ยวันหยุดพิเศษ (${p.holiDays.filter(h=>h.ok).length} วัน)</td><td class="num" style="color:var(--green)">${THB2(p.holiBonus)}</td></tr>`:''}
           ${p.tip && p.tip.share? `<tr><td style="color:var(--green)">＋ ทิปประจำเดือน (กองกลาง ${p.tip.pool%1?THB2(p.tip.pool):THB(p.tip.pool)} ÷ ${p.tip.n} คน)</td><td class="num" style="color:var(--green)">${THB2(p.tip.share)}</td></tr>`:''}
@@ -4398,7 +4401,7 @@ function buildSlip(e, period, compact){
       </div>
       <div style="text-align:right;font-size:11.5px">
         <div style="font-family:'Prompt',sans-serif;font-weight:600;font-size:13px">${periodLabel(period)}</div>
-        <div class="co">รอบ ${periodRangeLabel(period)}</div>
+        <div class="co">รอบ ${periodRangeLabelE(e, period)}</div>
         <div class="co">จ่ายวันที่ ${dayLabel(r.pay)}</div>
       </div>
     </div>
@@ -4467,7 +4470,7 @@ function buildSlip(e, period, compact){
       <div>
         <div class="section-title" style="margin:0 0 6px;font-size:13px">รายรับ</div>
         <div class="tbl-wrap"><table><tbody>
-          <tr><td>ค่าแรง ${isHr?'('+p.fullHrs+' ชม.เต็ม × '+THB(e.rate)+')':e.type==='monthly'?(p.prorate?'('+p.days+' วัน × '+THB(Math.round(p.dRate))+' — เข้า/ออกระหว่างงวด คิดรายวัน)':'(เหมาเดือน)'):'('+p.days+' วัน × '+THB(e.rate)+')'}</td><td class="num">${THB2(p.base)}</td></tr>
+          <tr><td>ค่าแรง ${isHr?'('+p.fullHrs+' ชม.เต็ม × '+THB(e.rate)+')':e.type==='monthly'?(p.prorate?'('+p.days+' วัน × '+THB(Math.round(p.dRate))+' — เข้า/ออกระหว่างงวด คิดรายวัน)':p.transExtra?'(เหมาเดือน '+THB(e.rate)+' + '+p.transExtra+' วัน '+transSpan(p.rg.from,p.transExtra)+')':'(เหมาเดือน)'):'('+p.days+' วัน × '+THB(e.rate)+')'}</td><td class="num">${THB2(p.base)}</td></tr>
           ${p.noOffBonus? `<tr><td>เบี้ยไม่หยุด (${p.noOffDays} วัน × ${THB(Math.round(p.dRate))})<br><span style="font-size:10px;color:#6b625b">สิทธิ์หยุด ${p.offDue} วัน · ใช้ไป ${p.offUsed} วัน</span></td><td class="num">${THB2(p.noOffBonus)}</td></tr>`:''}
           ${p.holiDays.filter(h=>h.ok).map(h=>`<tr><td>🎌 ${h.name} ${dayLabel(h.day)} (×${h.mult})</td><td class="num">${THB2(h.bonus)}</td></tr>`).join('')}
           ${p.tip && p.tip.share? `<tr><td>ทิปประจำเดือน (กองกลาง ${p.tip.pool%1?THB2(p.tip.pool):THB(p.tip.pool)} ÷ ${p.tip.n} คน)</td><td class="num">${THB2(p.tip.share)}</td></tr>`:''}
@@ -4547,8 +4550,8 @@ function openTransferSummary(){
       </div>
       <div style="text-align:right;font-size:11.5px">
         <div style="font-family:'Prompt',sans-serif;font-weight:600;font-size:13px">${periodLabel(period)}</div>
-        <div class="co">รอบ ${periodRangeLabel(period)}</div>
-        <div class="co">จ่ายวันที่ ${dayLabel(r.pay)}</div>
+        <div class="co">รอบ ${periodRangeLabelE(g.rows[0].e, period)}</div>
+        <div class="co">จ่ายวันที่ ${dayLabel(periodRangeE(g.rows[0].e, period).pay)}</div>
       </div>
     </div>
 
@@ -4573,7 +4576,7 @@ function openTransferSummary(){
     </div>
 
     <div class="slip-total">
-      <div><div style="font-size:11.5px;color:#b9ad9f">ยอดโอนเข้าบัญชีนี้รวม · จ่ายวันที่ ${dayLabel(r.pay)}</div>
+      <div><div style="font-size:11.5px;color:#b9ad9f">ยอดโอนเข้าบัญชีนี้รวม · จ่ายวันที่ ${dayLabel(periodRangeE(g.rows[0].e, period).pay)}</div>
         <div style="font-size:11px;color:#8a8076">${g.rows.map(x=>x.e.nick+' '+THB2(x.p.net)).join(' + ')}</div></div>
       <div class="n">${THB2(sumOf(g.rows))} ฿</div>
     </div>
@@ -4888,8 +4891,8 @@ function openAdvSheet(){
         </div>
         <div style="text-align:right;font-size:11.5px">
           <div style="font-family:'Prompt',sans-serif;font-weight:600;font-size:13px">${periodLabel(period)}</div>
-          <div class="co">รอบ ${periodRangeLabel(period)}</div>
-          <div class="co">เบิกวันที่ ${dayLabel(r.adv)} · หักคืนตอนจ่าย ${dayLabel(r.pay)}</div>
+          <div class="co">รอบ ${periodRangeLabelE({branch:b}, period)}</div>
+          <div class="co">เบิกวันที่ ${dayLabel(r.adv)} · หักคืนตอนจ่าย ${dayLabel(periodRangeE({branch:b}, period).pay)}</div>
         </div>
       </div>
       <p class="small" style="margin:8px 0">เพดาน ${THB(settings.advMax)} บาท หรือ ${Math.round(settings.advRatio*100)}% ของค่าแรงที่ทำมา (แล้วแต่อันไหน<b>น้อยกว่า</b>) — ช่อง "เบิกได้สูงสุด" คำนวณจากวันทำงานถึง ${dayLabel(r.adv)}</p>
