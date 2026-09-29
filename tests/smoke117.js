@@ -34,7 +34,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(method==='POST'&&path.startsWith('pnl_supply_moves')){let rows=JSON.parse(opt.body);const arr=Array.isArray(rows)?rows:[rows];const made=arr.map(r=>Object.assign({id:nextId++,created_at:new Date().toISOString()},r));posts.push({t:'moves',rows:made});return T(Array.isArray(rows)?made:made);}
       if(method==='POST')return T([]);
       if(path.startsWith('pnl_supply_balance')){const br=(path.match(/branch=eq\.([A-Z]+)/)||[])[1];const q=path.match(/item_id=eq\.(\d+)/);let r=bal.filter(b=>!br||b.branch===br);if(q)r=r.filter(b=>b.item_id===+q[1]);return T(r);}
-      if(path.startsWith('pnl_supply_moves')){const br=(path.match(/branch=eq\.([A-Z]+)/)||[])[1];const it=path.match(/item_id=eq\.(\d+)/);let r=moves.filter(m=>!br||m.branch===br);if(it)r=r.filter(m=>m.item_id===+it[1]);return T(r);}
+      if(path.startsWith('pnl_supply_moves')){const br=(path.match(/branch=eq\.([A-Z]+)/)||[])[1];const it=path.match(/item_id=eq\.(\d+)/);let r=moves.filter(m=>!br||m.branch===br);if(it)r=r.filter(m=>m.item_id===+it[1]);if(path.includes('kind=eq.out'))r=r.filter(m=>m.kind==='out');const g=(path.match(/d=gte\.([\d-]+)/)||[])[1],l=(path.match(/d=lte\.([\d-]+)/)||[])[1];if(g)r=r.filter(m=>m.d>=g);if(l)r=r.filter(m=>m.d<=l);return T(r);}
       if(path.startsWith('pnl_branches'))return T([{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]);
       if(path.startsWith('pnl_suppliers'))return T([{id:1,name:'FarmFresh',category:'อาหาร',active:true,sort:1,vat_type:'NON-VAT'}]);
       return T([]);

@@ -20,7 +20,12 @@ const users=[
    apps:{pnl:{dash:'v',exp:'vae',ck:'vaed'},payroll:{today:'v'}}},
   // บัญชีเก่าที่ไม่เคยตั้งใน JJ Access → ใช้ perms เดิม
   {id:3,username:'boy',pass_hash:H('boy','x'),display_name:'บอย',role:'staff',active:true,
-   perms:{dash:'view',income:'edit',ck:'none'},apps:{payroll:{today:'v'}}}];
+   perms:{dash:'view',income:'edit',ck:'none'},apps:{}},
+  // JJ Access ตั้งแอพอื่นให้แต่ "ปิดแอพนี้" (ไม่มีคีย์ pnl) ทั้งที่ perms เก่ายังมี → ต้องเข้า P&L ไม่ได้
+  {id:4,username:'pay',pass_hash:H('pay','x'),display_name:'เพย์',role:'staff',active:true,
+   perms:{dash:'edit',income:'edit'},apps:{payroll:{today:'v'}}},
+  // เจ้าของ (role owner จาก JJ Access) = ทุกสิทธิ์ และหน้าผู้ใช้ต้องไม่ลดขั้นเป็นพนักงาน
+  {id:5,username:'boss',pass_hash:H('boss','x'),display_name:'บอส',role:'owner',active:true,perms:{},apps:{}}];
 function run(me,fn){
  return new Promise(res=>{
   const patches=[];
@@ -35,6 +40,7 @@ function run(me,fn){
         const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),headers:{get:()=>null},json:async()=>v});
         if(url.includes('pnl_users')&&method==='GET'){
           if(url.includes('username=eq.')){const u=decodeURIComponent(url.match(/username=eq\.([^&]+)/)[1]);return T(users.filter(x=>x.username===u));}
+          if(url.includes('id=eq.')){const id=+url.match(/id=eq\.(\d+)/)[1];return T(users.filter(x=>x.id===id));}
           return T(users);
         }
         if(url.includes('pnl_users')&&method==='PATCH'){patches.push({url:url.split('rest/v1/')[1],body:JSON.parse(opt.body)});return T([]);}
@@ -79,6 +85,18 @@ const nav=(d,v)=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display!=='no
     out.push('[boy] เห็น แดชบอร์ด/รายรับ · ซ่อน ครัวกลาง: '+(nav(d,'dash')&&nav(d,'income')&&!nav(d,'ck')));
     out.push('[boy] permOf income=edit dash=view ck=none: '+(w.eval("permOf('income')")==='edit'&&w.eval("permOf('dash')")==='view'&&w.eval("permOf('ck')")==='none'));
   }));
+  // 2b) เพย์: ถูกปิดแอพ P&L จาก JJ Access → เด้งกลับหน้าล็อกอินพร้อมข้อความ แม้ perms เก่าจะมี
+  console.log(await run(users[3],async(w,d,out)=>{
+    out.push('[pay] ไม่ได้เข้าแอพ (S.user ว่าง + auth ถูกล้าง): '+(!w.eval('S.user')&&w.localStorage.getItem('jjpnl_auth')==='null'));
+    const ov=d.getElementById('loginOv');
+    out.push('[pay] หน้าล็อกอินขึ้น + ข้อความบอกให้เปิดสิทธิ์ใน JJ Access: '+(!!ov&&ov.style.display==='flex'&&d.getElementById('lgMsg').textContent.includes('JJ Access')));
+  }));
+  // 2c) บอส (owner): เห็นทุกเมนู แก้ได้ทุกหน้า
+  console.log(await run(users[4],async(w,d,out)=>{
+    out.push('[boss] owner เห็นทุกเมนู + permOf(set)=edit: '+(['dash','income','ck','set','sup'].every(v=>nav(d,v))&&w.eval("permOf('set')")==='edit'));
+    await w.show('set'); await new Promise(r=>setTimeout(r,400));
+    out.push('[boss] เห็นการ์ดผู้ใช้และสิทธิ์ (isBoss): '+d.getElementById('view-set').textContent.includes('ผู้ใช้และสิทธิ์'));
+  }));
   // 3) แอดมินแก้ผู้ใช้เฟิร์สในหน้าตั้งค่า → หน้าต่างโชว์สิทธิ์ที่มีผลจริง และบันทึกเขียน apps.pnl ด้วย
   console.log(await run(users[0],async(w,d,out,patches)=>{
     out.push('[admin] เห็นทุกเมนู: '+['dash','income','ck','set'].every(v=>nav(d,v)));
@@ -94,6 +112,13 @@ const nav=(d,v)=>d.querySelector('.sb-item[data-v="'+v+'"]').style.display!=='no
     out.push('[admin] PATCH perms: ck=view income=edit: '+!!(p&&p.body.perms.ck==='view'&&p.body.perms.income==='edit'));
     out.push('[admin] PATCH apps.pnl: ck=v income=vaed dash=v exp=vaed, ไม่มี sum: '+!!(p&&p.body.apps&&p.body.apps.pnl&&p.body.apps.pnl.ck==='v'&&p.body.apps.pnl.income==='vaed'&&p.body.apps.pnl.dash==='v'&&p.body.apps.pnl.exp==='vaed'&&!('sum' in p.body.apps.pnl)));
     out.push('[admin] apps ของแอพอื่น (payroll) ไม่หาย: '+!!(p&&p.body.apps.payroll&&p.body.apps.payroll.today==='v'));
+    // เปิดหน้าต่างของบอส (owner) แล้วกดบันทึกโดยไม่แก้อะไร → role ต้องยังเป็น owner
+    w.userModal(5); await new Promise(r=>setTimeout(r,100));
+    out.push('[admin] หน้าต่างผู้ใช้เลือกบทบาท owner ให้ถูก: '+(d.getElementById('umRole').value==='owner'));
+    await w.userSave(5); await new Promise(r=>setTimeout(r,200));
+    const pb=patches.find(x=>x.url.startsWith('pnl_users?id=eq.5'));
+    out.push('[admin] บันทึกบอสแล้ว role ยัง owner (ไม่ถูกลดเป็น staff): '+!!(pb&&pb.body.role==='owner'));
+    out.push('[admin] รายชื่อผู้ใช้โชว์ป้าย "เจ้าของ": '+d.getElementById('userList').textContent.includes('เจ้าของ'));
     out.push('[admin] flagsToPerm: v→view vae→edit ""→none d→none: '+(w.flagsToPerm('v')==='view'&&w.flagsToPerm('vae')==='edit'&&w.flagsToPerm('')==='none'&&w.flagsToPerm('d')==='none'));
   }));
   process.exit(0);
