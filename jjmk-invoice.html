@@ -1146,14 +1146,20 @@ function renderMissingNas(){
   var n=missingNas().length;
   el.textContent=n?(n+' ใบ'+(nasSyncActive()?' — NAS กำลังทยอยเก็บ':'')):'ครบแล้ว ✓';
   el.style.color=n?'var(--warn)':'var(--ok)';
-  var b=$('syncNasBtn'); if(b) b.disabled=!n||!nasHandle;
+  var b=$('syncNasBtn'); if(b) b.disabled=!n||!nasHandle||nasSyncing;
 }
 /* เก็บบิลที่รอทั้งหมดลงโฟลเดอร์ NAS ที่ผูกกับเครื่องนี้ (คอมที่ map ไดรฟ์ไว้) */
+var nasSyncing=false;     // ปุ่ม 📤 กำลังทำงาน — ห้ามกดซ้อน (รอบที่สองจะคืนคิวบิลที่รอบแรกเพิ่งเก็บ)
 async function syncMissingNas(){
+  if(nasSyncing) return;
   var rows=missingNas(), btn=$('syncNasBtn'), info=$('syncNasInfo');
   if(!rows.length){ toast('ไม่มีบิลค้าง — เก็บครบแล้ว','ok'); return; }
   if(!nasHandle){ toast('เครื่องนี้ยังไม่ได้เลือกโฟลเดอร์ NAS (การ์ดข้างบน)','err'); return; }
-  btn.disabled=true;
+  nasSyncing=true; btn.disabled=true;
+  try{ await syncMissingNasRun(rows, btn, info); }
+  finally{ nasSyncing=false; renderMissingNas(); }
+}
+async function syncMissingNasRun(rows, btn, info){
   var done=0, fail=0;
   var skip=0;
   for(var i=0;i<rows.length;i++){
@@ -1284,7 +1290,10 @@ async function markStored(inv, path, onlyIfMissing){
   if(inv.updated_at) q=q.eq('updated_at',inv.updated_at);
   var u=await q.select('id');
   if(!u.error && (u.data||[]).length) return true;
-  try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), inv); }catch(e){}
+  // ไม่ติด — ดูแถวสดก่อนว่าเพราะอะไร: มีคน (NAS/อีกเครื่อง) เก็บฉบับเดียวกันไปแล้ว = ถือว่าเก็บแล้ว ไม่ต้องคืนคิว
+  var cur=await freshInv(inv, true);
+  if(cur && (!inv.updated_at || cur.updated_at===inv.updated_at) && cur.nas_path===path) return true;
+  if(cur) try{ await invRow(sb.from('inv_invoices').update({nas_path:null}), cur); }catch(e){}   // บิลเปลี่ยนจริง → คืนคิว
   return false;
 }
 // บันทึกไฟล์บิล — คืน path ที่เก็บ (เก็บเองแล้ว) หรือ null (ยังไม่อยู่ใน NAS)

@@ -1112,6 +1112,14 @@ def process(inv, force=False):
         log('ข้าม — เลขบิลผิดรูปแบบ: %r' % bill)
         return False
     data = build_pdf(inv)
+    if not force:
+        # รอบหนึ่งดึงมาทีละหลายใบ ใบหลัง ๆ อาจเก่าไปหลายนาทีแล้ว — อ่านสดอีกครั้งก่อนเขียน/ลบไฟล์
+        # ถ้าระหว่างนั้นมีคนแก้/ยกเลิก/ย้ายเลข หรือคอมที่ผูกโฟลเดอร์เก็บไปแล้ว → ข้าม ไม่แตะไฟล์เลย (รอบหน้าทำจากข้อมูลล่าสุด)
+        now = fetch_one(bill)
+        if (not now or now.get('id') != inv.get('id') or now.get('updated_at') != inv.get('updated_at')
+                or now.get('nas_path') is not None):
+            log('ข้าม %s — บิลเปลี่ยนระหว่างรอบนี้ (รอบหน้าจะทำจากข้อมูลล่าสุด)' % bill)
+            return False
     rel = write_pdf(bill, inv.get('issued_at'), data, cancelled=inv.get('status') == STATUS_CANCELLED)
     if mark_saved(inv, rel, force=force):
         log('เก็บ %s (%d KB)%s' % (rel, len(data) // 1024 + 1,
