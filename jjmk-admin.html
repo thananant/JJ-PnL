@@ -199,6 +199,23 @@ a.back:hover{color:var(--gold2)}
 @media(max-width:560px){.pgrid2{grid-template-columns:1fr}.pkv.w3{grid-column:span 1}
   .pwhen{margin-left:0;text-align:left;white-space:normal}
   .pchead{flex-wrap:wrap}.pbtns .btn{flex:1 1 100%}}
+
+/* ===== การ์ดติดตั้งแจ้งเตือน LINE (Edge Function signup-notify) ===== */
+.setup{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-top:14px;overflow:hidden}
+.setup .sh{display:flex;align-items:center;gap:9px;padding:13px 15px;cursor:pointer;background:var(--card2);
+  font-family:var(--fd);font-weight:700;font-size:15px}
+.setup .sh .ar{margin-left:auto;color:var(--mut);font-size:12px}
+.setup .sb{display:none;padding:13px 15px}
+.setup.open .sb{display:block}
+.setup ol{margin:0;padding-left:20px;line-height:2}
+.setup li{font-size:13.5px}
+.setup code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12.5px}
+.warnbox{background:rgba(217,164,65,.1);border:1px solid rgba(217,164,65,.45);border-radius:11px;
+  padding:10px 13px;font-size:13px;color:var(--gold2);line-height:1.7;margin:10px 0}
+.warnbox b{color:#FFE9BC}
+.fnres{margin-top:10px;font-size:13px;line-height:1.7;padding:10px 13px;border-radius:11px;
+  background:var(--bg2);border:1px solid var(--line);display:none}
+.fnres.on{display:block}
 </style>
 <script>
 /* ============================================================
@@ -691,13 +708,13 @@ async function viewPending(){
   }catch(e){
     if(NEED_SQL(e))return '<div class="card"><div class="empty">ยังไม่ได้ติดตั้งระบบสมัครพนักงาน<br>'+
       '<span style="font-size:12.5px">รัน <b>jjmk-signup.sql</b> ใน Supabase ก่อน 1 ครั้ง '+
-      '(เพิ่มคอลัมน์ <code>pnl_users.status</code> และตาราง <code>pnl_profiles</code>)</span></div></div>';
+      '(เพิ่มคอลัมน์ <code>pnl_users.status</code> และตาราง <code>pnl_profiles</code>)</span></div></div>'+setupCard();
     throw e;
   }
   S.pend=us; S.pendApps={}; S.pendCopy={};
   setPendCount(us.length);
   if(!us.length)return '<div class="card"><div class="empty">🎉 ไม่มีใบสมัครค้างอยู่<br>'+
-    '<span style="font-size:12.5px">ใบสมัครใหม่จากหน้าศูนย์รวมแอพจะมาโผล่ที่นี่</span></div></div>';
+    '<span style="font-size:12.5px">ใบสมัครใหม่จากหน้าศูนย์รวมแอพจะมาโผล่ที่นี่</span></div></div>'+setupCard();
 
   let profs={};
   try{
@@ -712,7 +729,7 @@ async function viewPending(){
       '<div style="font-size:12.5px;color:var(--mut);margin-top:4px;line-height:1.65">'+
       'ตั้ง <b>ระดับ</b> + <b>ประจำที่</b> แล้วติ๊กว่าให้เข้าแอพไหนได้ → กดอนุมัติ · '+
       'ระหว่างที่ยังไม่อนุมัติ เขาล็อกอินได้แต่เห็นแค่หน้ารออนุมัติ เข้าแอพไหนไม่ได้เลย</div></div>'+
-    us.map(u=>pendCard(u,profs[u.username])).join('');
+    us.map(u=>pendCard(u,profs[u.username])).join('')+setupCard();
 }
 function pendCard(u,p){
   const nick=(p&&p.nickname)||u.display_name||u.username;
@@ -768,6 +785,79 @@ function pendCard(u,p){
       '</div>'+
     '</div></div>';
 }
+
+/* ---------- การ์ดติดตั้ง "แจ้งเตือน LINE ตอนมีคนสมัคร" (Edge Function signup-notify) ----------
+   ⚠️ โค้ดนี้เป็น TypeScript ของ Supabase Edge Functions — วางใน SQL Editor ไม่ได้
+      (เอาไปวางผิดที่จะขึ้น syntax error at or near "//" · เคยพลาดมาแล้วทั้งโค้ดฟีดปฏิทินและตัวนี้)
+   ขั้นตอนติดตั้งจึงอยู่ในแอพ พร้อมปุ่มคัดลอกและปุ่มทดสอบ */
+function setupCard(){
+  if(!isBoss(S.user))return '';
+  return '<div class="setup" id="fnCard">'+
+    '<div class="sh" onclick="document.getElementById(\'fnCard\').classList.toggle(\'open\')">'+
+      '🔔 แจ้งเตือน LINE เมื่อมีคนสมัครใหม่ <span class="ar">(ไม่ตั้งก็ใช้งานได้ปกติ — กดเพื่อดูวิธี)</span></div>'+
+    '<div class="sb">'+
+      '<div class="warnbox">⚠️ โค้ดนี้เป็น <b>TypeScript ของ Edge Functions</b> — '+
+        '<b>ห้ามเอาไปวางใน SQL Editor</b> จะขึ้น <code>syntax error at or near "//"</code><br>'+
+        'ส่วนที่ต้องวางใน SQL Editor คือไฟล์ <b>jjmk-signup.sql</b> คนละอันกัน</div>'+
+      '<ol>'+
+        '<li>เปิด Supabase → <b>Edge Functions</b> → <b>Deploy a new function</b> ตั้งชื่อ <code>signup-notify</code></li>'+
+        '<li>กดปุ่ม <b>📋 คัดลอกโค้ด</b> ข้างล่าง แล้ววางทับโค้ดตัวอย่างทั้งหมด → <b>Deploy</b></li>'+
+        '<li>เข้าไปที่ฟังก์ชัน → <b>Settings</b> → <b>ปิด Verify JWT</b> (สำคัญ ไม่ปิดจะโดนปัดตกตั้งแต่ด่านหน้า)</li>'+
+        '<li>Edge Functions → <b>Secrets</b> → เพิ่ม <code>LINE_TOKEN</code> และ <code>LINE_GROUP_ID</code><br>'+
+          '<span style="color:var(--mut);font-size:12.5px">ใช้ค่าเดียวกับที่ตั้งไว้ใน Cloudflare Worker ของระบบเงินเดือน '+
+          '(ตัวที่ส่งรายงานเข้าสู่กลุ่ม LINE อยู่แล้ว)</span></li>'+
+        '<li>กด <b>🔎 ทดสอบ</b> — ถ้าผ่านจะมีข้อความทดสอบเด้งเข้ากลุ่ม LINE ทันที</li>'+
+      '</ol>'+
+      '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">'+
+        '<button class="btn" onclick="copyFn()">📋 คัดลอกโค้ด</button>'+
+        '<button class="btn" onclick="testFn()">🔎 ทดสอบ</button></div>'+
+      '<div class="fnres" id="fnRes"></div>'+
+    '</div></div>';
+}
+function copyFn(){
+  const el=document.getElementById('fnSignupNotify'); if(!el)return;
+  const t=el.textContent;
+  const done=()=>toast('คัดลอกแล้ว — เอาไปวางที่ Edge Functions (ไม่ใช่ SQL Editor)');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,()=>fallback(t,done));
+  else fallback(t,done);
+  function fallback(txt,cb){
+    const a=document.createElement('textarea'); a.value=txt; a.style.position='fixed'; a.style.opacity='0';
+    document.body.appendChild(a); a.select();
+    try{document.execCommand('copy');cb();}catch(e){toast('คัดลอกไม่สำเร็จ',true);}
+    a.remove();
+  }
+}
+async function testFn(){
+  const box=document.getElementById('fnRes'); box.className='fnres on';
+  box.innerHTML='⏳ กำลังทดสอบ…';
+  const url=CONFIG.SUPABASE_URL+'/functions/v1/signup-notify';
+  try{
+    const r=await fetch(url,{method:'POST',
+      headers:{'Content-Type':'application/json',apikey:CONFIG.SUPABASE_KEY},
+      body:JSON.stringify({username:'ทดสอบระบบ',name:'(ข้อความทดสอบจาก JJ Access)',nickname:'',unit:''})});
+    const t=(await r.text()||'').trim();
+    if(r.status===404){
+      box.innerHTML='❌ <b>ยังไม่ได้ deploy ฟังก์ชัน</b><br>ทำตามข้อ 1–2 ก่อนครับ'; return;
+    }
+    if(r.status===401){
+      box.innerHTML='❌ <b>ยังไม่ได้ปิด Verify JWT</b><br>ฟังก์ชัน deploy แล้ว แต่ Supabase ปัดตกตั้งแต่ด่านหน้า — ทำข้อ 3'; return;
+    }
+    if(/^skip/.test(t)){
+      box.innerHTML='⚠️ <b>deploy แล้ว แต่ยังไม่ได้ตั้ง Secrets</b><br>เพิ่ม <code>LINE_TOKEN</code> + <code>LINE_GROUP_ID</code> ตามข้อ 4'; return;
+    }
+    if(/^sent/.test(t)){
+      box.innerHTML='✅ <b>ใช้งานได้แล้ว</b> — ลองดูในกลุ่ม LINE จะมีข้อความทดสอบเด้งเข้าไป'; return;
+    }
+    if(/^LINE ตอบกลับ/.test(t)){
+      box.innerHTML='❌ <b>LINE ปฏิเสธ</b><br><span style="font-size:12px;color:var(--mut)">'+esc(t.slice(0,220))+'</span><br>'+
+        'มักเป็นเพราะ token ผิด หรือบอทไม่ได้อยู่ในกลุ่มนั้น'; return;
+    }
+    box.innerHTML='ℹ️ ฟังก์ชันตอบกลับว่า: <span style="font-size:12px;color:var(--mut)">'+esc(t.slice(0,220)||('HTTP '+r.status))+'</span>';
+  }catch(e){
+    box.innerHTML='❌ ต่อไม่ได้ — <span style="font-size:12px;color:var(--mut)">'+esc(String(e.message||e).slice(0,160))+'</span>';
+  }
+}
+
 function setPendCount(n){
   const b=$('#pendN'); if(!b)return;
   b.textContent=n>99?'99+':String(n); b.hidden=!n;
@@ -1341,6 +1431,64 @@ function logout(){localStorage.removeItem('jjpnl_auth');location.reload();}
     }
   },{passive:true});
 })();
+</script>
+
+<!-- โค้ด Edge Function สำหรับปุ่ม 📋 คัดลอก — ต้องตรงกับ signup-notify.ts ที่ branch sql -->
+<script type="text/plain" id="fnSignupNotify">// signup-notify — แจ้ง LINE เมื่อมีพนักงานใหม่สมัครเข้ามาที่หน้าศูนย์รวมแอพ
+// วางที่ Supabase -> Edge Functions -> New function ชื่อ "signup-notify"
+// ⚠️ ต้อง "ปิด Verify JWT" ของฟังก์ชันนี้ (Settings ของฟังก์ชัน) ไม่งั้นจะโดนปัดตกตั้งแต่ด่านหน้า
+//
+// Secrets ที่ต้องตั้ง (Edge Functions -> Secrets) — ใช้ค่าเดียวกับที่ตั้งไว้ใน Cloudflare Worker ของระบบเงินเดือน:
+//   LINE_TOKEN     = Channel access token ของ LINE OA ที่ใช้ส่งรายงานอยู่แล้ว
+//   LINE_GROUP_ID  = Cxxxxxxxx... กลุ่ม LINE ที่จะให้แจ้งเตือน
+// ไม่ตั้ง 2 ตัวนี้ = ฟังก์ชันตอบ ok เฉย ๆ (การสมัครยังทำงานปกติ แค่ไม่มีแจ้งเตือน)
+
+const UNIT: Record<string, string> = {
+  JJLP: "สาขาลาดพร้าว", JJRD: "สาขารัชดา", JJCK: "ครัวกลาง", OFFICE: "ออฟฟิศ", ALL: "ส่วนกลาง",
+};
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+
+  try {
+    const b = await req.json().catch(() => ({} as Record<string, string>));
+    const token = Deno.env.get("LINE_TOKEN");
+    const to = Deno.env.get("LINE_GROUP_ID");
+    if (!token || !to) {
+      return new Response("skip: ยังไม่ได้ตั้ง LINE_TOKEN / LINE_GROUP_ID", { headers: CORS });
+    }
+
+    const parts = [
+      "🧑‍💼 มีคนสมัครเป็นพนักงานใหม่",
+      "",
+      "ชื่อ: " + (b.name || "-") + (b.nickname ? " (" + b.nickname + ")" : ""),
+      "ชื่อผู้ใช้ที่ขอ: " + (b.username || "-"),
+      b.unit ? "อยากทำที่: " + (UNIT[b.unit] || b.unit) : "",
+      "",
+      "อนุมัติที่ 🔑 JJ Access → แท็บ ⏳ รออนุมัติ",
+      "https://thananant.github.io/JJ-PnL/jjmk-admin.html",
+    ].filter((x) => x !== "");
+
+    const r = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ to, messages: [{ type: "text", text: parts.join("\n") }] }),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      return new Response("LINE ตอบกลับ " + r.status + ": " + t.slice(0, 300), { status: 200, headers: CORS });
+    }
+    return new Response("sent", { headers: CORS });
+  } catch (e) {
+    return new Response("error: " + String((e as Error)?.message || e), { status: 200, headers: CORS });
+  }
+});
 </script>
 </body>
 </html>
