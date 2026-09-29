@@ -564,6 +564,12 @@ Deno.serve(async (req) => {
   const u = new URL(req.url);
   const ch = u.searchParams.get("ch") ?? "";
 
+  // preflight จากหน้าแอป (การ์ดสถานะระบบยิงแบบแนบกุญแจเพื่อแยกว่า Verify JWT ปิดหรือยัง)
+  if (req.method === "OPTIONS") return new Response("ok", { headers: {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  } });
   if (req.method === "GET") {
     // ปลายทาง OAuth ของ Google Business Profile (กดยกเลิก/Google ปฏิเสธ → เด้งกลับแอปพร้อมเหตุผล)
     if (u.searchParams.get("state") === "jjgbp") {
