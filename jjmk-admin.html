@@ -1002,12 +1002,24 @@ function copyFn(){
     a.remove();
   }
 }
-/* เวอร์ชันของโค้ดฟังก์ชันที่ฝังอยู่ในไฟล์นี้ (อ่านจากบล็อก fnSignupNotify ตรง ๆ) */
-const FN_VER=(function(){
-  try{ const el=document.getElementById('fnSignupNotify');
-       return (/VERSION\s*=\s*"([^"]+)"/.exec(el?el.textContent:'')||[])[1]||''; }
-  catch(e){ return ''; }
-})();
+/* เวอร์ชันของโค้ดฟังก์ชันที่ฝังอยู่ในไฟล์นี้ — ต้องอ่านตอนเรียกใช้ ไม่ใช่ตอนโหลดสคริปต์
+   (บล็อก fnSignupNotify อยู่ท้ายไฟล์ ตอนสคริปต์หลักรันบรรทัดนี้ มันยังไม่ถูกสร้าง → เคยได้ค่าว่างเสมอ) */
+function fnVer(){
+  const el=document.getElementById('fnSignupNotify');
+  return (/VERSION\s*=\s*"([^"]+)"/.exec(el?el.textContent:'')||[])[1]||'';
+}
+/* เทียบเวอร์ชันแบบ 2026-09-29.3 — ห้ามเทียบสตริงตรง ๆ (.10 จะน้อยกว่า .3) */
+function verCmp(a,b){
+  const A=String(a||'').split('.'), B=String(b||'').split('.');
+  if(A[0]!==B[0])return A[0]<B[0]?-1:1;
+  return (Number(A[1])||0)-(Number(B[1])||0);
+}
+/* ธงให้หน้าศูนย์รวมแอพโชว์ปุ่ม "ลืมรหัสผ่าน" (ฟังก์ชันรุ่นใหม่ตั้งเองด้วย ตรงนี้ตั้งซ้ำกันพลาด)
+   ค่าว่าง = ซ่อนปุ่ม (ฟังก์ชันรุ่นเก่าจะส่ง "มีคนสมัครใหม่" ปลอมเข้ากลุ่มถ้าปล่อยให้กด) */
+async function setResetFlag(v){
+  try{ await api('POST','pnl_settings?on_conflict=id',{id:'reset_ready',val:v||'',updated_at:new Date().toISOString(),
+         updated_by:(S.user&&S.user.username)||'?'},'resolution=merge-duplicates,return=minimal'); }catch(e){}
+}
 async function testFn(){
   const box=document.getElementById('fnRes'); box.className='fnres on';
   box.innerHTML='⏳ กำลังทดสอบ…';
@@ -1042,11 +1054,16 @@ async function testFn(){
     }
     if(/^sent/.test(t)){
       /* ฟังก์ชันตอบเวอร์ชันของโค้ดที่ deploy อยู่กลับมาด้วย — ไม่มี = ยังเป็นโค้ดรุ่นเก่า */
-      const v=(/\|\s*v([0-9.\-]+)/.exec(t)||[])[1]||'';
-      box.innerHTML='✅ <b>ใช้งานได้แล้ว</b> — ลองดูในกลุ่ม LINE จะมีข้อความทดสอบเด้งเข้าไป'+
-        (v?'<br><span style="font-size:12px;color:var(--mut)">โค้ดที่ deploy อยู่: v'+esc(v)+' · ต้องเป็น <b>'+esc(FN_VER)+'</b> ขึ้นไป ระบบลืมรหัสผ่านถึงจะใช้ได้</span>'
-          :'<br><span style="font-size:12px;color:var(--warn)">⚠️ ยังเป็นโค้ดรุ่นเก่า — ระบบ \"ลืมรหัสผ่าน\" จะยังไม่ทำงาน '+
-           'กด 📋 คัดลอกโค้ด แล้ว Deploy ทับอีกรอบครับ</span>');
+      const v=(/\|\s*v([0-9.\-]+)/.exec(t)||[])[1]||'', need=fnVer();
+      const fresh=!!v&&verCmp(v,need)>=0;
+      await setResetFlag(fresh?v:'');
+      box.innerHTML='✅ <b>แจ้งเตือนใบสมัครใช้งานได้</b> — ลองดูในกลุ่ม LINE จะมีข้อความทดสอบเด้งเข้าไป<br>'+
+        (fresh
+          ? '✅ <b>ระบบลืมรหัสผ่านเปิดใช้แล้ว</b> — ปุ่ม 🔑 ลืมรหัสผ่าน โผล่ที่หน้าศูนย์รวมแอพแล้ว'+
+            '<br><span style="font-size:12px;color:var(--mut)">โค้ดที่ deploy อยู่: v'+esc(v)+'</span>'
+          : '<span style="color:var(--warn)">⚠️ <b>โค้ดที่ deploy อยู่เป็นรุ่นเก่า</b>'+(v?' (v'+esc(v)+')':'')+
+            ' — ต้องเป็น v'+esc(need)+' ขึ้นไป ปุ่มลืมรหัสผ่านจะยังซ่อนอยู่<br>'+
+            'กด 📋 คัดลอกโค้ด แล้ววางทับที่ฟังก์ชัน <code>signup-notify</code> → Deploy แล้วกดทดสอบอีกครั้ง</span>');
       return;
     }
     if(/^LINE ตอบกลับ/.test(t)){
@@ -1213,11 +1230,7 @@ async function viewUsers(){
       '<td style="text-align:right;white-space:nowrap">'+
         '<button class="btn sm" onclick="editPerms('+u.id+')">⚙️ ตั้งสิทธิ์</button> '+
         '<button class="btn sm" onclick="editUser('+u.id+')">✏️</button> '+
-        (meSelf(u)
-          ? '<span class="chip" title="บัญชีที่กำลังใช้อยู่ ปิดเองไม่ได้">นี่คือคุณ</span>'
-          : (u.active===false
-              ? '<button class="btn sm okb" onclick="userBack('+u.id+')" title="รับกลับเข้าทำงาน">↩️ รับกลับ</button>'
-              : '<button class="btn sm" onclick="userQuit('+u.id+')" title="พนักงานลาออก — ปิดไม่ให้เข้าทุกแอพ">🚪 ออกงาน</button>'))+
+        rowAct(u)+
         '</td>'+
     '</tr>';
   }).join('');
@@ -1241,6 +1254,22 @@ async function viewUsers(){
    ปิดใช้งานแล้วเข้าไม่ได้ทุกแอพทันที (ทุกแอพกรอง active=is.true อยู่แล้ว)
    ลบถาวรมีไว้สำหรับบัญชีทดสอบ/สมัครผิดเท่านั้น — ต้องพิมพ์ชื่อผู้ใช้ยืนยัน */
 function meSelf(u){ return !!(u&&S.user&&u.username===S.user.username); }
+/* ปุ่มท้ายแถวตามสถานะบัญชี (stOf) — ใบสมัครที่รออนุมัติ/ไม่อนุมัติ ห้ามมีปุ่ม "รับกลับ"
+   (เคยพลาด: กดรับกลับให้ผู้สมัคร = ข้ามขั้นอนุมัติ ได้ apps={} ซึ่งแทบทุกแอพถือว่า "ไม่จำกัดสิทธิ์") */
+function rowAct(u){
+  if(meSelf(u))return '<span class="chip" title="บัญชีที่กำลังใช้อยู่ ปิดเองไม่ได้">นี่คือคุณ</span>';
+  const st=stOf(u);
+  if(st==='pending') return '<button class="btn sm" onclick="go(\'pending\')" title="ไปตั้งสิทธิ์และอนุมัติที่แท็บรออนุมัติ">⏳ ไปอนุมัติ</button>';
+  if(st==='rejected')return '<span class="chip off">✖️ ไม่อนุมัติ</span>';
+  if(st==='off')     return '<button class="btn sm okb" onclick="userBack('+u.id+')" title="รับกลับเข้าทำงาน">↩️ รับกลับ</button>';
+  return '<button class="btn sm" onclick="userQuit('+u.id+')" title="พนักงานลาออก — ปิดไม่ให้เข้าทุกแอพ">🚪 ออกงาน</button>';
+}
+/* ปุ่มยืนยันในหน้าต่างเด้ง: กดรัว ๆ ต้องทำงานครั้งเดียว (ไม่งั้นประวัติการแก้สิทธิ์ซ้ำ 2 แถว) */
+async function once(btn,fn){
+  if(btn&&btn.disabled)return;
+  if(btn)btn.disabled=true;
+  try{ await fn(); } finally{ if(btn&&btn.isConnected)btn.disabled=false; }
+}
 
 async function userQuit(id){
   const u=S.users.find(x=>x.id===id); if(!u)return;
@@ -1254,25 +1283,41 @@ async function userQuit(id){
       '<li>ชื่อผู้ใช้ยังถูกจองไว้ คนใหม่เอาไปใช้ซ้ำไม่ได้</li>'+
     '</ul>'+
     '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn pri" onclick="userQuitGo('+id+')">🚪 ยืนยันว่าออกงานแล้ว</button></div>');
+      '<button class="btn pri" onclick="userQuitGo(this,'+id+')">🚪 ยืนยันว่าออกงานแล้ว</button></div>');
 }
-async function userQuitGo(id){
+async function userQuitGo(btn,id){
   const u=S.users.find(x=>x.id===id); if(!u)return;
-  try{
-    await upd('pnl_users','id=eq.'+id,{active:false});
-    await alog(u.username,'ปิดบัญชี (พนักงานออก)','ปิดไม่ให้เข้าทุกแอพ · ข้อมูลและประวัติยังอยู่');
-    closeModal(); toast('ปิดบัญชี '+(u.display_name||u.username)+' แล้ว ✓'); render();
-  }catch(e){ toast('ปิดบัญชีไม่สำเร็จ: '+e.message,true); }
+  await once(btn,async()=>{
+    try{
+      await upd('pnl_users','id=eq.'+id,{active:false});
+      await alog(u.username,'ปิดบัญชี (พนักงานออก)','ปิดไม่ให้เข้าทุกแอพ · ข้อมูลและประวัติยังอยู่');
+      closeModal(); toast('ปิดบัญชี '+(u.display_name||u.username)+' แล้ว ✓'); render();
+    }catch(e){ toast('ปิดบัญชีไม่สำเร็จ: '+e.message,true); }
+  });
 }
-async function userBack(id){
+function userBack(id){
   const u=S.users.find(x=>x.id===id); if(!u)return;
-  try{
-    const body={active:true};
-    if(u.status==='rejected'||u.status==='pending')body.status='active';
-    await upd('pnl_users','id=eq.'+id,body);
-    await alog(u.username,'เปิดบัญชีอีกครั้ง (รับกลับเข้าทำงาน)','');
-    toast('เปิดบัญชี '+(u.display_name||u.username)+' แล้ว ✓'); render();
-  }catch(e){ toast('เปิดบัญชีไม่สำเร็จ: '+e.message,true); }
+  if(stOf(u)!=='off'){ toast('บัญชีนี้ต้องอนุมัติที่แท็บ ⏳ รออนุมัติ',true); return; }
+  const n=APPKEYS.filter(k=>appOn(u,k)).length;
+  openModal('<h3>↩️ รับกลับเข้าทำงาน</h3>'+
+    '<p class="sub">เปิดบัญชี <b>'+esc(u.display_name||u.username)+'</b> (<code>'+esc(u.username)+'</code>) ให้เข้าระบบได้อีกครั้ง</p>'+
+    '<ul style="font-size:13px;color:var(--mut);line-height:1.9;margin:6px 0 2px;padding-left:18px">'+
+      '<li>ได้สิทธิ์เดิมที่ตั้งไว้ก่อนออก — '+(isBoss(u)?'<b>ทุกแอพ</b> (ระดับ '+esc(ROLES[roleOf(u)].n)+')':(n?'<b>'+n+' แอพ</b>':'<b style="color:var(--warn)">ยังไม่ได้ตั้งสิทธิ์แอพไหนเลย</b>'))+'</li>'+
+      '<li>ตรวจ/แก้สิทธิ์ได้ที่ปุ่ม ⚙️ ตั้งสิทธิ์ หลังเปิดบัญชี</li>'+
+    '</ul>'+
+    '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn pri" onclick="userBackGo(this,'+id+')">↩️ ยืนยันรับกลับ</button></div>');
+}
+async function userBackGo(btn,id){
+  const u=S.users.find(x=>x.id===id); if(!u)return;
+  if(stOf(u)!=='off'){ closeModal(); toast('บัญชีนี้ต้องอนุมัติที่แท็บ ⏳ รออนุมัติ',true); return; }
+  await once(btn,async()=>{
+    try{
+      await upd('pnl_users','id=eq.'+id,{active:true});      // เปิดอย่างเดียว ไม่แตะ status (อนุมัติต้องผ่าน pendApprove)
+      await alog(u.username,'เปิดบัญชีอีกครั้ง (รับกลับเข้าทำงาน)','');
+      closeModal(); toast('เปิดบัญชี '+(u.display_name||u.username)+' แล้ว ✓'); render();
+    }catch(e){ toast('เปิดบัญชีไม่สำเร็จ: '+e.message,true); }
+  });
 }
 function userDelAsk(id){
   const u=S.users.find(x=>x.id===id); if(!u)return;
@@ -1286,20 +1331,24 @@ function userDelAsk(id){
     '<label class="fld"><span>ชื่อผู้ใช้ที่จะลบ</span>'+
       '<input id="fDel" type="text" spellcheck="false" autocapitalize="none" placeholder="'+esc(u.username)+'"></label>'+
     '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn pri" onclick="userDelGo('+id+')">🗑 ลบถาวร</button></div>');
+      '<button class="btn pri" onclick="userDelGo(this,'+id+')">🗑 ลบถาวร</button></div>');
   setTimeout(()=>{ const e=$('#fDel'); if(e)e.focus(); },80);
 }
-async function userDelGo(id){
+async function userDelGo(btn,id){
   const u=S.users.find(x=>x.id===id); if(!u)return;
   const typed=(($('#fDel')||{}).value||'').trim();
   if(typed!==u.username){ toast('พิมพ์ชื่อผู้ใช้ให้ตรงก่อนครับ',true); return; }
-  try{
-    /* ลบข้อมูลส่วนตัวก่อน (ตารางอาจยังไม่มีถ้ายังไม่ได้รัน jjmk-signup.sql — ไม่เป็นไร) */
-    try{ await api('DELETE','pnl_profiles?username=eq.'+encodeURIComponent(u.username),null,'return=minimal'); }catch(e){}
-    await api('DELETE','pnl_users?id=eq.'+id,null,'return=minimal');
-    await alog(u.username,'ลบบัญชีถาวร','ลบแถวใน pnl_users + ข้อมูลส่วนตัวใน pnl_profiles');
-    closeModal(); toast('ลบบัญชีแล้ว'); render();
-  }catch(e){ toast('ลบไม่สำเร็จ: '+e.message,true); }
+  await once(btn,async()=>{
+    try{
+      /* ลบข้อมูลส่วนตัวก่อน (ตารางอาจยังไม่มีถ้ายังไม่ได้รัน jjmk-signup.sql — ไม่เป็นไร) */
+      try{ await api('DELETE','pnl_profiles?username=eq.'+encodeURIComponent(u.username),null,'return=minimal'); }catch(e){}
+      const gone=await api('DELETE','pnl_users?id=eq.'+id,null,'return=representation');
+      if(Array.isArray(gone)&&gone.length)
+        await alog(u.username,'ลบบัญชีถาวร','ลบแถวใน pnl_users + ข้อมูลส่วนตัวใน pnl_profiles');
+      S.users=S.users.filter(x=>x.id!==id);
+      closeModal(); toast('ลบบัญชีแล้ว'); render();
+    }catch(e){ toast('ลบไม่สำเร็จ: '+e.message,true); }
+  });
 }
 
 /* ---------- เปลี่ยนระดับ/ประจำที่ ได้จากตารางเลย (ไม่ต้องเปิดฟอร์ม) ---------- */
@@ -1485,7 +1534,7 @@ function editUser(id){
   openModal('<h3>'+(id?'✏️ แก้ไขผู้ใช้':'+ เพิ่มผู้ใช้ใหม่')+'</h3>'+
     '<div class="grid2">'+
       '<label class="fld"><span>ชื่อที่แสดง</span><input id="fName" value="'+esc(u.display_name)+'" placeholder="เช่น บอย"></label>'+
-      '<label class="fld"><span>ชื่อผู้ใช้ (username)</span><input id="fUser" value="'+esc(u.username)+'" '+(id?'disabled':'')+' placeholder="อังกฤษ/ตัวเลข"></label>'+
+      '<label class="fld"><span>ชื่อผู้ใช้ (username)</span><input id="fUser" value="'+esc(u.username)+'" '+(id?'disabled':'')+' autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="อังกฤษ/ตัวเลข"></label>'+
     '</div>'+
     '<div class="grid2">'+
       '<label class="fld"><span>รหัสผ่าน '+(id?'(เว้นว่าง = ไม่เปลี่ยน)':'(อย่างน้อย 4 ตัว)')+'</span><input id="fPass" type="password" autocomplete="new-password" placeholder="'+(id?'••••••••':'')+'"></label>'+
@@ -1819,9 +1868,16 @@ function logout(){localStorage.removeItem('jjpnl_auth');location.reload();}
 //   - ที่เก็บไว้ใน pnl_settings เป็น HMAC ของรหัส (กุญแจอยู่ในฟังก์ชัน) ไม่ใช่ตัวรหัส
 //     -> ใครอ่านตารางได้ก็ย้อนกลับเป็นรหัสไม่ได้ · **ห้ามเอารหัสจริงมาเก็บที่นี่เด็ดขาด**
 //   - ใส่ผิดเกิน 5 ครั้ง / เกิน 10 นาที = ต้องขอใหม่ · ขอถี่กว่า 60 วินาทีไม่ได้
+//     (ใส่ผิดครบ = เก็บเวลาที่ขอไว้ ไม่ลบแถว — ไม่งั้นขอรหัสใหม่ได้ทันที ข้ามช่วงรอ 60 วินาที)
 //   - เบราว์เซอร์คิด pass_hash เองแล้วส่งมา รหัสผ่านตัวจริงจึงไม่เคยออกจากเครื่องผู้ใช้
+//   - ชื่อผู้ใช้ต้องตรงกับที่ใช้ล็อกอินเป๊ะ (ตัวพิมพ์เล็ก/ใหญ่ด้วย เพราะ pwHash ผูกกับชื่อ)
+//     พิมพ์ตัวพิมพ์ไม่ตรง = หาแบบไม่สนตัวพิมพ์แล้วตอบชื่อจริงกลับไป ให้แอพคิด pass_hash ใหม่ด้วยชื่อจริง
+//
+// ธง pnl_settings.reset_ready = เวอร์ชันของโค้ดนี้ — หน้าศูนย์รวมแอพจะโชว์ปุ่ม "ลืมรหัสผ่าน" เมื่อธงถึงรุ่นที่ต้องการ
+//   (ฟังก์ชันรุ่นเก่าไม่รู้จัก action แล้วจะส่ง "มีคนสมัครใหม่" ปลอมเข้ากลุ่ม ถึงต้องซ่อนปุ่มไว้จนกว่าจะ deploy รุ่นนี้)
+//   ธงถูกตั้งตอนกด 🔎 ทดสอบ ใน JJ Access (ฟังก์ชันส่งข้อความทดสอบสำเร็จ)
 
-const VERSION = "2026-09-29.2";
+const VERSION = "2026-09-29.3";
 
 const UNIT: Record<string, string> = {
   JJLP: "สาขาลาดพร้าว", JJRD: "สาขารัชดา", JJCK: "ครัวกลาง", OFFICE: "ออฟฟิศ", ALL: "ส่วนกลาง",
@@ -1853,13 +1909,16 @@ function jsonRes(o: unknown, status = 200) {
 }
 
 // กลุ่มที่จะส่ง — เอาจากที่ตั้งไว้ในแอพก่อน (pnl_settings) ไม่มีค่อยใช้ secret
+// อ่านฐานข้อมูลไม่ได้ = จดไว้ใน GROUP_ERR (จะได้ไม่บอกผิดว่า "ยังไม่ได้ตั้งกลุ่ม")
+let GROUP_ERR = "";
 async function groupId(): Promise<string> {
+  GROUP_ERR = "";
   if (SB_URL && SB_KEY) {
     try {
       const rows = await sbGet("pnl_settings?select=val&id=eq.line_group_id");
       const v = rows && rows[0] ? String(rows[0].val || "").trim() : "";
       if (v) return v;
-    } catch (_) { /* อ่านไม่ได้ก็ตกไปใช้ secret */ }
+    } catch (e) { GROUP_ERR = String((e as Error)?.message || e); }
   }
   return (Deno.env.get("LINE_GROUP_ID") || "").trim();
 }
@@ -1901,8 +1960,12 @@ function sameHex(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;
 }
+// ชื่อผู้ใช้ที่ admin สร้างใน JJ Access มีได้ทั้งตัวพิมพ์ใหญ่และอักษรอื่น — ตรวจแค่ความยาวและตัวควบคุม
 function okUser(u: string): boolean {
-  return /^[a-z0-9._-]{3,20}$/.test(u);
+  return u.length >= 1 && u.length <= 64 && !/[\u0000-\u001f\u007f]/.test(u);
+}
+function likeEsc(u: string): string {
+  return u.replace(/[\\%_]/g, (c) => "\\" + c);
 }
 function thTime(ms: number): string {
   try {
@@ -1914,23 +1977,55 @@ function thTime(ms: number): string {
 
 const rkey = (u: string) => "reset:" + u;
 
-async function readReset(u: string): Promise<any> {
-  try {
-    const rows = await sbGet("pnl_settings?select=val&id=eq." + encodeURIComponent(rkey(u)));
-    if (!rows || !rows[0]) return null;
-    return JSON.parse(String(rows[0].val || "null"));
-  } catch (_) { return null; }
+// อ่านแถวคำขอ -> { raw: ข้อความเดิมในช่อง val (ใช้เทียบตอนเขียน), st: ค่าที่แปลงแล้ว } · ไม่มีแถว = null
+// อ่านฐานข้อมูลไม่ได้ = โยน error (ห้ามทำเหมือนไม่มีแถว ไม่งั้นช่วงรอ/จำนวนครั้งที่ลองหายไปเฉย ๆ)
+async function readReset(u: string): Promise<{ raw: string; st: any } | null> {
+  const rows = await sbGet("pnl_settings?select=val&id=eq." + encodeURIComponent(rkey(u)));
+  if (!rows || !rows[0]) return null;
+  const raw = String(rows[0].val ?? "");
+  let st: any = null;
+  try { st = JSON.parse(raw); } catch (_) { st = null; }
+  return { raw, st: st && typeof st === "object" ? st : {} };
 }
-async function writeReset(u: string, o: unknown): Promise<void> {
+// เขียนแถวคำขอก็ต่อเมื่อค่าเดิมยังเป็นค่าที่เราอ่านมา (compare-and-swap ที่ฐานข้อมูล)
+// กันกดพร้อมกันหลายครั้ง: ขอรหัสพร้อมกัน = ส่งรหัสแค่ครั้งเดียว · เดารหัสพร้อมกัน = ยังนับครบทุกครั้ง
+// คืน true = เขียนได้ · false = มีคำขออื่นเปลี่ยนค่าไปก่อนแล้ว
+async function casReset(u: string, prevRaw: string | null, next: unknown): Promise<boolean> {
+  const val = JSON.stringify(next);
+  const at = new Date().toISOString();
+  if (prevRaw === null) {
+    const r = await fetch(SB_URL + "/rest/v1/pnl_settings", {
+      method: "POST", headers: sbHead({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ id: rkey(u), val, updated_at: at, updated_by: "reset" }),
+    });
+    if (r.ok) return true;
+    if (r.status === 409) return false;          // มีแถวนี้แล้ว = อีกคำขอเขียนก่อน
+    throw new Error("บันทึกคำขอไม่ได้ (" + r.status + ")");
+  }
+  const r = await fetch(SB_URL + "/rest/v1/pnl_settings?id=eq." + encodeURIComponent(rkey(u)) +
+    "&val=eq." + encodeURIComponent(prevRaw), {
+    method: "PATCH", headers: sbHead({ Prefer: "return=representation" }),
+    body: JSON.stringify({ val, updated_at: at, updated_by: "reset" }),
+  });
+  if (!r.ok) throw new Error("บันทึกคำขอไม่ได้ (" + r.status + ")");
+  const rows = await r.json().catch(() => []);
+  return Array.isArray(rows) && rows.length === 1;
+}
+async function putSetting(id: string, val: string, by: string): Promise<void> {
   const r = await fetch(SB_URL + "/rest/v1/pnl_settings?on_conflict=id", {
     method: "POST",
     headers: sbHead({ Prefer: "resolution=merge-duplicates,return=minimal" }),
-    body: JSON.stringify({
-      id: rkey(u), val: JSON.stringify(o),
-      updated_at: new Date().toISOString(), updated_by: "reset",
-    }),
+    body: JSON.stringify({ id, val, updated_at: new Date().toISOString(), updated_by: by }),
   });
-  if (!r.ok) throw new Error("บันทึกคำขอไม่ได้ (" + r.status + ")");
+  if (!r.ok) throw new Error("บันทึกไม่ได้ (" + r.status + ")");
+}
+async function writeReset(u: string, o: unknown): Promise<void> {
+  await putSetting(rkey(u), JSON.stringify(o), "reset");
+}
+// ใส่ผิดครบ/ขอรหัสใหม่ไม่ได้ = เก็บแค่เวลาที่ขอไว้ (ไม่มีรหัสแล้ว) เพื่อให้ช่วงรอ 60 วินาทียังมีผล
+async function lockReset(u: string, st: any): Promise<void> {
+  try { await writeReset(u, { iat: Number(st && st.iat) || Date.now(), n: CODE_TRIES }); }
+  catch (_) { await clearReset(u); }
 }
 async function clearReset(u: string): Promise<void> {
   try {
@@ -1939,10 +2034,17 @@ async function clearReset(u: string): Promise<void> {
   } catch (_) { /* ไม่เป็นไร เดี๋ยวก็หมดอายุเอง */ }
 }
 
+// หาบัญชี: ชื่อตรงเป๊ะก่อน · ไม่เจอค่อยหาแบบไม่สนตัวพิมพ์ (ชื่อผู้ใช้ unique ตาม lower() อยู่แล้ว)
+// ต้องได้ 1 แถวพอดีเท่านั้น · ชื่อที่มี * ไม่ลองแบบไม่สนตัวพิมพ์ (PostgREST ตีความ * เป็นตัวแทนทุกตัวอักษร)
 async function findUser(u: string): Promise<any> {
-  const rows = await sbGet(
-    "pnl_users?select=username,display_name,active,status&username=eq." + encodeURIComponent(u));
-  return rows && rows[0] ? rows[0] : null;
+  const q = "pnl_users?select=*&";
+  let rows = await sbGet(q + "username=eq." + encodeURIComponent(u));
+  if (rows && rows.length === 1) return rows[0];
+  if ((!rows || !rows.length) && !u.includes("*")) {
+    rows = await sbGet(q + "username=ilike." + encodeURIComponent(likeEsc(u)));
+    if (rows && rows.length === 1) return rows[0];
+  }
+  return null;
 }
 function userBlocked(usr: any): string {
   if (usr.status === "pending") return "บัญชีนี้ยังรอผู้ดูแลอนุมัติอยู่";
@@ -1964,30 +2066,42 @@ async function logReset(username: string, detail: string): Promise<void> {
 
 /* ---------- ขอรหัส ---------- */
 async function resetRequest(b: Record<string, string>, token: string, to: string) {
-  const u = String(b.username || "").trim().toLowerCase();
-  if (!okUser(u)) return jsonRes({ ok: false, reason: "ชื่อผู้ใช้ไม่ถูกรูปแบบ" });
+  const raw = String(b.username || "").trim();
+  if (!okUser(raw)) return jsonRes({ ok: false, reason: "ใส่ชื่อผู้ใช้ก่อนครับ" });
 
-  const usr = await findUser(u);
+  const usr = await findUser(raw);
   if (!usr) return jsonRes({ ok: false, reason: "ไม่พบชื่อผู้ใช้นี้ในระบบ" });
+  const u = String(usr.username);            // ชื่อจริงตามที่เก็บไว้ (ตัวพิมพ์ตรง)
+  const name = usr.display_name || u;
   const bad = userBlocked(usr);
   if (bad) return jsonRes({ ok: false, reason: bad });
 
   const now = Date.now();
-  const cur = await readReset(u);
+  const got = await readReset(u);
+  const cur = got ? got.st : null;
   if (cur && cur.iat && now - cur.iat < ASK_GAP_SEC * 1000) {
+    // เพิ่งส่งรหัสไปและรหัสนั้นยังใช้ได้ = ไม่ส่งซ้ำ ให้ไปหน้าใส่รหัสด้วยรหัสเดิม
+    if (cur.h && cur.exp && now < cur.exp && Number(cur.n || 0) < CODE_TRIES) {
+      return jsonRes({ ok: true, again: true, username: u, name,
+        minutes: Math.max(1, Math.ceil((cur.exp - now) / 60000)) });
+    }
     const wait = Math.ceil((ASK_GAP_SEC * 1000 - (now - cur.iat)) / 1000);
     return jsonRes({ ok: false, reason: "เพิ่งขอรหัสไปเมื่อสักครู่ — รออีก " + wait + " วินาที" });
   }
 
   const code = newCode();
   const exp = now + CODE_TTL_MIN * 60000;
-  await writeReset(u, { h: await codeHash(u, code), exp, iat: now, n: 0 });
+  const h = await codeHash(u, code);
+  // ขอพร้อมกันหลายครั้ง: ได้เขียนแค่คำขอเดียว คำขอนั้นเป็นคนส่ง LINE (กลุ่มได้รหัสเดียว ไม่มีรหัสตาย)
+  if (!(await casReset(u, got ? got.raw : null, { h, exp, iat: now, n: 0 }))) {
+    return jsonRes({ ok: true, again: true, username: u, name, minutes: CODE_TTL_MIN });
+  }
 
   const msg = [
     "🔑 ขอตั้งรหัสผ่านใหม่",
     "",
     "ชื่อผู้ใช้: " + u,
-    "ชื่อ: " + (usr.display_name || u),
+    "ชื่อ: " + name,
     "",
     "รหัสยืนยัน: " + code,
     "ใช้ได้ถึง " + thTime(exp) + " น. (" + CODE_TTL_MIN + " นาที)",
@@ -2001,46 +2115,75 @@ async function resetRequest(b: Record<string, string>, token: string, to: string
     await clearReset(u);
     return jsonRes({ ok: false, reason: "ส่งรหัสเข้ากลุ่ม LINE ไม่สำเร็จ · " + err });
   }
-  return jsonRes({ ok: true, name: usr.display_name || u, minutes: CODE_TTL_MIN });
+  return jsonRes({ ok: true, username: u, name, minutes: CODE_TTL_MIN });
 }
 
 /* ---------- ใส่รหัส + ตั้งรหัสผ่านใหม่ ---------- */
 async function resetConfirm(b: Record<string, string>, token: string, to: string) {
-  const u = String(b.username || "").trim().toLowerCase();
+  const raw = String(b.username || "").trim();
   const code = String(b.code || "").replace(/\D/g, "");
   const ph = String(b.pass_hash || "").trim().toLowerCase();
-  if (!okUser(u)) return jsonRes({ ok: false, reason: "ชื่อผู้ใช้ไม่ถูกรูปแบบ" });
+  if (!okUser(raw)) return jsonRes({ ok: false, reason: "ใส่ชื่อผู้ใช้ก่อนครับ" });
   if (code.length !== 6) return jsonRes({ ok: false, reason: "ใส่รหัส 6 หลักให้ครบก่อนครับ" });
   if (!/^[0-9a-f]{64}$/.test(ph)) return jsonRes({ ok: false, reason: "รหัสผ่านใหม่ไม่ถูกต้อง" });
 
-  const st = await readReset(u);
-  if (!st || !st.h) return jsonRes({ ok: false, reason: "ยังไม่ได้ขอรหัส หรือรหัสหมดอายุแล้ว — กดขอรหัสใหม่ครับ" });
-  if (!st.exp || Date.now() > st.exp) {
-    await clearReset(u);
-    return jsonRes({ ok: false, reason: "รหัสหมดอายุแล้ว — กดขอรหัสใหม่ครับ" });
-  }
-  const tries = Number(st.n || 0);
-  if (tries >= CODE_TRIES) {
-    await clearReset(u);
-    return jsonRes({ ok: false, reason: "ใส่รหัสผิดหลายครั้งเกินไป — กดขอรหัสใหม่ครับ" });
-  }
-  if (!sameHex(st.h, await codeHash(u, code))) {
-    const left = CODE_TRIES - tries - 1;
-    if (left <= 0) { await clearReset(u); return jsonRes({ ok: false, reason: "รหัสไม่ถูกต้อง — ใส่ผิดครบแล้ว กดขอรหัสใหม่ครับ" }); }
-    await writeReset(u, { ...st, n: tries + 1 });
-    return jsonRes({ ok: false, reason: "รหัสไม่ถูกต้อง (ลองได้อีก " + left + " ครั้ง)" });
-  }
-
-  const usr = await findUser(u);
+  const usr = await findUser(raw);
   if (!usr) return jsonRes({ ok: false, reason: "ไม่พบชื่อผู้ใช้นี้ในระบบ" });
+  const u = String(usr.username);
+  // pass_hash ผูกกับชื่อผู้ใช้แบบตัวพิมพ์ตรง — พิมพ์มาไม่ตรง ให้แอพคิดใหม่ด้วยชื่อจริงแล้วส่งมาอีกรอบ
+  // (เช็คก่อนดูรหัส 6 หลัก จึงไม่เสียสิทธิ์ลองรหัส)
+  if (u !== raw) return jsonRes({ ok: false, retry: true, username: u, reason: "ชื่อผู้ใช้จริงคือ " + u });
   const bad = userBlocked(usr);
   if (bad) return jsonRes({ ok: false, reason: bad });
 
+  // จองสิทธิ์ลอง 1 ครั้งก่อนเทียบรหัส (เพิ่ม n แบบเทียบแล้วค่อยเขียน) — เดารหัสพร้อมกันหลายคำขอ
+  // ก็ยังนับครบทุกครั้ง ไม่มีทางได้ลองเกิน CODE_TRIES
+  let st: any = null, tries = 0, mine = "";
+  for (let i = 0; i < 6 && !mine; i++) {
+    const got = await readReset(u);
+    st = got ? got.st : null;
+    if (!st || !st.h) return jsonRes({ ok: false, reason: "ยังไม่มีรหัสที่ใช้ได้ (ยังไม่ได้ขอ · หมดอายุ · หรือใส่ผิดครบแล้ว) — กดขอรหัสใหม่ครับ" });
+    if (!st.exp || Date.now() > st.exp) {
+      await clearReset(u);            // หมดอายุแล้ว = เวลาที่ขอเก่ากว่า 60 วินาทีแน่นอน ลบทิ้งได้
+      return jsonRes({ ok: false, reason: "รหัสหมดอายุแล้ว — กดขอรหัสใหม่ครับ" });
+    }
+    tries = Number(st.n || 0);
+    if (tries >= CODE_TRIES) {
+      await lockReset(u, st);
+      return jsonRes({ ok: false, reason: "ใส่รหัสผิดหลายครั้งเกินไป — กดขอรหัสใหม่ครับ" });
+    }
+    const next = { ...st, n: tries + 1 };
+    if (await casReset(u, got!.raw, next)) mine = JSON.stringify(next);
+  }
+  if (!mine) return jsonRes({ ok: false, reason: "มีการใส่รหัสพร้อมกันหลายครั้ง — รอสักครู่แล้วลองใหม่ครับ" });
+
+  if (!sameHex(st.h, await codeHash(u, code))) {
+    const left = CODE_TRIES - tries - 1;
+    if (left <= 0) { await lockReset(u, st); return jsonRes({ ok: false, reason: "รหัสไม่ถูกต้อง — ใส่ผิดครบแล้ว กดขอรหัสใหม่ครับ" }); }
+    return jsonRes({ ok: false, reason: "รหัสไม่ถูกต้อง (ลองได้อีก " + left + " ครั้ง)" });
+  }
+
+  // รหัสถูก: ปิดรหัสนี้ทิ้งก่อนเปลี่ยนรหัสผ่าน (ใช้ได้ครั้งเดียวจริง ๆ แม้ส่งรหัสถูกพร้อมกัน 2 คำขอ)
+  let used = false;
+  for (let i = 0; i < 6 && !used; i++) {
+    const cur = i === 0 ? { raw: mine, st: JSON.parse(mine) } : await readReset(u);
+    if (!cur || !cur.st || cur.st.h !== st.h) {
+      return jsonRes({ ok: false, reason: "รหัสนี้ถูกใช้ไปแล้ว — ถ้าไม่ใช่คุณ ให้แจ้งหัวหน้าทันที" });
+    }
+    used = await casReset(u, cur.raw, { iat: Number(st.iat) || Date.now(), n: CODE_TRIES, used: true });
+  }
+  if (!used) return jsonRes({ ok: false, reason: "มีการใส่รหัสพร้อมกันหลายครั้ง — รอสักครู่แล้วลองใหม่ครับ" });
+
+  // แก้เฉพาะช่อง pass_hash · ขอแถวที่แก้กลับมา — ไม่มีแถวไหนถูกแก้ = ถือว่าไม่สำเร็จ (อย่าบอกว่าเปลี่ยนแล้ว)
   const r = await fetch(SB_URL + "/rest/v1/pnl_users?username=eq." + encodeURIComponent(u), {
-    method: "PATCH", headers: sbHead({ Prefer: "return=minimal" }),
+    method: "PATCH", headers: sbHead({ Prefer: "return=representation" }),
     body: JSON.stringify({ pass_hash: ph }),
   });
   if (!r.ok) return jsonRes({ ok: false, reason: "ตั้งรหัสผ่านใหม่ไม่สำเร็จ (" + r.status + ")" });
+  const changed = await r.json().catch(() => []);
+  if (!Array.isArray(changed) || changed.length !== 1) {
+    return jsonRes({ ok: false, reason: "ตั้งรหัสผ่านใหม่ไม่สำเร็จ — ไม่พบบัญชีที่จะแก้" });
+  }
 
   await clearReset(u);
   await logReset(u, "ขอรหัสผ่านกลุ่ม LINE แล้วตั้งรหัสใหม่เอง");
@@ -2049,7 +2192,7 @@ async function resetConfirm(b: Record<string, string>, token: string, to: string
       "✅ " + (usr.display_name || u) + " (" + u + ") ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว\n" +
       "ถ้าไม่ใช่เจ้าตัว ให้รีบเข้า 🔑 JJ Access ไปเปลี่ยนรหัส/ปิดบัญชีทันที");
   }
-  return jsonRes({ ok: true });
+  return jsonRes({ ok: true, username: u });
 }
 
 /* ---------- แจ้งกลุ่มว่ามีคนสมัครใหม่ (ของเดิม) ---------- */
@@ -2069,10 +2212,13 @@ function signupText(b: Record<string, string>): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
+  let isReset = false;                 // ประกาศนอก try — ข้อผิดพลาดของงานรีเซ็ตต้องตอบเป็น JSON เสมอ
   try {
     const b = await req.json().catch(() => ({} as Record<string, string>));
     const action = String(b.action || "");
-    const isReset = action === "reset_request" || action === "reset_confirm";
+    isReset = action === "reset_request" || action === "reset_confirm";
+    // action ที่ไม่รู้จัก = ไม่ส่งอะไรเข้ากลุ่ม (กันแอพรุ่นใหม่กว่าส่งงานที่โค้ดนี้ไม่รู้จัก แล้วกลายเป็น "มีคนสมัครใหม่" ปลอม)
+    if (action && !isReset) return new Response("skip: ไม่รู้จัก action " + action.slice(0, 40) + " | v" + VERSION, { headers: CORS });
 
     const token = (Deno.env.get("LINE_TOKEN") || "").trim();
     if (!token) {
@@ -2087,6 +2233,11 @@ Deno.serve(async (req) => {
     }
 
     const to = await groupId();
+    if (!to && GROUP_ERR) {
+      return isReset
+        ? jsonRes({ ok: false, error: true, reason: "ระบบขัดข้องชั่วคราว (" + GROUP_ERR.slice(0, 120) + ") ลองใหม่อีกครั้งครับ" })
+        : new Response("error: " + GROUP_ERR + " | v" + VERSION, { headers: CORS });
+    }
     if (!to) {
       return isReset
         ? jsonRes({ ok: false, reason: "ยังไม่ได้ตั้งกลุ่ม LINE — แจ้งผู้ดูแลระบบครับ" })
@@ -2098,10 +2249,14 @@ Deno.serve(async (req) => {
 
     const err = await pushLine(token, to, signupText(b));
     if (err) return new Response(err, { status: 200, headers: CORS });
+    // ส่งได้จริง = โค้ดรุ่นนี้พร้อมใช้ → ตั้งธงให้หน้าศูนย์รวมแอพโชว์ปุ่ม "ลืมรหัสผ่าน"
+    try { await putSetting("reset_ready", VERSION, "signup-notify"); } catch (_) { /* แอพ JJ Access ตั้งซ้ำให้อีกชั้น */ }
     return new Response("sent | v" + VERSION, { headers: CORS });
   } catch (e) {
-    const m = "error: " + String((e as Error)?.message || e);
-    return new Response(m, { status: 200, headers: CORS });
+    const m = String((e as Error)?.message || e);
+    return isReset
+      ? jsonRes({ ok: false, error: true, reason: "ระบบขัดข้องชั่วคราว (" + m.slice(0, 120) + ") ลองใหม่อีกครั้งครับ" })
+      : new Response("error: " + m, { status: 200, headers: CORS });
   }
 });
 </script>

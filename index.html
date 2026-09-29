@@ -547,7 +547,7 @@ window.JJGate=(function(){
 <div id="reset"></div>
 <script>JJLogin.mount('login',{submit:'doLogin()',sub:'เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกแอพที่ได้รับสิทธิ์',
   extra:'<button type="button" class="jjlg-btn2" onclick="showSignup()">🙋 สมัครพนักงานใหม่</button>'+
-        '<button type="button" class="jjlg-btn2" onclick="showReset()">🔑 ลืมรหัสผ่าน</button>',
+        '<button type="button" class="jjlg-btn2" id="rqBtn" style="display:none" onclick="showReset()">🔑 ลืมรหัสผ่าน</button>',
   note:'ยังไม่มีบัญชี? กดปุ่มสมัคร แล้วรอผู้ดูแลอนุมัติ'});</script>
 
 <script>
@@ -979,7 +979,38 @@ function waitBack(){
    รหัสผ่านตัวจริงไม่เคยออกจากเครื่อง — เบราว์เซอร์คิด pwHash() เองแล้วส่งแต่ค่าแฮช
    ต้อง deploy signup-notify รุ่น 2026-09-29.2 ขึ้นไป (รุ่นเก่าไม่รู้จัก action -> แอพจะบอกให้ไปอัปเดต)
    ============================================================ */
-var RQ={user:''};
+var RQ={user:'',busy:false,seq:0};
+var RQ_KEY='jjhub_reset';            // จำขั้นที่ 2 ไว้ในแท็บนี้ — ลากหน้าลง/สลับไปดู LINE แล้วกลับมายังอยู่หน้าใส่รหัส
+var RESET_MIN='2026-09-29.3';        // ฟังก์ชัน signup-notify ต้องเป็นรุ่นนี้ขึ้นไป ปุ่มลืมรหัสผ่านถึงจะโผล่
+
+/* เทียบเวอร์ชันแบบ 2026-09-29.3 (วันที่ + เลขลำดับ) — เทียบสตริงตรง ๆ ไม่ได้ เพราะ .10 จะน้อยกว่า .3 */
+function verCmp(a,b){
+  var A=String(a||'').split('.'), B=String(b||'').split('.');
+  if(A[0]!==B[0])return A[0]<B[0]?-1:1;
+  return (Number(A[1])||0)-(Number(B[1])||0);
+}
+/* โชว์ปุ่ม "ลืมรหัสผ่าน" เฉพาะเมื่อ deploy ฟังก์ชันรุ่นที่รองรับแล้ว
+   ฟังก์ชันรุ่นเก่าไม่รู้จัก action → ส่ง "มีคนสมัครใหม่" ปลอมเข้ากลุ่มทุกครั้งที่กด จึงต้องซ่อนไว้ก่อน
+   ธง pnl_settings.reset_ready ตั้งโดยฟังก์ชันเอง/ปุ่ม 🔎 ทดสอบ ใน JJ Access */
+async function rqReady(){
+  var b=document.getElementById('rqBtn'); if(!b)return;
+  try{
+    var r=await fetch(CFG.URL+'/rest/v1/pnl_settings?select=val&id=eq.reset_ready',
+      {headers:{apikey:CFG.KEY,Authorization:'Bearer '+CFG.KEY}});
+    var rows=r.ok?await r.json():[];
+    var v=rows&&rows[0]?String(rows[0].val||''):'';
+    if(v&&verCmp(v,RESET_MIN)>=0)b.style.display='';
+  }catch(e){}
+}
+function rqSave(minutes){
+  try{ sessionStorage.setItem(RQ_KEY,JSON.stringify({u:RQ.user,exp:Date.now()+(minutes||10)*60000})); }catch(e){}
+}
+function rqLoad(){
+  try{ var o=JSON.parse(sessionStorage.getItem(RQ_KEY)||'null');
+       if(o&&o.u&&o.exp>Date.now())return o; sessionStorage.removeItem(RQ_KEY); }catch(e){}
+  return null;
+}
+function rqForget(){ try{ sessionStorage.removeItem(RQ_KEY); }catch(e){} }
 
 function rqCard(inner){
   return '<div class="jjlg-in"><div class="jjlg-card">'+
@@ -987,44 +1018,59 @@ function rqCard(inner){
     '<h1 class="jjlg-app" style="margin-top:8px;text-align:center">ลืมรหัสผ่าน</h1>'+inner+'</div></div>';
 }
 function rqShow(html){
+  RQ.seq++;                          // หน้าเปลี่ยน = คำตอบที่ค้างอยู่ของหน้าก่อนไม่ต้องมาเขียนทับหน้านี้
   var b=document.getElementById('reset');
   b.innerHTML=rqCard(html); b.classList.add('on');
   document.getElementById('login').classList.remove('on');
   window.scrollTo(0,0);
 }
 function showReset(){
-  RQ.user=(document.getElementById('lgU').value||'').trim().toLowerCase();
+  var saved=rqLoad();
+  if(saved){ RQ.user=saved.u; rqStep2('',Math.max(1,Math.ceil((saved.exp-Date.now())/60000)),true); return; }
+  RQ.user=(document.getElementById('lgU').value||'').trim();
   rqStep1();
 }
 function hideReset(){
+  RQ.seq++;
   var b=document.getElementById('reset'); b.classList.remove('on'); b.innerHTML='';
   document.getElementById('login').classList.add('on');
 }
 
 /* ขั้นที่ 1 — บอกชื่อผู้ใช้ */
 function rqStep1(msg){
+  rqForget();
   rqShow(
     '<div class="jjlg-sub" style="margin-top:6px;text-align:center">ใส่ชื่อผู้ใช้ของคุณ<br>'+
       'ระบบจะส่ง<b>รหัส 6 หลัก</b>เข้ากลุ่ม LINE ของร้าน</div>'+
     '<div class="jjrq-hint" style="margin-top:14px">'+
       '👉 รหัส<b>ไม่ได้ส่งเข้ามือถือคุณ</b> — ขอจากหัวหน้าหรือผู้ดูแลที่อยู่ในกลุ่ม LINE ครับ</div>'+
-    '<div class="jjlg-f" style="margin-top:12px"><label for="rq_u">ชื่อผู้ใช้</label>'+
-      '<input id="rq_u" type="text" spellcheck="false" autocapitalize="none" autocomplete="username" '+
+    '<div class="jjlg-f" style="margin-top:12px"><label for="rq_u">ชื่อผู้ใช้ (ที่ใช้เข้าระบบ)</label>'+
+      '<input id="rq_u" type="text" spellcheck="false" autocapitalize="none" autocorrect="off" autocomplete="username" '+
       'placeholder="เช่น somchai" value="'+suEsc(RQ.user)+'"></div>'+
     '<div class="jjlg-msg" id="rq_msg">'+suEsc(msg||'')+'</div>'+
     '<button class="jjlg-btn" id="rq_go" type="button" onclick="rqAsk()">ขอรหัส 6 หลัก</button>'+
+    '<button class="jjlg-btn2" type="button" onclick="rqHaveCode()">มีรหัสแล้ว — ไปหน้าใส่รหัส</button>'+
     '<button class="jjlg-btn2" type="button" onclick="hideReset()">ยกเลิก · กลับหน้าเข้าสู่ระบบ</button>'+
     '<div class="jjlg-note">จำชื่อผู้ใช้ไม่ได้ด้วย? ให้ผู้ดูแลเปิด 🔑 JJ Access ตั้งรหัสใหม่ให้ได้เลย</div>');
   setTimeout(function(){ var e=document.getElementById('rq_u'); if(e)e.focus(); },80);
   var el=document.getElementById('rq_u');
-  if(el)el.addEventListener('keydown',function(e){ if(e.key==='Enter')rqAsk(); });
+  if(el)el.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); rqAsk(); } });
+}
+/* หัวหน้าบอกรหัสมาแล้ว แต่หน้าเด้งกลับมาขั้นที่ 1 (รีเฟรช/ปิดแท็บ) — ไปใส่รหัสได้เลย ไม่ต้องขอใหม่
+   (ขอใหม่ = รหัสเดิมที่หัวหน้าเพิ่งบอกใช้ไม่ได้) · เซิร์ฟเวอร์ยังตรวจรหัสและจำนวนครั้งเหมือนเดิม */
+function rqHaveCode(){
+  var u=(document.getElementById('rq_u').value||'').trim();
+  if(!u){ rqMsg('ใส่ชื่อผู้ใช้ก่อนครับ'); return; }
+  RQ.user=u; rqStep2('',10,true);
 }
 
 /* ขั้นที่ 2 — ใส่รหัสที่ได้จากกลุ่ม + ตั้งรหัสผ่านใหม่ */
-function rqStep2(name,minutes){
+function rqStep2(name,minutes,resumed){
+  rqSave(minutes);
   rqShow(
     '<div class="jjlg-sub" style="margin-top:6px;text-align:center">'+
-      'ส่งรหัสเข้ากลุ่ม LINE ของร้านแล้ว<br>สำหรับบัญชี <b style="color:#FFE9BC">'+suEsc(RQ.user)+'</b>'+
+      (resumed?'ใส่รหัส 6 หลักที่ได้จากกลุ่ม LINE':'ส่งรหัสเข้ากลุ่ม LINE ของร้านแล้ว')+
+      '<br>สำหรับบัญชี <b style="color:#FFE9BC">'+suEsc(RQ.user)+'</b>'+
       (name?' ('+suEsc(name)+')':'')+'</div>'+
     '<div class="jjrq-hint" style="margin-top:14px">'+
       '⏱ รหัสใช้ได้ '+(minutes||10)+' นาที · ใส่ผิดได้ 5 ครั้ง<br>'+
@@ -1039,12 +1085,13 @@ function rqStep2(name,minutes){
     '<div class="jjlg-msg" id="rq_msg"></div>'+
     '<button class="jjlg-btn" id="rq_go" type="button" onclick="rqConfirm()">ตั้งรหัสผ่านใหม่</button>'+
     '<button class="jjlg-btn2" type="button" onclick="rqStep1()">↩ ขอรหัสใหม่ / เปลี่ยนชื่อผู้ใช้</button>'+
+    '<button class="jjlg-btn2" type="button" onclick="rqForget();hideReset()">ยกเลิก · กลับหน้าเข้าสู่ระบบ</button>'+
     '<div class="jjlg-note">ตั้งเสร็จเข้าสู่ระบบด้วยรหัสใหม่ได้ทันที</div>');
   var c=document.getElementById('rq_code');
   if(c){ c.addEventListener('input',function(){ this.value=this.value.replace(/\D/g,'').slice(0,6); });
          setTimeout(function(){ try{c.focus();}catch(e){} },80); }
   var p2=document.getElementById('rq_p2');
-  if(p2)p2.addEventListener('keydown',function(e){ if(e.key==='Enter')rqConfirm(); });
+  if(p2)p2.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); rqConfirm(); } });
 }
 
 function rqMsg(t){ var e=document.getElementById('rq_msg'); if(e)e.textContent=t||''; }
@@ -1052,7 +1099,8 @@ function rqBusy(on,label){
   var b=document.getElementById('rq_go'); if(!b)return;
   b.disabled=!!on; b.textContent=on?'กำลังทำงาน…':label;
 }
-/* ยิงไปที่ Edge Function เดียวกับแจ้งเตือนสมัครงาน — แยกงานด้วยช่อง action */
+/* ยิงไปที่ Edge Function เดียวกับแจ้งเตือนสมัครงาน — แยกงานด้วยช่อง action
+   แยกอาการให้ถูก: ไม่มีฟังก์ชัน / ยังไม่ปิด Verify JWT / ระบบขัดข้อง / โค้ดรุ่นเก่า */
 async function rqCall(body){
   var r,t;
   try{
@@ -1063,21 +1111,29 @@ async function rqCall(body){
   }catch(e){ return {ok:false,reason:'ต่ออินเทอร์เน็ตไม่ได้ ลองใหม่อีกครั้งครับ'}; }
   if(r.status===404) return {ok:false,reason:'ระบบลืมรหัสผ่านยังไม่ได้ติดตั้ง — แจ้งผู้ดูแลระบบครับ'};
   if(r.status===401) return {ok:false,reason:'ระบบลืมรหัสผ่านยังตั้งค่าไม่เสร็จ — แจ้งผู้ดูแลระบบครับ'};
-  try{ return JSON.parse(t); }
-  catch(e){ return {ok:false,reason:'ระบบลืมรหัสผ่านยังเป็นโค้ดรุ่นเก่า — แจ้งผู้ดูแลให้อัปเดตฟังก์ชันก่อนครับ'}; }
+  try{ return JSON.parse(t); }catch(e){}
+  if(r.status>=500||/^error/i.test(t))
+    return {ok:false,reason:'ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้งครับ'+(t?' ('+t.slice(0,100)+')':'')};
+  return {ok:false,reason:'ระบบลืมรหัสผ่านยังเป็นโค้ดรุ่นเก่า — แจ้งผู้ดูแลให้อัปเดตฟังก์ชันก่อนครับ'};
 }
 async function rqAsk(){
-  var u=(document.getElementById('rq_u').value||'').trim().toLowerCase();
+  if(RQ.busy)return;                              // กด Enter รัว ๆ / กดปุ่มซ้ำ = ไม่ส่งซ้ำ
+  var u=(document.getElementById('rq_u').value||'').trim();
   rqMsg('');
   if(!u){ rqMsg('ใส่ชื่อผู้ใช้ก่อนครับ'); return; }
-  RQ.user=u;
-  rqBusy(true);
-  var res=await rqCall({action:'reset_request',username:u});
+  RQ.busy=true; rqBusy(true);
+  var seq=++RQ.seq, res;
+  try{ res=await rqCall({action:'reset_request',username:u}); }
+  finally{ RQ.busy=false; }
+  if(seq!==RQ.seq)return;                         // ผู้ใช้ไปหน้าอื่นแล้ว
   rqBusy(false,'ขอรหัส 6 หลัก');
   if(!res.ok){ rqMsg(res.reason||'ขอรหัสไม่สำเร็จ'); return; }
-  rqStep2(res.name,res.minutes);
+  RQ.user=res.username||u;                        // ชื่อจริงตามที่เก็บไว้ (ตัวพิมพ์ตรง) — ใช้คิด pass_hash
+  rqStep2(res.name,res.minutes,false);
+  if(res.again)rqMsg('ส่งรหัสไปแล้วเมื่อสักครู่ — ใช้รหัสเดิมที่หัวหน้าได้รับได้เลย');
 }
 async function rqConfirm(){
+  if(RQ.busy)return;
   var code=(document.getElementById('rq_code').value||'').replace(/\D/g,''),
       p=document.getElementById('rq_p').value||'',
       p2=document.getElementById('rq_p2').value||'';
@@ -1085,13 +1141,26 @@ async function rqConfirm(){
   if(code.length!==6){ rqMsg('ใส่รหัส 6 หลักให้ครบก่อนครับ'); return; }
   if(p.length<6){ rqMsg('รหัสผ่านใหม่อย่างน้อย 6 ตัว'); return; }
   if(p!==p2){ rqMsg('รหัสผ่าน 2 ช่องไม่ตรงกัน'); return; }
-  rqBusy(true);
-  var res=await rqCall({action:'reset_confirm',username:RQ.user,code:code,pass_hash:pwHash(RQ.user,p)});
+  RQ.busy=true; rqBusy(true);
+  var seq=++RQ.seq, res;
+  try{
+    res=await rqCall({action:'reset_confirm',username:RQ.user,code:code,pass_hash:pwHash(RQ.user,p)});
+    /* พิมพ์ชื่อผู้ใช้ตัวพิมพ์ไม่ตรงกับที่เก็บไว้ — pass_hash ต้องคิดด้วยชื่อจริง ไม่งั้นล็อกอินไม่ผ่าน
+       เซิร์ฟเวอร์บอกชื่อจริงกลับมา (ยังไม่ได้ดูรหัส จึงไม่เสียสิทธิ์ลอง) → คิดใหม่แล้วส่งอีกรอบ */
+    if(res&&res.retry&&res.username&&res.username!==RQ.user){
+      RQ.user=res.username;
+      res=await rqCall({action:'reset_confirm',username:RQ.user,code:code,pass_hash:pwHash(RQ.user,p)});
+    }
+  }finally{ RQ.busy=false; }
+  if(seq!==RQ.seq)return;
   rqBusy(false,'ตั้งรหัสผ่านใหม่');
   if(!res.ok){ rqMsg(res.reason||'ตั้งรหัสผ่านใหม่ไม่สำเร็จ'); return; }
+  if(res.username)RQ.user=res.username;
+  rqForget();
   rqDone();
 }
 function rqDone(){
+  RQ.seq++;
   document.getElementById('reset').innerHTML=
     '<div class="jjlg-in"><div class="jjlg-card"><div class="jjsu-ok">'+
     '<div class="big">✅</div>'+
@@ -1107,6 +1176,14 @@ function rqBackLogin(){
   if(u)u.value=RQ.user;
   if(p){ p.value=''; setTimeout(function(){ try{p.focus();}catch(e){} },80); }
 }
+/* เปิดหน้า: ถ้าค้างอยู่ขั้นใส่รหัสในแท็บนี้ (ลากหน้าลงรีเฟรช) = กลับไปหน้านั้นเลย · แล้วเช็คว่าจะโชว์ปุ่มไหม */
+(function(){
+  function boot(){
+    rqReady();
+    if(rqLoad()&&document.getElementById('login').classList.contains('on'))showReset();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot); else setTimeout(boot,0);
+})();
 
 /* ---------- ตัวเลขใบสมัครที่รออนุมัติ บนไอคอน JJ Access ---------- */
 async function paintPending(){
