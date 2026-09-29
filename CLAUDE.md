@@ -82,7 +82,16 @@
   - **นับสต๊อก (`jjmk-stockcheck.html`)**: เดิม hash ใช้ salt `JJSC` คนละตัวกับบัญชีกลาง (`JJPNL`) → เอา user/pass กลางไปกรอกยังไงก็ไม่ผ่าน · ตอนนี้ใช้ `pwHash(u,p)=sha256(u+'|'+p+'|JJPNL')` เหมือนกันแล้ว · เซสชันประจำแท็บ `sessionStorage.jjsc_sess` · `unit` ของบัญชีกำหนดสาขาที่เห็น (JJLP→ลาดพร้าว · JJRD→รัชดา · ALL/OFFICE/JJCK→ทุกสาขา) · มีสิทธิ์หน้า `cfg`/`set`/`items`/`sched` = เป็นผู้ดูแลในแอป · หน้า "จัดการผู้ใช้" เดิมเอาออกแล้ว ชี้ไป 🔑 JJ Access แทน
     - ⚠️ **ล็อกอินของไฟล์นี้เคยหายไปแล้ว 1 ครั้ง** — commit `6c515b2` (2026-09-24) เขียนทับ `jjmk-stockcheck.html` ด้วยสำเนาเก่าจาก session ที่ทำงานขนานกัน ทำให้กลับไปใช้ `sc_users`+salt `JJSC` และ **"โหมดเปิด" ที่ไม่ต้องล็อกอินเลย** (กู้คืนแล้ว 2026-09-28)
     - **แก้ไฟล์แอปไหนก็ต้อง `git fetch`+rebase บน `origin/main` ก่อน commit ทุกครั้ง** ไฟล์เดียวใหญ่ ๆ แบบนี้ทับกันง่ายมาก · เช็คหลัง merge ว่า `initAuth()` ยังเรียก `showLogin()` และ `pwHash` ยังเป็น salt `JJPNL`
-    - ⚠️ **เกิดซ้ำอีก 2026-09-29**: commit `63c5497` เขียนทับ `jjmk-admin.html` + `jjmk-pnl.html` ด้วยสำเนาเก่า ทำให้ **JJ Login หลุดไปจาก 2 ไฟล์นั้น** (กู้คืนแล้ว) · **ทุกครั้งที่จะ commit ให้เช็คก่อนว่าไฟล์ที่แก้ยังมีของเดิมครบ** เช่น `grep -c 'window.JJLogin' *.html` ต้องได้ 2 ทุกไฟล์ที่ควรมี
+    - ⚠️ **เกิดซ้ำแล้ว 3 ครั้ง** — `63c5497` (เขียนทับ `jjmk-admin.html`+`jjmk-pnl.html`) · `0d262eb` (เขียนทับ `jjmk-pnl.html` อีกรอบ) ทั้งคู่ทำให้ **JJ Login หลุดหายไป** (กู้คืนแล้วทั้งหมด)
+    - **เช็คทุกครั้งก่อน commit** ว่าไฟล์ที่แก้ยังมีของเดิมครบ:
+      ```
+      for f in index.html jjmk-pnl.html jjmk-owner.html jjmk-admin.html jjmk-payroll.html \
+               jjmk-calendar.html jjmk-invoice.html jjmk-social.html jjmk-maint.html \
+               jjmk-kpi.html jjmk-stockcheck.html jjmk-kitchen.html jjmk-order.html; do
+        printf "%-22s %s\n" $f "$(grep -c 'window.JJLogin' $f)"; done
+      ```
+      ต้องได้ **2 ทุกไฟล์** (1 = บล็อกหาย เหลือแต่ที่เรียกใช้ · 0 = หายทั้งคู่)
+    - **วิธีกู้**: `git diff 2266081^ 2266081 -- <ไฟล์> | git apply --3way` (commit 2266081 = PR #59 ที่ใส่ JJ Login ครั้งแรก) — merge เข้ากับงานใหม่ของ commit ที่มาทับได้เอง ไม่ต้องเลือกว่าจะทิ้งของใคร
   - **ครัวกลาง (`jjmk-kitchen.html`)**: เลิกใช้ Supabase Auth (`signInWithPassword` + อีเมลปลอม `@jjmk.local`) และตาราง `app_users` · เซสชันประจำแท็บ `sessionStorage.jjck_sess` · "จำไว้ในเครื่องนี้ 12 ชม." = `jjck_keep` · role แปลงเป็นของเดิมในแอป: admin/owner→`owner` · manager หรือมีสิทธิ์หน้า `set`/`acc`→`manager` · ที่เหลือ→`warehouse`
   - **ต้องรัน `jjmk_kitchen_central.sql` (branch `sql`) ครั้งเดียว** ไม่งั้นครัวกลางบันทึกอะไรไม่ได้ — RLS เดิมของตาราง `ck_*` บังคับ `authenticated` + เช็ค `app_users.auth_uid` ซึ่งบัญชีกลาง (ยิงผ่าน anon key) ทำไม่ได้ · ไฟล์เปิด `ck_*` + `ck_add_qty` + bucket `product-images` ให้ role `anon` (แพตเทิร์นเดียวกับ `jjmk_maint_access.sql`)
   - ~~ปุ่ม "ดูแอปทั้งหมด" ... อย่าตัดออก~~ **เจ้าของสั่งเอาออกแล้ว 2026-09-29** (ดูหัวข้อสมัครพนักงาน)
