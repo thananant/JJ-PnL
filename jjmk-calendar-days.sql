@@ -1,18 +1,18 @@
 -- jjmk-calendar-days.sql — วันพิเศษกลางของทุกระบบ (ลงที่ JJ Calendar แท็บ 🎌 วันพิเศษ)
 -- รันครั้งเดียวใน Supabase -> SQL Editor (รันซ้ำได้ · ไม่แตะตารางเดิมของระบบไหนเลย)
 --
--- ลงวันพิเศษที่ปฏิทินที่เดียว แล้วระบบอื่นเอาไปใช้ (เจ้าของตัดสินใจ 2026-09-29)
---   💰 เงินเดือน : วันจ่ายค่าแรง ×2 — หน้าร้านได้ ×2 / ออฟฟิศได้หยุด (กฎเดิมของหน้า 🎌 ทุกข้อ)
---                  เลือกได้ว่าใช้กับใคร (เจ้าของสั่ง 2026-09-30 "ออฟฟิศมีวันหยุดพิเศษไม่เหมือนหน้าร้าน"):
---                    all = ทั้งคู่ (แบบเดิม) · store = หน้าร้าน ×2 อย่างเดียว (ออฟฟิศทำงานปกติ)
---                    office = ออฟฟิศหยุดอย่างเดียว (หน้าร้านทำงานปกติ ไม่ได้ ×2 ไม่ใช่วันห้ามหยุด) · ออฟฟิศ = พนักงานสาขา OFFICE
---                  มีผลกับเงินเดือนก็ต่อเมื่อกด ✅ ยืนยัน ในหน้า 🎌 ของระบบเงินเดือนเท่านั้น
---                  (ระบบเงินเดือนคิดเงินจากตาราง holidays — ไฟล์นี้แค่เพิ่มช่อง holidays.scope ให้ ไม่แก้ข้อมูลเดิม)
---   📦 สั่งของ   : วันขายดี = แอพนับสต๊อก + ครัวกลาง คิดยอดใช้วันนั้นแบบ "เสาร์–อาทิตย์" (เลือกสาขาได้)
+-- ลงวันพิเศษที่ปฏิทินที่เดียว แล้วระบบอื่นเอาไปใช้ — แยกเป็น 3 ปฏิทิน (เจ้าของสั่ง 2026-09-30) · 1 แถว = 1 ปฏิทิน (ช่อง kind)
+--   🏢 office : ปฏิทินที่ออฟฟิศหยุด — พนักงานสาขา OFFICE ได้หยุด นับเป็นวันทำงาน · หน้าร้านทำงานปกติ
+--   💰 pay    : ปฏิทินที่พนักงานได้ค่าแรง ×2 — หน้าร้านได้ ×2 + วันนั้นห้ามหยุด · ออฟฟิศทำงานปกติ
+--   📦 order  : ปฏิทินที่สั่งของเท่าวันเสาร์–อาทิตย์ — แอพนับสต๊อก + ครัวกลาง คิดยอดใช้วันนั้นแบบ ส–อา (เลือกสาขาได้)
+--   วันเดียวกันอยู่ได้หลายปฏิทิน (เช่น สงกรานต์ อยู่ทั้ง 3) · 🏢/💰 มีผลกับเงินเดือนก็ต่อเมื่อกด ✅ ยืนยัน ในหน้า 🎌 ของระบบเงินเดือน
+--   ระบบเงินเดือนคิดเงินจากตาราง holidays — ไฟล์นี้เพิ่มช่อง scope/cal_id ให้ และยอมให้วันเดียวกันมีทั้งแถวออฟฟิศและแถวหน้าร้าน
+--   (แถวเดิมทุกแถวยังอยู่ครบ คิดเงินเท่าเดิมทุกบาท)
 
 create table if not exists public.cal_special_days (
   id               uuid primary key default gen_random_uuid(),
   name             text not null,
+  kind             text,                       -- ปฏิทินไหน: office ออฟฟิศหยุด · pay ค่าแรง ×2 · order สั่งของแบบ ส–อา (null = ป้ายเดิม)
   day_from         date not null,              -- วันแรก (วันของร้าน)
   day_to           date not null,              -- วันสุดท้าย (นับรวม)
   pay_multiplier   numeric(3,1),               -- null = ไม่เกี่ยวเงินเดือน · 2 = ×2 (ความหมายเดียวกับ holidays.multiplier)
@@ -36,6 +36,30 @@ create table if not exists public.cal_special_days (
 
 -- เคยรันไฟล์รุ่นก่อน (ยังไม่มีช่องนี้) = เพิ่มให้ · แถวเดิมเป็น all = ใช้กับทุกคนเหมือนเดิม
 alter table public.cal_special_days add column if not exists pay_scope text not null default 'all';
+alter table public.cal_special_days add column if not exists kind text;
+
+-- ย้ายแถวรุ่นก่อน (ที่ 1 แถวมีหลายผล) เข้า 3 ปฏิทิน — ไม่มีอะไรหาย · รันซ้ำได้ (ทำเฉพาะแถวที่ยังไม่มี kind)
+alter table public.cal_special_days drop constraint if exists cal_sd_pay_once;
+--   1) แถวที่ทั้งจ่ายค่าแรงและขายดี → แยกส่วนขายดีเป็นแถวปฏิทิน 📦
+insert into public.cal_special_days (name, kind, day_from, day_to, pay_scope, pay_status, order_rate_group, order_branches,
+                                     order_multiplier, closed, note, created_by, created_name, updated_by, cancelled)
+  select name, 'order', day_from, day_to, 'all', 'none', order_rate_group, order_branches,
+         order_multiplier, closed, note, created_by, created_name, updated_by, cancelled
+  from public.cal_special_days where kind is null and pay_multiplier is not null and order_rate_group is not null;
+update public.cal_special_days set order_rate_group = null, order_branches = null
+  where kind is null and pay_multiplier is not null and order_rate_group is not null;
+--   2) วันจ่ายค่าแรงแบบ "ทั้งคู่" → แยกส่วนออฟฟิศหยุดเป็นแถวปฏิทิน 🏢 (สถานะเงินเดือนตามแถวเดิม)
+insert into public.cal_special_days (name, kind, day_from, day_to, pay_scope, pay_status, pay_snapshot, pay_decided_by, pay_decided_at,
+                                     note, created_by, created_name, updated_by, cancelled)
+  select name, 'office', day_from, day_to, 'office', pay_status, pay_snapshot, pay_decided_by, pay_decided_at,
+         note, created_by, created_name, updated_by, cancelled
+  from public.cal_special_days where kind is null and pay_multiplier is not null and pay_scope = 'all';
+--   3) ใส่ชื่อปฏิทินให้แถวเดิม
+update public.cal_special_days set kind = 'office', pay_multiplier = null
+  where kind is null and pay_multiplier is not null and pay_scope = 'office';
+update public.cal_special_days set kind = 'pay', pay_scope = 'store' where kind is null and pay_multiplier is not null;
+update public.cal_special_days set kind = 'order' where kind is null and order_rate_group is not null;
+--   แถวที่ไม่มีผลอะไรเลย (ป้ายเดิม) คงไว้ kind = null — แอพให้เลือกย้ายเข้าปฏิทินเองได้
 
 -- กันข้อมูลเพี้ยน (ตารางนี้ anon เขียนได้เหมือนตาราง cal_* อื่น)
 alter table public.cal_special_days drop constraint if exists cal_sd_name;
@@ -46,6 +70,10 @@ alter table public.cal_special_days drop constraint if exists cal_sd_pay;
 alter table public.cal_special_days add  constraint cal_sd_pay   check (pay_multiplier is null or pay_multiplier in (1.5, 2, 3));
 alter table public.cal_special_days drop constraint if exists cal_sd_scope;
 alter table public.cal_special_days add  constraint cal_sd_scope check (pay_scope in ('all','store','office'));
+alter table public.cal_special_days drop constraint if exists cal_sd_kind;
+alter table public.cal_special_days add  constraint cal_sd_kind  check (kind is null or kind in ('office','pay','order'));
+alter table public.cal_special_days drop constraint if exists cal_sd_kind_pay;
+alter table public.cal_special_days add  constraint cal_sd_kind_pay check (kind is distinct from 'pay' or pay_multiplier is not null);
 alter table public.cal_special_days drop constraint if exists cal_sd_status;
 alter table public.cal_special_days add  constraint cal_sd_status check (pay_status in ('none','pending','confirmed','declined'));
 alter table public.cal_special_days drop constraint if exists cal_sd_grp;
@@ -55,12 +83,15 @@ alter table public.cal_special_days add  constraint cal_sd_br    check (order_br
   (cardinality(order_branches) between 1 and 4 and order_branches <@ array['JJLP','JJRD','JJCK','OFFICE']::text[]));
 alter table public.cal_special_days drop constraint if exists cal_sd_om;
 alter table public.cal_special_days add  constraint cal_sd_om    check (order_multiplier is null or order_multiplier between 0.5 and 3);
--- วันจ่ายค่าแรง 2 รายการห้ามทับวันเดียวกัน (หน้า 🎌 ของเงินเดือนมีได้วันละแถวเดียว)
--- หน้าร้าน+ออฟฟิศหยุดวันเดียวกัน = ใช้รายการเดียว เลือก "ทั้งคู่"
+-- ปฏิทินเดียวกันห้ามซ้อนวัน (🏢 กับ 🏢 · 💰 กับ 💰) — คนละปฏิทินซ้อนกันได้ (เช่น สงกรานต์ อยู่ทั้ง 🏢 และ 💰)
 alter table public.cal_special_days drop constraint if exists cal_sd_pay_once;
 alter table public.cal_special_days add  constraint cal_sd_pay_once
   exclude using gist (daterange(day_from, day_to, '[]') with &&)
-  where (pay_multiplier is not null and not cancelled);
+  where (kind = 'pay' and not cancelled);
+alter table public.cal_special_days drop constraint if exists cal_sd_off_once;
+alter table public.cal_special_days add  constraint cal_sd_off_once
+  exclude using gist (daterange(day_from, day_to, '[]') with &&)
+  where (kind = 'office' and not cancelled);
 
 create index if not exists cal_sd_days on public.cal_special_days (day_from, day_to) where not cancelled;
 
@@ -108,19 +139,37 @@ grant select on public.cal_special_days_log to anon, authenticated;
 -- 1 แถวต่อ 1 วัน (ไว้ให้ระบบอื่นอ่านง่าย ๆ)
 create or replace view public.cal_special_days_v as
   select g.d::date as day, s.id, s.name, s.pay_multiplier, s.pay_status,
-         s.order_rate_group, s.order_branches, s.order_multiplier, s.closed, s.pay_scope
+         s.order_rate_group, s.order_branches, s.order_multiplier, s.closed, s.pay_scope, s.kind
   from public.cal_special_days s,
        generate_series(s.day_from::timestamp, s.day_to::timestamp, interval '1 day') g(d)
   where not s.cancelled;
 grant select on public.cal_special_days_v to anon, authenticated;
 
--- 💰 ระบบเงินเดือน: วันหยุดพิเศษเลือกได้ว่าใช้กับใคร (เหมือนไฟล์ jjmk-payroll/jj_holiday_scope.sql — รันซ้ำได้)
---    แถวเดิมทั้งหมดเป็น all = คิดเงินเหมือนเดิมทุกบาท
-do $$ begin
+-- 💰 ระบบเงินเดือน (เหมือนไฟล์ jjmk-payroll/jj_holiday_scope.sql — รันซ้ำได้) · แถวเดิมทั้งหมดเป็น all = คิดเงินเหมือนเดิมทุกบาท
+--    scope  = ใช้กับใคร: all ทุกคน · store หน้าร้าน (มาจากปฏิทิน 💰) · office ออฟฟิศ (มาจากปฏิทิน 🏢)
+--    cal_id = มาจากรายการไหนในปฏิทิน (null = ตั้งเองในหน้า 🎌) — ยืนยันซ้ำ/ยกเลิกในปฏิทินจะแก้เฉพาะแถวของรายการนั้น
+--    ไม่ซ้ำ: เดิม 1 วัน 1 แถว → (วัน, scope) · วันเดียวกันมีได้ทั้งแถวออฟฟิศและแถวหน้าร้าน
+do $$ declare c record; dayatt smallint; begin
   if to_regclass('public.holidays') is not null then
     alter table public.holidays add column if not exists scope text not null default 'all';
     alter table public.holidays drop constraint if exists holidays_scope;
     alter table public.holidays add constraint holidays_scope check (scope in ('all','store','office'));
+    select attnum into dayatt from pg_attribute where attrelid = 'public.holidays'::regclass and attname = 'day';
+    if exists (select 1 from pg_constraint where conrelid = 'public.holidays'::regclass and contype = 'p' and conkey = array[dayatt]) then
+      raise exception 'ตาราง holidays ใช้ day เป็น primary key — ยังแยกหน้าร้าน/ออฟฟิศในวันเดียวกันไม่ได้ (แจ้งผู้พัฒนา)';
+    end if;
+    for c in select conname from pg_constraint
+             where conrelid = 'public.holidays'::regclass and contype = 'u' and conkey = array[dayatt] loop
+      execute format('alter table public.holidays drop constraint %I', c.conname);
+    end loop;
+    for c in select i.relname from pg_index x join pg_class i on i.oid = x.indexrelid
+             where x.indrelid = 'public.holidays'::regclass and x.indisunique and not x.indisprimary
+               and x.indkey::text = dayatt::text
+               and not exists (select 1 from pg_constraint k where k.conindid = x.indexrelid) loop
+      execute format('drop index public.%I', c.relname);
+    end loop;
+    create unique index if not exists holidays_day_scope on public.holidays (day, scope);
+    alter table public.holidays add column if not exists cal_id uuid;   -- เพิ่มท้ายสุด: แอพเห็นช่องนี้ = ขั้นบนเสร็จแล้ว
   end if;
 end $$;
 
