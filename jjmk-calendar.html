@@ -133,13 +133,28 @@ input[type=date],input[type=time]{min-width:0;max-width:100%}
 }
 
 /* ---------- 🎌 วันพิเศษ (2026-09-29) — สีพื้นช่องวัน ไม่ใช้แถบนัด (ไม่กินที่ 3 แถบ/วัน) ---------- */
-.mcell.spd-pay{background:linear-gradient(160deg,rgba(255,198,67,.16),rgba(255,198,67,.04));border-color:rgba(255,198,67,.35)}
 .mcell.spd-ord{background:linear-gradient(160deg,rgba(88,176,255,.16),rgba(88,176,255,.04));border-color:rgba(88,176,255,.32)}
-.mcell.spd-pay.spd-ord{background:linear-gradient(160deg,rgba(255,198,67,.16),rgba(88,176,255,.10))}
+.mcell.spd-off{background:linear-gradient(160deg,rgba(178,140,255,.18),rgba(178,140,255,.05));border-color:rgba(178,140,255,.38)}
+.mcell.spd-pay{background:linear-gradient(160deg,rgba(255,198,67,.16),rgba(255,198,67,.04));border-color:rgba(255,198,67,.35)}
+.mcell.spd-off.spd-pay{background:linear-gradient(160deg,rgba(255,198,67,.16),rgba(178,140,255,.12))}
 .spd{font-size:10px;font-weight:700;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .spd .ic{margin-right:2px}
 .sdcard{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:var(--r);padding:12px 14px;margin-bottom:9px}
 .sdcard.ord{border-left-color:#58B0FF}
+.sdcard.off{border-left-color:#B28CFF}
+.sdcard.leg{border-left-color:#8C8278}
+.chip.off{color:#D2BCFF;border-color:rgba(178,140,255,.5);background:rgba(178,140,255,.10)}
+.sdbox.off{border-color:rgba(178,140,255,.4)}
+.sdseg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.sdseg button{min-height:48px;border-radius:12px;border:1.5px solid var(--line);background:transparent;color:var(--ink,#fff);font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;padding:6px 4px;line-height:1.3}
+.sdseg button .n{display:inline-block;margin-left:5px;font-size:11px;font-weight:700;padding:0 6px;border-radius:9px;background:rgba(255,255,255,.1)}
+.sdseg button.on.off{border-color:#B28CFF;background:rgba(178,140,255,.16)}
+.sdseg button.on.pay{border-color:var(--gold);background:rgba(255,198,67,.14)}
+.sdseg button.on.ord{border-color:#58B0FF;background:rgba(88,176,255,.14)}
+.sdleg{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.sdl{min-height:40px;border-radius:20px;border:1.5px solid var(--line);background:transparent;color:var(--ink,#fff);font:inherit;font-size:12.5px;font-weight:600;padding:4px 12px;cursor:pointer}
+.sdl.off{border-color:rgba(178,140,255,.55)}.sdl.pay{border-color:rgba(255,198,67,.55)}.sdl.ord{border-color:rgba(88,176,255,.55)}
+.sdl.offl{opacity:.45;border-style:dashed}
 .sdcard.past{opacity:.6}
 .sdcard.pay-only{border-left-color:#8C8278;border-style:dashed}
 .sdcard .t{font-family:'Prompt';font-weight:700;font-size:15px}
@@ -160,12 +175,9 @@ input[type=date],input[type=time]{min-width:0;max-width:100%}
 .pick{display:flex;gap:6px;flex-wrap:wrap}
 .pick .chip{cursor:pointer;font-size:13px;padding:7px 12px;min-height:36px}
 .pick .chip.on{background:rgba(255,64,70,.18);border-color:var(--red);color:#fff}
-.psrow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:8px 2px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px}
-.psrow select{margin-top:5px;width:100%;max-width:230px;font-size:14px;padding:6px 8px;min-height:36px}
-@media(max-width:700px){.psrow select{font-size:16px}}
+.psrow{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;cursor:pointer;min-height:44px}
 .psrow input{width:20px;height:20px;accent-color:var(--red)}
 .psrow .d{font-size:12px;color:var(--mut)}
-.psrow label{display:flex;align-items:center;gap:4px;font-size:13px;white-space:nowrap}
 .psrow.have{opacity:.5}
 @media(max-width:640px){
   .spd .tx{display:none}
@@ -710,7 +722,9 @@ const S={user:null,tab:'month',
   events:[],loaded:false,
   users:[],branches:[{code:'JJLP',name:'ลาดพร้าว'},{code:'JJRD',name:'รัชดา'}],
   feedToken:'',
-  days:[],daysReady:false,holi:[],dayYear:new Date().getFullYear()};   // 🎌 วันพิเศษ (cal_special_days) + วันหยุดที่ตั้งไว้ในระบบเงินเดือน (อ่านอย่างเดียว)
+  days:[],daysReady:false,holi:[],dayYear:new Date().getFullYear(),
+  sdk:LS.get('jjcal_sdk','office'),                                    // แท็บ 🎌 เปิดปฏิทินไหนอยู่ (🏢/💰/📦)
+  sdShow:LS.get('jjcal_sdshow',{office:true,pay:true,order:true})};   // ชั้นวันพิเศษที่โชว์ในหน้าเดือน   // 🎌 วันพิเศษ (cal_special_days) + วันหยุดที่ตั้งไว้ในระบบเงินเดือน (อ่านอย่างเดียว)
 
 const TH_D=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
 const TH_DS=['อา','จ','อ','พ','พฤ','ศ','ส'];
@@ -925,13 +939,15 @@ function vMonth(el){
   for(let i=0;i<42;i++){
     const d=new Date(gridStart.getFullYear(),gridStart.getMonth(),gridStart.getDate()+i);
     const k=dkey(d),evs=map[k]||[],out=d.getMonth()!==m;
-    const sds=sdOn(k), sdPay=sds.some(sdPayHere), sdOrd=sds.some(sdOrdHere);
-    const sdStrip=sds.length?`<div class="spd" title="${esc(sds.map(x=>x.name).join(' · '))}"><span class="ic">${sdPay?'💰':''}${sdOrd?'📦':''}${!sdPay&&!sdOrd?'🎌':''}</span><span class="tx">${esc(sds[0].name)}${sds.length>1?' +'+(sds.length-1):''}</span></div>`:'';
+    const sds=sdOn(k), sdHas=kk=>sds.some(x=>sdKind(x)===kk);
+    const sdOff=sdHas('office'), sdPay=sdHas('pay'), sdOrd=sdHas('order');
+    const sdIc=(sdOff?'🏢':'')+(sdPay?'💰':'')+(sdOrd?'📦':'')||'🎌';
+    const sdStrip=sds.length?`<div class="spd" title="${esc(sds.map(x=>(sdKind(x)?SD_K[sdKind(x)].ic+' ':'')+x.name).join(' · '))}"><span class="ic">${sdIc}</span><span class="tx">${esc(sds[0].name)}${sds.length>1?' +'+(sds.length-1):''}</span></div>`:'';
     const chips=evs.slice(0,3).map(e=>{
       const c=brColor(e.branch);
       return `<div class="mev" data-ev="${e.id}" style="background:${c}22;color:${c};border:1px solid ${c}44">${e.all_day?'':thTime(e.start_at)+' '}${esc(e.title)}</div>`;
     }).join('')+(evs.length>3?`<div class="mmore">+${evs.length-3} รายการ</div>`:'');
-    cells+=`<div class="mcell${out?' out':''}${k===todayKey?' today':''}${sdPay?' spd-pay':''}${sdOrd?' spd-ord':''}" data-day="${k}"><span class="dnum">${d.getDate()}</span>${sdStrip}${chips}</div>`;
+    cells+=`<div class="mcell${out?' out':''}${k===todayKey?' today':''}${sdOrd?' spd-ord':''}${sdOff?' spd-off':''}${sdPay?' spd-pay':''}" data-day="${k}"><span class="dnum">${d.getDate()}</span>${sdStrip}${chips}</div>`;
   }
   const todayEvs=(map[todayKey]||[]);
   const bar=todayEvs.length?`<div class="todaybar">📌 <b>วันนี้มีนัด ${todayEvs.length} รายการ</b>${todayEvs.map(e=>`<span class="tchip" data-ev="${e.id}">${e.all_day?'ทั้งวัน':thTime(e.start_at)} · ${esc(e.title)}</span>`).join('')}</div>`:'';
@@ -944,6 +960,7 @@ function vMonth(el){
       <span style="flex:1"></span>
       <button class="btn sm" onclick="openEventForm()">➕ สร้างนัดใหม่</button>
     </div>
+    ${sdLegend()}
     <div class="dow"><span class="sun">อา</span><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span></div>
     <div class="mgrid">${cells}</div>
   </div>
@@ -965,8 +982,9 @@ function openDay(k){
         </div></div>`;
     }).join(''):'<div class="empty">วันนี้ยังไม่มีนัด</div>'}
     <div class="acts"><button class="btn" onclick="closeModal();openEventForm(null,'${k}')">➕ เพิ่มนัดวันนี้</button>
-    ${isBoss()&&S.daysReady?`<button class="btn dk" onclick="closeModal();openDayForm(null,'${k}')">🎌 ตั้งเป็นวันพิเศษ</button>`:''}
-    <button class="btn gh" onclick="closeModal()">ปิด</button></div>`);
+    <button class="btn gh" onclick="closeModal()">ปิด</button></div>
+    ${isBoss()&&S.daysReady&&S.sdKindCol?`<div class="xs mut" style="margin:12px 0 6px">🎌 ใส่วันนี้ลงปฏิทิน</div>
+      <div class="acts" style="margin-top:0">${SD_KINDS.map(kk=>`<button class="btn dk sm" onclick="closeModal();openDayForm(null,'${k}','${kk}')">${SD_K[kk].ic} ${SD_K[kk].t}</button>`).join('')}</div>`:''}`);
 }
 
 /* ---------- มุมมองรายการนัด ---------- */
@@ -1374,23 +1392,28 @@ async function rtApply(){
 }
 
 /* ============================================================
-   🎌 วันพิเศษ — ลงที่ปฏิทินที่เดียว ระบบอื่นเอาไปใช้ (เจ้าของสั่ง 2026-09-29)
-   ตาราง cal_special_days (SQL: jjmk-calendar-days.sql ที่ branch sql)
-   💰 pay_multiplier : วันจ่ายค่าแรง ×N (หน้าร้านได้ ×N · ออฟฟิศได้หยุด — กฎเดิมของหน้า 🎌 ระบบเงินเดือน)
-      pay_scope      : ใช้กับใคร (เจ้าของสั่ง 2026-09-30 "พนักงานออฟฟิศมีวันหยุดพิเศษไม่เหมือนกัน")
-                       all ทั้งคู่ (แบบเดิม) · store หน้าร้าน ×N อย่างเดียว · office ออฟฟิศหยุดอย่างเดียว · ออฟฟิศ = สาขา OFFICE
-                       = holidays.scope ของระบบเงินเดือน · ออฟฟิศหยุด เก็บตัวคูณ 2 ไว้เฉย ๆ (ซ่อนตัวเลือก)
-                      **ยังไม่มีผลกับเงินเดือนจนกว่าจะกด ✅ ในหน้า 🎌 ของระบบเงินเดือน** (pay_status: pending → confirmed)
-   📦 order_rate_group=2 : วันขายดี → แอพนับสต๊อก/ครัวกลาง คิดยอดใช้วันนั้นแบบ เสาร์–อาทิตย์ · order_branches = สาขาไหน (null = ทุกสาขา)
+   🎌 วันพิเศษ — ปฏิทินแยก 3 ชุด ลงที่ปฏิทินที่เดียว ระบบอื่นเอาไปใช้ (เจ้าของสั่ง 2026-09-29 / แยกปฏิทิน 2026-09-30)
+   เจ้าของ: "เรื่องปฏิทินจะต้องแยกเป็น 1.ปฏิทินที่ออฟฟิศหยุด 2.ปฏิทินที่พนักงานได้ค่าแรง ×2 3.ปฏิทินที่สั่งของเท่ากับวัน ส–อา"
+   ตาราง cal_special_days (SQL: jjmk-calendar-days.sql ที่ branch sql) · 1 แถว = 1 ปฏิทิน (ช่อง kind)
+   🏢 office : พนักงานสาขา OFFICE ได้หยุด นับเป็นวันทำงาน · หน้าร้านทำงานปกติ          → ระบบเงินเดือน holidays.scope=office
+   💰 pay    : หน้าร้านได้ค่าแรง ×N + วันนั้นห้ามหยุด · ออฟฟิศทำงานปกติ (pay_multiplier) → ระบบเงินเดือน holidays.scope=store
+   📦 order  : แอพนับสต๊อก/ครัวกลาง คิดยอดใช้วันนั้นแบบ ส–อา (order_rate_group=2 · order_branches null = ทุกสาขา)
+   · วันเดียวกันอยู่ได้หลายปฏิทิน (สงกรานต์ อยู่ทั้ง 3 ได้) · ปฏิทินเดียวกันห้ามซ้อนวัน (🏢/💰 — DB กัน)
+   · 🏢/💰 ยังไม่มีผลกับเงินเดือนจนกว่าจะกด ✅ ในหน้า 🎌 ของระบบเงินเดือน (pay_status: pending → confirmed/declined)
+   · kind = null = "ป้ายเดิม" จากรุ่นก่อนแยกปฏิทิน — ย้ายเข้าปฏิทินได้จากแท็บ 🎌
    วันที่เก็บเป็น 'YYYY-MM-DD' (date) — ห้ามแปลงผ่าน new Date(str) ตรง ๆ (เพี้ยนตามโซนเวลาเครื่อง) ใช้ sdAdd()
+   ⚠️ ปุ่มในส่วนนี้ใช้ data-sv / onclick — ห้ามใช้ data-v (ตัวจับคลิกกลางถือว่า [data-v] = ปุ่มแท็บ)
    ============================================================ */
-const SD_PAY=[[2,'×2'],[3,'×3'],[1.5,'×1.5']];   // ⚠️ ปุ่มเลือกในฟอร์มนี้ใช้ data-sv — ห้ามใช้ data-v (ตัวจับคลิกกลางถือว่า [data-v] = ปุ่มแท็บ)
-const SD_SCOPE=[['all','👥 ทั้งคู่'],['store','🏪 หน้าร้าน ×2 อย่างเดียว'],['office','🏢 ออฟฟิศหยุดอย่างเดียว']];
-function sdScope(x){const v=x&&x.pay_scope;return v==='store'||v==='office'?v:'all'}
-/* ป้ายวันจ่ายค่าแรง — บอกให้ชัดว่าใครได้อะไร */
-function sdPayLabel(m,sc){
-  return sc==='office'?'🏢 ออฟฟิศหยุด · หน้าร้านทำงานปกติ':sc==='store'?`💰 หน้าร้าน ×${+m} · ออฟฟิศทำงานปกติ`:`💰 หน้าร้าน ×${+m} · ออฟฟิศหยุด`;
-}
+const SD_K={
+  office:{ic:'🏢',t:'ออฟฟิศหยุด',tl:'ปฏิทินออฟฟิศหยุด',cls:'off',add:'＋ เพิ่มวันออฟฟิศหยุด',
+    desc:'พนักงาน<b>สาขา OFFICE</b> ได้หยุด นับเป็นวันทำงาน · <b>หน้าร้านทำงานปกติ</b> (ไม่ได้ ×2 · ไม่ใช่วันห้ามหยุด)'},
+  pay:{ic:'💰',t:'ค่าแรง ×2',tl:'ปฏิทินค่าแรง ×2 (หน้าร้าน)',cls:'pay',add:'＋ เพิ่มวันค่าแรง ×2',
+    desc:'พนักงาน<b>หน้าร้าน</b>ที่มาทำงาน ไม่สาย ไม่ออกก่อน ไม่ลืมตอก ได้ค่าแรง ×2 · <b>วันนั้นห้ามหยุด ขาดงาน = หัก 2 เท่าของค่าแรงวัน</b> · พนักงานสาขา OFFICE ทำงานปกติ'},
+  order:{ic:'📦',t:'สั่งของแบบ ส–อา',tl:'ปฏิทินสั่งของแบบ เสาร์–อาทิตย์',cls:'ord',add:'＋ เพิ่มวันสั่งของแบบ ส–อา',
+    desc:'แอพนับสต๊อก + ครัวกลาง คิดยอดใช้ของวันนั้นเท่า<b>วันเสาร์–อาทิตย์</b> แล้วสั่งเพิ่มในรอบส่งของที่ครอบคลุมวันนั้นเอง'},
+};
+const SD_KINDS=['office','pay','order'];
+const SD_PAY=[[2,'×2'],[3,'×3'],[1.5,'×1.5']];
 const SD_NAMES=['ปีใหม่','สงกรานต์','วันแรงงาน','วันเฉลิมฯ','วันแม่','วันพ่อ','ลอยกระทง','ตรุษจีน','สิ้นปี'];
 const SD_ORD_BR=[['JJLP','ลาดพร้าว'],['JJRD','รัชดา']];
 /* วันหยุดราชการที่วันที่ตายตัว — วันพระ/ลอยกระทง/ตรุษจีน/วันหยุดชดเชย เลื่อนทุกปี ให้กรอกเองด้วยปุ่ม ＋ */
@@ -1399,6 +1422,8 @@ const SD_PRESET=[['01-01','01-01','วันขึ้นปีใหม่'],['0
   ['07-28','07-28','วันเฉลิมฯ ร.10'],['08-12','08-12','วันแม่แห่งชาติ'],['10-13','10-13','วันนวมินทรมหาราช'],
   ['10-23','10-23','วันปิยมหาราช'],['12-05','12-05','วันพ่อแห่งชาติ'],['12-10','12-10','วันรัฐธรรมนูญ'],['12-31','12-31','วันสิ้นปี']];
 
+function sdKind(x){const k=x&&x.kind;return k==='office'||k==='pay'||k==='order'?k:null}
+function sdPayEff(x){const k=sdKind(x);return k==='office'||k==='pay'}   // มีผลกับเงินเดือน
 function sdAdd(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);return dkey(d)}
 function sdSpan(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000)}
 function sdWhen(x){
@@ -1407,19 +1432,17 @@ function sdWhen(x){
   return thDate(a,true)+' – '+thDate(b,true)+' ('+(sdSpan(x.day_from,x.day_to)+1)+' วัน)';
 }
 function sdBrText(x){return x.order_branches&&x.order_branches.length?x.order_branches.map(c=>brLabel(c)).join('·'):'ทุกสาขา'}
-/* วันพิเศษที่ครอบวัน k (ตามสาขาที่เลือกดู — วันจ่ายค่าแรงเป็นของทั้งบริษัท โชว์เสมอ) */
-/* วันขายดีมีผลกับสาขาที่เลือกดูอยู่ไหม (วันเดียวกันอาจจ่ายค่าแรงทั้งบริษัท แต่ขายดีแค่บางสาขา) */
-function sdOrdHere(x){return x.order_rate_group!=null&&(S.br==='ALL'||!x.order_branches||x.order_branches.includes(S.br))}
-/* วันจ่ายค่าแรงเกี่ยวกับสาขาที่เลือกดูไหม (ตามใช้กับใคร: ออฟฟิศ = สาขา OFFICE) */
-function sdPayHere(x){
-  if(!x.pay_multiplier)return false;
-  const sc=sdScope(x);
-  return S.br==='ALL'||sc==='all'||(sc==='office')===(S.br==='OFFICE');
-}
+/* ชั้นที่โชว์ในหน้าเดือน/รายการนัด (ปิดบางปฏิทินได้ — จำไว้ในเครื่อง) */
+function sdShown(k){return !S.sdShow||S.sdShow[k]!==false}
+function sdLayer(k){S.sdShow=Object.assign({office:true,pay:true,order:true},S.sdShow||{});S.sdShow[k]=!sdShown(k);LS.set('jjcal_sdshow',S.sdShow);show(S.tab)}
+/* วันนี้เกี่ยวกับสาขาที่เลือกดูไหม: 🏢 = สาขา OFFICE · 💰 = หน้าร้าน (ทุกสาขายกเว้น OFFICE) · 📦 = สาขาที่เลือกไว้ */
 function sdHere(x){
-  if(S.br==='ALL'||sdPayHere(x))return true;
-  if(x.order_rate_group!=null)return !x.order_branches||x.order_branches.includes(S.br);
-  return !x.pay_multiplier;                       // ป้ายในปฏิทินเฉย ๆ = ทุกสาขา
+  const k=sdKind(x);
+  if(k&&!sdShown(k))return false;
+  if(S.br==='ALL'||!k)return true;
+  if(k==='office')return S.br==='OFFICE';
+  if(k==='pay')return S.br!=='OFFICE';
+  return !x.order_branches||x.order_branches.includes(S.br);
 }
 function sdOn(k){
   return (S.days||[]).filter(x=>!x.cancelled&&x.day_from<=k&&k<=x.day_to&&sdHere(x));
@@ -1429,38 +1452,40 @@ async function loadDays(){
   try{
     S.days=await sel('cal_special_days','select=*&cancelled=eq.false&day_to=gte.'+(y-2)+'-01-01&order=day_from.asc&limit=1000')||[];
     S.daysReady=true;
-    /* มีช่อง "ใช้กับใคร" ไหม (ไฟล์ SQL รุ่นแรกยังไม่มี) · ไม่มีแถวเลย = ยังไม่รู้ ลองส่งไปก่อน */
-    if(S.days.length)S.sdScopeCol=('pay_scope' in S.days[0]);
+    /* มีช่อง kind ไหม (= รัน SQL รุ่นแยก 3 ปฏิทินแล้ว) · ไม่มีแถวเลยก็ลองอ่านช่องนั้นดู */
+    if(S.days.length)S.sdKindCol=('kind' in S.days[0]);
+    else{ try{ await sel('cal_special_days','select=kind&limit=1'); S.sdKindCol=true; }catch(e2){ S.sdKindCol=false; } }
   }catch(e){ S.days=[]; S.daysReady=false; }
   /* วันหยุดที่ตั้งไว้ในระบบเงินเดือน (หน้า 🎌) — อ่านอย่างเดียว ไว้โชว์ให้เห็นครบในที่เดียว */
-  try{ S.holi=await sel('holidays','select=day,name,multiplier,scope&day=gte.'+(y-2)+'-01-01&order=day.asc&limit=1000')||[]; }
-  catch(e){ try{ S.holi=await sel('holidays','select=day,name,multiplier&day=gte.'+(y-2)+'-01-01&order=day.asc&limit=1000')||[]; }catch(e2){ S.holi=[]; } }
+  const q='&day=gte.'+(y-2)+'-01-01&order=day.asc&limit=1000';
+  try{ S.holi=await sel('holidays','select=day,name,multiplier,scope,cal_id'+q)||[]; }
+  catch(e){ try{ S.holi=await sel('holidays','select=day,name,multiplier,scope'+q)||[]; }
+    catch(e2){ try{ S.holi=await sel('holidays','select=day,name,multiplier'+q)||[]; }catch(e3){ S.holi=[]; } } }
   return S.days;
 }
-function sdPayChip(x){
-  const m=x.pay_multiplier;
-  if(m){
-    const t=sdPayLabel(m,sdScope(x));
-    if(x.pay_status==='confirmed')return `<span class="chip pay">${t}</span><span class="chip okc">✅ ใช้คิดเงินแล้ว</span>`;
-    if(x.pay_status==='declined') return `<span class="chip pay">${t}</span><span class="chip">✖ เงินเดือนไม่ใช้</span>`;
-    return `<span class="chip pay">${t}</span><span class="chip wait">⏳ รอยืนยันในระบบเงินเดือน</span>`;
-  }
-  if(x.pay_status==='pending')return `<span class="chip wait">💰 ⏳ รอเอาออกจากระบบเงินเดือน</span>`;
-  return '';
+function sdStatusChip(x){
+  if(x.pay_status==='confirmed')return '<span class="chip okc">✅ ใช้คิดเงินแล้ว</span>';
+  if(x.pay_status==='declined')return '<span class="chip">✖ เงินเดือนไม่ใช้</span>';
+  return '<span class="chip wait">⏳ รอยืนยันในระบบเงินเดือน</span>';
 }
 function sdCard(x,inModal){
-  const past=x.day_to<dkey(new Date());
-  const ord=x.order_rate_group!=null;
-  const fx=[sdPayChip(x), ord?`<span class="chip ord">📦 ขายดี · คิดแบบ ส–อา · ${esc(sdBrText(x))}</span>`:''].filter(Boolean).join('');
-  const needPay=(x.pay_multiplier||x.pay_snapshot)&&x.pay_status==='pending';
-  return `<div class="sdcard${ord&&!x.pay_multiplier?' ord':''}${past&&!inModal?' past':''}">
-    <div class="t">🎌 ${esc(x.name)}</div>
+  const k=sdKind(x), past=x.day_to<dkey(new Date());
+  const fx=[];
+  if(k==='office')fx.push('<span class="chip off">🏢 สาขา OFFICE หยุด · หน้าร้านทำงานปกติ</span>');
+  if(k==='pay')fx.push(`<span class="chip pay">💰 หน้าร้าน ×${+x.pay_multiplier||2} · วันห้ามหยุด</span>`);
+  if(k==='order')fx.push(`<span class="chip ord">📦 คิดแบบ ส–อา · ${esc(sdBrText(x))}</span>`);
+  if(sdPayEff(x))fx.push(sdStatusChip(x));
+  if(!k)fx.push('<span class="chip">ป้ายเดิม — ยังไม่ได้อยู่ปฏิทินไหน</span>');
+  const needPay=sdPayEff(x)&&x.pay_status==='pending';
+  const mv=!k&&isBoss()&&S.sdKindCol?SD_KINDS.map(kk=>`<button class="btn gh sm" onclick="${inModal?'closeModal();':''}openDayForm('${x.id}',null,'${kk}')">→ ${SD_K[kk].ic} ${SD_K[kk].t}</button>`).join(''):'';
+  return `<div class="sdcard ${k?SD_K[k].cls:'leg'}${past&&!inModal?' past':''}">
+    <div class="t">${k?SD_K[k].ic:'🎌'} ${esc(x.name)}</div>
     <div class="when">${sdWhen(x)}</div>
-    <div class="fx">${fx||'<span class="chip">ป้ายในปฏิทินเท่านั้น</span>'}</div>
+    <div class="fx">${fx.join('')}</div>
     ${x.note?`<div class="sdnote">📝 ${esc(x.note)}</div>`:''}
     <div class="acts2">
       ${needPay?`<a class="btn sm" href="jjmk-payroll.html#holi" onclick="try{localStorage.setItem('jjpay_calfocus','${x.id}')}catch(e){}">💰 ไปยืนยันที่ระบบเงินเดือน</a>`:''}
-      ${isBoss()?`<button class="btn gh sm" onclick="${inModal?'closeModal();':''}openDayForm('${x.id}')">✏️ แก้ไข</button>`:''}
+      ${k&&isBoss()?`<button class="btn gh sm" onclick="${inModal?'closeModal();':''}openDayForm('${x.id}')">✏️ แก้ไข</button>`:''}${mv}
       <button class="btn gh sm" onclick="${inModal?'closeModal();':''}sdHistory('${x.id}')">🕘 ประวัติ</button>
     </div></div>`;
 }
@@ -1471,95 +1496,90 @@ function sdAgenda(){
   if(!xs.length)return '';
   return `<div class="agrp">🎌 วันพิเศษใน 30 วันข้างหน้า</div>`+xs.map(x=>sdCard(x,false)).join('');
 }
+/* ป้ายบอกชั้น + ปุ่มเปิด/ปิดแต่ละปฏิทินในหน้าเดือน */
+function sdLegend(){
+  if(!S.daysReady||!S.sdKindCol)return '';
+  return `<div class="sdleg">${SD_KINDS.map(k=>`<button type="button" class="sdl ${SD_K[k].cls}${sdShown(k)?'':' offl'}" onclick="sdLayer('${k}')" aria-pressed="${sdShown(k)}">${sdShown(k)?'☑':'☐'} ${SD_K[k].ic} ${SD_K[k].t}</button>`).join('')}</div>`;
+}
 
-/* ---------- แท็บ 🎌 วันพิเศษ ---------- */
+/* ---------- แท็บ 🎌 วันพิเศษ (แยก 3 ปฏิทิน) ---------- */
+function sdTab(k){S.sdk=k;LS.set('jjcal_sdk',k);vDays($('#view-days'))}
 function vDays(el){
-  const y=S.dayYear, t=dkey(new Date());
+  const y=S.dayYear, t=dkey(new Date()), K=SD_K[S.sdk]?S.sdk:'office', D=SD_K[K];
   const inY=x=>x.day_from<=y+'-12-31'&&x.day_to>=y+'-01-01';
-  const rows=(S.days||[]).filter(inY);
-  const up=rows.filter(x=>x.day_to>=t), past=rows.filter(x=>x.day_to<t).reverse();
-  /* วันที่ตั้งไว้ในระบบเงินเดือนแต่ยังไม่มีในปฏิทิน (เช่น ตั้งไว้ก่อนมีหน้านี้) */
-  const covered=k=>(S.days||[]).some(x=>x.pay_multiplier&&x.day_from<=k&&k<=x.day_to);
-  const holiOnly=(S.holi||[]).filter(h=>String(h.day).slice(0,4)===String(y)&&!covered(String(h.day).slice(0,10)));
+  const cnt=k=>(S.days||[]).filter(x=>sdKind(x)===k&&inY(x)).length;
   const yOpts=[y-1,y,y+1].map(v=>`<option value="${v}" ${v===y?'selected':''}>ปี ${v+543}</option>`).join('');
+  const ready=S.daysReady&&S.sdKindCol;
   let h=`<div class="card">
     <h3>🎌 วันพิเศษ <select style="width:auto;margin-left:auto" onchange="S.dayYear=+this.value;vDays($('#view-days'))">${yOpts}</select></h3>
-    <p class="xs mut" style="margin:0 0 8px;line-height:1.7">ลงวันพิเศษที่นี่ที่เดียว แล้วระบบอื่นเอาไปใช้เอง<br>
-      💰 <b>วันจ่ายค่าแรง ×2</b> → ระบบเงินเดือน · เลือกได้ว่าใช้กับ 👥 ทั้งคู่ / 🏪 หน้าร้าน ×2 อย่างเดียว / 🏢 ออฟฟิศหยุดอย่างเดียว
-      — <b>มีผลเมื่อกด ✅ ยืนยันในหน้า 🎌 ของระบบเงินเดือนแล้วเท่านั้น</b><br>
-      📦 <b>วันขายดี</b> → แอพนับสต๊อก + ครัวกลาง คิดยอดใช้วันนั้นแบบ <b>เสาร์–อาทิตย์</b> (สั่งของเผื่อให้เอง)</p>
-    ${isBoss()&&S.daysReady?`<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn" style="min-height:44px" onclick="openDayForm()">＋ เพิ่มวันพิเศษ</button>
-      <button class="btn dk" style="min-height:44px" onclick="openPresetSheet()">📋 ใส่วันหยุดราชการทั้งปี</button></div>`:''}
-    ${!isBoss()?'<p class="xs mut" style="margin:6px 0 0">เจ้าของ/ผู้ดูแลระบบเป็นคนลงวันพิเศษ</p>':''}
+    <p class="xs mut" style="margin:0 0 10px;line-height:1.7">ลงที่นี่ที่เดียว แล้วระบบอื่นเอาไปใช้เอง — แยกเป็น 3 ปฏิทิน วันเดียวกันอยู่หลายปฏิทินได้
+      · 🏢/💰 มีผลกับเงินเดือนเมื่อกด ✅ ยืนยันในหน้า 🎌 ของระบบเงินเดือนแล้วเท่านั้น</p>
+    ${ready?`<div class="sdseg" role="tablist">${SD_KINDS.map(k=>`<button type="button" role="tab" aria-selected="${k===K}" class="${SD_K[k].cls}${k===K?' on':''}" onclick="sdTab('${k}')">${SD_K[k].ic} ${SD_K[k].t}<span class="n">${cnt(k)}</span></button>`).join('')}</div>
+    <div class="sdbox ${D.cls}" style="margin:10px 0 0"><div class="sdnote" style="margin:0">${D.ic} <b>${D.tl}</b> — ${D.desc}</div></div>
+    ${isBoss()?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn" style="min-height:44px" onclick="openDayForm(null,null,'${K}')">${D.add}</button>
+      <button class="btn dk" style="min-height:44px" onclick="openPresetSheet('${K}')">📋 เลือกจากวันหยุดราชการ</button></div>`
+      :'<p class="xs mut" style="margin:8px 0 0">เจ้าของ/ผู้ดูแลระบบเป็นคนลงวันพิเศษ</p>'}`:''}
   </div>`;
   if(!S.daysReady){
     h+=`<div class="empty">${isBoss()?'⚠️ ยังไม่ได้ติดตั้งตารางวันพิเศษ — รัน <b>jjmk-calendar-days.sql</b> ใน Supabase → SQL Editor ก่อนครับ':'ยังไม่เปิดใช้งาน'}</div>`;
     el.innerHTML=h; return;
   }
-  if(!rows.length&&!holiOnly.length)h+=`<div class="empty">ปี ${y+543} ยังไม่มีวันพิเศษ${isBoss()?'<br><br>เริ่มง่าย ๆ ด้วยปุ่ม <b>📋 ใส่วันหยุดราชการทั้งปี</b>':''}</div>`;
+  if(!S.sdKindCol){
+    h+=`<div class="empty">${isBoss()?'⚠️ ต้องรัน <b>jjmk-calendar-days.sql</b> รุ่นล่าสุดใน Supabase → SQL Editor ก่อน (แยกเป็น 3 ปฏิทิน)<br><span class="xs">รายการที่ลงไว้แล้วจะถูกย้ายเข้าปฏิทินให้เอง ไม่มีอะไรหาย</span>':'ยังไม่เปิดใช้งาน'}</div>`;
+    el.innerHTML=h; return;
+  }
+  const rows=(S.days||[]).filter(x=>sdKind(x)===K&&inY(x));
+  const up=rows.filter(x=>x.day_to>=t), past=rows.filter(x=>x.day_to<t).reverse();
+  /* วันที่ตั้งไว้ในหน้า 🎌 ของเงินเดือนเอง (ไม่ได้มาจากปฏิทินนี้) — โชว์ให้เห็นครบ */
+  const covered=d=>(S.days||[]).some(x=>sdKind(x)===K&&x.day_from<=d&&d<=x.day_to);
+  const scOk=sc=>sc==='all'||(K==='office'?sc==='office':sc==='store');
+  const holiOnly=K==='order'?[]:(S.holi||[]).filter(hh=>{const d=String(hh.day).slice(0,10);
+    return d.slice(0,4)===String(y)&&!hh.cal_id&&scOk(hh.scope||'all')&&!covered(d)});
+  const legacy=(S.days||[]).filter(x=>!sdKind(x)&&inY(x));
+  if(!rows.length&&!holiOnly.length)h+=`<div class="empty">ปี ${y+543} ยังไม่มีวันใน${D.tl}${isBoss()?`<br><br>กด <b>${D.add}</b> หรือ <b>📋 เลือกจากวันหยุดราชการ</b>`:''}</div>`;
   if(up.length)h+=`<div class="agrp">📌 ที่จะถึง (${up.length})</div>`+up.map(x=>sdCard(x,false)).join('');
-  if(holiOnly.length)h+=`<div class="agrp" style="color:var(--mut)">💰 ตั้งไว้ในระบบเงินเดือนอย่างเดียว (${holiOnly.length})</div>`+
-    holiOnly.map(hh=>`<div class="sdcard pay-only"><div class="t">${esc(hh.name||'วันหยุดพิเศษ')}</div>
+  if(holiOnly.length)h+=`<div class="agrp" style="color:var(--mut)">💰 ตั้งไว้ในระบบเงินเดือนเอง (${holiOnly.length})</div>`+
+    holiOnly.map(hh=>{const sc=hh.scope||'all';
+      return `<div class="sdcard pay-only"><div class="t">${esc(hh.name||'วันหยุดพิเศษ')}</div>
       <div class="when">${thDate(new Date(String(hh.day).slice(0,10)+'T12:00:00'))}</div>
-      <div class="fx"><span class="chip pay">${sdPayLabel(+hh.multiplier||2,sdScope({pay_scope:hh.scope}))}</span><span class="chip">ตั้งไว้ที่หน้า 🎌 ของระบบเงินเดือน</span></div></div>`).join('');
+      <div class="fx"><span class="chip ${K==='office'?'off':'pay'}">${sc==='office'?'🏢 ออฟฟิศหยุด':sc==='store'?`💰 หน้าร้าน ×${+hh.multiplier||2}`:`👥 ทุกคน — หน้าร้าน ×${+hh.multiplier||2} · ออฟฟิศหยุด`}</span><span class="chip">ตั้งไว้ที่หน้า 🎌 ของระบบเงินเดือน</span></div></div>`}).join('');
   if(past.length)h+=`<div class="agrp" style="color:var(--mut)">ผ่านไปแล้ว (${past.length})</div>`+past.map(x=>sdCard(x,false)).join('');
+  if(legacy.length)h+=`<div class="agrp" style="color:var(--mut)">📝 ป้ายเดิม — ยังไม่ได้อยู่ปฏิทินไหน (${legacy.length})</div>`+legacy.map(x=>sdCard(x,false)).join('');
   el.innerHTML=h;
 }
 
-/* ---------- ฟอร์มเพิ่ม/แก้วันพิเศษ ---------- */
-function openDayForm(id,presetDate){
+/* ---------- ฟอร์มเพิ่ม/แก้วัน (ทีละปฏิทิน) ---------- */
+function openDayForm(id,presetDate,kind){
   if(!isBoss()){toast('เจ้าของ/ผู้ดูแลระบบเป็นคนลงวันพิเศษครับ',true);return}
-  if(!S.daysReady){toast('ยังไม่ได้รัน jjmk-calendar-days.sql',true);return}
+  if(!S.daysReady||!S.sdKindCol){toast('ยังไม่ได้รัน jjmk-calendar-days.sql รุ่นล่าสุด',true);return}
   const x=id?(S.days||[]).find(r=>r.id===id):null;
   if(id&&!x)return;
+  const K=sdKind(x)||(SD_K[kind]?kind:null)||(SD_K[S.sdk]?S.sdk:'office'), D=SD_K[K];
+  const conv=!!x&&!sdKind(x);                       // ป้ายเดิม → ย้ายเข้าปฏิทินนี้
   const d1=x?x.day_from:(presetDate||dkey(new Date())), d2=x?x.day_to:d1;
-  const pay=x?(+x.pay_multiplier||0):0, ord=x?x.order_rate_group!=null:false, sc=x&&pay?sdScope(x):'all';
-  const obr=x&&x.order_branches?x.order_branches:[];
-  openModal(`<h3>${x?'✏️ แก้ไขวันพิเศษ':'🎌 เพิ่มวันพิเศษ'}</h3>
+  const pay=x&&K==='pay'?(+x.pay_multiplier||2):2;
+  const obr=x&&K==='order'&&x.order_branches?x.order_branches:[];
+  openModal(`<h3>${D.ic} ${x&&!conv?'แก้ไขวันใน':conv?'ย้ายเข้า':'เพิ่มวันใน'}${D.tl}</h3>
+    <div class="sdbox ${D.cls}"><div class="sdnote" style="margin:0">${D.desc}</div>
+      ${K!=='order'?'<div class="sdwarn">⏳ ยังไม่มีผลกับเงินเดือน จนกว่าคนที่มีสิทธิ์จะกด <b>✅ ยืนยัน</b> ในหน้า 🎌 ของระบบเงินเดือน (จะเห็นก่อนว่าเงินเปลี่ยนกี่บาท)</div>':''}</div>
     <div class="fld"><label>ชื่อวัน *</label><input id="sdName" maxlength="80" value="${x?esc(x.name):''}" placeholder="เช่น สงกรานต์ / วันแม่ / วาเลนไทน์">
       <div class="pick" style="margin-top:6px">${SD_NAMES.map(n=>`<span class="chip" onclick="$('#sdName').value='${n}'">${n}</span>`).join('')}</div></div>
     <div class="grid2">
       <div class="fld"><label>ตั้งแต่ *</label><input type="date" id="sdFrom" value="${d1}" onchange="if($('#sdTo').value<this.value)$('#sdTo').value=this.value"></div>
       <div class="fld"><label>ถึง</label><input type="date" id="sdTo" value="${d2}"></div>
     </div>
-    <div class="sdbox pay">
-      <label class="ckrow"><input type="checkbox" id="sdPay" ${pay?'checked':''} onchange="$('#sdPayMore').style.display=this.checked?'block':'none'"> 💰 จ่ายค่าแรงพิเศษ (ระบบเงินเดือน)</label>
-      <div class="more" id="sdPayMore" style="${pay?'':'display:none'}">
-        <div class="xs mut" style="margin:0 0 4px">ใช้กับใคร</div>
-        <div class="pick" id="sdScope">${SD_SCOPE.map(([v,t])=>`<span class="chip${sc===v?' on':''}" data-sv="${v}" onclick="sdPick(this);sdScopeUi()">${t}</span>`).join('')}</div>
-        <div class="pick" id="sdMult" style="margin-top:8px">${SD_PAY.map(([v,t])=>`<span class="chip${(pay||2)===v?' on':''}" data-sv="${v}" onclick="sdPick(this)">${t}</span>`).join('')}</div>
-        <div class="sdnote" id="sdPayNote"></div>
-        <div class="sdwarn">⏳ ยังไม่มีผลกับเงินเดือน จนกว่าคนที่มีสิทธิ์จะกด <b>✅ ยืนยัน</b> ในหน้า 🎌 ของระบบเงินเดือน (จะเห็นก่อนว่าเงินเปลี่ยนกี่บาท)</div>
-      </div>
-    </div>
-    <div class="sdbox ord">
-      <label class="ckrow"><input type="checkbox" id="sdOrd" ${ord?'checked':''} onchange="$('#sdOrdMore').style.display=this.checked?'block':'none'"> 📦 ขายดีกว่าปกติ (สั่งของเผื่อ)</label>
-      <div class="more" id="sdOrdMore" style="${ord?'':'display:none'}">
-        <div class="pick" id="sdBr"><span class="chip${!obr.length?' on':''}" data-sv="" onclick="sdBrPick(this)">ทุกสาขา</span>${SD_ORD_BR.map(([c,n])=>`<span class="chip${obr.includes(c)?' on':''}" data-sv="${c}" onclick="sdBrPick(this)">${n}</span>`).join('')}</div>
-        <div class="sdnote">แอพนับสต๊อก + ครัวกลาง จะคิดยอดใช้ของวันนั้นแบบ <b>วันเสาร์–อาทิตย์</b> แล้วสั่งเพิ่มในรอบส่งของที่ครอบคลุมวันนั้นเอง</div>
-      </div>
-    </div>
+    ${K==='pay'?`<div class="fld"><label>ค่าแรงวันนั้น</label>
+      <div class="pick" id="sdMult">${SD_PAY.map(([v,t])=>`<span class="chip${pay===v?' on':''}" data-sv="${v}" onclick="sdPick(this)">${t}</span>`).join('')}</div>
+      <div class="sdnote">×2 = ได้เพิ่มอีก 1 เท่าของค่าแรงวัน · ×3 = เพิ่ม 2 เท่า · ×1.5 = เพิ่มครึ่งเท่า</div></div>`:''}
+    ${K==='order'?`<div class="fld"><label>สาขาที่ขายดี</label>
+      <div class="pick" id="sdBr"><span class="chip${!obr.length?' on':''}" data-sv="" onclick="sdBrPick(this)">ทุกสาขา</span>${SD_ORD_BR.map(([c,n])=>`<span class="chip${obr.includes(c)?' on':''}" data-sv="${c}" onclick="sdBrPick(this)">${n}</span>`).join('')}</div></div>`:''}
     <div class="fld"><label>หมายเหตุ</label><input id="sdNote" maxlength="200" value="${x?esc(x.note||''):''}" placeholder="(ไม่บังคับ)"></div>
     <div class="acts">
-      <button class="btn" id="sdSave" onclick="saveDay(${x?`'${x.id}'`:'null'})">💾 บันทึก</button>
-      ${x?`<button class="btn gh" onclick="cancelDay('${x.id}')">🗑 ยกเลิกวันนี้</button>`:''}
+      <button class="btn" id="sdSave" onclick="saveDay(${x?`'${x.id}'`:'null'},'${K}')">💾 บันทึก</button>
+      ${x?`<button class="btn gh" onclick="cancelDay('${x.id}')">🗑 ${conv?'ลบป้ายนี้':'ยกเลิกวันนี้'}</button>`:''}
       <button class="btn gh" onclick="closeModal()">ปิด</button>
     </div>`);
-  sdScopeUi();
-}
-/* อธิบายกฎตาม "ใช้กับใคร" ที่เลือก · ออฟฟิศหยุดอย่างเดียวไม่มีตัวคูณให้เลือก (ออฟฟิศได้หยุด ไม่ได้ ×) */
-function sdScopeUi(){
-  const on=document.querySelector('#sdScope .chip.on'), sc=on?on.dataset.sv:'all';
-  const m=$('#sdMult'), n=$('#sdPayNote'); if(!m||!n)return;
-  m.style.display=sc==='office'?'none':'';
-  const store='• <b>หน้าร้าน</b>ที่มาครบ ไม่สาย ไม่ออกก่อน ไม่ลืมตอก ได้เพิ่มอีก (N−1) เท่าของค่าแรงวัน (×2 = ได้รวม 2 เท่า)<br>'+
-    '• <b>หน้าร้าน: วันนี้เป็นวันห้ามหยุด ขาดงาน = หัก 2 เท่าของค่าแรงวัน</b>';
-  n.innerHTML=sc==='office'
-    ? '• <b>ออฟฟิศ</b> (พนักงานสาขา OFFICE) ได้หยุด นับเป็นวันทำงาน<br>• <b>หน้าร้านทำงานปกติ — ไม่ได้ ×2 และไม่ใช่วันห้ามหยุด</b>'
-    : sc==='store'
-    ? store+'<br>• <b>ออฟฟิศ</b> (พนักงานสาขา OFFICE) <b>ทำงานตามปกติ ไม่ได้หยุด</b>'
-    : store+'<br>• <b>ออฟฟิศไม่ได้ ×2</b> — ได้หยุดโดยนับเป็นวันทำงาน';
 }
 function sdPick(el){el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===el))}
 function sdBrPick(el){
@@ -1570,67 +1590,58 @@ function sdBrPick(el){
 }
 function sdErr(e){
   const t=String(e&&e.message||e);
-  if(/cal_sd_pay_once|exclusion/i.test(t))return 'มีวันจ่ายค่าแรงอื่นครอบวันนี้อยู่แล้ว — แก้วันเดิม หรือเลือกวันอื่นครับ (หน้าร้านกับออฟฟิศหยุดวันเดียวกัน = ใช้รายการเดียว เลือก 👥 ทั้งคู่)';
-  if(/pay_scope/.test(t))return 'ต้องรัน jjmk-calendar-days.sql รุ่นล่าสุดใน Supabase ก่อน (เพิ่มช่อง "ใช้กับใคร")';
+  if(/cal_sd_off_once/.test(t))return 'มีวันใน🏢 ปฏิทินออฟฟิศหยุดครอบวันนี้อยู่แล้ว — แก้รายการเดิม หรือเลือกวันอื่นครับ';
+  if(/cal_sd_pay_once|exclusion/i.test(t))return 'มีวันใน💰 ปฏิทินค่าแรง ×2 ครอบวันนี้อยู่แล้ว — แก้รายการเดิม หรือเลือกวันอื่นครับ';
   if(/cal_sd_range/.test(t))return 'ช่วงวันไม่ถูกต้อง (วันสุดท้ายต้องไม่ก่อนวันแรก และยาวไม่เกิน 32 วัน)';
+  if(/"kind"|'kind'|cal_sd_kind/.test(t))return 'ต้องรัน jjmk-calendar-days.sql รุ่นล่าสุดใน Supabase ก่อน (แยก 3 ปฏิทิน)';
   if(/cal_special_days|relation|schema cache/i.test(t))return 'ยังไม่ได้รัน jjmk-calendar-days.sql ใน Supabase';
   return 'บันทึกไม่สำเร็จ: '+t.slice(0,140);
 }
 /* สถานะฝั่งเงินเดือน — แก้อะไรที่กระทบเงินต้องให้ระบบเงินเดือนยืนยันใหม่เสมอ */
 function sdPayStatus(old,nw){
-  if(nw.pay_multiplier){
+  if(sdPayEff(nw)){
     if(!old)return 'pending';
-    const same=(+old.pay_multiplier||0)===(+nw.pay_multiplier)&&old.name===nw.name&&old.day_from===nw.day_from&&old.day_to===nw.day_to&&sdScope(old)===sdScope(nw);
+    const same=sdKind(old)===sdKind(nw)&&(+old.pay_multiplier||0)===(+nw.pay_multiplier||0)&&old.name===nw.name&&old.day_from===nw.day_from&&old.day_to===nw.day_to;
     return same?old.pay_status:'pending';
   }
-  /* เอาค่าแรงออก: ถ้าเงินเดือนเคยยืนยันไปแล้ว ต้องให้เงินเดือนเอาออกด้วย */
+  /* ไม่เกี่ยวเงินเดือนแล้ว: ถ้าเงินเดือนเคยยืนยันไปแล้ว ต้องให้เงินเดือนเอาออกด้วย */
   if(old&&(old.pay_snapshot||old.pay_status==='confirmed'))return 'pending';
   return 'none';
 }
-async function saveDay(id){
-  const old=id?(S.days||[]).find(r=>r.id===id):null;
+async function saveDay(id,K){
+  if(!SD_K[K])return;
+  const old=id?(S.days||[]).find(r=>r.id===id):null, D=SD_K[K];
   const name=$('#sdName').value.trim(), from=$('#sdFrom').value, to=$('#sdTo').value||from;
   if(!name){toast('ใส่ชื่อวันก่อนครับ',true);return}
   if(!from){toast('เลือกวันที่ก่อนครับ',true);return}
   if(to<from){toast('วันสุดท้ายต้องไม่ก่อนวันแรก',true);return}
   if(sdSpan(from,to)>31){toast('ยาวได้ไม่เกิน 32 วัน',true);return}
-  const payOn=$('#sdPay').checked, ordOn=$('#sdOrd').checked;
-  const scEl=document.querySelector('#sdScope .chip.on'), scope=payOn&&scEl?sdScope({pay_scope:scEl.dataset.sv}):'all';
-  const mEl=document.querySelector('#sdMult .chip.on'), mult=payOn?(scope==='office'?2:(+(mEl?mEl.dataset.sv:2)||2)):null;
-  if(scope!=='all'&&S.sdScopeCol===false){toast('ต้องรัน jjmk-calendar-days.sql รุ่นล่าสุดก่อน ถึงจะแยกหน้าร้าน/ออฟฟิศได้',true);return}
-  const brs=[...document.querySelectorAll('#sdBr .chip.on')].map(c=>c.dataset.sv).filter(Boolean);
-  const body={name,day_from:from,day_to:to,pay_multiplier:mult,pay_scope:scope,order_rate_group:ordOn?2:null,
-    order_branches:ordOn&&brs.length?brs:null,note:$('#sdNote').value.trim()||null,updated_by:S.user.username};
+  const mEl=document.querySelector('#sdMult .chip.on'), mult=K==='pay'?(+(mEl?mEl.dataset.sv:2)||2):null;
+  const brs=K==='order'?[...document.querySelectorAll('#sdBr .chip.on')].map(c=>c.dataset.sv).filter(Boolean):[];
+  const body={name,kind:K,day_from:from,day_to:to,pay_multiplier:mult,pay_scope:K==='office'?'office':K==='pay'?'store':'all',
+    order_rate_group:K==='order'?2:null,order_branches:K==='order'&&brs.length?brs:null,note:$('#sdNote').value.trim()||null,updated_by:S.user.username};
   body.pay_status=sdPayStatus(old,body);
   /* สรุปผลให้เห็นก่อนบันทึก */
-  const fx=[mult?`${sdPayLabel(mult,scope)} (รอยืนยันในระบบเงินเดือน)`:'',ordOn?`📦 ขายดี ${brs.length?brs.map(brLabel).join('·'):'ทุกสาขา'} (คิดแบบ ส–อา)`:''].filter(Boolean);
-  let msg=`${name} · ${sdWhen(body)}\n${fx.length?fx.join('\n'):'ป้ายในปฏิทินเท่านั้น (ไม่มีผลกับระบบอื่น)'}`;
+  const fx=K==='office'?'🏢 พนักงานสาขา OFFICE ได้หยุด นับเป็นวันทำงาน · หน้าร้านทำงานปกติ'
+    :K==='pay'?`💰 หน้าร้านได้ค่าแรง ×${mult} · วันนั้นห้ามหยุด · ออฟฟิศทำงานปกติ`
+    :`📦 สั่งของแบบ ส–อา · ${brs.length?brs.map(brLabel).join('·'):'ทุกสาขา'}`;
+  let msg=`${D.ic} ${D.tl}\n${name} · ${sdWhen(body)}\n${fx}`;
+  if(K!=='order')msg+='\n(รอยืนยันในระบบเงินเดือนก่อนถึงจะมีผล)';
   if(body.pay_status==='pending'&&from<dkey(new Date()))msg+='\n\n⚠️ มีวันที่ผ่านมาแล้ว — ถ้ายืนยันในระบบเงินเดือน สลิปของงวดนั้นจะเปลี่ยน';
   if(!confirm(msg+'\n\nบันทึกไหม?'))return;
   const btn=$('#sdSave'); if(btn.disabled)return; btn.disabled=true;
   try{
     if(old){
       /* แก้พร้อมกันหลายเครื่อง: เขียนเฉพาะถ้ายังเป็นฉบับที่เปิดดูอยู่ */
-      const r=await sdSend('PATCH','cal_special_days?id=eq.'+old.id+'&updated_at=eq.'+encodeURIComponent(old.updated_at),body,'return=representation');
+      const r=await api('PATCH','cal_special_days?id=eq.'+old.id+'&updated_at=eq.'+encodeURIComponent(old.updated_at),body,'return=representation');
       if(!r||!r.length){toast('มีคนแก้วันนี้พร้อมกัน — โหลดใหม่แล้วลองอีกครั้งครับ',true);await loadDays();closeModal();show(S.tab);return}
     }else{
-      await sdSend('POST','cal_special_days',Object.assign({created_by:S.user.username,created_name:S.user.display_name||S.user.username},body),'return=minimal');
+      await api('POST','cal_special_days',Object.assign({created_by:S.user.username,created_name:S.user.display_name||S.user.username},body),'return=minimal');
     }
-    await loadDays(); closeModal(); toast('บันทึกวันพิเศษแล้ว ✓'); S.dayYear=+from.slice(0,4); show(S.tab);
+    S.sdk=K; LS.set('jjcal_sdk',K);
+    await loadDays(); closeModal(); toast('บันทึกแล้ว ✓'); S.dayYear=+from.slice(0,4); show(S.tab);
   }catch(e){ toast(sdErr(e),true); }
   finally{ if(btn.isConnected)btn.disabled=false; }
-}
-/* เขียน cal_special_days — ตารางรุ่นแรกยังไม่มีช่อง pay_scope: วันที่ใช้กับทั้งคู่ส่งแบบไม่มีช่องนั้นได้ (ผลเหมือนเดิม) */
-async function sdSend(method,path,body,prefer){
-  const b=Object.assign({},body);
-  if(S.sdScopeCol===false&&(b.pay_scope||'all')==='all')delete b.pay_scope;
-  try{ return await api(method,path,b,prefer); }
-  catch(e){
-    if('pay_scope' in b&&b.pay_scope==='all'&&/pay_scope/.test(String(e&&e.message||e))){
-      S.sdScopeCol=false; delete b.pay_scope; return await api(method,path,b,prefer);
-    }
-    throw e;
-  }
 }
 async function cancelDay(id){
   const x=(S.days||[]).find(r=>r.id===id); if(!x)return;
@@ -1645,9 +1656,8 @@ async function sdHistory(id){
   let rows=[];
   try{ rows=await sel('cal_special_days_log','select=at,op,by_user,before,after&day_id=eq.'+id+'&order=at.desc&limit=50')||[]; }
   catch(e){ toast('อ่านประวัติไม่ได้',true); return; }
-  const F={name:'ชื่อ',day_from:'ตั้งแต่',day_to:'ถึง',pay_multiplier:'ค่าแรง',pay_scope:'ใช้กับ',pay_status:'สถานะเงินเดือน',order_rate_group:'ขายดี',order_branches:'สาขา',note:'หมายเหตุ',cancelled:'ยกเลิก'};
-  const SCN={all:'ทั้งคู่',store:'หน้าร้าน',office:'ออฟฟิศ'};
-  const show1=(v,k)=>v==null?'—':k==='pay_scope'?(SCN[v]||String(v)):Array.isArray(v)?v.join('·'):String(v);
+  const F={name:'ชื่อ',kind:'ปฏิทิน',day_from:'ตั้งแต่',day_to:'ถึง',pay_multiplier:'ค่าแรง',pay_status:'สถานะเงินเดือน',order_rate_group:'ขายดี',order_branches:'สาขา',note:'หมายเหตุ',cancelled:'ยกเลิก'};
+  const show1=(v,k)=>v==null?'—':k==='kind'?(SD_K[v]?SD_K[v].ic+' '+SD_K[v].t:String(v)):Array.isArray(v)?v.join('·'):String(v);
   openModal(`<h3>🕘 ประวัติการแก้</h3>${rows.length?rows.map(r=>{
     const a=r.after||{},b=r.before||{};
     const ch=r.op==='INSERT'?'สร้าง':Object.keys(F).filter(k=>JSON.stringify(a[k])!==JSON.stringify(b[k])).map(k=>`${F[k]}: ${esc(show1(b[k],k))} → <b>${esc(show1(a[k],k))}</b>`).join('<br>')||'—';
@@ -1656,45 +1666,41 @@ async function sdHistory(id){
   }).join(''):'<div class="empty">ยังไม่มีประวัติ</div>'}<div class="acts"><button class="btn gh" onclick="closeModal()">ปิด</button></div>`);
 }
 
-/* ---------- 📋 ใส่วันหยุดราชการทั้งปี ---------- */
-function openPresetSheet(){
-  if(!isBoss()||!S.daysReady)return;
-  const y=S.dayYear;
-  const have=(n,f)=>(S.days||[]).some(x=>x.day_from===f||(x.name===n&&x.day_from.slice(0,4)===String(y)));
-  openModal(`<h3>📋 วันหยุดราชการ ปี ${y+543}</h3>
-    <p class="xs mut" style="margin:0 0 6px;line-height:1.6">ติ๊กวันที่จะใส่ แล้วเลือกทีละวันว่า 💰 ค่าแรง/วันหยุด ใช้กับใคร (👥 ทั้งคู่ · 🏪 หน้าร้าน ×2 · 🏢 ออฟฟิศหยุด) และ 📦 ขายดี หรือไม่
-    — ไม่เลือก = เป็นป้ายในปฏิทินเฉย ๆ<br>
-    วันพระ · ลอยกระทง · ตรุษจีน · วันหยุดชดเชย เลื่อนทุกปี — ใส่เองด้วยปุ่ม ＋ เพิ่มวันพิเศษ</p>
+/* ---------- 📋 เลือกจากวันหยุดราชการ (ใส่ลงปฏิทินที่เปิดอยู่ · ตั้งต้นไม่ติ๊กอะไร — เจ้าของเลือกเองทุกวัน) ---------- */
+function openPresetSheet(K){
+  if(!isBoss()||!S.daysReady||!S.sdKindCol)return;
+  K=SD_K[K]?K:(SD_K[S.sdk]?S.sdk:'office'); const D=SD_K[K], y=S.dayYear;
+  const have=(n,f)=>(S.days||[]).some(x=>sdKind(x)===K&&(x.day_from===y+'-'+f||(x.name===n&&x.day_from.slice(0,4)===String(y))));
+  openModal(`<h3>📋 ใส่ลง${D.tl} ปี ${y+543}</h3>
+    <p class="xs mut" style="margin:0 0 6px;line-height:1.6">ติ๊กวันที่จะใส่ลง<b>${D.ic} ${D.tl}</b>${K==='pay'?' (ใส่เป็น ×2 — แก้ทีละวันได้ภายหลัง)':K==='order'?' (ทุกสาขา — แก้ทีละวันได้ภายหลัง)':''}<br>
+    วันพระ · ลอยกระทง · ตรุษจีน · วันหยุดชดเชย เลื่อนทุกปี — ใส่เองด้วยปุ่ม ${D.add}</p>
+    <div style="margin:4px 0 6px"><button type="button" class="btn gh sm" onclick="document.querySelectorAll('.psOn:not(:disabled)').forEach(c=>c.checked=true)">☑ ติ๊กทุกวันที่ยังไม่มี</button></div>
     <div id="psList">${SD_PRESET.map(([a,b,n],i)=>{
-      const f=y+'-'+a, t=y+'-'+b, h=have(n,f);
-      return `<div class="psrow${h?' have':''}"><input type="checkbox" class="psOn" data-i="${i}" ${h?'disabled':'checked'}>
-        <div>${esc(n)}<div class="d">${sdWhen({day_from:f,day_to:t})}${h?' · มีแล้ว':''}</div>
-          <select class="psPay" data-i="${i}" ${h?'disabled':''} aria-label="ค่าแรง/วันหยุด ${esc(n)}"><option value="">💰 ไม่เกี่ยวเงินเดือน</option>
-            <option value="all">👥 ทั้งคู่ (หน้าร้าน ×2 · ออฟฟิศหยุด)</option><option value="store">🏪 หน้าร้าน ×2 อย่างเดียว</option><option value="office">🏢 ออฟฟิศหยุดอย่างเดียว</option></select></div>
-        <label><input type="checkbox" class="psOrd" data-i="${i}" ${h?'disabled':''}>📦</label></div>`;
+      const f=y+'-'+a, t=y+'-'+b, h=have(n,a);
+      return `<label class="psrow${h?' have':''}"><input type="checkbox" class="psOn" data-i="${i}" ${h?'disabled':''}>
+        <div>${esc(n)}<div class="d">${sdWhen({day_from:f,day_to:t})}${h?' · มีในปฏิทินนี้แล้ว':''}</div></div></label>`;
     }).join('')}</div>
-    <div class="acts"><button class="btn" id="psGo" onclick="savePreset()">＋ ใส่วันที่ติ๊กไว้</button><button class="btn gh" onclick="closeModal()">ปิด</button></div>`);
+    <div class="acts"><button class="btn" id="psGo" onclick="savePreset('${K}')">＋ ใส่วันที่ติ๊กไว้</button><button class="btn gh" onclick="closeModal()">ปิด</button></div>`);
 }
-async function savePreset(){
-  const y=S.dayYear, btn=$('#psGo'); if(btn.disabled)return;
+async function savePreset(K){
+  if(!SD_K[K])return;
+  const y=S.dayYear, btn=$('#psGo'), D=SD_K[K]; if(btn.disabled)return;
   const pick=[...document.querySelectorAll('.psOn:checked:not(:disabled)')].map(c=>+c.dataset.i);
   if(!pick.length){toast('ยังไม่ได้ติ๊กวันไหนเลย',true);return}
-  const scOf=i=>document.querySelector('.psPay[data-i="'+i+'"]').value;
-  const nPay=pick.filter(i=>scOf(i)).length;
-  if(S.sdScopeCol===false&&pick.some(i=>scOf(i)&&scOf(i)!=='all')){toast('ต้องรัน jjmk-calendar-days.sql รุ่นล่าสุดก่อน ถึงจะแยกหน้าร้าน/ออฟฟิศได้',true);return}
-  if(!confirm(`ใส่ ${pick.length} วัน`+(nPay?` · 💰 ค่าแรง/วันหยุด ${nPay} วัน (ต้องไปกดยืนยันในระบบเงินเดือนอีกที)`:'')+'\nบันทึกไหม?'))return;
+  if(!confirm(`ใส่ ${pick.length} วัน ลง${D.tl}`+(K!=='order'?'\n(ต้องไปกดยืนยันในระบบเงินเดือนอีกที ถึงจะมีผล)':'')+'\nบันทึกไหม?'))return;
   btn.disabled=true; let ok=0; const bad=[];
   for(const i of pick){
-    const [a,b,n]=SD_PRESET[i], sc=scOf(i), ord=document.querySelector('.psOrd[data-i="'+i+'"]').checked;
+    const [a,b,n]=SD_PRESET[i];
     try{
-      await sdSend('POST','cal_special_days',{name:n,day_from:y+'-'+a,day_to:y+'-'+b,pay_multiplier:sc?2:null,pay_scope:sc||'all',pay_status:sc?'pending':'none',
-        order_rate_group:ord?2:null,order_branches:null,created_by:S.user.username,created_name:S.user.display_name||S.user.username,updated_by:S.user.username},'return=minimal');
+      await api('POST','cal_special_days',{name:n,kind:K,day_from:y+'-'+a,day_to:y+'-'+b,pay_multiplier:K==='pay'?2:null,
+        pay_scope:K==='office'?'office':K==='pay'?'store':'all',pay_status:K==='order'?'none':'pending',
+        order_rate_group:K==='order'?2:null,order_branches:null,created_by:S.user.username,created_name:S.user.display_name||S.user.username,updated_by:S.user.username},'return=minimal');
       ok++;
     }catch(e){ bad.push(n+' — '+sdErr(e)); }
   }
   await loadDays(); closeModal(); show(S.tab);
   if(bad.length)alert('ใส่ได้ '+ok+' วัน · ไม่สำเร็จ '+bad.length+' วัน:\n'+bad.join('\n'));
-  else toast('ใส่วันหยุดแล้ว '+ok+' วัน ✓');
+  else toast('ใส่แล้ว '+ok+' วัน ✓');
 }
 
 /* ---------- boot ---------- */
