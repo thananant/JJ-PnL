@@ -75,7 +75,13 @@
 - `punches` — เวลาสแกน: emp_code, punch_date, punch_time, source('manual' = แก้มือ), unique(emp_code,punch_date,punch_time)
 - `adjustments` — เพิ่ม/หักเงินรายงวด: employee_id, kind(add/deduct), reason, amount, period
 - `advances` — เบิกกลางเดือน: employee_id, amount, adv_date, period
-- `holidays` — วันหยุดพิเศษ: day, name, multiplier
+- `holidays` — วันหยุดพิเศษ: day, name, multiplier, **scope**
+  - **ใช้กับใคร (`scope` — เจ้าของสั่ง 2026-09-30)**: `all` ทุกคน (กฎเดิม · แถวเดิมทั้งหมด) · `store` หน้าร้านอย่างเดียว (พนักงานสาขา OFFICE ทำงานปกติ)
+    · `office` ออฟฟิศอย่างเดียว (หน้าร้านทำงานปกติ **ไม่ได้ ×N · ไม่ใช่วันห้ามหยุด**) · **ออฟฟิศ = `branch==='OFFICE'`** (เจ้าของเลือก ไม่ใช่ holidayPay)
+    · วันที่ใช้กับคนนั้นแล้ว ได้ ×N หรือได้หยุด ยังตามสวิตช์ `holidayPay` เดิม · **calcPay อ่านวันหยุดผ่าน `holiFor(emp,day)`/`holiHits(scope,emp)` เท่านั้น** ห้ามอ่าน `holidays[day]` ตรง ๆ
+    · SQL `jj_holiday_scope.sql` (หรือ `jjmk-calendar-days.sql` รุ่นล่าสุด — ทำให้ด้วย) · ยังไม่รัน = `holiScopeReady=false` → ฟอร์มซ่อนช่อง/ไม่ส่ง `scope`
+      และการ์ดจากปฏิทินที่เลือกหน้าร้าน/ออฟฟิศ **ยืนยันไม่ได้** (ไม่งั้นกลายเป็นใช้กับทุกคน) · เทส `test/holi.js` ส่วน C
+    · แดชบอร์ดรายวันขึ้นชิป 🎌 เฉพาะสาขาที่วันนั้นใช้ · Worker รายงาน LINE (`worker.js`) ยังโชว์ชื่อวันหยุดทุกสาขา (แค่ป้าย ไม่เกี่ยวเงิน)
   - **วันพิเศษจากปฏิทิน (2026-09-29)**: เจ้าของลงวันจ่ายค่าแรงที่ JJ Calendar แท็บ 🎌 (ตาราง `cal_special_days`) → หน้า 🎌 ของแอปนี้ขึ้นการ์ด
     **"📅 จากปฏิทิน รอยืนยัน"** พร้อมพรีวิวเงิน (วันที่ผ่านมาแล้วคิดจริงด้วย `calcPay` แล้วคืนค่า · วันข้างหน้าประมาณสูงสุด) + ตัวเลขบนเมนู 🎌
     · **มีผลกับเงินก็ต่อเมื่อกด ✅** (เจ้าของสั่ง) → `calConfirm` ติ๊กปฏิทินแบบมีเงื่อนไข `updated_at` ก่อน แล้วค่อยเขียน `holidays` ผ่านตัวดัก `db.from`

@@ -1,6 +1,7 @@
 // เทสวันหยุดพิเศษกับ calcPay ตัวจริงใน jjmk-payroll.html (jsdom + Supabase ปลอม)
 // ส่วน A = ล็อกพฤติกรรมเดิมของหน้า 🎌 (ต้องผ่านกับไฟล์ที่ยังไม่แก้) — เจ้าของสั่ง 2026-09-29: วันจ่ายค่าแรงจากปฏิทินใช้กฎเดิมทุกข้อ
 // ส่วน B = การ์ด "📅 จากปฏิทิน รอยืนยัน" (calDayDiff / ยืนยัน / ไม่ใช้) — ข้ามถ้ายังไม่มีฟังก์ชัน
+// ส่วน C = วันหยุดใช้กับใคร (holidays.scope — เจ้าของสั่ง 2026-09-30: ทุกคน / หน้าร้าน / ออฟฟิศ · ออฟฟิศ = สาขา OFFICE)
 const fs=require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
 const html=fs.readFileSync(__dirname+'/../../jjmk-payroll.html','utf8').replace(/<script src="[^"]+"><\/script>/g,'').replace(/<link[^>]+>/g,'');
@@ -105,6 +106,84 @@ setTimeout(async()=>{ try{
     ok(E(`Object.keys(holidays).length`)===0,'พรีวิวแล้วคืนค่า holidays เดิม (ไม่ค้างค่าทดลอง)');
     const pf=JSON.parse(E(`JSON.stringify(calPreview({id:'f',name:'สิ้นปี',day_from:'2099-12-31',day_to:'2099-12-31',pay_multiplier:2,pay_status:'pending',cancelled:false}))`));
     ok(pf.fut&&pf.fut.days===1&&pf.fut.store===1&&pf.fut.office===1&&pf.fut.maxBonus===600,'พรีวิววันข้างหน้า: หน้าร้าน 1 คน สูงสุด +600 · ออฟฟิศ 1 คนได้หยุด · รายชั่วโมงไม่นับ → '+JSON.stringify(pf.fut));
+  }
+  console.log('C · วันหยุดใช้กับใคร (ทุกคน / หน้าร้าน / ออฟฟิศ)');
+  if(E(`typeof holiFor`)!=='function'){ console.log('  (ยังไม่มี holiFor — ข้ามส่วน C)'); }
+  else {
+    E(`var mg={id:4,code:'MG',nick:'ผจก',branch:'JJLP',type:'monthly',rate:18000,mode:'shift',active:true,offCount:0,offWd:'1',holidayPay:false,depOn:false,depTarget:0,mustWorkExempt:true};
+       employees=[st,of,hr,mg];
+       shifts={ST:mk('2026-07-26','2026-08-25'),OF:mk('2026-07-26','2026-08-25',['2026-08-12']),HR:mk('2026-07-26','2026-08-25'),MG:mk('2026-07-26','2026-08-25',['2026-08-12'])};`);
+    // 🏪 หน้าร้านอย่างเดียว
+    E(`holidays={'2026-08-12':{name:'วันแม่',mult:2,id:1,scope:'store'}};`);
+    let c=C('st','2026-08');
+    ok(c.holiBonus===600,'🏪 หน้าร้าน: หน้าร้านมาทำงาน ตรงเวลา → ได้เพิ่ม 600 เหมือนเดิม');
+    c=C('of','2026-08');
+    ok(c.paidHoli.length===0&&c.holiWorked.length===0,'🏪 หน้าร้าน: ออฟฟิศ (สาขา OFFICE) ไม่ได้หยุด — ขาดวันนั้น = ขาดงานปกติ');
+    c=C('mg','2026-08');
+    ok(c.paidHoli.length===1,'🏪 หน้าร้าน: คนสาขาหน้าร้านที่ปิดสวิตช์เบี้ย (ผู้จัดการ) ยังได้หยุดนับเป็นวันทำงานตามสวิตช์เดิม');
+    E(`shifts.ST=mk('2026-07-26','2026-08-25',['2026-08-12']);`); c=C('st','2026-08');
+    ok(c.mustViol.includes('2026-08-12')&&c.mustFine===1200,'🏪 หน้าร้าน: หน้าร้านขาด = วันห้ามหยุด หัก 1,200 เหมือนเดิม');
+    // 🏢 ออฟฟิศอย่างเดียว
+    E(`holidays={'2026-08-12':{name:'วันแม่',mult:2,id:1,scope:'office'}};`);
+    c=C('st','2026-08');
+    ok(!c.mustViol.includes('2026-08-12')&&c.mustFine===0&&c.holiBonus===0,'🏢 ออฟฟิศ: หน้าร้านขาดวันนั้น = ไม่ใช่วันห้ามหยุด ไม่โดนหัก');
+    E(`shifts.ST=mk('2026-07-26','2026-08-25');`); c=C('st','2026-08');
+    ok(c.holiBonus===0&&c.holiDays.length===0,'🏢 ออฟฟิศ: หน้าร้านมาทำงาน = วันปกติ ไม่ได้ ×2');
+    c=C('of','2026-08');
+    ok(c.paidHoli.length===1&&c.paidHoli[0]==='2026-08-12','🏢 ออฟฟิศ: ออฟฟิศไม่มา = ได้หยุดนับเป็นวันทำงาน');
+    c=C('mg','2026-08');
+    ok(c.paidHoli.length===0,'🏢 ออฟฟิศ: คนสาขาหน้าร้านที่ปิดสวิตช์เบี้ย ไม่ได้หยุดวันออฟฟิศ (นับตามสาขา OFFICE เท่านั้น)');
+    // ทุกคน = เหมือนไม่มีช่อง scope เลย
+    E(`holidays={'2026-08-12':{name:'วันแม่',mult:2,id:1,scope:'all'}}; shifts.ST=mk('2026-07-26','2026-08-25',['2026-08-12']);`);
+    const all1=[C('st','2026-08'),C('of','2026-08'),C('mg','2026-08')].map(x=>x.net);
+    E(`holidays={'2026-08-12':{name:'วันแม่',mult:2,id:1}};`);
+    const all0=[C('st','2026-08'),C('of','2026-08'),C('mg','2026-08')].map(x=>x.net);
+    ok(JSON.stringify(all1)===JSON.stringify(all0),'👥 ทุกคน = ยอดเงินเท่ากับแถวเก่าที่ไม่มีช่อง scope ทุกบาท');
+    // การ์ดจากปฏิทิน
+    const D=(row,h)=>JSON.parse(E(`(function(){ holidays=${JSON.stringify(h||{})}; return JSON.stringify(calDayDiff(${JSON.stringify(row)})); })()`));
+    let d=D({id:'s',name:'วันแม่',day_from:'2027-08-12',day_to:'2027-08-12',pay_multiplier:2,pay_scope:'store',pay_status:'pending',cancelled:false},{'2027-08-12':{name:'วันแม่',mult:2,id:9,scope:'all'}});
+    ok(d.changes.length===1&&d.changes[0].to.scope==='store'&&d.changes[0].from.scope==='all','ปฏิทินเปลี่ยนเป็นหน้าร้านอย่างเดียว → การ์ดขึ้นว่าเปลี่ยน');
+    d=D({id:'s',name:'วันแม่',day_from:'2027-08-12',day_to:'2027-08-12',pay_multiplier:null,pay_status:'pending',cancelled:false,pay_snapshot:{days:['2027-08-12'],mult:2,name:'วันแม่',scope:'office'}},{'2027-08-12':{name:'วันแม่',mult:2,id:9,scope:'all'}});
+    ok(d.removes.length===0,'เอาออก: แถวที่ถูกแก้ใช้กับใครในหน้า 🎌 แล้ว (ไม่ตรง snapshot) ไม่แตะ');
+    d=D({id:'s',name:'วันแม่',day_from:'2027-08-12',day_to:'2027-08-12',pay_multiplier:null,pay_status:'pending',cancelled:false,pay_snapshot:{days:['2027-08-12'],mult:2,name:'วันแม่'}},{'2027-08-12':{name:'วันแม่',mult:2,id:9,scope:'all'}});
+    ok(d.removes.length===1,'snapshot รุ่นเก่า (ไม่มี scope) = ทุกคน → เอาออกได้ตามเดิม');
+    // ยืนยัน: มีช่อง scope → เขียน scope · ไม่มีช่อง → ไม่ยอมยืนยันวันที่แยกหน้าร้าน/ออฟฟิศ
+    E(`holiScopeReady=true; holidays={}; calDays=[{id:'q1',name:'วันหยุดออฟฟิศ',day_from:'2027-05-04',day_to:'2027-05-04',pay_multiplier:2,pay_scope:'office',pay_status:'pending',cancelled:false,updated_at:'t'}];
+       __writes=[]; __resp=(st)=>{ if(st.tbl==='cal_special_days'&&st.op==='update')return {data:[{id:'q1'}],error:null};
+         if(st.tbl==='holidays'&&st.op==='upsert')return {data:(Array.isArray(st.body)?st.body:[st.body]).map((b,i)=>Object.assign({id:200+i},b)),error:null}; return null; };`);
+    await E(`calConfirm('q1')`);
+    let W=JSON.parse(E(`JSON.stringify(__writes)`)), hol=W.find(x=>x.tbl==='holidays'&&x.op==='upsert'), cal=W.find(x=>x.tbl==='cal_special_days');
+    ok(hol&&hol.body[0].scope==='office'&&cal&&cal.body.pay_snapshot.scope==='office','ยืนยันวันออฟฟิศ → holidays.scope=office + snapshot จำ scope');
+    ok(E(`holidays['2027-05-04'].scope`)==='office','หน้าเงินเดือนเห็นเป็นวันออฟฟิศทันที');
+    E(`holiScopeReady=false; holidays={}; calDays=[{id:'q2',name:'x',day_from:'2027-05-05',day_to:'2027-05-05',pay_multiplier:2,pay_scope:'store',pay_status:'pending',cancelled:false,updated_at:'t'}]; __writes=[];`);
+    await E(`calConfirm('q2')`);
+    ok(JSON.parse(E(`JSON.stringify(__writes)`)).length===0,'ยังไม่รัน SQL + วันหน้าร้านอย่างเดียว → ไม่ยืนยัน (ไม่งั้นกลายเป็นใช้กับทุกคน)');
+    E(`calDays=[{id:'q3',name:'y',day_from:'2027-05-06',day_to:'2027-05-06',pay_multiplier:2,pay_status:'pending',cancelled:false,updated_at:'t'}]; __writes=[];
+       __resp=(st)=>{ if(st.tbl==='cal_special_days'&&st.op==='update')return {data:[{id:'q3'}],error:null};
+         if(st.tbl==='holidays'&&st.op==='upsert')return {data:(Array.isArray(st.body)?st.body:[st.body]).map((b,i)=>Object.assign({id:300+i},b)),error:null}; return null; };`);
+    await E(`calConfirm('q3')`);
+    hol=JSON.parse(E(`JSON.stringify(__writes)`)).find(x=>x.tbl==='holidays'&&x.op==='upsert');
+    ok(hol&&!('scope' in hol.body[0]),'ยังไม่รัน SQL + วันทุกคน → ยืนยันได้ และไม่ส่งช่อง scope (ตารางเก่าไม่มีช่องนี้)');
+    // พรีวิววันข้างหน้า
+    E(`employees=[st,of,hr,mg];`);
+    let pf=JSON.parse(E(`JSON.stringify(calPreview({id:'f',name:'o',day_from:'2099-12-30',day_to:'2099-12-30',pay_multiplier:2,pay_scope:'office',pay_status:'pending',cancelled:false}))`));
+    ok(pf.fut&&pf.fut.store===0&&pf.fut.office===1&&pf.fut.maxBonus===0,'พรีวิววันออฟฟิศ: หน้าร้าน 0 คน · ออฟฟิศ 1 คน · ไม่มีเงินเพิ่ม → '+JSON.stringify(pf.fut));
+    pf=JSON.parse(E(`JSON.stringify(calPreview({id:'f',name:'s',day_from:'2099-12-30',day_to:'2099-12-30',pay_multiplier:2,pay_scope:'store',pay_status:'pending',cancelled:false}))`));
+    ok(pf.fut&&pf.fut.store===1&&pf.fut.office===1&&pf.fut.maxBonus===600,'พรีวิววันหน้าร้าน: หน้าร้าน 1 คน +600 · ผู้จัดการที่ปิดสวิตช์ได้หยุด 1 คน · ออฟฟิศไม่นับ → '+JSON.stringify(pf.fut));
+    // หน้า 🎌: บันทึกฟอร์ม
+    E(`holiScopeReady=true; holidays={}; __writes=[]; __resp=(st)=>st.tbl==='holidays'?{data:Object.assign({id:77},st.body),error:null}:null;
+       document.getElementById('hId').value=''; document.getElementById('hDay').value='2027-10-23'; document.getElementById('hName').value='ปิยะ';
+       document.getElementById('hMult').value='2'; document.getElementById('hScope').value='office';`);
+    await E(`saveHoli()`);
+    let hw=JSON.parse(E(`JSON.stringify(__writes)`)).find(x=>x.tbl==='holidays');
+    ok(hw&&hw.body.scope==='office'&&E(`holidays['2027-10-23'].scope`)==='office','หน้า 🎌: เลือก 🏢 ออฟฟิศ → บันทึก scope=office');
+    E(`holiScopeReady=false; __writes=[]; document.getElementById('hDay').value='2027-10-24';`);
+    await E(`saveHoli()`);
+    hw=JSON.parse(E(`JSON.stringify(__writes)`)).find(x=>x.tbl==='holidays');
+    ok(hw&&!('scope' in hw.body),'หน้า 🎌: ยังไม่รัน SQL → ไม่ส่งช่อง scope');
+    E(`holiScopeReady=true; holidays={'2027-10-23':{name:'ปิยะ',mult:2,id:77,scope:'office'}}; document.getElementById('holiYear').dataset.pick='2027'; renderHoli();`);
+    const cell=E(`document.getElementById('holiTable').textContent`);
+    ok(/ออฟฟิศ/.test(cell)&&/ได้หยุด/.test(cell),'ตารางหน้า 🎌 โชว์ "🏢 ออฟฟิศ · ได้หยุด"');
   }
 }catch(e){ console.log('CRASH',e.stack||e.message); fail++; }
  console.log(errs.length?('jsdom errors: '+errs.slice(0,3).join(' | ')):'');
