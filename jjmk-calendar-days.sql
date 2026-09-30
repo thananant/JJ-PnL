@@ -2,9 +2,12 @@
 -- รันครั้งเดียวใน Supabase -> SQL Editor (รันซ้ำได้ · ไม่แตะตารางเดิมของระบบไหนเลย)
 --
 -- ลงวันพิเศษที่ปฏิทินที่เดียว แล้วระบบอื่นเอาไปใช้ (เจ้าของตัดสินใจ 2026-09-29)
---   💰 เงินเดือน : วันจ่ายค่าแรง ×2 — ใช้ทั้งบริษัท · หน้าร้านได้ ×2 / ออฟฟิศไม่ได้ (กฎเดิมของหน้า 🎌 ทุกข้อ)
+--   💰 เงินเดือน : วันจ่ายค่าแรง ×2 — หน้าร้านได้ ×2 / ออฟฟิศได้หยุด (กฎเดิมของหน้า 🎌 ทุกข้อ)
+--                  เลือกได้ว่าใช้กับใคร (เจ้าของสั่ง 2026-09-30 "ออฟฟิศมีวันหยุดพิเศษไม่เหมือนหน้าร้าน"):
+--                    all = ทั้งคู่ (แบบเดิม) · store = หน้าร้าน ×2 อย่างเดียว (ออฟฟิศทำงานปกติ)
+--                    office = ออฟฟิศหยุดอย่างเดียว (หน้าร้านทำงานปกติ ไม่ได้ ×2 ไม่ใช่วันห้ามหยุด) · ออฟฟิศ = พนักงานสาขา OFFICE
 --                  มีผลกับเงินเดือนก็ต่อเมื่อกด ✅ ยืนยัน ในหน้า 🎌 ของระบบเงินเดือนเท่านั้น
---                  (ระบบเงินเดือนยังคิดเงินจากตาราง holidays เดิม — ไฟล์นี้ไม่แตะตาราง holidays)
+--                  (ระบบเงินเดือนคิดเงินจากตาราง holidays — ไฟล์นี้แค่เพิ่มช่อง holidays.scope ให้ ไม่แก้ข้อมูลเดิม)
 --   📦 สั่งของ   : วันขายดี = แอพนับสต๊อก + ครัวกลาง คิดยอดใช้วันนั้นแบบ "เสาร์–อาทิตย์" (เลือกสาขาได้)
 
 create table if not exists public.cal_special_days (
@@ -13,6 +16,7 @@ create table if not exists public.cal_special_days (
   day_from         date not null,              -- วันแรก (วันของร้าน)
   day_to           date not null,              -- วันสุดท้าย (นับรวม)
   pay_multiplier   numeric(3,1),               -- null = ไม่เกี่ยวเงินเดือน · 2 = ×2 (ความหมายเดียวกับ holidays.multiplier)
+  pay_scope        text not null default 'all', -- ใช้กับใคร: all ทั้งคู่ · store หน้าร้าน · office ออฟฟิศ (= holidays.scope)
   pay_status       text not null default 'none', -- none / pending (รอยืนยันในเงินเดือน) / confirmed / declined
   pay_snapshot     jsonb,                      -- วันที่เงินเดือนยืนยันล่าสุด {"days":[...],"mult":2,"name":"..."}
   pay_decided_by   text,
@@ -30,6 +34,9 @@ create table if not exists public.cal_special_days (
   updated_at       timestamptz not null default now()
 );
 
+-- เคยรันไฟล์รุ่นก่อน (ยังไม่มีช่องนี้) = เพิ่มให้ · แถวเดิมเป็น all = ใช้กับทุกคนเหมือนเดิม
+alter table public.cal_special_days add column if not exists pay_scope text not null default 'all';
+
 -- กันข้อมูลเพี้ยน (ตารางนี้ anon เขียนได้เหมือนตาราง cal_* อื่น)
 alter table public.cal_special_days drop constraint if exists cal_sd_name;
 alter table public.cal_special_days add  constraint cal_sd_name  check (length(btrim(name)) between 1 and 80);
@@ -37,6 +44,8 @@ alter table public.cal_special_days drop constraint if exists cal_sd_range;
 alter table public.cal_special_days add  constraint cal_sd_range check (day_to >= day_from and day_to <= day_from + 31);
 alter table public.cal_special_days drop constraint if exists cal_sd_pay;
 alter table public.cal_special_days add  constraint cal_sd_pay   check (pay_multiplier is null or pay_multiplier in (1.5, 2, 3));
+alter table public.cal_special_days drop constraint if exists cal_sd_scope;
+alter table public.cal_special_days add  constraint cal_sd_scope check (pay_scope in ('all','store','office'));
 alter table public.cal_special_days drop constraint if exists cal_sd_status;
 alter table public.cal_special_days add  constraint cal_sd_status check (pay_status in ('none','pending','confirmed','declined'));
 alter table public.cal_special_days drop constraint if exists cal_sd_grp;
@@ -47,6 +56,7 @@ alter table public.cal_special_days add  constraint cal_sd_br    check (order_br
 alter table public.cal_special_days drop constraint if exists cal_sd_om;
 alter table public.cal_special_days add  constraint cal_sd_om    check (order_multiplier is null or order_multiplier between 0.5 and 3);
 -- วันจ่ายค่าแรง 2 รายการห้ามทับวันเดียวกัน (หน้า 🎌 ของเงินเดือนมีได้วันละแถวเดียว)
+-- หน้าร้าน+ออฟฟิศหยุดวันเดียวกัน = ใช้รายการเดียว เลือก "ทั้งคู่"
 alter table public.cal_special_days drop constraint if exists cal_sd_pay_once;
 alter table public.cal_special_days add  constraint cal_sd_pay_once
   exclude using gist (daterange(day_from, day_to, '[]') with &&)
@@ -98,11 +108,21 @@ grant select on public.cal_special_days_log to anon, authenticated;
 -- 1 แถวต่อ 1 วัน (ไว้ให้ระบบอื่นอ่านง่าย ๆ)
 create or replace view public.cal_special_days_v as
   select g.d::date as day, s.id, s.name, s.pay_multiplier, s.pay_status,
-         s.order_rate_group, s.order_branches, s.order_multiplier, s.closed
+         s.order_rate_group, s.order_branches, s.order_multiplier, s.closed, s.pay_scope
   from public.cal_special_days s,
        generate_series(s.day_from::timestamp, s.day_to::timestamp, interval '1 day') g(d)
   where not s.cancelled;
 grant select on public.cal_special_days_v to anon, authenticated;
+
+-- 💰 ระบบเงินเดือน: วันหยุดพิเศษเลือกได้ว่าใช้กับใคร (เหมือนไฟล์ jjmk-payroll/jj_holiday_scope.sql — รันซ้ำได้)
+--    แถวเดิมทั้งหมดเป็น all = คิดเงินเหมือนเดิมทุกบาท
+do $$ begin
+  if to_regclass('public.holidays') is not null then
+    alter table public.holidays add column if not exists scope text not null default 'all';
+    alter table public.holidays drop constraint if exists holidays_scope;
+    alter table public.holidays add constraint holidays_scope check (scope in ('all','store','office'));
+  end if;
+end $$;
 
 -- เรียลไทม์: มีคนลงวันพิเศษ ปฏิทินเครื่องอื่นเห็นทันที
 do $$ begin
