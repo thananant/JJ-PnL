@@ -75,19 +75,22 @@
 - `punches` — เวลาสแกน: emp_code, punch_date, punch_time, source('manual' = แก้มือ), unique(emp_code,punch_date,punch_time)
 - `adjustments` — เพิ่ม/หักเงินรายงวด: employee_id, kind(add/deduct), reason, amount, period
 - `advances` — เบิกกลางเดือน: employee_id, amount, adv_date, period
-- `holidays` — วันหยุดพิเศษ: day, name, multiplier, **scope**
+- `holidays` — วันหยุดพิเศษ: day, name, multiplier, **scope**, **cal_id** · **ไม่ซ้ำตาม (day, scope)** — วันเดียวกันมีได้ทั้งแถวออฟฟิศ แถวหน้าร้าน และแถวทุกคน
   - **ใช้กับใคร (`scope` — เจ้าของสั่ง 2026-09-30)**: `all` ทุกคน (กฎเดิม · แถวเดิมทั้งหมด) · `store` หน้าร้านอย่างเดียว (พนักงานสาขา OFFICE ทำงานปกติ)
     · `office` ออฟฟิศอย่างเดียว (หน้าร้านทำงานปกติ **ไม่ได้ ×N · ไม่ใช่วันห้ามหยุด**) · **ออฟฟิศ = `branch==='OFFICE'`** (เจ้าของเลือก ไม่ใช่ holidayPay)
     · วันที่ใช้กับคนนั้นแล้ว ได้ ×N หรือได้หยุด ยังตามสวิตช์ `holidayPay` เดิม · **calcPay อ่านวันหยุดผ่าน `holiFor(emp,day)`/`holiHits(scope,emp)` เท่านั้น** ห้ามอ่าน `holidays[day]` ตรง ๆ
-    · SQL `jj_holiday_scope.sql` (หรือ `jjmk-calendar-days.sql` รุ่นล่าสุด — ทำให้ด้วย) · ยังไม่รัน = `holiScopeReady=false` → ฟอร์มซ่อนช่อง/ไม่ส่ง `scope`
-      และการ์ดจากปฏิทินที่เลือกหน้าร้าน/ออฟฟิศ **ยืนยันไม่ได้** (ไม่งั้นกลายเป็นใช้กับทุกคน) · เทส `test/holi.js` ส่วน C
-    · แดชบอร์ดรายวันขึ้นชิป 🎌 เฉพาะสาขาที่วันนั้นใช้ · Worker รายงาน LINE (`worker.js`) ยังโชว์ชื่อวันหยุดทุกสาขา (แค่ป้าย ไม่เกี่ยวเงิน)
-  - **วันพิเศษจากปฏิทิน (2026-09-29)**: เจ้าของลงวันจ่ายค่าแรงที่ JJ Calendar แท็บ 🎌 (ตาราง `cal_special_days`) → หน้า 🎌 ของแอปนี้ขึ้นการ์ด
+    · ในหน่วยความจำ `holidays` ใช้คีย์ `holiKey(day,scope)` = `'YYYY-MM-DD'` (ทุกคน) / `'YYYY-MM-DD|store'` / `'YYYY-MM-DD|office'` · `holiFor` เอาแถวเจาะจงกลุ่มก่อน แล้วค่อยแถวทุกคน · `holiInPeriod` วันละ 1 แถวต่อคน
+    · 🏢+💰 วันเดียวกัน = คิดเงินเท่ากับวันหยุดแบบเดิม (ทุกคน) ทุกบาท (เทส `holi.js` ส่วน C)
+    · SQL `jj_holiday_scope.sql` (หรือ `jjmk-calendar-days.sql` รุ่นล่าสุด — ทำให้ด้วย) · `holiScopeReady` = มีช่อง scope · `holiCalReady` = มีช่อง cal_id (= ไม่ซ้ำตาม day+scope แล้ว)
+      ยังไม่รัน = ฟอร์มซ่อนช่อง/ไม่ส่ง `scope` + upsert ตาม `day` แบบเดิม · การ์ดจากปฏิทิน **ยืนยันไม่ได้** (บอกให้รัน SQL)
+  - **วันพิเศษจากปฏิทิน (2026-09-29 · แยก 3 ปฏิทิน 2026-09-30)**: ปฏิทิน 🏢 ออฟฟิศหยุด (`kind=office`) และ 💰 ค่าแรง ×2 (`kind=pay`) → หน้า 🎌 ขึ้นการ์ด
     **"📅 จากปฏิทิน รอยืนยัน"** พร้อมพรีวิวเงิน (วันที่ผ่านมาแล้วคิดจริงด้วย `calcPay` แล้วคืนค่า · วันข้างหน้าประมาณสูงสุด) + ตัวเลขบนเมนู 🎌
-    · **มีผลกับเงินก็ต่อเมื่อกด ✅** (เจ้าของสั่ง) → `calConfirm` ติ๊กปฏิทินแบบมีเงื่อนไข `updated_at` ก่อน แล้วค่อยเขียน `holidays` ผ่านตัวดัก `db.from`
-      (เช็คสิทธิ์หน้า `holi` + จดประวัติ) · ✖ = `calDecline` · **`calcPay` ไม่ได้แก้เลย** ยังคิดจาก `holidays` ตามเดิม (กฎเดิมทุกข้อ: หน้าร้านได้ ×N · ออฟฟิศได้หยุด · วันห้ามหยุด)
-    · `calDayDiff` เอาออกเฉพาะวันที่ยังตรงกับ `pay_snapshot` ที่ปฏิทินเคยใส่ — วันที่แก้มือในหน้า 🎌 ไม่แตะ · ยังไม่รัน SQL = ไม่มีการ์ด แอปปกติ
-    · เทส `test/holi.js` ส่วน A ล็อกกฎเดิมของวันหยุดพิเศษ (ผ่านกับไฟล์ก่อนแก้) · ส่วน B การ์ด/ยืนยัน/ไม่ใช้/สิทธิ์/พรีวิว
+    · **มีผลกับเงินก็ต่อเมื่อกด ✅** (เจ้าของสั่ง) → `calConfirm` ติ๊กปฏิทินแบบมีเงื่อนไข `updated_at` ก่อน แล้วค่อย upsert `holidays` (`onConflict:'day,scope'` + `cal_id`) ผ่านตัวดัก `db.from`
+      (เช็คสิทธิ์หน้า `holi` + จดประวัติ) · ✖ = `calDecline` · 1 รายการในปฏิทิน = แถวของตัวเอง (`cal_id`) — 🏢 → scope office · 💰 → scope store
+    · `calDayDiff` เอาออกเฉพาะแถวของรายการนั้น (`cal_id` ตรง · หรือแถวที่ยืนยันไว้ก่อนมี `cal_id` ที่ตรงกับ snapshot รุ่นแรก) — วันที่ตั้งเองในหน้า 🎌 ไม่แตะ
+      · แถวตั้งเองที่ค่าเท่ากันพอดี = "🔗 ผูกกับปฏิทิน" · snapshot รุ่นใหม่ `{v:2,kind,days,name,mult}` · รายการที่ยืนยันก่อนแยกปฏิทินขึ้นการ์ด "🔄 ย้ายเข้าปฏิทินแยก — กดยืนยันอีกครั้ง"
+    · หน้า 🎌 แสดงแถวที่มาจากปฏิทินด้วยป้าย 📅 · แก้ไขอ้างแถวด้วยคีย์ `holiKey` · เทส `test/holi.js` ส่วน A (กฎเดิม) · B (การ์ด/ยืนยัน/ย้ายรุ่นเก่า/พรีวิว) · C (scope/หลายแถวต่อวัน)
+    · แดชบอร์ดรายวันขึ้นชิป 🎌 เฉพาะสาขาที่วันนั้นใช้ · Worker รายงาน LINE (`worker.js`) ยังโชว์ชื่อวันหยุดแถวแรกของวัน (แค่ป้าย ไม่เกี่ยวเงิน)
 - `payroll_settings` — แถวเดียว: cutoff, cut_day, pay_day, late_rate, single_fine, grace, default_wage, month_div, no_off_bonus, hourly_*, must_work_days('5,6,0'), must_work_fine, **dep_start, ot_rate**
 - `deposit_entries` — override เงินประกันรายงวด: unique(employee_id, period)
 - `mou_loans` — unique ต่อคน: amount, monthly, final_max, start_period, opening, doc_passport, doc_pink, doc_complete, note, returned_at

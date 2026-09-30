@@ -1,7 +1,7 @@
 // เทสวันหยุดพิเศษกับ calcPay ตัวจริงใน jjmk-payroll.html (jsdom + Supabase ปลอม)
 // ส่วน A = ล็อกพฤติกรรมเดิมของหน้า 🎌 (ต้องผ่านกับไฟล์ที่ยังไม่แก้) — เจ้าของสั่ง 2026-09-29: วันจ่ายค่าแรงจากปฏิทินใช้กฎเดิมทุกข้อ
 // ส่วน B = การ์ด "📅 จากปฏิทิน รอยืนยัน" (calDayDiff / ยืนยัน / ไม่ใช้) — ข้ามถ้ายังไม่มีฟังก์ชัน
-// ส่วน C = วันหยุดใช้กับใคร (holidays.scope — เจ้าของสั่ง 2026-09-30: ทุกคน / หน้าร้าน / ออฟฟิศ · ออฟฟิศ = สาขา OFFICE)
+// ส่วน C = วันหยุดใช้กับใคร (holidays.scope — เจ้าของสั่ง 2026-09-30: ปฏิทินแยก 🏢 ออฟฟิศหยุด / 💰 ค่าแรง ×2 · ออฟฟิศ = สาขา OFFICE)
 const fs=require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
 const html=fs.readFileSync(__dirname+'/../../jjmk-payroll.html','utf8').replace(/<script src="[^"]+"><\/script>/g,'').replace(/<link[^>]+>/g,'');
@@ -58,63 +58,90 @@ setTimeout(async()=>{ try{
   E(`holidays={'2026-08-28':{name:'x',mult:2,id:2}}; shifts.ST=mk('2026-07-26','2026-09-25');`);
   ok(C('st','2026-08').holiBonus===0&&C('st','2026-09').holiBonus===600,'วันหยุด 28 ส.ค. อยู่งวด ก.ย. ของหน้าร้าน');
 
-  console.log('B · การ์ด "📅 จากปฏิทิน รอยืนยัน"');
+  console.log('B · การ์ด "📅 จากปฏิทิน รอยืนยัน" (ปฏิทินแยก 🏢 ออฟฟิศหยุด / 💰 ค่าแรง ×2)');
   if(E(`typeof calDayDiff`)!=='function'){ console.log('  (ยังไม่มี calDayDiff — ข้ามส่วน B)'); }
   else {
+    E(`holiCalReady=true; holiScopeReady=true;`);
     const D=(row,h)=>JSON.parse(E(`(function(){ holidays=${JSON.stringify(h||{})}; return JSON.stringify(calDayDiff(${JSON.stringify(row)})); })()`));
-    let d=D({id:'a',name:'สงกรานต์',day_from:'2027-04-13',day_to:'2027-04-15',pay_multiplier:2,pay_status:'pending',cancelled:false});
-    ok(d.adds.length===3&&d.changes.length===0&&d.removes.length===0&&d.adds[0].day==='2027-04-13'&&d.adds[2].mult===2,'วันใหม่ 3 วัน → เพิ่ม 3 วัน');
-    d=D({id:'a',name:'สงกรานต์',day_from:'2027-04-13',day_to:'2027-04-14',pay_multiplier:3,pay_status:'pending',cancelled:false,pay_snapshot:{days:['2027-04-13','2027-04-14','2027-04-15'],mult:2,name:'สงกรานต์'}},
-      {'2027-04-13':{name:'สงกรานต์',mult:2,id:5},'2027-04-14':{name:'สงกรานต์',mult:2,id:6},'2027-04-15':{name:'สงกรานต์',mult:2,id:7}});
-    ok(d.changes.length===2&&d.changes[0].to.mult===3&&d.removes.length===1&&d.removes[0].day==='2027-04-15'&&d.removes[0].id===7,'แก้เป็น ×3 และตัดวันที่ 15 → เปลี่ยน 2 วัน เอาออก 1 วัน');
-    d=D({id:'a',name:'สงกรานต์',day_from:'2027-04-13',day_to:'2027-04-15',pay_multiplier:2,cancelled:true,pay_status:'pending',pay_snapshot:{days:['2027-04-13','2027-04-14','2027-04-15'],mult:2,name:'สงกรานต์'}},
-      {'2027-04-13':{name:'สงกรานต์',mult:2,id:5},'2027-04-14':{name:'แก้มือในหน้า 🎌',mult:3,id:6},'2027-04-15':{name:'สงกรานต์',mult:2,id:7}});
-    ok(d.removes.length===2&&!d.removes.some(r=>r.day==='2027-04-14'),'ยกเลิกในปฏิทิน → เอาออกเฉพาะวันที่ยังตรงกับที่ปฏิทินใส่ (วันที่แก้มือในหน้า 🎌 ไม่แตะ)');
-    d=D({id:'a',name:'วันแม่',day_from:'2027-08-12',day_to:'2027-08-12',pay_multiplier:2,pay_status:'pending',cancelled:false},{'2027-08-12':{name:'วันแม่',mult:2,id:9}});
-    ok(d.adds.length===0&&d.changes.length===0&&d.removes.length===0,'ตรงกับหน้า 🎌 อยู่แล้ว → ไม่มีอะไรต้องเปลี่ยน');
-    // ยืนยันจริง: ต้องเขียน holidays ผ่านตัวดักเดียวกับหน้า 🎌 (จดประวัติ + เช็คสิทธิ์) และติ๊กปฏิทินแบบมีเงื่อนไข
-    E(`holidays={}; calDays=[{id:'r1',name:'สงกรานต์',day_from:'2027-04-13',day_to:'2027-04-14',pay_multiplier:2,pay_status:'pending',cancelled:false,updated_at:'2026-09-29T10:00:00+00:00'}]; calDaysReady=true;
+    const P=(id,name,from,to,m,o)=>Object.assign({id,name,kind:'pay',day_from:from,day_to:to,pay_multiplier:m,pay_status:'pending',cancelled:false},o||{});
+    const O=(id,name,from,to,o)=>Object.assign({id,name,kind:'office',day_from:from,day_to:to,pay_multiplier:null,pay_status:'pending',cancelled:false},o||{});
+    const H=(day,name,mult,scope,id,calId)=>({day,name,mult,scope,id,calId:calId||null});
+    let d=D(P('a','สงกรานต์','2027-04-13','2027-04-15',2));
+    ok(d.adds.length===3&&d.adds.every(x=>x.scope==='store'&&x.mult===2)&&d.adds[0].key==='2027-04-13|store','💰 วันใหม่ 3 วัน → เพิ่มแถวหน้าร้าน 3 แถว');
+    d=D(O('b','วันจักรี','2027-04-06','2027-04-06'));
+    ok(d.adds.length===1&&d.adds[0].scope==='office'&&d.adds[0].key==='2027-04-06|office','🏢 วันออฟฟิศหยุด → เพิ่มแถวออฟฟิศ');
+    d=D(P('a','สงกรานต์','2027-04-13','2027-04-14',3),{'2027-04-13|store':H('2027-04-13','สงกรานต์',2,'store',5,'a'),'2027-04-14|store':H('2027-04-14','สงกรานต์',2,'store',6,'a'),'2027-04-15|store':H('2027-04-15','สงกรานต์',2,'store',7,'a')});
+    ok(d.changes.length===2&&d.changes[0].to.mult===3&&d.removes.length===1&&d.removes[0].id===7,'แก้เป็น ×3 และตัดวันที่ 15 → เปลี่ยน 2 เอาออก 1 (เฉพาะแถวของรายการนี้)');
+    d=D(P('a','สงกรานต์','2027-04-13','2027-04-15',2,{cancelled:true}),{'2027-04-13|store':H('2027-04-13','สงกรานต์',2,'store',5,'a'),'2027-04-14|store':H('2027-04-14','ตั้งเอง',3,'store',6,null),'2027-04-15|store':H('2027-04-15','สงกรานต์',2,'store',7,'a'),'2027-04-13|office':H('2027-04-13','สงกรานต์',2,'office',8,'zz')});
+    ok(d.removes.length===2&&!d.removes.some(r=>r.id===6||r.id===8),'ยกเลิก → เอาออกเฉพาะแถวของรายการนี้ (แถวที่ตั้งเอง / ของปฏิทินออฟฟิศ ไม่แตะ)');
+    d=D(O('b','วันจักรี','2027-04-06','2027-04-06'),{'2027-04-06|office':H('2027-04-06','วันจักรี',2,'office',9,null)});
+    ok(d.changes.length===1&&d.changes[0].link===true,'มีแถวตั้งเองค่าเดียวกันอยู่แล้ว → แค่ผูกกับปฏิทิน (🔗)');
+    d=D(P('a','วันแม่','2027-08-12','2027-08-12',2),{'2027-08-12|store':H('2027-08-12','วันแม่',2,'store',9,'a')});
+    ok(!d.adds.length&&!d.changes.length&&!d.removes.length,'ตรงกับหน้า 🎌 อยู่แล้ว → ไม่มีอะไรต้องเปลี่ยน');
+    // ย้ายจากรุ่นก่อน (แถว "ทั้งคู่" ที่ยืนยันไว้ไม่มี cal_id) → แยกเป็นแถวหน้าร้าน + แถวออฟฟิศ แล้วเอาแถวทุกคนเดิมออก
+    const legacy={days:['2027-04-13'],mult:2,name:'สงกรานต์',scope:'all'}, h0={'2027-04-13':H('2027-04-13','สงกรานต์',2,'all',11,null)};
+    d=D(P('p','สงกรานต์','2027-04-13','2027-04-13',2,{pay_status:'confirmed',pay_snapshot:legacy}),h0);
+    ok(d.adds.length===1&&d.adds[0].key==='2027-04-13|store'&&d.removes.length===1&&d.removes[0].id===11,'รุ่นก่อน (💰 ทั้งคู่) → เพิ่มแถวหน้าร้าน + เอาแถวทุกคนเดิมออก');
+    d=D(O('o','สงกรานต์','2027-04-13','2027-04-13',{pay_status:'confirmed',pay_snapshot:legacy}),h0);
+    ok(d.adds.length===1&&d.adds[0].key==='2027-04-13|office'&&d.removes.length===1,'รุ่นก่อน (🏢 แถวที่แยกออกมา) → เพิ่มแถวออฟฟิศ + เอาแถวทุกคนเดิมออก');
+    E(`holidays=${JSON.stringify(h0)}; calDays=[${JSON.stringify(P('p','สงกรานต์','2027-04-13','2027-04-13',2,{pay_status:'confirmed',pay_snapshot:legacy}))}]; calDaysReady=true;`);
+    ok(E(`calPending().length`)===1,'รายการที่ยืนยันไว้ก่อนแยกปฏิทิน ขึ้นการ์ดให้ยืนยันอีกครั้ง');
+    // ยืนยันจริง
+    E(`holidays={}; calDays=[${JSON.stringify(P('r1','สงกรานต์','2027-04-13','2027-04-14',2,{updated_at:'2026-09-29T10:00:00+00:00'}))}];
        __writes=[]; __resp=(st)=>{ if(st.tbl==='cal_special_days'&&st.op==='update')return {data:[{id:'r1'}],error:null};
          if(st.tbl==='holidays'&&st.op==='upsert')return {data:(Array.isArray(st.body)?st.body:[st.body]).map((b,i)=>Object.assign({id:100+i},b)),error:null}; return null; };`);
     await E(`calConfirm('r1')`);
-    const W=JSON.parse(E(`JSON.stringify(__writes)`));
-    const cal=W.find(x=>x.tbl==='cal_special_days'), hol=W.find(x=>x.tbl==='holidays'&&x.op==='upsert');
+    let W=JSON.parse(E(`JSON.stringify(__writes)`)), cal=W.find(x=>x.tbl==='cal_special_days'), hol=W.find(x=>x.tbl==='holidays'&&x.op==='upsert');
     ok(cal&&cal.body.pay_status==='confirmed'&&cal.filters.some(f=>f[1]==='updated_at'),'ยืนยัน → ปฏิทินเป็น confirmed แบบมีเงื่อนไข updated_at');
-    ok(cal&&cal.body.pay_snapshot&&JSON.stringify(cal.body.pay_snapshot.days)==='["2027-04-13","2027-04-14"]','เก็บ snapshot วันที่ยืนยัน');
-    ok(hol&&Array.isArray(hol.body)&&hol.body.length===2&&hol.body[0].multiplier===2&&hol.opts&&hol.opts.onConflict==='day','เขียน holidays 2 วัน ×2 (upsert ตามวัน)');
-    ok(E(`holidays['2027-04-13']&&holidays['2027-04-13'].mult===2`)===true,'หน้าเงินเดือนเห็นวันใหม่ทันที');
-    // ปฏิทินถูกแก้ระหว่างเปิดหน้า → ห้ามเขียน holidays
-    E(`holidays={}; calDays=[{id:'r2',name:'x',day_from:'2027-05-01',day_to:'2027-05-01',pay_multiplier:2,pay_status:'pending',cancelled:false,updated_at:'old'}];
+    ok(cal&&cal.body.pay_snapshot.v===2&&cal.body.pay_snapshot.kind==='pay'&&JSON.stringify(cal.body.pay_snapshot.days)==='["2027-04-13","2027-04-14"]','เก็บ snapshot รุ่น 2 (ปฏิทินไหน + วัน)');
+    ok(hol&&hol.body.length===2&&hol.body.every(b=>b.scope==='store'&&b.cal_id==='r1'&&b.multiplier===2)&&hol.opts.onConflict==='day,scope','เขียน holidays 2 แถว หน้าร้าน ×2 + cal_id (ไม่ซ้ำตาม วัน+scope)');
+    ok(E(`!!holidays['2027-04-13|store']&&holidays['2027-04-13|store'].calId==='r1'`)===true,'หน้าเงินเดือนเห็นแถวใหม่ทันที');
+    // 🏢 + 💰 วันเดียวกัน = 2 แถว
+    E(`calDays=[${JSON.stringify(O('r9','สงกรานต์','2027-04-13','2027-04-13',{updated_at:'t'}))}]; __writes=[];
+       __resp=(st)=>{ if(st.tbl==='cal_special_days'&&st.op==='update')return {data:[{id:'r9'}],error:null};
+         if(st.tbl==='holidays'&&st.op==='upsert')return {data:(Array.isArray(st.body)?st.body:[st.body]).map((b,i)=>Object.assign({id:200+i},b)),error:null}; return null; };`);
+    await E(`calConfirm('r9')`);
+    ok(E(`!!holidays['2027-04-13|store']&&!!holidays['2027-04-13|office']`)===true,'ยืนยัน 🏢 วันเดียวกับ 💰 → มีทั้งแถวหน้าร้านและแถวออฟฟิศ');
+    // ปฏิทินถูกแก้พร้อมกัน → ห้ามเขียน holidays
+    E(`holidays={}; calDays=[${JSON.stringify(P('r2','x','2027-05-01','2027-05-01',2,{updated_at:'old'}))}];
        __writes=[]; __resp=(st)=>st.tbl==='cal_special_days'&&st.op==='update'?{data:[],error:null}:null;`);
     await E(`calConfirm('r2')`);
     ok(!JSON.parse(E(`JSON.stringify(__writes)`)).some(x=>x.tbl==='holidays'),'ปฏิทินถูกแก้พร้อมกัน → ไม่เขียน holidays');
+    // ยังไม่รัน SQL รุ่น 3 ปฏิทิน → ยืนยันไม่ได้
+    E(`holiCalReady=false; calDays=[${JSON.stringify(P('r5','y','2027-05-02','2027-05-02',2,{updated_at:'t'}))}]; __writes=[]; __resp=null;`);
+    await E(`calConfirm('r5')`);
+    ok(JSON.parse(E(`JSON.stringify(__writes)`)).length===0,'ยังไม่รัน SQL (ไม่มี holidays.cal_id) → ไม่ยืนยัน ไม่เขียนอะไร');
+    E(`holiCalReady=true;`);
     // ไม่ใช้
-    E(`calDays=[{id:'r3',name:'y',day_from:'2027-06-01',day_to:'2027-06-01',pay_multiplier:2,pay_status:'pending',cancelled:false,updated_at:'t'}];
+    E(`calDays=[${JSON.stringify(P('r3','y','2027-06-01','2027-06-01',2,{updated_at:'t'}))}];
        __writes=[]; __resp=(st)=>st.tbl==='cal_special_days'?{data:[{id:'r3'}],error:null}:null;`);
     await E(`calDecline('r3')`);
     const W3=JSON.parse(E(`JSON.stringify(__writes)`));
     ok(W3.length===1&&W3[0].body.pay_status==='declined'&&!W3.some(x=>x.tbl==='holidays'),'ไม่ใช้ → ปฏิทินเป็น declined · ไม่แตะ holidays');
-    // ไม่มีสิทธิ์หน้า 🎌 → ตัวดักปฏิเสธ
-    E(`PERM={holi:'v'}; __writes=[]; holidays={}; calDays=[{id:'r4',name:'z',day_from:'2027-07-01',day_to:'2027-07-01',pay_multiplier:2,pay_status:'pending',cancelled:false,updated_at:'t'}]; __resp=null;`);
+    E(`PERM={holi:'v'}; __writes=[]; __resp=null;`);
     ok(E(`calCanAct()`)===false,'สิทธิ์ดูอย่างเดียว → ไม่มีปุ่มยืนยัน');
     E(`PERM=null;`);
-    // พรีวิวเงิน: วันที่ผ่านมาแล้ว คิดจริงด้วย calcPay (แล้วคืน holidays เดิม)
-    E(`holidays={}; shifts={ST:mk('2026-07-26','2026-08-25'),OF:mk('2026-07-26','2026-08-25',['2026-08-12']),HR:mk('2026-07-26','2026-08-25')};`);
-    const pv=JSON.parse(E(`JSON.stringify(calPreview({id:'p',name:'วันแม่',day_from:'2026-08-12',day_to:'2026-08-12',pay_multiplier:2,pay_status:'pending',cancelled:false}))`));
-    const aug=pv.past.find(x=>x.p==='2026-08');
-    ok(aug&&aug.plus===600&&aug.nPlus===1&&aug.minus===0,'พรีวิววันที่ผ่านมา: งวด ส.ค. หน้าร้าน +600 (1 คน) · ออฟฟิศไม่ได้เพิ่ม → '+JSON.stringify(pv.past));
-    ok(E(`Object.keys(holidays).length`)===0,'พรีวิวแล้วคืนค่า holidays เดิม (ไม่ค้างค่าทดลอง)');
-    const pf=JSON.parse(E(`JSON.stringify(calPreview({id:'f',name:'สิ้นปี',day_from:'2099-12-31',day_to:'2099-12-31',pay_multiplier:2,pay_status:'pending',cancelled:false}))`));
-    ok(pf.fut&&pf.fut.days===1&&pf.fut.store===1&&pf.fut.office===1&&pf.fut.maxBonus===600,'พรีวิววันข้างหน้า: หน้าร้าน 1 คน สูงสุด +600 · ออฟฟิศ 1 คนได้หยุด · รายชั่วโมงไม่นับ → '+JSON.stringify(pf.fut));
+    // พรีวิวเงิน
+    E(`holidays={}; employees=[st,of,hr]; shifts={ST:mk('2026-07-26','2026-08-25'),OF:mk('2026-07-26','2026-08-25',['2026-08-12']),HR:mk('2026-07-26','2026-08-25')};`);
+    let pv=JSON.parse(E(`JSON.stringify(calPreview(${JSON.stringify(P('p','วันแม่','2026-08-12','2026-08-12',2))}))`));
+    let aug=pv.past.find(x=>x.p==='2026-08');
+    ok(aug&&aug.plus===600&&aug.nPlus===1&&aug.minus===0,'พรีวิว 💰 วันที่ผ่านมา: งวด ส.ค. หน้าร้าน +600 (1 คน) → '+JSON.stringify(pv.past));
+    ok(E(`Object.keys(holidays).length`)===0,'พรีวิวแล้วคืนค่า holidays เดิม');
+    pv=JSON.parse(E(`JSON.stringify(calPreview(${JSON.stringify(O('o','วันแม่','2026-08-12','2026-08-12'))}))`));
+    ok(!pv.past.some(x=>x.plus>0),'พรีวิว 🏢 วันที่ผ่านมา: ไม่มีใครได้เงินเพิ่ม (ออฟฟิศรายเดือนได้หยุดนับเป็นวันทำงาน) → '+JSON.stringify(pv.past));
+    let pf=JSON.parse(E(`JSON.stringify(calPreview(${JSON.stringify(P('f','สิ้นปี','2099-12-31','2099-12-31',2))}))`));
+    ok(pf.fut&&pf.fut.days===1&&pf.fut.store===1&&pf.fut.office===0&&pf.fut.maxBonus===600,'พรีวิว 💰 วันข้างหน้า: หน้าร้าน 1 คน +600 · ออฟฟิศไม่เกี่ยว · รายชั่วโมงไม่นับ → '+JSON.stringify(pf.fut));
+    pf=JSON.parse(E(`JSON.stringify(calPreview(${JSON.stringify(O('f','สิ้นปี','2099-12-31','2099-12-31'))}))`));
+    ok(pf.fut&&pf.fut.days===1&&pf.fut.store===0&&pf.fut.office===1&&pf.fut.maxBonus===0,'พรีวิว 🏢 วันข้างหน้า: ออฟฟิศ 1 คนได้หยุด · หน้าร้านไม่เกี่ยว → '+JSON.stringify(pf.fut));
   }
-  console.log('C · วันหยุดใช้กับใคร (ทุกคน / หน้าร้าน / ออฟฟิศ)');
+
+  console.log('C · วันหยุดใช้กับใคร (ทุกคน / หน้าร้าน / ออฟฟิศ) + วันเดียวกันหลายแถว');
   if(E(`typeof holiFor`)!=='function'){ console.log('  (ยังไม่มี holiFor — ข้ามส่วน C)'); }
   else {
     E(`var mg={id:4,code:'MG',nick:'ผจก',branch:'JJLP',type:'monthly',rate:18000,mode:'shift',active:true,offCount:0,offWd:'1',holidayPay:false,depOn:false,depTarget:0,mustWorkExempt:true};
        employees=[st,of,hr,mg];
        shifts={ST:mk('2026-07-26','2026-08-25'),OF:mk('2026-07-26','2026-08-25',['2026-08-12']),HR:mk('2026-07-26','2026-08-25'),MG:mk('2026-07-26','2026-08-25',['2026-08-12'])};`);
-    // 🏪 หน้าร้านอย่างเดียว
-    E(`holidays={'2026-08-12':{name:'วันแม่',mult:2,id:1,scope:'store'}};`);
+    E(`holidays={'2026-08-12|store':{day:'2026-08-12',name:'วันแม่',mult:2,id:1,scope:'store'}};`);
     let c=C('st','2026-08');
     ok(c.holiBonus===600,'🏪 หน้าร้าน: หน้าร้านมาทำงาน ตรงเวลา → ได้เพิ่ม 600 เหมือนเดิม');
     c=C('of','2026-08');
@@ -123,8 +150,7 @@ setTimeout(async()=>{ try{
     ok(c.paidHoli.length===1,'🏪 หน้าร้าน: คนสาขาหน้าร้านที่ปิดสวิตช์เบี้ย (ผู้จัดการ) ยังได้หยุดนับเป็นวันทำงานตามสวิตช์เดิม');
     E(`shifts.ST=mk('2026-07-26','2026-08-25',['2026-08-12']);`); c=C('st','2026-08');
     ok(c.mustViol.includes('2026-08-12')&&c.mustFine===1200,'🏪 หน้าร้าน: หน้าร้านขาด = วันห้ามหยุด หัก 1,200 เหมือนเดิม');
-    // 🏢 ออฟฟิศอย่างเดียว
-    E(`holidays={'2026-08-12':{name:'วันแม่',mult:2,id:1,scope:'office'}};`);
+    E(`holidays={'2026-08-12|office':{day:'2026-08-12',name:'วันแม่',mult:2,id:1,scope:'office'}};`);
     c=C('st','2026-08');
     ok(!c.mustViol.includes('2026-08-12')&&c.mustFine===0&&c.holiBonus===0,'🏢 ออฟฟิศ: หน้าร้านขาดวันนั้น = ไม่ใช่วันห้ามหยุด ไม่โดนหัก');
     E(`shifts.ST=mk('2026-07-26','2026-08-25');`); c=C('st','2026-08');
@@ -133,57 +159,35 @@ setTimeout(async()=>{ try{
     ok(c.paidHoli.length===1&&c.paidHoli[0]==='2026-08-12','🏢 ออฟฟิศ: ออฟฟิศไม่มา = ได้หยุดนับเป็นวันทำงาน');
     c=C('mg','2026-08');
     ok(c.paidHoli.length===0,'🏢 ออฟฟิศ: คนสาขาหน้าร้านที่ปิดสวิตช์เบี้ย ไม่ได้หยุดวันออฟฟิศ (นับตามสาขา OFFICE เท่านั้น)');
-    // ทุกคน = เหมือนไม่มีช่อง scope เลย
-    E(`holidays={'2026-08-12':{name:'วันแม่',mult:2,id:1,scope:'all'}}; shifts.ST=mk('2026-07-26','2026-08-25',['2026-08-12']);`);
-    const all1=[C('st','2026-08'),C('of','2026-08'),C('mg','2026-08')].map(x=>x.net);
+    // วันเดียวกันอยู่ทั้ง 🏢 และ 💰 = เหมือน "ทุกคน" แบบเดิมทุกบาท
+    E(`holidays={'2026-08-12|store':{day:'2026-08-12',name:'วันแม่',mult:2,id:1,scope:'store'},'2026-08-12|office':{day:'2026-08-12',name:'วันแม่',mult:2,id:2,scope:'office'}}; shifts.ST=mk('2026-07-26','2026-08-25',['2026-08-12']);`);
+    const both=[C('st','2026-08'),C('of','2026-08'),C('mg','2026-08')].map(x=>x.net);
     E(`holidays={'2026-08-12':{name:'วันแม่',mult:2,id:1}};`);
     const all0=[C('st','2026-08'),C('of','2026-08'),C('mg','2026-08')].map(x=>x.net);
-    ok(JSON.stringify(all1)===JSON.stringify(all0),'👥 ทุกคน = ยอดเงินเท่ากับแถวเก่าที่ไม่มีช่อง scope ทุกบาท');
-    // การ์ดจากปฏิทิน
-    const D=(row,h)=>JSON.parse(E(`(function(){ holidays=${JSON.stringify(h||{})}; return JSON.stringify(calDayDiff(${JSON.stringify(row)})); })()`));
-    let d=D({id:'s',name:'วันแม่',day_from:'2027-08-12',day_to:'2027-08-12',pay_multiplier:2,pay_scope:'store',pay_status:'pending',cancelled:false},{'2027-08-12':{name:'วันแม่',mult:2,id:9,scope:'all'}});
-    ok(d.changes.length===1&&d.changes[0].to.scope==='store'&&d.changes[0].from.scope==='all','ปฏิทินเปลี่ยนเป็นหน้าร้านอย่างเดียว → การ์ดขึ้นว่าเปลี่ยน');
-    d=D({id:'s',name:'วันแม่',day_from:'2027-08-12',day_to:'2027-08-12',pay_multiplier:null,pay_status:'pending',cancelled:false,pay_snapshot:{days:['2027-08-12'],mult:2,name:'วันแม่',scope:'office'}},{'2027-08-12':{name:'วันแม่',mult:2,id:9,scope:'all'}});
-    ok(d.removes.length===0,'เอาออก: แถวที่ถูกแก้ใช้กับใครในหน้า 🎌 แล้ว (ไม่ตรง snapshot) ไม่แตะ');
-    d=D({id:'s',name:'วันแม่',day_from:'2027-08-12',day_to:'2027-08-12',pay_multiplier:null,pay_status:'pending',cancelled:false,pay_snapshot:{days:['2027-08-12'],mult:2,name:'วันแม่'}},{'2027-08-12':{name:'วันแม่',mult:2,id:9,scope:'all'}});
-    ok(d.removes.length===1,'snapshot รุ่นเก่า (ไม่มี scope) = ทุกคน → เอาออกได้ตามเดิม');
-    // ยืนยัน: มีช่อง scope → เขียน scope · ไม่มีช่อง → ไม่ยอมยืนยันวันที่แยกหน้าร้าน/ออฟฟิศ
-    E(`holiScopeReady=true; holidays={}; calDays=[{id:'q1',name:'วันหยุดออฟฟิศ',day_from:'2027-05-04',day_to:'2027-05-04',pay_multiplier:2,pay_scope:'office',pay_status:'pending',cancelled:false,updated_at:'t'}];
-       __writes=[]; __resp=(st)=>{ if(st.tbl==='cal_special_days'&&st.op==='update')return {data:[{id:'q1'}],error:null};
-         if(st.tbl==='holidays'&&st.op==='upsert')return {data:(Array.isArray(st.body)?st.body:[st.body]).map((b,i)=>Object.assign({id:200+i},b)),error:null}; return null; };`);
-    await E(`calConfirm('q1')`);
-    let W=JSON.parse(E(`JSON.stringify(__writes)`)), hol=W.find(x=>x.tbl==='holidays'&&x.op==='upsert'), cal=W.find(x=>x.tbl==='cal_special_days');
-    ok(hol&&hol.body[0].scope==='office'&&cal&&cal.body.pay_snapshot.scope==='office','ยืนยันวันออฟฟิศ → holidays.scope=office + snapshot จำ scope');
-    ok(E(`holidays['2027-05-04'].scope`)==='office','หน้าเงินเดือนเห็นเป็นวันออฟฟิศทันที');
-    E(`holiScopeReady=false; holidays={}; calDays=[{id:'q2',name:'x',day_from:'2027-05-05',day_to:'2027-05-05',pay_multiplier:2,pay_scope:'store',pay_status:'pending',cancelled:false,updated_at:'t'}]; __writes=[];`);
-    await E(`calConfirm('q2')`);
-    ok(JSON.parse(E(`JSON.stringify(__writes)`)).length===0,'ยังไม่รัน SQL + วันหน้าร้านอย่างเดียว → ไม่ยืนยัน (ไม่งั้นกลายเป็นใช้กับทุกคน)');
-    E(`calDays=[{id:'q3',name:'y',day_from:'2027-05-06',day_to:'2027-05-06',pay_multiplier:2,pay_status:'pending',cancelled:false,updated_at:'t'}]; __writes=[];
-       __resp=(st)=>{ if(st.tbl==='cal_special_days'&&st.op==='update')return {data:[{id:'q3'}],error:null};
-         if(st.tbl==='holidays'&&st.op==='upsert')return {data:(Array.isArray(st.body)?st.body:[st.body]).map((b,i)=>Object.assign({id:300+i},b)),error:null}; return null; };`);
-    await E(`calConfirm('q3')`);
-    hol=JSON.parse(E(`JSON.stringify(__writes)`)).find(x=>x.tbl==='holidays'&&x.op==='upsert');
-    ok(hol&&!('scope' in hol.body[0]),'ยังไม่รัน SQL + วันทุกคน → ยืนยันได้ และไม่ส่งช่อง scope (ตารางเก่าไม่มีช่องนี้)');
-    // พรีวิววันข้างหน้า
-    E(`employees=[st,of,hr,mg];`);
-    let pf=JSON.parse(E(`JSON.stringify(calPreview({id:'f',name:'o',day_from:'2099-12-30',day_to:'2099-12-30',pay_multiplier:2,pay_scope:'office',pay_status:'pending',cancelled:false}))`));
-    ok(pf.fut&&pf.fut.store===0&&pf.fut.office===1&&pf.fut.maxBonus===0,'พรีวิววันออฟฟิศ: หน้าร้าน 0 คน · ออฟฟิศ 1 คน · ไม่มีเงินเพิ่ม → '+JSON.stringify(pf.fut));
-    pf=JSON.parse(E(`JSON.stringify(calPreview({id:'f',name:'s',day_from:'2099-12-30',day_to:'2099-12-30',pay_multiplier:2,pay_scope:'store',pay_status:'pending',cancelled:false}))`));
-    ok(pf.fut&&pf.fut.store===1&&pf.fut.office===1&&pf.fut.maxBonus===600,'พรีวิววันหน้าร้าน: หน้าร้าน 1 คน +600 · ผู้จัดการที่ปิดสวิตช์ได้หยุด 1 คน · ออฟฟิศไม่นับ → '+JSON.stringify(pf.fut));
-    // หน้า 🎌: บันทึกฟอร์ม
-    E(`holiScopeReady=true; holidays={}; __writes=[]; __resp=(st)=>st.tbl==='holidays'?{data:Object.assign({id:77},st.body),error:null}:null;
+    ok(JSON.stringify(both)===JSON.stringify(all0),'🏢+💰 วันเดียวกัน = ยอดเงินเท่ากับวันหยุดแบบเดิม (ทุกคน) ทุกบาท');
+    // แถวทุกคน + แถวเจาะจงกลุ่มวันเดียวกัน → แถวเจาะจงชนะ · ไม่นับซ้ำ
+    E(`holidays={'2026-08-12':{day:'2026-08-12',name:'เดิม',mult:2,id:1,scope:'all'},'2026-08-12|store':{day:'2026-08-12',name:'ใหม่',mult:3,id:2,scope:'store'},'2026-08-12|office':{day:'2026-08-12',name:'ออฟ',mult:2,id:3,scope:'office'}}; shifts.ST=mk('2026-07-26','2026-08-25');`);
+    c=C('st','2026-08');
+    ok(c.holiBonus===1200,'แถวหน้าร้าน ×3 ชนะแถวทุกคน ×2 (เจาะจงกว่า) → ได้เพิ่ม 1,200');
+    c=C('of','2026-08');
+    ok(c.paidHoli.length===1,'วันเดียวมี 3 แถว → ออฟฟิศนับวันหยุดครั้งเดียว (ไม่ซ้ำ)');
+    // หน้า 🎌
+    E(`holiScopeReady=true; holiCalReady=true; holidays={}; __writes=[]; __resp=(st)=>st.tbl==='holidays'?{data:Object.assign({id:77},st.body),error:null}:null;
        document.getElementById('hId').value=''; document.getElementById('hDay').value='2027-10-23'; document.getElementById('hName').value='ปิยะ';
        document.getElementById('hMult').value='2'; document.getElementById('hScope').value='office';`);
     await E(`saveHoli()`);
     let hw=JSON.parse(E(`JSON.stringify(__writes)`)).find(x=>x.tbl==='holidays');
-    ok(hw&&hw.body.scope==='office'&&E(`holidays['2027-10-23'].scope`)==='office','หน้า 🎌: เลือก 🏢 ออฟฟิศ → บันทึก scope=office');
-    E(`holiScopeReady=false; __writes=[]; document.getElementById('hDay').value='2027-10-24';`);
+    ok(hw&&hw.body.scope==='office'&&hw.opts&&hw.opts.onConflict==='day,scope'&&E(`holidays['2027-10-23|office'].scope`)==='office','หน้า 🎌: เลือก 🏢 ออฟฟิศ → บันทึก scope=office (ไม่ซ้ำตาม วัน+scope)');
+    E(`holiScopeReady=false; holiCalReady=false; __writes=[]; document.getElementById('hDay').value='2027-10-24';`);
     await E(`saveHoli()`);
     hw=JSON.parse(E(`JSON.stringify(__writes)`)).find(x=>x.tbl==='holidays');
-    ok(hw&&!('scope' in hw.body),'หน้า 🎌: ยังไม่รัน SQL → ไม่ส่งช่อง scope');
-    E(`holiScopeReady=true; holidays={'2027-10-23':{name:'ปิยะ',mult:2,id:77,scope:'office'}}; document.getElementById('holiYear').dataset.pick='2027'; renderHoli();`);
+    ok(hw&&!('scope' in hw.body)&&hw.opts.onConflict==='day','หน้า 🎌: ยังไม่รัน SQL → ไม่ส่งช่อง scope · ไม่ซ้ำตามวันแบบเดิม');
+    E(`holiScopeReady=true; holiCalReady=true; holidays={'2027-10-23|office':{day:'2027-10-23',name:'ปิยะ',mult:2,id:77,scope:'office',calId:'c1'},'2027-10-23|store':{day:'2027-10-23',name:'ปิยะ',mult:2,id:78,scope:'store'}};
+       document.getElementById('holiYear').dataset.pick='2027'; renderHoli();`);
     const cell=E(`document.getElementById('holiTable').textContent`);
-    ok(/ออฟฟิศ/.test(cell)&&/ได้หยุด/.test(cell),'ตารางหน้า 🎌 โชว์ "🏢 ออฟฟิศ · ได้หยุด"');
+    ok(/ออฟฟิศ/.test(cell)&&/ได้หยุด/.test(cell)&&/หน้าร้าน/.test(cell)&&/📅/.test(cell)&&E(`document.querySelectorAll('#holiTable tbody tr').length`)===2,'ตารางหน้า 🎌 โชว์วันเดียวกัน 2 แถว (🏢 ได้หยุด / 🏪 ×2) + ป้าย 📅 แถวจากปฏิทิน');
+    E(`openHoliForm('2027-10-23|store')`);
+    ok(E(`document.getElementById('hDay').value`)==='2027-10-23'&&E(`document.getElementById('hScope').value`)==='store','กดแก้ไขแถวหน้าร้าน → ฟอร์มได้วันและกลุ่มถูก');
   }
 }catch(e){ console.log('CRASH',e.stack||e.message); fail++; }
  console.log(errs.length?('jsdom errors: '+errs.slice(0,3).join(' | ')):'');

@@ -908,7 +908,9 @@ window.JJGate=(function(){
   <div class="card">
     <h2 class="font-display" style="font-size:18px;margin-bottom:6px">วันหยุดพิเศษ</h2>
     <p class="muted" style="margin-bottom:14px">ตั้งปีละครั้ง แต่ละปีไม่เหมือนกัน — พนักงานที่<b>มาทำงาน</b>ในวันเหล่านี้จะได้ค่าแรงคูณตามที่กำหนด
-      <br>💡 ลงวันพิเศษที่ <a href="jjmk-calendar.html" style="color:inherit;text-decoration:underline dotted">JJ Calendar แท็บ 🎌</a> ได้ด้วย — จะขึ้นเป็นการ์ด "📅 จากปฏิทิน รอยืนยัน" ด้านบน ต้องกดยืนยันก่อนถึงจะใช้คิดเงิน</p>
+      <br>💡 ลงวันพิเศษที่ <a href="jjmk-calendar.html" style="color:inherit;text-decoration:underline dotted">JJ Calendar แท็บ 🎌</a> ได้ด้วย — แยก 2 ปฏิทินที่เกี่ยวกับเงินเดือน:
+      <b>🏢 ออฟฟิศหยุด</b> (พนักงานสาขา OFFICE ได้หยุด) และ <b>💰 ค่าแรง ×2</b> (หน้าร้าน) · จะขึ้นเป็นการ์ด "📅 จากปฏิทิน รอยืนยัน" ด้านบน ต้องกดยืนยันก่อนถึงจะใช้คิดเงิน
+      · แถวที่มาจากปฏิทินมีป้าย 📅</p>
     <div class="toolbar">
       <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">ปี:
         <select id="holiYear" onchange="renderHoli()" style="width:auto;min-width:110px"></select>
@@ -1797,8 +1799,9 @@ let workDateReady = false; // true เมื่อรัน jj_work_dates.sql �
 let kbizReady = false;     // true เมื่อรัน jj_kbiz_added.sql แล้ว (จำว่าใครถูกแอดบัญชี K BIZ แล้ว)
 let fineEntries = [];      // แก้ไขรายการหักอัตโนมัติรายงวด {id, empId, period, kind, amount}
 let fineReady = false;     // true เมื่อรัน jj_work_dates.sql แล้ว (ตาราง fine_entries)
-let holidays = {};   // 'YYYY-MM-DD' -> {name, mult, id, scope}
+let holidays = {};   // holiKey(วัน, scope) -> {day, name, mult, id, scope, calId} · ทุกคน = 'YYYY-MM-DD' · หน้าร้าน/ออฟฟิศ = 'YYYY-MM-DD|store' / '|office'
 let holiScopeReady = false; // true เมื่อมีช่อง holidays.scope แล้ว (รัน jj_holiday_scope.sql หรือ jjmk-calendar-days.sql)
+let holiCalReady = false;   // true เมื่อมีช่อง holidays.cal_id แล้ว = ไม่ซ้ำตาม (วัน, scope) · รับวันจากปฏิทินแยก 🏢/💰 ได้
 let calDays = [], calDaysReady = false;   // 🎌 วันพิเศษจากปฏิทิน (cal_special_days) — ใช้ทำการ์ดยืนยันในหน้า 🎌 เท่านั้น · calcPay ไม่อ่าน
 let devBranch = {};  // device_sn -> branch
 let orgPos = [];     // โครงสร้าง {id, dept, name} จากตาราง org_positions
@@ -1895,10 +1898,13 @@ async function loadAll(){
       db.from('devices').select('sn,branch,name'),
     ]);
     for(const r of [sh,em,st,ad,av,hd,dv]) if(r.error) throw r.error;
-    holidays = {}; (hd.data||[]).forEach(h=>holidays[h.day] = { name:h.name||'วันหยุดพิเศษ', mult:+h.multiplier, id:h.id, scope:holiScopeOf(h.scope) });
-    /* มีช่อง scope ไหม — มีแถวก็ดูจากแถว · ไม่มีแถวเลยก็ลองอ่านช่องนั้นดู (ยังไม่รัน SQL = ทุกวันใช้กับทุกคนเหมือนเดิม) */
-    try{ holiScopeReady = (hd.data||[]).length ? ('scope' in hd.data[0]) : !(await db.from('holidays').select('scope').limit(1)).error; }
-    catch(_){ holiScopeReady = false; }
+    holidays = {}; (hd.data||[]).forEach(h => holiPut(holiRowOf(h)));
+    /* มีช่อง scope / cal_id ไหม — มีแถวก็ดูจากแถว · ไม่มีแถวเลยก็ลองอ่านช่องนั้นดู (ยังไม่รัน SQL = ทุกวันใช้กับทุกคนเหมือนเดิม) */
+    try{
+      const h0 = (hd.data||[])[0];
+      holiScopeReady = h0 ? ('scope' in h0) : !(await db.from('holidays').select('scope').limit(1)).error;
+      holiCalReady = h0 ? ('cal_id' in h0) : !(await db.from('holidays').select('cal_id').limit(1)).error;
+    }catch(_){ holiScopeReady = false; holiCalReady = false; }
     try{ const og = await db.from('org_positions').select('*').order('dept').order('sort');
          if(!og.error) orgPos = og.data||[]; }catch(_){ /* ยังไม่รัน phase14 ก็ใช้งานส่วนอื่นได้ */ }
     try{ const de = await db.from('deposit_entries').select('*');
@@ -2115,11 +2121,20 @@ const isOfficeCycle = e => !!e && e.branch === 'OFFICE';
 /* วันหยุดพิเศษใช้กับใคร (เจ้าของสั่ง 2026-09-30: "พนักงานออฟฟิศจะมีวันหยุดพิเศษไม่เหมือนกัน")
    all = ทุกคน (กฎเดิม) · store = หน้าร้านอย่างเดียว (ออฟฟิศทำงานปกติ) · office = ออฟฟิศอย่างเดียว (หน้าร้านทำงานปกติ ไม่ได้ ×N ไม่ใช่วันห้ามหยุด)
    "ออฟฟิศ" = พนักงานสาขา OFFICE (เจ้าของเลือก) — วันที่ใช้กับคนนั้นแล้ว จะได้ ×N หรือได้หยุด ยังตามสวิตช์ holidayPay เดิมทุกอย่าง
+   ปฏิทินแยก 3 ชุด (เจ้าของสั่ง 2026-09-30): 🏢 ออฟฟิศหยุด → แถว scope=office · 💰 ค่าแรง ×2 → แถว scope=store
+   วันเดียวกันมีได้ทั้งแถวออฟฟิศ แถวหน้าร้าน และแถวทุกคน (ไม่ซ้ำตาม วัน+scope) → แถวที่เจาะจงกลุ่มชนะแถวทุกคน
    ⚠️ calcPay ต้องอ่านวันหยุดผ่าน holiFor / holiHits เสมอ ห้ามอ่าน holidays[day] ตรง ๆ */
 const HOLI_SCOPE = { all:'👥 ทุกคน', store:'🏪 หน้าร้าน', office:'🏢 ออฟฟิศ' };
 function holiScopeOf(v){ return v === 'store' || v === 'office' ? v : 'all'; }
 function holiHits(scope, emp){ const sc = holiScopeOf(scope); return sc === 'all' || (sc === 'office') === (!!emp && emp.branch === 'OFFICE'); }
-function holiFor(emp, day){ const h = holidays[day]; return h && holiHits(h.scope, emp) ? h : null; }
+function holiKey(day, scope){ const sc = holiScopeOf(scope); return sc === 'all' ? day : day + '|' + sc; }
+function holiRowOf(h){ return { day:h.day, name:h.name||'วันหยุดพิเศษ', mult:+h.multiplier, id:h.id, scope:holiScopeOf(h.scope), calId:h.cal_id||null }; }
+function holiPut(h){ holidays[holiKey(h.day, h.scope)] = h; }
+function holiFor(emp, day){
+  const own = holidays[day + '|' + (!!emp && emp.branch === 'OFFICE' ? 'office' : 'store')];   // แถวที่เจาะจงกลุ่มของคนนี้ก่อน
+  if(own) return own;
+  const h = holidays[day]; return h && holiHits(h.scope, emp) ? h : null;
+}
 /* ช่วงวันที่เกินเดือนปกติในงวดเปลี่ยนผ่าน แบบสั้นพอให้สลิปครึ่งหน้าไม่ล้น เช่น "26–31 ส.ค." */
 const transSpan = (from, n) => { const to = addDaysYMD(from, n-1); return from.slice(0,7)===to.slice(0,7) ? (+from.slice(8))+'–'+dayLabel(to) : dayLabel(from)+'–'+dayLabel(to); };
 const addDaysYMD = (d, n) => { const x = new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return localYMD(x); };
@@ -2494,9 +2509,9 @@ function calcPay(emp, period){
   /* ---- เบี้ยวันหยุดพิเศษ : ต้องมาทำงาน + ไม่สาย + ไม่ออกก่อน + ไม่ลืมตอก ---- */
   const dRate = dailyRate(emp);
   const rgH = periodRangeE(emp, period);
-  const holiInPeriod = Object.entries(holidays)
-    .filter(([d,h]) => d >= rgH.from && d <= rgH.to && holiHits(h.scope, emp))
-    .map(([day,h]) => ({ day, ...h })).sort((a,b)=>a.day<b.day?-1:1);
+  const holiInPeriod = [...new Set(Object.keys(holidays).map(k => k.slice(0,10)))]
+    .filter(d => d >= rgH.from && d <= rgH.to).sort()
+    .map(day => { const h = holiFor(emp, day); return h ? { ...h, day } : null; }).filter(Boolean);   // วันละ 1 แถวต่อคน
 
   /* ---- แบบ "มาทำงาน = ได้เบี้ยคูณ" (หน้าร้าน) ---- */
   const holiDays = [];
@@ -4611,7 +4626,7 @@ function addHoliYear(){
   toast('เพิ่มปี ' + (+next + 543) + ' แล้ว — กด ＋ เพิ่มวันหยุด ใส่วันของปีนั้นได้เลย');
 }
 function renderHoli(){
-  const ys = [...new Set([...Object.keys(holidays).map(d=>d.slice(0,4)), ...holiExtraYears])];
+  const ys = [...new Set([...Object.keys(holidays).map(k=>k.slice(0,4)), ...holiExtraYears])];
   const cy = String(new Date().getFullYear());
   if(!ys.includes(cy)) ys.push(cy);
   ys.sort().reverse();
@@ -4620,8 +4635,10 @@ function renderHoli(){
   delete sel.dataset.pick;
   const yr = sel.value;
 
-  const list = Object.entries(holidays).filter(([d])=>d.startsWith(yr))
-    .map(([d,h])=>({day:d, ...h})).sort((a,b)=>a.day<b.day?-1:1);
+  const SO = { office:0, store:1, all:2 };
+  const list = Object.entries(holidays).filter(([k])=>k.startsWith(yr))
+    .map(([k,h])=>({ ...h, key:k, day:h.day||k.slice(0,10), scope:holiScopeOf(h.scope) }))
+    .sort((a,b)=>a.day<b.day?-1:a.day>b.day?1:SO[a.scope]-SO[b.scope]);
   document.getElementById('holiCount').textContent = `ปี ${+yr+543} มี ${list.length} วัน`;
 
   const t = document.getElementById('holiTable');
@@ -4632,20 +4649,20 @@ function renderHoli(){
       return `<tr style="opacity:${past?0.6:1}">
         <td><b>${dayLabel(h.day)}</b> <span class="muted">${h.day}</span></td>
         <td><span class="chip ${wdOf(h.day)===0?'chip-red':'chip-gray'}">${wd}</span></td>
-        <td>${h.name}</td>
+        <td>${audEsc(h.name)}${h.calId?' <span class="chip chip-gray" title="มาจากปฏิทิน (JJ Calendar)">📅</span>':''}</td>
         <td><span class="chip ${h.scope==='all'?'chip-gray':'chip-amber'}">${HOLI_SCOPE[h.scope]||HOLI_SCOPE.all}</span></td>
         <td class="num">${h.scope==='office'?'<span class="chip chip-gray">ได้หยุด</span>':`<span class="chip chip-green">×${h.mult}</span>`}</td>
         <td><span class="muted">${periodLabel(h.scope==='office' ? periodOfE({ branch:'OFFICE' }, h.day) : periodOf(h.day))}</span></td>
         <td style="text-align:right">
-          <button class="btn btn-light btn-sm" onclick="openHoliForm('${h.day}')">แก้ไข</button>
+          <button class="btn btn-light btn-sm" onclick="openHoliForm('${h.key}')">แก้ไข</button>
           <button class="btn btn-red btn-sm" onclick="delHoli(${h.id})">ลบ</button>
         </td></tr>`;
     }).join('')
     : '<tr><td colspan="7"><div class="empty">ยังไม่มีวันหยุดพิเศษในปีนี้ — กด ＋ เพิ่มวันหยุด</div></td></tr>') + '</tbody>';
   renderCalDayCards();
 }
-function openHoliForm(day){
-  const h = day? holidays[day] : null;
+function openHoliForm(key){
+  const h = key? holidays[key] : null, day = h ? (h.day || key.slice(0,10)) : '';
   document.getElementById('holiTitle').textContent = h? 'แก้ไขวันหยุดพิเศษ' : 'เพิ่มวันหยุดพิเศษ';
   document.getElementById('hId').value = h? h.id : '';
   const selYr = (document.getElementById('holiYear')||{}).value || String(new Date().getFullYear());
@@ -4671,34 +4688,38 @@ async function saveHoli(){
                 multiplier: +document.getElementById('hMult').value };
   if(holiScopeReady) row.scope = holiScopeOf(document.getElementById('hScope').value);
   const q = id ? db.from('holidays').update(row).eq('id', +id).select().single()
-               : db.from('holidays').upsert(row, {onConflict:'day'}).select().single();
+               : db.from('holidays').upsert(row, {onConflict: holiCalReady ? 'day,scope' : 'day'}).select().single();
   const { data, error } = await q;
   if(error) return dbErr(error, 'บันทึกวันหยุด');
-  if(id){ for(const d in holidays) if(holidays[d].id===+id) delete holidays[d]; }
-  holidays[data.day] = { name:data.name, mult:+data.multiplier, id:data.id, scope:holiScopeOf(data.scope) };
+  if(id){ for(const k in holidays) if(holidays[k].id===+id) delete holidays[k]; }
+  holiPut(holiRowOf(data));
   closeModal('holiBg'); renderHoli(); renderAll(); toast('บันทึกแล้ว');
 }
 async function delHoli(id){
   if(!confirm('ลบวันหยุดนี้?')) return;
   const { error } = await db.from('holidays').delete().eq('id', id);
   if(error) return dbErr(error, 'ลบวันหยุด');
-  for(const d in holidays) if(holidays[d].id===id) delete holidays[d];
+  for(const k in holidays) if(holidays[k].id===id) delete holidays[k];
   renderHoli(); renderAll(); toast('ลบแล้ว');
 }
 
 /* ================= 🎌 วันพิเศษจากปฏิทิน (JJ Calendar) → กดยืนยันก่อนถึงมีผลกับเงินเดือน =================
    เจ้าของสั่ง 2026-09-29: "ทุกระบบใช้ปฏิทินเป็นหลัก" + วันจ่ายค่าแรง ×2 ต้อง "กดยืนยันในเงินเดือนก่อน"
-   · calcPay ไม่ได้แก้เลย — ยังคิดจาก holidays เหมือนเดิม การ์ดนี้แค่เขียน holidays ให้เมื่อกด ✅
-     ผ่านตัวดัก db.from ตัวเดียวกับหน้า 🎌 = เช็คสิทธิ์หน้า holi + จดประวัติ payroll_audit อัตโนมัติ
+   เจ้าของสั่ง 2026-09-30: ปฏิทินแยก 3 ชุด — 🏢 ออฟฟิศหยุด (kind=office) · 💰 ค่าแรง ×2 (kind=pay) · 📦 สั่งของ (ไม่เกี่ยวเงินเดือน)
+   · 1 รายการในปฏิทิน → แถว holidays ของตัวเอง (cal_id = id ของรายการ) : 🏢 → scope=office · 💰 → scope=store
+     วันเดียวกันอยู่ทั้ง 🏢 และ 💰 ได้ = 2 แถว (ไม่ซ้ำตาม วัน+scope) → calcPay อ่านผ่าน holiFor ตามเดิม ไม่ได้แก้สูตร
+   · ยืนยันผ่านตัวดัก db.from ตัวเดียวกับหน้า 🎌 = เช็คสิทธิ์หน้า holi + จดประวัติ payroll_audit อัตโนมัติ
    · ลำดับยืนยัน: ติ๊กปฏิทินก่อนแบบมีเงื่อนไข updated_at (ปฏิทินถูกแก้ระหว่างนี้ = ไม่เขียนอะไรเลย) → ค่อยเขียน holidays
      เขียน holidays ค้างครึ่งทาง = การ์ดโผล่อีกรอบเอง (calPending เทียบของจริงกับปฏิทินทุกครั้ง)
-   · เอาออกเฉพาะวันที่ยังตรงกับที่ปฏิทินเคยใส่ (pay_snapshot) — วันที่แก้มือในหน้านี้ไม่แตะ
+   · เอาออกเฉพาะแถวที่เป็นของรายการนั้น (cal_id ตรง · หรือแถวรุ่นก่อนมี cal_id ที่ตรงกับ snapshot) — วันที่ตั้งเองในหน้านี้ไม่แตะ
+   · ต้องมีช่อง holidays.cal_id + ปฏิทินมีช่อง kind (jjmk-calendar-days.sql รุ่น 3 ปฏิทิน) ถึงจะยืนยันได้
    · เทส test/holi.js */
+const CAL_KIND = { office:{ ic:'🏢', t:'ออฟฟิศหยุด' }, pay:{ ic:'💰', t:'ค่าแรง ×N หน้าร้าน' } };
 async function calLoad(){
   try{
     const from = (new Date().getFullYear()-2) + '-01-01';
-    const r = await db.from('cal_special_days')
-      .select('*')
+    let r = await db.from('cal_special_days').select('*').in('kind', ['office','pay']).gte('day_to', from).order('day_from');
+    if(r.error) r = await db.from('cal_special_days').select('*')
       .or('pay_multiplier.not.is.null,pay_snapshot.not.is.null').gte('day_to', from).order('day_from');
     if(r.error) throw r.error;
     calDays = r.data || []; calDaysReady = true;
@@ -4710,31 +4731,35 @@ function calDaysOf(r){
   for(let d = new Date(r.day_from+'T12:00:00'); localYMD(d) <= r.day_to && out.length < 40; d.setDate(d.getDate()+1)) out.push(localYMD(d));
   return out;
 }
-/* ปฏิทินอยากได้อะไร เทียบกับ holidays ตอนนี้ → ต้องเพิ่ม / เปลี่ยน / เอาออก วันไหน */
+const calKindOf = r => r && (r.kind === 'office' || r.kind === 'pay') ? r.kind : null;
+/* ปฏิทินอยากได้อะไร เทียบกับ holidays ตอนนี้ → ต้องเพิ่ม / เปลี่ยน / เอาออก แถวไหน (key = holiKey) */
 function calDayDiff(r){
+  const kind = calKindOf(r), scope = kind === 'office' ? 'office' : 'store';
   const want = {};
-  const sc = holiScopeOf(r.pay_scope);
-  if(!r.cancelled && r.pay_multiplier) calDaysOf(r).forEach(d => want[d] = { name:r.name, mult:+r.pay_multiplier, scope:sc });
+  if(kind && !r.cancelled && (kind === 'office' || r.pay_multiplier))
+    calDaysOf(r).forEach(d => want[holiKey(d, scope)] = { day:d, name:r.name, mult: kind === 'office' ? 2 : +r.pay_multiplier, scope });
+  /* แถวที่เป็นของรายการนี้: cal_id ตรง · หรือแถวที่ยืนยันไว้ก่อนมี cal_id (snapshot รุ่นแรกไม่มี v) ที่ยังตรงกับ snapshot */
+  const snap = r.pay_snapshot || null, old = snap && !snap.v && Array.isArray(snap.days) ? snap : null;
+  const mine = (k, h) => h.calId === r.id || (!h.calId && !!old && old.days.includes(h.day) && k === holiKey(h.day, old.scope)
+                                              && h.name === old.name && +h.mult === +old.mult);
   const adds = [], changes = [], removes = [];
-  for(const d of Object.keys(want).sort()){
-    const h = holidays[d];
-    if(!h) adds.push({ day:d, ...want[d] });
-    else if(h.name !== want[d].name || +h.mult !== want[d].mult || holiScopeOf(h.scope) !== want[d].scope)
-      changes.push({ day:d, id:h.id, from:{ name:h.name, mult:+h.mult, scope:holiScopeOf(h.scope) }, to:want[d] });
+  for(const k of Object.keys(want).sort()){
+    const h = holidays[k], w = want[k];
+    if(!h) adds.push({ key:k, ...w });
+    else if(h.name !== w.name || +h.mult !== w.mult || h.calId !== r.id)
+      changes.push({ key:k, day:w.day, id:h.id, from:{ name:h.name, mult:+h.mult, scope:h.scope }, to:w,
+                     link: h.name === w.name && +h.mult === w.mult });   // ค่าเท่าเดิม แค่ผูกเข้ากับรายการในปฏิทิน
   }
-  const snap = r.pay_snapshot || null;
-  if(snap && Array.isArray(snap.days)) for(const d of snap.days.slice().sort()){
-    if(want[d]) continue;
-    const h = holidays[d];
-    if(h && h.name === snap.name && +h.mult === +snap.mult && holiScopeOf(h.scope) === holiScopeOf(snap.scope))
-      removes.push({ day:d, id:h.id, name:h.name, mult:+h.mult, scope:holiScopeOf(h.scope) });
+  for(const k of Object.keys(holidays).sort()){
+    const h = holidays[k];
+    if(!want[k] && mine(k, h)) removes.push({ key:k, day:h.day || k.slice(0,10), id:h.id, name:h.name, mult:+h.mult, scope:h.scope });
   }
-  return { adds, changes, removes, want };
+  return { adds, changes, removes, want, kind };
 }
 function calPending(){
   return calDays.filter(r => {
     if(r.pay_status === 'pending') return true;
-    if(r.pay_status === 'confirmed' && !r.cancelled){ const d = calDayDiff(r); return d.adds.length || d.changes.length || d.removes.length; }
+    if(r.pay_status === 'confirmed' && !r.cancelled && holiCalReady && calKindOf(r)){ const d = calDayDiff(r); return d.adds.length || d.changes.length || d.removes.length; }
     return false;
   });
 }
@@ -4747,7 +4772,7 @@ function calBadge(){
 /* เงินเปลี่ยนเท่าไร: วันที่ผ่านมาแล้วคิดจริงด้วย calcPay (ลองใส่ค่าใหม่ชั่วคราวแล้วคืนค่าเดิม) · วันข้างหน้าประมาณจากคนที่มีสิทธิ์ได้ */
 function calPreview(r){
   const d = calDayDiff(r), today = localYMD(new Date());
-  const touched = [...d.adds, ...d.changes, ...d.removes].map(x => x.day);
+  const touched = [...new Set([...d.adds, ...d.changes, ...d.removes].map(x => x.day))];
   const out = { past:[], fut:null, none:!touched.length };
   if(!touched.length) return out;
   const emps = employees.filter(e => e.active !== false);
@@ -4759,9 +4784,9 @@ function calPreview(r){
     for(const k in keys) before[k] = calcPay(keys[k].e, keys[k].p);
     const saved = holidays; holidays = Object.assign({}, holidays);
     try{
-      d.adds.forEach(x => holidays[x.day] = { name:x.name, mult:x.mult, id:0, scope:x.scope });
-      d.changes.forEach(x => holidays[x.day] = { name:x.to.name, mult:x.to.mult, id:x.id, scope:x.to.scope });
-      d.removes.forEach(x => delete holidays[x.day]);
+      d.adds.forEach(x => holidays[x.key] = { day:x.day, name:x.name, mult:x.mult, id:0, scope:x.scope, calId:r.id });
+      d.changes.forEach(x => holidays[x.key] = { day:x.day, name:x.to.name, mult:x.to.mult, id:x.id, scope:x.to.scope, calId:r.id });
+      d.removes.forEach(x => delete holidays[x.key]);
       const per = {};
       for(const k in keys){
         const a = calcPay(keys[k].e, keys[k].p), b = before[k], dn = a.net - b.net;
@@ -4773,8 +4798,9 @@ function calPreview(r){
     } finally { holidays = saved; }
   }
   if(fut.length){
-    const mult = !r.cancelled && r.pay_multiplier ? +r.pay_multiplier : 0, scope = holiScopeOf(r.pay_scope);
-    const addDays = fut.filter(x => d.want[x]);
+    const kind = d.kind, scope = kind === 'office' ? 'office' : 'store';
+    const mult = kind === 'pay' && !r.cancelled && r.pay_multiplier ? +r.pay_multiplier : 0;
+    const addDays = fut.filter(x => d.want[holiKey(x, scope)]);
     const inJob = (e, x) => !(e.startDate && x < e.startDate) && !(e.endDate && x > e.endDate);
     let maxBonus = 0; const store = new Set(), office = new Set();
     for(const x of addDays) for(const e of emps){
@@ -4782,7 +4808,7 @@ function calPreview(r){
       if(e.holidayPay){ store.add(e.id); maxBonus += Math.round(dailyRate(e) * (mult - 1)); }
       else if(!isOffWd(e, x)){ office.add(e.id); }
     }
-    out.fut = { days:addDays.length, gone:fut.length - addDays.length, store:store.size, office:office.size, maxBonus, mult, scope };
+    out.fut = { days:addDays.length, gone:fut.length - addDays.length, store:store.size, office:office.size, maxBonus, mult, kind };
   }
   return out;
 }
@@ -4794,37 +4820,41 @@ function renderCalDayCards(){
   if(!list.length){ box.innerHTML = ''; return; }
   const can = calCanAct(), focus = (()=>{ try{ return localStorage.getItem('jjpay_calfocus') || ''; }catch(_){ return ''; } })();
   const fmtDay = x => dayLabel(x) + ' <span class="muted">' + x + '</span>';
-  /* ×N + ใช้กับใคร เช่น "×2" / "×2 · 🏪 หน้าร้าน" / "🏢 ออฟฟิศหยุด" */
-  const fx = x => x.scope === 'office' ? '<b>🏢 ออฟฟิศหยุด</b>' : '<b>×' + x.mult + '</b>' + (x.scope === 'store' ? ' · 🏪 หน้าร้านอย่างเดียว' : '');
+  /* ผลของแถว เช่น "🏢 ออฟฟิศหยุด" / "×2 · 🏪 หน้าร้าน" / "×2 · 👥 ทุกคน" */
+  const fx = x => x.scope === 'office' ? '🏢 ออฟฟิศหยุด' : '×' + x.mult + ' · ' + (x.scope === 'store' ? '🏪 หน้าร้าน' : '👥 ทุกคน');
   box.innerHTML = list.map(r => {
-    const d = calDayDiff(r), pv = calPreview(r);
-    /* ปฏิทินเลือกหน้าร้าน/ออฟฟิศ แต่ตาราง holidays ยังไม่มีช่อง scope = ยืนยันไม่ได้ (ไม่งั้นกลายเป็นใช้กับทุกคน) */
-    const needSql = !holiScopeReady && Object.values(d.want).some(w => w.scope !== 'all');
-    const title = r.cancelled ? '🗑 ปฏิทินยกเลิกวันนี้แล้ว' : (!r.pay_multiplier ? '💰 ปฏิทินเอาค่าแรงพิเศษออก' : (r.pay_status === 'confirmed' ? '⚠️ ไม่ตรงกับปฏิทิน' : '📅 จากปฏิทิน รอยืนยัน'));
+    const kind = calKindOf(r), K = CAL_KIND[kind] || { ic:'📅', t:'วันพิเศษ' };
+    /* ยังไม่รัน SQL รุ่น 3 ปฏิทิน = ยืนยันไม่ได้ (แยกแถวออฟฟิศ/หน้าร้านในวันเดียวกันไม่ได้ · ไม่รู้ว่ารายการนี้อยู่ปฏิทินไหน) */
+    const needSql = !holiCalReady || !kind;
+    const d = needSql ? { adds:[], changes:[], removes:[], want:{} } : calDayDiff(r), pv = needSql ? { past:[], fut:null, none:true } : calPreview(r);
+    const oldSnap = r.pay_snapshot && !r.pay_snapshot.v;
+    const title = r.cancelled ? '🗑 ปฏิทินยกเลิกวันนี้แล้ว'
+      : (r.pay_status === 'confirmed' ? (oldSnap ? '🔄 ย้ายเข้าปฏิทินแยก — กดยืนยันอีกครั้ง' : '⚠️ ไม่ตรงกับปฏิทิน') : '📅 จากปฏิทิน รอยืนยัน');
     const rows = [
-      ...d.adds.map(x => `<li>＋ เพิ่ม ${fmtDay(x.day)} · ${audEsc(x.name)} ${fx(x)}</li>`),
-      ...d.changes.map(x => `<li>✎ ${fmtDay(x.day)} · เดิม ${audEsc(x.from.name)} ${fx(x.from).replace(/<\/?b>/g,'')} → <b>${audEsc(x.to.name)}</b> ${fx(x.to)}</li>`),
-      ...d.removes.map(x => `<li>－ เอาออก ${fmtDay(x.day)} · ${audEsc(x.name)} ${fx(x).replace(/<\/?b>/g,'')}</li>`),
-    ].join('') || '<li class="muted">ตรงกับตารางด้านล่างอยู่แล้ว — กดยืนยันเพื่อปิดรายการ</li>';
+      ...d.adds.map(x => `<li>＋ เพิ่ม ${fmtDay(x.day)} · ${audEsc(x.name)} <b>${fx(x)}</b></li>`),
+      ...d.changes.map(x => x.link ? `<li>🔗 ${fmtDay(x.day)} · ${audEsc(x.to.name)} ${fx(x.to)} <span class="muted">(มีอยู่แล้ว — ผูกกับปฏิทิน)</span></li>`
+        : `<li>✎ ${fmtDay(x.day)} · เดิม ${audEsc(x.from.name)} ${fx(x.from)} → <b>${audEsc(x.to.name)} ${fx(x.to)}</b></li>`),
+      ...d.removes.map(x => `<li>－ เอาออก ${fmtDay(x.day)} · ${audEsc(x.name)} ${fx(x)}</li>`),
+    ].join('') || (needSql ? '' : '<li class="muted">ตรงกับตารางด้านล่างอยู่แล้ว — กดยืนยันเพื่อปิดรายการ</li>');
+    const F = pv.fut;
     const money = [
       ...pv.past.map(x => `<div><b>${periodLabel(x.p)}</b>: ${x.nPlus ? `<span style="color:var(--green)">+฿${THB(x.plus)} (${x.nPlus} คน)</span> ` : ''}${x.nMinus ? `<span style="color:var(--red)">−฿${THB(-x.minus)} (${x.nMinus} คน)</span>` : ''} <span class="muted">— สลิปงวดนี้จะเปลี่ยน</span></div>`),
-      pv.fut && pv.fut.days ? `<div><b>วันข้างหน้า ${pv.fut.days} วัน (ประมาณ)</b>: ${[
-          pv.fut.store ? `หน้าร้าน ${pv.fut.store} คน ได้เพิ่มรวมไม่เกิน <b>฿${THB(pv.fut.maxBonus)}</b> ถ้ามาครบ ไม่สาย ไม่ออกก่อน ไม่ลืมตอก` : '',
-          pv.fut.office ? `${pv.fut.scope === 'office' ? 'ออฟฟิศ' : 'ออฟฟิศ/คนที่ไม่รับเบี้ย'} ${pv.fut.office} คน ได้หยุดนับเป็นวันทำงาน${pv.fut.scope === 'office' ? '' : ` (ไม่ได้ ×${pv.fut.mult})`}` : '',
-          pv.fut.scope === 'store' ? '🏢 พนักงานสาขา OFFICE ทำงานปกติ' : '',
-          pv.fut.scope === 'office' ? '🏪 หน้าร้านทำงานปกติ — ไม่ได้ ×2 และไม่ใช่วันห้ามหยุด' : ''].filter(Boolean).join(' · ') || 'ไม่มีใครได้รับผล'}${
-          pv.fut.scope !== 'office' ? '<br><b>วันนี้เป็นวันห้ามหยุด — หน้าร้านขาดงาน = หัก 2 เท่าของค่าแรงวัน</b>' : ''}</div>` : '',
-      pv.fut && pv.fut.gone ? `<div>วันข้างหน้า ${pv.fut.gone} วัน: จะไม่มีเบี้ย และไม่เป็นวันห้ามหยุดแล้ว</div>` : '',
-      !pv.past.length && !(pv.fut && (pv.fut.days || pv.fut.gone)) && !pv.none ? '<div class="muted">ไม่มีผลกับยอดเงินงวดที่ผ่านมา</div>' : '',
+      F && F.days ? `<div><b>วันข้างหน้า ${F.days} วัน (ประมาณ)</b>: ${F.kind === 'office'
+          ? `🏢 พนักงานสาขา OFFICE ${F.office} คน ได้หยุดนับเป็นวันทำงาน · 🏪 หน้าร้านทำงานปกติ — ไม่ได้ ×2 และไม่ใช่วันห้ามหยุด`
+          : `🏪 หน้าร้าน ${F.store} คน ได้เพิ่มรวมไม่เกิน <b>฿${THB(F.maxBonus)}</b> ถ้ามาครบ ไม่สาย ไม่ออกก่อน ไม่ลืมตอก` +
+            (F.office ? ` · คนที่ปิดสวิตช์เบี้ย ${F.office} คน ได้หยุดนับเป็นวันทำงาน` : '') +
+            ` · 🏢 พนักงานสาขา OFFICE ทำงานปกติ<br><b>วันนี้เป็นวันห้ามหยุด — หน้าร้านขาดงาน = หัก 2 เท่าของค่าแรงวัน</b>`}</div>` : '',
+      F && F.gone ? `<div>วันข้างหน้า ${F.gone} วัน: ${F.kind === 'office' ? 'ออฟฟิศจะไม่ได้หยุดวันนั้นแล้ว' : 'จะไม่มีเบี้ย และไม่เป็นวันห้ามหยุดแล้ว'}</div>` : '',
+      !pv.past.length && !(F && (F.days || F.gone)) && !pv.none ? '<div class="muted">ไม่มีผลกับยอดเงินงวดที่ผ่านมา</div>' : '',
     ].join('');
     return `<div class="card" id="cal-${audEsc(r.id)}" style="border:2px solid ${focus === r.id ? 'var(--ember,#E07A2C)' : '#E0B34C'};background:#FFF9EC">
-      <h3 style="margin:0 0 4px;font-size:16px">${title} · ${audEsc(r.name)}</h3>
-      <div class="muted" style="font-size:13px;margin-bottom:6px">${r.day_from === r.day_to ? dayLabel(r.day_from) : dayLabel(r.day_from) + ' – ' + dayLabel(r.day_to)}${r.created_name ? ' · ลงโดย ' + audEsc(r.created_name) : ''}${r.updated_by ? ' · แก้ล่าสุด ' + audEsc(r.updated_by) : ''}</div>
-      <ul style="margin:0 0 8px 18px;padding:0;font-size:14px;line-height:1.7">${rows}</ul>
-      <div style="font-size:13.5px;line-height:1.7;background:#fff;border:1px solid #F0DDB0;border-radius:10px;padding:8px 10px">${money || '<span class="muted">ไม่มีผลกับยอดเงิน</span>'}</div>
+      <h3 style="margin:0 0 4px;font-size:16px">${title} · ${K.ic} ${audEsc(r.name)}</h3>
+      <div class="muted" style="font-size:13px;margin-bottom:6px">ปฏิทิน${K.t}${kind === 'pay' && r.pay_multiplier ? ' ×' + (+r.pay_multiplier) : ''} · ${r.day_from === r.day_to ? dayLabel(r.day_from) : dayLabel(r.day_from) + ' – ' + dayLabel(r.day_to)}${r.created_name ? ' · ลงโดย ' + audEsc(r.created_name) : ''}${r.updated_by ? ' · แก้ล่าสุด ' + audEsc(r.updated_by) : ''}</div>
+      ${rows ? `<ul style="margin:0 0 8px 18px;padding:0;font-size:14px;line-height:1.7">${rows}</ul>` : ''}
+      ${needSql ? '' : `<div style="font-size:13.5px;line-height:1.7;background:#fff;border:1px solid #F0DDB0;border-radius:10px;padding:8px 10px">${money || '<span class="muted">ไม่มีผลกับยอดเงิน</span>'}</div>`}
       ${needSql ? `<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#FDECEC;color:#8A1F1F;font-size:13.5px;line-height:1.6">
-          ⚠️ วันนี้ตั้งให้ใช้กับ<b>${HOLI_SCOPE[Object.values(d.want)[0].scope]}อย่างเดียว</b> แต่ระบบเงินเดือนยังแยกไม่ได้ —
-          รัน <b>jj_holiday_scope.sql</b> (หรือ jjmk-calendar-days.sql รุ่นล่าสุด) ใน Supabase ก่อน แล้วรีเฟรชหน้านี้</div>` :
+          ⚠️ ระบบเงินเดือนยังรับปฏิทินแยก 🏢 ออฟฟิศหยุด / 💰 ค่าแรง ×2 ไม่ได้ —
+          รัน <b>jjmk-calendar-days.sql</b> รุ่นล่าสุดใน Supabase ก่อน แล้วรีเฟรชหน้านี้</div>` :
         can ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <button class="btn btn-ember" style="min-height:44px" onclick="calConfirm('${audEsc(r.id)}')">✅ ยืนยัน ใช้คิดเงิน</button>
         <button class="btn btn-light" style="min-height:44px" onclick="calDecline('${audEsc(r.id)}')">✖ ไม่ใช้กับเงินเดือน</button></div>`
@@ -4837,39 +4867,39 @@ function renderCalDayCards(){
 async function calConfirm(id){
   const r = calDays.find(x => x.id === id); if(!r) return;
   if(!calCanAct()) return toast('🔒 ไม่มีสิทธิ์แก้วันหยุดพิเศษ');
-  const d = calDayDiff(r), sc = holiScopeOf(r.pay_scope);
+  if(!holiCalReady || !calKindOf(r)) return toast('⚠️ รัน jjmk-calendar-days.sql รุ่นล่าสุดก่อน — ระบบเงินเดือนยังรับปฏิทินแยกไม่ได้');
+  const d = calDayDiff(r);
   if(d.removes.length && !canDo('holi','d')) return toast('🔒 ต้องมีสิทธิ์ลบในหน้าวันหยุดพิเศษ (มีวันที่ต้องเอาออก)');
-  if(!holiScopeReady && Object.values(d.want).some(w => w.scope !== 'all')) return toast('⚠️ รัน jj_holiday_scope.sql ก่อน — ระบบเงินเดือนยังแยกหน้าร้าน/ออฟฟิศไม่ได้');
-  const rule = sc === 'office' ? '🏢 ออฟฟิศ (สาขา OFFICE) ได้หยุดนับเป็นวันทำงาน · หน้าร้านทำงานปกติ ไม่ได้ ×' + (r.pay_multiplier || '-') + ' ไม่ใช่วันห้ามหยุด'
-    : sc === 'store' ? '🏪 หน้าร้านได้ ×' + (r.pay_multiplier || '-') + ' · วันห้ามหยุด · ออฟฟิศทำงานปกติ'
-    : 'กฎเดิมของหน้านี้ทุกข้อ: หน้าร้านได้ ×' + (r.pay_multiplier || '-') + ' · ออฟฟิศได้หยุด · วันห้ามหยุด';
+  const rule = d.kind === 'office'
+    ? '🏢 พนักงานสาขา OFFICE ได้หยุดนับเป็นวันทำงาน · หน้าร้านทำงานปกติ ไม่ได้ ×2 ไม่ใช่วันห้ามหยุด'
+    : '🏪 หน้าร้านได้ ×' + (r.pay_multiplier || '-') + ' · วันห้ามหยุด · พนักงานสาขา OFFICE ทำงานปกติ';
   if(!confirm('ยืนยันใช้ "' + r.name + '" คิดเงินเดือน?\n' +
      [d.adds.length ? 'เพิ่ม ' + d.adds.length + ' วัน' : '', d.changes.length ? 'เปลี่ยน ' + d.changes.length + ' วัน' : '', d.removes.length ? 'เอาออก ' + d.removes.length + ' วัน' : ''].filter(Boolean).join(' · ') +
      '\n(' + rule + ')')) return;
-  const payOn = !r.cancelled && !!r.pay_multiplier;
-  const next = payOn ? { pay_status:'confirmed', pay_snapshot:{ days:Object.keys(d.want).sort(), mult:+r.pay_multiplier, name:r.name, scope:sc } }
-                     : { pay_status:'none', pay_snapshot:null };
+  const live = Object.keys(d.want).length > 0;
+  const next = live ? { pay_status:'confirmed', pay_snapshot:{ v:2, kind:d.kind, days:Object.values(d.want).map(w => w.day).sort(),
+                                                              mult:d.kind === 'pay' ? +r.pay_multiplier : null, name:r.name } }
+                    : { pay_status:'none', pay_snapshot:null };
   next.pay_decided_by = (AUTH && AUTH.username) || '?';
   next.pay_decided_at = new Date().toISOString();
   /* 1) ติ๊กปฏิทินก่อน แบบมีเงื่อนไข — ปฏิทินถูกแก้ระหว่างเปิดหน้านี้ = ไม่เขียนอะไรเลย */
   const u = await db.from('cal_special_days').update(next).eq('id', r.id).eq('updated_at', r.updated_at).select('id');
   if(u.error) return dbErr(u.error, 'ยืนยันวันพิเศษ');
   if(!u.data || !u.data.length){ toast('⚠️ ปฏิทินเพิ่งถูกแก้ — โหลดใหม่ให้แล้ว ตรวจอีกครั้งก่อนยืนยัน'); await calLoad(); renderHoli(); return; }
-  /* 2) เขียน holidays — ตัวดักเดียวกับหน้านี้ (เช็คสิทธิ์ + จดประวัติ) */
-  const ups = [...d.adds, ...d.changes.map(c => ({ day:c.day, ...c.to }))].map(x => holiScopeReady ? { day:x.day, name:x.name, multiplier:x.mult, scope:x.scope }
-                                                                                                    : { day:x.day, name:x.name, multiplier:x.mult });
+  /* 2) เขียน holidays — ตัวดักเดียวกับหน้านี้ (เช็คสิทธิ์ + จดประวัติ) · แต่ละแถวจำว่ามาจากรายการไหน (cal_id) */
+  const ups = [...d.adds, ...d.changes.map(c => c.to)].map(x => ({ day:x.day, name:x.name, multiplier:x.mult, scope:x.scope, cal_id:r.id }));
   if(ups.length){
-    const { data, error } = await db.from('holidays').upsert(ups, { onConflict:'day' }).select();
+    const { data, error } = await db.from('holidays').upsert(ups, { onConflict:'day,scope' }).select();
     if(error){ await calLoad(); renderHoli(); return dbErr(error, 'บันทึกวันหยุด (กดยืนยันซ้ำได้)'); }
-    (data || []).forEach(h => holidays[h.day] = { name:h.name || 'วันหยุดพิเศษ', mult:+h.multiplier, id:h.id, scope:holiScopeOf(h.scope) });
+    (data || []).forEach(h => holiPut(holiRowOf(h)));
   }
   for(const x of d.removes){
     const { error } = await db.from('holidays').delete().eq('id', x.id);
     if(error){ await calLoad(); renderHoli(); return dbErr(error, 'ลบวันหยุด (กดยืนยันซ้ำได้)'); }
-    delete holidays[x.day];
+    delete holidays[x.key];
   }
   await calLoad(); renderHoli(); renderAll();
-  toast(payOn ? '✅ ยืนยันแล้ว — ใช้คิดเงินเดือนแล้ว' : '✅ เอาออกจากเงินเดือนแล้ว');
+  toast(live ? '✅ ยืนยันแล้ว — ใช้คิดเงินเดือนแล้ว' : '✅ เอาออกจากเงินเดือนแล้ว');
 }
 async function calDecline(id){
   const r = calDays.find(x => x.id === id); if(!r) return;
