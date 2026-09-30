@@ -62,6 +62,8 @@
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     box-shadow:0 0 0 3px rgba(184,134,11,.15);}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+  .brbar{display:flex;justify-content:flex-end;margin-bottom:10px}
+  .brbar .brSel{width:auto;min-width:200px;max-width:100%}
   @media(max-width:560px){.row{grid-template-columns:1fr;}}
 
   .items{width:100%;}
@@ -521,6 +523,7 @@ window.JJGate=(function(){
   <div class="tabs">
     <button class="tab active" data-tab="new">ออกบิลใหม่</button>
     <button class="tab" data-tab="list">รายการบิล<span class="pill zero" id="listCount">0</span></button>
+    <button class="tab" data-tab="sent" data-perm="list">✅ ส่งสำเร็จ<span class="pill zero" id="sentCount">0</span></button>
     <button class="tab" data-tab="failed">⚠ ส่งไม่สำเร็จ<span class="pill zero" id="failedCount">0</span></button>
     <button class="tab" data-tab="cancelled">ยกเลิก<span class="pill zero" id="cancelCount">0</span></button>
     <button class="tab" data-tab="history">📜 ประวัติ</button>
@@ -626,10 +629,12 @@ window.JJGate=(function(){
 
   <!-- ===== รายการบิล ===== -->
   <section class="panel" id="panel-list">
-    <div class="row" style="margin-bottom:8px">
+    <!-- แถบกรอง (ค้นหา · สาขา · เดือน) ใช้ร่วมกัน รายการบิล / ส่งสำเร็จ / ยกเลิก — ย้ายตามแท็บที่เปิด -->
+    <div class="row" id="listFilters" style="margin-bottom:8px">
       <div><input id="qSearch" placeholder="🔍 ค้นหา เลขบิล / ชื่อลูกค้า / เลขภาษี / อีเมล"></div>
       <div style="display:flex;gap:8px">
-        <select id="qMonth" style="flex:1"><option value="">ทุกเดือน</option></select>
+        <select class="brSel" aria-label="สาขา" style="flex:1;min-width:0"></select>
+        <select id="qMonth" style="flex:1;min-width:0"><option value="">ทุกเดือน</option></select>
         <button class="btn btn-ghost btn-sm" id="refreshList">รีเฟรช</button>
       </div>
     </div>
@@ -637,8 +642,15 @@ window.JJGate=(function(){
     <div id="listBox"></div>
   </section>
 
+  <!-- ===== ส่งอีเมลถึงลูกค้าแล้ว (เจ้าของสั่ง 2026-09-30: ส่งสำเร็จ = ย้ายออกจากรายการบิลมาอยู่ที่นี่) ===== -->
+  <section class="panel" id="panel-sent">
+    <div class="detail" id="sentInfo" style="margin-bottom:8px"></div>
+    <div id="sentBox"></div>
+  </section>
+
   <!-- ===== อีเมลส่งไม่สำเร็จ ===== -->
   <section class="panel" id="panel-failed">
+    <div class="brbar"><select class="brSel" aria-label="สาขา"></select></div>
     <div class="okbox" id="failEmpty" style="display:none">✓ ไม่มีอีเมลที่ส่งไม่สำเร็จ — ทุกใบส่งถึงปลายทางหรือกำลังตรวจอยู่</div>
     <div id="failNote" class="alert" style="display:none"></div>
     <div id="failBox"></div>
@@ -654,7 +666,8 @@ window.JJGate=(function(){
   <section class="panel" id="panel-history">
     <div class="row" style="margin-bottom:8px">
       <div><input id="hSearch" placeholder="🔍 กรอง ชื่อคน / เลขบิล / การกระทำ"></div>
-      <div><button class="btn btn-ghost btn-sm" id="refreshHistory">รีเฟรช</button></div>
+      <div style="display:flex;gap:8px"><select class="brSel" aria-label="สาขา" style="flex:1;min-width:0"></select>
+        <button class="btn btn-ghost btn-sm" id="refreshHistory">รีเฟรช</button></div>
     </div>
     <div class="card">
       <h2>ใครทำอะไรบ้าง (ล่าสุด 300 รายการ)</h2>
@@ -1588,7 +1601,7 @@ function anyAccess(){
 function applyPerms(){
   var tabs=[].slice.call(document.querySelectorAll('.tab[data-tab]')), first=null, activeOk=false;
   tabs.forEach(function(t){
-    var ok=can(t.dataset.tab,'v');
+    var ok=can(t.dataset.perm||t.dataset.tab,'v');     // ส่งสำเร็จ ใช้สิทธิ์ของ "รายการบิล" (data-perm)
     t.style.display=ok?'':'none';
     if(ok){ if(!first)first=t; if(t.classList.contains('active'))activeOk=true; }
   });
@@ -1623,6 +1636,8 @@ async function loadHistory(){
 function renderHistory(){
   var q=val('hSearch').toLowerCase();
   var rows=activityRows.filter(function(x){
+    // สาขา: รายการที่มีเลขบิล = ดูจากเลขบิล · ไม่มีเลขบิล (เช่น เลื่อนเลข/นำเข้า) = แสดงถ้าในรายละเอียดพูดถึงสาขานั้น
+    if(invBranch && !(x.bill_no ? brPass(x.bill_no) : String(x.detail||'').indexOf(invBranch)!==-1)) return false;
     if(!q)return true;
     return [x.user_name,x.action,x.bill_no,x.detail].join(' ').toLowerCase().indexOf(q)!==-1;
   });
@@ -2277,6 +2292,36 @@ function bindCards(scope){
 }
 function findInv(no){ return invoices.filter(function(x){ return x.bill_no===no; })[0]||null; }
 
+/* ตัวกรองสาขา (เจ้าของสั่ง 2026-09-30) — ตัวเดียวใช้ทุกแท็บ: รายการบิล · ส่งไม่สำเร็จ · ยกเลิก · ประวัติ
+   ดูสาขาจากตัวอักษรหน้าเลขบิล (แบบเดียวกับตัวนับเลขบิล/โฟลเดอร์ NAS) · จำไว้ในเครื่อง รีเฟรชแล้วยังอยู่ */
+var invBranch='';
+function brPass(billNo){ return !invBranch || nasBranch(billNo)===invBranch; }
+function brLabel(){
+  var b=CONFIG.BRANCHES.filter(function(x){ return x.prefix===invBranch; })[0];
+  return b?(b.label+' ('+b.prefix+')'):'';
+}
+function initBranchFilter(){
+  try{ invBranch=localStorage.getItem('jjinv_branch')||''; }catch(e){}
+  if(!CONFIG.BRANCHES.some(function(b){ return b.prefix===invBranch; })) invBranch='';   // ค่าเก่า/เสีย = ทุกสาขา
+  var opts='<option value="">🏪 ทุกสาขา</option>'+CONFIG.BRANCHES.map(function(b){
+    return '<option value="'+esc(b.prefix)+'">'+esc(b.label)+' ('+esc(b.prefix)+')</option>'; }).join('');
+  document.querySelectorAll('.brSel').forEach(function(sel){
+    sel.innerHTML=opts; sel.value=invBranch;
+    sel.onchange=function(){
+      invBranch=this.value;
+      try{ localStorage.setItem('jjinv_branch',invBranch); }catch(e){}
+      document.querySelectorAll('.brSel').forEach(function(x){ x.value=invBranch; });
+      renderList(); renderHistory();
+    };
+  });
+}
+/* เรียงเลขบิลใหม่สุด → เก่าสุด (เจ้าของสั่ง 2026-09-30) — เทียบเลขท้ายบิล (เลขเท่ากันข้ามสาขา = ใบที่ออกทีหลังก่อน) */
+function billNum(no){ var m=/([0-9]+)$/.exec(String(no||'')); return m?parseInt(m[1],10):-1; }
+function byBillDesc(a,b){
+  return (billNum(b.bill_no)-billNum(a.bill_no)) ||
+    String(b.issued_at||'').localeCompare(String(a.issued_at||'')) ||
+    String(a.bill_no||'').localeCompare(String(b.bill_no||''));
+}
 function renderMonthFilter(){
   var sel=$('qMonth'), cur=sel.value;
   var months={};
@@ -2289,26 +2334,35 @@ function renderMonthFilter(){
 function renderList(){
   var q=val('qSearch').toLowerCase(), m=$('qMonth').value;
   var rows=invoices.filter(function(v){
+    if(!brPass(v.bill_no))return false;
     if(m && ymOf(v.issued_at)!==m)return false;
     if(!q)return true;
     return [v.bill_no,v.customer_name,v.tax_id,v.email,v.phone].join(' ').toLowerCase().indexOf(q)!==-1;
-  });
-  var active=rows.filter(function(v){ return v.status!==STATUS.CANCELLED; });
+  }).sort(byBillDesc);
+  // ส่งอีเมลถึงลูกค้าแล้ว → แท็บส่งสำเร็จ · ที่เหลือ (ยังไม่ส่ง/กำลังตรวจ/ส่งไม่ถึง/ไม่มีอีเมล) อยู่รายการบิล
+  var sent=rows.filter(function(v){ return v.status!==STATUS.CANCELLED && v.email_status===EMAIL_STATUS.DELIVERED; });
+  var active=rows.filter(function(v){ return v.status!==STATUS.CANCELLED && v.email_status!==EMAIL_STATUS.DELIVERED; });
   var cancelled=rows.filter(function(v){ return v.status===STATUS.CANCELLED; });
 
   var box=$('listBox');
   box.innerHTML=active.length?active.map(function(v){ return invCard(v); }).join(''):'<div class="empty">ยังไม่มีบิล</div>';
-  $('listInfo').textContent='แสดง '+active.length+' ใบ (ยกเลิก '+cancelled.length+' ใบอยู่แท็บยกเลิก)';
+  $('listInfo').textContent='แสดง '+active.length+' ใบ'+(invBranch?(' · สาขา'+brLabel()):'')+
+    ' · เรียงเลขบิลใหม่ → เก่า (ส่งสำเร็จ '+sent.length+' ใบอยู่แท็บส่งสำเร็จ · ยกเลิก '+cancelled.length+' ใบอยู่แท็บยกเลิก)';
   bindCards(box);
+
+  var sbox=$('sentBox');
+  sbox.innerHTML=sent.length?sent.map(function(v){ return invCard(v); }).join(''):'<div class="empty">ยังไม่มีบิลที่ส่งอีเมลถึงลูกค้าแล้ว</div>';
+  $('sentInfo').textContent='ส่งอีเมลถึงลูกค้าแล้ว '+sent.length+' ใบ'+(invBranch?(' · สาขา'+brLabel()):'')+' · เรียงเลขบิลใหม่ → เก่า';
+  bindCards(sbox);
 
   var cbox=$('cancelBox');
   cbox.innerHTML=cancelled.map(function(v){ return invCard(v); }).join('');
   $('cancelEmpty').style.display=cancelled.length?'none':'block';
   bindCards(cbox);
 
-  // แท็บอีเมลส่งไม่สำเร็จ (ดูจากทุกใบ ไม่สนตัวกรองค้นหา)
-  var failed=invoices.filter(function(v){ return v.status!==STATUS.CANCELLED &&
-    (v.email_status===EMAIL_STATUS.FAILED||v.email_status===EMAIL_STATUS.ERROR); });
+  // แท็บอีเมลส่งไม่สำเร็จ (ดูจากทุกใบของสาขาที่เลือก ไม่สนตัวกรองค้นหา/เดือน — จะได้ไม่พลาดใบที่ต้องส่งซ้ำ)
+  var failed=invoices.filter(function(v){ return v.status!==STATUS.CANCELLED && brPass(v.bill_no) &&
+    (v.email_status===EMAIL_STATUS.FAILED||v.email_status===EMAIL_STATUS.ERROR); }).sort(byBillDesc);
   var fbox=$('failBox');
   fbox.innerHTML=failed.map(function(v){ return invCard(v,true); }).join('');
   $('failEmpty').style.display=failed.length?'none':'block';
@@ -2320,6 +2374,8 @@ function renderList(){
 
   var lp=$('listCount'); lp.textContent=active.length;
   lp.className='pill'+(active.length?'':' zero'); lp.style.background='#1f7a4d';
+  var sp=$('sentCount'); sp.textContent=sent.length;
+  sp.className='pill'+(sent.length?'':' zero'); sp.style.background='#1f7a4d';
   var fp=$('failedCount'); fp.textContent=failed.length;
   fp.className='pill'+(failed.length?'':' zero'); fp.style.background='var(--bad)';
   var cp=$('cancelCount'); cp.textContent=cancelled.length;
@@ -2362,10 +2418,14 @@ document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
   t.classList.add('active');
   $('panel-'+t.dataset.tab).classList.add('active');
   try{ localStorage.setItem('jjinv_tab', t.dataset.tab); }catch(e){}   // จำหน้าที่เปิดอยู่ — รีเฟรชแล้วกลับมาหน้าเดิม
-  if(t.dataset.tab==='list'||t.dataset.tab==='cancelled'||t.dataset.tab==='failed')loadInvoices();
+  if(t.dataset.tab==='list'||t.dataset.tab==='sent'||t.dataset.tab==='cancelled'){
+    var pn=$('panel-'+t.dataset.tab); pn.insertBefore($('listFilters'), pn.firstChild);   // แถบกรองตามไปแท็บที่เปิด
+  }
+  if(t.dataset.tab==='list'||t.dataset.tab==='sent'||t.dataset.tab==='cancelled'||t.dataset.tab==='failed')loadInvoices();
   if(t.dataset.tab==='history')loadHistory();
   if(t.dataset.tab==='settings'){ loadCounters(); refreshNasSync(); }   // สถานะ NAS ล่าสุด (ไม่ทับช่องที่กำลังกรอก)
 }; });
+initBranchFilter();
 /* เปิดแอพมาที่หน้าเดิมก่อนรีเฟรช (ถ้าไม่มีที่จำไว้ = หน้าออกบิลใหม่ตามเดิม) */
 (function(){
   var t; try{ t=localStorage.getItem('jjinv_tab'); }catch(e){ return; }
