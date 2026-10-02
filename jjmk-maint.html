@@ -638,8 +638,9 @@ function profCanEnter(prof){   // มีสิทธิ์เห็นอย่�
 }
 async function doLogout(){
   try{await sb.auth.signOut()}catch(e){}
-  SS.del(SESS_KEY);LSS.del(KEEP_KEY);LSS.del(TICKET);PROF=null;
+  SS.del(SESS_KEY);LSS.del(KEEP_KEY);LSS.del(TICKET);PROF=null;SCOPE=null;
   $('#hdr').style.display='none';$('#main').style.display='none';
+  {const nb=$('#noBr');if(nb)nb.style.display='none';}
   $('#lPass').value='';$('#lMsg').textContent='';$('#login').classList.add('on');
 }
 /* ปุ่มล็อกอินผูกจาก JJLogin.mount() แล้ว */
@@ -652,12 +653,58 @@ function paintTabBranch(){
   const b=(BRANCHES.find(x=>x.id===CUR_B)||{}).name||'';
   el.textContent=b?' · '+b:'';
 }
+/* ---- เห็นเฉพาะสาขา (เจ้าของสั่ง 2026-10-02 "อยากให้ทุกระบบกำหนดได้ว่าใครเห็นของสาขาไหน แบบ payroll") ----
+   ตั้งที่ 🔑 JJ Access → กล่องซ่อมบำรุง → apps.maint._br = 'JJLP,JJCK' · ไม่ตั้ง = ทุกสาขา
+   · ใช้กับบัญชีกลาง (pnl_users) เท่านั้น · ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ · apps ว่าง (ยังไม่เคยตั้งสิทธิ์) = ไม่จำกัด
+   · บัญชีเดิม app_users ใช้ branch_ids ของตัวเองเหมือนเดิม
+   · ตาราง branches ไม่มีรหัสสาขา → เดารหัสจากชื่อ (brCode) · สาขาที่เดาไม่ได้ = ซ่อนจากคนที่ถูกจำกัดสาขา
+   ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
+const ALL_BR=['JJLP','JJRD','JJCK','OFFICE'];
+const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};   // id สาขาเดิมของแอพนับสต๊อก (สำรองเผื่อชื่อไม่ตรง)
+let SCOPE=null;   // null = ทุกสาขา · ['JJLP'] = เฉพาะสาขาเหล่านี้
+function applyScope(prof){
+  SCOPE=null;
+  if(!prof||prof.kind!=='central'||prof.role==='admin'||prof.role==='owner')return;
+  const apps=prof.apps;
+  if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return;   // ยังไม่เคยตั้งสิทธิ์ = ไม่จำกัด
+  const m=(apps.maint&&typeof apps.maint==='object')?apps.maint:{};
+  const br=String(m._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
+  if(br.length)SCOPE=br;
+}
+function brCode(b){   // แถวในตาราง branches → รหัสสาขา (JJLP/JJRD/JJCK/OFFICE) · ไม่รู้จัก = ''
+  if(!b)return'';
+  const c=String(b.code||'').trim().toUpperCase();if(ALL_BR.includes(c))return c;
+  const id=String(b.id||'').trim().toUpperCase();if(ALL_BR.includes(id))return id;
+  const n=String(b.name||'');
+  if(/ครัวกลาง|central\s*kitchen/i.test(n))return'JJCK';   // เช็คครัวกลาง/ออฟฟิศก่อน เผื่อชื่อมีทำเลต่อท้าย
+  if(/ออฟฟิศ|สำนักงาน|office/i.test(n))return'OFFICE';
+  if(/รัชดา|ratchada/i.test(n))return'JJRD';
+  if(/ลาดพร้าว|lad\s*prao|lat\s*phrao/i.test(n))return'JJLP';
+  for(const k in STK_BR)if(STK_BR[k]===b.id)return k;
+  return'';
+}
 function accessibleBranches(){
-  if(isAdmin()||PROF&&PROF.kind==='central')return BRANCHES;   // บัญชีกลาง: เห็นทุกสาขา
+  if(isAdmin())return BRANCHES;
+  if(PROF&&PROF.kind==='central')return SCOPE?BRANCHES.filter(b=>SCOPE.includes(brCode(b))):BRANCHES;   // บัญชีกลาง: ทุกสาขา หรือเฉพาะที่ตั้งไว้
   const ids=(PROF&&PROF.branch_ids)||[];if(!ids.length)return BRANCHES;
   const r=BRANCHES.filter(b=>ids.indexOf(b.id)>-1);return r.length?r:BRANCHES;}
+const brOk=bid=>!!bid&&accessibleBranches().some(b=>b.id===bid);   // กันการบันทึก/โหลดสาขาที่ไม่มีสิทธิ์
+const NO_BR_MSG='บัญชีนี้ไม่มีสิทธิ์ในสาขานี้';
+function showNoBranch(prof){   // ได้สิทธิ์เฉพาะสาขาที่ไม่มีในระบบซ่อมบำรุง — บอกให้ชัด ไม่โชว์หน้าว่าง ๆ
+  $('#login').classList.remove('on');
+  $('#hdr').style.display='flex';$('#main').style.display='none';
+  $('#hBranch').style.display='none';$('#hMng').style.display='none';
+  let el=$('#noBr');
+  if(!el){el=document.createElement('div');el.id='noBr';el.style.cssText='max-width:520px;margin:30px auto;padding:0 14px';document.body.appendChild(el);}
+  el.style.display='';
+  el.innerHTML=`<div class="card" style="text-align:center;padding:22px 16px">
+    <b style="font-family:Prompt;font-size:1.05rem">🔒 ยังไม่มีสาขาที่เปิดให้บัญชีนี้</b>
+    <p class="hint" style="font-size:.9rem;margin:8px 0 0">บัญชี <b>${escapeHtml(prof.name||prof.username||'')}</b> ได้สิทธิ์เห็นเฉพาะ ${escapeHtml((SCOPE||[]).join(', '))} ซึ่งยังไม่มีในระบบซ่อมบำรุง — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access</p>
+  </div>`;
+}
 async function enterApp(prof){
-  PROF=prof;
+  PROF=prof;applyScope(prof);
+  {const nb=$('#noBr');if(nb)nb.style.display='none';}
   const {data,error}=await sb.from('branches').select('*').order('sort');
   if(error){loginErr('โหลดสาขาไม่ได้: '+error.message);return;}
   BRANCHES=data||[];
@@ -665,14 +712,17 @@ async function enterApp(prof){
   let saved=null;try{saved=localStorage.getItem('jjmt_branch')}catch(e){}
   CUR_B=(saved&&acc.some(b=>b.id===saved))?saved
     :((prof.branch_ids&&prof.branch_ids[0]&&acc.some(b=>b.id===prof.branch_ids[0]))?prof.branch_ids[0]:(acc[0]&&acc[0].id));
+  const RN={admin:'ผู้ดูแลระบบ',owner:'เจ้าของ',manager:'ผู้จัดการ',staff:'พนักงาน'};
+  $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(RN[prof.role]||prof.role||'พนักงาน')
+    +(SCOPE?' · 🔒 '+SCOPE.join(','):'');
+  if(!CUR_B&&SCOPE&&BRANCHES.length){showNoBranch(prof);return;}
   if(!CUR_B){loginErr('ยังไม่มีสาขาในระบบ');return;}
   $('#login').classList.remove('on');
   $('#hdr').style.display='flex';$('#main').style.display='block';
-  const RN={admin:'ผู้ดูแลระบบ',owner:'เจ้าของ',manager:'ผู้จัดการ',staff:'พนักงาน'};
-  $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(RN[prof.role]||prof.role||'พนักงาน');
   const sel=$('#hBranch');
   if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
-    sel.onchange=()=>{CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}
+    sel.onchange=()=>{if(!brOk(sel.value)){sel.value=CUR_B;toast(NO_BR_MSG);return;}
+      CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}
       paintTabBranch();maintLoad();if(TAB==='asset')astLoad();};}
   else{sel.style.display='none';}
   $('#hMng').style.display=canManage()?'':'none';
@@ -691,9 +741,24 @@ async function enterApp(prof){
 }
 async function boot(){
   ['hLogo','lLogo'].forEach(id=>{const el=document.getElementById(id);if(el)el.src=LOGO;});  /* หน้าล็อกอินใช้โลโก้ของ JJ Login แล้ว */
-  // 1) เซสชันของแท็บนี้ (รีเฟรชแล้วยังอยู่)
+  // 1) เซสชันของแท็บนี้ (รีเฟรชแล้วยังอยู่) — บัญชีกลางตรวจกับ pnl_users ซ้ำทุกครั้ง
+  //    (admin แก้สิทธิ์/สาขาที่เห็น หรือปิดบัญชีใน JJ Access แล้วมีผลตอนรีเฟรช · เน็ตสะดุด = ใช้ของเดิมในแท็บไปก่อน)
   const s=SS.get(SESS_KEY);
-  if(s&&s.username){await enterApp(s);return;}
+  if(s&&s.username){
+    if(s.kind!=='central'){await enterApp(s);return;}
+    let u;
+    try{u=await centralUser(s.username);}
+    catch(e){console.warn('refresh',e);await enterApp(s);return;}
+    let why='เซสชันหมดอายุหรือรหัสผ่านถูกเปลี่ยน — เข้าสู่ระบบใหม่ครับ';
+    if(u&&u.active!==false&&u.pass_hash===s.hash){
+      const prof=centralProf(u);
+      if(profCanEnter(prof)){saveSession(prof,false);await enterApp(prof);return;}
+      why='บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access';
+    }
+    SS.del(SESS_KEY);
+    $('#lMsg').style.color='#c62127';$('#lMsg').textContent=why;
+    $('#login').classList.add('on');return;
+  }
   // 2) ใบผ่านจากหน้าศูนย์รวมแอพ — ใช้ครั้งเดียว อายุสั้น แล้วตรวจกับฐานข้อมูลจริงอีกชั้น
   const tk=LSS.get(TICKET);
   if(tk&&tk.u&&(!tk.app||tk.app==='maint')&&Date.now()-(+tk.t||0)<TICKET_TTL){
@@ -753,6 +818,7 @@ function maintStat(t){
 }
 async function maintLoad(){
   const box=$('#mtList');box.innerHTML='<div class="rempty">กำลังโหลด...</div>';
+  if(!brOk(CUR_B)){MAINT_TASKS=[];MAINT_LOGS={};box.innerHTML='<div class="rempty">🔒 '+NO_BR_MSG+'</div>';return;}
   const [tk,lgs]=await Promise.all([
     sb.from('maint_tasks').select('*').eq('branch_id',CUR_B).is('deleted_at',null).order('sort'),
     sb.from('maint_logs').select('*').eq('branch_id',CUR_B).order('done_date',{ascending:false}).order('created_at',{ascending:false}).limit(600)]);
@@ -900,6 +966,7 @@ function maintDoneOverlay(t){
     if(files.length>room)toast('แนบได้อีก '+room+' รูป (สูงสุด '+MAX_PHOTOS+')');
     files.slice(0,room).forEach(f=>processImage(f,d=>{if(d){imgs.push(d);renderPrev();}else toast('อ่านรูปไม่สำเร็จ 1 รูป');}));};
   save.onclick=async()=>{
+    if(!brOk(CUR_B)||(t.branch_id&&!brOk(t.branch_id))){toast(NO_BR_MSG);return;}   // บันทึกได้เฉพาะสาขาที่มีสิทธิ์
     const d=ov.querySelector('.md_d').value||todayISO(),note=ov.querySelector('.md_n').value.trim();
     if(!imgs.length){toast('แนบรูปถ่ายอย่างน้อย 1 รูปก่อนบันทึก');return;}
     save.disabled=true;save.textContent='⏳ กำลังอัปโหลดรูป...';
@@ -947,6 +1014,7 @@ function maintHistOverlay(t){
 }
 function maintManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์ตั้งค่างาน');return;}
+  if(!brOk(CUR_B)){toast(NO_BR_MSG);return;}
   const acc=accessibleBranches();
   const bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
   const ov=document.createElement('div');ov.className='overlay on';
@@ -1004,6 +1072,7 @@ function maintManageOverlay(){
       }else{
         const bids=[...ov.querySelectorAll('.mm_br:checked')].map(c=>c.value);
         if(!bids.length){toast('เลือกอย่างน้อย 1 สาขา');saveBtn.disabled=false;return;}
+        if(!bids.every(brOk)){toast(NO_BR_MSG);saveBtn.disabled=false;return;}   // เพิ่มงานได้เฉพาะสาขาที่มีสิทธิ์
         const base=Math.max(0,...MAINT_TASKS.map(t=>t.sort||0));
         const rows=bids.map((bid,i)=>({id:uid('mt'),branch_id:bid,name,detail:detail||null,freq_days:freq,sort:base+10+i}));
         const {error}=await sb.from('maint_tasks').insert(rows);
@@ -1063,6 +1132,7 @@ function astForecast(hist){          // ค่าเฉลี่ยของห�
 async function astLoad(){
   if(PD_Y===null){const n=new Date();PD_Y=n.getFullYear();PD_M=n.getMonth();}
   const box=$('#astList');box.innerHTML='<div class="rempty">กำลังโหลด...</div>';
+  if(!brOk(CUR_B)){ASSETS=[];COUNTS={};box.innerHTML='<div class="rempty">🔒 '+NO_BR_MSG+'</div>';$('#astSum').innerHTML='';return;}
   const [as,cs]=await Promise.all([
     sb.from('maint_assets').select('*').eq('branch_id',CUR_B).is('deleted_at',null).order('sort'),
     sb.from('maint_counts').select('*').eq('branch_id',CUR_B).order('period',{ascending:false}).limit(3000)]);
@@ -1168,6 +1238,7 @@ function astCountOverlay(a){
   qEl.oninput=calc;aEl.oninput=calc;bEl.oninput=()=>{bEl.dataset.touched='1';};
   renderPrev();calc();
   save.onclick=async()=>{
+    if(!brOk(CUR_B)||(a.branch_id&&!brOk(a.branch_id))){toast(NO_BR_MSG);return;}   // บันทึกได้เฉพาะสาขาที่มีสิทธิ์
     const qty=parseFloat(qEl.value);
     if(isNaN(qty)||qty<0){toast('กรอกจำนวนที่นับได้ก่อน');qEl.focus();return;}
     const added=parseFloat(aEl.value)||0,broken=parseFloat(bEl.value)||0,tot=keep.length+imgs.length;
@@ -1237,6 +1308,7 @@ function astPhotoOverlay(a,r){
 }
 function astManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์จัดการรายการอุปกรณ์');return;}
+  if(!brOk(CUR_B)){toast(NO_BR_MSG);return;}
   const acc=accessibleBranches(),bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
   const ov=document.createElement('div');ov.className='overlay on';
   const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
@@ -1288,6 +1360,7 @@ function astManageOverlay(){
       else{
         const bids=[...ov.querySelectorAll('.am_br:checked')].map(c=>c.value);
         if(!bids.length){toast('เลือกอย่างน้อย 1 สาขา');saveBtn.disabled=false;return;}
+        if(!bids.every(brOk)){toast(NO_BR_MSG);saveBtn.disabled=false;return;}   // เพิ่มอุปกรณ์ได้เฉพาะสาขาที่มีสิทธิ์
         const base=Math.max(0,...ASSETS.map(a=>a.sort||0));
         const rows=bids.map((bid,i)=>({id:uid('ma'),branch_id:bid,name,unit,cat:cat||null,sort:base+10+i}));
         const {error}=await sb.from('maint_assets').insert(rows);

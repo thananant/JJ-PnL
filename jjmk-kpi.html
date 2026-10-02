@@ -564,7 +564,12 @@ async function fetchAll(mk) {
   }
   return out;
 }
-function bf(q, branch) { return branch === ALL ? q : q.eq('branch', branch); }
+/* กรองสาขาของทุก query แดชบอร์ด (จุดเดียว) — บัญชีที่เห็นเฉพาะบางสาขา: "ทุกสาขา" = เฉพาะสาขาที่ดูแล
+   · สาขาที่ไม่มีสิทธิ์ (ค่าค้าง/บังคับส่งมา) ก็ตกเป็นสาขาที่ดูแลเหมือนกัน · จอลูกค้าไม่ใช้ bf */
+function bf(q, branch) {
+  if (branch !== ALL && inScope(branch)) return q.eq('branch', branch);
+  return SCOPE ? q.in('branch', myBranches()) : q;
+}
 async function loadMeta() {
   /* ซิงก์รายชื่อพนักงานจากระบบเงินเดือน (payroll) ก่อน — พลาดได้ (ยังไม่รัน SQL/เน็ตสะดุด) ใช้รายชื่อเดิมต่อ */
   try { const rs = await sb.rpc('kpi_sync_staff', { p_branches: Object.keys(CONFIG.BRANCHES) }); S.syncOk = !rs.error; } catch (e) { S.syncOk = false; }
@@ -635,7 +640,7 @@ function staffById(id) { for (const s of S.staff) if (s.id === id) return s; ret
 function staffName(id) { const s = staffById(id); return s ? (s.nickname || s.name) : ''; }
 function staffFull(s) { return [s.nickname && s.nickname !== s.name ? s.name : '', s.position || ''].filter(Boolean).join(' · '); }
 function kioskUrl(b) { return location.origin + location.pathname + '?kiosk=' + b; }
-function openKiosk(b) { if (!CONFIG.BRANCHES[b]) { toast('เลือกสาขาก่อน (มุมขวาบน)'); return; } window.open(kioskUrl(b), '_blank'); }
+function openKiosk(b) { if (!CONFIG.BRANCHES[b] || !inScope(b)) { toast('เลือกสาขาก่อน (มุมขวาบน)'); return; } window.open(kioskUrl(b), '_blank'); }
 function copyText(t) { if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast('คัดลอกแล้ว'), () => toast('คัดลอกไม่ได้')); else prompt('คัดลอกลิงก์', t); }
 
 /* ===================== shared view pieces ===================== */
@@ -695,7 +700,7 @@ function leaderboardHTML(votes, total, limit) {
 function branchTableHTML(getter) {
   const depts = activeDepts();
   return '<div class="card"><h3>เปรียบเทียบสาขา</h3><div class="tbl"><table><thead><tr><th>สาขา</th><th class="r">ครั้ง</th><th class="r">เฉลี่ย</th><th class="r">พอใจ</th>' + depts.map(d => '<th class="r">' + esc(d.icon) + ' ' + esc(d.name) + '</th>').join('') + '</tr></thead><tbody>' +
-    Object.keys(CONFIG.BRANCHES).map(b => {
+    myBranches().map(b => {
       const g = getter(b);
       return '<tr><td><b>' + b + '</b> <small>' + esc(CONFIG.BRANCHES[b]) + '</small></td><td class="r num">' + g.n.toLocaleString('en-US') + '</td><td class="r num ' + scoreClass(g.agg.all.avg) + '">' + fmtAvg(g.agg.all.avg) + '</td><td class="r">' + pct(g.agg.all.csat) + '</td>' +
         depts.map(d => { const x = g.agg.byDept[d.id]; return '<td class="r num ' + (x ? scoreClass(x.avg) : 'none') + '">' + (x ? fmtAvg(x.avg) : '–') + '</td>'; }).join('') + '</tr>';
@@ -703,10 +708,17 @@ function branchTableHTML(getter) {
 }
 
 /* ===================== dashboard shell ===================== */
+/* ตัวเลือกสาขา (หัวแดชบอร์ด + หน้าตั้งค่า) — เฉพาะสาขาที่ดูแล · เห็นสาขาเดียว = ล็อกไว้ ไม่มี "ทุกสาขา" · หลายสาขา = "ทุกสาขาที่ดูแล" */
+function branchOptsHTML(cur, allFirst) {
+  const my = myBranches();
+  const all = (!SCOPE || my.length > 1) ? '<option value="ALL"' + (cur === ALL ? ' selected' : '') + '>' + (SCOPE ? 'ทุกสาขาที่ดูแล' : 'ทุกสาขา') + '</option>' : '';
+  const each = my.map(b => '<option value="' + b + '"' + (cur === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('');
+  return allFirst ? all + each : each + all;
+}
 function renderShell() {
   app.innerHTML =
     '<header class="hdr"><div class="seal">JJ</div><div><div class="hdr-title">จริงใจหมูกระทะ</div><div class="hdr-sub">KPI ความพึงพอใจลูกค้า</div></div>' +
-    '<div class="hdr-right">' + userChipHTML() + '<select id="branchSel" aria-label="สาขา">' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.branch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '<option value="ALL"' + (S.branch === ALL ? ' selected' : '') + '>ทุกสาขา</option></select>' +
+    '<div class="hdr-right">' + userChipHTML() + '<select id="branchSel" aria-label="สาขา">' + branchOptsHTML(S.branch, false) + '</select>' +
     (can('kiosk') ? '<button class="btn sm" data-act="openKiosk">🖥 หน้าจอลูกค้า</button>' : '') + '</div></header>' +
     '<nav class="tabs">' + visTabs().map(t => '<button class="tab' + (S.tab === t.id ? ' active' : '') + '" data-act="tab" data-tab="' + t.id + '">' + t.label + '</button>').join('') + '</nav>' +
     '<main id="main"></main>';
@@ -874,7 +886,7 @@ function deptRowHTML(d) {
 /* รายชื่อพนักงานในหน้าตั้งค่า — อ่านอย่างเดียว จัดกลุ่มตามตำแหน่ง (เจ้าของสั่ง 2026-09-21: คุมที่ "ตำแหน่ง" ไม่ใช่รายคน)
    ชื่อ/ชื่อเล่น/ตำแหน่ง/สาขา มาจากระบบเงินเดือนทั้งหมด แก้ที่แอป Payroll · ที่นี่เหลือแค่ติ๊กซ่อนรายคนไว้เป็นกรณียกเว้น */
 function staffListHTML() {
-  const list = S.staff.filter(s => s.active !== false && (S.setBranch === ALL || s.branch === S.setBranch));
+  const list = S.staff.filter(s => s.active !== false && inScope(s.branch) && (S.setBranch === ALL || s.branch === S.setBranch));
   if (!list.length) return '<div class="empty">ยังไม่มีรายชื่อ (รอซิงก์จากระบบเงินเดือน)</div>';
   const g = {};
   for (const s of list) { const p = (s.position || '').trim() || 'ไม่ระบุตำแหน่ง'; (g[p] = g[p] || []).push(s); }
@@ -905,6 +917,7 @@ function posListHTML() {
 }
 async function saveHidePos() {
   if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
+  if (SCOPE) { toast(SCOPE_GLOBAL_MSG, 3500); return; }   // ค่ากลางทุกสาขา
   const hidden = $$('#posList input[type=checkbox]').filter(c => !c.checked).map(c => c.dataset.pos);
   try {
     const r = await sb.from('kpi_settings').upsert([{ key: 'kiosk_hide_pos', value: hidden }]);
@@ -918,7 +931,7 @@ async function loadDutyInfo() {
   const box = $('#dutyBody'); if (!box) return;
   box.innerHTML = '<div class="loading">กำลังตรวจ…</div>';
   const rows = [];
-  for (const b of Object.keys(CONFIG.BRANCHES)) {
+  for (const b of myBranches()) {
     const all = S.staff.filter(s => s.active && s.branch === b);
     const shown = all.filter(s => !kHidePos(s.position));
     const linked = shown.filter(s => s.employee_id);
@@ -949,13 +962,15 @@ async function loadDutyInfo() {
   box.innerHTML = rows.join('');
 }
 function renderSettings() {
-  const staff = S.staff.filter(s => S.setBranch === ALL || s.branch === S.setBranch);
+  const staff = S.staff.filter(s => inScope(s.branch) && (S.setBranch === ALL || s.branch === S.setBranch));
   setMain(
+    /* แผนก/ตำแหน่งเป็นค่ากลางของทุกสาขา → บัญชีที่เห็นเฉพาะบางสาขาไม่เห็นการ์ดแก้ไข (กันซ้ำที่ saveDepts/saveHidePos) */
+    (SCOPE ? '<div class="card"><h3>แผนก / ตำแหน่งที่ให้ลูกค้าชม</h3><div class="hint" style="margin:0">🔒 บัญชีนี้เห็นเฉพาะ ' + esc(scopeLabel()) + ' — แผนกและตำแหน่งที่ให้ลูกค้าชมเป็นค่ากลางที่ใช้ทุกสาขา ผู้ที่ดูได้ทุกสาขาเป็นคนตั้ง</div></div>' :
     '<div class="card"><h3>แผนกที่ให้ลูกค้าประเมิน <small>(ใช้ร่วมกันทุกสาขา · ลำดับ = ลำดับหน้าจอ)</small></h3><div id="deptList">' + S.depts.map(deptRowHTML).join('') + '</div><div class="toolbar" style="margin-top:10px"><button class="btn ghost sm" data-act="addDept">+ เพิ่มแผนก</button><span class="grow"></span><button class="btn sm" data-act="saveDepts">บันทึกแผนก</button></div><div class="hint">ปิด "ใช้" แทนการลบ เพื่อเก็บประวัติคะแนนเดิมไว้</div></div>' +
     '<div class="card"><h3>ตำแหน่งที่ให้ลูกค้าชม <small>(ติ๊กไว้ = ลูกค้าเห็นตำแหน่งนี้ · มีผลทุกสาขา)</small></h3><div id="posList">' + posListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn sm" data-act="saveHidePos"' + (S.posTableOk ? '' : ' disabled') + '>บันทึกตำแหน่ง</button></div>' +
-    (S.posTableOk ? '' : '<div class="lg-msg" style="margin:10px 0 0">⚠️ ยังบันทึกไม่ได้ — ฐานข้อมูลยังไม่มีตาราง <code>kpi_settings</code><br>ให้รัน <code>kpi_upgrade.sql</code> (หรือ <code>jjmk-kpi.sql</code> เวอร์ชันล่าสุด) ใน Supabase ก่อน · ระหว่างนี้ระบบใช้ค่าเริ่มต้น: ซ่อน ' + esc(CONFIG.KIOSK_HIDE_POS.join(' / ')) + '</div>') + '<div class="hint">จอลูกค้าจะโชว์เฉพาะ <b>คนในตำแหน่งที่ติ๊กไว้</b> และ <b>ที่สแกนเข้างานอยู่ตอนนั้น</b> เท่านั้น · ตำแหน่งใหม่จากระบบเงินเดือนจะโชว์อัตโนมัติจนกว่าจะติ๊กออก</div></div>' +
-    '<div class="card"><h3>รายชื่อพนักงาน <small>(ซิงก์จากระบบเงินเดือน — ดูอย่างเดียว)</small></h3><div class="toolbar"><select id="setBranch"><option value="ALL"' + (S.setBranch === ALL ? ' selected' : '') + '>ทุกสาขา</option>' + Object.keys(CONFIG.BRANCHES).map(b => '<option value="' + b + '"' + (S.setBranch === b ? ' selected' : '') + '>' + b + ' · ' + esc(CONFIG.BRANCHES[b]) + '</option>').join('') + '</select></div><details class="stf-wrap"><summary>ดูรายชื่อรายคน (ปกติไม่ต้องแตะ)</summary><div id="staffList">' + staffListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn ghost sm" data-act="saveStaff">บันทึกการซ่อนรายคน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'เพิ่ม/แก้ชื่อ/ย้ายสาขา ทำที่แอป Payroll แล้วที่นี่อัปเดตตาม · ติ๊กออกเฉพาะกรณียกเว้นรายคน (เช่น ไม่อยากให้ขึ้นชื่อชั่วคราว) · คนลาออกระบบซ่อนให้เอง</div></details></div>' +
-    (can('kiosk') ? '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + Object.keys(CONFIG.BRANCHES).map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
+    (S.posTableOk ? '' : '<div class="lg-msg" style="margin:10px 0 0">⚠️ ยังบันทึกไม่ได้ — ฐานข้อมูลยังไม่มีตาราง <code>kpi_settings</code><br>ให้รัน <code>kpi_upgrade.sql</code> (หรือ <code>jjmk-kpi.sql</code> เวอร์ชันล่าสุด) ใน Supabase ก่อน · ระหว่างนี้ระบบใช้ค่าเริ่มต้น: ซ่อน ' + esc(CONFIG.KIOSK_HIDE_POS.join(' / ')) + '</div>') + '<div class="hint">จอลูกค้าจะโชว์เฉพาะ <b>คนในตำแหน่งที่ติ๊กไว้</b> และ <b>ที่สแกนเข้างานอยู่ตอนนั้น</b> เท่านั้น · ตำแหน่งใหม่จากระบบเงินเดือนจะโชว์อัตโนมัติจนกว่าจะติ๊กออก</div></div>') +
+    '<div class="card"><h3>รายชื่อพนักงาน <small>(ซิงก์จากระบบเงินเดือน — ดูอย่างเดียว)</small></h3><div class="toolbar"><select id="setBranch">' + branchOptsHTML(S.setBranch, true) + '</select></div><details class="stf-wrap"><summary>ดูรายชื่อรายคน (ปกติไม่ต้องแตะ)</summary><div id="staffList">' + staffListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn ghost sm" data-act="saveStaff">บันทึกการซ่อนรายคน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'เพิ่ม/แก้ชื่อ/ย้ายสาขา ทำที่แอป Payroll แล้วที่นี่อัปเดตตาม · ติ๊กออกเฉพาะกรณียกเว้นรายคน (เช่น ไม่อยากให้ขึ้นชื่อชั่วคราว) · คนลาออกระบบซ่อนให้เอง</div></details></div>' +
+    (can('kiosk') ? '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + myBranches().map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
     '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' : '') +
     '<div class="card"><h3>ใครเข้างานตอนนี้ <small>(จอลูกค้าโชว์เฉพาะคนที่สแกนเข้างานอยู่จริง)</small> <button class="btn ghost sm" data-act="reloadDuty">🔄 ตรวจใหม่</button></h3><div id="dutyBody"><div class="loading">กำลังตรวจ…</div></div><div class="hint">ดึงจากเครื่องสแกนของระบบเงินเดือน (นับสแกนของวันทำการ ตัด 06:00 — จำนวนคี่ = ยังอยู่ในร้าน) · คนที่ยังไม่ผูกกับระบบเงินเดือน หรือช่วงที่ไม่มีใครสแกนเข้า จะไม่ขึ้นให้ลูกค้ากด</div></div>' +
     '<div class="card"><h3>ค่าตั้งระบบ <small>(แก้ใน CONFIG ต้นไฟล์)</small></h3><div class="kv"><b>วันทำการเริ่ม</b><span>' + pad2(CONFIG.CUTOFF_HOUR) + ':00 (ก่อนเวลานี้นับเป็นวันก่อนหน้า)</span><b>เป้าคะแนน</b><span>' + CONFIG.TARGET.toFixed(2) + ' (ทอง ≥ ' + CONFIG.TARGET.toFixed(1) + ' · ส้ม ≥ ' + (CONFIG.TARGET - 0.5).toFixed(1) + ' · แดง ต่ำกว่านั้น)</span><b>PIN ออก Kiosk</b><span>' + '•'.repeat(CONFIG.KIOSK_PIN.length) + '</span><b>รีเซ็ตเมื่อไม่แตะ</b><span>' + CONFIG.KIOSK_IDLE_SEC + ' วินาที</span><b>ฐานข้อมูล</b><span><code>' + esc(CONFIG.SUPABASE_URL) + '</code> · ตาราง kpi_*</span></div></div>');
@@ -969,6 +984,7 @@ async function saveRows(table, rows) {
 }
 async function saveDepts() {
   if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
+  if (SCOPE) { toast(SCOPE_GLOBAL_MSG, 3500); return; }   // ค่ากลางทุกสาขา
   const rows = $$('#deptList .edit-row').map((el, i) => ({ id: el.dataset.id ? Number(el.dataset.id) : null, icon: $('.f-icon', el).value.trim() || '⭐', name: $('.f-name', el).value.trim(), active: $('.f-active', el).checked, sort_order: i + 1 }));
   if (rows.some(r => !r.name)) { toast('กรอกชื่อแผนกให้ครบก่อน'); return; }
   try { await saveRows('kpi_departments', rows); await loadMeta(); renderSettings(); toast('บันทึกแผนกแล้ว'); } catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e), 4000); }
@@ -977,6 +993,8 @@ async function saveStaff() {
   if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
   const rows = $$('#staffList .f-active').map(el => ({ id: Number(el.dataset.id), active: el.checked }));
   if (!rows.length) { toast('ยังไม่มีรายชื่อให้บันทึก'); return; }
+  /* แก้ได้เฉพาะพนักงานสาขาที่ดูแล (กันอีกชั้น เผื่อมีแถวสาขาอื่นหลุดมาในฟอร์ม) */
+  if (SCOPE && rows.some(r => { const st = staffById(r.id); return !st || !inScope(st.branch); })) { toast('บัญชีนี้แก้ได้เฉพาะพนักงานสาขา ' + scopeLabel(), 3500); return; }
   try { await saveRows('kpi_staff', rows); await loadMeta(); renderSettings(); toast('บันทึกแล้ว'); }
   catch (e) { toast('บันทึกไม่สำเร็จ: ' + (e.message || e), 4000); }
 }
@@ -984,7 +1002,9 @@ async function saveStaff() {
 /* ===================== dashboard events ===================== */
 function userChipHTML() {
   if (!ME) return '';
-  return '<span class="who">👤 <b>' + esc(ME.display_name || ME.username) + '</b> <a href="javascript:" data-act="logout">ออก</a></span>';
+  return '<span class="who">👤 <b>' + esc(ME.display_name || ME.username) + '</b>' +
+    (SCOPE ? ' <span class="mute" title="เห็นเฉพาะ ' + esc(scopeLabel()) + '">· 🔒 ' + esc(myBranches().join(',')) + '</span>' : '') +
+    ' <a href="javascript:" data-act="logout">ออก</a></span>';
 }
 function onDashClick(e) {
   const t = e.target.closest('[data-act]'); if (!t) return; const a = t.dataset.act;
@@ -1010,11 +1030,11 @@ function onDashClick(e) {
 }
 function onDashChange(e) {
   const el = e.target;
-  if (el.id === 'branchSel') { S.branch = el.value; lsSet('kpi_branch', S.branch); renderTab(); }
+  if (el.id === 'branchSel') { if (!branchOk(el.value)) return; S.branch = el.value; lsSet('kpi_branch', S.branch); renderTab(); }
   else if (el.id === 'dateInp') { if (el.value) { S.date = el.value; renderDaily(); } }
   else if (el.id === 'monthSel') { S.month = el.value; renderMonthly(); }
   else if (el.id === 'staffFrom' || el.id === 'staffTo') { const f = $('#staffFrom'), t = $('#staffTo'); S.staffFrom = f && f.value; S.staffTo = t && t.value; if (S.staffFrom && S.staffTo) renderStaff(); }
-  else if (el.id === 'setBranch') { S.setBranch = el.value; renderSettings(); }
+  else if (el.id === 'setBranch') { if (!branchOk(el.value)) return; S.setBranch = el.value; renderSettings(); }
 }
 async function dashInit() {
   document.title = 'JJ KPI · แดชบอร์ด';
@@ -1025,6 +1045,13 @@ async function dashInit() {
 let dashWired = false;
 async function startDash() {
   document.title = 'JJ KPI · แดชบอร์ด';
+  /* เห็นเฉพาะสาขา: ไม่มีสาขาที่มีข้อมูล KPI เลย = เข้าไม่ได้ · สาขาที่จำไว้ (kpi_branch) อยู่นอกสิทธิ์ = ย้ายมาสาขาที่ดูแล */
+  if (SCOPE) {
+    const my = myBranches();
+    if (!my.length) { showNoPerm(ME); return; }
+    const fit = b => (b === ALL ? my.length > 1 : my.indexOf(b) >= 0) ? b : (my.length > 1 ? ALL : my[0]);
+    S.branch = fit(S.branch); S.setBranch = fit(S.setBranch);
+  }
   try { await loadMeta(); }
   catch (e) { app.innerHTML = '<main>' + errHTML(e) + '<div class="toolbar"><button class="btn" onclick="location.reload()">ลองใหม่</button></div></main>'; return; }
   if (!dashWired) {
@@ -1214,7 +1241,7 @@ async function fetchUser(username) {   // select=* กันพังเวล�
   return (r.data || [])[0] || null;
 }
 function useUser(usr) {                // เก็บเฉพาะที่ใช้ + แฮชไว้ตรวจซ้ำตอนรีเฟรช
-  ME = { username: usr.username, display_name: usr.display_name || usr.username, role: usr.role || 'staff', unit: usr.unit || 'ALL', apps: usr.apps || null, h: usr.pass_hash };
+  setMe({ username: usr.username, display_name: usr.display_name || usr.username, role: usr.role || 'staff', unit: usr.unit || 'ALL', apps: usr.apps || null, h: usr.pass_hash });
   sessSet(ME);
 }
 /* สิทธิ์เข้าแอพนี้ — กติกาเดียวกับหน้าศูนย์รวมแอพ (canOpen ใน index.html) */
@@ -1237,8 +1264,38 @@ function canUseKpi(u) {
   if (!apps || typeof apps !== 'object' || !Object.keys(apps).length) return true;  // ยังไม่เคยตั้งสิทธิ์ = ไม่ล็อกใคร
   const a = apps.kpi;
   if (!a || typeof a !== 'object') return false;
-  return Object.keys(a).some(k => String(a[k] || '').indexOf('v') >= 0);
+  if (noKpiBranch(u)) return false;   // ได้สิทธิ์แค่สาขาที่ไม่มี KPI (ครัวกลาง/ออฟฟิศ)
+  return Object.keys(a).some(k => k.charAt(0) !== '_' && String(a[k] || '').indexOf('v') >= 0);   // ข้ามค่าตั้งอย่าง _br
 }
+/* ---- เห็นเฉพาะสาขา (เจ้าของสั่ง 2026-10-02 "อยากให้ทุกระบบ กำหนดได้เลยว่า ใครเห็นของสาขาไหนได้บ้าง แบบ payroll") ----
+   ตั้งที่ 🔑 JJ Access → กล่อง JJ KPI → apps.kpi._br = 'JJRD' หรือ 'JJLP,JJRD' · ไม่ตั้ง = ทุกสาขา
+   - ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ · apps ว่าง = ไม่จำกัด (กติกาเดียวกับ permOf/canUseKpi)
+   - กรองข้อมูลแดชบอร์ดที่ bf() จุดเดียว · ตัวเลือกสาขา/การ์ดเปรียบเทียบ/ลิงก์ kiosk/การ์ดคนเข้างาน เหลือเฉพาะสาขาที่ดูแล
+   - แผนก/ตำแหน่งที่ให้ลูกค้าชมเป็นค่ากลางทุกสาขา → บัญชีที่ถูกจำกัดแก้ไม่ได้
+   - ⚠️ ห้ามส่งสาขาที่ถูกจำกัดให้ kpi_sync_staff — RPC จะปิดพนักงานสาขาอื่นทิ้ง (loadMeta ใช้ CONFIG.BRANCHES ทั้งหมดเสมอ)
+   - จอลูกค้า (?kiosk=) ไม่ได้ล็อกอิน → SCOPE = null ไม่ถูกจำกัดอะไรเลย
+   ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
+const ALL_BR = ['JJLP', 'JJRD', 'JJCK', 'OFFICE'];
+const BR_TH = { JJLP: 'ลาดพร้าว', JJRD: 'รัชดา', JJCK: 'ครัวกลาง', OFFICE: 'ออฟฟิศ' };
+const SCOPE_GLOBAL_MSG = 'แผนก/ตำแหน่งเป็นค่ากลางของทุกสาขา — บัญชีที่เห็นเฉพาะบางสาขาแก้ไม่ได้';
+let SCOPE = null;      // null = ทุกสาขา · ['JJRD'] = เฉพาะสาขาเหล่านี้
+function scopeOf(u) {
+  if (!u || u.role === 'admin' || u.role === 'owner') return null;
+  const apps = u.apps;
+  if (!apps || typeof apps !== 'object' || !Object.keys(apps).length) return null;
+  const a = apps.kpi; if (!a || typeof a !== 'object') return null;
+  const br = String(a._br || '').split(',').map(x => x.trim()).filter(x => ALL_BR.indexOf(x) >= 0);
+  return br.length ? br : null;
+}
+function setMe(u) { ME = u; SCOPE = scopeOf(u); }
+function noKpiBranch(u) { const sc = scopeOf(u); return !!sc && !Object.keys(CONFIG.BRANCHES).some(b => sc.indexOf(b) >= 0); }
+function noKpiBranchMsg(u) {   // ข้อความตอนได้สิทธิ์แค่สาขาที่ไม่มีจอลูกค้า
+  return 'ได้สิทธิ์เฉพาะ ' + scopeOf(u).map(b => BR_TH[b] || b).join(', ') + ' ซึ่งไม่มีข้อมูลใน JJ KPI (มีแค่ ' + Object.keys(CONFIG.BRANCHES).map(b => CONFIG.BRANCHES[b]).join(', ') + ')';
+}
+function myBranches() { return Object.keys(CONFIG.BRANCHES).filter(b => !SCOPE || SCOPE.indexOf(b) >= 0); }
+function inScope(b) { return !SCOPE || SCOPE.indexOf(b) >= 0; }
+function branchOk(v) { return v === ALL ? (!SCOPE || myBranches().length > 1) : (!!CONFIG.BRANCHES[v] && inScope(v)); }
+function scopeLabel() { return (SCOPE || []).map(b => CONFIG.BRANCHES[b] || BR_TH[b] || b).join(', '); }
 function fromHub() {   // กดลิงก์มาจากหน้าศูนย์รวมแอพของเราเอง (เว็บอื่นปลอม referrer ข้ามโดเมนไม่ได้)
   try {
     const r = document.referrer; if (!r) return false;
@@ -1264,11 +1321,11 @@ function showNoPerm(u) {
   app.innerHTML = JJLogin.wrap({
     fields: false,
     title: 'ยังไม่ได้รับสิทธิ์',
-    sub: 'บัญชี <b>' + esc((u && (u.display_name || u.username)) || '') + '</b> ยังไม่ได้รับสิทธิ์ใช้ JJ KPI',
+    sub: 'บัญชี <b>' + esc((u && (u.display_name || u.username)) || '') + '</b> ' + (noKpiBranch(u) ? esc(noKpiBranchMsg(u)) : 'ยังไม่ได้รับสิทธิ์ใช้ JJ KPI'),
     btn: 'เข้าด้วยบัญชีอื่น', btnId: 'npLogout',
     note: 'ให้ผู้ดูแลระบบเปิดสิทธิ์ให้ที่หน้า 🔑 JJ Access → ผู้ใช้ &amp; สิทธิ์'
   });
-  const b = $('#npLogout'); if (b) b.addEventListener('click', () => { sessClear(); ME = null; showLogin(); });
+  const b = $('#npLogout'); if (b) b.addEventListener('click', () => { sessClear(); setMe(null); showLogin(); });
 }
 async function doLogin(e) {
   if (e) e.preventDefault();
@@ -1280,7 +1337,7 @@ async function doLogin(e) {
     const usr = await fetchUser(u);
     if (!usr || usr.pass_hash !== pwHash(u, p)) { msg.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
     if (usr.active === false) { msg.textContent = 'บัญชีนี้ถูกปิดการใช้งาน'; return; }
-    if (!canUseKpi(usr)) { msg.textContent = 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ JJ KPI — แจ้งผู้ดูแลระบบครับ'; return; }
+    if (!canUseKpi(usr)) { msg.textContent = 'บัญชีนี้' + (noKpiBranch(usr) ? noKpiBranchMsg(usr) : 'ยังไม่ได้รับสิทธิ์ใช้ JJ KPI') + ' — แจ้งผู้ดูแลระบบครับ'; return; }
     useUser(usr);
     await startDash();
   } catch (err) {
@@ -1290,7 +1347,7 @@ async function doLogin(e) {
   }
 }
 function logout() {
-  sessClear(); ME = null;
+  sessClear(); setMe(null);
   try { localStorage.removeItem(TICKET); } catch (e) {}
   location.href = 'index.html';
 }
@@ -1324,7 +1381,7 @@ async function authBoot() {
   if (sv && sv.username) {
     let usr;
     try { usr = await fetchUser(sv.username); }
-    catch (e) { ME = sv; return startDash(); }        // เน็ตสะดุด → ใช้ของเดิมในแท็บไปก่อน ไม่เตะคนทำงานออก
+    catch (e) { setMe(sv); return startDash(); }      // เน็ตสะดุด → ใช้ของเดิมในแท็บไปก่อน ไม่เตะคนทำงานออก
     if (usr && usr.active !== false && usr.pass_hash === sv.h) {
       if (!canUseKpi(usr)) return showNoPerm(usr);
       useUser(usr);

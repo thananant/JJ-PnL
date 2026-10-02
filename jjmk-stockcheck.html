@@ -602,6 +602,9 @@ const TICKET_TTL=120000;                               /* ใบผ่านอ�
 /* แปลงบัญชีกลาง → สิทธิ์ที่แอพนี้ใช้
    role : ผู้ดูแล/เจ้าของ = admin เสมอ · คนอื่นเป็น admin เมื่อได้สิทธิ์หน้า "ตั้งค่า" (cfg/set/items/sched)
    branches : จากสังกัด (unit) — ส่วนกลาง/ออฟฟิศ/ครัวกลาง = ทุกสาขา · สาขา = เฉพาะสาขาตัวเอง
+              ⤷ ตั้ง "เห็นเฉพาะสาขา" ใน JJ Access (apps.stock._br = 'JJLP,JJRD') = ใช้ค่านั้นแทนสังกัด
+                (เจ้าของสั่ง 2026-10-02 "กำหนดได้ว่าใครเห็นของสาขาไหน แบบ payroll") · ผู้ดูแลระบบ/เจ้าของ ไม่ถูกจำกัดด้วย _br
+                ได้แค่ JJCK/OFFICE (ไม่มีสต๊อกสาขา) = noBr → ไม่เห็นสาขาไหนเลย (ห้ามตีความว่า "ทุกสาขา")
    depts : บัญชีกลางไม่ได้แยกแผนก → นับได้ทุกแผนก */
 function mapCentral(u){
   const apps=(u&&u.apps&&typeof u.apps==='object')?u.apps:{};
@@ -609,9 +612,12 @@ function mapCentral(u){
   const boss=u.role==='admin'||u.role==='owner';
   const has=k=>!!(st&&String(st[k]||'').indexOf('v')>=0);
   const isAdm=boss||has('cfg')||has('set')||has('items')||has('sched');
-  const brs = (u.unit==='JJLP'||u.unit==='JJRD') ? [u.unit] : [];
+  let brs = (u.unit==='JJLP'||u.unit==='JJRD') ? [u.unit] : [], noBr=false;
+  const raw=boss?[]:String((st&&st._br)||'').split(',').map(x=>x.trim())
+    .filter(x=>['JJLP','JJRD','JJCK','OFFICE'].includes(x));
+  if(raw.length){ brs=raw.filter(b=>STK_BR[b]); noBr=!brs.length; }
   return {username:u.username, display_name:u.display_name||u.username,
-          role:isAdm?'admin':'staff', branches:brs, depts:[], central:true,
+          role:isAdm?'admin':'staff', branches:brs, noBr, brScoped:raw.length>0, depts:[], central:true,
           apps:apps, stockPerm:st};
 }
 /* ผู้ใช้ต้องได้รับสิทธิ์แอพนับสต๊อก — ยังไม่เคยตั้งสิทธิ์เลย (apps ว่าง) = ไม่ล็อกใคร */
@@ -983,6 +989,7 @@ const cfm=t=>confirm(TT(t));
 const ask=(t,d)=>prompt(TT(t),d===undefined?'':d);
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2800);}
 async function api(method,path,body,prefer,raw){
+  if(method!=='GET'&&S.user&&!brOk())throw new Error('บัญชีนี้ไม่มีสิทธิ์สาขาในแอพนี้');   // ได้แค่ครัวกลาง/ออฟฟิศ = เขียนอะไรไม่ได้
   const r=await fetch(CONFIG.URL+(raw?'':'/rest/v1/')+path,{method,
     headers:{apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY,
       ...(raw?{}:{'Content-Type':'application/json'}),...(prefer?{Prefer:prefer}:{})},
@@ -998,6 +1005,13 @@ function bizToday(now){const d=new Date(now||Date.now());if(d.getHours()<6)d.set
   const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function dayGrp(ds){const g=new Date(ds+'T12:00:00').getDay();return g===5?1:(g===0||g===6?2:0);}
 async function loadAll(){
+  /* ทางเข้าเดียวของข้อมูลรายสาขา (เปิดแอพ · ล็อกอิน · เปลี่ยนสาขา/วัน · ลากลงรีเฟรช)
+     ยังไม่ล็อกอิน = ยังไม่โหลด · สาขาที่ไม่มีสิทธิ์ = ไม่โหลดเลย (กันอ่านข้อมูลสาขาอื่นจากค่า jjsc_br ที่ค้างในเครื่อง) */
+  if(S.authOn&&!S.user)return;
+  if(!brOk()){
+    S.all=[]; S.items=[]; S.cur={}; S.recv={}; S.depts=[]; S.allBr=null; S.nameBrN=null;
+    $('#list').innerHTML=NOBR_HTML; return;
+  }
   $('#list').innerHTML='<div class="empty">กำลังโหลด...</div>';
   const bid=STK_BR[S.br];
   const base='products?select=id,branch_id,cat_label,name,unit,sup,safety,max,rate_wk,rate_fri,rate_we,image_url,sort';
@@ -1084,6 +1098,7 @@ function imgCell(it){
     :'<div class="pimg" onclick="pickImg(\''+it.id+'\')" title="แตะเพื่อใส่รูป">📷</div>';
 }
 function render(){
+  if(S.user&&!brOk()){ $('#deptbar').style.display='none'; $('#list').innerHTML=NOBR_HTML; return; }   // ไม่มีสิทธิ์สาขาไหนเลย
   $('#deptbar').style.display=S.tab==='count'?'':'none';
   if(S.tab==='dash')renderDash();
   else if(S.tab==='count')renderCount();
@@ -1270,6 +1285,7 @@ async function sendLine(sp){ // ส่งใบสั่งเข้ากลุ
   }catch(e){toast('ส่งไลน์ไม่สำเร็จ — '+String(e.message||e).slice(0,110),true);}
 }
 async function logReceipts(sp){ // upsert stock_receipts (แหล่งความจริงของ "สั่งจริง" ของระบบเดิม)
+  if(!brOk())return;   // เขียนยอดสั่งได้เฉพาะสาขาที่ได้สิทธิ์
   const g=(orderPlan()||[]).find(x=>x.sup===sp); if(!g)return;
   const od=($('#cd')&&$('#cd').value)||bizToday(),bid=STK_BR[S.br];
   const rows=g.rows.filter(r=>r.order>0).map(r=>({
@@ -1637,7 +1653,10 @@ function usersCard(){
     '<div style="padding:14px 15px;line-height:1.75">'+
       line('เพิ่มคน / ตั้งรหัสผ่าน / เลือกว่าใครเข้าแอพไหนได้ ทำที่ '+
         '<a href="jjmk-admin.html" style="color:var(--gold,#D9A441)"><b>🔑 JJ Access</b></a> ที่เดียว')+
-      line('<b>เห็นสาขาไหน</b> — ดูจาก “ประจำที่” ของบัญชี: สาขาลาดพร้าว/รัชดา = เห็นเฉพาะสาขาตัวเอง · ส่วนกลาง/ออฟฟิศ/ครัวกลาง = เห็นทุกสาขา')+
+      line('<b>เห็นสาขาไหน</b> — ตั้ง “เห็นเฉพาะสาขา” ใต้กล่องสิทธิ์ของแอพนี้ใน JJ Access ได้เลย (เช่น ให้เห็นแค่รัชดา) · '+
+        'ถ้าไม่ได้ตั้ง ดูจาก “ประจำที่” ของบัญชี: สาขาลาดพร้าว/รัชดา = เห็นเฉพาะสาขาตัวเอง · ส่วนกลาง/ออฟฟิศ/ครัวกลาง = เห็นทุกสาขา · '+
+        'ได้แค่ครัวกลาง/ออฟฟิศ = ไม่เห็นสาขาไหนในแอพนี้ · ผู้ดูแลระบบ/เจ้าของ ไม่ถูกจำกัดด้วยค่า “เห็นเฉพาะสาขา”'+
+        (me&&me.brScoped?' <span style="color:var(--mut)">(ตอนนี้คุณเห็น: '+esc(brScopeTxt())+')</span>':''))+
       line('<b>เข้าหน้าตั้งค่าได้ไหม</b> — ผู้ดูแลระบบและเจ้าของได้เสมอ · คนอื่นได้เมื่อเปิดสิทธิ์หน้า “ตั้งค่าระบบ/รายการสินค้า/รอบสั่งของ/Safety stock” ให้ใน JJ Access'+
         (me?' <span style="color:var(--mut)">(ตอนนี้คุณคือ '+(me.role==='admin'?'ผู้จัดการ/ผู้ดูแล':'พนักงานทั่วไป')+')</span>':''))+
     '</div></div>';
@@ -1703,7 +1722,8 @@ function renderItems(){
 function itemsCard(){
   if(!S.allBr)ensureAllProducts();
   const q=(S.cfgQ||'').trim().toLowerCase();
-  const BRK=Object.keys(STK_BR),BID2BR={};
+  const BRK=allowedBr(),BID2BR={};   // เห็นเฉพาะสาขา = แสดง/แก้เฉพาะสาขาที่ได้สิทธิ์ (S.allBr ยังโหลดทุกสาขาไว้จัดลำดับ)
+  const part=BRK.length<Object.keys(STK_BR).length;
   BRK.forEach(b=>{BID2BR[STK_BR[b]]=b;});
   const byName={};
   (S.allBr||[]).forEach(r=>{
@@ -1754,8 +1774,8 @@ function itemsCard(){
   }).join('');
   const st=S._apLoading?'<div class="note" style="margin:10px 15px">⏳ กำลังโหลดรายการสินค้าทุกสาขา...</div>'
     :(S.apErr?'<div class="note" style="margin:10px 15px">⚠ โหลดไม่สำเร็จ ('+esc(S.apErr)+')</div>':'');
-  return '<div class="card"><div class="h">📦 รายการสินค้าทั้งหมด <span class="n">'+total+' รายการ · รวมทุกสาขา แยกตามแผนก</span></div>'
-    +'<div class="note" style="margin:10px 15px">ดูได้ว่าสินค้าตัวไหน <b>สาขาไหนใช้บ้าง</b> — กด ✕ บนชื่อสาขา = เอาออกเฉพาะสาขานั้น · ปุ่ม 🗑 เลิกใช้ = เอาออกทุกสาขา (ข้อมูลเก่ายังอยู่ในระบบ กู้คืนได้ที่ฐานข้อมูล) · แผนกจัดตามสาขาที่เปิดอยู่ (สาขา'+BR_NAME[S.br]+')</div>'
+  return '<div class="card"><div class="h">📦 รายการสินค้าทั้งหมด <span class="n">'+total+' รายการ · '+(part?'🔒 เฉพาะสาขา'+esc(brScopeTxt()):'รวมทุกสาขา')+' แยกตามแผนก</span></div>'
+    +'<div class="note" style="margin:10px 15px">ดูได้ว่าสินค้าตัวไหน <b>สาขาไหนใช้บ้าง</b> — กด ✕ บนชื่อสาขา = เอาออกเฉพาะสาขานั้น · ปุ่ม 🗑 เลิกใช้ = เอาออก'+(part?'ทุกสาขาที่คุณดูแล':'ทุกสาขา')+' (ข้อมูลเก่ายังอยู่ในระบบ กู้คืนได้ที่ฐานข้อมูล) · แผนกจัดตามสาขาที่เปิดอยู่ (สาขา'+BR_NAME[S.br]+')</div>'
     +'<div class="lrow" style="grid-template-columns:1fr"><input class="di" id="cfgQ" value="'+esc(S.cfgQ||'')+'" placeholder="🔍 ค้นหาชื่อสินค้า / ชื่อบิล / ซัพ" oninput="cfgSearch(this.value)"></div>'
     +st
     +'<div class="hd2" style="'+G+'"><span></span><span>สินค้า (ชื่อนับ / ชื่อบิล)</span><span>สาขาที่ใช้</span><span>หน่วย / ซัพ</span><span></span></div>'
@@ -1771,6 +1791,7 @@ function toggleItemGrp(k){S.itemOpen=S.itemOpen||{};S.itemOpen[k]=!S.itemOpen[k]
 async function delProd(id){ // เอาสินค้าออกจากสาขาเดียว (soft delete)
   const r=(S.allBr||[]).find(x=>x.id===id); if(!r)return;
   const br=Object.keys(STK_BR).find(b=>STK_BR[b]===r.branch_id)||'';
+  if(!brOk(br)){toast('บัญชีนี้ไม่มีสิทธิ์ในสาขา'+(BR_NAME[br]||'นี้'),true);return;}   // เห็นเฉพาะสาขา = แก้ได้เฉพาะสาขาตัวเอง
   if(!cfm('เอา "'+r.name+'" ออกจากสาขา'+(BR_NAME[br]||'')+'?\n\nจะไม่ขึ้นหน้านับสต๊อกของสาขานี้อีก (ยอดนับเดิมยังอยู่)'))return;
   try{
     await api('PATCH','products?id=eq.'+encodeURIComponent(id),{deleted_at:new Date().toISOString()},'return=minimal');
@@ -1780,13 +1801,17 @@ async function delProd(id){ // เอาสินค้าออกจากส�
   }catch(e){toast('ลบไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
 async function delProdAll(name){ // เลิกใช้สินค้า = เอาออกทุกสาขา (soft delete)
-  const rows=(S.allBr||[]).filter(x=>String(x.name||'').trim()===name);
-  if(!rows.length)return;
-  if(!cfm('เลิกใช้ "'+name+'" ทุกสาขา ('+rows.length+' สาขา)?\n\nจะไม่ขึ้นหน้านับสต๊อกอีก (ยอดนับเดิมและประวัติบิลยังอยู่)'))return;
+  /* เห็นเฉพาะบางสาขา (สังกัด/“เห็นเฉพาะสาขา” ใน JJ Access) = เอาออกเฉพาะสาขาที่ได้สิทธิ์ ห้ามไปปิดของสาขาอื่น */
+  const my=allowedBr(),part=my.length<Object.keys(STK_BR).length,ids=my.map(b=>STK_BR[b]);
+  const hit=x=>String(x.name||'').trim()===name&&(!part||ids.includes(x.branch_id));
+  const rows=(S.allBr||[]).filter(hit);
+  if(!rows.length){ if(part)toast('สินค้านี้ไม่มีในสาขาที่คุณดูแล',true); return; }
+  if(!cfm('เลิกใช้ "'+name+'" '+(part?'ที่สาขา'+my.map(b=>BR_NAME[b]).join(', '):'ทุกสาขา')+' ('+rows.length+' สาขา)?\n\nจะไม่ขึ้นหน้านับสต๊อกอีก (ยอดนับเดิมและประวัติบิลยังอยู่)'
+    +(part?'\n\nสาขาอื่นที่ใช้ตัวนี้อยู่ไม่กระทบ':'')))return;
   try{
-    await api('PATCH','products?name=eq.'+encodeURIComponent(name)+'&deleted_at=is.null',{deleted_at:new Date().toISOString()},'return=minimal');
-    S.allBr=(S.allBr||[]).filter(x=>String(x.name||'').trim()!==name);
-    S.all=(S.all||[]).filter(x=>String(x.name||'').trim()!==name); S.items=S.all;
+    await api('PATCH','products?name=eq.'+encodeURIComponent(name)+'&deleted_at=is.null'+(part?'&branch_id=in.('+ids.join(',')+')':''),{deleted_at:new Date().toISOString()},'return=minimal');
+    S.allBr=(S.allBr||[]).filter(x=>!hit(x));
+    S.all=(S.all||[]).filter(x=>!hit(x)); S.items=S.all;
     toast('✅ เลิกใช้ "'+name+'" แล้ว ('+rows.length+' สาขา)');render();
   }catch(e){toast('ลบไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
@@ -2957,6 +2982,7 @@ async function upImg(file){
 }
 /* ---- บันทึก ---- */
 async function saveAll(){
+  if(!brOk()){toast('บัญชีนี้ไม่มีสิทธิ์บันทึกของสาขานี้',true);return;}   // บันทึกได้เฉพาะสาขาที่ได้สิทธิ์ (S.br)
   const btn=$('#save');btn.disabled=true;const old=btn.textContent;btn.textContent='⏳ กำลังบันทึก...';
   try{
     if(S.tab==='count'){
@@ -3064,12 +3090,17 @@ function logout(){
   S.user=null; S.users=null; showLogin(); applyAuth();
 }
 const allowedBr=()=>{const u=S.user;const all=Object.keys(STK_BR);
+  if(u&&u.noBr)return [];                      // ได้สิทธิ์แค่ครัวกลาง/ออฟฟิศ = ไม่มีสาขาในแอพนี้ (ไม่ใช่ทุกสาขา)
   return (u&&Array.isArray(u.branches)&&u.branches.length)?all.filter(b=>u.branches.includes(b)):all;};
+const brOk=b=>allowedBr().includes(b===undefined?S.br:b);   // สาขานี้ (ตั้งต้น = ที่เปิดอยู่) อยู่ในสิทธิ์ไหม
+const brScopeTxt=()=>allowedBr().map(b=>BR_NAME[b]).join(', ')||'—';
+const NOBR_HTML='<div class="empty">🔒 ไม่มีสิทธิ์สาขาในแอพนี้<br><span style="font-size:13px">บัญชีนี้ได้สิทธิ์เฉพาะสาขาที่ไม่มีสต๊อกหน้าร้าน (ครัวกลาง/ออฟฟิศ) — ให้ผู้ดูแลตั้ง “เห็นเฉพาะสาขา” ที่ 🔑 JJ Access</span></div>';
 const canDept=d=>{const u=S.user;
   return !u||u.role==='admin'||!Array.isArray(u.depts)||!u.depts.length||u.depts.includes(d);};
 function renderBr(){
   const bs=allowedBr();
-  if(!bs.includes(S.br))S.br=bs[0]||'JJRD';
+  if(!bs.length){ $('#brSeg').innerHTML='<span style="padding:6px 10px;font-size:12.5px;font-weight:700;color:#F2DCDC">🔒 ไม่มีสิทธิ์สาขาในแอพนี้</span>'; return; }   // ห้ามตกไปสาขาแรก
+  if(!bs.includes(S.br))S.br=bs[0];
   $('#brSeg').innerHTML=bs.map(b=>'<button data-br="'+b+'" class="'+(S.br===b?'on':'')+'">'+BR_NAME[b]+'</button>').join('');
 }
 function applyAuth(){
@@ -3078,7 +3109,8 @@ function applyAuth(){
   if(u){$('#who').value=u.username;$('#who').readOnly=true;} // ผู้นับ = username ที่ล็อกอิน ล็อกแก้ไม่ได้
   else $('#who').readOnly=false;
   $('#uchip').style.display=u?'block':'none';
-  if(u)$('#uchip').innerHTML='👤 <b>'+esc(u.display_name||u.username)+'</b> · '+(u.role==='admin'?'แอดมิน':'พนักงาน')+'<a onclick="logout()">ออก</a>';
+  if(u)$('#uchip').innerHTML='👤 <b>'+esc(u.display_name||u.username)+'</b> · '+(u.role==='admin'?'แอดมิน':'พนักงาน')
+    +'<a onclick="logout()">ออก</a>'+(u.brScoped?'<div style="margin-top:3px">'+(u.noBr?'🔒 ไม่มีสิทธิ์สาขาในแอพนี้':'🔒 เห็นเฉพาะสาขา '+esc(brScopeTxt()))+'</div>':'');
   const noAdm=!!(u&&u.role!=='admin');
   document.querySelectorAll('[data-t="set"],[data-t="sched"],[data-t="items"],[data-t="cfg"],#cfgBox').forEach(b=>{b.style.display=noAdm?'none':'';}); // Safety/รอบสั่งซัพ/ตั้งค่า เฉพาะแอดมิน
 }
@@ -3091,7 +3123,7 @@ function boot(){
   ['icon','apple-touch-icon'].forEach(rel=>{const l=document.createElement('link');l.rel=rel;l.href=LOGO_B64;document.head.appendChild(l);});
   renderBr(); placeCtl(); window.addEventListener('resize',placeCtl);
   $('#lgP')&&($('#lgP').onkeydown=e=>{if(e.key==='Enter')doLogin();});
-  $('#brSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.br=b.dataset.br;localStorage.setItem('jjsc_br',S.br);
+  $('#brSeg').onclick=e=>{const b=e.target.closest('button');if(!b||!brOk(b.dataset.br))return;S.br=b.dataset.br;localStorage.setItem('jjsc_br',S.br);
     document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x.dataset.br===S.br));loadAll();};
   document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
   $('#cd').value=bizToday();

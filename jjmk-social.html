@@ -524,7 +524,9 @@ const S={user:null,tab:'dash',
   br:localStorage.getItem('jjsocial_br')||'ALL',
   days:+(localStorage.getItem('jjsocial_days')||3650), // จำค่าที่เลือกไว้ · เริ่มต้น = ทั้งหมด
   cache:{},branches:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}],
-  settings:{},staff:[],feedFilter:{ch:'',kind:'',sen:'',st:'',q:''},feedLimit:50,chatThread:null,botTest:[]};
+  settings:{},staff:[],feedFilter:{ch:'',kind:'',sen:'',st:'',q:''},feedLimit:50,chatThread:null,botTest:[],
+  scope:null,   // เห็นเฉพาะสาขา: null = ทุกสาขา · ['JJRD'] = เฉพาะสาขาเหล่านี้ (ตั้งที่ useUser จาก apps.social._br)
+  mBr:{}};      // id ของเสียงลูกค้า → สาขา (ไว้กันแก้รายการของสาขาอื่น)
 
 const CH_META={
   line:{name:'LINE OA',em:'💬'}, facebook:{name:'Facebook',em:'📘'}, instagram:{name:'Instagram',em:'📸'},
@@ -559,7 +561,9 @@ function setBusy(b){busyCount+=b?1:-1;if(busyCount<0)busyCount=0;$('#syncDot').c
 async function api(method,path,body,prefer){
   // สิทธิ์: เขียนได้เฉพาะหน้าที่ได้รับ "แก้ไข"
   if(method!=='GET'&&S.user&&permOf(S.tab)!=='edit')
-    throw new Error('สิทธิ์ของคุณดูได้อย่างเดียวในหน้า "'+(MENU_LABEL[S.tab]||S.tab)+'"');
+    throw permErr('สิทธิ์ของคุณดูได้อย่างเดียวในหน้า "'+(MENU_LABEL[S.tab]||S.tab)+'"');
+  const deny=scopeDeny(method,path,body);   // เห็นเฉพาะสาขา: ห้ามเขียนข้ามสาขา
+  if(deny)throw permErr(deny);
   const {url,key}=cfg(); setBusy(true);
   try{
     const r=await fetch(url+'/rest/v1/'+path,{method,
@@ -574,7 +578,9 @@ const sel=(t,q)=>api('GET',t+'?'+q);
 const BRAIN_WRITE=['send_chat','send_reply','gbp_sync','gbp_auth_url','poll_google','upgrade_rules','reset_ai_failed'];
 async function brain(action,payload){
   if(BRAIN_WRITE.includes(action)&&S.user&&permOf(S.tab)!=='edit')
-    throw new Error('สิทธิ์ของคุณดูได้อย่างเดียวในหน้านี้');
+    throw permErr('สิทธิ์ของคุณดูได้อย่างเดียวในหน้านี้');
+  if(action==='send_reply'&&S.scope&&!inScope(S.mBr[payload&&payload.id]))
+    throw permErr('บัญชีนี้ตอบได้เฉพาะรีวิวของสาขา '+scopeLabel());
   const {url,key}=cfg(); setBusy(true);
   try{
     const r=await fetch(url+'/functions/v1/social-brain',{method:'POST',
@@ -627,6 +633,7 @@ async function fetchUser(username){   // select=* กันพังเวลา
 function useUser(usr){               // เก็บเฉพาะที่ใช้ + แฮชไว้ตรวจซ้ำตอนรีเฟรช
   S.user={username:usr.username,display_name:usr.display_name||usr.username,
     role:usr.role||'staff',unit:usr.unit||'ALL',apps:usr.apps||null,h:usr.pass_hash};
+  S.scope=scopeOf(S.user);
   sessSet(S.user);
 }
 function showLogin(msg){
@@ -645,7 +652,7 @@ async function doLogin(){
     if(!usr||usr.pass_hash!==pwHash(u,p)){msg.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return}
     if(usr.active===false){msg.textContent='บัญชีนี้ถูกปิดการใช้งาน';return}
     useUser(usr);
-    if(!firstAllowedTab()){sessClear();msg.textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ JJ Social — แจ้งผู้ดูแลระบบครับ';return}
+    if(!firstAllowedTab()){sessClear();msg.textContent=noAccessMsg()+' — แจ้งผู้ดูแลระบบครับ';return}
     $('#login').style.display='none';
     startApp();
   }catch(e){msg.textContent='เชื่อมต่อฐานข้อมูลไม่ได้: '+e.message;console.error(e)}
@@ -673,7 +680,7 @@ async function authBoot(){
     const usr=await fetchUser(t.u).catch(()=>null);
     if(usr&&usr.active!==false&&usr.pass_hash===t.h){
       useUser(usr);
-      if(!firstAllowedTab())return showLogin('บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ JJ Social');
+      if(!firstAllowedTab())return showLogin(noAccessMsg());
       return startApp();
     }
   }
@@ -684,7 +691,7 @@ async function authBoot(){
       const usr=await fetchUser(a.u).catch(()=>null);
       if(usr&&usr.active!==false&&usr.pass_hash===a.h){
         useUser(usr);
-        if(!firstAllowedTab())return showLogin('บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ JJ Social');
+        if(!firstAllowedTab())return showLogin(noAccessMsg());
         return startApp();
       }
     }
@@ -694,10 +701,10 @@ async function authBoot(){
   if(s&&s.username){
     let usr;
     try{usr=await fetchUser(s.username)}
-    catch(e){ S.user=s; return startApp(); }      // เน็ตสะดุด → ใช้ของเดิมในแท็บไปก่อน
+    catch(e){ S.user=s; S.scope=scopeOf(s); return startApp(); }      // เน็ตสะดุด → ใช้ของเดิมในแท็บไปก่อน
     if(usr&&usr.active!==false&&usr.pass_hash===s.h){
       useUser(usr);
-      if(!firstAllowedTab())return showLogin('สิทธิ์ของบัญชีนี้ถูกเปลี่ยน — ติดต่อผู้ดูแลระบบ');
+      if(!firstAllowedTab())return showLogin(noBranch()?noAccessMsg():'สิทธิ์ของบัญชีนี้ถูกเปลี่ยน — ติดต่อผู้ดูแลระบบ');
       return startApp();
     }
     sessClear();
@@ -721,10 +728,62 @@ function permOf(v){                 // 'edit' | 'view' | 'none'
   if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return 'edit'; // ยังไม่เคยตั้งสิทธิ์ = ไม่ล็อกใคร (กติกาเดียวกับหน้ารวมระบบ)
   const a=apps.social; if(!a||typeof a!=='object')return 'none';
   const f=String(a[v]||'');
-  if(/[aed]/.test(f))return 'edit';
+  if(/[aed]/.test(f))return S.scope&&GLOBAL_VIEWS.includes(v)?'view':'edit';   // ค่ากลางทุกสาขา: คนที่เห็นเฉพาะบางสาขาดูได้อย่างเดียว
   return f.includes('v')?'view':'none';
 }
-function firstAllowedTab(){return VIEWS.find(v=>permOf(v)!=='none')||null}
+function firstAllowedTab(){return noBranch()?null:(VIEWS.find(v=>permOf(v)!=='none')||null)}
+function noAccessMsg(){
+  return noBranch()
+    ?'บัญชีนี้ได้สิทธิ์เฉพาะ '+S.scope.map(c=>UNIT_LABEL[c]||c).join(', ')+' ซึ่งไม่มีข้อมูลใน JJ Social'
+    :'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ JJ Social';
+}
+
+/* ---------- เห็นเฉพาะสาขา (เจ้าของสั่ง 2026-10-02 "อยากให้ทุกระบบ กำหนดได้เลยว่า ใครเห็นของสาขาไหนได้บ้าง แบบ payroll") ----------
+   ตั้งที่ 🔑 JJ Access → กล่อง JJ Social → apps.social._br = 'JJRD' หรือ 'JJLP,JJRD' · ไม่ตั้ง = ทุกสาขา
+   - ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ · apps ว่าง = ไม่จำกัด (กติกาเดียวกับ permOf)
+   - เสียงลูกค้า: ดึงเฉพาะสาขาที่ดูแล (loadMentions) + กรองซ้ำที่ brFilter · รายการที่ไม่ระบุสาขา (เช่น คอมเมนต์ FB/IG ที่ไม่รู้สาขา) ไม่โชว์
+   - สรุป AI แบบรวมทุกสาขา (social_daily branch='ALL') ไม่โชว์ — โชว์เฉพาะสรุปรายสาขา
+   - "ตั้งค่าแชทบอท"/"เชื่อมต่อช่องทาง" เป็นค่ากลางทุกสาขา → ดูได้อย่างเดียว (permOf)
+   - รายชื่อพนักงาน: เห็นสาขาที่ดูแล + คนที่ตั้งเป็น "ทุกสาขา" (ดูได้ แก้ไม่ได้)
+   - แชทลูกค้า (social_chat_log) ไม่มีช่องสาขา → ยังเห็นทุกแชทเหมือนเดิม
+   - กันเขียนข้ามสาขาที่ api() จุดเดียว (scopeDeny) + brain('send_reply')
+   ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
+const ALL_BR=['JJLP','JJRD','JJCK','OFFICE'];
+const GLOBAL_VIEWS=['bot','ch'];
+function scopeOf(u){
+  if(!u||u.role==='admin'||u.role==='owner')return null;
+  const apps=u.apps;
+  if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return null;
+  const a=apps.social; if(!a||typeof a!=='object')return null;
+  const br=String(a._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
+  return br.length?br:null;
+}
+function myBranches(){return S.branches.filter(b=>!S.scope||S.scope.includes(b.code))}
+function inScope(code){return !S.scope||S.scope.includes(code)}       // null/ไม่ระบุสาขา = ไม่ผ่าน (เมื่อถูกจำกัด)
+function noBranch(){return !!S.scope&&!myBranches().length}            // ได้แค่สาขาที่ไม่มีใน JJ Social (ครัวกลาง/ออฟฟิศ)
+function scopeLabel(){return (S.scope||[]).map(c=>brName(c)).join(', ')}
+function permErr(m){const e=new Error(m);e.perm=true;return e}
+/* ตัวเลือกสาขาในฟอร์ม — ถูกจำกัด = เฉพาะสาขาที่ดูแล ไม่มีตัวเลือกว่าง (สร้างรายการที่ตัวเองมองไม่เห็นไม่ได้) */
+function brOpts(cur,emptyLabel){
+  return (S.scope?'':`<option value="">${emptyLabel}</option>`)+
+    myBranches().map(b=>`<option value="${esc(b.code)}" ${cur===b.code?'selected':''}>${esc(b.name)}</option>`).join('');
+}
+function scopeDeny(method,path,body){   // '' = ผ่าน · ข้อความ = ห้ามเขียน
+  if(!S.scope||method==='GET')return '';
+  const t=path.split('?')[0];
+  for(const r of (body==null?[]:Array.isArray(body)?body:[body]))
+    if(r&&typeof r==='object'&&'branch' in r&&!inScope(r.branch))
+      return 'บัญชีนี้บันทึกได้เฉพาะสาขา '+scopeLabel();
+  if(t==='social_mentions'||t==='social_staff'){
+    const m=path.match(/[?&]id=eq\.(\d+)(&|$)/);
+    if(!m)return method==='POST'?'':'บัญชีนี้แก้ทีละหลายรายการไม่ได้ (เห็นเฉพาะสาขา '+scopeLabel()+')';
+    const id=+m[1], br=t==='social_mentions'?S.mBr[id]:(S.staff.find(x=>x.id===id)||{}).branch;
+    if(!inScope(br))return 'บัญชีนี้แก้ได้เฉพาะรายการของสาขา '+scopeLabel();
+  }
+  return '';
+}
+/* ข้อความ "ไม่มีสิทธิ์" ที่โยนจาก api()/brain() ให้ขึ้นเป็น toast (ปุ่มส่วนใหญ่ไม่ได้ดักเอง) */
+window.addEventListener('unhandledrejection',e=>{if(e.reason&&e.reason.perm){toast(e.reason.message,true);e.preventDefault()}});
 function needEdit(){                // กันเขียนทับสิทธิ์ (ใช้ในปุ่มที่บันทึกข้อมูล)
   if(permOf(S.tab)==='edit')return true;
   toast('สิทธิ์ของคุณดูได้อย่างเดียวในหน้านี้',true); return false;
@@ -743,8 +802,12 @@ function applyPerms(){
     }
     sec.style.display=any?'':'none';
   });
+  paintUser();
+}
+function paintUser(){
   const u=S.user,un=UNIT_LABEL[u.unit]||'';
   $('#sbUser').innerHTML=`👤 ${esc(u.display_name)} · ${esc(ROLE_LABEL[u.role]||'พนักงาน')}${un?' · '+esc(un):''}`+
+    (S.scope?` · <span title="เห็นเฉพาะสาขาที่ตั้งไว้ใน JJ Access">🔒 ${esc(scopeLabel())}</span>`:'')+
     ` · <a class="hintlink" href="index.html">ทุกระบบ</a> · <a class="hintlink" href="javascript:logout()">ออก</a>`;
 }
 async function show(v){
@@ -772,10 +835,16 @@ function sinceIso(){return new Date(Date.now()-S.days*86400000).toISOString()}
 async function loadMentions(force){
   const key='m'+S.days;
   if(!force&&S.cache[key])return S.cache[key];
-  const rows=await sel('social_mentions',`select=*&posted_at=gte.${sinceIso()}&order=posted_at.desc&limit=1000`);
-  S.cache[key]=rows||[]; return S.cache[key];
+  const rows=await sel('social_mentions',`select=*&posted_at=gte.${sinceIso()}${scopeQ()}&order=posted_at.desc&limit=1000`);
+  S.cache[key]=rows||[]; S.cache[key].forEach(r=>{S.mBr[r.id]=r.branch});
+  return S.cache[key];
 }
-function brFilter(rows){return S.br==='ALL'?rows:rows.filter(r=>r.branch===S.br)}
+/* เห็นเฉพาะสาขา: ให้ฐานข้อมูลส่งมาแค่สาขาที่ดูแล (รายการไม่ระบุสาขาไม่มา) */
+function scopeQ(){return S.scope?'&branch=in.('+S.scope.map(encodeURIComponent).join(',')+')':''}
+function brFilter(rows){
+  if(S.br==='ALL')return S.scope?rows.filter(r=>inScope(r.branch)):rows;
+  return rows.filter(r=>r.branch===S.br&&inScope(r.branch));
+}
 async function loadSettings(){
   const rows=await sel('social_settings','select=*');
   S.settings={};(rows||[]).forEach(r=>S.settings[r.id]=r.val||{});
@@ -784,7 +853,7 @@ async function loadSettings(){
 async function loadStaff(){S.staff=await sel('social_staff','select=*&order=id')||[];return S.staff}
 async function refreshBadges(){
   try{
-    const p=await sel('social_mentions',`select=id&reply_status=eq.pending&kind=neq.message&posted_at=gte.${sinceIso()}&limit=100`);
+    const p=await sel('social_mentions',`select=id&reply_status=eq.pending&kind=neq.message&posted_at=gte.${sinceIso()}${scopeQ()}&limit=100`);
     const n=(p||[]).length;
     ['bdFeed','bdFeed2'].forEach(id=>{const b=$('#'+id);if(b){b.style.display=n?'':'none';b.textContent=n>99?'99+':n}});
     const chats=await loadThreads();
@@ -986,7 +1055,7 @@ function addManual(){
   openModal(`<h3>➕ เพิ่มรีวิว/เสียงลูกค้าเอง</h3>
     <div class="grid2">
       <div class="fld"><label>ช่องทาง</label><select id="amCh">${Object.keys(CH_META).map(c=>`<option value="${c}">${CH_META[c].em} ${CH_META[c].name}</option>`).join('')}</select></div>
-      <div class="fld"><label>สาขา</label><select id="amBr"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label>สาขา</label><select id="amBr">${brOpts(S.scope?S.br:'','ไม่ระบุ')}</select></div>
     </div>
     <div class="grid2">
       <div class="fld"><label>ชื่อลูกค้า (ถ้ามี)</label><input id="amName"></div>
@@ -1014,7 +1083,7 @@ function importModal(){
     <p class="xs mut" style="margin:0 0 10px">ใช้กับไฟล์รีวิวที่ส่งออกจากบริการอย่าง Outscraper / SerpApi หรือตารางทั่วไปที่มีคอลัมน์ ข้อความรีวิว / ชื่อผู้เขียน / ดาว / วันที่ — ระบบจับคอลัมน์ให้อัตโนมัติ</p>
     <div class="grid2">
       <div class="fld"><label>ช่องทาง</label><select id="impCh">${Object.keys(CH_META).map(c=>`<option value="${c}" ${c==='google'?'selected':''}>${CH_META[c].em} ${CH_META[c].name}</option>`).join('')}</select></div>
-      <div class="fld"><label>สาขา</label><select id="impBr"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label>สาขา</label><select id="impBr">${brOpts(S.scope?S.br:'','ไม่ระบุ')}</select></div>
     </div>
     <div class="fld"><label>ไฟล์</label><input type="file" id="impFile" accept=".csv,.json,.txt" onchange="impParse(this)"></div>
     <div id="impPrev" class="sm mut" style="margin-bottom:10px">ยังไม่ได้เลือกไฟล์</div>
@@ -1228,8 +1297,9 @@ async function vInsight(el){
   const postArr=Object.entries(posts).sort((a,b)=>b[1].n-a[1].n);
   // ดึงสรุป AI ล่าสุด
   let digest=null;
-  try{
-    const ds=await sel('social_daily',`select=*&branch=eq.${S.br}&order=d.desc&limit=1`);
+  const digHidden=!!S.scope&&S.br==='ALL';   // สรุปรวมทุกสาขา (branch='ALL') มีข้อมูลสาขาอื่นปน → ไม่โชว์ให้คนที่เห็นเฉพาะบางสาขา
+  if(!digHidden)try{
+    const ds=await sel('social_daily',`select=*&branch=eq.${encodeURIComponent(S.br)}&order=d.desc&limit=1`);
     digest=ds&&ds[0];
   }catch(e){}
 
@@ -1259,7 +1329,7 @@ async function vInsight(el){
         <button class="btn gh sm" onclick="genDigest('daily')">สรุปวันนี้</button>
         <button class="btn sm" onclick="genDigest('weekly')">สรุปรอบ 7 วัน</button>
       </span></h3>
-    <div id="digestBox">${digest?digestHtml(digest.data):'<div class="empty">กด "สรุปรอบ 7 วัน" เพื่อให้ AI สรุปว่ามีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี</div>'}</div>
+    <div id="digestBox">${digest?digestHtml(digest.data):digHidden?'<div class="empty">🔒 สรุปรวมทุกสาขามีข้อมูลสาขาอื่นปนอยู่ — เลือกสาขาด้านบนเพื่อดูสรุปของสาขานั้น</div>':'<div class="empty">กด "สรุปรอบ 7 วัน" เพื่อให้ AI สรุปว่ามีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี</div>'}</div>
   </div>
   <div class="grid g2">
     <div class="card"><h3>⚠️ ปัญหาที่ถูกพูดถึงบ่อย <span class="sp">${daysLabel()}</span></h3>
@@ -1662,10 +1732,10 @@ async function vSet(el){
   </div>`:''}
   <div class="card"><h3>👥 รายชื่อพนักงาน <span class="sp">ช่วยให้ AI จับชื่อในรีวิวได้แม่น + ใช้สรุปใครทำดี</span></h3>
     <div class="twrap"><table><tr><th>ชื่อ</th><th>ชื่อเล่น/สะกดอื่น</th><th>สาขา</th><th>กะ</th><th></th></tr>
-      ${S.staff.map(s=>`<tr style="${s.active?'':'opacity:.45'}">
+      ${S.staff.filter(s=>!s.branch||inScope(s.branch)).map(s=>`<tr style="${s.active?'':'opacity:.45'}">
         <td class="b">${esc(s.name)}</td><td class="xs">${esc((s.aliases||[]).join(', '))}</td>
         <td>${s.branch?esc(brName(s.branch)):'ทุกสาขา'}</td><td>${s.shift==='am'?'เช้า':s.shift==='pm'?'เย็น':'ทุกกะ'}</td>
-        <td class="right"><button class="hintlink" onclick="staffModal(${s.id})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="5" class="empty">ยังไม่มีรายชื่อ</td></tr>'}
+        <td class="right">${inScope(s.branch)?`<button class="hintlink" onclick="staffModal(${s.id})">แก้ไข</button>`:'<span class="xs mut" title="ตั้งเป็นทุกสาขา — ผู้ที่ดูได้ทุกสาขาเป็นคนแก้">🔒</span>'}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">ยังไม่มีรายชื่อ</td></tr>'}
     </table></div>
     <button class="btn gh sm" style="margin-top:8px" onclick="staffModal()">➕ เพิ่มพนักงาน</button>
   </div>
@@ -1904,7 +1974,7 @@ function staffModal(id){
     <div class="fld"><label>ชื่อ</label><input id="stName" value="${esc(s.name)}" placeholder="เช่น พี่หน่อย"></div>
     <div class="fld"><label>ชื่อเล่น/สะกดอื่น (คั่นด้วย ,)</label><input id="stAlias" value="${esc((s.aliases||[]).join(', '))}"></div>
     <div class="grid2">
-      <div class="fld"><label>สาขา</label><select id="stBr"><option value="">ทุกสาขา</option>${S.branches.map(b=>`<option value="${b.code}" ${s.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label>สาขา</label><select id="stBr">${brOpts(s.branch||(S.scope?S.br:''),'ทุกสาขา')}</select></div>
       <div class="fld"><label>กะ</label><select id="stShift">
         <option value="all" ${s.shift==='all'?'selected':''}>ทุกกะ</option>
         <option value="am" ${s.shift==='am'?'selected':''}>เช้า</option>
@@ -1971,9 +2041,14 @@ async function loadBranches(){
     const bs=(rows||[]).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code})).filter(b=>b.code);
     if(bs.length)S.branches=bs;
   }catch(e){}
-  if(!localStorage.getItem('jjsocial_br')&&S.user&&S.branches.find(b=>b.code===S.user.unit))S.br=S.user.unit;  // สังกัดสาขาไหน เปิดมาที่สาขานั้น
-  if(S.br!=='ALL'&&!S.branches.find(b=>b.code===S.br))S.br='ALL';
-  $('#brSeg').innerHTML=[...S.branches.map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}>${esc(b.name.replace('สาขา',''))}</button>`),`<button data-br="ALL" ${S.br==='ALL'?'class="on"':''}>ทุกสาขา</button>`].join('');
+  const my=myBranches();   // เห็นเฉพาะสาขา: ปุ่มเหลือเฉพาะสาขาที่ดูแล · สาขาเดียว = ล็อกไว้ ไม่มี "ทุกสาขา"
+  if(!localStorage.getItem('jjsocial_br')&&S.user&&my.find(b=>b.code===S.user.unit))S.br=S.user.unit;  // สังกัดสาขาไหน เปิดมาที่สาขานั้น
+  if(S.br!=='ALL'&&!my.find(b=>b.code===S.br))S.br='ALL';
+  if(S.scope&&my.length===1)S.br=my[0].code;
+  const lock=S.scope&&my.length===1?'🔒 ':'';
+  $('#brSeg').innerHTML=[...my.map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}${lock?' title="บัญชีนี้เห็นเฉพาะสาขานี้"':''}>${lock}${esc(b.name.replace('สาขา',''))}</button>`),
+    ...(!S.scope||my.length>1?[`<button data-br="ALL" ${S.br==='ALL'?'class="on"':''}>${S.scope?'ทุกสาขาที่ดูแล':'ทุกสาขา'}</button>`]:[])].join('');
+  paintUser();
   $('#brSeg').addEventListener('click',e=>{
     const b=e.target.closest('[data-br]');if(!b)return;
     S.br=b.dataset.br;localStorage.setItem('jjsocial_br',S.br);
@@ -1986,6 +2061,7 @@ async function startApp(){
   $('#daysPick').value=String(S.days);
   applyPerms();
   await loadBranches();
+  if(!firstAllowedTab()){$('#app').style.display='none';return showLogin(noAccessMsg()+' — แจ้งผู้ดูแลระบบครับ')}   // ได้แค่สาขาที่ไม่มีใน JJ Social
   rtStart();refreshBadges();
   if(S._gbpResult){
     const g=S._gbpResult;S._gbpResult=null;

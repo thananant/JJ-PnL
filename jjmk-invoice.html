@@ -1003,6 +1003,7 @@ async function freshInv(v, quiet){
   var r=await sb.from('inv_invoices').select('*').eq('id',v.id).limit(1);
   if(r.error){ if(!quiet) toast('ผิดพลาด: '+r.error.message,'err'); return null; }
   var x=(r.data||[])[0];
+  if(x&&!inScopeBill(x.bill_no)){ if(!quiet) toast('บัญชีนี้ไม่มีสิทธิ์ในบิลของสาขานี้','err'); return null; }
   if(!x||x.bill_no!==v.bill_no){
     if(!quiet) toast('บิล '+v.bill_no+' ถูกเปลี่ยนเลข/แก้ไขจากเครื่องอื่นแล้ว — โหลดรายการใหม่ให้แล้ว ลองอีกครั้ง','err');
     loadInvoices(); return null;
@@ -1513,7 +1514,7 @@ function renderUserChip(){
   var c=$('userChip');
   if(currentUser){ c.style.display='inline-block';
     var RN={admin:'ผู้ดูแลระบบ',owner:'เจ้าของ',manager:'ผู้จัดการ',staff:'พนักงาน'};
-    c.innerHTML='👤 '+esc(userName())+'<span class="chipmore"> · '+esc(RN[currentUser.role]||'พนักงาน')+' · ออกจากระบบ</span>'; }
+    c.innerHTML='👤 '+esc(userName())+(INV_SCOPE?' · 🔒 '+esc(myInvBranches().map(function(b){ return b.prefix; }).join(',')||'—'):'')+'<span class="chipmore"> · '+esc(RN[currentUser.role]||'พนักงาน')+' · ออกจากระบบ</span>'; }
   else c.style.display='none';
 }
 async function fetchUser(username){
@@ -1575,6 +1576,12 @@ var NO_ACCESS_MSG='บัญชีนี้ยังไม่ได้รับ�
 function setCurrentUser(usr){
   currentUser={ username:usr.username, display_name:usr.display_name, role:usr.role,
     apps:(usr.apps&&typeof usr.apps==='object')?usr.apps:null };
+  INV_SCOPE=null;
+  if(!isBoss()){
+    var p=invPerms(), br=p&&p._br?String(p._br).split(',').map(function(x){ return x.trim(); })
+      .filter(function(x){ return ['JJLP','JJRD','JJCK','OFFICE'].indexOf(x)>=0; }):[];
+    if(br.length) INV_SCOPE=br;
+  }
 }
 function isBoss(){ return !!currentUser&&(currentUser.role==='admin'||currentUser.role==='owner'); }
 function invPerms(){
@@ -1583,6 +1590,13 @@ function invPerms(){
   var p=a.invoice;
   return (p&&typeof p==='object')?p:{};
 }
+/* เห็นเฉพาะสาขา (เจ้าของสั่ง 2026-10-02 "อยากให้ทุกระบบกำหนดได้ว่าใครเห็นของสาขาไหน แบบ payroll")
+   ตั้งที่ 🔑 JJ Access → กล่องใบกำกับภาษี → apps.invoice._br = 'JJRD' · ไม่ตั้ง = ทุกสาขา · ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ
+   สาขาของบิล = ตัวอักษรหน้าเลขบิล (nasBranch) · กรองตอนโหลด (loadInvoices/loadHistory) + กันที่ freshInv/issueOrUpdate
+   ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
+var INV_SCOPE=null;   // null = ทุกสาขา · ['JJRD'] = เฉพาะสาขาเหล่านี้
+function myInvBranches(){ return CONFIG.BRANCHES.filter(function(b){ return !INV_SCOPE||INV_SCOPE.indexOf(b.prefix)>=0; }); }
+function inScopeBill(no){ return !INV_SCOPE||INV_SCOPE.indexOf(nasBranch(no))>=0; }
 function can(screen,flag){
   if(!currentUser) return false;
   if(isBoss()) return true;
@@ -1595,6 +1609,7 @@ function anyAccess(){
   if(isBoss()) return true;
   var p=invPerms();
   if(!p) return true;
+  if(INV_SCOPE&&!myInvBranches().length) return false;   // ได้สิทธิ์เฉพาะสาขาที่ไม่มีใบกำกับภาษี (ครัวกลาง/ออฟฟิศ)
   return ['new','list','failed','cancelled','history','settings'].some(function(k){ return can(k,'v'); });
 }
 /* ซ่อนแท็บ/ปุ่มที่บัญชีนี้ไม่มีสิทธิ์ แล้วเด้งไปแท็บแรกที่เข้าได้ */
@@ -1609,7 +1624,15 @@ function applyPerms(){
   var ib=$('issueBtn');
   if(!can('new','a')&&!editingBillNo){ ib.disabled=true; ib.title='ไม่มีสิทธิ์ออกบิล'; }
   else{ ib.disabled=false; ib.title=''; }
-  var ic=$('importCard'); if(ic) ic.style.display=(isBoss()||can('settings','e'))?'':'none';
+  var ic=$('importCard'); if(ic) ic.style.display=impCanRun()?'':'none';
+  /* ช่องสาขา (ฟอร์มออกบิล + ตัวกรองทุกแท็บ) — เหลือเฉพาะสาขาที่เห็นได้ (สร้างไว้ตั้งแต่ก่อนล็อกอิน ต้องทำใหม่) */
+  var fb=$('fBranch'), keep=fb.value;
+  fb.innerHTML=myInvBranches().map(function(b){
+    return '<option value="'+esc(b.prefix)+'">'+esc(b.label)+' ('+esc(b.prefix)+')</option>'; }).join('');
+  if(myInvBranches().some(function(b){ return b.prefix===keep; })) fb.value=keep;
+  initBranchFilter();
+  var pn=$('permNote');
+  if(pn) pn.textContent=INV_SCOPE?('🔒 เห็นเฉพาะ '+myInvBranches().map(function(b){ return b.label; }).join(', ')):'';
 }
 
 // ================= บันทึกประวัติว่าใครทำอะไร (ตาราง inv_activity) =================
@@ -1630,7 +1653,11 @@ async function loadHistory(){
       (r.error.code==='42P01'?' — รัน SQL เวอร์ชันล่าสุดก่อน':'')+'</div>';
     return;
   }
-  activityRows=r.data||[];
+  activityRows=(r.data||[]).filter(function(x){
+    if(!INV_SCOPE) return true;
+    return x.bill_no ? inScopeBill(x.bill_no)
+      : myInvBranches().some(function(b){ return String(x.detail||'').indexOf(b.prefix)!==-1; });
+  });
   renderHistory();
 }
 function renderHistory(){
@@ -1871,7 +1898,7 @@ async function loadInvoices(){
   $('listInfo').textContent='กำลังโหลด...';
   var r=await sb.from('inv_invoices').select('*').order('issued_at',{ascending:false}).limit(1000);
   if(r.error){ $('listInfo').textContent='โหลดไม่สำเร็จ: '+r.error.message; return; }
-  invoices=r.data||[];
+  invoices=(r.data||[]).filter(function(v){ return inScopeBill(v.bill_no); });   // เห็นเฉพาะสาขาที่ได้สิทธิ์
   renderMonthFilter();
   renderList();
   // ระหว่างมีอีเมล "กำลังส่ง" ให้รีเฟรชสถานะเองทุก 1 นาที (รอผลตรวจการตีกลับ)
@@ -2059,6 +2086,10 @@ async function issueOrUpdate(){
     toast(editingBillNo?'บัญชีนี้ไม่มีสิทธิ์แก้ไขบิล':'บัญชีนี้ไม่มีสิทธิ์ออกบิล','err'); return; }
   var payload=validateForm();
   if(!payload) return;
+  /* ออกบิล/แก้บิลได้เฉพาะสาขาที่ได้สิทธิ์ (ค่าว่าง/สาขาอื่น ห้ามตกไปเป็นสาขาแรกเอง) */
+  if(editingBillNo ? !inScopeBill(editingBillNo)
+                   : !myInvBranches().some(function(b){ return b.prefix===payload.branch_prefix; })){
+    toast('บัญชีนี้ไม่มีสิทธิ์ออกบิลของสาขานี้','err'); return; }
   var btn=$('issueBtn'), editing=editingBillNo;
   var label=ISSUE_LABEL;
   btn.disabled=true;
@@ -2295,15 +2326,17 @@ function findInv(no){ return invoices.filter(function(x){ return x.bill_no===no;
 /* ตัวกรองสาขา (เจ้าของสั่ง 2026-09-30) — ตัวเดียวใช้ทุกแท็บ: รายการบิล · ส่งไม่สำเร็จ · ยกเลิก · ประวัติ
    ดูสาขาจากตัวอักษรหน้าเลขบิล (แบบเดียวกับตัวนับเลขบิล/โฟลเดอร์ NAS) · จำไว้ในเครื่อง รีเฟรชแล้วยังอยู่ */
 var invBranch='';
-function brPass(billNo){ return !invBranch || nasBranch(billNo)===invBranch; }
+function brPass(billNo){ return inScopeBill(billNo) && (!invBranch || nasBranch(billNo)===invBranch); }
 function brLabel(){
   var b=CONFIG.BRANCHES.filter(function(x){ return x.prefix===invBranch; })[0];
   return b?(b.label+' ('+b.prefix+')'):'';
 }
 function initBranchFilter(){
   try{ invBranch=localStorage.getItem('jjinv_branch')||''; }catch(e){}
-  if(!CONFIG.BRANCHES.some(function(b){ return b.prefix===invBranch; })) invBranch='';   // ค่าเก่า/เสีย = ทุกสาขา
-  var opts='<option value="">🏪 ทุกสาขา</option>'+CONFIG.BRANCHES.map(function(b){
+  var my=myInvBranches();
+  if(!my.some(function(b){ return b.prefix===invBranch; })) invBranch='';   // ค่าเก่า/เสีย/สาขาที่ไม่มีสิทธิ์ = ทุกสาขา(ที่เห็นได้)
+  if(my.length===1) invBranch=my[0].prefix;                                // เห็นสาขาเดียว = ล็อกไว้ที่สาขานั้น
+  var opts=(my.length>1?'<option value="">🏪 '+(INV_SCOPE?'ทุกสาขาที่ดูแล':'ทุกสาขา')+'</option>':'')+my.map(function(b){
     return '<option value="'+esc(b.prefix)+'">'+esc(b.label)+' ('+esc(b.prefix)+')</option>'; }).join('');
   document.querySelectorAll('.brSel').forEach(function(sel){
     sel.innerHTML=opts; sel.value=invBranch;
@@ -2389,7 +2422,7 @@ async function loadCounters(){
   var box=$('counterBox');
   var r=await sb.from('inv_counters').select('*');
   var data=(r.error?[]:(r.data||[]));
-  box.innerHTML=CONFIG.BRANCHES.map(function(b){
+  box.innerHTML=myInvBranches().map(function(b){
     var row=data.filter(function(x){ return x.prefix===b.prefix; })[0];
     var last=row?row.last_no:(b.start-1);
     var next=String(last+1); while(next.length<4)next='0'+next;
@@ -2399,6 +2432,7 @@ async function loadCounters(){
   }).join('');
   box.querySelectorAll('.set-counter').forEach(function(btn){ btn.onclick=async function(){
     var p=btn.dataset.prefix;
+    if(INV_SCOPE&&INV_SCOPE.indexOf(p)<0){ toast('บัญชีนี้ไม่มีสิทธิ์ในสาขานี้','err'); return; }
     var v=prompt('ตั้ง "เลขล่าสุดที่ใช้แล้ว" ของ '+p+' (ใบต่อไปจะเป็นเลขนี้ +1)',btn.dataset.last);
     if(v===null)return;
     var n=parseInt(v,10);
@@ -2819,7 +2853,7 @@ function impPreviewHtml(){
   if(imp.skipped.length) h+='<span style="color:var(--warn)">อ่านไม่ได้: '+imp.skipped.slice(0,10).map(esc).join(' · ')+'</span><br>';
   return h;
 }
-function impCanRun(){ return isBoss()||can('settings','e'); }
+function impCanRun(){ return !INV_SCOPE&&(isBoss()||can('settings','e')); }   // นำเข้า/แก้เลขชน ยุ่งกับทุกสาขาในไฟล์ = เฉพาะคนที่เห็นทุกสาขา
 function impBindFix(){ var b=$('impFixBtn'); if(b) b.onclick=impFixConflicts; }
 $('impPickBtn').onclick=function(){
   if(!impCanRun()){ toast('บัญชีนี้ไม่มีสิทธิ์นำเข้าข้อมูล','err'); return; }
