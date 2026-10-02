@@ -80,6 +80,17 @@ setTimeout(async()=>{
   const prev=d.getElementById('pvPrev').textContent;
   out.push('ในรายการมีป้ายบอกว่าตัวไหนเครดิต 1 เดือน (รวมทั้งเดือน): '+prev.includes('เครดิต 1 เดือน (รวมทั้งเดือน)'));
   out.push('โน้ตในกล่องอธิบายกติกาใหม่: '+d.getElementById('modalBox').textContent.includes('จะรวมทั้งเดือนมาออกในงวด 16 – สิ้นเดือน'.replace(/\s+/g,' ').slice(0,10)));
+  // 2b) งวด 1–สิ้นเดือน (ทั้งเดือน · เพิ่ม 2 ต.ค.): ทุกซัพ ทั้งเดือน เฉพาะที่ยังไม่จ่าย
+  out.push('มีตัวเลือกงวด "1 – สิ้นเดือน": '+[...d.querySelectorAll('#pvPer option')].some(o=>o.value==='all'&&o.textContent.includes('1 – สิ้นเดือน')));
+  d.getElementById('pvPer').value='all';
+  await w.pvPreview(); await sleep(120);
+  const p3=draft();
+  const a3=p3.items.find(x=>x.n==='ตลาดสด'),b3=p3.items.find(x=>x.n==='บริษัทเครดิตเดือน');
+  out.push('ทั้งเดือน: ตลาดสด 1,000+2,000 = 3,000 (บิลติ๊กจ่าย 900 ไม่เอามา): '+(!!a3&&a3.amt===3000));
+  out.push('ทั้งเดือน: ซัพเครดิตเดือน 500+700 = 1,200: '+(!!b3&&b3.amt===1200));
+  out.push('ทั้งเดือน: หัวใบ d_from/d_to = 1–31: '+(p3.from==='2026-08-01'&&p3.to==='2026-08-31'));
+  out.push('ทั้งเดือน: พรีวิวบอกว่าหักบิลติ๊กจ่ายแล้ว 900: '+d.getElementById('pvPrev').textContent.includes('หักบิลติ๊กจ่ายแล้วออก ฿900'));
+  d.getElementById('pvPer').value='2'; await w.pvPreview(); await sleep(120); // กลับมางวดสิ้นเดือนให้ข้อ 3 เหมือนเดิม
   // 3) บันทึก PV → ยอดที่ส่งขึ้นต้องตรงกับพรีวิว
   d.getElementById('pvDate').value='2026-09-05';
   await w.pvSave(); await sleep(150);
