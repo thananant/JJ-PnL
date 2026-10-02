@@ -5663,12 +5663,12 @@ function pvCreateModal(){
   openModal(`<h3>สร้างใบสำคัญจ่าย · ${BRNAME[S.br]}</h3>
     <div class="grid2">
       <div class="fld"><label>เดือนของรายจ่าย</label><input type="month" id="pvM" value="${S.m}"></div>
-      <div class="fld"><label>งวด</label><select id="pvPer"><option value="1">1 – 15</option><option value="2">16 – สิ้นเดือน</option></select></div>
+      <div class="fld"><label>งวด</label><select id="pvPer"><option value="1">1 – 15</option><option value="2">16 – สิ้นเดือน</option><option value="all">1 – สิ้นเดือน (ทั้งเดือน)</option></select></div>
       <div class="fld"><label>ประเภท</label><select id="pvVat"><option>NON-VAT</option><option>VAT</option></select></div>
       <div class="fld"><label>วันที่ PV</label><input type="date" id="pvDate" value="${todayStr()}"></div>
     </div>
     <p class="xs mut">* ดึงเฉพาะบิลที่<b>ยังไม่ติ๊กจ่าย</b> (จ่ายแล้วถูกหักออกอัตโนมัติ) · ซัพ "VAT / NON-VAT" รวมในใบ VAT · แก้ยอดรายตัวได้ก่อนบันทึก<br>
-    * ซัพที่ตั้งไว้ว่า <b>เครดิต 1 เดือน</b> จะไม่ขึ้นในงวด 1–15 แต่จะรวม<b>ทั้งเดือน</b>มาออกในงวด 16–สิ้นเดือน (ตั้งรอบได้ที่ ตั้งค่า › ซัพพลายเออร์)</p>
+    * ซัพที่ตั้งไว้ว่า <b>เครดิต 1 เดือน</b> จะไม่ขึ้นในงวด 1–15 แต่จะรวม<b>ทั้งเดือน</b>มาออกในงวด 16–สิ้นเดือน · งวด <b>1–สิ้นเดือน</b> = บิลค้างจ่ายทุกใบทั้งเดือน ทุกซัพ (ตั้งรอบได้ที่ ตั้งค่า › ซัพพลายเออร์)</p>
     <button class="btn" style="width:100%" onclick="pvPreview()">ดึงยอด →</button>
     <div id="pvPrev"></div>`);
   document.getElementById('pvVat').value = (new Date().getDate()<=5||new Date().getDate()>=16)?'NON-VAT':'NON-VAT';
@@ -5677,7 +5677,8 @@ const isMonthlySup=s=>String(s&&s.pay_cycle||'')==='monthly'; // ซัพเค
 async function pvPreview(){
   const m=document.getElementById('pvM').value, per=document.getElementById('pvPer').value, vat=document.getElementById('pvVat').value;
   const days=monthDays(m);
-  const from=per==='1'?dstr(m,1):dstr(m,16), to=per==='1'?dstr(m,15):dstr(m,days);
+  const all=per==='all';                                                    // 1–สิ้นเดือน: บิลค้างจ่ายทั้งเดือน ทุกซัพ (ไม่คัดงวด)
+  const from=(per==='1'||all)?dstr(m,1):dstr(m,16), to=per==='1'?dstr(m,15):dstr(m,days);
   // งวดสิ้นเดือน: ดึงทั้งเดือนมาก่อน แล้วค่อยคัด (ซัพเครดิต 1 เดือนเอาทั้งเดือน · ซัพปกติเอาเฉพาะ 16–สิ้นเดือน)
   const qFrom=per==='1'?from:dstr(m,1), qTo=to;
   const rows=await selAll('pnl_expense_daily',`select=supplier_id,amount,paid,d&branch=eq.${S.br}&d=gte.${qFrom}&d=lte.${qTo}&order=d`);
@@ -5686,7 +5687,7 @@ async function pvPreview(){
     const sup=S.core.supById[r.supplier_id], mon=isMonthlySup(sup);
     const early=Number(String(r.d||'').slice(-2))<=15;
     if(per==='1'&&mon)return;              // ซัพเครดิตเดือน ไม่ออกในงวด 1–15
-    if(per!=='1'&&early&&!mon)return;       // ซัพปกติ งวดสิ้นเดือนเอาเฉพาะ 16–สิ้นเดือน
+    if(per==='2'&&early&&!mon)return;       // ซัพปกติ งวดสิ้นเดือนเอาเฉพาะ 16–สิ้นเดือน (งวดทั้งเดือนเอาหมด)
     if(per!=='1'&&mon)monthWide[r.supplier_id]=1;
     if(r.paid) paidSums[r.supplier_id]=(paidSums[r.supplier_id]||0)+num(r.amount);
     else sums[r.supplier_id]=(sums[r.supplier_id]||0)+num(r.amount);
