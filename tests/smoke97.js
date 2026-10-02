@@ -90,6 +90,15 @@ setTimeout(async()=>{
   out.push('ทั้งเดือน: ซัพเครดิตเดือน 500+700 = 1,200: '+(!!b3&&b3.amt===1200));
   out.push('ทั้งเดือน: หัวใบ d_from/d_to = 1–31: '+(p3.from==='2026-08-01'&&p3.to==='2026-08-31'));
   out.push('ทั้งเดือน: พรีวิวบอกว่าหักบิลติ๊กจ่ายแล้ว 900: '+d.getElementById('pvPrev').textContent.includes('หักบิลติ๊กจ่ายแล้วออก ฿900'));
+  // 2c) กด "จ่ายไปแล้ว" ของตลาดสด → กางรายการบิลที่จ่ายแล้ว (วันที่ · ยอด)
+  const pb=[...d.querySelectorAll('#pvPrev button.pvpaid')].find(b=>b.textContent.includes('900'));
+  out.push('มีปุ่ม "จ่ายไปแล้ว ฿900" ที่แถวตลาดสด: '+!!pb);
+  if(pb){ pb.click(); await sleep(30); }
+  const pl=d.getElementById('pvPaid1');
+  out.push('กดแล้วกางรายการ: 21 ส.ค. 2569 · ฿900.00 · 1 ใบ: '+(!!pl&&pl.style.display!=='none'&&pl.textContent.includes('21 ส.ค. 2569')&&pl.textContent.includes('฿900.00')&&pl.textContent.includes('1 ใบ')));
+  if(pb){ pb.click(); await sleep(30); }
+  out.push('กดอีกครั้งพับเก็บ: '+(!!pl&&pl.style.display==='none'));
+  out.push('ซัพเครดิตเดือนไม่มีบิลจ่ายแล้ว → ไม่มีปุ่ม: '+!d.getElementById('pvPaid2'));
   d.getElementById('pvPer').value='2'; await w.pvPreview(); await sleep(120); // กลับมางวดสิ้นเดือนให้ข้อ 3 เหมือนเดิม
   // 3) บันทึก PV → ยอดที่ส่งขึ้นต้องตรงกับพรีวิว
   d.getElementById('pvDate').value='2026-09-05';
