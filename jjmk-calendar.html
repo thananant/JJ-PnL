@@ -757,7 +757,31 @@ function att(e){return e.cal_attendees||[]}
 function byId(id){return S.events.find(e=>e.id===id)}
 function isMine(e){return e.created_by===S.user.username||att(e).some(a=>a.username===S.user.username)}
 function isBoss(){return !!S.user&&(S.user.role==='admin'||S.user.role==='owner')}
-function canEdit(e){return !!S.user&&(isBoss()||e.created_by===S.user.username)}
+/* แก้/ยกเลิกนัดได้: ผู้ดูแล/เจ้าของ · หรือผู้สร้างนัด ที่นัดอยู่ในสาขาที่ตัวเองดูแล (หรือเป็นนัดส่วนกลาง) */
+function canEdit(e){return !!S.user&&(isBoss()||(e.created_by===S.user.username&&inScope(e.branch)))}
+
+/* ---------- เห็นเฉพาะสาขา (เจ้าของสั่ง 2026-10-02 "อยากให้ทุกระบบกำหนดได้ว่าใครเห็นของสาขาไหน แบบ payroll") ----------
+   ตั้งที่ 🔑 JJ Access → กล่อง JJ Calendar → apps.calendar._br = 'JJLP,JJCK' · ไม่ตั้ง = ทุกสาขา
+   · ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ · apps ว่างทั้งก้อน (ยังไม่เคยตั้งสิทธิ์) = ไม่จำกัด (กันล็อกคนโดยไม่ตั้งใจ)
+   · เห็นนัด = สาขาที่ดูแล + นัดส่วนกลาง (ALL) + นัดที่ตัวเองสร้าง/ถูกเชิญ (สาขาไหนก็ได้ จะได้ไม่พลาดประชุม)
+   · ลงนัดได้เฉพาะสาขาที่ดูแล — ลงนัดส่วนกลางใหม่ไม่ได้ (นัดส่วนกลางกระจายถึงทุกสาขา) · แก้นัดส่วนกลางที่ตัวเองสร้างไว้ได้
+   · 🎌 วันพิเศษ = ข้อมูลกลางทั้งองค์กร ไม่จำกัดตามสาขา · ฟีดมือถือเหลือแค่ "นัดของฉัน" (ฟีดรวมทั้งองค์กรซ่อนไว้)
+   ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
+const ALL_BR=['JJLP','JJRD','JJCK','OFFICE'];
+let SCOPE=null;   // null = ทุกสาขา · ['JJLP'] = เฉพาะสาขาเหล่านี้
+function applyUser(u){
+  SCOPE=null;
+  if(!u||u.role==='admin'||u.role==='owner')return;
+  const apps=(u.apps&&typeof u.apps==='object')?u.apps:null;
+  if(!apps||!Object.keys(apps).length)return;   // ยังไม่เคยตั้งสิทธิ์ = ไม่จำกัด
+  const a=(apps.calendar&&typeof apps.calendar==='object')?apps.calendar:{};
+  const br=String(a._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
+  if(br.length)SCOPE=br;
+}
+function inScope(c){return !SCOPE||c==='ALL'||SCOPE.includes(c)}
+function myBranches(){return allBranches().filter(b=>!SCOPE||SCOPE.includes(b.code))}   // อย่ากรอง allBranches() เอง — brLabel ใช้ตั้งชื่อทุกสาขา
+function brHome(){const my=myBranches();return SCOPE&&my.length===1?my[0].code:'ALL'}       // เห็นสาขาเดียว = ล็อกปุ่มสาขาไว้ที่สาขานั้น
+function brOk(c){return c==='ALL'?brHome()==='ALL':myBranches().some(b=>b.code===c)}       // ปุ่มสาขาที่กดได้
 function nameOf(u){const x=S.users.find(r=>r.username===u);return x?(x.display_name||u):u}
 
 /* ---------- REST ---------- */
@@ -796,12 +820,12 @@ async function doLogin(){
   const u=$('#liUser').value.trim(),p=$('#liPass').value;
   if(!u||!p){toast('กรอกให้ครบก่อนครับ',true);return}
   try{
-    const rows=await sel('pnl_users',`select=id,username,display_name,role,active,pass_hash&username=eq.${encodeURIComponent(u)}&limit=1`);
+    const rows=await sel('pnl_users',`select=id,username,display_name,role,active,pass_hash,apps&username=eq.${encodeURIComponent(u)}&limit=1`);
     const usr=rows&&rows[0];
     if(!usr||usr.pass_hash!==pwHash(u,p)){toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',true);return}
     if(!usr.active){toast('บัญชีนี้ถูกปิดการใช้งาน',true);return}
     JJGate.grant(usr.username);
-    S.user={username:usr.username,display_name:usr.display_name,role:usr.role};
+    S.user={username:usr.username,display_name:usr.display_name,role:usr.role,apps:usr.apps||null};   // apps = สิทธิ์รายแอพ (_br = สาขาที่เห็น)
     LS.set('jjcal_sess',S.user);
     startApp();
   }catch(e){toast('เชื่อมต่อไม่ได้ — ตรวจว่ารัน jjmk-calendar.sql หรือยัง',true);console.error(e)}
@@ -817,12 +841,12 @@ async function loadBranches(){
     const bs=(rows||[]).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code})).filter(b=>b.code);
     if(bs.length)S.branches=bs;
   }catch(e){}
-  if(S.br!=='ALL'&&!allBranches().find(b=>b.code===S.br))S.br='ALL';
+  if(!brOk(S.br))S.br=brHome();   // ค่าเก่า/เสีย/สาขาที่ไม่มีสิทธิ์ → ทุกที่ (ที่ดูแล) · เห็นสาขาเดียว = สาขานั้น
   renderSeg();
 }
 function renderSeg(){
-  $('#brSeg').innerHTML=[`<button data-br="ALL" ${S.br==='ALL'?'class="on"':''}>ทุกที่</button>`,
-    ...allBranches().map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}>${esc(String(b.name).replace('สาขา',''))}</button>`)].join('');
+  $('#brSeg').innerHTML=[brHome()==='ALL'?`<button data-br="ALL" ${S.br==='ALL'?'class="on"':''}>${SCOPE?'ทุกสาขาที่ดูแล':'ทุกที่'}</button>`:'',
+    ...myBranches().map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}>${esc(String(b.name).replace('สาขา',''))}</button>`)].join('');
 }
 async function loadUsers(){
   try{S.users=await sel('pnl_users','select=username,display_name,role,unit&active=eq.true&order=display_name.asc')||[]}
@@ -841,12 +865,14 @@ async function loadEvents(force){
   if(S.loaded&&!force)return S.events;
   const since=new Date(Date.now()-400*86400000).toISOString();
   const rows=await sel('cal_events',`select=*,cal_attendees(username,display_name)&cancelled=eq.false&start_at=gte.${encodeURIComponent(since)}&order=start_at.asc&limit=2000`);
-  S.events=rows||[];S.loaded=true;
+  /* เห็นเฉพาะสาขาที่ดูแล + นัดส่วนกลาง + นัดของตัวเอง — กรองที่นี่ที่เดียว (เดือน/รายการ/วัน/.ics/เตือน/เรียลไทม์ ได้ตามกันหมด) */
+  S.events=(rows||[]).filter(e=>inScope(e.branch)||isMine(e));S.loaded=true;
   return S.events;
 }
 function filtered(){
   let out=S.events;
-  if(S.br!=='ALL')out=out.filter(e=>e.branch===S.br||e.branch==='ALL');
+  /* นัดสาขาอื่นที่ตัวเองถูกเชิญ (มีใน S.events ก็เพราะเป็นนัดของตัวเอง) โชว์เสมอ — คนที่ล็อกไว้สาขาเดียวจะได้ไม่พลาด */
+  if(S.br!=='ALL')out=out.filter(e=>e.branch===S.br||e.branch==='ALL'||!inScope(e.branch));
   if(S.mine)out=out.filter(e=>isMine(e));
   if(S.who)out=out.filter(e=>e.created_by===S.who||att(e).some(a=>a.username===S.who));
   if(S.q){
@@ -857,7 +883,7 @@ function filtered(){
   }
   return out;
 }
-function filterOn(){return !!(S.q||S.who||S.mine||S.br!=='ALL')}
+function filterOn(){return !!(S.q||S.who||S.mine||S.br!==brHome())}
 function filterBar(){
   const opts=['<option value="">👥 ทุกคน</option>'].concat(
     S.users.map(u=>`<option value="${esc(u.username)}" ${S.who===u.username?'selected':''}>${esc(u.display_name||u.username)}${u.unit&&UNIT_TH[u.unit]?' · '+esc(UNIT_TH[u.unit]):''}</option>`)).join('');
@@ -875,8 +901,8 @@ function fQ(v){
 }
 function fWho(v){S.who=v;fSave();show(S.tab)}
 function fClear(){
-  S.q='';S.who='';S.mine=false;S.br='ALL';
-  localStorage.setItem('jjcal_br','ALL');LS.set('jjcal_mine',false);
+  S.q='';S.who='';S.mine=false;S.br=brHome();   // เห็นสาขาเดียว = กลับไปสาขานั้น (ไม่มี "ทุกที่")
+  localStorage.setItem('jjcal_br',S.br);LS.set('jjcal_mine',false);
   const mb=$('#mineBtn');if(mb)mb.classList.remove('on');
   renderSeg();fSave();show(S.tab);
 }
@@ -924,7 +950,7 @@ document.addEventListener('click',e=>{
   const tb=e.target.closest('[data-v]');
   if(tb){show(tb.dataset.v);return}
   const br=e.target.closest('[data-br]');
-  if(br){S.br=br.dataset.br;localStorage.setItem('jjcal_br',S.br);renderSeg();show(S.tab)}
+  if(br){if(!brOk(br.dataset.br))return;S.br=br.dataset.br;localStorage.setItem('jjcal_br',S.br);renderSeg();show(S.tab)}
 });
 
 /* ---------- มุมมองเดือน ---------- */
@@ -1028,8 +1054,11 @@ function openEventForm(id,presetDate){
   const d1=e?dkey(s):(presetDate||dkey(new Date()));
   const d2=e?dkey(en):d1;
   const picked=e?att(e).map(a=>a.username):[S.user.username];
-  const brOpts=[{code:'ALL',name:'ทุกสาขา / ส่วนกลาง'},...allBranches()]
-    .map(b=>`<option value="${esc(b.code)}" ${e&&e.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('');
+  /* สาขาของนัด: บัญชีที่เห็นเฉพาะสาขา เลือกได้แค่สาขาที่ดูแล (ไม่มี "ทุกสาขา/ส่วนกลาง" ยกเว้นแก้นัดส่วนกลางเดิมของตัวเอง)
+     นัดใหม่ตั้งต้นที่สาขาที่ดูอยู่ · คนที่ไม่จำกัดสาขา ตั้งต้น "ทุกสาขา" เหมือนเดิม */
+  const brList=(!SCOPE||(e&&e.branch==='ALL')?[{code:'ALL',name:'ทุกสาขา / ส่วนกลาง'}]:[]).concat(myBranches());
+  const brPick=e?e.branch:(!SCOPE?'ALL':(S.br!=='ALL'&&brOk(S.br)?S.br:(myBranches()[0]||{}).code));
+  const brOpts=brList.map(b=>`<option value="${esc(b.code)}" ${brPick===b.code?'selected':''}>${esc(b.name)}</option>`).join('');
   const remOpts=REM_OPTS.map(([v,t])=>`<option value="${v}" ${(e?e.reminder_min:60)===v?'selected':''}>${t}</option>`).join('');
   const userCks=S.users.map(u=>`<label data-unit="${esc(u.unit||'')}"><input type="checkbox" class="attck" value="${esc(u.username)}" ${picked.includes(u.username)?'checked':''} onchange="attCount()"> <span>${esc(u.display_name||u.username)}</span>${u.unit&&UNIT_TH[u.unit]?` <span class="xs mut">·${esc(UNIT_TH[u.unit])}</span>`:''}</label>`).join('');
   const units=[...new Set(S.users.map(u=>u.unit||'').filter(Boolean))];
@@ -1087,6 +1116,11 @@ function attCount(){
   el.textContent='เลือกแล้ว '+[...document.querySelectorAll('.attck')].filter(c=>c.checked).length+' คน';
 }
 async function saveEvent(id){
+  /* กันที่ปลายทาง: แก้ได้เฉพาะนัดที่มีสิทธิ์ · สาขาของนัดต้องอยู่ในสาขาที่ดูแล (ค่าที่แอบเปลี่ยนในฟอร์มก็ไม่ผ่าน) */
+  const brV=$('#fBr').value, old=id?byId(id):null;
+  if(id&&(!old||!canEdit(old))){toast('แก้ได้เฉพาะผู้สร้างนัดหรือ admin ครับ',true);return}
+  if(SCOPE&&!(brV==='ALL'?(old&&old.branch==='ALL'):myBranches().some(b=>b.code===brV))){
+    toast('บัญชีนี้ลงนัดได้เฉพาะสาขาที่ดูแล ('+SCOPE.join(', ')+')',true);return}
   const title=$('#fTitle').value.trim();
   if(!title){toast('ใส่หัวข้อนัดก่อนครับ',true);return}
   const d1=$('#fDate').value;
@@ -1103,7 +1137,7 @@ async function saveEvent(id){
   }
   const picks=[...document.querySelectorAll('.attck')].filter(c=>c.checked).map(c=>c.value);
   if(!picks.includes(S.user.username))picks.push(S.user.username);
-  const body={title,detail:$('#fDetail').value.trim()||null,branch:$('#fBr').value,
+  const body={title,detail:$('#fDetail').value.trim()||null,branch:brV,
     location:$('#fLoc').value.trim()||null,all_day:allDay,
     start_at:start.toISOString(),end_at:end.toISOString(),
     reminder_min:+$('#fRem').value,updated_by:S.user.username};
@@ -1160,7 +1194,7 @@ function openEv(id){
       ${canEdit(e)?`<button class="btn gh" onclick="closeModal();openEventForm('${e.id}')">✏️ แก้ไข</button>
       <button class="btn gh" style="color:var(--bad)" onclick="cancelEv('${e.id}')">🗑 ยกเลิกนัด</button>`:''}
     </div>
-    <p class="xs mut" style="margin:10px 0 0">💡 กด .ics บน iPhone จะเปิดแอปปฏิทินให้ "เพิ่ม" ได้เลย · Android เปิดด้วย Google Calendar · หรือ subscribe ปฏิทินทั้งองค์กรได้ที่แท็บ "📲 เชื่อมมือถือ"</p>`);
+    <p class="xs mut" style="margin:10px 0 0">💡 กด .ics บน iPhone จะเปิดแอปปฏิทินให้ "เพิ่ม" ได้เลย · Android เปิดด้วย Google Calendar · หรือ subscribe ${SCOPE?'นัดของฉัน':'ปฏิทินทั้งองค์กร'}ได้ที่แท็บ "📲 เชื่อมมือถือ"</p>`);
 }
 
 /* ---------- ICS / Google Calendar ---------- */
@@ -1224,14 +1258,14 @@ async function vSync(el){
     <div id="feedStatus" class="sm mut" style="line-height:1.6;margin-bottom:10px">⏳ กำลังตรวจสอบระบบ…</div>
     <p class="sm b" style="margin:0 0 6px;color:var(--gold)">👤 นัดของฉัน (${meName})</p>
     <div id="tapMine">${order(mineUrl,'เพิ่มนัดของฉันเข้าปฏิทิน')}</div>
-    <details class="manual"><summary>➕ อยากได้ปฏิทินรวมทั้งองค์กร (ทุกคน ทุกสาขา)</summary><div>
+    ${SCOPE?'':`<details class="manual"><summary>➕ อยากได้ปฏิทินรวมทั้งองค์กร (ทุกคน ทุกสาขา)</summary><div>
       ${order(base,'เพิ่มปฏิทินรวมทั้งองค์กร')}
-    </div></details>
+    </div></details>`}
     <details class="manual"><summary>🛟 ปุ่มไม่ทำงาน? ทำเองทีละขั้น (คัดลอก URL)</summary><div>
       <p class="sm b" style="margin:6px 0 2px;color:var(--gold)">🔗 นัดของฉัน</p>
       <div class="copyline"><input readonly value="${esc(mineUrl)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(mineUrl)}')">คัดลอก</button></div>
-      <p class="sm b" style="margin:8px 0 2px;color:var(--gold)">🔗 นัดทั้งองค์กร</p>
-      <div class="copyline"><input readonly value="${esc(base)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(base)}')">คัดลอก</button></div>
+      ${SCOPE?'':`<p class="sm b" style="margin:8px 0 2px;color:var(--gold)">🔗 นัดทั้งองค์กร</p>
+      <div class="copyline"><input readonly value="${esc(base)}" onclick="this.select()"><button class="btn gh sm" onclick="copyTxt('${esc(base)}')">คัดลอก</button></div>`}
       <p class="sm b" style="margin:12px 0 2px">🍎 iPhone / iPad</p>
       <ol class="steps">
         <li>กด <b>คัดลอก</b> ที่ URL ข้างบน (ต้องขึ้นต้นด้วย <b>https://</b>)</li>
@@ -1293,7 +1327,8 @@ async function checkFeed(){
   st.innerHTML='⏳ กำลังตรวจสอบระบบ…';st.style.color='var(--mut)';
   const taps=on=>document.querySelectorAll('.tapbtn').forEach(a=>a.classList.toggle('off',!on));
   const set=(h,c)=>{st.innerHTML=h;st.style.color=c;taps(c==='var(--ok)')};
-  const u=cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken);
+  /* บัญชีที่เห็นเฉพาะสาขา ใช้ได้แค่ฟีด "นัดของฉัน" — ทดสอบด้วย URL นั้น (ไม่โชว์จำนวนนัดทั้งองค์กร) */
+  const u=cfg().url+'/functions/v1/cal-feed?token='+encodeURIComponent(S.feedToken)+(SCOPE?'&user='+encodeURIComponent(S.user.username):'');
   let a;
   try{a=await fetch(u)}                       // ยิงแบบเดียวกับที่แอปปฏิทินมือถือยิง (ไม่มี header)
   catch(e){set('❌ ต่อฟีดไม่ได้ — เช็คอินเทอร์เน็ตแล้วลองใหม่','var(--bad)');return}
@@ -1302,7 +1337,7 @@ async function checkFeed(){
     if(!tx.includes('BEGIN:VCALENDAR')){set('❌ ฟีดตอบกลับไม่ใช่ข้อมูลปฏิทิน — ตรวจโค้ดในฟังก์ชัน cal-feed อีกครั้ง','var(--bad)');return}
     const n=(tx.match(/BEGIN:VEVENT/g)||[]).length;          // นับนัดที่อยู่ในฟีดจริง
     const emo=/[\uD800-\uDFFF]/.test(tx.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g,''));  // อีโมจิถูกหั่นกลางตัวไหม (fold เวอร์ชันเก่า)
-    set('✅ <b>ระบบพร้อม</b> · มีนัดในฟีด '+n+' รายการ — แตะปุ่มข้างล่างได้เลย'+
+    set('✅ <b>ระบบพร้อม</b> · มี'+(SCOPE?'นัดของคุณ':'นัด')+'ในฟีด '+n+' รายการ — แตะปุ่มข้างล่างได้เลย'+
       (emo?'<br><span style="color:var(--gold)">⚠️ เจออีโมจิถูกหั่นกลางตัวในฟีด — โค้ดที่ deploy เป็นเวอร์ชันเก่า กด 📋 คัดลอกโค้ด แล้ววางทับใน Edge Functions</span>':''),'var(--ok)');
     return;
   }
@@ -1708,8 +1743,18 @@ async function startApp(){
   $('#login').style.display='none';$('#app').style.display='block';
   $('#mineBtn').classList.toggle('on',S.mine);
   fLoad();
-  $('#hdUser').innerHTML=`<span id="rtDot" title="สถานะการเชื่อมต่อสด">⚪</span>👤 ${esc(S.user.display_name||S.user.username)} · <a class="hintlink" href="javascript:hardReload()">🔄 โหลดใหม่</a> · <a class="hintlink" href="javascript:logout()">ออก</a>`;
+  applyUser(S.user);   // สาขาที่เห็น (apps.calendar._br) — อ่านจากข้อมูลบัญชีล่าสุดที่เพิ่งตรวจกับ pnl_users
+  const lock=SCOPE?` · <span title="เห็นเฉพาะ ${esc(SCOPE.map(brLabel).join(', '))}">🔒 ${esc(SCOPE.join(','))}</span>`:'';
+  $('#hdUser').innerHTML=`<span id="rtDot" title="สถานะการเชื่อมต่อสด">⚪</span>👤 ${esc(S.user.display_name||S.user.username)}${lock} · <a class="hintlink" href="javascript:hardReload()">🔄 โหลดใหม่</a> · <a class="hintlink" href="javascript:logout()">ออก</a>`;
   await loadBranches();
+  if(SCOPE&&!myBranches().length){   // ได้สิทธิ์เฉพาะสาขาที่ไม่มีในปฏิทิน — บอกให้ชัด ไม่โชว์ปฏิทินว่าง ๆ
+    ['#brSeg','#mineBtn','.tabbar','#fab'].forEach(s=>{const x=$(s);if(x)x.style.display='none'});
+    $('main').innerHTML=`<div class="card" style="max-width:520px;margin:30px auto;text-align:center">
+      <h3>🔒 ยังไม่มีสาขาที่เปิดให้บัญชีนี้</h3>
+      <p class="sm mut" style="margin:0">บัญชี <b>${esc(S.user.display_name||S.user.username)}</b> ได้สิทธิ์เห็นเฉพาะ ${esc(SCOPE.join(', '))} ซึ่งยังไม่มีในปฏิทิน — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access</p>
+      <p style="margin:14px 0 0"><a class="hintlink" href="javascript:logout()">เข้าด้วยบัญชีอื่น</a></p></div>`;
+    return;
+  }
   await Promise.all([loadUsers(),loadEvents(true),loadToken()]);
   loadDays().then(()=>{ if(S.tab!=='sync')show(S.tab); });   // วันพิเศษโหลดแยก ไม่ขวางการเปิดปฏิทิน (ยังไม่รัน SQL ก็เปิดได้)
   const t0=LS.get('jjcal_tab','month');
@@ -1736,7 +1781,7 @@ async function startApp(){
         toast(u?'บัญชีนี้ถูกปิดการใช้งาน — แจ้งผู้ดูแลระบบครับ':'ไม่พบบัญชีนี้แล้ว — เข้าสู่ระบบใหม่ครับ',true);
         return;
       }
-      S.user={username:u.username,display_name:u.display_name,role:u.role};   // ระดับ/ชื่อล่าสุดจากฐานข้อมูล
+      S.user={username:u.username,display_name:u.display_name,role:u.role,apps:u.apps||null};   // ระดับ/ชื่อ/สิทธิ์ล่าสุดจากฐานข้อมูล (admin แก้สาขาที่เห็นแล้วมีผลตอนรีเฟรช)
       LS.set('jjcal_sess',S.user);
     }catch(e){ S.user=sess; }
     startApp();
