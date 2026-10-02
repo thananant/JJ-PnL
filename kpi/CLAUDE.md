@@ -42,6 +42,13 @@
   · `dash` ไม่มี `e` → **ซ่อนแท็บตั้งค่า** (`visTabs`) + `renderTab` กันบังคับเปิด + `saveDepts`/`saveStaff`/`saveHidePos` ปฏิเสธอีกชั้น
   · `kiosk` ไม่มี `v` → ซ่อนปุ่ม 🖥 หน้าจอลูกค้า บนหัว และการ์ดลิงก์ kiosk ในหน้าตั้งค่า
   · admin/owner = `vaed` เสมอ · `apps` ว่าง = `vaed` (ไม่ล็อกใคร) — กติกาเดียวกับ `canUseKpi`
+- **เห็นเฉพาะสาขา** (2026-10-02 — เจ้าของสั่ง "อยากให้ทุกระบบ กำหนดได้เลยว่าใครเห็นของสาขาไหน แบบ payroll"): `apps.kpi._br = 'JJRD'`
+  ตั้งที่ JJ Access ใต้กล่อง JJ KPI (ติ๊กได้แค่ JJLP/JJRD · ติ๊กครบ/ไม่ติ๊ก = ไม่จำกัด) · `SCOPE`/`myBranches()`/`branchOk()` · `ME` ตั้งผ่าน `setMe()` เสมอ
+  · คำขอแดชบอร์ดทุกตัวผ่าน `bf()` → ดูรวม/สาขานอกสิทธิ์ = `.in('branch', myBranches())` · ตัวเลือกสาขา/ตารางสาขา/ใครเข้างาน/การ์ดลิงก์ kiosk วนจาก `myBranches()`
+  · การ์ดแผนก/ตำแหน่ง (ตั้งค่าทั้งร้าน) ซ่อน + `saveDepts`/`saveHidePos` ปฏิเสธ · `saveStaff` ปฏิเสธพนักงานสาขาอื่น
+  · ได้แค่ JJCK/OFFICE (ไม่มีข้อมูลใน KPI) = เข้าไม่ได้ (`noKpiBranch`) · admin/owner/`apps` ว่าง = ไม่จำกัด
+  · ⚠️ **`kpi_sync_staff` ต้องได้ทุกสาขาใน `CONFIG.BRANCHES` เสมอ ห้ามส่งรายการที่กรองตามสิทธิ์** — RPC ปิดพนักงานที่ไม่อยู่ในรายการ
+  · **จอ kiosk ไม่เกี่ยวกับเรื่องนี้เลย** (ไม่ล็อกอิน · ไม่อ่าน `pnl_users`)
 - **`?kiosk=` ไม่ต้องล็อกอิน** — จอให้ลูกค้าหน้าร้านกด (ใส่ประตูตรงนี้แท็บเล็ตจะใช้ไม่ได้)
 - ออกจากระบบ = ล้าง session ของแท็บ + ใบผ่าน แล้วกลับหน้าศูนย์รวมแอพ
 
@@ -147,13 +154,15 @@ cd kpi/test && npm install
 npm run check   # syntax ของ inline JS (อ่านแอปจาก ../../jjmk-kpi.html)
 npm test        # jsdom smoke test (จำลอง Supabase) — ต้อง ALL PASSED
 ```
-`harness.js` = fake Supabase client + DB 45 วัน 2 สาขา (+ตาราง employees/pnl_users จำลอง), `smoke.js` = 9 กลุ่มเทส
+`harness.js` = fake Supabase client + DB 45 วัน 2 สาขา (+ตาราง employees/pnl_users จำลอง), `smoke.js` = 13 กลุ่มเทส
 (dashboard ทุกแท็บ, ตารางหาย→hint, kiosk full flow + idle/PIN/offline, สาขาไม่มีพนักงาน, chooser,
-payroll sync, settings แถวซิงก์/ซิงก์ล้ม, helpers, **ล็อกอิน/สิทธิ์**, **สิทธิ์รายหน้าจอ**)
+payroll sync, settings แถวซิงก์/ซิงก์ล้ม, helpers, **ล็อกอิน/สิทธิ์**, **สิทธิ์รายหน้าจอ** … **[13] เห็นเฉพาะสาขา**)
+- fake client รองรับ `.in()` (จดใน `calls` เป็น `inF`) · หน้าล็อกอินเช็คด้วย `#lgU` (กล่อง `#loginForm` เดิมหายไปตั้งแต่ JJ Login — กลุ่ม [9] เคยตก 6 ข้อเพราะเรื่องนี้)
 - harness จำลองว่ากดเข้ามาจากหน้าศูนย์รวมแอพ (ออกใบผ่านให้) — ตัวเลือกใน `boot(url, db, extra)`:
   `noAuth:true` = เปิดลิงก์ตรง ไม่มีใบผ่าน · `as:'manager'` = ใบผ่านของคนอื่น · `authAge:ms` = ใบผ่านเก่า
   · `ticketApp:'payroll'` = ใบผ่านของแอปอื่น · **`sess:'boss'` = แท็บที่ล็อกอินค้างอยู่ (จำลองลากหน้าลง/รีเฟรช)**
-  · บัญชีจำลองอยู่ใน `USERS` (boss=owner, manager=ดูอย่างเดียว `dash:'v'`, nokpi=ไม่มีสิทธิ์, kpimgr=`dash:'vae'`+`kiosk:'v'`) รหัสทุกคน `kpi1234`
+  · บัญชีจำลองอยู่ใน `USERS` (boss=owner, manager=ดูอย่างเดียว `dash:'v'`, nokpi=ไม่มีสิทธิ์, kpimgr=`dash:'vae'`+`kiosk:'v'` ·
+    rdmgr=`_br:'JJRD'` · twobr=2 สาขา · ckonly=`_br:'JJCK'` · ownbr=เจ้าของที่มี `_br`) รหัสทุกคน `kpi1234`
 - jsdom ไม่มี `TextEncoder` (เบราว์เซอร์จริงมี) — harness shim ให้แล้วใน `beforeParse`
 หมายเหตุ: fake DB สร้างวันจากเวลาเครื่อง ให้รันด้วย `TZ=Asia/Bangkok` (ใน npm test ใส่ไว้แล้ว)
 ข้อความ jsdom "Not implemented: navigation" ตอนเทส PIN เป็นพฤติกรรมปกติของ jsdom
