@@ -170,6 +170,9 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield}
 .modal{background:#fff;border-radius:20px;max-width:560px;width:100%;margin:24px auto;padding:26px;position:relative;box-shadow:0 24px 60px rgba(43,36,32,.22)}
 .modal .close{position:absolute;top:14px;right:14px;background:#f1ede6;border:none;width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;color:var(--ink-soft)}
 .modal h2{font-size:19px;margin-bottom:4px}
+/* ตารางกระทบยอดไฟล์โอน K BIZ — ข้อความตัดบรรทัดได้ ตัวเลขชิดขวาไม่ตกขอบบนมือถือ */
+.kres td{white-space:normal}
+.kres td.num{white-space:nowrap;width:1%;vertical-align:top}
 .muted{color:var(--ink-soft);font-size:13.5px}
 .section-title{font-family:'Prompt',sans-serif;font-size:15px;font-weight:600;margin:20px 0 8px;display:flex;align-items:center;gap:8px}
 .section-title::before{content:'';width:10px;height:10px;border-radius:3px;background:var(--ember)}
@@ -1324,6 +1327,12 @@ END $$;
 </div>
 
 <!-- ============ เลือกสาขาก่อนสร้างไฟล์ K BIZ ============ -->
+<div class="modal-bg" id="kbizResBg" onclick="if(event.target===this)closeModal('kbizResBg')">
+  <div class="modal" style="max-width:640px">
+    <button class="close" onclick="closeModal('kbizResBg')">✕</button>
+    <div id="kbizResBody"></div>
+  </div>
+</div>
 <div class="modal-bg" id="kbizBg" onclick="if(event.target===this)closeModal('kbizBg')">
   <div class="modal" style="max-width:420px">
     <button class="close" onclick="closeModal('kbizBg')">✕</button>
@@ -5996,14 +6005,14 @@ function kbizAskDate(suggest){
 }
 /* items = [{e, amount}] → รวมบัญชีร่วมเป็นแถวเดียว (กันธนาคารตีกลับ) แล้วเขียนไฟล์ · คืน {rows,total,joint,skipped} */
 function kbizTransferWrite(items, eff, fname){
-  const byAcc = new Map(), skipped = [];
+  const byAcc = new Map(), skipped = [], skipRows = [];
   for(const {e, amount} of items){
     const r = kbizRow(e);
-    if(r.skip){ skipped.push(e.nick+' '+THB(amount)+' บ. — '+r.skip); continue; }
+    if(r.skip){ skipped.push(e.nick+' '+THB(amount)+' บ. — '+r.skip); skipRows.push({ e, amount, why:r.skip }); continue; }
     if(byAcc.has(r.acc)){ const x = byAcc.get(r.acc); x.amount += amount; x.names.push(e.nick); }
     else byAcc.set(r.acc, { name:r.name, amount, names:[e.nick] });
   }
-  if(!byAcc.size) return { rows:[], total:0, joint:[], skipped };
+  if(!byAcc.size) return { rows:[], total:0, joint:[], skipped, skipRows, people:0 };
   const rows = [...byAcc.entries()].map(([acc,x])=>['004', acc, x.name, Math.round(x.amount*100)/100, eff]);
   const total = Math.round(rows.reduce((s,r)=>s+r[3],0)*100)/100;
   kbizWrite('Transaction Upload',
@@ -6014,7 +6023,8 @@ function kbizTransferWrite(items, eff, fname){
     rows, fname, 3);
   const joint = [...byAcc.values()].filter(x=>x.names.length>1)
     .map(x=>x.names.join('+')+' รวม '+THB(x.amount)+' บ. (บัญชีร่วม)');
-  return { rows, total, joint, skipped };
+  const people = [...byAcc.values()].reduce((n,x)=>n + x.names.length, 0);
+  return { rows, total, joint, skipped, skipRows, people };
 }
 /* ---- ไฟล์โอนเบิกกลางเดือน — รวมยอดเบิกทั้งงวดต่อคน ตามสาขาที่เลือก ---- */
 function exportKbizAdv(branch){
@@ -6057,25 +6067,61 @@ function exportKbizPay(branch){
     .filter(e=>(!branch || e.branch===branch) && (e.active || empShiftsInPeriod(e,period).length))
     .map(e=>({e, p:calcPay(e, period)}))
     .sort((a,b)=>(a.e.branch||'').localeCompare(b.e.branch||'') || a.e.nick.localeCompare(b.e.nick,'th'));
-  const pre = [], items = [];
+  const items = [], neg = [];
   for(const {e, p} of list){
     const amt = Math.round(p.net*100)/100;
     if(amt > 0) items.push({ e, amount:amt });
-    else if(amt < 0 || empShiftsInPeriod(e,period).length) pre.push(e.nick+' — ยอดสุทธิ '+THB2(p.net)+' บ. (ไม่มียอดโอน)');
+    else if(amt < 0) neg.push({ e, amount:amt });
   }
-  if(!items.length && !pre.length) return toast('❌ งวดนี้ยังไม่มียอดเงินเดือนในสาขา'+kbizBrLabel(branch));
-  if(!items.length) return alert('❌ ไม่มีใครมียอดโอนในงวดนี้ ('+kbizBrLabel(branch)+')\n\n• '+pre.join('\n• '));
+  if(!items.length && !neg.length) return toast('❌ งวดนี้ยังไม่มียอดเงินเดือนในสาขา'+kbizBrLabel(branch));
+  if(!items.length) return alert('❌ ไม่มีใครมียอดโอนในงวดนี้ ('+kbizBrLabel(branch)+')\n\n• '+neg.map(x=>x.e.nick+' — ยอดสุทธิ '+THB2(x.amount)+' บ.').join('\n• '));
   const pays = [...new Set(items.map(x=>periodRangeE(x.e, period).pay))];
   const eff = kbizAskDate(pays.length===1 ? pays[0] : null);
   if(!eff) return;
   const res = kbizTransferWrite(items, eff, 'KBIZ_Payroll_'+(branch||'ALL')+'_'+period+'.xlsx');
-  const skipped = [...pre, ...res.skipped];
-  if(!res.rows.length) return alert('❌ ไม่มีรายการที่โอนผ่าน K BIZ ได้เลย\n\n• '+skipped.join('\n• '));
-  alert('✅ สร้างไฟล์โอนเงินเดือน '+periodLabel(period)+' ('+kbizBrLabel(branch)+')\n'+
-    res.rows.length+' รายการ · รวม '+THB2(res.total)+' บาท · เงินเข้า '+eff+
-    (pays.length>1? '\n\n📅 ในไฟล์มีหลายรอบจ่าย ('+pays.map(dayLabel).join(' / ')+') — ใช้วันเดียวทั้งไฟล์ · ถ้าจะโอนคนละวันให้สร้างแยกสาขา':'')+
-    (res.joint.length? '\n\n🔗 '+res.joint.join('\n'):'')+
-    (skipped.length? '\n\n⚠️ ไม่อยู่ในไฟล์ '+skipped.length+' คน (ต้องจ่ายเอง):\n• '+skipped.join('\n• '):''));
+  showKbizPayResult({ period, branch, eff, list, res, neg, pays });
+}
+/* หน้าต่างผลสร้างไฟล์ + กระทบยอดกับหน้าสรุปเงินเดือน (เจ้าของถาม 2026-10-02: หน้าสรุป 591,848 แต่ไฟล์ 562,813)
+   ยอดสุทธิรวมของหน้าสรุป = ในไฟล์ K BIZ + จ่ายเงินสด + ธนาคารอื่น + บัญชีใช้ไม่ได้ + ยอดติดลบ (รวมทุกคน ไม่ใช่เฉพาะที่โอน) */
+function showKbizPayResult({ period, branch, eff, list, res, neg, pays }){
+  const sum = a => Math.round(a.reduce((s,x)=>s + x.amount, 0)*100)/100;
+  const grp = { cash:[], bank:[], acc:[] };
+  for(const x of res.skipRows) (x.why==='รับเงินสด' ? grp.cash : /^ไม่ใช่บัญชีกสิกร/.test(x.why) ? grp.bank : grp.acc).push(x);
+  const all = Math.round(list.reduce((s,x)=>s + x.p.net, 0)*100)/100;
+  const people = list.length;   // นับเหมือน "ผลการค้นหา" ในหน้าสรุป (รวมคนที่ยอดเป็น 0)
+  const line = (ico, label, arr, total, note) => arr.length || total ? `<tr>
+      <td>${ico} ${label} <span class="muted">(${arr.length} คน)</span>${note?'<div class="muted" style="font-size:12px">'+note+'</div>':''}</td>
+      <td class="num" style="font-weight:600;color:${total<0?'var(--red)':'inherit'}">${THB2(total)}</td></tr>` : '';
+  const names = (title, arr, showWhy) => arr.length ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:600">${title} (${arr.length} คน)</summary>
+      <div class="tbl-wrap kres" style="margin-top:6px"><table style="font-size:13px"><tbody>
+      ${arr.map(x=>`<tr><td><b>${x.e.nick}</b> <span class="muted">${x.e.full||''}</span>${showWhy?'<div class="muted" style="font-size:12px">'+x.why+'</div>':''}</td>
+        <td class="num" style="white-space:nowrap">${THB2(x.amount)}</td></tr>`).join('')}
+      </tbody></table></div></details>` : '';
+  const manual = sum(grp.cash) + sum(grp.bank) + sum(grp.acc);
+  document.getElementById('kbizResBody').innerHTML = `
+    <h2 class="font-display" style="padding-right:36px">🏦 ไฟล์โอนเงินเดือน ${periodLabel(period)} — ${kbizBrLabel(branch)}</h2>
+    <div class="warn-note" style="background:var(--green-soft);border-color:#bfe5c8;color:#1e6b2e;margin:10px 0 14px">
+      ✅ สร้างไฟล์แล้ว <b>${res.rows.length} รายการ</b> (${res.people} คน) · รวม <b>${THB2(res.total)} บาท</b> · เงินเข้า <b>${eff}</b></div>
+    <div class="section-title" style="margin-top:0">กระทบยอดกับหน้าสรุปเงินเดือน</div>
+    <div class="tbl-wrap kres"><table><tbody>
+      ${line('🏦','โอนผ่าน K BIZ (ไฟล์นี้)', Array(res.people), res.total)}
+      ${line('💵','จ่ายเงินสด', grp.cash, sum(grp.cash))}
+      ${line('🏧','ธนาคารอื่น — ต้องโอนเอง', grp.bank, sum(grp.bank))}
+      ${line('⚠️','บัญชีใช้ไม่ได้ — ต้องแก้ข้อมูลหรือจ่ายเอง', grp.acc, sum(grp.acc), 'ยังไม่ใส่ธนาคาร/เลขบัญชี หรือเลขไม่ครบ 10 หลัก')}
+      ${line('➖','ยอดติดลบ — ไม่ต้องจ่าย', neg, sum(neg), 'หักมากกว่ารายรับ (เช่น เบิกเกิน) ยอดนี้หักออกจากยอดรวมในหน้าสรุปด้วย')}
+      <tr style="background:var(--ember-soft)"><td style="font-weight:700">= ยอดสุทธิรวม ${people} คน <span class="muted" style="font-weight:400">(ตรงกับ "จ่ายสุทธิรวม" ในหน้าสรุป)</span></td>
+        <td class="num" style="font-weight:700">${THB2(all)}</td></tr>
+    </tbody></table></div>
+    <p class="muted" style="font-size:12.5px;margin-top:6px">ต้องจ่ายนอกไฟล์รวม <b>${THB2(manual)} บาท</b> · ถ้าหน้าสรุปกรองแผนก/ตำแหน่ง/สถานะไว้ด้วย ตัวเลขรวมจะไม่ตรง (ไฟล์คิดทั้งสาขา)</p>
+    ${pays.length>1? `<div class="warn-note" style="margin-top:10px">📅 ในไฟล์มีหลายรอบจ่าย (${pays.map(dayLabel).join(' / ')}) — ใช้วันเงินเข้าวันเดียวทั้งไฟล์ · ถ้าจะโอนคนละวันให้สร้างแยกสาขา</div>`:''}
+    ${names('💵 รายชื่อจ่ายเงินสด', grp.cash)}
+    ${names('🏧 รายชื่อธนาคารอื่น', grp.bank, true)}
+    ${names('⚠️ รายชื่อบัญชีใช้ไม่ได้', grp.acc, true)}
+    ${names('➖ รายชื่อยอดติดลบ', neg)}
+    ${res.joint.length? `<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:600">🔗 บัญชีร่วม (${res.joint.length} บัญชี — รวมเป็นแถวเดียวในไฟล์)</summary>
+      <div style="font-size:13px;margin-top:6px;line-height:1.8">${res.joint.join('<br>')}</div></details>`:''}
+    <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="btn btn-ember" onclick="closeModal('kbizResBg')">ตกลง</button></div>`;
+  document.getElementById('kbizResBg').classList.add('show');
 }
 
 /* ================= สำรองข้อมูล (แผนฟรีไม่มี backup อัตโนมัติ) ================= */
