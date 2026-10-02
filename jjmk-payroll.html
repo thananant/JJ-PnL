@@ -820,6 +820,7 @@ window.JJGate=(function(){
     <button class="btn btn-light" onclick="openTips()">💰 ทิปประจำงวด</button>
     <button class="btn btn-light" onclick="exportPayrollXlsx()">📤 Export Excel</button>
     <button class="btn btn-ember" onclick="openSlipPicker()">🖨️ พิมพ์สลิป (เลือกคนได้)</button>
+    <button class="btn btn-light" title="ไฟล์ Excel สำหรับอัปโหลดโอนเงินเดือนใน K BIZ (ยอดสุทธิต่อคน · ฟอร์มเดียวกับเบิกกลางเดือน)" onclick="openKbizBranch('pay')">🏦 ไฟล์โอน K BIZ</button>
     <button class="btn btn-light" onclick="openTransferSummary()">🏦 บัญชีรับเกิน 1 คน</button>
   </div>
   <div class="muted" id="payPeriodInfo" style="margin-bottom:10px"></div>
@@ -5925,9 +5926,10 @@ let kbizMode = '';
 function openKbizBranch(mode){
   kbizMode = mode;
   document.getElementById('kbizTitle').textContent =
-    mode==='acc' ? '🏦 K BIZ แอดบัญชี — เลือกสาขา' : '🏦 ไฟล์โอน K BIZ — เลือกสาขา';
+    mode==='acc' ? '🏦 K BIZ แอดบัญชี — เลือกสาขา' : mode==='pay' ? '🏦 ไฟล์โอนเงินเดือน K BIZ — เลือกสาขา' : '🏦 ไฟล์โอน K BIZ — เลือกสาขา';
   document.getElementById('kbizDesc').textContent =
     mode==='acc' ? 'ไฟล์ลงทะเบียนบัญชีพนักงาน (เฉพาะบัญชีกสิกร) — ใส่เฉพาะคนที่ยังไม่เคยเพิ่มใน K BIZ'
+    : mode==='pay' ? 'ยอดสุทธิของแต่ละคน (หักเบิกกลางเดือน/ผ่อน/ประกันแล้ว) ของงวดที่เลือกในหน้าสรุปเงินเดือน'
                  : 'รวมยอดเบิกทั้งงวดต่อคน ของงวดที่เลือกในหน้าเบิกกลางเดือน';
   document.getElementById('kbizBtns').innerHTML =
     ['', ...Object.keys(BR)].map(b=>
@@ -5937,7 +5939,7 @@ function openKbizBranch(mode){
 }
 function kbizGo(branch){
   closeModal('kbizBg');
-  if(kbizMode==='acc') exportKbizAccounts(branch); else exportKbizAdv(branch);
+  if(kbizMode==='acc') exportKbizAccounts(branch); else if(kbizMode==='pay') exportKbizPay(branch); else exportKbizAdv(branch);
 }
 const kbizBrLabel = b => b ? ((BR[b]||{}).t||b) : 'ทุกสาขา';
 /* ---- ไฟล์แอดบัญชีพนักงาน (Beneficiary Upload) — เฉพาะคนที่ยังไม่เคยเพิ่มใน K BIZ ---- */
@@ -5975,7 +5977,46 @@ async function exportKbizAccounts(branch){
     toast('✅ จำแล้ว '+markIds.length+' คน — ครั้งหน้าจะไม่ใส่ซ้ำ');
   }
 }
-/* ---- ไฟล์โอนเบิกกลางเดือน (Transaction Upload) — รวมยอดเบิกทั้งงวดต่อคน ตามสาขาที่เลือก ---- */
+/* ---- ไฟล์โอน (Transaction Upload) — ใช้ร่วมระหว่างเบิกกลางเดือนกับเงินเดือน ---- */
+/* วันที่เงินเข้า: ธนาคารรับเฉพาะพรุ่งนี้เป็นต้นไป · suggest = วันจ่ายของงวด (ใช้เป็นค่าตั้งต้นถ้ายังไม่ผ่านไป) */
+function kbizAskDate(suggest){
+  const p2 = n => String(n).padStart(2,'0');
+  const fmt = d => p2(d.getDate())+'/'+p2(d.getMonth()+1)+'/'+d.getFullYear();
+  const tm = new Date(); tm.setDate(tm.getDate()+1); tm.setHours(0,0,0,0);   // ธนาคารบังคับวันอนาคต
+  const sg = suggest ? new Date(suggest+'T00:00:00') : null;
+  const defD = fmt(sg && !isNaN(sg) && sg >= tm ? sg : tm);
+  let eff = prompt('📅 วันที่ให้เงินเข้าบัญชี (วัน/เดือน/ปี ค.ศ.)\nธนาคารรับเฉพาะวันพรุ่งนี้เป็นต้นไป ไม่เกิน 1 ปี', defD);
+  if(eff === null) return null;
+  eff = eff.trim();
+  const m = eff.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!m){ toast('❌ รูปแบบวันที่ต้องเป็น DD/MM/YYYY เช่น '+defD); return null; }
+  const effD = new Date(+m[3], +m[2]-1, +m[1]);
+  if(!(effD > new Date())){ toast('❌ ต้องเป็นวันพรุ่งนี้เป็นต้นไป (ธนาคารไม่รับวันนี้/ย้อนหลัง)'); return null; }
+  return eff;
+}
+/* items = [{e, amount}] → รวมบัญชีร่วมเป็นแถวเดียว (กันธนาคารตีกลับ) แล้วเขียนไฟล์ · คืน {rows,total,joint,skipped} */
+function kbizTransferWrite(items, eff, fname){
+  const byAcc = new Map(), skipped = [];
+  for(const {e, amount} of items){
+    const r = kbizRow(e);
+    if(r.skip){ skipped.push(e.nick+' '+THB(amount)+' บ. — '+r.skip); continue; }
+    if(byAcc.has(r.acc)){ const x = byAcc.get(r.acc); x.amount += amount; x.names.push(e.nick); }
+    else byAcc.set(r.acc, { name:r.name, amount, names:[e.nick] });
+  }
+  if(!byAcc.size) return { rows:[], total:0, joint:[], skipped };
+  const rows = [...byAcc.entries()].map(([acc,x])=>['004', acc, x.name, Math.round(x.amount*100)/100, eff]);
+  const total = Math.round(rows.reduce((s,r)=>s+r[3],0)*100)/100;
+  kbizWrite('Transaction Upload',
+    ['Total No. of Transaction / จำนวนรายการทั้งหมด ', rows.length,
+     'Total Amount / จำนวนเงินทั้งหมด ', total],
+    ['Bank Code / \nรหัสธนาคาร','Account number / \nเลขบัญชีรับเงิน','Account name / \nชื่อบัญชีรับเงิน',
+     'Amount/ \nจำนวนเงิน','Effective Date /\nวันที่เงินเข้าบัญชี\n(DD/MM/YYYY) '],
+    rows, fname, 3);
+  const joint = [...byAcc.values()].filter(x=>x.names.length>1)
+    .map(x=>x.names.join('+')+' รวม '+THB(x.amount)+' บ. (บัญชีร่วม)');
+  return { rows, total, joint, skipped };
+}
+/* ---- ไฟล์โอนเบิกกลางเดือน — รวมยอดเบิกทั้งงวดต่อคน ตามสาขาที่เลือก ---- */
 function exportKbizAdv(branch){
   const period = document.getElementById('advPeriodSel').value || allPeriods()[0] || '';
   if(!period) return toast('❌ ยังไม่มีข้อมูล');
@@ -5985,47 +6026,55 @@ function exportKbizAdv(branch){
     .filter(x=>x.taken>0)
     .sort((a,b)=>(a.e.branch||'').localeCompare(b.e.branch||'') || a.e.nick.localeCompare(b.e.nick,'th'));
   if(!list.length) return toast('❌ งวดนี้ยังไม่มีรายการเบิกในสาขา'+kbizBrLabel(branch));
-  const p2 = n => String(n).padStart(2,'0');
-  const tm = new Date(); tm.setDate(tm.getDate()+1);   // ธนาคารบังคับวันอนาคต
-  const defD = p2(tm.getDate())+'/'+p2(tm.getMonth()+1)+'/'+tm.getFullYear();
-  let eff = prompt('📅 วันที่ให้เงินเข้าบัญชี (วัน/เดือน/ปี ค.ศ.)\nธนาคารรับเฉพาะวันพรุ่งนี้เป็นต้นไป ไม่เกิน 1 ปี', defD);
-  if(eff === null) return;
-  eff = eff.trim();
-  const m = eff.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if(!m) return toast('❌ รูปแบบวันที่ต้องเป็น DD/MM/YYYY เช่น '+defD);
-  const effD = new Date(+m[3], +m[2]-1, +m[1]);
-  if(!(effD > new Date())) return toast('❌ ต้องเป็นวันพรุ่งนี้เป็นต้นไป (ธนาคารไม่รับวันนี้/ย้อนหลัง)');
-  const byAcc = new Map();   // บัญชีร่วม รวมยอดเป็นแถวเดียว กันธนาคารตีกลับ
-  const skipped = [], loanCut = [];
+  const eff = kbizAskDate(null);
+  if(!eff) return;
+  const items = [], pre = [], loanCut = [];
   for(const {e, taken} of list){
     // หักผ่อนเงินยืม (โหมดหักตอนเบิกกลางเดือน) ออกจากยอดโอน
     const lo = loanCalc(e, period);
     const mid = (lo.loan && lo.loan.deductOn==='mid') ? lo.dedMid : 0;
     const net = taken - mid;
     if(mid > 0) loanCut.push(e.nick+' เบิก '+THB(taken)+' − ผ่อนยืม '+THB(mid)+' = โอน '+THB(net));
-    if(net <= 0){ if(!mid) skipped.push(e.nick+' — ยอดโอนเป็น 0'); continue; }
-    const r = kbizRow(e);
-    if(r.skip){ skipped.push(e.nick+' '+THB(net)+' บ. — '+r.skip); continue; }
-    if(byAcc.has(r.acc)){ const x = byAcc.get(r.acc); x.amount += net; x.names.push(e.nick); }
-    else byAcc.set(r.acc, { name:r.name, amount:net, names:[e.nick] });
+    if(net <= 0){ if(!mid) pre.push(e.nick+' — ยอดโอนเป็น 0'); continue; }
+    items.push({ e, amount:net });
   }
-  if(!byAcc.size){
-    return alert('❌ ไม่มีรายการที่โอนผ่าน K BIZ ได้เลย\n\n• '+skipped.join('\n• '));
-  }
-  const rows = [...byAcc.entries()].map(([acc,x])=>['004', acc, x.name, x.amount, eff]);
-  const total = rows.reduce((s,r)=>s+r[3],0);
-  kbizWrite('Transaction Upload',
-    ['Total No. of Transaction / จำนวนรายการทั้งหมด ', rows.length,
-     'Total Amount / จำนวนเงินทั้งหมด ', total],
-    ['Bank Code / \nรหัสธนาคาร','Account number / \nเลขบัญชีรับเงิน','Account name / \nชื่อบัญชีรับเงิน',
-     'Amount/ \nจำนวนเงิน','Effective Date /\nวันที่เงินเข้าบัญชี\n(DD/MM/YYYY) '],
-    rows, 'KBIZ_Advance_'+(branch||'ALL')+'_'+period+'.xlsx', 3);
-  const joint = [...byAcc.values()].filter(x=>x.names.length>1)
-    .map(x=>x.names.join('+')+' รวม '+THB(x.amount)+' บ. (บัญชีร่วม)');
+  const res = kbizTransferWrite(items, eff, 'KBIZ_Advance_'+(branch||'ALL')+'_'+period+'.xlsx');
+  const skipped = [...pre, ...res.skipped];
+  if(!res.rows.length) return alert('❌ ไม่มีรายการที่โอนผ่าน K BIZ ได้เลย\n\n• '+skipped.join('\n• '));
   alert('✅ สร้างไฟล์โอนเบิกกลางเดือน '+periodLabel(period)+' ('+kbizBrLabel(branch)+')\n'+
-    rows.length+' รายการ · รวม '+THB(total)+' บาท · เงินเข้า '+eff+
-    (joint.length? '\n\n🔗 '+joint.join('\n'):'')+
+    res.rows.length+' รายการ · รวม '+THB(res.total)+' บาท · เงินเข้า '+eff+
+    (res.joint.length? '\n\n🔗 '+res.joint.join('\n'):'')+
     (loanCut.length? '\n\n💳 หักผ่อนเงินยืมจากยอดโอน '+loanCut.length+' คน:\n• '+loanCut.join('\n• '):'')+
+    (skipped.length? '\n\n⚠️ ไม่อยู่ในไฟล์ '+skipped.length+' คน (ต้องจ่ายเอง):\n• '+skipped.join('\n• '):''));
+}
+/* ---- ไฟล์โอนเงินเดือน (เจ้าของสั่ง 2026-10-02 · ฟอร์มเดียวกับเบิกกลางเดือน) ----
+   คนเดียวกับตารางสรุปเงินเดือน (ทำงานอยู่ หรือพ้นสภาพแต่มีวันทำงานในงวด) · ยอด = calcPay().net ตัวเดียวกับสลิป
+   วันเงินเข้าตั้งต้น = วันจ่ายของงวด (หน้าร้านวันที่ 5 · ออฟฟิศสิ้นเดือน) ถ้ายังไม่ผ่านไป */
+function exportKbizPay(branch){
+  const period = document.getElementById('periodSel').value || allPeriods()[0] || '';
+  if(!period) return toast('❌ ยังไม่มีข้อมูล');
+  const list = employees
+    .filter(e=>(!branch || e.branch===branch) && (e.active || empShiftsInPeriod(e,period).length))
+    .map(e=>({e, p:calcPay(e, period)}))
+    .sort((a,b)=>(a.e.branch||'').localeCompare(b.e.branch||'') || a.e.nick.localeCompare(b.e.nick,'th'));
+  const pre = [], items = [];
+  for(const {e, p} of list){
+    const amt = Math.round(p.net*100)/100;
+    if(amt > 0) items.push({ e, amount:amt });
+    else if(amt < 0 || empShiftsInPeriod(e,period).length) pre.push(e.nick+' — ยอดสุทธิ '+THB2(p.net)+' บ. (ไม่มียอดโอน)');
+  }
+  if(!items.length && !pre.length) return toast('❌ งวดนี้ยังไม่มียอดเงินเดือนในสาขา'+kbizBrLabel(branch));
+  if(!items.length) return alert('❌ ไม่มีใครมียอดโอนในงวดนี้ ('+kbizBrLabel(branch)+')\n\n• '+pre.join('\n• '));
+  const pays = [...new Set(items.map(x=>periodRangeE(x.e, period).pay))];
+  const eff = kbizAskDate(pays.length===1 ? pays[0] : null);
+  if(!eff) return;
+  const res = kbizTransferWrite(items, eff, 'KBIZ_Payroll_'+(branch||'ALL')+'_'+period+'.xlsx');
+  const skipped = [...pre, ...res.skipped];
+  if(!res.rows.length) return alert('❌ ไม่มีรายการที่โอนผ่าน K BIZ ได้เลย\n\n• '+skipped.join('\n• '));
+  alert('✅ สร้างไฟล์โอนเงินเดือน '+periodLabel(period)+' ('+kbizBrLabel(branch)+')\n'+
+    res.rows.length+' รายการ · รวม '+THB2(res.total)+' บาท · เงินเข้า '+eff+
+    (pays.length>1? '\n\n📅 ในไฟล์มีหลายรอบจ่าย ('+pays.map(dayLabel).join(' / ')+') — ใช้วันเดียวทั้งไฟล์ · ถ้าจะโอนคนละวันให้สร้างแยกสาขา':'')+
+    (res.joint.length? '\n\n🔗 '+res.joint.join('\n'):'')+
     (skipped.length? '\n\n⚠️ ไม่อยู่ในไฟล์ '+skipped.length+' คน (ต้องจ่ายเอง):\n• '+skipped.join('\n• '):''));
 }
 
