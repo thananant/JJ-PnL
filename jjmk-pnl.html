@@ -5682,17 +5682,17 @@ async function pvPreview(){
   // งวดสิ้นเดือน: ดึงทั้งเดือนมาก่อน แล้วค่อยคัด (ซัพเครดิต 1 เดือนเอาทั้งเดือน · ซัพปกติเอาเฉพาะ 16–สิ้นเดือน)
   const qFrom=per==='1'?from:dstr(m,1), qTo=to;
   const rows=await selAll('pnl_expense_daily',`select=supplier_id,amount,paid,d&branch=eq.${S.br}&d=gte.${qFrom}&d=lte.${qTo}&order=d`);
-  const sums={}, paidSums={}, monthWide={};
+  const sums={}, paidSums={}, monthWide={}, paidRows={};
   rows.forEach(r=>{
     const sup=S.core.supById[r.supplier_id], mon=isMonthlySup(sup);
     const early=Number(String(r.d||'').slice(-2))<=15;
     if(per==='1'&&mon)return;              // ซัพเครดิตเดือน ไม่ออกในงวด 1–15
     if(per==='2'&&early&&!mon)return;       // ซัพปกติ งวดสิ้นเดือนเอาเฉพาะ 16–สิ้นเดือน (งวดทั้งเดือนเอาหมด)
     if(per!=='1'&&mon)monthWide[r.supplier_id]=1;
-    if(r.paid) paidSums[r.supplier_id]=(paidSums[r.supplier_id]||0)+num(r.amount);
+    if(r.paid){ paidSums[r.supplier_id]=(paidSums[r.supplier_id]||0)+num(r.amount); (paidRows[r.supplier_id]=paidRows[r.supplier_id]||[]).push({d:r.d,amount:num(r.amount)}); }
     else sums[r.supplier_id]=(sums[r.supplier_id]||0)+num(r.amount);
   });
-  S._pvMonthWide=monthWide;
+  S._pvMonthWide=monthWide; S._pvPaidRows=paidRows;
   const match=s=> vat==='VAT' ? (s.vat_type==='VAT'||s.vat_type==='VAT / NON-VAT') : s.vat_type==='NON-VAT';
   const items=S.core.sup.filter(s=>sums[s.id]>0&&match(s)).map(s=>({s,amt:sums[s.id]}));
   const paidCut=S.core.sup.filter(s=>paidSums[s.id]>0&&match(s)).reduce((a,s)=>a+paidSums[s.id],0);
@@ -5702,11 +5702,24 @@ async function pvPreview(){
     <div style="margin-top:8px;max-height:40dvh;overflow-y:auto">${items.map((it,i)=>{
       const pd=paidSums[it.s.id]||0;
       const mw=(S._pvMonthWide||{})[it.s.id];
-      return `<div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}${mw?` <span class="xs" style="color:#A66A00;font-weight:700">· เครดิต 1 เดือน (รวมทั้งเดือน)</span>`:''}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}${pd?` · <span style="color:var(--ok)">จ่ายไปแล้ว ฿${fmtI(pd)}</span>`:''}</div></div>
+      return `<div class="exrow"><div class="nm"><div class="t">${esc(it.s.name)}${mw?` <span class="xs" style="color:#A66A00;font-weight:700">· เครดิต 1 เดือน (รวมทั้งเดือน)</span>`:''}</div><div class="s">🏦 ${esc(it.s.bank||'')} · <b>${esc(it.s.account_no||'')}</b> ${esc(it.s.account_name||'')}${pd?` · <button type="button" class="hintlink pvpaid" style="color:var(--ok)" onclick="pvPaidToggle(${it.s.id},this)">จ่ายไปแล้ว ฿${fmtI(pd)} ▾</button>`:''}</div>${pd?`<div class="pvpaidlist" id="pvPaid${it.s.id}" style="display:none"></div>`:''}</div>
       <input type="number" step="any" inputmode="decimal" value="${it.amt.toFixed(2)}" onchange="S._pvDraft.items[${i}].amt=num(this.value)"></div>`;}).join('')}</div>
     <div class="dsum" style="border:none;justify-content:flex-end"><span class="mut">รวม ${items.length} ราย · ฿${fmtI(items.reduce((a,x)=>a+x.amt,0))}</span></div>
     <button class="btn dk" style="width:100%;margin-top:6px" onclick="pvSave()">บันทึก PV</button>`
     :`<div class="empty">ไม่มียอดค้างจ่ายประเภทนี้ในงวดที่เลือก${paidCut?`<br><span class="xs" style="color:var(--ok)">บิลงวดนี้ติ๊กจ่ายครบแล้ว ฿${fmtI(paidCut)} 🎉</span>`:''}</div>`;
+}
+function pvPaidToggle(sid,btn){ // กด "จ่ายไปแล้ว" → กางรายการบิลที่ติ๊กจ่ายแล้วของซัพนี้ในงวด (วันที่ · ยอด)
+  const box=document.getElementById('pvPaid'+sid); if(!box)return;
+  const open=box.style.display==='none';
+  if(open){
+    const rows=((S._pvPaidRows||{})[sid]||[]).slice().sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+    const tot=rows.reduce((a,r)=>a+num(r.amount),0);
+    box.innerHTML='<div class="xs" style="margin:6px 0 2px;padding:6px 8px;background:#EEF7F1;border:1px solid #BFE0C9;border-radius:9px">'
+      +'<div style="font-weight:700;color:var(--ok);margin-bottom:3px">บิลที่จ่ายแล้ว '+rows.length+' ใบ · ฿'+fmtI(tot)+' <span class="mut" style="font-weight:400">(ไม่รวมในใบสำคัญจ่ายนี้)</span></div>'
+      +rows.map(r=>'<div style="display:flex;justify-content:space-between;gap:10px;padding:1px 0"><span>'+thDate(r.d)+'</span><b>฿'+fmt(r.amount,2)+'</b></div>').join('')+'</div>';
+  }
+  box.style.display=open?'':'none';
+  if(btn)btn.textContent=btn.textContent.replace(open?'▾':'▴',open?'▴':'▾');
 }
 async function pvSave(){
   const D=S._pvDraft; if(!D||!D.items.length)return;
