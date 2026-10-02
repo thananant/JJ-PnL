@@ -13,7 +13,12 @@ const USERS = [
   { id: 2, username: 'manager', display_name: 'ผู้จัดการ', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('manager', 'kpi1234'), apps: { kpi: { dash: 'v' }, pnl: { dash: 'v' } } },
   { id: 3, username: 'nokpi', display_name: 'พนักงานครัว', role: 'staff', unit: 'JJLP', active: true, pass_hash: pwHash('nokpi', 'kpi1234'), apps: { stock: { count: 'v' } } },
   { id: 4, username: 'ออก', display_name: 'พ้นสภาพ', role: 'staff', unit: 'ALL', active: false, pass_hash: pwHash('ออก', 'kpi1234'), apps: {} },
-  { id: 5, username: 'kpimgr', display_name: 'หัวหน้า KPI', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('kpimgr', 'kpi1234'), apps: { kpi: { dash: 'vae', kiosk: 'v' } } }
+  { id: 5, username: 'kpimgr', display_name: 'หัวหน้า KPI', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('kpimgr', 'kpi1234'), apps: { kpi: { dash: 'vae', kiosk: 'v' } } },
+  /* เห็นเฉพาะสาขา (apps.kpi._br) */
+  { id: 6, username: 'rdmgr', display_name: 'ผจก.รัชดา', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('rdmgr', 'kpi1234'), apps: { kpi: { dash: 'vae', kiosk: 'v', _br: 'JJRD' } } },
+  { id: 7, username: 'twobr', display_name: 'ผจก.เขต', role: 'manager', unit: 'ALL', active: true, pass_hash: pwHash('twobr', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJLP,JJRD' } } },
+  { id: 8, username: 'ckonly', display_name: 'ครัวกลาง', role: 'staff', unit: 'JJCK', active: true, pass_hash: pwHash('ckonly', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJCK' } } },
+  { id: 9, username: 'ownbr', display_name: 'เจ้าของ (ติด _br)', role: 'owner', unit: 'ALL', active: true, pass_hash: pwHash('ownbr', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJLP' } } }
 ];
 const userOf = n => USERS.find(x => x.username === n) || {};
 /* ใบผ่านจากหน้าศูนย์รวมแอพ (localStorage · ใช้ครั้งเดียว อายุ 2 นาที) */
@@ -142,11 +147,12 @@ function makeClient(db) {
     const b = {
       select() { return b; }, insert(rows) { st.op = 'insert'; st.payload = rows; return b; }, upsert(rows) { st.op = 'upsert'; st.payload = rows; return b; },
       eq(k, v) { st.filters.push(r => r[k] === v); return b; }, gte(k, v) { st.filters.push(r => r[k] >= v); return b; }, lte(k, v) { st.filters.push(r => r[k] <= v); return b; },
+      in(k, arr) { st.inF = (st.inF || []).concat([[k, arr.slice()]]); st.filters.push(r => arr.includes(r[k])); return b; },
       order(k) { st.order.push(k); return b; }, range(a, z) { st.range = [a, z]; return b; },
       then(res, rej) { return new Promise(r => setTimeout(r, 2)).then(exec).then(res, rej); }
     };
     function exec() {
-      calls.push({ table, op: st.op, payload: st.payload });
+      calls.push({ table, op: st.op, payload: st.payload, inF: st.inF || null });
       try {
         if (st.op === 'select') {
           let rows = db.view(table).filter(r => st.filters.every(f => f(r)));
