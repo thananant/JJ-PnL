@@ -645,11 +645,24 @@ const isBoss=u=>!!u&&(u.role==='admin'||u.role==='owner');   // เข้าไ�
 function roleOf(u){ return (u&&ROLES[u.role])?u.role:'staff'; }
 function unitOf(u){ return (u&&UNITS[u.unit])?u.unit:'ALL'; }
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
-/* จำกัด "เห็นเฉพาะสาขา" รายแอพ (เจ้าของสั่ง 2026-09-29) — เก็บเป็น apps.<แอพ>._br = 'JJLP,JJRD'
-   ไม่ติ๊กเลย/ติ๊กครบทุกสาขา = ไม่จำกัด · เพิ่มแอพเข้า BR_SCOPED ได้ก็ต่อเมื่อตัวแอพนั้นรองรับ _br แล้ว (ตอนนี้: เงินเดือน) */
-const BR_SCOPED={payroll:true};
+/* จำกัด "เห็นเฉพาะสาขา" รายแอพ (เจ้าของสั่ง 2026-09-29 · ขยายทุกแอพ 2026-10-02) — เก็บเป็น apps.<แอพ>._br = 'JJLP,JJRD'
+   ไม่ติ๊กเลย/ติ๊กครบทุกสาขาของแอพนั้น = ไม่จำกัด · ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ
+   แอพที่อยู่ใน BR_SCOPED = ตัวแอพกรองข้อมูลตาม _br แล้ว · br = สาขาที่มีข้อมูลในแอพนั้นจริง (ใบกำกับภาษี/KPI/สต๊อก มีแค่หน้าร้าน)
+   JJ Owner ไม่อยู่ในนี้ — เปิดให้เฉพาะผู้ดูแลระบบ/เจ้าของอยู่แล้ว */
+const BR4=['JJLP','JJRD','JJCK','OFFICE'], BR2=['JJLP','JJRD'];
+const BR_SCOPED={
+  pnl:     {br:BR4, t:'เห็นเฉพาะบัญชีของสาขา'},
+  payroll: {br:BR4, t:'เห็นเฉพาะพนักงานสาขา'},
+  stock:   {br:BR2, t:'เห็นเฉพาะสต๊อกของสาขา'},
+  kitchen: {br:BR2, t:'เห็นเฉพาะออเดอร์/ยอดที่ต้องส่งของสาขา'},
+  maint:   {br:BR4, t:'เห็นเฉพาะงานซ่อม/อุปกรณ์ของสาขา'},
+  social:  {br:BR2, t:'เห็นเฉพาะเสียงลูกค้าของสาขา'},
+  invoice: {br:BR2, t:'เห็นเฉพาะบิลของสาขา'},
+  calendar:{br:BR4, t:'เห็นเฉพาะนัดของสาขา (นัดทั้งองค์กร/นัดที่ตัวเองอยู่ยังเห็น)'},
+  kpi:     {br:BR2, t:'เห็นเฉพาะคะแนนของสาขา'}
+};
 const BR_LIST=[['JJLP','ลาดพร้าว'],['JJRD','รัชดา'],['JJCK','ครัวกลาง'],['OFFICE','ออฟฟิศ']];
-function brOf(u,app){ const a=(u.apps||{})[app]; return a&&a._br?String(a._br).split(',').filter(Boolean):[]; }
+function brOf(u,app){ const a=(u.apps||{})[app]; return a&&a._br?String(a._br).split(',').map(x=>x.trim()).filter(Boolean):[]; }
 
 const S={user:null,tab:(function(){try{var t=localStorage.getItem('jjacc_tab');return ['pending','users','survey','matrix','log'].indexOf(t)>=0?t:'users';}catch(e){return 'users';}})(),users:[],sc:null,scErr:null,au:null,auErr:null,editId:null,draft:{},copiedFrom:null,pend:[],pendApps:{},pendCopy:{},lineCfg:null,lineGroups:[]};
 
@@ -1495,9 +1508,9 @@ function appBox(k,u){
   }).join('');
   let brRow='';
   if(BR_SCOPED[k]){
-    const cur=brOf(u,k);
-    brRow='<div class="brscope"><div class="bst">🏪 <b>เห็นเฉพาะพนักงานสาขา</b> — ไม่ติ๊กเลย = เห็นทุกสาขา</div>'+
-      BR_LIST.map(b=>'<label><input type="checkbox" data-br="'+b[0]+'"'+(cur.includes(b[0])?' checked':'')+
+    const cur=brOf(u,k), BS=BR_SCOPED[k];
+    brRow='<div class="brscope"><div class="bst">🏪 <b>'+esc(BS.t)+'</b> — ไม่ติ๊กเลย = เห็นทุกสาขา</div>'+
+      BR_LIST.filter(b=>BS.br.includes(b[0])).map(b=>'<label><input type="checkbox" data-br="'+b[0]+'"'+(cur.includes(b[0])?' checked':'')+
         ' onchange="syncDraft(\''+k+'\')"> '+b[1]+'</label>').join('')+'</div>';
   }
   return '<div class="appbox'+(on?' open':'')+'" id="box_'+k+'">'+head+
@@ -1533,7 +1546,7 @@ function syncDraft(k){
   });
   if(BR_SCOPED[k] && Object.keys(out).length){
     const br=[...box.querySelectorAll('input[data-br]')].filter(c=>c.checked).map(c=>c.dataset.br);
-    if(br.length && br.length<BR_LIST.length) out._br=br.join(',');
+    if(br.length && br.length<BR_SCOPED[k].br.length) out._br=br.join(',');
   }
   if(Object.keys(out).length)S.draft[k]=out; else delete S.draft[k];
   const n=Object.values(out).filter(v=>v.includes('v')).length;
