@@ -63,8 +63,6 @@
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     box-shadow:0 0 0 3px rgba(184,134,11,.15);}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
-  .brbar{display:flex;justify-content:flex-end;margin-bottom:10px}
-  .brbar .brSel{width:auto;min-width:200px;max-width:100%}
   @media(max-width:560px){.row{grid-template-columns:1fr;}}
 
   .items{width:100%;}
@@ -634,7 +632,7 @@ window.JJGate=(function(){
 
   <!-- ===== รายการบิล ===== -->
   <section class="panel" id="panel-list">
-    <!-- แถบกรอง (ค้นหา · สาขา · เดือน) ใช้ร่วมกัน รายการบิล / ส่งสำเร็จ / ยกเลิก — ย้ายตามแท็บที่เปิด -->
+    <!-- แถบกรอง (ค้นหา · สาขา · เดือน) ใช้ร่วมกัน รายการบิล / ส่งสำเร็จ / ส่งไม่สำเร็จ / ยกเลิก — ย้ายตามแท็บที่เปิด -->
     <div class="row" id="listFilters" style="margin-bottom:8px">
       <div><input id="qSearch" placeholder="🔍 ค้นหา เลขบิล / ชื่อลูกค้า / เลขภาษี / อีเมล"></div>
       <div style="display:flex;gap:8px">
@@ -656,7 +654,6 @@ window.JJGate=(function(){
 
   <!-- ===== อีเมลส่งไม่สำเร็จ ===== -->
   <section class="panel" id="panel-failed">
-    <div class="brbar"><select class="brSel" aria-label="สาขา"></select></div>
     <div class="okbox" id="failEmpty" style="display:none">✓ ไม่มีอีเมลที่ส่งไม่สำเร็จ — ทุกใบส่งถึงปลายทางหรือกำลังตรวจอยู่</div>
     <div id="failNote" class="alert" style="display:none"></div>
     <div id="failBox"></div>
@@ -2508,6 +2505,8 @@ function emailBadge(v){
   if(s===EMAIL_STATUS.SENDING)return '<span class="badge b-send">✉ กำลังส่ง'+(isStuck(v)?' · ค้างนาน':'')+'</span> ';
   return '<span class="badge b-cancel">✉ ยังไม่ส่ง</span> ';
 }
+var okMailCount={};    // อีเมล (ตัวเล็ก) → จำนวนบิลที่ส่งถึงแล้ว — คิดใน renderList
+function isMailFailed(v){ return v.email_status===EMAIL_STATUS.FAILED||v.email_status===EMAIL_STATUS.ERROR; }
 function invCard(v, withResend){
   var cancelled=(v.status===STATUS.CANCELLED);
   var detail=v.email_status_detail||v.status_detail||'';
@@ -2528,6 +2527,8 @@ function invCard(v, withResend){
         :((can('list','e')?'<button class="btn btn-ghost btn-sm a-edit" data-no="'+esc(v.bill_no)+'">✎ แก้ไข</button>':'')+
           (can('list','d')?'<button class="btn btn-ghost btn-sm a-cancel" data-no="'+esc(v.bill_no)+'" style="color:var(--bad)">⛔ ยกเลิกบิล</button>':'')))+
     '</div>'+
+    (withResend&&v.email&&okMailCount[String(v.email).trim().toLowerCase()]?('<div class="detail" style="margin-top:6px;color:var(--ok)">📬 ที่อยู่นี้รับบิลใบอื่นได้ปกติ ('+
+      okMailCount[String(v.email).trim().toLowerCase()]+' ใบ) — อีเมลน่าจะถูกต้อง สถานะ "ส่งไม่สำเร็จ" ใบนี้อาจผิด ลองกดส่งซ้ำ</div>'):'')+
     (withResend?('<div class="actions" style="align-items:flex-end">'+
       '<div style="flex:1;min-width:200px"><label>แก้อีเมลใหม่แล้วส่งซ้ำ</label>'+
       '<input class="re-email" value="'+esc(v.email||'')+'"></div>'+
@@ -2663,15 +2664,21 @@ function renderList(){
     if(!q)return true;
     return [v.bill_no,v.customer_name,v.tax_id,v.email,v.phone].join(' ').toLowerCase().indexOf(q)!==-1;
   }).sort(byBillDesc);
-  // ส่งอีเมลถึงลูกค้าแล้ว → แท็บส่งสำเร็จ · ที่เหลือ (ยังไม่ส่ง/กำลังตรวจ/ส่งไม่ถึง/ไม่มีอีเมล) อยู่รายการบิล
+  /* 1 บิลอยู่แท็บเดียว (เจ้าของถาม 2026-10-04 — เดิมใบส่งไม่ถึงโผล่ทั้งรายการบิลและแท็บ ⚠ ตัวเลขบนแท็บรวมกันเกินจำนวนบิลจริง)
+     ส่งถึงแล้ว → ✅ ส่งสำเร็จ · ส่งไม่ถึง/ส่งไม่ออก → ⚠ ส่งไม่สำเร็จ · ยกเลิก → ยกเลิก · ที่เหลือ (ยังไม่ส่ง/กำลังส่ง/ไม่มีอีเมล) → รายการบิล */
   var sent=rows.filter(function(v){ return v.status!==STATUS.CANCELLED && v.email_status===EMAIL_STATUS.DELIVERED; });
-  var active=rows.filter(function(v){ return v.status!==STATUS.CANCELLED && v.email_status!==EMAIL_STATUS.DELIVERED; });
+  var failedRows=rows.filter(function(v){ return v.status!==STATUS.CANCELLED && isMailFailed(v); });
+  var active=rows.filter(function(v){ return v.status!==STATUS.CANCELLED && v.email_status!==EMAIL_STATUS.DELIVERED && !isMailFailed(v); });
   var cancelled=rows.filter(function(v){ return v.status===STATUS.CANCELLED; });
+  // ที่อยู่อีเมลที่เคยรับบิลใบอื่นได้ — ใบส่งไม่ถึงที่ใช้ที่อยู่เดียวกัน สถานะอาจผิด (ตัวตรวจของระบบเดิม)
+  okMailCount={};
+  invoices.forEach(function(v){ if(v.email && v.email_status===EMAIL_STATUS.DELIVERED){
+    var k=String(v.email).trim().toLowerCase(); okMailCount[k]=(okMailCount[k]||0)+1; } });
 
   var box=$('listBox');
   box.innerHTML=active.length?active.map(function(v){ return invCard(v); }).join(''):'<div class="empty">ยังไม่มีบิล</div>';
   $('listInfo').textContent='แสดง '+active.length+' ใบ'+(invBranch?(' · สาขา'+brLabel()):'')+
-    ' · เรียงเลขบิลใหม่ → เก่า (ส่งสำเร็จ '+sent.length+' ใบอยู่แท็บส่งสำเร็จ · ยกเลิก '+cancelled.length+' ใบอยู่แท็บยกเลิก)';
+    ' · เรียงเลขบิลใหม่ → เก่า (ส่งสำเร็จ '+sent.length+' ใบ · ส่งไม่สำเร็จ '+failedRows.length+' ใบ · ยกเลิก '+cancelled.length+' ใบ อยู่แท็บของตัวเอง)';
   bindCards(box);
   renderStuck();
 
@@ -2685,15 +2692,24 @@ function renderList(){
   $('cancelEmpty').style.display=cancelled.length?'none':'block';
   bindCards(cbox);
 
-  // แท็บอีเมลส่งไม่สำเร็จ (ดูจากทุกใบของสาขาที่เลือก ไม่สนตัวกรองค้นหา/เดือน — จะได้ไม่พลาดใบที่ต้องส่งซ้ำ)
-  var failed=invoices.filter(function(v){ return v.status!==STATUS.CANCELLED && brPass(v.bill_no) &&
-    (v.email_status===EMAIL_STATUS.FAILED||v.email_status===EMAIL_STATUS.ERROR); }).sort(byBillDesc);
+  // แท็บอีเมลส่งไม่สำเร็จ — รายการตามตัวกรอง · ตัวเลขบนแท็บ/แถบเตือนนับทุกใบของสาขาที่เลือก (ตัวกรองไม่ทำให้พลาดใบที่ต้องส่งซ้ำ)
+  var failed=invoices.filter(function(v){ return v.status!==STATUS.CANCELLED && brPass(v.bill_no) && isMailFailed(v); });
   var fbox=$('failBox');
-  fbox.innerHTML=failed.map(function(v){ return invCard(v,true); }).join('');
+  fbox.innerHTML=failedRows.length?failedRows.map(function(v){ return invCard(v,true); }).join('')
+    :(failed.length?'<div class="empty">ไม่พบตามตัวกรอง — ล้างช่องค้นหา/เดือนเพื่อดูทั้ง '+failed.length+' ใบ</div>':'');
   $('failEmpty').style.display=failed.length?'none':'block';
   var fn=$('failNote');
-  if(failed.length){ fn.style.display='block';
-    fn.innerHTML='⚠ มี '+failed.length+' ใบที่อีเมลส่งไม่ถึงปลายทาง — แก้อีเมลแล้วกดส่งซ้ำได้'; }
+  if(failed.length){
+    var old=failed.filter(function(v){ return v.created_by===IMP_BY; }).length;
+    var known=failed.filter(function(v){ return okMailCount[String(v.email||'').trim().toLowerCase()]; }).length;
+    fn.style.display='block';
+    fn.innerHTML='⚠ มี <b>'+failed.length+' ใบ</b>ที่อีเมลส่งไม่ถึงปลายทาง — แก้อีเมลแล้วกดส่งซ้ำได้'+
+      (failedRows.length<failed.length?(' · แสดง '+failedRows.length+' ใบตามตัวกรอง'):'')+
+      (old?('<br><span class="detail">'+old+' ใบเป็นสถานะที่นำเข้ามาจากระบบเดิม — ตัวตรวจของระบบเดิมนับอีเมลตีกลับฉบับเก่าซ้ำ'+
+        ' (ส่งซ้ำภายใน 2 วันแล้วยังขึ้นว่าตีกลับ) บางใบจึงอาจถึงลูกค้าแล้วจริง · ระบบใหม่นับเฉพาะที่เด้งหลังส่งครั้งล่าสุด'+
+        ' อีเมลถูกต้องแล้วกดส่งซ้ำได้เลย ผลรอบนี้เชื่อได้'+
+        (known?(' · 📬 '+known+' ใบใช้ที่อยู่ที่เคยรับบิลใบอื่นได้ปกติ (มีป้ายในการ์ด)'):'')+'</span>'):'');
+  }
   else fn.style.display='none';
   bindCards(fbox);
 
@@ -2701,7 +2717,7 @@ function renderList(){
   lp.className='pill'+(active.length?'':' zero'); lp.style.background='#1f7a4d';
   var sp=$('sentCount'); sp.textContent=sent.length;
   sp.className='pill'+(sent.length?'':' zero'); sp.style.background='#1f7a4d';
-  var fp=$('failedCount'); fp.textContent=failed.length;
+  var fp=$('failedCount'); fp.textContent=failed.length;   // นับทุกใบของสาขา (ไม่ขึ้นกับตัวกรอง) ให้เห็นตลอดว่ามีค้าง
   fp.className='pill'+(failed.length?'':' zero'); fp.style.background='var(--bad)';
   var cp=$('cancelCount'); cp.textContent=cancelled.length;
   cp.className='pill'+(cancelled.length?'':' zero');
@@ -2744,7 +2760,7 @@ document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
   t.classList.add('active');
   $('panel-'+t.dataset.tab).classList.add('active');
   try{ localStorage.setItem('jjinv_tab', t.dataset.tab); }catch(e){}   // จำหน้าที่เปิดอยู่ — รีเฟรชแล้วกลับมาหน้าเดิม
-  if(t.dataset.tab==='list'||t.dataset.tab==='sent'||t.dataset.tab==='cancelled'){
+  if(t.dataset.tab==='list'||t.dataset.tab==='sent'||t.dataset.tab==='failed'||t.dataset.tab==='cancelled'){
     var pn=$('panel-'+t.dataset.tab); pn.insertBefore($('listFilters'), pn.firstChild);   // แถบกรองตามไปแท็บที่เปิด
   }
   if(t.dataset.tab==='list'||t.dataset.tab==='sent'||t.dataset.tab==='cancelled'||t.dataset.tab==='failed')loadInvoices();
