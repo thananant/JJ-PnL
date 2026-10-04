@@ -33,7 +33,11 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_users'))return {ok:false,status:404,text:async()=>'nf',json:async()=>({})};
       if(method==='POST'&&url.includes('pnl_pv_items')){posts.push({t:'items',rows:JSON.parse(opt.body)});return T([]);}
       if(method==='POST'&&url.includes('pnl_pv')){const b=JSON.parse(opt.body);posts.push({t:'pv',rows:b});return T([{id:77,...b}]);}
+      if(url.includes('pnl_pv_items')&&url.includes('pv_id=eq.77'))return T([{id:501,pv_id:77,supplier_id:1,amount:2140,vat_amount:140,scheduled:false,paid:false},{id:502,pv_id:77,supplier_id:2,amount:1070,vat_amount:70,scheduled:true,paid:false}]);
+      if(url.includes('pnl_pv_items')&&url.includes('pv_id=eq.78'))return T([{id:503,pv_id:78,supplier_id:1,amount:900,vat_amount:0,scheduled:false,paid:false}]);
       if(url.includes('pnl_pv_items'))return T([]);
+      if(url.includes('pnl_pv')&&url.includes('id=eq.77'))return T([{id:77,branch:'JJRD',pv_no:'JJRD-05092026V',pv_date:'2026-09-05',d_from:'2026-08-16',d_to:'2026-08-31',vat_type:'VAT'}]);
+      if(url.includes('pnl_pv')&&url.includes('id=eq.78'))return T([{id:78,branch:'JJRD',pv_no:'JJRD-05092026',pv_date:'2026-09-05',d_from:'2026-08-16',d_to:'2026-08-31',vat_type:'NON-VAT'}]);
       if(url.includes('pnl_pv'))return T([]);
       if(url.includes('pnl_suppliers'))return T(SUPS);
       if(url.includes('pnl_branches'))return T([{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]);
@@ -108,6 +112,25 @@ setTimeout(async()=>{
   out.push('บันทึก PV: หัวใบ 16–31 + รายการ 2 ราย ยอด 2,000 / 1,200: '
     +(!!hd&&hd.rows.d_from==='2026-08-16'&&hd.rows.d_to==='2026-08-31'&&!!it&&it.rows.length===2
       &&it.rows.some(r=>r.supplier_id===1&&r.amount===2000)&&it.rows.some(r=>r.supplier_id===2&&r.amount===1200)));
+  // 3b) เปิดใบ PV (4 ต.ค.): หัวคอลัมน์บอกชัดว่ายอด = ยอดโอน (รวม VAT) + มีคอลัมน์ก่อน VAT ในใบ VAT
+  await w.pvOpen(77); await sleep(120);
+  let mb=d.getElementById('modalBox'); let ths=[...mb.querySelectorAll('table tr:first-child th')].map(t=>t.textContent.trim());
+  out.push('ใบ VAT: หัวคอลัมน์ = ซัพ · ก่อน VAT · VAT · ยอดโอน (รวม VAT) · ตั้งจ่าย · สำเร็จ: '+(JSON.stringify(ths)===JSON.stringify(['ซัพพลายเออร์','ก่อน VAT','VAT','ยอดโอน (รวม VAT)','ตั้งจ่าย','สำเร็จ'])));
+  const r1=[...mb.querySelectorAll('table tr')].find(tr=>tr.textContent.includes('ตลาดสด'));
+  const cells=r1?[...r1.querySelectorAll('td.n')].map(t=>t.textContent.trim()):[];
+  out.push('แถวตลาดสด: ก่อน VAT 2,000.00 · VAT 140.00 · ยอดโอน 2,140.00: '+(JSON.stringify(cells)===JSON.stringify(['2,000.00','140.00','2,140.00'])));
+  const totRow=mb.querySelector('tr.tot'); const tc=totRow?[...totRow.querySelectorAll('td.n')].map(t=>t.textContent.trim()):[];
+  out.push('แถวรวม: 3,000.00 · 210.00 · 3,210.00: '+(JSON.stringify(tc)===JSON.stringify(['3,000.00','210.00','3,210.00'])));
+  w.closeModal();
+  await w.pvOpen(78); await sleep(120);
+  mb=d.getElementById('modalBox'); ths=[...mb.querySelectorAll('table tr:first-child th')].map(t=>t.textContent.trim());
+  out.push('ใบ NON-VAT: หัวคอลัมน์ = ซัพ · ยอดโอน · ตั้งจ่าย · สำเร็จ (ไม่มีคอลัมน์ VAT): '+(JSON.stringify(ths)===JSON.stringify(['ซัพพลายเออร์','ยอดโอน','ตั้งจ่าย','สำเร็จ'])));
+  // ใบพิมพ์ใช้หัวเดียวกัน
+  w.closeModal(); await w.pvOpen(77); await sleep(120);
+  w.pvPrint({id:77,branch:'JJRD',pv_no:'JJRD-05092026V',pv_date:'2026-09-05',d_from:'2026-08-16',d_to:'2026-08-31',vat_type:'VAT'});
+  const pa=d.getElementById('printArea').textContent;
+  out.push('ใบพิมพ์: มีหัว ก่อน VAT / ยอดโอน (รวม VAT) และยอด 2,000.00 · 2,140.00: '+(pa.includes('ก่อน VAT')&&pa.includes('ยอดโอน (รวม VAT)')&&pa.includes('2,000.00')&&pa.includes('2,140.00')));
+  w.closeModal();
   // 4) ตั้งค่าซัพ: มีช่องเลือกรอบทำ PV และค่าเดิมถูกเลือกไว้
   w.supModal(2); await sleep(60);
   const sel=d.getElementById('spCycle');

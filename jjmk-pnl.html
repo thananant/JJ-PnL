@@ -41,6 +41,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 .seg{display:flex;background:#EDE8E0;border-radius:11px;padding:3px;gap:2px}
 .seg button{padding:7px 13px;border-radius:9px;font-weight:600;color:var(--mut);font-size:14px;white-space:nowrap}
 .seg button.on{background:var(--red);color:#fff;box-shadow:0 2px 6px rgba(198,33,39,.35)}
+.seg .seglock{display:flex;align-items:center;padding:0 4px 0 7px;font-size:13px;flex:0 0 auto;cursor:help} /* เห็นเฉพาะสาขา */
 #monthPick{width:auto;padding:7px 10px;font-weight:600;font-size:14px;border-radius:10px}
 #syncDot{width:9px;height:9px;border-radius:50%;background:var(--ok);margin-left:auto;flex:none;transition:.2s}
 #syncDot.busy{background:var(--gold);animation:pul 1s infinite}
@@ -504,6 +505,7 @@ input.spl-saf{width:74px;padding:5px 8px;font-size:14px;text-align:right}
   .twrap,.mxwrap,.tblwrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
   /* ของใช้/อุปกรณ์: จอเล็กเอาปุ่มมาไว้ใต้ชื่อของ ซ่อนคอลัมน์เบิกล่าสุด (ดูได้ในประวัติ) */
   .spl-act.d,#view-sup .spl-lo{display:none}
+  #modalBox .pvx{display:none} /* หน้าต่าง PV จอเล็ก: ซ่อน ก่อน VAT/VAT ให้ยอดโอน+ช่องติ๊กอยู่ในจอ (ใบพิมพ์ยังครบ) */
   .spl-act.m{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;white-space:normal}
   .spl-act.m button{margin-left:0}
   input.spl-saf{width:64px}
@@ -943,7 +945,56 @@ function permOfUser(u,v){
   if(ap)return flagsToPerm(ap[v]);
   return (u.perms||{})[v]||'none';
 }
-function permOf(v){ return permOfUser(S.user,v); }
+/* ---------- เห็นเฉพาะสาขา (เจ้าของสั่ง 2026-10-02 "อยากให้ทุกระบบ กำหนดได้เลยว่า ใครเห็นของสาขาไหนได้บ้าง แบบ payroll") ----------
+   ตั้งที่ 🔑 JJ Access → กล่อง JJ P&L → apps.pnl._br = 'JJLP,JJRD' (คั่นจุลภาค) · ไม่ตั้ง/ว่าง = ทุกสาขา
+   - ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ · apps ว่าง (ยังไม่เคยตั้งใน JJ Access) = ทุกสาขา (กันล็อกคนโดยไม่ตั้งใจ)
+   - รหัสสาขาของ P&L มาจากตาราง pnl_branches (รับทุกรหัสที่มีในตาราง) · ออฟฟิศ: OFFICE ใน JJ Access = JJOF ใน P&L (และกลับกัน)
+   - ทำงานที่: loadCore กรอง S.core.branches ทีเดียว (ปุ่มสาขา/ยอดรวม "ทุกสาขา"/ทุกหน้า) · brIn() ให้คำขอโหมดทุกสาขาดึงเฉพาะสาขาที่ได้ ·
+     api() กันอ่าน/เขียนข้อมูลสาขาอื่น + ตาราง pnl_branches · ซ่อน ตรวจสอบเงิน (Beam ไม่แยกสาขา) / สำรองทุกตาราง / จัดการสาขา
+   - ได้สิทธิ์เฉพาะสาขาที่ไม่มีใน pnl_branches เลย (เช่น ครัวกลางอย่างเดียว) = เข้าแอพนี้ไม่ได้ (NO_BR_MSG)
+   ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
+let SCOPE=null;                                  // null = ทุกสาขา · ['JJLP',...] = รหัสตามที่ตั้งใน JJ Access
+const BR_ALIAS={OFFICE:'JJOF',JJOF:'OFFICE'};    // รหัสออฟฟิศของ JJ Access ↔ ของ P&L
+const SCOPE_HIDE=['recon'];                      // หน้าที่เป็นยอดทั้งบริษัท แยกสาขาไม่ได้ → ซ่อนจากคนที่เห็นเฉพาะสาขา
+const NO_BR_MSG='บัญชีนี้ได้สิทธิ์เฉพาะสาขาที่ไม่มีบัญชีใน JJ P&L — ให้ผู้ดูแลตั้งสาขาที่เห็นได้ในหน้า JJ Access ก่อน';
+function applyScope(u){
+  SCOPE=null;
+  if(!u||u.legacy||isBoss(u))return;
+  const ap=appsPnl(u); if(!ap)return;            // apps ว่าง = ไม่จำกัด
+  const br=String(ap._br||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
+  if(br.length)SCOPE=[...new Set(br)];
+}
+function brOk(code){                             // รหัสสาขานี้อยู่ในสิทธิ์ไหม ('ALL' ไม่ใช่สาขา = ไม่ผ่าน)
+  if(!SCOPE)return true;
+  const c=String(code==null?'':code).trim().toUpperCase(); if(!c)return false;
+  return SCOPE.includes(c)||!!(BR_ALIAS[c]&&SCOPE.includes(BR_ALIAS[c]));
+}
+function brIn(){                                 // ต่อท้ายคำขอโหมด "ทุกสาขา" ให้ดึงเฉพาะสาขาที่เห็นได้ (ไม่จำกัด = ไม่ต่อ)
+  return SCOPE?'&branch=in.('+((S.core&&S.core.branches)||[]).map(b=>encodeURIComponent(b.code)).join(',')+')':'';
+}
+function brPickable(br){                         // เลือกสาขานี้ที่ปุ่มสาขาได้ไหม
+  const L=(S.core&&S.core.branches)||[];
+  return br==='ALL' ? (!SCOPE||L.length>1) : L.some(b=>b.code===br);
+}
+function scopeLabel(){ return ((S.core&&S.core.branches)||[]).map(b=>(b.name||(BRNAME[b.code]||b.code).replace('สาขา',''))).join(', ')||'—'; }
+function scopeDenied(method,path,body){          // คำขอนี้แตะข้อมูลสาขาที่ไม่มีสิทธิ์ไหม
+  if(!SCOPE)return false;
+  const [t,q]=[path.split('?')[0],path.split('?')[1]||''];
+  if(t==='pnl_activity_log'||t==='pnl_users')return false;
+  if(method!=='GET'&&t==='pnl_branches')return true;            // เพิ่ม/แก้/ลบสาขา = เฉพาะคนที่เห็นทุกสาขา
+  if(method!=='GET'){
+    const rows=Array.isArray(body)?body:(body&&typeof body==='object'?[body]:[]);
+    if(rows.some(r=>r&&r.branch!=null&&!brOk(r.branch)))return true;
+  }
+  for(const part of q.split('&')){
+    const m=/^branch=(eq|in)\.(.*)$/.exec(part); if(!m)continue;
+    let v=m[2]; try{ v=decodeURIComponent(v); }catch(e){}
+    const vals=m[1]==='eq'?[v]:v.replace(/^\(|\)$/g,'').split(',');
+    if(vals.some(x=>{ x=x.trim().replace(/^"|"$/g,''); return !(method==='GET'&&x==='ALL')&&!brOk(x); }))return true;
+  }
+  return false;
+}
+function permOf(v){ if(SCOPE&&SCOPE_HIDE.includes(v))return 'none'; return permOfUser(S.user,v); }
 function firstAllowedTab(){ return VIEWS.find(v=>permOf(v)!=='none')||null; } // null = ไม่มีสิทธิ์หน้าใดเลย
 const NO_ACCESS_MSG='บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ JJ P&L — ให้ผู้ดูแลเปิดสิทธิ์ในหน้า JJ Access ก่อน';
 function applyNav(){
@@ -992,6 +1043,11 @@ async function api(method, path, body, prefer, quiet){
       toast('👁 บัญชีของคุณดูหน้านี้ได้อย่างเดียว — แก้ไขไม่ได้',true);
       throw new Error('view-only');
     }
+  }
+  // เห็นเฉพาะสาขา: ห้ามอ่าน/เขียนข้อมูลของสาขาที่ไม่ได้รับสิทธิ์ (กันที่จุดเดียว ทุกคำขอผ่านตรงนี้)
+  if(S.user && scopeDenied(method,path,body)){
+    if(method!=='GET') toast('🔒 บัญชีนี้ไม่มีสิทธิ์ในข้อมูลของสาขานี้',true);
+    throw new Error('🔒 ไม่มีสิทธิ์ในข้อมูลของสาขานี้');
   }
   setBusy(true);
   try{
@@ -1101,7 +1157,9 @@ async function loadCore(){
   S.core = { units, sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix,
     branches:(brs&&brs.length?brs:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]),
     fixGroups: fgs||[] };
-  S.core.branches.forEach(b=>{ if(b.name) BRNAME[b.code]='สาขา'+b.name; });
+  S.core.branches.forEach(b=>{ if(b.name) BRNAME[b.code]='สาขา'+b.name; }); // ชื่อครบทุกสาขา (ไว้แสดงป้าย)
+  if(SCOPE) S.core.branches=S.core.branches.filter(b=>brOk(b.code));      // เห็นเฉพาะสาขา: เหลือแค่สาขาที่ได้สิทธิ์ (ทุกหน้า/ยอดรวมใช้รายการนี้)
+  BRNAME.ALL=SCOPE?'สาขาที่ดูแล (รวม)':'ทุกสาขา (รวม)';
 }
 function mkey(b,m){ return b+'|'+m; }
 /* ---------- สาขา "ส่วนกลาง" (ออฟฟิศ) — มีเฉพาะรายจ่าย ---------- */
@@ -1220,7 +1278,7 @@ async function renderIncomeAll(el){
   const days=monthDays(S.m), from=S.m+'-01', to=dstr(S.m,days);
   const brs=S.core.branches.filter(b=>!b.is_central).map(b=>b.code);
   let rows=[];
-  try{ rows=await selAll('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}&order=d`); }catch(e){}
+  try{ rows=await selAll('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}${brIn()}&order=d`); }catch(e){}
   const M={}; rows.forEach(r=>{ const c=calcDay(r); M[r.d+'|'+r.branch]=c?c.incVat:0; });
   const bt={}; let g=0;
   let body='';
@@ -1236,7 +1294,7 @@ async function renderIncomeAll(el){
   el.innerHTML=`
   <div class="perbar">
     ${brs.map(b=>`<div class="pcell"><div class="l">${esc(BRNAME[b]||b)}</div><div class="v">฿${fmtI(bt[b]||0)}</div></div>`).join('')}
-    <div class="pcell hot"><div class="l">รวมทุกสาขา</div><div class="v">฿${fmtI(g)}</div></div>
+    <div class="pcell hot"><div class="l">${SCOPE?'รวมสาขาที่ดูแล':'รวมทุกสาขา'}</div><div class="v">฿${fmtI(g)}</div></div>
   </div>
   <div class="card"><h3>ยอดขายรายวัน (รวม VAT) · ทุกสาขา <span class="sp">${monthLabel(S.m)}</span></h3>
     <div class="xs mut" style="margin:-4px 0 8px">โหมดดูภาพรวม — จะแก้ไขตัวเลข ให้สลับไปสาขานั้นก่อน</div>
@@ -1250,7 +1308,7 @@ async function renderExpAll(el){
   const days=monthDays(S.m), from=S.m+'-01', to=dstr(S.m,days);
   const brs=S.core.branches.map(b=>b.code);
   let rows=[];
-  try{ rows=await selAll('pnl_expense_daily',`select=branch,d,amount&d=gte.${from}&d=lte.${to}&order=d`); }catch(e){}
+  try{ rows=await selAll('pnl_expense_daily',`select=branch,d,amount&d=gte.${from}&d=lte.${to}${brIn()}&order=d`); }catch(e){}
   const M={}; rows.forEach(r=>{ M[r.d+'|'+r.branch]=(M[r.d+'|'+r.branch]||0)+num(r.amount); });
   const bt={}; let g=0; let body='';
   for(let d2=1; d2<=days; d2++){
@@ -1265,7 +1323,7 @@ async function renderExpAll(el){
   el.innerHTML=`
   <div class="perbar">
     ${brs.map(b=>`<div class="pcell"><div class="l">${esc(BRNAME[b]||b)}</div><div class="v">฿${fmtI(bt[b]||0)}</div></div>`).join('')}
-    <div class="pcell hot"><div class="l">รวมทุกสาขา</div><div class="v">฿${fmtI(g)}</div></div>
+    <div class="pcell hot"><div class="l">${SCOPE?'รวมสาขาที่ดูแล':'รวมทุกสาขา'}</div><div class="v">฿${fmtI(g)}</div></div>
   </div>
   <div class="card"><h3>รายจ่ายซัพพลายเออร์รายวัน · ทุกสาขา <span class="sp">${monthLabel(S.m)}</span></h3>
     <div class="xs mut" style="margin:-4px 0 8px">ยอดบิลซัพรวมต่อวันของแต่ละสาขา (ไม่รวม Fix cost) · โหมดดูภาพรวม — คีย์บิลให้สลับไปสาขานั้นก่อน</div>
@@ -1284,6 +1342,7 @@ function allNotice(title){
       ${S.core.branches.map(b=>`<button class="btn dk sm2" onclick="pickBranch('${b.code}')">${esc(BRNAME[b.code]||b.name||b.code)}</button>`).join('')}</div></div>`;
 }
 function brModal(code){
+  if(SCOPE){ toast('🔒 จัดการสาขาได้เฉพาะบัญชีที่เห็นทุกสาขา',true); return; }
   const b=code?S.core.branches.find(x=>x.code===code):{code:'',name:''};
   openModal(`<h3>${code?'แก้ไขสาขา':'เพิ่มสาขาใหม่'}</h3>
     <div class="fld"><label>รหัสสาขา (อังกฤษ/ตัวเลข 2–10 ตัว เช่น JJBN)</label>
@@ -1361,11 +1420,15 @@ async function brDelete(code){
 }
 function renderBrSeg(){
   const seg=document.getElementById('brSeg'); if(!seg||!S.core)return;
-  seg.innerHTML = S.core.branches.map(b=>`<button data-br="${b.code}" class="${S.br===b.code?'on':''}">${esc(b.name||(BRNAME[b.code]||b.code).replace('สาขา',''))}</button>`).join('')
-    + `<button data-br="ALL" class="${S.br==='ALL'?'on':''}">ทุกสาขา</button>`;
+  // เห็นเฉพาะสาขา: มีกุญแจนำหน้า · ปุ่ม "รวม" โชว์เมื่อเห็นได้ ≥2 สาขา (รวมเฉพาะสาขาที่ดูแล)
+  seg.title=SCOPE?'🔒 บัญชีนี้เห็นเฉพาะ '+scopeLabel():'';
+  seg.innerHTML = (SCOPE?'<span class="seglock" aria-hidden="true">🔒</span>':'')
+    + S.core.branches.map(b=>`<button data-br="${b.code}" class="${S.br===b.code?'on':''}">${esc(b.name||(BRNAME[b.code]||b.code).replace('สาขา',''))}</button>`).join('')
+    + (brPickable('ALL')?`<button data-br="ALL" class="${S.br==='ALL'?'on':''}">${SCOPE?'รวมที่ดูแล':'ทุกสาขา'}</button>`:'');
   applyNav();
 }
 function pickBranch(br){
+  if(!brPickable(br)){ toast('🔒 บัญชีนี้ไม่มีสิทธิ์ดูสาขานี้',true); return; }
   S.br=br; LS.set('jjpnl_br',br);
   document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x.dataset.br===br));
   applyNav();
@@ -1530,7 +1593,11 @@ async function userSave(id){
   if(!name||!uname){toast('ใส่ชื่อและ username ก่อนครับ',true);return;}
   const perms={}, pnlFlags={}; // perms เก่าเลิกใช้แล้ว (ล้างเป็น {}) — สิทธิ์อยู่ที่ apps.pnl แหล่งเดียว ให้ JJ Access "ปิดแอพนี้" ปิดได้จริง
   VIEWS.forEach(v=>{const r=document.querySelector(`input[name="pm_${v}"]:checked`); const fl=permToFlags(r?r.value:'none'); if(fl)pnlFlags[v]=fl;});
-  const withApps=u=>Object.assign({},(u&&u.apps&&typeof u.apps==='object')?u.apps:{},{pnl:pnlFlags}); // ให้หน้า JJ Access เห็นค่าเดียวกัน
+  const withApps=u=>{ // ให้หน้า JJ Access เห็นค่าเดียวกัน · คงคีย์ขึ้นต้น _ ของ JJ Access ไว้ (เช่น _br = สาขาที่เห็น) ไม่งั้นบันทึกจากหน้านี้แล้วสิทธิ์รายสาขาหาย
+    const a=(u&&u.apps&&typeof u.apps==='object')?u.apps:{}, old=(a.pnl&&typeof a.pnl==='object')?a.pnl:{}, keep={};
+    if(Object.keys(pnlFlags).length) Object.keys(old).forEach(k=>{ if(k.charAt(0)==='_')keep[k]=old[k]; });
+    return Object.assign({},a,{pnl:Object.assign(keep,pnlFlags)});
+  };
   try{
     if(id){
       let cur=(S._users||[]).find(x=>x.id===id)||{};
@@ -1621,6 +1688,7 @@ async function authGate(){
 }
 function setUser(u){
   S.user={id:u.id,username:u.username,display_name:u.display_name,role:u.role,perms:u.perms||{},apps:(u.apps&&typeof u.apps==='object')?u.apps:{}};
+  applyScope(S.user); // เห็นเฉพาะสาขา (apps.pnl._br) — อ่านจาก pnl_users ทุกครั้งที่เปิด/ล็อกอิน
   LS.set('jjpnl_auth',{u:u.username,h:u.pass_hash,t:Date.now()});
   startIdleWatch();
 }
@@ -1710,7 +1778,8 @@ function paintUser(){
   if(!S.user){el.innerHTML='';return;}
   el.innerHTML=`<div style="padding:8px 12px;font-size:12px;color:#F2DCDC">
     👤 <b>${esc(S.user.display_name)}</b> <span style="opacity:.7">· ${S.user.legacy?'โหมดเดิม':(ROLE_LABEL[S.user.role]||S.user.role)}</span>
-    ${S.user.legacy?'':`<button class="hintlink" style="color:#F3C74F;margin-left:6px" onclick="logout()">ออก</button>`}</div>`;
+    ${S.user.legacy?'':`<button class="hintlink" style="color:#F3C74F;margin-left:6px" onclick="logout()">ออก</button>`}
+    ${SCOPE?`<div id="permNote" style="margin-top:3px;opacity:.85" title="ตั้งที่ JJ Access">🔒 เห็นเฉพาะ ${esc(scopeLabel())}</div>`:''}</div>`;
 }
 // ── Pull-to-refresh (มือถือ): ลากหน้าจอลงจากบนสุด = ดึงข้อมูลล่าสุด ──
 const PTR={on:false,y0:0,pull:0,lock:false};
@@ -1782,6 +1851,7 @@ async function boot(){
   document.getElementById('monthPick').value=S.m;
   document.getElementById('brSeg').onclick=async e=>{
     const btn=e.target.closest('button'); if(!btn||!btn.dataset.br)return;
+    if(!brPickable(btn.dataset.br))return;   // เห็นเฉพาะสาขา (กันปุ่มค้างจากก่อนโหลดรายชื่อสาขา)
     S.br=btn.dataset.br; LS.set('jjpnl_br',S.br);
     document.querySelectorAll('#brSeg button').forEach(x=>x.classList.toggle('on',x===btn));
     applyNav(); // เมนูซ้ายอัปเดตตามสาขาทันที (ส่วนกลางซ่อนแท็บที่ไม่เกี่ยว)
@@ -1814,7 +1884,12 @@ async function boot(){
   try{ await loadCore(); }catch(e){
     document.getElementById('view-dash').innerHTML='<div class="empty">เชื่อมต่อไม่ได้ — ตรวจ URL/Key ในหน้าตั้งค่า<br><span class="xs">'+esc(e.message)+'</span></div>'; return;
   }
-  if(S.br!=='ALL' && !S.core.branches.some(b=>b.code===S.br)) S.br=(S.core.branches[0]||{}).code||'JJRD';
+  if(SCOPE&&!S.core.branches.length){ // ได้สิทธิ์เฉพาะสาขาที่ไม่มีใน P&L (เช่น ครัวกลางอย่างเดียว) = เข้าไม่ได้
+    document.getElementById('app').style.display='none';
+    S.user=null; SCOPE=null; LS.set('jjpnl_auth',null); showLogin(false);
+    const m=document.getElementById('lgMsg'); if(m)m.textContent=NO_BR_MSG; return;
+  }
+  if(!brPickable(S.br)){ S.br=(S.core.branches[0]||{}).code||'JJRD'; LS.set('jjpnl_br',S.br); } // สาขาที่จำไว้ไม่มีแล้ว/ไม่มีสิทธิ์ → สาขาแรกที่เห็นได้
   renderBrSeg();
   const last=LS.get('jjpnl_view',null);
   let startTab = last && VIEWS.includes(last.tab) ? last.tab : 'dash';
@@ -1854,7 +1929,7 @@ async function splFresh(it){ // ยอดสดจาก view (ถ้าอ่�
 function splInMonth(d){ return d>=S.m+'-01'&&d<=dstr(S.m,monthDays(S.m)); }
 RENDER.sup = async (el)=>{
   S.spl=S.spl||{cat:'',q:'',low:false};
-  const brQ=S.br!=='ALL'?'&branch=eq.'+S.br:'';
+  const brQ=S.br!=='ALL'?'&branch=eq.'+S.br:brIn();
   const mF=S.m+'-01', mT=dstr(S.m,monthDays(S.m));
   let items=[],moves=[],outM=[];
   try{
@@ -2118,7 +2193,7 @@ async function splItemDel(id){
 RENDER.ck = async (el)=>{
   const F=S.m+'-01', T=dstr(S.m,monthDays(S.m));
   const pmm=prevMonth(S.m), PF=pmm+'-01', PT=dstr(pmm,monthDays(pmm));
-  const brQ = S.br!=='ALL' ? '&branch=eq.'+S.br : '';
+  const brQ = S.br!=='ALL' ? '&branch=eq.'+S.br : brIn();
   let ords=[],pords=[],recipes=[],openOrds=[],items=[];
   try{
     [ords,pords,recipes,openOrds]=await Promise.all([
@@ -2332,7 +2407,7 @@ function benchModal(key){
 async function loadBenchWindow(br,m){
   S.benchCache=S.benchCache||{};
   const key=br+'|'+m; if(S.benchCache[key]) return S.benchCache[key];
-  const brF = br==='ALL' ? '' : `&branch=eq.${br}`;
+  const brF = br==='ALL' ? brIn() : `&branch=eq.${br}`;
   // เฉลี่ยใช้ "ทุกเดือนที่มีข้อมูล" ก่อนเดือนที่ดู — หาเดือนแรกสุดที่มีข้อมูล (จริงหรือย้อนหลัง) ก่อน
   const mMax=prevMonth(m);
   let mMin=mMax;
@@ -3419,7 +3494,7 @@ const USE_GRP_LBL=['จ–พฤ','ศ','ส–อา'];
 function useGrp(d){ const wd=new Date(d+'T00:00:00').getDay(); return wd===5?1:(wd===6||wd===0)?2:0; }
 RENDER.usage = async (el)=>{
   const ALL=S.br==='ALL';
-  const brFilter=ALL?'':`&branch=eq.${S.br}`;
+  const brFilter=ALL?brIn():`&branch=eq.${S.br}`;
   const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
   const pm=prevMonth(S.m);
   const pFrom=pm+'-01', pTo=dstr(pm,monthDays(pm));
@@ -3444,7 +3519,7 @@ RENDER.usage = async (el)=>{
   let dd=0; const salesG=[0,0,0], daysG=[0,0,0], salesBr={};
   if(ALL){
     try{
-      const inc=await selAll('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}&order=d`);
+      const inc=await selAll('pnl_income_daily',`select=*&d=gte.${from}&d=lte.${to}${brIn()}&order=d`);
       dd=new Set(inc.filter(r=>hasIncData(r)).map(r=>r.d)).size;
       const byD={}; inc.forEach(r=>{ byD[r.d]=(byD[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm);
         const v2=num(r.sales_pos_am)+num(r.sales_pos_pm); if(r.branch&&v2>0) salesBr[r.branch]=(salesBr[r.branch]||0)+v2; });
@@ -3651,7 +3726,7 @@ async function stkBadge(){
     const el=document.querySelector('.sb-item[data-v="actual"]');
     if(!el)return;
     let n=0;
-    if(STK_BR[S.br]){
+    if(STK_BR[S.br]&&brOk(S.br)){
       const [prods,map]=await Promise.all([
         selAllQ('products','select=id,branch_id&deleted_at=is.null&order=id').catch(()=>[]),
         selAllQ('pnl_stock_map','select=product_id&order=id').catch(()=>[])
@@ -3680,6 +3755,7 @@ async function loadStkNames(rows){
   }
   const m={}, none={};
   (rows||[]).forEach(r=>{
+    if(!brOk(r.branch))return; // เห็นเฉพาะสาขา
     if(String(r.product_id||'').startsWith('none:')){ (none[ocrNorm(r.pnl_item)]??=new Set()).add(r.branch); return; }
     if(!r.active||!r.pnl_item||r.pnl_item==='-')return;
     const nm=String(r.stock_name||r.product_name||'').trim(); if(!nm)return;
@@ -4035,6 +4111,7 @@ function stkRowPayload(row){ // อ่านค่าจากแถวผูก
 }
 function stkMirrorRows(baseRows){ // ผูกที่สาขานี้ -> สร้างแถวผูกของอีกสาขาให้อัตโนมัติ (ชื่อ+หน่วยต้องตรง และยังไม่เคยผูก)
   const st=S._stk; if(!st)return [];
+  if(!brOk(st.brOther))return [];   // เห็นเฉพาะสาขา: อีกสาขาไม่ได้รับสิทธิ์ = ไม่ผูกให้
   const used={}; const out=[];
   baseRows.forEach(r=>{
     const sib=(st.prodsAll||[]).find(x=>x.branch_id===st.sbidOther&&ocrNorm(x.name)===ocrNorm(r.product_name)&&String(x.unit||'')===String(r.stock_unit||'')&&!st.map[x.id]&&!used[x.id]);
@@ -4150,7 +4227,7 @@ async function masterFillXlsx(){ // 📋 แม่บทกรอกเอง: �
   const to=new Date(), z=d=>d.toISOString().slice(0,10);
   const from=new Date(+to-92*86400000);
   try{ si=await selAllQ('pnl_sup_items','select=item,unit,supplier_id&order=item'); }catch(e){}
-  try{ bi=await selAll('pnl_bill_items',`select=branch,item,unit&d=gte.${z(from)}&d=lte.${z(to)}&order=d`); }catch(e){}
+  try{ bi=await selAll('pnl_bill_items',`select=branch,item,unit&d=gte.${z(from)}&d=lte.${z(to)}${brIn()}&order=d`); }catch(e){}
   try{ prods=await selAllQ('products','select=name,unit,sup&deleted_at=is.null&order=name').catch(()=>[]); }catch(e){}
   const M={};
   const put=(item,unit,supName,br)=>{ const k=ocrNorm(item); if(!k)return;
@@ -5445,7 +5522,7 @@ async function dtJump(d,sid,bn){
 // สินค้าเดียวกัน (ชื่อ+หน่วยตามบิล) ที่เดือนนี้ซื้อจากมากกว่า 1 ซัพ — ไว้แจ้งเตือนในหน้าสรุป
 async function sumDupItems(br,m){
   const from=m+'-01', to=dstr(m,monthDays(m));
-  const brF=br==='ALL'?'':`&branch=eq.${br}`;
+  const brF=br==='ALL'?brIn():`&branch=eq.${br}`;
   const rows=await sel('pnl_bill_items',`select=supplier_id,item,unit,qty,price,discount,d${brF}&d=gte.${from}&d=lte.${to}`).catch(()=>[]);
   const gi={};
   rows.forEach(r=>{
@@ -5742,16 +5819,16 @@ async function pvOpen(id){
   openModal(`<h3>${esc(pv.pv_no)} <span class="chip ${isVat?'gold':'mid'}">${pv.vat_type}</span></h3>
     <div class="sm mut" style="margin:-8px 0 10px">${BRNAME[pv.branch]} · งวด ${thDate(pv.d_from)} – ${thDate(pv.d_to)} · วันที่ ${thDate(pv.pv_date)}</div>
     <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
-      <tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th>${isVat?'<th class="right">VAT</th>':''}<th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
+      <tr><th>ซัพพลายเออร์</th>${isVat?'<th class="right pvx">ก่อน VAT</th><th class="right pvx">VAT</th>':''}<th class="right">ยอดโอน${isVat?' (รวม VAT)':''}</th><th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
       ${items.map(x=>{const s=S.core.supById[x.supplier_id]||{name:'?'};
         return `<tr><td><div class="b sm">${esc(s.name)}</div>
         <div class="xs" style="margin-top:2px">🏦 ${esc(s.bank||'-')} · <b style="font-size:13px;letter-spacing:.03em">${esc(s.account_no||'-')}</b>${s.account_no?` <button class="hintlink" onclick="copyTxt('${esc(s.account_no)}')">คัดลอก</button>`:''}</div>
         <div class="xs mut">${esc(s.account_name||'')}</div>
         <div style="margin-top:4px"><button class="hintlink" onclick="pvSlipPick(${x.supplier_id},'${pv.d_from}','${pv.d_to}',${x.id})">📎 แนบสลิป + ติ๊กบิลรอบนี้</button></div></td>
-        <td class="n">${fmt(x.amount,2)}</td>${isVat?`<td class="n xs">${fmt(x.vat_amount,2)}</td>`:''}
+        ${isVat?`<td class="n xs pvx">${fmt(num(x.amount)-num(x.vat_amount),2)}</td><td class="n xs pvx">${fmt(x.vat_amount,2)}</td>`:''}<td class="n b">${fmt(x.amount,2)}</td>
         <td><input type="checkbox" style="width:20px;height:20px" ${x.scheduled?'checked':''} onchange="upd('pnl_pv_items','id=eq.${x.id}',{scheduled:this.checked})"></td>
         <td><input type="checkbox" style="width:20px;height:20px" ${x.paid?'checked':''} onchange="upd('pnl_pv_items','id=eq.${x.id}',{paid:this.checked})"></td></tr>`;}).join('')}
-      <tr class="tot"><td>รวม</td><td class="n">${fmt(tot,2)}</td>${isVat?`<td class="n">${fmt(totV,2)}</td>`:''}<td colspan="2"></td></tr>
+      <tr class="tot"><td>รวม</td>${isVat?`<td class="n pvx">${fmt(tot-totV,2)}</td><td class="n pvx">${fmt(totV,2)}</td>`:''}<td class="n">${fmt(tot,2)}</td><td colspan="2"></td></tr>
     </table></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn gh sm2" style="color:var(--bad)" onclick="pvDel(${pv.id})">ลบ</button>
@@ -5780,14 +5857,14 @@ function pvPrint(pv){
     </div>
     <table style="width:100%;margin-top:10px;border-collapse:collapse">
       <tr><th style="text-align:left">ลำดับ</th><th style="text-align:left">ซัพพลายเออร์</th><th style="text-align:left">ธนาคาร</th><th style="text-align:left">เลขที่บัญชี / ชื่อบัญชี</th>
-        <th style="text-align:right">ยอดรวม</th>${isVat?'<th style="text-align:right">VAT</th>':''}<th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
+        ${isVat?'<th style="text-align:right">ก่อน VAT</th><th style="text-align:right">VAT</th>':''}<th style="text-align:right">ยอดโอน${isVat?' (รวม VAT)':''}</th><th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
       ${items.map((x,i)=>{const s=S.core.supById[x.supplier_id]||{};
         return `<tr><td>${i+1}</td><td>${esc(s.full_name||s.name||'')}</td><td>${esc(s.bank||'')}</td>
         <td>${esc(s.account_no||'')}<br><span style="font-size:10px">${esc(s.account_name||'')}</span></td>
-        <td style="text-align:right">${fmt(x.amount,2)}</td>${isVat?`<td style="text-align:right">${fmt(x.vat_amount,2)}</td>`:''}
+        ${isVat?`<td style="text-align:right">${fmt(num(x.amount)-num(x.vat_amount),2)}</td><td style="text-align:right">${fmt(x.vat_amount,2)}</td>`:''}<td style="text-align:right">${fmt(x.amount,2)}</td>
         <td style="text-align:center">${x.scheduled?'☑':'☐'}</td><td style="text-align:center">${x.paid?'☑':'☐'}</td></tr>`;}).join('')}
       <tr style="border-top:1.5px solid #000"><td></td><td style="font-weight:700">รวม</td><td></td><td></td>
-        <td style="text-align:right;font-weight:700">${fmt(tot,2)}</td>${isVat?`<td style="text-align:right;font-weight:700">${fmt(totV,2)}</td>`:''}<td></td><td></td></tr>
+        ${isVat?`<td style="text-align:right;font-weight:700">${fmt(tot-totV,2)}</td><td style="text-align:right;font-weight:700">${fmt(totV,2)}</td>`:''}<td style="text-align:right;font-weight:700">${fmt(tot,2)}</td><td></td><td></td></tr>
     </table>
     <div style="display:flex;gap:60px;margin-top:44px">
       <div>ผู้จัดทำ ........................................</div><div>ผู้ตรวจ ........................................</div><div>ผู้อนุมัติ ........................................</div>
@@ -6196,13 +6273,14 @@ async function loadHistList(){
   const el=document.getElementById('hiList'); if(!el)return;
   try{
     const [hs,hi]=await Promise.all([
-      sel('pnl_history','select=*&order=month.desc'),
-      sel('pnl_history_items','select=branch,month')
+      sel('pnl_history','select=*'+brIn()+'&order=month.desc'),
+      sel('pnl_history_items','select=branch,month'+brIn())
     ]);
-    if(!hs.length){el.innerHTML='<div class="xs mut">ยังไม่มีข้อมูลย้อนหลังที่นำเข้า</div>';return;}
+    const hsS=hs.filter(h=>brOk(h.branch)); // เห็นเฉพาะสาขา
+    if(!hsS.length){el.innerHTML='<div class="xs mut">ยังไม่มีข้อมูลย้อนหลังที่นำเข้า</div>';return;}
     const cnt={}; hi.forEach(r=>{const k=r.branch+'|'+r.month; cnt[k]=(cnt[k]||0)+1;});
     el.innerHTML='<div class="twrap"><table><tr><th>เดือน</th><th>สาขา</th><th class="right">รายได้ฐาน</th><th class="right">รายการ</th><th></th></tr>'+
-      hs.map(h=>`<tr><td>${monthLabel(h.month)}</td><td>${(BRNAME[h.branch]||h.branch).replace('สาขา','')}</td>
+      hsS.map(h=>`<tr><td>${monthLabel(h.month)}</td><td>${(BRNAME[h.branch]||h.branch).replace('สาขา','')}</td>
         <td class="n">฿${fmtI(h.revenue)}</td><td class="n">${cnt[h.branch+'|'+h.month]||0}</td>
         <td class="right"><button class="hintlink" onclick="delHist('${h.branch}','${h.month}')">ลบ</button></td></tr>`).join('')+'</table></div>';
   }catch(e){ el.innerHTML='<div class="xs mut">โหลดรายการไม่ได้ — ต้องรัน jjmk_pnl_history.sql ใน Supabase ก่อน</div>'; }
@@ -6221,6 +6299,7 @@ RENDER.set = async (el)=>{
     ${S.user&&!S.user.legacy?`
     <div class="card"><h3>👤 บัญชีของฉัน</h3>
       <div class="sm"><b>${esc(S.user.display_name)}</b> <span class="mut">· ${esc(S.user.username)} · ${isBoss(S.user)?(ROLE_LABEL[S.user.role]||S.user.role)+' (ทุกสิทธิ์)':(ROLE_LABEL[S.user.role]||S.user.role)}</span></div>
+      ${SCOPE?`<div class="xs" style="margin-top:4px;color:var(--blue)">🔒 เห็นเฉพาะ <b>${esc(scopeLabel())}</b> — ตั้งที่หน้า JJ Access (ผู้ดูแลระบบ)</div>`:''}
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn gh sm2" onclick="pwModal()">🔑 เปลี่ยนรหัสผ่าน</button>
         <button class="btn gh sm2" style="color:var(--bad)" onclick="logout()">ออกจากระบบ</button></div>
@@ -6254,12 +6333,12 @@ RENDER.set = async (el)=>{
       <div id="hiStatus" class="xs mut" style="margin-top:8px"></div>
       <div id="hiList" style="margin-top:10px"></div>
     </div>
-    <div class="card"><h3>สาขา <span class="sp"><button class="hintlink" onclick="brModal(null)">+ เพิ่มสาขา</button></span></h3>
+    ${SCOPE?'':`<div class="card"><h3>สาขา <span class="sp"><button class="hintlink" onclick="brModal(null)">+ เพิ่มสาขา</button></span></h3>
       <div class="xs mut" style="margin-bottom:8px">เพิ่มสาขาใหม่ได้เลย — ปุ่มเลือกสาขา ทุกหน้า รายงาน และสำรอง NAS รองรับอัตโนมัติ · รหัสใช้ภาษาอังกฤษ (ไปโชว์ในเลข PV และชื่อโฟลเดอร์สำรอง)</div>
       <div class="twrap"><table>
       ${S.core.branches.map(b=>`<tr><td><span class="b sm">${esc(b.name||'')}</span> <span class="xs mut">· ${esc(b.code)}</span>${b.is_central?' <span class="xs" style="color:var(--blue)">🏢 ส่วนกลาง</span>':''}</td>
         <td class="right"><button class="hintlink" onclick="brModal('${b.code}')">แก้ไขชื่อ</button></td></tr>`).join('')}
-      </table></div></div>
+      </table></div></div>`}
     <div class="card"><h3>ข้อมูลบริษัท (หัวเอกสาร PV)</h3>
       <div class="fld"><label>ชื่อบริษัท</label><input id="coName" value="${esc(co.name)}"></div>
       <div class="grid2"><div class="fld"><label>ที่อยู่ 1</label><input id="coA1" value="${esc(co.addr1)}"></div>
@@ -6270,7 +6349,7 @@ RENDER.set = async (el)=>{
       <p class="sm mut" style="margin:0 0 10px">ดาวน์โหลดเป็น Excel แล้ววางลงโฟลเดอร์ NAS ได้เลย หรือใช้สคริปต์ <b>nas_backup_jjmk.py</b> ตั้งเวลาสำรองอัตโนมัติทุกคืน (ดูไฟล์ SETUP_NAS.md)</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn dk sm2" onclick="exportMonth()">📥 สำรองเดือนนี้ (.xlsx)</button>
-        <button class="btn gh sm2" onclick="exportAll()">📦 สำรองทั้งหมดทุกตาราง (.xlsx)</button></div></div>
+        ${SCOPE?'':'<button class="btn gh sm2" onclick="exportAll()">📦 สำรองทั้งหมดทุกตาราง (.xlsx)</button>'}</div></div>
   </div>
   <div>
     <div class="card"><h3>📷 สถิติการสแกนบิล (OCR)</h3>
@@ -6638,6 +6717,7 @@ async function fetchAllRows(t){
   return rows;
 }
 async function exportAll(){
+  if(SCOPE){ toast('🔒 สำรองทุกตารางได้เฉพาะบัญชีที่เห็นทุกสาขา',true); return; } // มีข้อมูลทุกสาขา
   if(typeof XLSX==='undefined'){toast('โหลดตัวสร้าง Excel ไม่ขึ้น (เช็คเน็ต)',true);return;}
   toast('กำลังดึงข้อมูลทั้งหมด...');
   const wb=XLSX.utils.book_new();
