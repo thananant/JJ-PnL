@@ -505,6 +505,7 @@ input.spl-saf{width:74px;padding:5px 8px;font-size:14px;text-align:right}
   .twrap,.mxwrap,.tblwrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
   /* ของใช้/อุปกรณ์: จอเล็กเอาปุ่มมาไว้ใต้ชื่อของ ซ่อนคอลัมน์เบิกล่าสุด (ดูได้ในประวัติ) */
   .spl-act.d,#view-sup .spl-lo{display:none}
+  #modalBox .pvx{display:none} /* หน้าต่าง PV จอเล็ก: ซ่อน ก่อน VAT/VAT ให้ยอดโอน+ช่องติ๊กอยู่ในจอ (ใบพิมพ์ยังครบ) */
   .spl-act.m{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;white-space:normal}
   .spl-act.m button{margin-left:0}
   input.spl-saf{width:64px}
@@ -5818,16 +5819,16 @@ async function pvOpen(id){
   openModal(`<h3>${esc(pv.pv_no)} <span class="chip ${isVat?'gold':'mid'}">${pv.vat_type}</span></h3>
     <div class="sm mut" style="margin:-8px 0 10px">${BRNAME[pv.branch]} · งวด ${thDate(pv.d_from)} – ${thDate(pv.d_to)} · วันที่ ${thDate(pv.pv_date)}</div>
     <div class="twrap" style="max-height:46dvh;overflow-y:auto"><table>
-      <tr><th>ซัพพลายเออร์</th><th class="right">ยอด</th>${isVat?'<th class="right">VAT</th>':''}<th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
+      <tr><th>ซัพพลายเออร์</th>${isVat?'<th class="right pvx">ก่อน VAT</th><th class="right pvx">VAT</th>':''}<th class="right">ยอดโอน${isVat?' (รวม VAT)':''}</th><th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
       ${items.map(x=>{const s=S.core.supById[x.supplier_id]||{name:'?'};
         return `<tr><td><div class="b sm">${esc(s.name)}</div>
         <div class="xs" style="margin-top:2px">🏦 ${esc(s.bank||'-')} · <b style="font-size:13px;letter-spacing:.03em">${esc(s.account_no||'-')}</b>${s.account_no?` <button class="hintlink" onclick="copyTxt('${esc(s.account_no)}')">คัดลอก</button>`:''}</div>
         <div class="xs mut">${esc(s.account_name||'')}</div>
         <div style="margin-top:4px"><button class="hintlink" onclick="pvSlipPick(${x.supplier_id},'${pv.d_from}','${pv.d_to}',${x.id})">📎 แนบสลิป + ติ๊กบิลรอบนี้</button></div></td>
-        <td class="n">${fmt(x.amount,2)}</td>${isVat?`<td class="n xs">${fmt(x.vat_amount,2)}</td>`:''}
+        ${isVat?`<td class="n xs pvx">${fmt(num(x.amount)-num(x.vat_amount),2)}</td><td class="n xs pvx">${fmt(x.vat_amount,2)}</td>`:''}<td class="n b">${fmt(x.amount,2)}</td>
         <td><input type="checkbox" style="width:20px;height:20px" ${x.scheduled?'checked':''} onchange="upd('pnl_pv_items','id=eq.${x.id}',{scheduled:this.checked})"></td>
         <td><input type="checkbox" style="width:20px;height:20px" ${x.paid?'checked':''} onchange="upd('pnl_pv_items','id=eq.${x.id}',{paid:this.checked})"></td></tr>`;}).join('')}
-      <tr class="tot"><td>รวม</td><td class="n">${fmt(tot,2)}</td>${isVat?`<td class="n">${fmt(totV,2)}</td>`:''}<td colspan="2"></td></tr>
+      <tr class="tot"><td>รวม</td>${isVat?`<td class="n pvx">${fmt(tot-totV,2)}</td><td class="n pvx">${fmt(totV,2)}</td>`:''}<td class="n">${fmt(tot,2)}</td><td colspan="2"></td></tr>
     </table></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn gh sm2" style="color:var(--bad)" onclick="pvDel(${pv.id})">ลบ</button>
@@ -5856,14 +5857,14 @@ function pvPrint(pv){
     </div>
     <table style="width:100%;margin-top:10px;border-collapse:collapse">
       <tr><th style="text-align:left">ลำดับ</th><th style="text-align:left">ซัพพลายเออร์</th><th style="text-align:left">ธนาคาร</th><th style="text-align:left">เลขที่บัญชี / ชื่อบัญชี</th>
-        <th style="text-align:right">ยอดรวม</th>${isVat?'<th style="text-align:right">VAT</th>':''}<th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
+        ${isVat?'<th style="text-align:right">ก่อน VAT</th><th style="text-align:right">VAT</th>':''}<th style="text-align:right">ยอดโอน${isVat?' (รวม VAT)':''}</th><th>ตั้งจ่าย</th><th>สำเร็จ</th></tr>
       ${items.map((x,i)=>{const s=S.core.supById[x.supplier_id]||{};
         return `<tr><td>${i+1}</td><td>${esc(s.full_name||s.name||'')}</td><td>${esc(s.bank||'')}</td>
         <td>${esc(s.account_no||'')}<br><span style="font-size:10px">${esc(s.account_name||'')}</span></td>
-        <td style="text-align:right">${fmt(x.amount,2)}</td>${isVat?`<td style="text-align:right">${fmt(x.vat_amount,2)}</td>`:''}
+        ${isVat?`<td style="text-align:right">${fmt(num(x.amount)-num(x.vat_amount),2)}</td><td style="text-align:right">${fmt(x.vat_amount,2)}</td>`:''}<td style="text-align:right">${fmt(x.amount,2)}</td>
         <td style="text-align:center">${x.scheduled?'☑':'☐'}</td><td style="text-align:center">${x.paid?'☑':'☐'}</td></tr>`;}).join('')}
       <tr style="border-top:1.5px solid #000"><td></td><td style="font-weight:700">รวม</td><td></td><td></td>
-        <td style="text-align:right;font-weight:700">${fmt(tot,2)}</td>${isVat?`<td style="text-align:right;font-weight:700">${fmt(totV,2)}</td>`:''}<td></td><td></td></tr>
+        ${isVat?`<td style="text-align:right;font-weight:700">${fmt(tot-totV,2)}</td><td style="text-align:right;font-weight:700">${fmt(totV,2)}</td>`:''}<td style="text-align:right;font-weight:700">${fmt(tot,2)}</td><td></td><td></td></tr>
     </table>
     <div style="display:flex;gap:60px;margin-top:44px">
       <div>ผู้จัดทำ ........................................</div><div>ผู้ตรวจ ........................................</div><div>ผู้อนุมัติ ........................................</div>
