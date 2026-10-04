@@ -27,7 +27,8 @@
   body{margin:0;background:var(--cream);color:var(--ink);
     font-family:"Sarabun",sans-serif;font-size:15px;line-height:1.5;}
   .wrap{max-width:900px;margin:0 auto;padding:0 16px 48px;}
-  header{background:var(--brand);color:#fff;padding:14px 0;box-shadow:0 2px 0 var(--accent);}
+  header{background:var(--brand);color:#fff;padding:14px 0;box-shadow:0 2px 0 var(--accent);
+    padding-top:calc(14px + env(safe-area-inset-top));}   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง ห้ามทับหัวแอป */
   header .wrap{display:flex;align-items:center;gap:12px;padding-bottom:0;}
   header .mark{width:46px;height:46px;border-radius:50%;background:#fff;padding:3px;
     box-shadow:0 1px 4px rgba(0,0,0,.2);flex:0 0 auto;}
@@ -151,14 +152,18 @@
   header .htitle{min-width:0;}
   @media(max-width:700px){
     .wrap{padding:0 12px 64px;}
-    header{padding:10px 0;}
+    header{padding:calc(10px + env(safe-area-inset-top)) 0 10px;}
     header .mark{width:38px;height:38px;}
     header h1{font-size:16px;}
     header .sub{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .naschip,.userchip{font-size:11px;padding:4px 9px;max-width:100%;}
     .chipmore{display:none;}   /* ส่วนขยายข้อความ — จอแคบตัดออกให้เหลือบรรทัดเดียว */
-    .tabs{position:sticky;top:0;z-index:20;background:var(--cream);
+    .tabs{position:sticky;top:env(safe-area-inset-top);z-index:20;background:var(--cream);
       margin-top:12px;padding-top:8px;box-shadow:0 7px 8px -7px rgba(0,0,0,.2);}
+    /* พื้นทึบหลังแถบสถานะ iPhone (สีเดียวกับหัวแอป ตัวหนังสือขาวของนาฬิกาจะได้อ่านออก) —
+       เลื่อนหน้าแล้วแถบแท็บค้างใต้แถบสถานะพอดี เนื้อหาไม่โผล่ไปใต้นาฬิกา/สัญญาณ */
+    body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top);
+      background:var(--brand);z-index:30;pointer-events:none;}
     .tab{padding:9px 11px;font-size:13.5px;}
     .panel{padding-top:16px;}
     .card{padding:14px 13px;}
@@ -639,6 +644,7 @@ window.JJGate=(function(){
       </div>
     </div>
     <div class="detail" id="listInfo" style="margin-bottom:8px">กำลังโหลด...</div>
+    <div id="stuckNote" class="alert" style="display:none"></div>
     <div id="listBox"></div>
   </section>
 
@@ -778,15 +784,20 @@ window.JJGate=(function(){
           <li>เปิด <a href="https://script.new" target="_blank" rel="noopener"><b>script.new</b></a>
               ด้วยบัญชี <b>Gmail ของร้าน</b> (บัญชีที่จะใช้เป็นผู้ส่ง)</li>
           <li>ลบโค้ดตัวอย่างในหน้านั้นออกให้หมด →
-              กดปุ่ม <b>คัดลอกโค้ด</b> ข้างล่างนี้ แล้ววาง (Ctrl+V) ลงไป → กดบันทึก 💾</li>
+              กดปุ่ม <b>คัดลอกโค้ด</b> ข้างล่างนี้ แล้ววาง (Ctrl+V) ลงไป → กดบันทึก 💾
+              <span class="detail">(อัพเดตโค้ดรุ่นใหม่: เปิดโปรเจกต์เดิมที่ <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a>
+              ลบโค้ดเดิมทิ้งทั้งหมดแล้ววางทับ)</span></li>
           <li>เลือกฟังก์ชัน <code>setup</code> ด้านบน → กด <b>Run ▶</b> →
               กด <b>Review permissions</b> → เลือกบัญชีร้าน →
               <b>Advanced</b> → <b>Go to (unsafe)</b> → <b>Allow</b>
               <span class="detail">(หน้าเตือนนี้ปกติ เพราะเป็นสคริปต์ที่เราเขียนเอง)</span></li>
           <li>กด <b>Deploy</b> (มุมขวาบน) → <b>New deployment</b> → ไอคอน ⚙ เลือก <b>Web app</b> →
-              ตั้ง <b>Execute as: Me</b> · <b>Who has access: Anyone</b> → <b>Deploy</b></li>
+              ตั้ง <b>Execute as: Me</b> · <b>Who has access: Anyone</b> → <b>Deploy</b>
+              <span class="detail">(เคย Deploy แล้ว = <b>Deploy → จัดการการทำให้ใช้งานได้ → ✏️ → เวอร์ชัน: เวอร์ชันใหม่ → Deploy</b>
+              URL เดิมใช้ต่อได้ ไม่ต้องแก้ในแอป)</span></li>
           <li>คัดลอก <b>Web app URL</b> (ลงท้าย <code>/exec</code>) มาวางในช่องข้างล่าง →
-              กด <b>บันทึก URL</b> → กด <b>ทดสอบส่งอีเมล</b> เช็คว่าเข้ากล่องจดหมายจริง</li>
+              กด <b>บันทึก URL</b> → กด <b>ทดสอบส่งอีเมล</b> เช็คว่าเข้ากล่องจดหมายจริง →
+              กด <b>🔎 ตรวจสถานะอีเมล</b> (ขึ้น 🟢 = ตัวตรวจการตีกลับทุก 5 นาทีทำงานแล้ว)</li>
         </ol>
         <div class="actions" style="border:none;padding-top:4px">
           <button class="btn btn-gold btn-sm" id="copyGasBtn">📋 คัดลอกโค้ด Apps Script</button>
@@ -805,8 +816,10 @@ window.JJGate=(function(){
       <div class="actions" style="border:none;padding-top:8px">
         <button class="btn btn-primary btn-sm" id="saveGasBtn">บันทึก URL</button>
         <button class="btn btn-ghost btn-sm" id="testGasBtn">ทดสอบส่งอีเมล</button>
+        <button class="btn btn-ghost btn-sm" id="checkGasBtn">🔎 ตรวจสถานะอีเมล</button>
       </div>
       <div class="detail" id="gasStatus" style="margin-top:8px"></div>
+      <div class="detail" id="gasCheckState" style="margin-top:6px;line-height:1.6"></div>
     </div>
 
     <div class="card">
@@ -868,92 +881,211 @@ window.JJGate=(function(){
 <div id="pdfStage"></div>
 <script type="text/plain" id="gasCodeSrc">
 /** ตัวส่งอีเมลใบกำกับภาษี + ตรวจการตีกลับ (จริงใจหมูกระทะ)
- *  วิธีใช้: วางโค้ดนี้ใน https://script.new ของ Gmail ร้าน
+ *  วิธีใช้: วางโค้ดนี้ใน https://script.new ของ Gmail ร้าน (มีโค้ดเดิมอยู่ = ลบทิ้งให้หมดแล้ววางทับ)
  *  1) เลือกฟังก์ชัน setup แล้วกด Run (อนุญาตสิทธิ์)
  *  2) Deploy > New deployment > Web app
  *     Execute as: Me · Who has access: Anyone > Deploy
+ *     (เคย Deploy แล้ว: Deploy > Manage deployments > ✏️ > Version: New version > Deploy — URL เดิมใช้ต่อได้)
  *  3) คัดลอก URL ที่ลงท้าย /exec ไปใส่ในหน้าตั้งค่าของแอป
  */
+var VERSION = '2026-10-04.1';          // แอปเทียบเลขนี้เพื่อบอกว่าโค้ดที่ Deploy อยู่เป็นรุ่นล่าสุดไหม
 var SUPABASE_URL = 'https://aikyxvluaiubdidqxwnd.supabase.co';
 var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 var SENDER_NAME  = 'จริงใจหมูกระทะ';
 var ASSUME_DELIVERED_AFTER_MIN = 30;   // ต้องตรงกับค่าในแอป
+var SENDING = 'กำลังส่ง';
 
-// รับคำสั่งส่งอีเมลจากแอป (แนบ PDF ที่แอปสร้างมา - ไม่เก็บไฟล์ที่ไหน)
+// รับคำสั่งจากแอป: send = ส่งอีเมล · check = ตรวจการตีกลับเดี๋ยวนี้ (+ ติดตั้งตัวตรวจทุก 5 นาทีให้ถ้ายังไม่มี)
 function doPost(e) {
   var out;
   try {
     var req = JSON.parse(e.postData.contents);
-    if (req.action === 'send') {
-      if (!req.email) throw new Error('ไม่มีอีเมลผู้รับ');
-      var opts = { name: SENDER_NAME };
-      if (req.pdfBase64) {
-        opts.attachments = [Utilities.newBlob(
-          Utilities.base64Decode(req.pdfBase64), 'application/pdf',
-          req.filename || ((req.billNo || 'invoice') + '.pdf'))];
-      }
-      GmailApp.sendEmail(req.email, req.subject || '', req.body || '', opts);
-      out = { ok: true };
-    } else {
-      out = { ok: false, message: 'unknown action' };
-    }
+    if (req.action === 'send') out = sendMail_(req);
+    else if (req.action === 'check') out = checkNow_();
+    else if (req.action === 'ping') out = { ok: true, trigger: hasTrigger_() };
+    else out = { ok: false, message: 'unknown action' };
   } catch (err) {
-    out = { ok: false, message: String(err && err.message || err) };
+    out = { ok: false, message: errText_(err) };
   }
+  out.v = VERSION;
   return ContentService.createTextOutput(JSON.stringify(out))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ตรวจการตีกลับทุก 5 นาที แล้วอัพเดตสถานะกลับเข้า Supabase
-function checkBounces() {
-  var rows = sbGet_('/rest/v1/inv_invoices?email_status=eq.' +
-    encodeURIComponent('กำลังส่ง') + '&select=bill_no,email,email_sent_at');
-  if (!rows || !rows.length) return;
-  var threads = GmailApp.search('from:(mailer-daemon OR postmaster) newer_than:2d', 0, 50);
-  var parts = [];
-  threads.forEach(function (th) {
-    th.getMessages().forEach(function (m) {
-      parts.push((m.getPlainBody() || '') + ' ' + (m.getSubject() || ''));
-    });
-  });
-  var all = parts.join('\n').toLowerCase();
-  var now = new Date();
-  rows.forEach(function (r) {
-    var hit = (r.bill_no && all.indexOf(String(r.bill_no).toLowerCase()) !== -1) ||
-              (r.email  && all.indexOf(String(r.email).toLowerCase())  !== -1);
-    if (hit) {
-      sbPatch_(r.bill_no, { email_status: 'ส่งไม่สำเร็จ',
-        email_status_detail: 'พบการตีกลับ - อีเมลปลายทางอาจไม่มีอยู่จริง' });
-    } else if (r.email_sent_at &&
-        (now - new Date(r.email_sent_at)) / 60000 >= ASSUME_DELIVERED_AFTER_MIN) {
-      sbPatch_(r.bill_no, { email_status: 'ส่งถึงแล้ว',
-        email_status_detail: 'ส่งถึงแล้ว (ไม่พบการตีกลับใน ' + ASSUME_DELIVERED_AFTER_MIN + ' นาที)' });
+// ส่งอีเมล (แนบ PDF ที่แอปสร้างมา - ไม่เก็บไฟล์ที่ไหน)
+// Google ตอบผิดพลาดชั่วคราว แอปจะส่งคำขอเดิมซ้ำ (sendId เดิม) → ฉบับที่ส่งออกไปแล้วไม่ส่งซ้ำ
+function sendMail_(req) {
+  if (!req.email) throw new Error('ไม่มีอีเมลผู้รับ');
+  var key = req.sendId ? 'sent_' + String(req.sendId).slice(0, 200) : '';
+  var lock = null, cache = null;
+  if (key) {
+    lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+  }
+  try {
+    if (key) {
+      cache = CacheService.getScriptCache();
+      if (cache.get(key)) return { ok: true, dup: true };
     }
-  });
+    var opts = { name: SENDER_NAME };
+    if (req.pdfBase64) {
+      opts.attachments = [Utilities.newBlob(
+        Utilities.base64Decode(req.pdfBase64), 'application/pdf',
+        req.filename || ((req.billNo || 'invoice') + '.pdf'))];
+    }
+    GmailApp.sendEmail(req.email, req.subject || '', req.body || '', opts);
+    if (key) cache.put(key, '1', 21600);   // จำไว้ 6 ชม.
+    return { ok: true };
+  } finally {
+    if (lock) lock.releaseLock();
+  }
 }
 
-// รันครั้งเดียว: ขอสิทธิ์ + ติดตั้ง trigger ทุก 5 นาที
+// ตัวที่ trigger เรียกทุก 5 นาที (ติดตั้งด้วย setup) — ตรวจการตีกลับแล้วอัพเดตสถานะกลับเข้า Supabase
+function checkBounces() {
+  var r = check_();
+  if (r.error) throw new Error(r.error);   // ให้ Google ส่งอีเมลแจ้งเจ้าของด้วย
+  return r;
+}
+
+// แอปสั่งตรวจเอง (มีบิลค้าง "กำลังส่ง" นานเกินไป) — ลืมกด setup ก็ติดตั้งตัวตรวจทุก 5 นาทีให้ตรงนี้
+function checkNow_() {
+  var r = check_();
+  var t = ensureTrigger_();
+  if (r.error) return { ok: false, message: r.error, trigger: t };
+  r.ok = true;
+  r.trigger = t;
+  return r;
+}
+
+// ตรวจ 1 รอบ + รายงานตัวที่ inv_settings ทุกครั้ง (สำเร็จหรือพัง) แอปจะได้รู้ว่าตัวตรวจยังทำงานอยู่
+function check_() {
+  try {
+    var r = runCheck_();
+    heartbeat_('ตรวจ ' + r.checked + ' ใบ · ส่งถึง ' + r.delivered + ' · ตีกลับ ' + r.bounced + ' · รอ ' + r.waiting);
+    return r;
+  } catch (err) {
+    var msg = errText_(err);
+    heartbeat_('ผิดพลาด: ' + msg);
+    return { error: msg };
+  }
+}
+
+function runCheck_() {
+  var rows = sbGet_('/rest/v1/inv_invoices?email_status=eq.' + encodeURIComponent(SENDING) +
+    '&select=id,bill_no,email,email_sent_at,updated_at&limit=500');
+  var r = { checked: rows.length, delivered: 0, bounced: 0, waiting: 0 };
+  if (!rows.length) return r;
+  // อีเมลตีกลับ 2 วันล่าสุด — จำเวลาไว้ด้วย นับเฉพาะที่เด้งหลังส่งรอบล่าสุดของบิลนั้น
+  var bounces = [];
+  GmailApp.search('from:(mailer-daemon OR postmaster) newer_than:2d', 0, 50).forEach(function (th) {
+    th.getMessages().forEach(function (m) {
+      bounces.push({ t: m.getDate().getTime(),
+        s: ((m.getPlainBody() || '') + ' ' + (m.getSubject() || '')).toLowerCase() });
+    });
+  });
+  var now = Date.now();
+  rows.forEach(function (row) {
+    var sent = Date.parse(row.email_sent_at || row.updated_at || '');
+    var since = isNaN(sent) ? 0 : sent - 60000;
+    var bill = String(row.bill_no || '').toLowerCase(), mail = String(row.email || '').toLowerCase();
+    var hit = bounces.some(function (b) {
+      return b.t >= since && ((bill && b.s.indexOf(bill) !== -1) || (mail && b.s.indexOf(mail) !== -1));
+    });
+    if (hit) {
+      if (sbPatch_(row, { email_status: 'ส่งไม่สำเร็จ',
+          email_status_detail: 'พบการตีกลับ - อีเมลปลายทางอาจไม่มีอยู่จริง' })) r.bounced++;
+    } else if (isNaN(sent) || (now - sent) / 60000 >= ASSUME_DELIVERED_AFTER_MIN) {
+      if (sbPatch_(row, { email_status: 'ส่งถึงแล้ว',
+          email_status_detail: 'ส่งถึงแล้ว (ไม่พบการตีกลับใน ' + ASSUME_DELIVERED_AFTER_MIN + ' นาที)' })) r.delivered++;
+    } else {
+      r.waiting++;
+    }
+  });
+  return r;
+}
+
+// รันครั้งเดียว: ขอสิทธิ์ + ติดตั้ง trigger ทุก 5 นาที + ตรวจรอบแรกให้เลย
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'checkBounces') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('checkBounces').timeBased().everyMinutes(5).create();
   GmailApp.search('in:inbox', 0, 1);
-  return 'ติดตั้ง trigger ตรวจการตีกลับทุก 5 นาทีแล้ว';
+  var r = check_();
+  var msg = 'ติดตั้ง trigger ตรวจการตีกลับทุก 5 นาทีแล้ว (รุ่น ' + VERSION + ')' +
+    (r.error ? ' — แต่ตรวจรอบแรกไม่ผ่าน: ' + r.error : ' — ตรวจรอบแรก ' + r.checked + ' ใบ');
+  console.log(msg);
+  return msg;
 }
 
+function hasTrigger_() {
+  try {
+    return ScriptApp.getProjectTriggers().some(function (t) {
+      return t.getHandlerFunction() === 'checkBounces';
+    });
+  } catch (e) {
+    return null;
+  }
+}
+function ensureTrigger_() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return 'busy';
+  try {
+    if (hasTrigger_()) return 'ok';
+    ScriptApp.newTrigger('checkBounces').timeBased().everyMinutes(5).create();
+    return 'created';
+  } catch (e) {
+    return 'ติดตั้งไม่ได้: ' + errText_(e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// รายงานตัว (เก็บแค่ตัวหนังสือสรุป ไม่มีข้อมูลลูกค้า)
+function heartbeat_(info) {
+  try {
+    UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/inv_settings', {
+      method: 'post', contentType: 'application/json',
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY,
+        Prefer: 'resolution=merge-duplicates,return=minimal' },
+      payload: JSON.stringify([
+        { key: 'gas_check_last', value: new Date().toISOString() },
+        { key: 'gas_check_info', value: (info + ' · v' + VERSION).slice(0, 300) }]),
+      muteHttpExceptions: true });
+  } catch (e) {}
+}
+
+function errText_(err) {
+  return String((err && err.message) || err).slice(0, 200);
+}
 function sbGet_(path) {
   var res = UrlFetchApp.fetch(SUPABASE_URL + path, {
     headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY },
     muteHttpExceptions: true });
-  try { return JSON.parse(res.getContentText()); } catch (e) { return null; }
+  var code = res.getResponseCode(), text = res.getContentText();
+  if (code >= 300) throw new Error('อ่าน Supabase ไม่ได้ (HTTP ' + code + '): ' + text.slice(0, 150));
+  var data = JSON.parse(text);
+  if (!Array.isArray(data)) throw new Error('Supabase ตอบกลับผิดรูปแบบ');
+  return data;
 }
-function sbPatch_(billNo, fields) {
-  fields.updated_at = new Date().toISOString();
-  UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/inv_invoices?bill_no=eq.' + encodeURIComponent(billNo), {
+// เขียนเฉพาะแถวที่ยัง "กำลังส่ง" รอบเดียวกับที่อ่านมา (ระหว่างตรวจมีคนส่งซ้ำ/ย้ายเลขบิล = ไม่ทับ)
+// ไม่แตะ updated_at — สถานะอีเมลไม่ใช่การแก้บิล (แอป/NAS ใช้ updated_at ดูว่าบิลถูกแก้หรือยัง)
+function sbPatch_(row, fields) {
+  var q = '/rest/v1/inv_invoices?id=eq.' + encodeURIComponent(row.id) +
+    '&bill_no=eq.' + encodeURIComponent(row.bill_no) +
+    '&email_status=eq.' + encodeURIComponent(SENDING) +
+    (row.email_sent_at ? '&email_sent_at=eq.' + encodeURIComponent(row.email_sent_at)
+                       : '&email_sent_at=is.null') + '&select=id';
+  var res = UrlFetchApp.fetch(SUPABASE_URL + q, {
     method: 'patch', contentType: 'application/json',
-    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, Prefer: 'return=minimal' },
+    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY,
+      Prefer: 'return=representation' },
     payload: JSON.stringify(fields), muteHttpExceptions: true });
+  var code = res.getResponseCode();
+  if (code >= 300) throw new Error('บันทึกสถานะ ' + row.bill_no + ' ไม่ได้ (HTTP ' + code + '): ' +
+    res.getContentText().slice(0, 150));
+  try { return JSON.parse(res.getContentText()).length > 0; } catch (e) { return false; }
 }
 </script>
 <div class="toast" id="toast"></div>
@@ -1694,7 +1826,7 @@ function cleanGasUrl(u){
   return {url:u};
 }
 /* Google ตอบเป็นหน้าเว็บแทน JSON → อ่านข้อความในหน้านั้นมาบอกว่าติดอะไร */
-function gasHtmlReason(html, status){
+function gasHtmlReason(html, status, tries){
   var t=String(html||'').replace(/<(script|style)[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ')
     .replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
   if(/function not found: doPost|ไม่พบฟังก์ชันสคริปต์: doPost/i.test(t))
@@ -1703,24 +1835,59 @@ function gasHtmlReason(html, status){
     return 'ยังไม่ได้อนุญาตสิทธิ์ — ใน Apps Script เลือกฟังก์ชัน setup กด ▶ เรียกใช้ แล้วกดอนุญาต จากนั้น Deploy เวอร์ชันใหม่';
   if(/accounts\.google|sign in|ลงชื่อเข้าใช้|เข้าสู่ระบบ/i.test(t+html))
     return 'ผู้มีสิทธิ์เข้าถึงยังไม่ใช่ "ทุกคน" — Deploy → จัดการการทำให้ใช้งานได้ → ✏️ แก้ไข → ผู้มีสิทธิ์เข้าถึง: ทุกคน → เวอร์ชันใหม่ → Deploy';
-  if(status===404||/unable to open the file|ไม่สามารถเปิดไฟล์|not found/i.test(t))
+  /* "unable to open the file at this time" = หน้าเดียวกับที่ Google ใช้ตอน URL ผิด แต่เจอแบบชั่วคราวได้ด้วย
+     (ใบก่อน/หลังส่งได้ปกติ) — gasSend ลองซ้ำให้แล้ว จึงบอกทั้ง 2 กรณี ไม่ฟันธงว่า URL ผิด */
+  if(/unable to open the file|ไม่สามารถเปิดไฟล์/i.test(t))
+    return 'Google เปิดตัวส่งอีเมลไม่ได้ในขณะนั้น (ลองให้แล้ว '+(tries||1)+' ครั้ง) — ถ้าใบอื่นส่งได้ปกติ = Google ขัดข้องชั่วคราว'+
+      ' กด "ส่งซ้ำ" ในแท็บ ⚠ ส่งไม่สำเร็จ ได้เลย · ถ้าส่งไม่ได้ทุกใบ = URL ผิด หรือ Deployment ถูกลบ → คัดลอก Web app URL ใหม่จากหน้า Deploy';
+  if(status>=500||status===429)
+    return 'Google ขัดข้องชั่วคราว (HTTP '+status+' · ลองให้แล้ว '+(tries||1)+' ครั้ง) — กด "ส่งซ้ำ" ในแท็บ ⚠ ส่งไม่สำเร็จ อีกครั้งในอีกสักครู่';
+  if(status===404||/not found/i.test(t))
     return 'ไม่พบตัวส่งอีเมลที่ URL นี้ (URL ผิด หรือ Deployment ถูกลบ) — คัดลอก Web app URL ใหม่จากหน้า Deploy';
   return 'Google ตอบกลับว่า: '+(t.slice(0,160)||('HTTP '+status));
+}
+/* Google ขัดข้องชั่วคราว (หน้า "unable to open the file" / 5xx / 429) — สคริปต์ยังไม่ได้เริ่มทำงาน
+   → ส่งคำขอเดิมซ้ำให้เอง · ตัวส่งรุ่น 2026-10-04 ขึ้นไปจำ sendId ไว้ ฉบับที่ออกไปแล้วจะไม่ถูกส่งซ้ำ */
+var GAS_RETRY_MS=[2000,5000];
+function gasTransient(text,status){
+  return status>=500 || status===429 || /unable to open the file|ไม่สามารถเปิดไฟล์/i.test(String(text||''));
 }
 async function gasSend(payload){
   var c=cleanGasUrl(settings.gas_endpoint);
   if(c.error) return {ok:false,message:c.error};
-  var res, text;
-  try{
-    res=await fetch(c.url,{method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify(payload)});
-    text=await res.text();
-  }catch(e){
-    return {ok:false,message:'ต่อตัวส่งอีเมลไม่ได้ — มักเกิดจาก "ผู้มีสิทธิ์เข้าถึง" ไม่ใช่ ทุกคน หรือ URL ผิด (Deploy → จัดการ → แก้ไข)'};
+  for(var i=0;;i++){
+    var res, text;
+    try{
+      res=await fetch(c.url,{method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify(payload)});
+      text=await res.text();
+    }catch(e){
+      return {ok:false,message:'ต่อตัวส่งอีเมลไม่ได้ — มักเกิดจาก "ผู้มีสิทธิ์เข้าถึง" ไม่ใช่ ทุกคน หรือ URL ผิด (Deploy → จัดการ → แก้ไข)'};
+    }
+    var j=null;
+    try{ j=JSON.parse(text); }catch(e){}
+    if(j && typeof j==='object'){ if(j.v) gasSeen(j.v); return j; }
+    if(gasTransient(text,res.status) && i<GAS_RETRY_MS.length){
+      await new Promise(function(r){ setTimeout(r,GAS_RETRY_MS[i]); });
+      continue;
+    }
+    return {ok:false,message:gasHtmlReason(text,res.status,i+1)};
   }
-  try{ return JSON.parse(text); }
-  catch(e){ return {ok:false,message:gasHtmlReason(text,res.status)}; }
+}
+/* รุ่นของโค้ด Apps Script — ที่ฝังในแอป (อ่านตอนเรียกใช้: บล็อกอยู่ก่อนสคริปต์นี้ก็จริง แต่กันพลาดแบบ fnVer ของ JJ Access)
+   เทียบกับที่ Deploy อยู่จริง (v ในคำตอบ / ท้ายรายงานตัวของตัวตรวจ) */
+function gasCodeVer(){ var m=/var VERSION = '([^']+)'/.exec(gasCodeText()); return m?m[1]:''; }
+function gasVerCmp(a,b){
+  var x=String(a||'').split(/[.-]/), y=String(b||'').split(/[.-]/);
+  for(var i=0;i<Math.max(x.length,y.length);i++){ var d=(Number(x[i])||0)-(Number(y[i])||0); if(d) return d<0?-1:1; }
+  return 0;
+}
+var gasVerLive='';
+try{ gasVerLive=localStorage.getItem('jjinv_gasver')||''; }catch(e){}
+function gasSeen(v){
+  v=String(v).slice(0,40); if(v===gasVerLive) return;
+  gasVerLive=v; try{ localStorage.setItem('jjinv_gasver',v); }catch(e){}
 }
 /* หมายเหตุใน status_detail คั่นด้วย " · " — แก้ไข/ยกเลิก/เรียกคืน แทนที่เฉพาะส่วนของตัวเอง
    ส่วนอื่น (นำเข้าจากระบบเดิม · PDF เดิม · ย้ายจากเลข …) ต้องอยู่ต่อ ไม่งั้นร่องรอยบิลหาย */
@@ -1766,7 +1933,9 @@ async function sendInvoiceEmail(inv, blob, opts){
       mailBlob=await buildInvoicePdf(inv,true);
     }
     var m=mailContent(inv, opts);
-    var res=await gasSend({action:'send',billNo:inv.bill_no,email:inv.email,
+    // sendId ใหม่ทุกครั้งที่กดส่ง (ลองซ้ำอัตโนมัติใช้ตัวเดิม → ตัวส่งไม่ส่งฉบับเดียวกันซ้ำ)
+    var res=await gasSend({action:'send',sendId:(inv.id||inv.bill_no)+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+      billNo:inv.bill_no,email:inv.email,
       subject:m.subject,body:m.body,filename:inv.bill_no+'.pdf',
       pdfBase64:await blobToBase64(mailBlob)});
     var patch={updated_at:new Date().toISOString(),updated_by:userName()};
@@ -1803,6 +1972,127 @@ function renderGasStatus(){
     ?'✅ ตั้งค่าแล้ว — กดออกบิลแล้วระบบจะส่งอีเมลหาลูกค้าทันที และตรวจการตีกลับให้ทุก 5 นาที'
     :'⚠️ <b>ยังไม่ได้ตั้งค่า</b> — บิลจะยังไม่ถูกส่งอีเมล (ทำตามขั้นตอนข้างบนก่อน)';
   $('gasHelp').open=!on;   // ยังไม่ตั้งค่า = กางขั้นตอนให้เลย
+  renderGasCheck();
+}
+/* ===== ตัวตรวจการตีกลับ (trigger ทุก 5 นาทีใน Apps Script) =====
+   บิล "กำลังส่ง" เปลี่ยนเป็น "ส่งถึงแล้ว" ได้ก็ต่อเมื่อตัวตรวจนี้ทำงาน — ลืมกด setup / trigger หยุด = ค้างตลอดไป
+   (เจ้าของเจอจริง 2026-10-04) · โค้ดรุ่นใหม่รายงานตัวที่ inv_settings ทุกรอบ (gas_check_last / gas_check_info)
+   → แอปเห็นบิลค้างเกิน GAS_STUCK_MIN + ตัวตรวจเงียบ = สั่งตรวจเอง (action:'check' — ติดตั้ง trigger ให้ด้วยถ้ายังไม่มี) */
+var GAS_STUCK_MIN = ASSUME_DELIVERED_AFTER_MIN + 10;   // ตัวตรวจรันทุก 5 นาที — เกินนี้ยัง "กำลังส่ง" = ตัวตรวจไม่ทำงาน
+var GAS_CHECK_STALE_MIN = 15;                          // ไม่รายงานตัวเกินนี้ = ถือว่าตัวตรวจหยุด
+var GAS_AUTO_EVERY_MIN = 10;                           // สั่งตรวจเองได้ไม่เกินทุก 10 นาทีต่อเครื่อง
+var gasChk={busy:false, old:false, msg:'', at:0};
+function sendingAgeMin(v){
+  var t=Date.parse(v.email_sent_at||v.updated_at||'');
+  return isNaN(t)?Infinity:(Date.now()-t)/60000;
+}
+function isStuck(v){ return v.email_status===EMAIL_STATUS.SENDING && sendingAgeMin(v)>GAS_STUCK_MIN; }
+function stuckSending(){ return invoices.filter(isStuck); }
+function gasCheckAgeMin(){
+  var t=Date.parse(settings.gas_check_last||'');
+  return isNaN(t)?null:(Date.now()-t)/60000;
+}
+function gasCheckError(){ return /^ผิดพลาด/.test(String(settings.gas_check_info||'')); }
+function gasCheckFresh(){
+  var a=gasCheckAgeMin();
+  return a!==null && a>=-10 && a<=GAS_CHECK_STALE_MIN && !gasCheckError();
+}
+function gasCheckVer(){ var m=/ · v(\S+)$/.exec(String(settings.gas_check_info||'')); return m?m[1]:''; }
+/* อ่านเฉพาะ 2 ค่านี้ (ไม่แตะช่องอื่นในหน้าตั้งค่าที่ผู้ใช้อาจกำลังแก้) */
+async function refreshGasCheck(){
+  if(!dbReady) return;
+  try{
+    var r=await sb.from('inv_settings').select('key,value').in('key',['gas_check_last','gas_check_info']);
+    if(!r.error)(r.data||[]).forEach(function(x){
+      if(x.key==='gas_check_last'||x.key==='gas_check_info') settings[x.key]=x.value; });
+  }catch(e){}
+  renderGasCheck(); renderStuck();
+}
+function renderGasCheck(){
+  var el=$('gasCheckState'); if(!el) return;
+  if(!settings.gas_endpoint){ el.textContent=''; return; }
+  var a=gasCheckAgeMin(), info=String(settings.gas_check_info||''), want=gasCodeVer(), have=gasCheckVer()||gasVerLive;
+  var s, c;
+  if(a===null){
+    s='⚪ ตัวตรวจการตีกลับยังไม่เคยรายงานตัว — โค้ด Apps Script รุ่นก่อน '+want+' ไม่รายงานตัว: อัพเดตโค้ด'+
+      ' (📋 คัดลอกโค้ด → วางทับของเดิมทั้งหมด → 💾 → Deploy → จัดการการทำให้ใช้งานได้ → ✏️ → เวอร์ชันใหม่ → Deploy)'+
+      ' แล้วกด 🔎 ตรวจสถานะอีเมล';
+    c='var(--muted)';
+  }else if(a<-10){
+    s='🔴 เวลาที่ตัวตรวจรายงานมาล้ำอนาคต — เช็คเวลาของเครื่องนี้'; c='var(--bad)';
+  }else if(a>GAS_CHECK_STALE_MIN){
+    s='🔴 ตัวตรวจการตีกลับไม่ได้ทำงานมา '+agoText(a)+' (trigger หยุด) — กด 🔎 ตรวจสถานะอีเมล ระบบจะติดตั้งให้ใหม่เอง'+
+      ' · หรือใน Apps Script เลือกฟังก์ชัน setup กด ▶ เรียกใช้';
+    c='var(--bad)';
+  }else if(gasCheckError()){
+    s='🟠 ตัวตรวจทำงานแต่ติดปัญหา ('+agoText(Math.max(0,a))+') — '+info.replace(/^ผิดพลาด:\s*/,''); c='var(--warn)';
+  }else{
+    s='🟢 ตัวตรวจการตีกลับทำงานอยู่ · ล่าสุด '+agoText(Math.max(0,a))+(info?(' · '+info):''); c='var(--ok)';
+  }
+  var outdated=!!(have && want && gasVerCmp(have,want)<0);
+  if(outdated) s+=' · ⚠ โค้ดที่ Deploy อยู่เป็นรุ่น '+have+' (ในแอปเป็นรุ่น '+want+') — อัพเดตโค้ด';
+  el.textContent=s; el.style.color=c;
+  if(a===null||outdated) $('gasHelp').open=true;   // ต้องอัพเดตโค้ด = กางขั้นตอน + ปุ่มคัดลอกให้เห็นเลย
+}
+/* สั่งตัวส่งอีเมลตรวจเดี๋ยวนี้ · manual = กดปุ่มเอง
+   อัตโนมัติ (ตอนโหลดรายการบิล): เฉพาะเมื่อมีบิลค้าง + ตัวตรวจไม่ได้รายงานตัว + เครื่องนี้ไม่ได้สั่งไปใน 10 นาที */
+async function gasCheckNow(manual){
+  if(gasChk.busy || !settings.gas_endpoint || !dbReady) return;
+  if(!manual){
+    if(!stuckSending().length) return;
+    var last=gasChk.at;
+    try{ last=Math.max(last, Number(localStorage.getItem('jjinv_gascheck_at'))||0); }catch(e){}
+    if(Date.now()-last < GAS_AUTO_EVERY_MIN*60000) return;
+    gasChk.at=Date.now();
+    await refreshGasCheck();
+    if(gasCheckFresh()) return;      // ตัวตรวจเพิ่งทำงาน (trigger/เครื่องอื่น) — รอรอบของมัน
+  }
+  gasChk.at=Date.now();
+  try{ localStorage.setItem('jjinv_gascheck_at', String(gasChk.at)); }catch(e){}
+  gasChk.busy=true; renderStuck();
+  var b=$('checkGasBtn'); if(b){ b.disabled=true; b.textContent='กำลังตรวจ...'; }
+  var r;
+  try{ r=await gasSend({action:'check'}); }catch(e){ r={ok:false, message:e.message}; }
+  gasChk.busy=false;
+  if(b){ b.disabled=false; b.textContent='🔎 ตรวจสถานะอีเมล'; }
+  var trig=String(r.trigger||'');
+  if(r.ok){
+    gasChk.old=false;
+    gasChk.msg='ตรวจแล้ว: ส่งถึง '+(r.delivered||0)+' ใบ · ตีกลับ '+(r.bounced||0)+' ใบ · ยังรอ '+(r.waiting||0)+' ใบ'+
+      (trig==='created'?' · ติดตั้งตัวตรวจทุก 5 นาทีให้แล้ว':(/^ติดตั้งไม่ได้/.test(trig)?(' · ⚠ ตัวตรวจทุก 5 นาที'+trig):''));
+  }else if(/unknown action/i.test(String(r.message||''))){
+    gasChk.old=true; gasChk.msg='';          // โค้ดรุ่นก่อน 2026-10-04 ไม่รู้จักคำสั่งตรวจ
+  }else{
+    gasChk.msg='ตรวจไม่สำเร็จ: '+(r.message||'ไม่ทราบสาเหตุ');
+  }
+  // จดประวัติเฉพาะกดเอง หรือสั่งเองแล้วมีอะไรเปลี่ยน (สั่งเองทุก 10 นาทีตอนโค้ดยังเก่า ไม่ให้ประวัติรก)
+  if(manual || (r.ok && (r.delivered||r.bounced||trig==='created')))
+    logActivity('ตรวจสถานะอีเมล','', (manual?'กดตรวจเอง':'แอปสั่งตรวจเอง (บิลค้าง "กำลังส่ง")')+' — '+
+      (r.ok?gasChk.msg:(gasChk.old?'โค้ด Apps Script รุ่นเก่า (ไม่รู้จักคำสั่งตรวจ)':gasChk.msg)));
+  if(manual) toast(r.ok?gasChk.msg:(gasChk.old?'โค้ด Apps Script ที่ใช้อยู่เป็นรุ่นเก่า — อัพเดตโค้ดก่อน (ขั้นตอนอยู่ในหน้าตั้งค่า)':gasChk.msg),
+    r.ok?'ok':'err');
+  await refreshGasCheck();
+  if(r.ok) await loadInvoices(); else renderStuck();
+}
+/* แถบเตือนในแท็บรายการบิล — บิลค้าง "กำลังส่ง" นานเกินไป */
+function renderStuck(){
+  var el=$('stuckNote'); if(!el) return;
+  var st=stuckSending().filter(function(v){ return v.status!==STATUS.CANCELLED && brPass(v.bill_no); });
+  if(!st.length || !settings.gas_endpoint){ el.style.display='none'; return; }
+  var why;
+  if(gasChk.busy) why='⏳ กำลังสั่งตัวส่งอีเมลตรวจสถานะ...';
+  else if(gasChk.old) why='<b>โค้ด Apps Script ที่ใช้อยู่เป็นรุ่นเก่า</b> และตัวตรวจทุก 5 นาทีไม่ได้ทำงาน — ผู้ดูแล: ⚙ ตั้งค่า →'+
+    ' 📋 คัดลอกโค้ด Apps Script → วางทับโค้ดเดิมทั้งหมด → 💾 → Deploy → จัดการการทำให้ใช้งานได้ → ✏️ →'+
+    ' เวอร์ชัน: เวอร์ชันใหม่ → Deploy (URL เดิมใช้ต่อได้ ไม่ต้องแก้ในแอป)';
+  else if(gasChk.msg) why=esc(gasChk.msg);
+  else if(gasCheckError()) why='ตัวตรวจใน Apps Script ติดปัญหา: '+esc(String(settings.gas_check_info).replace(/^ผิดพลาด:\s*/,''));
+  else why='ตัวตรวจการตีกลับใน Apps Script ไม่ได้ทำงาน (ยังไม่ได้กด setup หรือ trigger หยุด) — กดปุ่มข้างล่างเพื่อตรวจเดี๋ยวนี้';
+  el.innerHTML='⏳ มีอีเมล <b>'+st.length+' ใบ</b> ค้าง "กำลังส่ง" เกิน '+GAS_STUCK_MIN+' นาที'+
+    ' (ปกติเปลี่ยนเป็น "ส่งถึงแล้ว" ภายใน '+ASSUME_DELIVERED_AFTER_MIN+' นาที)<br>'+why+
+    '<div class="actions" style="border:none;padding:8px 0 0"><button class="btn btn-gold btn-sm" id="stuckBtn"'+
+    (gasChk.busy?' disabled':'')+'>🔎 ตรวจสถานะอีเมลเดี๋ยวนี้</button></div>';
+  el.style.display='block';
+  $('stuckBtn').onclick=function(){ gasCheckNow(true); };
 }
 async function loadSettings(){
   if(!dbReady) return;
@@ -1906,6 +2196,7 @@ async function loadInvoices(){
   if(invoices.some(function(v){ return v.email_status===EMAIL_STATUS.SENDING; })){
     loadInvoices._t=setTimeout(loadInvoices,60000);
   }
+  gasCheckNow(false);   // บิลค้าง "กำลังส่ง" นานเกินไป + ตัวตรวจใน Apps Script เงียบ → สั่งตรวจเอง
 }
 
 // ================= ฟอร์มออกบิล =================
@@ -2214,7 +2505,7 @@ function emailBadge(v){
   var s=v.email_status;
   if(s===EMAIL_STATUS.DELIVERED)return '<span class="badge b-ok">✉ ส่งถึงแล้ว</span> ';
   if(s===EMAIL_STATUS.FAILED||s===EMAIL_STATUS.ERROR)return '<span class="badge b-bad">✉ '+esc(s)+'</span> ';
-  if(s===EMAIL_STATUS.SENDING)return '<span class="badge b-send">✉ กำลังส่ง</span> ';
+  if(s===EMAIL_STATUS.SENDING)return '<span class="badge b-send">✉ กำลังส่ง'+(isStuck(v)?' · ค้างนาน':'')+'</span> ';
   return '<span class="badge b-cancel">✉ ยังไม่ส่ง</span> ';
 }
 function invCard(v, withResend){
@@ -2382,6 +2673,7 @@ function renderList(){
   $('listInfo').textContent='แสดง '+active.length+' ใบ'+(invBranch?(' · สาขา'+brLabel()):'')+
     ' · เรียงเลขบิลใหม่ → เก่า (ส่งสำเร็จ '+sent.length+' ใบอยู่แท็บส่งสำเร็จ · ยกเลิก '+cancelled.length+' ใบอยู่แท็บยกเลิก)';
   bindCards(box);
+  renderStuck();
 
   var sbox=$('sentBox');
   sbox.innerHTML=sent.length?sent.map(function(v){ return invCard(v); }).join(''):'<div class="empty">ยังไม่มีบิลที่ส่งอีเมลถึงลูกค้าแล้ว</div>';
@@ -2457,7 +2749,7 @@ document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
   }
   if(t.dataset.tab==='list'||t.dataset.tab==='sent'||t.dataset.tab==='cancelled'||t.dataset.tab==='failed')loadInvoices();
   if(t.dataset.tab==='history')loadHistory();
-  if(t.dataset.tab==='settings'){ loadCounters(); refreshNasSync(); }   // สถานะ NAS ล่าสุด (ไม่ทับช่องที่กำลังกรอก)
+  if(t.dataset.tab==='settings'){ loadCounters(); refreshNasSync(); refreshGasCheck(); }   // สถานะ NAS/ตัวตรวจอีเมลล่าสุด (ไม่ทับช่องที่กำลังกรอก)
 }; });
 initBranchFilter();
 /* เปิดแอพมาที่หน้าเดิมก่อนรีเฟรช (ถ้าไม่มีที่จำไว้ = หน้าออกบิลใหม่ตามเดิม) */
@@ -2575,6 +2867,10 @@ $('testGasBtn').onclick=async function(){
     toast(r.ok?('ส่งทดสอบไปที่ '+to.trim()+' แล้ว — เช็คกล่องจดหมาย'):('ไม่สำเร็จ: '+(r.message||'')),r.ok?'ok':'err');
   }catch(e){ toast('ไม่สำเร็จ: '+e.message,'err'); }
   b.disabled=false; b.textContent='ทดสอบส่งอีเมล';
+};
+$('checkGasBtn').onclick=function(){
+  if(!settings.gas_endpoint){ toast('ใส่ URL แล้วกด "บันทึก URL" ก่อน','err'); return; }
+  gasCheckNow(true);
 };
 function gasCodeText(){ return ($('gasCodeSrc').textContent||'').replace(/^\n/,''); }
 $('copyGasBtn').onclick=async function(){
