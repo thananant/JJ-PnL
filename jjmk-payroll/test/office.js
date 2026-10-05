@@ -50,7 +50,8 @@ setTimeout(()=>{ try{
      recomputeAll();`);
   const txt=js=>E(`(()=>{const d=document.createElement('div'); d.innerHTML=${js}; return d.textContent.replace(/\\s+/g,' ');})()`);
   const slip=txt(`buildSlip(sO,'2026-09',true)`);
-  ok(slip.includes('รอบ 26 ส.ค. – 30 ก.ย.') && slip.includes('จ่ายวันที่ 30 ก.ย.') && !slip.includes('5 ต.ค.'),'สลิปออฟฟิศ ก.ย.: หัวสลิป 26 ส.ค.–30 ก.ย. จ่าย 30 ก.ย. (ไม่มี 5 ต.ค.)');
+  ok(slip.includes('รอบ 26 ส.ค. – 30 ก.ย.') && slip.includes('จ่ายวันที่ 30 ก.ย.') && !slip.includes('จ่ายวันที่ 5 ต.ค.'),   // ห้ามเช็คแค่ '5 ต.ค.' — บรรทัด "ออกเอกสาร" เป็นวันที่วันนี้ (เทสเคยล้มเองวันที่ 5 ต.ค.)
+   'สลิปออฟฟิศ ก.ย.: หัวสลิป 26 ส.ค.–30 ก.ย. จ่าย 30 ก.ย. (ไม่มี 5 ต.ค.)');
   ok(slip.includes('เหมาเดือน 20,000 + 6 วัน 26–31 ส.ค.') && slip.includes('24,000.00'),'สลิปบอกที่มาค่าแรง: เหมาเดือน 20,000 + 6 วัน 26–31 ส.ค. = 24,000');
   ok(slip.includes('28 ก.ย.'),'วันที่ 28 ก.ย. อยู่ในสลิปออฟฟิศงวด ก.ย.');
   const slipS=txt(`buildSlip(sS,'2026-09',true)`);

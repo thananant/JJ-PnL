@@ -79,6 +79,15 @@
 ## Supabase — ตารางทั้งหมด
 
 - `employees` — ข้อมูลพนักงาน: nick, full_name, code (รหัสเครื่องสแกน), branch, dept, position, wage_type(daily/monthly/hourly/hours), rate, mode, photo, active, off_* (วันหยุด), deposit_target/deposit_monthly/deposit_opening/deposit_on, **birth_date, phone, bank_name, bank_account, bank_account_name, start_date, end_date**
+  · **ข้อมูลพนักงานเพิ่ม (เจ้าของสั่ง 2026-10-05 · SQL `jj_employee_hr.sql` · flag `hrReady` = มีคอลัมน์ `nationality`)**: gender · nationality (`NAT_TH`: TH/LA/MM/SHAN/NONE) ·
+    address · emergency_name/relation/phone · passport_exp/work_permit_exp/pink_card_exp · doc_notify_in/out · doc_guardian · sso_hospital · face_scan ·
+    worker_group (`GROUP_TH`: ''=ทั่วไป/mou/illegal_nopass/illegal_minor/no_permit) · doc_status (`DOCST_TH`: mou/passport/illegal/notify_in/notify_out) · doc_start/doc_done · doc_agency (`AGENCIES` = Aisoon)
+    · ยังไม่รัน SQL = `toDbEmp` ไม่ส่งช่องพวกนี้ + ฟอร์มขึ้นแถบเตือน + แท็บข้อมูลส่วนตัวมีปุ่ม 📋 คัดลอก SQL (`#sqlEmpHr` ต้องตรงกับไฟล์บน branch sql — เทส `test/hr.js` เทียบให้)
+    · **เตือนเอกสารหมดอายุ ≤ 90 วัน (`DOC_WARN_DAYS`) ทั้ง 3 ใบ** (`docAlerts` — เฉพาะคนที่ยังทำงาน): แถบแดงบนหน้ารวม + บรรทัด 📄 บนการ์ด + แท็บภาพรวม + ป้ายแดงบนแท็บข้อมูลส่วนตัว
+      · ตัวกรอง "📄 เอกสารหมด/ใกล้หมด" + ตัวเลือกกลุ่ม (`detailGroup`: ทั่วไป/MOU/คนเถื่อน 2 แบบ/ไม่มีใบอนุญาต/🧾 กำลังทำเอกสาร)
+    · ฟอร์มมี 3 หัวข้อใหม่ (รายละเอียด · เอกสาร · กลุ่ม & การทำเอกสาร) + `hrHint()` แนะนำกลุ่ม (อายุ < 18 / พม่าไม่มี Passport) และหนังสือผู้ปกครอง — **ไม่ตั้งกลุ่มให้เอง** เจ้าของเลือกเอง
+    · แท็บข้อมูลส่วนตัว (`dtInfo`) จัดหัวข้อตามที่เจ้าของให้มา: รายละเอียด · เอกสาร · ประกันสังคม · การจ่ายเงินเดือน · สแกนหน้า·กลุ่ม · การทำเอกสาร · การทำงาน
+    · ⚠️ ช่องพวกนี้อ่านได้ด้วย anon key เหมือนข้อมูลพนักงานอื่น — **ไม่เก็บเลข Passport/รูปเอกสาร** (เจ้าของขอแค่วันหมดอายุ)
 - `punches` — เวลาสแกน: emp_code, punch_date, punch_time, source('manual' = แก้มือ), unique(emp_code,punch_date,punch_time)
 - `adjustments` — เพิ่ม/หักเงินรายงวด: employee_id, kind(add/deduct), reason, amount, period
 - `advances` — เบิกกลางเดือน: employee_id, amount, adv_date, period
