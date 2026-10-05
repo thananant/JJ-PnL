@@ -65,7 +65,10 @@ let fail=0; const ok=(c,m)=>{console.log((c?'  ✓ ':'  ✗ ')+m); if(!c) fail++
     ok(E(`detailEmpId`)===null && cards().length===3 && !w.sessionStorage.getItem('jjpay_detail'),'← รายชื่อทั้งหมด กลับหน้ารวม และล้างที่จำไว้');
     E(`openDetail(2)`);
     ok(E(`curPage()`)==='detail' && E(`detailTab`)==='over' && /หลิน/.test(d.querySelector('#detailContent h2').textContent),'openDetail จากหน้าอื่นเปิดหน้ารายคนที่ภาพรวม');
-    ok(/ตำแหน่ง/.test(d.querySelector('.dt-tabs').textContent)===false && d.querySelector('.dt-tabs .dt-badge'),'แท็บข้อมูลส่วนตัวมีป้ายเตือนเมื่อข้อมูลไม่ครบ');
+    const wb=[...d.querySelectorAll('#detailContent button')].find(b=>/ข้อมูลการทำงาน/.test(b.textContent));
+    ok(!d.querySelector('.dt-tabs .dt-badge') && wb && wb.classList.contains('btn-alert') && /ตำแหน่ง/.test(wb.title),'ไม่มีตำแหน่ง = ปุ่ม ⚙️ ข้อมูลการทำงานกระพริบ (ไม่ใช่ป้ายบนแท็บข้อมูลส่วนตัว)');
+    E(`employees.find(e=>e.id===2).phone=''; renderDetail()`);
+    ok(d.querySelector('.dt-tabs .dt-badge') && d.querySelector('.dt-tabs .dt-badge').textContent==='1','ข้อมูลส่วนตัวขาด (เบอร์) = ป้ายเตือนบนแท็บข้อมูลส่วนตัว');
     d.querySelector('aside nav button[data-page=detail]').click();
     ok(E(`detailEmpId`)===null && cards().length===3,'กดเมนู "ข้อมูลพนักงาน" = กลับหน้ารวม');
   });

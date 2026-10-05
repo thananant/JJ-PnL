@@ -37,7 +37,8 @@ setTimeout(async ()=>{ try{
   const row=nick=>[...d.querySelectorAll('#empTable tbody tr')].find(tr=>tr.cells[0].textContent.trim()===nick);
   ok(row('NB').cells[0].classList.contains('no-pos') && !row('NA').cells[0].classList.contains('no-pos'),'หน้าพนักงาน: กระพริบเฉพาะคนไม่มีตำแหน่ง');
   ok(!row('NE').cells[0].classList.contains('no-pos'),'หน้าพนักงาน: คนพ้นสภาพไม่กระพริบ');
-  ok(row('NB').querySelector('.btn-alert') && /ตำแหน่ง/.test(row('NB').querySelector('.btn-alert').title),'ปุ่ม ✎ กระพริบแดงบอก "ข้อมูลไม่ครบ: ตำแหน่ง"');
+  const edBtn=r=>[...r.querySelectorAll('button')].find(b=>b.textContent.trim()==='✎');
+  ok(edBtn(row('NB')).classList.contains('btn-alert') && /ตำแหน่ง/.test(edBtn(row('NB')).title) && !edBtn(row('NA')).classList.contains('btn-alert'),'ปุ่ม ✎ กระพริบแดงบอก "ข้อมูลไม่ครบ: ตำแหน่ง"');
   console.log('[กดป้ายแล้วไปเติมตำแหน่ง]');
   E(`go('today')`);
   nameCell('NB').nextElementSibling.querySelector('.nopos-tag').click();
