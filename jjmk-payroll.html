@@ -64,7 +64,7 @@ aside nav .nav-grp:first-child{padding-top:2px}
   .side-foot .btn{width:auto}
   main{padding:12px}
   body{overflow-x:hidden}                 /* กัน Safari ซูมออกเองเวลามีอะไรล้นจอ */
-  input,select{font-size:16px;padding:10px 12px}   /* ≥16px กัน iPhone ซูมเด้งเอง */
+  input,select,textarea{font-size:16px;padding:10px 12px}   /* ≥16px กัน iPhone ซูมเด้งเอง */
   td input,td select{font-size:16px;padding:6px 8px}
   .toolbar{gap:8px}
   .toolbar input[type=search]{max-width:100%;flex:1;min-width:150px}
@@ -150,8 +150,8 @@ th.num{text-align:right}
 .drop .ic{font-size:34px}
 
 label{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:4px;font-weight:600}
-input,select{font-family:'Sarabun',sans-serif;font-size:14.5px;padding:9px 13px;border:1.5px solid var(--line);border-radius:12px;width:100%;background:#fff;color:var(--ink);transition:.15s}
-input:focus,select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,90,31,.12)}
+input,select,textarea{font-family:'Sarabun',sans-serif;font-size:14.5px;padding:9px 13px;border:1.5px solid var(--line);border-radius:12px;width:100%;background:#fff;color:var(--ink);transition:.15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,90,31,.12)}
 input:focus,select:focus{outline:2px solid rgba(232,89,12,.25);border-color:var(--ember)}
 td input,td select{padding:5px 8px;font-size:13.5px}
 .emp-pick{max-height:230px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--line);border-radius:12px;background:#fff}
@@ -329,6 +329,11 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
 .dt-prog i{display:block;height:100%;border-radius:99px;background:var(--brand-grad)}
 .dt-bal-act{display:flex;gap:6px;flex-wrap:wrap}
 .dt-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 20px}
+.dt-kv > .w{grid-column:1/-1}
+.dt-h4{font-family:'Prompt',sans-serif;font-size:14.5px;font-weight:600;color:var(--ember-deep);margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.dt-h4:first-of-type{margin-top:4px}
+.dt-doc{font-size:12px;font-weight:600;color:var(--amber);background:var(--amber-soft);border-radius:7px;padding:3px 8px;justify-self:start}
+.dt-doc.bad{color:var(--red);background:var(--red-soft)}
 .dt-kv > div{border-bottom:1px dashed var(--line);padding-bottom:7px;min-width:0}
 .dt-kv .k{font-size:12px;color:var(--ink-soft)}
 .dt-kv .v{font-size:14.5px;word-break:break-word}
@@ -693,7 +698,13 @@ window.JJGate=(function(){
     <select id="detailDept" onchange="renderDetailSelector();renderDetail()" style="width:auto;min-width:150px"><option value="">ทุกแผนก</option></select>
     <select id="detailPos" onchange="renderDetail()" style="width:auto;min-width:150px"><option value="">ทุกตำแหน่ง</option></select>
     <select id="detailActive" onchange="renderDetail()" style="width:auto;min-width:130px">
-      <option value="1" selected>ทำงานอยู่</option><option value="0">พ้นสภาพ</option><option value="nopos">⚠️ ยังไม่มีตำแหน่ง</option><option value="">ทุกสถานะ</option>
+      <option value="1" selected>ทำงานอยู่</option><option value="0">พ้นสภาพ</option><option value="nopos">⚠️ ยังไม่มีตำแหน่ง</option>
+      <option value="docexp">📄 เอกสารหมด/ใกล้หมด (3 เดือน)</option><option value="">ทุกสถานะ</option>
+    </select>
+    <select id="detailGroup" onchange="renderDetail()" style="width:auto;min-width:140px">
+      <option value="">ทุกกลุ่ม</option><option value="general">ทั่วไป</option><option value="mou">MOU</option>
+      <option value="illegal_nopass">คนเถื่อน — พม่าไม่มี Passport</option><option value="illegal_minor">คนเถื่อน — อายุไม่ถึง 18 ปี</option>
+      <option value="no_permit">ไม่มีใบอนุญาตทำงาน</option><option value="proc">🧾 กำลังทำเอกสาร</option>
     </select>
     </span>
     <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">งวด:
@@ -1096,6 +1107,56 @@ window.JJGate=(function(){
 </div>
 
 <!-- SQL สร้างตารางประวัติ (สำเนาของ jjmk-payroll/jj_audit.sql ที่ branch sql) — ปุ่ม 📋 ในหน้าประวัติคัดลอกจากตรงนี้ · แก้ไฟล์บน branch sql ต้องแก้ตรงนี้ให้ตรงกัน -->
+<!-- SQL เพิ่มช่องข้อมูลพนักงาน (สำเนาของ jjmk-payroll/jj_employee_hr.sql ที่ branch sql) — ปุ่ม 📋 ในแท็บ "ข้อมูลส่วนตัว" คัดลอกจากตรงนี้ · แก้ไฟล์บน branch sql ต้องแก้ตรงนี้ให้ตรงกัน -->
+<script type="text/plain" id="sqlEmpHr">
+-- ============================================================
+-- jj_employee_hr.sql — ข้อมูลพนักงานเพิ่ม (JJ-Payroll · เจ้าของสั่ง 2026-10-05)
+-- เพศ · สัญชาติ · ที่อยู่ · ผู้ติดต่อฉุกเฉิน · วันหมดอายุเอกสาร (Passport/ใบอนุญาตทำงาน/บัตรชมพู)
+-- เอกสารแจ้งเข้า/แจ้งออก/หนังสือยินยอมผู้ปกครอง · โรงพยาบาลประกันสังคม · สแกนหน้า
+-- กลุ่ม (MOU/คนเถื่อน/ไม่มีใบอนุญาตทำงาน) · การทำเอกสาร (สถานะ/วันเริ่ม/วันเสร็จ/Agency)
+-- เพิ่มคอลัมน์อย่างเดียว ไม่แก้/ไม่ลบข้อมูลเดิม · รันทั้งไฟล์ใน Supabase SQL Editor · รันซ้ำได้ ไม่พัง
+-- ============================================================
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS gender             text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS nationality        text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS address            text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS emergency_name     text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS emergency_relation text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS emergency_phone    text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS passport_exp       date;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS work_permit_exp    date;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS pink_card_exp      date;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS doc_notify_in      boolean NOT NULL DEFAULT false;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS doc_notify_out     boolean NOT NULL DEFAULT false;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS doc_guardian       boolean NOT NULL DEFAULT false;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS sso_hospital       text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS face_scan          boolean NOT NULL DEFAULT false;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS worker_group       text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS doc_status         text NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS doc_start          date;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS doc_done           date;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS doc_agency         text NOT NULL DEFAULT '';
+
+COMMENT ON COLUMN employees.gender             IS 'เพศ: ชาย / หญิง / อื่นๆ';
+COMMENT ON COLUMN employees.nationality        IS 'สัญชาติ: TH ไทย / LA ลาว / MM พม่า / SHAN คนไทยใหญ่ / NONE ไม่มีสัญชาติ';
+COMMENT ON COLUMN employees.address            IS 'ที่อยู่ปัจจุบัน';
+COMMENT ON COLUMN employees.emergency_name     IS 'ผู้ติดต่อฉุกเฉิน — ชื่อ';
+COMMENT ON COLUMN employees.emergency_relation IS 'ผู้ติดต่อฉุกเฉิน — เกี่ยวข้องเป็น';
+COMMENT ON COLUMN employees.emergency_phone    IS 'ผู้ติดต่อฉุกเฉิน — เบอร์โทร';
+COMMENT ON COLUMN employees.passport_exp       IS 'Passport หมดอายุ (แอปเตือนก่อน 3 เดือน)';
+COMMENT ON COLUMN employees.work_permit_exp    IS 'ใบอนุญาตทำงาน หมดอายุ';
+COMMENT ON COLUMN employees.pink_card_exp      IS 'บัตรชมพู หมดอายุ';
+COMMENT ON COLUMN employees.doc_notify_in      IS 'มีเอกสารแจ้งเข้าแล้ว';
+COMMENT ON COLUMN employees.doc_notify_out     IS 'มีเอกสารแจ้งออกแล้ว';
+COMMENT ON COLUMN employees.doc_guardian       IS 'มีหนังสือยินยอมผู้ปกครองแล้ว (อายุไม่ถึง 18)';
+COMMENT ON COLUMN employees.sso_hospital       IS 'โรงพยาบาลที่เลือก (ประกันสังคม)';
+COMMENT ON COLUMN employees.face_scan          IS 'เพิ่มหน้าในเครื่องสแกนแล้ว';
+COMMENT ON COLUMN employees.worker_group       IS 'กลุ่ม: (ว่าง)=ทั่วไป / mou / illegal_nopass คนเถื่อน-พม่าไม่มี Passport / illegal_minor คนเถื่อน-อายุไม่ถึง 18 / no_permit ไม่มีใบอนุญาตทำงาน';
+COMMENT ON COLUMN employees.doc_status         IS 'กำลังทำเอกสาร: (ว่าง)=ไม่มี / mou / passport / illegal / notify_in / notify_out';
+COMMENT ON COLUMN employees.doc_start          IS 'การทำเอกสาร — วันที่เริ่มทำ';
+COMMENT ON COLUMN employees.doc_done           IS 'การทำเอกสาร — วันที่เสร็จ';
+COMMENT ON COLUMN employees.doc_agency         IS 'การทำเอกสาร — Agency';
+</script>
 <script type="text/plain" id="sqlAudit">
 -- ============================================================
 -- jj_audit.sql — ระบบล็อกอิน + ประวัติการทำรายการ (audit log)
@@ -1145,7 +1206,7 @@ END $$;
       <div><label>ชื่อเล่น *</label><input id="fNick"></div>
       <div><label>ชื่อ-นามสกุล</label><input id="fFull"></div>
       <div><label>รหัสพนักงาน (จากเครื่องสแกน)</label><input id="fCode"></div>
-      <div><label>วันเกิด</label><input type="date" id="fBirth"></div>
+      <div><label>วันเกิด</label><input type="date" id="fBirth" onchange="hrHint()"></div>
       <div><label>เบอร์โทร</label><input type="tel" id="fPhone" placeholder="เช่น 081-234-5678"></div>
       <div><label>วันเริ่มงาน</label><input type="date" id="fStart"></div>
       <div><label>วันสิ้นสุดการทำงาน (ออกจากงาน)</label><input type="date" id="fEnd"></div>
@@ -1166,7 +1227,8 @@ END $$;
         <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;margin-bottom:6px">
           <input type="checkbox" id="fSso" style="width:auto"> เข้าประกันสังคม (หักเงินสมทบอัตโนมัติ)
         </label>
-        <input id="fSsoId" inputmode="numeric" maxlength="17" placeholder="เลขบัตรประชาชน 13 หลัก"></div>
+        <input id="fSsoId" inputmode="numeric" maxlength="17" placeholder="เลขบัตรประชาชน 13 หลัก">
+        <input id="fSsoHosp" placeholder="โรงพยาบาลที่เลือก (ประกันสังคม)" style="margin-top:6px"></div>
       <div><label>รูปพนักงาน (ใส่หรือไม่ก็ได้)</label>
         <div style="display:flex;gap:10px;align-items:center">
           <div id="fPhotoPreview"></div>
@@ -1178,10 +1240,55 @@ END $$;
           </div>
         </div>
       </div>
+      <div><label>สแกนหน้า (เครื่องสแกน)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer">
+          <input type="checkbox" id="fFace" style="width:auto"> เพิ่มหน้าในเครื่องสแกนแล้ว
+        </label></div>
       <div><label>ประเภทค่าแรง</label>
         <select id="fType"><option value="monthly" selected>รายเดือน</option><option value="daily">รายวัน</option></select>
       </div>
       <div><label id="fRateLabel">อัตราค่าแรง (บาท)</label><input type="number" id="fRate" value="12000"></div>
+    </div>
+    <!-- ข้อมูลพนักงานเพิ่ม (เจ้าของสั่ง 2026-10-05 · SQL jj_employee_hr.sql) -->
+    <div class="warn-note" id="fHrNote" style="display:none;margin:4px 0 0">⚠️ ยังไม่ได้ติดตั้งช่องข้อมูลส่วนนี้ (รายละเอียด · เอกสาร · กลุ่ม · การทำเอกสาร) — ช่องด้านล่างจะยังไม่ถูกบันทึก ต้องรัน <b>jj_employee_hr.sql</b> ก่อน (ปุ่มคัดลอก SQL อยู่ในแท็บ "ข้อมูลส่วนตัว" ของหน้าข้อมูลพนักงาน)</div>
+    <div class="section-title" style="margin-bottom:10px">รายละเอียด</div>
+    <div class="grid g2">
+      <div><label>เพศ</label>
+        <select id="fGender"><option value="">– เลือก –</option><option>ชาย</option><option>หญิง</option><option>อื่นๆ</option></select></div>
+      <div><label>สัญชาติ</label>
+        <select id="fNat" onchange="hrHint()"><option value="">– เลือก –</option><option value="TH">ไทย</option><option value="LA">ลาว</option>
+          <option value="MM">พม่า</option><option value="SHAN">คนไทยใหญ่</option><option value="NONE">ไม่มีสัญชาติ</option></select></div>
+      <div style="grid-column:1/-1"><label>ที่อยู่ปัจจุบัน</label><textarea id="fAddr" rows="3" style="resize:vertical;line-height:1.5"></textarea></div>
+      <div><label>ผู้ติดต่อฉุกเฉิน — ชื่อ</label><input id="fEmgName" placeholder="ชื่อ-นามสกุล"></div>
+      <div><label>เกี่ยวข้องเป็น</label><input id="fEmgRel" list="relList" placeholder="เช่น แม่ / สามี / พี่สาว">
+        <datalist id="relList"><option>พ่อ</option><option>แม่</option><option>สามี</option><option>ภรรยา</option><option>พี่</option><option>น้อง</option><option>ญาติ</option><option>เพื่อน</option></datalist></div>
+      <div><label>เบอร์ผู้ติดต่อฉุกเฉิน</label><input type="tel" id="fEmgPhone" placeholder="เช่น 081-234-5678"></div>
+    </div>
+    <div class="section-title" style="margin-bottom:10px">เอกสาร</div>
+    <div class="grid g2">
+      <div><label>Passport — วันหมดอายุ <span class="muted" style="font-weight:400">(เตือนก่อน 3 เดือน)</span></label><input type="date" id="fPassExp" onchange="hrHint()"></div>
+      <div><label>ใบอนุญาตทำงาน — วันหมดอายุ</label><input type="date" id="fPermitExp" onchange="hrHint()"></div>
+      <div><label>บัตรชมพู — วันหมดอายุ</label><input type="date" id="fPinkExp" onchange="hrHint()"></div>
+      <div style="grid-column:1/-1;display:grid;gap:6px">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer"><input type="checkbox" id="fDocIn" style="width:auto"> มีเอกสารแจ้งเข้าแล้ว</label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer"><input type="checkbox" id="fDocOut" style="width:auto"> มีเอกสารแจ้งออกแล้ว</label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer"><input type="checkbox" id="fDocGuardian" style="width:auto" onchange="hrHint()"> มีหนังสือยินยอมผู้ปกครองแล้ว <span class="muted">(อายุไม่ถึง 18 ปี)</span></label>
+      </div>
+    </div>
+    <div class="section-title" style="margin-bottom:10px">กลุ่ม &amp; การทำเอกสาร</div>
+    <div class="grid g2">
+      <div><label>กลุ่ม</label>
+        <select id="fGroup" onchange="hrHint()"><option value="">ทั่วไป</option><option value="mou">MOU</option>
+          <option value="illegal_nopass">คนเถื่อน — พม่าไม่มี Passport</option><option value="illegal_minor">คนเถื่อน — อายุไม่ถึง 18 ปี</option>
+          <option value="no_permit">ไม่มีใบอนุญาตทำงาน</option></select></div>
+      <div><label>สถานะการทำเอกสาร</label>
+        <select id="fDocStatus"><option value="">ไม่มี</option><option value="mou">กำลังทำ MOU</option><option value="passport">กำลังทำ Passport</option>
+          <option value="illegal">กำลังทำ คนเถื่อน</option><option value="notify_in">กำลังแจ้งเข้า</option><option value="notify_out">กำลังแจ้งออก</option></select></div>
+      <div><label>วันที่เริ่มทำ</label><input type="date" id="fDocStart"></div>
+      <div><label>วันที่เสร็จ</label><input type="date" id="fDocDone"></div>
+      <div style="grid-column:1/-1"><label>Agency</label><input id="fDocAgency" list="agencyList" placeholder="เลือกหรือพิมพ์เอง">
+        <datalist id="agencyList"><option>บริษัท โกลด์สตาร์ อินฟินิตี้ จำกัด (Aisoon)</option></datalist></div>
+      <div id="fHrHint" style="grid-column:1/-1"></div>
     </div>
     <div class="section-title" style="margin-bottom:10px">ข้อมูลการทำงาน</div>
     <div class="grid g2">
@@ -1807,6 +1914,7 @@ let tipMemo = {};          // จำจำนวนคนหารต่อ 'ง
 let empInfoReady = false;  // true เมื่อรัน jj_employee_info.sql แล้ว (วันเกิด/เบอร์/บัญชี)
 let workDateReady = false; // true เมื่อรัน jj_work_dates.sql แล้ว (วันเริ่มงาน/วันสิ้นสุด)
 let kbizReady = false;     // true เมื่อรัน jj_kbiz_added.sql แล้ว (จำว่าใครถูกแอดบัญชี K BIZ แล้ว)
+let hrReady = false;       // true เมื่อรัน jj_employee_hr.sql แล้ว (เพศ/สัญชาติ/ที่อยู่/เอกสาร/กลุ่ม/การทำเอกสาร)
 let fineEntries = [];      // แก้ไขรายการหักอัตโนมัติรายงวด {id, empId, period, kind, amount}
 let fineReady = false;     // true เมื่อรัน jj_work_dates.sql แล้ว (ตาราง fine_entries)
 let holidays = {};   // holiKey(วัน, scope) -> {day, name, mult, id, scope, calId} · ทุกคน = 'YYYY-MM-DD' · หน้าร้าน/ออฟฟิศ = 'YYYY-MM-DD|store' / '|office'
@@ -1836,7 +1944,13 @@ const fromDbEmp = r => ({ id:r.id, code:r.code, nick:r.nick, full:r.full_name||'
   birth:r.birth_date||'', phone:r.phone||'', bankName:r.bank_name||'',
   bankAcc:r.bank_account||'', bankAccName:r.bank_account_name||'',
   startDate:r.start_date||'', endDate:r.end_date||'', kbizAdded:r.kbiz_added===true,
-  ssoOn:r.sso_on===true, ssoId:r.sso_id||'' });
+  ssoOn:r.sso_on===true, ssoId:r.sso_id||'',
+  gender:r.gender||'', nat:r.nationality||'', address:r.address||'',
+  emgName:r.emergency_name||'', emgRel:r.emergency_relation||'', emgPhone:r.emergency_phone||'',
+  passExp:r.passport_exp||'', permitExp:r.work_permit_exp||'', pinkExp:r.pink_card_exp||'',
+  docIn:r.doc_notify_in===true, docOut:r.doc_notify_out===true, docGuardian:r.doc_guardian===true,
+  ssoHosp:r.sso_hospital||'', faceScan:r.face_scan===true, group:r.worker_group||'',
+  docStatus:r.doc_status||'', docStart:r.doc_start||'', docDone:r.doc_done||'', docAgency:r.doc_agency||'' });
 const toDbEmp = e => ({ code:e.code, nick:e.nick, full_name:e.full||'', dept:e.dept||'',
   branch:e.branch||'', position:e.position||'', photo_url:e.photo||null,
   off_count:e.offCount||0, off_weekdays:e.offWd||'', holiday_pay:!!e.holidayPay,
@@ -1849,7 +1963,13 @@ const toDbEmp = e => ({ code:e.code, nick:e.nick, full_name:e.full||'', dept:e.d
                        bank_account:e.bankAcc||'', bank_account_name:e.bankAccName||'' } : {}),
   ...(workDateReady ? { start_date:e.startDate||null, end_date:e.endDate||null } : {}),
   ...(kbizReady ? { kbiz_added:!!e.kbizAdded } : {}),
-  ...(ssoReady ? { sso_on:!!e.ssoOn, sso_id:e.ssoId||'' } : {}) });
+  ...(ssoReady ? { sso_on:!!e.ssoOn, sso_id:e.ssoId||'' } : {}),
+  ...(hrReady ? { gender:e.gender||'', nationality:e.nat||'', address:e.address||'',
+      emergency_name:e.emgName||'', emergency_relation:e.emgRel||'', emergency_phone:e.emgPhone||'',
+      passport_exp:e.passExp||null, work_permit_exp:e.permitExp||null, pink_card_exp:e.pinkExp||null,
+      doc_notify_in:!!e.docIn, doc_notify_out:!!e.docOut, doc_guardian:!!e.docGuardian,
+      sso_hospital:e.ssoHosp||'', face_scan:!!e.faceScan, worker_group:e.group||'',
+      doc_status:e.docStatus||'', doc_start:e.docStart||null, doc_done:e.docDone||null, doc_agency:e.docAgency||'' } : {}) });
 const fromDbAdv = r => ({ id:r.id, empId:r.employee_id, period:r.period, amount:+r.amount,
   date:r.taken_date, note:r.note||'' });
 const fromDbShift = r => ({ id:r.id, name:r.name, start:String(r.start_time).slice(0,5),
@@ -1968,6 +2088,7 @@ async function loadAll(){
     empInfoReady = !!((em.data||[])[0] && 'birth_date' in em.data[0]);
     workDateReady = !!((em.data||[])[0] && 'start_date' in em.data[0]);
     kbizReady = !!((em.data||[])[0] && 'kbiz_added' in em.data[0]);
+    hrReady = !!((em.data||[])[0] && 'nationality' in em.data[0]);
     adjustments = (ad.data||[]).map(fromDbAdj);
     advances = (av.data||[]).map(fromDbAdv);
     if(st.data) settings = { ...settings,
@@ -2169,6 +2290,27 @@ const wdOf = d => new Date(d+'T12:00:00').getDay();
 /* ค่าแรงต่อวันสำหรับคิดเบี้ย: รายเดือน = เงินเดือน/30 · รายวัน = อัตราวัน */
 const dailyRate = e => e.type==='monthly' ? (+e.rate / (settings.monthDiv||30)) : +e.rate;
 const isOffWd = (e, day) => e.offWd ? e.offWd.split(',').includes(String(wdOf(day))) : false;
+/* ---- ข้อมูลพนักงานเพิ่ม (เจ้าของสั่ง 2026-10-05 · SQL jj_employee_hr.sql) ---- */
+const NAT_TH = { TH:'ไทย', LA:'ลาว', MM:'พม่า', SHAN:'คนไทยใหญ่', NONE:'ไม่มีสัญชาติ' };
+const GROUP_TH = { '':'ทั่วไป', mou:'MOU', illegal_nopass:'คนเถื่อน — พม่าไม่มี Passport',
+  illegal_minor:'คนเถื่อน — อายุไม่ถึง 18 ปี', no_permit:'ไม่มีใบอนุญาตทำงาน' };
+const DOCST_TH = { '':'ไม่มี', mou:'กำลังทำ MOU', passport:'กำลังทำ Passport', illegal:'กำลังทำ คนเถื่อน',
+  notify_in:'กำลังแจ้งเข้า', notify_out:'กำลังแจ้งออก' };
+const AGENCIES = ['บริษัท โกลด์สตาร์ อินฟินิตี้ จำกัด (Aisoon)'];
+const DOC_WARN_DAYS = 90;   // เตือนก่อนเอกสารหมดอายุ 3 เดือน
+const DOC_EXP = [['passExp','Passport'], ['permitExp','ใบอนุญาตทำงาน'], ['pinkExp','บัตรชมพู']];
+const ageOf = birth => { if(!birth) return null; const t = bizToday();
+  let a = +t.slice(0,4) - +birth.slice(0,4); if(t.slice(5) < birth.slice(5)) a--; return a; };
+/* เอกสารที่หมดแล้ว/ใกล้หมดใน 3 เดือน — เฉพาะคนที่ยังทำงานอยู่ · [{k,label,exp,days,expired}] */
+function docAlerts(e){
+  if(!e || !e.active) return [];
+  const t = bizToday();
+  return DOC_EXP.map(([k,label]) => { const exp = e[k]; if(!exp) return null;
+      const days = daysBetween(t, exp) - 1;
+      return days <= DOC_WARN_DAYS ? { k, label, exp, days, expired: days < 0 } : null; })
+    .filter(Boolean);
+}
+const docAlertText = a => a.expired ? a.label+' หมดอายุแล้ว '+(-a.days)+' วัน' : a.days===0 ? a.label+' หมดอายุวันนี้' : a.label+' หมดใน '+a.days+' วัน';
 const dayLabel = d => { const [y,m,dd]=d.split('-'); return +dd+' '+MONTHS_TH[+m-1]; };
 const WD_TH = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
 const toMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
@@ -3922,6 +4064,16 @@ function openEmpForm(id){
   document.getElementById('fKbiz').checked = e? !!e.kbizAdded : false;
   document.getElementById('fSso').checked = e? !!e.ssoOn : false;
   document.getElementById('fSsoId').value = e? (e.ssoId||'') : '';
+  // ข้อมูลพนักงานเพิ่ม (jj_employee_hr.sql)
+  const hv = (id, v) => { const el = document.getElementById(id); if(el.type==='checkbox') el.checked = !!v; else el.value = v||''; };
+  hv('fSsoHosp', e && e.ssoHosp); hv('fFace', e && e.faceScan);
+  hv('fGender', e && e.gender); hv('fNat', e && e.nat); hv('fAddr', e && e.address);
+  hv('fEmgName', e && e.emgName); hv('fEmgRel', e && e.emgRel); hv('fEmgPhone', e && e.emgPhone);
+  hv('fPassExp', e && e.passExp); hv('fPermitExp', e && e.permitExp); hv('fPinkExp', e && e.pinkExp);
+  hv('fDocIn', e && e.docIn); hv('fDocOut', e && e.docOut); hv('fDocGuardian', e && e.docGuardian);
+  hv('fGroup', e && e.group); hv('fDocStatus', e && e.docStatus); hv('fDocStart', e && e.docStart);
+  hv('fDocDone', e && e.docDone); hv('fDocAgency', e && e.docAgency);
+  document.getElementById('fHrNote').style.display = hrReady ? 'none' : '';
   document.getElementById('fBranch').value = e? (e.branch||(SCOPE?homeBranch(e):'')) : (SCOPE? myBranches()[0] : '');
   const curDept = e? (e.dept||'') : '';
   const depts = orgDepts();
@@ -3956,7 +4108,33 @@ function openEmpForm(id){
   document.getElementById('fHourlyWindow').value = (e && e.hourlyWindow === false) ? '0' : '1';
   document.getElementById('fMustWorkEx').checked = e? !!e.mustWorkExempt : false;
   toggleModeFields(); toggleOffFields();
-  document.getElementById('formBg').classList.add('show');
+  hrHint(); document.getElementById('formBg').classList.add('show');
+}
+/* ---- ฟอร์มข้อมูลพนักงานเพิ่ม ---- */
+function hrFormData(){
+  const v = id => document.getElementById(id).value.trim(), c = id => document.getElementById(id).checked;
+  return { gender:v('fGender'), nat:v('fNat'), address:v('fAddr'),
+    emgName:v('fEmgName'), emgRel:v('fEmgRel'), emgPhone:v('fEmgPhone'),
+    passExp:v('fPassExp'), permitExp:v('fPermitExp'), pinkExp:v('fPinkExp'),
+    docIn:c('fDocIn'), docOut:c('fDocOut'), docGuardian:c('fDocGuardian'),
+    ssoHosp:v('fSsoHosp'), faceScan:c('fFace'), group:v('fGroup'),
+    docStatus:v('fDocStatus'), docStart:v('fDocStart'), docDone:v('fDocDone'), docAgency:v('fDocAgency') };
+}
+const hrHasAny = d => ['gender','nat','address','emgName','emgRel','emgPhone','passExp','permitExp','pinkExp','ssoHosp','group','docStatus','docStart','docDone','docAgency']
+  .some(k => d[k]) || d.docIn || d.docOut || d.docGuardian || d.faceScan;
+/* คำแนะนำใต้ฟอร์ม: เข้าเงื่อนไขกลุ่มไหน · ต้องมีหนังสือผู้ปกครอง · เอกสารใกล้หมด (ไม่ตั้งค่าให้เอง เจ้าของเลือกเอง) */
+function hrHint(){
+  const box = document.getElementById('fHrHint'); if(!box) return;
+  const d = hrFormData(), age = ageOf(document.getElementById('fBirth').value), out = [];
+  if(age != null && age < 18){
+    if(d.group !== 'illegal_minor') out.push('💡 อายุ '+age+' ปี (ไม่ถึง 18) — เข้าเงื่อนไขกลุ่ม "คนเถื่อน — อายุไม่ถึง 18 ปี"');
+    if(!d.docGuardian) out.push('💡 อายุไม่ถึง 18 ปี — ต้องมีหนังสือยินยอมผู้ปกครอง');
+  }
+  if(d.nat === 'MM' && !d.passExp && d.group !== 'illegal_nopass' && d.group !== 'mou')
+    out.push('💡 สัญชาติพม่า ยังไม่มีวันหมดอายุ Passport — ถ้าไม่มี Passport เข้าเงื่อนไขกลุ่ม "คนเถื่อน — พม่าไม่มี Passport"');
+  for(const a of docAlerts({ active:true, passExp:d.passExp, permitExp:d.permitExp, pinkExp:d.pinkExp }))
+    out.push((a.expired ? '❗ ' : '⏰ ') + docAlertText(a));
+  box.innerHTML = out.length ? '<div class="warn-note" style="margin:0">'+out.join('<br>')+'</div>' : '';
 }
 async function saveEmpForm(){
   const id = document.getElementById('fId').value;
@@ -3975,6 +4153,7 @@ async function saveEmpForm(){
     kbizAdded: document.getElementById('fKbiz').checked,
     ssoOn: document.getElementById('fSso').checked,
     ssoId: document.getElementById('fSsoId').value.trim(),
+    ...(hrReady ? hrFormData() : {}),   // ยังไม่รัน SQL = ไม่ใส่ (กันหน้าจอโชว์ค่าที่ไม่ได้บันทึกจริง)
     dept: document.getElementById('fDept').value.trim(),
     branch: document.getElementById('fBranch').value,
     position: document.getElementById('fPos').value.trim(),
@@ -4024,6 +4203,10 @@ async function saveEmpForm(){
     toast('⚠️ ข้อมูลประกันสังคม ยังไม่ถูกบันทึก — ต้องรัน jj_sso.sql ใน Supabase ก่อน');
   if(data.startDate && data.endDate && data.endDate < data.startDate)
     return toast('❌ วันสิ้นสุดการทำงาน ต้องไม่ก่อนวันเริ่มงาน');
+  if(data.docStart && data.docDone && data.docDone < data.docStart)
+    return toast('❌ วันที่ทำเอกสารเสร็จ ต้องไม่ก่อนวันที่เริ่มทำ');
+  if(!hrReady && hrHasAny(hrFormData()))
+    toast('⚠️ รายละเอียด/เอกสาร/กลุ่ม/การทำเอกสาร ยังไม่ถูกบันทึก — ต้องรัน jj_employee_hr.sql ใน Supabase ก่อน');
   busy(true,'กำลังบันทึก…');
   try{
     if(id){
@@ -4153,27 +4336,40 @@ function dtToday(e){
 const dtStatus = e => { const x = dtToday(e);
   return `<span class="dt-st"><i style="background:${DT_ST[x.k]}"></i>${x.t}${x.s?' <span class="muted">'+x.s+'</span>':''}</span>`; };
 
+/* บรรทัดเตือนเอกสารบนการ์ด — หมดแล้ว = แดง · ใกล้หมด = เหลือง */
+function dtDocLine(e){
+  const al = docAlerts(e); if(!al.length) return '';
+  const bad = al.some(a=>a.expired);
+  return `<div class="dt-doc${bad?' bad':''}" title="${al.map(docAlertText).join(' · ')}">📄 ${docAlertText(al[0])}${al.length>1?' +'+(al.length-1):''}</div>`;
+}
 function detailFiltered(){
   const q  = (document.getElementById('detailSearch').value||'').toLowerCase();
   const bf = document.getElementById('detailBranch').value;
   const df = document.getElementById('detailDept').value;
   const pf = document.getElementById('detailPos').value;
   const af = document.getElementById('detailActive').value;
+  const gf = (document.getElementById('detailGroup')||{}).value || '';
   return employees.filter(e => (!bf || e.branch===bf) && (!df || e.dept===df) && (!pf || e.position===pf) &&
-    (af==='' || (af==='nopos' ? (e.active && noPos(e)) : String(+e.active)===af)) && empMatch(e, q));
+    (af==='' || (af==='nopos' ? (e.active && noPos(e)) : af==='docexp' ? docAlerts(e).length>0 : String(+e.active)===af)) &&
+    (!gf || (gf==='proc' ? !!e.docStatus : gf==='general' ? !e.group : e.group===gf)) && empMatch(e, q));
 }
 function renderDetailCards(){
   const period = document.getElementById('detailPeriodSel').value || allPeriods()[0] || '';
   const list = detailFiltered();
   const af = document.getElementById('detailActive').value;
-  const filtered = ['detailSearch','detailBranch','detailDept','detailPos'].some(id=>document.getElementById(id).value) || af !== '1';
+  const filtered = ['detailSearch','detailBranch','detailDept','detailPos','detailGroup'].some(id=>(document.getElementById(id)||{}).value) || af !== '1';
   const cnt = document.getElementById('detailCount');
   if(cnt) cnt.textContent = filtered ? `พบ ${list.length} คน` : `${list.length} คน`;
   if(!employees.length) return '<div class="card"><div class="empty">ยังไม่มีพนักงาน</div></div>';
-  if(!list.length) return '<div class="card"><div class="empty">ไม่พบพนักงานที่ตรงกับตัวกรอง</div></div>';
+  // แถบเตือนเอกสารหมดอายุ/ใกล้หมดใน 3 เดือน (ทั้งหมดที่เห็นได้ ไม่ขึ้นกับตัวกรอง)
+  const expN = af==='docexp' ? 0 : employees.filter(e=>docAlerts(e).length).length;
+  const banner = expN ? `<div class="warn-note" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--red-soft);border-color:#f3c4b5;color:#a03014">
+      📄 <b>เอกสารหมดอายุ/ใกล้หมดใน 3 เดือน ${expN} คน</b> (Passport · ใบอนุญาตทำงาน · บัตรชมพู)
+      <button class="btn btn-light btn-sm" onclick="document.getElementById('detailActive').value='docexp';renderDetail()">ดูรายชื่อ</button></div>` : '';
+  if(!list.length) return banner + '<div class="card"><div class="empty">ไม่พบพนักงานที่ตรงกับตัวกรอง</div></div>';
   const known = myBranches();
   const keys = [...known, ...[...new Set(list.map(e=>e.branch||''))].filter(b=>!known.includes(b)).sort()];
-  return keys.map(b => {
+  return banner + keys.map(b => {
     const G = list.filter(e => (e.branch||'') === b);
     if(!G.length) return '';
     G.sort((a,c)=> c.active-a.active || (a.dept||'').localeCompare(c.dept||'','th') || a.nick.localeCompare(c.nick,'th'));
@@ -4186,8 +4382,8 @@ function renderDetailCards(){
         const amt = e.mode==='hourly' ? x.fullHrs+' ชม.' : x.days+' วัน';
         return `<button class="dt-card${e.active?'':' gone'}" onclick="openDetail(${e.id})" title="ดูรายละเอียดทั้งหมดของ ${e.nick}">
           <div class="dt-top">${avatar(e, 46)}<div class="dt-nm"><b>${e.nick}</b><small>${e.full||'&nbsp;'}</small></div></div>
-          <div class="dt-meta"><span class="dept-chip">${e.dept||'–'}</span>${noPos(e) && e.active ? noPosTag(e) : '<span class="muted">'+(e.position||'–')+'</span>'}</div>
-          ${dtStatus(e)}
+          <div class="dt-meta"><span class="dept-chip">${e.dept||'–'}</span>${noPos(e) && e.active ? noPosTag(e) : '<span class="muted">'+(e.position||'–')+'</span>'}${e.group?'<span class="chip chip-violet" style="font-size:11px">'+(GROUP_TH[e.group]||'')+'</span>':''}</div>
+          ${dtStatus(e)}${dtDocLine(e)}
           <div class="dt-foot"><span class="muted">${amt}${x.lateCount?' · สาย '+x.lateCount:''}</span><b>฿${THB(x.net)}</b></div>
         </button>`; }).join('')}</div></section>`;
   }).join('');
@@ -4237,31 +4433,75 @@ function dtDebt(e, p, period){
 }
 function dtInfo(e){
   const thFull = d => { if(!d) return '–'; const [y,m,dd] = d.split('-'); return +dd+' '+MONTHS_TH[+m-1]+' '+(+y+543); };
-  const ageOf = d => { if(!d) return ''; const b = new Date(d+'T12:00:00'), n = new Date(); let a = n.getFullYear()-b.getFullYear();
-    if(n.getMonth()<b.getMonth() || (n.getMonth()===b.getMonth() && n.getDate()<b.getDate())) a--; return ' ('+a+' ปี)'; };
   const need = v => v || '<b style="color:var(--red)">ยังไม่ได้กรอก</b>';
+  const tx = v => v ? audEsc(v) : '–';
+  const yes = (v, okTxt, noTxt) => v ? '<span class="chip chip-green">✓ '+okTxt+'</span>' : '<span class="muted">'+noTxt+'</span>';
+  const age = ageOf(e.birth);
   const sh = shiftDefs.find(s=>s.id===e.shiftId);
   const offs = [e.offWd ? 'หยุดประจำ '+e.offWd.split(',').filter(Boolean).map(i=>WD_TH[+i]).join(', ') : '',
                 e.offCount ? 'หยุดได้ '+e.offCount+' วัน/งวด' : ''].filter(Boolean).join(' · ') || '–';
-  const rows = [
-    ['ชื่อ-นามสกุล', e.full || '–'], ['ชื่อเล่น', e.nick], ['รหัสเครื่องสแกน', e.code],
-    ['สาขา', (BR[e.branch]||{}).t || '–'], ['แผนก', e.dept || '–'],
-    ['ตำแหน่ง', noPos(e) ? (e.active ? noPosTag(e) : '–') : e.position],
-    ['วันเกิด', e.birth ? thFull(e.birth)+ageOf(e.birth) : need('')], ['เบอร์โทร', need(e.phone)],
-    ['รับเงินทาง', e.bankName==='เงินสด' ? '💵 เงินสด' : e.bankName ? e.bankName+' '+(e.bankAcc||'<b style="color:var(--red)">ไม่มีเลขบัญชี</b>')+(e.bankAccName?' ('+e.bankAccName+')':'') : need('')],
-    ['วันเริ่มงาน', thFull(e.startDate)], ['วันสิ้นสุดงาน', e.endDate ? thFull(e.endDate) : '–'],
-    ['สถานะ', e.active ? '<span class="chip chip-green">ทำงานอยู่</span>' : '<span class="chip chip-red">พ้นสภาพ</span>'],
-    ['ค่าแรง', e.mode==='hourly' ? THB(e.rate)+' บาท/ชม.' : e.type==='monthly' ? 'รายเดือน '+THB(e.rate)+' บาท' : 'รายวัน '+THB(e.rate)+' บาท'],
-    ['รูปแบบการทำงาน', modeLabel(e)+(e.mode==='shift' && sh ? ' <span class="muted">'+sh.start+'–'+sh.end+'</span>' : '')],
-    ['วันหยุด', offs], ['รอบจ่ายเงิน', isOfficeCycle(e) ? '1 – สิ้นเดือน · จ่ายสิ้นเดือน (ออฟฟิศ)' : '26 – 25 · จ่ายวันที่ 5'],
-    ['เงินประกัน', e.depOn === false ? 'ไม่หัก' : THB(e.depTarget)+' บาท · หักงวดละ '+THB(e.depMonthly)+(e.depOpen?' · ยอดยกมา '+THB(e.depOpen):'')],
-    ['ประกันสังคม', e.ssoOn ? 'หัก'+(e.ssoId?' · เลขที่ '+e.ssoId:'') : 'ไม่หัก'],
+  const docExp = k => { const exp = e[k]; if(!exp) return '<span class="muted">–</span>';
+    const d = daysBetween(bizToday(), exp) - 1;
+    return thFull(exp)+' '+(d < 0 ? '<span class="chip chip-red">หมดอายุแล้ว '+(-d)+' วัน</span>'
+      : d <= DOC_WARN_DAYS ? '<span class="chip chip-amber">เหลือ '+d+' วัน</span>' : '<span class="chip chip-green">ใช้ได้</span>'); };
+  const emg = [e.emgName, e.emgRel ? '('+e.emgRel+')' : '', e.emgPhone].filter(Boolean).join(' ');
+  const S = [
+    ['รายละเอียด', [
+      ['ชื่อ-นามสกุล', e.full || '–'], ['ชื่อเล่น', e.nick], ['เพศ', tx(e.gender)],
+      ['สัญชาติ', NAT_TH[e.nat] || '–'],
+      ['อายุ', e.birth ? age+' ปี <span class="muted">(เกิด '+thFull(e.birth)+')</span>' : need('')],
+      ['เบอร์โทร', need(e.phone)],
+      ['วันที่เริ่มทำงาน', thFull(e.startDate)], ['วันที่ออกจากงาน', e.endDate ? thFull(e.endDate) : '–'],
+      ['ผู้ติดต่อฉุกเฉิน', emg ? audEsc(emg) : '–'],
+      ['ที่อยู่ปัจจุบัน', tx(e.address), 1],
+      ['พนักงานสาขา', (BR[e.branch]||{}).t || '–'], ['แผนก', e.dept || '–'],
+      ['ตำแหน่ง', noPos(e) ? (e.active ? noPosTag(e) : '–') : e.position],
+      ['รหัสเครื่องสแกน', e.code],
+      ['สถานะ', e.active ? '<span class="chip chip-green">ทำงานอยู่</span>' : '<span class="chip chip-red">พ้นสภาพ</span>'] ]],
+    ['เอกสาร', [
+      ['Passport — หมดอายุ', docExp('passExp')], ['ใบอนุญาตทำงาน — หมดอายุ', docExp('permitExp')],
+      ['บัตรชมพู — หมดอายุ', docExp('pinkExp')],
+      ['เอกสารแจ้งเข้า', yes(e.docIn, 'มีแล้ว', 'ยังไม่มี')], ['เอกสารแจ้งออก', yes(e.docOut, 'มีแล้ว', 'ยังไม่มี')],
+      ['หนังสือยินยอมผู้ปกครอง', e.docGuardian ? yes(1, 'มีแล้ว') : age != null && age < 18
+        ? '<b style="color:var(--red)">ยังไม่มี — จำเป็น (อายุไม่ถึง 18)</b>' : '<span class="muted">ยังไม่มี</span>'] ]],
+    ['ประกันสังคม', [
+      ['ทำ / ไม่ทำ', e.ssoOn ? '<span class="chip chip-green">ทำ (หักเงินสมทบ)</span>' : '<span class="muted">ไม่ทำ</span>'],
+      ['เลขประกันสังคม', tx(e.ssoId)], ['โรงพยาบาลที่เลือก', tx(e.ssoHosp)] ]],
+    ['การจ่ายเงินเดือน', [
+      ['บัญชีธนาคาร หรือ เงินสด', e.bankName==='เงินสด' ? '💵 เงินสด' : e.bankName ? '🏦 '+e.bankName : need('')],
+      ['เลขที่บัญชี', e.bankName==='เงินสด' ? '–' : e.bankAcc ? e.bankAcc+(e.bankAccName?' <span class="muted">('+e.bankAccName+')</span>':'') : need('')],
+      ['ฐานเงินเดือน', e.mode==='hourly' ? THB(e.rate)+' บาท/ชม.' : e.type==='monthly' ? 'รายเดือน '+THB(e.rate)+' บาท' : 'รายวัน '+THB(e.rate)+' บาท'],
+      ['รอบจ่ายเงิน', isOfficeCycle(e) ? '1 – สิ้นเดือน · จ่ายสิ้นเดือน (ออฟฟิศ)' : '26 – 25 · จ่ายวันที่ 5'],
+      ['เงินประกัน', e.depOn === false ? 'ไม่หัก' : THB(e.depTarget)+' บาท · หักงวดละ '+THB(e.depMonthly)+(e.depOpen?' · ยอดยกมา '+THB(e.depOpen):'')] ]],
+    ['สแกนหน้า · กลุ่ม', [
+      ['สแกนหน้า', e.faceScan ? '<span class="chip chip-green">✓ เพิ่มแล้ว</span>' : '<b style="color:var(--amber)">ยังไม่เพิ่ม</b>'],
+      ['กลุ่ม', e.group ? '<b>'+(GROUP_TH[e.group]||audEsc(e.group))+'</b>' : 'ทั่วไป'] ]],
+    ['การทำเอกสาร', [
+      ['สถานะ', e.docStatus ? '<span class="chip chip-violet">'+(DOCST_TH[e.docStatus]||audEsc(e.docStatus))+'</span>' : '<span class="muted">ไม่มี</span>'],
+      ['วันที่เริ่มทำ', thFull(e.docStart)], ['วันที่เสร็จ', thFull(e.docDone)], ['Agency', tx(e.docAgency)] ]],
+    ['การทำงาน', [
+      ['รูปแบบการทำงาน', modeLabel(e)+(e.mode==='shift' && sh ? ' <span class="muted">'+sh.start+'–'+sh.end+'</span>' : '')],
+      ['วันหยุด', offs] ]],
   ];
-  return `<div class="card">
+  const setup = hrReady ? '' : `<div class="warn-note" style="display:grid;gap:8px">
+      <div>⚠️ ยังไม่ได้ติดตั้งช่อง <b>เพศ · สัญชาติ · ที่อยู่ · ผู้ติดต่อฉุกเฉิน · เอกสาร · กลุ่ม · การทำเอกสาร · สแกนหน้า</b> —
+        กดคัดลอก SQL แล้ววางใน <b>Supabase → SQL Editor</b> กด Run แล้วกด 🔄 รีเฟรชข้อมูล <span class="muted">(เพิ่มคอลัมน์อย่างเดียว ไม่แตะข้อมูลเดิม · รันซ้ำได้)</span></div>
+      <div><button class="btn btn-ember btn-sm" onclick="copySqlBlock('sqlEmpHr','empHrSqlBox',this)">📋 คัดลอก SQL (jj_employee_hr.sql)</button></div>
+      <textarea id="empHrSqlBox" readonly rows="6" style="font-family:monospace;font-size:12px;width:100%">${audEsc(document.getElementById('sqlEmpHr').textContent.trim())}</textarea>
+    </div>`;
+  return `${setup}<div class="card">
     <div class="section-title" style="margin-top:0">🪪 ข้อมูลส่วนตัว<span style="flex:1"></span>
       <button class="btn btn-light btn-sm" onclick="openEmpForm(${e.id})">✎ แก้ไขข้อมูล</button></div>
-    <div class="dt-kv">${rows.map(([k,v])=>`<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
+    ${S.map(([title, rows]) => `<div class="dt-h4">${title}</div>
+      <div class="dt-kv">${rows.map(([k,v,wide])=>`<div${wide?' class="w"':''}><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>`).join('')}
   </div>`;
+}
+/* คัดลอก SQL ที่ฝังไว้ใน <script type="text/plain"> — คัดลอกไม่ได้ = เลือกข้อความให้กด Ctrl+C เอง */
+async function copySqlBlock(srcId, boxId, btn){
+  const box = document.getElementById(boxId);
+  const txt = document.getElementById(srcId).textContent.trim();
+  try{ await navigator.clipboard.writeText(txt); toast('📋 คัดลอกแล้ว — ไปวางใน Supabase SQL Editor แล้วกด Run'); if(btn) btn.textContent = '✓ คัดลอกแล้ว'; }
+  catch(_){ if(box){ box.focus(); box.select(); } toast('กด Ctrl+C เพื่อคัดลอกข้อความที่เลือกไว้'); }
 }
 function renderDetailSelector(){
   const bf = document.getElementById('detailBranch').value;
@@ -4332,7 +4572,8 @@ function renderDetail(){
   const isH = e.mode==='hours', isHr = e.mode==='hourly';
   const T = DT_TABS.some(t=>t[0]===detailTab) ? detailTab : 'over';
   const miss = e.active ? missingInfo(e) : [];
-  const badge = { time: p.singleCount, info: miss.length };
+  const dal = docAlerts(e);
+  const badge = { time: p.singleCount, info: miss.length + dal.length };
   const tabs = `<div class="dt-tabs" role="tablist">${DT_TABS.map(([k,t])=>
     `<button role="tab" class="${k===T?'on':''}" onclick="setDetailTab('${k}')">${t}${badge[k]?' <span class="dt-badge">'+badge[k]+'</span>':''}</button>`).join('')}</div>`;
   const head = `
@@ -4371,6 +4612,8 @@ function renderDetail(){
 
 
     ${miss.length? `<div class="warn-note" style="background:var(--red-soft);border-color:#f3c4b5;color:#a03014">⚠️ <b>ข้อมูลยังไม่ครบ:</b> ${miss.join(' · ')} — ดูที่แท็บ "ข้อมูลส่วนตัว" หรือกด ✎ แก้ไขข้อมูล</div>`:''}
+    ${dal.length? `<div class="warn-note" style="${dal.some(x=>x.expired)?'background:var(--red-soft);border-color:#f3c4b5;color:#a03014':''}">📄 <b>เอกสาร:</b> ${dal.map(docAlertText).join(' · ')} — ดูที่แท็บ "ข้อมูลส่วนตัว"</div>`:''}
+    ${e.docStatus? `<div class="warn-note" style="background:var(--violet-soft);border-color:#d9cdf5;color:#4b2fa8">🧾 <b>${DOCST_TH[e.docStatus]||''}</b>${e.docStart?' · เริ่ม '+dayLabel(e.docStart):''}${e.docDone?' · เสร็จ '+dayLabel(e.docDone):''}${e.docAgency?' · '+audEsc(e.docAgency):''}</div>`:''}
         ${p.holiDays.length? `<div class="warn-note" style="margin-top:12px;margin-bottom:0;background:${p.holiDays.every(h=>h.ok)?'#e9f7ec':'#fdf6e3'};border-color:${p.holiDays.every(h=>h.ok)?'#c3e6cb':'#eedcb3'};color:${p.holiDays.every(h=>h.ok)?'#1e6b2e':'#7a5a12'}">
           🎌 <b>วันหยุดพิเศษในงวดนี้ ${p.holiDays.length} วัน</b><br>
           ${p.holiDays.map(h=>`${dayLabel(h.day)} ${h.name} ${h.ok?'<b>✓ ได้เบี้ย +'+THB(h.bonus)+'</b>':'<b>✕ ไม่ได้ ('+h.why+')</b>'}`).join('<br>')}
