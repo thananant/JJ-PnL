@@ -332,6 +332,24 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
 .dt-kv > .w{grid-column:1/-1}
 .dt-h4{font-family:'Prompt',sans-serif;font-size:14.5px;font-weight:600;color:var(--ember-deep);margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}
 .dt-h4:first-of-type{margin-top:4px}
+/* แก้ข้อมูลส่วนตัวในแท็บ (เจ้าของสั่ง 2026-10-05 — ไม่ใส่ในฟอร์ม ✎ แล้ว) */
+.dt-h4{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dt-h4 .dt-ed{margin-left:auto;font-family:inherit;font-weight:400;font-size:13px;color:var(--ink)}
+.dt-h4.edit{color:var(--blue);border-bottom-color:var(--blue)}
+.pi-form{background:#fbfaf7;border:1px solid var(--line);border-radius:12px;padding:12px}
+.pi-form .w{grid-column:1/-1}
+.pi-form textarea{resize:vertical;line-height:1.5}
+.pi-chk{display:flex!important;align-items:center;gap:8px;font-weight:400!important;color:var(--ink)!important;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;margin:0!important;min-height:44px}
+.pi-chk input{width:auto}
+.pi-na{font-size:13px;color:var(--ink-soft);background:#fff;border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
+.pi-act{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
+.pi-bar{position:sticky;bottom:0;z-index:5;background:var(--panel);border-top:1px solid var(--line);margin:14px -4px 0;padding:10px 4px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.pi-note{font-size:12.5px;color:var(--ink-soft);margin-top:8px}
+.info-note{background:var(--blue-soft);border:1px solid #c9dff2;color:#174f86;padding:10px 14px;border-radius:10px;font-size:13.5px;margin-bottom:6px}
+.info-note .btn{margin-top:8px}
+#dtHrHints:empty{display:none}
+@media (max-width:700px){.pi-form input,.pi-form select,.pi-form textarea{font-size:16px}}
+@media (max-width:560px){.pi-act .btn,.pi-bar .btn{flex:1 1 0}}
 .dt-doc{font-size:12px;font-weight:600;color:var(--amber);background:var(--amber-soft);border-radius:7px;padding:3px 8px;justify-self:start}
 .dt-doc.bad{color:var(--red);background:var(--red-soft)}
 .dt-kv > div{border-bottom:1px dashed var(--line);padding-bottom:7px;min-width:0}
@@ -1199,36 +1217,17 @@ END $$;
   <div class="modal">
     <button class="close" onclick="closeModal('formBg')">✕</button>
     <h2 class="font-display" id="formTitle">เพิ่มพนักงาน</h2>
-    <p class="muted" style="margin-bottom:16px">ข้อมูลพื้นฐาน ค่าแรง และรูปแบบการทำงาน</p>
+    <p class="muted" style="margin-bottom:10px">ชื่อ รหัส ค่าแรง และรูปแบบการทำงาน</p>
+    <div class="info-note" id="fInfoNote">🪪 <b>ข้อมูลส่วนตัว</b> (วันเกิด · เบอร์โทร · บัญชีธนาคาร · ประกันสังคม · เอกสาร · กลุ่ม · สแกนหน้า)
+      แก้ที่แท็บ <b>"ข้อมูลส่วนตัว"</b> ของหน้าข้อมูลพนักงาน<span id="fInfoBtnWrap"></span></div>
     <input type="hidden" id="fId">
     <div class="section-title" style="margin-top:12px;margin-bottom:10px">ข้อมูลพนักงาน</div>
     <div class="grid g2">
       <div><label>ชื่อเล่น *</label><input id="fNick"></div>
       <div><label>ชื่อ-นามสกุล</label><input id="fFull"></div>
       <div><label>รหัสพนักงาน (จากเครื่องสแกน)</label><input id="fCode"></div>
-      <div><label>วันเกิด</label><input type="date" id="fBirth" onchange="hrHint()"></div>
-      <div><label>เบอร์โทร</label><input type="tel" id="fPhone" placeholder="เช่น 081-234-5678"></div>
       <div><label>วันเริ่มงาน</label><input type="date" id="fStart"></div>
       <div><label>วันสิ้นสุดการทำงาน (ออกจากงาน)</label><input type="date" id="fEnd"></div>
-      <div><label>ธนาคารสำหรับโอนเงินเดือน</label>
-        <input id="fBank" list="bankList" placeholder="เลือกหรือพิมพ์เอง">
-        <datalist id="bankList">
-          <option>กสิกรไทย</option><option>ไทยพาณิชย์</option><option>กรุงเทพ</option>
-          <option>กรุงไทย</option><option>กรุงศรี</option><option>ทหารไทยธนชาต (ttb)</option>
-          <option>ออมสิน</option><option>พร้อมเพย์</option><option>เงินสด</option>
-        </datalist></div>
-      <div><label>เลขบัญชี</label><input id="fBankAcc" inputmode="numeric" placeholder="เลขบัญชี / เบอร์พร้อมเพย์"></div>
-      <div><label>ชื่อบัญชี</label><input id="fBankAccName" placeholder="ชื่อเจ้าของบัญชี"></div>
-      <div><label>ระบบ K BIZ (กสิกร)</label>
-        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer">
-          <input type="checkbox" id="fKbiz" style="width:auto"> เพิ่มบัญชีใน K BIZ แล้ว (ไฟล์แอดบัญชีจะข้ามคนนี้)
-        </label></div>
-      <div><label>ประกันสังคม (สปส.)</label>
-        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;margin-bottom:6px">
-          <input type="checkbox" id="fSso" style="width:auto"> เข้าประกันสังคม (หักเงินสมทบอัตโนมัติ)
-        </label>
-        <input id="fSsoId" inputmode="numeric" maxlength="17" placeholder="เลขบัตรประชาชน 13 หลัก">
-        <input id="fSsoHosp" placeholder="โรงพยาบาลที่เลือก (ประกันสังคม)" style="margin-top:6px"></div>
       <div><label>รูปพนักงาน (ใส่หรือไม่ก็ได้)</label>
         <div style="display:flex;gap:10px;align-items:center">
           <div id="fPhotoPreview"></div>
@@ -1240,55 +1239,10 @@ END $$;
           </div>
         </div>
       </div>
-      <div><label>สแกนหน้า (เครื่องสแกน)</label>
-        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer">
-          <input type="checkbox" id="fFace" style="width:auto"> เพิ่มหน้าในเครื่องสแกนแล้ว
-        </label></div>
       <div><label>ประเภทค่าแรง</label>
         <select id="fType"><option value="monthly" selected>รายเดือน</option><option value="daily">รายวัน</option></select>
       </div>
       <div><label id="fRateLabel">อัตราค่าแรง (บาท)</label><input type="number" id="fRate" value="12000"></div>
-    </div>
-    <!-- ข้อมูลพนักงานเพิ่ม (เจ้าของสั่ง 2026-10-05 · SQL jj_employee_hr.sql) -->
-    <div class="warn-note" id="fHrNote" style="display:none;margin:4px 0 0">⚠️ ยังไม่ได้ติดตั้งช่องข้อมูลส่วนนี้ (รายละเอียด · เอกสาร · กลุ่ม · การทำเอกสาร) — ช่องด้านล่างจะยังไม่ถูกบันทึก ต้องรัน <b>jj_employee_hr.sql</b> ก่อน (ปุ่มคัดลอก SQL อยู่ในแท็บ "ข้อมูลส่วนตัว" ของหน้าข้อมูลพนักงาน)</div>
-    <div class="section-title" style="margin-bottom:10px">รายละเอียด</div>
-    <div class="grid g2">
-      <div><label>เพศ</label>
-        <select id="fGender"><option value="">– เลือก –</option><option>ชาย</option><option>หญิง</option><option>อื่นๆ</option></select></div>
-      <div><label>สัญชาติ</label>
-        <select id="fNat" onchange="hrHint()"><option value="">– เลือก –</option><option value="TH">ไทย</option><option value="LA">ลาว</option>
-          <option value="MM">พม่า</option><option value="SHAN">คนไทยใหญ่</option><option value="NONE">ไม่มีสัญชาติ</option></select></div>
-      <div style="grid-column:1/-1"><label>ที่อยู่ปัจจุบัน</label><textarea id="fAddr" rows="3" style="resize:vertical;line-height:1.5"></textarea></div>
-      <div><label>ผู้ติดต่อฉุกเฉิน — ชื่อ</label><input id="fEmgName" placeholder="ชื่อ-นามสกุล"></div>
-      <div><label>เกี่ยวข้องเป็น</label><input id="fEmgRel" list="relList" placeholder="เช่น แม่ / สามี / พี่สาว">
-        <datalist id="relList"><option>พ่อ</option><option>แม่</option><option>สามี</option><option>ภรรยา</option><option>พี่</option><option>น้อง</option><option>ญาติ</option><option>เพื่อน</option></datalist></div>
-      <div><label>เบอร์ผู้ติดต่อฉุกเฉิน</label><input type="tel" id="fEmgPhone" placeholder="เช่น 081-234-5678"></div>
-    </div>
-    <div class="section-title" style="margin-bottom:10px">เอกสาร</div>
-    <div class="grid g2">
-      <div><label>Passport — วันหมดอายุ <span class="muted" style="font-weight:400">(เตือนก่อน 3 เดือน)</span></label><input type="date" id="fPassExp" onchange="hrHint()"></div>
-      <div><label>ใบอนุญาตทำงาน — วันหมดอายุ</label><input type="date" id="fPermitExp" onchange="hrHint()"></div>
-      <div><label>บัตรชมพู — วันหมดอายุ</label><input type="date" id="fPinkExp" onchange="hrHint()"></div>
-      <div style="grid-column:1/-1;display:grid;gap:6px">
-        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer"><input type="checkbox" id="fDocIn" style="width:auto"> มีเอกสารแจ้งเข้าแล้ว</label>
-        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer"><input type="checkbox" id="fDocOut" style="width:auto"> มีเอกสารแจ้งออกแล้ว</label>
-        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--ink);background:#faf7f1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer"><input type="checkbox" id="fDocGuardian" style="width:auto" onchange="hrHint()"> มีหนังสือยินยอมผู้ปกครองแล้ว <span class="muted">(อายุไม่ถึง 18 ปี)</span></label>
-      </div>
-    </div>
-    <div class="section-title" style="margin-bottom:10px">กลุ่ม &amp; การทำเอกสาร</div>
-    <div class="grid g2">
-      <div><label>กลุ่ม</label>
-        <select id="fGroup" onchange="hrHint()"><option value="">ทั่วไป</option><option value="mou">MOU</option>
-          <option value="illegal_nopass">คนเถื่อน — พม่าไม่มี Passport</option><option value="illegal_minor">คนเถื่อน — อายุไม่ถึง 18 ปี</option>
-          <option value="no_permit">ไม่มีใบอนุญาตทำงาน</option></select></div>
-      <div><label>สถานะการทำเอกสาร</label>
-        <select id="fDocStatus"><option value="">ไม่มี</option><option value="mou">กำลังทำ MOU</option><option value="passport">กำลังทำ Passport</option>
-          <option value="illegal">กำลังทำ คนเถื่อน</option><option value="notify_in">กำลังแจ้งเข้า</option><option value="notify_out">กำลังแจ้งออก</option></select></div>
-      <div><label>วันที่เริ่มทำ</label><input type="date" id="fDocStart"></div>
-      <div><label>วันที่เสร็จ</label><input type="date" id="fDocDone"></div>
-      <div style="grid-column:1/-1"><label>Agency</label><input id="fDocAgency" list="agencyList" placeholder="เลือกหรือพิมพ์เอง">
-        <datalist id="agencyList"><option>บริษัท โกลด์สตาร์ อินฟินิตี้ จำกัด (Aisoon)</option></datalist></div>
-      <div id="fHrHint" style="grid-column:1/-1"></div>
     </div>
     <div class="section-title" style="margin-bottom:10px">ข้อมูลการทำงาน</div>
     <div class="grid g2">
@@ -3904,16 +3858,18 @@ const modeLabel = e => e.mode==='hourly'
   : (e.shiftId ? `<span class="chip chip-blue">${(shiftDefs.find(s=>s.id===e.shiftId)||{}).name||'?'}</span>`
                : `<span class="chip chip-gray">🔍 อัตโนมัติ</span>`);
 
-/* ข้อมูลที่ยังขาด (ใช้เตือนปุ่มแก้ไขกระพริบแดง) */
-function missingInfo(e){
+/* ข้อมูลที่ยังขาด — แยก 2 ที่ตามที่แก้ (เจ้าของสั่ง 2026-10-05):
+   missingWork = แก้ที่ฟอร์ม ⚙️ ข้อมูลการทำงาน (✎) · missingPersonal = แก้ที่แท็บ "ข้อมูลส่วนตัว" ของหน้ารายคน (👁) */
+const missingWork = e => noPos(e) ? ['ตำแหน่ง'] : [];
+function missingPersonal(e){
   const m = [];
-  if(noPos(e)) m.push('ตำแหน่ง');
   if(!e.birth) m.push('วันเกิด');
   if(!e.phone) m.push('เบอร์โทร');
   if(!e.bankName) m.push('ธนาคาร');
   else if(e.bankName !== 'เงินสด' && !e.bankAcc) m.push('เลขบัญชี');
   return m;
 }
+const missingInfo = e => missingWork(e).concat(missingPersonal(e));
 /* ยังไม่ได้ระบุตำแหน่ง → ช่องชื่อกระพริบแดง + ป้าย "ไม่มีตำแหน่ง" (เจ้าของสั่ง 2026-09-29)
    ใช้ที่หน้าวันนี้ · รายชื่อพนักงาน · หัวหน้ารายละเอียด */
 const noPos = e => !!e && !String(e.position||'').trim();
@@ -3968,8 +3924,8 @@ function renderEmp(){
   const filtered = (bf||df||pf||af||q);
   document.getElementById('empStats').innerHTML = `
     <div class="stat"><div class="v">${active}</div><div class="l">พนักงานทำงานอยู่</div></div>
-    <div class="stat"><div class="v" style="color:${noInfo?'var(--red)':'var(--green)'}">${noInfo}</div><div class="l">ข้อมูลไม่ครบ (✎ แดง)</div></div>
-    <div class="stat"><div class="v" style="color:var(--blue)">${employees.filter(e=>e.active && e.bankName==='เงินสด').length}</div><div class="l">รับเงินสด (✎ ฟ้า)</div></div>
+    <div class="stat"><div class="v" style="color:${noInfo?'var(--red)':'var(--green)'}">${noInfo}</div><div class="l">ข้อมูลไม่ครบ (ปุ่มแดง)</div></div>
+    <div class="stat"><div class="v" style="color:var(--blue)">${employees.filter(e=>e.active && e.bankName==='เงินสด').length}</div><div class="l">รับเงินสด (👁 ฟ้า)</div></div>
     <div class="stat"><div class="v">${employees.length-active}</div><div class="l">พ้นสภาพ</div></div>
     <div class="stat"><div class="v">${[...new Set(employees.map(e=>e.dept).filter(Boolean))].length}</div><div class="l">แผนก</div></div>
     <div class="stat"><div class="v" style="color:${filtered?'var(--ember)':'inherit'}">${list.length}</div><div class="l">${filtered?'ผลการค้นหา':'รวมทั้งหมด'}</div></div>`;
@@ -3984,8 +3940,8 @@ function renderEmp(){
     </tr></thead><tbody>` +
     list.map(e=>{
       const days = period? empShiftsInPeriod(e,period).length : 0;
-      const miss = e.active ? missingInfo(e) : [];
-      const isCash = e.active && !miss.length && e.bankName === 'เงินสด';
+      const mw = e.active ? missingWork(e) : [], mp = e.active ? missingPersonal(e) : [];
+      const isCash = e.active && !mp.length && e.bankName === 'เงินสด';
       return `<tr>
         <td class="clickable${e.active?noPosCls(e):''}"${e.active?noPosTip(e):''} onclick="openDetail(${e.id})"><b style="color:var(--ember-deep)">${e.nick}</b></td>
         <td class="clickable" onclick="openDetail(${e.id})">${e.full||'<span class="muted">–</span>'}</td>
@@ -3997,8 +3953,8 @@ function renderEmp(){
         <td class="num">${days||'–'}</td>
         <td>${e.active?'<span class="chip chip-green">ทำงานอยู่</span>':'<span class="chip chip-red">พ้นสภาพ</span>'}</td>
         <td><div class="act">
-          <button class="btn btn-light" title="ดูรายละเอียด" onclick="openDetail(${e.id})">👁</button>
-          <button class="btn btn-light${miss.length?' btn-alert':isCash?' btn-cash':''}" title="${miss.length?'⚠️ ข้อมูลไม่ครบ: '+miss.join(' / ')+' — กดเพื่อเติม':isCash?'💵 รับเงินสด':'แก้ไขข้อมูล'}" onclick="openEmpForm(${e.id})">✎</button>
+          <button class="btn btn-light${mp.length?' btn-alert':isCash?' btn-cash':''}" title="${mp.length?'⚠️ ข้อมูลส่วนตัวไม่ครบ: '+mp.join(' / ')+' — กดเพื่อเติม':isCash?'💵 รับเงินสด · ดูรายละเอียด':'ดูรายละเอียด / ข้อมูลส่วนตัว'}" onclick="${mp.length?'openDetailInfo('+e.id+')':'openDetail('+e.id+')'}">👁</button>
+          <button class="btn btn-light${mw.length?' btn-alert':''}" title="${mw.length?'⚠️ ข้อมูลไม่ครบ: '+mw.join(' / ')+' — กดเพื่อเติม':'แก้ข้อมูลการทำงาน (ชื่อ · ค่าแรง · กะ · วันหยุด)'}" onclick="openEmpForm(${e.id})">✎</button>
           <button class="btn btn-red" title="ลบพนักงาน" onclick="delEmp(${e.id})">🗑</button>
         </div></td></tr>`;
     }).join('') + '</tbody>';
@@ -4049,31 +4005,16 @@ function openEmpForm(id){
   const e = employees.find(x=>x.id===id);
   document.getElementById('fShift').innerHTML = '<option value="">🔍 ตรวจอัตโนมัติจากเวลาตอก</option>'+
     shiftDefs.map(s=>`<option value="${s.id}">${s.name} (${s.start}–${s.end})</option>`).join('');
-  document.getElementById('formTitle').textContent = e? 'แก้ไขพนักงาน — '+e.nick : 'เพิ่มพนักงาน';
+  document.getElementById('formTitle').textContent = e? '⚙️ ข้อมูลการทำงาน — '+e.nick : 'เพิ่มพนักงาน';
+  document.getElementById('fInfoBtnWrap').innerHTML = (e && canSee('detail'))
+    ? `<br><button type="button" class="btn btn-light btn-sm" onclick="closeModal('formBg');openDetailInfo(${e.id})">🪪 ไปที่ข้อมูลส่วนตัวของ ${audEsc(e.nick)}</button>`
+    : e ? '' : '<br><span class="muted">เพิ่มพนักงานแล้วระบบจะพาไปกรอกข้อมูลส่วนตัวต่อ</span>';
   document.getElementById('fId').value = e? e.id : '';
   document.getElementById('fNick').value = e? e.nick : '';
   document.getElementById('fFull').value = e? e.full : '';
   document.getElementById('fCode').value = e? e.code : '';
-  document.getElementById('fBirth').value = e? (e.birth||'') : '';
-  document.getElementById('fPhone').value = e? (e.phone||'') : '';
   document.getElementById('fStart').value = e? (e.startDate||'') : '';
   document.getElementById('fEnd').value = e? (e.endDate||'') : '';
-  document.getElementById('fBank').value = e? (e.bankName||'') : '';
-  document.getElementById('fBankAcc').value = e? (e.bankAcc||'') : '';
-  document.getElementById('fBankAccName').value = e? (e.bankAccName||'') : '';
-  document.getElementById('fKbiz').checked = e? !!e.kbizAdded : false;
-  document.getElementById('fSso').checked = e? !!e.ssoOn : false;
-  document.getElementById('fSsoId').value = e? (e.ssoId||'') : '';
-  // ข้อมูลพนักงานเพิ่ม (jj_employee_hr.sql)
-  const hv = (id, v) => { const el = document.getElementById(id); if(el.type==='checkbox') el.checked = !!v; else el.value = v||''; };
-  hv('fSsoHosp', e && e.ssoHosp); hv('fFace', e && e.faceScan);
-  hv('fGender', e && e.gender); hv('fNat', e && e.nat); hv('fAddr', e && e.address);
-  hv('fEmgName', e && e.emgName); hv('fEmgRel', e && e.emgRel); hv('fEmgPhone', e && e.emgPhone);
-  hv('fPassExp', e && e.passExp); hv('fPermitExp', e && e.permitExp); hv('fPinkExp', e && e.pinkExp);
-  hv('fDocIn', e && e.docIn); hv('fDocOut', e && e.docOut); hv('fDocGuardian', e && e.docGuardian);
-  hv('fGroup', e && e.group); hv('fDocStatus', e && e.docStatus); hv('fDocStart', e && e.docStart);
-  hv('fDocDone', e && e.docDone); hv('fDocAgency', e && e.docAgency);
-  document.getElementById('fHrNote').style.display = hrReady ? 'none' : '';
   document.getElementById('fBranch').value = e? (e.branch||(SCOPE?homeBranch(e):'')) : (SCOPE? myBranches()[0] : '');
   const curDept = e? (e.dept||'') : '';
   const depts = orgDepts();
@@ -4108,33 +4049,7 @@ function openEmpForm(id){
   document.getElementById('fHourlyWindow').value = (e && e.hourlyWindow === false) ? '0' : '1';
   document.getElementById('fMustWorkEx').checked = e? !!e.mustWorkExempt : false;
   toggleModeFields(); toggleOffFields();
-  hrHint(); document.getElementById('formBg').classList.add('show');
-}
-/* ---- ฟอร์มข้อมูลพนักงานเพิ่ม ---- */
-function hrFormData(){
-  const v = id => document.getElementById(id).value.trim(), c = id => document.getElementById(id).checked;
-  return { gender:v('fGender'), nat:v('fNat'), address:v('fAddr'),
-    emgName:v('fEmgName'), emgRel:v('fEmgRel'), emgPhone:v('fEmgPhone'),
-    passExp:v('fPassExp'), permitExp:v('fPermitExp'), pinkExp:v('fPinkExp'),
-    docIn:c('fDocIn'), docOut:c('fDocOut'), docGuardian:c('fDocGuardian'),
-    ssoHosp:v('fSsoHosp'), faceScan:c('fFace'), group:v('fGroup'),
-    docStatus:v('fDocStatus'), docStart:v('fDocStart'), docDone:v('fDocDone'), docAgency:v('fDocAgency') };
-}
-const hrHasAny = d => ['gender','nat','address','emgName','emgRel','emgPhone','passExp','permitExp','pinkExp','ssoHosp','group','docStatus','docStart','docDone','docAgency']
-  .some(k => d[k]) || d.docIn || d.docOut || d.docGuardian || d.faceScan;
-/* คำแนะนำใต้ฟอร์ม: เข้าเงื่อนไขกลุ่มไหน · ต้องมีหนังสือผู้ปกครอง · เอกสารใกล้หมด (ไม่ตั้งค่าให้เอง เจ้าของเลือกเอง) */
-function hrHint(){
-  const box = document.getElementById('fHrHint'); if(!box) return;
-  const d = hrFormData(), age = ageOf(document.getElementById('fBirth').value), out = [];
-  if(age != null && age < 18){
-    if(d.group !== 'illegal_minor') out.push('💡 อายุ '+age+' ปี (ไม่ถึง 18) — เข้าเงื่อนไขกลุ่ม "คนเถื่อน — อายุไม่ถึง 18 ปี"');
-    if(!d.docGuardian) out.push('💡 อายุไม่ถึง 18 ปี — ต้องมีหนังสือยินยอมผู้ปกครอง');
-  }
-  if(d.nat === 'MM' && !d.passExp && d.group !== 'illegal_nopass' && d.group !== 'mou')
-    out.push('💡 สัญชาติพม่า ยังไม่มีวันหมดอายุ Passport — ถ้าไม่มี Passport เข้าเงื่อนไขกลุ่ม "คนเถื่อน — พม่าไม่มี Passport"');
-  for(const a of docAlerts({ active:true, passExp:d.passExp, permitExp:d.permitExp, pinkExp:d.pinkExp }))
-    out.push((a.expired ? '❗ ' : '⏰ ') + docAlertText(a));
-  box.innerHTML = out.length ? '<div class="warn-note" style="margin:0">'+out.join('<br>')+'</div>' : '';
+  document.getElementById('formBg').classList.add('show');
 }
 async function saveEmpForm(){
   const id = document.getElementById('fId').value;
@@ -4143,17 +4058,8 @@ async function saveEmpForm(){
   const data = {
     nick, full: document.getElementById('fFull').value.trim(),
     code: document.getElementById('fCode').value.trim() || ('M'+Date.now()),
-    birth: document.getElementById('fBirth').value || '',
-    phone: document.getElementById('fPhone').value.trim(),
     startDate: document.getElementById('fStart').value || '',
     endDate: document.getElementById('fEnd').value || '',
-    bankName: document.getElementById('fBank').value.trim(),
-    bankAcc: document.getElementById('fBankAcc').value.trim(),
-    bankAccName: document.getElementById('fBankAccName').value.trim(),
-    kbizAdded: document.getElementById('fKbiz').checked,
-    ssoOn: document.getElementById('fSso').checked,
-    ssoId: document.getElementById('fSsoId').value.trim(),
-    ...(hrReady ? hrFormData() : {}),   // ยังไม่รัน SQL = ไม่ใส่ (กันหน้าจอโชว์ค่าที่ไม่ได้บันทึกจริง)
     dept: document.getElementById('fDept').value.trim(),
     branch: document.getElementById('fBranch').value,
     position: document.getElementById('fPos').value.trim(),
@@ -4195,30 +4101,28 @@ async function saveEmpForm(){
   data.hourlyWindow = document.getElementById('fHourlyWindow').value !== '0';
   data.mustWorkExempt = document.getElementById('fMustWorkEx').checked;
   if(ot==='weekly' && !data.offWd) return toast('❌ เลือกวันหยุดประจำสัปดาห์อย่างน้อย 1 วัน');
-  if(!empInfoReady && (data.birth||data.phone||data.bankName||data.bankAcc||data.bankAccName))
-    toast('⚠️ วันเกิด/เบอร์/บัญชี ยังไม่ถูกบันทึก — ต้องรัน jj_employee_info.sql ใน Supabase ก่อน');
   if(!workDateReady && (data.startDate||data.endDate))
     toast('⚠️ วันเริ่ม/สิ้นสุดงาน ยังไม่ถูกบันทึก — ต้องรัน jj_work_dates.sql ใน Supabase ก่อน');
-  if(!ssoReady && (data.ssoOn||data.ssoId))
-    toast('⚠️ ข้อมูลประกันสังคม ยังไม่ถูกบันทึก — ต้องรัน jj_sso.sql ใน Supabase ก่อน');
   if(data.startDate && data.endDate && data.endDate < data.startDate)
     return toast('❌ วันสิ้นสุดการทำงาน ต้องไม่ก่อนวันเริ่มงาน');
-  if(data.docStart && data.docDone && data.docDone < data.docStart)
-    return toast('❌ วันที่ทำเอกสารเสร็จ ต้องไม่ก่อนวันที่เริ่มทำ');
-  if(!hrReady && hrHasAny(hrFormData()))
-    toast('⚠️ รายละเอียด/เอกสาร/กลุ่ม/การทำเอกสาร ยังไม่ถูกบันทึก — ต้องรัน jj_employee_hr.sql ใน Supabase ก่อน');
   busy(true,'กำลังบันทึก…');
   try{
+    let newId = null;
     if(id){
-      const { error } = await db.from('employees').update(toDbEmp(data)).eq('id', +id);
+      // ไม่ส่งคอลัมน์ข้อมูลส่วนตัว — ฟอร์มนี้ไม่มีช่องพวกนั้นแล้ว ส่งไปจะทับของที่แก้ในแท็บข้อมูลส่วนตัว
+      const row = toDbEmp(data); EMP_PERSONAL_COLS.forEach(c => delete row[c]);
+      const { error } = await db.from('employees').update(row).eq('id', +id);
       if(error) throw error;
       Object.assign(employees.find(x=>x.id==id), data);
     }else{
       const { data:row, error } = await db.from('employees').insert(toDbEmp(data)).select().single();
       if(error) throw error;
-      employees.push(fromDbEmp(row));
+      const ne = fromDbEmp(row); employees.push(ne); newId = ne.id;
     }
-    closeModal('formBg'); recomputeAll(); renderAll(); toast('บันทึกแล้ว');
+    closeModal('formBg'); recomputeAll(); renderAll();
+    // พนักงานใหม่ → พาไปกรอกข้อมูลส่วนตัวต่อที่แท็บ (เปิดแก้ทุกหัวข้อ)
+    if(newId != null && canSee('detail') && canDo('detail','e')){ openDetailInfo(newId, 'all'); toast('บันทึกแล้ว — กรอกข้อมูลส่วนตัวต่อได้เลย'); }
+    else toast('บันทึกแล้ว');
   }catch(e){ dbErr(e,'บันทึกพนักงาน'); }
   busy(false);
 }
@@ -4319,9 +4223,10 @@ function saveDetailView(){
 }
 (function(){ try{ const v = JSON.parse(sessionStorage.getItem('jjpay_detail')||'null');
   if(v && +v.id){ detailEmpId = +v.id; if(DT_TABS.some(t=>t[0]===v.tab)) detailTab = v.tab; } }catch(_){} })();
-function openDetail(id){ detailEmpId = id; detailTab = 'over'; saveDetailView(); go('detail'); }
-function detailList(){ detailEmpId = null; saveDetailView(); go('detail'); }
-function setDetailTab(k){ detailTab = k; saveDetailView(); renderDetail(); }
+const piLeave = () => !dtEditSec || !piDirty() || confirm('ยังไม่ได้บันทึกข้อมูลส่วนตัวที่แก้ไว้ — ทิ้งไปเลยไหม?');
+function openDetail(id){ if(!piLeave()) return; piClear(); detailEmpId = id; detailTab = 'over'; saveDetailView(); go('detail'); }
+function detailList(){ if(!piLeave()) return; piClear(); detailEmpId = null; saveDetailView(); go('detail'); }
+function setDetailTab(k){ if(k !== 'info'){ if(!piLeave()) return; piClear(); } detailTab = k; saveDetailView(); renderDetail(); }
 
 /* สถานะวันนี้ของการ์ด/หัวรายคน (วันของร้าน 06:00–05:59) */
 const DT_ST = { in:'var(--green)', out:'#9aa39c', abs:'var(--red)', off:'var(--blue)', gone:'#b9b0a7' };
@@ -4431,6 +4336,172 @@ function dtDebt(e, p, period){
       </tbody></table></div>
     </div>`;
 }
+/* ---- แก้ข้อมูลส่วนตัวในแท็บ (เจ้าของสั่ง 2026-10-05: "อะไรที่เกี่ยวข้องกับข้อมูลส่วนตัว อยากให้แก้ไขในหน้าข้อมูลส่วนตัวเลย")
+   ฟอร์ม ✎ เหลือแค่ข้อมูลการทำงาน · ที่นี่แก้ทีละหัวข้อ (✎ ข้างหัวข้อ) หรือ "แก้ไขทั้งหมด"
+   บันทึก = update เฉพาะคอลัมน์ที่เปลี่ยนจริง (ไม่ทับช่องที่คนอื่นเพิ่งแก้) · สิทธิ์ = แก้ไข ของหน้าข้อมูลพนักงาน (detail:e)
+   ช่องที่ยังไม่รัน SQL ของมัน = ขึ้นบอกว่าต้องรันไฟล์ไหน ไม่ให้กรอก (กันหน้าจอโชว์ค่าที่ไม่ได้บันทึกจริง) */
+const PI_RD  = { info:()=>empInfoReady, sso:()=>ssoReady, kbiz:()=>kbizReady, hr:()=>hrReady };
+const PI_SQL = { info:'jj_employee_info.sql', sso:'jj_sso.sql', kbiz:'jj_kbiz_added.sql', hr:'jj_employee_hr.sql' };
+const PI_F = {
+  gender:     { l:'เพศ', col:'gender', rd:'hr', ty:'sel', opts:()=>[['','– เลือก –'],['ชาย','ชาย'],['หญิง','หญิง'],['อื่นๆ','อื่นๆ']] },
+  nat:        { l:'สัญชาติ', col:'nationality', rd:'hr', ty:'sel', opts:()=>[['','– เลือก –'], ...Object.entries(NAT_TH)] },
+  birth:      { l:'วันเกิด', col:'birth_date', rd:'info', ty:'date', nul:1 },
+  phone:      { l:'เบอร์โทร', col:'phone', rd:'info', ty:'tel', ph:'เช่น 081-234-5678' },
+  emgName:    { l:'ผู้ติดต่อฉุกเฉิน — ชื่อ', col:'emergency_name', rd:'hr', ph:'ชื่อ-นามสกุล' },
+  emgRel:     { l:'เกี่ยวข้องเป็น', col:'emergency_relation', rd:'hr', list:['พ่อ','แม่','สามี','ภรรยา','พี่','น้อง','ญาติ','เพื่อน'], ph:'เช่น แม่ / สามี / พี่สาว' },
+  emgPhone:   { l:'เบอร์ผู้ติดต่อฉุกเฉิน', col:'emergency_phone', rd:'hr', ty:'tel', ph:'เช่น 081-234-5678' },
+  address:    { l:'ที่อยู่ปัจจุบัน', col:'address', rd:'hr', ty:'area', w:1 },
+  passExp:    { l:'Passport — วันหมดอายุ (เตือนก่อน 3 เดือน)', col:'passport_exp', rd:'hr', ty:'date', nul:1 },
+  permitExp:  { l:'ใบอนุญาตทำงาน — วันหมดอายุ', col:'work_permit_exp', rd:'hr', ty:'date', nul:1 },
+  pinkExp:    { l:'บัตรชมพู — วันหมดอายุ', col:'pink_card_exp', rd:'hr', ty:'date', nul:1 },
+  docIn:      { l:'มีเอกสารแจ้งเข้าแล้ว', col:'doc_notify_in', rd:'hr', ty:'chk' },
+  docOut:     { l:'มีเอกสารแจ้งออกแล้ว', col:'doc_notify_out', rd:'hr', ty:'chk' },
+  docGuardian:{ l:'มีหนังสือยินยอมผู้ปกครองแล้ว <span class="muted">(อายุไม่ถึง 18 ปี)</span>', col:'doc_guardian', rd:'hr', ty:'chk' },
+  ssoOn:      { l:'เข้าประกันสังคม <span class="muted">(หักเงินสมทบอัตโนมัติ)</span>', col:'sso_on', rd:'sso', ty:'chk' },
+  ssoId:      { l:'เลขประกันสังคม', col:'sso_id', rd:'sso', num:1, max:17, ph:'เลขบัตรประชาชน 13 หลัก' },
+  ssoHosp:    { l:'โรงพยาบาลที่เลือก', col:'sso_hospital', rd:'hr', ph:'โรงพยาบาลตามสิทธิ์ประกันสังคม' },
+  bankName:   { l:'ธนาคาร หรือ เงินสด', col:'bank_name', rd:'info', list:['กสิกรไทย','ไทยพาณิชย์','กรุงเทพ','กรุงไทย','กรุงศรี','ทหารไทยธนชาต (ttb)','ออมสิน','พร้อมเพย์','เงินสด'], ph:'เลือกหรือพิมพ์เอง' },
+  bankAcc:    { l:'เลขที่บัญชี', col:'bank_account', rd:'info', num:1, ph:'เลขบัญชี / เบอร์พร้อมเพย์' },
+  bankAccName:{ l:'ชื่อบัญชี', col:'bank_account_name', rd:'info', ph:'ชื่อเจ้าของบัญชี' },
+  kbizAdded:  { l:'เพิ่มบัญชีใน K BIZ แล้ว <span class="muted">(ไฟล์แอดบัญชีจะข้ามคนนี้)</span>', col:'kbiz_added', rd:'kbiz', ty:'chk' },
+  faceScan:   { l:'เพิ่มหน้าในเครื่องสแกนแล้ว', col:'face_scan', rd:'hr', ty:'chk' },
+  group:      { l:'กลุ่ม', col:'worker_group', rd:'hr', ty:'sel', opts:()=>Object.entries(GROUP_TH) },
+  docStatus:  { l:'สถานะการทำเอกสาร', col:'doc_status', rd:'hr', ty:'sel', opts:()=>Object.entries(DOCST_TH) },
+  docStart:   { l:'วันที่เริ่มทำ', col:'doc_start', rd:'hr', ty:'date', nul:1 },
+  docDone:    { l:'วันที่เสร็จ', col:'doc_done', rd:'hr', ty:'date', nul:1 },
+  docAgency:  { l:'Agency', col:'doc_agency', rd:'hr', list:AGENCIES, ph:'เลือกหรือพิมพ์เอง', w:1 },
+};
+/* คอลัมน์ข้อมูลส่วนตัวทั้งหมด — ฟอร์ม ✎ ห้ามส่งตอนแก้ไข */
+const EMP_PERSONAL_COLS = Object.values(PI_F).map(f => f.col);
+const PI_SECS = {
+  detail: { t:'รายละเอียด', f:['gender','nat','birth','phone','emgName','emgRel','emgPhone','address'],
+            note:'ชื่อ · ชื่อเล่น · รหัส · วันเริ่ม/ออกงาน · สาขา · แผนก · ตำแหน่ง → แก้ที่ปุ่ม ⚙️ ข้อมูลการทำงาน' },
+  docs:   { t:'เอกสาร', f:['passExp','permitExp','pinkExp','docIn','docOut','docGuardian'] },
+  sso:    { t:'ประกันสังคม', f:['ssoOn','ssoId','ssoHosp'] },
+  bank:   { t:'การจ่ายเงินเดือน', f:['bankName','bankAcc','bankAccName','kbizAdded'],
+            note:'ฐานเงินเดือน · รอบจ่าย → แก้ที่ปุ่ม ⚙️ ข้อมูลการทำงาน · เงินประกัน → หน้าเงินประกัน' },
+  scan:   { t:'สแกนหน้า · กลุ่ม', f:['faceScan','group'] },
+  proc:   { t:'การทำเอกสาร', f:['docStatus','docStart','docDone','docAgency'] },
+};
+let dtEditSec = null, dtEditEmp = null, dtEditOrig = null, dtDraft = null;
+const piReady = k => PI_RD[PI_F[k].rd]();
+const piVal = (e, k) => PI_F[k].ty === 'chk' ? !!e[k] : String(e[k] == null ? '' : e[k]);
+const piSecsOn = () => !dtEditSec ? [] : dtEditSec === 'all' ? Object.keys(PI_SECS) : [dtEditSec];
+const canEditInfo = () => canDo('detail','e');
+function piClear(){ dtEditSec = dtEditEmp = dtEditOrig = dtDraft = null; try{ sessionStorage.removeItem('jjpay_pidraft'); }catch(_){} }
+/* ร่างที่กรอกค้าง เก็บใน sessionStorage — ลากหน้าลง/รีเฟรชแล้วยังอยู่ (กติกา UX ฟอร์มยาว) */
+function piSave(){
+  if(!dtEditSec) return;
+  try{ sessionStorage.setItem('jjpay_pidraft', JSON.stringify({ emp:dtEditEmp, sec:dtEditSec, orig:dtEditOrig,
+    draft:Object.assign({}, dtDraft||{}, piVals()) })); }catch(_){}
+}
+(function(){ try{ const v = JSON.parse(sessionStorage.getItem('jjpay_pidraft')||'null');
+  if(v && +v.emp && v.orig && Object.keys(PI_F).every(k => k in v.orig) && (v.sec === 'all' || PI_SECS[v.sec])){
+    dtEditEmp = +v.emp; dtEditSec = v.sec; dtEditOrig = v.orig; dtDraft = v.draft || {}; } }catch(_){} })();
+/* ค่าที่กรอกค้างในฟอร์ม {key: value} */
+function piVals(){
+  const out = {};
+  document.querySelectorAll('#dtEditForm [data-pi]').forEach(el => {
+    out[el.dataset.pi] = el.type === 'checkbox' ? el.checked : el.value.trim(); });
+  return out;
+}
+const piDirty = () => { if(!dtEditOrig) return false; const v = Object.assign({}, dtDraft||{}, piVals());
+  return Object.keys(v).some(k => k in dtEditOrig && v[k] !== dtEditOrig[k]); };
+/* เปิดแก้หัวข้อ (sec = คีย์ใน PI_SECS หรือ 'all') */
+function piStart(sec){
+  const e = employees.find(x=>x.id===detailEmpId); if(!e || !canEditInfo()) return;
+  if(dtEditSec && dtEditEmp === e.id && sec === 'all') dtDraft = Object.assign({}, dtDraft||{}, piVals());   // ขยายเป็นแก้ทั้งหมด: เก็บที่กรอกค้างไว้
+  else {
+    if(dtEditSec && piDirty() && !confirm('ยังไม่ได้บันทึกที่แก้ไว้ — ทิ้งแล้วไปแก้หัวข้ออื่น?')) return;
+    dtDraft = null; dtEditOrig = null;
+    const old = document.getElementById('dtEditForm'); if(old) old.removeAttribute('id');   // renderDetail จะได้ไม่เก็บค่าที่ทิ้งไปแล้วกลับมา
+  }
+  if(!dtEditOrig){ dtEditOrig = {}; Object.keys(PI_F).forEach(k => dtEditOrig[k] = piVal(e, k)); }
+  dtEditSec = sec; dtEditEmp = e.id;
+  renderDetail(true); piSave();
+  const f = document.querySelector('#dtEditForm [data-sec="'+(sec==='all'?'detail':sec)+'"]');
+  if(f && f.scrollIntoView) f.scrollIntoView({ block:'start', behavior:'smooth' });
+}
+function piCancel(){
+  if(piDirty() && !confirm('ยกเลิกการแก้ไข? ข้อมูลที่กรอกไว้จะหายไป')) return;
+  piClear(); renderDetail(true);
+}
+/* เปิดหน้ารายคนที่แท็บข้อมูลส่วนตัว (sec = เปิดแก้หัวข้อนั้นเลย) */
+function openDetailInfo(id, sec){
+  if(!(dtEditSec && dtEditEmp === id && !sec)){ if(!piLeave()) return; piClear(); }   // คนเดิมที่กรอกค้างไว้ = กลับไปที่ฟอร์มเดิม
+  detailEmpId = id; detailTab = 'info'; saveDetailView(); go('detail');
+  if(sec && curPage() === 'detail') piStart(sec);
+}
+/* คำแนะนำ: เข้าเงื่อนไขกลุ่มไหน · ต้องมีหนังสือผู้ปกครอง · เอกสารใกล้หมด (ไม่ตั้งค่าให้เอง เจ้าของเลือกเอง) */
+function hrHintsOf(m){
+  if(!m || !m.active || !hrReady) return [];
+  const out = [], age = ageOf(m.birth);
+  if(age != null && age < 18){
+    if(m.group !== 'illegal_minor') out.push('💡 อายุ '+age+' ปี (ไม่ถึง 18) — เข้าเงื่อนไขกลุ่ม "คนเถื่อน — อายุไม่ถึง 18 ปี"');
+    if(!m.docGuardian) out.push('💡 อายุไม่ถึง 18 ปี — ต้องมีหนังสือยินยอมผู้ปกครอง');
+  }
+  if(m.nat === 'MM' && !m.passExp && m.group !== 'illegal_nopass' && m.group !== 'mou')
+    out.push('💡 สัญชาติพม่า ยังไม่มีวันหมดอายุ Passport — ถ้าไม่มี Passport เข้าเงื่อนไขกลุ่ม "คนเถื่อน — พม่าไม่มี Passport"');
+  for(const a of docAlerts(m)) out.push((a.expired ? '❗ ' : '⏰ ') + docAlertText(a));
+  return out;
+}
+const hrHintsHtml = m => { const h = hrHintsOf(m); return h.length ? '<div class="warn-note" style="margin:0 0 4px">'+h.join('<br>')+'</div>' : ''; };
+function piHint(){   // ระหว่างกรอก: คำแนะนำเปลี่ยนตามค่าที่กรอก (ผูกที่ #dtEditForm ใน renderDetail)
+  const e = employees.find(x=>x.id===dtEditEmp), box = document.getElementById('dtHrHints');
+  if(e && box) box.innerHTML = hrHintsHtml(Object.assign({}, e, dtDraft||{}, piVals()));
+}
+function piInput(k, e){
+  const f = PI_F[k], id = 'pi_'+k;
+  const v = dtDraft && k in dtDraft ? dtDraft[k] : piVal(e, k);
+  const wide = f.w || f.ty === 'chk' ? ' class="w"' : '';
+  if(!piReady(k)) return `<div${wide}><label>${f.l}</label><div class="pi-na">ยังแก้ไม่ได้ — ต้องรัน <b>${PI_SQL[f.rd]}</b> ใน Supabase ก่อน</div></div>`;
+  const on = '';
+  if(f.ty === 'chk') return `<div${wide}><label class="pi-chk"><input type="checkbox" id="${id}" data-pi="${k}"${v?' checked':''}${on}><span>${f.l}</span></label></div>`;
+  let inp;
+  if(f.ty === 'sel'){
+    const opts = f.opts(); if(v && !opts.some(o=>o[0]===v)) opts.push([v, v]);
+    inp = `<select id="${id}" data-pi="${k}"${on}>${opts.map(([ov,ot])=>`<option value="${audEsc(ov)}"${ov===v?' selected':''}>${audEsc(ot)}</option>`).join('')}</select>`;
+  } else if(f.ty === 'area'){
+    inp = `<textarea id="${id}" data-pi="${k}" rows="3">${audEsc(v)}</textarea>`;
+  } else {
+    const ty = f.ty === 'date' ? 'date' : f.ty === 'tel' ? 'tel' : 'text';
+    inp = `<input type="${ty}" id="${id}" data-pi="${k}" value="${audEsc(v)}"${f.ph?' placeholder="'+audEsc(f.ph)+'"':''}${f.num?' inputmode="numeric"':''}${f.max?' maxlength="'+f.max+'"':''}${f.list?' list="'+id+'_l"':''}${on}>`
+      + (f.list ? `<datalist id="${id}_l">${f.list.map(o=>`<option>${audEsc(o)}</option>`).join('')}</datalist>` : '');
+  }
+  return `<div${wide}><label for="${id}">${f.l}</label>${inp}</div>`;
+}
+function piForm(key, e){
+  const sec = PI_SECS[key], one = dtEditSec !== 'all';
+  return `<div class="pi-form" data-sec="${key}"><div class="grid g2">${sec.f.map(k=>piInput(k, e)).join('')}</div>
+    ${sec.note ? '<div class="pi-note">'+sec.note+'</div>' : ''}
+    ${one ? `<div class="pi-act"><button class="btn btn-light" onclick="piCancel()">ยกเลิก</button>
+      <button class="btn btn-ember" onclick="saveInfo()">💾 บันทึก</button></div>` : ''}</div>`;
+}
+async function saveInfo(){
+  const e = employees.find(x=>x.id===dtEditEmp);
+  if(!e || !dtEditOrig) return;
+  const v = Object.assign({}, dtDraft||{}, piVals());
+  const m = Object.assign({}, e, v);
+  const chg = k => k in v && v[k] !== dtEditOrig[k];
+  if((chg('docStart') || chg('docDone')) && m.docStart && m.docDone && m.docDone < m.docStart)
+    return toast('❌ วันที่ทำเอกสารเสร็จ ต้องไม่ก่อนวันที่เริ่มทำ');
+  if(chg('ssoId') && !/^[0-9 -]*$/.test(v.ssoId)) return toast('❌ เลขประกันสังคม ใส่ได้แค่ตัวเลข');
+  const patch = {}, local = {};
+  for(const k of Object.keys(v)){
+    const f = PI_F[k]; if(!f || !piReady(k) || v[k] === dtEditOrig[k]) continue;   // ส่งเฉพาะช่องที่เปลี่ยนจริง
+    local[k] = f.ty === 'chk' ? !!v[k] : v[k];
+    patch[f.col] = f.ty === 'chk' ? !!v[k] : f.nul ? (v[k] || null) : v[k];
+  }
+  if(!Object.keys(patch).length){ piClear(); renderDetail(true); return toast('ไม่มีอะไรเปลี่ยน'); }
+  busy(true,'กำลังบันทึก…');
+  try{
+    const { error } = await db.from('employees').update(patch).eq('id', e.id);
+    if(error) throw error;
+    Object.assign(e, local);
+    piClear(); recomputeAll(); renderAll(); toast('บันทึกแล้ว');
+  }catch(err){ dbErr(err,'บันทึกข้อมูลส่วนตัว'); }
+  busy(false);
+}
 function dtInfo(e){
   const thFull = d => { if(!d) return '–'; const [y,m,dd] = d.split('-'); return +dd+' '+MONTHS_TH[+m-1]+' '+(+y+543); };
   const need = v => v || '<b style="color:var(--red)">ยังไม่ได้กรอก</b>';
@@ -4446,7 +4517,7 @@ function dtInfo(e){
       : d <= DOC_WARN_DAYS ? '<span class="chip chip-amber">เหลือ '+d+' วัน</span>' : '<span class="chip chip-green">ใช้ได้</span>'); };
   const emg = [e.emgName, e.emgRel ? '('+e.emgRel+')' : '', e.emgPhone].filter(Boolean).join(' ');
   const S = [
-    ['รายละเอียด', [
+    ['detail', [
       ['ชื่อ-นามสกุล', e.full || '–'], ['ชื่อเล่น', e.nick], ['เพศ', tx(e.gender)],
       ['สัญชาติ', NAT_TH[e.nat] || '–'],
       ['อายุ', e.birth ? age+' ปี <span class="muted">(เกิด '+thFull(e.birth)+')</span>' : need('')],
@@ -4458,28 +4529,28 @@ function dtInfo(e){
       ['ตำแหน่ง', noPos(e) ? (e.active ? noPosTag(e) : '–') : e.position],
       ['รหัสเครื่องสแกน', e.code],
       ['สถานะ', e.active ? '<span class="chip chip-green">ทำงานอยู่</span>' : '<span class="chip chip-red">พ้นสภาพ</span>'] ]],
-    ['เอกสาร', [
+    ['docs', [
       ['Passport — หมดอายุ', docExp('passExp')], ['ใบอนุญาตทำงาน — หมดอายุ', docExp('permitExp')],
       ['บัตรชมพู — หมดอายุ', docExp('pinkExp')],
       ['เอกสารแจ้งเข้า', yes(e.docIn, 'มีแล้ว', 'ยังไม่มี')], ['เอกสารแจ้งออก', yes(e.docOut, 'มีแล้ว', 'ยังไม่มี')],
       ['หนังสือยินยอมผู้ปกครอง', e.docGuardian ? yes(1, 'มีแล้ว') : age != null && age < 18
         ? '<b style="color:var(--red)">ยังไม่มี — จำเป็น (อายุไม่ถึง 18)</b>' : '<span class="muted">ยังไม่มี</span>'] ]],
-    ['ประกันสังคม', [
+    ['sso', [
       ['ทำ / ไม่ทำ', e.ssoOn ? '<span class="chip chip-green">ทำ (หักเงินสมทบ)</span>' : '<span class="muted">ไม่ทำ</span>'],
       ['เลขประกันสังคม', tx(e.ssoId)], ['โรงพยาบาลที่เลือก', tx(e.ssoHosp)] ]],
-    ['การจ่ายเงินเดือน', [
+    ['bank', [
       ['บัญชีธนาคาร หรือ เงินสด', e.bankName==='เงินสด' ? '💵 เงินสด' : e.bankName ? '🏦 '+e.bankName : need('')],
       ['เลขที่บัญชี', e.bankName==='เงินสด' ? '–' : e.bankAcc ? e.bankAcc+(e.bankAccName?' <span class="muted">('+e.bankAccName+')</span>':'') : need('')],
       ['ฐานเงินเดือน', e.mode==='hourly' ? THB(e.rate)+' บาท/ชม.' : e.type==='monthly' ? 'รายเดือน '+THB(e.rate)+' บาท' : 'รายวัน '+THB(e.rate)+' บาท'],
       ['รอบจ่ายเงิน', isOfficeCycle(e) ? '1 – สิ้นเดือน · จ่ายสิ้นเดือน (ออฟฟิศ)' : '26 – 25 · จ่ายวันที่ 5'],
       ['เงินประกัน', e.depOn === false ? 'ไม่หัก' : THB(e.depTarget)+' บาท · หักงวดละ '+THB(e.depMonthly)+(e.depOpen?' · ยอดยกมา '+THB(e.depOpen):'')] ]],
-    ['สแกนหน้า · กลุ่ม', [
+    ['scan', [
       ['สแกนหน้า', e.faceScan ? '<span class="chip chip-green">✓ เพิ่มแล้ว</span>' : '<b style="color:var(--amber)">ยังไม่เพิ่ม</b>'],
       ['กลุ่ม', e.group ? '<b>'+(GROUP_TH[e.group]||audEsc(e.group))+'</b>' : 'ทั่วไป'] ]],
-    ['การทำเอกสาร', [
+    ['proc', [
       ['สถานะ', e.docStatus ? '<span class="chip chip-violet">'+(DOCST_TH[e.docStatus]||audEsc(e.docStatus))+'</span>' : '<span class="muted">ไม่มี</span>'],
       ['วันที่เริ่มทำ', thFull(e.docStart)], ['วันที่เสร็จ', thFull(e.docDone)], ['Agency', tx(e.docAgency)] ]],
-    ['การทำงาน', [
+    ['work', [
       ['รูปแบบการทำงาน', modeLabel(e)+(e.mode==='shift' && sh ? ' <span class="muted">'+sh.start+'–'+sh.end+'</span>' : '')],
       ['วันหยุด', offs] ]],
   ];
@@ -4489,11 +4560,24 @@ function dtInfo(e){
       <div><button class="btn btn-ember btn-sm" onclick="copySqlBlock('sqlEmpHr','empHrSqlBox',this)">📋 คัดลอก SQL (jj_employee_hr.sql)</button></div>
       <textarea id="empHrSqlBox" readonly rows="6" style="font-family:monospace;font-size:12px;width:100%">${audEsc(document.getElementById('sqlEmpHr').textContent.trim())}</textarea>
     </div>`;
-  return `${setup}<div class="card">
-    <div class="section-title" style="margin-top:0">🪪 ข้อมูลส่วนตัว<span style="flex:1"></span>
-      <button class="btn btn-light btn-sm" onclick="openEmpForm(${e.id})">✎ แก้ไขข้อมูล</button></div>
-    ${S.map(([title, rows]) => `<div class="dt-h4">${title}</div>
-      <div class="dt-kv">${rows.map(([k,v,wide])=>`<div${wide?' class="w"':''}><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>`).join('')}
+  const ed = canEditInfo(), on = piSecsOn(), editing = on.length > 0, all = dtEditSec === 'all';
+  const secReady = key => PI_SECS[key].f.some(piReady);
+  const workBtn = ed ? `<button class="btn btn-light btn-sm dt-ed" onclick="openEmpForm(${e.id})">⚙️ แก้ที่ข้อมูลการทำงาน</button>` : '';
+  const head = key => { const sec = PI_SECS[key], t = sec ? sec.t : 'การทำงาน';
+    const btn = !sec ? workBtn : (!ed || all) ? '' : on.includes(key) ? '<span class="dt-ed muted" style="font-size:12.5px">กำลังแก้ไข…</span>'
+      : secReady(key) ? `<button class="btn btn-light btn-sm dt-ed" onclick="piStart('${key}')">✎ แก้ไข</button>`
+      : `<span class="dt-ed muted" style="font-size:12px">รัน SQL ก่อนถึงจะแก้ได้</span>`;
+    return `<div class="dt-h4${on.includes(key)?' edit':''}">${t}${btn}</div>`; };
+  const hintSrc = editing ? Object.assign({}, e, dtDraft||{}) : e;
+  return `${setup}<div class="card"${editing?' id="dtEditForm" data-emp="'+e.id+'"':''}>
+    <div class="section-title" style="margin-top:0;flex-wrap:wrap;gap:8px">🪪 ข้อมูลส่วนตัว<span style="flex:1"></span>
+      ${ed && !editing ? `<button class="btn btn-ember btn-sm" onclick="piStart('all')">✎ แก้ไขทั้งหมด</button>` : ''}
+      ${ed ? `<button class="btn btn-light btn-sm${e.active && missingWork(e).length?' btn-alert':''}" onclick="openEmpForm(${e.id})">⚙️ ข้อมูลการทำงาน</button>` : ''}</div>
+    <div id="dtHrHints">${hrHintsHtml(hintSrc)}</div>
+    ${S.map(([key, rows]) => head(key) + (on.includes(key) ? piForm(key, e)
+      : `<div class="dt-kv">${rows.map(([k,v,wide])=>`<div${wide?' class="w"':''}><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>`)).join('')}
+    ${all ? `<div class="pi-bar"><button class="btn btn-light" onclick="piCancel()">ยกเลิก</button>
+      <button class="btn btn-ember" onclick="saveInfo()">💾 บันทึกทั้งหมด</button></div>` : ''}
   </div>`;
 }
 /* คัดลอก SQL ที่ฝังไว้ใน <script type="text/plain"> — คัดลอกไม่ได้ = เลือกข้อความให้กด Ctrl+C เอง */
@@ -4556,10 +4640,17 @@ function buildPayHistory(e, curPeriod){
       </table></div>
     </div>`;
 }
-function renderDetail(){
+function renderDetail(force){
   const box = document.getElementById('detailContent'); if(!box) return;
   let e = detailEmpId ? employees.find(x=>x.id===detailEmpId) : null;
   if(!e && detailEmpId && employees.length){ detailEmpId = null; saveDetailView(); }   // คนที่จำไว้ถูกลบ/อยู่นอกสิทธิ์สาขา
+  // กำลังแก้ข้อมูลส่วนตัว: ข้อมูลสด/รีเฟรชไม่วาดทับฟอร์ม (กันที่กรอกค้างหาย + คีย์บอร์ดมือถือหุบ) · วาดใหม่เมื่อไรเก็บค่าที่กรอกไว้ก่อน
+  if(dtEditSec && ((e && (dtEditEmp !== e.id || detailTab !== 'info')) || (!e && employees.length) || !canEditInfo())) piClear();
+  const ef = document.getElementById('dtEditForm');
+  if(dtEditSec && ef && +ef.dataset.emp === dtEditEmp){
+    if(!force && curPage() === 'detail') return;
+    dtDraft = Object.assign({}, dtDraft||{}, piVals());
+  }
   const fl = document.getElementById('detailFilters'), bk = document.getElementById('detailBackBtn');
   if(fl) fl.hidden = !!e;
   if(bk) bk.hidden = !e;
@@ -4572,8 +4663,9 @@ function renderDetail(){
   const isH = e.mode==='hours', isHr = e.mode==='hourly';
   const T = DT_TABS.some(t=>t[0]===detailTab) ? detailTab : 'over';
   const miss = e.active ? missingInfo(e) : [];
+  const mw = e.active ? missingWork(e) : [], mp = e.active ? missingPersonal(e) : [];
   const dal = docAlerts(e);
-  const badge = { time: p.singleCount, info: miss.length + dal.length };
+  const badge = { time: p.singleCount, info: mp.length + dal.length };
   const tabs = `<div class="dt-tabs" role="tablist">${DT_TABS.map(([k,t])=>
     `<button role="tab" class="${k===T?'on':''}" onclick="setDetailTab('${k}')">${t}${badge[k]?' <span class="dt-badge">'+badge[k]+'</span>':''}</button>`).join('')}</div>`;
   const head = `
@@ -4593,7 +4685,8 @@ function renderDetail(){
       ${e.phone? '<span class="muted">📞 '+e.phone+'</span>':''}
       ${e.bankAcc? '<span class="muted">🏦 '+(e.bankName?e.bankName+' ':'')+e.bankAcc+'</span>':''}
       <span style="flex:1"></span>
-      <button class="btn btn-light btn-sm${e.active && missingInfo(e).length?' btn-alert':(e.active && e.bankName==='เงินสด')?' btn-cash':''}" title="${e.active && missingInfo(e).length?'⚠️ ข้อมูลไม่ครบ: '+missingInfo(e).join(' / '):(e.active && e.bankName==='เงินสด')?'💵 รับเงินสด':''}" onclick="openEmpForm(${e.id})">✎ แก้ไขข้อมูล${e.active && missingInfo(e).length?' ⚠️':(e.active && e.bankName==='เงินสด')?' 💵':''}</button>
+      ${e.active && e.bankName==='เงินสด' ? '<span class="chip chip-blue" title="รับเงินเดือนเป็นเงินสด">💵 เงินสด</span>' : ''}
+      <button class="btn btn-light btn-sm${mw.length?' btn-alert':''}" title="${mw.length?'⚠️ ข้อมูลไม่ครบ: '+mw.join(' / '):'ชื่อ · รหัส · ค่าแรง · สาขา/แผนก/ตำแหน่ง · กะ · วันหยุด'}" onclick="openEmpForm(${e.id})">⚙️ ข้อมูลการทำงาน${mw.length?' ⚠️':''}</button>
       <button class="btn btn-ember btn-sm" onclick="openSlip(${e.id},'${period}')">🧾 ใบสรุปเงินเดือน</button>
     </div></div></div>
     <div class="muted" style="margin:8px 0 0">${period? 'งวด '+periodRangeLabelE(e, period)+' · จ่าย '+dayLabel(periodRangeE(e, period).pay)+(isOfficeCycle(e) && period >= OFFICE_MONTHLY_START ? ' · รอบออฟฟิศ (1–สิ้นเดือน)' : '') : ''}</div>
@@ -4611,7 +4704,8 @@ function renderDetail(){
     </div>
 
 
-    ${miss.length? `<div class="warn-note" style="background:var(--red-soft);border-color:#f3c4b5;color:#a03014">⚠️ <b>ข้อมูลยังไม่ครบ:</b> ${miss.join(' · ')} — ดูที่แท็บ "ข้อมูลส่วนตัว" หรือกด ✎ แก้ไขข้อมูล</div>`:''}
+    ${miss.length? `<div class="warn-note" style="background:var(--red-soft);border-color:#f3c4b5;color:#a03014">⚠️ <b>ข้อมูลยังไม่ครบ:</b> ${miss.join(' · ')} —
+      ${[mp.length?'<a href="javascript:void 0" onclick="setDetailTab(\'info\')" style="color:inherit;font-weight:600">แก้ที่แท็บ "ข้อมูลส่วนตัว"</a>':'', mw.length?'ตำแหน่งแก้ที่ปุ่ม ⚙️ ข้อมูลการทำงาน':''].filter(Boolean).join(' · ')}</div>`:''}
     ${dal.length? `<div class="warn-note" style="${dal.some(x=>x.expired)?'background:var(--red-soft);border-color:#f3c4b5;color:#a03014':''}">📄 <b>เอกสาร:</b> ${dal.map(docAlertText).join(' · ')} — ดูที่แท็บ "ข้อมูลส่วนตัว"</div>`:''}
     ${e.docStatus? `<div class="warn-note" style="background:var(--violet-soft);border-color:#d9cdf5;color:#4b2fa8">🧾 <b>${DOCST_TH[e.docStatus]||''}</b>${e.docStart?' · เริ่ม '+dayLabel(e.docStart):''}${e.docDone?' · เสร็จ '+dayLabel(e.docDone):''}${e.docAgency?' · '+audEsc(e.docAgency):''}</div>`:''}
         ${p.holiDays.length? `<div class="warn-note" style="margin-top:12px;margin-bottom:0;background:${p.holiDays.every(h=>h.ok)?'#e9f7ec':'#fdf6e3'};border-color:${p.holiDays.every(h=>h.ok)?'#c3e6cb':'#eedcb3'};color:${p.holiDays.every(h=>h.ok)?'#1e6b2e':'#7a5a12'}">
@@ -4739,6 +4833,8 @@ function renderDetail(){
     body = dtInfo(e);
   }
   box.innerHTML = head + tabs + '<div class="dt-body">' + body + '</div>';
+  const pf = document.getElementById('dtEditForm');
+  if(pf) pf.oninput = pf.onchange = () => { piSave(); piHint(); };
   const on = box.querySelector('.dt-tabs button.on');     // มือถือ: แถบแท็บเลื่อนให้เห็นแท็บที่เปิดอยู่
   if(on) on.parentElement.scrollLeft = Math.max(0, on.offsetLeft - 24);
 }
