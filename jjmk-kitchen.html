@@ -367,6 +367,25 @@ table.t tr.tap:hover{background:#FFF8F3}
 .bq button{width:72px;height:72px;border-radius:50%;font-size:38px;font-weight:800;background:var(--bg);color:var(--ink);flex:none;cursor:pointer}
 .modal.task .bq input{width:130px;height:76px;font-size:36px;text-align:center;font-weight:800;border-radius:18px}
 .tksave{margin-top:8px}
+.wdpick{display:flex;gap:6px;flex-wrap:wrap}.wdpick button{min-width:44px;min-height:44px;border-radius:12px;border:2px solid var(--line);background:#fff;font:inherit;font-weight:700;cursor:pointer}
+.wdpick button.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.sdnext{font-weight:700;font-size:15px;margin:4px 0;color:#7A5A1E}.sdnext.bad{color:var(--bad)}
+.tkcard.warn{border-color:#F2C4C2;background:var(--bad-t)}
+.sdlater>summary{text-align:left}
+.skin{display:flex;align-items:center;gap:6px;margin-top:6px}.skin input{flex:1;min-width:0;font-size:20px;font-weight:700;text-align:center;min-height:48px}
+.skin span{font-weight:700;white-space:nowrap}
+.skcn{font-size:12px;opacity:.75}
+.curow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}.curow .mthumb{width:48px;height:48px;font-size:24px;flex:none}
+.cugrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 4px}.cugrid label{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--mut)}
+.cugrid select{min-height:46px;font-size:16px;width:100%}
+@media(max-width:420px){.cugrid{grid-template-columns:1fr}}
+.lgrow{border:2px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:8px}
+.lgname{font-weight:800;font-size:17px;margin-bottom:6px}
+.lgeq{display:flex;flex-wrap:wrap;gap:6px}
+.lgc{display:flex;flex-direction:column;align-items:center;min-width:64px;padding:4px 8px;border-radius:10px;background:var(--bg)}
+.lgc small{font-size:12px;color:var(--mut)}.lgc b{font-size:17px}
+.lgc.in b{color:var(--ok)}.lgc.out b{color:var(--bad)}.lgc.eq{background:var(--ink);color:#fff}.lgc.eq small{color:#ddd}
+.lgadj{margin-top:6px;font-weight:700;font-size:15px}.lgadj.bad{color:var(--bad)}.lgadj.ok{color:var(--ok)}
 .tmsteps{border:2px solid var(--line);border-radius:16px;padding:4px 12px;margin-bottom:6px}
 .tmstep{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);font-size:17px;line-height:1.45}
 .tmstep:last-child{border-bottom:0}
@@ -627,7 +646,7 @@ const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const EMAIL_DOMAIN='@jjmk.local';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='CK b4';
+const APP_VER='CK b5';
 
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
@@ -1018,7 +1037,7 @@ async function loadAll(){
     if(probe.error){if(MISSING_TBL(probe.error)){S.setupNeeded=true;return;}throw probe.error;}
     S.setupNeeded=false;
     const from90=addDays(todayStr(),-45);
-    const [it,sp,rc,bm,pl,po,poi,pr,od,odi,br,xc,un,ks,bl]=await Promise.all([
+    const [it,sp,rc,bm,pl,po,poi,pr,od,odi,br,xc,un,ks,bl,sc1,sc2]=await Promise.all([
       sbAll(()=>sb.from('ck_items').select('*').is('deleted_at',null).order('sort').order('name').order('id')),
       sbAll(()=>sb.from('ck_sups').select('*').order('sort').order('name').order('id')),
       sbAll(()=>sb.from('ck_recipes').select('*').is('deleted_at',null).order('sort').order('name').order('id')),
@@ -1039,7 +1058,10 @@ async function loadAll(){
       // flow ประจำวัน: ค่าตั้งการผลิต/ราคาขายสาขา + การล็อกแก้ไข + บิลซัพ (ยังไม่รัน SQL = ข้ามไป)
       sb.from('ck_settings').select('key,value').in('key',['kplan','editlock']).then(r=>(r&&r.data)||[]).catch(()=>[]),
       sb.from('ck_bills').select('*').or('d.gte.'+from90+',paid_at.is.null').order('d',{ascending:false}).limit(2000)
-        .then(r=>{if(r&&r.error){S.billsOk=MISSING_TBL(r.error)?false:S.billsOk;return [];}S.billsOk=true;return (r&&r.data)||[];}).catch(()=>[])
+        .then(r=>{if(r&&r.error){S.billsOk=MISSING_TBL(r.error)?false:S.billsOk;return [];}S.billsOk=true;return (r&&r.data)||[];}).catch(()=>[]),
+      // วันสั่งของร้าน + หน่วยนับ (jjmk_kitchen_sched_count.sql) — ยังไม่รัน = ใช้แบบเดิม (สั่งได้ทุกวัน · หน่วยนับอัตโนมัติ)
+      sb.from('ck_sups').select('order_days').limit(1).then(r=>!(r&&r.error)).catch(()=>false),
+      sb.from('ck_items').select('count_unit').limit(1).then(r=>!(r&&r.error)).catch(()=>false)
     ]);
     S.items=it;S.sups=sp;S.recipes=rc;S.plans=pl;S.pos=po;S.prods=pr;S.orders=od.filter(o=>inBr(o.branch));   // เห็นเฉพาะสาขา
     S.boms={};bm.forEach(l=>{(S.boms[l.recipe_id]=S.boms[l.recipe_id]||[]).push(l);});
@@ -1052,6 +1074,7 @@ async function loadAll(){
     S.units=unitsClean(un);
     const kv=k=>((ks||[]).find(x=>x.key===k)||{}).value;
     S.kp=kpClean(kv('kplan'));S.editlock=elClean(kv('editlock'));S.bills=bl||[];S.kpAvg=null;
+    S.scSql=!!(sc1&&sc2);
   }finally{setBusy(false);}
 }
 async function reloadAll(){await loadAll();applyChrome();show(S.tab);toast('⟳ '+t('done'));autoBackfillI18n();}
@@ -1303,6 +1326,8 @@ const KITCHEN_SQL=[
 'alter table ck_recipes add column if not exists safety_qty numeric; -- สำรองตายตัว',
 'alter table ck_sups add column if not exists credit_days integer default 0; -- 0 = โอน/จ่ายทันที',
 'alter table ck_sups add column if not exists line_group_id text; -- กลุ่มไลน์ที่ส่งใบสั่งซื้อ',
+'alter table ck_sups add column if not exists order_days smallint[]; -- วันที่สั่งได้ 0=อา…6=ส (ว่าง = ทุกวัน)',
+'alter table ck_items add column if not exists count_unit text; -- นับสต๊อกเป็นหน่วยไหน (ว่าง = ระบบเลือกให้)',
 'create table if not exists ck_recipe_items (',
 '  id bigserial primary key, recipe_id text not null, item_id text not null,',
 '  qty numeric not null default 0, sort integer default 0);',
@@ -3549,6 +3574,7 @@ RENDER.stock=function(el){
   if(SK_MODE==='count'){renderStockCount(el);return;}
   let h='<div class="card"><h3>🥬 '+t('sk_items')+
     '<span class="sp">'+(canKitchen()?'<button class="btn sm2" onclick="skCountStart()">'+t('skc_start')+'</button> ':'')+
+    '<button class="btn gh sm2" onclick="ledgerOpen()">📒 '+t('lg_btn')+'</button> '+
     S.items.length+' '+t('items_n')+'</span></h3>';
   if(!S.items.length)h+='<div class="empty">'+t('it_none')+'</div>';
   else{h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('sk_now')+'</th><th class="right">'+t('sk_min')+'</th><th class="right">'+t('sk_val')+'</th><th></th></tr>';
@@ -3595,52 +3621,70 @@ async function adjSave(kind,id){await once(async()=>{
 /* ---------- 📋 โหมดนับสต๊อกครัวกลาง (นับของสำรองที่สั่งมาเก็บไว้) ---------- */
 function skCountStart(){if(!canKitchen())return;SK_MODE='count';SK_CNT={};SK_Q='';show('stock');}
 function skCountExit(){SK_MODE='table';SK_CNT={};show('stock');}
-function skEnt(kind,id){const k=kind+'|'+id;return SK_CNT[k]||(SK_CNT[k]={kind,id,a:'',b:''});}
-function skIsCounted(e){return e&&(String(e.a).trim()!==''||String(e.b).trim()!=='');}
-function skTotal(e,o,kind){ // เต็ม×อัตราแปลง + เศษ (หน่วยใช้)
-  const full=String(e.a).trim()===''?0:num(e.a);
-  const loose=String(e.b).trim()===''?0:num(e.b);
-  const mult=(kind==='item'&&o.buy_unit&&num(o.buy_qty)>1)?num(o.buy_qty):1;
-  return rnd2(full*mult+loose);}
-function skSet(kind,id,f,v){skEnt(kind,id)[f]=v;show('stock');}
+function skEnt(kind,id){const k=kind+'|'+id;return SK_CNT[k]||(SK_CNT[k]={kind,id,v:''});}
+function skIsCounted(e){return !!e&&String(e.v==null?'':e.v).trim()!=='';}
+function skUnit(kind,o){ // หน่วยที่นับ + 1 หน่วยนับ = กี่หน่วยใช้
+  if(kind!=='item')return {u:o.yield_unit||'',f:1};
+  const u=countUnitOf(o);return {u,f:unitFactor(o,u)||1};}
+function skTotal(e,o,kind){return rnd4(num(e.v)*skUnit(kind,o).f);}   // แปลงเป็นหน่วยใช้ก่อนเก็บ
+function skInput(kind,id,el){ // พิมพ์แล้วไม่วาดหน้าใหม่ (คีย์บอร์ดมือถือไม่หุบ) — อัปเดตเฉพาะการ์ดนี้กับตัวนับ
+  const e=skEnt(kind,id);e.v=el.value;
+  const card=el.closest('.icard');if(card)card.classList.toggle('cnt',skIsCounted(e));
+  const o=kind==='item'?itemById(id):recipeById(id);const eq=card&&card.querySelector('.skeq');
+  if(eq&&o){const U=skUnit(kind,o),base=kind==='item'?(o.unit||''):(o.yield_unit||'');
+    eq.textContent=skIsCounted(e)&&U.u!==base?'= '+fmtQ(skTotal(e,o,kind))+' '+trUnit(base):'';}
+  skPaintMeta();}
+function skPaintMeta(){
+  const n=Object.values(SK_CNT).filter(skIsCounted).length,all=S.items.filter(i=>i.active!==false).length+S.recipes.filter(r=>r.active!==false).length;
+  const v=document.getElementById('skN');if(v)v.textContent=t('skc_counted',{a:n,b:all});
+  const b=document.getElementById('skGo');if(b)b.disabled=!n;
+  document.querySelectorAll('#view-stock .catbar button[data-c]').forEach(x=>{const c=x.dataset.c;if(!c)return;
+    const L=c==='__menu'?S.recipes.filter(r=>r.active!==false).map(r=>'recipe|'+r.id):S.items.filter(i=>i.active!==false&&(i.cat||'อื่นๆ')===c).map(i=>'item|'+i.id);
+    const k=L.filter(id=>skIsCounted(SK_CNT[id])).length;const sp=x.querySelector('.skcn');if(sp)sp.textContent=k+'/'+L.length;});}
 function skCountCard(kind,o){
   const e=SK_CNT[kind+'|'+o.id];const counted=skIsCounted(e);
-  const unit=kind==='item'?(o.unit||''):(o.yield_unit||'');
-  const hasBuy=kind==='item'&&o.buy_unit&&num(o.buy_qty)>1;
-  const ic=kind==='item'?(ITEM_CAT_IC[o.cat]||'🥬'):'🍲';
-  let h='<div class="icard'+(counted?' cnt':'')+'">'+
+  const base=kind==='item'?(o.unit||''):(o.yield_unit||'');
+  const U=skUnit(kind,o);
+  const ic=kind==='item'?catIc(o.cat):'🍲';
+  return '<div class="icard skcard'+(counted?' cnt':'')+'">'+
     '<div class="ithumb" style="height:64px">'+(o.image_url?'<img src="'+esc(o.image_url)+'" loading="lazy">':ic)+'</div>'+
     '<div class="iname" style="min-height:auto">'+esc(dispName(o))+'</div>'+
-    '<div class="isub">'+t('skc_sys')+' '+fmtI(o.qty)+' '+esc(trUnit(unit))+'</div>';
-  if(hasBuy){
-    h+='<div class="grid2">'+
-      '<div><div class="xs mut">'+t('skc_full')+' ('+esc(trUnit(o.buy_unit))+')</div>'+
-      '<input inputmode="decimal" value="'+esc(e?e.a:'')+'" onchange="skSet(\''+kind+'\',\''+o.id+'\',\'a\',this.value)"></div>'+
-      '<div><div class="xs mut">'+t('skc_loose')+' ('+esc(trUnit(unit))+')</div>'+
-      '<input inputmode="decimal" value="'+esc(e?e.b:'')+'" onchange="skSet(\''+kind+'\',\''+o.id+'\',\'b\',this.value)"></div></div>';
-  }else{
-    h+='<div><div class="xs mut">'+t('qty')+' ('+esc(trUnit(unit))+')</div>'+
-      '<input inputmode="decimal" value="'+esc(e?e.b:'')+'" onchange="skSet(\''+kind+'\',\''+o.id+'\',\'b\',this.value)"></div>';
-  }
-  if(counted)h+='<div class="xs b" style="color:var(--gold)">'+t('total')+' '+fmtI(skTotal(e,o,kind))+' '+esc(trUnit(unit))+'</div>';
-  return h+'</div>';
-}
+    '<div class="isub">'+t('skc_sys')+' '+fmtQ(rnd2(num(o.qty)/U.f))+' '+esc(trUnit(U.u))+'</div>'+
+    (U.u!==base&&kind==='item'?'<div class="xs mut">'+esc(unitEqTxt(o,U.u))+'</div>':'')+
+    '<div class="skin"><input inputmode="decimal" placeholder="0" value="'+esc(e?e.v:'')+'" oninput="skInput(\''+kind+'\',\''+esc(o.id)+'\',this)"><span>'+esc(trUnit(U.u))+'</span></div>'+
+    '<div class="xs b skeq" style="color:var(--gold)">'+(counted&&U.u!==base?'= '+fmtQ(skTotal(e,o,kind))+' '+esc(trUnit(base)):'')+'</div></div>';}
+let SK_CAT=LS.get('jjck_skcat','')||'';
+function skSetCat(c){SK_CAT=c;LS.set('jjck_skcat',c);show('stock');}
 function renderStockCount(el){
-  const q=SK_Q.toLowerCase();
-  const items=S.items.filter(i=>i.active!==false&&(!q||(i.name||'').toLowerCase().includes(q)||dispName(i).toLowerCase().includes(q)));
-  const recs=S.recipes.filter(r=>r.active!==false&&(!q||(r.name||'').toLowerCase().includes(q)||dispName(r).toLowerCase().includes(q)));
-  const all=S.items.length+S.recipes.length;
-  const n=Object.values(SK_CNT).filter(skIsCounted).length;
+  const q=supKey(SK_Q);
+  const m=o=>!q||supKey(o.name).includes(q)||supKey(dispName(o)).includes(q);
+  const actI=S.items.filter(i=>i.active!==false),actR=S.recipes.filter(r=>r.active!==false);
+  const cats=allItemCats().filter(c=>actI.some(i=>(i.cat||'อื่นๆ')===c));
+  if(SK_CAT&&SK_CAT!=='__menu'&&!cats.includes(SK_CAT))SK_CAT='';
+  if(SK_CAT==='__menu'&&!actR.length)SK_CAT='';
+  const cnt=(L,k)=>L.filter(o=>skIsCounted(SK_CNT[k+'|'+o.id])).length;
   let h='<div class="hintbox">'+t('skc_hint')+'</div>'+
-    '<input placeholder="'+t('search')+'" value="'+esc(SK_Q)+'" oninput="SK_Q=this.value;show(\'stock\')" style="margin-bottom:10px">'+
-    '<div class="secbar">🥬 '+t('sk_items')+'<span class="sp">'+items.length+'</span></div>'+
-    '<div class="igrid" style="margin-bottom:14px">'+items.map(i=>skCountCard('item',i)).join('')+'</div>';
-  if(recs.length)h+='<div class="secbar">🍲 '+t('sk_menus')+'<span class="sp">'+recs.length+'</span></div>'+
-    '<div class="igrid" style="margin-bottom:14px">'+recs.map(r=>skCountCard('recipe',r)).join('')+'</div>';
-  h+='<div class="stickysum"><span class="v">'+t('skc_counted',{a:n,b:all})+'</span>'+
+    (canKitchen()?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn gh sm2" onclick="cuSetup()">⚙️ '+t('cu_setup')+'</button></div>':'')+
+    '<div class="catbar skcats"><button data-c="" class="'+(SK_CAT===''?'on':'')+'" onclick="skSetCat(\'\')">'+t('all')+'</button>'+
+    cats.map(c=>{const L=actI.filter(i=>(i.cat||'อื่นๆ')===c);
+      return '<button data-c="'+esc(c)+'" class="'+(SK_CAT===c?'on':'')+'" onclick="skSetCat(this.dataset.c)">'+catIc(c)+' '+esc(trCat(c))+' <span class="skcn">'+cnt(L,'item')+'/'+L.length+'</span></button>';}).join('')+
+    (actR.length?'<button data-c="__menu" class="'+(SK_CAT==='__menu'?'on':'')+'" onclick="skSetCat(\'__menu\')">🍲 '+t('skc_menus')+' <span class="skcn">'+cnt(actR,'recipe')+'/'+actR.length+'</span></button>':'')+'</div>'+
+    '<input placeholder="🔎 '+t('search')+'" value="'+esc(SK_Q)+'" oninput="SK_Q=this.value;show(\'stock\')" style="margin-bottom:10px">';
+  let shown=0;
+  if(SK_CAT!=='__menu')cats.filter(c=>!SK_CAT||c===SK_CAT).forEach(c=>{
+    const L=actI.filter(i=>(i.cat||'อื่นๆ')===c&&m(i)).sort((a,b)=>dispName(a).localeCompare(dispName(b),'th'));
+    if(!L.length)return;shown+=L.length;
+    h+='<div class="secbar">'+catIc(c)+' '+esc(trCat(c))+'<span class="sp">'+L.length+'</span></div>'+
+      '<div class="igrid" style="margin-bottom:14px">'+L.map(i=>skCountCard('item',i)).join('')+'</div>';});
+  if(!SK_CAT||SK_CAT==='__menu'){const R=actR.filter(m);
+    if(R.length){shown+=R.length;h+='<div class="secbar">🍲 '+t('skc_menus')+'<span class="sp">'+R.length+'</span></div>'+
+      '<div class="igrid" style="margin-bottom:14px">'+R.map(r=>skCountCard('recipe',r)).join('')+'</div>';}}
+  if(!shown)h+='<div class="card empty">'+t('no_data')+'</div>';
+  const n=Object.values(SK_CNT).filter(skIsCounted).length;
+  h+='<div class="stickysum"><span class="v" id="skN">'+t('skc_counted',{a:n,b:actI.length+actR.length})+'</span>'+
     '<span style="margin-left:auto;display:flex;gap:8px">'+
     '<button class="btn gh sm2" onclick="skCountExit()">'+t('cancel')+'</button>'+
-    '<button class="btn ok" onclick="skCountSum()" '+(n?'':'disabled')+'>'+t('skc_save')+'</button></span></div>';
+    '<button class="btn ok" id="skGo" onclick="skCountSum()" '+(n?'':'disabled')+'>'+t('skc_save')+'</button></span></div>';
   el.innerHTML=h;
 }
 function skCountSum(){ // สรุปเฉพาะตัวที่ต่างจากระบบ ก่อนปรับจริง
@@ -3650,17 +3694,19 @@ function skCountSum(){ // สรุปเฉพาะตัวที่ต่า
     const o=e.kind==='item'?itemById(e.id):recipeById(e.id);if(!o)return;
     const total=skTotal(e,o,e.kind);
     const delta=rnd2(total-num(o.qty));
+    const U=skUnit(e.kind,o);
     if(delta!==0)diffs.push({kind:e.kind,id:e.id,name:o.name,disp:dispName(o),
-      unit:e.kind==='item'?(o.unit||''):(o.yield_unit||''),sys:num(o.qty),cnt:total,delta});
+      unit:U.u,f:U.f,sys:num(o.qty),cnt:total,delta});
   });
   window._skDiffs=diffs;
   if(!diffs.length){openModal('<h3>📋 '+t('skc_start')+'</h3><div class="okbox">'+t('skc_none')+'</div>'+
     '<button class="btn big" onclick="closeModal();skCountExit()">'+t('done')+'</button>');return;}
   let h='<h3>📋 '+t('skc_sum')+'</h3><div class="twrap"><table class="t">'+
     '<tr><th>'+t('nav_items')+'</th><th class="right">'+t('skc_sys')+'</th><th class="right">'+t('skc_start').replace('📋 ','')+'</th><th class="right">'+t('skc_diff')+'</th></tr>';
-  diffs.forEach(d=>{h+='<tr><td>'+esc(d.disp)+'</td><td class="n">'+fmtI(d.sys)+' '+esc(trUnit(d.unit))+'</td>'+
-    '<td class="n">'+fmtI(d.cnt)+'</td>'+
-    '<td class="n" style="color:var(--'+(d.delta>0?'ok':'bad')+');font-weight:700">'+(d.delta>0?'+':'')+fmtI(d.delta)+'</td></tr>';});
+  diffs.forEach(d=>{const v=x=>fmtQ(rnd2(x/d.f));
+    h+='<tr><td>'+esc(d.disp)+'</td><td class="n">'+v(d.sys)+' '+esc(trUnit(d.unit))+'</td>'+
+    '<td class="n">'+v(d.cnt)+'</td>'+
+    '<td class="n" style="color:var(--'+(d.delta>0?'ok':'bad')+');font-weight:700">'+(d.delta>0?'+':'')+v(d.delta)+'</td></tr>';});
   h+='</table></div><button class="btn ok big" style="margin-top:12px" onclick="skCountApply()">'+t('skc_apply')+' ('+diffs.length+')</button>';
   openModal(h,true);
 }
@@ -3883,8 +3929,8 @@ function itemEdit(id){
   IT_DRAFT=i?{id:i.id,name:i.name,cat:i.cat||'อื่นๆ',unit:i.unit||'กก.',buy_unit:i.buy_unit||'',
       buy_qty:num(i.buy_qty)||1,price:i.price==null?null:num(i.price),sup:i.sup||'',
       lead_days:num(i.lead_days)||1,min_qty:i.min_qty==null?null:num(i.min_qty),image_url:i.image_url,
-      packs:itemPacks(i).map(p=>({u:p.u,q:num(p.q)}))}
-    :{id:null,name:'',cat:IT_CAT||'อื่นๆ',unit:'กก.',buy_unit:'',buy_qty:1,price:null,sup:'',lead_days:1,min_qty:null,image_url:null,packs:[]};
+      packs:itemPacks(i).map(p=>({u:p.u,q:num(p.q)})),count_unit:i.count_unit||''}
+    :{id:null,name:'',cat:IT_CAT||'อื่นๆ',unit:'กก.',buy_unit:'',buy_qty:1,price:null,sup:'',lead_days:1,min_qty:null,image_url:null,packs:[],count_unit:''};
   paintItemEdit();
 }
 function paintItemEdit(){
@@ -3896,9 +3942,9 @@ function paintItemEdit(){
     '<div class="mthumb" style="width:64px;height:64px;font-size:28px">'+(d.image_url?'<img src="'+esc(d.image_url)+'">':(ITEM_CAT_IC[d.cat]||'🥬'))+'</div>'+
     (d.id?'<button class="btn gh sm2" onclick="pickImage(\'item\',\''+d.id+'\',url=>{IT_DRAFT.image_url=url;paintItemEdit()})">'+t('pick_photo')+'</button>':'<span class="xs mut">'+t('save')+' → '+t('pick_photo')+'</span>')+'</div>'+
     '<div class="fld"><label>'+t('name_th')+'</label><input id="itName" value="'+esc(d.name)+'" onchange="if(IT_DRAFT)IT_DRAFT.name=this.value"></div>'+
-    '<div class="grid2"><div class="fld"><label>'+t('it_cat')+'</label><select onchange="IT_DRAFT.cat=this.value">'+
-    ITEM_CATS.map(c=>'<option value="'+esc(c)+'" '+(c===d.cat?'selected':'')+'>'+(ITEM_CAT_IC[c]||'')+' '+esc(trCat(c))+'</option>').join('')+
-    (ITEM_CATS.includes(d.cat)?'':'<option selected>'+esc(d.cat)+'</option>')+'</select></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('it_cat')+'</label><select onchange="itCatChange(this.value)">'+
+    allItemCats().map(c=>'<option value="'+esc(c)+'" '+(c===d.cat?'selected':'')+'>'+catIc(c)+' '+esc(trCat(c))+'</option>').join('')+
+    (allItemCats().includes(d.cat)?'':'<option selected>'+esc(d.cat)+'</option>')+'<option value="__new">＋ '+esc(t('cu_new_cat'))+'</option></select></div>'+
     '<div class="fld"><label>'+t('it_sup')+'</label><select onchange="IT_DRAFT.sup=this.value">'+supOpts+'</select></div></div>'+
     '<div class="grid2"><div class="fld"><label>'+t('it_unit_use')+'</label><select onchange="itUnitChange(this.value)">'+unitOptions(d.unit)+'</select></div>'+
     '<div class="fld"><label>'+t('it_buy_unit')+'</label><select onchange="IT_DRAFT.buy_unit=this.value;paintItemEdit()"><option value=""></option>'+unitOptions(d.buy_unit)+'</select></div></div>'+
@@ -3907,12 +3953,20 @@ function paintItemEdit(){
     '<div class="grid2"><div class="fld"><label>'+t('it_lead')+'</label><input inputmode="decimal" value="'+d.lead_days+'" onchange="IT_DRAFT.lead_days=num(this.value)||1"></div>'+
     '<div class="fld"><label>'+t('it_min')+'</label><input inputmode="decimal" value="'+(d.min_qty==null?'':d.min_qty)+'" onchange="IT_DRAFT.min_qty=this.value===\'\'?null:num(this.value)"></div></div>';
   h+=itPacksHtml(d);
+  {const tmp={unit:d.unit,buy_unit:d.buy_unit,buy_qty:d.buy_qty,packs:(d.packs||[]).map(p=>({u:p.u,q:num(p.q)})).filter(p=>p.u&&p.q>0)};
+   h+='<div class="fld"><label>📋 '+t('cu_lb')+'</label>'+(S.scSql===false?'<div class="xs mut">'+t('cu_need_sql')+'</div>':
+     '<select onchange="IT_DRAFT.count_unit=this.value"><option value="">'+esc(t('cu_auto',{u:trUnit(countUnitOf(tmp))}))+'</option>'+
+     itemUnits(tmp).map(u=>'<option value="'+esc(u)+'"'+(d.count_unit===u?' selected':'')+'>'+esc(trUnit(u))+'</option>').join('')+'</select>'+
+     '<div class="xs mut">'+t('cu_hint')+'</div>')+'</div>';}
   if(d.id)h+='<button class="btn gh sm2" onclick="priceHist(\''+d.id+'\')">📉 '+t('it_price_hist')+'</button>';
   h+='<div style="display:flex;gap:8px;margin-top:12px">'+
     (d.id?'<button class="btn gh" onclick="itemDel(\''+d.id+'\')">🗑</button>':'')+
     '<button class="btn big" style="flex:1" onclick="itemSave()">'+t('save')+'</button></div>';
   openModal(h,true);
 }
+function itCatChange(v){const d=IT_DRAFT;if(!d)return;
+  if(v==='__new'){const n=String(prompt(t('cu_new_cat_q'))||'').trim();if(n)d.cat=n;paintItemEdit();return;}
+  d.cat=v;}
 function itUnitChange(v){const d=IT_DRAFT;if(!d)return;
   const f=unitConv(null,d.unit,v);   // ขนาดหน่วยบรรจุเขียนเป็นหน่วยใช้ — เปลี่ยนหน่วยใช้แล้วแปลงตามให้ถ้าแปลงได้ (กรัม↔กก.)
   if(f!=null)(d.packs||[]).forEach(p=>{if(num(p.q)>0)p.q=rnd4(num(p.q)*f);});
@@ -3944,6 +3998,7 @@ async function itemSave(){await once(async()=>{
   if(!d.name){toast(t('need_name'),true);return;}
   const row={name:d.name,cat:d.cat,unit:d.unit,buy_unit:d.buy_unit||null,buy_qty:d.buy_qty||1,
     price:d.price,sup:d.sup||'',lead_days:d.lead_days||1,min_qty:d.min_qty};
+  if(S.scSql)row.count_unit=d.count_unit||null;
   const packs=itPacksClean(d);if(!packs){toast(t('it_pack_bad'),true);return;}
   row.packs=packs;
   let iid=d.id;let renamed=false;
@@ -3986,8 +4041,11 @@ async function supEdit(id){
   const s=id?S.sups.find(x=>x.id===id):null;
   openModal('<h3>🏷️ '+(s?t('sp_edit_info'):t('sp_new'))+'</h3>'+
     '<div class="fld"><label>'+t('name')+'</label><input id="spName" value="'+esc(s?s.name:'')+'"></div>'+
-    '<div class="grid2"><div class="fld"><label>'+t('it_phone')+'</label><input id="spPhone" inputmode="tel" value="'+esc(s?s.phone||'':'')+'"></div>'+
-    '<div class="fld"><label>'+t('it_lead')+'</label><input id="spLead" inputmode="decimal" value="'+(s?s.lead_days||1:1)+'"></div></div>'+
+    '<div class="fld"><label>'+t('it_phone')+'</label><input id="spPhone" inputmode="tel" value="'+esc(s?s.phone||'':'')+'"></div>'+
+    '<div class="fld"><label>📅 '+t('sd_days_lb')+'</label><div class="wdpick" id="spDays">'+
+      wdNames().map((w,i)=>'<button type="button" data-d="'+i+'" class="'+(supDaysOf(s).includes(i)?'on':'')+'" onclick="this.classList.toggle(\'on\')">'+esc(w)+'</button>').join('')+'</div>'+
+      '<div class="xs mut">'+(S.scSql===false?t('sd_need_sql'):t('sd_days_hint'))+'</div></div>'+
+    '<div class="fld"><label>🚚 '+t('sd_wait')+'</label><input id="spLead" inputmode="numeric" value="'+supLeadOf(s)+'"><div class="xs mut">'+t('sd_wait_hint')+'</div></div>'+
     '<div class="fld"><label>💳 '+t('kf_sup_credit')+'</label><input id="spCredit" inputmode="numeric" value="'+(s?Math.max(0,parseInt(s.credit_days,10)||0):0)+'">'+
       '<div class="xs mut">'+t('kf_sup_credit_hint')+'</div></div>'+
     '<div class="fld"><label>'+t('note')+'</label><input id="spNote" value="'+esc(s?s.note||'':'')+'"></div>'+
@@ -4001,10 +4059,14 @@ async function supSave(id){
     const name=(document.getElementById('spName').value||'').trim();
     if(!name){toast(t('need_name'),true);return;}
     if(S.sups.some(x=>x.id!==id&&supKey(x.name)===supKey(name))){toast(t('sp_dup'),true);return;}
+    const lv=document.getElementById('spLead').value.trim();
+    const days=[...document.querySelectorAll('#spDays button.on')].map(b=>+b.dataset.d).sort();
     const row={name,phone:document.getElementById('spPhone').value.trim()||null,
-      lead_days:num(document.getElementById('spLead').value)||1,
+      lead_days:lv===''?1:Math.max(0,parseInt(lv,10)||0),
       note:document.getElementById('spNote').value.trim()||null,
       credit_days:Math.max(0,parseInt(document.getElementById('spCredit').value,10)||0)};
+    if(S.scSql)row.order_days=days.length&&days.length<7?days:null;
+    else if(days.length)toast(t('sd_need_sql'),true);
     const NC=['credit_days'];const isNew=!id;
     if(id){const s=S.sups.find(x=>x.id===id);const old=s&&s.name;
       await updFallback('ck_sups',row,id,NC);Object.assign(s,row);
@@ -4410,7 +4472,7 @@ function kpSteps(){ // 6 ขั้นของวัน — คำง่าย �
   const nU=tkItems('urgent').length,nR=tkItems('refill').length;
   const brs=(S.br.data||[]).filter(B=>B.cd&&brPlan(B).need.length);
   const brLeft=brs.filter(B=>!brPlan(B).sent).length;
-  const nBuy=kpBuyRows().filter(r=>r.short>0).length+S.pos.filter(p=>p.status==='draft').length;
+  const nBuy=kpBuyRows().filter(r=>r.short>0&&(r.orderToday||r.runOut)).length+S.pos.filter(p=>p.status==='draft').length;
   const nRecv=S.pos.filter(p=>p.status==='ordered').length;
   return [
     {k:1,ic:'⚡',lb:t('sx_s1'),ok:!nU,sub:nU?t('sx_todo_n',{n:nU}):t('sx_ok_enough'),go:"taskMake('urgent')"},
@@ -4445,29 +4507,34 @@ async function billNoAssign(o){
 const orderSell=o=>o.total_sell!=null?num(o.total_sell):(S.orderItems[o.id]||[]).reduce((s,l)=>s+num(l.amount_sell!=null?l.amount_sell:l.amount),0);
 
 /* ---------- 🛒 สั่งวัตถุดิบ (พรุ่งนี้) — จากใบสั่งผลิตที่ค้าง + ที่คาดว่าจะผลิต (ยอดส่งเฉลี่ย/วัน) ผ่าน BOM ---------- */
-function kpBuyRows(){
+function kpBuyRows(){ // ยอดที่ต้องสั่ง — สั่งให้พอใช้ถึงวันก่อนที่ของรอบถัดไปของร้านนั้นจะมา (ตามวันสั่ง + วันรอของ)
   const today=bizTodayISO(),tmr=addDays(today,1);
-  const need={},firstD={};
-  const add=(r,q,d)=>{const b=q/(num(r.yield_qty)||1);
-    bomOf(r).forEach(l=>{need[l.item_id]=(need[l.item_id]||0)+b*num(l.qty);
-      if(!firstD[l.item_id]||d<firstD[l.item_id])firstD[l.item_id]=d;});};
-  S.plans.filter(p=>p.status==='plan').forEach(p=>{const r=recipeById(p.recipe_id);if(r)add(r,num(p.qty),p.d<today?today:p.d);});
-  S.recipes.forEach(r=>{const a=kpAvgOf(r.id);if(a>0)add(r,a,tmr);});
+  const planNeed={},daily={},firstD={};
+  const first=(iid,d)=>{if(!firstD[iid]||d<firstD[iid])firstD[iid]=d;};
+  S.plans.filter(p=>p.status==='plan').forEach(p=>{const r=recipeById(p.recipe_id);if(!r)return;
+    const b=num(p.qty)/(num(r.yield_qty)||1),d=p.d<today?today:p.d;
+    bomOf(r).forEach(l=>{planNeed[l.item_id]=(planNeed[l.item_id]||0)+b*num(l.qty);first(l.item_id,d);});});
+  S.recipes.forEach(r=>{const a=kpAvgOf(r.id);if(!(a>0))return;const b=a/(num(r.yield_qty)||1);   // ใช้ต่อวันโดยเฉลี่ย
+    bomOf(r).forEach(l=>{daily[l.item_id]=(daily[l.item_id]||0)+b*num(l.qty);first(l.item_id,tmr);});});
   const incoming={};
   S.pos.filter(p=>p.status==='ordered'||p.status==='draft').forEach(p=>{(S.poItems[p.id]||[]).forEach(l=>{
     const it=itemById(l.item_id);if(!it)return;
     incoming[l.item_id]=(incoming[l.item_id]||0)+num(l.qty)*(num(it.buy_qty)||1);});});
-  const ids=new Set(Object.keys(need));
+  const ids=new Set([...Object.keys(planNeed),...Object.keys(daily)]);
   S.items.forEach(it=>{if(it.active!==false&&it.min_qty!=null)ids.add(it.id);});
   return [...ids].map(iid=>{
     const it=itemById(iid);if(!it)return null;
-    const have=Math.max(0,num(it.qty)),inc=incoming[iid]||0,nd=num(need[iid]),mn=num(it.min_qty);
+    const lead=Math.max(num(it.lead_days)||0,supLeadOf(supByName(it.sup)));
+    const P=supPlanOf(it.sup,lead,today);
+    const days=Math.max(1,dayDiff(today,P.nextArrive)-1);
+    const pn=num(planNeed[iid]),dl=num(daily[iid]);
+    const have=Math.max(0,num(it.qty)),inc=incoming[iid]||0,nd=pn+dl*days,mn=num(it.min_qty);
     const short=Math.max(0,+(nd+mn-have-inc).toFixed(4));
     if(!nd&&!short)return null;
     const bq=num(it.buy_qty)||1;
-    const lead=num(it.lead_days)||((supByName(it.sup)||{}).lead_days)||1;
-    const prodD=firstD[iid]||tmr;
-    return {it,need:nd,min:mn,have,inc,short,buyN:Math.ceil(short/bq-1e-9),orderBy:addDays(prodD,-lead),produceD:prodD};
+    const runOut=!P.orderToday&&have+inc<pn+dl*Math.max(0,dayDiff(today,P.arrive)-1)-1e-9;   // ของหมดก่อนรอบสั่งปกติจะมา
+    return {it,need:nd,min:mn,have,inc,short,buyN:Math.ceil(short/bq-1e-9),orderBy:P.oDay,produceD:firstD[iid]||tmr,
+      lead,days,daily:dl,orderToday:P.orderToday,oDay:P.oDay,arrive:P.arrive,nextArrive:P.nextArrive,runOut};
   }).filter(Boolean).sort((a,b)=>String(a.it.sup||'').localeCompare(String(b.it.sup||''),'th')||dispName(a.it).localeCompare(dispName(b.it),'th'));}
 async function kpBuyWizard(){
   if(!canKitchen())return;
@@ -5102,32 +5169,43 @@ async function taskBuy(){
   kpBuyRows().filter(r=>r.short>0).forEach(r=>g(r.it.sup||'').rows.push(r));
   S.pos.filter(p=>p.status==='draft'&&(S.poItems[p.id]||[]).length).forEach(p=>{g(p.sup||'').po=p;});
   TB=by;
-  let h=head;const ks=Object.keys(by).sort((a,b)=>a.localeCompare(b,'th'));
-  if(!ks.length)h+=tkEmpty(t('sx_buy_none'));
+  const ks=Object.keys(by).sort((a,b)=>a.localeCompare(b,'th'));
   ks.forEach(k=>{const x=by[k];
-    const lines=x.po?(S.poItems[x.po.id]||[]).map(l=>esc(l.name)+' <b>'+fmtQ(l.qty)+' '+esc(trUnit(l.unit||''))+'</b>')
-      :x.rows.map(r=>esc(dispName(r.it))+' <b>'+r.buyN+' '+esc(trUnit(r.it.buy_unit||r.it.unit||''))+'</b>');
-    const hasG=!!supLineId(k);
-    h+='<div class="tkcard col"><div class="tkname">🏷️ '+esc(k||t('sx_no_sup'))+'</div>'+
-      '<div class="tklist">'+lines.map(s=>'<div>• '+s+'</div>').join('')+'</div>'+
-      (k?'<div class="tkbtns"><button class="btn big ok" data-sup="'+esc(k)+'" onclick="buySupGo(this.dataset.sup,false)">📤 '+t(hasG?'sx_buy_send':'sx_buy_open_line')+'</button>'+
-        '<button class="btn gh" data-sup="'+esc(k)+'" onclick="buySupGo(this.dataset.sup,true)">📋 '+t('kf_copy')+'</button></div>'
-       :'<div class="xs mut">'+t('sx_no_sup_hint')+'</div>')+
-      (k&&!hasG&&canKitchen()?'<button class="btn gh sm2 spsetl" data-sup="'+esc(k)+'" onclick="spOpenByName(this.dataset.sup,\'taskBuy()\')">💬 '+t('sp_set_line')+'</button>':'')+'</div>';});
+    x.today=!x.rows.length||x.rows.some(r=>r.orderToday);x.runOut=x.rows.some(r=>r.runOut);
+    x.oDay=x.rows.length?x.rows.map(r=>r.oDay).sort()[0]:bizTodayISO();
+    x.arrive=x.rows.length?x.rows.map(r=>r.arrive).sort()[0]:null;});
+  const now=ks.filter(k=>by[k].today||by[k].runOut),later=ks.filter(k=>!by[k].today&&!by[k].runOut);
+  let h=head;
+  if(!now.length)h+=tkEmpty(t('sx_buy_none'));
+  now.forEach(k=>{h+=buyCardHtml(k,by[k]);});
+  if(later.length)h+='<details class="tdmore sdlater"><summary>📅 '+t('sd_later')+' ('+later.length+')</summary>'+later.map(k=>buyCardHtml(k,by[k])).join('')+'</details>';
   const sent=S.pos.filter(p=>p.status==='ordered'&&p.d_order===bizTodayISO());
   if(sent.length){h+='<div class="tksec">✅ '+t('sx_buy_sent')+'</div>';
     sent.forEach(p=>{h+='<div class="tkcard done small"><div class="tkmid"><div class="tkname">🏷️ '+esc(p.sup||'-')+'</div><div>'+t('sx_items_n',{n:(S.poItems[p.id]||[]).length})+'</div></div><span class="tkgo">✓</span></div>';});}
   openTask(h);}
+function buyCardHtml(k,x){
+  const lines=x.po?(S.poItems[x.po.id]||[]).map(l=>esc(l.name)+' <b>'+fmtQ(l.qty)+' '+esc(trUnit(l.unit||''))+'</b>')
+    :x.rows.map(r=>esc(dispName(r.it))+' <b>'+r.buyN+' '+esc(trUnit(r.it.buy_unit||r.it.unit||''))+'</b>');
+  const hasG=!!supLineId(k),s=supByName(k);
+  return '<div class="tkcard col'+(x.runOut&&!x.today?' warn':'')+'"><div class="tkname">🏷️ '+esc(k||t('sx_no_sup'))+'</div>'+
+    (k&&s?'<div class="xs mut">'+supSchedLine(s)+'</div>':'')+
+    (!x.today?'<div class="sdnext'+(x.runOut?' bad':'')+'">'+(x.runOut?'⚠ '+t('sd_runout',{d:shortDate(x.oDay)}):'📅 '+t('sd_next',{d:shortDate(x.oDay)}))+'</div>'
+      :(x.arrive&&x.rows.length?'<div class="xs mut">🚚 '+t('sd_arrive',{d:shortDate(x.arrive)})+' · '+t('sd_cover',{d:shortDate(addDays(x.rows.map(r=>r.nextArrive).sort()[0],-1))})+'</div>':''))+
+    '<div class="tklist">'+lines.map(t2=>'<div>• '+t2+'</div>').join('')+'</div>'+
+    (k?'<div class="tkbtns"><button class="btn big ok" data-sup="'+esc(k)+'" onclick="buySupGo(this.dataset.sup,false)">📤 '+t(hasG?'sx_buy_send':'sx_buy_open_line')+'</button>'+
+      '<button class="btn gh" data-sup="'+esc(k)+'" onclick="buySupGo(this.dataset.sup,true)">📋 '+t('kf_copy')+'</button></div>'
+     :'<div class="xs mut">'+t('sx_no_sup_hint')+'</div>')+
+    (k&&!hasG&&canKitchen()?'<button class="btn gh sm2 spsetl" data-sup="'+esc(k)+'" onclick="spOpenByName(this.dataset.sup,\'taskBuy()\')">💬 '+t('sp_set_line')+'</button>':'')+'</div>';}
 let TB_BUSY=false;
 function buyText(x){ // ข้อความใบสั่งจากรายการบนจอ (ไม่ต้องรอบันทึก) — แบบเดียวกับ poText
   if(x.po)return poText(x.po);
-  const due=x.rows.map(r=>r.produceD).sort()[0];
+  const due=x.rows.map(r=>r.arrive||r.produceD).sort()[0];
   const L=['🛒 จริงใจหมูกระทะ','🏭 ครัวกลาง','🏷️ '+(x.sup||'-'),'📅 สั่งวันที่ '+thDate(bizTodayISO()),'🚚 ส่งวันที่ '+(due?thDate(due):'-'),''];
   x.rows.forEach(r=>L.push('• '+r.it.name+' — '+fmtQ(r.buyN)+' '+(r.it.buy_unit||r.it.unit||'')));
   L.push('','รวม '+x.rows.length+' รายการ');return L.join('\n');}
 async function buyEnsurePo(x){ // ยังไม่มีใบสั่ง → ทำใบสั่งของร้านนี้ (เหมือนปุ่มสร้างใบสั่งซื้อเดิม)
   if(x.po||!x.rows.length)return x.po;
-  const po={id:uid('po'),po_no:nextPoNo(),sup:x.sup,d_order:bizTodayISO(),d_due:x.rows.map(r=>r.produceD).sort()[0],
+  const po={id:uid('po'),po_no:nextPoNo(),sup:x.sup,d_order:bizTodayISO(),d_due:x.rows.map(r=>r.arrive||r.produceD).sort()[0],
     order_by:x.rows.map(r=>r.orderBy).sort()[0],status:'draft',by_name:S.user.name,note:t('pr_from_plan')};
   await insFallback('ck_pos',[po],['order_by']);
   const lines=x.rows.map((r,i)=>({po_id:po.id,item_id:r.it.id,name:r.it.name,unit:r.it.buy_unit||r.it.unit||'',qty:r.buyN,price:r.it.price,sort:i}));
@@ -5238,7 +5316,8 @@ RENDER.sups=function(el){
     return '<button class="tkcard spcard" data-id="'+esc(s.id)+'" data-n="'+esc(supKey(s.name))+'" onclick="supPage(this.dataset.id)">'+
       '<div class="mthumb">🏷️</div><div class="tkmid"><div class="tkname">'+esc(s.name)+'</div>'+
       '<div class="'+(g?'spok':'spbad')+'">'+(g?'💬 '+esc(lgName(g)):'⚠ '+t('sp_no_line'))+'</div>'+
-      '<div class="xs mut">🥬 '+t('sp_items_n',{n})+' · '+(num(s.credit_days)>0?t('kf_pay_credit')+' '+num(s.credit_days)+' '+t('kf_days'):t('kf_pay_now'))+'</div></div>'+
+      '<div class="xs mut">🥬 '+t('sp_items_n',{n})+' · '+(num(s.credit_days)>0?t('kf_pay_credit')+' '+num(s.credit_days)+' '+t('kf_days'):t('kf_pay_now'))+'</div>'+
+      '<div class="xs mut">'+supSchedLine(s)+'</div></div>'+
       '<span class="tkgo">›</span></button>';}).join('')+'</div>';
   if(orphans.length){h+='<div class="tksec">🏷️ '+t('sp_orphans')+'</div>';
     orphans.forEach(n=>{h+='<div class="tkcard small"><div class="mthumb">🏷️</div><div class="tkmid"><div class="tkname">'+esc(n)+'</div>'+
@@ -5311,7 +5390,8 @@ function paintSp(){
     '<button class="btn gh tkother" style="width:100%" onclick="spNewItem()">＋ '+t('sp_new_item')+'</button>';
   h+='<div class="tksec">📝 '+t('sp_info')+'</div><div class="spinfo">'+
     (s.phone?'<div>📞 <a href="tel:'+esc(String(s.phone).replace(/[^0-9+]/g,''))+'">'+esc(s.phone)+'</a></div>':'')+
-    '<div>🚚 '+t('it_lead')+' '+(num(s.lead_days)||1)+' '+t('kf_days')+'</div>'+
+    '<div>📅 '+t('sd_days')+': <b>'+esc(supDaysTxt(s))+'</b></div>'+
+    '<div>🚚 '+t('sd_wait_n',{n:supLeadOf(s)})+'</div>'+
     '<div>💳 '+(num(s.credit_days)>0?t('kf_pay_credit')+' '+num(s.credit_days)+' '+t('kf_days'):t('kf_pay_now'))+'</div>'+
     (s.note?'<div>📝 '+esc(s.note)+'</div>':'')+'</div>';
   if(can)h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="spEditInfo()">✎ '+t('sp_edit_info')+'</button>';
@@ -5394,6 +5474,190 @@ function methodHtml(r,b,secCls){
     '<div class="tmsteps">'+st.map(x=>'<div class="tmstep'+(x.tip?' tip':'')+'"><span class="n">'+(x.tip?'💡':(++n))+'</span><span>'+esc(x.tx)+'</span></div>').join('')+'</div>';}
 const MT_I18N={"th": {"mn_method": "วิธีทำ (1 บรรทัด = 1 ขั้น)", "mn_method_ph": "เช่น\nใส่ไข่ 10 ฟองลงในเครื่อง\nใส่น้ำตาล แล้วตีให้เข้ากัน\nอบไฟ 180 องศา 55 นาที", "sx_method": "วิธีทำ", "sx_method_scale": "ตัวเลขในวิธีทำเป็นของ 1 รอบ ({y}) — วันนี้ใช้จำนวนตาม \"ส่วนผสม\" ด้านบน"}, "en": {"mn_method": "Method (1 line = 1 step)", "mn_method_ph": "e.g.\nPut 10 eggs in the mixer\nAdd sugar and beat well\nBake at 180°C for 55 min", "sx_method": "How to make", "sx_method_scale": "Numbers in the steps are for 1 batch ({y}) — today use the amounts under \"Ingredients\" above"}, "lo": {"mn_method": "ວິທີເຮັດ (1 ແຖວ = 1 ຂັ້ນ)", "mn_method_ph": "ເຊັ່ນ\nໃສ່ໄຂ່ 10 ໜ່ວຍລົງໃນເຄື່ອງ\nໃສ່ນ້ຳຕານ ແລ້ວຕີໃຫ້ເຂົ້າກັນ\nອົບໄຟ 180 ອົງສາ 55 ນາທີ", "sx_method": "ວິທີເຮັດ", "sx_method_scale": "ຕົວເລກໃນວິທີເຮັດແມ່ນຂອງ 1 ຮອບ ({y}) — ມື້ນີ້ໃຊ້ຈຳນວນຕາມ \"ສ່ວນປະສົມ\" ຂ້າງເທິງ"}, "my": {"mn_method": "ပြုလုပ်နည်း (1 ကြောင်း = 1 အဆင့်)", "mn_method_ph": "ဥပမာ\nကြက်ဥ 10 လုံးကို စက်ထဲထည့်ပါ\nသကြားထည့်ပြီး ရောမွှေပါ\n180 ဒီဂရီ 55 မိနစ် ဖုတ်ပါ", "sx_method": "ပြုလုပ်နည်း", "sx_method_scale": "အဆင့်များထဲရှိ ကိန်းဂဏန်းများသည် 1 ကြိမ်စာ ({y}) ဖြစ်သည် — ယနေ့ အထက်ရှိ \"ပါဝင်ပစ္စည်း\" ပမာဏကို သုံးပါ"}};
 ['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],MT_I18N[l]));   // ข้อความวิธีทำ
+
+/* ============================================================
+   📅 วันสั่งของ + วันรอของ ของแต่ละร้าน (เจ้าของสั่ง 2026-10-06 "บางซัพจะต้องกำหนดวันสั่งด้วย และวันรอรับของ")
+   ck_sups.order_days = วันที่สั่งได้ 0=อา…6=ส (ว่าง = ทุกวัน) · ck_sups.lead_days = สั่งแล้วรอกี่วันของมา
+   วันนี้เป็นวันสั่ง = สั่งให้พอใช้ถึงวันก่อนที่ของรอบถัดไปจะมา · ยังไม่ถึง = บอกวันสั่งรอบหน้า + เตือนถ้าของจะหมดก่อนของมา
+   ============================================================ */
+function wdNames(){return (I18N[LANG]&&I18N[LANG].wd)||I18N.th.wd;}
+function wdOf(ds){const p=String(ds).split('-').map(Number);return new Date(p[0],p[1]-1,p[2]).getDay();}
+function dayDiff(a,b){const pa=String(a).split('-').map(Number),pb=String(b).split('-').map(Number);
+  return Math.round((new Date(pb[0],pb[1]-1,pb[2])-new Date(pa[0],pa[1]-1,pa[2]))/864e5);}
+function supDaysOf(s){return [...new Set((s&&Array.isArray(s.order_days)?s.order_days:[]).map(Number))].filter(d=>Number.isInteger(d)&&d>=0&&d<=6).sort();}
+function supLeadOf(s){const v=s&&s.lead_days;return (v==null||String(v).trim()==='')?1:Math.max(0,parseInt(v,10)||0);}
+function canOrderOn(days,ds){return !days.length||days.includes(wdOf(ds));}
+function nextOrderDay(days,ds){for(let i=1;i<=14;i++){const d=addDays(ds,i);if(canOrderOn(days,d))return d;}return addDays(ds,1);}
+function supPlanOf(name,lead,today){ // วันสั่ง · วันของมา · วันของรอบถัดไปมา
+  const days=supDaysOf(supByName(name));
+  const oDay=canOrderOn(days,today)?today:nextOrderDay(days,today);
+  return {days,oDay,orderToday:oDay===today,arrive:addDays(oDay,lead),nextArrive:addDays(nextOrderDay(days,oDay),lead)};}
+function supDaysTxt(s){const d=supDaysOf(s);if(!d.length)return t('sd_every');const W=wdNames();return d.map(x=>W[x]).join(' · ');}
+function shortDate(ds){const p=String(ds).split('-').map(Number);const L=I18N[LANG]||I18N.th;
+  return wdNames()[wdOf(ds)]+' '+p[2]+' '+((L.mo||I18N.th.mo)[p[1]-1]);}
+function supSchedLine(s){return '📅 '+t('sd_days')+': '+esc(supDaysTxt(s))+' · 🚚 '+t('sd_wait_n',{n:supLeadOf(s)});}
+
+/* ============================================================
+   📋 นับสต๊อกเป็นหน่วยของสินค้า (เจ้าของสั่ง 2026-10-06: "น้ำปลา ขวดละ 1500 มล. แต่เวลานับจะนับเป็นชิ้น เป็นขวด เป็นแกลลอน"
+   + "อยากให้แยกเป็นหมวดหมู่") — ck_items.count_unit (ว่าง = ระบบเลือก: ภาชนะเล็กสุดที่รู้ขนาด เช่น ขวด ก่อน ลัง)
+   ============================================================ */
+const WV_UNITS=['กก.','ขีด','กรัม','ลิตร','มล.'];   // หน่วยชั่ง/ตวง
+function countUnitAuto(it){
+  const base=(it&&it.unit)||'';
+  if(base&&!WV_UNITS.includes(base))return base;   // นับเป็นชิ้นอยู่แล้ว (ฟอง ขวด ถุง)
+  const c=[];if(it.buy_unit&&it.buy_unit!==base&&num(it.buy_qty)>1)c.push([it.buy_unit,num(it.buy_qty)]);
+  itemPacks(it).forEach(p=>c.push([p.u,num(p.q)]));
+  const best=c.filter(x=>x[1]>1&&!WV_UNITS.includes(x[0])).sort((a,b)=>a[1]-b[1])[0];
+  if(best)return best[0];
+  return base==='กรัม'?'กก.':base==='มล.'?'ลิตร':base;}
+function countUnitOf(it){if(!it)return '';
+  if(it.count_unit&&unitFactor(it,it.count_unit)!=null)return it.count_unit;
+  const u=countUnitAuto(it);return unitFactor(it,u)!=null?u:(it.unit||'');}
+function allItemCats(){const out=ITEM_CATS.slice();S.items.forEach(i=>{const c=i.cat||'อื่นๆ';if(!out.includes(c))out.push(c);});return out;}
+function catIc(c){return ITEM_CAT_IC[c]||'🧺';}
+
+/* ---------- ⚙️ จัดหมวด & หน่วยนับ (ตั้งครั้งเดียว ทีละหลายอย่าง) ---------- */
+let CU_Q='';
+function cuSetup(){if(!canKitchen())return;paintCu();}
+function paintCu(keep){
+  const box=document.getElementById('modalBox');const st=keep&&box?box.scrollTop:0;
+  const cats=allItemCats();
+  let h=tkHead('⚙️ '+t('cu_setup'),t('cu_setup_hint'),"closeModal();show('stock')");
+  if(S.scSql===false)h+='<div class="badbox">'+t('cu_need_sql')+'</div>';
+  h+='<input id="cuQ" placeholder="🔎 '+t('search')+'" value="'+esc(CU_Q)+'" oninput="CU_Q=this.value;cuFilter()" style="margin-bottom:10px">';
+  cats.forEach(c=>{const list=S.items.filter(i=>i.active!==false&&(i.cat||'อื่นๆ')===c).sort((a,b)=>dispName(a).localeCompare(dispName(b),'th'));
+    if(!list.length)return;
+    h+='<div class="tksec cusec">'+catIc(c)+' '+esc(trCat(c))+' <span class="xs mut">('+list.length+')</span></div>'+list.map(i=>cuRow(i,cats)).join('');});
+  openTask(h);cuFilter();
+  const b2=document.getElementById('modalBox');if(b2&&st)b2.scrollTop=st;}
+function cuRow(i,cats){
+  const cu=countUnitOf(i),base=i.unit||'';
+  const auto=countUnitOf(Object.assign({},i,{count_unit:null}));
+  return '<div class="curow" data-n="'+esc(supKey(dispName(i)+' '+i.name))+'">'+thumbHtml(i,catIc(i.cat))+
+    '<div class="grow"><div class="b">'+esc(dispName(i))+'</div><div class="cugrid">'+
+    '<label><span>'+t('it_cat')+'</span><select data-id="'+esc(i.id)+'" onchange="cuSetCat(this)">'+
+      cats.map(c=>'<option value="'+esc(c)+'"'+(c===(i.cat||'อื่นๆ')?' selected':'')+'>'+esc(trCat(c))+'</option>').join('')+
+      '<option value="__new">＋ '+esc(t('cu_new_cat'))+'</option></select></label>'+
+    '<label><span>'+t('cu_lb')+'</span><select data-id="'+esc(i.id)+'" onchange="cuSetUnit(this)"'+(S.scSql===false?' disabled':'')+'>'+
+      '<option value=""'+(!i.count_unit?' selected':'')+'>'+esc(t('cu_auto',{u:trUnit(auto)}))+'</option>'+
+      itemUnits(i).map(u=>'<option value="'+esc(u)+'"'+(i.count_unit===u?' selected':'')+'>'+esc(trUnit(u))+'</option>').join('')+
+      '<option value="__new">＋ '+esc(t('cu_new_unit'))+'</option></select></label></div>'+
+    '<div class="xs mut">'+(cu!==base?esc(unitEqTxt(i,cu))+' · ':'')+esc(t('cu_base',{u:trUnit(base)}))+'</div></div></div>';}
+function cuFilter(){const q=supKey(CU_Q);
+  document.querySelectorAll('#modalBox .curow').forEach(r=>{r.style.display=!q||r.dataset.n.indexOf(q)>=0?'':'none';});}
+async function cuSetCat(sel){
+  const it=itemById(sel.dataset.id);if(!it||!canKitchen())return;
+  let v=sel.value;
+  if(v==='__new'){v=String(prompt(t('cu_new_cat_q'))||'').trim();if(!v){paintCu(true);return;}}
+  if(v===(it.cat||'อื่นๆ'))return;
+  await once(async()=>{
+    try{await dbi(()=>sb.from('ck_items').update({cat:v}).eq('id',it.id));}catch(e){paintCu(true);return;}
+    it.cat=v;toast('✅ '+t('cu_saved'));paintCu(true);});}
+async function countUnitSave(it,u){ // false = ยังไม่ได้รัน SQL (ไม่มีคอลัมน์ count_unit)
+  const r=await sb.from('ck_items').update({count_unit:u||null}).eq('id',it.id);
+  if(r&&r.error){if(/count_unit/.test(String(r.error.message||r.error))){S.scSql=false;toast(t('cu_need_sql'),true);return false;}
+    toast(t('sv_err')+(r.error.message||r.error),true);return false;}
+  it.count_unit=u||null;return true;}
+async function cuSetUnit(sel){
+  const it=itemById(sel.dataset.id);if(!it||!canKitchen())return;
+  let v=sel.value;
+  await once(async()=>{
+    if(v==='__new'){
+      const u=String(prompt(t('cu_new_unit_q'))||'').trim();if(!u){paintCu(true);return;}
+      if(unitFactor(it,u)==null){
+        const q=num(String(prompt(t('cu_size_q',{u,b:trUnit(it.unit||'')}))||'').replace(/,/g,''));
+        if(!(q>0)){toast(t('need_qty'),true);paintCu(true);return;}
+        try{await itemPackSet(it,u,q);}catch(e){paintCu(true);return;}
+        unitRegister(u).catch(()=>{});}
+      v=u;}
+    if(await countUnitSave(it,v))toast('✅ '+t('cu_saved'));
+    paintCu(true);});}
+
+/* ============================================================
+   📒 สมุดสต๊อก — ยกมา + รับเข้า − ใช้ = ควรเหลือ · เทียบกับที่นับได้ (เจ้าของสั่ง 2026-10-06
+   "อย่าลืมเก็บข้อมูลพวก รับของ+สต๊อกเดิม-ใช้=สต๊อก") — คิดจาก ck_moves ที่เก็บทุกความเคลื่อนไหวอยู่แล้ว
+   คงเหลือ ณ วันสุดท้าย = ยอดตอนนี้ − ความเคลื่อนไหวหลังวันนั้น · ยกมา = คงเหลือ − ความเคลื่อนไหวในช่วง
+   ============================================================ */
+let LG={range:'7d',from:'',to:'',q:'',cat:'',rows:null,a:'',b:''};
+function lgRange(){const today=bizTodayISO();
+  if(LG.range==='today')return [today,today];
+  if(LG.range==='month')return [today.slice(0,8)+'01',today];
+  if(LG.range==='custom'&&LG.from&&LG.to)return LG.from<=LG.to?[LG.from,LG.to]:[LG.to,LG.from];
+  return [addDays(today,-6),today];}
+async function ledgerOpen(){LG.range=LS.get('jjck_lgr','7d')||'7d';LG.rows=null;await ledgerLoad();}
+async function ledgerLoad(){
+  const [a,b]=lgRange();LG.a=a;LG.b=b;
+  openTask(tkHead('📒 '+t('lg_title'),t('lg_hint'),"closeModal();show(S.tab)")+'<div class="spin"></div>');
+  let mv=[];
+  try{mv=await dbi(()=>sbAll(()=>sb.from('ck_moves').select('d,kind,item_kind,ref_id,qty').gte('d',a).order('d').order('id'),200).then(data=>({data})));}
+  catch(e){mv=null;}
+  LG.rows=mv?lgCompute(mv,a,b):[];LG.err=!mv;paintLg();}
+function lgCompute(mv,a,b){
+  const R={};
+  const g=(k,id)=>{const key=k+'|'+id;if(R[key])return R[key];const o=k==='recipe'?recipeById(id):itemById(id);if(!o)return null;
+    return (R[key]={k,o,after:0,rec:0,use:0,made:0,send:0,adj:0,oth:0});};
+  S.items.forEach(i=>g('item',i.id));S.recipes.forEach(r=>g('recipe',r.id));
+  mv.forEach(m=>{const x=g(m.item_kind==='recipe'?'recipe':'item',m.ref_id);if(!x||m.d<a)return;const q=num(m.qty);
+    if(m.d>b){x.after+=q;return;}
+    if(m.kind==='buy')x.rec+=q;else if(m.kind==='use')x.use-=q;else if(m.kind==='made')x.made+=q;
+    else if(m.kind==='send')x.send-=q;else if(m.kind==='adjust')x.adj+=q;else x.oth+=q;});
+  const z=v=>Math.abs(v)<1e-9;
+  return Object.values(R).map(x=>{x.close=rnd4(num(x.o.qty)-x.after);
+    x.expect=rnd4(x.close-x.adj);x.open=rnd4(x.expect-(x.rec-x.use+x.made-x.send+x.oth));return x;})
+    .filter(x=>!(z(x.open)&&z(x.rec)&&z(x.use)&&z(x.made)&&z(x.send)&&z(x.adj)&&z(x.oth)&&z(x.close)));}
+function lgUnit(x){if(x.k==='recipe')return {u:x.o.yield_unit||'',f:1};const u=countUnitOf(x.o);return {u,f:unitFactor(x.o,u)||1};}
+function lgCat(x){return x.k==='recipe'?'__menu':(x.o.cat||'อื่นๆ');}
+function lgRowHtml(x){
+  const U=lgUnit(x),v=n=>fmtQ(rnd2(n/U.f)),u=esc(trUnit(U.u));
+  const parts=['<span class="lgc"><small>'+t('lg_open')+'</small><b>'+v(x.open)+'</b></span>'];
+  if(x.k==='item'){parts.push('<span class="lgc in"><small>+ '+t('lg_rec')+'</small><b>'+v(x.rec)+'</b></span>');
+    parts.push('<span class="lgc out"><small>− '+t('lg_use')+'</small><b>'+v(x.use)+'</b></span>');}
+  else{parts.push('<span class="lgc in"><small>+ '+t('lg_made')+'</small><b>'+v(x.made)+'</b></span>');
+    parts.push('<span class="lgc out"><small>− '+t('lg_send')+'</small><b>'+v(x.send)+'</b></span>');
+    if(Math.abs(x.use)>1e-9)parts.push('<span class="lgc out"><small>− '+t('lg_use')+'</small><b>'+v(x.use)+'</b></span>');}
+  if(Math.abs(x.oth)>1e-9)parts.push('<span class="lgc"><small>± '+t('lg_oth')+'</small><b>'+v(x.oth)+'</b></span>');
+  parts.push('<span class="lgc eq"><small>= '+t('lg_expect')+'</small><b>'+v(x.expect)+'</b></span>');
+  const adj=rnd2(x.adj/U.f);
+  return '<div class="lgrow" data-n="'+esc(supKey(dispName(x.o)+' '+x.o.name))+'"><div class="lgname">'+esc(dispName(x.o))+' <span class="xs mut">('+u+')</span></div>'+
+    '<div class="lgeq">'+parts.join('')+'</div>'+
+    (Math.abs(adj)>1e-9?'<div class="lgadj '+(adj<0?'bad':'ok')+'">📋 '+t('lg_count')+' '+v(x.close)+' · '+(adj<0?t('lg_short',{v:fmtQ(-adj)}):t('lg_over',{v:fmtQ(adj)}))+'</div>'
+      :'<div class="xs mut">'+t('lg_close')+' '+v(x.close)+'</div>')+'</div>';}
+function paintLg(){
+  const rows=LG.rows||[];const q=supKey(LG.q);
+  const cats=allItemCats().concat(['__menu']).filter(c=>rows.some(x=>lgCat(x)===c));
+  if(LG.cat&&!cats.includes(LG.cat))LG.cat='';
+  let h=tkHead('📒 '+t('lg_title'),t('lg_hint'),"closeModal();show(S.tab)");
+  h+='<div class="catbar lgr">'+['today','7d','month','custom'].map(k=>'<button class="'+(LG.range===k?'on':'')+'" data-r="'+k+'" onclick="lgSetRange(this.dataset.r)">'+t('lg_'+k)+'</button>').join('')+'</div>';
+  if(LG.range==='custom')h+='<div class="grid2" style="margin-bottom:8px"><input type="date" id="lgF" value="'+esc(LG.from||LG.a)+'" onchange="LG.from=this.value;ledgerLoad()">'+
+    '<input type="date" id="lgT" value="'+esc(LG.to||LG.b)+'" onchange="LG.to=this.value;ledgerLoad()"></div>';
+  h+='<div class="xs mut" style="margin-bottom:8px">📅 '+esc(dispDate(LG.a))+(LG.a!==LG.b?' – '+esc(dispDate(LG.b)):'')+'</div>';
+  if(LG.err)h+='<div class="badbox">'+t('sv_err')+'</div>';
+  if(cats.length>1)h+='<div class="catbar">'+'<button class="'+(LG.cat===''?'on':'')+'" data-c="" onclick="LG.cat=this.dataset.c;paintLg()">'+t('all')+'</button>'+
+    cats.map(c=>'<button class="'+(LG.cat===c?'on':'')+'" data-c="'+esc(c)+'" onclick="LG.cat=this.dataset.c;paintLg()">'+(c==='__menu'?'🍲 '+t('skc_menus'):catIc(c)+' '+esc(trCat(c)))+'</button>').join('')+'</div>';
+  h+='<input placeholder="🔎 '+t('search')+'" value="'+esc(LG.q)+'" oninput="LG.q=this.value;lgFilter()" style="margin-bottom:8px">';
+  const show1=x=>!LG.cat||lgCat(x)===LG.cat;
+  const list=rows.filter(show1);
+  if(!list.length)h+=tkEmpty(t('lg_none'));
+  cats.filter(c=>!LG.cat||c===LG.cat).forEach(c=>{const L=list.filter(x=>lgCat(x)===c).sort((a,b)=>dispName(a.o).localeCompare(dispName(b.o),'th'));
+    if(!L.length)return;
+    h+='<div class="tksec">'+(c==='__menu'?'🍲 '+t('skc_menus'):catIc(c)+' '+esc(trCat(c)))+'</div>'+L.map(lgRowHtml).join('');});
+  if(list.length)h+='<button class="btn gh" style="width:100%;margin-top:10px" onclick="lgCsvDl()">⬇ '+t('lg_csv')+'</button>';
+  openTask(h);lgFilter();}
+function lgFilter(){const q=supKey(LG.q);document.querySelectorAll('#modalBox .lgrow').forEach(r=>{r.style.display=!q||r.dataset.n.indexOf(q)>=0?'':'none';});}
+function lgSetRange(r){LG.range=r;LS.set('jjck_lgr',r);if(r==='custom'&&!LG.from){LG.from=LG.a;LG.to=LG.b;}ledgerLoad();}
+function lgCsv(){ // ภาษาไทยเสมอ (ไฟล์ให้บัญชี) · หน่วยเดียวกับที่นับ
+  const cell=v=>{const s=String(v==null?'':v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const L=[['หมวด','ชื่อ','หน่วย','ยกมา','รับเข้า','ผลิตได้','ใช้','ส่งสาขา','อื่นๆ','ควรเหลือ','นับ/ปรับ (+เกิน −ขาด)','คงเหลือ'].join(',')];
+  (LG.rows||[]).filter(x=>!LG.cat||lgCat(x)===LG.cat).sort((a,b)=>String(lgCat(a)).localeCompare(String(lgCat(b)),'th')||String(a.o.name).localeCompare(String(b.o.name),'th'))
+    .forEach(x=>{const U=lgUnit(x),v=n=>rnd2(n/U.f);
+      L.push([x.k==='recipe'?'ของที่ทำเสร็จ':(x.o.cat||'อื่นๆ'),x.o.name,U.u,v(x.open),v(x.rec),v(x.made),v(x.use),v(x.send),v(x.oth),v(x.expect),v(x.adj),v(x.close)].map(cell).join(','));});
+  return '﻿'+L.join('\r\n');}
+function lgCsvDl(){
+  const blob=new Blob([lgCsv()],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='สมุดสต๊อก_'+LG.a+'_'+LG.b+'.csv';document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);}
+const SC_I18N={"th": {"sd_every": "ทุกวัน", "sd_days": "วันสั่ง", "sd_days_lb": "วันที่สั่งของร้านนี้ได้", "sd_days_hint": "แตะเลือกวัน · ไม่เลือกเลย = สั่งได้ทุกวัน", "sd_wait": "สั่งแล้วรอของกี่วัน", "sd_wait_hint": "0 = ของมาวันเดียวกัน · 1 = มาพรุ่งนี้ · 2 = มะรืน", "sd_wait_n": "รอของ {n} วัน", "sd_arrive": "ของมา {d}", "sd_next": "ยังไม่ถึงวันสั่ง — สั่งได้ {d}", "sd_runout": "ของจะหมดก่อนของมา! วันสั่งปกติคือ {d} — โทรสั่งด่วน", "sd_later": "ร้านที่ยังไม่ถึงวันสั่ง", "sd_cover": "สั่งให้พอใช้ถึง {d}", "sd_need_sql": "ต้องรัน SQL jjmk_kitchen_sched_count.sql ก่อน ถึงจะเก็บวันสั่งได้", "cu_lb": "นับสต๊อกเป็น", "cu_auto": "อัตโนมัติ ({u})", "cu_hint": "เวลานับของ นับเป็นหน่วยนี้ (เช่น ขวด แกลลอน ชิ้น) ระบบแปลงเป็นหน่วยในสูตรให้เอง", "cu_setup": "จัดหมวด & หน่วยนับ", "cu_setup_hint": "ตั้งครั้งเดียว: ของแต่ละอย่างอยู่หมวดไหน และนับเป็นอะไร (ขวด ชิ้น แกลลอน)", "cu_new_cat": "หมวดใหม่…", "cu_new_cat_q": "ชื่อหมวดใหม่ (เช่น ซอส, ของแช่เย็น)", "cu_new_unit": "หน่วยอื่น…", "cu_new_unit_q": "นับเป็นอะไร? (เช่น ขวด แกลลอน กระปุก)", "cu_size_q": "1 {u} = กี่ {b}?", "cu_base": "ใช้ในสูตรเป็น {u}", "cu_saved": "บันทึกแล้ว", "cu_need_sql": "ต้องรัน SQL jjmk_kitchen_sched_count.sql ก่อน ถึงจะเลือกหน่วยนับได้ (ตอนนี้ระบบเลือกให้อัตโนมัติ)", "skc_menus": "ของที่ทำเสร็จ", "lg_title": "สมุดสต๊อก", "lg_hint": "ยกมา + รับเข้า − ใช้ = ควรเหลือ · เทียบกับที่นับได้", "lg_btn": "สมุดสต๊อก", "lg_open": "ยกมา", "lg_rec": "รับ", "lg_use": "ใช้", "lg_made": "ทำได้", "lg_send": "ส่งสาขา", "lg_oth": "อื่นๆ", "lg_expect": "ควรเหลือ", "lg_count": "นับได้", "lg_close": "คงเหลือ", "lg_short": "ขาด {v}", "lg_over": "เกิน {v}", "lg_today": "วันนี้", "lg_7d": "7 วัน", "lg_month": "เดือนนี้", "lg_custom": "เลือกวัน", "lg_none": "ช่วงนี้ไม่มีของเข้า-ออก", "lg_csv": "ดาวน์โหลดไฟล์ Excel (CSV)"}, "en": {"sd_every": "Every day", "sd_days": "Order days", "sd_days_lb": "Days this shop takes orders", "sd_days_hint": "Tap the days · none = any day", "sd_wait": "Days from order to delivery", "sd_wait_hint": "0 = same day · 1 = next day · 2 = in two days", "sd_wait_n": "Arrives in {n} days", "sd_arrive": "Arrives {d}", "sd_next": "Not an order day — next order {d}", "sd_runout": "Will run out before delivery! Usual order day is {d} — call to order now", "sd_later": "Shops not ordering today", "sd_cover": "Enough until {d}", "sd_need_sql": "Run SQL jjmk_kitchen_sched_count.sql first to save order days", "cu_lb": "Count stock in", "cu_auto": "Automatic ({u})", "cu_hint": "When counting, count in this unit (bottle, gallon, piece) — the system converts it for recipes", "cu_setup": "Groups & count units", "cu_setup_hint": "One-time setup: which group each item is in and what you count it in (bottle, piece, gallon)", "cu_new_cat": "New group…", "cu_new_cat_q": "New group name (e.g. Sauces, Chilled)", "cu_new_unit": "Other unit…", "cu_new_unit_q": "Count it in what? (e.g. bottle, gallon, jar)", "cu_size_q": "1 {u} = how many {b}?", "cu_base": "Recipes use {u}", "cu_saved": "Saved", "cu_need_sql": "Run SQL jjmk_kitchen_sched_count.sql first to choose count units (automatic for now)", "skc_menus": "Finished goods", "lg_title": "Stock ledger", "lg_hint": "Opening + received − used = expected · compared with the count", "lg_btn": "Stock ledger", "lg_open": "Opening", "lg_rec": "In", "lg_use": "Used", "lg_made": "Made", "lg_send": "Sent", "lg_oth": "Other", "lg_expect": "Expected", "lg_count": "Counted", "lg_close": "Closing", "lg_short": "Short {v}", "lg_over": "Over {v}", "lg_today": "Today", "lg_7d": "7 days", "lg_month": "This month", "lg_custom": "Pick dates", "lg_none": "No stock movement in this period", "lg_csv": "Download Excel (CSV)"}, "lo": {"sd_every": "ທຸກມື້", "sd_days": "ມື້ສັ່ງ", "sd_days_lb": "ມື້ທີ່ສັ່ງເຄື່ອງຮ້ານນີ້ໄດ້", "sd_days_hint": "ແຕະເລືອກມື້ · ບໍ່ເລືອກ = ສັ່ງໄດ້ທຸກມື້", "sd_wait": "ສັ່ງແລ້ວລໍເຄື່ອງຈັກມື້", "sd_wait_hint": "0 = ເຄື່ອງມາມື້ດຽວກັນ · 1 = ມາມື້ອື່ນ · 2 = ມື້ຮື", "sd_wait_n": "ລໍເຄື່ອງ {n} ມື້", "sd_arrive": "ເຄື່ອງມາ {d}", "sd_next": "ຍັງບໍ່ຮອດມື້ສັ່ງ — ສັ່ງໄດ້ {d}", "sd_runout": "ເຄື່ອງຈະໝົດກ່ອນເຄື່ອງມາ! ມື້ສັ່ງປົກກະຕິແມ່ນ {d} — ໂທສັ່ງດ່ວນ", "sd_later": "ຮ້ານທີ່ຍັງບໍ່ຮອດມື້ສັ່ງ", "sd_cover": "ສັ່ງໃຫ້ພໍໃຊ້ຮອດ {d}", "sd_need_sql": "ຕ້ອງລັນ SQL jjmk_kitchen_sched_count.sql ກ່ອນ ຈຶ່ງຈະເກັບມື້ສັ່ງໄດ້", "cu_lb": "ນັບສະຕັອກເປັນ", "cu_auto": "ອັດຕະໂນມັດ ({u})", "cu_hint": "ເວລານັບເຄື່ອງ ນັບເປັນຫົວໜ່ວຍນີ້ (ເຊັ່ນ ແກ້ວ ແກລອນ ຊິ້ນ) ລະບົບແປງໃຫ້ເອງ", "cu_setup": "ຈັດໝວດ & ຫົວໜ່ວຍນັບ", "cu_setup_hint": "ຕັ້ງຄັ້ງດຽວ: ເຄື່ອງແຕ່ລະຢ່າງຢູ່ໝວດໃດ ແລະ ນັບເປັນຫຍັງ (ແກ້ວ ຊິ້ນ ແກລອນ)", "cu_new_cat": "ໝວດໃໝ່…", "cu_new_cat_q": "ຊື່ໝວດໃໝ່ (ເຊັ່ນ ຊອດ, ເຄື່ອງແຊ່ເຢັນ)", "cu_new_unit": "ຫົວໜ່ວຍອື່ນ…", "cu_new_unit_q": "ນັບເປັນຫຍັງ? (ເຊັ່ນ ແກ້ວ ແກລອນ ກະປຸກ)", "cu_size_q": "1 {u} = ຈັກ {b}?", "cu_base": "ໃຊ້ໃນສູດເປັນ {u}", "cu_saved": "ບັນທຶກແລ້ວ", "cu_need_sql": "ຕ້ອງລັນ SQL jjmk_kitchen_sched_count.sql ກ່ອນ ຈຶ່ງຈະເລືອກຫົວໜ່ວຍນັບໄດ້ (ຕອນນີ້ລະບົບເລືອກໃຫ້)", "skc_menus": "ເຄື່ອງທີ່ເຮັດແລ້ວ", "lg_title": "ປຶ້ມສະຕັອກ", "lg_hint": "ຍົກມາ + ຮັບເຂົ້າ − ໃຊ້ = ຄວນເຫຼືອ · ທຽບກັບທີ່ນັບໄດ້", "lg_btn": "ປຶ້ມສະຕັອກ", "lg_open": "ຍົກມາ", "lg_rec": "ຮັບ", "lg_use": "ໃຊ້", "lg_made": "ເຮັດໄດ້", "lg_send": "ສົ່ງສາຂາ", "lg_oth": "ອື່ນໆ", "lg_expect": "ຄວນເຫຼືອ", "lg_count": "ນັບໄດ້", "lg_close": "ຄົງເຫຼືອ", "lg_short": "ຂາດ {v}", "lg_over": "ເກີນ {v}", "lg_today": "ມື້ນີ້", "lg_7d": "7 ມື້", "lg_month": "ເດືອນນີ້", "lg_custom": "ເລືອກມື້", "lg_none": "ຊ່ວງນີ້ບໍ່ມີເຄື່ອງເຂົ້າ-ອອກ", "lg_csv": "ດາວໂຫຼດໄຟລ໌ Excel (CSV)"}, "my": {"sd_every": "နေ့တိုင်း", "sd_days": "မှာနိုင်သည့်နေ့", "sd_days_lb": "ဤဆိုင်ကို မှာနိုင်သည့်နေ့များ", "sd_days_hint": "နေ့ကို နှိပ်ရွေးပါ · မရွေးလျှင် = နေ့တိုင်း မှာနိုင်", "sd_wait": "မှာပြီး ပစ္စည်းရောက်ရန် ရက်", "sd_wait_hint": "0 = တစ်နေ့တည်းရောက် · 1 = နောက်နေ့ · 2 = သန်ဘက်ခါ", "sd_wait_n": "{n} ရက်ကြာမှ ရောက်", "sd_arrive": "{d} ရောက်မည်", "sd_next": "ယနေ့ မှာနိုင်သည့်နေ့ မဟုတ်ပါ — {d} တွင် မှာပါ", "sd_runout": "ပစ္စည်း မရောက်ခင် ကုန်မည်! ပုံမှန်မှာသည့်နေ့ {d} — ချက်ချင်း ဖုန်းဆက်မှာပါ", "sd_later": "ယနေ့ မမှာရသေးသည့် ဆိုင်များ", "sd_cover": "{d} အထိ လုံလောက်အောင် မှာ", "sd_need_sql": "မှာသည့်နေ့ သိမ်းရန် SQL jjmk_kitchen_sched_count.sql ကို အရင် run ပါ", "cu_lb": "စတော့ ရေတွက်သည့်ယူနစ်", "cu_auto": "အလိုအလျောက် ({u})", "cu_hint": "ရေတွက်ရာတွင် ဤယူနစ်ဖြင့် ရေတွက်ပါ (ပုလင်း ဂါလံ ခု) — စနစ်က ဖော်မြူလာယူနစ်သို့ ပြောင်းပေးမည်", "cu_setup": "အုပ်စု & ရေတွက်ယူနစ်", "cu_setup_hint": "တစ်ကြိမ်သာ သတ်မှတ်ပါ — ပစ္စည်းတစ်ခုချင်း မည်သည့်အုပ်စု၊ မည်သည့်ယူနစ်ဖြင့် ရေတွက်မည် (ပုလင်း ခု ဂါလံ)", "cu_new_cat": "အုပ်စုအသစ်…", "cu_new_cat_q": "အုပ်စုအမည်အသစ် (ဥပမာ ဆော့စ်၊ အအေးခန်း)", "cu_new_unit": "အခြားယူနစ်…", "cu_new_unit_q": "ဘာဖြင့် ရေတွက်မလဲ? (ဥပမာ ပုလင်း ဂါလံ ဘူး)", "cu_size_q": "1 {u} = {b} ဘယ်လောက်?", "cu_base": "ဖော်မြူလာတွင် {u} ဖြင့်သုံး", "cu_saved": "သိမ်းပြီး", "cu_need_sql": "ရေတွက်ယူနစ် ရွေးရန် SQL jjmk_kitchen_sched_count.sql ကို အရင် run ပါ (လောလောဆယ် အလိုအလျောက်)", "skc_menus": "ပြီးစီးသည့် ပစ္စည်း", "lg_title": "စတော့စာအုပ်", "lg_hint": "အဖွင့် + ဝင် − သုံး = ကျန်သင့် · ရေတွက်သည်နှင့် နှိုင်းယှဉ်", "lg_btn": "စတော့စာအုပ်", "lg_open": "အဖွင့်", "lg_rec": "ဝင်", "lg_use": "သုံး", "lg_made": "ထုတ်", "lg_send": "ဆိုင်ခွဲပို့", "lg_oth": "အခြား", "lg_expect": "ကျန်သင့်", "lg_count": "ရေတွက်ရ", "lg_close": "လက်ကျန်", "lg_short": "{v} လို", "lg_over": "{v} ပို", "lg_today": "ယနေ့", "lg_7d": "7 ရက်", "lg_month": "ဤလ", "lg_custom": "ရက်ရွေး", "lg_none": "ဤကာလတွင် ဝင်/ထွက် မရှိ", "lg_csv": "Excel (CSV) ဒေါင်းလုဒ်"}};
+['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],SC_I18N[l]));   // วันสั่ง · หน่วยนับ · สมุดสต๊อก
 
 sbMoreSet(LS.get('jjck_sbmore',0)==1);
 
