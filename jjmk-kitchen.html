@@ -287,6 +287,7 @@ table.t tr.tap:hover{background:#FFF8F3}
 .imgzoom{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px}
 .imgzoom img{max-width:96vw;max-height:88vh;border-radius:14px}
 .hintbox{background:var(--gold-t);border:1.5px solid #E9D9A8;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
+.kfsteps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.kfs{display:flex;gap:8px;align-items:center;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:8px 10px;cursor:pointer;min-height:52px;font:inherit;color:var(--ink);min-width:0}.kfs.ok{background:var(--ok-t);border-color:#BFE3CE;color:#145C3B}.kfs.todo{background:#FFF4E5;border-color:#F2C27B}.kfs.wait{opacity:.7}.kfn{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:#fff;border:1.5px solid currentColor;font-size:13px}.kfl{display:flex;flex-direction:column;min-width:0}.kfl b{font-size:13px}.kfl small{font-size:11.5px;opacity:.8}.korow{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.korow .grow{min-width:0}.korow.off{opacity:.45}.kochk input,.brtick input{width:22px;height:22px;margin:0}.koq{width:84px;flex:none}.koq input{width:100%}.koU{flex:none}.brtick{flex:none;display:flex;align-items:center}.brline.ticked{background:#F0FAF4}.kfdet{border-top:1px solid var(--line);padding:4px 0}.kfdet summary{cursor:pointer;display:flex;gap:6px;align-items:center;padding:8px 0;flex-wrap:wrap}.kfdet summary .sp{margin-left:auto}@media(max-width:420px){.koq{width:68px}.kfsteps{grid-template-columns:1fr 1fr}}
 .qrline{display:flex;gap:6px;align-items:center;margin-bottom:6px}.qrline input{flex:1;min-width:0}.qrline select{flex:1.4;min-width:0}.qrline>span{flex:none;font-size:13px}.qrline .btn{flex:none}.qrdef{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:#FFF8E6;border:1.5px dashed #E8C66A;border-radius:12px;padding:8px 10px;margin:0 0 8px;font-size:13px}.qrdef>input{flex:1;min-width:70px;max-width:120px}.qrdef.col{display:block}.qrdef.col .qrline{margin:6px 0}.qrwarn{background:#FFF1F0;border:1.5px solid #F5C2BD;color:#9B1C12;border-radius:12px;padding:8px 12px;margin:8px 0;font-size:13px}.unsec{font-weight:700;font-size:13px;margin:14px 0 6px}.unchips{display:flex;flex-wrap:wrap;gap:6px}.unchips .chip{display:inline-flex;align-items:center;gap:4px}.unx{border:0;background:transparent;color:inherit;font-size:12px;padding:0 0 0 2px;cursor:pointer;min-height:0;line-height:1}
 .okbox{background:var(--ok-t);border:1.5px solid #BFE3CE;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
 .badbox{background:var(--bad-t);border:1.5px solid #F2C4C2;border-radius:12px;padding:10px 12px;margin:8px 0 10px;font-size:13px}
@@ -934,7 +935,7 @@ async function loadAll(){
     if(probe.error){if(MISSING_TBL(probe.error)){S.setupNeeded=true;return;}throw probe.error;}
     S.setupNeeded=false;
     const from90=addDays(todayStr(),-45);
-    const [it,sp,rc,bm,pl,po,poi,pr,od,odi,br,xc,un]=await Promise.all([
+    const [it,sp,rc,bm,pl,po,poi,pr,od,odi,br,xc,un,ks,bl]=await Promise.all([
       sbAll(()=>sb.from('ck_items').select('*').is('deleted_at',null).order('sort').order('name').order('id')),
       sbAll(()=>sb.from('ck_sups').select('*').order('sort').order('name').order('id')),
       sbAll(()=>sb.from('ck_recipes').select('*').is('deleted_at',null).order('sort').order('name').order('id')),
@@ -951,7 +952,11 @@ async function loadAll(){
         .then(r=>(r&&r.data&&Array.isArray(r.data.value))?r.data.value:[]).catch(()=>[]),
       // หน่วยที่เพิ่มเอง + ตัวแปลงหน่วย (ck_settings key=units)
       sb.from('ck_settings').select('value').eq('key','units').maybeSingle()
-        .then(r=>(r&&r.data&&r.data.value&&typeof r.data.value==='object')?r.data.value:null).catch(()=>null)
+        .then(r=>(r&&r.data&&r.data.value&&typeof r.data.value==='object')?r.data.value:null).catch(()=>null),
+      // flow ประจำวัน: ค่าตั้งการผลิต/ราคาขายสาขา + การล็อกแก้ไข + บิลซัพ (ยังไม่รัน SQL = ข้ามไป)
+      sb.from('ck_settings').select('key,value').in('key',['kplan','editlock']).then(r=>(r&&r.data)||[]).catch(()=>[]),
+      sb.from('ck_bills').select('*').or('d.gte.'+from90+',paid_at.is.null').order('d',{ascending:false}).limit(2000)
+        .then(r=>{if(r&&r.error){S.billsOk=MISSING_TBL(r.error)?false:S.billsOk;return [];}S.billsOk=true;return (r&&r.data)||[];}).catch(()=>[])
     ]);
     S.items=it;S.sups=sp;S.recipes=rc;S.plans=pl;S.pos=po;S.prods=pr;S.orders=od.filter(o=>inBr(o.branch));   // เห็นเฉพาะสาขา
     S.boms={};bm.forEach(l=>{(S.boms[l.recipe_id]=S.boms[l.recipe_id]||[]).push(l);});
@@ -962,6 +967,8 @@ async function loadAll(){
     S.branches=brScoped()?S.branchesAll.filter(b=>inBr(b.code)&&!b.is_central):S.branchesAll;
     S.expCats=(xc||[]).filter(c=>c&&typeof c.n==='string'&&c.n.trim());
     S.units=unitsClean(un);
+    const kv=k=>((ks||[]).find(x=>x.key===k)||{}).value;
+    S.kp=kpClean(kv('kplan'));S.editlock=elClean(kv('editlock'));S.bills=bl||[];S.kpAvg=null;
   }finally{setBusy(false);}
 }
 async function reloadAll(){await loadAll();applyChrome();show(S.tab);toast('⟳ '+t('done'));autoBackfillI18n();}
@@ -987,9 +994,9 @@ function recipeCostCalc(r){ // ต้นทุนตามสูตร (จา�
 function recipeUnitCost(r){ // ใช้ต้นทุนผลิตล่าสุดก่อน ถ้าไม่มีใช้คำนวณจากสูตร
   if(r.unit_cost!=null)return num(r.unit_cost);
   const c=recipeCostCalc(r);return c.hasBom&&!c.missing?c.perUnit:null;}
-function recipeSellPrice(r){ // ราคาขายสาขา — ไม่ตั้ง = ใช้ต้นทุน/หน่วย
-  if(r&&r.sell_price!=null)return num(r.sell_price);
-  return recipeUnitCost(r);}
+function recipeSellPrice(r){ // ราคาขายสาขา = ต้นทุนจริง/หน่วย + % (เจ้าของเลือก 2026-10-06 · ตั้ง % ที่หน้าตั้งค่า/รายเมนู)
+  const c=recipeUnitCost(r);if(c==null)return null;
+  return rnd4(c*(1+markupOf(r)/100));}
 
 /* ---------- เคลื่อนไหวสต๊อก (ledger + ยอดคงเหลือ) ---------- */
 async function addQty(kind,id,delta){ // บวก/ลบยอดแบบ atomic ผ่าน RPC (กันหลายเครื่องเขียนชนกัน)
@@ -1204,6 +1211,11 @@ const KITCHEN_SQL=[
 '  sort integer default 0, active boolean default true, deleted_at timestamptz, created_at timestamptz default now());',
 'alter table ck_recipes add column if not exists sell_price numeric; -- ราคาขายสาขา/หน่วย',
 'alter table ck_items add column if not exists packs jsonb; -- หน่วยรับเข้าอื่นๆ [{"u":"ถุง","q":1000}] = 1 ถุง = 1000 หน่วยหลัก',
+'alter table ck_recipes add column if not exists markup_pct numeric; -- % บวกจากทุน (ว่าง = ค่ากลาง)',
+'alter table ck_recipes add column if not exists safety_days numeric; -- สำรองกี่วัน (ว่าง = ค่ากลาง)',
+'alter table ck_recipes add column if not exists safety_qty numeric; -- สำรองตายตัว',
+'alter table ck_sups add column if not exists credit_days integer default 0; -- 0 = โอน/จ่ายทันที',
+'alter table ck_sups add column if not exists line_group_id text; -- กลุ่มไลน์ที่ส่งใบสั่งซื้อ',
 'create table if not exists ck_recipe_items (',
 '  id bigserial primary key, recipe_id text not null, item_id text not null,',
 '  qty numeric not null default 0, sort integer default 0);',
@@ -1279,8 +1291,15 @@ const KITCHEN_SQL=[
 'grant execute on function ck_add_qty(text,text,numeric) to anon, authenticated;',
 '',
 '-- สิทธิ์: แอพเข้าผ่านบัญชีกลาง pnl_users (anon key) เหมือนแอพอื่นในเครือ — สิทธิ์รายคนตรวจที่ตัวแอพ (JJ Access)',
+'alter table ck_plans add column if not exists kind text; -- urgent / refill',
+'alter table ck_productions add column if not exists plan_qty numeric; -- สั่งผลิต (ผลิตได้จริง = qty)',
+'alter table ck_orders add column if not exists bill_no text; -- เลขบิลส่งสาขา',
+'create table if not exists ck_bills ( -- บิลรับของจากซัพ (รายการอยู่ใน ck_moves kind=buy ref=id)',
+'  id text primary key, d date not null, sup text default \'\', bill_no text, total numeric default 0,',
+'  credit_days integer default 0, due_date date, paid_at date, po_id text, note text, by_name text,',
+'  created_at timestamptz default now(), updated_at timestamptz default now());',
 'do $$ declare tb text; begin',
-'  foreach tb in array array[\'ck_items\',\'ck_sups\',\'ck_recipes\',\'ck_recipe_items\',\'ck_plans\',\'ck_pos\',\'ck_po_items\',\'ck_productions\',\'ck_prod_items\',\'ck_orders\',\'ck_order_items\',\'ck_moves\',\'ck_price_log\',\'ck_settings\',\'ck_expenses\',\'ck_br_needs\'] loop',
+'  foreach tb in array array[\'ck_items\',\'ck_sups\',\'ck_recipes\',\'ck_recipe_items\',\'ck_plans\',\'ck_pos\',\'ck_po_items\',\'ck_productions\',\'ck_prod_items\',\'ck_orders\',\'ck_order_items\',\'ck_moves\',\'ck_price_log\',\'ck_settings\',\'ck_expenses\',\'ck_br_needs\',\'ck_bills\'] loop',
 '    execute format(\'alter table %I enable row level security\', tb);',
 '    execute format(\'drop policy if exists ck_auth_all on %I\', tb);',
 '    execute format(\'drop policy if exists ck_anon_read on %I\', tb);',
@@ -1374,7 +1393,7 @@ const RENDER={};
 /* ============================================================
    🏠 หน้าหลัก
    ============================================================ */
-RENDER.dash=function(el){
+function dashLegacyHtml(){ // ส่วนล่างของแดชบอร์ด: แผนผลิต · ใบสั่งซื้อถึงกำหนด · ของใกล้หมด · ออเดอร์ล่าสุด
   const today=bizTodayISO(),tomorrow=addDays(today,1);
   const prToday=S.prods.filter(p=>p.d===today);
   const prVal=prToday.reduce((s,p)=>s+num(p.cost_total),0);
@@ -1384,11 +1403,7 @@ RENDER.dash=function(el){
   const plans=S.plans.filter(p=>p.status==='plan'&&(p.d===today||p.d===tomorrow));
   const poDue=S.pos.filter(p=>p.status==='ordered'&&p.d_due&&p.d_due<=today);
   const poOrderNow=S.pos.filter(p=>p.status==='draft'&&p.order_by&&p.order_by<=today);
-  let h='<div class="kpis">'+
-    '<div class="kpi hero"><div class="t">🍳 '+t('da_produce_today')+'</div><div class="kpi-v">฿'+fmt(prVal)+'</div><div class="s">'+prToday.length+' '+t('items_n')+'</div></div>'+
-    '<div class="kpi tap" onclick="show(\'items\')"><div class="t">⚠ '+t('da_low')+'</div><div class="kpi-v" style="color:'+(low.length?'var(--bad)':'var(--ok)')+'">'+low.length+'</div><div class="s mut">'+t('items_n')+'</div></div>'+
-    '<div class="kpi tap" onclick="show(\'orders\')"><div class="t">🚚 '+t('da_orders_open')+'</div><div class="kpi-v">'+openOrd.length+'</div><div class="s mut">'+t('items_n')+'</div></div>'+
-    '<div class="kpi tap" onclick="show(\'stock\')"><div class="t">📦 '+t('da_stock_value')+'</div><div class="kpi-v">฿'+fmt(stockVal)+'</div><div class="s mut">'+S.items.length+' '+t('items_n')+'</div></div></div>';
+  let h='';
   // แผนผลิตวันนี้-พรุ่งนี้
   h+='<div class="card"><h3>📅 '+t('da_plans')+'<span class="sp"><button class="btn sm2" onclick="planModal()">'+t('pl_add')+'</button></span></h3>';
   if(!plans.length)h+='<div class="empty">'+t('da_none_plan')+'</div>';
@@ -1426,8 +1441,8 @@ RENDER.dash=function(el){
   if(!rec.length)h+='<div class="empty">'+t('or_none')+'</div>';
   else rec.forEach(o=>{h+=orderRow(o);});
   h+='</div>';
-  el.innerHTML=h;
-};
+  return h;
+}
 
 /* ============================================================
    📅 แผนผลิต
@@ -1676,7 +1691,13 @@ function quickPoLow(){ // สั่งของใกล้หมดทั้ง
    ============================================================ */
 RENDER.buy=function(el){
   let h='';
-  if(canKitchen())h+='<div style="margin-bottom:12px"><button class="btn" onclick="poModal()">'+t('po_new')+'</button></div>';
+  const nDraft=S.pos.filter(p=>p.status==='draft').length;
+  if(canKitchen())h+='<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap">'+
+    '<button class="btn" onclick="billNew()">📥 '+t('kf_bill_new')+'</button>'+
+    '<button class="btn gh" onclick="kpBuyWizard()">🛒 '+t('kf_s5')+'</button>'+
+    '<button class="btn gh" onclick="poModal()">'+t('po_new')+'</button>'+
+    (nDraft?'<button class="btn gh" onclick="poSendAllModal()">📤 '+t('kf_send_all')+' ('+nDraft+')</button>':'')+'</div>';
+  h+=apHtml(8)+billsRecentHtml();
   const open=S.pos.filter(p=>p.status==='draft'||p.status==='ordered');
   const done=S.pos.filter(p=>p.status==='received').slice(0,20);
   if(!S.pos.length)h+='<div class="card empty">'+t('po_none')+'</div>';
@@ -1703,6 +1724,8 @@ function poCard(p){
   h+='<tr class="tot"><td colspan="3">'+t('total')+'</td><td class="n">฿'+fmt(p.status==='received'?num(p.total):poTotal(p),2)+'</td></tr></table></div>';
   if(canKitchen()){
     h+='<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">';
+    if(p.status==='draft'||p.status==='ordered')h+='<button class="btn gh sm2" data-id="'+esc(p.id)+'" onclick="poCopy(this.dataset.id)">📋 '+t('kf_copy')+'</button>'+
+      '<button class="btn sm2" style="background:#EAF4EC;color:#2E5B3C;border:1.5px solid #9DBFA6" data-id="'+esc(p.id)+'" onclick="poSendLine(this.dataset.id)">📤 '+(supLineId(p.sup)?t('kf_send_line'):t('kf_send_line_nog'))+'</button>';
     if(p.status==='draft')h+='<button class="btn gh sm2" onclick="poModal(\''+p.id+'\')">✎ '+t('edit')+'</button>'+
       '<button class="btn sm2" onclick="poMarkOrdered(\''+p.id+'\')">'+t('po_mark_ordered')+'</button>'+
       '<button class="btn gh sm2" onclick="poDel(\''+p.id+'\')">🗑</button>';
@@ -1774,6 +1797,7 @@ async function poDel(id){if(!confirm(t('po_del_confirm')))return;
     S.pos=S.pos.filter(x=>x.id!==id);delete S.poItems[id];applyChrome();show('buy');});}
 function poReceiveModal(id){
   if(!canKitchen())return;
+  return billFromPo(id);   // รับของตามใบสั่งซื้อ = บิลรับของ (มีซัพ เลขบิล เครดิต) — แบบเดิมด้านล่างไม่ใช้แล้ว
   const p=S.pos.find(x=>x.id===id);if(!p)return;
   const lines=S.poItems[id]||[];
   let h='<h3>'+t('po_recv_title')+' · '+esc(p.po_no||'')+'</h3>'+
@@ -1818,6 +1842,8 @@ async function poReceive(id){await once(async()=>{
 });}
 async function poUnreceive(id){ // รับของผิด — คืนสต๊อกแล้วกลับเป็นสถานะสั่งแล้ว
   if(!canKitchen())return;
+  const bl=(S.bills||[]).find(b=>b.po_id===id);
+  if(bl){await billOpen(bl.id);return;}   // รับผ่านบิล → แก้/ลบที่บิล
   if(!confirm(t('undo_confirm')))return;
   await once(async()=>{
     const p=S.pos.find(x=>x.id===id);if(!p||p.status!=='received')return;
@@ -1842,14 +1868,18 @@ async function poUnreceive(id){ // รับของผิด — คืนส�
    ============================================================ */
 RENDER.produce=function(el){
   let h='';
-  if(canKitchen())h+='<div style="margin-bottom:12px"><button class="btn" onclick="produceModal()">'+t('pr_new')+'</button></div>';
+  if(canKitchen())h+='<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="kpOrderModal()">🍳 '+t('kf_order_btn')+'</button>'+
+    '<button class="btn gh" onclick="produceModal()">'+t('pr_new')+'</button></div>';
+  h+='<div class="card"><h3>🍳 '+t('kf_prod_orders')+' · '+dispDate(bizTodayISO())+'</h3>'+kpPlansHtml()+'</div>';
   h+='<div class="card"><h3>🍳 '+t('pr_hist')+'<span class="sp xs mut">'+t('last45')+'</span></h3>';
   const list=S.prods.slice(0,40);
   if(!list.length)h+='<div class="empty">'+t('pr_none')+'</div>';
-  else{h+='<div class="twrap"><table class="t"><tr><th>'+t('date')+'</th><th>'+t('nav_menus')+'</th><th class="right">'+t('qty')+'</th><th class="right">'+t('pr_cost_total')+'</th><th class="right">'+t('pr_cost_unit')+'</th></tr>';
+  else{h+='<div class="twrap"><table class="t"><tr><th>'+t('date')+'</th><th>'+t('nav_menus')+'</th><th class="right">'+t('kf_ordered')+'</th><th class="right">'+t('kf_actual')+'</th><th class="right">'+t('pr_cost_total')+'</th><th class="right">'+t('pr_cost_unit')+'</th></tr>';
     list.forEach(p=>{const r=recipeById(p.recipe_id);
-      h+='<tr class="tap" onclick="prodDetail(\''+p.id+'\')"><td>'+dispDate(p.d)+'</td><td>'+esc(r?dispName(r):p.name||'')+'</td><td class="n">'+fmtI(p.qty)+' '+esc(trUnit(r?r.yield_unit||'':''))+'</td>'+
-        '<td class="n">฿'+fmt(p.cost_total,2)+'</td><td class="n"><b>฿'+fmt(p.cost_unit,2)+'</b></td></tr>';});
+      const pq=prodPlanQty(p),u=esc(trUnit(r?r.yield_unit||'':'')),df=pq!=null?num(p.qty)-pq:0;
+      h+='<tr class="tap" onclick="prodDetail(\''+p.id+'\')"><td>'+dispDate(p.d)+'</td><td>'+esc(r?dispName(r):p.name||'')+'</td>'+
+        '<td class="n">'+(pq!=null?fmtQ(pq):'–')+'</td><td class="n"><b'+(Math.abs(df)>1e-9?' style="color:var(--'+(df<0?'bad':'ok')+')"':'')+'>'+fmtQ(p.qty)+'</b> '+u+'</td>'+
+        '<td class="n">฿'+fmt(p.cost_total,2)+'</td><td class="n"><b>฿'+fmtP(num(p.cost_unit))+'</b></td></tr>';});
     h+='</table></div>';}
   h+='</div>';
   el.innerHTML=h;
@@ -1857,11 +1887,11 @@ RENDER.produce=function(el){
 let PR_DRAFT=null;
 function produceFromPlan(planId){
   const p=S.plans.find(x=>x.id===planId);if(!p)return;
-  produceModal(p.recipe_id,num(p.qty),planId,p.d);
+  produceModal(p.recipe_id,num(p.qty),planId,p.d<bizTodayISO()?bizTodayISO():p.d);
 }
 function produceModal(rid,qtyPre,planId,dPre){
   if(!canKitchen())return;
-  PR_DRAFT={rid:rid||null,qty:qtyPre||null,planId:planId||null,d:dPre||bizTodayISO(),lines:null};
+  PR_DRAFT={rid:rid||null,qty:qtyPre||null,planId:planId||null,d:dPre||bizTodayISO(),lines:null,actual:null,actualTouched:false};
   if(rid)prBuildLines();
   paintProduceModal();
 }
@@ -1876,14 +1906,20 @@ function prBuildLines(){
 }
 function paintProduceModal(){
   const d=PR_DRAFT;const r=d.rid?recipeById(d.rid):null;
-  let h='<h3>🍳 '+t('pr_new')+'</h3>'+
+  let h='<h3>🍳 '+(d.editId?'✎ '+t('edit'):t('pr_new'))+'</h3>'+
+    (d.planId?(p=>p?'<div class="hintbox">'+kpKindLb(p)+' '+t('kf_ordered')+' <b>'+fmtQ(p.qty)+' '+esc(trUnit((recipeById(p.recipe_id)||{}).yield_unit||''))+'</b></div>':'')(S.plans.find(x=>x.id===d.planId)):'')+
     '<div class="fld"><label>'+t('date')+'</label><input type="date" id="prD" value="'+d.d+'" onchange="PR_DRAFT.d=this.value"></div>'+
     '<div class="fld"><label>'+t('pr_pick')+'</label>'+
     '<button class="btn gh" style="width:100%;justify-content:flex-start" onclick="pickRecipe(rid=>{PR_DRAFT.rid=rid;PR_DRAFT.qty=null;PR_DRAFT.lines=null;prBuildLines();paintProduceModal();},paintProduceModal)">'+
     (r?thumbHtml(r,'🍲')+' <b>'+esc(dispName(r))+'</b>':t('pl_pick'))+'</button></div>';
   if(r){
-    h+='<div class="fld"><label>'+t('pr_out')+' ('+esc(r.yield_unit||'')+')</label>'+
-      '<div class="stepper"><button onclick="prStep(-1)">−</button><input id="prQ" inputmode="decimal" value="'+fmtI(d.qty)+'" onchange="prQtyChanged()"><button class="plus" onclick="prStep(1)">＋</button></div></div>';
+    const bt=num(d.qty)/(num(r.yield_qty)||1);
+    h+='<div class="fld"><label>'+t('kf_order_qty')+' ('+esc(trUnit(r.yield_unit||''))+')</label>'+
+      '<div class="stepper"><button onclick="prStep(-1)">−</button><input id="prQ" inputmode="decimal" value="'+fmtI(d.qty)+'" onchange="prQtyChanged()"><button class="plus" onclick="prStep(1)">＋</button></div>'+
+      '<div class="xs mut">'+t('kf_batch',{b:fmtQ(rnd2(bt)),y:fmtQ(num(r.yield_qty)||1),u:esc(trUnit(r.yield_unit||''))})+(Math.abs(bt-Math.round(bt))>1e-9?' · '+t('kf_partial'):'')+'</div></div>'+
+      '<div class="fld"><label>✅ '+t('kf_actual_qty')+' ('+esc(trUnit(r.yield_unit||''))+')</label>'+
+      '<input id="prA" inputmode="decimal" value="'+esc(d.actual==null?fmtI(d.qty):d.actual)+'" oninput="PR_DRAFT.actual=this.value;PR_DRAFT.actualTouched=true;prCostPaint()">'+
+      '<div class="xs mut">'+t('kf_actual_hint')+'</div></div>';
     if(d.lines){
       let mat=0,shortWarn=false,noPrice=false;
       h+='<div class="secbar">'+t('pr_use')+'</div>';
@@ -1899,10 +1935,10 @@ function paintProduceModal(){
       const total=mat+extra;
       h+=(shortWarn?'<div class="badbox">'+t('pr_stock_warn')+'</div>':'')+
         (noPrice?'<div class="hintbox">'+t('no_price_warn')+'</div>':'')+
-        '<div class="okbox"><div style="display:flex;justify-content:space-between"><span>'+t('pr_cost_mat')+'</span><b>฿'+fmt(mat,2)+'</b></div>'+
+        '<div class="okbox" id="prCost" data-total="'+total+'"><div style="display:flex;justify-content:space-between"><span>'+t('pr_cost_mat')+'</span><b>฿'+fmt(mat,2)+'</b></div>'+
         '<div style="display:flex;justify-content:space-between"><span>'+t('pr_cost_extra')+'</span><b>฿'+fmt(extra,2)+'</b></div>'+
         '<div style="display:flex;justify-content:space-between"><span>'+t('pr_cost_total')+'</span><b>฿'+fmt(total,2)+'</b></div>'+
-        '<div style="display:flex;justify-content:space-between;font-size:16px"><span><b>'+t('pr_cost_unit')+'</b></span><b style="color:var(--red)">฿'+fmt(num(d.qty)?total/num(d.qty):0,2)+' / '+esc(r.yield_unit||'')+'</b></div></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:16px"><span><b>'+t('pr_cost_unit')+'</b></span><b style="color:var(--red)" id="prCostU">฿'+fmtP(prActual(d)?total/prActual(d):0)+' / '+esc(trUnit(r.yield_unit||''))+'</b></div></div>'+
         '<button class="btn big" onclick="produceSave()">'+t('save')+'</button>';
     }
   }
@@ -1912,14 +1948,23 @@ function prStep(dir){const inp=document.getElementById('prQ');let v=num(inp.valu
   const r=recipeById(PR_DRAFT.rid);const step=num(r&&r.yield_qty)||1;
   v=Math.max(0,rnd2(v+dir*step));inp.value=fmtI(v);prQtyChanged();}
 function prQtyChanged(){PR_DRAFT.qty=num(document.getElementById('prQ').value);
+  if(!PR_DRAFT.actualTouched)PR_DRAFT.actual=null;   // ยังไม่ได้แก้ยอดได้จริงเอง = ตามยอดสั่งผลิต
   PR_DRAFT.lines=null;prBuildLines();paintProduceModal();}
+function prCostPaint(){const b=document.getElementById('prCost'),u=document.getElementById('prCostU');if(!b||!u||!PR_DRAFT)return;
+  const r=recipeById(PR_DRAFT.rid),a=prActual(PR_DRAFT);
+  u.textContent='฿'+fmtP(a>0?num(b.dataset.total)/a:0)+' / '+trUnit((r&&r.yield_unit)||'');}
 async function produceSave(){await once(async()=>{
   const d=PR_DRAFT;if(!d)return;const r=recipeById(d.rid);
   if(!r||!num(d.qty)){toast(t('need_qty'),true);return;}
+  const actual=prActual(d);   // ผลิตได้จริง (ต้นทุน/หน่วย คิดจากยอดนี้) · สั่งผลิต = d.qty (วัตถุดิบคิดตามนี้)
+  if(!(actual>0)){toast(t('kf_need_actual'),true);return;}
+  if(d.editId&&editDenied('prod',d.d0))return;
   const today=d.d||bizTodayISO();
-  const prodId=uid('pr');
+  if(!canEditRec('prod',today)){toast(t('kf_locked'),true);return;}
+  const prodId=d.editId||uid('pr');
+  if(d.editId)await prodReverse(d.editId,false);   // แก้ไข = ย้อนของเดิมก่อน แล้วลงใหม่ด้วย id เดิม
   let mat=0;const prodLines=[];const moves=[];
-  d.lines.forEach(l=>{
+  (d.lines||[]).forEach(l=>{
     const it=itemById(l.item_id);if(!it||!num(l.qty))return;
     const c=unitCost(it);const cost=c!=null?rnd2(num(l.qty)*c):0;
     mat+=cost;
@@ -1928,19 +1973,23 @@ async function produceSave(){await once(async()=>{
   });
   const extra=rnd2(num(r.extra_cost)*(num(d.qty)/(num(r.yield_qty)||1)));
   const total=rnd2(mat+extra);
-  const perUnit=rnd2(total/num(d.qty));
-  const prod={id:prodId,d:today,recipe_id:r.id,name:r.name,qty:num(d.qty),
+  const perUnit=rnd4(total/actual);
+  const prod={id:prodId,d:today,recipe_id:r.id,name:r.name,qty:actual,plan_qty:num(d.qty),
     cost_mat:rnd2(mat),cost_extra:extra,cost_total:total,cost_unit:perUnit,
     plan_id:d.planId||null,by_name:S.user.name};
-  await dbi(()=>sb.from('ck_productions').insert(prod));
+  // ต้นทุน/หน่วยของที่ผลิตแล้วในสต๊อก = ถัวเฉลี่ยกับของเดิม (ราคาขายสาขาคิดจากตัวนี้)
+  const oldQ=Math.max(0,num(r.qty)),oldC=r.unit_cost!=null?num(r.unit_cost):null;
+  const avg=(oldC!=null&&oldQ>0)?(oldQ*oldC+total)/(oldQ+actual):total/actual;
+  await insFallback('ck_productions',[prod],['plan_qty']);
   if(prodLines.length)await dbi(()=>sb.from('ck_prod_items').insert(prodLines.map(l=>Object.assign({prod_id:prod.id},l))));
-  moves.push({d:today,kind:'made',item_kind:'recipe',ref_id:r.id,name:r.name,qty:num(d.qty),cost:total,ref:prod.id});
+  moves.push({d:today,kind:'made',item_kind:'recipe',ref_id:r.id,name:r.name,qty:actual,cost:total,ref:prod.id});
   await pushMoves(moves);
-  r.unit_cost=perUnit;
-  await dbi(()=>sb.from('ck_recipes').update({unit_cost:perUnit}).eq('id',r.id));
+  r.unit_cost=rnd4(avg);
+  await dbi(()=>sb.from('ck_recipes').update({unit_cost:r.unit_cost}).eq('id',r.id));
   if(d.planId){await dbi(()=>sb.from('ck_plans').update({status:'done'}).eq('id',d.planId));
     const p=S.plans.find(x=>x.id===d.planId);if(p)p.status='done';}
-  S.prods.unshift(prod);
+  S.prods=S.prods.filter(x=>x.id!==prodId);S.prods.unshift(prod);
+  S.prods.sort((a,b)=>String(b.d).localeCompare(String(a.d)));
   PR_DRAFT=null;closeModal();toast(t('pr_ok'));show(S.tab);
 });}
 async function prodDetail(id){ // รายละเอียดการผลิต + ลบ/ย้อนได้
@@ -1952,29 +2001,23 @@ async function prodDetail(id){ // รายละเอียดการผล�
     '<div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('qty')+'</th><th class="right">'+t('cost')+'</th></tr>';
   (lines||[]).forEach(l=>{h+='<tr><td>'+esc(l.name||'')+'</td><td class="n">'+fmtI(l.qty)+' '+esc(trUnit(l.unit||''))+'</td>'+
     '<td class="n">฿'+fmt(l.cost,2)+'</td></tr>';});
-  h+='<tr class="tot"><td>'+t('pr_out')+'</td><td class="n">'+fmtI(p.qty)+' '+esc(trUnit(r?r.yield_unit||'':''))+'</td><td class="n">฿'+fmt(p.cost_total,2)+'</td></tr>'+
-    '<tr class="tot"><td><b>'+t('pr_cost_unit')+'</b></td><td></td><td class="n"><b style="color:var(--red)">฿'+fmt(p.cost_unit,2)+'</b></td></tr></table></div>'+
+  const pq=prodPlanQty(p);
+  if(pq!=null)h+='<tr><td>'+t('kf_ordered')+'</td><td class="n">'+fmtQ(pq)+' '+esc(trUnit(r?r.yield_unit||'':''))+'</td><td></td></tr>';
+  h+='<tr class="tot"><td>'+t('kf_actual')+'</td><td class="n">'+fmtQ(p.qty)+' '+esc(trUnit(r?r.yield_unit||'':''))+'</td><td class="n">฿'+fmt(p.cost_total,2)+'</td></tr>'+
+    '<tr class="tot"><td><b>'+t('pr_cost_unit')+'</b></td><td></td><td class="n"><b style="color:var(--red)">฿'+fmtP(num(p.cost_unit))+'</b></td></tr></table></div>'+
     (p.by_name?'<div class="xs mut" style="margin-top:6px">👤 '+esc(p.by_name)+'</div>':'')+
-    (canKitchen()?'<button class="btn gh" style="margin-top:12px" onclick="prodDel(\''+id+'\')">🗑 '+t('del')+' ('+t('undo_send').replace('↩ ','')+')</button>':'');
+    (canEditRec('prod',p.d)?'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn gh" data-id="'+esc(id)+'" onclick="prodEdit(this.dataset.id)">✎ '+t('edit')+'</button>'+
+      '<button class="btn gh" onclick="prodDel(\''+id+'\')">🗑 '+t('del')+' ('+t('undo_send').replace('↩ ','')+')</button></div>'
+      :(canKitchen()?'<div class="xs mut" style="margin-top:10px">🔒 '+t('kf_locked')+'</div>':''));
   openModal(h,true);
 }
 async function prodDel(id){ // ลบการผลิต — คืนวัตถุดิบ ตัดของที่ผลิตออก
   if(!canKitchen())return;
+  const p=S.prods.find(x=>x.id===id);if(!p)return;
+  if(editDenied('prod',p.d))return;
   if(!confirm(t('undo_confirm')))return;
   await once(async()=>{
-    const p=S.prods.find(x=>x.id===id);if(!p)return;
-    const mv=await dbi(()=>sb.from('ck_moves').select('*').eq('ref',id));
-    await dbi(()=>sb.from('ck_moves').delete().eq('ref',id));
-    for(const m of (mv||[])){
-      const o=m.item_kind==='item'?itemById(m.ref_id):recipeById(m.ref_id);
-      const v=await addQty(m.item_kind,m.ref_id,-num(m.qty));
-      if(o)o.qty=v!=null?v:rnd2(num(o.qty)-num(m.qty));
-    }
-    await dbi(()=>sb.from('ck_prod_items').delete().eq('prod_id',id));
-    await dbi(()=>sb.from('ck_productions').delete().eq('id',id));
-    if(p.plan_id){try{await dbi(()=>sb.from('ck_plans').update({status:'plan'}).eq('id',p.plan_id));
-      const pl=S.plans.find(x=>x.id===p.plan_id);if(pl)pl.status='plan';}catch(e){}}
-    S.prods=S.prods.filter(x=>x.id!==id);
+    await prodReverse(id,true);
     closeModal();toast(t('sv_ok'));show(S.tab);
   });}
 
@@ -1987,7 +2030,8 @@ function orderRow(o){
   const stLb={new:t('or_st_new'),prep:t('or_st_prep'),sent:t('or_st_sent'),done:t('or_st_done'),cancel:t('or_st_cancel')};
   return '<div class="rowline" style="cursor:pointer" onclick="orderDetail(\''+o.id+'\')">'+
     '<div class="grow"><b>🏪 '+esc(o.branch_name||branchName(o.branch))+'</b>'+
-    '<div class="xs mut">'+dispDate(o.d)+' · '+lines.length+' '+t('items_n')+(o.total!=null?' · ฿'+fmt(o.total,2):'')+'</div></div>'+
+    '<div class="xs mut">'+(o.bill_no?'🧾 '+esc(o.bill_no)+' · ':'')+dispDate(o.d)+' · '+lines.length+' '+t('items_n')+
+      ((o.status==='sent'||o.status==='done')?' · ฿'+fmt(orderSell(o),2):'')+'</div></div>'+
     '<span class="stpill '+(stCls[o.status]||'st-draft')+'">'+esc(stLb[o.status]||o.status)+'</span></div>';
 }
 RENDER.orders=function(el){
@@ -2078,16 +2122,19 @@ function orderDetail(id){
   const stLb={new:t('or_st_new'),prep:t('or_st_prep'),sent:t('or_st_sent'),done:t('or_st_done'),cancel:t('or_st_cancel')};
   const stKnown=['new','prep','sent','done','cancel'].includes(o.status)?o.status:'new';
   let h='<h3>🚚 '+esc(o.branch_name||branchName(o.branch))+' · '+dispDate(o.d)+
-    ' <span class="stpill st-'+stKnown+'">'+esc(stLb[o.status]||o.status)+'</span></h3>';
+    ' <span class="stpill st-'+stKnown+'">'+esc(stLb[o.status]||o.status)+'</span></h3>'+
+    (o.bill_no?'<div class="sm" style="margin-bottom:6px">🧾 '+t('kf_bill_no')+' <b>'+esc(o.bill_no)+'</b></div>':'');
   if(o.note)h+='<div class="xs mut" style="margin-bottom:8px">'+esc(o.note)+'</div>';
   h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_menus')+'</th><th class="right">'+t('qty')+'</th>'+
-    (o.status==='sent'||o.status==='done'?'<th class="right">'+t('cost')+'/'+t('unit')+'</th><th class="right">'+t('total')+'</th>':'')+'</tr>';
-  let tot=0;
+    (o.status==='sent'||o.status==='done'?'<th class="right">'+t('price')+'/'+t('unit')+'</th><th class="right">'+t('total')+'</th>':'')+'</tr>';
+  let tot=0,cost=0;
   lines.forEach(l=>{
-    h+='<tr><td>'+esc(l.name)+'</td><td class="n">'+fmtI(l.qty)+' '+esc(trUnit(l.unit||''))+'</td>';
-    if(o.status==='sent'||o.status==='done'){h+='<td class="n">'+fmt(l.cost_unit,2)+'</td><td class="n">'+fmt(l.amount,2)+'</td>';tot+=num(l.amount);}
+    h+='<tr><td>'+esc(l.name)+'</td><td class="n">'+fmtQ(l.qty)+' '+esc(trUnit(l.unit||''))+'</td>';
+    if(o.status==='sent'||o.status==='done'){const su=l.sell_unit!=null?num(l.sell_unit):l.cost_unit,sa=l.amount_sell!=null?num(l.amount_sell):num(l.amount);
+      h+='<td class="n">'+(su!=null?fmtP(num(su)):'–')+'</td><td class="n">'+fmt(sa,2)+'</td>';tot+=sa;cost+=num(l.amount);}
     h+='</tr>';});
-  if(o.status==='sent'||o.status==='done')h+='<tr class="tot"><td colspan="3">'+t('or_value')+'</td><td class="n">฿'+fmt(o.total!=null?o.total:tot,2)+'</td></tr>';
+  if(o.status==='sent'||o.status==='done')h+='<tr class="tot"><td colspan="3">'+t('kf_bill_amt')+'</td><td class="n">฿'+fmt(o.total_sell!=null?num(o.total_sell):tot,2)+'</td></tr>'+
+    '<tr><td colspan="3" class="xs mut">'+t('kf_cost_of')+'</td><td class="n xs mut">฿'+fmt(o.total!=null?o.total:cost,2)+'</td></tr>';
   h+='</table></div><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">';
   if(canKitchen()){
     if(o.status==='new')h+='<button class="btn sm2" onclick="orderStatus(\''+id+'\',\'prep\')">'+t('or_prep')+'</button>'+
@@ -2096,7 +2143,7 @@ function orderDetail(id){
     if(o.status==='new')h+='<button class="btn gh sm2" onclick="orderStatus(\''+id+'\',\'cancel\')">🗑 '+t('or_st_cancel')+'</button>';
   }
   if(o.status==='sent')h+='<button class="btn sm2" onclick="orderStatus(\''+id+'\',\'done\')">'+t('or_done')+'</button>'+
-    (canKitchen()?'<button class="btn gh sm2" onclick="orderUnsend(\''+id+'\')">'+t('undo_send')+'</button>':'');
+    (canEditRec('send',o.d)?'<button class="btn gh sm2" onclick="orderUnsend(\''+id+'\')">'+t('undo_send')+'</button>':'');
   if(o.status!=='new'&&o.status!=='cancel')h+='<button class="btn dk sm2" onclick="orderPrint(\''+id+'\')">'+t('or_print')+'</button>';
   h+='</div>';
   openModal(h,true);
@@ -2134,14 +2181,16 @@ async function orderSend(id){
       cost:amount,ref:o.id,branch:o.branch});
   }
   await pushMoves(moves);
-  o.status='sent';o.total=rnd2(total);
+  o.status='sent';o.total=rnd2(total);o.total_sell=rnd2(totalSell);
   try{await dbi(()=>sb.from('ck_orders').update({status:'sent',total:o.total,total_sell:rnd2(totalSell)}).eq('id',id));}
   catch(e){if(!/total_sell/.test(String((e&&e.message)||e)))throw e;
     await dbi(()=>sb.from('ck_orders').update({status:'sent',total:o.total}).eq('id',id));}
-  closeModal();applyChrome();toast(t('or_sent_ok'));show(S.tab);
+  await billNoAssign(o);
+  closeModal();applyChrome();toast(t('or_sent_ok')+(o.bill_no?' · 🧾 '+o.bill_no:''));show(S.tab);
   });}
 async function orderUnsend(id){ // ส่งผิด — คืนสต๊อกของที่ผลิตแล้ว กลับสถานะกำลังจัด
   if(!canKitchen())return;
+  const o0=S.orders.find(x=>x.id===id);if(o0&&editDenied('send',o0.d))return;
   if(!confirm(t('undo_confirm')))return;
   await once(async()=>{
     const o=S.orders.find(x=>x.id===id);if(!o||o.status!=='sent')return;
@@ -2162,15 +2211,16 @@ async function orderUnsend(id){ // ส่งผิด — คืนสต๊อ�
 function orderPrint(id){
   const o=S.orders.find(x=>x.id===id);const lines=S.orderItems[id]||[];
   let rows='';let tot=0;
-  lines.forEach((l,i)=>{rows+='<tr><td>'+(i+1)+'</td><td>'+esc(l.name)+'</td><td class="n">'+fmtI(l.qty)+' '+esc(trUnit(l.unit||''))+'</td>'+
-    '<td class="n">'+(l.cost_unit!=null?fmt(l.cost_unit,2):'')+'</td><td class="n">'+(l.amount!=null?fmt(l.amount,2):'')+'</td></tr>';
-    tot+=num(l.amount);});
+  lines.forEach((l,i)=>{const su=l.sell_unit!=null?num(l.sell_unit):l.cost_unit,sa=l.amount_sell!=null?num(l.amount_sell):l.amount;
+    rows+='<tr><td>'+(i+1)+'</td><td>'+esc(l.name)+'</td><td class="n">'+fmtQ(l.qty)+' '+esc(trUnit(l.unit||''))+'</td>'+
+    '<td class="n">'+(su!=null?fmtP(num(su)):'')+'</td><td class="n">'+(sa!=null?fmt(sa,2):'')+'</td></tr>';
+    tot+=num(sa);});
   document.getElementById('printArea').innerHTML=
     '<div class="ph"><img src="'+LOGO_B64+'"><div><div style="font-size:18px;font-weight:700">'+t('or_deliver_note')+'</div>'+
     '<div style="font-size:13px">จริงใจหมูกระทะ — JJ Kitchen</div></div>'+
-    '<div style="margin-left:auto;text-align:right;font-size:13px">'+t('or_branch')+': <b>'+esc(o.branch_name||branchName(o.branch))+'</b><br>'+t('date')+': '+dispDate(o.d)+'</div></div>'+
-    '<table><tr><th style="width:30px">#</th><th>'+t('nav_menus')+'</th><th class="n">'+t('qty')+'</th><th class="n">'+t('cost')+'/'+t('unit')+'</th><th class="n">'+t('total')+'</th></tr>'+rows+
-    '<tr><td colspan="4" style="text-align:right;font-weight:700">'+t('or_value')+'</td><td class="n" style="font-weight:700">'+fmt(o.total!=null?o.total:tot,2)+'</td></tr></table>'+
+    '<div style="margin-left:auto;text-align:right;font-size:13px">'+(o.bill_no?t('kf_bill_no')+': <b>'+esc(o.bill_no)+'</b><br>':'')+t('or_branch')+': <b>'+esc(o.branch_name||branchName(o.branch))+'</b><br>'+t('date')+': '+dispDate(o.d)+'</div></div>'+
+    '<table><tr><th style="width:30px">#</th><th>'+t('nav_menus')+'</th><th class="n">'+t('qty')+'</th><th class="n">'+t('price')+'/'+t('unit')+'</th><th class="n">'+t('total')+'</th></tr>'+rows+
+    '<tr><td colspan="4" style="text-align:right;font-weight:700">'+t('kf_bill_amt')+'</td><td class="n" style="font-weight:700">'+fmt(o.total_sell!=null?num(o.total_sell):tot,2)+'</td></tr></table>'+
     (o.note?'<div style="margin-top:8px;font-size:13px">📝 '+esc(o.note)+'</div>':'')+
     '<div class="sigs"><div>'+t('or_sig_pack')+'</div><div>'+t('or_sig_check')+'</div><div>'+t('or_sig_send')+'</div><div>'+t('or_sig_recv')+'</div></div>';
   window.print();
@@ -2191,7 +2241,7 @@ RENDER.today=async function(el){
   S._tmv=mv;
   const recv=mv.filter(x=>x.kind==='buy');
   const sends=mv.filter(x=>x.kind==='send');
-  const counted=mv.some(x=>x.kind==='adjust');
+  const counted=mv.some(x=>x.kind==='adjust');S._countedToday=counted;
   const prodsT=S.prods.filter(p=>p.d===D);
   const recvVal=recv.reduce((s,x)=>s+num(x.cost),0);
   const madeVal=prodsT.reduce((s,p)=>s+num(p.cost_total),0);
@@ -2204,10 +2254,11 @@ RENDER.today=async function(el){
     '<div class="xs mut">'+t('td_hint')+'</div></div>';
   // ปุ่มลัดใหญ่ 4 งานหลัก
   if(K)h+='<div class="bigacts">'+
-    '<button class="bigact" onclick="qrModal()"><span class="bi">📥</span>'+t('td_receive')+'</button>'+
+    '<button class="bigact" onclick="billNew()"><span class="bi">📥</span>'+t('kf_s6')+'</button>'+
     '<button class="bigact hot" onclick="produceModal()"><span class="bi">🍳</span>'+t('nav_produce')+'</button>'+
     (S.branches.length?'<button class="bigact" onclick="qsModal()"><span class="bi">🚚</span>'+t('td_send')+'</button>':'')+
     '<button class="bigact" onclick="show(\'stock\');skCountStart()"><span class="bi">📋</span>'+t('skc_start').replace('📋 ','')+'</button></div>';
+  h+='<div id="kfStepsBox">'+kpStepsHtml()+'</div><div id="kfStep1Box">'+kpCheckHtml()+'</div>';
   h+='<div id="brNeedToday"></div>';
   // KPI วันนี้
   h+='<div class="kpis">'+
@@ -2245,12 +2296,13 @@ RENDER.today=async function(el){
   // รับเข้าวันนี้
   h+='<div class="card"><h3>📥 '+t('td_recv_today')+'</h3>';
   if(!recv.length)h+='<div class="empty">'+t('td_none')+'</div>';
-  else recv.forEach(x=>{const it=itemById(x.ref_id);const fromPo=x.ref&&!String(x.ref).startsWith('qr');
+  else recv.forEach(x=>{const it=itemById(x.ref_id);const isBill=String(x.ref||'').startsWith('bl');const fromPo=x.ref&&!String(x.ref).startsWith('qr')&&!isBill;
     h+='<div class="rowline">'+thumbHtml(it,ITEM_CAT_IC[it&&it.cat]||'🥬')+
       '<div class="grow"><b>'+esc(it?dispName(it):x.name||'')+'</b>'+
       '<div class="xs mut">'+fmtQ(x.qty)+' '+esc(trUnit(it?it.unit||'':''))+(x.note?' ('+esc(x.note)+')':'')+(fromPo?' · '+t('td_from_po'):'')+'</div></div>'+
       (x.cost!=null?'<b>฿'+fmt(x.cost,2)+'</b>':'')+
-      (K&&!fromPo?'<button class="btn gh sm2" onclick="mvUndo('+x.id+')">↩</button>':'')+'</div>';});
+      (isBill?'<button class="btn gh sm2" data-id="'+esc(x.ref)+'" onclick="billOpen(this.dataset.id)">🧾</button>':
+       (K&&!fromPo?'<button class="btn gh sm2" onclick="mvUndo('+x.id+')">↩</button>':''))+'</div>';});
   h+='</div>';
 
   // ของผลิตคงเหลือ — "ควรเหลือเท่าไร"
@@ -2269,6 +2321,7 @@ RENDER.today=async function(el){
   h+='<button class="btn dk" style="margin-top:10px" onclick="todayPrint()">'+t('td_print')+'</button></div>';
   el.innerHTML=h;
   brPaint('brNeedToday','compact');
+  kpTodayLoad();
 };
 
 /* ---------- ↩ ยกเลิกรายการเคลื่อนไหวเดี่ยว (รับเข้าเร็ว) ---------- */
@@ -2278,6 +2331,7 @@ async function mvUndo(id){
   await once(async()=>{
     const rows=await dbi(()=>sb.from('ck_moves').select('*').eq('id',id));
     const m=rows&&rows[0];if(!m)return;
+    if(editDenied('bill',m.d))return;
     await dbi(()=>sb.from('ck_moves').delete().eq('id',id));
     const o=m.item_kind==='item'?itemById(m.ref_id):recipeById(m.ref_id);
     const v=await addQty(m.item_kind,m.ref_id,-num(m.qty));
@@ -2334,7 +2388,8 @@ function qrUnitOpts(it,sel){
 function paintQr(){
   const d=QR;if(!d)return;
   const it=d.iid?itemById(d.iid):null;
-  let h='<h3>📥 '+t('td_receive')+' · '+dispDate(bizTodayISO())+'</h3>'+
+  let h='<h3>📥 '+t('td_receive')+' · '+dispDate(d.bill&&BL?BL.d:bizTodayISO())+'</h3>'+
+    (d.bill&&BL&&BL.sup?'<div class="xs mut" style="margin-bottom:6px">🧾 '+esc(BL.sup)+(BL.bill_no?' #'+esc(BL.bill_no):'')+'</div>':'')+
     '<div class="fld"><label>'+t('nav_items')+'</label>'+
     '<button class="btn gh" style="width:100%;justify-content:flex-start" onclick="qrPick()">'+
     (it?thumbHtml(it,ITEM_CAT_IC[it.cat]||'🥬')+' <b>'+esc(dispName(it))+'</b>':t('search'))+'</button></div>';
@@ -2361,10 +2416,13 @@ function paintQr(){
         (u==='__total'?t('qr_price_total'):t('qr_price_per')+' '+esc(trUnit(u)))+'</option>').join('')+'</select></div></div>';
     h+='<div id="qrSum"></div>';
     h+='<div style="display:flex;gap:8px;margin-top:10px">'+
-      '<button class="btn gh" style="flex:1" onclick="qrSave(true)">'+t('td_save_next')+'</button>'+
-      '<button class="btn" style="flex:1" onclick="qrSave(false)">'+t('save')+'</button></div>';
+      (d.bill?'<button class="btn gh" style="flex:1" onclick="qrSave(true)">'+t('kf_line_next')+'</button>'+
+        '<button class="btn" style="flex:1" onclick="qrSave(false)">'+t('kf_line_add')+'</button>'
+      :'<button class="btn gh" style="flex:1" onclick="qrSave(true)">'+t('td_save_next')+'</button>'+
+        '<button class="btn" style="flex:1" onclick="qrSave(false)">'+t('save')+'</button>')+'</div>';
   }
   openModal(h);
+  if(d.bill)MODAL_BACK=paintBill;   // ปิดหน้านี้ = กลับไปหน้าบิล (ไม่ทิ้งรายการที่ใส่ไว้)
   if(it)qrSum();
 }
 function qrSum(){
@@ -2424,6 +2482,12 @@ async function qrSave(next){await once(async()=>{
   const c=qrCalc();
   if(c.miss.length){toast(t('qr_need_def',{u:trUnit(c.miss[0]),b:trUnit(it.unit||'')}),true);return;}
   if(c.total<=0){toast(t('need_qty'),true);return;}
+  if(d.bill){   // อยู่ในบิล: ยังไม่ลงสต๊อก — ลงทีเดียวตอนบันทึกบิล
+    if(!BL){QR=null;closeModal();return;}
+    blFromQr(c,it);
+    if(next){QR=blQrBase();qrPick();}
+    else{QR=null;MODAL_BACK=null;paintBill();}
+    return;}
   const D=bizTodayISO();const base=it.unit||'';
   const mixed=c.raw.length>1||d.lines.some(l=>num(l.q)>0&&l.u!==base);
   await pushMoves([{d:D,kind:'buy',item_kind:'item',ref_id:it.id,name:it.name,qty:c.total,cost:c.cost,
@@ -2502,8 +2566,10 @@ async function qsSend(){
     try{await dbi(()=>sb.from('ck_orders').update({total:row.total,total_sell:rnd2(totalSell)}).eq('id',oid));}
     catch(e){if(!/total_sell/.test(String((e&&e.message)||e)))throw e;
       await dbi(()=>sb.from('ck_orders').update({total:row.total}).eq('id',oid));}
+    row.total_sell=rnd2(totalSell);
     S.orders.unshift(row);S.orderItems[oid]=ins2;
-    QS=null;applyChrome();closeModal();toast(t('or_sent_ok'));show(S.tab);
+    await billNoAssign(row);
+    QS=null;applyChrome();closeModal();toast(t('or_sent_ok')+(row.bill_no?' · 🧾 '+row.bill_no:''));show(S.tab);
   });}
 
 /* ---------- 🖨 พิมพ์สรุปวันนี้ ---------- */
@@ -2597,44 +2663,12 @@ RENDER.acc=async function(el){
   const m=S.statsM;
   const tok=++ACC_TOK;
   el.innerHTML='<div class="spin"></div>';
-  const F=m+'-01',T=dstr(m,monthDays(m));
-  let exps=[],mv=[],ords=[],items=[];
-  try{
-    [exps,mv,ords]=await Promise.all([
-      dbi(()=>sbAll(()=>sb.from('ck_expenses').select('*').gte('d',F).lte('d',T).order('d').order('id'),50).then(data=>({data})))
-        .catch(e=>{if(MISSING_TBL(e))return null;throw e;}),
-      dbi(()=>sbAll(()=>sb.from('ck_moves').select('d,kind,ref_id,name,qty,cost,branch').gte('d',F).lte('d',T).order('d').order('id'),100).then(data=>({data}))),
-      dbi(()=>sbAll(()=>brQin(sb.from('ck_orders').select('*').in('status',['sent','done']).gte('d',F).lte('d',T),'branch').order('d').order('id'),50).then(data=>({data})))
-    ]);
-    ords=ords.filter(o=>inBr(o.branch));                     // เห็นเฉพาะสาขา
-    mv=mv.filter(x=>x.kind!=='send'||inBr(x.branch));
-    const ids=ords.map(o=>o.id);
-    for(let i=0;i<ids.length;i+=80)
-      items.push(...await dbi(()=>sbAll(()=>sb.from('ck_order_items').select('*').in('order_id',ids.slice(i,i+80)).order('id'),20).then(data=>({data}))));
-  }catch(e){if(tok===ACC_TOK)el.innerHTML='<div class="card empty">⚠ '+esc((e&&e.message)||e)+'</div>';return;}
+  let A;
+  try{A=await accData(m);}
+  catch(e){if(tok===ACC_TOK)el.innerHTML='<div class="card empty">⚠ '+esc((e&&e.message)||e)+'</div>';return;}
   if(tok!==ACC_TOK)return;
-  const expMissing=exps===null;if(expMissing)exps=[];
-  // รายรับ = ราคาขายที่ล็อกไว้ตอนส่ง (ของเก่าไม่มี → คำนวณจากราคาขาย/ต้นทุนปัจจุบัน)
-  const oMap={};ords.forEach(o=>oMap[o.id]=o);
-  const revByBr={},revByMenu={};let rev=0,cogs=0;
-  items.forEach(l=>{const o=oMap[l.order_id];if(!o)return;
-    const r=l.recipe_id?recipeById(l.recipe_id):null;
-    let a=l.amount_sell;
-    if(a==null){const sp=r?recipeSellPrice(r):(l.cost_unit!=null?num(l.cost_unit):null);
-      a=sp!=null?rnd2(num(l.qty)*sp):0;}
-    rev+=num(a);cogs+=num(l.amount);
-    const bk=o.branch||o.branch_name||'?';
-    if(!revByBr[bk])revByBr[bk]={name:o.branch_name||branchName(o.branch),amt:0,n:0};
-    revByBr[bk].amt+=num(a);revByBr[bk].n++;
-    const mk=l.recipe_id||l.name;
-    if(!revByMenu[mk])revByMenu[mk]={name:(r?dispName(r):l.name),qty:0,amt:0};
-    revByMenu[mk].qty+=num(l.qty);revByMenu[mk].amt+=num(a);});
-  const buys=mv.filter(x=>x.kind==='buy');
-  const buyVal=buys.reduce((s,x)=>s+num(x.cost),0);
-  const expByCat={};let expVal=0;
-  exps.forEach(x=>{const c=x.cat||EXP_OTHER;expByCat[c]=(expByCat[c]||0)+num(x.amount);expVal+=num(x.amount);});
-  const profit=rev-buyVal-expVal;
-  const stockVal=S.items.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
+  const {exps,ords,rev,revByBr,revByMenu,cogs,buys,buyVal,expByCat,expVal,profit,stockVal,expMissing}=A;
+  S._exps=exps;
   const K=canKitchen();
 
   let h='<div class="card"><h3>💰 '+t('ac_pl')+
@@ -2654,7 +2688,7 @@ RENDER.acc=async function(el){
   h+='<div class="card"><h3>📄 '+t('ac_pl')+'</h3><div class="twrap"><table class="t">';
   h+='<tr><td><b>💵 '+t('ac_rev')+'</b></td><td class="n"><b>'+fmt(rev,2)+'</b></td></tr>';
   Object.keys(revByBr).forEach(k=>{const v=revByBr[k];
-    h+='<tr><td class="mut" style="padding-left:24px">🏪 '+esc(v.name)+' <span class="xs">('+v.n+')</span></td><td class="n">'+fmt(v.amt,2)+'</td></tr>';});
+    h+='<tr><td class="mut" style="padding-left:24px">🏪 '+esc(v.name)+' <span class="xs">('+v.n+' '+t('kf_bill_n')+')</span></td><td class="n">'+fmt(v.amt,2)+'</td></tr>';});
   h+='<tr><td><b>🛒 '+t('ac_buy')+'</b></td><td class="n" style="color:var(--bad)">−'+fmt(buyVal,2)+'</td></tr>';
   h+='<tr><td><b>🧾 '+t('ac_exp')+'</b></td><td class="n" style="color:var(--bad)">−'+fmt(expVal,2)+'</td></tr>';
   const cats=expCats();
@@ -2666,6 +2700,7 @@ RENDER.acc=async function(el){
   h+='</table></div>'+
     '<div class="xs mut" style="margin-top:8px">'+t('ac_sent_cost')+': ฿'+fmt(cogs,2)+' · '+t('ac_stock_now')+': ฿'+fmt(stockVal,2)+'</div></div>';
 
+  h+=allocHtml(A)+brBillsHtml(A)+supBillsHtml(A)+apHtml(0);
   // รายรับแยกเมนู
   const mks=Object.keys(revByMenu).sort((a,b)=>revByMenu[b].amt-revByMenu[a].amt);
   if(mks.length){
@@ -2683,18 +2718,23 @@ RENDER.acc=async function(el){
       '<div class="grow"><b>'+esc(trCat(x.cat||''))+(x.name?' — '+esc(x.name):'')+'</b>'+
       '<div class="xs mut">'+dispDate(x.d)+(x.by_name?' · '+esc(x.by_name):'')+(x.note?' · '+esc(x.note):'')+'</div></div>'+
       '<b>฿'+fmt(x.amount,2)+'</b>'+
-      (K?'<button class="btn gh sm2" onclick="expDel(\''+esc(x.id)+'\')">🗑</button>':'')+'</div>';});
+      (canEditRec('exp',x.d)?'<button class="btn gh sm2" data-id="'+esc(x.id)+'" onclick="expModal(this.dataset.id)">✎</button>'+
+        '<button class="btn gh sm2" onclick="expDel(\''+esc(x.id)+'\')">🗑</button>':'')+'</div>';});
   h+='</div>';
   el.innerHTML=h;
 };
 
 /* ---------- เพิ่ม/ลบค่าใช้จ่าย ---------- */
 let EX=null;
-function expModal(){if(!canKitchen())return;
-  EX={cat:'ค่าแรง',d:bizTodayISO(),name:'',amount:'',note:'',adding:false,newName:'',newIc:'🧾'};paintExp();}
+function expModal(id){if(!canKitchen())return;
+  const x=id?(S._exps||[]).find(e=>e.id===id):null;
+  if(id&&!x)return;
+  if(x&&editDenied('exp',x.d))return;
+  EX=x?{id:x.id,d0:x.d,cat:x.cat||EXP_OTHER,d:x.d,name:x.name||'',amount:String(num(x.amount)),note:x.note||'',adding:false,newName:'',newIc:'🧾'}
+    :{cat:'ค่าแรง',d:bizTodayISO(),name:'',amount:'',note:'',adding:false,newName:'',newIc:'🧾'};paintExp();}
 function paintExp(){
   const d=EX;if(!d)return;
-  let h='<h3>🧾 '+t('ac_add')+'</h3>'+
+  let h='<h3>🧾 '+(d.id?'✎ '+t('edit'):t('ac_add'))+'</h3>'+
     '<div class="catwrap" onclick="expCatClick(event)">'+
     expCats().map(([c,ic])=>'<button data-cat="'+esc(c)+'" class="'+(d.cat===c&&!d.adding?'on':'')+'">'+ic+' '+esc(trCat(c))+'</button>').join('')+
     '<button data-add="1" class="add'+(d.adding?' on':'')+'">➕ '+esc(t('ac_cat_add'))+'</button></div>';
@@ -2772,13 +2812,16 @@ async function expSave(){await once(async()=>{
   const d=EX;if(!d)return;
   const amt=num(d.amount);
   if(amt<=0){toast(t('need_qty'),true);return;}
-  const row={id:uid('ex'),d:d.d,cat:d.cat,name:(d.name||'').trim()||null,amount:amt,
+  if(!canEditRec('exp',d.d)||(d.id&&editDenied('exp',d.d0))){if(!d.id)toast(t('kf_locked'),true);return;}
+  const row={id:d.id||uid('ex'),d:d.d,cat:d.cat,name:(d.name||'').trim()||null,amount:amt,
     note:(d.note||'').trim()||null,by_name:S.user.name};
-  await dbi(()=>sb.from('ck_expenses').insert(row));
+  if(d.id)await dbi(()=>sb.from('ck_expenses').update(row).eq('id',d.id));
+  else await dbi(()=>sb.from('ck_expenses').insert(row));
   EX=null;closeModal();toast(t('sv_ok'));show('acc');
 });}
 async function expDel(id){
   if(!canKitchen())return;
+  const x=(S._exps||[]).find(e=>e.id===id);if(x&&editDenied('exp',x.d))return;
   if(!confirm(t('confirm_del')))return;
   await once(async()=>{
     await dbi(()=>sb.from('ck_expenses').delete().eq('id',id));
@@ -3207,11 +3250,21 @@ let BR_DRAFT=null;
 function brSendModal(code){
   const B=brBranch(code);if(!B)return;
   const P=brPlan(B);
-  const v={};P.rows.forEach(x=>{const s=brSentQty(x);v[x.p.id]=s!=null?String(s):brDefault(x);});
-  BR_DRAFT={code,v,all:false,ro:P.sent};
+  const v={},tick={};P.rows.forEach(x=>{const s=brSentQty(x);v[x.p.id]=s!=null?String(s):brDefault(x);if(s>0)tick[x.p.id]=true;});
+  BR_DRAFT={code,v,tick,all:false,ro:P.sent};
   brPaintSend();
 }
-function brIn(el){if(BR_DRAFT)BR_DRAFT.v[el.dataset.pid]=el.value;}
+function brIn(el){if(BR_DRAFT){BR_DRAFT.v[el.dataset.pid]=el.value;brBillPaint();}}
+function brTick(el){if(!BR_DRAFT||BR_DRAFT.ro)return;BR_DRAFT.tick[el.dataset.pid]=el.checked;
+  const row=el.closest('.brline');if(row)row.classList.toggle('ticked',el.checked);brBillPaint();}
+function brLineAmt(x,q){const L=x.link;if(!L.r||!L.f||!(q>0))return 0;const sp=recipeSellPrice(L.r);return sp!=null?rnd2(q*L.f*sp):0;}
+function brBillPaint(){ // ยอดบิลสด: เฉพาะรายการที่ติ๊กแล้ว (ราคาขายสาขา = ทุนจริง + %)
+  const d=BR_DRAFT,el=document.getElementById('brBill');if(!d||!el)return;
+  const B=brBranch(d.code);if(!B)return;
+  let n=0,tot=0,m=0;
+  brPlan(B).rows.forEach(x=>{const q=num(d.v[x.p.id]);if(!(q>0))return;m++;if(!d.tick[x.p.id])return;n++;tot+=brLineAmt(x,q);});
+  el.innerHTML=t('kf_tick_n',{n,m})+' · '+t('kf_bill_amt')+' <b>฿'+fmt(tot,2)+'</b>';
+  const go=document.getElementById('brGo');if(go)go.textContent=t('kf_send_ticked',{n});}
 function brPaintSend(){
   const d=BR_DRAFT;if(!d)return;
   const B=brBranch(d.code);if(!B)return;
@@ -3223,6 +3276,7 @@ function brPaintSend(){
     '<div class="xs mut" style="margin-bottom:8px">'+t('br_counted_at',{d:dispDate(B.cd)})+
     (P.dl&&P.dl.d?' · '+t('br_arrive',{d:dispDate(P.dl.d)}):'')+'</div>';
   if(d.ro)h+='<div class="hintbox">'+t('br_already')+'</div>';
+  else h+='<div class="hintbox">☑️ '+t('kf_tick_hint')+'</div>';
   if(list.some(x=>!x.link.r&&!x.link.none))h+='<div class="hintbox">⚠ '+t('br_unlinked')+'</div>';
   if(!list.length)h+='<div class="empty">'+t('br_nothing')+'</div>';
   list.forEach(x=>{
@@ -3232,7 +3286,8 @@ function brPaintSend(){
     if(L.r&&L.f&&sent>0&&sent*L.f>num(L.r.qty)+1e-9)warn='<span class="chip warn xs">'+t('br_short',{n:fmtI(L.r.qty)+' '+esc(trUnit(L.r.yield_unit||''))})+'</span>';
     const linkTxt=L.r?(L.f?'🔗 '+esc(dispName(L.r))+(L.f!==1?' · 1 '+u+' = '+fmtI(L.f)+' '+esc(trUnit(L.r.yield_unit||'')):'')
         :'⚠ '+t('br_no_factor')):(L.none?t('br_not_ours_s'):'⚠ '+t('br_unlinked_s'));
-    h+='<div class="brline">'+
+    h+='<div class="brline'+(d.tick[x.p.id]?' ticked':'')+'">'+
+      '<label class="brtick"><input type="checkbox" data-pid="'+esc(x.p.id)+'"'+(d.tick[x.p.id]?' checked':'')+(d.ro?' disabled':'')+' onchange="brTick(this)"></label>'+
       '<div class="grow"><b>'+esc(x.p.name)+'</b>'+
         '<div class="xs mut">'+t('br_have')+' '+(x.have==null?'–':fmtI(x.have)+' '+u)+
         (x.need?'':' · '+t('br_no_rate'))+'</div>'+
@@ -3244,16 +3299,20 @@ function brPaintSend(){
   });
   if(rest.length)h+='<button class="btn gh" style="margin:8px 0" onclick="BR_DRAFT.all=!BR_DRAFT.all;brPaintSend()">'+
     (d.all?t('br_hide_rest'):t('br_show_all',{n:rest.length}))+'</button>';
-  if(!d.ro&&canKitchen())h+='<button class="btn big" onclick="brSend()">'+t('br_confirm')+'</button>';
+  h+='<div class="okbox" id="brBill"></div>';
+  if(!d.ro&&canKitchen())h+='<button class="btn big" id="brGo" onclick="brSend()">'+t('br_confirm')+'</button>';
   openModal(h,true);
+  brBillPaint();
 }
 async function brSend(){await once(async()=>{
   const d=BR_DRAFT;if(!d||d.ro)return;
   if(!inBr(d.code)){toast(t('br_noaccess'),true);return;}   // ส่งได้เฉพาะสาขาที่ได้สิทธิ์
   const B=brBranch(d.code);if(!B||!B.cd)return;
   const rows=brPlan(B).rows;
-  const val=x=>{const n=num(d.v[x.p.id]);return n>0?n:0;};
+  const val=x=>{const n=num(d.v[x.p.id]);return n>0&&d.tick[x.p.id]?n:0;};   // ส่งเฉพาะรายการที่ติ๊กแล้ว
   const lines=rows.filter(x=>val(x)>0);
+  const unt=rows.filter(x=>num(d.v[x.p.id])>0&&!d.tick[x.p.id]).length;
+  if(unt&&!confirm(t('kf_untick_q',{n:unt})))return;
   if(!lines.length&&!confirm(t('br_none_sent_q')))return;
   const D=bizTodayISO();let oid=null;
   if(lines.length){
@@ -3283,7 +3342,9 @@ async function brSend(){await once(async()=>{
     try{await dbi(()=>sb.from('ck_orders').update({total:row.total,total_sell:rnd2(totalSell)}).eq('id',oid));}
     catch(e){if(!/total_sell/.test(String((e&&e.message)||e)))throw e;
       await dbi(()=>sb.from('ck_orders').update({total:row.total}).eq('id',oid));}
+    row.total_sell=rnd2(totalSell);
     S.orders.unshift(row);S.orderItems[oid]=ins||items;
+    await billNoAssign(row);
   }
   // เก็บ "ต้องส่ง vs ส่งจริง" ทุกบรรทัดที่เกี่ยว (รวมที่ส่ง 0 = ส่งขาด) — ไว้ใช้วางแผนผลิต/สั่งของ
   const recs=rows.filter(x=>x.order>0||val(x)>0).map(x=>({branch:d.code,count_date:B.cd,product_id:x.p.id,
@@ -3302,7 +3363,8 @@ async function brSend(){await once(async()=>{
     if(r&&r.error)warn=warn||r.error.message||'';
   }
   BR_DRAFT=null;closeModal();applyChrome();
-  toast(warn?t('br_done')+' · ⚠ '+warn:t('br_done'),!!warn);
+  const bn=oid&&(S.orders.find(o=>o.id===oid)||{}).bill_no;
+  toast((warn?t('br_done')+' · ⚠ '+warn:t('br_done'))+(bn?' · 🧾 '+bn:''),!!warn);
   await brLoad(true);show(S.tab);
 });}
 /* ยกเลิกการส่งที่มาจากยอดนับ (เรียกจาก orderUnsend) — ให้ยอดต้องส่งกลับมาโชว์ และแอพนับไม่นับว่าของกำลังมา */
@@ -3549,7 +3611,8 @@ function menuDetail(id){
   let h='<h3>'+thumbHtml(r,'🍲')+' '+esc(dispName(r))+'</h3>'+
     '<div class="sm mut" style="margin-bottom:8px">'+esc(trCat(r.cat||''))+' · '+t('mn_yield')+' <b>'+fmtI(r.yield_qty)+' '+esc(trUnit(r.yield_unit||''))+'</b>'+
     ' · '+t('sk_now')+' <b>'+fmtI(r.qty)+'</b>'+
-    (r.sell_price!=null?' · 💰 '+t('ac_sell')+' <b>฿'+fmt(r.sell_price,2)+'/'+esc(trUnit(r.yield_unit||''))+'</b>':'')+
+    (sp=>sp!=null?' · 💰 '+t('ac_sell')+' <b>฿'+fmtP(sp)+'/'+esc(trUnit(r.yield_unit||''))+'</b> <span class="xs">(+'+fmtQ(markupOf(r))+'%)</span>':'')(recipeSellPrice(r))+
+    (sf=>sf.q>0?' · 🛟 '+t('kf_safety')+' <b>'+fmtQ(kpRound(r,sf.q))+'</b>'+(sf.fixed?' 📌':' ('+fmtQ(sf.days)+' '+t('kf_days')+')'):'')(safetyOf(r))+
     (r.note?'<br>📝 '+esc(r.note):'')+'</div>';
   if(!bom.length)h+='<div class="hintbox">'+t('mn_no_bom')+'</div>';
   else{
@@ -3604,10 +3667,11 @@ function menuEdit(id){
   if(!canKitchen())return;
   const r=id?recipeById(id):null;
   MN_DRAFT=r?{id:r.id,name:r.name,cat:r.cat||'อื่นๆ',yield_qty:num(r.yield_qty)||1,yield_unit:r.yield_unit||'กก.',
-      extra_cost:num(r.extra_cost)||0,sell_price:r.sell_price==null?null:num(r.sell_price),
+      extra_cost:num(r.extra_cost)||0,markup_pct:blankNum(r.markup_pct)?'':String(r.markup_pct),
+      safety_days:blankNum(r.safety_days)?'':String(r.safety_days),safety_qty:blankNum(r.safety_qty)?'':String(r.safety_qty),
       note:r.note||'',image_url:r.image_url,
       bom:bomOf(r).map(l=>({item_id:l.item_id,qty:num(l.qty)}))}
-    :{id:null,name:'',cat:'อื่นๆ',yield_qty:1,yield_unit:'กก.',extra_cost:0,sell_price:null,note:'',image_url:null,bom:[]};
+    :{id:null,name:'',cat:'อื่นๆ',yield_qty:1,yield_unit:'กก.',extra_cost:0,markup_pct:'',safety_days:'',safety_qty:'',note:'',image_url:null,bom:[]};
   paintMenuEdit();
 }
 function paintMenuEdit(){
@@ -3623,7 +3687,9 @@ function paintMenuEdit(){
     '<div class="fld"><label>'+t('mn_extra')+'</label><input inputmode="decimal" value="'+d.extra_cost+'" onchange="MN_DRAFT.extra_cost=num(this.value)"></div></div>'+
     '<div class="grid2"><div class="fld"><label>'+t('mn_yield')+'</label><input inputmode="decimal" value="'+d.yield_qty+'" onchange="MN_DRAFT.yield_qty=num(this.value)"></div>'+
     '<div class="fld"><label>'+t('unit')+'</label><select onchange="MN_DRAFT.yield_unit=this.value">'+unitOptions(d.yield_unit)+'</select></div></div>'+
-    '<div class="fld"><label>💰 '+t('mn_sell')+'</label><input inputmode="decimal" value="'+(d.sell_price==null?'':d.sell_price)+'" onchange="MN_DRAFT.sell_price=this.value===\'\'?null:num(this.value)"></div>'+
+    '<div class="grid2"><div class="fld"><label>💰 '+t('kf_mk_lb')+'</label><input inputmode="decimal" placeholder="'+esc(t('kf_def',{v:fmtQ(kpCfg().markup)}))+'" value="'+esc(d.markup_pct)+'" oninput="MN_DRAFT.markup_pct=this.value"></div>'+
+    '<div class="fld"><label>🛟 '+t('kf_sf_days')+'</label><input inputmode="decimal" placeholder="'+esc(t('kf_def',{v:fmtQ(kpCfg().safety_days)}))+'" value="'+esc(d.safety_days)+'" oninput="MN_DRAFT.safety_days=this.value"></div></div>'+
+    '<div class="fld"><label>📌 '+t('kf_sf_qty')+' ('+esc(trUnit(d.yield_unit||''))+')</label><input inputmode="decimal" placeholder="'+esc(t('kf_sf_qty_ph'))+'" value="'+esc(d.safety_qty)+'" oninput="MN_DRAFT.safety_qty=this.value"></div>'+
     '<div class="fld"><label>'+t('note')+'</label><input value="'+esc(d.note)+'" onchange="MN_DRAFT.note=this.value"></div>'+
     '<div class="secbar">'+t('mn_bom')+'<span class="sp">'+d.bom.length+'</span></div>';
   d.bom.forEach((l,i)=>{const it=itemById(l.item_id);
@@ -3644,15 +3710,15 @@ async function menuSave(){await once(async()=>{
   const d=MN_DRAFT;if(!d)return;
   d.name=(document.getElementById('mnName').value||'').trim();
   if(!d.name){toast(t('need_name'),true);return;}
+  const nb=v=>String(v==null?'':v).trim()===''?null:num(v);
+  if([d.markup_pct,d.safety_days,d.safety_qty].some(v=>String(v==null?'':v).trim()!==''&&!(num(v)>=0&&isFinite(Number(String(v).replace(/,/g,'')))))){toast(t('kf_set_bad'),true);return;}
   const row={name:d.name,cat:d.cat,yield_qty:d.yield_qty||1,yield_unit:d.yield_unit,
-    extra_cost:d.extra_cost||0,sell_price:d.sell_price,note:d.note||null};
+    extra_cost:d.extra_cost||0,markup_pct:nb(d.markup_pct),safety_days:nb(d.safety_days),safety_qty:nb(d.safety_qty),note:d.note||null};
+  const NEWC=['markup_pct','safety_days','safety_qty'];
   let rid=d.id;let renamed=false;
   if(rid){const old=recipeById(rid);renamed=old&&old.name!==d.name;
     if(renamed)row.i18n=null; // เปลี่ยนชื่อ — ล้างคำแปลเก่าแล้วแปลใหม่
-    try{await dbi(()=>sb.from('ck_recipes').update(row).eq('id',rid));}
-    catch(e){ // DB เก่ายังไม่มีคอลัมน์ sell_price — รัน setup รอบใหม่จะได้ครบ
-      if(!/sell_price/.test(String((e&&e.message)||e)))throw e;
-      delete row.sell_price;await dbi(()=>sb.from('ck_recipes').update(row).eq('id',rid));}
+    await updFallback('ck_recipes',row,rid,NEWC);   // ยังไม่รัน jjmk_kitchen_flow.sql = บันทึกช่องอื่นไปก่อน
     Object.assign(recipeById(rid),row);
     const oldIds=(S.boms[rid]||[]).map(l=>l.id).filter(x=>x!=null);
     const lines=d.bom.filter(l=>num(l.qty)>0).map((l,i)=>({recipe_id:rid,item_id:l.item_id,qty:l.qty,sort:i}));
@@ -3660,14 +3726,14 @@ async function menuSave(){await once(async()=>{
     if(oldIds.length)await dbi(()=>sb.from('ck_recipe_items').delete().in('id',oldIds));
     S.boms[rid]=ins;}
   else{rid=uid('rc');row.id=rid;row.qty=0;
-    try{await dbi(()=>sb.from('ck_recipes').insert(row));}
-    catch(e){if(!/sell_price/.test(String((e&&e.message)||e)))throw e;
-      delete row.sell_price;await dbi(()=>sb.from('ck_recipes').insert(row));}
+    await insFallback('ck_recipes',[row],NEWC);
     S.recipes.push(row);
     const lines=d.bom.filter(l=>num(l.qty)>0).map((l,i)=>({recipe_id:rid,item_id:l.item_id,qty:l.qty,sort:i}));
     const ins=lines.length?await dbi(()=>sb.from('ck_recipe_items').insert(lines).select()):[];
     S.boms[rid]=ins;}
-  MN_DRAFT=null;closeModal();toast(t('sv_ok'));show('menus');
+  MN_DRAFT=null;closeModal();
+  if(S.flowSql===false&&NEWC.some(c=>row[c]!=null))toast(t('kf_need_sql'),true);else toast(t('sv_ok'));
+  show('menus');
   // แปลชื่ออัตโนมัติ (พื้นหลัง — เติมเฉพาะช่องว่าง)
   const r=recipeById(rid);
   autoI18n(row.name,renamed?null:(r&&r.i18n)).then(o=>{if(o&&r){r.i18n=o;
@@ -3819,18 +3885,28 @@ async function priceHist(id){
 function supsModal(){
   let h='<h3>🚛 '+t('it_sup_title')+'</h3>';
   S.sups.forEach(s=>{h+='<div class="rowline"><div class="grow"><b>'+esc(s.name)+'</b>'+
-    '<div class="xs mut">'+(s.phone?'📞 '+esc(s.phone)+' · ':'')+t('it_lead')+' '+(s.lead_days||1)+'</div></div>'+
+    '<div class="xs mut">'+(s.phone?'📞 '+esc(s.phone)+' · ':'')+t('it_lead')+' '+(s.lead_days||1)+
+      ' · '+(num(s.credit_days)>0?t('kf_pay_credit')+' '+num(s.credit_days)+' '+t('kf_days'):t('kf_pay_now'))+(s.line_group_id?' · 💬':'')+'</div></div>'+
     '<button class="btn gh sm2" onclick="supEdit(\''+s.id+'\')">✎</button></div>';});
   h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="supEdit()">'+t('it_sup_new')+'</button>';
   openModal(h);
 }
-function supEdit(id){
+async function supEdit(id){
   if(!canKitchen())return;
+  await lineGroupsLoad();
   const s=id?S.sups.find(x=>x.id===id):null;
+  const gl=(S.lineGroups||[]).slice().sort((a,b)=>lgName(a.group_id).localeCompare(lgName(b.group_id),'th'));
+  const gid=s&&s.line_group_id||'';
   openModal('<h3>🚛 '+(s?t('edit'):t('it_sup_new'))+'</h3>'+
     '<div class="fld"><label>'+t('name')+'</label><input id="spName" value="'+esc(s?s.name:'')+'"></div>'+
     '<div class="grid2"><div class="fld"><label>'+t('it_phone')+'</label><input id="spPhone" value="'+esc(s?s.phone||'':'')+'"></div>'+
     '<div class="fld"><label>'+t('it_lead')+'</label><input id="spLead" inputmode="decimal" value="'+(s?s.lead_days||1:1)+'"></div></div>'+
+    '<div class="fld"><label>💳 '+t('kf_sup_credit')+'</label><input id="spCredit" inputmode="numeric" value="'+(s?Math.max(0,parseInt(s.credit_days,10)||0):0)+'">'+
+      '<div class="xs mut">'+t('kf_sup_credit_hint')+'</div></div>'+
+    '<div class="fld"><label>💬 '+t('kf_sup_line')+'</label><select id="spLine"><option value="">'+t('kf_sup_noline')+'</option>'+
+      gl.map(g=>'<option value="'+esc(g.group_id)+'"'+(String(g.group_id)===String(gid)?' selected':'')+'>'+esc(lgName(g.group_id))+'</option>').join('')+
+      (gid&&!gl.some(g=>String(g.group_id)===String(gid))?'<option value="'+esc(gid)+'" selected>'+esc(String(gid).slice(0,12))+'…</option>':'')+'</select>'+
+      '<div class="xs mut">'+t('kf_sup_line_hint')+'</div></div>'+
     '<div class="fld"><label>'+t('note')+'</label><input id="spNote" value="'+esc(s?s.note||'':'')+'"></div>'+
     '<div style="display:flex;gap:8px;margin-top:10px">'+
     (s?'<button class="btn gh" onclick="supDel(\''+s.id+'\')">🗑</button>':'')+
@@ -3843,12 +3919,16 @@ async function supSave(id){
     if(!name){toast(t('need_name'),true);return;}
     const row={name,phone:document.getElementById('spPhone').value.trim()||null,
       lead_days:num(document.getElementById('spLead').value)||1,
-      note:document.getElementById('spNote').value.trim()||null};
-    if(id){await dbi(()=>sb.from('ck_sups').update(row).eq('id',id));
+      note:document.getElementById('spNote').value.trim()||null,
+      credit_days:Math.max(0,parseInt(document.getElementById('spCredit').value,10)||0),
+      line_group_id:document.getElementById('spLine').value||null};
+    const NC=['credit_days','line_group_id'];
+    if(id){await updFallback('ck_sups',row,id,NC);
       Object.assign(S.sups.find(x=>x.id===id),row);}
-    else{row.id=uid('sp');await dbi(()=>sb.from('ck_sups').insert(row));S.sups.push(row);}
+    else{row.id=uid('sp');await insFallback('ck_sups',[row],NC);S.sups.push(row);}
+    if(S.flowSql===false&&(row.credit_days||row.line_group_id))toast(t('kf_need_sql'),true);
     S.sups.sort((a,b)=>(a.name||'')<(b.name||'')?-1:1);
-    closeModal();toast(t('sv_ok'));supsModal();
+    closeModal();if(!(S.flowSql===false&&(row.credit_days||row.line_group_id)))toast(t('sv_ok'));supsModal();
   });}
 async function supDel(id){
   if(!canKitchen())return;
@@ -4023,7 +4103,7 @@ RENDER.set=function(el){
   h+='<div class="card"><h3>👤 '+t('se_user')+'</h3>'+
     '<div class="rowline"><div class="grow"><b>'+esc(S.user.name)+'</b><div class="xs mut">@'+esc(S.prof.username||'')+' · '+t('se_role')+': '+esc(S.prof.role||'')+'</div></div>'+
     '<button class="btn gh sm2" onclick="doLogout()">🚪 '+t('logout')+'</button></div></div>';
-  h+=unitsCardHtml();
+  h+=kpSetCardHtml()+unitsCardHtml()+elCardHtml();
   if(isAdminish()){
     h+='<div class="card"><h3>🛠 '+t('se_sql')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('se_sql_hint')+'</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'+
@@ -4055,6 +4135,719 @@ async function backfillI18n(){ // เติมคำแปลที่ขาด�
   }
   toast(t('se_backfill_done')+' ('+n+')');
 }
+</script>
+<script>
+const FLOW_I18N={"th": {"kf_new_sup": "＋ ซัพใหม่…", "kf_new_sup_q": "ชื่อซัพพลายเออร์ใหม่", "kf_actual": "ผลิตได้จริง", "kf_actual_hint": "ใส่ยอดที่ได้ออกมาจริง — ต้นทุน/หน่วยคิดจากยอดนี้ (วัตถุดิบคิดตามยอดสั่งผลิต)", "kf_actual_qty": "ผลิตได้จริง", "kf_add_first": "ยังไม่มีรายการ — กด ＋ เพิ่มสินค้า", "kf_add_item": "เพิ่มสินค้าในบิล", "kf_alloc": "หารค่าใช้จ่ายให้สาขา (สิ้นเดือน)", "kf_alloc_exp": "ค่าใช้จ่ายที่หารให้", "kf_alloc_goods": "ยอดบิลส่งของ", "kf_alloc_hint": "ค่าใช้จ่ายอื่นที่ไม่ใช่วัตถุดิบ (ค่าแรง น้ำ ไฟ ฯลฯ) หารให้แต่ละสาขาตามสัดส่วนยอดบิลที่ส่งให้สาขานั้นในเดือนนี้", "kf_alloc_none": "เดือนนี้ยังไม่มียอดส่งสาขา — ยังหารไม่ได้", "kf_alloc_scoped": "ต้องเห็นทุกสาขาถึงจะหารค่าใช้จ่ายได้ถูกต้อง", "kf_alloc_total": "รวมที่สาขารับภาระ", "kf_ap": "เจ้าหนี้ค้างจ่าย", "kf_ap_none": "ไม่มีบิลค้างจ่าย 👍", "kf_batch": "= {b} batch (สูตรละ {y} {u})", "kf_bill_amt": "ยอดบิล", "kf_bill_date": "วันที่บิล", "kf_bill_del_q": "ลบบิลนี้? ของในบิลจะถูกหักออกจากสต๊อก", "kf_bill_edit": "แก้ไขบิลรับของ", "kf_bill_n": "บิล", "kf_bill_new": "รับของ + บิล", "kf_bill_no": "เลขที่บิล", "kf_bill_total": "ยอดรวมบิล", "kf_bills": "บิลรับของล่าสุด", "kf_br_bills": "บิลส่งของแต่ละสาขา", "kf_br_loading": "กำลังโหลดยอดที่สาขาสั่ง…", "kf_br_order": "สาขาสั่ง", "kf_buy_hint": "ต้องใช้ = วัตถุดิบตามสูตรของใบสั่งผลิตที่ยังไม่ได้ทำ + ที่คาดว่าจะผลิตพรุ่งนี้ (ยอดส่งเฉลี่ย/วัน) + ขั้นต่ำที่ตั้งไว้ · หักของที่มีและที่สั่งไว้แล้ว", "kf_buy_nobill": "มีรับของที่ไม่ได้ผ่านบิล ฿{a} (รายการเก่า/รับเร็ว)", "kf_by_sup": "แยกตามซัพ", "kf_copied": "คัดลอกใบสั่ง {s} แล้ว — วางในไลน์ได้เลย", "kf_copy": "คัดลอก", "kf_copy_fail": "คัดลอกไม่ได้", "kf_cost_of": "ต้นทุนของที่ส่ง", "kf_cost_u": "ทุน/หน่วย", "kf_days": "วัน", "kf_def": "ค่ากลาง {v}", "kf_draft_clear": "เริ่มใหม่", "kf_draft_resumed": "ใช้ร่างบิลที่กรอกค้างไว้", "kf_due": "ครบกำหนดจ่าย {d}", "kf_due_s": "ครบกำหนด", "kf_el_before": "ล็อกข้อมูลก่อนวันที่ (ปิดงวด — ว่าง = ไม่ล็อก)", "kf_el_bill": "📥 บิลรับของ / รับของเข้า", "kf_el_boss": "เฉพาะเจ้าของ/ผู้ดูแลระบบที่ตั้งได้", "kf_el_exp": "🧾 ค่าใช้จ่ายอื่น", "kf_el_hint": "ติ๊ก = พนักงานแก้/ลบข้อมูลที่บันทึกแล้วได้ · เจ้าของ/ผู้ดูแลระบบแก้ได้เสมอ", "kf_el_off": "ล็อก", "kf_el_on": "แก้ได้", "kf_el_prod": "🍳 การผลิต", "kf_el_send": "🚚 การส่งของให้สาขา", "kf_el_title": "การแก้ไขข้อมูล", "kf_exp_split": "วัตถุดิบ ฿{a} · อื่น ๆ ฿{b}", "kf_expense_all": "รายจ่าย", "kf_fg": "ของผลิตแล้วรอส่ง", "kf_have": "มีในครัว", "kf_line_add": "ใส่ในบิล", "kf_line_fail": "ส่งไลน์ไม่สำเร็จ", "kf_line_next": "＋ ใส่แล้วเพิ่มต่อ", "kf_line_ok": "ส่งใบสั่ง {s} เข้าไลน์แล้ว", "kf_locked": "ข้อมูลนี้ถูกล็อก แก้ไม่ได้ — ให้เจ้าของ/ผู้ดูแลระบบแก้", "kf_mark_paid": "จ่ายแล้ว", "kf_mk_lb": "บวกจากทุน %", "kf_n_branch": "รอส่ง {n} สาขา", "kf_n_buy": "ต้องสั่ง {n} รายการ", "kf_n_due": "ของต้องเข้า {n} ใบ", "kf_n_refill": "ต้องเติม {n} รายการ", "kf_n_urgent": "ผลิตด่วน {n} รายการ", "kf_need_actual": "ใส่ยอดที่ผลิตได้จริง", "kf_need_sql": "ยังไม่ได้รัน SQL jjmk_kitchen_flow.sql — ข้อมูลบางช่องยังเก็บไม่ได้", "kf_need_sup": "เลือกซัพพลายเออร์ก่อน", "kf_no_draft": "ไม่มีใบสั่งซื้อร่างที่ต้องส่ง", "kf_no_group": "ซัพ {s} ยังไม่ได้ผูกกลุ่มไลน์ (แก้ที่ 🚛 ซัพพลายเออร์) — เปิดไลน์ให้เลือกกลุ่มเองก่อน", "kf_no_group_s": "ยังไม่ผูกกลุ่มไลน์ — จะข้าม", "kf_no_need": "วันนี้ยังไม่มียอดที่สาขาสั่ง และยังไม่ได้ตั้งสต๊อกสำรอง", "kf_no_orders": "ยังไม่มีใบสั่งผลิตวันนี้", "kf_no_price_line": "บางรายการยังไม่มีราคา — ยอดบิลจะไม่ครบ", "kf_nothing_make": "ของพอแล้ว ไม่ต้องผลิตเพิ่ม 👍", "kf_ok_enough": "ของพอส่ง", "kf_ok_full": "สต๊อกเต็มแล้ว", "kf_ok_recv": "ไม่มีของค้างรับ", "kf_ok_sent": "ส่งครบแล้ว", "kf_open": "สั่งผลิตแล้ว {q}", "kf_order_btn": "สั่งผลิต", "kf_order_go": "สั่งผลิต {n} รายการ", "kf_order_hint": "ด่วน = ต้องมีให้พอส่งวันนี้ · เติม = เติมสต๊อกสำรองให้เต็มหลังส่ง — แก้ตัวเลขได้", "kf_order_qty": "สั่งผลิต (วัตถุดิบคิดตามนี้)", "kf_order_title": "สั่งผลิต", "kf_ordered": "สั่งผลิต", "kf_overdue": "เลยกำหนดจ่าย {n} บิล ฿{a}", "kf_overdue_n": "เลยกำหนด {n} บิล", "kf_paid": "จ่ายแล้ว", "kf_paid_on": "จ่ายแล้ว {d}", "kf_paid_q": "บันทึกว่าจ่ายบิล {s} ฿{a} แล้ว — วันที่จ่าย (ปปปป-ดด-วว ค.ศ.):", "kf_partial": "ไม่เต็ม batch — หารวัตถุดิบตามสัดส่วนแล้ว", "kf_pay": "การจ่ายเงิน", "kf_pay_credit": "เครดิต", "kf_pay_now": "โอน/จ่ายทันที", "kf_prod_orders": "ใบสั่งผลิตวันนี้", "kf_raw": "วัตถุดิบ", "kf_record": "บันทึกผลิตจริง", "kf_refill": "เติมสต๊อก", "kf_s1": "เช็คของ & ผลิตด่วน", "kf_s1_hint": "สต๊อกสำรอง = {d} วัน × ยอดส่งเฉลี่ย {n} วันล่าสุด (ตั้งที่ ⚙️ ตั้งค่า / รายเมนู)", "kf_s2": "ส่งของตามสาขา", "kf_s3": "ผลิตเติมสต๊อก", "kf_s4": "นับสต๊อก", "kf_s5": "สั่งวัตถุดิบ", "kf_s6": "รับของ + บิล", "kf_safety": "สำรอง", "kf_send_all": "ส่งใบสั่งทั้งหมด", "kf_send_all_hint": "ส่งเข้ากลุ่มไลน์ของแต่ละซัพ = ซัพเห็นทันที · ใบที่ส่งแล้วเปลี่ยนเป็น \"สั่งแล้ว\"", "kf_send_line": "ส่งไลน์", "kf_send_line_nog": "ส่งไลน์ (ยังไม่ผูกกลุ่ม)", "kf_send_n": "ยืนยันส่ง {n} ซัพ", "kf_send_q": "ส่งใบสั่ง \"{s}\" เข้ากลุ่ม {g} ?", "kf_send_ticked": "ยืนยันส่ง ({n} รายการที่ติ๊ก)", "kf_sent_n": "ส่งไลน์สำเร็จ {n} ซัพ", "kf_set_avg": "ยอดส่งเฉลี่ยย้อนหลัง (วัน)", "kf_set_bad": "ใส่ตัวเลขให้ถูกต้อง (ไม่ติดลบ)", "kf_set_hint": "สต๊อกสำรอง = จำนวนวัน × ยอดส่งเฉลี่ยต่อวัน · ราคาขายสาขา = ต้นทุนจริง + % — ตั้งรายเมนูทับได้ที่หน้าเมนู", "kf_set_markup": "ราคาขายสาขา: บวกจากทุน (%)", "kf_set_safety": "สต๊อกสำรอง (วัน)", "kf_set_title": "การผลิต & ราคาขายสาขา", "kf_sf_days": "สำรองกี่วัน", "kf_sf_qty": "หรือสำรองตายตัว", "kf_sf_qty_ph": "ว่าง = คิดจากจำนวนวัน", "kf_steps": "ขั้นตอนวันนี้", "kf_stock_now": "สต๊อกตอนนี้", "kf_stock_total": "มูลค่าสต๊อกรวม", "kf_sup_bills": "บิลซัพเดือนนี้", "kf_sup_credit": "เครดิต (วัน)", "kf_sup_credit_hint": "0 = โอน/จ่ายทันที · ใช้เป็นค่าตั้งต้นตอนรับของ", "kf_sup_line": "กลุ่มไลน์ของซัพ", "kf_sup_line_hint": "ใช้ส่งใบสั่งซื้อเข้ากลุ่ม (บอทร้านต้องอยู่ในกลุ่ม)", "kf_sup_noline": "— ไม่ผูกกลุ่ม —", "kf_tick_hint": "จัดของขึ้นรถแล้วติ๊กทีละรายการ + แก้ยอดส่งจริง — ส่งเฉพาะรายการที่ติ๊ก", "kf_tick_n": "ติ๊กแล้ว {n}/{m}", "kf_unlinked": "มี {n} รายการของสาขายังไม่ได้ผูกกับสูตร — ไม่ถูกนับในยอดผลิต (ผูกที่หน้า 🚚 ออเดอร์สาขา)", "kf_unpaid": "ค้างจ่าย", "kf_untick_q": "ยังไม่ได้ติ๊ก {n} รายการ — รายการนั้นจะบันทึกว่าไม่ได้ส่ง ยืนยัน?", "kf_urgent": "ด่วน", "kf_value": "มูลค่า"}, "en": {"kf_new_sup": "＋ New supplier…", "kf_new_sup_q": "New supplier name", "kf_actual": "Actual output", "kf_actual_hint": "Enter what actually came out — cost per unit uses this (ingredients follow the ordered amount)", "kf_actual_qty": "Actual output", "kf_add_first": "No items yet — tap ＋ Add item", "kf_add_item": "Add item to bill", "kf_alloc": "Overhead split to branches (month end)", "kf_alloc_exp": "Overhead share", "kf_alloc_goods": "Goods billed", "kf_alloc_hint": "Non-ingredient costs (staff, water, power, etc.) split to each branch by its share of goods billed this month", "kf_alloc_none": "No branch deliveries this month — nothing to split yet", "kf_alloc_scoped": "You need access to all branches to split overhead correctly", "kf_alloc_total": "Branch total", "kf_ap": "Unpaid bills", "kf_ap_none": "No unpaid bills 👍", "kf_batch": "= {b} batch (recipe makes {y} {u})", "kf_bill_amt": "Bill total", "kf_bill_date": "Bill date", "kf_bill_del_q": "Delete this bill? Its items will be taken out of stock", "kf_bill_edit": "Edit goods bill", "kf_bill_n": "bills", "kf_bill_new": "Receive + bill", "kf_bill_no": "Bill no.", "kf_bill_total": "Bill total", "kf_bills": "Recent goods bills", "kf_br_bills": "Delivery bills by branch", "kf_br_loading": "Loading branch orders…", "kf_br_order": "Branches ordered", "kf_buy_hint": "Needed = ingredients for open production orders + expected production tomorrow (avg daily sends) + minimum stock · minus stock on hand and already ordered", "kf_buy_nobill": "Goods received without a bill ฿{a} (older/quick receive)", "kf_by_sup": "By supplier", "kf_copied": "Copied {s} order — paste it in LINE", "kf_copy": "Copy", "kf_copy_fail": "Could not copy", "kf_cost_of": "Cost of goods sent", "kf_cost_u": "Cost/unit", "kf_days": "days", "kf_def": "default {v}", "kf_draft_clear": "Start over", "kf_draft_resumed": "Continuing your unsaved bill", "kf_due": "Due {d}", "kf_due_s": "Due", "kf_el_before": "Lock records before (period close — blank = no lock)", "kf_el_bill": "📥 Goods bills / receiving", "kf_el_boss": "Only owner/admin can change this", "kf_el_exp": "🧾 Other expenses", "kf_el_hint": "Ticked = staff can edit/delete saved records · owner/admin can always edit", "kf_el_off": "Locked", "kf_el_on": "Editable", "kf_el_prod": "🍳 Production", "kf_el_send": "🚚 Deliveries to branches", "kf_el_title": "Editing records", "kf_exp_split": "Ingredients ฿{a} · other ฿{b}", "kf_expense_all": "Expenses", "kf_fg": "Finished goods waiting to send", "kf_have": "In kitchen", "kf_line_add": "Add to bill", "kf_line_fail": "LINE send failed", "kf_line_next": "＋ Add & next", "kf_line_ok": "Sent {s} order to LINE", "kf_locked": "This record is locked — ask the owner/admin to change it", "kf_mark_paid": "Paid", "kf_mk_lb": "Markup on cost %", "kf_n_branch": "{n} branches to send", "kf_n_buy": "{n} items to order", "kf_n_due": "{n} deliveries due", "kf_n_refill": "{n} items to refill", "kf_n_urgent": "{n} urgent items", "kf_need_actual": "Enter the actual output", "kf_need_sql": "SQL jjmk_kitchen_flow.sql has not been run — some fields cannot be saved yet", "kf_need_sup": "Choose a supplier first", "kf_no_draft": "No draft purchase orders to send", "kf_no_group": "Supplier {s} has no LINE group yet (set it in 🚛 Suppliers) — opening LINE so you can pick a group", "kf_no_group_s": "No LINE group — will be skipped", "kf_no_need": "No branch orders today and no safety stock set", "kf_no_orders": "No production orders today", "kf_no_price_line": "Some items have no price — bill total is incomplete", "kf_nothing_make": "Stock is enough — nothing to produce 👍", "kf_ok_enough": "Enough to send", "kf_ok_full": "Stock is full", "kf_ok_recv": "Nothing waiting", "kf_ok_sent": "All sent", "kf_open": "Already ordered {q}", "kf_order_btn": "Production order", "kf_order_go": "Order {n} items", "kf_order_hint": "Urgent = needed to send today · Refill = top up safety stock after sending — numbers can be edited", "kf_order_qty": "Ordered (ingredients follow this)", "kf_order_title": "Production order", "kf_ordered": "Ordered", "kf_overdue": "{n} bills overdue ฿{a}", "kf_overdue_n": "{n} overdue", "kf_paid": "Paid", "kf_paid_on": "Paid {d}", "kf_paid_q": "Mark bill {s} ฿{a} as paid — payment date (YYYY-MM-DD):", "kf_partial": "Partial batch — ingredients scaled down", "kf_pay": "Payment", "kf_pay_credit": "Credit", "kf_pay_now": "Pay now / transfer", "kf_prod_orders": "Today production orders", "kf_raw": "Ingredients", "kf_record": "Record output", "kf_refill": "Refill", "kf_s1": "Check stock & urgent", "kf_s1_hint": "Safety stock = {d} days × average sends of the last {n} days (set in ⚙️ Settings / per menu)", "kf_s2": "Send to branches", "kf_s3": "Refill stock", "kf_s4": "Count stock", "kf_s5": "Order ingredients", "kf_s6": "Receive + bill", "kf_safety": "Safety", "kf_send_all": "Send all orders", "kf_send_all_hint": "Sends into each supplier LINE group — they see it right away · sent orders become \"ordered\"", "kf_send_line": "Send LINE", "kf_send_line_nog": "Send LINE (no group)", "kf_send_n": "Send to {n} suppliers", "kf_send_q": "Send \"{s}\" order to group {g}?", "kf_send_ticked": "Confirm send ({n} ticked)", "kf_sent_n": "Sent to {n} suppliers", "kf_set_avg": "Average sends over (days)", "kf_set_bad": "Please enter valid numbers (not negative)", "kf_set_hint": "Safety stock = days × average daily sends · Branch price = actual cost + % — override per menu on the menu page", "kf_set_markup": "Branch price: markup on cost (%)", "kf_set_safety": "Safety stock (days)", "kf_set_title": "Production & branch prices", "kf_sf_days": "Safety days", "kf_sf_qty": "Or fixed safety qty", "kf_sf_qty_ph": "blank = use days", "kf_steps": "Today steps", "kf_stock_now": "Stock now", "kf_stock_total": "Total stock value", "kf_sup_bills": "Supplier bills this month", "kf_sup_credit": "Credit (days)", "kf_sup_credit_hint": "0 = pay now/transfer · default when receiving", "kf_sup_line": "Supplier LINE group", "kf_sup_line_hint": "Purchase orders are sent to this group (the shop bot must be in it)", "kf_sup_noline": "— no group —", "kf_tick_hint": "Tick each item as it goes on the truck + fix the actual qty — only ticked items are sent", "kf_tick_n": "Ticked {n}/{m}", "kf_unlinked": "{n} branch items are not linked to a recipe — not counted in production (link them on 🚚 Branch orders)", "kf_unpaid": "Unpaid", "kf_untick_q": "{n} items are not ticked — they will be recorded as not sent. Continue?", "kf_urgent": "Urgent", "kf_value": "Value"}, "lo": {"kf_new_sup": "＋ ຜູ້ສະໜອງໃໝ່…", "kf_new_sup_q": "ຊື່ຜູ້ສະໜອງໃໝ່", "kf_actual": "ຜະລິດໄດ້ແທ້", "kf_actual_hint": "ໃສ່ຍອດທີ່ໄດ້ອອກມາແທ້ — ຕົ້ນທຶນ/ຫົວໜ່ວຍ ຄິດຈາກຍອດນີ້ (ວັດຖຸດິບຄິດຕາມຍອດສັ່ງຜະລິດ)", "kf_actual_qty": "ຜະລິດໄດ້ແທ້", "kf_add_first": "ຍັງບໍ່ມີລາຍການ — ກົດ ＋ ເພີ່ມສິນຄ້າ", "kf_add_item": "ເພີ່ມສິນຄ້າໃນບິນ", "kf_alloc": "ແບ່ງຄ່າໃຊ້ຈ່າຍໃຫ້ສາຂາ (ທ້າຍເດືອນ)", "kf_alloc_exp": "ຄ່າໃຊ້ຈ່າຍທີ່ແບ່ງໃຫ້", "kf_alloc_goods": "ຍອດບິນສົ່ງເຄື່ອງ", "kf_alloc_hint": "ຄ່າໃຊ້ຈ່າຍອື່ນທີ່ບໍ່ແມ່ນວັດຖຸດິບ (ຄ່າແຮງ ນ້ຳ ໄຟ ແລະອື່ນໆ) ແບ່ງໃຫ້ແຕ່ລະສາຂາຕາມສັດສ່ວນຍອດບິນທີ່ສົ່ງໃຫ້ສາຂານັ້ນໃນເດືອນນີ້", "kf_alloc_none": "ເດືອນນີ້ຍັງບໍ່ມີຍອດສົ່ງສາຂາ — ຍັງແບ່ງບໍ່ໄດ້", "kf_alloc_scoped": "ຕ້ອງເຫັນທຸກສາຂາຈຶ່ງແບ່ງຄ່າໃຊ້ຈ່າຍໄດ້ຖືກ", "kf_alloc_total": "ລວມທີ່ສາຂາຮັບ", "kf_ap": "ໜີ້ຄ້າງຈ່າຍ", "kf_ap_none": "ບໍ່ມີບິນຄ້າງຈ່າຍ 👍", "kf_batch": "= {b} batch (ສູດລະ {y} {u})", "kf_bill_amt": "ຍອດບິນ", "kf_bill_date": "ວັນທີບິນ", "kf_bill_del_q": "ລຶບບິນນີ້? ເຄື່ອງໃນບິນຈະຖືກຫັກອອກຈາກສະຕັອກ", "kf_bill_edit": "ແກ້ໄຂບິນຮັບເຄື່ອງ", "kf_bill_n": "ບິນ", "kf_bill_new": "ຮັບເຄື່ອງ + ບິນ", "kf_bill_no": "ເລກທີບິນ", "kf_bill_total": "ຍອດລວມບິນ", "kf_bills": "ບິນຮັບເຄື່ອງລ່າສຸດ", "kf_br_bills": "ບິນສົ່ງເຄື່ອງແຕ່ລະສາຂາ", "kf_br_loading": "ກຳລັງໂຫຼດຍອດທີ່ສາຂາສັ່ງ…", "kf_br_order": "ສາຂາສັ່ງ", "kf_buy_hint": "ຕ້ອງໃຊ້ = ວັດຖຸດິບຕາມສູດຂອງໃບສັ່ງຜະລິດທີ່ຍັງບໍ່ໄດ້ເຮັດ + ທີ່ຄາດວ່າຈະຜະລິດມື້ອື່ນ (ຍອດສົ່ງສະເລ່ຍ/ມື້) + ຂັ້ນຕ່ຳ · ຫັກເຄື່ອງທີ່ມີ ແລະ ທີ່ສັ່ງແລ້ວ", "kf_buy_nobill": "ມີຮັບເຄື່ອງທີ່ບໍ່ຜ່ານບິນ ฿{a}", "kf_by_sup": "ແຍກຕາມຜູ້ສະໜອງ", "kf_copied": "ກັອບປີ້ໃບສັ່ງ {s} ແລ້ວ — ວາງໃນໄລນ໌ໄດ້ເລີຍ", "kf_copy": "ກັອບປີ້", "kf_copy_fail": "ກັອບປີ້ບໍ່ໄດ້", "kf_cost_of": "ຕົ້ນທຶນຂອງທີ່ສົ່ງ", "kf_cost_u": "ທຶນ/ຫົວໜ່ວຍ", "kf_days": "ມື້", "kf_def": "ຄ່າກາງ {v}", "kf_draft_clear": "ເລີ່ມໃໝ່", "kf_draft_resumed": "ໃຊ້ຮ່າງບິນທີ່ຄ້າງໄວ້", "kf_due": "ຄົບກຳນົດຈ່າຍ {d}", "kf_due_s": "ຄົບກຳນົດ", "kf_el_before": "ລັອກຂໍ້ມູນກ່ອນວັນທີ (ປິດງວດ — ວ່າງ = ບໍ່ລັອກ)", "kf_el_bill": "📥 ບິນຮັບເຄື່ອງ / ຮັບເຄື່ອງເຂົ້າ", "kf_el_boss": "ສະເພາະເຈົ້າຂອງ/ຜູ້ດູແລລະບົບທີ່ຕັ້ງໄດ້", "kf_el_exp": "🧾 ຄ່າໃຊ້ຈ່າຍອື່ນ", "kf_el_hint": "ຕິກ = ພະນັກງານແກ້/ລຶບຂໍ້ມູນທີ່ບັນທຶກແລ້ວໄດ້ · ເຈົ້າຂອງ/ຜູ້ດູແລລະບົບແກ້ໄດ້ສະເໝີ", "kf_el_off": "ລັອກ", "kf_el_on": "ແກ້ໄດ້", "kf_el_prod": "🍳 ການຜະລິດ", "kf_el_send": "🚚 ການສົ່ງເຄື່ອງໃຫ້ສາຂາ", "kf_el_title": "ການແກ້ໄຂຂໍ້ມູນ", "kf_exp_split": "ວັດຖຸດິບ ฿{a} · ອື່ນໆ ฿{b}", "kf_expense_all": "ລາຍຈ່າຍ", "kf_fg": "ຂອງຜະລິດແລ້ວລໍຖ້າສົ່ງ", "kf_have": "ມີໃນຄົວ", "kf_line_add": "ໃສ່ໃນບິນ", "kf_line_fail": "ສົ່ງໄລນ໌ບໍ່ສຳເລັດ", "kf_line_next": "＋ ໃສ່ແລ້ວເພີ່ມຕໍ່", "kf_line_ok": "ສົ່ງໃບສັ່ງ {s} ເຂົ້າໄລນ໌ແລ້ວ", "kf_locked": "ຂໍ້ມູນນີ້ຖືກລັອກ ແກ້ບໍ່ໄດ້ — ໃຫ້ເຈົ້າຂອງ/ຜູ້ດູແລລະບົບແກ້", "kf_mark_paid": "ຈ່າຍແລ້ວ", "kf_mk_lb": "ບວກຈາກທຶນ %", "kf_n_branch": "ລໍສົ່ງ {n} ສາຂາ", "kf_n_buy": "ຕ້ອງສັ່ງ {n} ລາຍການ", "kf_n_due": "ເຄື່ອງຕ້ອງເຂົ້າ {n} ໃບ", "kf_n_refill": "ຕ້ອງເຕີມ {n} ລາຍການ", "kf_n_urgent": "ຜະລິດດ່ວນ {n} ລາຍການ", "kf_need_actual": "ໃສ່ຍອດທີ່ຜະລິດໄດ້ແທ້", "kf_need_sql": "ຍັງບໍ່ໄດ້ແລ່ນ SQL jjmk_kitchen_flow.sql — ບາງຊ່ອງຍັງບັນທຶກບໍ່ໄດ້", "kf_need_sup": "ເລືອກຜູ້ສະໜອງກ່ອນ", "kf_no_draft": "ບໍ່ມີໃບສັ່ງຊື້ຮ່າງທີ່ຕ້ອງສົ່ງ", "kf_no_group": "ຜູ້ສະໜອງ {s} ຍັງບໍ່ໄດ້ຜູກກຸ່ມໄລນ໌ (ແກ້ທີ່ 🚛 ຜູ້ສະໜອງ) — ເປີດໄລນ໌ໃຫ້ເລືອກກຸ່ມເອງກ່ອນ", "kf_no_group_s": "ຍັງບໍ່ຜູກກຸ່ມໄລນ໌ — ຈະຂ້າມ", "kf_no_need": "ມື້ນີ້ຍັງບໍ່ມີຍອດທີ່ສາຂາສັ່ງ ແລະ ຍັງບໍ່ໄດ້ຕັ້ງສະຕັອກສຳຮອງ", "kf_no_orders": "ຍັງບໍ່ມີໃບສັ່ງຜະລິດມື້ນີ້", "kf_no_price_line": "ບາງລາຍການຍັງບໍ່ມີລາຄາ — ຍອດບິນຈະບໍ່ຄົບ", "kf_nothing_make": "ເຄື່ອງພໍແລ້ວ ບໍ່ຕ້ອງຜະລິດເພີ່ມ 👍", "kf_ok_enough": "ເຄື່ອງພໍສົ່ງ", "kf_ok_full": "ສະຕັອກເຕັມແລ້ວ", "kf_ok_recv": "ບໍ່ມີເຄື່ອງຄ້າງຮັບ", "kf_ok_sent": "ສົ່ງຄົບແລ້ວ", "kf_open": "ສັ່ງຜະລິດແລ້ວ {q}", "kf_order_btn": "ສັ່ງຜະລິດ", "kf_order_go": "ສັ່ງຜະລິດ {n} ລາຍການ", "kf_order_hint": "ດ່ວນ = ຕ້ອງມີໃຫ້ພໍສົ່ງມື້ນີ້ · ເຕີມ = ເຕີມສະຕັອກສຳຮອງໃຫ້ເຕັມຫຼັງສົ່ງ — ແກ້ຕົວເລກໄດ້", "kf_order_qty": "ສັ່ງຜະລິດ (ວັດຖຸດິບຄິດຕາມນີ້)", "kf_order_title": "ສັ່ງຜະລິດ", "kf_ordered": "ສັ່ງຜະລິດ", "kf_overdue": "ເກີນກຳນົດຈ່າຍ {n} ບິນ ฿{a}", "kf_overdue_n": "ເກີນກຳນົດ {n} ບິນ", "kf_paid": "ຈ່າຍແລ້ວ", "kf_paid_on": "ຈ່າຍແລ້ວ {d}", "kf_paid_q": "ບັນທຶກວ່າຈ່າຍບິນ {s} ฿{a} ແລ້ວ — ວັນທີຈ່າຍ (YYYY-MM-DD):", "kf_partial": "ບໍ່ເຕັມ batch — ແບ່ງວັດຖຸດິບຕາມສັດສ່ວນແລ້ວ", "kf_pay": "ການຈ່າຍເງິນ", "kf_pay_credit": "ເຄຣດິດ", "kf_pay_now": "ໂອນ/ຈ່າຍທັນທີ", "kf_prod_orders": "ໃບສັ່ງຜະລິດມື້ນີ້", "kf_raw": "ວັດຖຸດິບ", "kf_record": "ບັນທຶກຜະລິດແທ້", "kf_refill": "ເຕີມສະຕັອກ", "kf_s1": "ກວດເຄື່ອງ & ຜະລິດດ່ວນ", "kf_s1_hint": "ສະຕັອກສຳຮອງ = {d} ມື້ × ຍອດສົ່ງສະເລ່ຍ {n} ມື້ລ່າສຸດ (ຕັ້ງທີ່ ⚙️ ຕັ້ງຄ່າ / ແຕ່ລະເມນູ)", "kf_s2": "ສົ່ງເຄື່ອງຕາມສາຂາ", "kf_s3": "ຜະລິດເຕີມສະຕັອກ", "kf_s4": "ນັບສະຕັອກ", "kf_s5": "ສັ່ງວັດຖຸດິບ", "kf_s6": "ຮັບເຄື່ອງ + ບິນ", "kf_safety": "ສຳຮອງ", "kf_send_all": "ສົ່ງໃບສັ່ງທັງໝົດ", "kf_send_all_hint": "ສົ່ງເຂົ້າກຸ່ມໄລນ໌ຂອງແຕ່ລະຜູ້ສະໜອງ = ເຫັນທັນທີ · ໃບທີ່ສົ່ງແລ້ວປ່ຽນເປັນ \"ສັ່ງແລ້ວ\"", "kf_send_line": "ສົ່ງໄລນ໌", "kf_send_line_nog": "ສົ່ງໄລນ໌ (ຍັງບໍ່ຜູກກຸ່ມ)", "kf_send_n": "ຢືນຢັນສົ່ງ {n} ຜູ້ສະໜອງ", "kf_send_q": "ສົ່ງໃບສັ່ງ \"{s}\" ເຂົ້າກຸ່ມ {g} ?", "kf_send_ticked": "ຢືນຢັນສົ່ງ ({n} ລາຍການທີ່ຕິກ)", "kf_sent_n": "ສົ່ງໄລນ໌ສຳເລັດ {n} ຜູ້ສະໜອງ", "kf_set_avg": "ຍອດສົ່ງສະເລ່ຍຍ້ອນຫຼັງ (ມື້)", "kf_set_bad": "ໃສ່ຕົວເລກໃຫ້ຖືກ (ບໍ່ຕິດລົບ)", "kf_set_hint": "ສະຕັອກສຳຮອງ = ຈຳນວນມື້ × ຍອດສົ່ງສະເລ່ຍຕໍ່ມື້ · ລາຄາຂາຍສາຂາ = ຕົ້ນທຶນແທ້ + % — ຕັ້ງແຕ່ລະເມນູໄດ້ທີ່ໜ້າເມນູ", "kf_set_markup": "ລາຄາຂາຍສາຂາ: ບວກຈາກທຶນ (%)", "kf_set_safety": "ສະຕັອກສຳຮອງ (ມື້)", "kf_set_title": "ການຜະລິດ & ລາຄາຂາຍສາຂາ", "kf_sf_days": "ສຳຮອງຈັກມື້", "kf_sf_qty": "ຫຼື ສຳຮອງຄົງທີ່", "kf_sf_qty_ph": "ວ່າງ = ຄິດຈາກຈຳນວນມື້", "kf_steps": "ຂັ້ນຕອນມື້ນີ້", "kf_stock_now": "ສະຕັອກຕອນນີ້", "kf_stock_total": "ມູນຄ່າສະຕັອກລວມ", "kf_sup_bills": "ບິນຜູ້ສະໜອງເດືອນນີ້", "kf_sup_credit": "ເຄຣດິດ (ມື້)", "kf_sup_credit_hint": "0 = ໂອນ/ຈ່າຍທັນທີ · ໃຊ້ເປັນຄ່າຕັ້ງຕົ້ນຕອນຮັບເຄື່ອງ", "kf_sup_line": "ກຸ່ມໄລນ໌ຂອງຜູ້ສະໜອງ", "kf_sup_line_hint": "ໃຊ້ສົ່ງໃບສັ່ງຊື້ເຂົ້າກຸ່ມ (ບອດຮ້ານຕ້ອງຢູ່ໃນກຸ່ມ)", "kf_sup_noline": "— ບໍ່ຜູກກຸ່ມ —", "kf_tick_hint": "ຈັດເຄື່ອງຂຶ້ນລົດແລ້ວຕິກເທື່ອລະລາຍການ + ແກ້ຍອດສົ່ງແທ້ — ສົ່ງສະເພາະລາຍການທີ່ຕິກ", "kf_tick_n": "ຕິກແລ້ວ {n}/{m}", "kf_unlinked": "ມີ {n} ລາຍການຂອງສາຂາຍັງບໍ່ໄດ້ຜູກກັບສູດ — ບໍ່ຖືກນັບໃນຍອດຜະລິດ", "kf_unpaid": "ຄ້າງຈ່າຍ", "kf_untick_q": "ຍັງບໍ່ໄດ້ຕິກ {n} ລາຍການ — ລາຍການນັ້ນຈະບັນທຶກວ່າບໍ່ໄດ້ສົ່ງ ຢືນຢັນ?", "kf_urgent": "ດ່ວນ", "kf_value": "ມູນຄ່າ"}, "my": {"kf_new_sup": "＋ ကုန်သွင်းသူအသစ်…", "kf_new_sup_q": "ကုန်သွင်းသူအမည်အသစ်", "kf_actual": "အမှန်ထုတ်ရရှိ", "kf_actual_hint": "အမှန်ထွက်လာသည့်ပမာဏထည့်ပါ — ယူနစ်ကုန်ကျစရိတ်ကို ဤပမာဏဖြင့်တွက်သည်", "kf_actual_qty": "အမှန်ထုတ်ရရှိ", "kf_add_first": "စာရင်းမရှိသေး — ＋ ပစ္စည်းထည့်ရန် နှိပ်ပါ", "kf_add_item": "ဘေလ်ထဲ ပစ္စည်းထည့်ရန်", "kf_alloc": "ဆိုင်ခွဲများသို့ အသုံးစရိတ်ခွဲဝေ (လကုန်)", "kf_alloc_exp": "ခွဲဝေသည့်အသုံးစရိတ်", "kf_alloc_goods": "ပို့ကုန်ဘေလ်", "kf_alloc_hint": "ကုန်ကြမ်းမဟုတ်သော အသုံးစရိတ် (လုပ်ခ ရေ မီး စသည်) ကို ဤလ ဆိုင်ခွဲတစ်ခုစီသို့ ပို့သည့်ဘေလ်အချိုးအတိုင်း ခွဲဝေသည်", "kf_alloc_none": "ဤလ ဆိုင်ခွဲသို့ပို့ခြင်းမရှိသေး — ခွဲဝေ၍မရသေး", "kf_alloc_scoped": "ဆိုင်ခွဲအားလုံးကိုမြင်မှ မှန်ကန်စွာခွဲဝေနိုင်သည်", "kf_alloc_total": "ဆိုင်ခွဲစုစုပေါင်း", "kf_ap": "မပေးရသေးသော ဘေလ်များ", "kf_ap_none": "မပေးရသေးသော ဘေလ်မရှိ 👍", "kf_batch": "= {b} batch (ချက်နည်းတစ်ခု {y} {u})", "kf_bill_amt": "ဘေလ်စုစုပေါင်း", "kf_bill_date": "ဘေလ်ရက်စွဲ", "kf_bill_del_q": "ဤဘေလ်ကို ဖျက်မလား? ပစ္စည်းများကို စတော့မှ နုတ်မည်", "kf_bill_edit": "ပစ္စည်းလက်ခံဘေလ် ပြင်ရန်", "kf_bill_n": "ဘေလ်", "kf_bill_new": "လက်ခံ + ဘေလ်", "kf_bill_no": "ဘေလ်နံပါတ်", "kf_bill_total": "ဘေလ်စုစုပေါင်း", "kf_bills": "နောက်ဆုံး လက်ခံဘေလ်များ", "kf_br_bills": "ဆိုင်ခွဲအလိုက် ပို့ကုန်ဘေလ်", "kf_br_loading": "ဆိုင်ခွဲမှာယူမှု ဖွင့်နေသည်…", "kf_br_order": "ဆိုင်ခွဲမှာ", "kf_buy_hint": "လိုအပ်ချက် = မပြီးသေးသော ထုတ်လုပ်ရန်အမိန့် + မနက်ဖြန် ထုတ်မည့်ပမာဏ (တစ်ရက်ပျမ်းမျှပို့) + အနည်းဆုံး · ရှိပြီးနှင့် မှာပြီးကို နုတ်သည်", "kf_buy_nobill": "ဘေလ်မပါသော လက်ခံမှု ฿{a}", "kf_by_sup": "ကုန်သွင်းသူအလိုက်", "kf_copied": "{s} မှာစာ ကူးပြီး — LINE တွင် ကပ်ပါ", "kf_copy": "ကူးရန်", "kf_copy_fail": "ကူး၍မရပါ", "kf_cost_of": "ပို့ကုန်ကုန်ကျစရိတ်", "kf_cost_u": "ယူနစ်ကုန်ကျ", "kf_days": "ရက်", "kf_def": "ပုံသေ {v}", "kf_draft_clear": "အသစ်စရန်", "kf_draft_resumed": "မသိမ်းရသေးသော ဘေလ်ကို ဆက်သုံးနေသည်", "kf_due": "ပေးရမည့်ရက် {d}", "kf_due_s": "ပေးရမည့်ရက်", "kf_el_before": "ဤရက်မတိုင်မီ ဒေတာကို သော့ခတ် (ကွက်လပ် = မခတ်)", "kf_el_bill": "📥 လက်ခံဘေလ် / ပစ္စည်းလက်ခံ", "kf_el_boss": "ပိုင်ရှင်/စီမံသူသာ ပြင်နိုင်သည်", "kf_el_exp": "🧾 အခြားအသုံးစရိတ်", "kf_el_hint": "အမှန်ခြစ် = ဝန်ထမ်းများ သိမ်းပြီးဒေတာကို ပြင်/ဖျက်နိုင်သည် · ပိုင်ရှင်/စီမံသူ အမြဲပြင်နိုင်သည်", "kf_el_off": "သော့ခတ်", "kf_el_on": "ပြင်နိုင်", "kf_el_prod": "🍳 ထုတ်လုပ်မှု", "kf_el_send": "🚚 ဆိုင်ခွဲသို့ပို့ခြင်း", "kf_el_title": "ဒေတာပြင်ဆင်ခြင်း", "kf_exp_split": "ကုန်ကြမ်း ฿{a} · အခြား ฿{b}", "kf_expense_all": "အသုံးစရိတ်", "kf_fg": "ပို့ရန်စောင့်နေသော ထုတ်ကုန်", "kf_have": "မီးဖိုချောင်တွင်ရှိ", "kf_line_add": "ဘေလ်ထဲထည့်ရန်", "kf_line_fail": "LINE ပို့၍မရပါ", "kf_line_next": "＋ ထည့်ပြီး ဆက်ရန်", "kf_line_ok": "{s} မှာစာကို LINE သို့ပို့ပြီး", "kf_locked": "ဤဒေတာ သော့ခတ်ထားသည် — ပိုင်ရှင်/စီမံသူကို ပြင်ခိုင်းပါ", "kf_mark_paid": "ပေးပြီး", "kf_mk_lb": "ကုန်ကျစရိတ်အပေါ် အမြတ် %", "kf_n_branch": "ဆိုင်ခွဲ {n} ခု ပို့ရန်", "kf_n_buy": "{n} ခု မှာရန်", "kf_n_due": "{n} စောင် ရောက်ရန်", "kf_n_refill": "{n} ခု ဖြည့်ရန်", "kf_n_urgent": "အရေးပေါ် {n} ခု", "kf_need_actual": "အမှန်ထုတ်ရရှိသည့်ပမာဏ ထည့်ပါ", "kf_need_sql": "SQL jjmk_kitchen_flow.sql မ run ရသေးပါ — အချို့ကွက်လပ်များ မသိမ်းနိုင်သေး", "kf_need_sup": "ကုန်သွင်းသူကို ဦးစွာရွေးပါ", "kf_no_draft": "ပို့ရန် မူကြမ်းမှာစာ မရှိပါ", "kf_no_group": "{s} တွင် LINE အုပ်စု မချိတ်ရသေး (🚛 ကုန်သွင်းသူတွင် သတ်မှတ်ပါ) — LINE ဖွင့်ပေးမည်", "kf_no_group_s": "LINE အုပ်စုမချိတ်ရသေး — ကျော်မည်", "kf_no_need": "ယနေ့ ဆိုင်ခွဲမှာယူမှုမရှိ၊ အရန်စတော့လည်း မသတ်မှတ်ရသေး", "kf_no_orders": "ယနေ့ ထုတ်လုပ်ရန်အမိန့် မရှိသေး", "kf_no_price_line": "အချို့ပစ္စည်းတွင် စျေးနှုန်းမရှိ — ဘေလ်စုစုပေါင်း မပြည့်စုံ", "kf_nothing_make": "စတော့လုံလောက်သည် — ထပ်ထုတ်ရန်မလို 👍", "kf_ok_enough": "ပို့ရန်လုံလောက်", "kf_ok_full": "စတော့ပြည့်ပြီ", "kf_ok_recv": "စောင့်နေသည်မရှိ", "kf_ok_sent": "အားလုံးပို့ပြီး", "kf_open": "မှာပြီး {q}", "kf_order_btn": "ထုတ်လုပ်ရန်အမိန့်", "kf_order_go": "{n} ခု ထုတ်ရန်မှာမည်", "kf_order_hint": "အရေးပေါ် = ယနေ့ပို့ရန်လိုအပ် · ဖြည့် = ပို့ပြီးနောက် အရန်စတော့ဖြည့်ရန် — ဂဏန်းပြင်နိုင်သည်", "kf_order_qty": "မှာထုတ်ပမာဏ (ကုန်ကြမ်းကို ဤအတိုင်းတွက်)", "kf_order_title": "ထုတ်လုပ်ရန်အမိန့်", "kf_ordered": "မှာထုတ်", "kf_overdue": "ရက်လွန် {n} ဘေလ် ฿{a}", "kf_overdue_n": "ရက်လွန် {n}", "kf_paid": "ပေးပြီး", "kf_paid_on": "{d} တွင်ပေးပြီး", "kf_paid_q": "{s} ฿{a} ဘေလ်ကို ပေးပြီးအဖြစ် မှတ်မည် — ပေးသည့်ရက် (YYYY-MM-DD):", "kf_partial": "batch မပြည့် — ကုန်ကြမ်းကို အချိုးကျ လျှော့ပြီး", "kf_pay": "ငွေပေးချေမှု", "kf_pay_credit": "အကြွေး", "kf_pay_now": "ချက်ချင်းပေး/လွှဲ", "kf_prod_orders": "ယနေ့ ထုတ်လုပ်ရန်အမိန့်များ", "kf_raw": "ကုန်ကြမ်း", "kf_record": "အမှန်ထုတ်ရရှိ မှတ်ရန်", "kf_refill": "စတော့ဖြည့်", "kf_s1": "စတော့စစ် & အရေးပေါ်ထုတ်", "kf_s1_hint": "အရန်စတော့ = {d} ရက် × နောက်ဆုံး {n} ရက် ပျမ်းမျှပို့ပမာဏ (⚙️ ဆက်တင် / မီနူးအလိုက်)", "kf_s2": "ဆိုင်ခွဲသို့ပို့", "kf_s3": "စတော့ဖြည့်ထုတ်", "kf_s4": "စတော့ရေတွက်", "kf_s5": "ကုန်ကြမ်းမှာ", "kf_s6": "လက်ခံ + ဘေလ်", "kf_safety": "အရန်", "kf_send_all": "မှာစာအားလုံးပို့", "kf_send_all_hint": "ကုန်သွင်းသူတစ်ဦးချင်း LINE အုပ်စုသို့ ပို့မည် · ပို့ပြီးသည့်မှာစာများ \"မှာပြီး\" ဖြစ်မည်", "kf_send_line": "LINE ပို့", "kf_send_line_nog": "LINE ပို့ (အုပ်စုမရှိ)", "kf_send_n": "ကုန်သွင်းသူ {n} ဦးသို့ ပို့မည်", "kf_send_q": "\"{s}\" မှာစာကို {g} အုပ်စုသို့ ပို့မလား?", "kf_send_ticked": "ပို့မည် (အမှန်ခြစ် {n} ခု)", "kf_sent_n": "ကုန်သွင်းသူ {n} ဦးသို့ ပို့ပြီး", "kf_set_avg": "ပျမ်းမျှပို့ပမာဏ (ရက်)", "kf_set_bad": "မှန်ကန်သော ဂဏန်းထည့်ပါ (အနုတ်မဖြစ်ရ)", "kf_set_hint": "အရန်စတော့ = ရက် × တစ်ရက်ပျမ်းမျှပို့ · ဆိုင်ခွဲစျေး = အမှန်ကုန်ကျ + % — မီနူးစာမျက်နှာတွင် မီနူးအလိုက်ပြင်နိုင်", "kf_set_markup": "ဆိုင်ခွဲစျေး: ကုန်ကျစရိတ်အပေါ် အမြတ် (%)", "kf_set_safety": "အရန်စတော့ (ရက်)", "kf_set_title": "ထုတ်လုပ်မှု & ဆိုင်ခွဲစျေး", "kf_sf_days": "အရန် ရက်", "kf_sf_qty": "သို့မဟုတ် ပုံသေအရန်", "kf_sf_qty_ph": "ကွက်လပ် = ရက်ဖြင့်တွက်", "kf_steps": "ယနေ့ အဆင့်များ", "kf_stock_now": "ယခု စတော့", "kf_stock_total": "စတော့တန်ဖိုး စုစုပေါင်း", "kf_sup_bills": "ဤလ ကုန်သွင်းသူဘေလ်များ", "kf_sup_credit": "အကြွေး (ရက်)", "kf_sup_credit_hint": "0 = ချက်ချင်းပေး/လွှဲ · လက်ခံချိန် ပုံသေတန်ဖိုး", "kf_sup_line": "ကုန်သွင်းသူ LINE အုပ်စု", "kf_sup_line_hint": "ဝယ်ယူမှာစာကို ဤအုပ်စုသို့ပို့သည် (ဆိုင် bot အုပ်စုထဲရှိရမည်)", "kf_sup_noline": "— အုပ်စုမချိတ် —", "kf_tick_hint": "ကားပေါ်တင်ပြီး တစ်ခုချင်း အမှန်ခြစ်ပါ + အမှန်ပို့ပမာဏ ပြင်ပါ — အမှန်ခြစ်ထားသည်များသာ ပို့မည်", "kf_tick_n": "အမှန်ခြစ်ပြီး {n}/{m}", "kf_unlinked": "ဆိုင်ခွဲပစ္စည်း {n} ခု ချက်နည်းနှင့် မချိတ်ရသေး — ထုတ်လုပ်မှုတွင် မတွက်ပါ", "kf_unpaid": "မပေးရသေး", "kf_untick_q": "{n} ခု အမှန်မခြစ်ရသေး — မပို့ဟု မှတ်မည်။ ဆက်မလား?", "kf_urgent": "အရေးပေါ်", "kf_value": "တန်ဖိုး"}};
+['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],FLOW_I18N[l]));   // ข้อความของ flow ประจำวัน (kf_*)
+/* ============================================================
+   🏭 flow ประจำวันของครัวกลาง (เจ้าของสั่ง 2026-10-06)
+   ① เช็คของ+ผลิตด่วน → ② ส่งของตามสาขา (ติ๊ก+บิล) → ③ ผลิตเติมสต๊อก → ④ นับสต๊อก
+   → ⑤ สั่งวัตถุดิบ (แยกซัพ ส่งไลน์) → ⑥ รับของ+บิลซัพ (เครดิต/โอน) · บัญชี · แดชบอร์ด
+   ค่าตั้ง: ck_settings key=kplan {safety_days,avg_days,markup} · key=editlock {bill,prod,send,exp,before}
+   ============================================================ */
+const KP_DEF={safety_days:2,avg_days:14,markup:0};
+function kpClean(v){v=(v&&typeof v==='object')?v:{};
+  const n=(x,d,lo,hi)=>{const y=Number(x);return (x!==null&&x!==''&&x!==undefined&&isFinite(y)&&y>=lo&&y<=hi)?y:d;};
+  return {safety_days:n(v.safety_days,KP_DEF.safety_days,0,60),avg_days:Math.round(n(v.avg_days,KP_DEF.avg_days,3,90)),
+    markup:n(v.markup,KP_DEF.markup,0,1000)};}
+const EL_TYPES=['bill','prod','send','exp'];
+function elClean(v){v=(v&&typeof v==='object')?v:{};const o={};
+  EL_TYPES.forEach(k=>{o[k]=v[k]!==false;});
+  o.before=/^\d{4}-\d{2}-\d{2}$/.test(String(v.before||''))?String(v.before):'';
+  return o;}
+const kpCfg=()=>S.kp||kpClean(null);
+const blankNum=v=>v==null||v==='';
+function ckBoss(){return !!(S.prof&&S.prof.role==='owner');}   // ผู้ดูแลระบบ/เจ้าของ (mapCentralProf แปลงเป็น owner)
+/* แก้/ลบข้อมูลที่บันทึกแล้ว — เจ้าของ/ผู้ดูแลระบบได้เสมอ · คนอื่นตามหน้าตั้งค่า 🔒 (ปิดเป็นเรื่อง ๆ + ล็อกก่อนวันที่) */
+function canEditRec(type,d){
+  if(!canKitchen())return false;
+  if(ckBoss())return true;
+  const L=S.editlock||elClean(null);
+  if(L[type]===false)return false;
+  if(L.before&&d&&String(d).slice(0,10)<L.before)return false;
+  return true;}
+function editDenied(type,d){if(canEditRec(type,d))return false;toast(t('kf_locked'),true);return true;}
+/* คอลัมน์ใหม่ยังไม่มี (ยังไม่ได้รัน jjmk_kitchen_flow.sql) = บันทึกช่องอื่นไปก่อน */
+const colErr=(e,cols)=>!!e&&cols.some(c=>String(e.message||e).indexOf(c)>=0);
+async function insFallback(tbl,rows,cols,sel){
+  return dbi(async()=>{
+    const run=rr=>sel?sb.from(tbl).insert(rr).select():sb.from(tbl).insert(rr);
+    let r=await run(rows);
+    if(r&&r.error&&colErr(r.error,cols)){S.flowSql=false;
+      r=await run(rows.map(x=>{const y=Object.assign({},x);cols.forEach(c=>delete y[c]);return y;}));}
+    return r;});}
+async function updFallback(tbl,row,id,cols){
+  return dbi(async()=>{
+    let r=await sb.from(tbl).update(row).eq('id',id);
+    if(r&&r.error&&colErr(r.error,cols)){S.flowSql=false;const y=Object.assign({},row);cols.forEach(c=>delete y[c]);
+      r=Object.keys(y).length?await sb.from(tbl).update(y).eq('id',id):{data:null,error:null};}
+    return r;});}
+
+/* ---------- ราคาขายสาขา = ต้นทุนจริงต่อหน่วย + % (ตั้งค่ากลางในหน้าตั้งค่า · ตั้งรายเมนูทับได้) ---------- */
+function markupOf(r){return (r&&!blankNum(r.markup_pct))?num(r.markup_pct):kpCfg().markup;}
+
+/* ---------- สต๊อกสำรอง (safety) ของที่ผลิต = วัน × ยอดส่งเฉลี่ยต่อวัน · ใส่ตัวเลขตายตัวทับได้ ---------- */
+function kpAvgOf(rid){return num(((S.kpAvg||{}).by||{})[rid]);}
+function safetyOf(r){
+  if(r&&!blankNum(r.safety_qty))return {q:num(r.safety_qty),fixed:true,days:null};
+  const days=(r&&!blankNum(r.safety_days))?num(r.safety_days):kpCfg().safety_days;
+  return {q:days*kpAvgOf(r&&r.id),fixed:false,days};}
+async function kpAvgLoad(force){ // ยอดส่งสาขาย้อนหลัง N วัน (ไม่นับวันนี้ที่ยังส่งไม่ครบ) ÷ N
+  if(!force&&S.kpAvg&&Date.now()-S.kpAvg.t<300000)return S.kpAvg;
+  const n=kpCfg().avg_days,to=bizTodayISO(),from=addDays(to,-n);
+  let rows=[];
+  try{rows=await sbAll(()=>sb.from('ck_moves').select('ref_id,qty,d').eq('kind','send').eq('item_kind','recipe')
+    .gte('d',from).lt('d',to).order('id'),20);}catch(e){rows=[];}
+  const by={};rows.forEach(m=>{by[m.ref_id]=(by[m.ref_id]||0)+Math.abs(num(m.qty));});
+  Object.keys(by).forEach(k=>{by[k]=by[k]/n;});
+  S.kpAvg={t:Date.now(),by,n};return S.kpAvg;}
+function kpRound(r,q){ // ผลิตเป็นจำนวนเต็ม — หน่วยชั่ง/ตวง (กก. ลิตร) ปัดขึ้น 2 ตำแหน่ง
+  if(!(q>1e-9))return 0;
+  return brContinuous(r&&r.yield_unit)?Math.ceil(q*100-1e-6)/100:Math.ceil(q-1e-9);}
+/* ยอดที่สาขาสั่ง (ยังไม่ได้ส่ง) ต่อสูตร — จากยอดนับของแอพนับสต๊อก (+ ออเดอร์ที่กดเองค้างถึงวันนี้) */
+function kpBranchNeed(){
+  const need={},by={};let unl=0;const D=bizTodayISO();
+  (S.br.data||[]).forEach(B=>{if(!B.cd)return;const P=brPlan(B);if(P.sent)return;
+    P.need.forEach(x=>{const L=x.link;
+      if(!L.r||!L.f){if(!L.none)unl++;return;}
+      const q=num(x.order)*L.f;
+      need[L.r.id]=(need[L.r.id]||0)+q;
+      (by[L.r.id]=by[L.r.id]||{})[B.code]=((by[L.r.id]||{})[B.code]||0)+q;});});
+  S.orders.filter(o=>(o.status==='new'||o.status==='prep')&&o.d<=D).forEach(o=>(S.orderItems[o.id]||[]).forEach(l=>{
+    if(!l.recipe_id)return;need[l.recipe_id]=(need[l.recipe_id]||0)+num(l.qty);
+    (by[l.recipe_id]=by[l.recipe_id]||{})[o.branch]=((by[l.recipe_id]||{})[o.branch]||0)+num(l.qty);}));
+  return {need,by,unl};}
+/* ต่อสูตร: ด่วน = ต้องส่งวันนี้ − มี · เติม = สำรอง − (มี − ต้องส่ง) · หักใบสั่งผลิตที่ค้างอยู่แล้ว */
+function kpPlan(){
+  const bn=kpBranchNeed();const D=bizTodayISO();
+  const open={};S.plans.filter(p=>p.status==='plan'&&p.d<=D).forEach(p=>{open[p.recipe_id]=(open[p.recipe_id]||0)+num(p.qty);});
+  const rows=S.recipes.filter(r=>r.active!==false).map(r=>{
+    const have=num(r.qty),need=num(bn.need[r.id]),sf=safetyOf(r),op=num(open[r.id]);
+    const urgent=Math.max(0,need-have);
+    const refill=Math.max(0,sf.q-Math.max(0,have-need));
+    const uLeft=Math.max(0,urgent-op);
+    const rLeft=Math.max(0,refill-Math.max(0,op-urgent));
+    return {r,have,need,sf,open:op,urgent,refill,uLeft:kpRound(r,uLeft),rLeft:kpRound(r,rLeft),by:bn.by[r.id]||{}};
+  }).filter(x=>x.need>0||x.sf.q>0||x.open>0);
+  return {rows,unl:bn.unl};}
+
+/* ---------- 🍳 สั่งผลิต (ด่วน / เติมสต๊อก) → ck_plans (status=plan, kind) ---------- */
+let KO=null;
+function kpOrderModal(){if(!canKitchen())return;
+  const P=kpPlan();
+  KO={rows:P.rows.filter(x=>x.uLeft>0||x.rLeft>0).map(x=>({rid:x.r.id,u:x.uLeft?String(x.uLeft):'',f:x.rLeft?String(x.rLeft):'',on:true}))};
+  if(!KO.rows.length){KO=null;toast(t('kf_nothing_make'));return;}
+  paintKo();}
+function paintKo(){
+  const d=KO;if(!d)return;
+  let h='<h3>🍳 '+t('kf_order_title')+' · '+dispDate(bizTodayISO())+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('kf_order_hint')+'</div>';
+  d.rows.forEach((x,i)=>{const r=recipeById(x.rid);if(!r)return;const u=esc(trUnit(r.yield_unit||''));
+    const b=(num(x.u)+num(x.f))/(num(r.yield_qty)||1);
+    h+='<div class="korow'+(x.on?'':' off')+'"><label class="kochk"><input type="checkbox"'+(x.on?' checked':'')+' onchange="KO.rows['+i+'].on=this.checked;paintKo()"></label>'+
+      '<div class="grow"><b>'+esc(dispName(r))+'</b><div class="xs mut">'+t('kf_batch',{b:fmtQ(rnd2(b)),y:fmtQ(num(r.yield_qty)||1),u})+'</div></div>'+
+      '<div class="koq"><div class="xs">⚡ '+t('kf_urgent')+'</div><input inputmode="decimal" value="'+esc(x.u)+'" oninput="KO.rows['+i+'].u=this.value" onchange="paintKo()"></div>'+
+      '<div class="koq"><div class="xs">🔄 '+t('kf_refill')+'</div><input inputmode="decimal" value="'+esc(x.f)+'" oninput="KO.rows['+i+'].f=this.value" onchange="paintKo()"></div>'+
+      '<span class="xs mut koU">'+u+'</span></div>';});
+  const n=d.rows.filter(x=>x.on&&(num(x.u)>0||num(x.f)>0)).length;
+  h+='<button class="btn big" style="margin-top:10px" onclick="kpOrderSave()"'+(n?'':' disabled')+'>'+t('kf_order_go',{n})+'</button>';
+  openModal(h,true);}
+async function kpOrderSave(){await once(async()=>{
+  const d=KO;if(!d)return;const D=bizTodayISO();const rows=[];
+  d.rows.forEach(x=>{if(!x.on)return;const r=recipeById(x.rid);if(!r)return;
+    [['urgent',num(x.u),'⚡ '+I18N.th.kf_urgent],['refill',num(x.f),'🔄 '+I18N.th.kf_refill]].forEach(k=>{
+      if(k[1]>0)rows.push({id:uid('pl'),d:D,recipe_id:r.id,qty:k[1],status:'plan',kind:k[0],note:k[2],by_name:S.user.name});});});
+  if(!rows.length){toast(t('need_qty'),true);return;}
+  await insFallback('ck_plans',rows,['kind']);
+  S.plans.push(...rows);S.plans.sort((a,b)=>a.d<b.d?-1:1);
+  KO=null;closeModal();toast(t('sv_ok'));show(S.tab);});}
+function kpKind(p){return p.kind||(String(p.note||'').startsWith('⚡')?'urgent':String(p.note||'').startsWith('🔄')?'refill':'');}
+function kpKindLb(p){const k=kpKind(p);
+  return k==='urgent'?'<span class="chip bad xs">⚡ '+t('kf_urgent')+'</span>':k==='refill'?'<span class="chip blue xs">🔄 '+t('kf_refill')+'</span>':'';}
+function prodPlanQty(p){if(p.plan_qty!=null)return num(p.plan_qty);
+  if(p.plan_id){const pl=S.plans.find(x=>x.id===p.plan_id);if(pl)return num(pl.qty);}return null;}
+/* รายการสั่งผลิตวันนี้: ยังไม่ทำ (ปุ่มบันทึกผลิตจริง) + ทำแล้ว (สั่ง vs ได้จริง) */
+function kpPlansHtml(){
+  const D=bizTodayISO(),K=canKitchen();
+  const open=S.plans.filter(p=>p.status==='plan'&&p.d<=D);
+  const done=S.prods.filter(p=>p.d===D);
+  let h='';
+  open.forEach(p=>{const r=recipeById(p.recipe_id);if(!r)return;
+    h+='<div class="rowline">'+thumbHtml(r,'🍲')+'<div class="grow"><b>'+esc(dispName(r))+'</b> '+kpKindLb(p)+
+      '<div class="xs mut">'+t('kf_ordered')+' '+fmtQ(p.qty)+' '+esc(trUnit(r.yield_unit||''))+(p.d<D?' · '+dispDate(p.d):'')+'</div></div>'+
+      (K?'<button class="btn sm2" data-id="'+esc(p.id)+'" onclick="produceFromPlan(this.dataset.id)">✅ '+t('kf_record')+'</button>':'')+'</div>';});
+  done.forEach(p=>{const r=recipeById(p.recipe_id);const u=esc(trUnit(r?r.yield_unit||'':''));
+    const pq=prodPlanQty(p);const diff=pq!=null?num(p.qty)-pq:null;
+    h+='<div class="rowline" style="cursor:pointer" data-id="'+esc(p.id)+'" onclick="prodDetail(this.dataset.id)">'+thumbHtml(r,'🍲')+
+      '<div class="grow"><b>'+esc(r?dispName(r):p.name||'')+'</b>'+
+      '<div class="xs mut">'+(pq!=null?t('kf_ordered')+' '+fmtQ(pq)+' '+u+' · ':'')+t('kf_actual')+' <b>'+fmtQ(p.qty)+' '+u+'</b>'+
+      (diff!=null&&Math.abs(diff)>1e-9?' <span class="chip '+(diff<0?'bad':'ok')+' xs">'+(diff>0?'+':'')+fmtQ(rnd2(diff))+'</span>':'')+'</div></div>'+
+      '<span class="chip ok xs">✓</span></div>';});
+  return h||'<div class="empty">'+t('kf_no_orders')+'</div>';}
+/* การ์ด ① เช็คของ + ผลิตด่วน/เติม */
+function kpCheckHtml(){
+  const P=kpPlan(),K=canKitchen(),c=kpCfg();
+  let h='<div class="card" id="kfStep1"><h3>🌅 '+t('kf_s1')+'<span class="sp">'+
+    (K?'<button class="btn sm2" onclick="kpOrderModal()">🍳 '+t('kf_order_btn')+'</button>':'')+'</span></h3>'+
+    '<div class="xs mut" style="margin-bottom:8px">'+t('kf_s1_hint',{d:fmtQ(c.safety_days),n:c.avg_days})+'</div>';
+  if(!S.br.data&&stkCodes().length)h+='<div class="xs mut">⏳ '+t('kf_br_loading')+'</div>';
+  if(P.unl)h+='<div class="hintbox">⚠ '+t('kf_unlinked',{n:P.unl})+'</div>';
+  if(!P.rows.length)h+='<div class="empty">'+t('kf_no_need')+'</div>';
+  else{
+    h+='<div class="twrap"><table class="t kft"><tr><th>'+t('nav_menus')+'</th><th class="right">'+t('kf_br_order')+'</th><th class="right">'+t('kf_have')+'</th>'+
+      '<th class="right">⚡ '+t('kf_urgent')+'</th><th class="right">'+t('kf_safety')+'</th><th class="right">🔄 '+t('kf_refill')+'</th></tr>';
+    P.rows.forEach(x=>{const u=esc(trUnit(x.r.yield_unit||''));
+      const brs=Object.keys(x.by).map(b=>esc(branchName(b))+' '+fmtQ(rnd2(x.by[b]))).join(' · ');
+      h+='<tr><td>'+esc(dispName(x.r))+' <span class="xs mut">'+u+'</span>'+
+        (brs?'<div class="xs mut">'+brs+'</div>':'')+(x.open?'<div class="xs mut">🍳 '+t('kf_open',{q:fmtQ(x.open)})+'</div>':'')+'</td>'+
+        '<td class="n">'+(x.need?fmtQ(rnd2(x.need)):'–')+'</td><td class="n">'+fmtQ(x.have)+'</td>'+
+        '<td class="n">'+(x.uLeft?'<b style="color:var(--bad)">'+fmtQ(x.uLeft)+'</b>':'<span class="chip ok xs">✓</span>')+'</td>'+
+        '<td class="n">'+fmtQ(kpRound(x.r,x.sf.q))+(x.sf.fixed?' 📌':'')+'</td>'+
+        '<td class="n">'+(x.rLeft?'<b style="color:#2F6FB0">'+fmtQ(x.rLeft)+'</b>':'<span class="chip ok xs">✓</span>')+'</td></tr>';});
+    h+='</table></div>';}
+  h+='<div class="secbar" style="margin-top:10px">🍳 '+t('kf_prod_orders')+'</div>'+kpPlansHtml();
+  return h+'</div>';}
+
+/* ---------- ☀️ ขั้นตอนวันนี้ ①–⑥ ---------- */
+function kpSteps(){
+  const P=kpPlan(),D=bizTodayISO();
+  const brs=(S.br.data||[]).filter(B=>B.cd&&brPlan(B).need.length);
+  const brLeft=brs.filter(B=>!brPlan(B).sent).length;
+  const buy=kpBuyRows().filter(r=>r.short>0);
+  const due=S.pos.filter(p=>p.status==='ordered'&&p.d_due&&p.d_due<=D);
+  const nU=P.rows.filter(x=>x.uLeft>0).length,nR=P.rows.filter(x=>x.rLeft>0).length;
+  return [
+    {k:1,ic:'🌅',lb:t('kf_s1'),ok:!nU,sub:nU?t('kf_n_urgent',{n:nU}):t('kf_ok_enough'),go:"kfGo('kfStep1')"},
+    {k:2,ic:'🚚',lb:t('kf_s2'),ok:S.br.data?!brLeft:null,sub:S.br.data?(brLeft?t('kf_n_branch',{n:brLeft}):t('kf_ok_sent')):'…',go:"kfGo('brNeedToday')"},
+    {k:3,ic:'🔄',lb:t('kf_s3'),ok:!nR,sub:nR?t('kf_n_refill',{n:nR}):t('kf_ok_full'),go:'kpOrderModal()'},
+    {k:4,ic:'📋',lb:t('kf_s4'),ok:!!S._countedToday,sub:S._countedToday?t('td_counted_ok'):t('td_counted_no'),go:"show('stock');skCountStart()"},
+    {k:5,ic:'🛒',lb:t('kf_s5'),ok:!buy.length,sub:buy.length?t('kf_n_buy',{n:buy.length}):t('pl_no_short'),go:'kpBuyWizard()'},
+    {k:6,ic:'📥',lb:t('kf_s6'),ok:!due.length,sub:due.length?t('kf_n_due',{n:due.length}):t('kf_ok_recv'),go:'billNew()'}];}
+function kpStepsHtml(){
+  return '<div class="card"><h3>🗺 '+t('kf_steps')+'</h3><div class="kfsteps">'+kpSteps().map(s=>
+    '<button class="kfs '+(s.ok===null?'wait':s.ok?'ok':'todo')+'" onclick="'+s.go+'"><span class="kfn">'+(s.ok?'✓':s.k)+'</span>'+
+    '<span class="kfl"><b>'+s.ic+' '+esc(s.lb)+'</b><small>'+esc(s.sub)+'</small></span></button>').join('')+'</div></div>';}
+function kfGo(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
+async function kpTodayLoad(){ // โหลดยอดส่งเฉลี่ย + ยอดที่สาขาสั่ง แล้ววาดการ์ด ①/ขั้นตอนใหม่
+  try{await Promise.all([kpAvgLoad(),stkCodes().length?brLoad():null]);}catch(e){}
+  if(S.tab!=='today')return;
+  const a=document.getElementById('kfStepsBox'),b=document.getElementById('kfStep1Box');
+  if(a)a.innerHTML=kpStepsHtml();
+  if(b)b.innerHTML=kpCheckHtml();}
+
+/* ---------- 🧾 เลขบิลส่งสาขา: <สาขา>-<ปปดดวว>-<ลำดับของวันนั้น> เช่น JJRD-261006-1 ---------- */
+async function billNoAssign(o){
+  if(!o||o.bill_no||S.billNoCol===false)return null;
+  try{
+    const r=await sb.from('ck_orders').select('bill_no').eq('branch',o.branch).eq('d',o.d);
+    if(r.error){if(colErr(r.error,['bill_no']))S.billNoCol=false;return null;}
+    const pre=o.branch+'-'+String(o.d).slice(2,10).split('-').join('')+'-';
+    let n=0;(r.data||[]).forEach(x=>{const m=String(x.bill_no||'');
+      if(m.startsWith(pre)){const k=parseInt(m.slice(pre.length),10);if(k>n)n=k;}});
+    const no=pre+(n+1);
+    const u=await sb.from('ck_orders').update({bill_no:no}).eq('id',o.id);
+    if(u.error){if(colErr(u.error,['bill_no']))S.billNoCol=false;return null;}
+    o.bill_no=no;return no;
+  }catch(e){return null;}}
+const orderSell=o=>o.total_sell!=null?num(o.total_sell):(S.orderItems[o.id]||[]).reduce((s,l)=>s+num(l.amount_sell!=null?l.amount_sell:l.amount),0);
+
+/* ---------- 🛒 สั่งวัตถุดิบ (พรุ่งนี้) — จากใบสั่งผลิตที่ค้าง + ที่คาดว่าจะผลิต (ยอดส่งเฉลี่ย/วัน) ผ่าน BOM ---------- */
+function kpBuyRows(){
+  const today=bizTodayISO(),tmr=addDays(today,1);
+  const need={},firstD={};
+  const add=(r,q,d)=>{const b=q/(num(r.yield_qty)||1);
+    bomOf(r).forEach(l=>{need[l.item_id]=(need[l.item_id]||0)+b*num(l.qty);
+      if(!firstD[l.item_id]||d<firstD[l.item_id])firstD[l.item_id]=d;});};
+  S.plans.filter(p=>p.status==='plan').forEach(p=>{const r=recipeById(p.recipe_id);if(r)add(r,num(p.qty),p.d<today?today:p.d);});
+  S.recipes.forEach(r=>{const a=kpAvgOf(r.id);if(a>0)add(r,a,tmr);});
+  const incoming={};
+  S.pos.filter(p=>p.status==='ordered'||p.status==='draft').forEach(p=>{(S.poItems[p.id]||[]).forEach(l=>{
+    const it=itemById(l.item_id);if(!it)return;
+    incoming[l.item_id]=(incoming[l.item_id]||0)+num(l.qty)*(num(it.buy_qty)||1);});});
+  const ids=new Set(Object.keys(need));
+  S.items.forEach(it=>{if(it.active!==false&&it.min_qty!=null)ids.add(it.id);});
+  return [...ids].map(iid=>{
+    const it=itemById(iid);if(!it)return null;
+    const have=Math.max(0,num(it.qty)),inc=incoming[iid]||0,nd=num(need[iid]),mn=num(it.min_qty);
+    const short=Math.max(0,+(nd+mn-have-inc).toFixed(4));
+    if(!nd&&!short)return null;
+    const bq=num(it.buy_qty)||1;
+    const lead=num(it.lead_days)||((supByName(it.sup)||{}).lead_days)||1;
+    const prodD=firstD[iid]||tmr;
+    return {it,need:nd,min:mn,have,inc,short,buyN:Math.ceil(short/bq-1e-9),orderBy:addDays(prodD,-lead),produceD:prodD};
+  }).filter(Boolean).sort((a,b)=>String(a.it.sup||'').localeCompare(String(b.it.sup||''),'th')||dispName(a.it).localeCompare(dispName(b.it),'th'));}
+async function kpBuyWizard(){
+  if(!canKitchen())return;
+  await kpAvgLoad();
+  const rows=kpBuyRows();
+  window._bwRows=rows;
+  let h='<h3>🛒 '+t('kf_s5')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('kf_buy_hint')+'</div>';
+  if(!rows.length)h+='<div class="okbox">'+t('pl_no_short')+'</div>';
+  else{
+    h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('pl_need')+'</th><th class="right">'+t('pl_have')+'</th><th class="right">'+t('pl_incoming')+'</th><th class="right">'+t('pl_short')+'</th></tr>';
+    rows.forEach(r=>{h+='<tr><td>'+esc(dispName(r.it))+' <span class="xs mut">'+esc(trUnit(r.it.unit||''))+(r.it.sup?' · '+esc(r.it.sup):'')+'</span></td>'+
+      '<td class="n">'+fmtQ(rnd2(r.need))+(r.min?'<div class="xs mut">+'+t('it_min')+' '+fmtQ(r.min)+'</div>':'')+'</td><td class="n">'+fmtQ(r.have)+'</td>'+
+      '<td class="n">'+(r.inc?fmtQ(r.inc):'–')+'</td>'+
+      '<td class="n">'+(r.short>0?'<b style="color:var(--bad)">'+fmtQ(rnd2(r.short))+'</b>':'<span class="chip ok">✓</span>')+'</td></tr>';});
+    h+='</table></div>';
+    if(rows.some(r=>r.short>0))h+='<button class="btn big" style="margin-top:12px" onclick="bomPoStep()">'+t('next')+' → '+t('kf_by_sup')+'</button>';
+    else h+='<div class="okbox" style="margin-top:10px">'+t('pl_no_short')+'</div>';}
+  openModal(h,true);}
+
+/* ---------- 📤 ส่งใบสั่งซื้อแยกตามซัพ เข้ากลุ่มไลน์ของซัพ (แบบแอพนับสต๊อก — ฟังก์ชัน line-order ตัวเดียวกัน) ---------- */
+const LINE_FN=()=>SB_URL+'/functions/v1/line-order';
+function thDate(iso){const p=String(iso||'').slice(0,10).split('-').map(Number);if(p.length<3||!p[0])return '-';
+  return p[2]+' '+I18N.th.mo[p[1]-1]+' '+(p[0]+543);}
+function poText(p){ // ข้อความใบสั่ง (ภาษาไทยเสมอ — ซัพอ่าน)
+  const lines=(S.poItems[p.id]||[]).filter(l=>num(l.qty)>0);if(!lines.length)return '';
+  const L=['🛒 จริงใจหมูกระทะ','🏭 ครัวกลาง','🏷️ '+(p.sup||'-')+(p.po_no?' · '+p.po_no:''),
+    '📅 สั่งวันที่ '+thDate(bizTodayISO()),'🚚 ส่งวันที่ '+(p.d_due?thDate(p.d_due):'-'),''];
+  lines.forEach(l=>L.push('• '+(l.name||'')+' — '+fmtQ(l.qty)+' '+(l.unit||'')));
+  L.push('','รวม '+lines.length+' รายการ');
+  return L.join('\n');}
+function supLineId(name){const s=supByName(name);return (s&&s.line_group_id)||null;}
+async function lineGroupsLoad(){
+  if(S.lineGroups)return S.lineGroups;
+  let r=null;try{r=await sb.from('line_groups').select('group_id,name');}catch(e){r=null;}
+  S.lineGroups=(r&&!r.error&&r.data)||[];return S.lineGroups;}
+const lgName=gid=>{const g=(S.lineGroups||[]).find(x=>String(x.group_id)===String(gid));
+  return (g&&g.name&&String(g.name).trim())||(gid?String(gid).slice(0,10)+'…':'');};
+function copyText(tx,done){
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(tx).then(done,()=>copyFallback(tx,done));return;}}catch(e){}
+  copyFallback(tx,done);}
+function copyFallback(tx,done){const ta=document.createElement('textarea');ta.value=tx;document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');done();}catch(e){toast(t('kf_copy_fail'),true);}ta.remove();}
+function poCopy(id){const p=S.pos.find(x=>x.id===id);if(!p)return;const tx=poText(p);
+  if(!tx){toast(t('pl_no_short'),true);return;}
+  copyText(tx,()=>toast('✅ '+t('kf_copied',{s:p.sup||'-'})));}
+async function lineSend(to,text){
+  const r=await fetch(LINE_FN(),{method:'POST',
+    headers:{'Content-Type':'application/json',apikey:SB_ANON,Authorization:'Bearer '+SB_ANON},
+    body:JSON.stringify({to,text})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||j.ok===false)throw new Error(j.error||j.message||('HTTP '+r.status));}
+async function poSetOrdered(p){
+  await dbi(()=>sb.from('ck_pos').update({status:'ordered',d_order:bizTodayISO()}).eq('id',p.id));
+  p.status='ordered';p.d_order=bizTodayISO();}
+async function poSendLine(id){
+  const p=S.pos.find(x=>x.id===id);if(!p||!canKitchen())return;
+  const tx=poText(p);if(!tx){toast(t('pl_no_short'),true);return;}
+  const gid=supLineId(p.sup);
+  if(!gid){ // ซัพนี้ยังไม่ได้ผูกกลุ่มไลน์ → เปิดไลน์ให้เลือกกลุ่มเอง
+    try{window.open('https://line.me/R/share?text='+encodeURIComponent(tx),'_blank');}catch(e){}
+    toast(t('kf_no_group',{s:p.sup||'-'}),true);return;}
+  await lineGroupsLoad();
+  if(!confirm(t('kf_send_q',{s:p.sup||'-',g:lgName(gid)})+'\n\n'+tx))return;
+  await once(async()=>{
+    try{await lineSend(gid,tx);}catch(e){toast(t('kf_line_fail')+' — '+String(e.message||e).slice(0,100),true);return;}
+    if(p.status==='draft')await poSetOrdered(p);
+    applyChrome();toast('✅ '+t('kf_line_ok',{s:p.sup||'-'}));show(S.tab);});}
+let PSA=null;
+async function poSendAllModal(){
+  if(!canKitchen())return;
+  await lineGroupsLoad();
+  const list=S.pos.filter(p=>p.status==='draft'&&(S.poItems[p.id]||[]).some(l=>num(l.qty)>0));
+  if(!list.length){toast(t('kf_no_draft'),true);return;}
+  PSA=PSA||{};list.forEach(p=>{if(PSA[p.id]===undefined)PSA[p.id]=true;});
+  const ok=p=>!!supLineId(p.sup);
+  const n=list.filter(p=>PSA[p.id]&&ok(p)).length;
+  openModal('<h3>📤 '+t('kf_send_all')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('kf_send_all_hint')+'</div>'+
+    list.map(p=>'<label class="rowline" style="cursor:pointer"><input type="checkbox" style="width:22px;height:22px"'+(PSA[p.id]?' checked':'')+
+      ' data-id="'+esc(p.id)+'" onchange="PSA[this.dataset.id]=this.checked;poSendAllModal()">'+
+      '<div class="grow"><b>'+esc(p.sup||'-')+'</b> · '+(S.poItems[p.id]||[]).length+' '+t('items_n')+
+      '<div class="xs '+(ok(p)?'mut':'')+'" style="'+(ok(p)?'':'color:var(--bad)')+'">'+(ok(p)?'💬 '+esc(lgName(supLineId(p.sup))):'⚠ '+t('kf_no_group_s'))+'</div></div></label>').join('')+
+    '<button class="btn big" style="margin-top:10px" id="psaGo" onclick="poSendAllGo()"'+(n?'':' disabled')+'>'+t('kf_send_n',{n})+'</button>',true);}
+async function poSendAllGo(){await once(async()=>{
+  const list=S.pos.filter(p=>p.status==='draft'&&PSA&&PSA[p.id]&&supLineId(p.sup));
+  const b=document.getElementById('psaGo');if(b){b.disabled=true;b.textContent='⏳';}
+  let ok=0;const fail=[];
+  for(const p of list){const tx=poText(p);if(!tx)continue;
+    try{await lineSend(supLineId(p.sup),tx);await poSetOrdered(p);ok++;}catch(e){fail.push(p.sup||'-');}}
+  PSA=null;closeModal();applyChrome();
+  toast(t('kf_sent_n',{n:ok})+(fail.length?' · ❌ '+fail.slice(0,3).join(', '):''),!!fail.length);show(S.tab);});}
+
+/* ---------- 📥 รับของ + บิลซัพ (หัวบิล ck_bills · รายการ = ck_moves kind=buy ref=id บิล) ---------- */
+let BL=null;
+const BL_KEY='jjck_bill_draft';   // ร่างบิลที่กรอกค้าง — ลากหน้าลง/รีเฟรชแล้วไม่หาย (12 ชม.)
+function blBlank(){return {id:null,sup:'',bill_no:'',d:bizTodayISO(),credit:'0',paid_at:null,note:'',po_id:null,lines:[]};}
+function blSaveDraft(){try{if(BL&&!BL.id)localStorage.setItem(BL_KEY,JSON.stringify({t:Date.now(),d:BL}));}catch(e){}}
+function blDropDraft(){try{localStorage.removeItem(BL_KEY);}catch(e){}}
+function blTotal(){return (BL&&BL.lines||[]).reduce((s,l)=>s+num(l.cost),0);}
+function billNew(){if(!canKitchen())return;
+  let dr=null;try{dr=JSON.parse(localStorage.getItem(BL_KEY)||'null');}catch(e){}
+  BL=(dr&&dr.d&&Array.isArray(dr.d.lines)&&Date.now()-num(dr.t)<12*3600e3)?Object.assign(blBlank(),dr.d,{id:null,resumed:true}):blBlank();
+  paintBill();}
+async function blSup(v){if(!BL)return;
+  if(v==='__new'){ // เพิ่มซัพใหม่จากหน้าบิลเลย (ยังไม่มีในรายการ)
+    const n=String(prompt(t('kf_new_sup_q'))||'').trim().replace(/\s+/g,' ');
+    if(n&&!supByName(n)){const row={id:uid('sp'),name:n,lead_days:1};
+      try{await dbi(()=>sb.from('ck_sups').insert(row));S.sups.push(row);S.sups.sort((a,b)=>(a.name||'')<(b.name||'')?-1:1);}catch(e){paintBill();return;}}
+    if(!n){paintBill();return;}
+    v=n;}
+  BL.sup=v;const s=supByName(v);
+  if(s&&!BL.id)BL.credit=String(Math.max(0,parseInt(s.credit_days,10)||0));blSaveDraft();paintBill();}
+function blPay(v){if(!BL)return;const s=supByName(BL.sup);
+  BL.credit=v==='c'?String((s&&parseInt(s.credit_days,10)>0)?parseInt(s.credit_days,10):30):'0';blSaveDraft();paintBill();}
+function paintBill(){
+  const d=BL;if(!d)return;MODAL_BACK=null;
+  const ro=!!d.ro;
+  const supOpts='<option value=""></option>'+S.sups.map(s=>'<option'+(s.name===d.sup?' selected':'')+'>'+esc(s.name)+'</option>').join('')+
+    (d.sup&&!S.sups.some(s=>s.name===d.sup)?'<option selected>'+esc(d.sup)+'</option>':'')+'<option value="__new">'+t('kf_new_sup')+'</option>';
+  const cr=Math.max(0,parseInt(d.credit,10)||0),tot=blTotal(),dis=ro?' disabled':'';
+  let h='<h3>📥 '+(d.id?t('kf_bill_edit'):t('kf_bill_new'))+(d.po_id?' · '+esc((S.pos.find(p=>p.id===d.po_id)||{}).po_no||''):'')+'</h3>';
+  if(ro)h+='<div class="hintbox">🔒 '+t('kf_locked')+'</div>';
+  if(d.resumed)h+='<div class="hintbox">'+t('kf_draft_resumed')+' <button class="btn gh sm2" onclick="blDropDraft();BL=blBlank();paintBill()">'+t('kf_draft_clear')+'</button></div>';
+  if(S.billsOk===false)h+='<div class="hintbox">⚠ '+t('kf_need_sql')+'</div>';
+  h+='<div class="grid2"><div class="fld"><label>'+t('it_sup')+' *</label><select onchange="blSup(this.value)"'+dis+'>'+supOpts+'</select></div>'+
+    '<div class="fld"><label>'+t('kf_bill_no')+'</label><input value="'+esc(d.bill_no)+'" oninput="BL.bill_no=this.value;blSaveDraft()"'+dis+'></div></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('kf_bill_date')+'</label><input type="date" value="'+esc(d.d)+'" onchange="BL.d=this.value;blSaveDraft();paintBill()"'+dis+'></div>'+
+    '<div class="fld"><label>'+t('kf_pay')+'</label><div class="qrline"><select onchange="blPay(this.value)"'+dis+'>'+
+      '<option value="n"'+(cr>0?'':' selected')+'>'+t('kf_pay_now')+'</option><option value="c"'+(cr>0?' selected':'')+'>'+t('kf_pay_credit')+'</option></select>'+
+      (cr>0?'<input inputmode="numeric" style="max-width:76px" value="'+cr+'" onchange="BL.credit=String(Math.max(1,parseInt(this.value,10)||1));blSaveDraft();paintBill()"'+dis+'><span>'+t('kf_days')+'</span>':'')+'</div>'+
+      (cr>0?'<div class="xs mut">'+t('kf_due',{d:dispDate(addDays(d.d,cr))})+'</div>':'')+'</div></div>';
+  h+='<div class="secbar">'+t('nav_items')+'<span class="sp">'+d.lines.length+'</span></div>';
+  if(!d.lines.length)h+='<div class="empty">'+t('kf_add_first')+'</div>';
+  d.lines.forEach((l,i)=>{const it=itemById(l.iid);
+    h+='<div class="rowline">'+thumbHtml(it,ITEM_CAT_IC[it&&it.cat]||'🥬')+'<div class="grow"><b>'+esc(it?dispName(it):l.name||'?')+'</b>'+
+      '<div class="xs mut">'+fmtQ(l.qty)+' '+esc(trUnit(it?it.unit||'':''))+(l.note?' ('+esc(l.note)+')':'')+'</div></div>'+
+      '<b>'+(l.cost!=null?'฿'+fmt(l.cost,2):'–')+'</b>'+
+      (ro?'':'<button class="btn gh sm2" aria-label="edit" onclick="blEditLine('+i+')">✎</button><button class="btn gh sm2" aria-label="del" onclick="BL.lines.splice('+i+',1);blSaveDraft();paintBill()">✕</button>')+'</div>';});
+  if(!ro)h+='<button class="btn gh" style="width:100%;margin-top:6px" onclick="blAddLine()">＋ '+t('kf_add_item')+'</button>';
+  h+='<div class="okbox" style="display:flex;justify-content:space-between;font-size:15px"><span>'+t('kf_bill_total')+'</span><b>฿'+fmt(tot,2)+'</b></div>';
+  if(d.lines.some(l=>l.cost==null))h+='<div class="hintbox">'+t('kf_no_price_line')+'</div>';
+  h+='<div class="fld"><label>'+t('note')+'</label><input value="'+esc(d.note||'')+'" oninput="BL.note=this.value;blSaveDraft()"'+dis+'></div>';
+  if(d.id&&cr>0)h+='<div class="xs" style="margin-bottom:8px">'+(d.paid_at?'✅ '+t('kf_paid_on',{d:dispDate(d.paid_at)}):'⏳ '+t('kf_unpaid'))+'</div>';
+  if(!ro)h+='<div style="display:flex;gap:8px;margin-top:8px">'+(d.id?'<button class="btn gh" data-id="'+esc(d.id)+'" onclick="billDel(this.dataset.id)">🗑</button>':'')+
+    '<button class="btn big" style="flex:1" onclick="billSave()">'+t('save')+'</button></div>';
+  openModal(h,true);}
+function blQrBase(){return Object.assign(qrBlank(),{bill:true,bi:-1});}
+function blAddLine(){if(!BL)return;QR=blQrBase();qrPick();}
+function blParseNote(it,note,qty){ // "2 ลัง + 3 ขวด" (หมายเหตุของรายการรับเข้า) → [{q,u}] — ต้องรวมแล้วเท่ากับจำนวนจริงเท่านั้น
+  if(!it||!note)return null;
+  const parts=String(note).split(' · ')[0].split(' + ').map(x=>{const m=x.trim().match(/^([\d.,]+)\s+(.+)$/);
+    return m?{q:m[1].replace(/,/g,''),u:m[2].trim()}:null;});
+  if(!parts.length||parts.some(x=>!x))return null;
+  let tot=0;for(const x of parts){const f=unitFactor(it,x.u);if(f==null)return null;tot+=num(x.q)*f;}
+  return Math.abs(tot-num(qty))<=1e-6*Math.max(1,Math.abs(num(qty)))?parts:null;}
+function blEditLine(i){const l=BL&&BL.lines[i];if(!l)return;const it=itemById(l.iid);if(!it){toast(t('menu_deleted'),true);return;}
+  let lines,price,pu;
+  if(l.q&&Array.isArray(l.q.lines)){lines=l.q.lines.map(x=>({q:x.q,u:x.u}));price=String(l.q.price==null?'':l.q.price);pu=l.q.pu;}
+  else{ // บิลที่บันทึกแล้ว: กู้หน่วยเดิมจากหมายเหตุ (เช่น 2 ลัง) + ราคาต่อหน่วยนั้น · กู้ไม่ได้ = ใช้หน่วยใช้ + ราคารวม
+    const ps=blParseNote(it,l.note,l.qty);
+    lines=ps||[{q:String(l.qty),u:it.unit||''}];
+    if(l.cost==null){price='';pu=it.buy_unit||it.unit||'';}
+    else if(lines.length===1&&num(lines[0].q)>0){pu=lines[0].u;price=String(rnd4(num(l.cost)/num(lines[0].q)));}
+    else{pu='__total';price=String(l.cost);}}
+  QR=Object.assign(blQrBase(),{bi:i,iid:l.iid,auto:false,lines,price,pu});
+  paintQr();}
+function blFromQr(c,it){ // บรรทัดในบิลจากหน้ารับของ (หลายหน่วย)
+  const base=it.unit||'',d=QR;
+  const mixed=c.raw.length>1||d.lines.some(l=>num(l.q)>0&&l.u!==base);
+  const line={iid:it.id,name:it.name,qty:c.total,cost:c.cost,note:mixed?c.raw.join(' + '):null,newPrice:c.newPrice,bu:c.bu,
+    q:{lines:d.lines.map(l=>({q:l.q,u:l.u})),price:d.price,pu:d.pu}};
+  if(d.bi>=0&&BL.lines[d.bi])BL.lines[d.bi]=line;else BL.lines.push(line);
+  blSaveDraft();}
+async function billReverse(id){ // คืนสต๊อกของบิลเดิม (ก่อนแก้/ลบ)
+  const mv=await dbi(()=>sb.from('ck_moves').select('*').eq('ref',id).eq('kind','buy'));
+  await dbi(()=>sb.from('ck_moves').delete().eq('ref',id).eq('kind','buy'));
+  for(const m of (mv||[])){const o=itemById(m.ref_id);const v=await addQty('item',m.ref_id,-num(m.qty));
+    if(o)o.qty=v!=null?v:rnd2(num(o.qty)-num(m.qty));}
+  return mv||[];}
+async function billSave(){await once(async()=>{
+  const d=BL;if(!d||d.ro)return;
+  if(!d.sup){toast(t('kf_need_sup'),true);return;}
+  if(!d.lines.length){toast(t('kf_add_first'),true);return;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(d.d||''))){toast(t('kf_bill_date'),true);return;}
+  if(d.id&&editDenied('bill',d.d0))return;
+  if(!canEditRec('bill',d.d)){toast(t('kf_locked'),true);return;}
+  const cr=Math.max(0,parseInt(d.credit,10)||0);
+  const id=d.id||uid('bl');
+  const tot=rnd2(blTotal());
+  if(d.id)await billReverse(d.id);   // แก้บิล = คืนของชุดเดิมก่อน แล้วลงชุดใหม่
+  const head={id,d:d.d,sup:d.sup,bill_no:String(d.bill_no||'').trim()||null,total:tot,credit_days:cr,due_date:addDays(d.d,cr),
+    paid_at:cr>0?(d.paid_at||null):d.d,po_id:d.po_id||null,note:String(d.note||'').trim()||null,by_name:S.user.name,
+    updated_at:new Date().toISOString()};
+  if(S.billsOk!==false){const r=await sb.from('ck_bills').upsert(head);
+    if(r&&r.error){if(MISSING_TBL(r.error))S.billsOk=false;else{toast(t('sv_err')+(r.error.message||r.error),true);throw r.error;}}}
+  const tag=S.billsOk===false?'🧾 '+d.sup+(head.bill_no?' #'+head.bill_no:''):'';
+  await pushMoves(d.lines.map(l=>({d:d.d,kind:'buy',item_kind:'item',ref_id:l.iid,name:l.name||((itemById(l.iid)||{}).name)||'',
+    qty:num(l.qty),cost:l.cost==null?null:num(l.cost),ref:id,note:[l.note,tag].filter(Boolean).join(' · ')||null})));
+  for(const l of d.lines){if(l.newPrice==null)continue;const it=itemById(l.iid);if(!it)continue;
+    if(it.price==null||Math.abs(num(l.newPrice)-num(it.price))>1e-9){it.price=num(l.newPrice);
+      await dbi(()=>sb.from('ck_items').update({price:it.price}).eq('id',it.id));}
+    await dbi(()=>sb.from('ck_price_log').insert({item_id:it.id,d:d.d,price:num(l.newPrice),buy_unit:l.bu||it.buy_unit||it.unit,source:d.po_id?'po':'bill'}));}
+  if(d.po_id)await poMarkReceived(d.po_id,d.lines,tot);
+  if(S.billsOk!==false){S.bills=(S.bills||[]).filter(b=>b.id!==id);S.bills.unshift(head);}
+  if(!d.id)blDropDraft();
+  BL=null;MODAL_BACK=null;closeModal();applyChrome();toast(t('sv_ok'));show(S.tab);});}
+async function poMarkReceived(poId,lines,tot){
+  const p=S.pos.find(x=>x.id===poId);if(!p)return;
+  for(const l of (S.poItems[poId]||[])){const it=itemById(l.item_id);
+    const q=lines.filter(x=>x.iid===l.item_id).reduce((s,x)=>s+num(x.qty),0)/((it&&num(it.buy_qty))||1);
+    l.received_qty=rnd2(q);await dbi(()=>sb.from('ck_po_items').update({received_qty:l.received_qty}).eq('id',l.id));}
+  p.status='received';p.total=rnd2(tot);
+  await dbi(()=>sb.from('ck_pos').update({status:'received',total:p.total}).eq('id',poId));}
+async function billOpen(id){
+  let b=(S.bills||[]).find(x=>x.id===id)||null;
+  if(!b&&S.billsOk!==false){const r=await sb.from('ck_bills').select('*').eq('id',id).maybeSingle();if(r&&!r.error)b=r.data;}
+  const mv=await dbi(()=>sb.from('ck_moves').select('*').eq('ref',id).eq('kind','buy').order('id'));
+  if(!b&&!(mv||[]).length){toast(t('no_data'),true);return;}
+  const d0=b?b.d:((mv||[])[0]||{}).d;
+  BL=Object.assign(blBlank(),b?{sup:b.sup||'',bill_no:b.bill_no||'',d:b.d,credit:String(b.credit_days||0),paid_at:b.paid_at||null,note:b.note||'',po_id:b.po_id||null}:{d:d0},
+    {id,d0,ro:!canEditRec('bill',d0),
+     lines:(mv||[]).map(m=>({iid:m.ref_id,name:m.name,qty:num(m.qty),cost:m.cost==null?null:num(m.cost),
+       note:String(m.note||'').split(' · ').filter(x=>!x.startsWith('🧾')).join(' · ')||null,newPrice:null}))});
+  paintBill();}
+async function billDel(id){
+  if(!BL||BL.id!==id)return;
+  if(editDenied('bill',BL.d0))return;
+  if(!confirm(t('kf_bill_del_q')))return;
+  await once(async()=>{
+    const po=BL.po_id;
+    await billReverse(id);
+    if(S.billsOk!==false)await dbi(()=>sb.from('ck_bills').delete().eq('id',id));
+    if(po){const p=S.pos.find(x=>x.id===po);
+      for(const l of (S.poItems[po]||[])){l.received_qty=null;await dbi(()=>sb.from('ck_po_items').update({received_qty:null}).eq('id',l.id));}
+      if(p){p.status='ordered';p.total=null;}
+      await dbi(()=>sb.from('ck_pos').update({status:'ordered',total:null}).eq('id',po));}
+    S.bills=(S.bills||[]).filter(b=>b.id!==id);
+    BL=null;MODAL_BACK=null;closeModal();applyChrome();toast(t('sv_ok'));show(S.tab);});}
+function billFromPo(id){ // รับของตามใบสั่งซื้อ → เปิดบิลที่เติมรายการให้แล้ว (แก้จำนวน/หน่วย/ราคาได้ทีละรายการ)
+  if(!canKitchen())return;
+  const p=S.pos.find(x=>x.id===id);if(!p)return;
+  const s=supByName(p.sup);
+  BL=Object.assign(blBlank(),{sup:p.sup||'',po_id:id,credit:String(Math.max(0,parseInt(s&&s.credit_days,10)||0)),
+    lines:(S.poItems[id]||[]).filter(l=>num(l.qty)>0&&itemById(l.item_id)).map(l=>{const it=itemById(l.item_id);
+      const u=l.unit||it.buy_unit||it.unit||'';const f=unitFactor(it,u);const bq=num(it.buy_qty)||1;
+      const qty=rnd4(num(l.qty)*(f!=null?f:bq));
+      return {iid:it.id,name:it.name,qty,cost:l.price!=null?rnd2(num(l.qty)*num(l.price)):null,
+        note:u!==it.unit?fmtQ(l.qty)+' '+u:null,newPrice:l.price!=null&&u===(it.buy_unit||it.unit)?num(l.price):null,bu:it.buy_unit||it.unit,
+        q:{lines:[{q:String(l.qty),u}],price:l.price==null?'':String(l.price),pu:u}};})});
+  paintBill();}
+
+/* ---------- 💸 เจ้าหนี้ (บิลเครดิตที่ยังไม่จ่าย) ---------- */
+function apList(){return (S.bills||[]).filter(b=>num(b.credit_days)>0&&!b.paid_at)
+  .sort((a,b)=>String(a.due_date||'').localeCompare(String(b.due_date||'')));}
+function apHtml(limit){
+  const L=apList(),D=bizTodayISO(),K=canKitchen();
+  const sum=L.reduce((s,b)=>s+num(b.total),0),over=L.filter(b=>b.due_date&&b.due_date<D);
+  let h='<div class="card"><h3>💸 '+t('kf_ap')+'<span class="sp"><b>฿'+fmt(sum,2)+'</b></span></h3>';
+  if(S.billsOk===false)return h+'<div class="hintbox">⚠ '+t('kf_need_sql')+'</div></div>';
+  if(over.length)h+='<div class="badbox">⚠ '+t('kf_overdue',{n:over.length,a:fmt(over.reduce((s,b)=>s+num(b.total),0),2)})+'</div>';
+  if(!L.length)h+='<div class="okbox">'+t('kf_ap_none')+'</div>';
+  (limit?L.slice(0,limit):L).forEach(b=>{const late=b.due_date&&b.due_date<D,soon=!late&&b.due_date&&b.due_date<=addDays(D,3);
+    h+='<div class="rowline"><div class="grow" style="cursor:pointer" data-id="'+esc(b.id)+'" onclick="billOpen(this.dataset.id)"><b>'+esc(b.sup||'-')+'</b>'+(b.bill_no?' · #'+esc(b.bill_no):'')+
+      '<div class="xs mut">'+dispDate(b.d)+' · '+t('kf_due_s')+' <b style="color:'+(late?'var(--bad)':soon?'#B7791F':'inherit')+'">'+dispDate(b.due_date)+'</b></div></div>'+
+      '<b>฿'+fmt(b.total,2)+'</b>'+(K?'<button class="btn ok sm2" data-id="'+esc(b.id)+'" onclick="billPaid(this.dataset.id)">✅ '+t('kf_mark_paid')+'</button>':'')+'</div>';});
+  if(limit&&L.length>limit)h+='<div class="xs mut">+ '+(L.length-limit)+' '+t('items_n')+' — <a onclick="show(&#39;acc&#39;)">'+t('nav_acc')+'</a></div>';
+  return h+'</div>';}
+async function billPaid(id){
+  if(!canKitchen())return;
+  const b=(S.bills||[]).find(x=>x.id===id);if(!b)return;
+  const v=prompt(t('kf_paid_q',{s:b.sup||'-',a:fmt(b.total,2)}),bizTodayISO());
+  if(v==null)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v.trim())){toast(t('kf_bill_date'),true);return;}
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_bills').update({paid_at:v.trim(),updated_at:new Date().toISOString()}).eq('id',id));
+    b.paid_at=v.trim();toast(t('sv_ok'));show(S.tab);});}
+function billsRecentHtml(){
+  const L=(S.bills||[]).slice().sort((a,b)=>String(b.d).localeCompare(String(a.d))||String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,15);
+  let h='<div class="card"><h3>🧾 '+t('kf_bills')+(canKitchen()?'<span class="sp"><button class="btn sm2" onclick="billNew()">📥 '+t('kf_bill_new')+'</button></span>':'')+'</h3>';
+  if(S.billsOk===false)return h+'<div class="hintbox">⚠ '+t('kf_need_sql')+'</div></div>';
+  if(!L.length)h+='<div class="empty">'+t('td_none')+'</div>';
+  L.forEach(b=>{const cr=num(b.credit_days)>0;
+    h+='<div class="rowline" style="cursor:pointer" data-id="'+esc(b.id)+'" onclick="billOpen(this.dataset.id)"><div class="grow"><b>'+esc(b.sup||'-')+'</b>'+(b.bill_no?' · #'+esc(b.bill_no):'')+
+      '<div class="xs mut">'+dispDate(b.d)+' · '+(cr?t('kf_pay_credit')+' '+num(b.credit_days)+' '+t('kf_days'):t('kf_pay_now'))+'</div></div>'+
+      '<b>฿'+fmt(b.total,2)+'</b><span class="chip '+(b.paid_at?'ok':'warn')+' xs">'+(b.paid_at?t('kf_paid'):t('kf_unpaid'))+'</span></div>';});
+  return h+'</div>';}
+
+/* ---------- 💰 ข้อมูลบัญชีรายเดือน (ใช้ทั้งหน้าบัญชีและแดชบอร์ด) ---------- */
+async function accData(m){
+  const F=m+'-01',T=dstr(m,monthDays(m));
+  let [exps,mv,ords,bills]=await Promise.all([
+    dbi(()=>sbAll(()=>sb.from('ck_expenses').select('*').gte('d',F).lte('d',T).order('d').order('id'),50).then(data=>({data})))
+      .catch(e=>{if(MISSING_TBL(e))return null;throw e;}),
+    dbi(()=>sbAll(()=>sb.from('ck_moves').select('d,kind,ref_id,name,qty,cost,branch,ref').gte('d',F).lte('d',T).order('d').order('id'),100).then(data=>({data}))),
+    dbi(()=>sbAll(()=>brQin(sb.from('ck_orders').select('*').in('status',['sent','done']).gte('d',F).lte('d',T),'branch').order('d').order('id'),50).then(data=>({data}))),
+    S.billsOk===false?Promise.resolve(null):sbAll(()=>sb.from('ck_bills').select('*').gte('d',F).lte('d',T).order('d').order('id'),20)
+      .catch(e=>{if(MISSING_TBL(e))S.billsOk=false;return null;})
+  ]);
+  ords=ords.filter(o=>inBr(o.branch));                     // เห็นเฉพาะสาขา
+  mv=mv.filter(x=>x.kind!=='send'||inBr(x.branch));
+  const items=[];const ids=ords.map(o=>o.id);
+  for(let i=0;i<ids.length;i+=80)
+    items.push(...await dbi(()=>sbAll(()=>sb.from('ck_order_items').select('*').in('order_id',ids.slice(i,i+80)).order('id'),20).then(data=>({data}))));
+  const expMissing=exps===null;if(expMissing)exps=[];
+  // รายรับ = ราคาขายที่ล็อกไว้ตอนส่ง (ของเก่าไม่มี → คำนวณจากราคาขาย/ต้นทุนปัจจุบัน)
+  const oMap={};ords.forEach(o=>oMap[o.id]=o);
+  const revByBr={},revByMenu={};let rev=0,cogs=0;
+  items.forEach(l=>{const o=oMap[l.order_id];if(!o)return;
+    const r=l.recipe_id?recipeById(l.recipe_id):null;
+    let a=l.amount_sell;
+    if(a==null){const sp=r?recipeSellPrice(r):(l.cost_unit!=null?num(l.cost_unit):null);
+      a=sp!=null?rnd2(num(l.qty)*sp):0;}
+    rev+=num(a);cogs+=num(l.amount);
+    const bk=o.branch||o.branch_name||'?';
+    if(!revByBr[bk])revByBr[bk]={code:o.branch,name:o.branch_name||branchName(o.branch),amt:0,n:0,bills:[]};
+    revByBr[bk].amt+=num(a);
+    const mk=l.recipe_id||l.name;
+    if(!revByMenu[mk])revByMenu[mk]={name:(r?dispName(r):l.name),qty:0,amt:0};
+    revByMenu[mk].qty+=num(l.qty);revByMenu[mk].amt+=num(a);});
+  ords.forEach(o=>{const bk=o.branch||o.branch_name||'?';const B=revByBr[bk];if(!B)return;
+    B.n++;B.bills.push({id:o.id,no:o.bill_no||'',d:o.d,amt:(S.orderItems[o.id]?orderSell(o):(o.total_sell!=null?num(o.total_sell):num(o.total)))});});
+  const buys=mv.filter(x=>x.kind==='buy');
+  const buyVal=buys.reduce((s,x)=>s+num(x.cost),0);
+  const expByCat={};let expVal=0;
+  exps.forEach(x=>{const c=x.cat||EXP_OTHER;expByCat[c]=(expByCat[c]||0)+num(x.amount);expVal+=num(x.amount);});
+  const profit=rev-buyVal-expVal;
+  const stockVal=S.items.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
+  const fgVal=S.recipes.reduce((s,r)=>{const c=recipeUnitCost(r);return s+(c!=null&&num(r.qty)>0?num(r.qty)*c:0);},0);
+  // บิลซัพของเดือนนี้ แยกซัพ (จ่ายทันที / เครดิต / ค้างจ่าย)
+  const bySup={};let billTot=0;
+  (bills||[]).forEach(b=>{const k=b.sup||'-';const x=bySup[k]=bySup[k]||{sup:k,tot:0,cash:0,credit:0,unpaid:0,n:0};
+    const a=num(b.total);x.tot+=a;x.n++;billTot+=a;
+    if(num(b.credit_days)>0){x.credit+=a;if(!b.paid_at)x.unpaid+=a;}else x.cash+=a;});
+  // ค่าใช้จ่ายอื่น (ไม่ใช่วัตถุดิบ) หารให้สาขาตามสัดส่วนยอดที่ส่ง (เจ้าของเลือก 2026-10-06)
+  const alloc=Object.keys(revByBr).map(k=>{const B=revByBr[k];const sh=rev>0?B.amt/rev:0;
+    return {k,name:B.name,amt:B.amt,share:sh,exp:rnd2(expVal*sh),total:rnd2(B.amt+expVal*sh)};})
+    .sort((a,b)=>b.amt-a.amt);
+  return {m,exps,mv,ords,items,rev,revByBr,revByMenu,cogs,buys,buyVal,expByCat,expVal,profit,stockVal,fgVal,
+    expMissing,bills,bySup,billTot,alloc};}
+function allocHtml(A){
+  let h='<div class="card"><h3>🏪 '+t('kf_alloc')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('kf_alloc_hint')+'</div>';
+  if(brScoped())return h+'<div class="hintbox">'+t('kf_alloc_scoped')+'</div></div>';
+  if(!(A.rev>0))return h+'<div class="empty">'+t('kf_alloc_none')+'</div></div>';
+  h+='<div class="twrap"><table class="t"><tr><th>'+t('or_branch')+'</th><th class="right">'+t('kf_alloc_goods')+'</th><th class="right">%</th>'+
+    '<th class="right">'+t('kf_alloc_exp')+'</th><th class="right"><b>'+t('kf_alloc_total')+'</b></th></tr>';
+  A.alloc.forEach(x=>{h+='<tr><td>🏪 '+esc(x.name)+'</td><td class="n">'+fmt(x.amt,2)+'</td><td class="n">'+fmt(x.share*100,1)+'</td>'+
+    '<td class="n">'+fmt(x.exp,2)+'</td><td class="n"><b>'+fmt(x.total,2)+'</b></td></tr>';});
+  h+='<tr class="tot"><td>'+t('total')+'</td><td class="n">'+fmt(A.rev,2)+'</td><td class="n">100</td><td class="n">'+fmt(A.expVal,2)+'</td>'+
+    '<td class="n"><b>'+fmt(A.rev+A.expVal,2)+'</b></td></tr></table></div>';
+  return h+'</div>';}
+function brBillsHtml(A){
+  const ks=Object.keys(A.revByBr);
+  let h='<div class="card"><h3>🧾 '+t('kf_br_bills')+'</h3>';
+  if(!ks.length)return h+'<div class="empty">'+t('ac_none')+'</div></div>';
+  ks.forEach(k=>{const B=A.revByBr[k];
+    h+='<details class="kfdet"><summary><b>🏪 '+esc(B.name)+'</b> · '+B.n+' '+t('kf_bill_n')+'<span class="sp"><b>฿'+fmt(B.amt,2)+'</b></span></summary>'+
+      B.bills.slice().sort((a,b)=>String(b.d).localeCompare(String(a.d))).map(x=>'<div class="rowline" style="cursor:pointer" data-id="'+esc(x.id)+'" onclick="orderDetail(this.dataset.id)">'+
+        '<div class="grow">'+(x.no?'<b>'+esc(x.no)+'</b> · ':'')+dispDate(x.d)+'</div><b>฿'+fmt(x.amt,2)+'</b></div>').join('')+'</details>';});
+  return h+'</div>';}
+function supBillsHtml(A){
+  let h='<div class="card"><h3>🧾 '+t('kf_sup_bills')+'</h3>';
+  if(S.billsOk===false)return h+'<div class="hintbox">⚠ '+t('kf_need_sql')+'</div></div>';
+  const L=Object.values(A.bySup).sort((a,b)=>b.tot-a.tot);
+  if(!L.length)return h+'<div class="empty">'+t('ac_none')+'</div></div>';
+  h+='<div class="twrap"><table class="t"><tr><th>'+t('it_sup')+'</th><th class="right">'+t('kf_pay_now')+'</th><th class="right">'+t('kf_pay_credit')+'</th>'+
+    '<th class="right">'+t('kf_unpaid')+'</th><th class="right"><b>'+t('total')+'</b></th></tr>';
+  L.forEach(x=>{h+='<tr><td>'+esc(x.sup)+' <span class="xs mut">('+x.n+')</span></td><td class="n">'+fmt(x.cash,2)+'</td><td class="n">'+fmt(x.credit,2)+'</td>'+
+    '<td class="n">'+(x.unpaid?'<b style="color:var(--bad)">'+fmt(x.unpaid,2)+'</b>':'–')+'</td><td class="n"><b>'+fmt(x.tot,2)+'</b></td></tr>';});
+  h+='<tr class="tot"><td>'+t('total')+'</td><td colspan="3"></td><td class="n"><b>'+fmt(A.billTot,2)+'</b></td></tr></table></div>';
+  const noBill=A.buys.filter(x=>!String(x.ref||'').startsWith('bl')).reduce((s,x)=>s+num(x.cost),0);
+  if(noBill>0.005)h+='<div class="xs mut" style="margin-top:6px">'+t('kf_buy_nobill',{a:fmt(noBill,2)})+'</div>';
+  return h+'</div>';}
+
+/* ---------- 🏠 แดชบอร์ดหลัก ---------- */
+let DASH_TOK=0;
+function fgRows(){return S.recipes.filter(r=>r.active!==false&&(num(r.qty)>0||safetyOf(r).q>0))
+  .map(r=>{const c=recipeUnitCost(r);return {r,q:num(r.qty),val:c!=null&&num(r.qty)>0?num(r.qty)*c:0,sf:safetyOf(r)};})
+  .sort((a,b)=>b.val-a.val);}
+function dashTopHtml(A){
+  const ap=apList(),apSum=ap.reduce((s,b)=>s+num(b.total),0),D=bizTodayISO();
+  const apOver=ap.filter(b=>b.due_date&&b.due_date<D).length;
+  const rawVal=S.items.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null&&num(i.qty)>0?num(i.qty)*c:0);},0);
+  const low=S.items.filter(i=>i.min_qty!=null&&num(i.qty)<=num(i.min_qty)).length;
+  const fg=fgRows(),fgVal=fg.reduce((s,x)=>s+x.val,0);
+  const exp=A?A.buyVal+A.expVal:null;
+  let h='<div class="secbar">📅 '+dispMonth(todayStr().slice(0,7))+'<span class="sp"><a onclick="show(&#39;acc&#39;)">'+t('nav_acc')+' ›</a></span></div>'+
+    '<div class="kpis">'+
+    '<div class="kpi hero tap" onclick="show(&#39;acc&#39;)"><div class="t">💵 '+t('ac_rev')+'</div><div class="kpi-v">'+(A?'฿'+fmt(A.rev):'–')+'</div><div class="s">'+(A?A.ords.length+' '+t('kf_bill_n'):'')+'</div></div>'+
+    '<div class="kpi tap" onclick="show(&#39;acc&#39;)"><div class="t">🧾 '+t('kf_expense_all')+'</div><div class="kpi-v">'+(exp!=null?'฿'+fmt(exp):'–')+'</div>'+
+      '<div class="s mut">'+(A?t('kf_exp_split',{a:fmt(A.buyVal),b:fmt(A.expVal)}):'')+'</div></div>'+
+    '<div class="kpi"><div class="t">'+(A&&A.profit<0?'📉':'📈')+' '+t('ac_profit')+'</div><div class="kpi-v" style="color:var(--'+(A&&A.profit<0?'bad':'ok')+')">'+(A?'฿'+fmt(A.profit):'–')+'</div></div>'+
+    '<div class="kpi tap" onclick="show(&#39;buy&#39;)"><div class="t">💸 '+t('kf_ap')+'</div><div class="kpi-v" style="color:'+(apOver?'var(--bad)':'inherit')+'">฿'+fmt(apSum)+'</div>'+
+      '<div class="s mut">'+(apOver?t('kf_overdue_n',{n:apOver}):ap.length+' '+t('kf_bill_n'))+'</div></div></div>';
+  h+='<div class="secbar">📦 '+t('kf_stock_now')+'</div><div class="kpis">'+
+    '<div class="kpi tap" onclick="show(&#39;stock&#39;)"><div class="t">🍲 '+t('kf_fg')+'</div><div class="kpi-v">฿'+fmt(fgVal)+'</div><div class="s mut">'+fg.filter(x=>x.q>0).length+' '+t('items_n')+'</div></div>'+
+    '<div class="kpi tap" onclick="show(&#39;items&#39;)"><div class="t">🥬 '+t('kf_raw')+'</div><div class="kpi-v">฿'+fmt(rawVal)+'</div>'+
+      '<div class="s mut">'+(low?'⚠ '+t('da_low')+' '+low:S.items.length+' '+t('items_n'))+'</div></div>'+
+    '<div class="kpi"><div class="t">💰 '+t('kf_stock_total')+'</div><div class="kpi-v">฿'+fmt(fgVal+rawVal)+'</div></div></div>';
+  if(fg.length){
+    h+='<div class="card"><h3>🍲 '+t('kf_fg')+'</h3><div class="twrap"><table class="t"><tr><th>'+t('nav_menus')+'</th><th class="right">'+t('sk_now')+'</th>'+
+      '<th class="right">'+t('kf_safety')+'</th><th class="right">'+t('kf_cost_u')+'</th><th class="right">'+t('kf_value')+'</th></tr>';
+    fg.slice(0,15).forEach(x=>{const u=esc(trUnit(x.r.yield_unit||''));const c=recipeUnitCost(x.r);const lowS=x.sf.q>0&&x.q<x.sf.q;
+      h+='<tr><td>'+esc(dispName(x.r))+'</td><td class="n"><b style="color:'+(lowS?'var(--bad)':'inherit')+'">'+fmtQ(x.q)+'</b> '+u+'</td>'+
+        '<td class="n">'+(x.sf.q>0?fmtQ(kpRound(x.r,x.sf.q)):'–')+'</td><td class="n">'+(c!=null?fmtP(c):'–')+'</td><td class="n">'+fmt(x.val,2)+'</td></tr>';});
+    h+='</table></div></div>';}
+  return h;}
+RENDER.dash=async function(el){
+  const tok=++DASH_TOK;
+  el.innerHTML='<div class="spin"></div>';
+  let A=null;
+  try{[A]=await Promise.all([accData(todayStr().slice(0,7)).catch(()=>null),kpAvgLoad().catch(()=>null),stkCodes().length?brLoad().catch(()=>null):null]);}catch(e){A=null;}
+  if(tok!==DASH_TOK||S.tab!=='dash')return;
+  if(A)S._countedToday=A.mv.some(x=>x.kind==='adjust'&&x.d===bizTodayISO());
+  el.innerHTML=kpStepsHtml()+dashTopHtml(A)+dashLegacyHtml();};
+
+/* ---------- ⚙️ ค่าตั้งการผลิต/ราคาขายสาขา + 🔒 การแก้ไขข้อมูล ---------- */
+function kpSetCardHtml(){
+  const c=kpCfg(),ed=isAdminish(),dis=ed?'':' disabled';
+  return '<div class="card" id="kpSetCard"><h3>🏭 '+t('kf_set_title')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('kf_set_hint')+'</div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('kf_set_safety')+'</label><input id="kpSd" inputmode="decimal" value="'+c.safety_days+'"'+dis+'></div>'+
+    '<div class="fld"><label>'+t('kf_set_avg')+'</label><input id="kpAd" inputmode="numeric" value="'+c.avg_days+'"'+dis+'></div></div>'+
+    '<div class="fld"><label>'+t('kf_set_markup')+'</label><input id="kpMk" inputmode="decimal" value="'+c.markup+'"'+dis+'></div>'+
+    (ed?'<button class="btn sm2" onclick="kpSetSave()">'+t('save')+'</button>':'')+'</div>';}
+async function kpSetSave(){if(!isAdminish())return;
+  const g=id=>(document.getElementById(id)||{}).value;
+  const v={safety_days:g('kpSd'),avg_days:g('kpAd'),markup:g('kpMk')};
+  const c=kpClean(v);
+  if(String(v.safety_days).trim()===''||String(v.avg_days).trim()===''||String(v.markup).trim()===''||
+     num(v.safety_days)!==c.safety_days||Math.round(num(v.avg_days))!==c.avg_days||num(v.markup)!==c.markup){toast(t('kf_set_bad'),true);return;}
+  await once(async()=>{
+    const cur=await dbi(()=>sb.from('ck_settings').select('value').eq('key','kplan').maybeSingle());
+    const nv=Object.assign({},(cur&&cur.value)||{},c);
+    await dbi(()=>sb.from('ck_settings').upsert({key:'kplan',value:nv}));
+    S.kp=kpClean(nv);S.kpAvg=null;toast(t('sv_ok'));show('set');});}
+const EL_LB={bill:'kf_el_bill',prod:'kf_el_prod',send:'kf_el_send',exp:'kf_el_exp'};
+function elCardHtml(){
+  const L=S.editlock||elClean(null),ed=ckBoss(),dis=ed?'':' disabled';
+  return '<div class="card" id="elCard"><h3>🔒 '+t('kf_el_title')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('kf_el_hint')+'</div>'+
+    EL_TYPES.map(k=>'<label class="rowline" style="cursor:pointer"><input type="checkbox" id="el_'+k+'" style="width:22px;height:22px"'+(L[k]?' checked':'')+dis+'>'+
+      '<div class="grow">'+t(EL_LB[k])+'</div><span class="chip '+(L[k]?'ok':'bad')+' xs">'+(L[k]?t('kf_el_on'):'🔒 '+t('kf_el_off'))+'</span></label>').join('')+
+    '<div class="fld" style="margin-top:8px"><label>'+t('kf_el_before')+'</label><input type="date" id="elBefore" value="'+esc(L.before)+'"'+dis+'></div>'+
+    (ed?'<button class="btn sm2" onclick="elSave()">'+t('save')+'</button>':'<div class="xs mut">'+t('kf_el_boss')+'</div>')+'</div>';}
+async function elSave(){if(!ckBoss())return;
+  const v={};EL_TYPES.forEach(k=>{const e=document.getElementById('el_'+k);v[k]=!!(e&&e.checked);});
+  v.before=(document.getElementById('elBefore')||{}).value||'';
+  await once(async()=>{const c=elClean(v);
+    await dbi(()=>sb.from('ck_settings').upsert({key:'editlock',value:c}));
+    S.editlock=c;toast(t('sv_ok'));show('set');});}
+
+/* ---------- ✎ แก้ไข/ย้อนการผลิต ---------- */
+async function prodReverse(id,resetPlan){
+  const p=S.prods.find(x=>x.id===id);
+  const mv=await dbi(()=>sb.from('ck_moves').select('*').eq('ref',id));
+  await dbi(()=>sb.from('ck_moves').delete().eq('ref',id));
+  for(const m of (mv||[])){
+    const o=m.item_kind==='item'?itemById(m.ref_id):recipeById(m.ref_id);
+    const v=await addQty(m.item_kind,m.ref_id,-num(m.qty));
+    if(o)o.qty=v!=null?v:rnd2(num(o.qty)-num(m.qty));}
+  await dbi(()=>sb.from('ck_prod_items').delete().eq('prod_id',id));
+  await dbi(()=>sb.from('ck_productions').delete().eq('id',id));
+  if(resetPlan&&p&&p.plan_id){try{await dbi(()=>sb.from('ck_plans').update({status:'plan'}).eq('id',p.plan_id));
+    const pl=S.plans.find(x=>x.id===p.plan_id);if(pl)pl.status='plan';}catch(e){}}
+  S.prods=S.prods.filter(x=>x.id!==id);}
+async function prodEdit(id){
+  const p=S.prods.find(x=>x.id===id);if(!p)return;
+  if(editDenied('prod',p.d))return;
+  const r=recipeById(p.recipe_id);if(!r){toast(t('menu_deleted'),true);return;}
+  let lines=[];try{lines=await dbi(()=>sb.from('ck_prod_items').select('*').eq('prod_id',id).order('id'));}catch(e){return;}
+  const pq=prodPlanQty(p);
+  PR_DRAFT={editId:id,d0:p.d,rid:r.id,qty:pq!=null?pq:num(p.qty),actual:String(num(p.qty)),actualTouched:true,
+    planId:p.plan_id||null,d:p.d,
+    lines:(lines||[]).filter(l=>itemById(l.item_id)).map(l=>({item_id:l.item_id,name:l.name,unit:l.unit||'',qty:num(l.qty),touched:true}))};
+  paintProduceModal();}
+function prActual(d){return (d.actual==null||String(d.actual).trim()==='')?num(d.qty):num(d.actual);}
+
 </script>
 <script>
 /* ============================================================
