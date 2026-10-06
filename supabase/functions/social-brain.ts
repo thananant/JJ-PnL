@@ -1,10 +1,10 @@
 // ============================================================
 // JJ Social — social-brain
 // วิเคราะห์เสียงลูกค้า (Gemini ฟรี / Claude ถ้าเลือกโหมดคุณภาพสูงสุด / กติกาเบื้องต้น) + สรุปรายวัน
-// + ดึงรีวิว Google (Business Profile ฟรี → Places ทุก 3 ชม.) + ส่งคำตอบ
+// + ดึงรีวิว Google (Business Profile ฟรี → Places ทุก 3 ชม.) + ดึงทุกแอพผ่าน Apify (เครดิตฟรี $5/เดือน) + ส่งคำตอบ
 // deploy: วางโค้ดใน Supabase Dashboard → Edge Functions → social-brain (เปิด Verify JWT ไว้)
 // เรียกด้วย POST body: {action: analyze|upgrade_rules|summary|learn_faq|poll_google|chat_test|send_chat|send_reply|
-//                       gbp_auth_url|gbp_sync|status|cron, ...}
+//                       gbp_auth_url|gbp_sync|apify_connect|apify_disconnect|apify_run|status|cron, ...}
 // cron/summary ที่ pg_cron เรียก: ตอบกลับทันทีแล้วทำงานเบื้องหลัง (ผลดูที่ social_settings id='cron')
 // ============================================================
 import Anthropic from "npm:@anthropic-ai/sdk";
@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-09-29.6";
+const VERSION = "2026-10-06.1";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -39,12 +39,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // โค้ดตั้งแต่บรรทัดนี้ถึง faqReply() เหมือนกันทั้ง social-brain และ social-webhook — แก้ต้องแก้ทั้ง 2 ไฟล์
 const SECRET_VALUES = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "GOOGLE_MAPS_API_KEY",
   "LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET", "FB_PAGE_TOKEN", "FB_APP_SECRET",
-  "GBP_CLIENT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "WEBHOOK_SHARED_KEY"]
+  "GBP_CLIENT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "WEBHOOK_SHARED_KEY", "APIFY_TOKEN"]
   .map((k) => Deno.env.get(k) ?? "").filter((v) => v.length >= 8);
 function scrub(s: unknown): string {
   let t = String((s as any)?.message ?? s ?? "");
   for (const v of SECRET_VALUES) t = t.split(v).join("***");
-  return t.replace(/([?&](?:key|access_token|client_secret|refresh_token)=)[^&\s)"']+/gi, "$1***");
+  return t.replace(/([?&](?:key|token|access_token|client_secret|refresh_token)=)[^&\s)"']+/gi, "$1***");
 }
 
 // ----- สุขภาพ AI: เก็บลง social_settings id='ai_health' ให้หน้าสถานะเห็นข้ามรอบ/ข้ามฟังก์ชัน -----
@@ -428,6 +428,11 @@ const GBP_CLIENT_SECRET = Deno.env.get("GBP_CLIENT_SECRET") ?? "";
 async function aesKey() {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SB_SERVICE));
   return crypto.subtle.importKey("raw", h, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+async function encryptRT(rt: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aesKey(), new TextEncoder().encode(rt)));
+  return btoa(String.fromCharCode(...iv)) + "." + btoa(String.fromCharCode(...ct));
 }
 async function decryptRT(enc: string): Promise<string | null> {
   try {
@@ -1049,6 +1054,531 @@ async function pollGoogle(placesIn?: { place_id: string; branch: string }[], thr
   return { ok: true, added, diag, errors: errors.length ? errors : undefined };
 }
 
+// ===== Apify: ดึงรีวิว/คอมเมนต์จากทุกแอพด้วยบริการภายนอกตัวเดียว (แผนฟรีได้เครดิต $5/เดือน) =====
+// เจ้าของวาง API token ในแอปครั้งเดียว (เก็บแบบเข้ารหัสเหมือน refresh token ของ Google) แล้ววางลิงก์ร้านของแต่ละแอพ
+// cron ทุก 15 นาที: ①เก็บผลรอบที่เสร็จแล้ว ②เริ่มรอบใหม่ของแหล่งที่ถึงเวลา — ไม่รอให้เสร็จ (ฟังก์ชันถูกตัดที่ 150 วิ)
+// กันค่าใช้จ่ายบานปลาย 3 ชั้น: จำนวนรายการต่อรอบ (maxItems) · เงินต่อรอบ (maxTotalChargeUsd) · ยอดใช้ทั้งเดือน (อ่านจาก Apify เอง)
+// ⚠️ social_settings เขียนได้ด้วยคีย์สาธารณะ → ค่าทุกตัวที่อ่านจากตารางต้องถูกบีบให้อยู่ในกรอบก่อนใช้ (apSources) ห้ามเชื่อตรง ๆ
+const APIFY = "https://api.apify.com/v2";
+const APIFY_ENV = Deno.env.get("APIFY_TOKEN") ?? "";
+// งบต่อเดือน: ตั้งได้ทาง secret เท่านั้น (คีย์สาธารณะแก้ไม่ได้) · ตั้งต้น $4.5 = หยุดก่อนเครดิตฟรี $5 หมด
+const AP_BUDGET = Math.max(0.5, Math.min(500, Number(Deno.env.get("APIFY_BUDGET_USD")) || 4.5));
+const AP_RUN_USD = 0.1;            // เพดานเงินต่อรอบ (actor แบบคิดเงินตามเหตุการณ์)
+const AP_TIMEOUT_S = 300;          // รอบหนึ่งทำงานได้ไม่เกิน 5 นาที
+const AP_STALE_MS = 45 * 60000;    // รอบที่ค้างนานกว่านี้ = ยกเลิก
+const AP_MAX_SOURCES = 14;
+const AP_MIN_H = 12;               // ดึงถี่สุดทุก 12 ชม.
+const AP_MANUAL_GAP_MS = 30 * 60000; // กด "ดึงตอนนี้" ซ้ำแหล่งเดิมได้ทุก 30 นาที
+const AP_START_PER_TICK = 2;       // เริ่มรอบใหม่ไม่เกินนี้ต่อครั้ง ที่เหลือรอบหน้า (แผนฟรีรันพร้อมกันได้จำกัดตามหน่วยความจำ)
+
+type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number };
+type ApRow = { channel: string; kind: string; external_id: string; branch: string | null; author_name: string | null;
+  text: string; rating: number | null; url: string | null; posted_at: string; raw: Record<string, unknown>; reply_text?: string | null };
+type ApStep = { actor: string; max: number; input: (s: ApSrc, urls: string[], since: string | null) => Record<string, unknown>;
+  urls?: (items: any[], s: ApSrc) => string[] };
+
+const apGet = (o: any, ...paths: string[]): any => {
+  for (const p of paths) {
+    const v = p.split(".").reduce((a: any, k) => (a == null ? a : a[k]), o);
+    if (v != null && v !== "") return v;
+  }
+  return null;
+};
+const apIso = (v: any): string | null => {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? (v < 1e12 ? v * 1000 : v) : (/^\d{9,13}$/.test(String(v)) ? Number(v) * (String(v).length <= 10 ? 1000 : 1) : Date.parse(String(v)));
+  return Number.isFinite(n) && n > 946684800000 && n < Date.now() + 86400000 ? new Date(n).toISOString() : null;
+};
+const apNum = (v: any): number | null => { const n = Number(v); return v != null && v !== "" && Number.isFinite(n) ? n : null; };
+const apStr = (v: any, n = 4000) => (v == null ? "" : String(v)).slice(0, n);
+const apRecent = (v: any, days: number) => { const t = Date.parse(apIso(v) ?? ""); return !t || Date.now() - t <= days * 86400000; };
+// ชื่อบัญชีจากลิงก์หรือ @ชื่อ (IG/TikTok)
+const apUser = (s: string) => {
+  const t = s.trim();
+  const m = /(?:instagram\.com|tiktok\.com)\/@?([A-Za-z0-9._]+)/i.exec(t);
+  return (m ? m[1] : t.replace(/^@/, "")).replace(/[^A-Za-z0-9._]/g, "").slice(0, 40);
+};
+const apFb = (s: string) => {
+  const t = s.trim();
+  if (/^https?:\/\//i.test(t)) return t.replace(/^http:/i, "https:");
+  return "https://www.facebook.com/" + t.replace(/^@/, "").replace(/[^A-Za-z0-9._-]/g, "");
+};
+const apFbSlug = (s: string) => {
+  try { return new URL(apFb(s)).pathname.replace(/^\/+|\/+$/g, "").split("/")[0].toLowerCase(); } catch { return ""; }
+};
+// ไอดีคอมเมนต์ Facebook จากการดึงหน้าเว็บเป็น base64 ของ "comment:<โพสต์>_<คอมเมนต์>" → แปลงให้ตรงกับที่ webhook เก็บ (กันซ้ำ)
+const apFbCid = (id: string) => {
+  try { const m = /^comment:(\d+_\d+)$/.exec(atob(id)); if (m) return m[1]; } catch { /* ไม่ใช่ base64 */ }
+  return "fbc_" + id;
+};
+const TT_NO_DL = { shouldDownloadVideos: false, shouldDownloadCovers: false, shouldDownloadSubtitles: false,
+  shouldDownloadSlideshowImages: false, shouldDownloadAvatars: false, shouldDownloadMusicCovers: false };
+
+// ชนิดแหล่งข้อมูล → actor บน Apify + วิธีแปลงผลเป็นแถว social_mentions
+// ชนิดที่มี 2 ขั้น: ขั้นแรกหาโพสต์ล่าสุดของร้าน → ขั้นที่สองดึงคอมเมนต์ใต้โพสต์เหล่านั้น
+// shop = รายการนี้ร้านเขียนเอง (ไม่ใช่เสียงลูกค้า แต่ใช้บอกว่าร้านตอบคอมเมนต์ไหนแล้ว) · ext = แปลงไอดีเป็น external_id
+const apS = (o: any, ...paths: string[]) => {
+  for (const p of paths) { const v = apGet(o, p); if (typeof v === "string" || typeof v === "number") return String(v); }
+  return "";
+};
+const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; every: number; ok: (u: string) => boolean;
+  steps: ApStep[]; map: (it: any, s: ApSrc) => ApRow | null; shop?: (it: any, s: ApSrc) => boolean; ext?: (id: string) => string }> = {
+  gmaps: {
+    label: "รีวิว Google Maps", channel: "google", mkind: "review", every: 24,
+    ok: (u) => /^https:\/\/(www\.)?(google\.[a-z.]+\/maps|maps\.google\.[a-z.]+|maps\.app\.goo\.gl|goo\.gl\/maps|g\.page)\//i.test(u),
+    steps: [{ actor: "compass~google-maps-reviews-scraper", max: 40,
+      input: (s, _u, since) => ({ startUrls: [{ url: s.url }], maxReviews: since ? 30 : 40, reviewsSort: "newest",
+        language: "th", personalData: true, ...(since ? { reviewsStartDate: since.slice(0, 10) } : {}) }) }],
+    map: (it, s) => {
+      const rid = apS(it, "reviewId", "id"); const at = apIso(apGet(it, "publishedAtDate", "publishAt"));
+      if (!rid || !at) return null;
+      return { channel: "google", kind: "review", external_id: "g_ap_" + rid.slice(0, 120), branch: s.branch,
+        author_name: apS(it, "name", "reviewerName", "author").slice(0, 120) || null,
+        text: apStr(apS(it, "text", "textTranslated")), rating: apNum(apGet(it, "stars", "rating")),
+        url: apS(it, "reviewUrl", "url") || null, posted_at: at, raw: { via: "apify" },
+        reply_text: apS(it, "responseFromOwnerText") || null };
+    },
+  },
+  wongnai: {
+    label: "รีวิว Wongnai", channel: "wongnai", mkind: "review", every: 72,
+    ok: (u) => /^https:\/\/(www\.)?wongnai\.com\//i.test(u),
+    // ตัวดึงของชุมชน ชื่อช่องแต่ละตัวไม่เหมือนกัน → ส่งชื่อที่พบบ่อยไปพร้อมกัน (ช่องที่ไม่รู้จักถูกข้าม)
+    steps: [{ actor: "gravityzer0~wongnai-scraper", max: 25,
+      input: (s) => ({ startUrls: [{ url: s.url }], urls: [s.url], scrapeReviews: true, maxReviews: 20, maxReviewsPerListing: 20 }) }],
+    map: (it, s) => {
+      const text = apStr(apS(it, "text", "description", "content", "comment", "body", "reviewText", "review"));
+      const at = apIso(apGet(it, "date", "createdTime", "createdAt", "reviewedTime", "publishedAt", "time", "reviewDate", "created"));
+      const author = apS(it, "author.name", "user.name", "reviewer.name", "authorName", "userName", "reviewerName", "author").slice(0, 120);
+      if (!text || !at) return null;
+      const id = apS(it, "reviewId", "reviewID", "id") || (author + "_" + at);
+      return { channel: "wongnai", kind: "review", external_id: "wn_" + id.slice(0, 120), branch: s.branch,
+        author_name: author || null, text, rating: apNum(apGet(it, "rating", "stars", "score", "rate")),
+        url: apS(it, "reviewUrl", "url") || s.url, posted_at: at, raw: { via: "apify" } };
+    },
+  },
+  fb_reviews: {
+    label: "รีวิวเพจ Facebook", channel: "facebook", mkind: "review", every: 72,
+    ok: (u) => /^(https:\/\/(www\.|m\.)?(facebook|fb)\.com\/.+|@?[A-Za-z0-9._-]{3,})$/i.test(u),
+    steps: [{ actor: "apify~facebook-reviews-scraper", max: 15,
+      input: (s) => ({ startUrls: [{ url: apFb(s.url) }], resultsLimit: 15 }) }],
+    map: (it, s) => {
+      const id = apS(it, "id", "reviewId"); const at = apIso(apGet(it, "date", "time", "createdAt"));
+      if (!id || !at) return null;
+      const rec = apGet(it, "isRecommended", "recommended");
+      const body = apStr(apS(it, "text", "reviewText"));
+      return { channel: "facebook", kind: "review", external_id: "fbr_" + id.slice(0, 160), branch: s.branch,
+        author_name: apS(it, "user.name", "reviewerName", "author.name", "name").slice(0, 120) || null,
+        text: (rec === true ? "[แนะนำร้านนี้] " : rec === false ? "[ไม่แนะนำร้านนี้] " : "") + body,
+        rating: apNum(apGet(it, "rating")), url: apS(it, "url") || null, posted_at: at, raw: { via: "apify", recommended: rec } };
+    },
+  },
+  fb_comments: {
+    label: "คอมเมนต์โพสต์ Facebook", channel: "facebook", mkind: "comment", every: 72,
+    ok: (u) => /^(https:\/\/(www\.|m\.)?(facebook|fb)\.com\/.+|@?[A-Za-z0-9._-]{3,})$/i.test(u),
+    steps: [
+      { actor: "apify~facebook-posts-scraper", max: 4, input: (s) => ({ startUrls: [{ url: apFb(s.url) }], resultsLimit: 4 }),
+        urls: (items) => items.filter((it) => apRecent(apGet(it, "time", "date", "timestamp"), 7))
+          .map((it) => apS(it, "url", "postUrl", "topLevelUrl")).filter((u) => /^https:\/\//.test(u)) },
+      // เอาคำตอบใต้คอมเมนต์มาด้วย → รู้ว่าเพจร้านตอบคอมเมนต์ไหนแล้ว (อัตราการตอบรายโพสต์)
+      { actor: "apify~facebook-comments-scraper", max: 80,
+        input: (_s, urls) => ({ startUrls: urls.map((url) => ({ url })), resultsLimit: 25, includeNestedComments: true, viewOption: "RECENT_ACTIVITY" }) },
+    ],
+    shop: (it, s) => {
+      const slug = apFbSlug(s.url); const pu = apS(it, "profileUrl").toLowerCase();
+      return !!(slug && pu && (pu.includes("/" + slug + "/") || pu.endsWith("/" + slug) || pu.includes("id=" + slug)));
+    },
+    ext: (id) => apFbCid(id),
+    map: (it, s) => {
+      const id = apS(it, "id", "commentId"); const at = apIso(apGet(it, "date", "createdTime", "time"));
+      const text = apStr(apS(it, "text"));
+      if (!id || !at || !text) return null;
+      const post = apS(it, "postUrl", "facebookUrl", "inputUrl") || null;
+      return { channel: "facebook", kind: "comment", external_id: apFbCid(id.slice(0, 200)), branch: s.branch,
+        author_name: apS(it, "profileName", "author.name", "name").slice(0, 120) || null, text, rating: null,
+        url: apS(it, "commentUrl", "url") || post, posted_at: at, raw: { via: "apify", post_id: post } };
+    },
+  },
+  ig_comments: {
+    label: "คอมเมนต์ Instagram", channel: "instagram", mkind: "comment", every: 72,
+    ok: (u) => apUser(u).length >= 2,
+    steps: [
+      { actor: "apify~instagram-post-scraper", max: 4,
+        input: (s) => ({ username: [apUser(s.url)], resultsLimit: 4, onlyPostsNewerThan: "7 days" }),
+        urls: (items) => items.filter((it) => apRecent(apGet(it, "timestamp", "takenAt"), 7))
+          .map((it) => apS(it, "url")).filter((u) => /^https:\/\//.test(u)) },
+      { actor: "apify~instagram-comment-scraper", max: 80, input: (_s, urls) => ({ directUrls: urls, resultsLimit: 20 }) },
+    ],
+    shop: (it, s) => apS(it, "ownerUsername", "owner.username").toLowerCase() === apUser(s.url).toLowerCase(),
+    ext: (id) => (/^\d+$/.test(id) ? id : "igc_" + id),
+    map: (it, s) => {
+      const id = apS(it, "id"); const at = apIso(apGet(it, "timestamp", "createdAt"));
+      const text = apStr(apS(it, "text"));
+      if (!id || !at || !text) return null;
+      const post = apS(it, "postUrl") || null;
+      return { channel: "instagram", kind: "comment", external_id: /^\d+$/.test(id) ? id.slice(0, 120) : "igc_" + id.slice(0, 120), branch: s.branch,
+        author_name: apS(it, "ownerUsername", "owner.username").slice(0, 120) || null, text, rating: null, url: post, posted_at: at,
+        raw: { via: "apify", post_id: post } };
+    },
+  },
+  tt_comments: {
+    label: "คอมเมนต์คลิป TikTok ของร้าน", channel: "tiktok", mkind: "comment", every: 72,
+    ok: (u) => apUser(u).length >= 2,
+    steps: [
+      { actor: "clockworks~tiktok-scraper", max: 4,
+        input: (s) => ({ profiles: [apUser(s.url)], resultsPerPage: 4, profileSorting: "latest", profileScrapeSections: ["videos"],
+          excludePinnedPosts: true, ...TT_NO_DL }),
+        urls: (items) => items.filter((it) => apRecent(apGet(it, "createTimeISO", "createTime"), 10))
+          .map((it) => apS(it, "webVideoUrl")).filter((u) => /^https:\/\//.test(u)) },
+      { actor: "clockworks~tiktok-comments-scraper", max: 80, input: (_s, urls) => ({ postURLs: urls, commentsPerPost: 20 }) },
+    ],
+    shop: (it, s) => apS(it, "uniqueId", "user.uniqueId").toLowerCase() === apUser(s.url).toLowerCase(),
+    ext: (id) => "ttc_" + id,
+    map: (it, s) => {
+      const id = apS(it, "cid", "id"); const at = apIso(apGet(it, "createTimeISO", "createTime"));
+      const text = apStr(apS(it, "text"));
+      if (!id || !at || !text) return null;
+      const post = apS(it, "videoWebUrl", "webVideoUrl") || null;
+      return { channel: "tiktok", kind: "comment", external_id: "ttc_" + id.slice(0, 120), branch: s.branch,
+        author_name: apS(it, "uniqueId", "user.uniqueId").slice(0, 120) || null, text, rating: null, url: post, posted_at: at,
+        raw: { via: "apify", post_id: post } };
+    },
+  },
+  tt_search: {
+    label: "คลิป TikTok ที่พูดถึงร้าน", channel: "tiktok", mkind: "mention", every: 168,
+    ok: (u) => u.trim().length >= 3,
+    steps: [{ actor: "clockworks~tiktok-scraper", max: 10,
+      input: (s) => ({ searchQueries: [s.url.trim().slice(0, 80)], resultsPerPage: 10, ...TT_NO_DL }) }],
+    map: (it, s) => {
+      const id = apS(it, "id"); const url = apS(it, "webVideoUrl"); const at = apIso(apGet(it, "createTimeISO", "createTime"));
+      if (!id || !url || !at) return null;
+      return { channel: "tiktok", kind: "mention", external_id: "ttv_" + id.slice(0, 120), branch: s.branch,
+        author_name: apS(it, "authorMeta.name", "authorMeta.nickName", "author.uniqueId").slice(0, 120) || null,
+        text: apStr(apS(it, "text", "desc")), rating: null, url, posted_at: at, raw: { via: "apify", query: s.url.slice(0, 80) } };
+    },
+  },
+};
+// แปลงผลทั้งชุดเป็นแถว + หาว่าร้านตอบคอมเมนต์ไหนแล้ว (คำตอบของร้านเป็นแถวลูก หรืออยู่ใน replies ของคอมเมนต์)
+function apRows(def: (typeof AP_KINDS)[string], items: any[], src: ApSrc): ApRow[] {
+  const rows: ApRow[] = []; const idx = new Map<string, ApRow>();
+  const replied = new Map<string, string>();
+  for (const it of items) {
+    if (def.shop?.(it, src)) {
+      const pid = apS(it, "replyToCommentId", "parentComment.id", "parentCommentId", "replyToId", "repliesToId", "parentId");
+      if (pid) replied.set(pid, apStr(apS(it, "text"), 1000) || "(ร้านตอบในแอพแล้ว)");
+      continue;
+    }
+    let row: ApRow | null = null;
+    try { row = def.map(it, src); } catch { row = null; }
+    if (!row) continue;
+    rows.push(row);
+    idx.set(apS(it, "id", "commentId", "cid"), row);
+    const reps = [it?.replies, it?.replyComments, it?.childComments].find((x) => Array.isArray(x)) ?? [];
+    const own = def.shop ? reps.find((x: any) => def.shop!(x, src)) : null;
+    if (own && !row.reply_text) row.reply_text = apStr(apS(own, "text"), 1000) || "(ร้านตอบในแอพแล้ว)";
+  }
+  for (const [pid, txt] of replied) {
+    const row = idx.get(pid) ?? rows.find((r) => def.ext && r.external_id === def.ext(pid));
+    if (row && !row.reply_text) row.reply_text = txt;
+  }
+  return rows;
+}
+// อ่านรายการแหล่งจาก channels.apify_sources แล้วบีบให้อยู่ในกรอบ (คีย์สาธารณะแก้ตารางนี้ได้)
+function apSources(arr: unknown): ApSrc[] {
+  if (!Array.isArray(arr)) return [];
+  const out: ApSrc[] = []; const seen = new Set<string>();
+  for (const s of arr.slice(0, AP_MAX_SOURCES) as any[]) {
+    const kind = String(s?.kind ?? "");
+    if (!AP_KINDS[kind]) continue;
+    const url = String(s?.url ?? "").trim().slice(0, 300);
+    if (!url) continue;
+    let id = String(s?.id ?? "").replace(/[^\w-]/g, "").slice(0, 24) || kind + "_" + out.length;
+    while (seen.has(id)) id = id.slice(0, 20) + "_" + out.length;
+    seen.add(id);
+    const br = /^[A-Z0-9_]{2,12}$/.test(String(s?.branch ?? "")) ? String(s.branch) : null;
+    const every = Math.max(AP_MIN_H, Math.min(24 * 14, Number(s?.every_h) || AP_KINDS[kind].every));
+    out.push({ id, kind, url, branch: br, on: s?.on !== false, every_h: every });
+  }
+  return out;
+}
+let apTok = "";
+// อ่านจากตารางทุกครั้ง (ไม่จำข้ามคำขอ) — ยกเลิกการเชื่อมแล้วอินสแตนซ์อื่นของฟังก์ชันต้องหยุดใช้ token เดิมทันที
+async function apToken(): Promise<string> {
+  if (APIFY_ENV) return APIFY_ENV;
+  const { data, error } = await sb.from("social_settings").select("val").eq("id", "apify").maybeSingle();
+  if (error) throw new Error("อ่านสถานะ Apify ไม่ได้: " + error.message);
+  const enc = data?.val?.tok_enc;
+  const t = enc ? (await decryptRT(String(enc))) ?? "" : "";
+  if (t && !SECRET_VALUES.includes(t)) SECRET_VALUES.push(t);
+  apTok = t;
+  return t;
+}
+function apErr(status: number, d: any, t: string) {
+  const m = scrub(d?.error?.message ?? t).slice(0, 200);
+  const type = String(d?.error?.type ?? "");
+  if (status === 401) return "Apify ไม่รับ token (ถูกลบ/พิมพ์ผิด) — วาง token ใหม่ในหน้าเชื่อมต่อช่องทาง";
+  if (/memory|concurren/i.test(type + " " + m)) return "แผนฟรีของ Apify รันพร้อมกันได้จำกัด — รอบหน้า (15 นาที) จะเริ่มให้เอง";
+  if (status === 402 || /usage|limit-exceeded|credit|insufficient|not-enough/i.test(type)) return "เครดิต Apify เดือนนี้หมดแล้ว — ระบบจะดึงต่อเองเมื่อขึ้นรอบเดือนใหม่";
+  if (status === 404) return "ไม่พบตัวดึงข้อมูลนี้บน Apify: " + m;
+  if (status === 400) return "ข้อมูลที่ส่งให้ตัวดึงไม่ถูกต้อง: " + m;
+  if (status === 429) return "Apify ให้รอสักครู่ (เรียกถี่เกิน) — รอบหน้าจะลองใหม่";
+  return `Apify ตอบ ${status}: ${m}`;
+}
+async function apCall(tok: string, path: string, opt: { method?: string; body?: unknown; q?: Record<string, string | number> } = {}) {
+  const qs = opt.q ? "?" + new URLSearchParams(Object.entries(opt.q).map(([k, v]) => [k, String(v)])).toString() : "";
+  const r = await fetch(APIFY + path + qs, {
+    method: opt.method ?? "GET",
+    headers: { Authorization: `Bearer ${tok}`, ...(opt.body !== undefined ? { "Content-Type": "application/json" } : {}) },
+    body: opt.body !== undefined ? JSON.stringify(opt.body) : undefined,
+    signal: AbortSignal.timeout(25000),
+  });
+  const t = await r.text();
+  let d: any = null;
+  try { d = JSON.parse(t); } catch { /* ไม่ใช่ JSON */ }
+  if (!r.ok) { const e: any = new Error(apErr(r.status, d, t)); e.status = r.status; throw e; }
+  return d;
+}
+async function apUsage(tok: string) {
+  const d = (await apCall(tok, "/users/me/limits"))?.data ?? {};
+  const used = Number(d.current?.monthlyUsageUsd ?? NaN), limit = Number(d.limits?.maxMonthlyUsageUsd ?? NaN);
+  if (!Number.isFinite(used)) throw new Error("อ่านยอดใช้ของ Apify ไม่ได้");
+  const lim = Number.isFinite(limit) && limit > 0 ? limit : 5;
+  return { used: Math.round(used * 1000) / 1000, limit: lim, budget: Math.min(AP_BUDGET, lim * 0.95),
+    end: d.monthlyUsageCycle?.endAt ?? null, at: new Date().toISOString() };
+}
+// แก้แถว social_settings id='apify' แบบเทียบเวลาแก้ล่าสุดก่อนเขียน (cron กับปุ่มในแอปทำงานพร้อมกันได้)
+async function apSave(mut: (v: any) => void) {
+  for (let i = 0; i < 5; i++) {
+    const { data, error } = await sb.from("social_settings").select("val,updated_at").eq("id", "apify").maybeSingle();
+    if (error) throw new Error("อ่านสถานะ Apify ไม่ได้: " + error.message);
+    const v = JSON.parse(JSON.stringify(data?.val ?? {}));
+    mut(v);
+    const now = new Date().toISOString();
+    if (!data) {
+      const { error: ie } = await sb.from("social_settings").insert({ id: "apify", val: v, updated_at: now });
+      if (!ie) return v;
+      continue; // อีกงานเพิ่งสร้างแถว → อ่านใหม่
+    }
+    const { data: up, error: ue } = await sb.from("social_settings").update({ val: v, updated_at: now })
+      .eq("id", "apify").eq("updated_at", data.updated_at).select("id");
+    if (ue) throw new Error("บันทึกสถานะ Apify ไม่ได้: " + ue.message);
+    if (up?.length) return v;
+    await sleep(150 + Math.random() * 300);
+  }
+  throw new Error("บันทึกสถานะ Apify ไม่ได้ (มีงานอื่นแก้พร้อมกัน)");
+}
+// บันทึกแถวลง social_mentions (รีวิว Google กันซ้ำกับที่ได้จาก Business Profile/Places แบบเดียวกับ pollGoogle)
+async function apSaveRows(rows: ApRow[]) {
+  let added = 0, dup = 0, err = "";
+  for (const r of rows) {
+    if (r.channel === "google" && r.author_name) {
+      const ep = Date.parse(r.posted_at);
+      let q = sb.from("social_mentions").select("id,reply_status").eq("channel", "google").eq("author_name", r.author_name)
+        .gte("posted_at", new Date(ep - 43200000).toISOString()).lte("posted_at", new Date(ep + 43200000).toISOString());
+      if (r.rating != null) q = q.eq("rating", r.rating);
+      if (r.branch) q = q.or(`branch.eq.${r.branch},branch.is.null`);
+      const { data: ex } = await q.limit(1);
+      if (ex?.length) {
+        dup++;
+        if (r.reply_text && !["sent", "auto_sent"].includes(ex[0].reply_status))
+          await sb.from("social_mentions").update({ reply_status: "sent", reply_text: apStr(r.reply_text), replied_by: "ร้าน (ตอบใน Google)" }).eq("id", ex[0].id);
+        continue;
+      }
+    }
+    const row: Record<string, unknown> = { channel: r.channel, kind: r.kind, external_id: r.external_id, branch: r.branch,
+      author_name: r.author_name, text: r.text, rating: r.rating, url: typeof r.url === "string" ? r.url.slice(0, 500) : null,
+      posted_at: r.posted_at, raw: r.raw };
+    if (r.reply_text) { row.reply_status = "sent"; row.reply_text = apStr(r.reply_text); row.replied_by = "ร้าน (ตอบไว้แล้ว)"; }
+    const { data, error } = await sb.from("social_mentions").upsert(row, { onConflict: "channel,external_id", ignoreDuplicates: true }).select("id");
+    if (error) { err = error.message; continue; }
+    if ((data ?? []).length) { added++; continue; }
+    dup++;
+    // มีอยู่แล้ว — ร้านเพิ่งไปตอบในแอพนั้นเอง → ขึ้นว่าตอบแล้ว (อัตราการตอบรายโพสต์ไม่ค้างเป็น "ยังไม่ตอบ")
+    if (r.reply_text) {
+      const { data: ex } = await sb.from("social_mentions").select("id,reply_status").eq("channel", r.channel).eq("external_id", r.external_id).limit(1);
+      if (ex?.length && !["sent", "auto_sent"].includes(ex[0].reply_status))
+        await sb.from("social_mentions").update({ reply_status: "sent", reply_text: apStr(r.reply_text), replied_by: "ร้าน (ตอบในแอพนั้นแล้ว)" }).eq("id", ex[0].id);
+    }
+  }
+  return { added, dup, err };
+}
+async function apStart(tok: string, src: ApSrc, step: number, urls: string[], since: string | null) {
+  const st = AP_KINDS[src.kind].steps[step];
+  const d = await apCall(tok, `/acts/${st.actor}/runs`, { method: "POST", body: st.input(src, urls, since),
+    q: { timeout: AP_TIMEOUT_S, maxItems: st.max, maxTotalChargeUsd: AP_RUN_USD } });
+  const id = d?.data?.id;
+  if (!id) throw new Error("Apify ไม่ส่งรหัสรอบกลับมา");
+  return String(id);
+}
+// งานหลัก: เก็บผลรอบที่เสร็จ → ต่อขั้นที่ 2 → เริ่มรอบใหม่ของแหล่งที่ถึงเวลา
+// manual=true (กดในแอป): แหล่งที่ไม่ได้ดึงมา 30 นาทีเริ่มได้เลยไม่ต้องรอถึงรอบ · start=false = เก็บผลอย่างเดียว
+async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: string) {
+  const t0 = Date.now();
+  const tok = await apToken();
+  if (!tok) return { ok: false, reason: "ยังไม่ได้เชื่อม Apify — วาง API token ในหน้าเชื่อมต่อช่องทาง" };
+  // อ่านรายการแหล่งแบบเช็ค error — อ่านพลาดแล้วได้รายการว่าง = ระบบจะยกเลิกรอบที่กำลังทำ + ลบประวัติทิ้งหมด
+  const { data: chRow, error: chErr } = await sb.from("social_settings").select("val").eq("id", "channels").maybeSingle();
+  if (chErr) return { ok: false, reason: "อ่านรายการแหล่งข้อมูลไม่ได้: " + scrub(chErr.message).slice(0, 120) };
+  const sources = apSources(chRow?.val?.apify_sources);
+  const lockId = crypto.randomUUID();
+  let S0: any;
+  try {
+    S0 = await apSave((v) => {
+      if (v.lock && Date.parse(v.lock.until) > Date.now()) throw new Error("APLOCK");
+      v.lock = { id: lockId, until: new Date(Date.now() + budgetMs + 60000).toISOString() };
+    });
+  } catch (e) {
+    if (String((e as any)?.message ?? e).includes("APLOCK")) return { ok: true, skipped: true, reason: "มีรอบดึงข้อมูลกำลังทำงานอยู่ — ลองใหม่อีกสักครู่" };
+    throw e;
+  }
+  const runs: Record<string, any> = {}; const last: Record<string, any> = {};
+  const dropRuns = new Set<string>();
+  const report: any[] = [];
+  let usage: any = null, usageErr = "", added = 0, started = 0;
+  const L = (sid: string) => (last[sid] ??= { ...(S0.last?.[sid] ?? {}) });
+  try {
+    try { usage = await apUsage(tok); } catch (e) { usageErr = scrub(e).slice(0, 160); }
+    // ① เก็บผลรอบที่เปิดค้างไว้
+    for (const [sid, r] of Object.entries(S0.runs ?? {}) as [string, any][]) {
+      if (Date.now() - t0 > budgetMs) break;
+      const src = sources.find((s) => s.id === sid);
+      try {
+        if (!src || !src.on || !AP_KINDS[src.kind]?.steps[r.step ?? 0]) {
+          await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}/abort`, { method: "POST" }).catch(() => null);
+          dropRuns.add(sid); continue;
+        }
+        const run = (await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}`))?.data ?? {};
+        const status = String(run.status ?? "");
+        if (["READY", "RUNNING", "TIMING-OUT", "ABORTING"].includes(status)) {
+          if (Date.now() - (Date.parse(r.at) || 0) > AP_STALE_MS) {
+            await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}/abort`, { method: "POST" }).catch(() => null);
+            Object.assign(L(sid), { ok: false, err: "ใช้เวลานานเกิน 45 นาที — ยกเลิกรอบนี้ รอบหน้าลองใหม่", done: new Date().toISOString() });
+            dropRuns.add(sid);
+          }
+          continue;
+        }
+        const step = Number(r.step) || 0;
+        const def = AP_KINDS[src.kind];
+        const stepDef = def.steps[step];
+        let items: any[] = [];
+        if (run.defaultDatasetId && ["SUCCEEDED", "TIMED-OUT", "ABORTED"].includes(status)) {
+          const d = await apCall(tok, `/datasets/${encodeURIComponent(run.defaultDatasetId)}/items`,
+            { q: { clean: "true", format: "json", limit: Math.min(200, stepDef.max * 2) } });
+          // บางตัวดึงส่งเป็น "ร้าน 1 แถว + รีวิวเป็นรายการข้างใน" → แตกเป็นรีวิวทีละแถว
+          items = (Array.isArray(d) ? d : []).flatMap((it: any) => {
+            const inner = [it?.reviews, it?.latestReviews, it?.userReviews].find((x) => Array.isArray(x) && x.length && typeof x[0] === "object");
+            return inner ? inner.slice(0, 100) : [it];
+          });
+        }
+        if (status !== "SUCCEEDED" && !items.length) {
+          Object.assign(L(sid), { ok: false, done: new Date().toISOString(),
+            err: status === "FAILED" ? "ตัวดึงข้อมูลทำงานไม่สำเร็จ: " + scrub(run.statusMessage ?? "").slice(0, 160)
+              : status === "TIMED-OUT" ? "ดึงไม่ทันเวลา 5 นาที — รอบหน้าลองใหม่" : "รอบถูกยกเลิก" });
+          dropRuns.add(sid); continue;
+        }
+        if (step < def.steps.length - 1) {
+          // ขั้นแรก (หาโพสต์ล่าสุด) เสร็จ → เริ่มขั้นดึงคอมเมนต์ต่อ
+          const urls = [...new Set((stepDef.urls?.(items, src) ?? []).map(String))].slice(0, 4);
+          if (!urls.length) {
+            Object.assign(L(sid), { ok: true, err: null, n: 0, added: 0, done: new Date().toISOString(), note: "ไม่มีโพสต์ใหม่ในช่วงนี้" });
+            dropRuns.add(sid); continue;
+          }
+          if (usage && usage.used >= usage.budget) {
+            Object.assign(L(sid), { ok: false, err: `หยุดก่อน — ใช้เครดิตเดือนนี้ไป $${usage.used.toFixed(2)} ถึงงบ $${usage.budget.toFixed(2)} แล้ว`, done: new Date().toISOString() });
+            dropRuns.add(sid); continue;
+          }
+          const nid = await apStart(tok, src, step + 1, urls, null);
+          runs[sid] = { id: nid, step: step + 1, at: new Date().toISOString() };
+          continue;
+        }
+        const rows = apRows(def, items, src);
+        const sv = await apSaveRows(rows);
+        added += sv.added;
+        Object.assign(L(sid), { ok: !sv.err, err: sv.err ? "บันทึกไม่ได้: " + scrub(sv.err).slice(0, 160) : null,
+          n: items.length, rows: rows.length, added: sv.added, done: new Date().toISOString(), ok_at: new Date().toISOString(),
+          note: status !== "SUCCEEDED" ? "ได้ข้อมูลบางส่วน (หมดเวลา)" : (items.length && !rows.length ? "ได้ข้อมูลแต่อ่านไม่ออก — แจ้งผู้ดูแล" : null) });
+        report.push({ id: sid, kind: src.kind, n: items.length, added: sv.added });
+        dropRuns.add(sid);
+      } catch (e) {
+        const st2 = (e as any)?.status;
+        Object.assign(L(sid), { ok: false, err: scrub(e).slice(0, 200), done: new Date().toISOString() });
+        if (st2 === 404 || st2 === 400) dropRuns.add(sid); // รอบหาย/ใช้ไม่ได้ → ไม่ต้องตามต่อ
+        if (st2 === 401) break;
+      }
+    }
+    // ② เริ่มรอบใหม่
+    if (start) {
+      const busy = (sid: string) => (runs[sid] || (S0.runs?.[sid] && !dropRuns.has(sid)));
+      for (const src of sources) {
+        if (started >= AP_START_PER_TICK || Date.now() - t0 > budgetMs) break;
+        if (!src.on || busy(src.id) || (only && src.id !== only)) continue;
+        const prev = L(src.id);
+        const since = Date.parse(prev.start ?? "") || 0;
+        const due = manual ? Date.now() - since >= AP_MANUAL_GAP_MS : Date.now() - since >= src.every_h * 3600000;
+        if (!due) continue;
+        const def = AP_KINDS[src.kind];
+        if (!def.ok(src.url)) {
+          Object.assign(prev, { ok: false, err: `ลิงก์/ชื่อไม่ถูกรูปแบบของ "${def.label}"`, start: new Date().toISOString() });
+          continue;
+        }
+        if (!usage) { prev.err = "ยังไม่เริ่ม — อ่านยอดใช้เครดิตของ Apify ไม่ได้ (" + usageErr + ")"; break; }
+        if (usage.used >= usage.budget) { prev.err = `หยุดก่อน — ใช้เครดิตเดือนนี้ไป $${usage.used.toFixed(2)} ถึงงบ $${usage.budget.toFixed(2)} แล้ว`; continue; }
+        try {
+          // Google Maps: ดึงเฉพาะรีวิวตั้งแต่รอบที่สำเร็จล่าสุด (เผื่อ 3 วัน) → จ่ายเฉพาะรีวิวใหม่
+          const okAt = Date.parse(prev.ok_at ?? "") || 0;
+          const sinceIso = src.kind === "gmaps" && okAt ? new Date(okAt - 3 * 86400000).toISOString() : null;
+          const id = await apStart(tok, src, 0, [], sinceIso);
+          runs[src.id] = { id, step: 0, at: new Date().toISOString() };
+          Object.assign(prev, { start: new Date().toISOString(), err: null });
+          started++;
+        } catch (e) {
+          // เริ่มไม่ได้เพราะข้อมูลผิด/ไม่มีสิทธิ์ = รอรอบปกติ · ติดชั่วคราว (เครดิต/หน่วยความจำ/ถี่เกิน/เน็ต) = ลองใหม่รอบหน้า
+          const s2 = Number((e as any)?.status) || 0;
+          Object.assign(prev, { ok: false, err: scrub(e).slice(0, 200), ...([400, 403, 404].includes(s2) ? { start: new Date().toISOString() } : {}) });
+          if (s2 === 401 || s2 === 402 || s2 === 429 || s2 === 0 || s2 >= 500) break;
+        }
+      }
+    }
+  } finally {
+    await apSave((v) => {
+      v.runs = { ...(v.runs ?? {}) };
+      for (const sid of dropRuns) if (v.runs[sid]?.id === S0.runs?.[sid]?.id) delete v.runs[sid];
+      Object.assign(v.runs, runs);
+      // แหล่งที่ถูกลบออกจากรายการแล้ว ไม่ต้องเก็บประวัติ
+      v.last = { ...(v.last ?? {}), ...last };
+      for (const k of Object.keys(v.last)) if (!sources.some((s) => s.id === k)) delete v.last[k];
+      if (usage) v.usage = usage;
+      v.usage_err = usageErr || null;
+      v.tick_at = new Date().toISOString();
+      if (v.lock?.id === lockId) delete v.lock;
+    }).catch((e) => console.error("apify state", scrub(e)));
+  }
+  return { ok: true, added, started, collected: report, usage, usage_err: usageErr || undefined,
+    running: Object.keys({ ...Object.fromEntries(Object.entries(S0.runs ?? {}).filter(([k]) => !dropRuns.has(k))), ...runs }).length };
+}
+// ตรวจว่าเป็นผู้ดูแลระบบ/เจ้าของ (ใช้กับคำสั่งที่มีผลกับบัญชีภายนอก/ค่าใช้จ่าย)
+async function bossOk(u: unknown, h: unknown) {
+  const { data: pu } = await sb.from("pnl_users").select("*").eq("username", String(u ?? "")).limit(1);
+  const usr: any = pu?.[0];
+  return !!(usr && h && usr.pass_hash === h && usr.active !== false && ["admin", "owner"].includes(usr.role));
+}
+async function apifyConnect(token: string) {
+  const t = String(token ?? "").trim();
+  if (!/^apify_api_[A-Za-z0-9]{20,80}$/.test(t)) return { ok: false, reason: "token ต้องขึ้นต้นด้วย apify_api_ — คัดลอกจาก Apify → Settings → API & Integrations" };
+  let me: any;
+  try { me = (await apCall(t, "/users/me"))?.data ?? {}; }
+  catch (e) { return { ok: false, reason: scrub(String((e as any)?.message ?? e).split(t).join("***")) }; }
+  const usage = await apUsage(t).catch(() => null);
+  const enc = await encryptRT(t);
+  await apSave((v) => {
+    v.tok_enc = enc;
+    v.user = { name: apStr(me.username, 60), plan: apStr(me.plan?.id ?? me.plan?.name ?? "", 30), at: new Date().toISOString() };
+    if (usage) v.usage = usage;
+  });
+  apTok = t; if (!SECRET_VALUES.includes(t)) SECRET_VALUES.push(t);
+  return { ok: true, user: apStr(me.username, 60), usage };
+}
+// ===== /Apify =====
+
 // ---------- เรียนรู้คำถามที่ลูกค้าถามซ้ำ → เสนอเป็น FAQ ให้คนอนุมัติ ----------
 const LearnFaq = z.object({
   items: z.array(z.object({ q: z.string(), a: z.string(), count: z.number() })),
@@ -1283,13 +1813,18 @@ async function runCron() {
       g.places = await pollGoogle(undefined, 3, false, g.failed_branches).catch((e) => ({ ok: false, reason: scrub(e) }));
     }
     const left = () => 120000 - (Date.now() - t0); // ฟังก์ชันถูกตัดที่ 150 วิ เผื่อไว้
+    // 3) Apify (ทุกแอพ) — เก็บผลรอบที่เสร็จ + เริ่มรอบใหม่ที่ถึงเวลา (ไม่รอให้เสร็จ)
+    let ap: any = null;
+    if (Array.isArray(st.channels?.apify_sources) && st.channels.apify_sources.length && (APIFY_ENV || st.apify?.tok_enc) && left() > 50000)
+      ap = await apifyTick(false, Math.min(35000, left() - 45000)).catch((e) => ({ ok: false, reason: scrub(e) }));
     const a = await analyzeMentions(undefined, 20, Math.max(10000, left() - 15000));
     // ไม่มีของค้างแล้ว + Gemini ยังว่าง → ค่อย ๆ อัพเกรดรายการ "[เบื้องต้น]" เป็นผลวิเคราะห์ AI
     let up: any = null;
     if (!a.deferred && (a.total ?? 0) < 20 && gemAvailable() && gemUsedToday() < UPGRADE_DAILY_CAP && left() > 30000)
       up = await analyzeMentions(undefined, 10, left() - 15000, "upgrade");
-    out = { google: g, analyze: a, upgrade: up };
-    await heartbeat("cron", true, { google: g.ok ?? g.places?.ok ?? false, analyzed: a.analyzed, deferred: a.deferred, upgraded: up?.analyzed ?? 0, providers: a.providers });
+    out = { google: g, apify: ap, analyze: a, upgrade: up };
+    await heartbeat("cron", true, { google: g.ok ?? g.places?.ok ?? false, apify: ap ? { ok: ap.ok, added: ap.added ?? 0, started: ap.started ?? 0, reason: ap.reason } : null,
+      analyzed: a.analyzed, deferred: a.deferred, upgraded: up?.analyzed ?? 0, providers: a.providers });
   } catch (e) {
     out = { error: scrub(e) };
     await heartbeat("cron", false, scrub(e));
@@ -1382,9 +1917,7 @@ Deno.serve(async (req) => {
         }
         // เฉพาะผู้ดูแล (admin/owner) — ตรวจบัญชีกับ pnl_users ฝั่งเซิร์ฟเวอร์ แล้วออก state แบบลงลายเซ็น อายุ 15 นาที
         // (ปลายทางใน social-webhook ตรวจลายเซ็นก่อนรับ token — กันคนอื่นเอาบัญชี Google ของตัวเองมาเชื่อมแทนร้าน)
-        const { data: pu } = await sb.from("pnl_users").select("*").eq("username", String(b.u ?? "")).limit(1);
-        const usr: any = pu?.[0];
-        if (!usr || !b.h || usr.pass_hash !== b.h || usr.active === false || !["admin", "owner"].includes(usr.role)) {
+        if (!(await bossOk(b.u, b.h))) {
           out = { ok: false, reason: "เชื่อมบัญชี Google ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — ออกแล้วเข้าแอปใหม่ แล้วลองอีกครั้ง" };
           break;
         }
@@ -1398,6 +1931,31 @@ Deno.serve(async (req) => {
         break;
       }
       case "gbp_sync": out = await gbpSync(!!b.full, !!b.resume); break;
+      case "apify_connect": {   // วาง API token ของ Apify (เฉพาะผู้ดูแล/เจ้าของ) → ตรวจกับ Apify แล้วเก็บแบบเข้ารหัส
+        if (!(await bossOk(b.u, b.h))) { out = { ok: false, reason: "เชื่อม Apify ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — ออกแล้วเข้าแอปใหม่ แล้วลองอีกครั้ง" }; break; }
+        out = await apifyConnect(b.token);
+        break;
+      }
+      case "apify_disconnect": {
+        if (!(await bossOk(b.u, b.h))) { out = { ok: false, reason: "เฉพาะผู้ดูแลระบบ/เจ้าของ" }; break; }
+        const tok = await apToken().catch(() => "");
+        const cur = await sb.from("social_settings").select("val").eq("id", "apify").maybeSingle();
+        for (const r of Object.values(cur.data?.val?.runs ?? {}) as any[]) // หยุดรอบที่ค้างอยู่ก่อน ไม่งั้นเครดิตยังเดินต่อ
+          if (tok && r?.id) await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}/abort`, { method: "POST" }).catch(() => null);
+        await apSave((v) => { delete v.tok_enc; delete v.user; delete v.runs; delete v.usage; delete v.lock; });
+        apTok = "";
+        out = { ok: true, env: !!APIFY_ENV };
+        break;
+      }
+      case "apify_run": {
+        // start=false = เก็บผลรอบที่เสร็จแล้วอย่างเดียว (ไม่มีค่าใช้จ่ายเพิ่ม) · เริ่มรอบใหม่ทันทีได้เฉพาะผู้ดูแล/เจ้าของ
+        const startNow = b.start !== false;
+        if (startNow && !(await bossOk(b.u, b.h))) { out = { ok: false, reason: "สั่งดึงทันทีได้เฉพาะผู้ดูแลระบบ/เจ้าของ (ระบบดึงให้เองตามรอบอยู่แล้ว)" }; break; }
+        const r: any = await apifyTick(startNow, 60000, startNow, typeof b.only === "string" ? b.only : undefined);
+        if (r.added) r.analyze = await analyzeMentions(undefined, 8, 30000);
+        out = r;
+        break;
+      }
       case "status": {   // หน้า "สถานะระบบ" ในแอป — บอกแค่ว่าตั้งค่าแล้วหรือยัง/ใช้งานได้ไหม ไม่ส่งค่าลับออกไป
         const st = m0 ?? await getSettings();
         const ch = st.channels ?? {};
@@ -1420,7 +1978,7 @@ Deno.serve(async (req) => {
           secrets: {
             anthropic: !!CLAUDE_KEY, gemini: !!GEMINI_KEY,
             google_places: !!GOOGLE_KEY, gbp_oauth: !!(GBP_CLIENT_ID && GBP_CLIENT_SECRET),
-            line_token: !!LINE_TOKEN, fb_page_token: !!FB_PAGE_TOKEN,
+            line_token: !!LINE_TOKEN, fb_page_token: !!FB_PAGE_TOKEN, apify: !!APIFY_ENV,
           },
           claude_paused_min: claudeDownUntil > Date.now() ? Math.ceil((claudeDownUntil - Date.now()) / 60000) : 0,
           claude: { model: CLAUDE_MODEL, error: AIH.claude.error ? scrub(AIH.claude.error) : null, error_at: AIH.claude.error ? AIH.claude.at : null, ok_at: AIH.claude.ok_at ?? null },
@@ -1446,6 +2004,15 @@ Deno.serve(async (req) => {
               diag: (ch.google_last_result.diag ?? []).map((d: any) => ({ ...d, http: Number(d.http) || 0, newest_api: Number(d.newest_api) || 0 })) } : null,
             gbp_loc_errors: ch.gbp?.loc_errors ?? null,
           },
+          apify: (() => {
+            const ap = st.apify ?? {}; const srcs = apSources(ch.apify_sources);
+            const errs = srcs.filter((s) => s.on && ap.last?.[s.id]?.ok === false).length;
+            const u = ap.usage ?? null;
+            return { connected: !!(APIFY_ENV || ap.tok_enc), env: !!APIFY_ENV, user: ap.user?.name ? String(ap.user.name).slice(0, 60) : null,
+              sources: srcs.length, on: srcs.filter((s) => s.on).length, errors: errs, tick_at: ap.tick_at ?? null,
+              usage: u ? { used: Number(u.used) || 0, limit: Number(u.limit) || 0, budget: Math.min(AP_BUDGET, (Number(u.limit) || 5) * 0.95), end: u.end ?? null, at: u.at ?? null } : null,
+              usage_err: ap.usage_err ? scrub(ap.usage_err).slice(0, 160) : null, budget: AP_BUDGET };
+          })(),
           cron: st.cron ?? null,
           line, facebook: fb,
           pending_analysis: cnt.count ?? 0, rules_only: rulesN.count ?? 0, ai_failed: failN.count ?? 0,

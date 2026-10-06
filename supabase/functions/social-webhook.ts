@@ -10,7 +10,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-09-29.6";
+const VERSION = "2026-10-06.1";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // ใช้ชื่อเฉพาะของ JJ Social — อย่าสับสนกับ LINE_SECRET/LINE_TOKEN ซึ่งเป็นของ OA ระบบอื่น
@@ -40,12 +40,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // โค้ดตั้งแต่บรรทัดนี้ถึง faqReply() เหมือนกันทั้ง social-brain และ social-webhook — แก้ต้องแก้ทั้ง 2 ไฟล์
 const SECRET_VALUES = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "GOOGLE_MAPS_API_KEY",
   "LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET", "FB_PAGE_TOKEN", "FB_APP_SECRET",
-  "GBP_CLIENT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "WEBHOOK_SHARED_KEY"]
+  "GBP_CLIENT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "WEBHOOK_SHARED_KEY", "APIFY_TOKEN"]
   .map((k) => Deno.env.get(k) ?? "").filter((v) => v.length >= 8);
 function scrub(s: unknown): string {
   let t = String((s as any)?.message ?? s ?? "");
   for (const v of SECRET_VALUES) t = t.split(v).join("***");
-  return t.replace(/([?&](?:key|access_token|client_secret|refresh_token)=)[^&\s)"']+/gi, "$1***");
+  return t.replace(/([?&](?:key|token|access_token|client_secret|refresh_token)=)[^&\s)"']+/gi, "$1***");
 }
 
 // ----- สุขภาพ AI: เก็บลง social_settings id='ai_health' ให้หน้าสถานะเห็นข้ามรอบ/ข้ามฟังก์ชัน -----
