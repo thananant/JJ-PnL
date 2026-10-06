@@ -638,13 +638,15 @@ async function chkPnl(){
   return out;
 }
 
-const INV_SENDING='กำลังส่ง',INV_CANCEL='ยกเลิก';
+const INV_SENDING='กำลังส่ง',INV_CANCEL='ยกเลิก',INV_IMP='ระบบเดิม (Apps Script)';
+// บิลระบบเดิมที่ยังไม่มีใครแตะสถานะอีเมลหลังนำเข้า = ปิดเรื่องอีเมลแล้ว (ตรงกับ isLegacyClosed ใน jjmk-invoice.html)
+const invLegacy=v=>v.created_by===INV_IMP&&v.updated_by===INV_IMP;
 const invBr=no=>(String(no||'').match(/^[A-Za-z]+/)||[''])[0].toUpperCase();
 async function chkInvoice(){
   const out=[];
   const [sending,failed,nasq,st]=await Promise.all([
     sel('inv_invoices',`select=bill_no,status,email_sent_at,updated_at&email_status=eq.${enc(INV_SENDING)}&limit=500`),
-    sel('inv_invoices',`select=bill_no,status,issued_at&email_status=in.(${enc('"ส่งไม่สำเร็จ"')},${enc('"ผิดพลาด"')})&limit=2000`),
+    sel('inv_invoices',`select=bill_no,status,issued_at,created_by,updated_by&email_status=in.(${enc('"ส่งไม่สำเร็จ"')},${enc('"ผิดพลาด"')})&limit=2000`),
     sel('inv_invoices','select=bill_no&nas_path=is.null&limit=2000'),
     opt(sel('inv_settings','select=key,value&key=in.(gas_check_last,gas_check_info,nas_sync_last,nas_sync_info)'))]);
   const S={};(st||[]).forEach(r=>S[r.key]=r.value);
@@ -654,11 +656,11 @@ async function chkInvoice(){
   if(stuck.length)out.push(it('i_stuck_'+stuck.map(v=>v.bill_no).sort().join(','),'warn',`บิลค้าง "กำลังส่ง" เกิน 40 นาที ${stuck.length} ใบ`,
     list(stuck.map(v=>v.bill_no),6)+(gasBad?` · ตัวตรวจอีเมล (Apps Script) ${gasAge==null?'ยังไม่เคยรายงานตัว':'เงียบไป '+fmt(gasAge)+' นาที'} — กด 🔎 ตรวจสถานะอีเมล ในหน้าตั้งค่าของแอพ`:'')));
   const since=Date.now()-14*864e5;
-  const fl=failed.filter(v=>v.status!==INV_CANCEL&&mine(v));
+  const fl=failed.filter(v=>v.status!==INV_CANCEL&&mine(v)&&!invLegacy(v));
   const recent=fl.filter(v=>Date.parse(v.issued_at)>=since),old=fl.length-recent.length;
   if(recent.length)out.push(it('i_fail_'+recent.length+'_'+bkk(0),'warn',`อีเมลส่งไม่ถึงลูกค้า ${recent.length} ใบ (14 วันล่าสุด)`,
     list(recent.map(v=>v.bill_no),6)+' · ดูในแท็บ ⚠ ส่งไม่สำเร็จ'));
-  if(old)out.push(it('i_fail_old','info',`ส่งไม่สำเร็จที่เก่ากว่า 14 วัน ${old} ใบ`,'ส่วนใหญ่มาจากบิลระบบเดิมที่นำเข้ามา'));
+  if(old)out.push(it('i_fail_old','info',`ส่งไม่สำเร็จที่เก่ากว่า 14 วัน ${old} ใบ`,'ดูในแท็บ ⚠ ส่งไม่สำเร็จ'));
   const nq=nasq.filter(mine).length,na=ageMin(S.nas_sync_last),nasOk=na!=null&&na>=-10&&na<=30&&!/^ผิดพลาด/.test(S.nas_sync_info||'');
   if(nq&&!nasOk)out.push(it('i_nas_'+bkk(0),'warn',`ไฟล์ PDF รอเก็บลง NAS ${nq} ใบ แต่ NAS ไม่รายงานตัว`,
     na==null?'ยังไม่เคยรายงานตัว — ตรวจ Task Scheduler บน Synology':`รายงานตัวล่าสุด ${fmt(na)} นาทีที่แล้ว${/^ผิดพลาด/.test(S.nas_sync_info||'')?' · '+String(S.nas_sync_info).slice(0,80):''}`));
