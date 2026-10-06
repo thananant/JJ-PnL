@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-06.1";
+const VERSION = "2026-10-06.2";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -429,17 +429,18 @@ async function aesKey() {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SB_SERVICE));
   return crypto.subtle.importKey("raw", h, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
-async function encryptRT(rt: string): Promise<string> {
+// aad = ผูกค่าที่เข้ารหัสกับจุดใช้งาน (เอา refresh token ของ Google ไปวางแทน token Apify แล้วถอดได้ไม่ได้)
+async function encryptRT(rt: string, aad?: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aesKey(), new TextEncoder().encode(rt)));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, ...(aad ? { additionalData: new TextEncoder().encode(aad) } : {}) }, await aesKey(), new TextEncoder().encode(rt)));
   return btoa(String.fromCharCode(...iv)) + "." + btoa(String.fromCharCode(...ct));
 }
-async function decryptRT(enc: string): Promise<string | null> {
+async function decryptRT(enc: string, aad?: string): Promise<string | null> {
   try {
     const [ivb, ctb] = enc.split(".");
     const iv = Uint8Array.from(atob(ivb), (c) => c.charCodeAt(0));
     const ct = Uint8Array.from(atob(ctb), (c) => c.charCodeAt(0));
-    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, await aesKey(), ct);
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv, ...(aad ? { additionalData: new TextEncoder().encode(aad) } : {}) }, await aesKey(), ct);
     return new TextDecoder().decode(pt);
   } catch { return null; }
 }
@@ -1069,9 +1070,12 @@ const AP_STALE_MS = 45 * 60000;    // รอบที่ค้างนานก
 const AP_MAX_SOURCES = 14;
 const AP_MIN_H = 12;               // ดึงถี่สุดทุก 12 ชม.
 const AP_MANUAL_GAP_MS = 30 * 60000; // กด "ดึงตอนนี้" ซ้ำแหล่งเดิมได้ทุก 30 นาที
+const AP_MAX_RUNNING = 3;          // รันบน Apify พร้อมกันไม่เกินนี้ (นับจากบัญชี Apify เอง)
+const AP_MAX_PER_HOUR = 8;         // เริ่มรอบใหม่ได้ไม่เกินนี้ต่อชั่วโมง (นับจากบัญชี Apify เอง — กันคนลบสถานะในตารางแล้วเรียก cron รัว ๆ)
+const AP_CALL_MS = 15000;          // เวลารอต่อคำขอ Apify
 const AP_START_PER_TICK = 2;       // เริ่มรอบใหม่ไม่เกินนี้ต่อครั้ง ที่เหลือรอบหน้า (แผนฟรีรันพร้อมกันได้จำกัดตามหน่วยความจำ)
 
-type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number };
+type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number; owner?: string };
 type ApRow = { channel: string; kind: string; external_id: string; branch: string | null; author_name: string | null;
   text: string; rating: number | null; url: string | null; posted_at: string; raw: Record<string, unknown>; reply_text?: string | null };
 type ApStep = { actor: string; max: number; input: (s: ApSrc, urls: string[], since: string | null) => Record<string, unknown>;
@@ -1103,8 +1107,15 @@ const apFb = (s: string) => {
   if (/^https?:\/\//i.test(t)) return t.replace(/^http:/i, "https:");
   return "https://www.facebook.com/" + t.replace(/^@/, "").replace(/[^A-Za-z0-9._-]/g, "");
 };
-const apFbSlug = (s: string) => {
-  try { return new URL(apFb(s)).pathname.replace(/^\/+|\/+$/g, "").split("/")[0].toLowerCase(); } catch { return ""; }
+// ตัวระบุเพจ/โปรไฟล์จากลิงก์: /ชื่อเพจ · profile.php?id=… · /people/ชื่อ/<ไอดี> · /pages/ชื่อ/<ไอดี>
+const apFbKey = (s: string) => {
+  try {
+    const u = new URL(apFb(s));
+    const parts = u.pathname.split("/").filter(Boolean).map((x) => x.toLowerCase());
+    if (parts[0] === "profile.php") return u.searchParams.get("id") ?? "";
+    if (parts[0] === "people" || parts[0] === "pages") return parts.find((x) => /^\d{5,}$/.test(x)) ?? "";
+    return parts[0] ?? "";
+  } catch { return ""; }
 };
 // ไอดีคอมเมนต์ Facebook จากการดึงหน้าเว็บเป็น base64 ของ "comment:<โพสต์>_<คอมเมนต์>" → แปลงให้ตรงกับที่ webhook เก็บ (กันซ้ำ)
 const apFbCid = (id: string) => {
@@ -1183,9 +1194,11 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
       { actor: "apify~facebook-comments-scraper", max: 80,
         input: (_s, urls) => ({ startUrls: urls.map((url) => ({ url })), resultsLimit: 25, includeNestedComments: true, viewOption: "RECENT_ACTIVITY" }) },
     ],
+    // คำตอบของเพจร้าน: ลิงก์โปรไฟล์ตรงกับลิงก์เพจ หรือชื่อตรงกับชื่อเพจที่ได้จากขั้นแรก
     shop: (it, s) => {
-      const slug = apFbSlug(s.url); const pu = apS(it, "profileUrl").toLowerCase();
-      return !!(slug && pu && (pu.includes("/" + slug + "/") || pu.endsWith("/" + slug) || pu.includes("id=" + slug)));
+      const k = apFbKey(s.url), pk = apS(it, "profileUrl") ? apFbKey(apS(it, "profileUrl")) : "";
+      const nm = apS(it, "profileName").trim().toLowerCase();
+      return !!((k && pk && k === pk) || (s.owner && nm && nm === s.owner.trim().toLowerCase()));
     },
     ext: (id) => apFbCid(id),
     map: (it, s) => {
@@ -1292,7 +1305,8 @@ function apSources(arr: unknown): ApSrc[] {
     const url = String(s?.url ?? "").trim().slice(0, 300);
     if (!url) continue;
     let id = String(s?.id ?? "").replace(/[^\w-]/g, "").slice(0, 24) || kind + "_" + out.length;
-    while (seen.has(id)) id = id.slice(0, 20) + "_" + out.length;
+    const base = id.slice(0, 20); let n = 0;
+    while (seen.has(id)) id = base + "_" + (++n);
     seen.add(id);
     const br = /^[A-Z0-9_]{2,12}$/.test(String(s?.branch ?? "")) ? String(s.branch) : null;
     const every = Math.max(AP_MIN_H, Math.min(24 * 14, Number(s?.every_h) || AP_KINDS[kind].every));
@@ -1307,7 +1321,8 @@ async function apToken(): Promise<string> {
   const { data, error } = await sb.from("social_settings").select("val").eq("id", "apify").maybeSingle();
   if (error) throw new Error("อ่านสถานะ Apify ไม่ได้: " + error.message);
   const enc = data?.val?.tok_enc;
-  const t = enc ? (await decryptRT(String(enc))) ?? "" : "";
+  const raw = enc ? (await decryptRT(String(enc), "apify")) ?? "" : "";
+  const t = /^apify_api_[A-Za-z0-9]{20,80}$/.test(raw) ? raw : "";   // ถอดได้แต่ไม่ใช่ token Apify = ไม่ใช้ (ไม่ส่งค่าลับอื่นออกไป)
   if (t && !SECRET_VALUES.includes(t)) SECRET_VALUES.push(t);
   apTok = t;
   return t;
@@ -1329,7 +1344,7 @@ async function apCall(tok: string, path: string, opt: { method?: string; body?: 
     method: opt.method ?? "GET",
     headers: { Authorization: `Bearer ${tok}`, ...(opt.body !== undefined ? { "Content-Type": "application/json" } : {}) },
     body: opt.body !== undefined ? JSON.stringify(opt.body) : undefined,
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(AP_CALL_MS),
   });
   const t = await r.text();
   let d: any = null;
@@ -1372,7 +1387,10 @@ async function apSaveRows(rows: ApRow[]) {
   for (const r of rows) {
     if (r.channel === "google" && r.author_name) {
       const ep = Date.parse(r.posted_at);
+      // เทียบแบบคล้าย (ชื่อ ±12 ชม.) เฉพาะแถวจาก Business Profile/Places — แถวจาก Apify มีไอดีรีวิวตรงตัวอยู่แล้ว
+      // (ไม่งั้นคนชื่อเดียวกันให้ดาวเท่ากันในวันเดียวกัน รีวิวคนที่สองจะหาย)
       let q = sb.from("social_mentions").select("id,reply_status").eq("channel", "google").eq("author_name", r.author_name)
+        .not("external_id", "like", "g\\_ap\\_%")
         .gte("posted_at", new Date(ep - 43200000).toISOString()).lte("posted_at", new Date(ep + 43200000).toISOString());
       if (r.rating != null) q = q.eq("rating", r.rating);
       if (r.branch) q = q.or(`branch.eq.${r.branch},branch.is.null`);
@@ -1409,10 +1427,23 @@ async function apStart(tok: string, src: ApSrc, step: number, urls: string[], si
   if (!id) throw new Error("Apify ไม่ส่งรหัสรอบกลับมา");
   return String(id);
 }
+// รอบล่าสุดจากบัญชี Apify เอง — ใช้นับเพดาน (ตาราง social_settings ใครถือคีย์สาธารณะก็แก้/ลบได้ ห้ามใช้นับ)
+async function apRunStats(tok: string) {
+  const d = await apCall(tok, "/actor-runs", { q: { desc: 1, limit: 50 } });
+  const items = d?.data?.items;
+  if (!Array.isArray(items)) throw new Error("อ่านรายการรอบของ Apify ไม่ได้");
+  const now = Date.now();
+  return {
+    running: items.filter((r: any) => ["READY", "RUNNING"].includes(String(r?.status))).length,
+    hour: items.filter((r: any) => now - (Date.parse(r?.startedAt) || 0) < 3600000).length,
+  };
+}
+const apKey = (s: ApSrc) => s.kind + "|" + s.url;
 // งานหลัก: เก็บผลรอบที่เสร็จ → ต่อขั้นที่ 2 → เริ่มรอบใหม่ของแหล่งที่ถึงเวลา
 // manual=true (กดในแอป): แหล่งที่ไม่ได้ดึงมา 30 นาทีเริ่มได้เลยไม่ต้องรอถึงรอบ · start=false = เก็บผลอย่างเดียว
 async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: string) {
   const t0 = Date.now();
+  const left = () => budgetMs - (Date.now() - t0);
   const tok = await apToken();
   if (!tok) return { ok: false, reason: "ยังไม่ได้เชื่อม Apify — วาง API token ในหน้าเชื่อมต่อช่องทาง" };
   // อ่านรายการแหล่งแบบเช็ค error — อ่านพลาดแล้วได้รายการว่าง = ระบบจะยกเลิกรอบที่กำลังทำ + ลบประวัติทิ้งหมด
@@ -1420,11 +1451,12 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
   if (chErr) return { ok: false, reason: "อ่านรายการแหล่งข้อมูลไม่ได้: " + scrub(chErr.message).slice(0, 120) };
   const sources = apSources(chRow?.val?.apify_sources);
   const lockId = crypto.randomUUID();
+  const lockUntil = () => new Date(Date.now() + Math.max(0, left()) + 90000).toISOString();
   let S0: any;
   try {
     S0 = await apSave((v) => {
       if (v.lock && Date.parse(v.lock.until) > Date.now()) throw new Error("APLOCK");
-      v.lock = { id: lockId, until: new Date(Date.now() + budgetMs + 60000).toISOString() };
+      v.lock = { id: lockId, until: lockUntil() };
     });
   } catch (e) {
     if (String((e as any)?.message ?? e).includes("APLOCK")) return { ok: true, skipped: true, reason: "มีรอบดึงข้อมูลกำลังทำงานอยู่ — ลองใหม่อีกสักครู่" };
@@ -1433,25 +1465,47 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
   const runs: Record<string, any> = {}; const last: Record<string, any> = {};
   const dropRuns = new Set<string>();
   const report: any[] = [];
-  let usage: any = null, usageErr = "", added = 0, started = 0;
+  let usage: any = null, usageErr = "", gate: { running: number; hour: number } | null = null, gateErr = "";
+  let added = 0, started = 0, chained = 0;
   const L = (sid: string) => (last[sid] ??= { ...(S0.last?.[sid] ?? {}) });
+  const now = () => new Date().toISOString();
+  // บันทึกรอบที่เพิ่งสั่งเริ่มทันที — ฟังก์ชันถูกตัดกลางทางก็ยังตามเก็บผลได้ ไม่เริ่มซ้ำ (เงินเสียไปแล้ว)
+  const commitRun = (sid: string, entry: any) => apSave((v) => {
+    v.runs = { ...(v.runs ?? {}), [sid]: entry };
+    v.last = { ...(v.last ?? {}), [sid]: { ...(v.last?.[sid] ?? {}), ...L(sid) } };
+    if (v.lock?.id === lockId) v.lock.until = lockUntil();
+  }).catch((e) => console.error("apify commit", scrub(e)));
+  // ก่อนเริ่มรอบใหม่ทุกครั้ง: งบเดือนนี้ (รวมรอบที่กำลังทำ) + รันพร้อมกัน + จำนวนต่อชั่วโมง — นับจาก Apify เอง
+  const blocked = (): { msg: string; hard: boolean } | null => {
+    if (!usage) return { msg: "ยังไม่เริ่ม — อ่านยอดใช้เครดิตของ Apify ไม่ได้ (" + usageErr + ")", hard: false };
+    if (!gate) return { msg: "ยังไม่เริ่ม — อ่านรายการรอบของ Apify ไม่ได้ (" + gateErr + ")", hard: false };
+    const fresh = started + chained;
+    if (usage.used + (gate.running + fresh) * AP_RUN_USD >= usage.budget)
+      return { msg: `หยุดก่อน — ใช้เครดิตเดือนนี้ไป $${usage.used.toFixed(2)} (รวมงานที่กำลังทำ) ถึงงบ $${usage.budget.toFixed(2)} แล้ว`, hard: true };
+    if (gate.running + fresh >= AP_MAX_RUNNING) return { msg: "รอรอบที่กำลังทำเสร็จก่อน — รอบหน้าเริ่มให้เอง", hard: false };
+    if (gate.hour + fresh >= AP_MAX_PER_HOUR) return { msg: "ชั่วโมงนี้เริ่มครบโควต้าแล้ว — รอบหน้าเริ่มให้เอง", hard: false };
+    return null;
+  };
   try {
     try { usage = await apUsage(tok); } catch (e) { usageErr = scrub(e).slice(0, 160); }
+    try { gate = await apRunStats(tok); } catch (e) { gateErr = scrub(e).slice(0, 160); }
     // ① เก็บผลรอบที่เปิดค้างไว้
     for (const [sid, r] of Object.entries(S0.runs ?? {}) as [string, any][]) {
-      if (Date.now() - t0 > budgetMs) break;
-      const src = sources.find((s) => s.id === sid);
+      if (left() < AP_CALL_MS * 2) break;
+      const src0 = sources.find((s) => s.id === sid);
       try {
-        if (!src || !src.on || !AP_KINDS[src.kind]?.steps[r.step ?? 0]) {
+        // แหล่งถูกลบ/ปิด/เปลี่ยนลิงก์หลังสั่งรอบนี้ → ผลเป็นของลิงก์เดิม ทิ้งไป
+        if (!src0 || !src0.on || !AP_KINDS[src0.kind]?.steps[r.step ?? 0] || (r.key && r.key !== apKey(src0))) {
           await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}/abort`, { method: "POST" }).catch(() => null);
           dropRuns.add(sid); continue;
         }
+        const src: ApSrc = { ...src0, owner: typeof r.owner === "string" ? r.owner.slice(0, 120) : undefined };
         const run = (await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}`))?.data ?? {};
         const status = String(run.status ?? "");
         if (["READY", "RUNNING", "TIMING-OUT", "ABORTING"].includes(status)) {
           if (Date.now() - (Date.parse(r.at) || 0) > AP_STALE_MS) {
             await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}/abort`, { method: "POST" }).catch(() => null);
-            Object.assign(L(sid), { ok: false, err: "ใช้เวลานานเกิน 45 นาที — ยกเลิกรอบนี้ รอบหน้าลองใหม่", done: new Date().toISOString() });
+            Object.assign(L(sid), { ok: false, err: "ใช้เวลานานเกิน 45 นาที — ยกเลิกรอบนี้ รอบหน้าลองใหม่", done: now() });
             dropRuns.add(sid);
           }
           continue;
@@ -1461,6 +1515,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         const stepDef = def.steps[step];
         let items: any[] = [];
         if (run.defaultDatasetId && ["SUCCEEDED", "TIMED-OUT", "ABORTED"].includes(status)) {
+          if (left() < AP_CALL_MS) break;
           const d = await apCall(tok, `/datasets/${encodeURIComponent(run.defaultDatasetId)}/items`,
             { q: { clean: "true", format: "json", limit: Math.min(200, stepDef.max * 2) } });
           // บางตัวดึงส่งเป็น "ร้าน 1 แถว + รีวิวเป็นรายการข้างใน" → แตกเป็นรีวิวทีละแถว
@@ -1470,7 +1525,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           });
         }
         if (status !== "SUCCEEDED" && !items.length) {
-          Object.assign(L(sid), { ok: false, done: new Date().toISOString(),
+          Object.assign(L(sid), { ok: false, done: now(),
             err: status === "FAILED" ? "ตัวดึงข้อมูลทำงานไม่สำเร็จ: " + scrub(run.statusMessage ?? "").slice(0, 160)
               : status === "TIMED-OUT" ? "ดึงไม่ทันเวลา 5 นาที — รอบหน้าลองใหม่" : "รอบถูกยกเลิก" });
           dropRuns.add(sid); continue;
@@ -1479,28 +1534,39 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           // ขั้นแรก (หาโพสต์ล่าสุด) เสร็จ → เริ่มขั้นดึงคอมเมนต์ต่อ
           const urls = [...new Set((stepDef.urls?.(items, src) ?? []).map(String))].slice(0, 4);
           if (!urls.length) {
-            Object.assign(L(sid), { ok: true, err: null, n: 0, added: 0, done: new Date().toISOString(), note: "ไม่มีโพสต์ใหม่ในช่วงนี้" });
+            Object.assign(L(sid), { ok: true, err: null, n: 0, added: 0, done: now(), note: "ไม่มีโพสต์ใหม่ในช่วงนี้" });
             dropRuns.add(sid); continue;
           }
-          if (usage && usage.used >= usage.budget) {
-            Object.assign(L(sid), { ok: false, err: `หยุดก่อน — ใช้เครดิตเดือนนี้ไป $${usage.used.toFixed(2)} ถึงงบ $${usage.budget.toFixed(2)} แล้ว`, done: new Date().toISOString() });
-            dropRuns.add(sid); continue;
+          const b = blocked();
+          if (b) {
+            // งบหมด = จบรอบนี้ · ติดชั่วคราว (อ่านยอดไม่ได้/รันพร้อมกันเต็ม) = เก็บรอบไว้ รอบหน้าลองต่อขั้นสองใหม่
+            Object.assign(L(sid), b.hard ? { ok: false, err: b.msg, done: now() } : { wait: b.msg });
+            if (b.hard) dropRuns.add(sid);
+            continue;
           }
+          if (left() < AP_CALL_MS) break;
+          // ชื่อเพจ/บัญชีร้านจากขั้นแรก → ใช้แยกคำตอบของร้านออกจากเสียงลูกค้าในขั้นสอง
+          const owner = apS(items[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120);
           const nid = await apStart(tok, src, step + 1, urls, null);
-          runs[sid] = { id: nid, step: step + 1, at: new Date().toISOString() };
+          chained++;
+          runs[sid] = { id: nid, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}) };
+          L(sid).wait = null;
+          await commitRun(sid, runs[sid]);
           continue;
         }
         const rows = apRows(def, items, src);
         const sv = await apSaveRows(rows);
         added += sv.added;
+        // รอบที่สำเร็จครบเท่านั้นที่เลื่อน ok_at (Google Maps ใช้เป็นจุดเริ่มรอบหน้า — เลื่อนพลาด = รีวิวหายถาวร)
+        const full = !sv.err && status === "SUCCEEDED";
         Object.assign(L(sid), { ok: !sv.err, err: sv.err ? "บันทึกไม่ได้: " + scrub(sv.err).slice(0, 160) : null,
-          n: items.length, rows: rows.length, added: sv.added, done: new Date().toISOString(), ok_at: new Date().toISOString(),
+          n: items.length, rows: rows.length, added: sv.added, done: now(), ...(full ? { ok_at: now() } : {}),
           note: status !== "SUCCEEDED" ? "ได้ข้อมูลบางส่วน (หมดเวลา)" : (items.length && !rows.length ? "ได้ข้อมูลแต่อ่านไม่ออก — แจ้งผู้ดูแล" : null) });
         report.push({ id: sid, kind: src.kind, n: items.length, added: sv.added });
         dropRuns.add(sid);
       } catch (e) {
         const st2 = (e as any)?.status;
-        Object.assign(L(sid), { ok: false, err: scrub(e).slice(0, 200), done: new Date().toISOString() });
+        Object.assign(L(sid), { ok: false, err: scrub(e).slice(0, 200), done: now() });
         if (st2 === 404 || st2 === 400) dropRuns.add(sid); // รอบหาย/ใช้ไม่ได้ → ไม่ต้องตามต่อ
         if (st2 === 401) break;
       }
@@ -1509,31 +1575,35 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
     if (start) {
       const busy = (sid: string) => (runs[sid] || (S0.runs?.[sid] && !dropRuns.has(sid)));
       for (const src of sources) {
-        if (started >= AP_START_PER_TICK || Date.now() - t0 > budgetMs) break;
+        if (started >= AP_START_PER_TICK || left() < AP_CALL_MS + 2000) break;
         if (!src.on || busy(src.id) || (only && src.id !== only)) continue;
         const prev = L(src.id);
+        // เปลี่ยนลิงก์/ประเภทของแหล่งนี้ → เริ่มนับใหม่ (ไม่งั้น Google Maps ดึงจากวันที่ของลิงก์เดิม รีวิวเก่าของร้านใหม่หาย)
+        if (prev.key && prev.key !== apKey(src))
+          for (const k of ["ok_at", "start", "n", "rows", "added", "note", "err", "ok", "done"]) delete prev[k];
         const since = Date.parse(prev.start ?? "") || 0;
         const due = manual ? Date.now() - since >= AP_MANUAL_GAP_MS : Date.now() - since >= src.every_h * 3600000;
         if (!due) continue;
         const def = AP_KINDS[src.kind];
         if (!def.ok(src.url)) {
-          Object.assign(prev, { ok: false, err: `ลิงก์/ชื่อไม่ถูกรูปแบบของ "${def.label}"`, start: new Date().toISOString() });
+          Object.assign(prev, { ok: false, err: `ลิงก์/ชื่อไม่ถูกรูปแบบของ "${def.label}"`, start: now(), key: apKey(src) });
           continue;
         }
-        if (!usage) { prev.err = "ยังไม่เริ่ม — อ่านยอดใช้เครดิตของ Apify ไม่ได้ (" + usageErr + ")"; break; }
-        if (usage.used >= usage.budget) { prev.err = `หยุดก่อน — ใช้เครดิตเดือนนี้ไป $${usage.used.toFixed(2)} ถึงงบ $${usage.budget.toFixed(2)} แล้ว`; continue; }
+        const b = blocked();
+        if (b) { if (b.hard) { prev.err = b.msg; continue; } prev.wait = b.msg; break; }
         try {
           // Google Maps: ดึงเฉพาะรีวิวตั้งแต่รอบที่สำเร็จล่าสุด (เผื่อ 3 วัน) → จ่ายเฉพาะรีวิวใหม่
           const okAt = Date.parse(prev.ok_at ?? "") || 0;
           const sinceIso = src.kind === "gmaps" && okAt ? new Date(okAt - 3 * 86400000).toISOString() : null;
           const id = await apStart(tok, src, 0, [], sinceIso);
-          runs[src.id] = { id, step: 0, at: new Date().toISOString() };
-          Object.assign(prev, { start: new Date().toISOString(), err: null });
           started++;
+          runs[src.id] = { id, step: 0, at: now(), key: apKey(src) };
+          Object.assign(prev, { start: now(), err: null, wait: null, key: apKey(src) });
+          await commitRun(src.id, runs[src.id]);
         } catch (e) {
           // เริ่มไม่ได้เพราะข้อมูลผิด/ไม่มีสิทธิ์ = รอรอบปกติ · ติดชั่วคราว (เครดิต/หน่วยความจำ/ถี่เกิน/เน็ต) = ลองใหม่รอบหน้า
           const s2 = Number((e as any)?.status) || 0;
-          Object.assign(prev, { ok: false, err: scrub(e).slice(0, 200), ...([400, 403, 404].includes(s2) ? { start: new Date().toISOString() } : {}) });
+          Object.assign(prev, { ok: false, err: scrub(e).slice(0, 200), key: apKey(src), ...([400, 403, 404].includes(s2) ? { start: now() } : {}) });
           if (s2 === 401 || s2 === 402 || s2 === 429 || s2 === 0 || s2 >= 500) break;
         }
       }
@@ -1548,11 +1618,12 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
       for (const k of Object.keys(v.last)) if (!sources.some((s) => s.id === k)) delete v.last[k];
       if (usage) v.usage = usage;
       v.usage_err = usageErr || null;
-      v.tick_at = new Date().toISOString();
+      v.env = !!APIFY_ENV;
+      v.tick_at = now();
       if (v.lock?.id === lockId) delete v.lock;
     }).catch((e) => console.error("apify state", scrub(e)));
   }
-  return { ok: true, added, started, collected: report, usage, usage_err: usageErr || undefined,
+  return { ok: true, added, started: started + chained, collected: report, usage, usage_err: usageErr || undefined,
     running: Object.keys({ ...Object.fromEntries(Object.entries(S0.runs ?? {}).filter(([k]) => !dropRuns.has(k))), ...runs }).length };
 }
 // ตรวจว่าเป็นผู้ดูแลระบบ/เจ้าของ (ใช้กับคำสั่งที่มีผลกับบัญชีภายนอก/ค่าใช้จ่าย)
@@ -1562,13 +1633,14 @@ async function bossOk(u: unknown, h: unknown) {
   return !!(usr && h && usr.pass_hash === h && usr.active !== false && ["admin", "owner"].includes(usr.role));
 }
 async function apifyConnect(token: string) {
+  if (APIFY_ENV) return { ok: false, reason: "มี secret APIFY_TOKEN ใน Supabase อยู่แล้ว ระบบใช้ตัวนั้น — ถ้าจะเปลี่ยนบัญชีให้ลบ secret ก่อน" };
   const t = String(token ?? "").trim();
   if (!/^apify_api_[A-Za-z0-9]{20,80}$/.test(t)) return { ok: false, reason: "token ต้องขึ้นต้นด้วย apify_api_ — คัดลอกจาก Apify → Settings → API & Integrations" };
   let me: any;
   try { me = (await apCall(t, "/users/me"))?.data ?? {}; }
   catch (e) { return { ok: false, reason: scrub(String((e as any)?.message ?? e).split(t).join("***")) }; }
   const usage = await apUsage(t).catch(() => null);
-  const enc = await encryptRT(t);
+  const enc = await encryptRT(t, "apify");
   await apSave((v) => {
     v.tok_enc = enc;
     v.user = { name: apStr(me.username, 60), plan: apStr(me.plan?.id ?? me.plan?.name ?? "", 30), at: new Date().toISOString() };
@@ -1815,6 +1887,7 @@ async function runCron() {
     const left = () => 120000 - (Date.now() - t0); // ฟังก์ชันถูกตัดที่ 150 วิ เผื่อไว้
     // 3) Apify (ทุกแอพ) — เก็บผลรอบที่เสร็จ + เริ่มรอบใหม่ที่ถึงเวลา (ไม่รอให้เสร็จ)
     let ap: any = null;
+    if (!!APIFY_ENV !== !!st.apify?.env) await apSave((v) => { v.env = !!APIFY_ENV; }).catch(() => null); // แอปรู้ว่าเชื่อมผ่าน secret
     if (Array.isArray(st.channels?.apify_sources) && st.channels.apify_sources.length && (APIFY_ENV || st.apify?.tok_enc) && left() > 50000)
       ap = await apifyTick(false, Math.min(35000, left() - 45000)).catch((e) => ({ ok: false, reason: scrub(e) }));
     const a = await analyzeMentions(undefined, 20, Math.max(10000, left() - 15000));
