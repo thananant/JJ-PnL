@@ -472,7 +472,7 @@ window.JJGate=(function(){
     <button id="zoOut" aria-label="ซูมออก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
     <button id="zoIn" aria-label="ซูมเข้า"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></button>
     <span class="sep rot3"></span>
-    <button class="rot3" id="rotL" aria-label="หมุนซ้าย" title="หมุนซ้าย (Q) · คลิกขวาแล้วลาก = หมุนอิสระ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+    <button class="rot3" id="rotL" aria-label="หมุนซ้าย" title="หมุนซ้าย (Q) · หรือคลิกค้างแล้วลากหมุนเองได้"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
     <button class="rot3" id="rotR" aria-label="หมุนขวา" title="หมุนขวา (E)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
     <button class="rot3" id="tiltBtn" aria-label="ปรับมุมก้มเงย" title="ปรับมุมก้มเงย (มองจากบน ↔ เฉียง)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <button class="rot3" id="cutBtn" aria-label="ตัดผนังให้เตี้ย" title="ผนังเตี้ย/สูง"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 12h18M9 5v7M15 12v7"/></svg></button>
@@ -1349,6 +1349,7 @@ let hover=null,sel_=null,pills=[],running=false;
 const SEVC={crit:'#c62127',warn:'#e6a325',err:'#8a7f76'};
 function frame(ts){
   const t=ts/1000;
+  if(SPIN){setAngle(ANG.th+SPIN.vth,ANG.ph+SPIN.vph);SPIN.vth*=.92;SPIN.vph*=.85;if(Math.abs(SPIN.vth)<.0008&&Math.abs(SPIN.vph)<.0008){SPIN=null;saveAng()}}
   if(ANGT){const k=RM?1:.16,nt=ANG.th+(ANGT.th-ANG.th)*k,np=ANG.ph+(ANGT.ph-ANG.ph)*k;
     if(Math.abs(ANGT.th-nt)<.002&&Math.abs(ANGT.ph-np)<.002){setAngle(ANGT.th,ANGT.ph);ANGT=null;saveAng()}else setAngle(nt,np)}
   if(camT){const k=.16;cam.s+=(camT.s-cam.s)*k;cam.x+=(camT.x-cam.x)*k;cam.y+=(camT.y-cam.y)*k;if(Math.abs(camT.s-cam.s)<.001&&Math.abs(camT.x-cam.x)<.5)camT=null}
@@ -1408,23 +1409,32 @@ function startMeeting(){if(meeting)return;closeSheet();beep(520,.08);meeting=1;$
   const s=Math.max(cam.s,fitS*(W<760?1.7:1.25)),cp=VS(20.5,3,0);camT={s,x:W/2-cp[0]*s,y:H*.48-cp[1]*s};if(RM){cam=camT;camT=null}}
 function sendHome(){PPL.forEach((p,i)=>{const back=routeToMeeting(p,i).slice(0,-1).reverse();back.push(p.home);p.path=back});meeting=3}
 
-/* ---------- แตะ/ลาก/ซูม ---------- */
-const ptrs=new Map();let drag=null,pinch=null;
-cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);
-  if(ptrs.size===1)drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y,moved:0,rot:MODE==='3d'&&(e.button===2||e.shiftKey||e.ctrlKey||e.altKey),th:ANG.th,ph:ANG.ph};
-  else if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),s:cam.s,a:Math.atan2(b[1]-a[1],b[0]-a[0]),my:(a[1]+b[1])/2,th:ANG.th,ph:ANG.ph};drag=null;ANGT=null}});
+/* ---------- แตะ/ลาก/ซูม ----------
+   3D: ลากเมาส์ซ้าย/นิ้วเดียว = จับหมุนรอบทิศ (ปล่อยแล้วหมุนต่อตามแรงเหวี่ยง) · คลิกขวา/Shift/Ctrl+ลาก หรือ 2 นิ้ว = เลื่อนผัง · ล้อเมาส์/บีบ = ซูม
+   2D: ลาก = เลื่อนผัง · แตะไม่ขยับ (≤6px) = เปิดห้อง */
+const ptrs=new Map();let drag=null,pinch=null,SPIN=null;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);SPIN=null;
+  if(ptrs.size===1)drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y,moved:0,rot:MODE==='3d'&&!(e.button===2||e.shiftKey||e.ctrlKey||e.altKey),
+    th:ANG.th,ph:ANG.ph,lx:e.clientX,ly:e.clientY,lt:performance.now(),vx:0,vy:0};
+  else if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),s:cam.s,mx:(a[0]+b[0])/2,my:(a[1]+b[1])/2,cx:cam.x,cy:cam.y};drag=null;ANGT=null}});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointermove',e=>{
   if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,[e.clientX,e.clientY]);
-  if(pinch&&ptrs.size===2){const [a,b]=[...ptrs.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);
-    if(MODE==='3d'){let da=Math.atan2(b[1]-a[1],b[0]-a[0])-pinch.a;da=Math.atan2(Math.sin(da),Math.cos(da));setAngle(pinch.th-da,pinch.ph+((a[1]+b[1])/2-pinch.my)*.005)}
-    zoom(pinch.s*d/pinch.d/cam.s,(a[0]+b[0])/2,(a[1]+b[1])/2);return}
-  if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved=Math.max(drag.moved,Math.abs(dx)+Math.abs(dy));if(drag.moved>6){if(drag.rot){setAngle(drag.th-dx*.008,drag.ph+dy*.006);ANGT=null}else{cam.x=drag.cx+dx;cam.y=drag.cy+dy;camT=null}cv.classList.add('drag')}return}
-  hover=hit(e.clientX,e.clientY);cv.classList.toggle('hot',!!hover)});
-cv.addEventListener('pointerup',e=>{const wasRot=(drag&&drag.rot&&drag.moved>6)||(pinch&&MODE==='3d');ptrs.delete(e.pointerId);cv.classList.remove('drag');if(wasRot)saveAng();
-  if(drag&&drag.moved<=6){const h=hit(e.clientX,e.clientY);if(h)openAgent(h);else closeSheet()}
+  if(pinch&&ptrs.size===2){const [a,b]=[...ptrs.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]),mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+    cam.x=pinch.cx+(mx-pinch.mx);cam.y=pinch.cy+(my-pinch.my);camT=null;zoom(pinch.s*d/pinch.d/cam.s,mx,my);cv.classList.add('drag');return}
+  if(drag&&ptrs.has(e.pointerId)){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved=Math.max(drag.moved,Math.abs(dx)+Math.abs(dy));
+    if(drag.moved>6){
+      if(drag.rot){setAngle(drag.th-dx*.009,drag.ph+dy*.006);ANGT=null;
+        const now=performance.now(),dt=Math.max(1,now-drag.lt);drag.vx=(e.clientX-drag.lx)/dt;drag.vy=(e.clientY-drag.ly)/dt;drag.lx=e.clientX;drag.ly=e.clientY;drag.lt=now}
+      else{cam.x=drag.cx+dx;cam.y=drag.cy+dy;camT=null}
+      cv.classList.add('drag')}return}
+  hover=hit(e.clientX,e.clientY);const x=e.clientX,y=e.clientY;   // มือจับเสมอ · ชี้ป้าย/❗ = นิ้วชี้
+  cv.classList.toggle('hot',pills.some(p=>x>=p.x&&x<=p.x+p.w&&y>=p.y&&y<=p.y+p.h))});
+cv.addEventListener('pointerup',e=>{const d=drag,wasRot=d&&d.rot&&d.moved>6;ptrs.delete(e.pointerId);cv.classList.remove('drag');
+  if(wasRot){if(!RM&&performance.now()-d.lt<80&&(Math.abs(d.vx)>.05||Math.abs(d.vy)>.05))SPIN={vth:-d.vx*.009*16,vph:d.vy*.006*16};else saveAng()}
+  if(d&&d.moved<=6){const h=hit(e.clientX,e.clientY);if(h)openAgent(h);else closeSheet()}
   if(ptrs.size<2)pinch=null;drag=null});
-cv.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);drag=null;pinch=null});
+cv.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);drag=null;pinch=null;cv.classList.remove('drag')});
 cv.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(-e.deltaY*.0015),e.clientX,e.clientY)},{passive:false});
 function hit(x,y){for(let i=pills.length-1;i>=0;i--){const p=pills[i];if(x>=p.x&&x<=p.x+p.w&&y>=p.y&&y<=p.y+p.h)return p.a}
   if(meeting)return null;const [gx,gy]=toGrid(x,y);
@@ -1627,6 +1637,7 @@ let started=false;
 function startApp(){
   if(started)return;started=true;
   MODE=init3D()?'3d':'2d';if(MODE!=='3d'){$('scene3').hidden=true;document.querySelectorAll('.rot3').forEach(b=>b.hidden=true)}else{loadAng();paintCut()}
+  if(MODE==='3d'&&!LS.get('jjoffice_hint',0)){LS.set('jjoffice_hint',1);setTimeout(()=>toast(matchMedia('(pointer:coarse)').matches?'✋ ลากนิ้วเดียว = หมุนรอบ · 2 นิ้ว = เลื่อน/ซูม':'✋ คลิกค้างแล้วลาก = หมุนรอบ · คลิกขวาลาก = เลื่อน · ล้อเมาส์ = ซูม'),1200)}
   resize();paintHud();paintSnd();requestAnimationFrame(frame);
   const v=LS.get('jjoffice_view','');const a=[...AG,BOSS].find(x=>x.id===v);if(a)setTimeout(()=>openAgent(a),50);
   runAll();setInterval(()=>{if(!document.hidden)runAll()},5*60e3);
