@@ -106,7 +106,7 @@
 
 - **พนักงานล็อกอินที่หน้าแรก (`index.html`) ที่เดียว** แล้วเห็นเฉพาะแอปที่ตัวเองได้รับสิทธิ์ (อ่านจาก `pnl_users.apps` ที่ admin ตั้งในหน้า JJ Access)
 - ล็อกอินสำเร็จ → หน้าแรก**แจกใบผ่านให้ทุกแอปที่ใช้บัญชี `pnl_users`** ผ่าน localStorage (ฟังก์ชัน `spreadSession`) จึงเข้าแอปต่อได้เลยไม่ต้องกรอกซ้ำ:
-  `jjpnl_auth` (P&L · Owner · Access) · `jjpay_sess` (Payroll) · `jjsocial_sess` · `jjcal_sess` · `jjmk_inv_sess`
+  `jjpnl_auth` (P&L · Owner · Access) · `jjpay_sess` (Payroll) · `jjsocial_sess` · `jjcal_sess` · `jjmk_inv_sess` · `jjoffice_sess`
   — **เพิ่มแอปใหม่ที่ใช้ `pnl_users` ต้องเพิ่มคีย์ใน `spreadSession` และ `clearSession` ด้วย** ไม่งั้นต้องล็อกอินซ้ำ
 - **"ติ๊กแอปไหนให้ ก็เห็นแอปนั้น"** — ไอคอนบนหน้าแรกตรงกับที่ตั้งใน JJ Access เป๊ะ ไม่มีข้อยกเว้น (เจ้าของสั่ง 2026-09-21 — เดิมมีรายการ `ALWAYS` ให้ KPI/นับสต๊อก/ครัวกลาง/ซ่อมบำรุงแสดงเสมอ **เอาออกแล้ว** เพราะทำให้เห็นแอปเกินสิทธิ์ที่ให้)
 - **ทุกแอปใช้บัญชีกลาง `pnl_users` ชุดเดียวกันหมดแล้ว (2026-09-24)** — นับสต๊อก (`sc_users`) และครัวกลาง (Supabase Auth + `app_users`) เป็น 2 ตัวสุดท้ายที่ย้ายมา · ติ๊กที่ JJ Access จึงคุมทั้ง "เห็นไอคอนไหม" และ "เข้าแอปนั้นได้ไหม"
@@ -118,13 +118,13 @@
       ```
       for f in index.html jjmk-pnl.html jjmk-owner.html jjmk-admin.html jjmk-payroll.html \
                jjmk-calendar.html jjmk-invoice.html jjmk-social.html jjmk-maint.html \
-               jjmk-kpi.html jjmk-stockcheck.html jjmk-kitchen.html jjmk-order.html; do
+               jjmk-kpi.html jjmk-stockcheck.html jjmk-kitchen.html jjmk-order.html jjmk-office.html; do
         printf "%-22s def=%s use=%s\n" $f "$(grep -c 'window.JJLogin=JJLogin' $f)" \
           "$(grep -c 'JJLogin\.\(mount\|wrap\)' $f)"; done
       ```
       ต้องได้ **`def=1` ทุกไฟล์** (0 = บล็อก JJ Login หายไปทั้งก้อน) และ **`use≥1`** (0 = หน้าล็อกอินไม่ถูกเรียกใช้)
       · *(เดิมเขียนว่านับ `window.JJLogin` แล้วต้องได้ 2 ทุกไฟล์ — **ผิด** เพราะเลข 2 มาจาก `JJGate.note()`
-      ซึ่งมีเฉพาะ 7 ไฟล์ที่ฝัง JJ Gate · อีก 6 ไฟล์ได้ 1 ตามปกติ ไม่ใช่ไฟล์เสีย)*
+      ซึ่งมีเฉพาะ 8 ไฟล์ที่ฝัง JJ Gate · อีก 6 ไฟล์ได้ 1 ตามปกติ ไม่ใช่ไฟล์เสีย)*
     - **วิธีกู้**: `git diff 2266081^ 2266081 -- <ไฟล์> | git apply --3way` (commit 2266081 = PR #59 ที่ใส่ JJ Login ครั้งแรก) — merge เข้ากับงานใหม่ของ commit ที่มาทับได้เอง ไม่ต้องเลือกว่าจะทิ้งของใคร
   - **ครัวกลาง (`jjmk-kitchen.html`)**: เลิกใช้ Supabase Auth (`signInWithPassword` + อีเมลปลอม `@jjmk.local`) และตาราง `app_users` · เซสชันประจำแท็บ `sessionStorage.jjck_sess` · "จำไว้ในเครื่องนี้ 12 ชม." = `jjck_keep` · role แปลงเป็นของเดิมในแอป: admin/owner→`owner` · manager หรือมีสิทธิ์หน้า `set`/`acc`→`manager` · ที่เหลือ→`warehouse`
   - **ต้องรัน `jjmk_kitchen_central.sql` (branch `sql`) ครั้งเดียว** ไม่งั้นครัวกลางบันทึกอะไรไม่ได้ — RLS เดิมของตาราง `ck_*` บังคับ `authenticated` + เช็ค `app_users.auth_uid` ซึ่งบัญชีกลาง (ยิงผ่าน anon key) ทำไม่ได้ · ไฟล์เปิด `ck_*` + `ck_add_qty` + bucket `product-images` ให้ role `anon` (แพตเทิร์นเดียวกับ `jjmk_maint_access.sql`)
@@ -250,10 +250,10 @@
 พร้อม **ไอคอนประจำแอพ** (ชุดเดียวกับหน้าศูนย์รวมแอพเป๊ะ) + โลโก้ร้านเป็นตราเล็กมุมขวาล่าง
 เพื่อเตือนว่ากำลังเข้าแอพไหน (เจ้าของสั่ง: "อยากให้มีไอคอนของแต่ละระบบ เตือนเวลา login ด้วย")
 
-- โค้ดคือบล็อก `window.JJLogin` (+ CSS ในตัว) ฝังก่อน `</head>` ของ **13 ไฟล์**:
+- โค้ดคือบล็อก `window.JJLogin` (+ CSS ในตัว) ฝังก่อน `</head>` ของ **14 ไฟล์**:
   `index.html` · `jjmk-pnl.html` · `jjmk-owner.html` · `jjmk-admin.html` · `jjmk-payroll.html` ·
   `jjmk-calendar.html` · `jjmk-invoice.html` · `jjmk-social.html` · `jjmk-maint.html` ·
-  `jjmk-kpi.html` · `jjmk-stockcheck.html` · `jjmk-kitchen.html` · `jjmk-order.html`
+  `jjmk-kpi.html` · `jjmk-stockcheck.html` · `jjmk-kitchen.html` · `jjmk-order.html` · `jjmk-office.html`
   — **บล็อกเหมือนกันทุกไฟล์ ต่างแค่ `var APP=` บรรทัดแรก · แก้ที่ไหนต้องแก้ให้ครบทุกไฟล์**
   (วิธีที่ใช้จริง: แก้ไฟล์ต้นฉบับแล้ว sync ทับทุกไฟล์ด้วยสคริปต์ อย่าไล่แก้มือทีละไฟล์)
 - ทะเบียนแอพอยู่ในตัวแปร `A` ของบล็อก (อิโมจิ + ชื่อ + คำอธิบาย + สีไล่เฉด) — **ต้องตรงกับไอคอนใน `index.html`**
@@ -278,9 +278,9 @@
 **กติกา: เข้าจากหน้าศูนย์รวมแอพ = ใช้ได้เลยตามสิทธิ์ · เข้าด้วย URL ตรง = ต้องใส่รหัสผ่านใหม่ทุกครั้ง**
 (กันกรณีลิงก์ถูกส่งต่อ แล้วเครื่องนั้นมี session ค้างอยู่ → เดิมเปิดเข้าได้เลย)
 
-- โค้ดด่านคือบล็อก `window.JJGate` (+ `<style>` คู่กัน) ฝังไว้ก่อน `</head>` ของ **7 ไฟล์**:
+- โค้ดด่านคือบล็อก `window.JJGate` (+ `<style>` คู่กัน) ฝังไว้ก่อน `</head>` ของ **8 ไฟล์**:
   `index.html` · `jjmk-pnl.html` · `jjmk-owner.html` · `jjmk-admin.html` · `jjmk-payroll.html` ·
-  `jjmk-calendar.html` · `jjmk-invoice.html`
+  `jjmk-calendar.html` · `jjmk-invoice.html` · `jjmk-office.html`
   — **บล็อกเหมือนกันทุกไฟล์ ต่างแค่ `var APP=` บรรทัดแรก · แก้ที่ไหนต้องแก้ให้ครบทุกไฟล์**
 - **JJ Social + ซ่อมบำรุง ไม่ได้ฝังบล็อกนี้** — สองแอพนั้นมีระบบของตัวเองที่ทำเรื่องเดียวกัน
   (ใบผ่าน `jjsso_ticket` + session ประจำแท็บใน `sessionStorage`) ทำงานร่วมกันได้ ไม่ต้องรวมเป็นอันเดียว:
@@ -659,6 +659,27 @@
   · นับของ: ตัวนับ "นับแล้ว x/y" นับเฉพาะแผนกที่เปิด · ที่นับไว้แผนกอื่นยังเก็บไว้และบันทึกพร้อมกัน · CSV สมุดสต๊อกมีคอลัมน์ `แผนก` นำหน้า
 - ข้อความ `dp_*` ครบ 4 ภาษา (`DP_I18N`) · เทส [24]/[24b]/[24c]/[25] (`t_dept`) ใน `/tmp` ของ session · SQL ทดสอบกับ PGlite (รันซ้ำ · anon เขียนได้ · constraint ทำงาน)
 
+## ออฟฟิศ AI (JJ Office) — agent ประจำทุกระบบ (เจ้าของสั่ง 2026-10-06)
+
+เจ้าของ: *"อยากให้ทำ agent แบบ virtual agent คล้ายในรูป"* (ออฟฟิศสามมิติ ห้องละระบบ) → *"ทำให้มันเป็นจริงเลย"*
+
+- แอปคือ `jjmk-office.html` (key `office` · ไอคอน 🏢 · ล็อกอิน `pnl_users` + JJ Login + JJ Gate · เซสชัน `jjoffice_sess`)
+- ผังออฟฟิศวาดด้วย canvas isometric: 9 ห้อง = 9 agent (บัญชี · ใบกำกับภาษี · เงินเดือน · Social · KPI · ครัวกลาง · นับสต๊อก · ซ่อมบำรุง · ปฏิทิน)
+  + "ผู้จัดการ AI" กลางออฟฟิศ · แตะห้อง = แผงรายงาน · ❗ แดง = ด่วน เหลือง = ต้องดู · "?" เทา = อ่านข้อมูลไม่ได้
+- **ทุก agent อ่านข้อมูลจริงจาก Supabase แบบอ่านอย่างเดียว ในเบราว์เซอร์** (ฟังก์ชัน `chkPnl` … `chkCalendar`) — **ห้ามเขียนตารางของระบบอื่นจากแอปนี้**
+  · ตรวจแบบ fail-soft ต่อห้อง (ตาราง/คอลัมน์ไม่มี = ห้องนั้นขึ้นอ่านไม่ได้ ห้องอื่นยังทำงาน) · ดึงใหม่ทุก 5 นาที + ตอนกลับมาที่แท็บ + ปุ่ม 🔄
+  · สูตรที่ลอกจากแอปต้นทาง (แก้แอปต้นทางแล้วต้องเช็คที่นี่ด้วย): ลงยอดขาย = `hasIncData` ของ P&L · บิลค้าง = `isStuck` (40 นาที) + NAS = `nasSyncActive` ของใบกำกับ ·
+    สแกนครั้งเดียว = กลุ่มวันทำงาน 06:00–05:59 แบบ `recomputeAll` · แชทรอตอบ = ตรรกะ `waiting` ของ Social · งานเลยกำหนด = `maintStat` · วันสั่งของ = `suppliers.schedule` ·
+    วันหยุดที่ยังไม่ลง = `SD_PRESET` ของปฏิทิน · biz date: KPI ตัด 05:00 · นับสต๊อกตัด 06:00
+- **สิทธิ์**: เข้าแอปได้ตาม `apps.office` (หน้าจอ `map` · `brief`) · **ห้องของแต่ละระบบเห็นตามสิทธิ์ของแอปนั้นเอง** (กติกาเดียวกับ `canOpen` ในหน้าแรก) — ไม่มีสิทธิ์ = ห้องล็อก 🔒 ไม่ดึงข้อมูล ·
+  `_br` ของแอปนั้นกรองรายการตามสาขา · office ไม่อยู่ใน `BR_SCOPED` (ใช้ `_br` ของแต่ละแอปแทน)
+- ภารกิจ = รายการ ด่วน/ต้องดู · ปุ่ม "รับทราบ/จัดการแล้ว" + XP/เหรียญ/เลเวล/วันติดกัน เก็บใน `localStorage.jjoffice_p_<username>` (ต่อวัน — พรุ่งนี้ยังไม่แก้ = ขึ้นใหม่) ·
+  เรื่องหายเองเมื่อแก้ที่แอปจริงแล้ว · จำห้องที่เปิดค้าง `jjoffice_view` (รีเฟรชแล้วกลับห้องเดิม) · ลากบนผัง = เลื่อนผัง (pull-to-refresh ข้าม `#scene`)
+- **ประชุมเช้า**: agent เดินเข้าห้องประชุม → สรุปทุกห้อง · ส่งเข้ากลุ่มไลน์ผ่าน Edge Function `line-order` (`{to,text}` · `sc_config.line_endpoint` ถ้าตั้งไว้)
+  เฉพาะคนมีสิทธิ์ `brief:a` หรือ admin/owner · กลุ่มตั้งต้น = `pnl_settings.line_group_id` (กลุ่มแจ้งใบสมัคร) · เลือกกลุ่มอื่นจาก `line_groups` จำใน `jjoffice_lg`
+- ยังไม่ได้ทำ: ส่งสรุปอัตโนมัติทุกเช้า (ต้องมี Edge Function + cron) · ให้ AI (Gemini) เรียบเรียงข้อความ — ตอนนี้ข้อความมาจากกติกาตรง ๆ ไม่มีค่าใช้จ่าย AI
+- เทส (Playwright + Supabase จำลอง) อยู่ `/tmp` ของ session: ทุก agent · ห้องอ่านไม่ได้ · ล็อกตามสิทธิ์ · `_br` · ส่งไลน์ · รีเฟรช · มือถือ 390px
+
 ## กติกา UX ทุกแอป — รีเฟรชแล้วต้องอยู่หน้าเดิม (เจ้าของสั่ง 2026-09-18)
 
 - **ลากลง (pull-to-refresh) หรือกดรีเฟรช = ต้องกลับมาที่หน้า/แท็บเดิมที่เปิดค้างไว้** ห้ามเด้งกลับหน้าแรก
@@ -668,7 +689,7 @@
 - เขียนแอปใหม่ต้องมีตั้งแต่แรก · สถานะปัจจุบัน (2026-09-18) ทำครบทุกแอปแล้ว:
   P&L `jjpnl_view` · Kitchen `jjck_tab` · นับสต๊อก `jjsc_tab` · Payroll (hash routing) ·
   Social `jjsocial_tab` · Calendar `jjcal_tab` · KPI `kpi_tab` · Invoice `jjinv_tab` ·
-  Access `jjacc_tab` · Owner `jjowner_view` · ซ่อมบำรุง `jjmt_tab` (แท็บตารางบำรุงรักษา/นับอุปกรณ์)
+  Access `jjacc_tab` · Owner `jjowner_view` · ซ่อมบำรุง `jjmt_tab` (แท็บตารางบำรุงรักษา/นับอุปกรณ์) · ออฟฟิศ AI `jjoffice_view`
 - **ทุกแอปใส่ meta no-cache ใน `<head>`** (`Cache-Control`/`Pragma`/`Expires` — ทำครบทุกไฟล์แล้ว 2026-09-21) เพราะดึงหน้าลง (pull-to-refresh) บนมือถือแล้วยังได้ไฟล์เก่าค้าง · **เขียนแอปใหม่ต้องใส่ด้วยทุกครั้ง**
 - หน้าศูนย์รวมแอป (`index.html`) และ Calendar มีปุ่ม 🔄 โหลดใหม่ (ข้ามแคชด้วย `?v=`) เพิ่มอีกชั้น — `hardReload()`
 - **ลากหน้าลง = รีเฟรช (pull-to-refresh) — มีครบทุกแอปแล้ว** (เจ้าของสั่ง 2026-09-21):
