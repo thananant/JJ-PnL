@@ -344,6 +344,20 @@ table.t tr.tap:hover{background:#FFF8F3}
 .tkbtns{display:flex;flex-direction:column;gap:8px}
 .tkempty{text-align:center;padding:28px 10px}.tkempty span{display:block;font-size:64px}.tkempty b{font-size:21px}
 .tkother{margin-top:6px}
+.spbot{border:2px solid #CFE3D5;background:#F4FAF6}.spbot-h{font-size:17px;margin-bottom:4px}
+.spbtns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.spbtns .btn{min-height:48px;flex:1 1 auto}
+.sphow{margin-top:6px}.sphow>summary{cursor:pointer;font-weight:700;padding:8px 0}
+.spsteps{margin:4px 0 4px 20px;padding:0;font-size:15px;line-height:1.6}
+.spok{color:var(--ok);font-weight:700}.spbad{color:var(--bad);font-weight:700}
+.spline{border-radius:14px;padding:12px 14px;font-weight:700;font-size:16px;margin-bottom:8px}
+.spline.ok{background:var(--ok-t);color:#145C3B}.spline.bad{background:var(--bad-t);color:var(--bad)}
+.spsel{width:100%;min-height:54px;font-size:17px}
+.spstk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#EEF4FB;border:1.5px solid #B9CBE0;border-radius:14px;padding:10px 12px;margin:8px 0;font-size:15px}
+.spstk .btn{min-height:46px}
+.spinfo{border:2px solid var(--line);border-radius:16px;padding:10px 14px;line-height:1.9;font-size:16px}
+.spk{cursor:pointer}.spk .spkcb{width:30px;height:30px;flex:none;accent-color:var(--ok)}
+.spkfoot{position:sticky;bottom:-18px;background:#fff;padding:10px 0 4px;margin-top:6px}
+.spoff{flex:none;min-width:48px}.spsetl{margin-top:8px;align-self:flex-start}
 .tmtop{display:flex;gap:14px;align-items:center;margin-bottom:6px}.tmtop .mthumb{width:84px;height:84px;font-size:42px}
 .tmneed{font-size:40px;font-weight:800;line-height:1.1;color:var(--red)}.tmneed small{font-size:20px;color:var(--ink)}
 .tmuse{border:2px solid var(--line);border-radius:16px;padding:6px 12px}
@@ -546,6 +560,7 @@ table.t tr.tap:hover{background:#FFF8F3}
   <button class="sb-item" data-v="stock"><span class="ic">📦</span><span class="lb"></span></button>
   <button class="sb-item" data-v="menus"><span class="ic">📖</span><span class="lb"></span></button>
   <button class="sb-item" data-v="items"><span class="ic">🥬</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="sups"><span class="ic">🏷️</span><span class="lb"></span></button>
   <button class="sb-item" data-v="stats"><span class="ic">📈</span><span class="lb"></span></button>
   <button class="sb-item" data-v="acc"><span class="ic">💰</span><span class="lb"></span></button>
   </div>
@@ -580,6 +595,7 @@ table.t tr.tap:hover{background:#FFF8F3}
   <section class="view" id="view-stock"></section>
   <section class="view" id="view-menus"></section>
   <section class="view" id="view-items"></section>
+  <section class="view" id="view-sups"></section>
   <section class="view" id="view-stats"></section>
   <section class="view" id="view-acc"></section>
   <section class="view" id="view-set"></section>
@@ -605,7 +621,7 @@ const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const EMAIL_DOMAIN='@jjmk.local';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='CK b2';
+const APP_VER='CK b3';
 
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
@@ -1395,7 +1411,7 @@ const KITCHEN_SQL=[
 /* ============================================================
    Shell: nav + chrome
    ============================================================ */
-const VIEWS=['today','dash','plan','buy','produce','orders','stock','menus','items','stats','acc','set'];
+const VIEWS=['today','dash','plan','buy','produce','orders','stock','menus','items','sups','stats','acc','set'];
 function applyChrome(){
   document.body.setAttribute('data-lang',LANG);
   document.querySelectorAll('[data-v]').forEach(b=>{
@@ -3820,7 +3836,7 @@ RENDER.items=function(el){
   let h='';
   if(canKitchen())h+='<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">'+
     '<button class="btn" onclick="itemEdit()">'+t('it_new')+'</button>'+
-    '<button class="btn gh" onclick="supsModal()">🚛 '+t('it_sup_title')+'</button>'+
+    '<button class="btn gh" onclick="show(\'sups\')">🏷️ '+t('nav_sups')+'</button>'+
     (S.items.some(i=>i.active!==false&&!i.image_url)?'<button class="btn gh" onclick="autoImgWizard(\'item\')">'+t('ai_btn')+'</button>':'')+'</div>';
   const cats=[...new Set(S.items.map(i=>i.cat||'อื่นๆ'))];
   h+='<div class="catbar" onclick="const b=event.target.closest(\'button\');if(b){IT_CAT=b.dataset.cat||\'\';show(\'items\')}">'+
@@ -3869,7 +3885,7 @@ function paintItemEdit(){
     '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'+
     '<div class="mthumb" style="width:64px;height:64px;font-size:28px">'+(d.image_url?'<img src="'+esc(d.image_url)+'">':(ITEM_CAT_IC[d.cat]||'🥬'))+'</div>'+
     (d.id?'<button class="btn gh sm2" onclick="pickImage(\'item\',\''+d.id+'\',url=>{IT_DRAFT.image_url=url;paintItemEdit()})">'+t('pick_photo')+'</button>':'<span class="xs mut">'+t('save')+' → '+t('pick_photo')+'</span>')+'</div>'+
-    '<div class="fld"><label>'+t('name_th')+'</label><input id="itName" value="'+esc(d.name)+'" onchange="IT_DRAFT.name=this.value"></div>'+
+    '<div class="fld"><label>'+t('name_th')+'</label><input id="itName" value="'+esc(d.name)+'" onchange="if(IT_DRAFT)IT_DRAFT.name=this.value"></div>'+
     '<div class="grid2"><div class="fld"><label>'+t('it_cat')+'</label><select onchange="IT_DRAFT.cat=this.value">'+
     ITEM_CATS.map(c=>'<option value="'+esc(c)+'" '+(c===d.cat?'selected':'')+'>'+(ITEM_CAT_IC[c]||'')+' '+esc(trCat(c))+'</option>').join('')+
     (ITEM_CATS.includes(d.cat)?'':'<option selected>'+esc(d.cat)+'</option>')+'</select></div>'+
@@ -3931,9 +3947,11 @@ async function itemSave(){await once(async()=>{
   else{iid=uid('it');row.id=iid;row.qty=0;
     await itemWriteRow(x=>sb.from('ck_items').insert(x),row);S.items.push(row);
     if(d.price!=null)await dbi(()=>sb.from('ck_price_log').insert({item_id:iid,d:todayStr(),price:d.price,buy_unit:d.buy_unit||d.unit,source:'manual'}));}
+  const fromSp=!!d._fromSp;
   IT_DRAFT=null;closeModal();
   if(packs.length&&!PACKS_OK)toast(t('un_need_sql'),true);else toast(t('sv_ok'));
-  show(S.tab==='set'?'set':'items');
+  show(fromSp||S.tab==='set'?S.tab:'items');
+  if(fromSp&&!document.getElementById('modalWrap').classList.contains('on'))paintSp();
   const it=itemById(iid);
   autoI18n(row.name,renamed?null:(it&&it.i18n)).then(o=>{if(o&&it){it.i18n=o;
     sb.from('ck_items').update({i18n:o}).eq('id',iid).then(()=>{},()=>{});}}).catch(()=>{});
@@ -3941,7 +3959,9 @@ async function itemSave(){await once(async()=>{
 async function itemDel(id){if(!confirm(t('confirm_del')))return;
   await once(async()=>{
     await dbi(()=>sb.from('ck_items').update({deleted_at:new Date().toISOString()}).eq('id',id));
-    S.items=S.items.filter(x=>x.id!==id);IT_DRAFT=null;MODAL_BACK=null;closeModal();show(S.tab==='set'?'set':'items');});}
+    const fromSp=!!(IT_DRAFT&&IT_DRAFT._fromSp);
+    S.items=S.items.filter(x=>x.id!==id);IT_DRAFT=null;MODAL_BACK=null;closeModal();show(fromSp||S.tab==='set'?S.tab:'items');
+    if(fromSp)paintSp();});}
 async function priceHist(id){
   const it=itemById(id);
   const logs=await dbi(()=>sb.from('ck_price_log').select('*').eq('item_id',id).order('created_at',{ascending:false}).limit(30));
@@ -3950,60 +3970,57 @@ async function priceHist(id){
     logs.map(l=>'<tr><td>'+dispDate(l.d)+'</td><td class="n">฿'+fmt(l.price,2)+'/'+esc(trUnit(l.buy_unit||''))+'</td><td class="xs mut">'+esc(l.source||'')+'</td></tr>').join('')+
     '</table></div>':'<div class="empty">'+t('no_data')+'</div>'));
 }
-function supsModal(){
-  let h='<h3>🚛 '+t('it_sup_title')+'</h3>';
-  S.sups.forEach(s=>{h+='<div class="rowline"><div class="grow"><b>'+esc(s.name)+'</b>'+
-    '<div class="xs mut">'+(s.phone?'📞 '+esc(s.phone)+' · ':'')+t('it_lead')+' '+(s.lead_days||1)+
-      ' · '+(num(s.credit_days)>0?t('kf_pay_credit')+' '+num(s.credit_days)+' '+t('kf_days'):t('kf_pay_now'))+(s.line_group_id?' · 💬':'')+'</div></div>'+
-    '<button class="btn gh sm2" onclick="supEdit(\''+s.id+'\')">✎</button></div>';});
-  h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="supEdit()">'+t('it_sup_new')+'</button>';
-  openModal(h);
-}
+function supsModal(){show('sups');}   // หน้าร้านค้าแยกแล้ว (🏷️) — ชื่อเดิมไว้ให้ปุ่มเก่า
 async function supEdit(id){
   if(!canKitchen())return;
-  await lineGroupsLoad();
   const s=id?S.sups.find(x=>x.id===id):null;
-  const gl=(S.lineGroups||[]).slice().sort((a,b)=>lgName(a.group_id).localeCompare(lgName(b.group_id),'th'));
-  const gid=s&&s.line_group_id||'';
-  openModal('<h3>🚛 '+(s?t('edit'):t('it_sup_new'))+'</h3>'+
+  openModal('<h3>🏷️ '+(s?t('sp_edit_info'):t('sp_new'))+'</h3>'+
     '<div class="fld"><label>'+t('name')+'</label><input id="spName" value="'+esc(s?s.name:'')+'"></div>'+
-    '<div class="grid2"><div class="fld"><label>'+t('it_phone')+'</label><input id="spPhone" value="'+esc(s?s.phone||'':'')+'"></div>'+
+    '<div class="grid2"><div class="fld"><label>'+t('it_phone')+'</label><input id="spPhone" inputmode="tel" value="'+esc(s?s.phone||'':'')+'"></div>'+
     '<div class="fld"><label>'+t('it_lead')+'</label><input id="spLead" inputmode="decimal" value="'+(s?s.lead_days||1:1)+'"></div></div>'+
     '<div class="fld"><label>💳 '+t('kf_sup_credit')+'</label><input id="spCredit" inputmode="numeric" value="'+(s?Math.max(0,parseInt(s.credit_days,10)||0):0)+'">'+
       '<div class="xs mut">'+t('kf_sup_credit_hint')+'</div></div>'+
-    '<div class="fld"><label>💬 '+t('kf_sup_line')+'</label><select id="spLine"><option value="">'+t('kf_sup_noline')+'</option>'+
-      gl.map(g=>'<option value="'+esc(g.group_id)+'"'+(String(g.group_id)===String(gid)?' selected':'')+'>'+esc(lgName(g.group_id))+'</option>').join('')+
-      (gid&&!gl.some(g=>String(g.group_id)===String(gid))?'<option value="'+esc(gid)+'" selected>'+esc(String(gid).slice(0,12))+'…</option>':'')+'</select>'+
-      '<div class="xs mut">'+t('kf_sup_line_hint')+'</div></div>'+
     '<div class="fld"><label>'+t('note')+'</label><input id="spNote" value="'+esc(s?s.note||'':'')+'"></div>'+
     '<div style="display:flex;gap:8px;margin-top:10px">'+
-    (s?'<button class="btn gh" onclick="supDel(\''+s.id+'\')">🗑</button>':'')+
-    '<button class="btn big" style="flex:1" onclick="supSave(\''+(s?s.id:'')+'\')">'+t('save')+'</button></div>');
+    (s?'<button class="btn gh" data-id="'+esc(s.id)+'" onclick="supDel(this.dataset.id)">🗑</button>':'')+
+    '<button class="btn big" style="flex:1" data-id="'+esc(s?s.id:'')+'" onclick="supSave(this.dataset.id)">'+t('save')+'</button></div>');
 }
 async function supSave(id){
   if(!canKitchen())return;
   await once(async()=>{
     const name=(document.getElementById('spName').value||'').trim();
     if(!name){toast(t('need_name'),true);return;}
+    if(S.sups.some(x=>x.id!==id&&supKey(x.name)===supKey(name))){toast(t('sp_dup'),true);return;}
     const row={name,phone:document.getElementById('spPhone').value.trim()||null,
       lead_days:num(document.getElementById('spLead').value)||1,
       note:document.getElementById('spNote').value.trim()||null,
-      credit_days:Math.max(0,parseInt(document.getElementById('spCredit').value,10)||0),
-      line_group_id:document.getElementById('spLine').value||null};
-    const NC=['credit_days','line_group_id'];
-    if(id){await updFallback('ck_sups',row,id,NC);
-      Object.assign(S.sups.find(x=>x.id===id),row);}
-    else{row.id=uid('sp');await insFallback('ck_sups',[row],NC);S.sups.push(row);}
-    if(S.flowSql===false&&(row.credit_days||row.line_group_id))toast(t('kf_need_sql'),true);
+      credit_days:Math.max(0,parseInt(document.getElementById('spCredit').value,10)||0)};
+    const NC=['credit_days'];const isNew=!id;
+    if(id){const s=S.sups.find(x=>x.id===id);const old=s&&s.name;
+      await updFallback('ck_sups',row,id,NC);Object.assign(s,row);
+      if(old&&old!==name)await supRenameCascade(old,name);}
+    else{row.id=uid('sp');await insFallback('ck_sups',[row],NC);S.sups.push(row);id=row.id;}
     S.sups.sort((a,b)=>(a.name||'')<(b.name||'')?-1:1);
-    closeModal();if(!(S.flowSql===false&&(row.credit_days||row.line_group_id)))toast(t('sv_ok'));supsModal();
+    if(S.flowSql===false&&row.credit_days)toast(t('kf_need_sql'),true);else toast(isNew?t('sp_line_after'):t('sv_ok'));
+    MODAL_BACK=null;closeModal();
+    if(S.tab==='sups')show('sups');
+    supPage(id,SP&&SP.id===id?SP.back:null);   // บันทึกแล้วไปหน้าร้าน (ร้านใหม่ = ตั้งกลุ่มไลน์ต่อได้เลย)
   });}
+async function supRenameCascade(old,nw){ // เปลี่ยนชื่อร้าน = วัตถุดิบ + ใบสั่งที่ยังไม่รับของ ตามชื่อใหม่ (บิลเก่าคงชื่อตามบิล)
+  await dbi(()=>sb.from('ck_items').update({sup:nw}).eq('sup',old));
+  S.items.forEach(i=>{if(i.sup===old)i.sup=nw;});
+  const open=S.pos.filter(p=>p.sup===old&&p.status!=='received').map(p=>p.id);
+  if(open.length){await dbi(()=>sb.from('ck_pos').update({sup:nw}).in('id',open));
+    S.pos.forEach(p=>{if(open.includes(p.id))p.sup=nw;});}}
 async function supDel(id){
   if(!canKitchen())return;
-  if(!confirm(t('confirm_del')))return;
+  const s=S.sups.find(x=>x.id===id);if(!s)return;
+  const its=S.items.filter(i=>(i.sup||'')===s.name);
+  if(!confirm(its.length?t('sp_del_q_items',{s:s.name,n:its.length}):t('confirm_del')))return;
   await once(async()=>{
+    if(its.length){await dbi(()=>sb.from('ck_items').update({sup:''}).eq('sup',s.name));its.forEach(i=>{i.sup='';});}
     await dbi(()=>sb.from('ck_sups').delete().eq('id',id));
-    S.sups=S.sups.filter(x=>x.id!==id);closeModal();supsModal();});}
+    S.sups=S.sups.filter(x=>x.id!==id);SP=null;MODAL_BACK=null;closeModal();show('sups');});}
 </script>
 <script>
 /* ============================================================
@@ -4171,6 +4188,8 @@ RENDER.set=function(el){
   h+='<div class="card"><h3>👤 '+t('se_user')+'</h3>'+
     '<div class="rowline"><div class="grow"><b>'+esc(S.user.name)+'</b><div class="xs mut">@'+esc(S.prof.username||'')+' · '+t('se_role')+': '+esc(S.prof.role||'')+'</div></div>'+
     '<button class="btn gh sm2" onclick="doLogout()">🚪 '+t('logout')+'</button></div></div>';
+  h+='<div class="card"><h3>🏷️ '+t('nav_sups')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('sp_card_txt')+'</div>'+
+    '<button class="btn" onclick="show(\'sups\')">💬 '+t('sp_go')+' ›</button></div>';
   h+=kpSetCardHtml()+unitsCardHtml()+elCardHtml();
   if(isAdminish()){
     h+='<div class="card"><h3>🛠 '+t('se_sql')+'</h3><div class="xs mut" style="margin-bottom:8px">'+t('se_sql_hint')+'</div>'+
@@ -4459,7 +4478,7 @@ async function kpBuyWizard(){
   openModal(h,true);}
 
 /* ---------- 📤 ส่งใบสั่งซื้อแยกตามซัพ เข้ากลุ่มไลน์ของซัพ (แบบแอพนับสต๊อก — ฟังก์ชัน line-order ตัวเดียวกัน) ---------- */
-const LINE_FN=()=>SB_URL+'/functions/v1/line-order';
+const LINE_FN=()=>S.lineEp||SB_URL+'/functions/v1/line-order';   // บอทตัวเดียวกับแอพนับสต๊อก (sc_config.line_endpoint ถ้าตั้งไว้)
 function thDate(iso){const p=String(iso||'').slice(0,10).split('-').map(Number);if(p.length<3||!p[0])return '-';
   return p[2]+' '+I18N.th.mo[p[1]-1]+' '+(p[0]+543);}
 function poText(p){ // ข้อความใบสั่ง (ภาษาไทยเสมอ — ซัพอ่าน)
@@ -4470,10 +4489,17 @@ function poText(p){ // ข้อความใบสั่ง (ภาษาไ�
   L.push('','รวม '+lines.length+' รายการ');
   return L.join('\n');}
 function supLineId(name){const s=supByName(name);return (s&&s.line_group_id)||null;}
-async function lineGroupsLoad(){
-  if(S.lineGroups)return S.lineGroups;
+async function lineCfgLoad(){ // แอพนับสต๊อกเปลี่ยนที่ส่งไลน์ได้ที่ sc_config.line_endpoint — ครัวกลางใช้ตามกัน
+  if(S.lineEp!==undefined)return;S.lineEp=null;
+  try{const r=await sb.from('sc_config').select('*');
+    const row=((r&&!r.error&&r.data)||[]).find(x=>x&&x.k==='line_endpoint');
+    const v=String((row&&row.v)||'').trim();if(/^https:\/\/\S+$/.test(v))S.lineEp=v;}catch(e){}}
+async function lineGroupsLoad(force){
+  await lineCfgLoad();
+  if(S.lineGroups&&!force)return S.lineGroups;
   let r=null;try{r=await sb.from('line_groups').select('group_id,name');}catch(e){r=null;}
-  S.lineGroups=(r&&!r.error&&r.data)||[];return S.lineGroups;}
+  if(r&&!r.error&&r.data)S.lineGroups=r.data;else if(!S.lineGroups)S.lineGroups=[];
+  return S.lineGroups;}
 const lgName=gid=>{const g=(S.lineGroups||[]).find(x=>String(x.group_id)===String(gid));
   return (g&&g.name&&String(g.name).trim())||(gid?String(gid).slice(0,10)+'…':'');};
 function copyText(tx,done){
@@ -4918,7 +4944,7 @@ function prActual(d){return (d.actual==null||String(d.actual).trim()==='')?num(d
    ออกแบบให้เด็ก 5 ขวบ / ผู้ใหญ่ที่เพิ่งหัดใช้สมาร์ทโฟน ใช้ได้")
    หน้าวันนี้ = ปุ่มใหญ่ 6 ขั้น · กดแล้วเข้าหน้างานทีละเรื่อง (ปุ่มใหญ่ ตัวหนังสือใหญ่ คำง่าย)
    ============================================================ */
-const NAV_IC={today:'☀️',dash:'🏠',plan:'📅',buy:'🛒',produce:'🍳',orders:'🚚',stock:'📦',menus:'📖',items:'🥬',stats:'📈',acc:'💰',set:'⚙️'};
+const NAV_IC={today:'☀️',dash:'🏠',plan:'📅',buy:'🛒',produce:'🍳',orders:'🚚',stock:'📦',menus:'📖',items:'🥬',sups:'🏷️',stats:'📈',acc:'💰',set:'⚙️'};
 function navMenu(){ // มือถือ: ปุ่ม ☰ เมนู = ตารางปุ่มใหญ่ของทุกหน้า
   openModal('<h3>☰ '+t('sx_menu')+'</h3><div class="navgrid">'+
     VIEWS.map(v=>'<button class="navtile'+(v===S.tab?' on':'')+'" data-go="'+v+'" onclick="closeModal();show(this.dataset.go)"><span>'+NAV_IC[v]+'</span>'+esc(t('nav_'+v))+'</button>').join('')+
@@ -5075,7 +5101,8 @@ async function taskBuy(){
       '<div class="tklist">'+lines.map(s=>'<div>• '+s+'</div>').join('')+'</div>'+
       (k?'<div class="tkbtns"><button class="btn big ok" data-sup="'+esc(k)+'" onclick="buySupGo(this.dataset.sup,false)">📤 '+t(hasG?'sx_buy_send':'sx_buy_open_line')+'</button>'+
         '<button class="btn gh" data-sup="'+esc(k)+'" onclick="buySupGo(this.dataset.sup,true)">📋 '+t('kf_copy')+'</button></div>'
-       :'<div class="xs mut">'+t('sx_no_sup_hint')+'</div>')+'</div>';});
+       :'<div class="xs mut">'+t('sx_no_sup_hint')+'</div>')+
+      (k&&!hasG&&canKitchen()?'<button class="btn gh sm2 spsetl" data-sup="'+esc(k)+'" onclick="spOpenByName(this.dataset.sup,\'taskBuy()\')">💬 '+t('sp_set_line')+'</button>':'')+'</div>';});
   const sent=S.pos.filter(p=>p.status==='ordered'&&p.d_order===bizTodayISO());
   if(sent.length){h+='<div class="tksec">✅ '+t('sx_buy_sent')+'</div>';
     sent.forEach(p=>{h+='<div class="tkcard done small"><div class="tkmid"><div class="tkname">🏷️ '+esc(p.sup||'-')+'</div><div>'+t('sx_items_n',{n:(S.poItems[p.id]||[]).length})+'</div></div><span class="tkgo">✓</span></div>';});}
@@ -5128,6 +5155,219 @@ function taskRecv(){
     today.forEach(b=>{h+='<button class="tkcard done small" data-id="'+esc(b.id)+'" onclick="billOpen(this.dataset.id)"><div class="tkmid"><div class="tkname">🏷️ '+esc(b.sup||'-')+'</div>'+
       '<div>฿'+fmt(b.total,2)+(b.bill_no?' · #'+esc(b.bill_no):'')+'</div></div><span class="tkgo">✓</span></button>';});}
   openTask(h);}
+
+/* ============================================================
+   🏷️ ร้านค้า (ซัพ) — กลุ่มไลน์ของแต่ละร้าน + วัตถุดิบที่ซื้อร้านนั้น (เจ้าของสั่ง 2026-10-06:
+   "กลุ่มไลน์ตั้งตรงไหน อยากให้มีหน้าตั้งค่า supplier พร้อมตั้งกลุ่มไลน์ และเพิ่มวัตถุดิบเข้าแต่ละซัพ
+    และเชื่อมบอทตัวเดียวกับระบบสต๊อก")
+   บอทตัวเดียวกับแอพนับสต๊อก: ส่งผ่าน Edge Function line-order (หรือ sc_config.line_endpoint ถ้าแอพนับตั้งไว้) ·
+   รายชื่อกลุ่ม = line_groups · ดึงกลุ่มใหม่ = sync-line-groups · ชื่อกลุ่มที่ตั้งเอง = line_groups.name (สองแอพเห็นชื่อเดียวกัน) ·
+   ร้านเดียวกันในแอพนับ (suppliers.line_group_id ชื่อตรงกัน) = แนะนำกลุ่มให้กดใช้ได้เลย
+   ============================================================ */
+const supKey=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+const lgNamed=gid=>{const g=(S.lineGroups||[]).find(x=>String(x.group_id)===String(gid));return !!(g&&g.name&&String(g.name).trim());};
+function supItems(name){return S.items.filter(i=>i.active!==false&&(i.sup||'')===name);}
+async function stkSupsLoad(force){ // ซัพของแอพนับสต๊อก — อ่านอย่างเดียว เอากลุ่มไลน์ที่ผูกไว้แล้วมาแนะนำ
+  if(S.stkSups&&!force)return S.stkSups;
+  let r=null;try{r=await sb.from('suppliers').select('name,line_group_id');}catch(e){r=null;}
+  S.stkSups=(r&&!r.error&&r.data)||[];return S.stkSups;}
+function stkGroupOf(name){const k=supKey(name);if(!k)return null;
+  const x=(S.stkSups||[]).find(s=>supKey(s.name)===k&&s.line_group_id);return x?String(x.line_group_id):null;}
+const LG_SYNC_MS=6*3600*1000;   // แอพนับสต๊อกใช้คีย์เดียวกัน (jjsc_lgsync — โดเมนเดียวกัน) สองแอพจึงไม่ดึงซ้ำกัน
+async function lgSync(auto){ // ดึงกลุ่มที่บอทอยู่ + ชื่อกลุ่มล่าสุด (Edge Function ของแอพนับสต๊อก)
+  if(S._lgSyncing)return;S._lgSyncing=true;
+  if(!auto)toast('⏳ '+t('sp_lg_syncing'));
+  const before={};(S.lineGroups||[]).forEach(g=>{before[String(g.group_id)]=String(g.name||'');});
+  try{await fetch(SB_URL+'/functions/v1/sync-line-groups',{method:'POST',
+    headers:{'Content-Type':'application/json',apikey:SB_ANON,Authorization:'Bearer '+SB_ANON},body:'{}'});}catch(e){}
+  try{await lineGroupsLoad(true);}catch(e){}
+  (S.lineGroups||[]).forEach(g=>{const o=before[String(g.group_id)];if(o&&!String(g.name||'').trim())g.name=o;}); // ไลน์ไม่ส่งชื่อมา = คงชื่อเดิม
+  try{localStorage.setItem('jjsc_lgsync',String(Date.now()));}catch(e){}
+  S._lgSyncing=false;
+  const n=(S.lineGroups||[]).length;
+  if(!auto)toast(n?t('sp_lg_found',{n}):t('sp_lg_none'),!n);
+  const after={};(S.lineGroups||[]).forEach(g=>{after[String(g.group_id)]=String(g.name||'');});
+  if(!auto||JSON.stringify(after)!==JSON.stringify(before))spRepaint();}   // ดึงเองเบื้องหลังแล้วไม่มีอะไรเปลี่ยน = ไม่วาดทับหน้าที่ใช้อยู่
+function lgAutoSync(){let last=0;try{last=+(localStorage.getItem('jjsc_lgsync')||0)||0;}catch(e){}
+  if(Date.now()-last>=LG_SYNC_MS)lgSync(true);}
+async function lgRename(gid){
+  if(!canKitchen())return;
+  const g=(S.lineGroups||[]).find(x=>String(x.group_id)===String(gid));
+  const nn=String(prompt(t('sp_lg_rename_q'),(g&&g.name)||'')||'').trim();if(!nn)return;
+  await once(async()=>{
+    let r=null;try{r=await sb.from('line_groups').update({name:nn}).eq('group_id',gid).select();}catch(e){r={error:e};}
+    if(!r||r.error||!(r.data||[]).length){toast(t('sp_lg_rename_fail')+(r&&r.error?' — '+String(r.error.message||r.error).slice(0,80):''),true);return;}
+    if(g)g.name=nn;toast('✅ '+t('sv_ok'));spRepaint();});}
+function spRepaint(){ // หลังดึงกลุ่ม/ตั้งชื่อ — วาดหน้าที่เปิดอยู่ใหม่
+  const box=document.getElementById('modalBox'),open=document.getElementById('modalWrap').classList.contains('on');
+  if(S.tab==='sups')show('sups');
+  if(open&&SP&&box&&box.querySelector('[data-sp]'))paintSp();}
+
+/* ---------- หน้ารายการร้าน ---------- */
+let SP_Q='';
+RENDER.sups=function(el){
+  const can=canKitchen();
+  if(!S.lineGroups||!S.stkSups){el.innerHTML='<div class="spin"></div>';
+    Promise.all([lineGroupsLoad(),stkSupsLoad()]).then(()=>{if(S.tab==='sups')show('sups');});return;}
+  const sups=S.sups.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'th'));
+  const withG=sups.filter(s=>s.line_group_id).length;
+  const fromStk=sups.filter(s=>!s.line_group_id&&stkGroupOf(s.name));
+  const names=new Set(S.sups.map(s=>s.name));
+  const orphans=[...new Set(S.items.filter(i=>i.active!==false&&i.sup&&!names.has(i.sup)).map(i=>i.sup))].sort((a,b)=>a.localeCompare(b,'th'));
+  let h='<div class="tkhint">'+t('sp_hint')+'</div>';
+  h+='<div class="card spbot"><div class="spbot-h">🤖 <b>'+t('sp_bot')+'</b></div>'+
+    '<div class="sm mut">'+t('sp_bot_txt',{n:(S.lineGroups||[]).length,a:withG,b:sups.length})+'</div>'+
+    (can?'<div class="spbtns"><button class="btn gh" onclick="lgSync()">🔄 '+t('sp_lg_sync')+'</button>'+
+      (fromStk.length?'<button class="btn ok" onclick="spUseStock()">📥 '+t('sp_use_stock',{n:fromStk.length})+'</button>':'')+'</div>':'')+
+    '<details class="sphow"><summary>❓ '+t('sp_how_q')+'</summary>'+spHowHtml()+'</details></div>';
+  if(can)h+='<button class="btn big" style="width:100%;margin-bottom:12px" onclick="spNew()">＋ '+t('sp_new')+'</button>';
+  if(sups.length>6)h+='<input id="spQ" placeholder="🔎 '+t('search')+'" value="'+esc(SP_Q)+'" oninput="SP_Q=this.value;spFilter()" style="margin-bottom:10px">';
+  if(!sups.length)h+='<div class="card empty">'+t('sp_none')+'</div>';
+  h+='<div id="spList">'+sups.map(s=>{const g=s.line_group_id?String(s.line_group_id):'';const n=supItems(s.name).length;
+    return '<button class="tkcard spcard" data-id="'+esc(s.id)+'" data-n="'+esc(supKey(s.name))+'" onclick="supPage(this.dataset.id)">'+
+      '<div class="mthumb">🏷️</div><div class="tkmid"><div class="tkname">'+esc(s.name)+'</div>'+
+      '<div class="'+(g?'spok':'spbad')+'">'+(g?'💬 '+esc(lgName(g)):'⚠ '+t('sp_no_line'))+'</div>'+
+      '<div class="xs mut">🥬 '+t('sp_items_n',{n})+' · '+(num(s.credit_days)>0?t('kf_pay_credit')+' '+num(s.credit_days)+' '+t('kf_days'):t('kf_pay_now'))+'</div></div>'+
+      '<span class="tkgo">›</span></button>';}).join('')+'</div>';
+  if(orphans.length){h+='<div class="tksec">🏷️ '+t('sp_orphans')+'</div>';
+    orphans.forEach(n=>{h+='<div class="tkcard small"><div class="mthumb">🏷️</div><div class="tkmid"><div class="tkname">'+esc(n)+'</div>'+
+      '<div class="xs mut">🥬 '+t('sp_items_n',{n:supItems(n).length})+'</div></div>'+
+      (can?'<button class="btn ok sm2" data-n="'+esc(n)+'" onclick="spAddName(this.dataset.n)">＋ '+t('sp_add_this')+'</button>':'')+'</div>';});}
+  el.innerHTML=h;spFilter();
+  lgAutoSync();};
+function spFilter(){const q=supKey(SP_Q);
+  document.querySelectorAll('#spList .spcard').forEach(b=>{b.style.display=!q||b.dataset.n.indexOf(q)>=0?'':'none';});}
+function spHowHtml(){return '<ol class="spsteps"><li>'+t('sp_how1')+'</li><li>'+t('sp_how2')+'</li><li>'+t('sp_how3')+'</li><li>'+t('sp_how4')+'</li></ol>';}
+async function spUseStock(){ // ร้านที่ยังไม่มีกลุ่ม แต่แอพนับสต๊อกผูกร้านชื่อเดียวกันไว้แล้ว → ใช้กลุ่มเดียวกัน
+  if(!canKitchen())return;
+  const list=S.sups.filter(s=>!s.line_group_id&&stkGroupOf(s.name));if(!list.length)return;
+  if(!confirm(t('sp_use_stock_q',{n:list.length})+'\n\n'+list.map(s=>'• '+s.name+' → '+lgName(stkGroupOf(s.name))).join('\n')))return;
+  await once(async()=>{let n=0;
+    for(const s of list){const gid=stkGroupOf(s.name);
+      await updFallback('ck_sups',{line_group_id:gid},s.id,['line_group_id']);
+      if(S.flowSql===false)break;
+      s.line_group_id=gid;n++;}
+    if(S.flowSql===false)toast(t('kf_need_sql'),true);else toast('✅ '+t('sp_use_stock_ok',{n}));
+    show('sups');});}
+async function spAddName(name){ // ชื่อร้านที่มีในวัตถุดิบ แต่ยังไม่มีในรายการร้าน
+  if(!canKitchen())return;name=String(name||'').trim();if(!name)return;
+  let s=S.sups.find(x=>x.name===name);
+  if(!s)await once(async()=>{const row={id:uid('sp'),name,lead_days:1};
+    await dbi(()=>sb.from('ck_sups').insert(row));S.sups.push(row);s=row;});
+  if(!s)return;
+  if(S.tab==='sups')show('sups');
+  supPage(s.id,SP&&SP.back);}
+function spNew(){supEdit().then(()=>{MODAL_BACK=null;});}
+
+/* ---------- หน้าร้าน (ทีละร้าน เต็มจอ) ---------- */
+let SP=null; // {id, back: โค้ดของปุ่ม ‹ กลับ}
+async function supPage(id,back){
+  SP={id,back:back||null};
+  if(!S.lineGroups||!S.stkSups){openTask(tkHead('🏷️','')+'<div class="spin"></div>');
+    try{await Promise.all([lineGroupsLoad(),stkSupsLoad()]);}catch(e){}}
+  paintSp();}
+function spOpenByName(name,back){const s=S.sups.find(x=>x.name===name);
+  if(s)supPage(s.id,back);else{SP={id:null,back:back||null};spAddName(name);}}
+function paintSp(){
+  const s=SP&&S.sups.find(x=>x.id===SP.id);if(!s){MODAL_BACK=null;closeModal();return;}
+  const can=canKitchen(),gid=s.line_group_id?String(s.line_group_id):'';
+  const gl=(S.lineGroups||[]).slice().sort((a,b)=>lgName(a.group_id).localeCompare(lgName(b.group_id),'th'));
+  const stk=stkGroupOf(s.name);
+  const its=supItems(s.name).sort((a,b)=>dispName(a).localeCompare(dispName(b),'th'));
+  let h='<div data-sp="1"></div>'+tkHead('🏷️ '+esc(s.name),'',SP.back||'closeModal()');
+  h+='<div class="tksec">💬 '+t('sp_line')+'</div>'+
+    '<div class="spline '+(gid?'ok':'bad')+'">'+(gid?'✓ '+t('sp_line_on',{g:esc(lgName(gid))}):'⚠ '+t('sp_no_line_long'))+'</div>';
+  if(can){
+    h+='<select id="spG" class="spsel" onchange="spSetGroup(this.value)"><option value="">'+t('kf_sup_noline')+'</option>'+
+      gl.map(g=>{const used=S.sups.filter(x=>x.id!==s.id&&String(x.line_group_id||'')===String(g.group_id)).map(x=>x.name);
+        return '<option value="'+esc(g.group_id)+'"'+(String(g.group_id)===gid?' selected':'')+'>'+esc(lgName(g.group_id))+
+          (used.length?' · '+esc(t('sp_used_by',{s:used.slice(0,2).join(', ')+(used.length>2?' …':'')})):'')+'</option>';}).join('')+
+      (gid&&!gl.some(g=>String(g.group_id)===gid)?'<option value="'+esc(gid)+'" selected>'+esc(lgName(gid))+'</option>':'')+'</select>';
+    if(!gl.length)h+='<div class="tkhint">'+t('sp_lg_none')+'</div>';
+    if(stk&&stk!==gid)h+='<div class="spstk">📦 '+t('sp_stk_has',{g:esc(lgName(stk))})+
+      '<button class="btn ok" data-g="'+esc(stk)+'" onclick="spSetGroup(this.dataset.g)">'+t('sp_stk_use')+'</button></div>';
+    h+='<div class="spbtns">'+(gid?'<button class="btn gh" onclick="spTest()">🔔 '+t('sp_test')+'</button>':'')+
+      '<button class="btn gh" onclick="lgSync()">🔄 '+t('sp_lg_sync')+'</button>'+
+      (gid&&!lgNamed(gid)?'<button class="btn gh" data-g="'+esc(gid)+'" onclick="lgRename(this.dataset.g)">✏️ '+t('sp_lg_rename')+'</button>':'')+'</div>'+
+      '<details class="sphow"><summary>❓ '+t('sp_how_q')+'</summary>'+spHowHtml()+'</details>';}
+  h+='<div class="tksec">🥬 '+t('sp_items')+' ('+its.length+')</div>';
+  if(!its.length)h+='<div class="tkhint">'+t('sp_items_none')+'</div>';
+  its.forEach(i=>{h+='<div class="tkcard small">'+thumbHtml(i,'🥬')+
+    '<div class="tkmid"'+(can?' data-id="'+esc(i.id)+'" onclick="spItemEdit(this.dataset.id)" style="cursor:pointer"':'')+'><div class="tkname">'+esc(dispName(i))+'</div>'+
+    '<div class="xs mut">'+esc(trUnit(i.buy_unit||i.unit||''))+(i.price!=null?' · ฿'+fmt(i.price,2):'')+'</div></div>'+
+    (can?'<button class="btn gh sm2 spoff" data-id="'+esc(i.id)+'" onclick="spItemOff(this.dataset.id)" title="'+esc(t('sp_item_off'))+'">✕</button>':'')+'</div>';});
+  if(can)h+='<button class="btn big ok" onclick="spPick()">＋ '+t('sp_add_items')+'</button>'+
+    '<button class="btn gh tkother" style="width:100%" onclick="spNewItem()">＋ '+t('sp_new_item')+'</button>';
+  h+='<div class="tksec">📝 '+t('sp_info')+'</div><div class="spinfo">'+
+    (s.phone?'<div>📞 <a href="tel:'+esc(String(s.phone).replace(/[^0-9+]/g,''))+'">'+esc(s.phone)+'</a></div>':'')+
+    '<div>🚚 '+t('it_lead')+' '+(num(s.lead_days)||1)+' '+t('kf_days')+'</div>'+
+    '<div>💳 '+(num(s.credit_days)>0?t('kf_pay_credit')+' '+num(s.credit_days)+' '+t('kf_days'):t('kf_pay_now'))+'</div>'+
+    (s.note?'<div>📝 '+esc(s.note)+'</div>':'')+'</div>';
+  if(can)h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="spEditInfo()">✎ '+t('sp_edit_info')+'</button>';
+  openTask(h);}
+async function spSetGroup(v){
+  const s=SP&&S.sups.find(x=>x.id===SP.id);if(!s||!canKitchen())return;
+  const gid=String(v||'').trim()||null;
+  await once(async()=>{
+    try{await updFallback('ck_sups',{line_group_id:gid},s.id,['line_group_id']);}catch(e){paintSp();return;}
+    if(S.flowSql===false){toast(t('kf_need_sql'),true);paintSp();return;}
+    s.line_group_id=gid;
+    toast(gid?'✅ '+t('sp_line_saved',{g:lgName(gid)}):t('sp_line_cleared'));
+    if(S.tab==='sups')show('sups');
+    paintSp();});}
+async function spTest(){
+  const s=SP&&S.sups.find(x=>x.id===SP.id);const gid=s&&s.line_group_id;if(!gid)return;
+  await lineGroupsLoad();
+  await once(async()=>{
+    try{await lineSend(String(gid),'🔔 ทดสอบจากระบบครัวกลาง JJ\nกลุ่มนี้จะได้รับใบสั่งของของร้าน "'+s.name+'" ครับ');
+      toast('✅ '+t('sp_test_ok',{g:lgName(gid)}));}
+    catch(e){toast(t('kf_line_fail')+' — '+String(e.message||e).slice(0,100),true);}});}
+async function spItemOff(id){
+  const s=SP&&S.sups.find(x=>x.id===SP.id),it=itemById(id);if(!s||!it||!canKitchen())return;
+  if(!confirm(t('sp_item_off_q',{n:dispName(it),s:s.name})))return;
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_items').update({sup:''}).eq('id',id));
+    it.sup='';paintSp();});}
+function spItemEdit(id){itemEdit(id);if(!IT_DRAFT)return;IT_DRAFT._fromSp=true;MODAL_BACK=paintSp;}   // บันทึก/ปิด = กลับหน้าร้าน
+function spNewItem(){const s=SP&&S.sups.find(x=>x.id===SP.id);if(!s)return;
+  itemEdit();if(!IT_DRAFT)return;IT_DRAFT.sup=s.name;IT_DRAFT._fromSp=true;paintItemEdit();MODAL_BACK=paintSp;}
+function spEditInfo(){const s=SP&&S.sups.find(x=>x.id===SP.id);if(!s)return;
+  supEdit(s.id).then(()=>{MODAL_BACK=paintSp;});}
+
+/* ---------- เลือกวัตถุดิบเข้าร้าน ---------- */
+let SPK=null;
+function spPick(){SPK={sel:{},q:''};paintSpk();}
+function paintSpk(){
+  const s=SP&&S.sups.find(x=>x.id===SP.id);if(!s||!SPK)return;
+  const list=S.items.filter(i=>i.active!==false&&(i.sup||'')!==s.name)
+    .sort((a,b)=>(a.sup?1:0)-(b.sup?1:0)||dispName(a).localeCompare(dispName(b),'th'));   // ยังไม่มีร้าน ขึ้นก่อน
+  let h=tkHead('＋ '+t('sp_add_items'),t('sp_pick_hint',{s:esc(s.name)}),'SPK=null;paintSp()');
+  if(list.length>6)h+='<input id="spkQ" placeholder="🔎 '+t('search')+'" value="'+esc(SPK.q)+'" oninput="SPK.q=this.value;spkFilter()" style="margin-bottom:10px">';
+  h+='<div id="spkList">'+list.map(i=>'<label class="tkcard small spk" data-n="'+esc(supKey(dispName(i)+' '+i.name))+'">'+
+    '<input type="checkbox" class="spkcb" data-id="'+esc(i.id)+'"'+(SPK.sel[i.id]?' checked':'')+' onchange="spkTick(this)">'+thumbHtml(i,'🥬')+
+    '<div class="tkmid"><div class="tkname">'+esc(dispName(i))+'</div><div class="xs '+(i.sup?'mut':'spok')+'">'+
+    (i.sup?t('sp_now_at',{s:esc(i.sup)}):t('sp_no_shop'))+'</div></div></label>').join('')+'</div>';
+  if(!list.length)h+=tkEmpty(t('sp_pick_none'));
+  else h+='<div class="spkfoot"><button class="btn big ok" id="spkGo" onclick="spPickSave()" disabled></button></div>';
+  openTask(h);spkTick();spkFilter();}
+function spkTick(cb){if(cb&&SPK)SPK.sel[cb.dataset.id]=cb.checked;
+  const n=SPK?Object.keys(SPK.sel).filter(k=>SPK.sel[k]).length:0;
+  const b=document.getElementById('spkGo');if(b){b.disabled=!n;b.textContent='✓ '+t('sp_pick_go',{n});}}
+function spkFilter(){const q=supKey(SPK&&SPK.q);
+  document.querySelectorAll('#spkList .spk').forEach(r=>{r.style.display=!q||r.dataset.n.indexOf(q)>=0?'':'none';});}
+async function spPickSave(){
+  const s=SP&&S.sups.find(x=>x.id===SP.id);if(!s||!SPK||!canKitchen())return;
+  const ids=Object.keys(SPK.sel).filter(k=>SPK.sel[k]&&itemById(k));if(!ids.length)return;
+  const moving=ids.map(itemById).filter(i=>i.sup&&i.sup!==s.name);
+  if(moving.length&&!confirm(t('sp_move_q',{n:moving.length,s:s.name})+'\n\n'+moving.slice(0,8).map(i=>'• '+dispName(i)+' ('+i.sup+')').join('\n')))return;
+  await once(async()=>{
+    await dbi(()=>sb.from('ck_items').update({sup:s.name}).in('id',ids));
+    ids.forEach(id=>{const i=itemById(id);if(i)i.sup=s.name;});
+    SPK=null;toast('✅ '+t('sp_added',{n:ids.length}));
+    if(S.tab==='sups')show('sups');
+    paintSp();});}
+const SP_I18N={"th": {"nav_sups": "ร้านค้า (ซัพ)", "sp_hint": "ร้านที่ครัวสั่งของ — ตั้งกลุ่มไลน์ของร้านไว้ เวลากดสั่งของ ใบสั่งจะเข้ากลุ่มร้านเอง", "sp_bot": "บอทไลน์ — ตัวเดียวกับระบบนับสต๊อก", "sp_bot_txt": "บอทอยู่ใน {n} กลุ่ม · ตั้งกลุ่มแล้ว {a} จาก {b} ร้าน", "sp_lg_sync": "ดึงกลุ่มไลน์ใหม่", "sp_lg_syncing": "กำลังดึงกลุ่มไลน์…", "sp_lg_found": "เจอ {n} กลุ่ม ✓", "sp_lg_none": "ยังไม่เจอกลุ่มไลน์ — เชิญบอทเข้ากลุ่ม แล้วพิมพ์ 1 ข้อความในกลุ่มก่อน", "sp_use_stock": "ใช้กลุ่มไลน์จากระบบนับสต๊อก ({n} ร้าน)", "sp_use_stock_q": "ตั้งกลุ่มไลน์ให้ {n} ร้าน ตามที่ระบบนับสต๊อกผูกไว้?", "sp_use_stock_ok": "ตั้งกลุ่มไลน์ให้ {n} ร้านแล้ว", "sp_how_q": "เพิ่มกลุ่มไลน์ใหม่ ทำยังไง?", "sp_how1": "สร้างกลุ่มไลน์กับร้าน (หรือใช้กลุ่มเดิมที่คุยกับร้านอยู่แล้ว)", "sp_how2": "เชิญบอทของร้านเราเข้ากลุ่ม — บอทตัวเดียวกับที่ระบบนับสต๊อกใช้ส่งใบสั่ง", "sp_how3": "พิมพ์อะไรก็ได้ในกลุ่ม 1 ข้อความ (บอทถึงจะรู้จักกลุ่ม)", "sp_how4": "กลับมากด 🔄 ดึงกลุ่มไลน์ใหม่ แล้วเลือกกลุ่มให้ร้าน", "sp_new": "เพิ่มร้านใหม่", "sp_none": "ยังไม่มีร้าน — กด ＋ เพิ่มร้านใหม่", "sp_no_line": "ยังไม่ได้ตั้งกลุ่มไลน์", "sp_no_line_long": "ยังไม่ได้ตั้งกลุ่มไลน์ — เวลาสั่งของต้องเลือกกลุ่มเองทุกครั้ง", "sp_items_n": "{n} วัตถุดิบ", "sp_orphans": "ร้านที่มีในวัตถุดิบ แต่ยังไม่ได้เพิ่มเป็นร้าน", "sp_add_this": "เพิ่มร้านนี้", "sp_line": "กลุ่มไลน์ของร้าน", "sp_line_on": "ใบสั่งของจะเข้ากลุ่ม \"{g}\"", "sp_used_by": "ใช้กับ {s} อยู่", "sp_stk_has": "ระบบนับสต๊อกใช้กลุ่ม \"{g}\" กับร้านนี้", "sp_stk_use": "ใช้กลุ่มเดียวกัน", "sp_test": "ทดสอบส่ง", "sp_test_ok": "ส่งข้อความทดสอบเข้ากลุ่ม {g} แล้ว", "sp_lg_rename": "ตั้งชื่อกลุ่ม", "sp_lg_rename_q": "ตั้งชื่อกลุ่มไลน์นี้ (ระบบนับสต๊อกเห็นชื่อเดียวกัน)", "sp_lg_rename_fail": "ตั้งชื่อกลุ่มไม่ได้", "sp_line_saved": "ตั้งกลุ่มไลน์ \"{g}\" แล้ว", "sp_line_cleared": "เอากลุ่มไลน์ออกแล้ว", "sp_items": "วัตถุดิบที่ซื้อร้านนี้", "sp_items_none": "ยังไม่มีวัตถุดิบ — กด ＋ เพิ่มวัตถุดิบเข้าร้านนี้", "sp_add_items": "เพิ่มวัตถุดิบเข้าร้านนี้", "sp_new_item": "วัตถุดิบใหม่ (ยังไม่มีในระบบ)", "sp_item_off": "เอาออกจากร้านนี้", "sp_item_off_q": "เอา \"{n}\" ออกจากร้าน {s}?", "sp_pick_hint": "แตะเลือกวัตถุดิบที่ซื้อจากร้าน {s} แล้วกดปุ่มเขียวด้านล่าง", "sp_now_at": "ตอนนี้ซื้อที่ {s}", "sp_no_shop": "ยังไม่มีร้าน", "sp_pick_none": "วัตถุดิบทุกอย่างอยู่ร้านนี้แล้ว", "sp_pick_go": "เพิ่ม {n} อย่าง", "sp_move_q": "มี {n} อย่างที่ซื้อร้านอื่นอยู่ — ย้ายมาซื้อร้าน {s} แทนใช่ไหม?", "sp_added": "เพิ่ม {n} อย่างเข้าร้านแล้ว", "sp_info": "ข้อมูลร้าน", "sp_edit_info": "แก้ข้อมูลร้าน", "sp_dup": "มีร้านชื่อนี้อยู่แล้ว", "sp_del_q_items": "ลบร้าน {s}?\nวัตถุดิบ {n} อย่างของร้านนี้จะกลายเป็น \"ยังไม่มีร้าน\"", "sp_set_line": "ตั้งกลุ่มไลน์ร้านนี้", "sp_card_txt": "ตั้งกลุ่มไลน์ของแต่ละร้าน และเลือกว่าวัตถุดิบไหนซื้อร้านไหน", "sp_go": "ไปหน้าร้านค้า", "sp_line_after": "บันทึกแล้ว — ตั้งกลุ่มไลน์ของร้านได้เลยข้างล่าง", "kf_no_group": "ร้าน {s} ยังไม่ได้ตั้งกลุ่มไลน์ (ตั้งที่ ☰ เมนู › 🏷️ ร้านค้า) — เปิดไลน์ให้เลือกกลุ่มเองก่อน"}, "en": {"nav_sups": "Suppliers", "sp_hint": "Shops the kitchen buys from — set each shop's LINE group and purchase orders go straight into it", "sp_bot": "LINE bot — the same one as the stock-count app", "sp_bot_txt": "Bot is in {n} groups · {a} of {b} shops have a group", "sp_lg_sync": "Refresh LINE groups", "sp_lg_syncing": "Refreshing LINE groups…", "sp_lg_found": "Found {n} groups ✓", "sp_lg_none": "No LINE groups yet — invite the bot to the group and post 1 message there first", "sp_use_stock": "Use LINE groups from the stock-count app ({n} shops)", "sp_use_stock_q": "Set the LINE group for {n} shops, as linked in the stock-count app?", "sp_use_stock_ok": "LINE group set for {n} shops", "sp_how_q": "How do I add a new LINE group?", "sp_how1": "Create a LINE group with the shop (or use the chat you already have)", "sp_how2": "Invite our bot to the group — the same bot the stock-count app uses", "sp_how3": "Post any 1 message in the group (so the bot knows the group)", "sp_how4": "Come back, tap 🔄 Refresh LINE groups, then pick the group for the shop", "sp_new": "Add a shop", "sp_none": "No shops yet — tap ＋ Add a shop", "sp_no_line": "No LINE group yet", "sp_no_line_long": "No LINE group yet — you must pick the group yourself every time you order", "sp_items_n": "{n} ingredients", "sp_orphans": "Shops named in ingredients but not added yet", "sp_add_this": "Add this shop", "sp_line": "Shop's LINE group", "sp_line_on": "Orders go to \"{g}\"", "sp_used_by": "used by {s}", "sp_stk_has": "The stock-count app uses \"{g}\" for this shop", "sp_stk_use": "Use the same group", "sp_test": "Send a test", "sp_test_ok": "Test message sent to {g}", "sp_lg_rename": "Name this group", "sp_lg_rename_q": "Name this LINE group (the stock-count app sees the same name)", "sp_lg_rename_fail": "Could not rename the group", "sp_line_saved": "LINE group set to \"{g}\"", "sp_line_cleared": "LINE group removed", "sp_items": "Ingredients bought here", "sp_items_none": "No ingredients yet — tap ＋ Add ingredients to this shop", "sp_add_items": "Add ingredients to this shop", "sp_new_item": "New ingredient (not in the system yet)", "sp_item_off": "Remove from this shop", "sp_item_off_q": "Remove \"{n}\" from {s}?", "sp_pick_hint": "Tap the ingredients you buy from {s}, then tap the green button below", "sp_now_at": "Now bought at {s}", "sp_no_shop": "No shop yet", "sp_pick_none": "Every ingredient is already in this shop", "sp_pick_go": "Add {n}", "sp_move_q": "{n} of these are bought at another shop — move them to {s}?", "sp_added": "Added {n} to the shop", "sp_info": "Shop details", "sp_edit_info": "Edit shop details", "sp_dup": "A shop with this name already exists", "sp_del_q_items": "Delete {s}?\nIts {n} ingredients will have no shop", "sp_set_line": "Set this shop's LINE group", "sp_card_txt": "Set each shop's LINE group and choose which ingredients you buy where", "sp_go": "Open suppliers", "sp_line_after": "Saved — set the shop's LINE group below", "kf_no_group": "{s} has no LINE group yet (set it in ☰ Menu › 🏷️ Suppliers) — opening LINE so you can pick a group"}, "lo": {"nav_sups": "ຮ້ານຄ້າ (ຊັບ)", "sp_hint": "ຮ້ານທີ່ຄົວສັ່ງເຄື່ອງ — ຕັ້ງກຸ່ມໄລນ໌ຂອງຮ້ານໄວ້ ເວລາກົດສັ່ງເຄື່ອງ ໃບສັ່ງຈະເຂົ້າກຸ່ມຮ້ານເອງ", "sp_bot": "ບອດໄລນ໌ — ໂຕດຽວກັບລະບົບນັບສະຕັອກ", "sp_bot_txt": "ບອດຢູ່ໃນ {n} ກຸ່ມ · ຕັ້ງກຸ່ມແລ້ວ {a} ຈາກ {b} ຮ້ານ", "sp_lg_sync": "ດຶງກຸ່ມໄລນ໌ໃໝ່", "sp_lg_syncing": "ກຳລັງດຶງກຸ່ມໄລນ໌…", "sp_lg_found": "ພົບ {n} ກຸ່ມ ✓", "sp_lg_none": "ຍັງບໍ່ພົບກຸ່ມໄລນ໌ — ເຊີນບອດເຂົ້າກຸ່ມ ແລ້ວພິມ 1 ຂໍ້ຄວາມໃນກຸ່ມກ່ອນ", "sp_use_stock": "ໃຊ້ກຸ່ມໄລນ໌ຈາກລະບົບນັບສະຕັອກ ({n} ຮ້ານ)", "sp_use_stock_q": "ຕັ້ງກຸ່ມໄລນ໌ໃຫ້ {n} ຮ້ານ ຕາມທີ່ລະບົບນັບສະຕັອກຜູກໄວ້?", "sp_use_stock_ok": "ຕັ້ງກຸ່ມໄລນ໌ໃຫ້ {n} ຮ້ານແລ້ວ", "sp_how_q": "ເພີ່ມກຸ່ມໄລນ໌ໃໝ່ ເຮັດແນວໃດ?", "sp_how1": "ສ້າງກຸ່ມໄລນ໌ກັບຮ້ານ (ຫຼືໃຊ້ກຸ່ມເກົ່າທີ່ລົມກັບຮ້ານຢູ່ແລ້ວ)", "sp_how2": "ເຊີນບອດຂອງຮ້ານເຮົາເຂົ້າກຸ່ມ — ບອດໂຕດຽວກັບທີ່ລະບົບນັບສະຕັອກໃຊ້ສົ່ງໃບສັ່ງ", "sp_how3": "ພິມຫຍັງກໍໄດ້ໃນກຸ່ມ 1 ຂໍ້ຄວາມ (ບອດຈຶ່ງຈະຮູ້ຈັກກຸ່ມ)", "sp_how4": "ກັບມາກົດ 🔄 ດຶງກຸ່ມໄລນ໌ໃໝ່ ແລ້ວເລືອກກຸ່ມໃຫ້ຮ້ານ", "sp_new": "ເພີ່ມຮ້ານໃໝ່", "sp_none": "ຍັງບໍ່ມີຮ້ານ — ກົດ ＋ ເພີ່ມຮ້ານໃໝ່", "sp_no_line": "ຍັງບໍ່ໄດ້ຕັ້ງກຸ່ມໄລນ໌", "sp_no_line_long": "ຍັງບໍ່ໄດ້ຕັ້ງກຸ່ມໄລນ໌ — ເວລາສັ່ງເຄື່ອງຕ້ອງເລືອກກຸ່ມເອງທຸກເທື່ອ", "sp_items_n": "{n} ວັດຖຸດິບ", "sp_orphans": "ຮ້ານທີ່ມີໃນວັດຖຸດິບ ແຕ່ຍັງບໍ່ໄດ້ເພີ່ມເປັນຮ້ານ", "sp_add_this": "ເພີ່ມຮ້ານນີ້", "sp_line": "ກຸ່ມໄລນ໌ຂອງຮ້ານ", "sp_line_on": "ໃບສັ່ງເຄື່ອງຈະເຂົ້າກຸ່ມ \"{g}\"", "sp_used_by": "ໃຊ້ກັບ {s} ຢູ່", "sp_stk_has": "ລະບົບນັບສະຕັອກໃຊ້ກຸ່ມ \"{g}\" ກັບຮ້ານນີ້", "sp_stk_use": "ໃຊ້ກຸ່ມດຽວກັນ", "sp_test": "ທົດສອບສົ່ງ", "sp_test_ok": "ສົ່ງຂໍ້ຄວາມທົດສອບເຂົ້າກຸ່ມ {g} ແລ້ວ", "sp_lg_rename": "ຕັ້ງຊື່ກຸ່ມ", "sp_lg_rename_q": "ຕັ້ງຊື່ກຸ່ມໄລນ໌ນີ້ (ລະບົບນັບສະຕັອກເຫັນຊື່ດຽວກັນ)", "sp_lg_rename_fail": "ຕັ້ງຊື່ກຸ່ມບໍ່ໄດ້", "sp_line_saved": "ຕັ້ງກຸ່ມໄລນ໌ \"{g}\" ແລ້ວ", "sp_line_cleared": "ເອົາກຸ່ມໄລນ໌ອອກແລ້ວ", "sp_items": "ວັດຖຸດິບທີ່ຊື້ຮ້ານນີ້", "sp_items_none": "ຍັງບໍ່ມີວັດຖຸດິບ — ກົດ ＋ ເພີ່ມວັດຖຸດິບເຂົ້າຮ້ານນີ້", "sp_add_items": "ເພີ່ມວັດຖຸດິບເຂົ້າຮ້ານນີ້", "sp_new_item": "ວັດຖຸດິບໃໝ່ (ຍັງບໍ່ມີໃນລະບົບ)", "sp_item_off": "ເອົາອອກຈາກຮ້ານນີ້", "sp_item_off_q": "ເອົາ \"{n}\" ອອກຈາກຮ້ານ {s}?", "sp_pick_hint": "ແຕະເລືອກວັດຖຸດິບທີ່ຊື້ຈາກຮ້ານ {s} ແລ້ວກົດປຸ່ມສີຂຽວດ້ານລຸ່ມ", "sp_now_at": "ຕອນນີ້ຊື້ທີ່ {s}", "sp_no_shop": "ຍັງບໍ່ມີຮ້ານ", "sp_pick_none": "ວັດຖຸດິບທຸກຢ່າງຢູ່ຮ້ານນີ້ແລ້ວ", "sp_pick_go": "ເພີ່ມ {n} ຢ່າງ", "sp_move_q": "ມີ {n} ຢ່າງທີ່ຊື້ຮ້ານອື່ນຢູ່ — ຍ້າຍມາຊື້ຮ້ານ {s} ແທນແມ່ນບໍ່?", "sp_added": "ເພີ່ມ {n} ຢ່າງເຂົ້າຮ້ານແລ້ວ", "sp_info": "ຂໍ້ມູນຮ້ານ", "sp_edit_info": "ແກ້ຂໍ້ມູນຮ້ານ", "sp_dup": "ມີຮ້ານຊື່ນີ້ຢູ່ແລ້ວ", "sp_del_q_items": "ລຶບຮ້ານ {s}?\nວັດຖຸດິບ {n} ຢ່າງຂອງຮ້ານນີ້ຈະກາຍເປັນ \"ຍັງບໍ່ມີຮ້ານ\"", "sp_set_line": "ຕັ້ງກຸ່ມໄລນ໌ຮ້ານນີ້", "sp_card_txt": "ຕັ້ງກຸ່ມໄລນ໌ຂອງແຕ່ລະຮ້ານ ແລະເລືອກວ່າວັດຖຸດິບໃດຊື້ຮ້ານໃດ", "sp_go": "ໄປໜ້າຮ້ານຄ້າ", "sp_line_after": "ບັນທຶກແລ້ວ — ຕັ້ງກຸ່ມໄລນ໌ຂອງຮ້ານໄດ້ເລີຍຂ້າງລຸ່ມ", "kf_no_group": "ຮ້ານ {s} ຍັງບໍ່ໄດ້ຕັ້ງກຸ່ມໄລນ໌ (ຕັ້ງທີ່ ☰ ເມນູ › 🏷️ ຮ້ານຄ້າ) — ເປີດໄລນ໌ໃຫ້ເລືອກກຸ່ມເອງກ່ອນ"}, "my": {"nav_sups": "ပစ္စည်းသွင်းဆိုင်များ", "sp_hint": "မီးဖိုချောင်က ပစ္စည်းမှာသည့်ဆိုင်များ — ဆိုင်တစ်ဆိုင်ချင်းစီ၏ LINE အုပ်စုကို သတ်မှတ်ထားပါ၊ မှာလိုက်လျှင် အော်ဒါစာ အဲဒီအုပ်စုထဲ တိုက်ရိုက်ရောက်မည်", "sp_bot": "LINE ဘော့ — စတော့ရေတွက်စနစ်နှင့် တစ်ကောင်တည်း", "sp_bot_txt": "ဘော့သည် အုပ်စု {n} ခုတွင်ရှိ · ဆိုင် {b} ဆိုင်တွင် {a} ဆိုင် အုပ်စုသတ်မှတ်ပြီး", "sp_lg_sync": "LINE အုပ်စုများ ပြန်ဆွဲယူရန်", "sp_lg_syncing": "LINE အုပ်စုများ ဆွဲယူနေသည်…", "sp_lg_found": "အုပ်စု {n} ခု တွေ့သည် ✓", "sp_lg_none": "LINE အုပ်စု မတွေ့သေးပါ — ဘော့ကို အုပ်စုထဲ ဖိတ်ပြီး အုပ်စုထဲ စာ 1 စောင် အရင်ပို့ပါ", "sp_use_stock": "စတော့ရေတွက်စနစ်မှ LINE အုပ်စုများ သုံးရန် (ဆိုင် {n})", "sp_use_stock_q": "စတော့ရေတွက်စနစ်တွင် ချိတ်ထားသည့်အတိုင်း ဆိုင် {n} ဆိုင်အတွက် LINE အုပ်စု သတ်မှတ်မလား?", "sp_use_stock_ok": "ဆိုင် {n} ဆိုင်အတွက် LINE အုပ်စု သတ်မှတ်ပြီး", "sp_how_q": "LINE အုပ်စုအသစ် ဘယ်လိုထည့်မလဲ?", "sp_how1": "ဆိုင်နှင့် LINE အုပ်စုတစ်ခု ဖွဲ့ပါ (သို့မဟုတ် ရှိပြီးသားအုပ်စုကို သုံးပါ)", "sp_how2": "ကျွန်ုပ်တို့၏ ဘော့ကို အုပ်စုထဲ ဖိတ်ပါ — စတော့ရေတွက်စနစ် သုံးသည့် ဘော့နှင့် တစ်ကောင်တည်း", "sp_how3": "အုပ်စုထဲ ဘာစာမဆို 1 စောင် ပို့ပါ (ဘော့က အုပ်စုကို သိရန်)", "sp_how4": "ပြန်လာပြီး 🔄 LINE အုပ်စုများ ပြန်ဆွဲယူရန် ကိုနှိပ်ကာ ဆိုင်အတွက် အုပ်စုရွေးပါ", "sp_new": "ဆိုင်အသစ် ထည့်ရန်", "sp_none": "ဆိုင် မရှိသေးပါ — ＋ ဆိုင်အသစ် ထည့်ရန် ကိုနှိပ်ပါ", "sp_no_line": "LINE အုပ်စု မသတ်မှတ်ရသေး", "sp_no_line_long": "LINE အုပ်စု မသတ်မှတ်ရသေး — မှာတိုင်း အုပ်စုကို ကိုယ်တိုင်ရွေးရမည်", "sp_items_n": "ကုန်ကြမ်း {n} မျိုး", "sp_orphans": "ကုန်ကြမ်းတွင် နာမည်ပါသော်လည်း ဆိုင်အဖြစ် မထည့်ရသေးသည့် ဆိုင်များ", "sp_add_this": "ဤဆိုင်ကို ထည့်ရန်", "sp_line": "ဆိုင်၏ LINE အုပ်စု", "sp_line_on": "အော်ဒါများ \"{g}\" သို့ ရောက်မည်", "sp_used_by": "{s} အတွက် သုံးနေသည်", "sp_stk_has": "စတော့ရေတွက်စနစ်က ဤဆိုင်အတွက် \"{g}\" ကို သုံးသည်", "sp_stk_use": "အုပ်စုတူကို သုံးရန်", "sp_test": "စမ်းပို့ရန်", "sp_test_ok": "{g} သို့ စမ်းသပ်စာ ပို့ပြီး", "sp_lg_rename": "အုပ်စုအမည်ပေးရန်", "sp_lg_rename_q": "ဤ LINE အုပ်စုကို အမည်ပေးပါ (စတော့ရေတွက်စနစ်တွင်လည်း ဤအမည်ပဲ မြင်ရမည်)", "sp_lg_rename_fail": "အုပ်စုအမည် မပေးနိုင်ပါ", "sp_line_saved": "LINE အုပ်စု \"{g}\" သတ်မှတ်ပြီး", "sp_line_cleared": "LINE အုပ်စု ဖယ်ရှားပြီး", "sp_items": "ဤဆိုင်မှ ဝယ်သည့် ကုန်ကြမ်းများ", "sp_items_none": "ကုန်ကြမ်း မရှိသေးပါ — ＋ ဤဆိုင်သို့ ကုန်ကြမ်းထည့်ရန် ကိုနှိပ်ပါ", "sp_add_items": "ဤဆိုင်သို့ ကုန်ကြမ်းထည့်ရန်", "sp_new_item": "ကုန်ကြမ်းအသစ် (စနစ်ထဲ မရှိသေး)", "sp_item_off": "ဤဆိုင်မှ ဖယ်ရန်", "sp_item_off_q": "\"{n}\" ကို {s} မှ ဖယ်မလား?", "sp_pick_hint": "{s} မှ ဝယ်သည့် ကုန်ကြမ်းများကို နှိပ်ရွေးပြီး အောက်ရှိ အစိမ်းရောင်ခလုတ်ကို နှိပ်ပါ", "sp_now_at": "လောလောဆယ် {s} တွင် ဝယ်သည်", "sp_no_shop": "ဆိုင် မရှိသေး", "sp_pick_none": "ကုန်ကြမ်းအားလုံး ဤဆိုင်တွင် ရှိပြီးသား", "sp_pick_go": "{n} မျိုး ထည့်ရန်", "sp_move_q": "{n} မျိုးကို အခြားဆိုင်တွင် ဝယ်နေသည် — {s} သို့ ပြောင်းမလား?", "sp_added": "ဆိုင်ထဲသို့ {n} မျိုး ထည့်ပြီး", "sp_info": "ဆိုင်အချက်အလက်", "sp_edit_info": "ဆိုင်အချက်အလက် ပြင်ရန်", "sp_dup": "ဤအမည်ဖြင့် ဆိုင်ရှိပြီးသား", "sp_del_q_items": "{s} ကို ဖျက်မလား?\nဤဆိုင်၏ ကုန်ကြမ်း {n} မျိုးသည် \"ဆိုင် မရှိသေး\" ဖြစ်သွားမည်", "sp_set_line": "ဤဆိုင်၏ LINE အုပ်စု သတ်မှတ်ရန်", "sp_card_txt": "ဆိုင်တစ်ဆိုင်ချင်း၏ LINE အုပ်စုနှင့် ဘယ်ကုန်ကြမ်းကို ဘယ်ဆိုင်မှဝယ်သည်ကို သတ်မှတ်ပါ", "sp_go": "ဆိုင်များ စာမျက်နှာ ဖွင့်ရန်", "sp_line_after": "သိမ်းပြီး — ဆိုင်၏ LINE အုပ်စုကို အောက်တွင် သတ်မှတ်ပါ", "kf_no_group": "{s} တွင် LINE အုပ်စု မသတ်မှတ်ရသေး (☰ မီနူး › 🏷️ ပစ္စည်းသွင်းဆိုင်များ တွင် သတ်မှတ်ပါ) — အုပ်စုကို ကိုယ်တိုင်ရွေးရန် LINE ဖွင့်ပေးမည်"}};
+['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],SP_I18N[l]));   // ข้อความหน้าร้านค้า (sp_*)
 
 sbMoreSet(LS.get('jjck_sbmore',0)==1);
 
