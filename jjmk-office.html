@@ -151,6 +151,8 @@ button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(
   .meT{gap:8px}
   .drop{position:fixed;left:16px;right:16px;width:auto;top:calc(130px + env(safe-area-inset-top,0px))}
   .ctl .opt{display:none}
+  .ctl{flex-direction:column}
+  .ctl .sep{width:26px;height:1px;margin:4px 0}
   .ctl button{width:44px;height:44px}
   #sheet{top:auto;left:8px;right:8px;width:auto;max-width:none;height:78%;transform:translateY(110%);bottom:calc(8px + env(safe-area-inset-bottom,0px))}
   #sheet.on{transform:none}
@@ -469,7 +471,12 @@ window.JJGate=(function(){
     <span class="sep opt"></span>
     <button id="zoOut" aria-label="ซูมออก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
     <button id="zoIn" aria-label="ซูมเข้า"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></button>
-    <button id="sndBtn" aria-label="เสียง"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path id="sndWave" d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></button>
+    <span class="sep rot3"></span>
+    <button class="rot3" id="rotL" aria-label="หมุนซ้าย" title="หมุนซ้าย (Q) · คลิกขวาแล้วลาก = หมุนอิสระ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+    <button class="rot3" id="rotR" aria-label="หมุนขวา" title="หมุนขวา (E)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button class="rot3" id="tiltBtn" aria-label="ปรับมุมก้มเงย" title="ปรับมุมก้มเงย (มองจากบน ↔ เฉียง)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="rot3" id="cutBtn" aria-label="ตัดผนังให้เตี้ย" title="ผนังเตี้ย/สูง"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 12h18M9 5v7M15 12v7"/></svg></button>
+    <button class="opt" id="sndBtn" aria-label="เสียง"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path id="sndWave" d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></button>
     <button id="reBtn" aria-label="ดึงข้อมูลใหม่"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
   </div>
 </div>
@@ -944,7 +951,13 @@ function drawPerson(p,t){
    · 1 ช่องผัง = 1 เมตร · แกน: x = gx (ขวา-หลัง) · z = gy (ซ้าย-หน้า) · y = สูง
    · โหลด three.js ไม่ได้ / เครื่องไม่มี WebGL = ใช้ผัง 2 มิติเดิม (MODE '2d')
    ===================================================================== */
-const K3=Math.SQRT1_2, DIR3=[.5,K3,.5];          // กล้องมองจาก (+x,+y,+z) เงย 45°
+const K3=Math.SQRT1_2;
+/* มุมกล้อง: th = หมุนรอบ (0–360°) · ph = เงย (22°–88°) · ค่าตั้งต้น = มุมเดิม (45°, 45°) · จำใน localStorage.jjoffice_ang */
+const ANG0={th:Math.PI/4,ph:Math.PI/4},PHMIN=22*Math.PI/180,PHMAX=88*Math.PI/180;
+const ANG=Object.assign({},ANG0);let ANGT=null;
+function camBasis(){const st=Math.sin(ANG.th),ct=Math.cos(ANG.th),sp=Math.sin(ANG.ph),cp=Math.cos(ANG.ph);
+  return {D:[cp*st,sp,cp*ct],Rv:[ct,0,-st],Uv:[-sp*st,cp,-sp*ct],st,ct,sp,cp}}
+let OUTW={},INW=null,DECIN=null,DOORS=[],CUT=false;
 let R3=null,SC3=null,CAM3=null,HL3=null,ANI=4,PP3=[];
 const MATC={},GEOC={},TEXC={};
 function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
@@ -1076,11 +1089,15 @@ function sofa3(x,z,w,col,face){const g=new THREE.Group();g.position.set(x,0,z);g
   [[-w/2+.1,-.35],[w/2-.1,-.35],[-w/2+.1,.35],[w/2-.1,.35]].forEach(([a,b])=>put(gCyl(.025,.02,.09,8),M3.walnut,a,.045,b,{to:g}));
   g.updateMatrixWorld(true)}
 function arm3(x,z,col,face){sofa3(x,z,.9,col,face)}
-function tv3(axis,pos,a,b,y0,y1,kind,acc){ // จอติดผนัง axis 'z' = ผนังแนว x ที่ z=pos · 'x' = ผนังแนว z ที่ x=pos
+function wallSide(axis,pos){return axis==='z'?(pos===0?'N':pos===18?'S':null):(pos===0?'W':pos===24?'E':null)}
+function onWall(axis,pos,fn){const prev=GRP,sd=wallSide(axis,pos);GRP=sd?OUTW[sd].dec:DECIN;try{fn()}finally{GRP=prev}}
+function tv3(axis,pos,a,b,y0,y1,kind,acc){return onWall(axis,pos,()=>tv3_(axis,pos,a,b,y0,y1,kind,acc))}
+function panel3(axis,pos,a,b,y0,y1,tex,o){return onWall(axis,pos,()=>panel3_(axis,pos,a,b,y0,y1,tex,o))}
+function tv3_(axis,pos,a,b,y0,y1,kind,acc){ // จอติดผนัง axis 'z' = ผนังแนว x ที่ z=pos · 'x' = ผนังแนว z ที่ x=pos
   const w=b-a,h=y1-y0,em=texScreen(kind,acc),sm=mat('#ffffff',{map:em,em,ei:.9,r:.3});
   if(axis==='z'){B3(a,pos+.07,w,.04,y0,h,M3.black);put(gBox(w-.06,h-.06,.004),sm,a+w/2,y0+h/2,pos+.112,{cs:false})}
   else{B3(pos+.07,a,.04,w,y0,h,M3.black);put(gBox(.004,h-.06,w-.06),sm,pos+.112,y0+h/2,a+w/2,{cs:false})}}
-function panel3(axis,pos,a,b,y0,y1,tex,o){o=o||{};const w=b-a,h=y1-y0,m=mat('#ffffff',{map:tex,r:.8,...(o.glow?{em:tex,ei:o.glow}:{})});
+function panel3_(axis,pos,a,b,y0,y1,tex,o){o=o||{};const w=b-a,h=y1-y0,m=mat('#ffffff',{map:tex,r:.8,...(o.glow?{em:tex,ei:o.glow}:{})});
   if(axis==='z'){if(o.frame!==false)B3(a-.02,pos+.07,w+.04,.03,y0-.02,h+.04,o.fm||M3.frame);put(gBox(w,h,.006),m,a+w/2,y0+h/2,pos+.105,{cs:false})}
   else{if(o.frame!==false)B3(pos+.07,a-.02,.03,w+.04,y0-.02,h+.04,o.fm||M3.frame);put(gBox(.006,h,w),m,pos+.105,y0+h/2,a+w/2,{cs:false})}}
 
@@ -1096,7 +1113,7 @@ function wall3(axis,pos,a,b,h,o){o=o||{};const gaps=(o.doors||[]).concat(o.wins|
     const fm=M3.woodW;if(axis==='z'){B3(s-.04,pos-WT/2-.02,.05,WT+.04,0,2.12,fm);B3(e-.01,pos-WT/2-.02,.05,WT+.04,0,2.12,fm);B3(s-.04,pos-WT/2-.02,e-s+.08,WT+.04,2.08,.06,fm)}
     else{B3(pos-WT/2-.02,s-.04,WT+.04,.05,0,2.12,fm);B3(pos-WT/2-.02,e-.01,WT+.04,.05,0,2.12,fm);B3(pos-WT/2-.02,s-.04,WT+.04,e-s+.08,2.08,.06,fm)}
     // บานประตูเปิดค้าง (หันเข้าห้องด้านหน้า)
-    const L=e-s-.04,g=new THREE.Group();GRP.add(g);
+    const L=e-s-.04,g=new THREE.Group();GRP.add(g);DOORS.push(g);
     if(axis==='z'){g.position.set(s+.02,0,pos+WT/2);g.rotation.y=-1.25}else{g.position.set(pos+WT/2,0,s+.02);g.rotation.y=1.25}
     const dm=mat('#a77b52',{r:.55});
     if(axis==='z')put(gBox(L,2.04,.04),dm,L/2,1.02,.02,{to:g,dyn:1});else put(gBox(.04,2.04,L),dm,.02,1.02,L/2,{to:g,dyn:1});
@@ -1125,14 +1142,21 @@ function build3(){
   R3B(10,10.15,3.6,1.5,0,.02,.01,mat('#efe2cc',{r:1}),{cs:false});R3B(10.15,10.3,3.3,1.2,.005,.02,.01,mat('#c9a978',{r:1}),{cs:false});
   R3B(14.9,8.5,2.3,2.7,0,.02,.01,mat('#d8cfc0',{r:1}),{cs:false});R3B(18.3,16.2,5,1.6,0,.02,.01,mat('#c98a9b',{r:1}),{cs:false});
   // ผนังนอก (มีหน้าต่าง) + ผนังหน้าเตี้ย
-  wall3('z',0,0,24,WH3,{wins:[[.6,1.6],[3.2,4.2],[7.2,8.4],[9.4,10.4],[12,13],[15.2,16.2],[18.4,19.6],[22,23.2]]});
-  wall3('x',0,0,18,WH3,{wins:[[1.4,2.6],[7.4,8.6],[9.8,11],[13.6,14.8],[15.8,17]]});
-  wall3('z',18,0,24,WF3);wall3('x',24,0,18,WF3);
-  // ผนังใน
+  // ผนังนอก 4 ด้าน: ด้านที่หันเข้าหากล้องเหลือแค่ขอบเตี้ย (สลับเองตามมุมที่หมุน)
+  const inG=fn=>{const prev=GRP,g=new THREE.Group();prev.add(g);GRP=g;try{fn()}finally{GRP=prev}return g};
+  const SIDES={N:['z',0,0,24,[[.6,1.6],[3.2,4.2],[7.2,8.4],[9.4,10.4],[12,13],[15.2,16.2],[18.4,19.6],[22,23.2]]],
+    W:['x',0,0,18,[[1.4,2.6],[7.4,8.6],[9.8,11],[13.6,14.8],[15.8,17]]],
+    S:['z',18,0,24,[[1.5,2.7],[8.6,9.6],[13.2,14.2],[19.2,20.4],[21.6,22.8]]],
+    E:['x',24,0,18,[[1.4,2.6],[3.6,4.6],[7.6,8.8],[13.4,14.6],[15.4,16.6]]]};
+  for(const k in SIDES){const [ax,pos,a,b,wins]=SIDES[k];OUTW[k]={hi:inG(()=>wall3(ax,pos,a,b,WH3,{wins})),lo:inG(()=>wall3(ax,pos,a,b,WF3)),dec:inG(()=>{})}}
+  DECIN=inG(()=>{});
+  // ผนังใน (ปุ่ม 🧱 = ตัดผนังให้เตี้ย มองเห็นทุกห้อง)
+  INW=inG(()=>{
   wall3('z',6,0,5,WI3);wall3('z',6,6,17,WI3,{doors:[[8,9],[13.5,14.5]]});wall3('z',6,18,24,WI3);
   wall3('z',12,0,5,WI3);wall3('z',12,5,18,WI3,{doors:[[5.5,6.5],[9,10],[14,15],[17,18]]});wall3('z',12,18,24,WI3);
   wall3('x',5,0,6,WI3,{doors:[[3.5,4.5]]});wall3('x',5,6,12,WI3,{doors:[[8.5,9.5]]});wall3('x',6,0,6,WI3);wall3('x',11,0,6,WI3);wall3('x',17,0,6,WI3);
   wall3('x',18,6,12,WI3,{doors:[[8.5,9.5]]});wall3('x',7,12,18,WI3);wall3('x',12,12,18,WI3);wall3('x',17,12,18,WI3);
+  });
   // ---- 📒 บัญชี (0–5, 0–6)
   desk3(1,1.2,M3.wood,'#f0b04a');chair3(1.8,2.45,'#3b3b44',Math.PI);desk3(3,1.2,M3.wood,'#5fd0c0',{scr:'line'});chair3(3.8,2.45,'#3b3b44',Math.PI);
   shelf3(.12,2.9,.42,2.4,2.0,'#6e4a30',3);B3(3.1,4.6,.8,.6,0,.7,mat('#4a4f57',{r:.4,m:.5}));C3(3.5,4.92,.06,.4,.04,M3.steel,{rx:Math.PI/2});   // ตู้เซฟ
@@ -1280,9 +1304,12 @@ function init3D(){
 function render3(t){
   CAM3.left=-W/2;CAM3.right=W/2;CAM3.top=H/2;CAM3.bottom=-H/2;CAM3.zoom=cam.s;CAM3.updateProjectionMatrix();
   const u0=(W/2-cam.x)/cam.s,w0=(H/2-cam.y)/cam.s;            // จุดกลางจอในพิกัดภาพ
-  const Rv=[K3,0,-K3],Uv=[-.5,K3,-.5],v0=-w0;
-  CAM3.position.set(Rv[0]*u0+Uv[0]*v0+DIR3[0]*100,Rv[1]*u0+Uv[1]*v0+DIR3[1]*100,Rv[2]*u0+Uv[2]*v0+DIR3[2]*100);
-  CAM3.up.set(Uv[0],Uv[1],Uv[2]);CAM3.lookAt(CAM3.position.x-DIR3[0],CAM3.position.y-DIR3[1],CAM3.position.z-DIR3[2]);
+  const {D,Rv,Uv}=camBasis(),v0=-w0;
+  CAM3.position.set(Rv[0]*u0+Uv[0]*v0+D[0]*100,Rv[1]*u0+Uv[1]*v0+D[1]*100,Rv[2]*u0+Uv[2]*v0+D[2]*100);
+  CAM3.up.set(Uv[0],Uv[1],Uv[2]);CAM3.lookAt(CAM3.position.x-D[0],CAM3.position.y-D[1],CAM3.position.z-D[2]);
+  const front={N:D[2]<-.02,S:D[2]>.02,W:D[0]<-.02,E:D[0]>.02};
+  for(const k in OUTW){const f=front[k];OUTW[k].hi.visible=!f;OUTW[k].lo.visible=f;OUTW[k].dec.visible=!f}
+  if(INW){INW.scale.y=CUT?.42:1;DECIN.visible=!CUT;DOORS.forEach(d=>d.visible=!CUT)}
   PPL.forEach((p,i)=>pose3(p,PP3[i],t));
   const hl=sel_||hover;hl3(hl&&!hl.boss?hl.room:null,!!hl);
   R3.render(SC3,CAM3);
@@ -1291,7 +1318,7 @@ function render3(t){
 /* ---------- กล้อง (ใช้ร่วม 2D/3D: VS = พิกัดภาพก่อนซูม · cam {s,x,y}) ---------- */
 let fitted=false,MODE='2d',fitS=1;
 const PXM=20;   // 2D: 1 เมตร = 20 หน่วยภาพ
-function VS(gx,gy,h){h=h||0;if(MODE==='3d')return[(gx-gy)*K3,.5*(gx+gy)-K3*h];return P(gx,gy,h*PXM)}
+function VS(gx,gy,h){h=h||0;if(MODE==='3d'){const b=camBasis();return[gx*b.ct-gy*b.st,(gx*b.st+gy*b.ct)*b.sp-h*b.cp]}return P(gx,gy,h*PXM)}
 function proj(gx,gy,h){const v=VS(gx,gy,h);return[v[0]*cam.s+cam.x,v[1]*cam.s+cam.y]}
 function resize(){dpr=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;
   if(MODE==='3d'){R3.setPixelRatio(dpr);R3.setSize(W,H,false)}fit(true)}
@@ -1305,13 +1332,25 @@ function focusRoom(r){const p=VS((r[0]+r[2])/2,(r[1]+r[3])/2,.5);const s=Math.ma
   const off=W>=760?-210:0,offy=W>=760?0:-H*.22;camT={s,x:W/2+off-p[0]*s,y:H/2+offy-p[1]*s};if(RM){cam=camT;camT=null}}
 function zoom(f,sx=W/2,sy=H/2){const s=Math.max(fitS*.45,Math.min(fitS*4,cam.s*f)),k=s/cam.s;cam={s,x:sx-(sx-cam.x)*k,y:sy-(sy-cam.y)*k};camT=null}
 function toGrid(sx,sy){const u=(sx-cam.x)/cam.s,w=(sy-cam.y)/cam.s;
-  if(MODE==='3d')return[(u/K3+2*w)/2,(2*w-u/K3)/2];const a=u/(TW/2),b=w/(TH/2);return[(a+b)/2,(b-a)/2]}
+  if(MODE==='3d'){const b=camBasis(),q=w/b.sp;return[u*b.ct+q*b.st,-u*b.st+q*b.ct]}const a=u/(TW/2),b=w/(TH/2);return[(a+b)/2,(b-a)/2]}
+
+/* ---------- หมุน/เงยกล้อง (3D) — จุดกลางจอบนพื้นอยู่ที่เดิมระหว่างหมุน ---------- */
+function setAngle(th,ph){if(MODE!=='3d')return;const g=toGrid(W/2,H/2);
+  ANG.th=((th%(2*Math.PI))+2*Math.PI)%(2*Math.PI);ANG.ph=Math.max(PHMIN,Math.min(PHMAX,ph));
+  const v=VS(g[0],g[1],0);cam.x=W/2-v[0]*cam.s;cam.y=H/2-v[1]*cam.s;camT=null}
+function angTo(th,ph){if(MODE!=='3d')return;let d=th-ANG.th;d=Math.atan2(Math.sin(d),Math.cos(d));
+  ANGT={th:ANG.th+d,ph:Math.max(PHMIN,Math.min(PHMAX,ph))};if(RM){setAngle(ANGT.th,ANGT.ph);ANGT=null;saveAng()}}
+const saveAng=()=>LS.set('jjoffice_ang',{th:ANG.th,ph:ANG.ph,cut:CUT});
+function loadAng(){const v=LS.get('jjoffice_ang',null);if(v&&isFinite(v.th)&&isFinite(v.ph)){ANG.th=v.th;ANG.ph=Math.max(PHMIN,Math.min(PHMAX,v.ph));CUT=!!v.cut}}
+const TILTS=[30,45,62,88].map(d=>d*Math.PI/180);
 
 /* ---------- วาดทุกเฟรม ---------- */
 let hover=null,sel_=null,pills=[],running=false;
 const SEVC={crit:'#c62127',warn:'#e6a325',err:'#8a7f76'};
 function frame(ts){
   const t=ts/1000;
+  if(ANGT){const k=RM?1:.16,nt=ANG.th+(ANGT.th-ANG.th)*k,np=ANG.ph+(ANGT.ph-ANG.ph)*k;
+    if(Math.abs(ANGT.th-nt)<.002&&Math.abs(ANGT.ph-np)<.002){setAngle(ANGT.th,ANGT.ph);ANGT=null;saveAng()}else setAngle(nt,np)}
   if(camT){const k=.16;cam.s+=(camT.s-cam.s)*k;cam.x+=(camT.x-cam.x)*k;cam.y+=(camT.y-cam.y)*k;if(Math.abs(camT.s-cam.s)<.001&&Math.abs(camT.x-cam.x)<.5)camT=null}
   step(t);
   c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
@@ -1372,14 +1411,17 @@ function sendHome(){PPL.forEach((p,i)=>{const back=routeToMeeting(p,i).slice(0,-
 /* ---------- แตะ/ลาก/ซูม ---------- */
 const ptrs=new Map();let drag=null,pinch=null;
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);
-  if(ptrs.size===1)drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y,moved:0};
-  else if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),s:cam.s};drag=null}});
+  if(ptrs.size===1)drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y,moved:0,rot:MODE==='3d'&&(e.button===2||e.shiftKey||e.ctrlKey||e.altKey),th:ANG.th,ph:ANG.ph};
+  else if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),s:cam.s,a:Math.atan2(b[1]-a[1],b[0]-a[0]),my:(a[1]+b[1])/2,th:ANG.th,ph:ANG.ph};drag=null;ANGT=null}});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointermove',e=>{
   if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,[e.clientX,e.clientY]);
-  if(pinch&&ptrs.size===2){const [a,b]=[...ptrs.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);zoom(pinch.s*d/pinch.d/cam.s,(a[0]+b[0])/2,(a[1]+b[1])/2);return}
-  if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved=Math.max(drag.moved,Math.abs(dx)+Math.abs(dy));if(drag.moved>6){cam.x=drag.cx+dx;cam.y=drag.cy+dy;camT=null;cv.classList.add('drag')}return}
+  if(pinch&&ptrs.size===2){const [a,b]=[...ptrs.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);
+    if(MODE==='3d'){let da=Math.atan2(b[1]-a[1],b[0]-a[0])-pinch.a;da=Math.atan2(Math.sin(da),Math.cos(da));setAngle(pinch.th-da,pinch.ph+((a[1]+b[1])/2-pinch.my)*.005)}
+    zoom(pinch.s*d/pinch.d/cam.s,(a[0]+b[0])/2,(a[1]+b[1])/2);return}
+  if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved=Math.max(drag.moved,Math.abs(dx)+Math.abs(dy));if(drag.moved>6){if(drag.rot){setAngle(drag.th-dx*.008,drag.ph+dy*.006);ANGT=null}else{cam.x=drag.cx+dx;cam.y=drag.cy+dy;camT=null}cv.classList.add('drag')}return}
   hover=hit(e.clientX,e.clientY);cv.classList.toggle('hot',!!hover)});
-cv.addEventListener('pointerup',e=>{ptrs.delete(e.pointerId);cv.classList.remove('drag');
+cv.addEventListener('pointerup',e=>{const wasRot=(drag&&drag.rot&&drag.moved>6)||(pinch&&MODE==='3d');ptrs.delete(e.pointerId);cv.classList.remove('drag');if(wasRot)saveAng();
   if(drag&&drag.moved<=6){const h=hit(e.clientX,e.clientY);if(h)openAgent(h);else closeSheet()}
   if(ptrs.size<2)pinch=null;drag=null});
 cv.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);drag=null;pinch=null});
@@ -1584,7 +1626,7 @@ async function init(){
 let started=false;
 function startApp(){
   if(started)return;started=true;
-  MODE=init3D()?'3d':'2d';if(MODE!=='3d')$('scene3').hidden=true;
+  MODE=init3D()?'3d':'2d';if(MODE!=='3d'){$('scene3').hidden=true;document.querySelectorAll('.rot3').forEach(b=>b.hidden=true)}else{loadAng();paintCut()}
   resize();paintHud();paintSnd();requestAnimationFrame(frame);
   const v=LS.get('jjoffice_view','');const a=[...AG,BOSS].find(x=>x.id===v);if(a)setTimeout(()=>openAgent(a),50);
   runAll();setInterval(()=>{if(!document.hidden)runAll()},5*60e3);
@@ -1596,7 +1638,15 @@ $('drop').onclick=e=>{const b=e.target.closest('[data-ag]');if(!b)return;$('drop
 $('veil').onclick=e=>{if(e.target.id==='veil'||e.target.closest('[data-close]'))return closeModal();
   if(e.target.closest('#lgSend'))return sendBrief(e.target.closest('#lgSend'));if(e.target.closest('#cpBrief'))return copyBrief()};
 addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('veil').hidden)closeModal();else if(!$('drop').hidden)$('drop').hidden=true;else closeSheet()});
-$('zoIn').onclick=()=>zoom(1.2);$('zoOut').onclick=()=>zoom(1/1.2);$('fitBtn').onclick=()=>{closeSheet();fit()};
+$('zoIn').onclick=()=>zoom(1.2);$('zoOut').onclick=()=>zoom(1/1.2);
+$('fitBtn').onclick=()=>{closeSheet();if(MODE==='3d'){ANGT=null;ANG.th=ANG0.th;ANG.ph=ANG0.ph;saveAng()}fit()};
+$('rotL').onclick=()=>angTo((ANGT?ANGT.th:ANG.th)-Math.PI/4,ANGT?ANGT.ph:ANG.ph);
+$('rotR').onclick=()=>angTo((ANGT?ANGT.th:ANG.th)+Math.PI/4,ANGT?ANGT.ph:ANG.ph);
+$('tiltBtn').onclick=()=>{const cur=ANGT?ANGT.ph:ANG.ph,i=TILTS.findIndex(t=>t>cur+.02);angTo(ANGT?ANGT.th:ANG.th,TILTS[i<0?0:i])};
+function paintCut(){$('cutBtn').setAttribute('aria-pressed',String(CUT));$('cutBtn').style.background=CUT?'var(--card2)':''}
+$('cutBtn').onclick=()=>{CUT=!CUT;saveAng();paintCut();toast(CUT?'ผนังเตี้ย — มองเห็นทุกห้อง':'ผนังสูงตามจริง')};
+addEventListener('keydown',e=>{if(e.target&&/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
+  if(e.key==='q'||e.key==='Q')$('rotL').click();else if(e.key==='e'||e.key==='E')$('rotR').click()});
 $('reBtn').onclick=$('liveChip').onclick=()=>runAll();
 $('sndBtn').onclick=()=>{SND=!SND;LS.set('jjoffice_snd',SND);paintSnd();beep(700,.08)};
 $('outBtn').onclick=logout;
