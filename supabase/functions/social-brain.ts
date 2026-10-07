@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.10";
+const VERSION = "2026-10-07.11";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -1132,6 +1132,12 @@ const AP_FULL_BATCH = 8;            // โพสต์ต่อรอบดึ�
 const AP_FULL_CM_PER = 300;         // คอมเมนต์สูงสุดต่อโพสต์
 const AP_FULL_LIST_USD = 2;         // เพดานเงินรอบอ่านรายการโพสต์
 const AP_FULL_CM_USD = 1;           // เพดานเงินรอบดึงคอมเมนต์
+// รายการโพสต์ "ทั้งหมด" จริง: IG ไม่จำกัดวัน (ปกติ 30 วัน · ดึงย้อนหลัง 365 วัน) · TikTok เอาคลิปปักหมุดด้วย (มักเป็นคลิปเก่าที่คนดูเยอะ)
+const AP_FULL_LIST_INPUT: Record<string, (n: number) => Record<string, unknown>> = {
+  fb_comments: (n) => ({ resultsLimit: n }),
+  ig_comments: (n) => ({ resultsLimit: n, onlyPostsNewerThan: "20 years" }),
+  tt_comments: (n) => ({ resultsPerPage: n, excludePinnedPosts: false }),
+};
 const AP_FULL_CM_INPUT: Record<string, (n: number) => Record<string, unknown>> = {
   fb_comments: (n) => ({ resultsLimit: n }),
   ig_comments: (n) => ({ resultsLimit: n }),
@@ -2109,7 +2115,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           const b = blocked(Math.max(def.steps[0].usd ?? AP_RUN_USD, AP_RUN_USD));
           if (b) { if (b.hard) paused = b.msg; continue; }
           try {
-            const r0 = await apStart(tok, src, 0, [], null, room(), { max: AP_FULL_POSTS, input: AP_CAT_INPUT[src.kind](AP_FULL_POSTS),
+            const r0 = await apStart(tok, src, 0, [], null, room(), { max: AP_FULL_POSTS, input: AP_FULL_LIST_INPUT[src.kind](AP_FULL_POSTS),
               usd: Math.min(AP_FULL_LIST_USD, room()), timeout: 3600 });
             started++; freshUsd += r0.usd;
             runs[kA] = { id: r0.id, step: 0, at: now(), key: apKey(src), full: "posts", off: 0 };
