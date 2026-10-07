@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.2";
+const VERSION = "2026-10-07.3";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -1075,7 +1075,8 @@ const AP_MAX_PER_HOUR = 8;         // เริ่มรอบใหม่ได
 const AP_CALL_MS = 15000;          // เวลารอต่อคำขอ Apify
 const AP_START_PER_TICK = 2;       // เริ่มรอบใหม่ไม่เกินนี้ต่อครั้ง ที่เหลือรอบหน้า (แผนฟรีรันพร้อมกันได้จำกัดตามหน่วยความจำ)
 
-type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number; owner?: string };
+type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null };
+type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number; owner?: string; posts?: ApPost[] };
 type ApRow = { channel: string; kind: string; external_id: string; branch: string | null; author_name: string | null;
   text: string; rating: number | null; url: string | null; posted_at: string; raw: Record<string, unknown>; reply_text?: string | null };
 // usd = เพดานเงินต่อรอบของตัวดึงนี้ (บางตัวบังคับขั้นต่ำ เช่น TikTok ของ clockworks ไม่รับต่ำกว่า $0.50 — เป็นแค่เพดาน จ่ายจริงตามจำนวนที่ได้)
@@ -1267,10 +1268,44 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
       if (!id || !url || !at) return null;
       return { channel: "tiktok", kind: "mention", external_id: "ttv_" + id.slice(0, 120), branch: s.branch,
         author_name: apS(it, "authorMeta.name", "authorMeta.nickName", "author.uniqueId").slice(0, 120) || null,
-        text: apStr(apS(it, "text", "desc")), rating: null, url, posted_at: at, raw: { via: "apify", query: s.url.slice(0, 80) } };
+        text: apStr(apS(it, "text", "desc")), rating: null, url, posted_at: at,
+        raw: { via: "apify", query: s.url.slice(0, 80), nick: apS(it, "authorMeta.nickName").slice(0, 80) || null,
+          video: { vw: apNum(apGet(it, "playCount")), lk: apNum(apGet(it, "diggCount")), cm: apNum(apGet(it, "commentCount")), sh: apNum(apGet(it, "shareCount")) } } };
     },
   },
 };
+// โพสต์/คลิปต้นทางของคอมเมนต์ (ข้อความ · วันที่ · ไลก์/คอมเมนต์/วิว) — เก็บไว้กับคอมเมนต์ให้แอปบอกได้ว่ามาจากโพสต์ไหน
+// ลิงก์แบบ permalink.php?story_fbid=… / watch?v=… → path เหมือนกันทุกโพสต์ ต้องเอาเลขโพสต์ใน query มาด้วย (แอปใช้สูตรเดียวกัน: postKey)
+const apUrlKey = (u: string) => {
+  try {
+    const x = new URL(u); const p = x.pathname.replace(/\/+$/, "");
+    const q = /\.php$|\/watch$/i.test(p) ? ["story_fbid", "fbid", "id", "v"].map((k) => x.searchParams.get(k) ?? "").join("|") : "";
+    return (x.host.replace(/^(www|m|web)\./, "") + p + (q ? "?" + q : "")).toLowerCase();
+  } catch { return ""; }
+};
+function apPostMeta(it: any, u: string): ApPost {
+  return { u: u.slice(0, 500), t: apS(it, "text", "caption", "message", "desc", "postText").replace(/\s+/g, " ").trim().slice(0, 160),
+    at: apIso(apGet(it, "time", "timestamp", "takenAt", "createTimeISO", "date", "createTime")),
+    lk: apNum(apGet(it, "likes", "likesCount", "diggCount", "reactionsCount", "topReactionsCount")),
+    cm: apNum(apGet(it, "comments", "commentsCount", "commentCount")),
+    vw: apNum(apGet(it, "playCount", "videoPlayCount", "videoViewCount", "views", "viewsCount")) };
+}
+function apPostOf(posts: ApPost[] | undefined, ...cands: string[]): ApPost | null {
+  if (!posts?.length) return null;
+  for (const c of cands) {
+    const k = c ? apUrlKey(c) : "";
+    const p = k ? posts.find((x) => apUrlKey(x.u) === k) : null;
+    if (p) return p;
+  }
+  return null;
+}
+// ค่าจากแถว runs (คีย์สาธารณะแก้ได้) → บีบให้เป็นข้อมูลสั้น ๆ ที่ปลอดภัยก่อนเก็บลงรีวิว
+function apPostsClean(a: unknown): ApPost[] {
+  if (!Array.isArray(a)) return [];
+  return a.slice(0, 6).filter((p: any) => typeof p?.u === "string" && /^https:\/\//.test(p.u)).map((p: any) => ({
+    u: String(p.u).slice(0, 500), t: String(p.t ?? "").slice(0, 160), at: apIso(p.at),
+    lk: apNum(p.lk), cm: apNum(p.cm), vw: apNum(p.vw) }));
+}
 // แปลงผลทั้งชุดเป็นแถว + หาว่าร้านตอบคอมเมนต์ไหนแล้ว (คำตอบของร้านเป็นแถวลูก หรืออยู่ใน replies ของคอมเมนต์)
 function apRows(def: (typeof AP_KINDS)[string], items: any[], src: ApSrc): ApRow[] {
   const rows: ApRow[] = []; const idx = new Map<string, ApRow>();
@@ -1284,6 +1319,10 @@ function apRows(def: (typeof AP_KINDS)[string], items: any[], src: ApSrc): ApRow
     let row: ApRow | null = null;
     try { row = def.map(it, src); } catch { row = null; }
     if (!row) continue;
+    if (row.kind === "comment") {
+      const pm = apPostOf(src.posts, apS(it, "inputUrl"), apS(it, "postUrl", "videoWebUrl", "webVideoUrl", "facebookUrl"), String(row.raw.post_id ?? ""));
+      if (pm) row.raw = { ...row.raw, post_id: pm.u, post: { t: pm.t, at: pm.at, lk: pm.lk, cm: pm.cm, vw: pm.vw } };
+    }
     rows.push(row);
     idx.set(apS(it, "id", "commentId", "cid"), row);
     const reps = [it?.replies, it?.replyComments, it?.childComments].find((x) => Array.isArray(x)) ?? [];
@@ -1412,10 +1451,18 @@ async function apSaveRows(rows: ApRow[]) {
     if ((data ?? []).length) { added++; continue; }
     dup++;
     // มีอยู่แล้ว — ร้านเพิ่งไปตอบในแอพนั้นเอง → ขึ้นว่าตอบแล้ว (อัตราการตอบรายโพสต์ไม่ค้างเป็น "ยังไม่ตอบ")
-    if (r.reply_text) {
-      const { data: ex } = await sb.from("social_mentions").select("id,reply_status").eq("channel", r.channel).eq("external_id", r.external_id).limit(1);
-      if (ex?.length && !["sent", "auto_sent"].includes(ex[0].reply_status))
-        await sb.from("social_mentions").update({ reply_status: "sent", reply_text: apStr(r.reply_text), replied_by: "ร้าน (ตอบในแอพนั้นแล้ว)" }).eq("id", ex[0].id);
+    // + เติม/อัพเดตข้อมูลโพสต์ต้นทาง (ยอดไลก์/วิวเปลี่ยนทุกรอบ) เฉพาะแถวที่ Apify สร้าง — แถวจาก webhook ไม่แตะ raw
+    const pr: any = r.raw;
+    if (r.reply_text || pr?.post || pr?.video) {
+      const { data: ex } = await sb.from("social_mentions").select("id,reply_status,raw").eq("channel", r.channel).eq("external_id", r.external_id).limit(1);
+      const e0: any = ex?.[0];
+      if (e0) {
+        const patch: Record<string, unknown> = {};
+        if (r.reply_text && !["sent", "auto_sent"].includes(e0.reply_status))
+          Object.assign(patch, { reply_status: "sent", reply_text: apStr(r.reply_text), replied_by: "ร้าน (ตอบในแอพนั้นแล้ว)" });
+        if ((pr?.post || pr?.video) && e0.raw?.via === "apify") patch.raw = { ...e0.raw, ...pr };
+        if (Object.keys(patch).length) await sb.from("social_mentions").update(patch).eq("id", e0.id);
+      }
     }
   }
   return { added, dup, err };
@@ -1512,7 +1559,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}/abort`, { method: "POST" }).catch(() => null);
           dropRuns.add(sid); continue;
         }
-        const src: ApSrc = { ...src0, owner: typeof r.owner === "string" ? r.owner.slice(0, 120) : undefined };
+        const src: ApSrc = { ...src0, owner: typeof r.owner === "string" ? r.owner.slice(0, 120) : undefined, posts: apPostsClean(r.posts) };
         const run = (await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}`))?.data ?? {};
         const status = String(run.status ?? "");
         if (["READY", "RUNNING", "TIMING-OUT", "ABORTING"].includes(status)) {
@@ -1560,9 +1607,13 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           if (left() < AP_CALL_MS) break;
           // ชื่อเพจ/บัญชีร้านจากขั้นแรก → ใช้แยกคำตอบของร้านออกจากเสียงลูกค้าในขั้นสอง
           const owner = apS(items[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120);
+          const posts = urls.map((u) => {
+            const it = items.find((x) => [apS(x, "url"), apS(x, "postUrl"), apS(x, "topLevelUrl"), apS(x, "webVideoUrl")].includes(u));
+            return it ? apPostMeta(it, u) : { u, t: "", at: null, lk: null, cm: null, vw: null };
+          });
           const nr = await apStart(tok, src, step + 1, urls, null, room());
           chained++; freshUsd += nr.usd;
-          runs[sid] = { id: nr.id, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}) };
+          runs[sid] = { id: nr.id, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}), posts };
           L(sid).wait = null;
           await commitRun(sid, runs[sid]);
           continue;
