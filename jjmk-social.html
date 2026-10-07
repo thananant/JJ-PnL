@@ -1763,7 +1763,7 @@ function pMoreCm(v){
     ${S.days<3650?`<p class="xs" style="margin:6px 0 0;color:var(--gold)">ℹ️ ตอนนี้ดูช่วง ${daysLabel()} — คอมเมนต์ที่เก่ากว่านี้จะไม่โชว์ในหน้า (เลือกช่วงเวลา "ทั้งหมด" ด้านบนเพื่อดูครบ)</p>`:''}
     <div style="text-align:right;margin-top:10px"><button class="btn gh" onclick="closeModal()">ยกเลิก</button></div>`);
 }
-/* รายการโพสต์ของช่องทาง: ตาราง social_posts (social-brain ≥ v2026-10-07.10 · ต้องรัน jjmk_social_posts.sql) + รายการเดิมใน social_settings "ap_posts"
+/* รายการโพสต์ของช่องทาง: ตาราง social_posts (social-brain ≥ v2026-10-07.11 · ต้องรัน jjmk_social_posts.sql) + รายการเดิมใน social_settings "ap_posts"
    ที่ตารางยังไม่มี · pulled/got = ดึงคอมเมนต์ของโพสต์นั้นแล้ว/ได้กี่อัน (ปุ่ม 🚀 ดึงทั้งหมด) */
 async function loadCat(ch){
   return cachedLoad('cat_'+ch,async()=>{
@@ -2460,7 +2460,7 @@ function apCardHtml(){
   </div>`;
 }
 /* ---- 🚀 ดึงย้อนหลังทั้งหมด (เจ้าของสั่ง 2026-10-07 "ไปโหลดคลิปหรือโพสต์ย้อนหลังมาทั้งหมด และดึงคอมเมนต์มาด้วย และวิเคราะห์เลย ย้ำนะว่าทั้งหมด")
-   social-brain (≥ v2026-10-07.10) ทำเป็นรอบ ๆ ใน cron: ① อ่านรายการโพสต์/คลิปทั้งหมดของแหล่ง FB/IG/TikTok ลงตาราง social_posts
+   social-brain (≥ v2026-10-07.11) ทำเป็นรอบ ๆ ใน cron: ① อ่านรายการโพสต์/คลิปทั้งหมดของแหล่ง FB/IG/TikTok ลงตาราง social_posts
    ② ดึงคอมเมนต์ทุกโพสต์ ใหม่ก่อน ครั้งละ 8 โพสต์ (สูงสุด 300 คอมเมนต์/โพสต์ · โพสต์ที่ไม่มีคอมเมนต์ข้าม) ③ AI วิเคราะห์ตามเองทุก 15 นาที
    งบเดียวกับงานปกติ (หยุดเองที่ $4.50/เดือน แล้วทำต่อเมื่อเครดิตรอบใหม่เริ่ม) · เริ่ม/หยุด = brain('apify_full') เฉพาะผู้ดูแล/เจ้าของ */
 const AP_FULL_CM_EST={facebook:0.0025,instagram:0.0023,tiktok:0.001};   // $ ต่อคอมเมนต์โดยประมาณ (เผื่อไว้)
@@ -2488,7 +2488,7 @@ async function apFullPaint(){
     return `<div class="apfl"><b>${k.em} ${esc(k.name)}</b><div>① รายการ: ${a}</div><div>② คอมเมนต์: ${b}</div>${err}</div>`;
   }).join('');
   const tblMiss=rows===null;
-  const head=tblMiss?`<div class="sm" style="color:var(--gold)">⚠️ ต้องรัน SQL <code>jjmk_social_posts.sql</code> ใน Supabase ก่อน (สร้างตารางเก็บโพสต์ทั้งหมด) แล้ว Deploy social-brain รุ่น 2026-10-07.10</div>`
+  const head=tblMiss?`<div class="sm" style="color:var(--gold)">⚠️ ต้องรัน SQL <code>jjmk_social_posts.sql</code> ใน Supabase ก่อน (สร้างตารางเก็บโพสต์ทั้งหมด) แล้ว Deploy social-brain รุ่น 2026-10-07.11</div>`
     :F.on?`<div class="sm" style="color:var(--blu)">🚀 กำลังดึงทั้งหมด — เริ่ม ${esc(timeago(F.at))}${F.by?' โดย '+esc(F.by):''} · ระบบทำต่อเองทุก 15 นาที ปิดหน้านี้ได้</div>`
       +(F.paused?`<div class="sm" style="color:var(--gold)">⏸ พักไว้: ${esc(String(F.paused).slice(0,160))} — ทำต่อเองเมื่อเครดิตรอบใหม่เริ่ม</div>`:'')
     :F.done_at&&(!F.stopped_at||F.done_at>F.stopped_at)?`<div class="sm" style="color:var(--ok)">✓ ดึงทั้งหมดเสร็จแล้ว ${esc(timeago(F.done_at))} — ต่อจากนี้รอบอัตโนมัติดึงคอมเมนต์ใหม่ของ 4 โพสต์ล่าสุดให้เอง</div>`
@@ -2512,13 +2512,13 @@ async function apFullGo(on,btn){
   try{
     if(on)await apSaveSrc(true);
     const r=await brain('apify_full',{u:S.user&&S.user.username,h:S.user&&S.user.h,on});
-    if(!r||!r.ok)throw new Error((r&&r.reason)||'ทำไม่ได้ — ถ้าเพิ่งอัปเดต ให้ Deploy social-brain รุ่น 2026-10-07.10 ก่อน');
+    if(!r||!r.ok)throw new Error((r&&r.reason)||'ทำไม่ได้ — ถ้าเพิ่งอัปเดต ให้ Deploy social-brain รุ่น 2026-10-07.11 ก่อน');
     toast(on?(r.started?`เริ่มแล้ว ✓ สั่งอ่านรายการโพสต์ ${r.started} แหล่ง — ระบบทำต่อเองทุก 15 นาที`:'เริ่มแล้ว ✓ ระบบจะทยอยทำทุก 15 นาที'+(r.reason?' ('+r.reason+')':'')):'หยุดแล้ว');
     delete S.cache.fullst;
     await loadSettings();apPaint();apPollStart();
   }catch(e){
     // ฟังก์ชันรุ่นก่อน 2026-10-07.10 ไม่รู้จัก apify_full → ตอบ 400 "unknown action"
-    toast(/unknown action/i.test(e.message)?'social-brain ที่ติดตั้งอยู่เป็นรุ่นเก่า ยังไม่มีปุ่มนี้ — อัปเดตเป็นรุ่น 2026-10-07.10 ด้วยปุ่ม 📋 คัดลอกโค้ด ในการ์ด 🩺 สถานะระบบ (หน้าตั้งค่า) แล้ว Deploy':e.message,true);
+    toast(/unknown action/i.test(e.message)?'social-brain ที่ติดตั้งอยู่เป็นรุ่นเก่า ยังไม่มีปุ่มนี้ — อัปเดตเป็นรุ่น 2026-10-07.11 ด้วยปุ่ม 📋 คัดลอกโค้ด ในการ์ด 🩺 สถานะระบบ (หน้าตั้งค่า) แล้ว Deploy':e.message,true);
     if(btn){btn.disabled=false;btn.textContent=on?'🚀 เริ่มดึงทั้งหมด':'⏸ หยุดดึงทั้งหมด'}
   }
 }
@@ -3208,7 +3208,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.10";
+const VERSION = "2026-10-07.11";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -4327,6 +4327,12 @@ const AP_FULL_BATCH = 8;            // โพสต์ต่อรอบดึ�
 const AP_FULL_CM_PER = 300;         // คอมเมนต์สูงสุดต่อโพสต์
 const AP_FULL_LIST_USD = 2;         // เพดานเงินรอบอ่านรายการโพสต์
 const AP_FULL_CM_USD = 1;           // เพดานเงินรอบดึงคอมเมนต์
+// รายการโพสต์ "ทั้งหมด" จริง: IG ไม่จำกัดวัน (ปกติ 30 วัน · ดึงย้อนหลัง 365 วัน) · TikTok เอาคลิปปักหมุดด้วย (มักเป็นคลิปเก่าที่คนดูเยอะ)
+const AP_FULL_LIST_INPUT: Record<string, (n: number) => Record<string, unknown>> = {
+  fb_comments: (n) => ({ resultsLimit: n }),
+  ig_comments: (n) => ({ resultsLimit: n, onlyPostsNewerThan: "20 years" }),
+  tt_comments: (n) => ({ resultsPerPage: n, excludePinnedPosts: false }),
+};
 const AP_FULL_CM_INPUT: Record<string, (n: number) => Record<string, unknown>> = {
   fb_comments: (n) => ({ resultsLimit: n }),
   ig_comments: (n) => ({ resultsLimit: n }),
@@ -5304,7 +5310,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           const b = blocked(Math.max(def.steps[0].usd ?? AP_RUN_USD, AP_RUN_USD));
           if (b) { if (b.hard) paused = b.msg; continue; }
           try {
-            const r0 = await apStart(tok, src, 0, [], null, room(), { max: AP_FULL_POSTS, input: AP_CAT_INPUT[src.kind](AP_FULL_POSTS),
+            const r0 = await apStart(tok, src, 0, [], null, room(), { max: AP_FULL_POSTS, input: AP_FULL_LIST_INPUT[src.kind](AP_FULL_POSTS),
               usd: Math.min(AP_FULL_LIST_USD, room()), timeout: 3600 });
             started++; freshUsd += r0.usd;
             runs[kA] = { id: r0.id, step: 0, at: now(), key: apKey(src), full: "posts", off: 0 };
