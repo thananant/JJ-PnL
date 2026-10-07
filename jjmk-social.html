@@ -681,13 +681,21 @@ async function api(method,path,body,prefer){
   const deny=scopeDeny(method,path,body);   // เห็นเฉพาะสาขา: ห้ามเขียนข้ามสาขา
   if(deny)throw permErr(deny);
   const {url,key}=cfg(); setBusy(true);
-  try{
-    const r=await fetch(url+'/rest/v1/'+path,{method,
+  const go=ms=>fetch(url+'/rest/v1/'+path,{method,
       headers:{'Content-Type':'application/json',apikey:key,Authorization:'Bearer '+key,
         ...(prefer?{Prefer:prefer}:{})},
       body:body?JSON.stringify(body):undefined,
-      // อ่านข้อมูลเกิน 20 วิ = ตัดทิ้ง (ไม่งั้นเน็ตค้างแล้วหน้าเปิดค้าง "กำลังตรวจสอบสิทธิ์…" ตลอดไป) · การเขียนไม่ตัด กันบันทึกครึ่ง ๆ กลาง ๆ
-      signal:method==='GET'&&typeof AbortSignal!=='undefined'&&AbortSignal.timeout?AbortSignal.timeout(20000):undefined});
+      // อ่านข้อมูลเกินเวลา = ตัดทิ้ง (ไม่งั้นเน็ตค้างแล้วหน้าเปิดค้าง "กำลังตรวจสอบสิทธิ์…" ตลอดไป) · การเขียนไม่ตัด กันบันทึกครึ่ง ๆ กลาง ๆ
+      signal:method==='GET'&&typeof AbortSignal!=='undefined'&&AbortSignal.timeout?AbortSignal.timeout(ms):undefined});
+  try{
+    let r;
+    try{r=await go(20000)}
+    catch(e){
+      // อ่านไม่ทัน/เน็ตสะดุด → ลองเองอีก 1 ครั้ง (รอนานขึ้น) — เจ้าของเจอ "โหลดไม่ได้: signal timed out" 2026-10-07 · การเขียนไม่ลองซ้ำ กันบันทึกซ้ำ
+      if(method!=='GET')throw e;
+      await new Promise(res=>setTimeout(res,1500));
+      r=await go(30000);
+    }
     if(!r.ok)throw new Error(await r.text());
     const tx=await r.text(); return tx?JSON.parse(tx):null;
   }finally{setBusy(false)}
@@ -960,7 +968,17 @@ async function show(v){
     else if(v==='ch')await vCh(el);
     else if(v==='set')await vSet(el);
     else if(PLAT[v])await vPlat(el,v);
-  }catch(e){el.innerHTML='<div class="empty">โหลดไม่ได้: '+esc(e.message)+'<br><span class="xs">ถ้ายังไม่ได้ติดตั้ง ให้รัน jjmk_social_setup.sql ใน Supabase ก่อนครับ</span></div>';console.error(e)}
+  }catch(e){
+    // แยกอาการ: ช้า/เน็ตหลุด (ลองใหม่ได้ + ลองให้เองใน 30 วิ) · ยังไม่มีตาราง (ต้องรัน SQL) · อื่น ๆ
+    const m=String((e&&e.message)||e),slow=(e&&e.name==='TimeoutError')||/timed out|timeout|Failed to fetch|NetworkError|Load failed/i.test(m);
+    const noTbl=/PGRST205|42P01|does not exist|Could not find the table/i.test(m);
+    el.innerHTML=`<div class="empty">${slow?'⏳ เซิร์ฟเวอร์ตอบช้าหรือเน็ตสะดุด (ลองให้แล้ว 2 ครั้ง)':'โหลดไม่ได้: '+esc(m.slice(0,300))}
+      <br><button class="btn sm" style="margin-top:10px" onclick="S.cache={};show(S.tab)">🔄 ลองใหม่</button>
+      ${slow?'<br><span class="xs">ระบบจะลองให้อีกครั้งเองใน 30 วินาที · ถ้าเป็นบ่อย ดู Supabase → Reports ว่าฐานข้อมูลทำงานหนักไหม (แผนฟรีถูกลดความเร็วชั่วคราวได้)</span>'
+        :noTbl?'<br><span class="xs">ยังไม่ได้ติดตั้งตาราง — ให้รัน jjmk_social_setup.sql ใน Supabase ก่อนครับ</span>':''}</div>`;
+    console.error(e);
+    if(slow){clearTimeout(S._autoRetry);S._autoRetry=setTimeout(()=>{if(S.tab===v&&!document.hidden&&el.querySelector('.empty'))show(v)},30000)}
+  }
 }
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-v]'); if(b)show(b.dataset.v);
@@ -968,12 +986,19 @@ document.addEventListener('click',e=>{
 
 /* ---------- data ---------- */
 function sinceIso(){return new Date(Date.now()-S.days*86400000).toISOString()}
+const _inflight=new WeakMap();   // คำขอที่กำลังวิ่ง ผูกกับก้อน S.cache ปัจจุบัน — หลายส่วนขอข้อมูลชุดเดียวกันพร้อมกัน = ยิงครั้งเดียว
 async function loadMentions(force){
-  const key='m'+S.days;
-  if(!force&&S.cache[key])return S.cache[key];
-  const rows=await sel('social_mentions',`select=*&posted_at=gte.${sinceIso()}${scopeQ()}&order=posted_at.desc&limit=1000`);
-  S.cache[key]=rows||[]; S.cache[key].forEach(r=>{S.mBr[r.id]=r.branch});
-  return S.cache[key];
+  const key='m'+S.days,c=S.cache;
+  if(!force&&c[key])return c[key];
+  let f=_inflight.get(c); if(!f){f={};_inflight.set(c,f)}
+  if(!force&&f[key])return f[key];
+  const p=(async()=>{
+    const rows=await sel('social_mentions',`select=*&posted_at=gte.${sinceIso()}${scopeQ()}&order=posted_at.desc&limit=1000`);
+    c[key]=rows||[]; c[key].forEach(r=>{S.mBr[r.id]=r.branch});
+    return c[key];
+  })();
+  f[key]=p;
+  try{return await p}finally{if(f[key]===p)delete f[key]}
 }
 /* เห็นเฉพาะสาขา: ให้ฐานข้อมูลส่งมาแค่สาขาที่ดูแล (รายการไม่ระบุสาขาไม่มา) */
 function scopeQ(){return S.scope?'&branch=in.('+S.scope.map(encodeURIComponent).join(',')+')':''}
@@ -2834,8 +2859,17 @@ function rtStart(){
   }catch(e){}
   setInterval(()=>{if(!_rtLive&&!document.hidden)rtApply()},90000); // โพลสำรอง
 }
-function rtEvent(){clearTimeout(_rtT);_rtT=setTimeout(rtApply,1200)}
+/* ข้อมูลเปลี่ยนเป็นชุด ๆ (ดึงจาก Apify/วิเคราะห์ AI/เติมรูปโพสต์ = อัปเดตหลายร้อยแถวติดกัน) → รวบเป็นการโหลดใหม่ครั้งเดียว
+   รอเงียบ 2.5 วิ · ไม่เกินทุก 15 วิ · รอนานสุด 20 วิ (เดิมโหลดใหม่ทุก 1.2 วิ ทำให้ฐานข้อมูลแผนฟรีทำงานหนักจนตอบช้า) */
+let _rtFirst=0,_rtLast=0;
+function rtEvent(){
+  if(!_rtFirst)_rtFirst=Date.now();
+  clearTimeout(_rtT);
+  const due=Math.max(_rtLast+15000,Math.min(Date.now()+2500,_rtFirst+20000));
+  _rtT=setTimeout(rtApply,Math.max(0,due-Date.now()));
+}
 async function rtApply(){
+  _rtFirst=0;_rtLast=Date.now();
   if(document.hidden)return;
   const a=document.activeElement;
   if(a&&['TEXTAREA','INPUT'].includes(a.tagName)&&a.value){rtBanner();return} // ไม่ทับของที่พิมพ์ค้าง
