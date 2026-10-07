@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.5";
+const VERSION = "2026-10-07.6";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -1074,8 +1074,11 @@ const AP_MAX_RUNNING = 3;          // รันบน Apify พร้อมก�
 const AP_MAX_PER_HOUR = 8;         // เริ่มรอบใหม่ได้ไม่เกินนี้ต่อชั่วโมง (นับจากบัญชี Apify เอง — กันคนลบสถานะในตารางแล้วเรียก cron รัว ๆ)
 const AP_CALL_MS = 15000;          // เวลารอต่อคำขอ Apify
 const AP_START_PER_TICK = 2;       // เริ่มรอบใหม่ไม่เกินนี้ต่อครั้ง ที่เหลือรอบหน้า (แผนฟรีรันพร้อมกันได้จำกัดตามหน่วยความจำ)
+// ขั้นแรกของชนิด 2 ขั้น อ่านโพสต์ล่าสุดกี่โพสต์ — ดึงคอมเมนต์เฉพาะโพสต์ใหม่ ≤4 เหมือนเดิม แต่จำข้อมูล/รูปปกของทุกโพสต์ที่เห็น
+// ไว้เติมให้คอมเมนต์ที่เก็บไว้ก่อนหน้า (apBackfill — เจ้าของถาม 2026-10-07 "ทำไมไม่มีรูปเบื้องต้นเลย")
+const AP_META_MAX = 8;
 
-type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null; img?: string | null; vid?: boolean | null };
+type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null; img?: string | null; vid?: boolean | null; pid?: string | null };
 type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number; owner?: string; posts?: ApPost[] };
 type ApRow = { channel: string; kind: string; external_id: string; branch: string | null; author_name: string | null;
   text: string; rating: number | null; url: string | null; posted_at: string; raw: Record<string, unknown>; reply_text?: string | null };
@@ -1189,7 +1192,7 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
     label: "คอมเมนต์โพสต์ Facebook", channel: "facebook", mkind: "comment", every: 72,
     ok: (u) => /^(https:\/\/(www\.|m\.)?(facebook|fb)\.com\/.+|@?[A-Za-z0-9._-]{3,})$/i.test(u),
     steps: [
-      { actor: "apify~facebook-posts-scraper", max: 4, input: (s) => ({ startUrls: [{ url: apFb(s.url) }], resultsLimit: 4 }),
+      { actor: "apify~facebook-posts-scraper", max: AP_META_MAX, input: (s) => ({ startUrls: [{ url: apFb(s.url) }], resultsLimit: AP_META_MAX }),
         urls: (items) => items.filter((it) => apRecent(apGet(it, "time", "date", "timestamp"), 7))
           .map((it) => apS(it, "url", "postUrl", "topLevelUrl")).filter((u) => /^https:\/\//.test(u)) },
       // เอาคำตอบใต้คอมเมนต์มาด้วย → รู้ว่าเพจร้านตอบคอมเมนต์ไหนแล้ว (อัตราการตอบรายโพสต์)
@@ -1217,8 +1220,8 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
     label: "คอมเมนต์ Instagram", channel: "instagram", mkind: "comment", every: 72,
     ok: (u) => apUser(u).length >= 2,
     steps: [
-      { actor: "apify~instagram-post-scraper", max: 4,
-        input: (s) => ({ username: [apUser(s.url)], resultsLimit: 4, onlyPostsNewerThan: "7 days" }),
+      { actor: "apify~instagram-post-scraper", max: AP_META_MAX,
+        input: (s) => ({ username: [apUser(s.url)], resultsLimit: AP_META_MAX, onlyPostsNewerThan: "30 days" }),
         urls: (items) => items.filter((it) => apRecent(apGet(it, "timestamp", "takenAt"), 7))
           .map((it) => apS(it, "url")).filter((u) => /^https:\/\//.test(u)) },
       { actor: "apify~instagram-comment-scraper", max: 80, input: (_s, urls) => ({ directUrls: urls, resultsLimit: 20 }) },
@@ -1239,8 +1242,8 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
     label: "คอมเมนต์คลิป TikTok ของร้าน", channel: "tiktok", mkind: "comment", every: 72,
     ok: (u) => apUser(u).length >= 2,
     steps: [
-      { actor: "clockworks~tiktok-scraper", max: 4, usd: 0.5,
-        input: (s) => ({ profiles: [apUser(s.url)], resultsPerPage: 4, profileSorting: "latest", profileScrapeSections: ["videos"],
+      { actor: "clockworks~tiktok-scraper", max: AP_META_MAX, usd: 0.5,
+        input: (s) => ({ profiles: [apUser(s.url)], resultsPerPage: AP_META_MAX, profileSorting: "latest", profileScrapeSections: ["videos"],
           excludePinnedPosts: true, ...TT_NO_DL }),
         urls: (items) => items.filter((it) => apRecent(apGet(it, "createTimeISO", "createTime"), 10))
           .map((it) => apS(it, "webVideoUrl")).filter((u) => /^https:\/\//.test(u)) },
@@ -1314,7 +1317,26 @@ function apPostMeta(it: any, u: string): ApPost {
     lk: apNum(apGet(it, "likes", "likesCount", "diggCount", "reactionsCount", "topReactionsCount")),
     cm: apNum(apGet(it, "comments", "commentsCount", "commentCount")),
     vw: apNum(apGet(it, "playCount", "videoPlayCount", "videoViewCount", "views", "viewsCount")),
-    img: apImgOf(it), vid: apVidOf(it, u) };
+    img: apImgOf(it), vid: apVidOf(it, u), pid: apPid(apS(it, "postId", "post_id")) };
+}
+// เลขโพสต์ Facebook (ตัวเลขล้วน) — ลิงก์โพสต์มี 2 แบบ (pfbid… กับเลขโพสต์) ใช้เลขนี้จับคู่แทนได้
+const apPid = (s: unknown) => { const t = String(s ?? ""); return /^\d{5,25}$/.test(t) ? t : null; };
+const apPidOfUrl = (u: string) => {
+  try { const x = new URL(u); return apPid(x.searchParams.get("story_fbid") ?? x.searchParams.get("fbid") ?? /\/(\d{5,25})\/?$/.exec(x.pathname)?.[1]); }
+  catch { return null; }
+};
+// ข้อมูลทุกโพสต์ที่ขั้นแรกเห็น (โพสต์ที่จะดึงคอมเมนต์มาก่อน · ≤AP_META_MAX)
+function apMetasOf(items: any[], urls: string[]): ApPost[] {
+  const out: ApPost[] = []; const seen = new Set<string>();
+  const add = (it: any, u: string) => {
+    const k = apUrlKey(u);
+    if (!k || seen.has(k) || out.length >= AP_META_MAX) return;
+    seen.add(k);
+    out.push(it ? apPostMeta(it, u) : { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null, pid: null });
+  };
+  for (const u of urls) add(items.find((x) => [apS(x, "url"), apS(x, "postUrl"), apS(x, "topLevelUrl"), apS(x, "webVideoUrl")].includes(u)), u);
+  for (const it of items) { const u = apS(it, "url", "postUrl", "webVideoUrl", "topLevelUrl"); if (/^https:\/\//.test(u)) add(it, u); }
+  return out;
 }
 let apThumbErr = "";
 async function apReadCap(r: Response, max: number): Promise<Uint8Array | null> {
@@ -1363,21 +1385,50 @@ async function apThumb(src: unknown, key: string): Promise<string | null> {
     return apImgOk(pub) ? pub + "?v=" + Date.now().toString(36) : ok;
   } catch (e) { apThumbErr = "เก็บรูปปกไม่ได้: " + scrub(e).slice(0, 140); return ok; }
 }
-function apPostOf(posts: ApPost[] | undefined, ...cands: string[]): ApPost | null {
+// pid = เลขโพสต์ (คอมเมนต์ FB ไอดี "เลขโพสต์_เลขคอมเมนต์") · cands = ลิงก์ที่อาจเป็นโพสต์ต้นทาง
+function apPostOf(posts: ApPost[] | undefined, pid: string | null, ...cands: string[]): ApPost | null {
   if (!posts?.length) return null;
   for (const c of cands) {
     const k = c ? apUrlKey(c) : "";
     const p = k ? posts.find((x) => apUrlKey(x.u) === k) : null;
     if (p) return p;
   }
+  for (const n of [pid, ...cands.map((c) => (c ? apPidOfUrl(c) : null))]) {
+    const p = n ? posts.find((x) => x.pid === n || apPidOfUrl(x.u) === n) : null;
+    if (p) return p;
+  }
   return null;
+}
+// เติมข้อมูลโพสต์/รูปปกให้คอมเมนต์ที่เก็บไว้ก่อนหน้า (เฉพาะแถวที่มาจาก Apify · ไม่แตะแถวของ webhook) · คืนจำนวนแถวที่เติม
+async function apBackfill(channel: string, metas: ApPost[], deadline: number): Promise<number> {
+  if (!metas.length) return 0;
+  const since = new Date(Date.now() - 120 * 86400000).toISOString();
+  const { data, error } = await sb.from("social_mentions").select("id,external_id,raw").eq("channel", channel).eq("kind", "comment")
+    .gte("posted_at", since).order("posted_at", { ascending: false }).limit(500);
+  if (error || !Array.isArray(data)) return 0;
+  let n = 0;
+  for (const r of data as any[]) {
+    if (Date.now() > deadline) break;
+    const raw = r.raw && typeof r.raw === "object" ? r.raw : {};
+    if (raw.via !== "apify") continue;
+    const pid = /^(\d{5,25})_\d+$/.exec(String(r.external_id ?? ""))?.[1] ?? null;
+    const p = apPostOf(metas, channel === "facebook" ? pid : null, String(raw.post_id ?? ""));
+    if (!p) continue;
+    const post = { t: p.t, at: p.at, lk: p.lk, cm: p.cm, vw: p.vw, img: p.img ?? null, vid: p.vid ?? null };
+    // เหมือนเดิม (ต่างแค่ ?v= ของรูปที่คัดลอกซ้ำ) = ไม่เขียน — ไม่ให้แอปที่เปิดอยู่รีเฟรชเปล่า ๆ ทุกรอบ
+    const norm = (x: any) => JSON.stringify(x ? { ...x, img: String(x.img ?? "").split("?")[0] } : null);
+    if (raw.post_id === p.u && norm(raw.post) === norm(post)) continue;
+    const { error: ue } = await sb.from("social_mentions").update({ raw: { ...raw, post_id: p.u, post } }).eq("id", r.id);
+    if (!ue) n++;
+  }
+  return n;
 }
 // ค่าจากแถว runs (คีย์สาธารณะแก้ได้) → บีบให้เป็นข้อมูลสั้น ๆ ที่ปลอดภัยก่อนเก็บลงรีวิว
 function apPostsClean(a: unknown): ApPost[] {
   if (!Array.isArray(a)) return [];
-  return a.slice(0, 6).filter((p: any) => typeof p?.u === "string" && /^https:\/\//.test(p.u)).map((p: any) => ({
+  return a.slice(0, AP_META_MAX).filter((p: any) => typeof p?.u === "string" && /^https:\/\//.test(p.u)).map((p: any) => ({
     u: String(p.u).slice(0, 500), t: String(p.t ?? "").slice(0, 160), at: apIso(p.at),
-    lk: apNum(p.lk), cm: apNum(p.cm), vw: apNum(p.vw), img: apImgOk(p.img), vid: p.vid === true }));
+    lk: apNum(p.lk), cm: apNum(p.cm), vw: apNum(p.vw), img: apImgOk(p.img), vid: p.vid === true, pid: apPid(p.pid) }));
 }
 // แปลงผลทั้งชุดเป็นแถว + หาว่าร้านตอบคอมเมนต์ไหนแล้ว (คำตอบของร้านเป็นแถวลูก หรืออยู่ใน replies ของคอมเมนต์)
 function apRows(def: (typeof AP_KINDS)[string], items: any[], src: ApSrc): ApRow[] {
@@ -1393,7 +1444,8 @@ function apRows(def: (typeof AP_KINDS)[string], items: any[], src: ApSrc): ApRow
     try { row = def.map(it, src); } catch { row = null; }
     if (!row) continue;
     if (row.kind === "comment") {
-      const pm = apPostOf(src.posts, apS(it, "inputUrl"), apS(it, "postUrl", "videoWebUrl", "webVideoUrl", "facebookUrl"), String(row.raw.post_id ?? ""));
+      const pm = apPostOf(src.posts, /^(\d{5,25})_\d+$/.exec(row.external_id)?.[1] ?? null,
+        apS(it, "inputUrl"), apS(it, "postUrl", "videoWebUrl", "webVideoUrl", "facebookUrl"), String(row.raw.post_id ?? ""));
       if (pm) row.raw = { ...row.raw, post_id: pm.u, post: { t: pm.t, at: pm.at, lk: pm.lk, cm: pm.cm, vw: pm.vw, img: pm.img ?? null, vid: pm.vid ?? null } };
     }
     rows.push(row);
@@ -1666,7 +1718,20 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         if (step < def.steps.length - 1) {
           // ขั้นแรก (หาโพสต์ล่าสุด) เสร็จ → เริ่มขั้นดึงคอมเมนต์ต่อ
           const urls = [...new Set((stepDef.urls?.(items, src) ?? []).map(String))].slice(0, 4);
+          // ข้อมูล + รูปปกของทุกโพสต์ที่เห็น (≤8) → ใช้จับคู่คอมเมนต์รอบนี้ + เติมให้คอมเมนต์เก่า
+          const metas = apMetasOf(items, urls);
+          const thumbs = async () => {
+            if (left() > AP_THUMB_MS && metas.some((p) => p.img)) {
+              apThumbErr = "";
+              await Promise.all(metas.map(async (p) => { if (p.img) p.img = await apThumb(p.img, apUrlKey(p.u)); }));
+              L(sid).th_err = apThumbErr || null;
+            }
+          };
+          const backfill = async () => {
+            if (left() > 8000) L(sid).bf = await apBackfill(def.channel, metas, Date.now() + Math.min(left() - 4000, 10000)).catch(() => 0);
+          };
           if (!urls.length) {
+            await thumbs(); await backfill();
             Object.assign(L(sid), { ok: true, err: null, n: 0, added: 0, done: now(), note: "ไม่มีโพสต์ใหม่ในช่วงนี้" });
             dropRuns.add(sid); continue;
           }
@@ -1680,21 +1745,14 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           if (left() < AP_CALL_MS) break;
           // ชื่อเพจ/บัญชีร้านจากขั้นแรก → ใช้แยกคำตอบของร้านออกจากเสียงลูกค้าในขั้นสอง
           const owner = apS(items[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120);
-          const posts = urls.map((u) => {
-            const it = items.find((x) => [apS(x, "url"), apS(x, "postUrl"), apS(x, "topLevelUrl"), apS(x, "webVideoUrl")].includes(u));
-            return it ? apPostMeta(it, u) : { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null };
-          });
-          // รูปปกโพสต์ → เก็บลง Storage (≤4 รูป พร้อมกัน · มีเวลาเหลือเท่านั้น · ไม่ได้ = ใช้ลิงก์เดิม)
-          if (left() > AP_THUMB_MS && posts.some((p) => p.img)) {
-            apThumbErr = "";
-            await Promise.all(posts.map(async (p) => { if (p.img) p.img = await apThumb(p.img, apUrlKey(p.u)); }));
-            L(sid).th_err = apThumbErr || null;
-          }
+          // รูปปกโพสต์ → เก็บลง Storage (พร้อมกัน · มีเวลาเหลือเท่านั้น · ไม่ได้ = ใช้ลิงก์เดิม)
+          await thumbs();
           const nr = await apStart(tok, src, step + 1, urls, null, room());
           chained++; freshUsd += nr.usd;
-          runs[sid] = { id: nr.id, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}), posts };
+          runs[sid] = { id: nr.id, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}), posts: metas };
           L(sid).wait = null;
           await commitRun(sid, runs[sid]);
+          await backfill();
           continue;
         }
         const rows = apRows(def, items, src);
