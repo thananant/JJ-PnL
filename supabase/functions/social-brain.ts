@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.3";
+const VERSION = "2026-10-07.4";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -1075,7 +1075,7 @@ const AP_MAX_PER_HOUR = 8;         // เริ่มรอบใหม่ได
 const AP_CALL_MS = 15000;          // เวลารอต่อคำขอ Apify
 const AP_START_PER_TICK = 2;       // เริ่มรอบใหม่ไม่เกินนี้ต่อครั้ง ที่เหลือรอบหน้า (แผนฟรีรันพร้อมกันได้จำกัดตามหน่วยความจำ)
 
-type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null };
+type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null; img?: string | null; vid?: boolean | null };
 type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number; owner?: string; posts?: ApPost[] };
 type ApRow = { channel: string; kind: string; external_id: string; branch: string | null; author_name: string | null;
   text: string; rating: number | null; url: string | null; posted_at: string; raw: Record<string, unknown>; reply_text?: string | null };
@@ -1270,7 +1270,8 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
         author_name: apS(it, "authorMeta.name", "authorMeta.nickName", "author.uniqueId").slice(0, 120) || null,
         text: apStr(apS(it, "text", "desc")), rating: null, url, posted_at: at,
         raw: { via: "apify", query: s.url.slice(0, 80), nick: apS(it, "authorMeta.nickName").slice(0, 80) || null,
-          video: { vw: apNum(apGet(it, "playCount")), lk: apNum(apGet(it, "diggCount")), cm: apNum(apGet(it, "commentCount")), sh: apNum(apGet(it, "shareCount")) } } };
+          video: { vw: apNum(apGet(it, "playCount")), lk: apNum(apGet(it, "diggCount")), cm: apNum(apGet(it, "commentCount")), sh: apNum(apGet(it, "shareCount")),
+            img: apImgOf(it) } } };
     },
   },
 };
@@ -1283,12 +1284,84 @@ const apUrlKey = (u: string) => {
     return (x.host.replace(/^(www|m|web)\./, "") + p + (q ? "?" + q : "")).toLowerCase();
   } catch { return ""; }
 };
+// รูปปกโพสต์/คลิป (แอปโชว์เป็นช่อง ๆ แบบหน้าโปรไฟล์ IG — เจ้าของสั่ง 2026-10-07)
+// ลิงก์รูปของ IG/FB/TikTok หมดอายุในไม่กี่วัน และ IG/FB ไม่ให้เว็บอื่นแสดงรูปตรง ๆ → คัดลอกเก็บใน Storage bucket สาธารณะ
+// "social-media" (ฟังก์ชันสร้าง bucket ให้เองครั้งแรก) · เก็บไม่ได้ = ใช้ลิงก์เดิมไปก่อน (แอปขึ้นช่องตัวหนังสือแทนถ้ารูปไม่ขึ้น)
+// ⚠️ ดึงรูปเฉพาะโดเมน CDN ของ 3 แพลตฟอร์มนี้ (AP_IMG_HOST) — ลิงก์มาจากผลของตัวดึง/แถว runs ที่คีย์สาธารณะแก้ได้ ห้ามดึงโดเมนอื่น
+const AP_BUCKET = "social-media";
+const AP_IMG_MAX = 1_500_000;
+const AP_THUMB_MS = 18000;         // เหลือเวลาน้อยกว่านี้ = ข้ามการเก็บรูปปกรอบนี้ (ใช้ลิงก์เดิมไปก่อน · cron ให้เวลาทั้งรอบ ≤35 วิ)
+const AP_IMG_HOST = /(^|\.)(fbcdn\.net|cdninstagram\.com|tiktokcdn(-[a-z0-9]+)?\.com|ibyteimg\.com|byteimg\.com)$/i;
+const AP_IMG_PUB = `${SB_URL}/storage/v1/object/public/${AP_BUCKET}/`;
+const AP_IMG_PATHS = ["videoMeta.coverUrl", "videoMeta.originalCoverUrl", "covers.0", "covers.default", "displayUrl", "thumbnailUrl", "images.0",
+  "media.0.thumbnail", "media.0.photo_image.uri", "media.0.image.uri", "full_picture", "thumbnail", "picture", "image"];
+function apImgOk(s: unknown): string | null {
+  const t = typeof s === "string" ? s.trim() : "";
+  if (!t || t.length > 1500) return null;
+  if (t.startsWith(AP_IMG_PUB) && !/[\s"'<>]/.test(t)) return t;
+  try { const x = new URL(t); return x.protocol === "https:" && AP_IMG_HOST.test(x.hostname) ? t : null; } catch { return null; }
+}
+function apImgOf(it: any): string | null {
+  for (const p of AP_IMG_PATHS) { const v = apGet(it, p); const ok = typeof v === "string" ? apImgOk(v) : null; if (ok) return ok; }
+  return null;
+}
+const apVidOf = (it: any, u: string) =>
+  /tiktok\.com\/.+\/video\/|\/reels?\/|\/videos\/|\/watch\b/i.test(u) || it?.isVideo === true ||
+  /video|clips|igtv|reel/i.test(String(apGet(it, "type", "productType", "media.0.__typename") ?? "")) || !!apGet(it, "videoUrl");
 function apPostMeta(it: any, u: string): ApPost {
   return { u: u.slice(0, 500), t: apS(it, "text", "caption", "message", "desc", "postText").replace(/\s+/g, " ").trim().slice(0, 160),
     at: apIso(apGet(it, "time", "timestamp", "takenAt", "createTimeISO", "date", "createTime")),
     lk: apNum(apGet(it, "likes", "likesCount", "diggCount", "reactionsCount", "topReactionsCount")),
     cm: apNum(apGet(it, "comments", "commentsCount", "commentCount")),
-    vw: apNum(apGet(it, "playCount", "videoPlayCount", "videoViewCount", "views", "viewsCount")) };
+    vw: apNum(apGet(it, "playCount", "videoPlayCount", "videoViewCount", "views", "viewsCount")),
+    img: apImgOf(it), vid: apVidOf(it, u) };
+}
+let apThumbErr = "";
+async function apReadCap(r: Response, max: number): Promise<Uint8Array | null> {
+  const rd = r.body?.getReader(); if (!rd) return null;
+  const parts: Uint8Array[] = []; let n = 0;
+  for (;;) {
+    const { done, value } = await rd.read();
+    if (done) break;
+    n += value.length;
+    if (n > max) { await rd.cancel().catch(() => {}); return null; }
+    parts.push(value);
+  }
+  const out = new Uint8Array(n); let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+const apWithin = <T,>(p: Promise<T>, ms: number) =>
+  Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("หมดเวลา")), ms))]);
+// คืนลิงก์รูปใน Storage ของเรา · เก็บไม่ได้ = คืนลิงก์เดิม (ผ่าน apImgOk แล้ว) · ลิงก์ใช้ไม่ได้ = null
+async function apThumb(src: unknown, key: string): Promise<string | null> {
+  const ok = apImgOk(src);
+  if (!ok || ok.startsWith(AP_IMG_PUB)) return ok;
+  try {
+    const r = await fetch(ok, { redirect: "error", signal: AbortSignal.timeout(6000) });
+    const ct = (r.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const ext = ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as Record<string, string>)[ct];
+    if (!r.ok || !ext || Number(r.headers.get("content-length") ?? 0) > AP_IMG_MAX) {
+      await r.body?.cancel().catch(() => {});
+      if (!r.ok) apThumbErr = `ดึงรูปปกไม่ได้ (HTTP ${r.status})`;
+      return ok;
+    }
+    const buf = await apReadCap(r, AP_IMG_MAX);
+    if (!buf?.length) return ok;
+    const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key || ok)));
+    const path = "p/" + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("") + "." + ext;
+    const up = () => apWithin(sb.storage.from(AP_BUCKET).upload(path, buf, { contentType: ct, upsert: true, cacheControl: "604800" }), 6000);
+    let { error } = await up();
+    if (error && /not.?found|does not exist/i.test(error.message)) {
+      const c = await apWithin(sb.storage.createBucket(AP_BUCKET, { public: true, fileSizeLimit: AP_IMG_MAX,
+        allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"] }), 6000);
+      if (!c.error || /exist/i.test(c.error.message)) ({ error } = await up());
+      else error = c.error;
+    }
+    if (error) { apThumbErr = "เก็บรูปปกลง Storage ไม่ได้: " + scrub(error.message).slice(0, 140); return ok; }
+    const pub = sb.storage.from(AP_BUCKET).getPublicUrl(path).data.publicUrl;
+    return apImgOk(pub) ? pub + "?v=" + Date.now().toString(36) : ok;
+  } catch (e) { apThumbErr = "เก็บรูปปกไม่ได้: " + scrub(e).slice(0, 140); return ok; }
 }
 function apPostOf(posts: ApPost[] | undefined, ...cands: string[]): ApPost | null {
   if (!posts?.length) return null;
@@ -1304,7 +1377,7 @@ function apPostsClean(a: unknown): ApPost[] {
   if (!Array.isArray(a)) return [];
   return a.slice(0, 6).filter((p: any) => typeof p?.u === "string" && /^https:\/\//.test(p.u)).map((p: any) => ({
     u: String(p.u).slice(0, 500), t: String(p.t ?? "").slice(0, 160), at: apIso(p.at),
-    lk: apNum(p.lk), cm: apNum(p.cm), vw: apNum(p.vw) }));
+    lk: apNum(p.lk), cm: apNum(p.cm), vw: apNum(p.vw), img: apImgOk(p.img), vid: p.vid === true }));
 }
 // แปลงผลทั้งชุดเป็นแถว + หาว่าร้านตอบคอมเมนต์ไหนแล้ว (คำตอบของร้านเป็นแถวลูก หรืออยู่ใน replies ของคอมเมนต์)
 function apRows(def: (typeof AP_KINDS)[string], items: any[], src: ApSrc): ApRow[] {
@@ -1321,7 +1394,7 @@ function apRows(def: (typeof AP_KINDS)[string], items: any[], src: ApSrc): ApRow
     if (!row) continue;
     if (row.kind === "comment") {
       const pm = apPostOf(src.posts, apS(it, "inputUrl"), apS(it, "postUrl", "videoWebUrl", "webVideoUrl", "facebookUrl"), String(row.raw.post_id ?? ""));
-      if (pm) row.raw = { ...row.raw, post_id: pm.u, post: { t: pm.t, at: pm.at, lk: pm.lk, cm: pm.cm, vw: pm.vw } };
+      if (pm) row.raw = { ...row.raw, post_id: pm.u, post: { t: pm.t, at: pm.at, lk: pm.lk, cm: pm.cm, vw: pm.vw, img: pm.img ?? null, vid: pm.vid ?? null } };
     }
     rows.push(row);
     idx.set(apS(it, "id", "commentId", "cid"), row);
@@ -1609,8 +1682,14 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           const owner = apS(items[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120);
           const posts = urls.map((u) => {
             const it = items.find((x) => [apS(x, "url"), apS(x, "postUrl"), apS(x, "topLevelUrl"), apS(x, "webVideoUrl")].includes(u));
-            return it ? apPostMeta(it, u) : { u, t: "", at: null, lk: null, cm: null, vw: null };
+            return it ? apPostMeta(it, u) : { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null };
           });
+          // รูปปกโพสต์ → เก็บลง Storage (≤4 รูป พร้อมกัน · มีเวลาเหลือเท่านั้น · ไม่ได้ = ใช้ลิงก์เดิม)
+          if (left() > AP_THUMB_MS && posts.some((p) => p.img)) {
+            apThumbErr = "";
+            await Promise.all(posts.map(async (p) => { if (p.img) p.img = await apThumb(p.img, apUrlKey(p.u)); }));
+            L(sid).th_err = apThumbErr || null;
+          }
           const nr = await apStart(tok, src, step + 1, urls, null, room());
           chained++; freshUsd += nr.usd;
           runs[sid] = { id: nr.id, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}), posts };
@@ -1619,6 +1698,15 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           continue;
         }
         const rows = apRows(def, items, src);
+        // คลิปที่พูดถึงร้าน: เก็บรูปปกคลิปด้วย (≤12 รูป)
+        if (src.kind === "tt_search" && left() > AP_THUMB_MS) {
+          apThumbErr = "";
+          await Promise.all(rows.slice(0, 12).map(async (row) => {
+            const v = row.raw?.video as { img?: string | null } | undefined;
+            if (v?.img) v.img = await apThumb(v.img, apUrlKey(row.url ?? "") || row.external_id);
+          }));
+          L(sid).th_err = apThumbErr || null;
+        }
         const sv = await apSaveRows(rows);
         added += sv.added;
         // รอบที่สำเร็จครบเท่านั้นที่เลื่อน ok_at (Google Maps ใช้เป็นจุดเริ่มรอบหน้า — เลื่อนพลาด = รีวิวหายถาวร)
