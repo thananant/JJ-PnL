@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.8";
+const VERSION = "2026-10-07.9";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -1088,6 +1088,15 @@ const AP_CAT_INPUT: Record<string, (n: number) => Record<string, unknown>> = {
   ig_comments: (n) => ({ resultsLimit: n, onlyPostsNewerThan: "365 days" }),
   tt_comments: (n) => ({ resultsPerPage: n }),
 };
+// ปุ่ม "💬 ดึงคอมเมนต์ทุกโพสต์/คลิปที่ยังไม่ได้ดึง" — หลายโพสต์ในรอบเดียว (เจ้าของถาม 2026-10-07 "กดดึงคลิปเก่า 15 คลิปแล้ว ไม่ดึงคอมเมนต์มาด้วย")
+// แยกทีละโพสต์ไม่ได้: 15 รอบเกินเพดานเริ่มรอบ AP_MAX_PER_HOUR · เพดานเงินต่อครั้งเท่ารอบดึงย้อนหลัง (AP_CAT_USD) · ต้องตรงกับ AP_CM_BULK ในแอป
+const AP_CM_BULK = 20;              // โพสต์ต่อรอบ (ใหม่ก่อน — ที่เหลือกดอีกครั้ง)
+const AP_CM_MAX = 300;              // คอมเมนต์รวมทั้งรอบไม่เกินนี้ (maxItems · บันทึกทีละแถวต้องเสร็จในเวลาของฟังก์ชัน)
+const AP_CM_PER: Record<string, { def: number; input: (k: number) => Record<string, unknown> }> = {   // คอมเมนต์ต่อโพสต์ (ไม่เกินค่าปกติของขั้นสอง)
+  fb_comments: { def: 25, input: (k) => ({ resultsLimit: k }) },
+  ig_comments: { def: 20, input: (k) => ({ resultsLimit: k }) },
+  tt_comments: { def: 20, input: (k) => ({ commentsPerPost: k }) },
+};
 const apSrcIdOf = (k: string) => k.split("~")[0];   // คีย์รอบพิเศษ: <แหล่ง>~cat (ดึงย้อนหลัง) · <แหล่ง>~cm (คอมเมนต์รายโพสต์)
 
 type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null; img?: string | null; vid?: boolean | null; pid?: string | null };
@@ -1766,7 +1775,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}/abort`, { method: "POST" }).catch(() => null);
           dropRuns.add(sid); continue;
         }
-        const src: ApSrc = { ...src0, owner: typeof r.owner === "string" ? r.owner.slice(0, 120) : undefined, posts: apPostsClean(r.posts) };
+        const src: ApSrc = { ...src0, owner: typeof r.owner === "string" ? r.owner.slice(0, 120) : undefined, posts: apPostsClean(r.posts, r.cm ? AP_CM_BULK : AP_META_MAX) };
         const run = (await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}`))?.data ?? {};
         const status = String(run.status ?? "");
         if (["READY", "RUNNING", "TIMING-OUT", "ABORTING"].includes(status)) {
@@ -1784,7 +1793,8 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         if (run.defaultDatasetId && ["SUCCEEDED", "TIMED-OUT", "ABORTED"].includes(status)) {
           if (left() < AP_CALL_MS) break;
           const d = await apCall(tok, `/datasets/${encodeURIComponent(run.defaultDatasetId)}/items`,
-            { q: { clean: "true", format: "json", limit: Math.min(200, stepDef.max * 2) } });
+            { q: { clean: "true", format: "json", limit: r.cm && Number(r.max) > stepDef.max
+              ? Math.min(AP_CM_MAX, Number(r.max) | 0) * 2 : Math.min(200, stepDef.max * 2) } });
           // บางตัวดึงส่งเป็น "ร้าน 1 แถว + รีวิวเป็นรายการข้างใน" → แตกเป็นรีวิวทีละแถว
           items = (Array.isArray(d) ? d : []).flatMap((it: any) => {
             const inner = [it?.reviews, it?.latestReviews, it?.userReviews].find((x) => Array.isArray(x) && x.length && typeof x[0] === "object");
@@ -1967,7 +1977,8 @@ async function bossCheck(u: unknown, h: unknown): Promise<string> {
 }
 async function bossOk(u: unknown, h: unknown) { return !(await bossCheck(u, h)); }
 // ปุ่มในหน้าแพลตฟอร์ม (ผู้ดูแล/เจ้าของ): n = ดึงรายการโพสต์/คลิปย้อนหลัง 30/60 (ไม่ดึงคอมเมนต์) · url = ดึงคอมเมนต์ของโพสต์นี้ตอนนี้
-async function apifyMore(sid: string, n: number, url: string) {
+// urls = ดึงคอมเมนต์หลายโพสต์ในรอบเดียว (≤AP_CM_BULK · แอปส่ง url ตัวแรกมาด้วย → ฟังก์ชันรุ่นเก่าดึงได้อย่างน้อย 1 โพสต์)
+async function apifyMore(sid: string, n: number, url: string, urls: unknown[] = []) {
   const tok = await apToken();
   if (!tok) return { ok: false, reason: "ยังไม่ได้เชื่อม Apify" };
   const { data: chRow, error } = await sb.from("social_settings").select("val").eq("id", "channels").maybeSingle();
@@ -1985,22 +1996,49 @@ async function apifyMore(sid: string, n: number, url: string) {
   const S0 = (await sb.from("social_settings").select("val").eq("id", "apify").maybeSingle()).data?.val ?? {};
   const busy = (k: string) => S0.runs?.[k] && Date.now() - (Date.parse(S0.runs[k].at) || 0) < AP_STALE_MS;
   const now = new Date().toISOString();
-  let key: string, entry: any;
+  let key: string, entry: any, nPosts = 0;
+  // ลิงก์โพสต์ต้องเป็นของแพลตฟอร์มเดียวกับแหล่ง (https · ≤500 ตัวอักษร)
+  const want = def.channel === "facebook" ? /^(facebook\.com|fb\.watch)$/ : def.channel === "instagram" ? /^instagram\.com$/ : /^tiktok\.com$/;
+  const postOk = (u: string) => {
+    let host = "";
+    try { const x = new URL(u); host = x.protocol === "https:" ? x.hostname.replace(/^(www|m|web)\./, "") : ""; } catch { host = ""; }
+    return want.test(host) && u.length <= 500;
+  };
+  const metaOf = async (list: string[]) => {
+    const cat = apPostsClean((await sb.from("social_settings").select("val").eq("id", "ap_posts").maybeSingle()).data?.val?.[def.channel], AP_CAT_MAX);
+    return list.map((u) => cat.find((p) => apUrlKey(p.u) === apUrlKey(u)) ?? { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null, pid: null });
+  };
   try {
-    if (url) {
-      const u = String(url).trim();
-      let host = "";
-      try { const x = new URL(u); host = x.protocol === "https:" ? x.hostname.replace(/^(www|m|web)\./, "") : ""; } catch { host = ""; }
-      const want = def.channel === "facebook" ? /^(facebook\.com|fb\.watch)$/ : def.channel === "instagram" ? /^instagram\.com$/ : /^tiktok\.com$/;
-      if (!want.test(host) || u.length > 500) return { ok: false, reason: "ลิงก์โพสต์ไม่ใช่ของ " + def.label };
+    const many = Array.isArray(urls) && urls.length > 0;
+    if (many || url) {
+      // หลายโพสต์: ตัดลิงก์ที่ไม่ใช่ของแพลตฟอร์มนี้/ซ้ำทิ้ง · ≤AP_CM_BULK
+      const list: string[] = [], seen = new Set<string>();
+      for (const x of many ? urls.slice(0, AP_CM_BULK * 3) : [url]) {
+        const u = String(x ?? "").trim(), k = apUrlKey(u);
+        if (!postOk(u) || !k || seen.has(k)) continue;
+        seen.add(k); list.push(u);
+        if (list.length >= AP_CM_BULK) break;
+      }
+      if (!list.length) return { ok: false, reason: "ลิงก์โพสต์ไม่ใช่ของ " + def.label };
       key = sid + "~cm";
-      if (busy(key)) return { ok: false, reason: "กำลังดึงคอมเมนต์ของอีกโพสต์อยู่ — รอให้เสร็จก่อน (1–3 นาที)" };
+      if (busy(key)) return { ok: false, reason: "กำลังดึงคอมเมนต์อยู่อีกรอบ — รอให้เสร็จก่อน (1–5 นาที)" };
       const st = def.steps[1];
-      if ((st.usd ?? AP_RUN_USD) > room) return { ok: false, reason: `งบ Apify เดือนนี้เหลือไม่พอ (ใช้ไป $${usage.used.toFixed(2)})` };
-      const cat = apPostsClean((await sb.from("social_settings").select("val").eq("id", "ap_posts").maybeSingle()).data?.val?.[def.channel], AP_CAT_MAX);
-      const meta = cat.find((p) => apUrlKey(p.u) === apUrlKey(u)) ?? { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null, pid: null };
-      const r = await apStart(tok, src, 1, [u], null, room);
-      entry = { id: r.id, step: 1, at: now, key: apKey(src), posts: [meta], cm: true };
+      const metas = await metaOf(list);
+      if (list.length === 1) {
+        if ((st.usd ?? AP_RUN_USD) > room) return { ok: false, reason: `งบ Apify เดือนนี้เหลือไม่พอ (ใช้ไป $${usage.used.toFixed(2)})` };
+        const r = await apStart(tok, src, 1, list, null, room);
+        entry = { id: r.id, step: 1, at: now, key: apKey(src), posts: metas, cm: true };
+      } else {
+        // คอมเมนต์ต่อโพสต์ลดลงตามจำนวนโพสต์ ให้รวมทั้งรอบไม่เกิน AP_CM_MAX · เพดานเงินเท่ารอบดึงย้อนหลัง
+        const pp = AP_CM_PER[src.kind];
+        const per = Math.max(5, Math.min(pp?.def ?? 20, Math.floor(AP_CM_MAX / list.length)));
+        const max = Math.min(AP_CM_MAX, list.length * per * (src.kind === "fb_comments" ? 2 : 1));   // FB นับคำตอบใต้คอมเมนต์ด้วย
+        const cap = Math.min(AP_CAT_USD, room);
+        if (cap < (st.usd ?? AP_RUN_USD)) return { ok: false, reason: `งบ Apify เดือนนี้เหลือไม่พอ (ใช้ไป $${usage.used.toFixed(2)})` };
+        const r = await apStart(tok, src, 1, list, null, room, { max, input: pp ? pp.input(per) : {}, usd: cap });
+        entry = { id: r.id, step: 1, at: now, key: apKey(src), posts: metas, cm: true, max };
+      }
+      nPosts = list.length;
     } else {
       const nn = AP_CAT_N.includes(n) ? n : AP_CAT_N[0];
       key = sid + "~cat";
@@ -2009,13 +2047,14 @@ async function apifyMore(sid: string, n: number, url: string) {
       if (cap < (def.steps[0].usd ?? AP_RUN_USD)) return { ok: false, reason: `งบ Apify เดือนนี้เหลือไม่พอ (ใช้ไป $${usage.used.toFixed(2)})` };
       const r = await apStart(tok, src, 0, [], null, room, { max: nn, input: AP_CAT_INPUT[src.kind](nn), usd: cap });
       entry = { id: r.id, step: 0, at: now, key: apKey(src), cat: nn };
+      nPosts = nn;
     }
   } catch (e) { return { ok: false, reason: scrub(e).slice(0, 200) }; }
   await apSave((v) => {
     v.runs = { ...(v.runs ?? {}), [key]: entry };
     v.last = { ...(v.last ?? {}), [key]: { ...(v.last?.[key] ?? {}), start: now, err: null, ok: null, note: null, key: apKey(src) } };
   });
-  return { ok: true, key };
+  return { ok: true, key, n: nPosts };
 }
 async function apifyConnect(token: string) {
   if (APIFY_ENV) return { ok: false, reason: "มี secret APIFY_TOKEN ใน Supabase อยู่แล้ว ระบบใช้ตัวนั้น — ถ้าจะเปลี่ยนบัญชีให้ลบ secret ก่อน" };
@@ -2397,10 +2436,11 @@ Deno.serve(async (req) => {
         out = await apifyConnect(b.token);
         break;
       }
-      case "apify_more": {   // ดึงโพสต์/คลิปย้อนหลัง หรือคอมเมนต์ของโพสต์เดียว (มีค่าใช้จ่าย → เฉพาะผู้ดูแล/เจ้าของ)
+      case "apify_more": {   // ดึงโพสต์/คลิปย้อนหลัง หรือคอมเมนต์ของโพสต์เดียว/หลายโพสต์ (มีค่าใช้จ่าย → เฉพาะผู้ดูแล/เจ้าของ)
         const bc = await bossCheck(b.u, b.h);
         if (bc) { out = { ok: false, reason: "เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
-        out = await apifyMore(String(b.id ?? "").slice(0, 40), Number(b.n) || 0, typeof b.url === "string" ? b.url : "");
+        out = await apifyMore(String(b.id ?? "").slice(0, 40), Number(b.n) || 0, typeof b.url === "string" ? b.url : "",
+          Array.isArray(b.urls) ? b.urls : []);
         break;
       }
       case "apify_disconnect": {
