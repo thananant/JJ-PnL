@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.4";
+const VERSION = "2026-10-07.5";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -1980,6 +1980,8 @@ async function sendReply(id: number, text: string, by: string) {
   const { data: m } = await sb.from("social_mentions").select("*").eq("id", id).single();
   if (!m) return { ok: false, reason: "ไม่พบรายการ" };
   let ok = false, reason = "";
+  if ((m.channel === "facebook" || m.channel === "instagram") && m.kind === "comment" && !FB_PAGE_TOKEN)
+    return { ok: false, reason: "ยังไม่ได้เชื่อม Meta (ไม่มี secret FB_PAGE_TOKEN) จึงตอบจากแอปไม่ได้ — กด ⧉ คัดลอกคำตอบ แล้วกด 🔗 เปิดต้นทางไปตอบในแอป" + (m.channel === "facebook" ? " Facebook" : " Instagram") };
   if (m.channel === "facebook" && m.kind === "comment" && m.external_id) {
     const r = await fetch(`https://graph.facebook.com/v21.0/${m.external_id}/comments?access_token=${FB_PAGE_TOKEN}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -2048,6 +2050,8 @@ async function heartbeat(kind: "cron" | "summary", ok: boolean, note: unknown) {
     val[kind + "_at"] = new Date().toISOString();
     val[kind + "_ok"] = ok;
     val[kind + "_note"] = scrub(JSON.stringify(note ?? null)).slice(0, 400);
+    // แอปใช้ซ่อนปุ่ม "ตอบในนามเพจ/IG ร้าน" เมื่อยังไม่ได้เชื่อม Meta (บอกแค่มี/ไม่มี — ไม่ใช่ค่าลับ)
+    if (kind === "cron") val.can = { fb: !!FB_PAGE_TOKEN };
     await sb.from("social_settings").upsert({ id: "cron", val, updated_at: new Date().toISOString() });
   } catch (e) { console.error("heartbeat", scrub(e)); }
 }
