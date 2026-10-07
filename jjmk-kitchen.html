@@ -178,6 +178,15 @@ table.t tr.tap:hover{background:#FFF8F3}
 .catbar button.on{background:var(--red);border-color:var(--red);color:#fff}
 .dpbar{display:flex;gap:8px;margin:2px 0 10px}
 .stacts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.icard.selable{cursor:pointer;user-select:none}
+.icard .selck{position:absolute;top:8px;left:8px;width:32px;height:32px;border-radius:50%;border:2px solid var(--line);background:#fff;color:transparent;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;z-index:2;box-shadow:var(--sh)}
+.icard.sel{outline:3px solid var(--red);outline-offset:-2px;background:var(--red-t)}
+.icard.sel .selck{background:var(--red);border-color:var(--red);color:#fff}
+.icard.offc>:not(.offrs){opacity:.6}
+.icard.offc .ithumb img{filter:grayscale(.85)}
+.icard .offrs{width:100%}
+.tkcard.orph{display:flex;gap:10px;align-items:center;cursor:pointer}
+.tkcard.orph input{width:26px;height:26px;min-height:0;flex:none;accent-color:var(--red)}
 table.sttab th.right{text-align:right}
 @media(min-width:640px){.modal.task.cntw{max-width:min(1100px,94vw)}}
 .stacts .btn{flex:1 1 auto}
@@ -665,7 +674,7 @@ const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const EMAIL_DOMAIN='@jjmk.local';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='CK b7';
+const APP_VER='CK b8';
 
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
@@ -1349,6 +1358,8 @@ const KITCHEN_SQL=[
 'alter table ck_sups add column if not exists line_group_id text; -- กลุ่มไลน์ที่ส่งใบสั่งซื้อ',
 'alter table ck_sups add column if not exists order_days smallint[]; -- วันที่สั่งได้ 0=อา…6=ส (ว่าง = ทุกวัน)',
 'alter table ck_items add column if not exists count_unit text; -- นับสต๊อกเป็นหน่วยไหน (ว่าง = ระบบเลือกให้)',
+'alter table ck_items add column if not exists active boolean default true; -- false = ไม่ใช้แล้ว (ซ่อน)',
+'alter table ck_recipes add column if not exists active boolean default true;',
 'alter table ck_items add column if not exists dept text; -- แผนก main=ครัวกลาง dessert=ของหวาน both=ใช้ทั้งสอง (ว่าง = ดูจากสูตร)',
 'create table if not exists ck_recipe_items (',
 '  id bigserial primary key, recipe_id text not null, item_id text not null,',
@@ -1495,6 +1506,8 @@ function applyChrome(){
 }
 function show(v){
   if(!VIEWS.includes(v))v='dash';
+  if(SEL&&v!==(SEL.kind==='recipe'?'menus':'items'))SEL=null;   // ออกจากหน้าที่กำลังเลือก "ไม่ใช้แล้ว"
+
   S.tab=v;LS.set('jjck_tab',v);
   document.querySelectorAll('.tabbar button,.sb-item').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   if(typeof navSync==='function')navSync(v);
@@ -1534,9 +1547,9 @@ function dashLegacyHtml(){ // ส่วนล่างของแดชบอ�
   const today=bizTodayISO(),tomorrow=addDays(today,1);
   const prToday=S.prods.filter(p=>p.d===today);
   const prVal=prToday.reduce((s,p)=>s+num(p.cost_total),0);
-  const low=S.items.filter(i=>i.min_qty!=null&&num(i.qty)<=num(i.min_qty));
+  const low=S.items.filter(i=>i.active!==false&&i.min_qty!=null&&num(i.qty)<=num(i.min_qty));
   const openOrd=S.orders.filter(o=>o.status==='new'||o.status==='prep');
-  const stockVal=S.items.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
+  const stockVal=S.items.filter(i=>i.active!==false).reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
   const plans=S.plans.filter(p=>p.status==='plan'&&(p.d===today||p.d===tomorrow));
   const poDue=S.pos.filter(p=>p.status==='ordered'&&p.d_due&&p.d_due<=today);
   const poOrderNow=S.pos.filter(p=>p.status==='draft'&&p.order_by&&p.order_by<=today);
@@ -1746,7 +1759,7 @@ function bomExplode(){
     if(firstD[l.item_id]&&p.d_due>firstD[l.item_id])return; // ของเข้าหลังวันผลิต — ใช้ไม่ทัน
     incoming[l.item_id]=(incoming[l.item_id]||0)+num(l.qty)*(num(it.buy_qty)||1);});});
   const rows=Object.keys(need).map(iid=>{
-    const it=itemById(iid);if(!it)return null;
+    const it=itemById(iid);if(!it||it.active===false)return null;   // ไม่ใช้แล้ว = ไม่แนะนำให้สั่ง
     const have=Math.max(0,num(it.qty)),inc=incoming[iid]||0;
     const short=Math.max(0,need[iid]-have-inc);
     const bq=num(it.buy_qty)||1;
@@ -1809,7 +1822,7 @@ function quickPoLow(){ // สั่งของใกล้หมดทั้ง
   S.pos.filter(p=>p.status==='ordered'||p.status==='draft').forEach(p=>{(S.poItems[p.id]||[]).forEach(l=>{
     const it=itemById(l.item_id);if(!it)return;
     incoming[l.item_id]=(incoming[l.item_id]||0)+num(l.qty)*(num(it.buy_qty)||1);});});
-  const low=S.items.filter(i=>i.min_qty!=null&&num(i.qty)<=num(i.min_qty));
+  const low=S.items.filter(i=>i.active!==false&&i.min_qty!=null&&num(i.qty)<=num(i.min_qty));
   window._bwRows=low.map(it=>{
     const inc=incoming[it.id]||0;
     const short=Math.max(0,num(it.min_qty)*2-Math.max(0,num(it.qty))-inc);
@@ -3537,7 +3550,7 @@ function brPaintLink(){
   let h='<h3>🔗 '+t('br_link_title',{n:esc(d.name)})+'</h3>'+
     '<div class="fld"><label>'+t('nav_menus')+'</label><select onchange="BR_LINK.r=this.value;BR_LINK.none=false;'+
       'const r=recipeById(this.value);BR_LINK.f=r?String(brUFactor(BR_LINK.unit,r.yield_unit)||\'\'):\'\';brPaintLink()"'+(d.none?' disabled':'')+'>'+
-      '<option value="">—</option>'+S.recipes.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===d.r?' selected':'')+'>'+esc(dispName(x))+'</option>').join('')+'</select></div>';
+      '<option value="">—</option>'+S.recipes.filter(x=>x.active!==false||x.id===d.r).map(x=>'<option value="'+esc(x.id)+'"'+(x.id===d.r?' selected':'')+'>'+esc(dispName(x))+'</option>').join('')+'</select></div>';
   if(r&&!d.none)h+='<div class="fld"><label>'+t('br_factor',{a:esc(trUnit(d.unit)),b:esc(trUnit(r.yield_unit||''))})+'</label>'+
       '<input inputmode="decimal" value="'+esc(d.f)+'" oninput="BR_LINK.f=this.value"></div>';
   h+='<label class="fld" style="display:flex;gap:9px;align-items:center"><input type="checkbox" style="width:20px;height:20px"'+(d.none?' checked':'')+
@@ -3826,32 +3839,42 @@ async function skCountApply(){await once(async()=>{
    ============================================================ */
 let MN_CAT='';
 RENDER.menus=function(el){
+  const K=canKitchen(),sel=selOn('recipe');
+  const act=S.recipes.filter(r=>r.active!==false),nOff=offN('recipe');
+  if(MN_CAT==='__off'&&(!nOff||sel))MN_CAT='';
   let h='';
-  if(canKitchen())h+='<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="menuEdit()">'+t('mn_new')+'</button>'+
-    (S.recipes.some(r=>r.active!==false&&!r.image_url)?'<button class="btn gh" onclick="autoImgWizard(\'recipe\')">'+t('ai_btn')+'</button>':'')+'</div>';
-  const cats=[...new Set(S.recipes.map(r=>r.cat||'อื่นๆ'))];
+  if(sel)h+=selBarHtml();
+  else if(K)h+='<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="menuEdit()">'+t('mn_new')+'</button>'+
+    (act.length?'<button class="btn gh" onclick="selStart(\'recipe\')">🗄️ '+t('off_btn')+'</button>':'')+
+    (act.some(r=>!r.image_url)?'<button class="btn gh" onclick="autoImgWizard(\'recipe\')">'+t('ai_btn')+'</button>':'')+'</div>';
+  const cats=[...new Set(act.map(r=>r.cat||'อื่นๆ'))];
+  if(MN_CAT&&MN_CAT!=='__off'&&!cats.includes(MN_CAT))MN_CAT='';
   h+='<div class="catbar" onclick="const b=event.target.closest(\'button\');if(b){MN_CAT=b.dataset.cat||\'\';show(\'menus\')}">'+
     '<button data-cat="" class="'+(MN_CAT===''?'on':'')+'">'+t('all')+'</button>'+
-    cats.map(c=>'<button data-cat="'+esc(c)+'" class="'+(MN_CAT===c?'on':'')+'">'+(MENU_CAT_IC[c]||'🍱')+' '+esc(trCat(c))+'</button>').join('')+'</div>';
-  const list=S.recipes.filter(r=>!MN_CAT||(r.cat||'อื่นๆ')===MN_CAT);
-  if(!list.length){h+='<div class="card empty">'+t('mn_none')+'</div>';el.innerHTML=h;return;}
+    cats.map(c=>'<button data-cat="'+esc(c)+'" class="'+(MN_CAT===c?'on':'')+'">'+(MENU_CAT_IC[c]||'🍱')+' '+esc(trCat(c))+'</button>').join('')+
+    (nOff&&!sel?'<button data-cat="__off" class="'+(MN_CAT==='__off'?'on':'')+'">🗄️ '+t('off_chip')+' '+nOff+'</button>':'')+'</div>';
+  const list=MN_CAT==='__off'?S.recipes.filter(r=>r.active===false):act.filter(r=>!MN_CAT||(r.cat||'อื่นๆ')===MN_CAT);
+  if(!list.length){h+='<div class="card empty">'+t(MN_CAT==='__off'?'off_none':'mn_none')+'</div>'+(sel?selFootHtml():'');el.innerHTML=h;return;}
+  if(MN_CAT==='__off')h+='<div class="hintbox">🗄️ '+t('off_view_h')+'</div>';
   h+='<div class="igrid">';
   list.forEach(r=>{
-    const c=recipeCostCalc(r);const cu=recipeUnitCost(r);
-    h+='<div class="icard" onclick="menuDetail(\''+r.id+'\')" style="cursor:pointer">'+
+    const cu=recipeUnitCost(r),off=r.active===false,on=sel&&SEL.ids[r.id];
+    h+='<div class="icard'+(sel?' selable':'')+(on?' sel':'')+(off?' offc':'')+'" onclick="'+(sel?'selToggle(\''+r.id+'\',this)':'menuDetail(\''+r.id+'\')')+'" style="cursor:pointer">'+
+      (sel?'<span class="selck">✓</span>':'')+
       '<div class="ithumb">'+(r.image_url?'<img src="'+esc(r.image_url)+'" loading="lazy">':'🍲')+'</div>'+
       '<div class="iname">'+esc(dispName(r))+'</div>'+
       '<div class="isub">'+t('mn_yield')+' '+fmtI(r.yield_qty)+' '+esc(trUnit(r.yield_unit||''))+'</div>'+
       '<div style="display:flex;justify-content:space-between;align-items:center">'+
       '<span class="chip '+(cu!=null?'gold':'mid')+'">'+(cu!=null?'฿'+fmt(cu,2)+'/'+esc(trUnit(r.yield_unit||'')):'⚠')+'</span>'+
-      '<span class="iqty">'+fmtI(r.qty)+'</span></div></div>';});
-  h+='</div>';
+      '<span class="iqty">'+fmtI(r.qty)+'</span></div>'+
+      (off&&K?'<button class="btn sm2 offrs" onclick="event.stopPropagation();offSet(\'recipe\',\''+r.id+'\',true)">'+t('off_restore')+'</button>':'')+'</div>';});
+  h+='</div>'+(sel?selFootHtml():'');
   el.innerHTML=h;
 };
 function menuDetail(id){
   const r=recipeById(id);if(!r)return;
   const bom=bomOf(r);const c=recipeCostCalc(r);
-  let h='<h3>'+thumbHtml(r,'🍲')+' '+esc(dispName(r))+'</h3>'+
+  let h='<h3>'+thumbHtml(r,'🍲')+' '+esc(dispName(r))+(r.active===false?' <span class="chip mid">🗄️ '+t('off_chip')+'</span>':'')+'</h3>'+
     '<div class="sm mut" style="margin-bottom:8px">'+esc(trCat(r.cat||''))+' · '+t('mn_yield')+' <b>'+fmtI(r.yield_qty)+' '+esc(trUnit(r.yield_unit||''))+'</b>'+
     ' · '+t('sk_now')+' <b>'+fmtI(r.qty)+'</b>'+
     (sp=>sp!=null?' · 💰 '+t('ac_sell')+' <b>฿'+fmtP(sp)+'/'+esc(trUnit(r.yield_unit||''))+'</b> <span class="xs">(+'+fmtQ(markupOf(r))+'%)</span>':'')(recipeSellPrice(r))+
@@ -3871,7 +3894,9 @@ function menuDetail(id){
   h+='<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'+
     '<button class="btn dk sm2" onclick="menuCalc(\''+id+'\')">'+t('mn_calc')+'</button>'+
     (canKitchen()?'<button class="btn gh sm2" onclick="menuEdit(\''+id+'\')">✎ '+t('edit')+'</button>'+
-    '<button class="btn sm2" onclick="closeModal();produceModal(\''+id+'\')">🍳 '+t('nav_produce')+'</button>':'')+'</div>';
+    (r.active===false?'':'<button class="btn sm2" onclick="closeModal();produceModal(\''+id+'\')">🍳 '+t('nav_produce')+'</button>')+
+    (r.active===false?'<button class="btn sm2" onclick="offSet(\'recipe\',\''+id+'\',true)">'+t('off_restore')+'</button>'
+      :'<button class="btn gh sm2" onclick="offSet(\'recipe\',\''+id+'\',false)">🗄️ '+t('off_one')+'</button>'):'')+'</div>';
   openModal(h,true);
 }
 function menuCalc(id){
@@ -3941,7 +3966,7 @@ function paintMenuEdit(){
       '<button class="btn gh sm2" onclick="MN_DRAFT.bom.splice('+i+',1);paintMenuEdit()">🗑</button></div>';});
   h+='<button class="btn gh" style="width:100%;margin-top:8px" onclick="mnAddIng()">'+t('mn_add_ing')+'</button>'+
     '<div style="display:flex;gap:8px;margin-top:12px">'+
-    (d.id?'<button class="btn gh" onclick="menuDel(\''+d.id+'\')">🗑</button>':'')+
+    (d.id?offBtn('recipe',recipeById(d.id))+'<button class="btn gh" onclick="menuDel(\''+d.id+'\')">🗑</button>':'')+
     '<button class="btn big" style="flex:1" onclick="menuSave()">'+t('save')+'</button></div>';
   openModal(h,true);
 }
@@ -3993,40 +4018,50 @@ async function menuDel(id){if(!confirm(t('confirm_del')))return;
 let IT_CAT='',IT_Q='';
 function itDept(d){deptSet(d);IT_CAT='';show('items');}
 RENDER.items=function(el){
+  const K=canKitchen(),sel=selOn('item');
+  const act=S.items.filter(i=>i.active!==false),nOff=offN('item');
+  if(IT_CAT==='__off'&&(!nOff||sel))IT_CAT='';
   let h='';
-  if(canKitchen())h+='<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+  if(sel){const u=usedItemIds(),un=act.filter(i=>!u[i.id]).length;
+    h+=selBarHtml()+(un?'<div style="margin-bottom:10px"><button class="btn gh sm2" onclick="selPickUnused()">🧩 '+t('off_unused_pick',{n:un})+'</button></div>':'');}
+  else if(K)h+='<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">'+
     '<button class="btn" onclick="itemEdit()">'+t('it_new')+'</button>'+
     '<button class="btn gh" onclick="show(\'sups\')">🏷️ '+t('nav_sups')+'</button>'+
-    (S.items.some(i=>i.active!==false&&!i.image_url)?'<button class="btn gh" onclick="autoImgWizard(\'item\')">'+t('ai_btn')+'</button>':'')+'</div>';
-  h+=deptBarHtml('itDept',d=>S.items.filter(i=>inDept('item',i,d)).length);
-  const cats=[...new Set(S.items.filter(i=>inDept('item',i)).map(i=>i.cat||'อื่นๆ'))];
-  if(IT_CAT&&!cats.includes(IT_CAT))IT_CAT='';
+    (act.length?'<button class="btn gh" onclick="selStart(\'item\')">🗄️ '+t('off_btn')+'</button>':'')+
+    (act.some(i=>!i.image_url)?'<button class="btn gh" onclick="autoImgWizard(\'item\')">'+t('ai_btn')+'</button>':'')+'</div>';
+  if(IT_CAT!=='__off')h+=deptBarHtml('itDept',d=>act.filter(i=>inDept('item',i,d)).length);
+  const cats=[...new Set(act.filter(i=>inDept('item',i)).map(i=>i.cat||'อื่นๆ'))];
+  if(IT_CAT&&IT_CAT!=='__off'&&!cats.includes(IT_CAT))IT_CAT='';
   h+='<div class="catbar" onclick="const b=event.target.closest(\'button\');if(b){IT_CAT=b.dataset.cat||\'\';show(\'items\')}">'+
     '<button data-cat="" class="'+(IT_CAT===''?'on':'')+'">'+t('all')+'</button>'+
-    cats.map(c=>'<button data-cat="'+esc(c)+'" class="'+(IT_CAT===c?'on':'')+'">'+(ITEM_CAT_IC[c]||'🧺')+' '+esc(trCat(c))+'</button>').join('')+'</div>'+
+    cats.map(c=>'<button data-cat="'+esc(c)+'" class="'+(IT_CAT===c?'on':'')+'">'+(ITEM_CAT_IC[c]||'🧺')+' '+esc(trCat(c))+'</button>').join('')+
+    (nOff&&!sel?'<button data-cat="__off" class="'+(IT_CAT==='__off'?'on':'')+'">🗄️ '+t('off_chip')+' '+nOff+'</button>':'')+'</div>'+
+    (IT_CAT==='__off'?'<div class="hintbox">🗄️ '+t('off_view_h')+'</div>':'')+
     '<input placeholder="'+t('search')+'" value="'+esc(IT_Q)+'" oninput="IT_Q=this.value;paintItemGrid()" style="margin-bottom:10px">'+
-    '<div id="itGrid" class="igrid"></div>';
+    '<div id="itGrid" class="igrid"></div>'+(sel?selFootHtml():'');
   el.innerHTML=h;
   paintItemGrid();
 };
 function paintItemGrid(){
   const box=document.getElementById('itGrid');if(!box)return;
   const q=IT_Q.toLowerCase();
-  const list=S.items.filter(i=>inDept('item',i)&&(!IT_CAT||(i.cat||'อื่นๆ')===IT_CAT)&&
+  const offv=IT_CAT==='__off',sel=selOn('item'),K=canKitchen();
+  const list=S.items.filter(i=>(offv?i.active===false:(i.active!==false&&inDept('item',i)&&(!IT_CAT||(i.cat||'อื่นๆ')===IT_CAT)))&&
     (!q||(i.name||'').toLowerCase().includes(q)||dispName(i).toLowerCase().includes(q)));
-  if(!list.length){box.innerHTML='<div class="empty" style="grid-column:1/-1">'+t('it_none')+'</div>';return;}
+  if(!list.length){box.innerHTML='<div class="empty" style="grid-column:1/-1">'+t(offv?'off_none':'it_none')+'</div>';return;}
   box.innerHTML=list.map(i=>{
-    const uc=unitCost(i);const low=i.min_qty!=null&&num(i.qty)<=num(i.min_qty);
-    return '<div class="icard'+(low?' low':'')+'">'+
-      (canKitchen()?'<button class="edit-dot" onclick="itemEdit(\''+i.id+'\')">✎</button>':'')+
-      '<div class="ithumb" '+(i.image_url?'onclick="zoomImg(\''+esc(i.image_url)+'\')"':(canKitchen()?'onclick="pickImage(\'item\',\''+i.id+'\',()=>paintItemGrid())"':''))+'>'+
+    const uc=unitCost(i);const low=!offv&&i.min_qty!=null&&num(i.qty)<=num(i.min_qty);
+    return '<div class="icard'+(low?' low':'')+(sel?' selable'+(SEL.ids[i.id]?' sel':''):'')+(offv?' offc':'')+'"'+(sel?' onclick="selToggle(\''+i.id+'\',this)"':'')+'>'+
+      (sel?'<span class="selck">✓</span>':(K?'<button class="edit-dot" onclick="itemEdit(\''+i.id+'\')">✎</button>':''))+
+      '<div class="ithumb" '+(sel?'':i.image_url?'onclick="zoomImg(\''+esc(i.image_url)+'\')"':(K?'onclick="pickImage(\'item\',\''+i.id+'\',()=>paintItemGrid())"':''))+'>'+
       (i.image_url?'<img src="'+esc(i.image_url)+'" loading="lazy">':(ITEM_CAT_IC[i.cat]||'🥬'))+'</div>'+
       '<div class="iname">'+esc(dispName(i))+'</div>'+
       '<div class="isub">'+(i.price!=null?'฿'+fmt(i.price,2)+'/'+esc(trUnit(i.buy_unit||i.unit||'')):'– '+t('it_price'))+
       (uc!=null?' · ฿'+fmt(uc,2)+'/'+esc(trUnit(i.unit||'')):'')+'</div>'+
       '<div style="display:flex;justify-content:space-between;align-items:center">'+
       '<span class="chip '+(low?'bad':'mid')+'">'+fmtI(i.qty)+' '+esc(trUnit(i.unit||''))+'</span>'+
-      '<span class="xs mut">'+esc(i.sup||'')+'</span></div></div>';}).join('');
+      '<span class="xs mut">'+esc(i.sup||'')+'</span></div>'+
+      (offv&&K?'<button class="btn sm2 offrs" onclick="offSet(\'item\',\''+i.id+'\',true)">'+t('off_restore')+'</button>':'')+'</div>';}).join('');
 }
 let IT_DRAFT=null;
 function itemEdit(id){
@@ -4070,7 +4105,7 @@ function paintItemEdit(){
      '<div class="xs mut">'+t('cu_hint')+'</div>')+'</div>';}
   if(d.id)h+='<button class="btn gh sm2" onclick="priceHist(\''+d.id+'\')">📉 '+t('it_price_hist')+'</button>';
   h+='<div style="display:flex;gap:8px;margin-top:12px">'+
-    (d.id?'<button class="btn gh" onclick="itemDel(\''+d.id+'\')">🗑</button>':'')+
+    (d.id?offBtn('item',itemById(d.id))+'<button class="btn gh" onclick="itemDel(\''+d.id+'\')">🗑</button>':'')+
     '<button class="btn big" style="flex:1" onclick="itemSave()">'+t('save')+'</button></div>';
   openModal(h,true);
 }
@@ -4625,7 +4660,7 @@ function kpBuyRows(){ // ยอดที่ต้องสั่ง — สั�
   S.plans.filter(p=>p.status==='plan').forEach(p=>{const r=recipeById(p.recipe_id);if(!r)return;
     const b=num(p.qty)/(num(r.yield_qty)||1),d=p.d<today?today:p.d;
     bomOf(r).forEach(l=>{planNeed[l.item_id]=(planNeed[l.item_id]||0)+b*num(l.qty);first(l.item_id,d);});});
-  S.recipes.forEach(r=>{const a=kpAvgOf(r.id);if(!(a>0))return;const b=a/(num(r.yield_qty)||1);   // ใช้ต่อวันโดยเฉลี่ย
+  S.recipes.forEach(r=>{if(r.active===false)return;const a=kpAvgOf(r.id);if(!(a>0))return;const b=a/(num(r.yield_qty)||1);   // ใช้ต่อวันโดยเฉลี่ย
     bomOf(r).forEach(l=>{daily[l.item_id]=(daily[l.item_id]||0)+b*num(l.qty);first(l.item_id,tmr);});});
   const incoming={};
   S.pos.filter(p=>p.status==='ordered'||p.status==='draft').forEach(p=>{(S.poItems[p.id]||[]).forEach(l=>{
@@ -4634,7 +4669,7 @@ function kpBuyRows(){ // ยอดที่ต้องสั่ง — สั�
   const ids=new Set([...Object.keys(planNeed),...Object.keys(daily)]);
   S.items.forEach(it=>{if(it.active!==false&&it.min_qty!=null)ids.add(it.id);});
   return [...ids].map(iid=>{
-    const it=itemById(iid);if(!it)return null;
+    const it=itemById(iid);if(!it||it.active===false)return null;   // ไม่ใช้แล้ว = ไม่แนะนำให้สั่ง
     const lead=Math.max(num(it.lead_days)||0,supLeadOf(supByName(it.sup)));
     const P=supPlanOf(it.sup,lead,today);
     const days=Math.max(1,dayDiff(today,P.nextArrive)-1);
@@ -4979,8 +5014,8 @@ async function accData(m){
   const expByCat={};let expVal=0;
   exps.forEach(x=>{const c=x.cat||EXP_OTHER;expByCat[c]=(expByCat[c]||0)+num(x.amount);expVal+=num(x.amount);});
   const profit=rev-buyVal-expVal;
-  const stockVal=S.items.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
-  const fgVal=S.recipes.reduce((s,r)=>{const c=recipeUnitCost(r);return s+(c!=null&&num(r.qty)>0?num(r.qty)*c:0);},0);
+  const stockVal=S.items.filter(i=>i.active!==false).reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
+  const fgVal=S.recipes.filter(r=>r.active!==false).reduce((s,r)=>{const c=recipeUnitCost(r);return s+(c!=null&&num(r.qty)>0?num(r.qty)*c:0);},0);
   // บิลซัพของเดือนนี้ แยกซัพ (จ่ายทันที / เครดิต / ค้างจ่าย)
   const bySup={};let billTot=0;
   (bills||[]).forEach(b=>{const k=b.sup||'-';const x=bySup[k]=bySup[k]||{sup:k,tot:0,cash:0,credit:0,unpaid:0,n:0};
@@ -5034,8 +5069,8 @@ function fgRows(){return S.recipes.filter(r=>r.active!==false&&(num(r.qty)>0||sa
 function dashTopHtml(A){
   const ap=apList(),apSum=ap.reduce((s,b)=>s+num(b.total),0),D=bizTodayISO();
   const apOver=ap.filter(b=>b.due_date&&b.due_date<D).length;
-  const rawVal=S.items.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null&&num(i.qty)>0?num(i.qty)*c:0);},0);
-  const low=S.items.filter(i=>i.min_qty!=null&&num(i.qty)<=num(i.min_qty)).length;
+  const rawVal=S.items.filter(i=>i.active!==false).reduce((s,i)=>{const c=unitCost(i);return s+(c!=null&&num(i.qty)>0?num(i.qty)*c:0);},0);
+  const low=S.items.filter(i=>i.active!==false&&i.min_qty!=null&&num(i.qty)<=num(i.min_qty)).length;
   const fg=fgRows(),fgVal=fg.reduce((s,x)=>s+x.val,0);
   const exp=A?A.buyVal+A.expVal:null;
   let h='<div class="secbar">📅 '+dispMonth(todayStr().slice(0,7))+'<span class="sp"><a onclick="show(&#39;acc&#39;)">'+t('nav_acc')+' ›</a></span></div>'+
@@ -5822,6 +5857,79 @@ const DP_I18N={"th": {"dp_main": "ครัวกลาง", "dp_dessert": "ข�
 ['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],DP_I18N[l]));   // แผนก ครัวกลาง/ของหวาน
 const ST_I18N={"th": {"st_count": "นับสต๊อก", "st_draft": "มีตัวเลขที่นับค้างไว้ {n} อย่าง", "st_resume": "นับต่อ", "st_val_all": "มูลค่าสต๊อกทั้งหมด", "st_low": "ใกล้หมด", "st_last": "นับล่าสุด", "skc_draft": "นับค้างไว้ {n} อย่าง — นับต่อได้เลย", "skc_cancel_q": "ยกเลิกการนับ? ตัวเลขที่กรอกไว้จะหายทั้งหมด"}, "en": {"st_count": "Count stock", "st_draft": "{n} counted items not saved yet", "st_resume": "Continue", "st_val_all": "Total stock value", "st_low": "Running low", "st_last": "Last count", "skc_draft": "{n} counted items restored — carry on", "skc_cancel_q": "Cancel counting? Everything you typed will be lost"}, "lo": {"st_count": "ນັບສະຕັອກ", "st_draft": "ມີຕົວເລກທີ່ນັບຄ້າງໄວ້ {n} ຢ່າງ", "st_resume": "ນັບຕໍ່", "st_val_all": "ມູນຄ່າສະຕັອກທັງໝົດ", "st_low": "ໃກ້ໝົດ", "st_last": "ນັບລ່າສຸດ", "skc_draft": "ນັບຄ້າງໄວ້ {n} ຢ່າງ — ນັບຕໍ່ໄດ້ເລີຍ", "skc_cancel_q": "ຍົກເລີກການນັບ? ຕົວເລກທີ່ປ້ອນໄວ້ຈະຫາຍທັງໝົດ"}, "my": {"st_count": "စတော့ရေတွက်", "st_draft": "မသိမ်းရသေးသော ရေတွက်ချက် {n} ခု ရှိသည်", "st_resume": "ဆက်ရေတွက်", "st_val_all": "စတော့ တန်ဖိုးစုစုပေါင်း", "st_low": "ကုန်ခါနီး", "st_last": "နောက်ဆုံးရေတွက်", "skc_draft": "ရေတွက်ထားသော {n} ခု ပြန်ရပြီ — ဆက်ရေတွက်ပါ", "skc_cancel_q": "ရေတွက်ခြင်း ပယ်ဖျက်မလား? ရိုက်ထည့်ထားသမျှ ပျောက်မည်"}};
 ['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],ST_I18N[l]));   // หน้าสต๊อก + หน้านับของแยกกัน
+/* ---------- 🗄️ ไม่ใช้แล้ว — ซ่อนเมนู/วัตถุดิบที่เลิกใช้ (เจ้าของสั่ง 2026-10-07 "มีบางเมนูไม่ใช้แล้ว และวัตถุดิบบางตัวก็ไม่ได้ใช้แล้ว")
+   = ck_items/ck_recipes.active=false · ไม่ลบอะไร ประวัติ/บิล/สมุดสต๊อกยังอยู่ · ซ่อนจากหน้าวันนี้ ทำของ นับของ สั่งของ สต๊อก ตัวเลือก
+   เลือกทีละหลายอย่างได้ (SEL) · ดู/เอากลับมาใช้ที่ชิป "🗄️ ไม่ใช้แล้ว" ของหน้าเมนู/วัตถุดิบ ---------- */
+var SEL=null;   // {kind:'recipe'|'item', ids:{id:1}} — var: show() อ่านได้ก่อนบรรทัดนี้รัน
+function offN(kind){return (kind==='recipe'?S.recipes:S.items).filter(o=>o.active===false).length;}
+function usedItemIds(){const u={};S.recipes.forEach(r=>{if(r.active===false)return;(S.boms[r.id]||[]).forEach(l=>{u[l.item_id]=1;});});return u;}
+function itemUsedBy(id){return S.recipes.filter(r=>r.active!==false&&(S.boms[r.id]||[]).some(l=>l.item_id===id));}
+function selStart(kind){if(!canKitchen())return;SEL={kind,ids:{}};show(kind==='recipe'?'menus':'items');}
+function selStop(){SEL=null;show(S.tab);}
+function selOn(kind){return !!(SEL&&SEL.kind===kind);}
+function selToggle(id,el){if(!SEL)return;if(SEL.ids[id])delete SEL.ids[id];else SEL.ids[id]=1;
+  const c=el&&el.closest('.icard');if(c)c.classList.toggle('sel',!!SEL.ids[id]);selPaint();}
+function selN(){return SEL?Object.keys(SEL.ids).length:0;}
+function selPaint(){const n=selN();const v=document.getElementById('selN');if(v)v.textContent=t('off_sel_n',{n});
+  const b=document.getElementById('selGo');if(b){b.disabled=!n;b.textContent=t('off_do',{n});}}
+function selBarHtml(){return '<div class="hintbox">'+t('off_hint_sel')+'</div>';}
+function selFootHtml(){return '<div class="stickysum"><span class="v" id="selN">'+t('off_sel_n',{n:selN()})+'</span>'+
+  '<span style="margin-left:auto;display:flex;gap:8px"><button class="btn gh sm2" onclick="selStop()">'+t('cancel')+'</button>'+
+  '<button class="btn" id="selGo" onclick="selApply()" '+(selN()?'':'disabled')+'>'+t('off_do',{n:selN()})+'</button></span></div>';}
+function selPickUnused(){ // วัตถุดิบที่ไม่มีเมนูไหนใช้ — ติ๊กให้ แล้วให้เจ้าของดูเอาออกเอง
+  if(!selOn('item'))return;const u=usedItemIds();
+  S.items.forEach(i=>{if(i.active!==false&&!u[i.id])SEL.ids[i.id]=1;});show('items');}
+async function setActive(kind,ids,on){ // ไม่ลบ — เปลี่ยนแค่ active
+  if(!ids.length)return true;
+  const r=await sb.from(kind==='recipe'?'ck_recipes':'ck_items').update({active:!!on}).in('id',ids);
+  if(r&&r.error){toast(t('sv_err')+(r.error.message||r.error),true);return false;}
+  ids.forEach(id=>{const o=kind==='recipe'?recipeById(id):itemById(id);if(o)o.active=!!on;});
+  return true;}
+function offConfirmText(kind,ids){
+  let msg=t(kind==='recipe'?'off_q_r':'off_q_i',{n:ids.length});
+  if(kind==='item'){
+    const use=ids.map(itemById).filter(Boolean).map(i=>{const R=itemUsedBy(i.id);return R.length?dispName(i)+' ('+R.slice(0,3).map(dispName).join(', ')+(R.length>3?'…':'')+')':'';}).filter(Boolean);
+    if(use.length)msg+='\n\n'+t('off_in_use',{list:use.slice(0,6).join(' · ')+(use.length>6?' …':'')});}
+  const left=ids.map(id=>kind==='recipe'?recipeById(id):itemById(id)).filter(o=>o&&num(o.qty)>0).map(o=>{const U=skUnit(kind,o);
+    return dispName(o)+' '+fmtQ(rnd2(num(o.qty)/U.f))+' '+trUnit(U.u);});
+  if(left.length)msg+='\n\n'+t('off_has_stock',{list:left.slice(0,6).join(' · ')+(left.length>6?' …':'')});
+  return msg;}
+async function selApply(){
+  if(!SEL||!selN())return;const kind=SEL.kind,ids=Object.keys(SEL.ids);
+  if(!confirm(offConfirmText(kind,ids)))return;
+  await once(async()=>{
+    if(!await setActive(kind,ids,false))return;
+    SEL=null;toast('🗄️ '+t('off_done',{n:ids.length}));show(S.tab);
+    if(kind==='recipe')offOrphans(ids);});}
+function offOrphans(rids){ // ซ่อนเมนูแล้ว — วัตถุดิบที่ไม่มีเมนูไหนใช้แล้ว ซ่อนด้วยไหม
+  const u=usedItemIds(),cand={};rids.forEach(id=>(S.boms[id]||[]).forEach(l=>{cand[l.item_id]=1;}));
+  const L=Object.keys(cand).map(itemById).filter(i=>i&&i.active!==false&&!u[i.id]).sort((a,b)=>dispName(a).localeCompare(dispName(b),'th'));
+  if(!L.length)return;
+  window._orph=L.map(i=>i.id);
+  openTask(tkHead('🗄️ '+t('off_orphans_t'),t('off_orphans_h'),'closeModal()')+
+    L.map(i=>'<label class="tkcard orph"><input type="checkbox" checked data-id="'+esc(i.id)+'"> '+thumbHtml(i,catIc(i.cat))+
+      '<span class="grow"><b>'+esc(dispName(i))+'</b>'+(num(i.qty)>0?'<br><span class="xs mut">'+t('sk_now')+' '+stQtyHtml('item',i)+'</span>':'')+'</span></label>').join('')+
+    '<button class="btn big" onclick="offOrphansGo()">'+t('off_orphans_go')+'</button>'+
+    '<button class="btn gh" style="width:100%;margin-top:8px" onclick="closeModal()">'+t('off_skip')+'</button>');}
+async function offOrphansGo(){
+  const ids=[...document.querySelectorAll('#modalBox .orph input:checked')].map(x=>x.dataset.id);
+  if(!ids.length){closeModal();return;}
+  await once(async()=>{if(!await setActive('item',ids,false))return;
+    closeModal();toast('🗄️ '+t('off_done',{n:ids.length}));show(S.tab);});}
+async function offSet(kind,id,on){ // ปุ่มทีละอย่าง (ฟอร์ม/รายละเอียด/การ์ด)
+  if(!canKitchen())return;
+  if(!on&&!confirm(offConfirmText(kind,[id])))return;
+  await once(async()=>{
+    if(!await setActive(kind,[id],on))return;
+    MODAL_BACK=null;IT_DRAFT=null;MN_DRAFT=null;closeModal();
+    toast(on?'↩️ '+t('off_restored'):'🗄️ '+t('off_done',{n:1}));show(S.tab);
+    if(!on&&kind==='recipe')offOrphans([id]);});}
+function offBtn(kind,o){ // ปุ่มในฟอร์มแก้ไข
+  if(!o||!o.id)return '';
+  return o.active===false?'<button class="btn gh" onclick="offSet(\''+kind+'\',\''+esc(o.id)+'\',true)">'+t('off_restore')+'</button>'
+    :'<button class="btn gh" title="'+esc(t('off_chip'))+'" onclick="offSet(\''+kind+'\',\''+esc(o.id)+'\',false)">🗄️</button>';}
+const OFF_I18N={"th": {"off_btn": "เลือกที่ไม่ใช้แล้ว", "off_chip": "ไม่ใช้แล้ว", "off_one": "ไม่ใช้แล้ว", "off_hint_sel": "แตะเลือกรายการที่ไม่ใช้แล้ว แล้วกดปุ่มด้านล่าง — จะหายจากหน้าวันนี้ ทำของ นับของ สั่งของ และสต๊อก แต่ประวัติยังอยู่ กลับมาใช้ได้ทุกเมื่อ", "off_sel_n": "เลือกแล้ว {n}", "off_do": "🗄️ ไม่ใช้แล้ว ({n})", "off_q_r": "ซ่อน {n} เมนูนี้เพราะไม่ใช้แล้ว?\nจะไม่ขึ้นในหน้าวันนี้ ทำของ นับของ และสต๊อก — ประวัติยังอยู่ กด \"ใช้ต่อ\" ได้ทุกเมื่อ", "off_q_i": "ซ่อน {n} วัตถุดิบนี้เพราะไม่ใช้แล้ว?\nจะไม่ขึ้นในหน้านับของ สั่งของ และสต๊อก — ประวัติยังอยู่ กด \"ใช้ต่อ\" ได้ทุกเมื่อ", "off_in_use": "⚠️ ยังอยู่ในสูตรเมนู: {list}", "off_has_stock": "📦 ยังมีของเหลือ (จะไม่นับในมูลค่าสต๊อก): {list}", "off_done": "ซ่อนแล้ว {n} อย่าง", "off_restore": "↩️ ใช้ต่อ", "off_restored": "กลับมาใช้แล้ว", "off_none": "ไม่มีรายการที่ซ่อนไว้", "off_view_h": "รายการที่ไม่ใช้แล้ว — กด \"↩️ ใช้ต่อ\" เพื่อเอากลับมา", "off_orphans_t": "วัตถุดิบที่ไม่มีเมนูไหนใช้แล้ว", "off_orphans_h": "วัตถุดิบพวกนี้ใช้แค่ในเมนูที่เพิ่งซ่อน ซ่อนด้วยไหม? (เอาติ๊กออกตัวที่ยังใช้อยู่)", "off_orphans_go": "🗄️ ซ่อนวัตถุดิบที่ติ๊กไว้", "off_skip": "ไม่ต้อง เก็บไว้ก่อน", "off_unused_pick": "ติ๊กตัวที่ไม่อยู่ในเมนูไหน ({n})"}, "en": {"off_btn": "Pick ones no longer used", "off_chip": "No longer used", "off_one": "No longer used", "off_hint_sel": "Tap the items no longer used, then press the button below — they disappear from Today, making, counting, ordering and stock, but history stays and you can bring them back any time", "off_sel_n": "{n} selected", "off_do": "🗄️ No longer used ({n})", "off_q_r": "Hide these {n} menus as no longer used?\nThey will not show in Today, making, counting or stock — history stays, press \"Use again\" any time", "off_q_i": "Hide these {n} ingredients as no longer used?\nThey will not show in counting, ordering or stock — history stays, press \"Use again\" any time", "off_in_use": "⚠️ Still in recipes: {list}", "off_has_stock": "📦 Still in stock (not counted in stock value): {list}", "off_done": "Hid {n}", "off_restore": "↩️ Use again", "off_restored": "Back in use", "off_none": "Nothing hidden", "off_view_h": "No longer used — press \"↩️ Use again\" to bring one back", "off_orphans_t": "Ingredients no menu uses any more", "off_orphans_h": "These were only used by the menus you just hid. Hide them too? (untick any still in use)", "off_orphans_go": "🗄️ Hide ticked ingredients", "off_skip": "No, keep them", "off_unused_pick": "Tick ones in no menu ({n})"}, "lo": {"off_btn": "ເລືອກອັນທີ່ບໍ່ໃຊ້ແລ້ວ", "off_chip": "ບໍ່ໃຊ້ແລ້ວ", "off_one": "ບໍ່ໃຊ້ແລ້ວ", "off_hint_sel": "ແຕະເລືອກລາຍການທີ່ບໍ່ໃຊ້ແລ້ວ ແລ້ວກົດປຸ່ມລຸ່ມ — ຈະຫາຍຈາກໜ້າມື້ນີ້ ເຮັດເຄື່ອງ ນັບເຄື່ອງ ສັ່ງເຄື່ອງ ແລະ ສະຕັອກ ແຕ່ປະຫວັດຍັງຢູ່ ເອົາກັບມາໃຊ້ໄດ້ທຸກເມື່ອ", "off_sel_n": "ເລືອກແລ້ວ {n}", "off_do": "🗄️ ບໍ່ໃຊ້ແລ້ວ ({n})", "off_q_r": "ເຊື່ອງ {n} ເມນູນີ້ເພາະບໍ່ໃຊ້ແລ້ວ?\nຈະບໍ່ຂຶ້ນໃນໜ້າມື້ນີ້ ເຮັດເຄື່ອງ ນັບເຄື່ອງ ແລະ ສະຕັອກ — ປະຫວັດຍັງຢູ່ ກົດ \"ໃຊ້ຕໍ່\" ໄດ້ທຸກເມື່ອ", "off_q_i": "ເຊື່ອງ {n} ວັດຖຸດິບນີ້ເພາະບໍ່ໃຊ້ແລ້ວ?\nຈະບໍ່ຂຶ້ນໃນໜ້ານັບເຄື່ອງ ສັ່ງເຄື່ອງ ແລະ ສະຕັອກ — ປະຫວັດຍັງຢູ່ ກົດ \"ໃຊ້ຕໍ່\" ໄດ້ທຸກເມື່ອ", "off_in_use": "⚠️ ຍັງຢູ່ໃນສູດເມນູ: {list}", "off_has_stock": "📦 ຍັງມີເຄື່ອງເຫຼືອ (ຈະບໍ່ນັບໃນມູນຄ່າສະຕັອກ): {list}", "off_done": "ເຊື່ອງແລ້ວ {n} ຢ່າງ", "off_restore": "↩️ ໃຊ້ຕໍ່", "off_restored": "ກັບມາໃຊ້ແລ້ວ", "off_none": "ບໍ່ມີລາຍການທີ່ເຊື່ອງໄວ້", "off_view_h": "ລາຍການທີ່ບໍ່ໃຊ້ແລ້ວ — ກົດ \"↩️ ໃຊ້ຕໍ່\" ເພື່ອເອົາກັບມາ", "off_orphans_t": "ວັດຖຸດິບທີ່ບໍ່ມີເມນູໃດໃຊ້ແລ້ວ", "off_orphans_h": "ວັດຖຸດິບເຫຼົ່ານີ້ໃຊ້ແຕ່ໃນເມນູທີ່ຫາກໍ່ເຊື່ອງ ເຊື່ອງນຳບໍ? (ເອົາໝາຍອອກອັນທີ່ຍັງໃຊ້ຢູ່)", "off_orphans_go": "🗄️ ເຊື່ອງວັດຖຸດິບທີ່ໝາຍໄວ້", "off_skip": "ບໍ່ຕ້ອງ ເກັບໄວ້ກ່ອນ", "off_unused_pick": "ໝາຍອັນທີ່ບໍ່ຢູ່ໃນເມນູໃດ ({n})"}, "my": {"off_btn": "မသုံးတော့သည်များ ရွေးရန်", "off_chip": "မသုံးတော့", "off_one": "မသုံးတော့", "off_hint_sel": "မသုံးတော့သည့်အရာများကို နှိပ်ရွေးပြီး အောက်ခလုတ်ကို နှိပ်ပါ — ယနေ့၊ ထုတ်လုပ်၊ ရေတွက်၊ မှာယူ၊ စတော့ စာမျက်နှာများမှ ပျောက်မည် သို့သော် မှတ်တမ်းကျန်ပြီး အချိန်မရွေး ပြန်သုံးနိုင်သည်", "off_sel_n": "{n} ခု ရွေးပြီး", "off_do": "🗄️ မသုံးတော့ ({n})", "off_q_r": "ဤမီနူး {n} ခုကို မသုံးတော့၍ ဝှက်မလား?\nယနေ့၊ ထုတ်လုပ်၊ ရေတွက်၊ စတော့ တွင် မပေါ်တော့ — မှတ်တမ်းကျန်သည် \"ပြန်သုံး\" ကို အချိန်မရွေး နှိပ်နိုင်", "off_q_i": "ဤကုန်ကြမ်း {n} ခုကို မသုံးတော့၍ ဝှက်မလား?\nရေတွက်၊ မှာယူ၊ စတော့ တွင် မပေါ်တော့ — မှတ်တမ်းကျန်သည် \"ပြန်သုံး\" ကို အချိန်မရွေး နှိပ်နိုင်", "off_in_use": "⚠️ ဖော်မြူလာတွင် ရှိနေဆဲ: {list}", "off_has_stock": "📦 လက်ကျန်ရှိနေဆဲ (စတော့တန်ဖိုးတွင် မထည့်တော့): {list}", "off_done": "{n} ခု ဝှက်ပြီး", "off_restore": "↩️ ပြန်သုံး", "off_restored": "ပြန်သုံးပြီ", "off_none": "ဝှက်ထားသည့်အရာ မရှိ", "off_view_h": "မသုံးတော့သည့်အရာများ — ပြန်ယူရန် \"↩️ ပြန်သုံး\" နှိပ်ပါ", "off_orphans_t": "မည်သည့်မီနူးမှ မသုံးတော့သော ကုန်ကြမ်း", "off_orphans_h": "ဤကုန်ကြမ်းများကို ယခုဝှက်လိုက်သော မီနူးတွင်သာ သုံးသည်။ အတူဝှက်မလား? (သုံးနေဆဲကို အမှန်ခြစ်ဖြုတ်ပါ)", "off_orphans_go": "🗄️ အမှန်ခြစ်ထားသည်များ ဝှက်", "off_skip": "မလိုပါ ထားမည်", "off_unused_pick": "မီနူးမရှိသည်များကို ခြစ် ({n})"}};
+['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],OFF_I18N[l]));   // ไม่ใช้แล้ว
 
 sbMoreSet(LS.get('jjck_sbmore',0)==1);
 
