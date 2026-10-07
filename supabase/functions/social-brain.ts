@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.7";
+const VERSION = "2026-10-07.8";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -1306,7 +1306,7 @@ const apUrlKey = (u: string) => {
 const AP_BUCKET = "social-media";
 const AP_IMG_MAX = 1_500_000;
 const AP_THUMB_MS = 18000;         // เหลือเวลาน้อยกว่านี้ = ข้ามการเก็บรูปปกรอบนี้ (ใช้ลิงก์เดิมไปก่อน · cron ให้เวลาทั้งรอบ ≤35 วิ)
-const AP_IMG_HOST = /(^|\.)(fbcdn\.net|cdninstagram\.com|tiktokcdn(-[a-z0-9]+)?\.com|ibyteimg\.com|byteimg\.com)$/i;
+const AP_IMG_HOST = /(^|\.)(fbcdn\.net|fbsbx\.com|cdninstagram\.com|tiktokcdn(-[a-z0-9]+)?\.com|ibyteimg\.com|byteimg\.com)$/i;
 const AP_IMG_PUB = `${SB_URL}/storage/v1/object/public/${AP_BUCKET}/`;
 const AP_IMG_PATHS = ["videoMeta.coverUrl", "videoMeta.originalCoverUrl", "covers.0", "covers.default", "displayUrl", "thumbnailUrl", "images.0",
   "media.0.thumbnail", "media.0.photo_image.uri", "media.0.image.uri", "full_picture", "thumbnail", "picture", "image"];
@@ -1317,7 +1317,24 @@ function apImgOk(s: unknown): string | null {
   try { const x = new URL(t); return x.protocol === "https:" && AP_IMG_HOST.test(x.hostname) ? t : null; } catch { return null; }
 }
 function apImgOf(it: any): string | null {
-  for (const p of AP_IMG_PATHS) { const v = apGet(it, p); const ok = typeof v === "string" ? apImgOk(v) : null; if (ok) return ok; }
+  for (const p of AP_IMG_PATHS) { const v = apGet(it, p); const ok = typeof v === "string" && !AP_NOT_IMG.test(v) ? apImgOk(v) : null; if (ok) return ok; }
+  return apImgDeep(it);
+}
+// ชื่อช่องของตัวดึงไม่ตรงที่คาด (เจ้าของเจอ 2026-10-07: โพสต์ FB ขึ้นข้อความแต่ไม่มีรูป) → ไล่หาลิงก์รูปในช่องที่ชื่อบอกว่าเป็นรูป/สื่อ
+// ข้ามรูปโปรไฟล์/โลโก้เพจ (โดเมนเดียวกัน แต่ไม่ใช่รูปของโพสต์) และไฟล์วิดีโอ
+const AP_IMG_KEY = /media|image|photo|thumb|cover|picture|display|preview|attachment|full_?picture/i;
+const AP_IMG_SKIP = /profile|avatar|user|author|owner|logo|icon|video_?url|playable|^(hd|sd)_?src$/i;
+const AP_NOT_IMG = /\.(mp4|m3u8|webm|mov)(\?|$)/i;
+function apImgDeep(o: any, depth = 0, keyOk = false): string | null {
+  if (o == null || depth > 6) return null;
+  if (typeof o === "string") return keyOk && !AP_NOT_IMG.test(o) ? apImgOk(o) : null;
+  if (Array.isArray(o)) { for (const x of o.slice(0, 8)) { const r = apImgDeep(x, depth + 1, keyOk); if (r) return r; } return null; }
+  if (typeof o !== "object") return null;
+  for (const [k, v] of Object.entries(o)) {
+    if (AP_IMG_SKIP.test(k)) continue;
+    const r = apImgDeep(v, depth + 1, keyOk || AP_IMG_KEY.test(k));
+    if (r) return r;
+  }
   return null;
 }
 const apVidOf = (it: any, u: string) =>
@@ -1351,6 +1368,19 @@ function apMetasOf(items: any[], urls: string[], max = AP_META_MAX): ApPost[] {
   return out;
 }
 let apThumbErr = "";
+// รวมเหตุผลที่เก็บรูปไม่ได้ (หลายรูปทำพร้อมกัน — ไม่ให้ข้อความหลังทับข้อความแรก)
+const apThumbNote = (m: string) => { if (!apThumbErr.includes(m)) apThumbErr = (apThumbErr ? apThumbErr + " · " : "") + m; };
+// ตัวดึงไม่ส่งรูปมาเลยสักโพสต์ → จดชื่อช่องที่ได้มา (ชื่อช่องเท่านั้น ไม่มีค่า) ไว้ให้ผู้ดูแลแก้ชื่อช่องในโค้ดได้ถูก
+function apNoImgNote(L: any, metas: ApPost[], items: any[]) {
+  if (!metas.length || metas.some((p) => p.img)) return;
+  const it = items.find((x) => x && typeof x === "object") ?? {};
+  const keys = Object.keys(it).slice(0, 30).map((k) => {
+    const v = it[k];
+    if (Array.isArray(v) && v[0] && typeof v[0] === "object") return `${k}[${Object.keys(v[0]).slice(0, 8).join("/")}]`;
+    return k;
+  }).join(", ");
+  L.th_err = scrub("ตัวดึงไม่ได้ส่งลิงก์รูปปกมา — ช่องที่ได้: " + keys).slice(0, 300);
+}
 async function apReadCap(r: Response, max: number): Promise<Uint8Array | null> {
   const rd = r.body?.getReader(); if (!rd) return null;
   const parts: Uint8Array[] = []; let n = 0;
@@ -1377,7 +1407,8 @@ async function apThumb(src: unknown, key: string): Promise<string | null> {
     const ext = ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as Record<string, string>)[ct];
     if (!r.ok || !ext || Number(r.headers.get("content-length") ?? 0) > AP_IMG_MAX) {
       await r.body?.cancel().catch(() => {});
-      if (!r.ok) apThumbErr = `ดึงรูปปกไม่ได้ (HTTP ${r.status})`;
+      apThumbNote(!r.ok ? `ดึงรูปปกจาก ${new URL(ok).hostname} ไม่ได้ (HTTP ${r.status})`
+        : !ext ? `ลิงก์รูปปกไม่ใช่ไฟล์รูป (${ct.slice(0, 40) || "ไม่ระบุชนิด"})` : "รูปปกใหญ่เกิน 1.5MB");
       return ok;
     }
     const buf = await apReadCap(r, AP_IMG_MAX);
@@ -1392,10 +1423,10 @@ async function apThumb(src: unknown, key: string): Promise<string | null> {
       if (!c.error || /exist/i.test(c.error.message)) ({ error } = await up());
       else error = c.error;
     }
-    if (error) { apThumbErr = "เก็บรูปปกลง Storage ไม่ได้: " + scrub(error.message).slice(0, 140); return ok; }
+    if (error) { apThumbNote("เก็บรูปปกลง Storage ไม่ได้: " + scrub(error.message).slice(0, 140)); return ok; }
     const pub = sb.storage.from(AP_BUCKET).getPublicUrl(path).data.publicUrl;
     return apImgOk(pub) ? pub + "?v=" + Date.now().toString(36) : ok;
-  } catch (e) { apThumbErr = "เก็บรูปปกไม่ได้: " + scrub(e).slice(0, 140); return ok; }
+  } catch (e) { apThumbNote("เก็บรูปปกไม่ได้: " + scrub(e).slice(0, 140)); return ok; }
 }
 // pid = เลขโพสต์ (คอมเมนต์ FB ไอดี "เลขโพสต์_เลขคอมเมนต์") · cands = ลิงก์ที่อาจเป็นโพสต์ต้นทาง
 function apPostOf(posts: ApPost[] | undefined, pid: string | null, ...cands: string[]): ApPost | null {
@@ -1784,13 +1815,13 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
             if (left() > 8000) L(sid).bf = await apBackfill(def.channel, metas, Date.now() + Math.min(left() - 4000, 10000)).catch(() => 0);
           };
           if (r.cat) {   // รอบดึงย้อนหลัง: เก็บรายการโพสต์อย่างเดียว ไม่ดึงคอมเมนต์ (กันค่าใช้จ่าย)
-            await thumbs(); await backfill();
+            await thumbs(); apNoImgNote(L(sid), metas, items); await backfill();
             Object.assign(L(sid), { ok: true, err: null, n: metas.length, added: 0, done: now(), ok_at: now(),
               note: status !== "SUCCEEDED" ? `ได้ ${metas.length} โพสต์ (บางส่วน)` : `ได้ ${metas.length} โพสต์` });
             dropRuns.add(sid); continue;
           }
           if (!urls.length) {
-            await thumbs(); await backfill();
+            await thumbs(); apNoImgNote(L(sid), metas, items); await backfill();
             Object.assign(L(sid), { ok: true, err: null, n: 0, added: 0, done: now(), note: "ไม่มีโพสต์ใหม่ในช่วงนี้" });
             dropRuns.add(sid); continue;
           }
@@ -1806,6 +1837,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           const owner = apS(items[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120);
           // รูปปกโพสต์ → เก็บลง Storage (พร้อมกัน · มีเวลาเหลือเท่านั้น · ไม่ได้ = ใช้ลิงก์เดิม)
           await thumbs();
+          apNoImgNote(L(sid), metas, items);
           const nr = await apStart(tok, src, step + 1, urls, null, room());
           chained++; freshUsd += nr.usd;
           runs[sid] = { id: nr.id, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}), posts: metas };
