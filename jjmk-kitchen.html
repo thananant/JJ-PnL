@@ -177,6 +177,19 @@ table.t tr.tap:hover{background:#FFF8F3}
 .catbar button{flex:none;padding:7px 13px;border-radius:99px;font-weight:600;font-size:13px;background:#fff;border:1.5px solid var(--line);color:var(--mut);display:inline-flex;gap:5px;align-items:center}
 .catbar button.on{background:var(--red);border-color:var(--red);color:#fff}
 .dpbar{display:flex;gap:8px;margin:2px 0 10px}
+.stacts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+table.sttab th.right{text-align:right}
+@media(min-width:640px){.modal.task.cntw{max-width:min(1100px,94vw)}}
+.stacts .btn{flex:1 1 auto}
+@media(max-width:560px){
+  table.sttab tr:first-child{display:none}
+  table.sttab tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;padding:10px 6px;border-bottom:1px solid var(--line)}
+  table.sttab td{border:0;padding:0;text-align:left!important}
+  table.sttab td:first-child{grid-column:1/-1;font-weight:700}
+  table.sttab td.n::before{content:attr(data-l);display:block;font-size:11px;color:var(--mut);font-weight:400}
+  table.sttab td.right{grid-column:1/-1}
+  table.sttab td.right .btn{width:100%}
+}
 .dpbar button{flex:1 1 0;min-width:0;min-height:52px;padding:6px 8px;border-radius:14px;border:2px solid var(--line);background:#fff;color:var(--ink);font-weight:700;font-size:15px;line-height:1.2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;text-align:center}
 .dpbar button small{font-size:12px;font-weight:700;color:var(--mut)}
 .dpbar button.on{background:var(--ink);border-color:var(--ink);color:#fff}
@@ -652,7 +665,7 @@ const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const EMAIL_DOMAIN='@jjmk.local';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='CK b6';
+const APP_VER='CK b7';
 
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
@@ -1081,7 +1094,7 @@ async function loadAll(){
     S.expCats=(xc||[]).filter(c=>c&&typeof c.n==='string'&&c.n.trim());
     S.units=unitsClean(un);
     const kv=k=>((ks||[]).find(x=>x.key===k)||{}).value;
-    S.kp=kpClean(kv('kplan'));S.editlock=elClean(kv('editlock'));S.bills=bl||[];S.kpAvg=null;
+    S.kp=kpClean(kv('kplan'));S.editlock=elClean(kv('editlock'));S.cntLast=(c=>c&&typeof c==='object'&&c.d?c:null)(kv('count_last'));S.bills=bl||[];S.kpAvg=null;
     S.scSql=!!(sc1&&sc2);S.deptCol=!!dpc;
   }finally{setBusy(false);}
 }
@@ -2365,7 +2378,7 @@ RENDER.today=async function(el){
   S._tmv=mv;
   const recv=mv.filter(x=>x.kind==='buy');
   const sends=mv.filter(x=>x.kind==='send');
-  const counted=mv.some(x=>x.kind==='adjust');S._countedToday=counted;
+  const counted=mv.some(x=>x.kind==='adjust')||!!(S.cntLast&&S.cntLast.d===bizTodayISO());S._countedToday=counted;
   const prodsT=S.prods.filter(p=>p.d===D);
   const recvVal=recv.reduce((s,x)=>s+num(x.cost),0);
   const madeVal=prodsT.reduce((s,p)=>s+num(p.cost_total),0);
@@ -2382,7 +2395,7 @@ RENDER.today=async function(el){
     '<button class="bigact" onclick="billNew()"><span class="bi">📥</span>'+t('kf_s6')+'</button>'+
     '<button class="bigact hot" onclick="produceModal()"><span class="bi">🍳</span>'+t('nav_produce')+'</button>'+
     (S.branches.length?'<button class="bigact" onclick="qsModal()"><span class="bi">🚚</span>'+t('td_send')+'</button>':'')+
-    '<button class="bigact" onclick="show(\'stock\');skCountStart()"><span class="bi">📋</span>'+t('skc_start').replace('📋 ','')+'</button></div>';
+    '<button class="bigact" onclick="countOpen()"><span class="bi">📋</span>'+t('skc_start').replace('📋 ','')+'</button></div>';
   h+='<div id="kfStep1Box">'+kpCheckHtml()+'</div>';
   h+='<div id="brNeedToday"></div>';
   // KPI วันนี้
@@ -3578,80 +3591,140 @@ async function brSrcSave(auto){await once(async()=>{
 /* ============================================================
    📦 สต๊อกครัวกลาง
    ============================================================ */
-let SK_MODE='table', SK_CNT={}, SK_Q='';
-function skDept(d){deptSet(d);if(SK_CAT&&SK_CAT!=='__menu')SK_CAT='';show('stock');}
+/* ---------- 📦 หน้าสต๊อกครัว = ดูสต๊อกอย่างเดียว (เจ้าของสั่ง 2026-10-07: "หน้านี้ต้องเป็นเกี่ยวกับสต๊อก ไม่ใช่นับของ")
+   การนับของแยกไปเป็นหน้างานเต็มจอของตัวเอง (countOpen) เหมือนขั้นอื่นในหน้าวันนี้ ---------- */
+let SK_CNT={}, SK_Q='', ST_Q='';
+let ST_CAT=LS.get('jjck_stcat','')||'';
+function skDept(d){deptSet(d);if(ST_CAT&&ST_CAT!=='__menu'&&ST_CAT!=='__low')ST_CAT='';show('stock');}
+function stSetCat(c){ST_CAT=c||'';LS.set('jjck_stcat',ST_CAT);show('stock');}
+function itLow(i){return i.min_qty!=null&&num(i.qty)<=num(i.min_qty);}
+function stQtyHtml(kind,o){ // ยอดเป็นหน่วยนับ (ขวด แกลลอน …) + หน่วยใช้ตัวเล็ก
+  const U=skUnit(kind,o),base=kind==='item'?(o.unit||''):(o.yield_unit||'');
+  return '<b>'+fmtQ(rnd2(num(o.qty)/U.f))+'</b> '+esc(trUnit(U.u))+
+    (U.u!==base?'<div class="xs mut">'+fmtQ(rnd4(num(o.qty)))+' '+esc(trUnit(base))+'</div>':'');}
+function stItemRows(L){const K=canKitchen();
+  return '<div class="twrap"><table class="t sttab"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('sk_now')+'</th><th class="right">'+t('sk_min')+'</th><th class="right">'+t('sk_val')+'</th>'+(K?'<th></th>':'')+'</tr>'+
+    L.map(i=>{const c=unitCost(i),low=itLow(i),U=skUnit('item',i);
+      return '<tr class="strow" data-n="'+esc(supKey(dispName(i)+' '+i.name))+'"><td>'+esc(dispName(i))+(i.sup?'<div class="xs mut">'+esc(i.sup)+'</div>':'')+'</td>'+
+        '<td class="n" data-l="'+esc(t('sk_now'))+'"'+(low?' style="color:var(--bad)"':'')+'>'+(low?'⚠️ ':'')+stQtyHtml('item',i)+'</td>'+
+        '<td class="n" data-l="'+esc(t('sk_min'))+'">'+(i.min_qty!=null?fmtQ(rnd2(num(i.min_qty)/U.f))+' '+esc(trUnit(U.u)):'–')+'</td>'+
+        '<td class="n" data-l="'+esc(t('sk_val'))+'">'+(c!=null?'฿'+fmt(num(i.qty)*c,2):'–')+'</td>'+
+        (K?'<td class="right"><button class="btn gh sm2" onclick="adjModal(\'item\',\''+esc(i.id)+'\')">'+t('sk_adjust')+'</button></td>':'')+'</tr>';}).join('')+
+    '</table></div>';}
+function stMenuRows(L){const K=canKitchen();
+  return '<div class="twrap"><table class="t sttab"><tr><th>'+t('nav_menus')+'</th><th class="right">'+t('sk_now')+'</th><th class="right">'+t('pr_cost_unit')+'</th><th class="right">'+t('sk_val')+'</th>'+(K?'<th></th>':'')+'</tr>'+
+    L.map(r=>{const c=recipeUnitCost(r);
+      return '<tr class="strow" data-n="'+esc(supKey(dispName(r)+' '+r.name))+'"><td>'+esc(dispName(r))+'</td>'+
+        '<td class="n" data-l="'+esc(t('sk_now'))+'">'+stQtyHtml('recipe',r)+'</td>'+
+        '<td class="n" data-l="'+esc(t('pr_cost_unit'))+'">'+(c!=null?'฿'+fmt(c,2):'–')+'</td>'+
+        '<td class="n" data-l="'+esc(t('sk_val'))+'">'+(c!=null?'฿'+fmt(num(r.qty)*c,2):'–')+'</td>'+
+        (K?'<td class="right"><button class="btn gh sm2" onclick="adjModal(\'recipe\',\''+esc(r.id)+'\')">'+t('sk_adjust')+'</button></td>':'')+'</tr>';}).join('')+
+    '</table></div>';}
 RENDER.stock=function(el){
-  if(SK_MODE==='count'){renderStockCount(el);return;}
-  const IT=S.items.filter(i=>inDept('item',i)),RC=S.recipes.filter(r=>inDept('recipe',r));
-  let h=deptBarHtml('skDept',d=>S.items.filter(i=>inDept('item',i,d)).length+S.recipes.filter(r=>inDept('recipe',r,d)).length)+
-    '<div class="card"><h3>🥬 '+t('sk_items')+
-    '<span class="sp">'+(canKitchen()?'<button class="btn sm2" onclick="skCountStart()">'+t('skc_start')+'</button> ':'')+
-    '<button class="btn gh sm2" onclick="ledgerOpen()">📒 '+t('lg_btn')+'</button> '+
-    IT.length+' '+t('items_n')+'</span></h3>';
-  if(!IT.length)h+='<div class="empty">'+t('it_none')+'</div>';
-  else{h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_items')+'</th><th class="right">'+t('sk_now')+'</th><th class="right">'+t('sk_min')+'</th><th class="right">'+t('sk_val')+'</th><th></th></tr>';
-    IT.forEach(i=>{const c=unitCost(i);const low=i.min_qty!=null&&num(i.qty)<=num(i.min_qty);
-      h+='<tr><td>'+esc(dispName(i))+'</td>'+
-        '<td class="n"'+(low?' style="color:var(--bad);font-weight:700"':'')+'>'+fmtI(i.qty)+' '+esc(trUnit(i.unit||''))+'</td>'+
-        '<td class="n">'+(i.min_qty!=null?fmtI(i.min_qty):'–')+'</td>'+
-        '<td class="n">'+(c!=null?'฿'+fmt(num(i.qty)*c,2):'–')+'</td>'+
-        '<td class="right">'+(canKitchen()?'<button class="btn gh sm2" onclick="adjModal(\'item\',\''+i.id+'\')">'+t('sk_adjust')+'</button>':'')+'</td></tr>';});
-    const val=IT.reduce((s,i)=>{const c=unitCost(i);return s+(c!=null?num(i.qty)*c:0);},0);
-    h+='<tr class="tot"><td>'+t('total')+'</td><td></td><td></td><td class="n">฿'+fmt(val,2)+'</td><td></td></tr></table></div>';}
-  h+='</div>';
-  h+='<div class="card"><h3>🍲 '+t('sk_menus')+'<span class="sp">'+RC.length+' '+t('items_n')+'</span></h3>';
-  if(!RC.length)h+='<div class="empty">'+t('mn_none')+'</div>';
-  else{h+='<div class="twrap"><table class="t"><tr><th>'+t('nav_menus')+'</th><th class="right">'+t('sk_now')+'</th><th class="right">'+t('pr_cost_unit')+'</th><th class="right">'+t('sk_val')+'</th><th></th></tr>';
-    RC.forEach(r=>{const c=recipeUnitCost(r);
-      h+='<tr><td>'+esc(dispName(r))+'</td><td class="n">'+fmtI(r.qty)+' '+esc(trUnit(r.yield_unit||''))+'</td>'+
-        '<td class="n">'+(c!=null?'฿'+fmt(c,2):'–')+'</td>'+
-        '<td class="n">'+(c!=null?'฿'+fmt(num(r.qty)*c,2):'–')+'</td>'+
-        '<td class="right">'+(canKitchen()?'<button class="btn gh sm2" onclick="adjModal(\'recipe\',\''+r.id+'\')">'+t('sk_adjust')+'</button>':'')+'</td></tr>';});
-    h+='</table></div>';}
-  h+='</div>';
-  el.innerHTML=h;
+  const K=canKitchen();
+  const IT=S.items.filter(i=>i.active!==false&&inDept('item',i)),RC=S.recipes.filter(r=>r.active!==false&&inDept('recipe',r));
+  const vI=i=>{const c=unitCost(i);return c!=null?num(i.qty)*c:0;},vR=r=>{const c=recipeUnitCost(r);return c!=null?num(r.qty)*c:0;};
+  const valI=IT.reduce((s,i)=>s+vI(i),0),valR=RC.reduce((s,r)=>s+vR(r),0);
+  const low=IT.filter(itLow);
+  const cats=allItemCats().filter(c=>IT.some(i=>(i.cat||'อื่นๆ')===c));
+  if(ST_CAT&&ST_CAT!=='__menu'&&ST_CAT!=='__low'&&!cats.includes(ST_CAT))ST_CAT='';
+  if((ST_CAT==='__low'&&!low.length)||(ST_CAT==='__menu'&&!RC.length))ST_CAT='';
+  const dn=skDraftN(),cl=S.cntLast;
+  let h='<div class="stacts">'+(K?'<button class="btn" onclick="countOpen()">📋 '+t('st_count')+'</button>':'')+
+    '<button class="btn gh" onclick="ledgerOpen()">📒 '+t('lg_btn')+'</button>'+
+    (K?'<button class="btn gh" onclick="cuSetup()">⚙️ '+t('cu_setup')+'</button>':'')+'</div>';
+  if(dn&&K)h+='<div class="hintbox stdraft">📋 '+t('st_draft',{n:dn})+' <button class="btn sm2" onclick="countOpen()">'+t('st_resume')+'</button></div>';
+  h+=deptBarHtml('skDept',d=>S.items.filter(i=>i.active!==false&&inDept('item',i,d)).length+S.recipes.filter(r=>r.active!==false&&inDept('recipe',r,d)).length);
+  h+='<div class="kpis">'+
+    '<div class="kpi hero"><div class="t">📦 '+t('st_val_all')+'</div><div class="kpi-v">฿'+fmt(valI+valR)+'</div><div class="s">'+(IT.length+RC.length)+' '+t('items_n')+'</div></div>'+
+    '<div class="kpi"><div class="t">🥬 '+t('sk_items')+'</div><div class="kpi-v">฿'+fmt(valI)+'</div><div class="s mut">'+IT.length+' '+t('items_n')+'</div></div>'+
+    '<div class="kpi"><div class="t">🍲 '+t('sk_menus')+'</div><div class="kpi-v">฿'+fmt(valR)+'</div><div class="s mut">'+RC.length+' '+t('items_n')+'</div></div>'+
+    '<div class="kpi"><div class="t">⚠️ '+t('st_low')+'</div><div class="kpi-v"'+(low.length?' style="color:var(--bad)"':'')+'>'+low.length+'</div>'+
+      '<div class="s mut">📋 '+t('st_last')+' '+(cl&&cl.d?esc(dispDate(cl.d))+(cl.by?' · '+esc(cl.by):''):'–')+'</div></div></div>';
+  const chip=(c,lb)=>'<button data-c="'+esc(c)+'" class="'+(ST_CAT===c?'on':'')+'" onclick="stSetCat(this.dataset.c)">'+lb+'</button>';
+  h+='<div class="catbar stcats">'+chip('',t('all'))+(low.length?chip('__low','⚠️ '+t('st_low')+' <span class="skcn">'+low.length+'</span>'):'')+
+    cats.map(c=>chip(c,catIc(c)+' '+esc(trCat(c))+' <span class="skcn">'+IT.filter(i=>(i.cat||'อื่นๆ')===c).length+'</span>')).join('')+
+    (RC.length?chip('__menu','🍲 '+t('skc_menus')+' <span class="skcn">'+RC.length+'</span>'):'')+'</div>'+
+    '<input id="stQ" placeholder="🔎 '+t('search')+'" value="'+esc(ST_Q)+'" oninput="ST_Q=this.value;stFilter()" style="margin-bottom:10px">';
+  const byName=(a,b)=>dispName(a).localeCompare(dispName(b),'th');
+  const sec=(ic,lb,L,val,body)=>'<div class="stsec"><div class="secbar">'+ic+' '+lb+'<span class="sp">'+L.length+' · ฿'+fmt(val)+'</span></div>'+body+'</div>';
+  if(!IT.length&&!RC.length)h+='<div class="card empty">'+t('it_none')+'</div>';
+  if(ST_CAT==='__low')h+=sec('⚠️',t('st_low'),low,low.reduce((s,i)=>s+vI(i),0),stItemRows(low.slice().sort(byName)));
+  else if(ST_CAT!=='__menu')cats.filter(c=>!ST_CAT||c===ST_CAT).forEach(c=>{const L=IT.filter(i=>(i.cat||'อื่นๆ')===c).sort(byName);
+    h+=sec(catIc(c),esc(trCat(c)),L,L.reduce((s,i)=>s+vI(i),0),stItemRows(L));});
+  if((!ST_CAT||ST_CAT==='__menu')&&RC.length)h+=sec('🍲',t('skc_menus'),RC,valR,stMenuRows(RC.slice().sort(byName)));
+  h+='<div class="card empty" id="stNone" style="display:none">'+t('no_data')+'</div>';
+  el.innerHTML=h;stFilter();
 };
-function adjModal(kind,id){
+function stFilter(){const q=supKey(ST_Q);let any=0;
+  document.querySelectorAll('#view-stock .stsec').forEach(s=>{let n=0;
+    s.querySelectorAll('tr.strow').forEach(r=>{const v=!q||r.dataset.n.indexOf(q)>=0;r.style.display=v?'':'none';if(v)n++;});
+    s.style.display=n?'':'none';any+=n;});
+  const e=document.getElementById('stNone');if(e)e.style.display=any||!document.querySelector('#view-stock .stsec')?'none':'';}
+function adjModal(kind,id){ // ปรับยอดเป็นหน่วยนับ (ขวด แกลลอน …) — เก็บเป็นหน่วยใช้เหมือนเดิม
   const o=kind==='item'?itemById(id):recipeById(id);if(!o)return;
+  const U=skUnit(kind,o),base=kind==='item'?(o.unit||''):(o.yield_unit||'');
+  const v0=String(rnd4(num(o.qty)/U.f));window._adj={f:U.f,v0};
   openModal('<h3>'+t('sk_adj_title')+' · '+esc(dispName(o))+'</h3>'+
-    '<div class="fld"><label>'+t('sk_now')+'</label><div class="b" style="font-size:18px">'+fmtI(o.qty)+' '+esc(trUnit((kind==='item'?o.unit:o.yield_unit)||''))+'</div></div>'+
-    '<div class="fld"><label>'+t('sk_new_qty')+'</label><input id="adjQ" inputmode="decimal" value="'+fmtI(o.qty)+'"></div>'+
+    '<div class="fld"><label>'+t('sk_now')+'</label><div class="b" style="font-size:18px">'+stQtyHtml(kind,o)+'</div></div>'+
+    '<div class="fld"><label>'+t('sk_new_qty')+' ('+esc(trUnit(U.u))+')</label><input id="adjQ" inputmode="decimal" value="'+esc(v0)+'">'+
+      (U.u!==base?'<div class="xs mut">'+esc(unitEqTxt(o,U.u))+'</div>':'')+'</div>'+
     '<div class="fld"><label>'+t('sk_adj_note')+'</label><input id="adjN"></div>'+
-    '<button class="btn big" onclick="adjSave(\''+kind+'\',\''+id+'\')">'+t('save')+'</button>');
+    '<button class="btn big" onclick="adjSave(\''+kind+'\',\''+esc(id)+'\')">'+t('save')+'</button>');
 }
 async function adjSave(kind,id){await once(async()=>{
   const o=kind==='item'?itemById(id):recipeById(id);if(!o)return;
-  const nv=num(document.getElementById('adjQ').value);
-  const delta=rnd2(nv-num(o.qty));
-  if(delta!==0){
+  const A=window._adj||{f:1,v0:''};const raw=document.getElementById('adjQ').value.trim();
+  const delta=raw===A.v0?0:rnd4(num(raw)*A.f-num(o.qty));   // ไม่ได้แก้ตัวเลข = ไม่ปรับ (กันเศษจากการปัดหน่วย)
+  if(Math.abs(delta)>1e-9){
     await pushMoves([{d:bizTodayISO(),kind:'adjust',item_kind:kind,ref_id:id,name:o.name,qty:delta,
       note:document.getElementById('adjN').value.trim()||null}]);
   }
   closeModal();toast(t('sv_ok'));show(S.tab);
 });}
 
-/* ---------- 📋 โหมดนับสต๊อกครัวกลาง (นับของสำรองที่สั่งมาเก็บไว้) ---------- */
-function skCountStart(){if(!canKitchen())return;SK_MODE='count';SK_CNT={};SK_Q='';show('stock');}
-function skCountExit(){SK_MODE='table';SK_CNT={};show('stock');}
+/* ---------- 📋 นับของ — หน้างานเต็มจอ (ขั้น ④ ในหน้าวันนี้ · ปุ่มในหน้าสต๊อก)
+   ‹ กลับ = เก็บตัวเลขที่นับไว้ (ร่างใน localStorage jjck_cnt_draft — วันเดียวกัน ≤12 ชม.) · ยกเลิก = ทิ้ง ---------- */
+const CNT_DRAFT='jjck_cnt_draft';
 function skEnt(kind,id){const k=kind+'|'+id;return SK_CNT[k]||(SK_CNT[k]={kind,id,v:''});}
 function skIsCounted(e){return !!e&&String(e.v==null?'':e.v).trim()!=='';}
 function skUnit(kind,o){ // หน่วยที่นับ + 1 หน่วยนับ = กี่หน่วยใช้
   if(kind!=='item')return {u:o.yield_unit||'',f:1};
   const u=countUnitOf(o);return {u,f:unitFactor(o,u)||1};}
-function skTotal(e,o,kind){return rnd4(num(e.v)*skUnit(kind,o).f);}   // แปลงเป็นหน่วยใช้ก่อนเก็บ
+function skTotal(e,o,kind){ // แปลงเป็นหน่วยใช้ก่อนเก็บ (ตามหน่วยที่ใช้ตอนพิมพ์)
+  const f=e.u&&kind==='item'?(unitFactor(o,e.u)||skUnit(kind,o).f):skUnit(kind,o).f;return rnd4(num(e.v)*f);}
+function skDraftGet(){const d=LS.get(CNT_DRAFT,null);
+  if(!d||!d.e||d.d!==bizTodayISO()||Date.now()-num(d.t)>12*3600e3)return null;return d;}
+function skDraftN(){const d=skDraftGet();return d?Object.keys(d.e).length:0;}
+function skDraftSave(){const e={};Object.entries(SK_CNT).forEach(([k,x])=>{if(skIsCounted(x))e[k]={v:String(x.v),u:x.u||''};});
+  if(Object.keys(e).length)LS.set(CNT_DRAFT,{t:Date.now(),d:bizTodayISO(),e});else skDraftClear();}
+function skDraftClear(){try{localStorage.removeItem(CNT_DRAFT);}catch(e){}}
+function countOpen(){
+  if(!canKitchen())return;
+  if(!Object.values(SK_CNT).some(skIsCounted)){const d=skDraftGet();
+    if(d){SK_CNT={};Object.entries(d.e).forEach(([k,x])=>{const p=k.indexOf('|'),kind=k.slice(0,p),id=k.slice(p+1);
+        if(kind==='item'?itemById(id):recipeById(id))SK_CNT[k]={kind,id,v:x&&x.v!=null?String(x.v):String(x),u:(x&&x.u)||''};});
+      const n=Object.values(SK_CNT).filter(skIsCounted).length;if(n)toast('📋 '+t('skc_draft',{n}));}}
+  paintCount();}
+const skCountStart=countOpen;   // ชื่อเดิม
+function countBack(){closeModal();show(S.tab);}   // ‹ กลับ — ตัวเลขที่นับไว้ยังอยู่ กดนับของอีกครั้งนับต่อได้
+function skCountCancel(){
+  if(Object.values(SK_CNT).some(skIsCounted)&&!confirm(t('skc_cancel_q')))return;
+  SK_CNT={};skDraftClear();closeModal();show(S.tab);}
 function skInput(kind,id,el){ // พิมพ์แล้วไม่วาดหน้าใหม่ (คีย์บอร์ดมือถือไม่หุบ) — อัปเดตเฉพาะการ์ดนี้กับตัวนับ
   const e=skEnt(kind,id);e.v=el.value;
   const card=el.closest('.icard');if(card)card.classList.toggle('cnt',skIsCounted(e));
   const o=kind==='item'?itemById(id):recipeById(id);const eq=card&&card.querySelector('.skeq');
+  if(o)e.u=skUnit(kind,o).u;
   if(eq&&o){const U=skUnit(kind,o),base=kind==='item'?(o.unit||''):(o.yield_unit||'');
     eq.textContent=skIsCounted(e)&&U.u!==base?'= '+fmtQ(skTotal(e,o,kind))+' '+trUnit(base):'';}
-  skPaintMeta();}
+  skDraftSave();skPaintMeta();}
 function skPaintMeta(){
   const aI=S.items.filter(i=>i.active!==false&&inDept('item',i)),aR=S.recipes.filter(r=>r.active!==false&&inDept('recipe',r));
   const n=aI.filter(i=>skIsCounted(SK_CNT['item|'+i.id])).length+aR.filter(r=>skIsCounted(SK_CNT['recipe|'+r.id])).length,all=aI.length+aR.length;
   const v=document.getElementById('skN');if(v)v.textContent=t('skc_counted',{a:n,b:all});
   const b=document.getElementById('skGo');if(b)b.disabled=!Object.values(SK_CNT).some(skIsCounted);
-  document.querySelectorAll('#view-stock .catbar button[data-c]').forEach(x=>{const c=x.dataset.c;if(!c)return;
+  document.querySelectorAll('#modalBox .skcats button[data-c]').forEach(x=>{const c=x.dataset.c;if(!c)return;
     const L=c==='__menu'?aR.map(r=>'recipe|'+r.id):aI.filter(i=>(i.cat||'อื่นๆ')===c).map(i=>'item|'+i.id);
     const k=L.filter(id=>skIsCounted(SK_CNT[id])).length;const sp=x.querySelector('.skcn');if(sp)sp.textContent=k+'/'+L.length;});}
 function skCountCard(kind,o){
@@ -3659,7 +3732,7 @@ function skCountCard(kind,o){
   const base=kind==='item'?(o.unit||''):(o.yield_unit||'');
   const U=skUnit(kind,o);
   const ic=kind==='item'?catIc(o.cat):'🍲';
-  return '<div class="icard skcard'+(counted?' cnt':'')+'">'+
+  return '<div class="icard skcard'+(counted?' cnt':'')+'" data-n="'+esc(supKey(dispName(o)+' '+o.name))+'">'+
     '<div class="ithumb" style="height:64px">'+(o.image_url?'<img src="'+esc(o.image_url)+'" loading="lazy">':ic)+'</div>'+
     '<div class="iname" style="min-height:auto">'+esc(dispName(o))+'</div>'+
     '<div class="isub">'+t('skc_sys')+' '+fmtQ(rnd2(num(o.qty)/U.f))+' '+esc(trUnit(U.u))+'</div>'+
@@ -3667,71 +3740,85 @@ function skCountCard(kind,o){
     '<div class="skin"><input inputmode="decimal" placeholder="0" value="'+esc(e?e.v:'')+'" oninput="skInput(\''+kind+'\',\''+esc(o.id)+'\',this)"><span>'+esc(trUnit(U.u))+'</span></div>'+
     '<div class="xs b skeq" style="color:var(--gold)">'+(counted&&U.u!==base?'= '+fmtQ(skTotal(e,o,kind))+' '+esc(trUnit(base)):'')+'</div></div>';}
 let SK_CAT=LS.get('jjck_skcat','')||'';
-function skSetCat(c){SK_CAT=c;LS.set('jjck_skcat',c);show('stock');}
-function renderStockCount(el){
-  const q=supKey(SK_Q);
-  const m=o=>!q||supKey(o.name).includes(q)||supKey(dispName(o)).includes(q);
+function skSetCat(c){SK_CAT=c;LS.set('jjck_skcat',c);paintCount();}
+function cntDept(d){deptSet(d);paintCount();}
+function skNormUnits(){ // หน่วยนับของสินค้าเปลี่ยนหลังพิมพ์ไปแล้ว → แปลงตัวเลขที่พิมพ์ไว้เป็นหน่วยใหม่
+  Object.values(SK_CNT).forEach(e=>{if(e.kind!=='item'||!skIsCounted(e)||!e.u)return;const o=itemById(e.id);if(!o)return;
+    const U=skUnit('item',o);if(e.u===U.u)return;const f0=unitFactor(o,e.u);
+    if(f0){e.v=String(rnd4(num(e.v)*f0/U.f));}e.u=U.u;});}
+function paintCount(keep){
+  const box0=document.getElementById('modalBox');const st=keep&&box0?box0.scrollTop:0;
+  skNormUnits();
   const actI=S.items.filter(i=>i.active!==false&&inDept('item',i)),actR=S.recipes.filter(r=>r.active!==false&&inDept('recipe',r));
   const cats=allItemCats().filter(c=>actI.some(i=>(i.cat||'อื่นๆ')===c));
   if(SK_CAT&&SK_CAT!=='__menu'&&!cats.includes(SK_CAT))SK_CAT='';
   if(SK_CAT==='__menu'&&!actR.length)SK_CAT='';
   const cnt=(L,k)=>L.filter(o=>skIsCounted(SK_CNT[k+'|'+o.id])).length;
   const dn=d=>S.items.filter(i=>i.active!==false&&inDept('item',i,d)).length+S.recipes.filter(r=>r.active!==false&&inDept('recipe',r,d)).length;
-  let h='<div class="hintbox">'+t('skc_hint')+'</div>'+
-    (canKitchen()?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn gh sm2" onclick="cuSetup()">⚙️ '+t('cu_setup')+'</button></div>':'')+
-    deptBarHtml('skDept',dn)+
+  let h=tkHead('📋 '+t('sx_s4'),t('skc_hint'),'countBack()')+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn gh sm2" onclick="cuSetup(\'count\')">⚙️ '+t('cu_setup')+'</button></div>'+
+    deptBarHtml('cntDept',dn)+
     '<div class="catbar skcats"><button data-c="" class="'+(SK_CAT===''?'on':'')+'" onclick="skSetCat(\'\')">'+t('all')+'</button>'+
     cats.map(c=>{const L=actI.filter(i=>(i.cat||'อื่นๆ')===c);
       return '<button data-c="'+esc(c)+'" class="'+(SK_CAT===c?'on':'')+'" onclick="skSetCat(this.dataset.c)">'+catIc(c)+' '+esc(trCat(c))+' <span class="skcn">'+cnt(L,'item')+'/'+L.length+'</span></button>';}).join('')+
     (actR.length?'<button data-c="__menu" class="'+(SK_CAT==='__menu'?'on':'')+'" onclick="skSetCat(\'__menu\')">🍲 '+t('skc_menus')+' <span class="skcn">'+cnt(actR,'recipe')+'/'+actR.length+'</span></button>':'')+'</div>'+
-    '<input placeholder="🔎 '+t('search')+'" value="'+esc(SK_Q)+'" oninput="SK_Q=this.value;show(\'stock\')" style="margin-bottom:10px">';
-  let shown=0;
+    '<input id="skQ" placeholder="🔎 '+t('search')+'" value="'+esc(SK_Q)+'" oninput="SK_Q=this.value;skFilter()" style="margin-bottom:10px">';
+  const byName=(a,b)=>dispName(a).localeCompare(dispName(b),'th');
   if(SK_CAT!=='__menu')cats.filter(c=>!SK_CAT||c===SK_CAT).forEach(c=>{
-    const L=actI.filter(i=>(i.cat||'อื่นๆ')===c&&m(i)).sort((a,b)=>dispName(a).localeCompare(dispName(b),'th'));
-    if(!L.length)return;shown+=L.length;
-    h+='<div class="secbar">'+catIc(c)+' '+esc(trCat(c))+'<span class="sp">'+L.length+'</span></div>'+
-      '<div class="igrid" style="margin-bottom:14px">'+L.map(i=>skCountCard('item',i)).join('')+'</div>';});
-  if(!SK_CAT||SK_CAT==='__menu'){const R=actR.filter(m);
-    if(R.length){shown+=R.length;h+='<div class="secbar">🍲 '+t('skc_menus')+'<span class="sp">'+R.length+'</span></div>'+
-      '<div class="igrid" style="margin-bottom:14px">'+R.map(r=>skCountCard('recipe',r)).join('')+'</div>';}}
-  if(!shown)h+='<div class="card empty">'+t('no_data')+'</div>';
-  const n=actI.filter(i=>skIsCounted(SK_CNT['item|'+i.id])).length+actR.filter(r=>skIsCounted(SK_CNT['recipe|'+r.id])).length;
+    const L=actI.filter(i=>(i.cat||'อื่นๆ')===c).sort(byName);
+    h+='<div class="sksec"><div class="secbar">'+catIc(c)+' '+esc(trCat(c))+'<span class="sp">'+L.length+'</span></div>'+
+      '<div class="igrid" style="margin-bottom:14px">'+L.map(i=>skCountCard('item',i)).join('')+'</div></div>';});
+  if((!SK_CAT||SK_CAT==='__menu')&&actR.length)
+    h+='<div class="sksec"><div class="secbar">🍲 '+t('skc_menus')+'<span class="sp">'+actR.length+'</span></div>'+
+      '<div class="igrid" style="margin-bottom:14px">'+actR.slice().sort(byName).map(r=>skCountCard('recipe',r)).join('')+'</div></div>';
+  h+='<div class="card empty" id="skNone" style="display:none">'+t('no_data')+'</div>';
+  const n=cnt(actI,'item')+cnt(actR,'recipe');
   const nAll=Object.values(SK_CNT).filter(skIsCounted).length;   // นับไว้แผนกอื่นก็บันทึกด้วย
   h+='<div class="stickysum"><span class="v" id="skN">'+t('skc_counted',{a:n,b:actI.length+actR.length})+'</span>'+
     '<span style="margin-left:auto;display:flex;gap:8px">'+
-    '<button class="btn gh sm2" onclick="skCountExit()">'+t('cancel')+'</button>'+
+    '<button class="btn gh sm2" onclick="skCountCancel()">'+t('cancel')+'</button>'+
     '<button class="btn ok" id="skGo" onclick="skCountSum()" '+(nAll?'':'disabled')+'>'+t('skc_save')+'</button></span></div>';
-  el.innerHTML=h;
-}
+  MODAL_BACK=null;openTask(h);skFilter();
+  const box=document.getElementById('modalBox');if(box){box.classList.add('cntw');box.scrollTop=st;}}
+function skFilter(){const q=supKey(SK_Q);let any=0;
+  document.querySelectorAll('#modalBox .sksec').forEach(s=>{let n=0;
+    s.querySelectorAll('.skcard').forEach(c=>{const v=!q||c.dataset.n.indexOf(q)>=0;c.style.display=v?'':'none';if(v)n++;});
+    s.style.display=n?'':'none';any+=n;});
+  const e=document.getElementById('skNone');if(e)e.style.display=any?'none':'';}
 function skCountSum(){ // สรุปเฉพาะตัวที่ต่างจากระบบ ก่อนปรับจริง
-  const diffs=[];
+  const diffs=[];let n=0;
   Object.values(SK_CNT).forEach(e=>{
     if(!skIsCounted(e))return;
-    const o=e.kind==='item'?itemById(e.id):recipeById(e.id);if(!o)return;
+    const o=e.kind==='item'?itemById(e.id):recipeById(e.id);if(!o)return;n++;
     const total=skTotal(e,o,e.kind);
-    const delta=rnd2(total-num(o.qty));
+    const delta=rnd4(total-num(o.qty));
     const U=skUnit(e.kind,o);
-    if(delta!==0)diffs.push({kind:e.kind,id:e.id,name:o.name,disp:dispName(o),
+    if(Math.abs(delta)>1e-9)diffs.push({kind:e.kind,id:e.id,name:o.name,disp:dispName(o),
       unit:U.u,f:U.f,sys:num(o.qty),cnt:total,delta});
   });
-  window._skDiffs=diffs;
-  if(!diffs.length){openModal('<h3>📋 '+t('skc_start')+'</h3><div class="okbox">'+t('skc_none')+'</div>'+
-    '<button class="btn big" onclick="closeModal();skCountExit()">'+t('done')+'</button>');return;}
-  let h='<h3>📋 '+t('skc_sum')+'</h3><div class="twrap"><table class="t">'+
+  window._skDiffs=diffs;window._skN=n;
+  const head=tkHead('📋 '+t('skc_sum'),'','paintCount(true)');
+  if(!diffs.length){openTask(head+'<div class="okbox">'+t('skc_none')+'</div>'+
+    '<button class="btn big ok" onclick="skCountApply()">'+t('done')+'</button>');return;}
+  let h=head+'<div class="twrap"><table class="t">'+
     '<tr><th>'+t('nav_items')+'</th><th class="right">'+t('skc_sys')+'</th><th class="right">'+t('skc_start').replace('📋 ','')+'</th><th class="right">'+t('skc_diff')+'</th></tr>';
   diffs.forEach(d=>{const v=x=>fmtQ(rnd2(x/d.f));
     h+='<tr><td>'+esc(d.disp)+'</td><td class="n">'+v(d.sys)+' '+esc(trUnit(d.unit))+'</td>'+
     '<td class="n">'+v(d.cnt)+'</td>'+
     '<td class="n" style="color:var(--'+(d.delta>0?'ok':'bad')+');font-weight:700">'+(d.delta>0?'+':'')+v(d.delta)+'</td></tr>';});
   h+='</table></div><button class="btn ok big" style="margin-top:12px" onclick="skCountApply()">'+t('skc_apply')+' ('+diffs.length+')</button>';
-  openModal(h,true);
+  openTask(h);
 }
 async function skCountApply(){await once(async()=>{
-  const diffs=window._skDiffs||[];if(!diffs.length)return;
+  const diffs=window._skDiffs||[],n=window._skN||0;
   const today=bizTodayISO();
-  await pushMoves(diffs.map(d=>({d:today,kind:'adjust',item_kind:d.kind,ref_id:d.id,name:d.name,
+  if(diffs.length)await pushMoves(diffs.map(d=>({d:today,kind:'adjust',item_kind:d.kind,ref_id:d.id,name:d.name,
     qty:d.delta,note:'นับสต๊อก'})));
-  closeModal();toast(t('sv_ok'));skCountExit();
+  // จดว่านับแล้ววันนี้ (นับแล้วตรงทุกอย่างก็นับว่าเสร็จ) — ขั้น ④ ในหน้าวันนี้เป็นสีเขียว
+  const cl={d:today,by:(S.user&&S.user.name)||'',n,diff:diffs.length,at:new Date().toISOString()};S.cntLast=cl;
+  sb.from('ck_settings').upsert({key:'count_last',value:cl}).then(()=>{},()=>{});
+  SK_CNT={};skDraftClear();window._skDiffs=[];
+  closeModal();toast(t('sv_ok'));show(S.tab);
 });}
 
 /* ============================================================
@@ -4502,7 +4589,7 @@ function kpSteps(){ // 6 ขั้นของวัน — คำง่าย �
     {k:1,ic:'⚡',lb:t('sx_s1'),ok:!nU,sub:nU?t('sx_todo_n',{n:nU}):t('sx_ok_enough'),go:"taskMake('urgent')"},
     {k:2,ic:'🚚',lb:t('sx_s2'),ok:S.br.data?!brLeft:null,sub:S.br.data?(brLeft?t('sx_br_n',{n:brLeft}):(brs.length?t('sx_br_ok'):t('sx_br_none'))):'…',go:'taskSend()'},
     {k:3,ic:'🍳',lb:t('sx_s3'),ok:!nR,sub:nR?t('sx_todo_n',{n:nR}):t('sx_ok_full'),go:"taskMake('refill')"},
-    {k:4,ic:'📋',lb:t('sx_s4'),ok:!!S._countedToday,sub:S._countedToday?t('sx_cnt_ok'):t('sx_cnt_no'),go:"show('stock');skCountStart()"},
+    {k:4,ic:'📋',lb:t('sx_s4'),ok:!!S._countedToday,sub:S._countedToday?t('sx_cnt_ok'):t('sx_cnt_no'),go:"countOpen()"},
     {k:5,ic:'🛒',lb:t('sx_s5'),ok:!nBuy,sub:nBuy?t('sx_buy_n',{n:nBuy}):t('sx_buy_ok'),go:'taskBuy()'},
     {k:6,ic:'📥',lb:t('sx_s6'),ok:!nRecv,sub:nRecv?t('sx_recv_n',{n:nRecv}):t('sx_recv_tap'),go:'taskRecv()'}];}
 function kpStepsHtml(){return kpBigStepsHtml();}
@@ -4978,7 +5065,7 @@ RENDER.dash=async function(el){
   let A=null;
   try{[A]=await Promise.all([accData(todayStr().slice(0,7)).catch(()=>null),kpAvgLoad().catch(()=>null),stkCodes().length?brLoad().catch(()=>null):null]);}catch(e){A=null;}
   if(tok!==DASH_TOK||S.tab!=='dash')return;
-  if(A)S._countedToday=A.mv.some(x=>x.kind==='adjust'&&x.d===bizTodayISO());
+  if(A)S._countedToday=A.mv.some(x=>x.kind==='adjust'&&x.d===bizTodayISO())||!!(S.cntLast&&S.cntLast.d===bizTodayISO());
   el.innerHTML=dashTopHtml(A)+dashLegacyHtml();};
 
 /* ---------- ⚙️ ค่าตั้งการผลิต/ราคาขายสาขา + 🔒 การแก้ไขข้อมูล ---------- */
@@ -5577,12 +5664,13 @@ async function deptSave(it,v){ // false = ยังไม่ได้รัน S
 
 /* ---------- ⚙️ จัดหมวด & หน่วยนับ (ตั้งครั้งเดียว ทีละหลายอย่าง) ---------- */
 let CU_Q='';
-function cuSetup(){if(!canKitchen())return;paintCu();}
+let CU_FROM='';
+function cuSetup(from){if(!canKitchen())return;CU_FROM=from==='count'?'count':'';paintCu();}
 function cuDept(d){deptSet(d);paintCu();}
 function paintCu(keep){
   const box=document.getElementById('modalBox');const st=keep&&box?box.scrollTop:0;
   const cats=allItemCats();
-  let h=tkHead('⚙️ '+t('cu_setup'),t('cu_setup_hint'),"closeModal();show('stock')");
+  let h=tkHead('⚙️ '+t('cu_setup'),t('cu_setup_hint'),CU_FROM==='count'?'countOpen()':'closeModal();show(S.tab)');
   if(S.scSql===false)h+='<div class="badbox">'+t('cu_need_sql')+'</div>';
   if(S.deptCol===false)h+='<div class="badbox">'+t('dp_need_sql')+'</div>';
   h+=deptBarHtml('cuDept',d=>S.items.filter(i=>i.active!==false&&inDept('item',i,d)).length);
@@ -5732,6 +5820,8 @@ const SC_I18N={"th": {"sd_every": "ทุกวัน", "sd_days": "วันส
 ['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],SC_I18N[l]));   // วันสั่ง · หน่วยนับ · สมุดสต๊อก
 const DP_I18N={"th": {"dp_main": "ครัวกลาง", "dp_dessert": "ของหวาน", "dp_both": "ใช้ทั้งสองแผนก", "dp_lb": "แผนก", "dp_auto": "อัตโนมัติ ({d})", "dp_hint": "ไม่เลือก = ระบบดูจากสูตร (ใช้ในเมนูของหวาน = ของหวาน)", "dp_need_sql": "ต้องรัน SQL jjmk_kitchen_dept.sql ก่อน ถึงจะเลือกแผนกเองได้ (ตอนนี้ระบบดูจากสูตรให้)"}, "en": {"dp_main": "Kitchen", "dp_dessert": "Desserts", "dp_both": "Both sections", "dp_lb": "Section", "dp_auto": "Automatic ({d})", "dp_hint": "Blank = from recipes (used in dessert menus = Desserts)", "dp_need_sql": "Run SQL jjmk_kitchen_dept.sql first to choose a section (automatic from recipes for now)"}, "lo": {"dp_main": "ຄົວກາງ", "dp_dessert": "ຂອງຫວານ", "dp_both": "ໃຊ້ທັງສອງພະແນກ", "dp_lb": "ພະແນກ", "dp_auto": "ອັດຕະໂນມັດ ({d})", "dp_hint": "ບໍ່ເລືອກ = ລະບົບເບິ່ງຈາກສູດ (ໃຊ້ໃນເມນູຂອງຫວານ = ຂອງຫວານ)", "dp_need_sql": "ຕ້ອງລັນ SQL jjmk_kitchen_dept.sql ກ່ອນ ຈຶ່ງຈະເລືອກພະແນກເອງໄດ້ (ຕອນນີ້ລະບົບເບິ່ງຈາກສູດໃຫ້)"}, "my": {"dp_main": "ဗဟိုမီးဖိုချောင်", "dp_dessert": "အချိုပွဲ", "dp_both": "ဌာနနှစ်ခုလုံး", "dp_lb": "ဌာန", "dp_auto": "အလိုအလျောက် ({d})", "dp_hint": "မရွေးလျှင် = ဖော်မြူလာမှ ကြည့်သည် (အချိုပွဲမီနူးတွင်သုံး = အချိုပွဲ)", "dp_need_sql": "ဌာနရွေးရန် SQL jjmk_kitchen_dept.sql ကို အရင် run ပါ (လောလောဆယ် ဖော်မြူလာမှ အလိုအလျောက်)"}};
 ['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],DP_I18N[l]));   // แผนก ครัวกลาง/ของหวาน
+const ST_I18N={"th": {"st_count": "นับสต๊อก", "st_draft": "มีตัวเลขที่นับค้างไว้ {n} อย่าง", "st_resume": "นับต่อ", "st_val_all": "มูลค่าสต๊อกทั้งหมด", "st_low": "ใกล้หมด", "st_last": "นับล่าสุด", "skc_draft": "นับค้างไว้ {n} อย่าง — นับต่อได้เลย", "skc_cancel_q": "ยกเลิกการนับ? ตัวเลขที่กรอกไว้จะหายทั้งหมด"}, "en": {"st_count": "Count stock", "st_draft": "{n} counted items not saved yet", "st_resume": "Continue", "st_val_all": "Total stock value", "st_low": "Running low", "st_last": "Last count", "skc_draft": "{n} counted items restored — carry on", "skc_cancel_q": "Cancel counting? Everything you typed will be lost"}, "lo": {"st_count": "ນັບສະຕັອກ", "st_draft": "ມີຕົວເລກທີ່ນັບຄ້າງໄວ້ {n} ຢ່າງ", "st_resume": "ນັບຕໍ່", "st_val_all": "ມູນຄ່າສະຕັອກທັງໝົດ", "st_low": "ໃກ້ໝົດ", "st_last": "ນັບລ່າສຸດ", "skc_draft": "ນັບຄ້າງໄວ້ {n} ຢ່າງ — ນັບຕໍ່ໄດ້ເລີຍ", "skc_cancel_q": "ຍົກເລີກການນັບ? ຕົວເລກທີ່ປ້ອນໄວ້ຈະຫາຍທັງໝົດ"}, "my": {"st_count": "စတော့ရေတွက်", "st_draft": "မသိမ်းရသေးသော ရေတွက်ချက် {n} ခု ရှိသည်", "st_resume": "ဆက်ရေတွက်", "st_val_all": "စတော့ တန်ဖိုးစုစုပေါင်း", "st_low": "ကုန်ခါနီး", "st_last": "နောက်ဆုံးရေတွက်", "skc_draft": "ရေတွက်ထားသော {n} ခု ပြန်ရပြီ — ဆက်ရေတွက်ပါ", "skc_cancel_q": "ရေတွက်ခြင်း ပယ်ဖျက်မလား? ရိုက်ထည့်ထားသမျှ ပျောက်မည်"}};
+['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],ST_I18N[l]));   // หน้าสต๊อก + หน้านับของแยกกัน
 
 sbMoreSet(LS.get('jjck_sbmore',0)==1);
 
