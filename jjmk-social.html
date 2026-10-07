@@ -1679,7 +1679,9 @@ function apPaint(){
 function apCardHtml(){
   const A=S.settings.apify||{}, chs=S.settings.channels||{}, canEdit=permOf('ch')==='edit', boss=isAdmin();
   let src=Array.isArray(chs.apify_sources)?chs.apify_sources:[];
-  if(!src.length)src=S.branches.map(b=>({id:apId(),kind:'gmaps',branch:b.code,on:true,url:''}));  // ตัวอย่างให้กรอกต่อ
+  const gbpOn=!!(chs.gbp&&chs.gbp.rt_enc);
+  // ตัวอย่างให้กรอกต่อ: รีวิว Google Maps ของสาขาหน้าร้าน — เชื่อม Business Profile แล้วไม่ต้อง (ได้ครบ+ฟรีอยู่แล้ว ไม่เปลืองเครดิต)
+  if(!src.length&&!gbpOn)src=S.branches.filter(b=>!/^(OFFICE|JJOF|JJCK|ALL)$/.test(b.code)).map(b=>({id:apId(),kind:'gmaps',branch:b.code,on:true,url:''}));
   const con=!!(A.tok_enc||A.env);   // env = เชื่อมผ่าน secret APIFY_TOKEN ใน Supabase (ฟังก์ชันจดธงไว้ให้)
   return `<div class="card" id="apCard" style="border-left:4px solid var(--gold)">
     <h3>⚡ ดึงจากทุกแอพอัตโนมัติ <span class="sp">ทางที่ง่ายที่สุด — ผ่าน Apify · เครดิตฟรี $5/เดือน</span></h3>
@@ -1696,6 +1698,7 @@ function apCardHtml(){
       <div class="copyline"><input id="apTok" type="password" placeholder="apify_api_..." autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn sm" onclick="apConnect(this)">🔗 เชื่อมต่อ</button></div>`
     :`<div class="sm mut" style="margin-top:8px">ยังไม่ได้เชื่อม — ให้ผู้ดูแลระบบ/เจ้าของเข้ามาวาง API key ที่การ์ดนี้</div>`}
     <div class="sm b" style="margin:12px 0 2px">แหล่งที่จะดึง</div>
+    ${gbpOn?`<div class="xs" style="color:var(--ok);margin:2px 0 4px">✓ รีวิว Google Maps ดึงผ่าน Google Business Profile แล้ว (การ์ด 📍 ด้านล่าง) — ไม่ต้องใส่ในการ์ดนี้ · ใช้การ์ดนี้กับ Wongnai · Facebook · Instagram · TikTok</div>`:''}
     <div id="apList">${src.map(s=>apRowHtml(s,canEdit)).join('')}</div>
     ${canEdit?`<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">
       <button class="btn gh sm" onclick="apAdd()">➕ เพิ่มแหล่ง</button>
