@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.9";
+const VERSION = "2026-10-07.10";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -393,6 +393,12 @@ function normAnalysis(j: any): z.infer<typeof Analysis> | null {
 }
 const GEMINI_SCHEMA_ANALYSIS = `\n\nตอบเป็น JSON ล้วนตามโครงสร้างนี้เท่านั้น (ห้ามมีข้อความอื่น):
 {"sentiment":"pos|neu|neg","ai_score":0-100,"topics":["หัวข้อ"],"issues":[{"topic":"หัวข้อ","detail":"รายละเอียด","severity":1-3}],"praises":[{"topic":"หัวข้อ","detail":"รายละเอียด"}],"staff":[{"name":"ชื่อ","sentiment":"pos|neu|neg","detail":"รายละเอียด"}],"visit_slot":"lunch|afternoon|dinner|late|unknown","branch":"รหัสสาขาหรือ unknown","summary":"สรุป 1 บรรทัด","reply":"ร่างคำตอบ"}`;
+// วิเคราะห์ทีละหลายรายการในคำขอเดียว (ประหยัดโควต้าฟรีของ Gemini ~8 เท่า — งานดึงย้อนหลังทั้งหมดมีคอมเมนต์เป็นพัน)
+const AN_BATCH = 8;
+const AN_BATCH_MAXLEN = 700;   // ข้อความยาวกว่านี้วิเคราะห์ทีละรายการเหมือนเดิม
+const GEMINI_SCHEMA_BATCH = `\n\nตอบเป็น JSON ล้วนเท่านั้น: {"items":[ ... ]} มีครบทุกรายการตามลำดับ แต่ละรายการคือ
+{"i":เลขรายการ,"sentiment":"pos|neu|neg","ai_score":0-100,"topics":["หัวข้อ"],"issues":[{"topic":"หัวข้อ","detail":"รายละเอียด","severity":1-3}],"praises":[{"topic":"หัวข้อ","detail":"รายละเอียด"}],"staff":[{"name":"ชื่อ","sentiment":"pos|neu|neg","detail":"รายละเอียด"}],"visit_slot":"lunch|afternoon|dinner|late|unknown","branch":"รหัสสาขาหรือ unknown","summary":"สรุป 1 บรรทัด","reply":"ร่างคำตอบ"}
+วิเคราะห์แต่ละรายการแยกกัน ห้ามเอาเนื้อหาข้ามรายการ`;
 const GEMINI_SCHEMA_DIGEST = `\n\nตอบเป็น JSON ล้วนตามโครงสร้างนี้เท่านั้น:
 {"headline":"...","problems":[{"topic":"...","detail":"...","count":1,"severity":1-3,"action":"..."}],"praises":[{"topic":"...","detail":"...","count":1}],"staff_good":[{"name":"...","detail":"..."}],"staff_fix":[{"name":"...","detail":"..."}],"time_slots":[{"slot":"lunch|afternoon|dinner|late","verdict":"..."}],"actions":["..."]}`;
 function ruleDigest(set: any[]): z.infer<typeof Digest> {
@@ -799,6 +805,24 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
   const errs: string[] = [];
   const prov = { claude: 0, gemini: 0, rules: 0 };
   const branchCodes = branches.map((b) => b.code);
+  // Gemini แบบหลายรายการต่อคำขอ (ข้อความสั้น) — ได้ผลรายการไหนใช้เลย · รายการที่ไม่ได้ผลค่อยวิเคราะห์ทีละรายการตามเดิมด้านล่าง
+  const pre = new Map<number, z.infer<typeof Analysis>>();
+  if (GEMINI_KEY && !(mode === "pending" && useClaude())) {
+    const cand = rows.filter((r: any) => String(r.text ?? "").length <= AN_BATCH_MAXLEN);
+    for (let i = 0; i + 1 < cand.length; i += AN_BATCH) {
+      if (Date.now() - t0 > budgetMs - 20000 || !gemAvailable()) break;
+      if (mode === "upgrade" && gemUsedToday() >= UPGRADE_DAILY_CAP) break;
+      const part = cand.slice(i, i + AN_BATCH);
+      const userB = `วิเคราะห์ ${part.length} รายการต่อไปนี้ แยกกันทีละรายการ:\n\n` + part.map((r: any, j: number) =>
+        `#${j + 1} ช่องทาง: ${r.channel} (${r.kind})${r.rating != null ? ` · ให้ดาว ${r.rating}/5` : ""}${r.branch ? ` · สาขาที่ระบบระบุ: ${r.branch}` : ""}\nข้อความ:\n"""${maskPII(String(r.text ?? "").slice(0, AN_BATCH_MAXLEN))}"""`).join("\n\n");
+      const j = await geminiJson(system + GEMINI_SCHEMA_BATCH, userB, 650 * part.length + 600);
+      const arr: any[] = Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : [];
+      for (const x of arr) {
+        const k = Number(x?.i) - 1, a = normAnalysis(x);
+        if (a && k >= 0 && k < part.length && !pre.has(part[k].id)) pre.set(part[k].id, a);
+      }
+    }
+  }
   for (let i = 0; i < rows.length; i++) {
     const r: any = rows[i];
     if (Date.now() - t0 > budgetMs) { deferred = rows.length - i; break; } // ใกล้หมดเวลา → ที่เหลือทำรอบหน้า
@@ -825,7 +849,8 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
         if (a) { used = "claude"; noteClaudeOk(); }
       } catch (e) { markClaudeDown(e); }
     }
-    // ชั้น 2: Gemini (โควต้าฟรี) — ตัดเบอร์โทร/อีเมล/ชื่อผู้เขียนออกก่อนส่ง
+    // ชั้น 2: Gemini (โควต้าฟรี) — ตัดเบอร์โทร/อีเมล/ชื่อผู้เขียนออกก่อนส่ง · ได้ผลจากชุดหลายรายการแล้ว = ใช้เลย
+    if (!a && pre.has(r.id)) { a = pre.get(r.id)!; used = "gemini"; }
     if (!a && gemAvailable() && (mode === "pending" || gemUsedToday() < UPGRADE_DAILY_CAP)) {
       const userG = `${head}\nข้อความ:\n"""${maskPII(body)}"""`;
       const gj = await geminiJson(system + GEMINI_SCHEMA_ANALYSIS, userG, 2500);
@@ -1098,6 +1123,20 @@ const AP_CM_PER: Record<string, { def: number; input: (k: number) => Record<stri
   tt_comments: { def: 20, input: (k) => ({ commentsPerPost: k }) },
 };
 const apSrcIdOf = (k: string) => k.split("~")[0];   // คีย์รอบพิเศษ: <แหล่ง>~cat (ดึงย้อนหลัง) · <แหล่ง>~cm (คอมเมนต์รายโพสต์)
+// 🚀 ดึงทั้งหมด (เจ้าของสั่ง 2026-10-07 "ไปโหลดคลิปหรือโพสต์ย้อนหลังมาทั้งหมด และดึงคอมเมนต์มาด้วย และวิเคราะห์เลย ย้ำนะว่าทั้งหมด")
+// งานยาวทำทีละรอบใน cron: ① รายการโพสต์ทั้งหมดของแต่ละแหล่ง (<แหล่ง>~all) → ตาราง social_posts ② คอมเมนต์ทุกโพสต์ ใหม่ก่อน ครั้งละ AP_FULL_BATCH โพสต์ (<แหล่ง>~fc)
+// โพสต์ที่แพลตฟอร์มบอกว่าไม่มีคอมเมนต์ = ข้าม (ไม่เสียเงิน) · ชนงบเดือน = พักเอง แล้วทำต่อเมื่อขึ้นรอบเดือนใหม่ · สถานะอยู่ apify.full
+const AP_FULL_POSTS = 2000;         // รายการโพสต์สูงสุดต่อแหล่ง
+const AP_FULL_PAGE = 300;           // อ่านผลรายการโพสต์ทีละหน้า
+const AP_FULL_BATCH = 8;            // โพสต์ต่อรอบดึงคอมเมนต์
+const AP_FULL_CM_PER = 300;         // คอมเมนต์สูงสุดต่อโพสต์
+const AP_FULL_LIST_USD = 2;         // เพดานเงินรอบอ่านรายการโพสต์
+const AP_FULL_CM_USD = 1;           // เพดานเงินรอบดึงคอมเมนต์
+const AP_FULL_CM_INPUT: Record<string, (n: number) => Record<string, unknown>> = {
+  fb_comments: (n) => ({ resultsLimit: n }),
+  ig_comments: (n) => ({ resultsLimit: n }),
+  tt_comments: (n) => ({ commentsPerPost: n }),
+};
 
 type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null; img?: string | null; vid?: boolean | null; pid?: string | null };
 type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number; owner?: string; posts?: ApPost[] };
@@ -1499,8 +1538,59 @@ async function apCatMerge(channel: string, metas: ApPost[]) {
     v.at = new Date().toISOString();
   });
 }
+// ตาราง social_posts (ต้องรัน jjmk_social_posts.sql) · ยังไม่มีตาราง = เก็บในแถว ap_posts เหมือนเดิม
+let postsTbl = false;
+async function hasPostsTbl() {
+  if (postsTbl) return true;   // จำเฉพาะ "มีแล้ว" — เจ้าของรัน SQL ทีหลังก็ใช้ได้ทันที
+  const { error } = await sb.from("social_posts").select("id").limit(1);
+  postsTbl = !error;
+  return postsTbl;
+}
+const POST_COLS = "pkey,url,pid,caption,posted_at,likes,comments,views,img,is_video";
+const rowToPost = (r: any): ApPost => ({ u: r.url, t: r.caption ?? "", at: r.posted_at ?? null, lk: r.likes ?? null, cm: r.comments ?? null,
+  vw: r.views ?? null, img: apImgOk(r.img), vid: r.is_video === true, pid: apPid(r.pid) });
+async function apPostsSave(channel: string, srcId: string, metas: ApPost[]) {
+  if (!metas.length || !["facebook", "instagram", "tiktok"].includes(channel)) return 0;
+  if (!(await hasPostsTbl())) { await apCatMerge(channel, metas); return metas.length; }
+  let n = 0;
+  for (let i = 0; i < metas.length; i += 50) {
+    const part = metas.slice(i, i + 50).filter((m) => apUrlKey(m.u));
+    const keys = [...new Set(part.map((m) => apUrlKey(m.u)))];
+    const { data: old, error: oe } = await sb.from("social_posts").select(POST_COLS).eq("channel", channel).in("pkey", keys);
+    if (oe) throw new Error("อ่านตาราง social_posts ไม่ได้: " + oe.message);
+    const prev = new Map((old ?? []).map((r: any) => [r.pkey, r]));
+    const byKey = new Map<string, any>();
+    for (const m of part) {
+      const k = apUrlKey(m.u), o: any = prev.get(k) ?? {};
+      const img = m.img?.startsWith(AP_IMG_PUB) ? m.img : o.img?.startsWith?.(AP_IMG_PUB) ? o.img : (m.img ?? o.img ?? null);
+      const int = (x: number | null | undefined, y: any) => (x != null ? Math.round(x) : y ?? null);
+      // ทุกแถวต้องมีช่องครบชุดเดียวกัน (PostgREST) — ค่าที่ไม่มีใช้ของเดิม · cm_pulled_at/cm_got/cm_err ไม่ส่ง = ไม่ถูกทับ
+      byKey.set(k, { channel, pkey: k, url: m.u || o.url, src_id: srcId, pid: m.pid ?? o.pid ?? null, caption: m.t || o.caption || null,
+        posted_at: m.at ?? o.posted_at ?? null, likes: int(m.lk, o.likes), comments: int(m.cm, o.comments), views: int(m.vw, o.views),
+        img, is_video: !!(m.vid || o.is_video), updated_at: new Date().toISOString(), ...(img?.startsWith(AP_IMG_PUB) ? { img_fail: 0 } : { img_fail: o.img_fail ?? 0 }) });
+    }
+    const rows = [...byKey.values()].map(({ img_fail, ...r }) => r);
+    const { error } = await sb.from("social_posts").upsert(rows, { onConflict: "channel,pkey" });
+    if (error) throw new Error("บันทึกตาราง social_posts ไม่ได้: " + error.message);
+    n += rows.length;
+  }
+  return n;
+}
 // รูปปกในรายการที่ยังเป็นลิงก์ CDN (เช่น ได้มาจากรอบดึงย้อนหลังที่เวลาไม่พอ) → ทยอยเก็บลง Storage รอบละ ≤8 รูป · พลาด 2 ครั้ง = เลิกลอง
 async function apCatThumbs(deadline: number) {
+  if (await hasPostsTbl()) {
+    const { data: rows } = await sb.from("social_posts").select("id,url,img,img_fail").not("img", "is", null)
+      .not("img", "like", AP_IMG_PUB + "%").lt("img_fail", 2).order("posted_at", { ascending: false }).limit(8);
+    if (!rows?.length || Date.now() > deadline) return 0;
+    let ok = 0;
+    await Promise.all(rows.map(async (r: any) => {
+      const img = await apThumb(r.img, apUrlKey(r.url));
+      const good = !!img?.startsWith(AP_IMG_PUB);
+      if (good) ok++;
+      await sb.from("social_posts").update(good ? { img, img_fail: 0 } : { img_fail: (Number(r.img_fail) || 0) + 1 }).eq("id", r.id);
+    }));
+    return ok;
+  }
   const { data } = await sb.from("social_settings").select("val").eq("id", "ap_posts").maybeSingle();
   const todo: { ch: string; p: ApPost & { thf?: number } }[] = [];
   for (const ch of ["tiktok", "instagram", "facebook"])
@@ -1639,7 +1729,29 @@ const apSave = (mut: (v: any) => void) => stSave("apify", mut);
 // บันทึกแถวลง social_mentions (รีวิว Google กันซ้ำกับที่ได้จาก Business Profile/Places แบบเดียวกับ pollGoogle)
 async function apSaveRows(rows: ApRow[]) {
   let added = 0, dup = 0, err = "";
+  // แถวใหม่ที่ไม่ใช่ Google (มีไอดีตรงตัว) บันทึกทีละ 100 แถวในคำขอเดียว — 🚀 ดึงทั้งหมดได้คอมเมนต์ทีละหลายร้อย บันทึกทีละแถวไม่ทันเวลาของฟังก์ชัน
+  // แถวที่มีอยู่แล้ว/ซ้ำในชุด/บันทึกทั้งชุดไม่ได้ → ไปทางเดิมด้านล่างทีละแถว (ร้านเพิ่งตอบ · เติมข้อมูลโพสต์ · กันซ้ำรีวิว Google)
+  const slow: ApRow[] = [], byCh = new Map<string, ApRow[]>();
   for (const r of rows) {
+    if (r.channel === "google" || !r.external_id) { slow.push(r); continue; }
+    const a = byCh.get(r.channel) ?? []; a.push(r); byCh.set(r.channel, a);
+  }
+  for (const [ch, list] of byCh) for (let i = 0; i < list.length; i += 100) {
+    const part = list.slice(i, i + 100);
+    const { data: ex, error: e1 } = await sb.from("social_mentions").select("external_id").eq("channel", ch).in("external_id", [...new Set(part.map((r) => r.external_id))]);
+    if (e1) { slow.push(...part); continue; }
+    const have = new Set((ex ?? []).map((x: any) => String(x.external_id))), fresh: ApRow[] = [];
+    for (const r of part) { if (have.has(r.external_id)) slow.push(r); else { have.add(r.external_id); fresh.push(r); } }
+    if (!fresh.length) continue;
+    const { data, error } = await sb.from("social_mentions").upsert(fresh.map((r) => ({ channel: r.channel, kind: r.kind, external_id: r.external_id,
+      branch: r.branch ?? null, author_name: r.author_name ?? null, text: r.text, rating: r.rating ?? null,
+      url: typeof r.url === "string" ? r.url.slice(0, 500) : null, posted_at: r.posted_at, raw: r.raw,
+      reply_status: r.reply_text ? "sent" : "pending", reply_text: r.reply_text ? apStr(r.reply_text) : null, replied_by: r.reply_text ? "ร้าน (ตอบไว้แล้ว)" : null })),
+      { onConflict: "channel,external_id", ignoreDuplicates: true }).select("id");
+    if (error) { slow.push(...fresh); continue; }
+    added += (data ?? []).length; dup += fresh.length - (data ?? []).length;
+  }
+  for (const r of slow) {
     if (r.channel === "google" && r.author_name) {
       const ep = Date.parse(r.posted_at);
       // เทียบแบบคล้าย (ชื่อ ±12 ชม.) เฉพาะแถวจาก Business Profile/Places — แถวจาก Apify มีไอดีรีวิวตรงตัวอยู่แล้ว
@@ -1684,10 +1796,10 @@ async function apSaveRows(rows: ApRow[]) {
 }
 // room = งบที่ยังเหลือให้รอบนี้ — ตัวดึงบอกว่าเพดานต่ำกว่าขั้นต่ำ ("allowed minimum of $X") ลองใหม่ด้วย X ได้ครั้งเดียว ถ้า X ≤ $1 และไม่เกินงบที่เหลือ
 async function apStart(tok: string, src: ApSrc, step: number, urls: string[], since: string | null, room = Infinity,
-  over?: { max: number; input: Record<string, unknown>; usd: number }) {
+  over?: { max: number; input: Record<string, unknown>; usd: number; timeout?: number }) {
   const st = AP_KINDS[src.kind].steps[step];
   const go = (cap: number) => apCall(tok, `/acts/${st.actor}/runs`, { method: "POST", body: { ...st.input(src, urls, since), ...(over?.input ?? {}) },
-    q: { timeout: AP_TIMEOUT_S, maxItems: over?.max ?? st.max, maxTotalChargeUsd: cap } });
+    q: { timeout: over?.timeout ?? AP_TIMEOUT_S, maxItems: over?.max ?? st.max, maxTotalChargeUsd: cap } });
   let cap = over?.usd ?? st.usd ?? AP_RUN_USD, d: any;
   try { d = await go(cap); }
   catch (e) {
@@ -1742,6 +1854,9 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
   let usage: any = null, usageErr = "", gate: { running: number; hour: number } | null = null, gateErr = "";
   let added = 0, started = 0, chained = 0, freshUsd = 0;
   const L = (sid: string) => (last[sid] ??= { ...(S0.last?.[sid] ?? {}) });
+  // 🚀 ดึงทั้งหมด: สถานะต่อแหล่ง (เขียนกลับตอนจบรอบ — ไม่ทับคำสั่งหยุดที่เจ้าของกดระหว่างรอบ)
+  const fullSrc: Record<string, any> = {}; let fullFlag: { paused?: string | null; done?: boolean } = {};
+  const FS = (sid: string) => (fullSrc[sid] ??= { ...(S0.full?.src?.[sid] ?? {}) });
   const now = () => new Date().toISOString();
   // บันทึกรอบที่เพิ่งสั่งเริ่มทันที — ฟังก์ชันถูกตัดกลางทางก็ยังตามเก็บผลได้ ไม่เริ่มซ้ำ (เงินเสียไปแล้ว)
   const commitRun = (sid: string, entry: any) => apSave((v) => {
@@ -1779,7 +1894,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         const run = (await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}`))?.data ?? {};
         const status = String(run.status ?? "");
         if (["READY", "RUNNING", "TIMING-OUT", "ABORTING"].includes(status)) {
-          if (Date.now() - (Date.parse(r.at) || 0) > AP_STALE_MS) {
+          if (Date.now() - (Date.parse(r.at) || 0) > (r.full === "posts" ? 80 * 60000 : AP_STALE_MS)) {
             await apCall(tok, `/actor-runs/${encodeURIComponent(r.id)}/abort`, { method: "POST" }).catch(() => null);
             Object.assign(L(sid), { ok: false, err: "ใช้เวลานานเกิน 45 นาที — ยกเลิกรอบนี้ รอบหน้าลองใหม่", done: now() });
             dropRuns.add(sid);
@@ -1789,6 +1904,66 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         const step = Number(r.step) || 0;
         const def = AP_KINDS[src.kind];
         const stepDef = def.steps[step];
+        if (r.full === "posts") {
+          // รายการโพสต์ทั้งหมด: อ่านผลทีละหน้า (อาจหลายพันโพสต์) บันทึกลง social_posts · อ่านไม่หมดในรอบนี้ = จำตำแหน่งไว้อ่านต่อรอบหน้า
+          const fsr = FS(src.id);
+          if (!run.defaultDatasetId || !["SUCCEEDED", "TIMED-OUT", "ABORTED"].includes(status)) {
+            fsr.pf = (Number(fsr.pf) || 0) + 1;
+            if (fsr.pf >= 2) Object.assign(fsr, { posts: "done", posts_err: "อ่านรายการโพสต์ไม่สำเร็จ 2 ครั้ง — ข้ามไปดึงคอมเมนต์ของโพสต์ที่มีอยู่" });
+            Object.assign(L(sid), { ok: false, done: now(), err: "อ่านรายการโพสต์ทั้งหมดไม่สำเร็จ: " + scrub(run.statusMessage ?? status).slice(0, 140) });
+            dropRuns.add(sid); continue;
+          }
+          let off = Number(r.off) || 0, end = false;
+          while (left() > AP_CALL_MS * 2) {
+            const page = await apCall(tok, `/datasets/${encodeURIComponent(run.defaultDatasetId)}/items`,
+              { q: { clean: "true", format: "json", limit: AP_FULL_PAGE, offset: off } });
+            const its = Array.isArray(page) ? page : [];
+            // ชื่อเพจ/บัญชีร้าน → ชุดคอมเมนต์ใช้แยกคำตอบของร้านออกจากเสียงลูกค้า (แบบขั้นแรกของรอบปกติ)
+            if (!fsr.owner && its.length) { const ow = apS(its[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120); if (ow) fsr.owner = ow; }
+            await apPostsSave(def.channel, src.id, apMetasOf(its, [], AP_FULL_PAGE));
+            off += its.length;
+            if (its.length < AP_FULL_PAGE) { end = true; break; }
+          }
+          if (!end) { runs[sid] = { ...r, off }; await commitRun(sid, runs[sid]); continue; }
+          Object.assign(fsr, { posts: "done", n: off, posts_err: null, posts_at: now() });
+          Object.assign(L(sid), { ok: true, err: null, n: off, added: 0, done: now(), ok_at: now(),
+            note: `รายการโพสต์ทั้งหมด ${off} โพสต์${status !== "SUCCEEDED" ? " (บางส่วน — หมดเวลา)" : ""}` });
+          dropRuns.add(sid); continue;
+        }
+        if (r.full === "cm") {
+          // 🚀 คอมเมนต์ชุดละ AP_FULL_BATCH โพสต์ (อาจหลายพันแถว) — อ่านผลทีละหน้า บันทึก แล้วจำตำแหน่ง (อ่านไม่หมดในรอบนี้ = รอบหน้าอ่านต่อ)
+          // ติ๊กโพสต์ว่าดึงแล้วเมื่ออ่านครบทุกหน้าเท่านั้น (ไม่งั้นคอมเมนต์ที่ยังไม่ได้อ่านหายถาวร)
+          if (!run.defaultDatasetId || !["SUCCEEDED", "TIMED-OUT", "ABORTED"].includes(status)) {
+            await apFullMark(def.channel, r.keys, null).catch(() => null);
+            Object.assign(L(sid), { ok: false, done: now(), err: "ดึงคอมเมนต์ชุดนี้ไม่สำเร็จ: " + scrub(run.statusMessage ?? status).slice(0, 140) });
+            dropRuns.add(sid); continue;
+          }
+          let off = Number(r.off) || 0, end = false, bad = "", addN = Number(r.added) || 0;
+          const got: Record<string, number> = { ...(r.got && typeof r.got === "object" ? r.got : {}) };
+          while (left() > AP_CALL_MS * 2) {
+            const page = await apCall(tok, `/datasets/${encodeURIComponent(run.defaultDatasetId)}/items`,
+              { q: { clean: "true", format: "json", limit: AP_FULL_PAGE, offset: off } });
+            const its = Array.isArray(page) ? page : [];
+            const rows = apRows(def, its, src);
+            const sv = await apSaveRows(rows);
+            if (sv.err) { bad = sv.err; break; }   // หน้านี้ยังไม่นับ — รอบหน้าอ่านหน้าเดิมซ้ำ (แถวที่บันทึกแล้วถูกข้ามเอง)
+            for (const row of rows) { const k = apUrlKey(String(row.raw?.post_id ?? "")); if (k) got[k] = (got[k] ?? 0) + 1; }
+            addN += sv.added; added += sv.added; off += its.length;
+            if (its.length < AP_FULL_PAGE) { end = true; break; }
+          }
+          if (bad) {
+            const sf = (Number(r.sf) || 0) + 1;
+            Object.assign(L(sid), { ok: false, err: "บันทึกคอมเมนต์ไม่ได้: " + scrub(bad).slice(0, 160), done: now() });
+            if (sf >= 3) { await apFullMark(def.channel, r.keys, null).catch(() => null); dropRuns.add(sid); continue; }
+            runs[sid] = { ...r, off, got, added: addN, sf }; await commitRun(sid, runs[sid]); continue;
+          }
+          if (!end) { runs[sid] = { ...r, off, got, added: addN }; await commitRun(sid, runs[sid]); continue; }
+          await apFullMark(def.channel, r.keys, got).catch((e) => console.error("full mark", scrub(e)));
+          Object.assign(L(sid), { ok: true, err: null, n: off, added: addN, done: now(),
+            note: `คอมเมนต์ ${(Array.isArray(r.keys) ? r.keys : []).length} โพสต์ · ได้ ${off} รายการ (ใหม่ ${addN})${status !== "SUCCEEDED" ? " — บางส่วน (หมดเวลา)" : ""}` });
+          report.push({ id: sid, kind: src.kind, n: off, added: addN });
+          dropRuns.add(sid); continue;
+        }
         let items: any[] = [];
         if (run.defaultDatasetId && ["SUCCEEDED", "TIMED-OUT", "ABORTED"].includes(status)) {
           if (left() < AP_CALL_MS) break;
@@ -1821,7 +1996,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
             }
           };
           const backfill = async () => {
-            await apCatMerge(def.channel, metas).catch((e) => console.error("ap_posts", scrub(e)));
+            await apPostsSave(def.channel, src.id, metas).catch((e) => { L(sid).th_err = scrub(e).slice(0, 200); });
             if (left() > 8000) L(sid).bf = await apBackfill(def.channel, metas, Date.now() + Math.min(left() - 4000, 10000)).catch(() => 0);
           };
           if (r.cat) {   // รอบดึงย้อนหลัง: เก็บรายการโพสต์อย่างเดียว ไม่ดึงคอมเมนต์ (กันค่าใช้จ่าย)
@@ -1920,6 +2095,50 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         }
       }
     }
+    // ③ 🚀 ดึงทั้งหมด (เจ้าของกดเริ่มในการ์ด ⚡) — เริ่มขั้นถัดไปของแต่ละแหล่ง ภายใต้งบ/เพดานรันพร้อมกันเดียวกับงานปกติ
+    if (start && S0.full?.on && !only) {
+      const busyK = (k: string) => runs[k] || (S0.runs?.[k] && !dropRuns.has(k));
+      const fullSources = sources.filter((s) => s.on && AP_FULL_CM_INPUT[s.kind] && AP_KINDS[s.kind].ok(s.url));
+      let paused: string | null = null;
+      for (const src of fullSources) {
+        if (left() < AP_CALL_MS + 3000) break;
+        const def = AP_KINDS[src.kind], fsr = FS(src.id);
+        const kA = src.id + "~all", kC = src.id + "~fc";
+        if (fsr.posts !== "done") {
+          if (busyK(kA)) continue;
+          const b = blocked(Math.max(def.steps[0].usd ?? AP_RUN_USD, AP_RUN_USD));
+          if (b) { if (b.hard) paused = b.msg; continue; }
+          try {
+            const r0 = await apStart(tok, src, 0, [], null, room(), { max: AP_FULL_POSTS, input: AP_CAT_INPUT[src.kind](AP_FULL_POSTS),
+              usd: Math.min(AP_FULL_LIST_USD, room()), timeout: 3600 });
+            started++; freshUsd += r0.usd;
+            runs[kA] = { id: r0.id, step: 0, at: now(), key: apKey(src), full: "posts", off: 0 };
+            Object.assign(L(kA), { start: now(), err: null, key: apKey(src) });
+            await commitRun(kA, runs[kA]);
+          } catch (e) { Object.assign(L(kA), { ok: false, err: scrub(e).slice(0, 200), done: now() }); }
+          continue;   // คอมเมนต์เริ่มหลังได้รายการโพสต์ครบ
+        }
+        if (fsr.cm === "done" || busyK(kC)) continue;
+        const need = def.steps[1].usd ?? AP_RUN_USD;
+        const b = blocked(need);
+        if (b) { if (b.hard) paused = b.msg; continue; }
+        try {
+          const todo = await apFullTodo(def.channel, src.id);
+          if (!todo.length) { fsr.cm = "done"; continue; }
+          const r1 = await apStart(tok, src, 1, todo.map((p) => p.u), null, room(), { max: AP_FULL_BATCH * AP_FULL_CM_PER,
+            input: AP_FULL_CM_INPUT[src.kind](AP_FULL_CM_PER), usd: Math.min(AP_FULL_CM_USD, room()), timeout: 1200 });
+          started++; freshUsd += r1.usd;
+          runs[kC] = { id: r1.id, step: 1, at: now(), key: apKey(src), full: "cm", keys: todo.map((p) => apUrlKey(p.u)), posts: todo,
+            ...(typeof fsr.owner === "string" && fsr.owner ? { owner: fsr.owner.slice(0, 120) } : {}) };
+          Object.assign(L(kC), { start: now(), err: null, key: apKey(src) });
+          await commitRun(kC, runs[kC]);
+        } catch (e) { Object.assign(L(kC), { ok: false, err: scrub(e).slice(0, 200), done: now() }); }
+      }
+      fullFlag.paused = paused;
+      const pending = (k: string) => runs[k] || (S0.runs?.[k] && !dropRuns.has(k));
+      if (fullSources.length && fullSources.every((s) => FS(s.id).posts === "done" && FS(s.id).cm === "done" && !pending(s.id + "~all") && !pending(s.id + "~fc")))
+        fullFlag.done = true;
+    }
     if (left() > AP_THUMB_MS) await apCatThumbs(Date.now() + left() - 8000).catch((e) => console.error("ap thumbs", scrub(e)));
   } finally {
     await apSave((v) => {
@@ -1929,6 +2148,13 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
       // แหล่งที่ถูกลบออกจากรายการแล้ว ไม่ต้องเก็บประวัติ
       v.last = { ...(v.last ?? {}), ...last };
       for (const k of Object.keys(v.last)) if (!sources.some((s) => s.id === apSrcIdOf(k))) delete v.last[k];
+      if (Object.keys(fullSrc).length || "paused" in fullFlag || fullFlag.done) {
+        const f = { ...(v.full ?? {}) };
+        f.src = { ...(f.src ?? {}), ...fullSrc };
+        if ("paused" in fullFlag) f.paused = fullFlag.paused;
+        if (fullFlag.done && f.on) { f.on = false; f.done_at = now(); f.paused = null; }
+        v.full = f;
+      }
       if (usage) v.usage = usage;
       v.usage_err = usageErr || null;
       v.env = !!APIFY_ENV;
@@ -1976,6 +2202,41 @@ async function bossCheck(u: unknown, h: unknown): Promise<string> {
   return "";
 }
 async function bossOk(u: unknown, h: unknown) { return !(await bossCheck(u, h)); }
+// 🚀 โพสต์ถัดไปที่ต้องดึงคอมเมนต์ (ใหม่ก่อน) — โพสต์ที่แพลตฟอร์มบอกว่าไม่มีคอมเมนต์ติ๊กว่าเสร็จเลย ไม่เสียเงิน
+async function apFullTodo(channel: string, srcId: string): Promise<ApPost[]> {
+  await sb.from("social_posts").update({ cm_pulled_at: new Date().toISOString(), cm_got: 0 })
+    .eq("channel", channel).eq("src_id", srcId).is("cm_pulled_at", null).eq("comments", 0);
+  const { data, error } = await sb.from("social_posts").select(POST_COLS).eq("channel", channel).eq("src_id", srcId)
+    .is("cm_pulled_at", null).lt("cm_err", 2).order("posted_at", { ascending: false, nullsFirst: false }).limit(AP_FULL_BATCH);
+  if (error) throw new Error("อ่านตาราง social_posts ไม่ได้: " + error.message);
+  return (data ?? []).map(rowToPost).filter((p) => /^https:\/\//.test(p.u));
+}
+// got = จำนวนคอมเมนต์ที่ได้ต่อโพสต์ (สำเร็จ) · null = รอบนี้พัง (นับครั้งพลาด ครบ 2 = ข้ามโพสต์นั้น)
+async function apFullMark(channel: string, keys: unknown, got: Record<string, number> | null) {
+  const ks = (Array.isArray(keys) ? keys : []).map(String).filter(Boolean).slice(0, 50);
+  if (!ks.length) return;
+  if (got) {
+    for (const k of ks)
+      await sb.from("social_posts").update({ cm_pulled_at: new Date().toISOString(), cm_got: got[k] ?? 0 }).eq("channel", channel).eq("pkey", k);
+    return;
+  }
+  const { data } = await sb.from("social_posts").select("id,cm_err").eq("channel", channel).in("pkey", ks);
+  for (const r of data ?? []) await sb.from("social_posts").update({ cm_err: (Number((r as any).cm_err) || 0) + 1 }).eq("id", (r as any).id);
+}
+async function apifyFull(on: boolean, by: string) {
+  if (on && !(await hasPostsTbl())) return { ok: false, reason: "ต้องรัน SQL jjmk_social_posts.sql ใน Supabase ก่อน (สร้างตารางเก็บโพสต์ทั้งหมด)" };
+  const now = new Date().toISOString();
+  await apSave((v) => {
+    // เริ่มใหม่ภายใน 30 วัน = ใช้รายการโพสต์ที่อ่านครบแล้วต่อ (ไม่จ่ายค่าอ่านรายการซ้ำ) · ขั้นคอมเมนต์ดูจากตาราง social_posts ว่าโพสต์ไหนยังไม่ได้ดึง
+    const keep: Record<string, unknown> = {};
+    for (const [sid, x] of Object.entries((v.full?.src ?? {}) as Record<string, any>))
+      if (x?.posts === "done" && !x.posts_err && Date.now() - (Date.parse(x.posts_at) || 0) < 30 * 864e5)
+        keep[sid] = { posts: "done", n: x.n, posts_at: x.posts_at, ...(typeof x.owner === "string" ? { owner: x.owner.slice(0, 120) } : {}) };
+    v.full = on ? { on: true, at: now, by: String(by).slice(0, 60), src: keep, paused: null }
+      : { ...(v.full ?? {}), on: false, stopped_at: now };
+  });
+  return { ok: true };
+}
 // ปุ่มในหน้าแพลตฟอร์ม (ผู้ดูแล/เจ้าของ): n = ดึงรายการโพสต์/คลิปย้อนหลัง 30/60 (ไม่ดึงคอมเมนต์) · url = ดึงคอมเมนต์ของโพสต์นี้ตอนนี้
 // urls = ดึงคอมเมนต์หลายโพสต์ในรอบเดียว (≤AP_CM_BULK · แอปส่ง url ตัวแรกมาด้วย → ฟังก์ชันรุ่นเก่าดึงได้อย่างน้อย 1 โพสต์)
 async function apifyMore(sid: string, n: number, url: string, urls: unknown[] = []) {
@@ -2005,7 +2266,12 @@ async function apifyMore(sid: string, n: number, url: string, urls: unknown[] = 
     return want.test(host) && u.length <= 500;
   };
   const metaOf = async (list: string[]) => {
-    const cat = apPostsClean((await sb.from("social_settings").select("val").eq("id", "ap_posts").maybeSingle()).data?.val?.[def.channel], AP_CAT_MAX);
+    // ข้อมูลโพสต์ (ข้อความ/รูปปก) จากตาราง social_posts ก่อน · ยังไม่รัน SQL = รายการเดิมใน ap_posts
+    let cat: ApPost[] = [];
+    if (await hasPostsTbl()) {
+      const { data: pr } = await sb.from("social_posts").select(POST_COLS).eq("channel", def.channel).in("pkey", list.map(apUrlKey));
+      cat = (pr ?? []).map(rowToPost);
+    } else cat = apPostsClean((await sb.from("social_settings").select("val").eq("id", "ap_posts").maybeSingle()).data?.val?.[def.channel], AP_CAT_MAX);
     return list.map((u) => cat.find((p) => apUrlKey(p.u) === apUrlKey(u)) ?? { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null, pid: null });
   };
   try {
@@ -2318,11 +2584,11 @@ async function runCron() {
     if (!!APIFY_ENV !== !!st.apify?.env) await apSave((v) => { v.env = !!APIFY_ENV; }).catch(() => null); // แอปรู้ว่าเชื่อมผ่าน secret
     if (Array.isArray(st.channels?.apify_sources) && st.channels.apify_sources.length && (APIFY_ENV || st.apify?.tok_enc) && left() > 50000)
       ap = await apifyTick(false, Math.min(35000, left() - 45000)).catch((e) => ({ ok: false, reason: scrub(e) }));
-    const a = await analyzeMentions(undefined, 20, Math.max(10000, left() - 15000));
+    const a = await analyzeMentions(undefined, 48, Math.max(10000, left() - 15000));   // วิเคราะห์ทีละ 8 รายการต่อคำขอ → รอบละ ~48
     // ไม่มีของค้างแล้ว + Gemini ยังว่าง → ค่อย ๆ อัพเกรดรายการ "[เบื้องต้น]" เป็นผลวิเคราะห์ AI
     let up: any = null;
-    if (!a.deferred && (a.total ?? 0) < 20 && gemAvailable() && gemUsedToday() < UPGRADE_DAILY_CAP && left() > 30000)
-      up = await analyzeMentions(undefined, 10, left() - 15000, "upgrade");
+    if (!a.deferred && (a.total ?? 0) < 48 && gemAvailable() && gemUsedToday() < UPGRADE_DAILY_CAP && left() > 30000)
+      up = await analyzeMentions(undefined, 24, left() - 15000, "upgrade");
     out = { google: g, apify: ap, analyze: a, upgrade: up };
     await heartbeat("cron", true, { google: g.ok ?? g.places?.ok ?? false, apify: ap ? { ok: ap.ok, added: ap.added ?? 0, started: ap.started ?? 0, reason: ap.reason } : null,
       analyzed: a.analyzed, deferred: a.deferred, upgraded: up?.analyzed ?? 0, providers: a.providers });
@@ -2441,6 +2707,17 @@ Deno.serve(async (req) => {
         if (bc) { out = { ok: false, reason: "เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
         out = await apifyMore(String(b.id ?? "").slice(0, 40), Number(b.n) || 0, typeof b.url === "string" ? b.url : "",
           Array.isArray(b.urls) ? b.urls : []);
+        break;
+      }
+      case "apify_full": {   // 🚀 เริ่ม/หยุด ดึงย้อนหลังทั้งหมด + คอมเมนต์ (มีค่าใช้จ่าย → เฉพาะผู้ดูแล/เจ้าของ)
+        const bc = await bossCheck(b.u, b.h);
+        if (bc) { out = { ok: false, reason: "เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
+        const fr: any = await apifyFull(b.on === true, String(b.u ?? ""));
+        if (fr.ok && b.on === true) {   // เริ่มขั้นแรกให้เลย ไม่ต้องรอ cron
+          const r: any = await apifyTick(false, 45000, true).catch((e) => ({ ok: false, reason: scrub(e) }));
+          Object.assign(fr, { started: r.started ?? 0, reason: r.ok === false ? r.reason : undefined });
+        }
+        out = fr;
         break;
       }
       case "apify_disconnect": {
