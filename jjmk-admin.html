@@ -123,6 +123,19 @@ label.fld span{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;
 .brscope .bst{flex-basis:100%;font-size:12.5px;color:var(--ink2)}
 .brscope label{display:inline-flex;align-items:center;gap:5px;font-size:14px;cursor:pointer}
 .brscope input{width:18px;height:18px}
+/* ↩️ ย้อนกลับในแท็บประวัติ */
+.undonote{font-size:12.5px;color:var(--ink2);background:var(--card2);border:1px solid var(--line2);border-radius:9px;padding:8px 11px;margin:8px 0 10px;line-height:1.6}
+.undonote.warn{color:#FFD9A0;border-color:rgba(255,170,60,.45);background:rgba(255,170,60,.08)}
+tr.undone td{opacity:.55}
+.udhead{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) 18px minmax(0,1fr);gap:6px;font-size:11.5px;color:var(--mut);margin:10px 0 2px}
+.udhead span:first-child{grid-column:2}
+.udhead span:last-child{grid-column:4}
+.udrow{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) 18px minmax(0,1fr);gap:6px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line2);font-size:13px}
+.udk{font-weight:600}
+.udv{color:var(--mut);overflow-wrap:anywhere}
+.udv.new{color:var(--ink);font-weight:600}
+.uda{color:var(--mut);text-align:center}
+.udsec{font-size:12px;color:var(--ink2);margin:10px 0 0;font-weight:600}
 
 /* ตัวกรองรายชื่อผู้ใช้ (แท็บ ผู้ใช้ & สิทธิ์) */
 .ufbar{display:grid;grid-template-columns:minmax(170px,1.5fr) repeat(4,minmax(118px,1fr)) auto;gap:8px;align-items:center;margin:2px 0 12px}
@@ -725,8 +738,24 @@ const sel=(t,q)=>api('GET',t+'?'+q);
 const upd=(t,q,b)=>api('PATCH',t+'?'+q,b);
 const ins=(t,b)=>api('POST',t,b);
 
-async function alog(target,action,detail){
-  try{await ins('pnl_access_log',{actor:(S.user&&S.user.username)||'?',target_user:target,action,detail:(detail||'').slice(0,300)});}catch(e){}
+/* ประวัติ + ค่าก่อน/หลังของช่องที่แก้ (เจ้าของสั่ง 2026-10-07 "อยากให้แก้สิทธิ์กลับได้ บางทีกดผิด")
+   snap = {b:{ช่อง:ค่าเดิม}, a:{ช่อง:ค่าใหม่}} → ปุ่ม ↩️ ย้อนกลับ ในแท็บประวัติ · undo_of = รายการนี้ย้อนรายการ id ไหน
+   ยังไม่รัน jjmk-access-undo.sql (ไม่มีคอลัมน์ snap/undo_of) = จดแบบเดิมไปก่อน (S.undoCols=false)
+   ⚠️ ห้ามใส่ pass_hash ลง snap — ประวัติอ่านได้ด้วยคีย์สาธารณะ และย้อนรหัสผ่านเดิมกลับมาไม่ควรทำได้ */
+async function alog(target,action,detail,snap,undoOf){
+  const row={actor:(S.user&&S.user.username)||'?',target_user:target,action,detail:(detail||'').slice(0,300)};
+  if(snap&&S.undoCols!==false){ row.snap=snap; if(undoOf)row.undo_of=undoOf; }
+  try{ await ins('pnl_access_log',row); }
+  catch(e){
+    if(!row.snap)return;
+    if(/snap|undo_of|PGRST204|schema cache|column/i.test(String(e.message||'')))S.undoCols=false;
+    delete row.snap; delete row.undo_of;
+    try{ await ins('pnl_access_log',row); }catch(e2){}
+  }
+}
+const UNDO_F=['role','unit','apps','active','status','display_name','reject_reason','approved_by','approved_at'];
+function snapPick(u,fields){
+  const o={}; fields.forEach(f=>{ o[f]=(u&&u[f]!==undefined)?JSON.parse(JSON.stringify(u[f])):null; }); return o;
 }
 
 /* ---------- แผนสิทธิ์ ---------- */
@@ -1156,10 +1185,13 @@ async function pendApprove(id){
   const n=boss?APPKEYS.length:Object.keys(apps).length;
   if(!boss&&!n&&!confirm('ยังไม่ได้ติ๊กแอพไหนเลย\n\nอนุมัติแล้วเขาจะล็อกอินได้แต่ไม่เห็นแอพอะไรเลย — ไปติ๊กให้ทีหลังได้ที่แท็บผู้ใช้ & สิทธิ์\n\nอนุมัติเลยไหม?'))return;
   try{
-    await upd('pnl_users','id=eq.'+id,{status:'active',active:true,role:role,unit:unit,apps:apps,
-      approved_by:(S.user&&S.user.username)||'?',approved_at:new Date().toISOString(),reject_reason:null});
+    const body={status:'active',active:true,role:role,unit:unit,apps:apps,
+      approved_by:(S.user&&S.user.username)||'?',approved_at:new Date().toISOString(),reject_reason:null};
+    const AF=Object.keys(body), before=snapPick(u,AF);
+    await upd('pnl_users','id=eq.'+id,body);
     await alog(u.username,'อนุมัติพนักงานใหม่',
-      'ระดับ '+((ROLES[role]||{}).n||role)+' · ประจำที่ '+((UNITS[unit]||{}).n||unit)+' · เปิดให้ '+n+' แอพ');
+      'ระดับ '+((ROLES[role]||{}).n||role)+' · ประจำที่ '+((UNITS[unit]||{}).n||unit)+' · เปิดให้ '+n+' แอพ',
+      {b:before,a:snapPick(body,AF)});
     toast('✅ อนุมัติ '+(u.display_name||u.username)+' แล้ว — เข้าใช้งานได้เลย');
     S.users=[]; render();
   }catch(e){ toast('อนุมัติไม่สำเร็จ — '+String(e.message||e).slice(0,120),true); }
@@ -1169,9 +1201,11 @@ async function pendReject(id){
   const why=prompt('ไม่อนุมัติใบสมัครของ '+(u.display_name||u.username)+'\n\nเหตุผล (พิมพ์ให้เขาอ่าน เว้นว่างก็ได้):','');
   if(why===null)return;
   try{
-    await upd('pnl_users','id=eq.'+id,{status:'rejected',active:false,
-      reject_reason:(why||'').slice(0,200),approved_by:(S.user&&S.user.username)||'?',approved_at:new Date().toISOString()});
-    await alog(u.username,'ไม่อนุมัติใบสมัคร',why||'(ไม่ระบุเหตุผล)');
+    const body={status:'rejected',active:false,
+      reject_reason:(why||'').slice(0,200),approved_by:(S.user&&S.user.username)||'?',approved_at:new Date().toISOString()};
+    const RF=Object.keys(body), before=snapPick(u,RF);
+    await upd('pnl_users','id=eq.'+id,body);
+    await alog(u.username,'ไม่อนุมัติใบสมัคร',why||'(ไม่ระบุเหตุผล)',{b:before,a:snapPick(body,RF)});
     toast('บันทึกแล้ว — ไม่อนุมัติ '+(u.display_name||u.username));
     render();
   }catch(e){ toast('บันทึกไม่สำเร็จ — '+String(e.message||e).slice(0,120),true); }
@@ -1331,8 +1365,9 @@ async function userQuitGo(btn,id){
   const u=S.users.find(x=>x.id===id); if(!u)return;
   await once(btn,async()=>{
     try{
+      const before=snapPick(u,['active']);
       await upd('pnl_users','id=eq.'+id,{active:false});
-      await alog(u.username,'ปิดบัญชี (พนักงานออก)','ปิดไม่ให้เข้าทุกแอพ · ข้อมูลและประวัติยังอยู่');
+      await alog(u.username,'ปิดบัญชี (พนักงานออก)','ปิดไม่ให้เข้าทุกแอพ · ข้อมูลและประวัติยังอยู่',{b:before,a:{active:false}});
       closeModal(); toast('ปิดบัญชี '+(u.display_name||u.username)+' แล้ว ✓'); render();
     }catch(e){ toast('ปิดบัญชีไม่สำเร็จ: '+e.message,true); }
   });
@@ -1355,8 +1390,9 @@ async function userBackGo(btn,id){
   if(stOf(u)!=='off'){ closeModal(); toast('บัญชีนี้ต้องอนุมัติที่แท็บ ⏳ รออนุมัติ',true); return; }
   await once(btn,async()=>{
     try{
+      const before=snapPick(u,['active']);
       await upd('pnl_users','id=eq.'+id,{active:true});      // เปิดอย่างเดียว ไม่แตะ status (อนุมัติต้องผ่าน pendApprove)
-      await alog(u.username,'เปิดบัญชีอีกครั้ง (รับกลับเข้าทำงาน)','');
+      await alog(u.username,'เปิดบัญชีอีกครั้ง (รับกลับเข้าทำงาน)','',{b:before,a:{active:true}});
       closeModal(); toast('เปิดบัญชี '+(u.display_name||u.username)+' แล้ว ✓'); render();
     }catch(e){ toast('เปิดบัญชีไม่สำเร็จ: '+e.message,true); }
   });
@@ -1410,10 +1446,11 @@ async function quickSet(el){
   el.disabled=true;
   try{
     const body={}; body[field]=val;
+    const before=snapPick(u,[field]);
     await upd('pnl_users','id=eq.'+id,body);
     u[field]=val;
     const label = field==='role' ? ROLES[val].n : UNITS[val].n;
-    await alog(u.username, field==='role'?'เปลี่ยนระดับ':'เปลี่ยนประจำที่', label);
+    await alog(u.username, field==='role'?'เปลี่ยนระดับ':'เปลี่ยนประจำที่', label, {b:before,a:body});
     toast((u.display_name||u.username)+' → '+label+' ✓');
     render();
   }catch(e){
@@ -1559,11 +1596,13 @@ async function savePerms(){
   const u=S.users.find(x=>x.id===S.editId); if(!u)return;
   APPKEYS.forEach(k=>{if($('#box_'+k))syncDraft(k);});
   try{
+    const before=snapPick(u,['apps']);
     await upd('pnl_users','id=eq.'+u.id,{apps:S.draft});
     const opened=APPKEYS.filter(k=>S.draft[k]&&Object.values(S.draft[k]).some(v=>v.includes('v')));
     await alog(u.username,S.copiedFrom?'คัดลอกสิทธิ์':'แก้สิทธิ์',
       (S.copiedFrom?'คัดลอกจาก '+S.copiedFrom+' · ':'')+
-      'เปิดแอพ: '+(opened.map(k=>APPS[k].n).join(', ')||'— ไม่มี —'));
+      'เปิดแอพ: '+(opened.map(k=>APPS[k].n).join(', ')||'— ไม่มี —'),
+      {b:before,a:snapPick({apps:S.draft},['apps'])});
     S.copiedFrom=null;
     closeModal(); toast('บันทึกสิทธิ์ของ '+(u.display_name||u.username)+' แล้ว ✓'); render();
   }catch(e){toast('บันทึกไม่สำเร็จ: '+e.message,true);}
@@ -1613,8 +1652,11 @@ async function saveUser(id){
       const u=S.users.find(x=>x.id===id);
       const body={display_name:name,role,unit,active};
       if(pass){if(pass.length<4){toast('รหัสผ่านอย่างน้อย 4 ตัว',true);return;} body.pass_hash=pwHash(u.username,pass);}
+      const UF=['display_name','role','unit','active'];
+      const before=snapPick(u,UF);
       await upd('pnl_users','id=eq.'+id,body);
-      await alog(u.username,'แก้ข้อมูลผู้ใช้',(pass?'เปลี่ยนรหัสผ่าน · ':'')+ROLES[role].n+' · '+UNITS[unit].n+(active?'':' · ปิดใช้งาน'));
+      await alog(u.username,'แก้ข้อมูลผู้ใช้',(pass?'เปลี่ยนรหัสผ่าน · ':'')+ROLES[role].n+' · '+UNITS[unit].n+(active?'':' · ปิดใช้งาน'),
+        {b:before,a:snapPick(body,UF)});   // ไม่เก็บ pass_hash
     }else{
       if(pass.length<4){toast('รหัสผ่านอย่างน้อย 4 ตัว',true);return;}
       await ins('pnl_users',{username:uname,display_name:name,pass_hash:pwHash(uname,pass),role,unit,active,perms:{},apps:{}});
@@ -1747,21 +1789,172 @@ async function viewMatrix(){
     '<p class="sub" style="margin:12px 0 0">'+APPKEYS.map(k=>APPS[k].ic+' '+esc(APPS[k].n)).join(' · ')+'</p></div>';
 }
 
-/* ---------- แท็บ 4: ประวัติ ---------- */
+/* ---------- แท็บ 4: ประวัติ + ↩️ ย้อนกลับ (เจ้าของสั่ง 2026-10-07 "อยากให้แก้สิทธิ์กลับได้ บางทีกดผิด") ----------
+   - รายการที่มี snap (จดหลังรัน jjmk-access-undo.sql) = ย้อนได้ทุกเรื่องที่แก้บัญชี: ระดับ · ประจำที่ · สิทธิ์แอพ (รวม 🏪 สาขา) ·
+     ข้อมูลผู้ใช้ (ยกเว้นรหัสผ่าน) · ปิด/เปิดบัญชี · อนุมัติ/ไม่อนุมัติใบสมัคร
+   - รายการเก่าก่อนมีระบบนี้: ย้อนได้แค่ "เปลี่ยนระดับ/ประจำที่" โดยหาค่าเดิมจากประวัติก่อนหน้า (legacyGuess) — หาไม่เจอ = บอกให้แก้เอง
+   - ย้อน = อ่านบัญชีล่าสุดก่อน → บอกว่าจะเปลี่ยนอะไรจากอะไรเป็นอะไร (+ เตือนถ้ามีคนแก้ช่องนั้นต่อหลังรายการนี้) → ยืนยัน → อ่านซ้ำอีกรอบ
+     ว่าไม่มีใครแก้ระหว่างนั้น → เขียนเฉพาะช่องในรายการนั้น → จดประวัติ "ย้อนกลับ" (มี snap เหมือนกัน = ย้อนการย้อนได้)
+   - กันพลาด: ย้อนแล้วบัญชีที่ใช้อยู่หลุดสิทธิ์ผู้ดูแล/ถูกปิด = ไม่ให้ทำ · เปิดบัญชีที่ยังไม่ได้อนุมัติ = ไม่ให้ทำ (ต้องผ่านแท็บรออนุมัติ) */
+const UF_N={role:'ระดับ',unit:'ประจำที่',apps:'สิทธิ์แอพ',active:'เปิดใช้งาน',status:'สถานะใบสมัคร',display_name:'ชื่อที่แสดง',reject_reason:'เหตุผลที่ไม่อนุมัติ'};
+const ST_N={active:'อนุมัติแล้ว',pending:'รออนุมัติ',rejected:'ไม่อนุมัติ'};
+function stableJ(v){   // JSON ที่เรียงคีย์ — เทียบค่า jsonb ได้ไม่ขึ้นกับลำดับคีย์
+  if(v===undefined)v=null;
+  if(v===null||typeof v!=='object')return JSON.stringify(v);
+  if(Array.isArray(v))return '['+v.map(stableJ).join(',')+']';
+  return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stableJ(v[k])).join(',')+'}';
+}
+const sameVal=(a,b)=>stableJ(a)===stableJ(b);
+function appsLine(apps,k){   // สรุปสิทธิ์ของแอพเดียว เช่น "5/12 หน้า · 🏪 ลาดพร้าว"
+  const a=(apps&&apps[k])||null, tot=Object.keys(APPS[k].s).length;
+  const n=a?Object.keys(APPS[k].s).filter(sc=>String(a[sc]||'').includes('v')).length:0;
+  if(!n)return 'ปิด';
+  const br=a._br?String(a._br).split(',').map(b=>(BR_LIST.find(x=>x[0]===b)||[b,b])[1]).join('/'):'';
+  return n+'/'+tot+' หน้า'+(br?' · 🏪 '+br:'');
+}
+function fieldVal(f,v){      // ค่าของช่องแบบที่คนอ่านเข้าใจ (ไม่รวม apps — ใช้ appsDiff)
+  if(f==='role')return v&&ROLES[v]?ROLES[v].ic+' '+ROLES[v].n:'—';
+  if(f==='unit')return v&&UNITS[v]?UNITS[v].ic+' '+UNITS[v].n:'—';
+  if(f==='active')return v===false?'⛔ ปิด':'✅ เปิด';
+  if(f==='status')return v?(ST_N[v]||v):'—';
+  return v==null||v===''?'—':String(v);
+}
+function appsDiff(now,to){   // แถวละแอพที่สิทธิ์ต่างกัน: ตอนนี้ → จะกลับเป็น
+  return APPKEYS.filter(k=>!sameVal((now||{})[k],(to||{})[k])).map(k=>{
+    const x=appsLine(now,k), y=appsLine(to,k);
+    return '<div class="udrow"><span class="udk">'+APPS[k].ic+' '+esc(APPS[k].n)+'</span>'+
+      '<span class="udv">'+esc(x)+'</span><span class="uda">→</span><span class="udv new">'+esc(x===y?y+' · สิทธิ์ ดู/เพิ่ม/แก้/ลบ ต่างกัน':y)+'</span></div>';
+  }).join('');
+}
+/* รายการเก่า (ก่อนมี snap): หาค่าเดิมของ ระดับ/ประจำที่ จากประวัติก่อนหน้าของบัญชีเดียวกัน */
+function legacyGuess(r){
+  const f=r.action==='เปลี่ยนระดับ'?'role':r.action==='เปลี่ยนประจำที่'?'unit':null;
+  if(!f)return null;
+  const MAP=f==='role'?ROLES:UNITS;
+  const keyOf=n=>Object.keys(MAP).find(k=>MAP[k].n===String(n||'').trim());
+  const now=keyOf(r.detail);
+  const rows=S.logRows||[], i=rows.indexOf(r);
+  for(let j=i+1;j<rows.length;j++){                 // แถวถัดไป = เก่ากว่า (เรียงใหม่ → เก่า)
+    const o=rows[j]; if(o.target_user!==r.target_user)continue;
+    if(o.snap&&o.snap.a&&o.snap.a[f]!==undefined)return {f,v:o.snap.a[f],now,src:o};
+    const parts=String(o.detail||'').split(' · ').map(x=>x.trim());
+    let hit=null;
+    if(o.action===r.action)hit=keyOf(parts[0]);
+    else if(o.action==='แก้ข้อมูลผู้ใช้'||o.action==='เพิ่มผู้ใช้')hit=parts.map(keyOf).find(Boolean);
+    else if(o.action==='อนุมัติพนักงานใหม่'){
+      const pre=f==='role'?'ระดับ ':'ประจำที่ ', x=parts.find(t=>t.indexOf(pre)===0);
+      if(x)hit=keyOf(x.slice(pre.length));
+    }
+    if(hit)return {f,v:hit,now,src:o};
+  }
+  return {f,v:undefined,now,src:null};
+}
+function undoable(r){        // 'snap' = มีค่าก่อน/หลัง · 'guess' = รายการเก่า ระดับ/ประจำที่ · '' = ย้อนไม่ได้
+  if(r.snap&&r.snap.b&&typeof r.snap.b==='object'){
+    const F=Object.keys(r.snap.b).filter(f=>UNDO_F.includes(f));
+    return F.length&&!F.every(f=>sameVal(r.snap.b[f],(r.snap.a||{})[f]))?'snap':'';
+  }
+  return (r.action==='เปลี่ยนระดับ'||r.action==='เปลี่ยนประจำที่')?'guess':'';
+}
 async function viewLog(){
   let rows=[];
-  try{rows=await sel('pnl_access_log','select=*&order=created_at.desc&limit=200');}
+  try{rows=await sel('pnl_access_log','select=*&order=created_at.desc&limit=500');}
   catch(e){return '<div class="card"><div class="empty">ยังอ่านประวัติไม่ได้ — รัน <b>jjmk-access.sql</b> ใน Supabase ก่อนครับ<br><span style="font-size:12px">'+esc(e.message)+'</span></div></div>';}
+  S.logRows=rows;
+  if(rows.length)S.undoCols=('snap' in rows[0]);
+  const done={}; rows.forEach(r=>{ if(r.undo_of)done[r.undo_of]=r; });
+  const when=d=>d.toLocaleDateString('th-TH',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
   const body=rows.map(r=>{
-    const d=new Date(r.created_at);
-    return '<tr><td style="white-space:nowrap;font-size:12px;color:var(--mut)">'+
-      d.toLocaleDateString('th-TH',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+'</td>'+
+    const d=new Date(r.created_at), u=done[r.id], how=undoable(r);
+    const act=u?'<span class="chip" title="ย้อนเมื่อ '+esc(when(new Date(u.created_at)))+'">↩️ ย้อนแล้ว · '+esc(u.actor)+'</span>'
+      :how?'<button class="btn sm" onclick="undoAsk('+Number(r.id)+')">'+(r.undo_of?'↪️ ยกเลิกการย้อน':'↩️ ย้อนกลับ')+'</button>':'';
+    return '<tr'+(u?' class="undone"':'')+'><td style="white-space:nowrap;font-size:12px;color:var(--mut)">'+esc(when(d))+'</td>'+
       '<td>'+esc(r.actor)+'</td><td><b>'+esc(r.target_user)+'</b></td>'+
-      '<td>'+esc(r.action)+'</td><td style="font-size:12px;color:var(--ink2)">'+esc(r.detail||'')+'</td></tr>';
+      '<td>'+esc(r.action)+'</td><td style="font-size:12px;color:var(--ink2)">'+esc(r.detail||'')+'</td>'+
+      '<td style="white-space:nowrap">'+act+'</td></tr>';
   }).join('');
-  return '<div class="card"><h3>📜 ประวัติการแก้สิทธิ์ <span class="chip">'+rows.length+' รายการล่าสุด</span></h3>'+
-    '<div class="twrap"><table class="mc"><tr><th>เวลา</th><th>คนแก้</th><th>บัญชีที่ถูกแก้</th><th>ทำอะไร</th><th>รายละเอียด</th></tr>'+
-    (body||'<tr><td colspan="5" class="empty">ยังไม่มีประวัติ</td></tr>')+'</table></div></div>';
+  const note=S.undoCols===false
+    ?'<div class="undonote warn">↩️ ตอนนี้ย้อนได้แค่ <b>เปลี่ยนระดับ / เปลี่ยนประจำที่</b> — รัน <b>jjmk-access-undo.sql</b> ใน Supabase ครั้งเดียว '+
+      'แล้วการแก้ต่อจากนี้ทุกอย่าง (สิทธิ์แอพ · สาขา · ปิด/เปิดบัญชี · อนุมัติ) จะกด ↩️ ย้อนกลับได้</div>'
+    :'<div class="undonote">กดผิด? กด <b>↩️ ย้อนกลับ</b> ท้ายรายการ — ระบบบอกก่อนว่าจะเปลี่ยนอะไร แล้วค่อยกดยืนยัน · '+
+      'รหัสผ่าน / เพิ่มผู้ใช้ / ลบบัญชี ย้อนไม่ได้</div>';
+  return '<div class="card"><h3>📜 ประวัติการแก้สิทธิ์ <span class="chip">'+rows.length+' รายการล่าสุด</span></h3>'+note+
+    '<div class="twrap"><table class="mc"><tr><th>เวลา</th><th>คนแก้</th><th>บัญชีที่ถูกแก้</th><th>ทำอะไร</th><th>รายละเอียด</th><th>ย้อน</th></tr>'+
+    (body||'<tr><td colspan="6" class="empty">ยังไม่มีประวัติ</td></tr>')+'</table></div></div>';
+}
+function undoBlock(cur,to){  // เหตุผลที่ย้อนไม่ได้ ('' = ทำได้)
+  const m=Object.assign({},cur,to);
+  if(meSelf(cur)&&(!isBoss(m)||m.active===false))
+    return 'ย้อนแล้วบัญชีที่คุณกำลังใช้อยู่จะหลุดสิทธิ์ผู้ดูแล/ถูกปิด — ให้ผู้ดูแลอีกคนเป็นคนย้อน';
+  if(m.active!==false&&m.status!=null&&m.status!=='active')
+    return 'บัญชีนี้ยังไม่ได้อนุมัติ — ย้อนแล้วจะเปิดบัญชีโดยข้ามขั้นอนุมัติ ไปอนุมัติที่แท็บ ⏳ รออนุมัติแทน';
+  return '';
+}
+async function undoAsk(id){
+  const r=(S.logRows||[]).find(x=>Number(x.id)===Number(id)); if(!r)return;
+  const how=undoable(r); if(!how)return;
+  let to, from, guess=null;
+  if(how==='snap'){
+    const F=Object.keys(r.snap.b).filter(f=>UNDO_F.includes(f));
+    to={}; from={}; F.forEach(f=>{ to[f]=r.snap.b[f]; from[f]=(r.snap.a||{})[f]; });
+  }else{
+    guess=legacyGuess(r);
+    if(!guess||guess.v===undefined){
+      toast('รายการนี้บันทึกก่อนมีระบบย้อนกลับ และไม่พบค่าเดิมในประวัติ — แก้'+(guess&&guess.f==='unit'?'ประจำที่':'ระดับ')+'เองที่แท็บ 👥 ผู้ใช้ & สิทธิ์',true);
+      return;
+    }
+    to={}; to[guess.f]=guess.v; from={}; if(guess.now)from[guess.f]=guess.now;
+  }
+  let cur;
+  try{ cur=(await sel('pnl_users','select=*&username=eq.'+encodeURIComponent(r.target_user)+'&limit=1'))[0]; }
+  catch(e){ toast('อ่านบัญชีล่าสุดไม่ได้: '+e.message,true); return; }
+  if(!cur){ toast('ไม่พบบัญชี '+r.target_user+' แล้ว (ถูกลบไป) — ย้อนไม่ได้',true); return; }
+  const F=Object.keys(to);
+  const diff=F.filter(f=>!sameVal(cur[f],to[f]));
+  if(!diff.length){ toast('ตอนนี้ '+(cur.display_name||cur.username)+' เป็นค่าก่อนรายการนี้อยู่แล้ว — ไม่ต้องย้อน'); return; }
+  const later=diff.filter(f=>f in from&&!sameVal(cur[f],from[f])&&UF_N[f]);
+  const block=undoBlock(cur,to);
+  S.undo={id:r.id,cur:snapPick(cur,F),uid:cur.id,to,F};
+  const rowsHtml=diff.filter(f=>UF_N[f]).map(f=>f==='apps'
+    ?'<div class="udsec">'+UF_N[f]+'</div>'+(appsDiff(cur.apps,to.apps)||'<div class="udrow"><span class="udk">—</span></div>')
+    :'<div class="udrow"><span class="udk">'+UF_N[f]+'</span><span class="udv">'+esc(fieldVal(f,cur[f]))+'</span>'+
+      '<span class="uda">→</span><span class="udv new">'+esc(fieldVal(f,to[f]))+'</span></div>').join('');
+  const d=new Date(r.created_at);
+  openModal('<h3>↩️ '+(r.undo_of?'ยกเลิกการย้อน':'ย้อนกลับ')+'</h3>'+
+    '<p class="sub"><b>'+esc(r.action)+'</b> ของ <b>'+esc(cur.display_name||cur.username)+'</b> (<code>'+esc(cur.username)+'</code>)<br>'+
+      'เมื่อ '+esc(d.toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}))+' โดย '+esc(r.actor)+'</p>'+
+    '<div class="udhead"><span>ตอนนี้</span><span>→ จะกลับเป็น</span></div>'+rowsHtml+
+    (guess?'<div class="undonote">ค่าเดิมหาจากประวัติ "'+esc(guess.src.action)+'" เมื่อ '+
+      esc(new Date(guess.src.created_at).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}))+' (รายการนี้บันทึกก่อนมีระบบย้อนกลับ)</div>':'')+
+    (later.length?'<div class="undonote warn">⚠️ หลังรายการนี้มีการแก้ <b>'+later.map(f=>UF_N[f]).join(' · ')+'</b> ของบัญชีนี้อีก — '+
+      'ย้อนแล้วจะทับของที่แก้ทีหลังด้วย (ดูให้แน่ใจว่าใช่)</div>':'')+
+    (r.action.indexOf('แก้ข้อมูลผู้ใช้')>=0&&String(r.detail||'').indexOf('เปลี่ยนรหัสผ่าน')>=0
+      ?'<div class="undonote">รหัสผ่านไม่ย้อน — ถ้าต้องการรหัสเดิม ตั้งใหม่ที่ ✏️</div>':'')+
+    (block?'<div class="undonote warn">⛔ '+esc(block)+'</div>':'')+
+    '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
+      (block?'':'<button class="btn pri" onclick="undoGo(this)">↩️ ยืนยันย้อนกลับ</button>')+'</div>');
+}
+async function undoGo(btn){
+  const U=S.undo; if(!U)return;
+  const r=(S.logRows||[]).find(x=>Number(x.id)===Number(U.id)); if(!r)return;
+  await once(btn,async()=>{
+    try{
+      const cur=(await sel('pnl_users','select=*&id=eq.'+U.uid+'&limit=1'))[0];
+      if(!cur||!sameVal(snapPick(cur,U.F),U.cur)){
+        closeModal(); toast('บัญชีนี้เพิ่งถูกแก้จากอีกเครื่อง — เปิด ↩️ ย้อนกลับใหม่อีกครั้งเพื่อดูค่าล่าสุด',true); S.undo=null; render(); return;
+      }
+      const block=undoBlock(cur,U.to); if(block){ toast(block,true); return; }
+      await upd('pnl_users','id=eq.'+U.uid,U.to);
+      const base=String(r.action).replace(/^(ย้อนกลับ|ยกเลิกการย้อน) · /,'');
+      const d=new Date(r.created_at);
+      await alog(cur.username,(r.undo_of?'ยกเลิกการย้อน':'ย้อนกลับ')+' · '+base,
+        'รายการเมื่อ '+d.toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'})+' โดย '+r.actor+
+          ' · คืน '+U.F.filter(f=>UF_N[f]&&!sameVal(U.cur[f],U.to[f])).map(f=>UF_N[f]).join(' · '),
+        {b:U.cur,a:U.to},r.id);
+      S.undo=null; S.users=[];
+      closeModal(); toast('↩️ ย้อนกลับแล้ว — '+(cur.display_name||cur.username)+' ✓'); render();
+    }catch(e){ toast('ย้อนกลับไม่สำเร็จ: '+e.message,true); }
+  });
 }
 
 /* ---------- ล็อกอิน ---------- */
