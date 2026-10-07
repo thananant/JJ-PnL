@@ -139,7 +139,11 @@ tr.undone td{opacity:.55}
 .udpicks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:10px 0 4px}
 .udpick{text-align:left;white-space:normal;min-height:48px;padding:9px 12px;line-height:1.35}
 .udpick small{display:block;font-size:11px;color:var(--mut);font-weight:400;margin-top:2px}
-.udpick.on{border-color:var(--gold);background:rgba(217,164,65,.14);box-shadow:0 0 0 1px var(--gold) inset}
+.udpick{position:relative}
+.udpick.on{border-color:var(--gold);background:rgba(217,164,65,.26);box-shadow:0 0 0 2px var(--gold) inset}
+.udpick.on::after{content:'✓ เลือกแล้ว';position:absolute;top:-9px;right:8px;font-size:11px;font-weight:700;color:#1A1411;background:var(--gold2);border-radius:99px;padding:1px 8px}
+.udsteps{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin:10px 0 0}
+.udsteps b{color:var(--gold2)}
 .udpick[disabled]{opacity:.45;cursor:default}
 
 /* ตัวกรองรายชื่อผู้ใช้ (แท็บ ผู้ใช้ & สิทธิ์) */
@@ -1952,17 +1956,18 @@ async function undoPickAsk(r,g){
     '<div class="undonote warn">ระบบไม่รู้ว่าก่อนรายการนี้ '+esc(cur.display_name||cur.username)+' เป็น'+nm+'อะไร '+
       '(บันทึกก่อนมีระบบย้อนกลับ และไม่มีประวัติเก่ากว่านี้) — <b>เลือก'+nm+'ที่ถูกต้อง</b> แล้วกดยืนยัน</div>'+
     '<div class="udrow"><span class="udk">ตอนนี้</span><span class="udv new">'+esc(fieldVal(f,cur[f]))+'</span></div>'+
+    '<div class="udsteps"><span><b>①</b> แตะเลือก'+nm+'ที่ถูกต้อง 1 อัน</span><span><b>②</b> กดปุ่มยืนยันมุมขวาล่าง</span></div>'+
     '<div class="udpicks">'+Object.keys(MAP).map(k=>'<button type="button" class="btn udpick" data-ud="'+k+'"'+
       (cur[f]===k?' disabled title="ค่าปัจจุบัน"':'')+' onclick="udPick(this)">'+MAP[k].ic+' '+esc(MAP[k].n)+
       (MAP[k].d?'<small>'+esc(MAP[k].d)+'</small>':'')+(cur[f]===k?'<small>(ตอนนี้)</small>':'')+'</button>').join('')+'</div>'+
     '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
-      '<button class="btn pri" id="udGo" disabled onclick="undoGo(this)">↩️ ยืนยัน</button></div>');
+      '<button class="btn pri" id="udGo" disabled onclick="undoGo(this)">👆 เลือก'+nm+'ก่อน</button></div>');
 }
 function udPick(el){
   const U=S.undo; if(!U||!U.pick)return;
   document.querySelectorAll('#modal .udpick').forEach(b=>b.classList.toggle('on',b===el));
   U.to={}; U.to[U.pick]=el.dataset.ud;
-  const g=$('#udGo'); if(g)g.disabled=false;
+  const g=$('#udGo'); if(g){ g.disabled=false; g.textContent='↩️ ยืนยัน เปลี่ยนเป็น '+fieldVal(U.pick,el.dataset.ud); }
 }
 async function undoGo(btn){
   const U=S.undo; if(!U)return;
