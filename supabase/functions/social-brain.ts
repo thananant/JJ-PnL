@@ -13,7 +13,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.1";
+const VERSION = "2026-10-07.2";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -1078,7 +1078,8 @@ const AP_START_PER_TICK = 2;       // เริ่มรอบใหม่ไม
 type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number; owner?: string };
 type ApRow = { channel: string; kind: string; external_id: string; branch: string | null; author_name: string | null;
   text: string; rating: number | null; url: string | null; posted_at: string; raw: Record<string, unknown>; reply_text?: string | null };
-type ApStep = { actor: string; max: number; input: (s: ApSrc, urls: string[], since: string | null) => Record<string, unknown>;
+// usd = เพดานเงินต่อรอบของตัวดึงนี้ (บางตัวบังคับขั้นต่ำ เช่น TikTok ของ clockworks ไม่รับต่ำกว่า $0.50 — เป็นแค่เพดาน จ่ายจริงตามจำนวนที่ได้)
+type ApStep = { actor: string; max: number; usd?: number; input: (s: ApSrc, urls: string[], since: string | null) => Record<string, unknown>;
   urls?: (items: any[], s: ApSrc) => string[] };
 
 const apGet = (o: any, ...paths: string[]): any => {
@@ -1237,12 +1238,12 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
     label: "คอมเมนต์คลิป TikTok ของร้าน", channel: "tiktok", mkind: "comment", every: 72,
     ok: (u) => apUser(u).length >= 2,
     steps: [
-      { actor: "clockworks~tiktok-scraper", max: 4,
+      { actor: "clockworks~tiktok-scraper", max: 4, usd: 0.5,
         input: (s) => ({ profiles: [apUser(s.url)], resultsPerPage: 4, profileSorting: "latest", profileScrapeSections: ["videos"],
           excludePinnedPosts: true, ...TT_NO_DL }),
         urls: (items) => items.filter((it) => apRecent(apGet(it, "createTimeISO", "createTime"), 10))
           .map((it) => apS(it, "webVideoUrl")).filter((u) => /^https:\/\//.test(u)) },
-      { actor: "clockworks~tiktok-comments-scraper", max: 80, input: (_s, urls) => ({ postURLs: urls, commentsPerPost: 20 }) },
+      { actor: "clockworks~tiktok-comments-scraper", max: 80, usd: 0.5, input: (_s, urls) => ({ postURLs: urls, commentsPerPost: 20 }) },
     ],
     shop: (it, s) => apS(it, "uniqueId", "user.uniqueId").toLowerCase() === apUser(s.url).toLowerCase(),
     ext: (id) => "ttc_" + id,
@@ -1259,7 +1260,7 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
   tt_search: {
     label: "คลิป TikTok ที่พูดถึงร้าน", channel: "tiktok", mkind: "mention", every: 168,
     ok: (u) => u.trim().length >= 3,
-    steps: [{ actor: "clockworks~tiktok-scraper", max: 10,
+    steps: [{ actor: "clockworks~tiktok-scraper", max: 10, usd: 0.5,
       input: (s) => ({ searchQueries: [s.url.trim().slice(0, 80)], resultsPerPage: 10, ...TT_NO_DL }) }],
     map: (it, s) => {
       const id = apS(it, "id"); const url = apS(it, "webVideoUrl"); const at = apIso(apGet(it, "createTimeISO", "createTime"));
@@ -1419,13 +1420,23 @@ async function apSaveRows(rows: ApRow[]) {
   }
   return { added, dup, err };
 }
-async function apStart(tok: string, src: ApSrc, step: number, urls: string[], since: string | null) {
+// room = งบที่ยังเหลือให้รอบนี้ — ตัวดึงบอกว่าเพดานต่ำกว่าขั้นต่ำ ("allowed minimum of $X") ลองใหม่ด้วย X ได้ครั้งเดียว ถ้า X ≤ $1 และไม่เกินงบที่เหลือ
+async function apStart(tok: string, src: ApSrc, step: number, urls: string[], since: string | null, room = Infinity) {
   const st = AP_KINDS[src.kind].steps[step];
-  const d = await apCall(tok, `/acts/${st.actor}/runs`, { method: "POST", body: st.input(src, urls, since),
-    q: { timeout: AP_TIMEOUT_S, maxItems: st.max, maxTotalChargeUsd: AP_RUN_USD } });
+  const go = (cap: number) => apCall(tok, `/acts/${st.actor}/runs`, { method: "POST", body: st.input(src, urls, since),
+    q: { timeout: AP_TIMEOUT_S, maxItems: st.max, maxTotalChargeUsd: cap } });
+  let cap = st.usd ?? AP_RUN_USD, d: any;
+  try { d = await go(cap); }
+  catch (e) {
+    const m = /allowed minimum of\s*\$?\s*([\d.]+)/i.exec(String((e as any)?.message ?? ""));
+    const min = m ? Number(m[1]) : NaN;
+    if ((e as any)?.status !== 400 || !(min > cap) || min > Math.min(1, room)) throw e;
+    cap = min;
+    d = await go(cap);
+  }
   const id = d?.data?.id;
   if (!id) throw new Error("Apify ไม่ส่งรหัสรอบกลับมา");
-  return String(id);
+  return { id: String(id), usd: cap };
 }
 // รอบล่าสุดจากบัญชี Apify เอง — ใช้นับเพดาน (ตาราง social_settings ใครถือคีย์สาธารณะก็แก้/ลบได้ ห้ามใช้นับ)
 async function apRunStats(tok: string) {
@@ -1466,7 +1477,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
   const dropRuns = new Set<string>();
   const report: any[] = [];
   let usage: any = null, usageErr = "", gate: { running: number; hour: number } | null = null, gateErr = "";
-  let added = 0, started = 0, chained = 0;
+  let added = 0, started = 0, chained = 0, freshUsd = 0;
   const L = (sid: string) => (last[sid] ??= { ...(S0.last?.[sid] ?? {}) });
   const now = () => new Date().toISOString();
   // บันทึกรอบที่เพิ่งสั่งเริ่มทันที — ฟังก์ชันถูกตัดกลางทางก็ยังตามเก็บผลได้ ไม่เริ่มซ้ำ (เงินเสียไปแล้ว)
@@ -1476,11 +1487,13 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
     if (v.lock?.id === lockId) v.lock.until = lockUntil();
   }).catch((e) => console.error("apify commit", scrub(e)));
   // ก่อนเริ่มรอบใหม่ทุกครั้ง: งบเดือนนี้ (รวมรอบที่กำลังทำ) + รันพร้อมกัน + จำนวนต่อชั่วโมง — นับจาก Apify เอง
-  const blocked = (): { msg: string; hard: boolean } | null => {
+  // cap = เพดานเงินของรอบที่จะเริ่ม · freshUsd = เพดานของรอบที่เพิ่งเริ่มในครั้งนี้ (ยังไม่ขึ้นยอดใน Apify)
+  const room = () => (usage && gate ? usage.budget - usage.used - gate.running * AP_RUN_USD - freshUsd : 0);
+  const blocked = (cap = AP_RUN_USD): { msg: string; hard: boolean } | null => {
     if (!usage) return { msg: "ยังไม่เริ่ม — อ่านยอดใช้เครดิตของ Apify ไม่ได้ (" + usageErr + ")", hard: false };
     if (!gate) return { msg: "ยังไม่เริ่ม — อ่านรายการรอบของ Apify ไม่ได้ (" + gateErr + ")", hard: false };
     const fresh = started + chained;
-    if (usage.used + (gate.running + fresh) * AP_RUN_USD >= usage.budget)
+    if (cap > room())
       return { msg: `หยุดก่อน — ใช้เครดิตเดือนนี้ไป $${usage.used.toFixed(2)} (รวมงานที่กำลังทำ) ถึงงบ $${usage.budget.toFixed(2)} แล้ว`, hard: true };
     if (gate.running + fresh >= AP_MAX_RUNNING) return { msg: "รอรอบที่กำลังทำเสร็จก่อน — รอบหน้าเริ่มให้เอง", hard: false };
     if (gate.hour + fresh >= AP_MAX_PER_HOUR) return { msg: "ชั่วโมงนี้เริ่มครบโควต้าแล้ว — รอบหน้าเริ่มให้เอง", hard: false };
@@ -1537,7 +1550,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
             Object.assign(L(sid), { ok: true, err: null, n: 0, added: 0, done: now(), note: "ไม่มีโพสต์ใหม่ในช่วงนี้" });
             dropRuns.add(sid); continue;
           }
-          const b = blocked();
+          const b = blocked(def.steps[step + 1].usd ?? AP_RUN_USD);
           if (b) {
             // งบหมด = จบรอบนี้ · ติดชั่วคราว (อ่านยอดไม่ได้/รันพร้อมกันเต็ม) = เก็บรอบไว้ รอบหน้าลองต่อขั้นสองใหม่
             Object.assign(L(sid), b.hard ? { ok: false, err: b.msg, done: now() } : { wait: b.msg });
@@ -1547,9 +1560,9 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
           if (left() < AP_CALL_MS) break;
           // ชื่อเพจ/บัญชีร้านจากขั้นแรก → ใช้แยกคำตอบของร้านออกจากเสียงลูกค้าในขั้นสอง
           const owner = apS(items[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120);
-          const nid = await apStart(tok, src, step + 1, urls, null);
-          chained++;
-          runs[sid] = { id: nid, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}) };
+          const nr = await apStart(tok, src, step + 1, urls, null, room());
+          chained++; freshUsd += nr.usd;
+          runs[sid] = { id: nr.id, step: step + 1, at: now(), key: apKey(src), ...(owner ? { owner } : {}) };
           L(sid).wait = null;
           await commitRun(sid, runs[sid]);
           continue;
@@ -1582,22 +1595,23 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         if (prev.key && prev.key !== apKey(src))
           for (const k of ["ok_at", "start", "n", "rows", "added", "note", "err", "ok", "done"]) delete prev[k];
         const since = Date.parse(prev.start ?? "") || 0;
-        const due = manual ? Date.now() - since >= AP_MANUAL_GAP_MS : Date.now() - since >= src.every_h * 3600000;
+        // กดดึงตอนนี้: แหล่งที่รอบล่าสุดพัง ลองใหม่ได้ทันที (แก้ลิงก์/อัพเดตโค้ดแล้วไม่ต้องรอ 30 นาที)
+        const due = manual ? (prev.ok === false || Date.now() - since >= AP_MANUAL_GAP_MS) : Date.now() - since >= src.every_h * 3600000;
         if (!due) continue;
         const def = AP_KINDS[src.kind];
         if (!def.ok(src.url)) {
           Object.assign(prev, { ok: false, err: `ลิงก์/ชื่อไม่ถูกรูปแบบของ "${def.label}"`, start: now(), key: apKey(src) });
           continue;
         }
-        const b = blocked();
+        const b = blocked(def.steps[0].usd ?? AP_RUN_USD);
         if (b) { if (b.hard) { prev.err = b.msg; continue; } prev.wait = b.msg; break; }
         try {
           // Google Maps: ดึงเฉพาะรีวิวตั้งแต่รอบที่สำเร็จล่าสุด (เผื่อ 3 วัน) → จ่ายเฉพาะรีวิวใหม่
           const okAt = Date.parse(prev.ok_at ?? "") || 0;
           const sinceIso = src.kind === "gmaps" && okAt ? new Date(okAt - 3 * 86400000).toISOString() : null;
-          const id = await apStart(tok, src, 0, [], sinceIso);
-          started++;
-          runs[src.id] = { id, step: 0, at: now(), key: apKey(src) };
+          const r0 = await apStart(tok, src, 0, [], sinceIso, room());
+          started++; freshUsd += r0.usd;
+          runs[src.id] = { id: r0.id, step: 0, at: now(), key: apKey(src) };
           Object.assign(prev, { start: now(), err: null, wait: null, key: apKey(src) });
           await commitRun(src.id, runs[src.id]);
         } catch (e) {
