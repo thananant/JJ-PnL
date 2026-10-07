@@ -2381,7 +2381,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-06.2";
+const VERSION = "2026-10-07.1";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -3995,11 +3995,42 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
     running: Object.keys({ ...Object.fromEntries(Object.entries(S0.runs ?? {}).filter(([k]) => !dropRuns.has(k))), ...runs }).length };
 }
 // ตรวจว่าเป็นผู้ดูแลระบบ/เจ้าของ (ใช้กับคำสั่งที่มีผลกับบัญชีภายนอก/ค่าใช้จ่าย)
-async function bossOk(u: unknown, h: unknown) {
-  const { data: pu } = await sb.from("pnl_users").select("*").eq("username", String(u ?? "")).limit(1);
-  const usr: any = pu?.[0];
-  return !!(usr && h && usr.pass_hash === h && usr.active !== false && ["admin", "owner"].includes(usr.role));
+// คีย์สาธารณะชุดเดียวกับหน้าแอป/SQL cron (ไม่ใช่ความลับ) — ใช้อ่าน pnl_users เมื่อคีย์ฝั่งเซิร์ฟเวอร์อ่านไม่ได้
+const SB_PUBLISHABLE = "sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm";
+async function readPnlUser(u: string): Promise<{ usr: any; err: string }> {
+  let err = "";
+  try {
+    const { data, error } = await sb.from("pnl_users").select("*").eq("username", u).limit(1);
+    if (!error && data?.length) return { usr: data[0], err: "" };
+    if (error) err = error.message;
+  } catch (e) { err = scrub(e); }
+  // service role อ่านไม่ได้ (ตารางไม่ได้ให้สิทธิ์ service_role / คีย์ legacy ถูกปิด) → อ่านแบบเดียวกับแอป (ตาราง pnl_users เปิดให้คีย์สาธารณะอ่าน)
+  for (const k of [Deno.env.get("SUPABASE_ANON_KEY") ?? "", SB_PUBLISHABLE]) {
+    if (!k) continue;
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/pnl_users?select=*&username=eq.${encodeURIComponent(u)}&limit=1`,
+        { headers: { apikey: k, Authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(8000) });
+      if (r.ok) {
+        const d = await r.json().catch(() => null);
+        if (Array.isArray(d)) return { usr: d[0] ?? null, err: d[0] ? "" : err };
+      } else err = err || `HTTP ${r.status}`;
+    } catch (e) { err = err || scrub(e); }
+  }
+  return { usr: null, err };
 }
+// ตรวจว่าเป็นผู้ดูแลระบบ/เจ้าของ — คืน "" = ผ่าน · ไม่ผ่าน = เหตุผลจริง (บอกให้แก้ถูกจุด แทนข้อความกลาง ๆ)
+async function bossCheck(u: unknown, h: unknown): Promise<string> {
+  const un = String(u ?? "").trim();
+  if (!un) return "แอปไม่ได้ส่งชื่อผู้ใช้มา — ออกจากระบบแล้วล็อกอินใหม่";
+  if (!h) return "แอปไม่ได้ส่งรหัสยืนยันตัวตนมา — ออกจากระบบแล้วล็อกอินใหม่";
+  const { usr, err } = await readPnlUser(String(u));
+  if (!usr) return err ? "เซิร์ฟเวอร์อ่านตารางผู้ใช้ไม่ได้: " + scrub(err).slice(0, 140) : `ไม่พบบัญชี "${un.slice(0, 40)}" ในตารางผู้ใช้`;
+  if (usr.pass_hash !== h) return "รหัสผ่านของบัญชีนี้ถูกเปลี่ยนไปแล้ว — ออกจากระบบแล้วล็อกอินใหม่";
+  if (usr.active === false) return "บัญชีนี้ถูกปิดใช้งาน";
+  if (!["admin", "owner"].includes(String(usr.role))) return `บัญชีนี้เป็นระดับ "${String(usr.role ?? "").slice(0, 20)}" — ต้องเป็นผู้ดูแลระบบหรือเจ้าของ`;
+  return "";
+}
+async function bossOk(u: unknown, h: unknown) { return !(await bossCheck(u, h)); }
 async function apifyConnect(token: string) {
   if (APIFY_ENV) return { ok: false, reason: "มี secret APIFY_TOKEN ใน Supabase อยู่แล้ว ระบบใช้ตัวนั้น — ถ้าจะเปลี่ยนบัญชีให้ลบ secret ก่อน" };
   const t = String(token ?? "").trim();
@@ -4358,10 +4389,8 @@ Deno.serve(async (req) => {
         }
         // เฉพาะผู้ดูแล (admin/owner) — ตรวจบัญชีกับ pnl_users ฝั่งเซิร์ฟเวอร์ แล้วออก state แบบลงลายเซ็น อายุ 15 นาที
         // (ปลายทางใน social-webhook ตรวจลายเซ็นก่อนรับ token — กันคนอื่นเอาบัญชี Google ของตัวเองมาเชื่อมแทนร้าน)
-        if (!(await bossOk(b.u, b.h))) {
-          out = { ok: false, reason: "เชื่อมบัญชี Google ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — ออกแล้วเข้าแอปใหม่ แล้วลองอีกครั้ง" };
-          break;
-        }
+        const bc = await bossCheck(b.u, b.h);
+        if (bc) { out = { ok: false, reason: "เชื่อมบัญชี Google ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
         out = { ok: true, url: "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
           client_id: GBP_CLIENT_ID,
           redirect_uri: `${SB_URL}/functions/v1/social-webhook`,
@@ -4373,12 +4402,14 @@ Deno.serve(async (req) => {
       }
       case "gbp_sync": out = await gbpSync(!!b.full, !!b.resume); break;
       case "apify_connect": {   // วาง API token ของ Apify (เฉพาะผู้ดูแล/เจ้าของ) → ตรวจกับ Apify แล้วเก็บแบบเข้ารหัส
-        if (!(await bossOk(b.u, b.h))) { out = { ok: false, reason: "เชื่อม Apify ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — ออกแล้วเข้าแอปใหม่ แล้วลองอีกครั้ง" }; break; }
+        const bc = await bossCheck(b.u, b.h);
+        if (bc) { out = { ok: false, reason: "เชื่อม Apify ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
         out = await apifyConnect(b.token);
         break;
       }
       case "apify_disconnect": {
-        if (!(await bossOk(b.u, b.h))) { out = { ok: false, reason: "เฉพาะผู้ดูแลระบบ/เจ้าของ" }; break; }
+        const bc = await bossCheck(b.u, b.h);
+        if (bc) { out = { ok: false, reason: "เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
         const tok = await apToken().catch(() => "");
         const cur = await sb.from("social_settings").select("val").eq("id", "apify").maybeSingle();
         for (const r of Object.values(cur.data?.val?.runs ?? {}) as any[]) // หยุดรอบที่ค้างอยู่ก่อน ไม่งั้นเครดิตยังเดินต่อ
@@ -4391,7 +4422,8 @@ Deno.serve(async (req) => {
       case "apify_run": {
         // start=false = เก็บผลรอบที่เสร็จแล้วอย่างเดียว (ไม่มีค่าใช้จ่ายเพิ่ม) · เริ่มรอบใหม่ทันทีได้เฉพาะผู้ดูแล/เจ้าของ
         const startNow = b.start !== false;
-        if (startNow && !(await bossOk(b.u, b.h))) { out = { ok: false, reason: "สั่งดึงทันทีได้เฉพาะผู้ดูแลระบบ/เจ้าของ (ระบบดึงให้เองตามรอบอยู่แล้ว)" }; break; }
+        const bc = startNow ? await bossCheck(b.u, b.h) : "";
+        if (bc) { out = { ok: false, reason: "สั่งดึงทันทีได้เฉพาะผู้ดูแลระบบ/เจ้าของ (ระบบดึงให้เองตามรอบอยู่แล้ว) — " + bc }; break; }
         const r: any = await apifyTick(startNow, 60000, startNow, typeof b.only === "string" ? b.only : undefined);
         if (r.added) r.analyze = await analyzeMentions(undefined, 8, 30000);
         out = r;
