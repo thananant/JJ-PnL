@@ -136,6 +136,11 @@ tr.undone td{opacity:.55}
 .udv.new{color:var(--ink);font-weight:600}
 .uda{color:var(--mut);text-align:center}
 .udsec{font-size:12px;color:var(--ink2);margin:10px 0 0;font-weight:600}
+.udpicks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:10px 0 4px}
+.udpick{text-align:left;white-space:normal;min-height:48px;padding:9px 12px;line-height:1.35}
+.udpick small{display:block;font-size:11px;color:var(--mut);font-weight:400;margin-top:2px}
+.udpick.on{border-color:var(--gold);background:rgba(217,164,65,.14);box-shadow:0 0 0 1px var(--gold) inset}
+.udpick[disabled]{opacity:.45;cursor:default}
 
 /* ตัวกรองรายชื่อผู้ใช้ (แท็บ ผู้ใช้ & สิทธิ์) */
 .ufbar{display:grid;grid-template-columns:minmax(170px,1.5fr) repeat(4,minmax(118px,1fr)) auto;gap:8px;align-items:center;margin:2px 0 12px}
@@ -1899,10 +1904,8 @@ async function undoAsk(id){
     to={}; from={}; F.forEach(f=>{ to[f]=r.snap.b[f]; from[f]=(r.snap.a||{})[f]; });
   }else{
     guess=legacyGuess(r);
-    if(!guess||guess.v===undefined){
-      toast('รายการนี้บันทึกก่อนมีระบบย้อนกลับ และไม่พบค่าเดิมในประวัติ — แก้'+(guess&&guess.f==='unit'?'ประจำที่':'ระดับ')+'เองที่แท็บ 👥 ผู้ใช้ & สิทธิ์',true);
-      return;
-    }
+    if(!guess)return;
+    if(guess.v===undefined)return undoPickAsk(r,guess);   // ไม่รู้ค่าเดิม = ให้เลือกเองในหน้าต่างนี้เลย (เจ้าของเจอที่ Kim/Tin 2026-10-07)
     to={}; to[guess.f]=guess.v; from={}; if(guess.now)from[guess.f]=guess.now;
   }
   let cur;
@@ -1934,8 +1937,36 @@ async function undoAsk(id){
     '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
       (block?'':'<button class="btn pri" onclick="undoGo(this)">↩️ ยืนยันย้อนกลับ</button>')+'</div>');
 }
+/* รายการเก่าที่หาค่าเดิมในประวัติไม่เจอ (บัญชีสร้างก่อนมีประวัติ) — ให้เลือกระดับ/ประจำที่ที่ถูกต้องในหน้าต่างเดียวกัน
+   แทนการบอกให้ไปแก้ที่แท็บอื่น · บันทึกผ่าน undoGo ตัวเดียวกัน (อ่านซ้ำก่อนเขียน · กันตัวเองหลุดสิทธิ์ · จดประวัติ + undo_of) */
+async function undoPickAsk(r,g){
+  let cur;
+  try{ cur=(await sel('pnl_users','select=*&username=eq.'+encodeURIComponent(r.target_user)+'&limit=1'))[0]; }
+  catch(e){ toast('อ่านบัญชีล่าสุดไม่ได้: '+e.message,true); return; }
+  if(!cur){ toast('ไม่พบบัญชี '+r.target_user+' แล้ว (ถูกลบไป) — ย้อนไม่ได้',true); return; }
+  const f=g.f, MAP=f==='role'?ROLES:UNITS, nm=UF_N[f], d=new Date(r.created_at);
+  S.undo={id:r.id,cur:snapPick(cur,[f]),uid:cur.id,to:null,F:[f],pick:f};
+  openModal('<h3>↩️ ย้อนกลับ</h3>'+
+    '<p class="sub"><b>'+esc(r.action)+'</b> ของ <b>'+esc(cur.display_name||cur.username)+'</b> (<code>'+esc(cur.username)+'</code>)<br>'+
+      'เมื่อ '+esc(d.toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}))+' โดย '+esc(r.actor)+'</p>'+
+    '<div class="undonote warn">ระบบไม่รู้ว่าก่อนรายการนี้ '+esc(cur.display_name||cur.username)+' เป็น'+nm+'อะไร '+
+      '(บันทึกก่อนมีระบบย้อนกลับ และไม่มีประวัติเก่ากว่านี้) — <b>เลือก'+nm+'ที่ถูกต้อง</b> แล้วกดยืนยัน</div>'+
+    '<div class="udrow"><span class="udk">ตอนนี้</span><span class="udv new">'+esc(fieldVal(f,cur[f]))+'</span></div>'+
+    '<div class="udpicks">'+Object.keys(MAP).map(k=>'<button type="button" class="btn udpick" data-ud="'+k+'"'+
+      (cur[f]===k?' disabled title="ค่าปัจจุบัน"':'')+' onclick="udPick(this)">'+MAP[k].ic+' '+esc(MAP[k].n)+
+      (MAP[k].d?'<small>'+esc(MAP[k].d)+'</small>':'')+(cur[f]===k?'<small>(ตอนนี้)</small>':'')+'</button>').join('')+'</div>'+
+    '<div class="mbtn"><button class="btn" onclick="closeModal()">ยกเลิก</button>'+
+      '<button class="btn pri" id="udGo" disabled onclick="undoGo(this)">↩️ ยืนยัน</button></div>');
+}
+function udPick(el){
+  const U=S.undo; if(!U||!U.pick)return;
+  document.querySelectorAll('#modal .udpick').forEach(b=>b.classList.toggle('on',b===el));
+  U.to={}; U.to[U.pick]=el.dataset.ud;
+  const g=$('#udGo'); if(g)g.disabled=false;
+}
 async function undoGo(btn){
   const U=S.undo; if(!U)return;
+  if(!U.to){ toast('เลือก'+(UF_N[U.pick]||'ค่า')+'ที่ถูกต้องก่อนครับ',true); return; }
   const r=(S.logRows||[]).find(x=>Number(x.id)===Number(U.id)); if(!r)return;
   await once(btn,async()=>{
     try{
@@ -1949,7 +1980,8 @@ async function undoGo(btn){
       const d=new Date(r.created_at);
       await alog(cur.username,(r.undo_of?'ยกเลิกการย้อน':'ย้อนกลับ')+' · '+base,
         'รายการเมื่อ '+d.toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'})+' โดย '+r.actor+
-          ' · คืน '+U.F.filter(f=>UF_N[f]&&!sameVal(U.cur[f],U.to[f])).map(f=>UF_N[f]).join(' · '),
+          (U.pick?' · ไม่มีค่าเดิมในประวัติ เลือก'+UF_N[U.pick]+'เป็น '+fieldVal(U.pick,U.to[U.pick])
+                 :' · คืน '+U.F.filter(f=>UF_N[f]&&!sameVal(U.cur[f],U.to[f])).map(f=>UF_N[f]).join(' · ')),
         {b:U.cur,a:U.to},r.id);
       S.undo=null; S.users=[];
       closeModal(); toast('↩️ ย้อนกลับแล้ว — '+(cur.display_name||cur.username)+' ✓'); render();
