@@ -1142,7 +1142,7 @@ function mentionCard(r,opt){
       :r.reply_status==='skipped'?`<div class="xs mut">ข้ามรายการนี้ · <a class="hintlink" href="javascript:setStatus(${r.id},'pending')">เอากลับมา</a></div>`
       :`<textarea id="rp${r.id}" placeholder="พิมพ์คำตอบ หรือกดวิเคราะห์เพื่อให้ AI ร่างให้...">${esc(r.ai_reply||'')}</textarea>
         <div class="racts">
-          ${((r.channel==='facebook'||r.channel==='instagram')&&r.kind==='comment'&&!/^(fbc|igc)_/.test(String(r.external_id||'')))||(r.channel==='google'&&String(r.external_id||'').startsWith('gbp_'))?`<button class="btn sm" onclick="replySend(${r.id})">↩︎ ส่งตอบกลับ</button>`:''}
+          ${replyBtn(r)}
           <button class="btn gh sm" onclick="copyReply(${r.id})">⧉ คัดลอกคำตอบ</button>
           ${safeUrl(r.url)?`<a class="btn gh sm" style="text-decoration:none" href="${esc(r.url)}" target="_blank" rel="noopener">🔗 เปิดต้นทาง</a>`:''}
           <button class="btn gh sm" onclick="markReplied(${r.id})">✓ ตอบแล้ว (ตอบเองที่แพลตฟอร์ม)</button>
@@ -1167,8 +1167,35 @@ function copyReply(id){
   const t=$('#rp'+id); if(!t||!t.value){toast('ยังไม่มีคำตอบให้คัดลอก',true);return}
   navigator.clipboard.writeText(t.value).then(()=>toast('คัดลอกแล้ว ✓ ไปวางตอบที่แพลตฟอร์มได้เลย'));
 }
+/* ปุ่มตอบกลับจากแอป (เจ้าของถาม 2026-10-07 "กดส่งตอบกลับ จะเป็น user ไหน") — ตอบในนามบัญชีของร้านเสมอ ไม่ใช่ชื่อพนักงานที่กด
+   FB = เพจร้าน · IG = บัญชี IG ร้านที่ผูกกับเพจ (ทั้งคู่ใช้ FB_PAGE_TOKEN) · Google = โปรไฟล์ธุรกิจที่เชื่อมไว้ · ระบบจดชื่อคนกดไว้ใน replied_by
+   ยังไม่ได้เชื่อม Meta (cron จด can.fb=false) = ไม่โชว์ปุ่ม FB/IG บอกให้คัดลอกไปตอบเองแทน */
+const REPLY_AS={facebook:'เพจร้าน',instagram:' IG ร้าน',google:'ร้าน (Google)'};
+function replyCan(r){
+  const ext=String(r.external_id||'');
+  if((r.channel==='facebook'||r.channel==='instagram')&&r.kind==='comment'&&!/^(fbc|igc)_/.test(ext))return S.caps&&S.caps.fb===false?'nometa':'ok';
+  if(r.channel==='google'&&ext.startsWith('gbp_'))return 'ok';
+  return '';
+}
+function replyBtn(r){
+  const c=replyCan(r);
+  if(c==='nometa')return `<span class="xs mut" style="align-self:center">ตอบจากแอปยังไม่ได้ (ยังไม่ได้เชื่อม Meta) — กด ⧉ คัดลอก แล้วกด 🔗 เปิดต้นทางไปตอบ</span>`;
+  if(c!=='ok')return '';
+  return `<button class="btn sm" onclick="replySend(${r.id})" title="ข้อความจะขึ้นเป็นการตอบกลับใต้คอมเมนต์/รีวิวของ ${esc(r.author_name||'ลูกค้า')} จากบัญชีของร้าน (ไม่ใช่ชื่อคุณ) · ระบบจดว่าคุณเป็นคนกด">↩︎ ตอบในนาม${REPLY_AS[r.channel]||'ร้าน'}</button>`;
+}
+async function loadCaps(){
+  try{
+    const rows=await sel('social_settings','select=val&id=eq.cron');
+    const c=rows&&rows[0]&&rows[0].val&&rows[0].val.can;
+    const prev=JSON.stringify(S.caps||null);
+    S.caps=c&&typeof c==='object'?c:null;
+    if(prev!==JSON.stringify(S.caps)&&(S.tab==='feed'||(PLAT[S.tab]&&!pfOf(S.tab).open)))show(S.tab);
+  }catch(e){}
+}
 async function replySend(id){
   const t=$('#rp'+id); if(!t.value.trim()){toast('พิมพ์คำตอบก่อนครับ',true);return}
+  const m=Object.values(S.cache).flat().find(x=>x&&x.id===id);
+  if(m&&!confirm(`ส่งคำตอบนี้ในนาม${REPLY_AS[m.channel]||'ร้าน'} ใต้${m.kind==='review'?'รีวิว':'คอมเมนต์'}ของ ${m.author_name||'ลูกค้า'}?\n\nคนทั่วไปจะเห็นเป็นข้อความจากบัญชีของร้าน (ไม่ใช่ชื่อคุณ) และลูกค้าจะได้รับแจ้งเตือน`))return;
   try{
     const r=await brain('send_reply',{id,text:t.value.trim(),by:S.user.username});
     if(r.ok){toast('ส่งตอบกลับแล้ว ✓');S.cache={};show(S.tab)}
@@ -2750,7 +2777,7 @@ async function startApp(){
   applyPerms();
   await loadBranches();
   if(!firstAllowedTab()){$('#app').style.display='none';return showLogin(noAccessMsg()+' — แจ้งผู้ดูแลระบบครับ')}   // ได้แค่สาขาที่ไม่มีใน JJ Social
-  rtStart();refreshBadges();
+  rtStart();refreshBadges();loadCaps();
   if(S._gbpResult){
     const g=S._gbpResult;S._gbpResult=null;
     if(g.ok){toast('✅ เชื่อมต่อ Google Business สำเร็จ — กด "ซิงค์รีวิวทั้งหมด" ได้เลย');await loadSettings();show('ch');return}
@@ -2864,7 +2891,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.4";
+const VERSION = "2026-10-07.5";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -4831,6 +4858,8 @@ async function sendReply(id: number, text: string, by: string) {
   const { data: m } = await sb.from("social_mentions").select("*").eq("id", id).single();
   if (!m) return { ok: false, reason: "ไม่พบรายการ" };
   let ok = false, reason = "";
+  if ((m.channel === "facebook" || m.channel === "instagram") && m.kind === "comment" && !FB_PAGE_TOKEN)
+    return { ok: false, reason: "ยังไม่ได้เชื่อม Meta (ไม่มี secret FB_PAGE_TOKEN) จึงตอบจากแอปไม่ได้ — กด ⧉ คัดลอกคำตอบ แล้วกด 🔗 เปิดต้นทางไปตอบในแอป" + (m.channel === "facebook" ? " Facebook" : " Instagram") };
   if (m.channel === "facebook" && m.kind === "comment" && m.external_id) {
     const r = await fetch(`https://graph.facebook.com/v21.0/${m.external_id}/comments?access_token=${FB_PAGE_TOKEN}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -4899,6 +4928,8 @@ async function heartbeat(kind: "cron" | "summary", ok: boolean, note: unknown) {
     val[kind + "_at"] = new Date().toISOString();
     val[kind + "_ok"] = ok;
     val[kind + "_note"] = scrub(JSON.stringify(note ?? null)).slice(0, 400);
+    // แอปใช้ซ่อนปุ่ม "ตอบในนามเพจ/IG ร้าน" เมื่อยังไม่ได้เชื่อม Meta (บอกแค่มี/ไม่มี — ไม่ใช่ค่าลับ)
+    if (kind === "cron") val.can = { fb: !!FB_PAGE_TOKEN };
     await sb.from("social_settings").upsert({ id: "cron", val, updated_at: new Date().toISOString() });
   } catch (e) { console.error("heartbeat", scrub(e)); }
 }
