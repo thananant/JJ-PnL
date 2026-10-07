@@ -839,6 +839,9 @@ const PLAT={p_google:{ch:'google',subs:['reviews'],always:['reviews']},
   p_instagram:{ch:'instagram',subs:['posts','mentions'],always:['posts']},
   p_tiktok:{ch:'tiktok',subs:['posts','mentions'],always:['posts','mentions']}};
 const PLAT_OF={google:'p_google',facebook:'p_facebook',instagram:'p_instagram',tiktok:'p_tiktok'};
+/* FB/IG/TikTok มีบัญชีเดียวทั้งร้าน (เจ้าของบอก 2026-10-07 "มีแค่อย่างละเพจ อย่างละช่องเท่านั้น") → หน้าแพลตฟอร์มแสดงทั้งร้านเสมอ ไม่ขึ้นกับปุ่มสาขา
+   + แหล่ง Apify ของ 3 ช่องทางนี้ไม่มีตัวเลือกสาขา (AP_KIND ที่ไม่มี br) · Google Maps ยังแยกสาขา (มีหมุดของแต่ละสาขา) */
+const SHOP_WIDE=['facebook','instagram','tiktok'];
 const SUB_TH={posts:{facebook:'📌 คอมเมนต์ตามโพสต์',instagram:'📌 คอมเมนต์ตามโพสต์',tiktok:'🎬 คอมเมนต์ตามคลิปของร้าน'},
   reviews:{google:'⭐ รีวิว',facebook:'⭐ รีวิวเพจ'},
   mentions:{facebook:'🏷 กล่าวถึงร้าน',instagram:'🏷 แท็ก/กล่าวถึงร้าน',tiktok:'🔎 คลิปที่พูดถึงร้าน'}};
@@ -1551,8 +1554,9 @@ async function vPlat(el,v){
   if(!el.innerHTML)el.innerHTML='<div class="spin"></div>';
   const men=await loadMentions();
   const mine=men.filter(r=>r.channel===ch&&r.kind!=='message');
-  const all=brFilter(mine);
-  const hiddenNoBr=!S.scope&&S.br!=='ALL'?mine.filter(r=>!r.branch).length:0;
+  const wide=SHOP_WIDE.includes(ch);
+  const all=wide&&!S.scope?mine:brFilter(mine);   // คนที่เห็นเฉพาะบางสาขา: รายการไม่ระบุสาขาไม่ถูกโหลดมาตั้งแต่แรก (กติกาเดิม)
+  const hiddenNoBr=!wide&&!S.scope&&S.br!=='ALL'?mine.filter(r=>!r.branch).length:0;
   const by={posts:all.filter(r=>r.kind==='comment'),reviews:all.filter(r=>r.kind==='review'),mentions:all.filter(r=>r.kind==='mention')};
   const subs=P.subs.filter(s=>P.always.includes(s)||by[s].length);
   if(!subs.includes(f.sub))f.sub=subs[0];
@@ -1576,8 +1580,10 @@ async function vPlat(el,v){
   }
   const goCh=permOf('ch')!=='none'?` <a class="hintlink" href="javascript:show('ch')">🔌 ไปหน้าเชื่อมต่อช่องทาง</a>`:'';
   const head=`<div class="card phero"><div class="phx"><span class="pico">${cm.em}</span><div style="min-width:0">
-      <h3 style="margin:0">${cm.name} <span class="sp">${esc(S.br==='ALL'?(S.scope?'ทุกสาขาที่ดูแล':'ทุกสาขา'):brName(S.br))} · ${daysLabel()}${last?' · ล่าสุด '+timeago(last):''}</span></h3>
+      <h3 style="margin:0">${cm.name} <span class="sp">${wide?'ทั้งร้าน (บัญชีเดียวทุกสาขา)':esc(S.br==='ALL'?(S.scope?'ทุกสาขาที่ดูแล':'ทุกสาขา'):brName(S.br))} · ${daysLabel()}${last?' · ล่าสุด '+timeago(last):''}</span></h3>
       <div class="xs mut">${PLAT_SRC[ch]}</div></div></div>
+    ${wide&&!S.scope&&S.br!=='ALL'?`<div class="xs" style="margin-top:8px;color:var(--blu)">ℹ️ ${cm.name} ของร้านมีบัญชีเดียว — หน้านี้แสดงของทั้งร้านเสมอ ไม่ขึ้นกับปุ่มสาขาด้านบน</div>`:''}
+    ${wide&&S.scope?`<div class="xs" style="margin-top:8px;color:var(--gold)">🔒 ${cm.name} เป็นบัญชีรวมทั้งร้าน — บัญชีที่เห็นเฉพาะสาขา ${esc(scopeLabel())} จึงไม่เห็นส่วนนี้</div>`:''}
     ${hiddenNoBr?`<div class="xs" style="margin-top:8px;color:var(--gold)">มีอีก ${hiddenNoBr} รายการที่ไม่ได้ระบุสาขา (เช่น เพจรวมของร้าน) — ซ่อนอยู่เพราะเลือกสาขา${esc(brName(S.br))} · <a class="hintlink" href="javascript:pAllBr()">ดูทุกสาขา</a></div>`:''}</div>`;
   if(!mine.length){
     el.innerHTML=head+`<div class="empty">ยังไม่มีข้อมูลจาก ${cm.name} ในช่วง ${daysLabel()}${goCh?'<br>'+goCh:''}</div>`;return;
@@ -2126,7 +2132,7 @@ function apRowHtml(s,canEdit){
   return `<div class="aprow" data-id="${esc(s.id||apId())}">
     <div class="aptop">
       <select class="apK" ${dis} onchange="apKindChg(this)">${Object.entries(AP_KIND).map(([v,x])=>`<option value="${v}" ${s.kind===v?'selected':''}>${x.em} ${esc(x.name)}</option>`).join('')}</select>
-      <select class="apB" ${dis}><option value="">ทุกสาขา / ให้ AI ดูเอง</option>${S.branches.map(b=>`<option value="${esc(b.code)}" ${s.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+      ${apBrSel(k,s.branch,dis)}
       <select class="apE" ${dis} onchange="apEstimate()">${AP_EVERY.map(([h,t])=>`<option value="${h}" ${Number(s.every_h||k.every)===h?'selected':''}>${t}</option>`).join('')}</select>
       <label class="apOn"><input type="checkbox" ${s.on!==false?'checked':''} ${dis} onchange="apEstimate()"> เปิด</label>
       ${canEdit?`<button class="icb" title="ลบแหล่งนี้" onclick="this.closest('.aprow').remove();apEstimate()">✕</button>`:''}
@@ -2135,15 +2141,20 @@ function apRowHtml(s,canEdit){
     <div class="xs mut apSt"></div>
   </div>`;
 }
+function apBrSel(k,br,dis){
+  return k.br?`<select class="apB" ${dis}><option value="">ทุกสาขา / ให้ AI ดูเอง</option>${S.branches.map(b=>`<option value="${esc(b.code)}" ${br===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>`
+    :`<select class="apB" disabled title="บัญชีเดียวทั้งร้าน — ไม่ต้องเลือกสาขา"><option value="">ทั้งร้าน (บัญชีเดียว)</option></select>`;
+}
 function apKindChg(sel){
   const row=sel.closest('.aprow'),k=AP_KIND[sel.value];
+  const ob=row.querySelector('.apB'); if(ob)ob.outerHTML=apBrSel(k,ob.value||null,'');
   row.querySelector('.apU').placeholder=k.ph;
   row.querySelector('.apE').value=String(k.every);
   apEstimate();
 }
 function apRows(){
   return [...document.querySelectorAll('#apList .aprow')].map(r=>({
-    id:r.dataset.id,kind:r.querySelector('.apK').value,branch:r.querySelector('.apB').value||null,
+    id:r.dataset.id,kind:r.querySelector('.apK').value,branch:(AP_KIND[r.querySelector('.apK').value]||{}).br&&r.querySelector('.apB').value||null,
     every_h:Number(r.querySelector('.apE').value),on:r.querySelector('.apOn input').checked,
     url:r.querySelector('.apU').value.trim()}));
 }
