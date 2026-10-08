@@ -1,5 +1,5 @@
 -- JJ Social: รายการโพสต์/คลิปทั้งหมดของร้าน (Facebook / Instagram / TikTok)
--- ใช้กับปุ่ม "🚀 ดึงทั้งหมด" (ดึงโพสต์ย้อนหลังทั้งหมด + คอมเมนต์ + วิเคราะห์) และหน้าแยกแพลตฟอร์มแบบช่อง ๆ
+-- ใช้กับปุ่ม "🚀 ดึงทั้งหมด" (ดึงโพสต์ย้อนหลังทั้งหมด + คอมเมนต์ + วิเคราะห์) · หน้าแยกแพลตฟอร์มแบบช่อง ๆ · เมนู 📈 วิเคราะห์โพสต์/คลิป
 -- รันใน Supabase → SQL Editor ครั้งเดียว (รันซ้ำได้ ไม่ลบข้อมูลเดิม)
 -- ฟังก์ชัน social-brain เป็นคนเขียน (service role) · แอปอ่านอย่างเดียว (คีย์สาธารณะเขียนไม่ได้)
 
@@ -26,6 +26,13 @@ create table if not exists public.social_posts (
   unique (channel, pkey)
 );
 
+-- 2026-10-08: ยอดแชร์/เซฟ/ความยาวคลิป/แฮชแท็ก/ประเภทโพสต์ — ใช้กับเมนู 📈 วิเคราะห์โพสต์/คลิป (social-brain ≥ v2026-10-08.1)
+alter table public.social_posts add column if not exists shares   integer;   -- จำนวนแชร์ (TikTok · Facebook)
+alter table public.social_posts add column if not exists saves    integer;   -- จำนวนเซฟ/บันทึก (TikTok)
+alter table public.social_posts add column if not exists duration real;      -- ความยาวคลิป (วินาที)
+alter table public.social_posts add column if not exists hashtags text[];    -- แฮชแท็ก (ตัวเล็ก ไม่มี #)
+alter table public.social_posts add column if not exists ptype    text;      -- video | photo | carousel | text
+
 create index if not exists social_posts_ch_at on public.social_posts (channel, posted_at desc);
 create index if not exists social_posts_todo on public.social_posts (channel, posted_at desc) where cm_pulled_at is null;
 
@@ -38,6 +45,6 @@ grant select on public.social_posts to anon, authenticated;
 grant all on public.social_posts to service_role;
 grant usage, select on sequence public.social_posts_id_seq to service_role;
 
--- ตรวจผล: ควรเห็น 0 แถว (ตารางใหม่) หรือจำนวนโพสต์ที่มีอยู่แล้ว
-select channel, count(*) as posts, count(cm_pulled_at) as comments_pulled
+-- ตรวจผล: ควรเห็น 0 แถว (ตารางใหม่) หรือจำนวนโพสต์ที่มีอยู่แล้ว · มียอดแชร์แล้วกี่โพสต์
+select channel, count(*) as posts, count(cm_pulled_at) as comments_pulled, count(shares) as with_shares
 from public.social_posts group by channel order by channel;
