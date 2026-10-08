@@ -10,7 +10,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-06.2";
+const VERSION = "2026-10-08.1";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // ใช้ชื่อเฉพาะของ JJ Social — อย่าสับสนกับ LINE_SECRET/LINE_TOKEN ซึ่งเป็นของ OA ระบบอื่น
@@ -170,7 +170,8 @@ function gemClearKeyDown() {
   const g = gemState();
   for (const m of Object.keys(g.down)) if (g.why[m] === "key") { delete g.down[m]; delete g.why[m]; gemKeyCleared = true; aihDirty = true; }
 }
-async function geminiJson(system: string, user: string, maxTokens = 2500): Promise<any | null> {
+// parts = ส่วนเสริมต่อท้ายข้อความ (เช่น รูปปก {inline_data:{mime_type,data}}) — ไม่ส่ง = ข้อความล้วนแบบเดิม
+async function geminiJson(system: string, user: string, maxTokens = 2500, parts?: any[]): Promise<any | null> {
   gemLastFail = "transient";
   if (!GEMINI_KEY) return null;
   let sawContent = false, sawTransient = false;
@@ -190,7 +191,7 @@ async function geminiJson(system: string, user: string, maxTokens = 2500): Promi
           signal: AbortSignal.timeout(40000),
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: system }] },
-            contents: [{ role: "user", parts: [{ text: user }] }],
+            contents: [{ role: "user", parts: [{ text: user }, ...(Array.isArray(parts) ? parts : [])] }],
             generationConfig: {
               responseMimeType: "application/json", maxOutputTokens: maxTokens, temperature: 0.4,
               // ปิดโหมดคิดนาน — เร็วกว่า และไม่กินโทเคนคำตอบจนตัดกลางคัน

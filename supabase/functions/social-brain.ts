@@ -4,7 +4,8 @@
 // + ดึงรีวิว Google (Business Profile ฟรี → Places ทุก 3 ชม.) + ดึงทุกแอพผ่าน Apify (เครดิตฟรี $5/เดือน) + ส่งคำตอบ
 // deploy: วางโค้ดใน Supabase Dashboard → Edge Functions → social-brain (เปิด Verify JWT ไว้)
 // เรียกด้วย POST body: {action: analyze|upgrade_rules|summary|learn_faq|poll_google|chat_test|send_chat|send_reply|
-//                       gbp_auth_url|gbp_sync|apify_connect|apify_disconnect|apify_run|status|cron, ...}
+//                       gbp_auth_url|gbp_sync|apify_connect|apify_disconnect|apify_run|apify_more|apify_full|apify_restat|
+//                       news|news_cfg|content_ai|status|cron, ...}
 // cron/summary ที่ pg_cron เรียก: ตอบกลับทันทีแล้วทำงานเบื้องหลัง (ผลดูที่ social_settings id='cron')
 // ============================================================
 import Anthropic from "npm:@anthropic-ai/sdk";
@@ -13,7 +14,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // เวอร์ชันโค้ด — แอปใช้เทียบว่าที่ deploy ใน Supabase เป็นตัวล่าสุดหรือยัง (แก้โค้ดแล้วเลื่อนวันที่ด้วย)
-const VERSION = "2026-10-07.11";
+const VERSION = "2026-10-08.1";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
@@ -169,7 +170,8 @@ function gemClearKeyDown() {
   const g = gemState();
   for (const m of Object.keys(g.down)) if (g.why[m] === "key") { delete g.down[m]; delete g.why[m]; gemKeyCleared = true; aihDirty = true; }
 }
-async function geminiJson(system: string, user: string, maxTokens = 2500): Promise<any | null> {
+// parts = ส่วนเสริมต่อท้ายข้อความ (เช่น รูปปก {inline_data:{mime_type,data}}) — ไม่ส่ง = ข้อความล้วนแบบเดิม
+async function geminiJson(system: string, user: string, maxTokens = 2500, parts?: any[]): Promise<any | null> {
   gemLastFail = "transient";
   if (!GEMINI_KEY) return null;
   let sawContent = false, sawTransient = false;
@@ -189,7 +191,7 @@ async function geminiJson(system: string, user: string, maxTokens = 2500): Promi
           signal: AbortSignal.timeout(40000),
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: system }] },
-            contents: [{ role: "user", parts: [{ text: user }] }],
+            contents: [{ role: "user", parts: [{ text: user }, ...(Array.isArray(parts) ? parts : [])] }],
             generationConfig: {
               responseMimeType: "application/json", maxOutputTokens: maxTokens, temperature: 0.4,
               // ปิดโหมดคิดนาน — เร็วกว่า และไม่กินโทเคนคำตอบจนตัดกลางคัน
@@ -897,7 +899,9 @@ reply: ร่างคำตอบภาษาไทยสุภาพในน�
 }
 
 // ---------- สรุปรายวัน/รายสัปดาห์ ----------
-async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily") {
+// opts.deadline (cron เท่านั้น): เลยเวลานี้แล้ว สาขาที่เหลือใช้สรุปแบบกติกา (ไม่เรียก AI) — ให้ 📰 ส่งเข้า LINE ทันเวลา
+// คืน digest = สรุปของแถว ALL ที่เพิ่งทำในรอบนี้ (ในหน่วยความจำ — 📰 ใช้ส่ง LINE แทนการอ่านจากตารางที่คีย์สาธารณะแก้ได้)
+async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily", opts: { deadline?: number } = {}) {
   // ไม่ระบุวัน = สรุป "เมื่อวาน" ตามเวลาไทย (cron รันตอน 06:10)
   const dKey = dateStr ??
     new Date(Date.now() + 7 * 3600000 - 86400000).toISOString().slice(0, 10);
@@ -921,7 +925,10 @@ async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily")
     const digSystem = `คุณคือผู้ช่วยผู้บริหารร้านหมูกระทะ สรุปเสียงลูกค้า${span === "weekly" ? "รอบ 7 วัน" : "รายวัน"}เป็นภาษาไทย ให้เจ้าของร้านอ่านแล้วรู้ทันทีว่า มีปัญหาอะไร ใครทำดี ช่วงเวลาไหนดี/มีปัญหา และควรทำอะไรต่อ อ้างอิงเฉพาะข้อมูลที่ให้ อย่าแต่งเพิ่ม นับ count จากจำนวนรีวิวที่พูดถึงเรื่องนั้นจริง`;
     const digUser = `ข้อมูล ${set.length} รายการ (${br === "ALL" ? "ทุกสาขา" : "สาขา " + br}):\n` + lines.join("\n");
     let d: z.infer<typeof Digest> | null = null;
-    if (useClaude()) {
+    // cron: เลยกำหนดแล้ว = ไม่เรียก AI (สรุปแบบกติกา) · เหลือเวลาน้อย = Claude รอไม่เกินเวลาที่เหลือ ไม่ลองซ้ำ
+    const left = opts.deadline != null ? opts.deadline - Date.now() : Infinity;
+    const late = left <= 0;
+    if (!late && useClaude() && left > 15000) {
       try {
         const res = await anthropic().messages.parse({
           model: CLAUDE_MODEL,
@@ -929,12 +936,12 @@ async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily")
           output_config: { effort: "medium", format: zodOutputFormat(Digest) },
           system: digSystem,
           messages: [{ role: "user", content: digUser }],
-        });
+        }, Number.isFinite(left) ? { timeout: Math.min(60000, left), maxRetries: 0 } : undefined);
         d = parsedOf<z.infer<typeof Digest>>(res);
         if (d) noteClaudeOk();
       } catch (e) { markClaudeDown(e); }
     }
-    if (!d && gemAvailable()) {
+    if (!d && !late && gemAvailable()) {
       const s = Digest.safeParse(await geminiJson(digSystem + GEMINI_SCHEMA_DIGEST, maskPII(digUser), 4000));
       if (s.success) d = s.data;
     }
@@ -952,7 +959,7 @@ async function makeSummary(dateStr?: string, span: "daily" | "weekly" = "daily")
     });
     results[br] = d;
   }
-  return { ok: true, date: dKey, branches: Object.keys(results) };
+  return { ok: true, date: dKey, branches: Object.keys(results), digest: (results.ALL ?? null) as z.infer<typeof Digest> | null };
 }
 function avg(a: number[]) { return a.length ? Math.round(a.reduce((s, x) => s + Number(x), 0) / a.length * 100) / 100 : null; }
 
@@ -1144,7 +1151,9 @@ const AP_FULL_CM_INPUT: Record<string, (n: number) => Record<string, unknown>> =
   tt_comments: (n) => ({ commentsPerPost: n }),
 };
 
-type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null; img?: string | null; vid?: boolean | null; pid?: string | null };
+// sh = แชร์ · sv = บันทึก/เซฟ · du = ความยาวคลิป (วินาที) · tg = แฮชแท็ก (ตัวเล็ก ไม่มี #) · ty = ประเภทโพสต์ — ไม่รู้ = null (📈 วิเคราะห์โพสต์/คลิป)
+type ApPost = { u: string; t: string; at: string | null; lk: number | null; cm: number | null; vw: number | null; img?: string | null; vid?: boolean | null; pid?: string | null;
+  sh?: number | null; sv?: number | null; du?: number | null; tg?: string[] | null; ty?: string | null };
 type ApSrc = { id: string; kind: string; url: string; branch: string | null; on: boolean; every_h: number; owner?: string; posts?: ApPost[] };
 type ApRow = { channel: string; kind: string; external_id: string; branch: string | null; author_name: string | null;
   text: string; rating: number | null; url: string | null; posted_at: string; raw: Record<string, unknown>; reply_text?: string | null };
@@ -1340,7 +1349,7 @@ const AP_KINDS: Record<string, { label: string; channel: string; mkind: string; 
         text: apStr(apS(it, "text", "desc")), rating: null, url, posted_at: at,
         raw: { via: "apify", query: s.url.slice(0, 80), nick: apS(it, "authorMeta.nickName").slice(0, 80) || null,
           video: { vw: apNum(apGet(it, "playCount")), lk: apNum(apGet(it, "diggCount")), cm: apNum(apGet(it, "commentCount")), sh: apNum(apGet(it, "shareCount")),
-            img: apImgOf(it) } } };
+            sv: apCntOf(it, "collectCount"), img: apImgOf(it) } } };
     },
   },
 };
@@ -1394,13 +1403,80 @@ function apImgDeep(o: any, depth = 0, keyOk = false): string | null {
 const apVidOf = (it: any, u: string) =>
   /tiktok\.com\/.+\/video\/|\/reels?\/|\/videos\/|\/watch\b/i.test(u) || it?.isVideo === true ||
   /video|clips|igtv|reel/i.test(String(apGet(it, "type", "productType", "media.0.__typename") ?? "")) || !!apGet(it, "videoUrl");
+// ----- ยอดแชร์/เซฟ · ความยาวคลิป · แฮชแท็ก · ประเภทโพสต์ (ชื่อช่องอ้างจากเอกสารสาธารณะของตัวดึง — ลองหลายชื่อ) -----
+const AP_TYPES = ["video", "photo", "carousel", "text"];
+// จำนวน (≥0 · จำนวนเต็ม) จากช่องแรกที่เป็นตัวเลขจริง — ช่องที่เป็นออบเจกต์ (เช่น FB shares:{count}) ข้ามไปลองชื่อถัดไป
+const apCntOf = (it: any, ...paths: string[]): number | null => {
+  for (const p of paths) { const n = apNum(apGet(it, p)); if (n != null && n >= 0 && typeof apGet(it, p) !== "boolean") return Math.round(n); }
+  return null;
+};
+// ความยาวคลิป (วินาที) — ไม่เกิน 4 ชม. · 0/ติดลบ = ไม่รู้
+const apDur = (v: unknown): number | null => { const n = apNum(v); return n != null && n > 0 && n <= 14400 ? Math.round(n * 10) / 10 : null; };
+function apDurOf(it: any): number | null {
+  for (const p of ["videoMeta.duration", "videoDuration", "video.duration", "duration", "media.0.duration"]) { const d = apDur(apGet(it, p)); if (d != null) return d; }
+  // ช่องหน่วยมิลลิวินาที (เช่น playable_duration_in_ms) — ชื่อที่บอกว่าเป็นความยาวก่อน แล้วค่อยช่องอื่นที่ลงท้าย _ms (ค่าเวลาแบบ timestamp เกิน 4 ชม. ถูกทิ้งเอง)
+  const objs = [it, it?.video, it?.videoMeta, Array.isArray(it?.media) ? it.media[0] : null].filter((o) => o && typeof o === "object" && !Array.isArray(o));
+  for (const pass of [/dur|length/i, /./])
+    for (const o of objs) for (const [k, v] of Object.entries(o)) {
+      if (!/_ms$/i.test(k) || !pass.test(k)) continue;
+      const n = apNum(v); const d = n != null ? apDur(n / 1000) : null;
+      if (d != null) return d;
+    }
+  return null;
+}
+// แฮชแท็ก: ตัวเล็ก ไม่มี # ไม่ซ้ำ ≤15 อัน ≤40 ตัวอักษร (ตัวอักษรไทยได้) — รับทั้ง ["a"] และ [{name:"a"}]
+function apTags(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: string[] = [];
+  for (const x of v.slice(0, 60)) {
+    const s = String(x && typeof x === "object" ? ((x as any).name ?? (x as any).title ?? "") : x ?? "").trim().replace(/^#+/, "").toLowerCase().slice(0, 40);
+    if (s && /^[\p{L}\p{N}\p{M}_]+$/u.test(s) && !out.includes(s)) out.push(s);
+    if (out.length >= 15) break;
+  }
+  return out;
+}
+const apTagsOfText = (t: string): string[] => apTags([...String(t ?? "").matchAll(/#([\p{L}\p{N}\p{M}_]+)/gu)].map((m) => m[1])) ?? [];
+function apTypeOf(it: any, u: string, vid: boolean): string | null {
+  let h = "";
+  try { h = new URL(u).hostname.replace(/^(www|m|web|vm|vt)\./, "").toLowerCase(); } catch { h = ""; }
+  const len = (a: any) => (Array.isArray(a) ? a.length : null);
+  if (/(^|\.)tiktok\.com$/.test(h) || it?.webVideoUrl || it?.diggCount != null) {
+    const sl = it?.isSlideshow === true || !!it?.imagePost || !!it?.slideshow || !!len(it?.slideshowImageLinks);
+    if (!sl) return "video";
+    return (len(it?.imagePost?.images) ?? len(it?.slideshowImageLinks) ?? len(it?.slideshow)) === 1 ? "photo" : "carousel";
+  }
+  if (/(^|\.)instagram\.com$/.test(h) || it?.shortCode || it?.ownerUsername) {
+    if (/clips|reels?|igtv/i.test(String(it?.productType ?? ""))) return "video";
+    const t = String(it?.type ?? "").toLowerCase();
+    if (t === "video") return "video";
+    if (t === "image") return "photo";
+    if (t === "sidecar") return "carousel";
+  } else if (/(^|\.)(facebook\.com|fb\.watch|fb\.com)$/.test(h) || it?.facebookUrl || it?.topLevelUrl || it?.pageName) {
+    const media = Array.isArray(it?.media) ? it.media : [];
+    if (media.length > 1) return "carousel";
+    const tn = String(media[0]?.__typename ?? "");
+    if (/video/i.test(tn)) return "video";
+    if (/photo|image/i.test(tn)) return "photo";
+    if (!media.length) return vid ? "video" : "text";
+  }
+  return vid ? "video" : null;
+}
 function apPostMeta(it: any, u: string): ApPost {
-  return { u: u.slice(0, 500), t: apS(it, "text", "caption", "message", "desc", "postText").replace(/\s+/g, " ").trim().slice(0, 160),
+  const full = apS(it, "text", "caption", "message", "desc", "postText");
+  const vid = apVidOf(it, u);
+  const tg0 = apTags(it?.hashtags);
+  return { u: u.slice(0, 500), t: full.replace(/\s+/g, " ").trim().slice(0, 160),
     at: apIso(apGet(it, "time", "timestamp", "takenAt", "createTimeISO", "date", "createTime")),
     lk: apNum(apGet(it, "likes", "likesCount", "diggCount", "reactionsCount", "topReactionsCount")),
     cm: apNum(apGet(it, "comments", "commentsCount", "commentCount")),
     vw: apNum(apGet(it, "playCount", "videoPlayCount", "videoViewCount", "views", "viewsCount")),
-    img: apImgOf(it), vid: apVidOf(it, u), pid: apPid(apS(it, "postId", "post_id")) };
+    img: apImgOf(it), vid, pid: apPid(apS(it, "postId", "post_id")),
+    sh: apCntOf(it, "shareCount", "shares", "sharesCount", "shares.count"),
+    sv: apCntOf(it, "collectCount", "savesCount", "saveCount"),
+    du: apDurOf(it),
+    // แฮชแท็กจากช่องของตัวดึงก่อน · ไม่มี = หาจากข้อความเต็ม (ก่อนตัด 160 ตัวอักษร) · ไม่มีข้อความเลย = ไม่รู้
+    tg: tg0?.length ? tg0 : full ? apTagsOfText(full) : tg0,
+    ty: apTypeOf(it, u, vid) };
 }
 // เลขโพสต์ Facebook (ตัวเลขล้วน) — ลิงก์โพสต์มี 2 แบบ (pfbid… กับเลขโพสต์) ใช้เลขนี้จับคู่แทนได้
 const apPid = (s: unknown) => { const t = String(s ?? ""); return /^\d{5,25}$/.test(t) ? t : null; };
@@ -1415,7 +1491,7 @@ function apMetasOf(items: any[], urls: string[], max = AP_META_MAX): ApPost[] {
     const k = apUrlKey(u);
     if (!k || seen.has(k) || out.length >= max) return;
     seen.add(k);
-    out.push(it ? apPostMeta(it, u) : { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null, pid: null });
+    out.push(it ? apPostMeta(it, u) : { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null, pid: null, sh: null, sv: null, du: null, tg: null, ty: null });
   };
   for (const u of urls) add(items.find((x) => [apS(x, "url"), apS(x, "postUrl"), apS(x, "topLevelUrl"), apS(x, "webVideoUrl")].includes(u)), u);
   for (const it of items) { const u = apS(it, "url", "postUrl", "webVideoUrl", "topLevelUrl"); if (/^https:\/\//.test(u)) add(it, u); }
@@ -1511,7 +1587,7 @@ async function apBackfill(channel: string, metas: ApPost[], deadline: number): P
     const pid = /^(\d{5,25})_\d+$/.exec(String(r.external_id ?? ""))?.[1] ?? null;
     const p = apPostOf(metas, channel === "facebook" ? pid : null, String(raw.post_id ?? ""));
     if (!p) continue;
-    const post = { t: p.t, at: p.at, lk: p.lk, cm: p.cm, vw: p.vw, img: p.img ?? null, vid: p.vid ?? null };
+    const post = { t: p.t, at: p.at, lk: p.lk, cm: p.cm, vw: p.vw, img: p.img ?? null, vid: p.vid ?? null, sh: p.sh ?? null, sv: p.sv ?? null };
     // เหมือนเดิม (ต่างแค่ ?v= ของรูปที่คัดลอกซ้ำ) = ไม่เขียน — ไม่ให้แอปที่เปิดอยู่รีเฟรชเปล่า ๆ ทุกรอบ
     const norm = (x: any) => JSON.stringify(x ? { ...x, img: String(x.img ?? "").split("?")[0] } : null);
     if (raw.post_id === p.u && norm(raw.post) === norm(post)) continue;
@@ -1520,12 +1596,25 @@ async function apBackfill(channel: string, metas: ApPost[], deadline: number): P
   }
   return n;
 }
+// ยอดแชร์/เซฟ/ความยาว/แฮชแท็ก/ประเภท จากแถวที่คีย์สาธารณะแก้ได้ → บีบให้อยู่ในกรอบ (ใส่เฉพาะช่องที่รู้ค่า)
+function apStatClean(p: any): Partial<ApPost> {
+  const o: Partial<ApPost> = {};
+  const n = (x: unknown) => { const v = apNum(x); return v != null && v >= 0 && v < 1e12 ? Math.round(v) : null; };
+  const sh = n(p?.sh), sv = n(p?.sv), du = apDur(p?.du), tg = apTags(p?.tg);
+  if (sh != null) o.sh = sh;
+  if (sv != null) o.sv = sv;
+  if (du != null) o.du = du;
+  if (tg) o.tg = tg;
+  if (AP_TYPES.includes(p?.ty)) o.ty = p.ty;
+  return o;
+}
 // ค่าจากแถว runs (คีย์สาธารณะแก้ได้) → บีบให้เป็นข้อมูลสั้น ๆ ที่ปลอดภัยก่อนเก็บลงรีวิว
 function apPostsClean(a: unknown, max = AP_META_MAX): ApPost[] {
   if (!Array.isArray(a)) return [];
   return a.slice(0, max).filter((p: any) => typeof p?.u === "string" && /^https:\/\//.test(p.u)).map((p: any) => ({
     u: String(p.u).slice(0, 500), t: String(p.t ?? "").slice(0, 160), at: apIso(p.at),
     lk: apNum(p.lk), cm: apNum(p.cm), vw: apNum(p.vw), img: apImgOk(p.img), vid: p.vid === true, pid: apPid(p.pid),
+    ...apStatClean(p),
     ...(Number(p.thf) > 0 ? { thf: Math.min(9, Number(p.thf) | 0) } : {}) }));
 }
 // เพิ่ม/อัปเดตโพสต์ลงรายการ (ข้อมูลใหม่ทับของเดิม · รูปที่เก็บใน Storage แล้วไม่ถูกลิงก์ CDN ชั่วคราวทับ)
@@ -1553,8 +1642,22 @@ async function hasPostsTbl() {
   return postsTbl;
 }
 const POST_COLS = "pkey,url,pid,caption,posted_at,likes,comments,views,img,is_video";
+// คอลัมน์ยอดแชร์/เซฟ/ความยาว/แฮชแท็ก/ประเภท (jjmk_social_posts.sql รุ่น 2026-10-08) — ยังไม่รัน SQL รุ่นนั้น = ตารางไม่มีคอลัมน์
+// → ฐานข้อมูลปฏิเสธ (PGRST204 / 42703) → จำไว้ในอินสแตนซ์นี้ (statCols=false) แล้วอ่าน/เขียนแบบเดิม ไม่ให้งานดึงโพสต์พัง
+const POST_STAT = ["shares", "saves", "duration", "hashtags", "ptype"];
+let statCols = true;
+const postCols = () => (statCols ? POST_COLS + "," + POST_STAT.join(",") : POST_COLS);
+const statColErr = (e: any) => !!e && (["PGRST204", "42703"].includes(String(e.code ?? "")) ||
+  (/column/i.test(String(e.message ?? "")) && POST_STAT.some((c) => String(e.message ?? "").includes(c))));
+// อ่าน social_posts ด้วยคอลัมน์ชุดเต็ม → ไม่มีคอลัมน์ใหม่ = อ่านซ้ำด้วยชุดเดิม (mk รับรายชื่อคอลัมน์ คืนคำขอ)
+async function selPosts(mk: (cols: string) => any): Promise<{ data: any[] | null; error: any }> {
+  let r = await mk(postCols());
+  if (r.error && statCols && statColErr(r.error)) { statCols = false; r = await mk(postCols()); }
+  return r;
+}
 const rowToPost = (r: any): ApPost => ({ u: r.url, t: r.caption ?? "", at: r.posted_at ?? null, lk: r.likes ?? null, cm: r.comments ?? null,
-  vw: r.views ?? null, img: apImgOk(r.img), vid: r.is_video === true, pid: apPid(r.pid) });
+  vw: r.views ?? null, img: apImgOk(r.img), vid: r.is_video === true, pid: apPid(r.pid),
+  ...apStatClean({ sh: r.shares, sv: r.saves, du: r.duration, tg: r.hashtags, ty: r.ptype }) });
 async function apPostsSave(channel: string, srcId: string, metas: ApPost[]) {
   if (!metas.length || !["facebook", "instagram", "tiktok"].includes(channel)) return 0;
   if (!(await hasPostsTbl())) { await apCatMerge(channel, metas); return metas.length; }
@@ -1562,7 +1665,7 @@ async function apPostsSave(channel: string, srcId: string, metas: ApPost[]) {
   for (let i = 0; i < metas.length; i += 50) {
     const part = metas.slice(i, i + 50).filter((m) => apUrlKey(m.u));
     const keys = [...new Set(part.map((m) => apUrlKey(m.u)))];
-    const { data: old, error: oe } = await sb.from("social_posts").select(POST_COLS).eq("channel", channel).in("pkey", keys);
+    const { data: old, error: oe } = await selPosts((c) => sb.from("social_posts").select(c).eq("channel", channel).in("pkey", keys));
     if (oe) throw new Error("อ่านตาราง social_posts ไม่ได้: " + oe.message);
     const prev = new Map((old ?? []).map((r: any) => [r.pkey, r]));
     const byKey = new Map<string, any>();
@@ -1573,10 +1676,16 @@ async function apPostsSave(channel: string, srcId: string, metas: ApPost[]) {
       // ทุกแถวต้องมีช่องครบชุดเดียวกัน (PostgREST) — ค่าที่ไม่มีใช้ของเดิม · cm_pulled_at/cm_got/cm_err ไม่ส่ง = ไม่ถูกทับ
       byKey.set(k, { channel, pkey: k, url: m.u || o.url, src_id: srcId, pid: m.pid ?? o.pid ?? null, caption: m.t || o.caption || null,
         posted_at: m.at ?? o.posted_at ?? null, likes: int(m.lk, o.likes), comments: int(m.cm, o.comments), views: int(m.vw, o.views),
-        img, is_video: !!(m.vid || o.is_video), updated_at: new Date().toISOString(), ...(img?.startsWith(AP_IMG_PUB) ? { img_fail: 0 } : { img_fail: o.img_fail ?? 0 }) });
+        img, is_video: !!(m.vid || o.is_video), updated_at: new Date().toISOString(), ...(img?.startsWith(AP_IMG_PUB) ? { img_fail: 0 } : { img_fail: o.img_fail ?? 0 }),
+        // ยอดแชร์/เซฟ/ความยาว/แฮชแท็ก/ประเภท — ค่าที่ไม่มีในรอบนี้ใช้ของเดิม (แบบเดียวกับไลก์/วิว)
+        shares: int(m.sh, o.shares), saves: int(m.sv, o.saves), duration: m.du ?? o.duration ?? null,
+        hashtags: m.tg ?? (Array.isArray(o.hashtags) ? o.hashtags : null), ptype: m.ty ?? o.ptype ?? null });
     }
     const rows = [...byKey.values()].map(({ img_fail, ...r }) => r);
-    const { error } = await sb.from("social_posts").upsert(rows, { onConflict: "channel,pkey" });
+    const noStat = (rs: any[]) => rs.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !POST_STAT.includes(k))));
+    let { error } = await sb.from("social_posts").upsert(statCols ? rows : noStat(rows), { onConflict: "channel,pkey" });
+    // ยังไม่ได้รัน SQL รุ่นที่เพิ่มคอลัมน์ → บันทึกซ้ำแบบไม่มี 5 คอลัมน์ใหม่ (จำไว้ ไม่ลองซ้ำทุกชุด)
+    if (error && statCols && statColErr(error)) { statCols = false; ({ error } = await sb.from("social_posts").upsert(noStat(rows), { onConflict: "channel,pkey" })); }
     if (error) throw new Error("บันทึกตาราง social_posts ไม่ได้: " + error.message);
     n += rows.length;
   }
@@ -1630,7 +1739,7 @@ function apRows(def: (typeof AP_KINDS)[string], items: any[], src: ApSrc): ApRow
     if (row.kind === "comment") {
       const pm = apPostOf(src.posts, /^(\d{5,25})_\d+$/.exec(row.external_id)?.[1] ?? null,
         apS(it, "inputUrl"), apS(it, "postUrl", "videoWebUrl", "webVideoUrl", "facebookUrl"), String(row.raw.post_id ?? ""));
-      if (pm) row.raw = { ...row.raw, post_id: pm.u, post: { t: pm.t, at: pm.at, lk: pm.lk, cm: pm.cm, vw: pm.vw, img: pm.img ?? null, vid: pm.vid ?? null } };
+      if (pm) row.raw = { ...row.raw, post_id: pm.u, post: { t: pm.t, at: pm.at, lk: pm.lk, cm: pm.cm, vw: pm.vw, img: pm.img ?? null, vid: pm.vid ?? null, sh: pm.sh ?? null, sv: pm.sv ?? null } };
     }
     rows.push(row);
     idx.set(apS(it, "id", "commentId", "cid"), row);
@@ -1912,11 +2021,14 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         const stepDef = def.steps[step];
         if (r.full === "posts") {
           // รายการโพสต์ทั้งหมด: อ่านผลทีละหน้า (อาจหลายพันโพสต์) บันทึกลง social_posts · อ่านไม่หมดในรอบนี้ = จำตำแหน่งไว้อ่านต่อรอบหน้า
-          const fsr = FS(src.id);
+          // restat = ปุ่ม 🔄 อัปเดตยอดทุกโพสต์ (<แหล่ง>~st) — ใช้ทางเดียวกัน แต่ห้ามแตะสถานะงาน 🚀 (full.src) · บอกผลที่ last[<แหล่ง>~st] อย่างเดียว
+          const fsr: any = r.restat ? null : FS(src.id);
           if (!run.defaultDatasetId || !["SUCCEEDED", "TIMED-OUT", "ABORTED"].includes(status)) {
-            fsr.pf = (Number(fsr.pf) || 0) + 1;
-            if (fsr.pf >= 2) Object.assign(fsr, { posts: "done", posts_err: "อ่านรายการโพสต์ไม่สำเร็จ 2 ครั้ง — ข้ามไปดึงคอมเมนต์ของโพสต์ที่มีอยู่" });
-            Object.assign(L(sid), { ok: false, done: now(), err: "อ่านรายการโพสต์ทั้งหมดไม่สำเร็จ: " + scrub(run.statusMessage ?? status).slice(0, 140) });
+            if (fsr) {
+              fsr.pf = (Number(fsr.pf) || 0) + 1;
+              if (fsr.pf >= 2) Object.assign(fsr, { posts: "done", posts_err: "อ่านรายการโพสต์ไม่สำเร็จ 2 ครั้ง — ข้ามไปดึงคอมเมนต์ของโพสต์ที่มีอยู่" });
+            }
+            Object.assign(L(sid), { ok: false, done: now(), err: (r.restat ? "อัปเดตยอดโพสต์ไม่สำเร็จ: " : "อ่านรายการโพสต์ทั้งหมดไม่สำเร็จ: ") + scrub(run.statusMessage ?? status).slice(0, 140) });
             dropRuns.add(sid); continue;
           }
           let off = Number(r.off) || 0, end = false;
@@ -1925,15 +2037,15 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
               { q: { clean: "true", format: "json", limit: AP_FULL_PAGE, offset: off } });
             const its = Array.isArray(page) ? page : [];
             // ชื่อเพจ/บัญชีร้าน → ชุดคอมเมนต์ใช้แยกคำตอบของร้านออกจากเสียงลูกค้า (แบบขั้นแรกของรอบปกติ)
-            if (!fsr.owner && its.length) { const ow = apS(its[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120); if (ow) fsr.owner = ow; }
+            if (fsr && !fsr.owner && its.length) { const ow = apS(its[0], "pageName", "user.name", "author.name", "ownerFullName").slice(0, 120); if (ow) fsr.owner = ow; }
             await apPostsSave(def.channel, src.id, apMetasOf(its, [], AP_FULL_PAGE));
             off += its.length;
             if (its.length < AP_FULL_PAGE) { end = true; break; }
           }
           if (!end) { runs[sid] = { ...r, off }; await commitRun(sid, runs[sid]); continue; }
-          Object.assign(fsr, { posts: "done", n: off, posts_err: null, posts_at: now() });
+          if (fsr) Object.assign(fsr, { posts: "done", n: off, posts_err: null, posts_at: now() });
           Object.assign(L(sid), { ok: true, err: null, n: off, added: 0, done: now(), ok_at: now(),
-            note: `รายการโพสต์ทั้งหมด ${off} โพสต์${status !== "SUCCEEDED" ? " (บางส่วน — หมดเวลา)" : ""}` });
+            note: (r.restat ? `อัปเดตยอด ${off} โพสต์` : `รายการโพสต์ทั้งหมด ${off} โพสต์`) + (status !== "SUCCEEDED" ? " (บางส่วน — หมดเวลา)" : "") });
           dropRuns.add(sid); continue;
         }
         if (r.full === "cm") {
@@ -2112,6 +2224,9 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
         const kA = src.id + "~all", kC = src.id + "~fc";
         if (fsr.posts !== "done") {
           if (busyK(kA)) continue;
+          // 🔄 อัปเดตยอดทุกโพสต์ (<แหล่ง>~st) กำลังอ่านรายการชุดเดียวกันอยู่ → รอให้เสร็จก่อน ไม่จ่ายค่าอ่านรายการซ้ำพร้อมกัน
+          if (busyK(src.id + "~st")) { L(kA).wait = "รอรอบอัปเดตยอดให้เสร็จก่อน"; continue; }
+          if (last[kA]?.wait || S0.last?.[kA]?.wait) L(kA).wait = null;   // รอบอัปเดตยอดจบแล้ว — ไม่ค้างข้อความรอ (ถูกบล็อกงบ/เพดานต่อ = การ์ดบอกเหตุผลอื่น)
           const b = blocked(Math.max(def.steps[0].usd ?? AP_RUN_USD, AP_RUN_USD));
           if (b) { if (b.hard) paused = b.msg; continue; }
           try {
@@ -2119,7 +2234,7 @@ async function apifyTick(manual = false, budgetMs = 40000, start = true, only?: 
               usd: Math.min(AP_FULL_LIST_USD, room()), timeout: 3600 });
             started++; freshUsd += r0.usd;
             runs[kA] = { id: r0.id, step: 0, at: now(), key: apKey(src), full: "posts", off: 0 };
-            Object.assign(L(kA), { start: now(), err: null, key: apKey(src) });
+            Object.assign(L(kA), { start: now(), err: null, wait: null, key: apKey(src) });
             await commitRun(kA, runs[kA]);
           } catch (e) { Object.assign(L(kA), { ok: false, err: scrub(e).slice(0, 200), done: now() }); }
           continue;   // คอมเมนต์เริ่มหลังได้รายการโพสต์ครบ
@@ -2212,8 +2327,8 @@ async function bossOk(u: unknown, h: unknown) { return !(await bossCheck(u, h));
 async function apFullTodo(channel: string, srcId: string): Promise<ApPost[]> {
   await sb.from("social_posts").update({ cm_pulled_at: new Date().toISOString(), cm_got: 0 })
     .eq("channel", channel).eq("src_id", srcId).is("cm_pulled_at", null).eq("comments", 0);
-  const { data, error } = await sb.from("social_posts").select(POST_COLS).eq("channel", channel).eq("src_id", srcId)
-    .is("cm_pulled_at", null).lt("cm_err", 2).order("posted_at", { ascending: false, nullsFirst: false }).limit(AP_FULL_BATCH);
+  const { data, error } = await selPosts((c) => sb.from("social_posts").select(c).eq("channel", channel).eq("src_id", srcId)
+    .is("cm_pulled_at", null).lt("cm_err", 2).order("posted_at", { ascending: false, nullsFirst: false }).limit(AP_FULL_BATCH));
   if (error) throw new Error("อ่านตาราง social_posts ไม่ได้: " + error.message);
   return (data ?? []).map(rowToPost).filter((p) => /^https:\/\//.test(p.u));
 }
@@ -2275,7 +2390,7 @@ async function apifyMore(sid: string, n: number, url: string, urls: unknown[] = 
     // ข้อมูลโพสต์ (ข้อความ/รูปปก) จากตาราง social_posts ก่อน · ยังไม่รัน SQL = รายการเดิมใน ap_posts
     let cat: ApPost[] = [];
     if (await hasPostsTbl()) {
-      const { data: pr } = await sb.from("social_posts").select(POST_COLS).eq("channel", def.channel).in("pkey", list.map(apUrlKey));
+      const { data: pr } = await selPosts((c) => sb.from("social_posts").select(c).eq("channel", def.channel).in("pkey", list.map(apUrlKey)));
       cat = (pr ?? []).map(rowToPost);
     } else cat = apPostsClean((await sb.from("social_settings").select("val").eq("id", "ap_posts").maybeSingle()).data?.val?.[def.channel], AP_CAT_MAX);
     return list.map((u) => cat.find((p) => apUrlKey(p.u) === apUrlKey(u)) ?? { u, t: "", at: null, lk: null, cm: null, vw: null, img: null, vid: null, pid: null });
@@ -2328,6 +2443,53 @@ async function apifyMore(sid: string, n: number, url: string, urls: unknown[] = 
   });
   return { ok: true, key, n: nPosts };
 }
+// 🔄 อัปเดตยอดทุกโพสต์ (ปุ่มในหน้า 📈 วิเคราะห์โพสต์/คลิป · ผู้ดูแล/เจ้าของ) — อ่านรายการโพสต์ทั้งหมดใหม่ของทุกแหล่ง FB/IG/TikTok
+// แบบเดียวกับขั้นแรกของ 🚀 (AP_FULL_LIST_INPUT · ≤AP_FULL_POSTS · หมดเวลา 1 ชม.) คีย์รอบ <แหล่ง>~st · ผลเก็บด้วยทางเดียวกับ r.full==="posts" (ไม่แตะงาน 🚀)
+// ใช้งบ/เพดานเดียวกับทุกงาน: เพดานเงินต่อรอบ ≤ min(AP_FULL_LIST_USD, งบที่เหลือ) · รันพร้อมกัน/ต่อชั่วโมงนับจากบัญชี Apify เอง
+async function apifyRestat() {
+  if (!(await hasPostsTbl())) return { ok: false, started: 0, reason: "ต้องรัน SQL jjmk_social_posts.sql ใน Supabase ก่อน (ตารางเก็บโพสต์ทั้งหมด)" };
+  const tok = await apToken();
+  if (!tok) return { ok: false, started: 0, reason: "ยังไม่ได้เชื่อม Apify — วาง API token ในหน้าเชื่อมต่อช่องทาง" };
+  const { data: chRow, error } = await sb.from("social_settings").select("val").eq("id", "channels").maybeSingle();
+  if (error) return { ok: false, started: 0, reason: "อ่านรายการแหล่งข้อมูลไม่ได้ — ลองใหม่อีกครั้ง" };
+  const srcs = apSources(chRow?.val?.apify_sources).filter((s) => s.on && AP_FULL_LIST_INPUT[s.kind] && AP_KINDS[s.kind].ok(s.url));
+  if (!srcs.length) return { ok: false, started: 0, reason: "ยังไม่มีแหล่งคอมเมนต์ Facebook/Instagram/TikTok ที่เปิดอยู่ — ตั้งในการ์ด ⚡ หน้าเชื่อมต่อช่องทาง" };
+  let usage: any, gate: any;
+  try { usage = await apUsage(tok); gate = await apRunStats(tok); }
+  catch (e) { return { ok: false, started: 0, reason: "อ่านยอดเครดิต/รอบของ Apify ไม่ได้: " + scrub(e).slice(0, 120) }; }
+  let room = usage.budget - usage.used - gate.running * AP_RUN_USD;
+  const S0 = (await sb.from("social_settings").select("val").eq("id", "apify").maybeSingle()).data?.val ?? {};
+  const busy = (k: string) => S0.runs?.[k] && Date.now() - (Date.parse(S0.runs[k].at) || 0) < 80 * 60000;
+  const reasons: string[] = [], made: Record<string, any> = {};
+  let started = 0;
+  for (const [i, src] of srcs.entries()) {
+    const def = AP_KINDS[src.kind], key = src.id + "~st", name = def.label;
+    if (busy(key)) { reasons.push(`${name}: กำลังอัปเดตยอดอยู่แล้ว`); continue; }
+    if (busy(src.id + "~all")) { reasons.push(`${name}: งาน 🚀 กำลังอ่านรายการโพสต์อยู่ (ยอดจะอัปเดตจากงานนั้น)`); continue; }
+    if (gate.running + started >= AP_MAX_RUNNING || gate.hour + started >= AP_MAX_PER_HOUR) { reasons.push(`${name}: Apify ทำงานเต็มโควต้า — ลองใหม่ภายหลัง`); continue; }
+    // แบ่งงบที่เหลือให้ทุกแหล่งที่ยังไม่ได้เริ่ม (กดครั้งเดียวได้ครบทุกช่องทาง) · ส่วนแบ่งไม่ถึงขั้นต่ำของตัวดึง = ให้แหล่งนี้ใช้ที่เหลือทั้งหมด
+    const need = Math.max(def.steps[0].usd ?? AP_RUN_USD, AP_RUN_USD);
+    const share = room / Math.max(1, srcs.length - i);
+    const cap = Math.min(AP_FULL_LIST_USD, share >= need ? share : room);
+    if (cap < need) {
+      reasons.push(started ? `${name}: งบที่เหลือกันไว้ให้รอบที่เพิ่งเริ่มแล้ว — กดอีกครั้งหลังรอบนั้นเสร็จ`
+        : `${name}: งบ Apify เดือนนี้เหลือไม่พอ (ใช้ไป $${Number(usage.used).toFixed(2)})`);
+      continue;
+    }
+    try {
+      const r = await apStart(tok, src, 0, [], null, room, { max: AP_FULL_POSTS, input: AP_FULL_LIST_INPUT[src.kind](AP_FULL_POSTS), usd: cap, timeout: 3600 });
+      room -= r.usd; started++;
+      made[key] = { id: r.id, step: 0, at: new Date().toISOString(), key: apKey(src), full: "posts", restat: true, off: 0 };
+    } catch (e) { reasons.push(`${name}: ${scrub(e).slice(0, 160)}`); }
+  }
+  if (started) await apSave((v) => {
+    const now = new Date().toISOString();
+    v.runs = { ...(v.runs ?? {}), ...made };
+    v.last = { ...(v.last ?? {}) };
+    for (const [k, e] of Object.entries(made)) v.last[k] = { ...(v.last[k] ?? {}), start: now, err: null, ok: null, note: null, key: e.key };
+  });
+  return { ok: started > 0, started, ...(reasons.length ? { reason: reasons.join(" · ") } : {}) };
+}
 async function apifyConnect(token: string) {
   if (APIFY_ENV) return { ok: false, reason: "มี secret APIFY_TOKEN ใน Supabase อยู่แล้ว ระบบใช้ตัวนั้น — ถ้าจะเปลี่ยนบัญชีให้ลบ secret ก่อน" };
   const t = String(token ?? "").trim();
@@ -2346,6 +2508,710 @@ async function apifyConnect(token: string) {
   return { ok: true, user: apStr(me.username, 60), usage };
 }
 // ===== /Apify =====
+
+// ===== 📰 สรุปประจำวัน "มีอะไรใหม่" + 📈 วิเคราะห์โพสต์/คลิป (เจ้าของสั่ง 2026-10-08) =====
+// เจ้าของ: "อยากให้มีสรุปทุกวันว่ามีอะไรใหม่บ้าง รีวิวใหม่ คอมเมนต์ใหม่ … และอยากรู้ว่าทำไมคลิปแต่ละตัวถึงมียอดดู คนกดไลค์ คนแชร์ไม่เท่ากัน"
+// 📰 news: social_daily kind='news' (ALL + รายสาขา) · ส่งเข้ากลุ่ม LINE ผ่าน line-order (บอทตัวเดียวกับนับสต๊อก/ครัวกลาง) เฉพาะกลุ่มที่ลงลายเซ็นแล้ว
+// 📈 content: social_daily kind='content' branch=<ช่องทาง> · AI อธิบายว่าทำไมแต่ละโพสต์ได้ยอดต่างกัน + ไอเดียคลิป/เมนูใหม่
+const thDay = (t = Date.now()) => new Date(t + 7 * 3600000).toISOString().slice(0, 10);
+const thStart = (d: string) => Date.parse(d + "T00:00:00+07:00");
+const TH_WD = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+const CH_TH: Record<string, string> = { google: "Google", facebook: "FB", instagram: "IG", tiktok: "TikTok", wongnai: "Wongnai", line: "LINE",
+  grab: "Grab", lineman: "LINE MAN", other: "อื่น ๆ" };
+const NEWS_URL = "https://thananant.github.io/JJ-PnL/jjmk-social.html";
+const NEWS_GROUP_RE = /^[CRU][0-9a-f]{32}$/;
+const NEWS_MAX = 4500;
+// คีย์ apikey ของคำขอที่กำลังทำ (ใช้เรียก line-order ผ่าน gateway เดียวกัน) — จำไว้ในหน่วยความจำเท่านั้น ห้าม log/เก็บลงตาราง
+let reqApiKey = "";
+// ข้อความที่ใส่ในสรุป/ส่งเข้า LINE: ตัดเบอร์/อีเมล/ไอดีไลน์ + @ชื่อบัญชี · ยุบช่องว่าง · ไม่มีชื่อผู้เขียน (ไม่ select author_name เลย)
+// ตัดความยาวก่อน maskPII เสมอ (regex อีเมลใน maskPII ช้าแบบกำลังสองกับข้อความยาว ๆ ที่คีย์สาธารณะแทรกได้ — 50,000 ตัวอักษร = หลายวินาที) · เผื่อ 400 ตัวให้เบอร์/อีเมลที่คร่อมจุดตัดยังถูกตัด
+const newsTxt = (s: unknown, n: number) => maskPII(String(s ?? "").slice(0, n + 400)).replace(/@[A-Za-z0-9._]{2,30}/g, "@…").replace(/\s+/g, " ").trim().slice(0, n);
+// ข้อความที่ส่งเข้า LINE: ทุกข้อความที่มาจากตาราง (คีย์สาธารณะเขียน social_mentions/social_daily/pnl_branches ได้) ตัดลิงก์/ชื่อโดเมนทิ้ง
+// กันคนแปะลิงก์หลอก (phishing) ให้บอทร้านส่งเข้ากลุ่มหัวหน้า — ลิงก์เดียวในข้อความคือ NEWS_URL ท้ายข้อความ
+// ตัดหลัง maskPII (อีเมลกลายเป็น [อีเมล] ก่อน ไม่เหลือชื่อหน้า @) · ไม่แตะทศนิยม (4.5★) และภาษาไทย — เฉพาะโดเมนที่ลงท้ายด้วยตัวอักษร
+// โดเมนภาษาอื่น/หน้าตาเหมือน (ผลตรวจรอบ 2 — "จริงใจหมูกระทะ.com" · "jjmoo.онлайн" · "evil。com" · "ｅｖｉｌ．ｃｏｍ" · "evil<ZWSP>.com"):
+//   ① ลบอักขระควบคุมที่มองไม่เห็น (\p{Cf}: zero-width · soft hyphen · word joiner · BOM · ทิศทางข้อความ) ② แปลงตัวอักษรเต็มความกว้าง (U+FF01–FF5E) เป็น ASCII
+//   ③ จุดแบบอื่น (。｡․﹒) เป็น "." — **ไม่ใช้ NFKC กับทั้งข้อความ** (สระอำ ำ จะถูกแยกเป็น ํ+า ข้อความไทยเปลี่ยน)
+//   ④ ลิงก์ที่มี scheme/www · ⑤ ชื่อโดเมนทุกภาษา (label = ตัวอักษร/ตัวเลขภาษาใดก็ได้) ลงท้ายด้วย xn-- / a-z ≥2 ตัว / ไทย / คอม / ตัวอักษรภาษาอื่นที่ไม่ใช่ไทย ≥2 ตัว
+//      (ท้ายเป็นอักษรไทยอื่น = ไม่ใช่โดเมน → ม.ค. · ก.ย. · อ.เมือง · ธ.ไทยพาณิชย์ ไม่ถูกตัด) · ⑥ IP ⑦ คำที่ NFKC แล้วกลายเป็นลิงก์ (ⓔⓥⓘⓛ.ⓒⓞⓜ) = ตัดทั้งคำ
+//   เริ่มจับเฉพาะต้นคำ (lookbehind) — ข้อความไทยยาวไม่มีจุดไม่ต้องไล่ทุกตำแหน่ง
+const NL_URL = /(?:\b[a-z][a-z0-9+.-]{1,15}:\/\/|www\.)\S+/gi;
+const NL_DOM = /(?<![\p{L}\p{M}\p{N}_-])[\p{L}\p{M}\p{N}_-]+(?:\.[\p{L}\p{M}\p{N}_-]+)*\.(?:xn--[a-z0-9-]+|[a-z]{2,}|(?:ไทย|คอม)(?![\u0E00-\u0E7F])|(?![\u0E00-\u0E7F])(?:\p{L}\p{M}*){2,})(?:\/\S*)?/giu;
+const NL_IP = /\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:\/\S*)?/g;
+const NL_ANY = new RegExp(`${NL_URL.source}|${NL_DOM.source}|${NL_IP.source}`, "iu");
+// ①–③ (ใช้ซ้ำกับรูป NFKC ในขั้น ⑦ — "evil︒com" NFKC แล้วได้ "。" ต้องแปลงเป็นจุดอีกรอบ)
+const nlPre = (s: string) => s
+  .replace(/\p{Cf}/gu, "")
+  .replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+  .replace(/[\u3002\uFF61\u2024\uFE52\uFE12]/g, ".");
+const noLinks = (s: string) => nlPre(s)
+  .replace(NL_URL, "[ลิงก์]")
+  .replace(NL_DOM, "[ลิงก์]")
+  .replace(NL_IP, "[ลิงก์]")
+  .replace(/\S+/g, (w) => { const k = nlPre(w.normalize("NFKC")); return k !== w && NL_ANY.test(k) ? "[ลิงก์]" : w; });
+// ตัดลิงก์จากข้อความยาว n+200 (โดเมนที่คร่อมจุดตัดยังถูกจับ) แล้วค่อยตัดเหลือ n — ไม่ต้องไล่ข้อความทั้งก้อน
+const lineTxt = (s: unknown, n: number) => noLinks(newsTxt(s, n + 200)).slice(0, n);
+const nz =(x: unknown) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
+const r2 = (x: number) => Math.round(x * 100) / 100;
+// 1,234 · 12.3K · 1.2M
+function fmtK(x: unknown): string {
+  const n = nz(x), a = Math.abs(n);
+  if (a >= 999950) return String(Math.round(n / 1e5) / 10) + "M";   // 999,999 → 1M (ไม่ใช่ 1000K)
+  if (a >= 1e4) return String(Math.round(n / 100) / 10) + "K";
+  return Math.round(n).toLocaleString("en-US");
+}
+function thDateLabel(d: string) {
+  const [y, m, dd] = d.split("-").map(Number);
+  const wd = new Date(Date.UTC(y, m - 1, dd)).getUTCDay();
+  return `วัน${TH_WD[wd]} ${dd} ${TH_MO[m - 1] ?? ""}`;
+}
+// อ่านทีละ 1,000 แถว (เพดานของ PostgREST) สูงสุด max แถว
+async function pageAll(mk: (from: number, to: number) => any, max = 5000): Promise<{ rows: any[]; error: any }> {
+  const rows: any[] = [];
+  for (let off = 0; off < max; off += 1000) {
+    const { data, error } = await mk(off, Math.min(off + 999, max - 1));
+    if (error) return { rows, error };
+    const d = Array.isArray(data) ? data : [];
+    rows.push(...d);
+    if (d.length < 1000) break;
+  }
+  return { rows, error: null };
+}
+const postBrief = (ch: string, p: ApPost) => ({ ch, k: apUrlKey(p.u), u: p.u, t: newsTxt(p.t, 80), at: p.at ?? null,
+  vw: p.vw ?? null, lk: p.lk ?? null, cm: p.cm ?? null, sh: p.sh ?? null, img: apImgOk(p.img) });
+
+// ---------- 📰 สร้างสรุปของวัน d (เวลาไทย) — ไม่ระบุ = เมื่อวาน · "today" = วันนี้ถึงตอนนี้ ----------
+// opts.digest = สรุป AI แถว ALL ที่ makeSummary เพิ่งทำในรอบเดียวกัน (opts.date = วันของสรุปนั้น) → data.digest_src "run"
+// ไม่มี = อ่านจาก social_daily kind='daily' (คีย์สาธารณะแก้ได้) → digest_src "db" — โชว์ในแอปได้ แต่ไม่ส่งเข้า LINE
+const NEWS_PEND_DAYS = 7;   // รอตอบ = เฉพาะที่โพสต์ใน 7 วันที่จบที่วันของสรุป (หลังดึงย้อนหลัง 🚀 ของค้างทั้งหมดมีเป็นพัน ไม่มีประโยชน์ในสรุปรายวัน)
+async function makeNews(dIn?: string, opts: { digest?: any; date?: string } = {}) {
+  const today = thDay();
+  let d = thDay(Date.now() - 86400000);
+  if (dIn === "today") d = today;
+  else if (dIn) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dIn) || !Number.isFinite(thStart(dIn)) || dIn > today) return { ok: false, reason: "วันที่ไม่ถูกต้อง" };
+    d = dIn;
+  }
+  const fromT = thStart(d), toT = d === today ? Math.min(Date.now(), fromT + 86400000) : fromT + 86400000;
+  const from = new Date(fromT).toISOString(), to = new Date(toT).toISOString();
+  // รายการที่โพสต์ในวันนั้น (รีวิว/คอมเมนต์/คลิปที่พูดถึงร้าน/ข้อความ) — vw = ยอดวิวของคลิปที่พูดถึงร้าน
+  const men = await pageAll((a, b) => sb.from("social_mentions")
+    .select("id,channel,kind,branch,text,rating,sentiment,issues,topics,url,posted_at,analyzed_at,vw:raw->video->>vw")
+    .gte("posted_at", from).lt("posted_at", to).order("posted_at", { ascending: false }).range(a, b));
+  if (men.error) return { ok: false, reason: "อ่านรายการไม่ได้: " + scrub(men.error.message).slice(0, 140) };
+  const rows = men.rows;
+  // รอตอบ (โพสต์ใน 7 วันที่จบที่วันนี้ของสรุป) · ดึงย้อนหลังที่เข้ามาในวันนั้น · แชทลูกค้าในวันนั้น — อ่านไม่ได้ = นับ 0 (ไม่ให้ทั้งสรุปพัง)
+  const pendFrom = new Date(toT - NEWS_PEND_DAYS * 86400000).toISOString();
+  const pend = await pageAll((a, b) => sb.from("social_mentions").select("channel,branch")
+    .eq("reply_status", "pending").neq("kind", "message").gte("posted_at", pendFrom).lt("posted_at", to)
+    .order("id", { ascending: false }).range(a, b));
+  const back = await pageAll((a, b) => sb.from("social_mentions").select("branch")
+    .gte("created_at", from).lt("created_at", to).lt("posted_at", from).neq("kind", "message").order("id", { ascending: false }).range(a, b));
+  let chatIn = 0;
+  try {
+    const { count, error } = await sb.from("social_chat_log").select("id", { count: "exact", head: true })
+      .eq("direction", "in").gte("created_at", from).lt("created_at", to);
+    if (!error) chatIn = nz(count);
+  } catch { /* ไม่มีตาราง = 0 */ }
+  // สรุป AI ของวันเดียวกัน (social_daily kind='daily') → หัวข้อ + สิ่งที่ควรทำ
+  const dig: Record<string, any> = {};
+  try {
+    const { data } = await sb.from("social_daily").select("branch,data").eq("kind", "daily").eq("d", d);
+    for (const x of data ?? []) if (x?.data && typeof x.data === "object") dig[String(x.branch)] = x.data;
+  } catch { /* ไม่มี = null */ }
+  // โพสต์ใหม่ของร้าน + เด่นสัปดาห์นี้ (ทั้งร้านเท่านั้น — FB/IG/TikTok มีบัญชีเดียว)
+  let shopPosts: any[] = [], topWeek: any[] = [];
+  if (await hasPostsTbl()) {
+    const weekFrom = new Date(toT - 7 * 86400000).toISOString();
+    const { data: wk } = await selPosts((c) => sb.from("social_posts").select("channel," + c)
+      .gte("posted_at", weekFrom).lt("posted_at", to).order("posted_at", { ascending: false }).limit(300));
+    const list = (wk ?? []).map((r: any) => ({ ch: String(r.channel ?? ""), p: rowToPost(r) })).filter((x: any) => x.p.u && x.ch);
+    shopPosts = list.filter((x: any) => String(x.p.at ?? "") >= from).slice(0, 6).map((x: any) => postBrief(x.ch, x.p));
+    const best: Record<string, any> = {};
+    for (const x of list) {
+      const s = (p: ApPost) => [nz(p.vw), nz(p.lk)];
+      const o = best[x.ch];
+      if (!o || s(x.p)[0] > s(o.p)[0] || (s(x.p)[0] === s(o.p)[0] && s(x.p)[1] > s(o.p)[1])) best[x.ch] = x;
+    }
+    topWeek = Object.values(best).filter((x: any) => nz(x.p.vw) > 0 || nz(x.p.lk) > 0)
+      .sort((a: any, b: any) => nz(b.p.vw) - nz(a.p.vw) || nz(b.p.lk) - nz(a.p.lk)).slice(0, 3).map((x: any) => postBrief(x.ch, x.p));
+  }
+  const isUrgent = (r: any) => (Array.isArray(r.issues) && r.issues.some((i: any) => nz(i?.severity) >= 3)) ||
+    (r.rating != null && nz(r.rating) <= 2) || (r.sentiment === "neg" && (r.kind === "review" || r.kind === "comment"));
+  const topicOf = (r: any) => {
+    const is = Array.isArray(r.issues) ? r.issues : [];
+    const t = is.find((i: any) => nz(i?.severity) >= 3)?.topic ?? is[0]?.topic ?? (Array.isArray(r.topics) ? r.topics[0] : null);
+    return t ? newsTxt(t, 40) : null;
+  };
+  const build = (br: string) => {
+    const mine = (r: any) => br === "ALL" || r.branch === br;
+    const set = rows.filter(mine);
+    const items = set.filter((r: any) => r.kind !== "message");
+    const by: Record<string, any> = {};
+    for (const r of items) {
+      const c = String(r.channel || "other").slice(0, 20);
+      const x = by[c] ??= { n: 0, reviews: 0, comments: 0, mentions: 0, avg: null, pos: 0, neu: 0, neg: 0, _s: 0, _k: 0 };
+      x.n++;
+      if (r.kind === "review") x.reviews++; else if (r.kind === "comment") x.comments++; else if (r.kind === "mention") x.mentions++;
+      if (r.rating != null && Number.isFinite(Number(r.rating))) { x._s += Number(r.rating); x._k++; }
+      if (r.sentiment === "pos") x.pos++; else if (r.sentiment === "neu") x.neu++; else if (r.sentiment === "neg") x.neg++;
+    }
+    for (const x of Object.values(by)) { x.avg = x._k ? r2(x._s / x._k) : null; delete x._s; delete x._k; }
+    const revs = items.filter((r: any) => r.kind === "review");
+    const rated = revs.filter((r: any) => r.rating != null && Number.isFinite(Number(r.rating)));
+    const stars: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
+    for (const r of rated) stars[String(Math.min(5, Math.max(1, Math.round(Number(r.rating)))))]++;
+    const cms = items.filter((r: any) => r.kind === "comment");
+    const mts = items.filter((r: any) => r.kind === "mention");
+    const pRows = pend.rows.filter(mine), pBy: Record<string, number> = {};
+    for (const r of pRows) { const c = String(r.channel || "other").slice(0, 20); pBy[c] = (pBy[c] ?? 0) + 1; }
+    // แถว ALL: ใช้สรุป AI ที่เพิ่งทำในรอบนี้ (ถ้ามี) — ไม่งั้นอ่านจากตาราง
+    const run = br === "ALL" && opts.digest && typeof opts.digest === "object" && opts.date === d ? opts.digest : null;
+    const dg = run ?? dig[br];
+    const digest = dg && (dg.headline || Array.isArray(dg.actions)) ? { headline: newsTxt(dg.headline, 300),
+      actions: (Array.isArray(dg.actions) ? dg.actions : []).slice(0, 3).map((a: unknown) => newsTxt(a, 200)).filter(Boolean) } : null;
+    return {
+      v: 1, d, branch: br, from, to, at: new Date().toISOString(),
+      total: items.length,
+      by_ch: by,
+      reviews: { n: revs.length, avg: rated.length ? r2(rated.reduce((s: number, r: any) => s + Number(r.rating), 0) / rated.length) : null, stars,
+        low: rated.filter((r: any) => Number(r.rating) <= 2).slice(0, 5).map((r: any) => ({ id: r.id, ch: r.channel, br: r.branch ?? null,
+          rating: Number(r.rating), text: newsTxt(r.text, 140), url: typeof r.url === "string" ? r.url.slice(0, 500) : null })) },
+      comments: { n: cms.length, pos: cms.filter((r: any) => r.sentiment === "pos").length, neu: cms.filter((r: any) => r.sentiment === "neu").length,
+        neg: cms.filter((r: any) => r.sentiment === "neg").length },
+      mentions: { n: mts.length, top: mts.map((r: any) => ({ r, vw: apNum(r.vw ?? r.raw?.video?.vw) })).sort((a: any, b: any) => nz(b.vw) - nz(a.vw)).slice(0, 3)
+        .map(({ r, vw }: any) => ({ id: r.id, text: newsTxt(r.text, 100), url: typeof r.url === "string" ? r.url.slice(0, 500) : null, vw })) },
+      messages: set.filter((r: any) => r.kind === "message").length + (br === "ALL" ? chatIn : 0),
+      urgent: items.filter(isUrgent).slice(0, 6).map((r: any) => ({ id: r.id, ch: r.channel, br: r.branch ?? null, kind: r.kind,
+        text: newsTxt(r.text, 140), topic: topicOf(r), url: typeof r.url === "string" ? r.url.slice(0, 500) : null })),
+      pending: { n: pRows.length, by_ch: pBy, days: NEWS_PEND_DAYS },
+      backfill: back.rows.filter(mine).length,
+      shop_posts: br === "ALL" ? shopPosts : [],
+      top_week: br === "ALL" ? topWeek : [],
+      analyzed: { done: items.filter((r: any) => r.analyzed_at).length, total: items.length },
+      digest,
+      digest_src: digest ? (run ? "run" : "db") : null,
+    };
+  };
+  const brs = ["ALL", ...new Set(rows.map((r: any) => String(r.branch ?? "")).filter((b: string) => /^[A-Z0-9_]{2,12}$/.test(b) && b !== "ALL"))];
+  const list = brs.map((br) => ({ d, branch: br, kind: "news", data: build(br), created_at: new Date().toISOString() }));
+  const { error } = await sb.from("social_daily").upsert(list);
+  if (error) return { ok: false, reason: "บันทึกสรุปไม่ได้: " + scrub(error.message).slice(0, 140) };
+  return { ok: true, d, rows: list.length, data: list[0].data };
+}
+
+// ---------- 📰 ข้อความ LINE (ข้อความล้วน ≤4,500 ตัวอักษร · ไม่มีชื่อผู้เขียน · ไม่มีลิงก์จากข้อมูล) ----------
+// ทุกข้อความที่มาจากตารางผ่าน lineTxt (ตัดลิงก์/โดเมน) · หัวข้อ/สิ่งที่ควรทำของสรุป AI ใส่เฉพาะที่ทำในรอบเดียวกันในหน่วยความจำ
+// (digest_src "run" — cron) · ส่งจากปุ่ม (digest อ่านจากตาราง = "db") ไม่ใส่ เพราะแถว social_daily คีย์สาธารณะแก้ได้
+const own = (o: Record<string, string>, k: unknown) => typeof k === "string" && Object.prototype.hasOwnProperty.call(o, k);
+function newsText(data: any, brNames: Record<string, string> = {}): string {
+  const x = data ?? {};
+  const dg = x.digest_src === "run" && x.digest && typeof x.digest === "object" ? x.digest : null;
+  const L: string[] = [`📰 สรุปโซเชียลประจำวัน · ${/^\d{4}-\d{2}-\d{2}$/.test(String(x.d ?? "")) ? thDateLabel(x.d) : "-"}`];
+  const head = dg ? lineTxt(dg.headline, 300) : "";
+  if (head) L.push(`✨ ${head}`);
+  L.push(`📥 เข้ามาใหม่ ${fmtK(x.total)} รายการ${nz(x.total) ? "" : " — ไม่มีอะไรใหม่"}`);
+  const by = x.by_ch && typeof x.by_ch === "object" ? x.by_ch : {};
+  const chName = (c: unknown) => (own(CH_TH, c) ? CH_TH[c as string] : lineTxt(c, 20) || "อื่น ๆ");
+  if (nz(x.reviews?.n)) {
+    const chs = Object.entries(by).filter(([, v]: any) => nz(v?.reviews)).map(([c, v]: any) => `${chName(c)} ${fmtK(v.reviews)}`).join(" · ");
+    L.push(`• ⭐ รีวิว ${fmtK(x.reviews.n)}${x.reviews.avg != null ? ` · เฉลี่ย ${nz(x.reviews.avg).toFixed(1)}★` : ""}${chs ? ` (${chs})` : ""}`);
+  }
+  if (nz(x.comments?.n)) L.push(`• 💬 คอมเมนต์ ${fmtK(x.comments.n)} · 😊 ${fmtK(x.comments.pos)} · 😠 ${fmtK(x.comments.neg)}`);
+  if (nz(x.mentions?.n)) L.push(`• 🔎 คลิปที่พูดถึงร้าน ${fmtK(x.mentions.n)}`);
+  if (nz(x.messages)) L.push(`• 💌 แชท ${fmtK(x.messages)}`);
+  const urg = Array.isArray(x.urgent) ? x.urgent.slice(0, 5) : [];
+  if (urg.length) {
+    L.push("⚠️ ต้องดูด่วน");
+    for (const u of urg) {
+      const br = u?.br ? lineTxt(own(brNames, u.br) ? brNames[u.br] : u.br, 40) : "";
+      L.push(`• ${chName(u?.ch)}${br ? " " + br : ""} — "${lineTxt(u?.text, 90)}"`);
+    }
+  }
+  if (nz(x.pending?.n)) {
+    const pb = Object.entries(x.pending.by_ch ?? {}).filter(([, n]) => nz(n)).sort((a, b) => nz(b[1]) - nz(a[1])).map(([c, n]) => `${chName(c)} ${fmtK(n)}`).join(" · ");
+    const pd = nz(x.pending.days);
+    L.push(`⏳ รอตอบ ${fmtK(x.pending.n)} รายการ${pd > 0 && pd <= 60 ? ` ใน ${Math.round(pd)} วันล่าสุด` : ""}${pb ? ` (${pb})` : ""}`);
+  }
+  const stat = (p: any) => [p.vw != null ? `👁 ${fmtK(p.vw)}` : "", p.lk != null ? `❤ ${fmtK(p.lk)}` : "", p.cm != null ? `💬 ${fmtK(p.cm)}` : "",
+    p.sh != null ? `↗ ${fmtK(p.sh)}` : ""].filter(Boolean).join(" ");
+  const sp = Array.isArray(x.shop_posts) ? x.shop_posts : [];
+  if (sp.length) {
+    L.push("🎬 โพสต์ใหม่ของร้าน");
+    for (const p of sp) { const s = stat(p ?? {}); L.push(`• ${chName(p?.ch)} "${lineTxt(p?.t, 50) || "(ไม่มีข้อความ)"}"${s ? " — " + s : ""}`); }
+  }
+  const tw = Array.isArray(x.top_week) ? x.top_week[0] : null;
+  if (tw) L.push(`🏆 เด่นสัปดาห์นี้: ${chName(tw.ch)} "${lineTxt(tw.t, 50) || "(ไม่มีข้อความ)"}"${tw.vw != null ? ` 👁 ${fmtK(tw.vw)}` : tw.lk != null ? ` ❤ ${fmtK(tw.lk)}` : ""}`);
+  const acts = dg && Array.isArray(dg.actions) ? dg.actions.slice(0, 3).map((a: unknown) => lineTxt(a, 160)).filter(Boolean) : [];
+  if (acts.length) L.push("👉 ควรทำ: " + acts.map((a: string, i: number) => `${i + 1}) ${a}`).join(" "));
+  if (x.analyzed && nz(x.analyzed.done) < nz(x.analyzed.total)) L.push(`(วิเคราะห์แล้ว ${fmtK(x.analyzed.done)}/${fmtK(x.analyzed.total)})`);
+  const foot = `เปิดดู: ${NEWS_URL}`;
+  let body = L.join("\n");
+  if (body.length + foot.length + 1 > NEWS_MAX) body = body.slice(0, NEWS_MAX - foot.length - 2) + "…";
+  return body + "\n" + foot;
+}
+
+// ---------- social_sys: สถานะที่คีย์สาธารณะแก้ไม่ได้ (RLS: anon อ่านอย่างเดียว · ฟังก์ชันเขียนด้วย service role) ----------
+// news_cfg = กลุ่ม LINE ที่ส่งสรุป · news_last = ผลส่งล่าสุด · news_push:<วันที่> / content_run:<วันที่> = จองงานของวัน (กันส่ง/วิเคราะห์ซ้ำ)
+// ไม่มีตาราง (ยังไม่รัน SQL) = ไม่ส่ง/ไม่วิเคราะห์อัตโนมัติ (ปิดไว้ก่อน ไม่เดา)
+const SYS_MISSING = "ต้องรัน SQL jjmk_social_posts.sql ล่าสุดใน Supabase ก่อน (ตาราง social_sys)";
+const sysNoTbl = (e: any) => !!e && (["PGRST205", "42P01"].includes(String(e.code ?? "")) ||
+  (/social_sys/.test(String(e.message ?? "")) && /does not exist|could not find/i.test(String(e.message ?? ""))));
+type SysRes = { ok: boolean; val?: any; dup?: boolean; missing?: boolean; error?: string };
+const sysErr = (e: any): SysRes => (sysNoTbl(e) ? { ok: false, missing: true } : { ok: false, error: scrub(e?.message ?? e).slice(0, 140) });
+async function sysGet(id: string): Promise<SysRes> {
+  try {
+    const { data, error } = await sb.from("social_sys").select("val").eq("id", id).maybeSingle();
+    return error ? sysErr(error) : { ok: true, val: data?.val ?? null };
+  } catch (e) { return sysErr(e); }
+}
+async function sysPut(id: string, val: unknown): Promise<SysRes> {
+  try {
+    const { error } = await sb.from("social_sys").upsert({ id, val, updated_at: new Date().toISOString() });
+    return error ? sysErr(error) : { ok: true };
+  } catch (e) { return sysErr(e); }
+}
+// จองงานของวัน: insert ธรรมดา (ไม่ upsert) — ซ้ำ (23505 / 409) = มีคำขออื่นจองไปแล้ว → ไม่ทำซ้ำ · คำขอพร้อมกันกี่ครั้งก็ได้ทำครั้งเดียว
+async function sysClaim(id: string, val: unknown): Promise<SysRes> {
+  try {
+    const { error } = await sb.from("social_sys").insert({ id, val, updated_at: new Date().toISOString() });
+    if (!error) return { ok: true };
+    if (String(error.code ?? "") === "23505" || /duplicate key/i.test(String(error.message ?? ""))) return { ok: false, dup: true };
+    return sysErr(error);
+  } catch (e) { return sysErr(e); }
+}
+// โควต้ารายวัน: จอง <prefix>:<วันไทย>:<n> ทีละช่อง n=1..max (insert ธรรมดา) — ครบทุกช่อง = full · คำขอพร้อมกันได้ช่องคนละช่องเสมอ (ไม่เกิน max)
+// ใช้กับงานที่ต้องผ่าน bossCheck (ค่าแฮชใน pnl_users คีย์สาธารณะอ่านได้ — ข้อจำกัดของทั้งระบบ) → จำกัดความเสียหายด้วยสถานะที่คีย์สาธารณะเขียนไม่ได้
+async function sysClaimN(prefix: string, max: number, val: unknown): Promise<SysRes & { id?: string; full?: boolean }> {
+  const day = thDay();
+  for (let n = 1; n <= max; n++) {
+    const id = `${prefix}:${day}:${n}`;
+    const r = await sysClaim(id, val);
+    if (r.ok) return { ok: true, id };
+    if (!r.dup) return r;
+  }
+  return { ok: false, full: true };
+}
+const NEWS_MANUAL_MAX = 5, CONTENT_AI_MAX = 6, NEWS_MANUAL_DAYS = 7, NEWS_CFG_NOTE_MAX = 3;
+const NEWS_MANUAL_FULL = `ส่งเองได้วันละไม่เกิน ${NEWS_MANUAL_MAX} ครั้ง — พรุ่งนี้ส่งได้อีก`;
+const NEWS_MANUAL_OLD = `ส่งเข้า LINE ได้เฉพาะสรุป ${NEWS_MANUAL_DAYS} วันล่าสุด`;
+const CONTENT_AI_FULL = `สั่งวิเคราะห์ได้วันละไม่เกิน ${CONTENT_AI_MAX} ครั้ง (กันค่าใช้จ่าย) — พรุ่งนี้กดได้อีก`;
+// ส่งอัตโนมัติ (cron) เฉพาะ 06:00–07:59 เวลาไทย — summary เรียกได้ด้วยคีย์สาธารณะ ห้ามให้คนอื่นเลือกเวลาส่ง/จองวันไปก่อน (pg_cron = 06:10)
+const NEWS_AUTO_H0 = 6, NEWS_AUTO_H1 = 8;
+const NEWS_AUTO_OUT = "นอกช่วงเวลาส่งอัตโนมัติ (06:00–08:00)";
+const thHour = (t = Date.now()) => new Date(t + 7 * 3600000).getUTCHours();
+const thHM = (t = Date.now()) => new Date(t + 7 * 3600000).toISOString().slice(11, 16);
+
+// ---------- 📰 ตั้งค่า/ส่งเข้ากลุ่ม LINE ----------
+// การตั้งค่าอยู่ที่ social_sys แถว news_cfg เท่านั้น (คีย์สาธารณะแก้ไม่ได้ — ไม่ต้องลงลายเซ็น) · ปิดส่ง/เปลี่ยนกลุ่ม = มีผลทันที
+// เปลี่ยน/ล้างกลุ่ม (เดิมตั้งกลุ่มไว้แล้ว) → แจ้งกลุ่มเดิมสั้น ๆ ว่าใครเปลี่ยน — คนที่ได้ค่าแฮชไปแอบย้ายกลุ่ม กลุ่มหัวหน้าจะรู้ (ส่งไม่ได้ = ยังบันทึกได้)
+async function newsCfg(by: string, on: boolean, group: unknown) {
+  const g = String(group ?? "").trim();
+  if ((g || on) && !NEWS_GROUP_RE.test(g)) return { ok: false, reason: "ไอดีกลุ่ม LINE ไม่ถูกต้อง (ต้องขึ้นต้นด้วย C ตามด้วยตัวอักษร 0-9a-f 32 ตัว) — เลือกจากรายการกลุ่ม" };
+  const old = await sysGet("news_cfg");
+  if (old.missing) return { ok: false, reason: SYS_MISSING };
+  const r = await sysPut("news_cfg", { on: !!on && !!g, group: g || null, by: String(by ?? "").slice(0, 60), at: new Date().toISOString() });
+  if (r.missing) return { ok: false, reason: SYS_MISSING };
+  if (!r.ok) return { ok: false, reason: "บันทึกการตั้งค่าไม่ได้: " + r.error };
+  const gOld = old.ok ? String(old.val?.group ?? "") : "";
+  if (!NEWS_GROUP_RE.test(gOld) || gOld === g) return { ok: true };
+  // แจ้งกลุ่มเดิมได้วันละ ≤3 ครั้ง (social_sys news_cfg_note:<วัน>:<n>) — สลับกลุ่มไปมาไม่ทำให้บอทส่งข้อความได้ไม่จำกัด · เกิน = บันทึกได้แต่ไม่แจ้ง
+  const nc = await sysClaimN("news_cfg_note", NEWS_CFG_NOTE_MAX, { at: new Date().toISOString(), by: String(by ?? "").slice(0, 60) });
+  if (!nc.ok) return { ok: true, old_notified: false };
+  const who = lineTxt(by, 40) || "ไม่ทราบชื่อ";
+  const sent = await linePost(gOld, `🔔 JJ Social: เปลี่ยนกลุ่มที่รับสรุปรายวันแล้ว โดย ${who} (${thHM()}) — ถ้าไม่ได้สั่งเอง แจ้งผู้ดูแลระบบ`)
+    .catch((e) => ({ ok: false, reason: scrub(e) }));
+  if (!sent.ok) console.error("news cfg notice", sent.reason);
+  return { ok: true, old_notified: sent.ok };
+}
+// ส่งข้อความเข้ากลุ่มผ่าน line-order ของโปรเจกต์นี้เสมอ — ไม่อ่าน sc_config.line_endpoint (คีย์สาธารณะแก้ได้ เคยใช้เปลี่ยนที่ส่งให้ "ส่งสำเร็จ" ทั้งที่ไม่ถึงกลุ่ม)
+// คีย์ที่ gateway ของ Supabase รับ: anon (ถ้ามี) → คีย์ของคำขอนี้ → คีย์สาธารณะของแอป · ถูกปัดตก (401/403) ค่อยลองตัวถัดไป · ห้าม log/ส่งคีย์กลับ
+const LINE_ORDER_PATH = "/functions/v1/line-order";
+async function linePost(group: string, text: string): Promise<{ ok: boolean; reason?: string }> {
+  const ep = SB_URL + LINE_ORDER_PATH;
+  const keys = [...new Set([Deno.env.get("SUPABASE_ANON_KEY") ?? "", reqApiKey, SB_PUBLISHABLE].filter((k) => k && k.length >= 8))];
+  let st = 0, body: any = null, err = "";
+  for (let i = 0; i < keys.length; i++) {
+    try {
+      const r = await fetch(ep, { method: "POST", signal: AbortSignal.timeout(15000),
+        headers: { "Content-Type": "application/json", apikey: keys[i], Authorization: `Bearer ${keys[i]}` },
+        body: JSON.stringify({ to: group, text }) });
+      st = r.status;
+      const t = await r.text().catch(() => "");
+      try { body = JSON.parse(t); } catch { body = t ? { message: t.slice(0, 200) } : null; }
+      err = "";
+      if ((st === 401 || st === 403) && i < keys.length - 1) continue;
+    } catch (e) { st = 0; err = "เชื่อมต่อ line-order ไม่ได้: " + scrub(e).slice(0, 120); }
+    break;
+  }
+  if (st >= 200 && st < 300 && !(body && typeof body === "object" && body.ok === false)) return { ok: true };
+  const why = err || (st === 404 ? "ไม่พบ Edge Function line-order (บอทของระบบนับสต๊อก)"
+    : `line-order ตอบ ${st}${body?.error || body?.message ? ": " + String(body.error ?? body.message).slice(0, 160) : ""}`);
+  return { ok: false, reason: scrub(why) };
+}
+// ผลส่งล่าสุด (cron/ปุ่ม) → social_sys news_last (แอปอ่านแถวนี้มาโชว์)
+async function newsLast(ok: boolean, d: unknown, err: string | null, how: "cron" | "manual") {
+  const r = await sysPut("news_last", { at: new Date().toISOString(), d: String(d ?? "").slice(0, 10), ok, err: err ? scrub(err).slice(0, 300) : null, how });
+  if (!r.ok && !r.missing) console.error("news last", r.error);
+}
+// ส่ง data (ออบเจกต์ในหน่วยความจำจาก makeNews ของคำขอนี้) เข้ากลุ่มใน news_cfg · cfgIn = การตั้งค่าที่อ่านมาแล้ว (cron)
+async function newsPush(data: any, how: "cron" | "manual", cfgIn?: any): Promise<{ ok: boolean; reason?: string }> {
+  let cfg = cfgIn;
+  if (cfg === undefined) {
+    const c = await sysGet("news_cfg");
+    if (c.missing) return { ok: false, reason: SYS_MISSING };
+    if (!c.ok) return { ok: false, reason: "อ่านการตั้งค่าส่ง LINE ไม่ได้: " + c.error };
+    cfg = c.val;
+  }
+  const fail = async (m: string) => { await newsLast(false, data?.d, m, how); return { ok: false, reason: m }; };
+  const group = String(cfg?.group ?? "");
+  if (!group) return await fail("ยังไม่ได้เลือกกลุ่ม LINE — ตั้งในหน้าตั้งค่า");
+  if (!NEWS_GROUP_RE.test(group)) return await fail("ไอดีกลุ่ม LINE ไม่ถูกต้อง — ตั้งใหม่ในหน้าตั้งค่า");
+  const names: Record<string, string> = {};
+  for (const b of await getBranches().catch(() => [])) if (typeof b?.code === "string") names[b.code] = String(b.name ?? "");
+  const res = await linePost(group, newsText(data, names));
+  if (res.ok) { await newsLast(true, data?.d, null, how); return { ok: true }; }
+  return await fail(res.reason ?? "ส่งไม่สำเร็จ");
+}
+// cron 06:10: สรุปเมื่อวาน (+สรุป AI ของรอบนี้ในหน่วยความจำ) → ส่งเข้า LINE ถ้าเปิดไว้
+// จองวัน (social_sys news_push:<วันที่>) ก่อนส่งเสมอ — summary เรียกได้ด้วยคีย์สาธารณะ ห้ามส่งซ้ำ · จองไม่ได้/ไม่มีตาราง = ไม่ส่ง
+// ส่ง/จองเฉพาะ 06:00–07:59 เวลาไทย (นอกช่วง = ยังทำสรุปเก็บไว้ แต่ไม่จองวัน ไม่ส่ง — คนอื่นเรียกตอนเที่ยงคืนเพื่อแย่งจองวันไม่ได้)
+async function newsDaily(sum: { digest?: any; date?: string } = {}) {
+  const r: any = await makeNews(undefined, sum);
+  if (!r.ok) return { ok: false, reason: r.reason };
+  const base = { ok: true, d: r.d, rows: r.rows, total: r.data.total };
+  const c = await sysGet("news_cfg");
+  if (c.missing) return { ...base, push: { ok: false, skipped: true, reason: SYS_MISSING } };
+  if (!c.ok) return { ...base, push: { ok: false, skipped: true, reason: "อ่านการตั้งค่าส่ง LINE ไม่ได้: " + c.error } };
+  if (c.val?.on !== true) return { ...base, push: null };
+  const h = thHour();
+  if (h < NEWS_AUTO_H0 || h >= NEWS_AUTO_H1) return { ...base, push: { ok: false, skipped: true, reason: NEWS_AUTO_OUT } };
+  const key = "news_push:" + r.d;
+  const cl = await sysClaim(key, { at: new Date().toISOString(), ok: null, err: null });
+  if (cl.dup) return { ...base, push: { ok: false, skipped: true, reason: "ส่งแล้ววันนี้" } };
+  if (!cl.ok) return { ...base, push: { ok: false, skipped: true, reason: cl.missing ? SYS_MISSING : "จองการส่งไม่ได้: " + cl.error } };
+  const push = await newsPush(r.data, "cron", c.val);
+  await sysPut(key, { at: new Date().toISOString(), ok: push.ok, err: push.ok ? null : scrub(push.reason ?? "").slice(0, 300) });
+  return { ...base, push };
+}
+
+// ---------- 📈 วิเคราะห์โพสต์/คลิป ----------
+const CT_CH = ["tiktok", "facebook", "instagram"];
+const CT_DAYS = [30, 90, 0];
+const CT_HOURS: [string, number, number][] = [["06-11", 6, 11], ["11-14", 11, 14], ["14-17", 14, 17], ["17-20", 17, 20], ["20-24", 20, 24], ["00-06", 0, 6]];
+const CT_DUR: [string, number, number][] = [["≤15 วิ", 0, 15], ["15-30 วิ", 15, 30], ["30-60 วิ", 30, 60], ["60 วิขึ้นไป", 60, 1e9]];
+const CT_TY: Record<string, string> = { video: "คลิป/วิดีโอ", photo: "รูปเดี่ยว", carousel: "หลายรูป", text: "ข้อความล้วน" };
+const CT_CHN: Record<string, string> = { tiktok: "TikTok", facebook: "Facebook", instagram: "Instagram" };
+const CT_IMG_MAX = 600_000, CT_IMG_TOTAL = 4 * 1024 * 1024;
+const CT_GEM_MS = 45000;     // เริ่มเรียก Gemini ได้เมื่อเหลือเวลาถึงกำหนดอย่างน้อยเท่านี้
+const CT_NEXT_MS = 60000;    // งานรายสัปดาห์: ช่องทางแรกไม่ผ่านเร็ว ๆ + เหลือเวลาเท่านี้ = ลองช่องทางถัดไป
+const median = (a: (number | null | undefined)[]): number | null => {
+  const v = a.filter((x): x is number => typeof x === "number" && Number.isFinite(x)).sort((x, y) => x - y);
+  if (!v.length) return null;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+};
+const ContentAI = z.object({
+  headline: z.string(),
+  winners: z.array(z.object({ id: z.string(), why: z.string() })),
+  losers: z.array(z.object({ id: z.string(), why: z.string() })),
+  patterns: z.array(z.object({ factor: z.string(), finding: z.string(), evidence: z.string() })),
+  do_more: z.array(z.string()),
+  avoid: z.array(z.string()),
+  clip_ideas: z.array(z.object({ title: z.string(), hook: z.string(), why: z.string() })),
+  menu_ideas: z.array(z.object({ idea: z.string(), evidence: z.string() })),
+  best_time: z.string(),
+  caveats: z.string(),
+});
+type ContentOut = z.infer<typeof ContentAI>;
+const GEMINI_SCHEMA_CONTENT = `\n\nตอบเป็น JSON ล้วนตามโครงสร้างนี้เท่านั้น (ห้ามมีข้อความอื่น):
+{"headline":"สรุป 1-2 ประโยค","winners":[{"id":"P3","why":"ทำไมโพสต์นี้ได้ยอดดี"}],"losers":[{"id":"P9","why":"ทำไมโพสต์นี้ยอดต่ำ"}],"patterns":[{"factor":"เวลาโพสต์|วันในสัปดาห์|ความยาวคลิป|ปก/ฮุคช่วงแรก|เมนูที่โชว์|แฮชแท็ก|คำบรรยาย|ประเภทโพสต์","finding":"สิ่งที่เจอ","evidence":"ตัวเลข/หลักฐาน"}],"do_more":["..."],"avoid":["..."],"clip_ideas":[{"title":"...","hook":"ประโยค/ภาพเปิด 3 วิแรก","why":"..."}],"menu_ideas":[{"idea":"...","evidence":"คอมเมนต์ที่เป็นหลักฐาน"}],"best_time":"...","caveats":"..."}`;
+// ตรวจ/บีบผลของ AI: รหัสโพสต์ต้องเป็น P-id ที่ให้ไปเท่านั้น · จำกัดจำนวน/ความยาว · ไม่มีเนื้อหาเลย = ใช้ไม่ได้
+function normContent(j: any, ids: Set<string>): ContentOut | null {
+  if (!j || typeof j !== "object" || Array.isArray(j)) return null;
+  const s = (x: unknown, n = 400) => (typeof x === "string" || typeof x === "number" ? String(x) : "").replace(/\s+/g, " ").trim().slice(0, n);
+  const arr = (x: unknown): any[] => (Array.isArray(x) ? x : []);
+  const pid = (x: unknown) => { const m = /^#?P0*(\d{1,4})$/i.exec(s(x, 12)); return m ? "P" + m[1] : ""; };
+  const used = new Set<string>();
+  const pick = (x: unknown) => arr(x).map((o) => ({ id: pid(o?.id), why: s(o?.why ?? o?.reason) }))
+    .filter((o) => ids.has(o.id) && !used.has(o.id) && used.add(o.id)).slice(0, 5);
+  const winners = pick(j.winners), losers = pick(j.losers);
+  const out = {
+    headline: s(j.headline, 300), winners, losers,
+    patterns: arr(j.patterns).map((o) => ({ factor: s(o?.factor, 60), finding: s(o?.finding), evidence: s(o?.evidence) })).filter((o) => o.finding).slice(0, 8),
+    do_more: arr(j.do_more).map((x) => s(x, 300)).filter(Boolean).slice(0, 6),
+    avoid: arr(j.avoid).map((x) => s(x, 300)).filter(Boolean).slice(0, 5),
+    clip_ideas: arr(j.clip_ideas).map((o) => ({ title: s(o?.title, 120), hook: s(o?.hook, 200), why: s(o?.why, 300) })).filter((o) => o.title).slice(0, 6),
+    menu_ideas: arr(j.menu_ideas).map((o) => ({ idea: s(o?.idea, 160), evidence: s(o?.evidence, 300) })).filter((o) => o.idea).slice(0, 5),
+    best_time: s(j.best_time, 200), caveats: s(j.caveats, 500),
+  };
+  const r = ContentAI.safeParse(out);
+  if (!r.success || (!r.data.headline && !r.data.winners.length && !r.data.patterns.length)) return null;
+  return r.data;
+}
+type CtPost = ApPost & { id: string; k: string; er: number | null; x: number | null; m: number | null; dt: string; wd: number | null; hr: number | null; mi: number | null;
+  cn: number; cpos: number; cneg: number; ctop: string[]; texts: string[] };
+type CtBucket = { factor: string; label: string; n: number; med: number | null };
+function ctBuckets(ps: CtPost[], mOf: (p: CtPost) => number | null) {
+  const grp = (factor: string, keyOf: (p: CtPost) => string | null, order: string[]) => {
+    const g = new Map<string, number[]>();
+    for (const p of ps) { const k = keyOf(p); const v = mOf(p); if (k == null || v == null) continue; (g.get(k) ?? g.set(k, []).get(k)!).push(v); }
+    return order.filter((k) => g.has(k)).map((k) => ({ factor, label: k, n: g.get(k)!.length, med: median(g.get(k)!) })) as CtBucket[];
+  };
+  const tagN = new Map<string, number>();
+  for (const p of ps) for (const t of p.tg ?? []) tagN.set(t, (tagN.get(t) ?? 0) + 1);
+  const tags = [...tagN.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t]) => "#" + t);
+  return {
+    wd: grp("วันในสัปดาห์", (p) => (p.wd == null ? null : "วัน" + TH_WD[p.wd]), TH_WD.map((w) => "วัน" + w)),
+    hr: grp("เวลาโพสต์", (p) => (p.hr == null ? null : (CT_HOURS.find(([, a, b]) => p.hr! >= a && p.hr! < b)?.[0] ?? null)), CT_HOURS.map((h) => h[0])),
+    du: grp("ความยาวคลิป", (p) => (p.du == null ? null : (CT_DUR.find(([, a, b]) => p.du! > a && p.du! <= b)?.[0] ?? null)), CT_DUR.map((d) => d[0])),
+    ty: grp("ประเภทโพสต์", (p) => (p.ty ? CT_TY[p.ty] ?? null : null), Object.values(CT_TY)),
+    tag: tags.map((t): CtBucket => {
+      const v = ps.filter((p) => (p.tg ?? []).includes(t.slice(1))).map(mOf);
+      return { factor: "แฮชแท็ก", label: t, n: v.filter((x) => x != null).length, med: median(v) };
+    }).filter((b) => b.n >= 2),
+    cap: grp("คำบรรยาย", (p) => (p.t.length <= 40 ? "สั้น ≤40 ตัวอักษร" : p.t.length <= 120 ? "กลาง ≤120" : "ยาว"), ["สั้น ≤40 ตัวอักษร", "กลาง ≤120", "ยาว"]),
+  };
+}
+// กติกาล้วน (ไม่มี AI): โพสต์เด่น/ไม่ปังจาก ×ค่ากลาง + รูปแบบจากกลุ่มที่ต่างจากค่ากลาง ≥30% (กลุ่มละ ≥3 โพสต์)
+function ruleContent(ps: CtPost[], B: ReturnType<typeof ctBuckets>, medM: number | null, mName: string): ContentOut {
+  const hm = (p: CtPost) => (p.hr == null ? "" : ` ${String(p.hr).padStart(2, "0")}:${String(p.mi ?? 0).padStart(2, "0")}`);
+  const desc = (p: CtPost) => [p.wd != null ? `ลงวัน${TH_WD[p.wd]}${hm(p)}` : "", p.du ? `คลิป ${p.du} วิ` : p.ty ? CT_TY[p.ty] ?? "" : "",
+    p.x != null ? `${mName} ×${p.x.toFixed(1)} ของค่ากลาง` : "", p.er != null ? `ER ${p.er.toFixed(1)}%` : "", p.cn ? `คอมเมนต์ ${p.cn}` : ""].filter(Boolean).join(" · ");
+  const ranked = ps.filter((p) => p.x != null).sort((a, b) => b.x! - a.x!);
+  const winners = ranked.filter((p) => p.x! > 1).slice(0, 5);
+  const losers = ranked.filter((p) => p.x! < 1 && !winners.includes(p)).reverse().slice(0, 5);
+  const pats: { factor: string; finding: string; evidence: string; diff: number; label: string }[] = [];
+  if (medM) for (const g of [...B.wd, ...B.hr, ...B.du, ...B.ty, ...B.tag, ...B.cap]) {
+    if (g.n < 3 || g.med == null) continue;
+    const diff = g.med / medM - 1;
+    if (Math.abs(diff) < 0.3) continue;
+    pats.push({ factor: g.factor, label: g.label, diff, finding: `${g.label} ได้${mName}${diff > 0 ? "สูง" : "ต่ำ"}กว่าค่ากลาง ${Math.round(Math.abs(diff) * 100)}%`,
+      evidence: `ค่ากลาง ${fmtK(g.med)} จาก ${g.n} โพสต์ (ทุกโพสต์ ${fmtK(medM)})` });
+  }
+  pats.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  const goodT = [...B.wd, ...B.hr].filter((g) => g.n >= 3 && g.med != null).sort((a, b) => b.med! - a.med!);
+  const bw = goodT.find((g) => g.factor === "วันในสัปดาห์"), bh = goodT.find((g) => g.factor === "เวลาโพสต์");
+  return {
+    headline: winners[0] ? `โพสต์ที่ดีที่สุดได้${mName} ×${winners[0].x!.toFixed(1)} ของค่ากลาง${pats[0] ? " · " + pats[0].finding : ""}`
+      : `วิเคราะห์ ${ps.length} โพสต์ — ยอดใกล้เคียงกัน ยังไม่เห็นโพสต์ที่โดดเด่นชัดเจน`,
+    winners: winners.map((p) => ({ id: p.id, why: desc(p) })),
+    losers: losers.map((p) => ({ id: p.id, why: desc(p) })),
+    patterns: pats.slice(0, 8).map(({ factor, finding, evidence }) => ({ factor, finding, evidence })),
+    do_more: pats.filter((p) => p.diff > 0).slice(0, 6).map((p) => `ทำแบบ "${p.label}" (${p.factor}) ให้บ่อยขึ้น — ${p.finding}`),
+    avoid: pats.filter((p) => p.diff < 0).slice(0, 5).map((p) => `ลดแบบ "${p.label}" (${p.factor}) — ${p.finding}`),
+    clip_ideas: winners.slice(0, 3).map((p) => ({ title: `ทำคลิปแนวเดียวกับ "${newsTxt(p.t, 40) || p.id}"`,
+      hook: newsTxt(p.t, 60) || "เปิดด้วยภาพเมนูเด่นบนกระทะในวินาทีแรก", why: `โพสต์ ${p.id} ได้${mName} ×${p.x!.toFixed(1)} ของค่ากลาง` })),
+    menu_ideas: [],
+    best_time: bw || bh ? [bw?.label, bh ? `ช่วง ${bh.label} น.` : ""].filter(Boolean).join(" ") + " (ค่ากลางสูงสุดจากกลุ่มที่มี ≥3 โพสต์)" : "ข้อมูลยังน้อยเกินจะสรุปช่วงเวลา",
+    caveats: "วิเคราะห์ด้วยสถิติล้วน (AI ไม่พร้อมใช้งานตอนนี้) — บอกได้แค่ว่าอะไรมาคู่กับยอดสูง/ต่ำ ยังไม่ได้ดูรูปปก/เนื้อหาคลิป และยังไม่มีไอเดียเมนูใหม่จากคอมเมนต์ (ต้องใช้ AI)",
+  };
+}
+const b64 = (u8: Uint8Array) => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
+// รูปปกที่เก็บใน Storage ของเราเท่านั้น (ไม่ดึงโดเมนอื่น) · ≤600KB ต่อรูป · รวม ≤4MB
+async function ctCovers(list: CtPost[]): Promise<{ id: string; mime: string; data: string }[]> {
+  const ok = list.filter((p) => typeof p.img === "string" && p.img.startsWith(AP_IMG_PUB) && !/\.\.|%2e/i.test(p.img.slice(AP_IMG_PUB.length)));
+  const got = await Promise.all(ok.map(async (p) => {
+    try {
+      const r = await fetch(p.img!, { redirect: "error", signal: AbortSignal.timeout(6000) });
+      const ct = (r.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+      const ext = /\.(jpe?g|png|webp)(\?|$)/i.exec(p.img!)?.[1]?.toLowerCase();
+      const mime = ["image/jpeg", "image/png", "image/webp"].includes(ct) ? ct : ext ? (ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg") : "";
+      if (!r.ok || !mime || Number(r.headers.get("content-length") ?? 0) > CT_IMG_MAX) { await r.body?.cancel().catch(() => {}); return null; }
+      const buf = await apReadCap(r, CT_IMG_MAX);
+      return buf?.length ? { id: p.id, mime, data: b64(buf) } : null;
+    } catch { return null; }
+  }));
+  const out: { id: string; mime: string; data: string }[] = [];
+  let total = 0;
+  for (const g of got) { if (!g || total + g.data.length > CT_IMG_TOTAL) continue; total += g.data.length; out.push(g); }
+  return out;
+}
+async function contentAnalyze(ch: string, daysIn: number, deadline = Date.now() + 90000) {
+  if (!CT_CH.includes(ch)) return { ok: false, reason: "ช่องทางต้องเป็น tiktok / facebook / instagram" };
+  const days = CT_DAYS.includes(daysIn) ? daysIn : 90;
+  if (!(await hasPostsTbl())) return { ok: false, reason: "ต้องรัน SQL jjmk_social_posts.sql ก่อน" };
+  const since = days ? new Date(Date.now() - days * 86400000).toISOString() : null;
+  const { data: prow, error } = await selPosts((c) => {
+    let q = sb.from("social_posts").select(c).eq("channel", ch);
+    if (since) q = q.gte("posted_at", since);
+    return q.order("posted_at", { ascending: false, nullsFirst: false }).limit(300);
+  });
+  if (error) return { ok: false, reason: "อ่านตาราง social_posts ไม่ได้: " + scrub(error.message).slice(0, 120) };
+  const base = (prow ?? []).map(rowToPost).filter((p: ApPost) => p.u && (nz(p.vw) > 0 || nz(p.lk) > 0));
+  if (base.length < 5) return { ok: false, reason: "มีโพสต์ที่มียอดวิว/ไลก์ไม่ถึง 5 โพสต์ — กด 🚀 ดึงทั้งหมด หรือ 📥 ดึงย้อนหลังก่อน" };
+  base.sort((a: ApPost, b: ApPost) => String(b.at ?? "").localeCompare(String(a.at ?? "")));
+  // ตัววัดหลัก: ยอดวิว (ถ้าโพสต์ส่วนใหญ่มีวิว) ไม่งั้นไลก์ — ×ค่ากลาง = ยอด ÷ ค่ากลางของทุกโพสต์
+  const mk: "vw" | "lk" = base.filter((p: ApPost) => nz(p.vw) > 0).length >= base.length / 2 ? "vw" : "lk";
+  const mName = mk === "vw" ? "วิว" : "ไลก์";
+  const ps: CtPost[] = base.map((p: ApPost, i: number) => {
+    const t = Date.parse(p.at ?? "");
+    const th = Number.isFinite(t) ? new Date(t + 7 * 3600000) : null;
+    const vw = nz(p.vw);
+    return { ...p, id: "P" + (i + 1), k: apUrlKey(p.u),
+      er: vw > 0 ? Math.round((nz(p.lk) + nz(p.cm) + nz(p.sh) + nz(p.sv)) / vw * 1000) / 10 : null,
+      x: null, m: (p as any)[mk] != null && Number.isFinite(Number((p as any)[mk])) ? Number((p as any)[mk]) : null,
+      dt: th ? th.toISOString().slice(0, 10) : "", wd: th ? th.getUTCDay() : null, hr: th ? th.getUTCHours() : null, mi: th ? th.getUTCMinutes() : null,
+      cn: 0, cpos: 0, cneg: 0, ctop: [], texts: [] };
+  });
+  const medM = median(ps.map((p) => p.m));
+  for (const p of ps) p.x = p.m != null && medM ? Math.round(p.m / medM * 100) / 100 : null;
+  // คอมเมนต์ของแต่ละโพสต์ (จับคู่ด้วยลิงก์โพสต์ · Facebook จับด้วยเลขโพสต์หน้าไอดีคอมเมนต์ได้ด้วย)
+  const byK = new Map(ps.map((p) => [p.k, p]));
+  const byPid = new Map<string, CtPost>();
+  for (const p of ps) { const n = p.pid ?? apPidOfUrl(p.u); if (n) byPid.set(n, p); }
+  const tops = new Map<CtPost, Map<string, number>>();
+  let cmTotal = 0;
+  if (Date.now() < deadline - 40000) {
+    const cm = await pageAll((a, b) => sb.from("social_mentions").select("sentiment,topics,text,external_id,post_id:raw->>post_id")
+      .eq("channel", ch).eq("kind", "comment").order("posted_at", { ascending: false }).range(a, b));
+    for (const c of cm.rows) {
+      const k = apUrlKey(String(c.post_id ?? c.raw?.post_id ?? ""));
+      let p = k ? byK.get(k) : undefined;
+      if (!p && ch === "facebook") { const n = /^(\d{5,25})_\d+$/.exec(String(c.external_id ?? ""))?.[1]; if (n) p = byPid.get(n); }
+      if (!p) continue;
+      cmTotal++; p.cn++;
+      if (c.sentiment === "pos") p.cpos++; else if (c.sentiment === "neg") p.cneg++;
+      const tm = tops.get(p) ?? tops.set(p, new Map()).get(p)!;
+      for (const t of Array.isArray(c.topics) ? c.topics.slice(0, 5) : []) if (typeof t === "string" && t) tm.set(t, (tm.get(t) ?? 0) + 1);
+      if (p.texts.length < 30 && typeof c.text === "string" && c.text.trim().length >= 4) p.texts.push(c.text);
+    }
+  }
+  for (const [p, tm] of tops) p.ctop = [...tm.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t.slice(0, 30));
+  const ranked = ps.filter((p) => p.x != null).sort((a, b) => b.x! - a.x!);
+  const top8 = ranked.slice(0, 8), bot8 = ranked.slice(-8).filter((p) => !top8.includes(p));
+  const B = ctBuckets(ps, (p) => p.m);
+  // ข้อความให้ AI (ตัดเบอร์/อีเมล/ไอดีก่อนส่งทุกครั้ง · ไม่มีชื่อผู้คอมเมนต์)
+  const fmtB = (bs: CtBucket[]) => bs.map((g) => `${g.label}: ค่ากลาง ${g.med == null ? "-" : fmtK(g.med)} (n=${g.n}${g.n < 3 ? " ข้อมูลน้อย" : ""})`).join(" · ") || "-";
+  const sample = (p: CtPost) => [...new Set(p.texts.map((t) => newsTxt(t, 80)))].sort((a, b) => b.length - a.length).slice(0, 2);
+  const line = (p: CtPost) => {
+    const hm = p.hr == null ? "" : `${String(p.hr).padStart(2, "0")}:${String(p.mi ?? 0).padStart(2, "0")}`;
+    const full = top8.includes(p) || bot8.includes(p);
+    const st = [`วิว ${p.vw ?? "-"}`, `ไลก์ ${p.lk ?? "-"}`, `คอมเมนต์ ${p.cm ?? "-"}`, `แชร์ ${p.sh ?? "-"}`, `เซฟ ${p.sv ?? "-"}`,
+      p.er != null ? `ER ${p.er}%` : "", p.x != null ? `×ค่ากลาง ${p.x}` : ""].filter(Boolean).join(" ");
+    const cmt = p.cn ? ` | คอมเมนต์ในระบบ ${p.cn} (บวก ${Math.round(p.cpos / p.cn * 100)}% ลบ ${Math.round(p.cneg / p.cn * 100)}%${p.ctop.length ? " เรื่อง: " + p.ctop.join(", ") : ""})` : "";
+    const smp = full && p.texts.length ? ` | ตัวอย่างคอมเมนต์: ${sample(p).map((t) => `"${t}"`).join(" / ")}` : "";
+    return `${p.id} ${p.wd != null ? "วัน" + TH_WD[p.wd] + " " : ""}${p.dt ? p.dt + " " : ""}${hm} | ${p.ty ? CT_TY[p.ty] ?? p.ty : "ไม่ทราบประเภท"}${p.du ? ` ${p.du} วิ` : ""} | ${st}` +
+      `${p.tg?.length ? " | " + p.tg.slice(0, 8).map((t) => "#" + t).join(" ") : ""} | คำบรรยาย: "${newsTxt(p.t, full ? 200 : 100)}"${cmt}${smp}`;
+  };
+  const medians = { vw: median(ps.map((p) => p.vw)), lk: median(ps.map((p) => p.lk)), cm: median(ps.map((p) => p.cm)), sh: median(ps.map((p) => p.sh)),
+    er: median(ps.map((p) => p.er)) };
+  for (const k of Object.keys(medians) as (keyof typeof medians)[]) if (medians[k] != null) medians[k] = Math.round(medians[k]! * 10) / 10;
+  const covers = Date.now() < deadline - 45000 ? await ctCovers([...ranked.slice(0, 6), ...ranked.slice(-6).filter((p) => !ranked.slice(0, 6).includes(p))]) : [];
+  const shop = (await sb.from("social_settings").select("val").eq("id", "shop").maybeSingle().then((r: any) => r.data?.val, () => null)) ?? {};
+  const system = `คุณคือนักวางกลยุทธ์คอนเทนต์ (content strategist) ของร้านหมูกระทะ "${shop.name ?? "จริงใจหมูกระทะ"}" ในกรุงเทพฯ
+หน้าที่: อธิบายว่าทำไมโพสต์/คลิปแต่ละอันของร้านบน ${CT_CHN[ch]} ได้ยอดวิว ไลก์ คอมเมนต์ แชร์ ไม่เท่ากัน แล้วบอกสิ่งที่ทีมร้านควรทำต่อ เพื่อพัฒนาการทำคลิปและเมนู
+กติกา:
+- ใช้เฉพาะข้อมูลที่ให้ ห้ามแต่งตัวเลขหรือเหตุการณ์เพิ่ม ถ้าข้อมูลน้อยหรือสรุปไม่ได้ให้บอกใน caveats
+- คุณดูคลิปไม่ได้ เห็นเฉพาะ คำบรรยาย รูปปก (บางโพสต์) เวลาโพสต์ ความยาวคลิป ประเภทโพสต์ แฮชแท็ก ยอดต่าง ๆ และคอมเมนต์ของลูกค้า
+- เรื่องรูปแบบ (วัน/เวลา/ความยาว/ประเภท/แฮชแท็ก/คำบรรยาย) ให้อิงตัวเลขค่ากลางใน "สถิติแยกกลุ่ม" ที่คำนวณไว้แล้วเป็นหลัก กลุ่มที่มีไม่ถึง 3 โพสต์ถือว่าข้อมูลน้อย ห้ามสรุปจากกลุ่มนั้นอย่างเดียว
+- ×ค่ากลาง = ${mName}ของโพสต์ ÷ ค่ากลางของทุกโพสต์ (มากกว่า 1 = ดีกว่าปกติ) · ER = (ไลก์+คอมเมนต์+แชร์+เซฟ) ÷ วิว × 100
+- winners = โพสต์ที่ดีกว่าปกติชัดเจน (สูงสุด 5) · losers = โพสต์ที่ต่ำกว่าปกติชัดเจน (สูงสุด 5) · ใช้รหัส P ตามที่ให้เท่านั้น
+- why / finding / do_more / avoid ต้องเจาะจงและนำไปทำได้จริงสำหรับพนักงานร้าน (เช่น "เปิดคลิปด้วยภาพหมูสามชั้นบนกระทะร้อน 2 วิแรก")
+- clip_ideas = ไอเดียคลิปถัดไป (title, hook = ประโยค/ภาพเปิด 3 วิแรก, why) · best_time = วัน/ช่วงเวลาที่ควรโพสต์จากข้อมูล
+- menu_ideas = ไอเดียเมนู/โปรใหม่จากสิ่งที่ลูกค้าถามหาหรือชมในคอมเมนต์ (ใส่หลักฐานจากคอมเมนต์ใน evidence · ไม่มีหลักฐาน = รายการว่าง)
+- ตอบเป็นภาษาไทยทั้งหมด`;
+  const user = maskPII(`ช่องทาง: ${CT_CHN[ch]} · ช่วง: ${days ? days + " วันล่าสุด" : "ทั้งหมด"} · ${ps.length} โพสต์ · ตัววัดหลัก: ${mName}
+ค่ากลางทุกโพสต์: วิว ${medians.vw ?? "-"} · ไลก์ ${medians.lk ?? "-"} · คอมเมนต์ ${medians.cm ?? "-"} · แชร์ ${medians.sh ?? "-"} · ER ${medians.er ?? "-"}%
+
+สถิติแยกกลุ่ม (ค่ากลาง${mName}ของแต่ละกลุ่ม · n = จำนวนโพสต์):
+- วันในสัปดาห์: ${fmtB(B.wd)}
+- ช่วงเวลาโพสต์ (เวลาไทย): ${fmtB(B.hr)}
+- ความยาวคลิป: ${fmtB(B.du)}
+- ประเภทโพสต์: ${fmtB(B.ty)}
+- แฮชแท็กที่ใช้ ≥2 ครั้ง: ${fmtB(B.tag)}
+- ความยาวคำบรรยาย: ${fmtB(B.cap)}
+
+รายการโพสต์ (ใหม่ → เก่า):
+${ps.map(line).join("\n")}
+${covers.length ? `\nแนบรูปปก ${covers.length} รูป (ของโพสต์ที่ยอดสูงสุดและต่ำสุด) ระบุว่าเป็นปกของโพสต์ไหนก่อนแต่ละรูป` : ""}`);
+  const ids = new Set(ps.map((p) => p.id));
+  let ai: ContentOut | null = null, provider: "claude" | "gemini" | "rule" = "rule";
+  if (useClaude() && Date.now() < deadline - 35000) {
+    try {
+      const content: any[] = [{ type: "text", text: user }];
+      for (const c of covers) content.push({ type: "text", text: `ปกของ ${c.id}` }, { type: "image", source: { type: "base64", media_type: c.mime, data: c.data } });
+      const res = await anthropic().messages.parse({
+        model: CLAUDE_MODEL, max_tokens: 8000,
+        output_config: { effort: "medium", format: zodOutputFormat(ContentAI) },
+        system, messages: [{ role: "user", content }],
+      } as any, { timeout: Math.max(20000, Math.min(60000, deadline - Date.now() - 25000)), maxRetries: 0 });
+      if ((res as any).stop_reason !== "refusal") ai = normContent(parsedOf<ContentOut>(res), ids);
+      if (ai) { provider = "claude"; noteClaudeOk(); }
+    } catch (e) { markClaudeDown(e); }
+  }
+  // Gemini (รวมรอบลองใหม่แบบข้อความล้วน) เริ่มเฉพาะเมื่อเหลือเวลา ≥45 วิ (แต่ละรุ่นรอได้ถึง 40 วิ) — ไม่พอ = สถิติล้วน
+  const gemRoom = () => deadline - Date.now() >= CT_GEM_MS;
+  if (!ai && GEMINI_KEY && gemRoom()) {
+    const parts = covers.flatMap((c) => [{ text: `ปกของ ${c.id}` }, { inline_data: { mime_type: c.mime, data: c.data } }]);
+    let j = await geminiJson(system + GEMINI_SCHEMA_CONTENT, user, 6000, parts.length ? parts : undefined);
+    // ส่งพร้อมรูปไม่ผ่าน → ลองแบบข้อความล้วนอีกครั้ง
+    if (j == null && parts.length && gemRoom()) j = await geminiJson(system + GEMINI_SCHEMA_CONTENT, user, 6000);
+    ai = normContent(j, ids);
+    if (ai) provider = "gemini";
+  }
+  if (!ai) ai = ruleContent(ps, B, medM, mName);
+  const refs = new Set([...ai.winners, ...ai.losers].map((w) => w.id));
+  const posts: Record<string, unknown> = {};
+  for (const p of ps) if (refs.has(p.id)) posts[p.id] = { k: p.k, u: p.u, t: newsTxt(p.t, 160), at: p.at ?? null, vw: p.vw ?? null, lk: p.lk ?? null,
+    cm: p.cm ?? null, sh: p.sh ?? null, sv: p.sv ?? null, du: p.du ?? null, ty: p.ty ?? null, img: apImgOk(p.img) };
+  const data = { v: 1, ch, days, at: new Date().toISOString(), provider, n: ps.length, medians, posts, ai,
+    saw: { covers: covers.length, comments: cmTotal, posts: ps.length } };
+  const { error: ue } = await sb.from("social_daily").upsert({ d: thDay(), branch: ch, kind: "content", data, created_at: new Date().toISOString() });
+  return { ok: true, data, ...(ue ? { warn: "บันทึกผลไม่ได้: " + scrub(ue.message).slice(0, 140) } : {}) };
+}
+// cron 06:10: วิเคราะห์ให้เองสัปดาห์ละครั้งต่อช่องทาง — วันละไม่เกิน 1 ช่องทาง (ช่องทางที่วิเคราะห์ล่าสุดนานที่สุด · ข้ามช่องทางที่เพิ่งวิเคราะห์ใน 7 วัน)
+// จองวัน (social_sys content_run:<วันนี้>) ก่อนวิเคราะห์ — summary เรียกได้ด้วยคีย์สาธารณะ และแถว social_daily ใครก็ลบได้ → วันละครั้งเสมอ
+// (ไม่ดูว่า "วันนี้มีแถว content แล้ว" — social_daily คีย์สาธารณะเพิ่มแถวได้ เคยทำให้ข้ามทุกวัน · ช่องทางที่วิเคราะห์วันนี้แล้วแค่ยังไม่ถึงรอบ)
+// ช่องทางที่มีสิทธิ์ = มีโพสต์ที่มียอดวิว/ไลก์ ≥5 ใน 90 วัน (ช่วงเดียวกับที่วิเคราะห์จริง) · ช่องทางแรกไม่ผ่านเร็ว ๆ + เหลือเวลา ≥60 วิ = ลองช่องทางถัดไป
+// (ไม่เก็บแถว "ข้าม" ใน social_daily — แอปโชว์แถว content ล่าสุดของช่องทาง แถวข้ามจะบังผลวิเคราะห์จริงอันก่อน)
+async function contentWeekly(deadline: number) {
+  if (!(await hasPostsTbl())) return { skipped: "no_table" };
+  const today = thDay();
+  // วิเคราะห์ล่าสุดของแต่ละช่องทาง = การจองใน social_sys ที่วิเคราะห์สำเร็จ (content_run:<วัน> ของ cron · content_ai:<วัน>:<n> ของปุ่ม)
+  // ไม่อ่าน social_daily — คีย์สาธารณะแทรกแถว content ปลอมครบ 3 ช่องทางได้ (เคยทำให้งานรายสัปดาห์ "ยังไม่ถึงรอบ" ไปตลอด)
+  const latest: Record<string, string> = {};
+  for (const pre of ["content_run:", "content_ai:"]) {
+    const { data: rows, error } = await sb.from("social_sys").select("id,val").like("id", pre + "%").order("id", { ascending: false }).limit(300);
+    if (error) { const e = sysErr(error); return e.missing ? { skipped: "no_sys", reason: SYS_MISSING } : { skipped: "read_error" }; }
+    for (const r of rows ?? []) {
+      const d = String(r?.id ?? "").slice(pre.length, pre.length + 10), ch = String(r?.val?.ch ?? "");
+      if (r?.val?.ok !== true || !CT_CH.includes(ch) || !/^\d{4}-\d{2}-\d{2}$/.test(d) || d > today) continue;
+      if (!latest[ch] || d > latest[ch]) latest[ch] = d;
+    }
+  }
+  const cutoff = thDay(Date.now() - 7 * 86400000);
+  const since = new Date(Date.now() - 90 * 86400000).toISOString();
+  const cands: { ch: string; l: string }[] = [];
+  for (const ch of CT_CH) {
+    const l = latest[ch] ?? "";
+    if (l && l > cutoff) continue;
+    const { count, error: ce } = await sb.from("social_posts").select("id", { count: "exact", head: true }).eq("channel", ch)
+      .gte("posted_at", since).or("views.gt.0,likes.gt.0");
+    if (ce || nz(count) < 5) continue;
+    cands.push({ ch, l });
+  }
+  if (!cands.length) return { skipped: "none_due" };
+  cands.sort((a, b) => a.l.localeCompare(b.l));
+  const key = "content_run:" + today;
+  const cl = await sysClaim(key, { ch: cands[0].ch, at: new Date().toISOString(), ok: null });
+  if (cl.dup) return { skipped: "claimed" };
+  if (!cl.ok) return cl.missing ? { skipped: "no_sys", reason: SYS_MISSING } : { skipped: "claim_error", reason: cl.error };
+  const tried: { ch: string; ok: boolean; reason?: string }[] = [];
+  let res: { ch: string; ok: true; provider: string | null } | null = null;
+  for (const c of cands) {
+    if (tried.length && deadline - Date.now() < CT_NEXT_MS) break;
+    const r: any = await contentAnalyze(c.ch, 90, deadline);
+    tried.push({ ch: c.ch, ok: !!r.ok, ...(r.ok ? {} : { reason: String(r.reason ?? "").slice(0, 80) }) });
+    if (r.ok) { res = { ch: c.ch, ok: true, provider: r.data?.provider ?? null }; break; }
+  }
+  const lastT = tried[tried.length - 1];
+  await sysPut(key, { ch: lastT.ch, at: new Date().toISOString(), ok: !!res });
+  const more = tried.length > 1 ? { tried: tried.map((t) => t.ch + (t.ok ? ":ok" : ":x")) } : {};
+  return res ? { ...res, ...more } : { ch: lastT.ch, ok: false, reason: lastT.reason, ...more };
+}
+// ===== /📰 📈 =====
 
 // ---------- เรียนรู้คำถามที่ลูกค้าถามซ้ำ → เสนอเป็น FAQ ให้คนอนุมัติ ----------
 const LearnFaq = z.object({
@@ -2605,18 +3471,43 @@ async function runCron() {
   await flushAiHealth();
   return out;
 }
-async function runSummary(date?: string, span: "daily" | "weekly" = "daily") {
-  let out: any;
+// cron=true (pg_cron 06:10 — เรียกด้วยคีย์สาธารณะ แยกจากคนอื่นไม่ได้ จึงไม่รับวันที่/ช่วงจากคำขอ: สรุป "เมื่อวาน" เสมอ):
+//   สรุป AI (เลย t0+60 วิ = สาขาที่เหลือใช้สรุปแบบกติกา) → 📰 สรุปเมื่อวาน + ส่ง LINE (จองวันก่อนส่ง) → heartbeat
+//   → เรียนรู้ FAQ (ถ้าเหลือเวลา >30 วิ) → 📈 วิเคราะห์คลิปรายสัปดาห์ (จองวัน · ถึง t0+115 วิ) → heartbeat
+// กดสรุปจากแอป (wait:true) = สรุป AI + เรียนรู้ FAQ เหมือนเดิม (ไม่ส่ง LINE · ไม่เสียเวลา/เงินกับงานวิเคราะห์คลิป)
+const CRON_SUM_MS = 60000, CRON_END_MS = 115000;
+async function runSummary(date?: string, span: "daily" | "weekly" = "daily", cron = false) {
+  const t0 = Date.now();
+  if (cron) { date = undefined; span = "daily"; }
+  let out: any, ok = true, sum: { digest?: any; date?: string } = {};
   try {
-    out = await makeSummary(date, span);
-    const f = await learnFaq().catch((e) => ({ ok: false, reason: String(e) })); // อัพเดตคลังคำถามซ้ำไปพร้อมสรุปรายวัน
-    await heartbeat("summary", true, { summary: out, faq: f });
-  } catch (e) {
-    out = { ok: false, reason: scrub(e) };
-    await heartbeat("summary", false, scrub(e));
+    const r: any = await makeSummary(date, span, cron ? { deadline: t0 + CRON_SUM_MS } : {});
+    const { digest, ...rest } = r ?? {};
+    out = rest;
+    if (r?.ok && digest) sum = { digest, date: r.date };
+  } catch (e) { out = { ok: false, reason: scrub(e) }; ok = false; }
+  if (!cron) {
+    const f = await learnFaq().catch((e) => ({ ok: false, reason: scrub(e) })); // อัพเดตคลังคำถามซ้ำไปพร้อมสรุปรายวัน
+    await heartbeat("summary", ok, ok ? { summary: out, faq: f } : { error: out.reason });
+    await flushAiHealth();
+    return out;
   }
+  const END = t0 + CRON_END_MS, left = () => END - Date.now();
+  let content: any = null, f: any;
+  const news: any = await newsDaily(sum).catch((e) => ({ ok: false, reason: scrub(e) }));
+  const nb = { ok: news.ok, rows: news.rows, total: news.total,
+    push: news.push ? (news.push.ok ? "ok" : String(news.push.reason ?? "").slice(0, 100)) : null,
+    reason: news.reason ? String(news.reason).slice(0, 80) : undefined };
+  const beat = () => heartbeat("summary", ok, ok ? { news: nb, content: content ?? undefined, summary: out, faq: f }
+    : { error: out.reason, news: nb, content: content ?? undefined });
+  // จด heartbeat ก่อนงาน AI ที่ไม่เกี่ยวกับสรุป (ถ้าฟังก์ชันถูกตัดกลางทาง หน้าสถานะยังรู้ว่าสรุป/ส่ง LINE ทำแล้ว)
+  await beat();
+  f = left() > 30000 ? await learnFaq().catch((e) => ({ ok: false, reason: scrub(e) })) : { skipped: "time" };
+  // เหลือเวลาไม่ถึง 50 วิ = ข้ามวันนี้ (ยังไม่จองวัน — พรุ่งนี้ลองใหม่) · ฟังก์ชันถูกตัดที่ 150 วิ
+  content = left() < 50000 ? { skipped: "time" } : await contentWeekly(END).catch((e) => ({ ok: false, reason: scrub(e) }));
+  await beat();
   await flushAiHealth();
-  return out;
+  return { ...out, news: nb, content };
 }
 // ตรวจโควต้า LINE (ฟรี ไม่นับข้อความ) — บอกว่าเดือนนี้ใช้ push ไปเท่าไหร่แล้ว
 async function lineStatus() {
@@ -2647,6 +3538,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return new Response("jjmk social-brain ok v" + VERSION, { headers: CORS });
   try {
+    reqApiKey = req.headers.get("apikey") ?? "";   // ใช้เรียก line-order ผ่าน gateway (เฉพาะในหน่วยความจำ)
     const b = await req.json();
     // อ่านโหมด AI (ฟรี/คุณภาพสูงสุด) + สถานะโควต้า AI ล่าสุดก่อนทุกครั้ง
     const m0 = await getSettings().catch(() => null);
@@ -2667,9 +3559,74 @@ Deno.serve(async (req) => {
         break;
       }
       case "summary": {
-        // cron เรียกแบบไม่ส่ง wait → ทำเบื้องหลังแล้วตอบทันที · กดจากแอป (wait:true) → รอผล
+        // cron เรียกแบบไม่ส่ง wait → ทำเบื้องหลังแล้วตอบทันที (+ 📰 สรุปมีอะไรใหม่ + 📈 วิเคราะห์คลิปรายสัปดาห์) · กดจากแอป (wait:true) → รอผล
+        // ทางไม่รอผล = ทางของ cron ใช้คีย์สาธารณะเรียกได้ → ไม่รับ date/span จากคำขอ (สรุปเมื่อวานเสมอ) · ส่ง LINE/วิเคราะห์คลิปจองวันก่อนทำ
         if (b.wait) out = await runSummary(b.date, b.span ?? "daily");
-        else { bg(runSummary(b.date, b.span ?? "daily")); out = { ok: true, queued: true }; }
+        else { bg(runSummary(undefined, "daily", true)); out = { ok: true, queued: true }; }
+        break;
+      }
+      case "news": {   // 📰 สรุปมีอะไรใหม่ของวัน (date ไม่ส่ง = เมื่อวาน · "today" = วันนี้ถึงตอนนี้) · send = ส่งเข้ากลุ่ม LINE ตอนนี้ (ผู้ดูแล/เจ้าของ)
+        const send = b.send === true;
+        const dIn = typeof b.date === "string" && b.date ? b.date : undefined;
+        // ส่งจากปุ่ม: ผู้ดูแล/เจ้าของ → เฉพาะสรุป 7 วันล่าสุด → อ่านกลุ่ม (ยังไม่ได้ตั้ง = ไม่เสียโควต้า) → จองโควต้าวันละ 5 ครั้ง (social_sys news_manual:<วันนี้>:<n>)
+        // ค่าแฮชใน pnl_users คีย์สาธารณะอ่านได้ (ข้อจำกัดของทั้งระบบ) → จำกัดความเสียหายด้วยสถานะที่คีย์สาธารณะเขียนไม่ได้ · ส่งไม่สำเร็จก็นับโควต้า
+        let cfg: any = undefined, pre: { ok: false; reason: string } | null = null, claimId = "";
+        if (send) {
+          const bc = await bossCheck(b.u, b.h);
+          if (bc) { out = { ok: false, reason: "ส่งเข้า LINE ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
+          const today = thDay(), dd = dIn === "today" ? today : dIn ?? thDay(Date.now() - 86400000);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dd) || !Number.isFinite(thStart(dd))) { out = { ok: false, reason: "วันที่ไม่ถูกต้อง" }; break; }
+          if (dd > today || dd < thDay(Date.now() - NEWS_MANUAL_DAYS * 86400000)) { out = { ok: false, reason: NEWS_MANUAL_OLD }; break; }
+          const c = await sysGet("news_cfg");
+          if (c.missing) pre = { ok: false, reason: SYS_MISSING };
+          else if (!c.ok) pre = { ok: false, reason: "อ่านการตั้งค่าส่ง LINE ไม่ได้: " + c.error };
+          else {
+            cfg = c.val ?? null;
+            if (NEWS_GROUP_RE.test(String(cfg?.group ?? ""))) {
+              const cl = await sysClaimN("news_manual", NEWS_MANUAL_MAX, { at: new Date().toISOString(), by: String(b.u ?? "").slice(0, 60), d: dd, ok: null });
+              if (cl.full) { out = { ok: false, reason: NEWS_MANUAL_FULL }; break; }
+              if (!cl.ok) pre = { ok: false, reason: cl.missing ? SYS_MISSING : "จองการส่งไม่ได้: " + cl.error };
+              else claimId = cl.id!;
+            }
+          }
+        }
+        const job = (async () => {
+          const r: any = await makeNews(dIn);
+          // ปุ่มทดสอบ: ส่งแม้ยังไม่ได้เปิดส่งอัตโนมัติ (กลุ่มจาก social_sys news_cfg) · สรุป AI ที่อ่านจากตารางไม่ใส่ในข้อความ LINE
+          if (r.ok && send) {
+            r.push = pre ?? await newsPush(r.data, "manual", cfg);
+            if (claimId) await sysPut(claimId, { at: new Date().toISOString(), by: String(b.u ?? "").slice(0, 60), d: r.d, ok: r.push.ok,
+              err: r.push.ok ? null : scrub(r.push.reason ?? "").slice(0, 200) });
+          }
+          return r;
+        })();
+        if (b.wait === false) { bg(job); out = { ok: true, queued: true }; } else out = await job;
+        break;
+      }
+      case "news_cfg": {   // ตั้งกลุ่ม LINE ที่จะส่งสรุปทุกเช้า (ผู้ดูแล/เจ้าของ) — เก็บที่ social_sys (คีย์สาธารณะแก้ไม่ได้)
+        const bc = await bossCheck(b.u, b.h);
+        if (bc) { out = { ok: false, reason: "ตั้งการส่งเข้า LINE ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
+        out = await newsCfg(String(b.u ?? ""), b.on === true, b.group);
+        break;
+      }
+      case "content_ai": {   // 📈 ให้ AI วิเคราะห์ว่าทำไมแต่ละโพสต์/คลิปได้ยอดต่างกัน (โหมดคุณภาพสูงสุดใช้ Claude มีค่าใช้จ่าย → ผู้ดูแล/เจ้าของ)
+        const bc = await bossCheck(b.u, b.h);
+        if (bc) { out = { ok: false, reason: "สั่งวิเคราะห์ได้เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
+        const ch = String(b.ch ?? "");
+        if (!CT_CH.includes(ch)) { out = { ok: false, reason: "ช่องทางต้องเป็น tiktok / facebook / instagram" }; break; }
+        // โควต้าวันละ 6 ครั้ง (social_sys content_ai:<วันนี้>:<n> — คีย์สาธารณะเขียนไม่ได้) กันค่าใช้จ่าย Claude · งานรายสัปดาห์ของ cron (content_run) ไม่นับ
+        const cl = await sysClaimN("content_ai", CONTENT_AI_MAX, { at: new Date().toISOString(), by: String(b.u ?? "").slice(0, 60), ch });
+        if (cl.full) { out = { ok: false, reason: CONTENT_AI_FULL }; break; }
+        if (!cl.ok) { out = { ok: false, reason: cl.missing ? SYS_MISSING : "จองโควต้าวิเคราะห์ไม่ได้: " + cl.error }; break; }
+        const days = Number(b.days);
+        out = await contentAnalyze(ch, CT_DAYS.includes(days) ? days : 90, Date.now() + 95000);
+        if (cl.id) await sysPut(cl.id, { at: new Date().toISOString(), by: String(b.u ?? "").slice(0, 60), ch, ok: (out as any)?.ok === true });   // งานรายสัปดาห์ดูว่าช่องทางนี้เพิ่งวิเคราะห์
+        break;
+      }
+      case "apify_restat": {   // 🔄 อัปเดตยอดทุกโพสต์ (อ่านรายการโพสต์ทั้งหมดใหม่ · มีค่าใช้จ่าย Apify → ผู้ดูแล/เจ้าของ)
+        const bc = await bossCheck(b.u, b.h);
+        if (bc) { out = { ok: false, started: 0, reason: "เฉพาะผู้ดูแลระบบ/เจ้าของ — " + bc }; break; }
+        out = await apifyRestat();
         break;
       }
       case "learn_faq":   out = await learnFaq(); break;
@@ -2806,6 +3763,18 @@ Deno.serve(async (req) => {
               usage_err: ap.usage_err ? scrub(ap.usage_err).slice(0, 160) : null, budget: AP_BUDGET };
           })(),
           cron: st.cron ?? null,
+          // 📰 ส่งสรุปเข้า LINE (อ่านจาก social_sys): บอกแค่เปิดไหม/ตั้งกลุ่มแล้วไหม + ผลส่งล่าสุด (ไม่ส่งไอดีกลุ่มออกไป) · ยังไม่มีตาราง = sys_missing
+          news: await (async () => {
+            const [c, l] = await Promise.all([sysGet("news_cfg"), sysGet("news_last")]);
+            if (c.missing) return { on: false, group_set: false, last: null, sys_missing: true };
+            const la = l.ok ? l.val : null;
+            const last = la && typeof la === "object" ? { at: typeof la.at === "string" ? la.at.slice(0, 40) : null, ok: la.ok === true,
+              d: typeof la.d === "string" ? la.d.slice(0, 10) : null, err: la.err ? scrub(la.err).slice(0, 300) : null, how: la.how === "cron" ? "cron" : "manual" } : null;
+            // อ่านการตั้งค่าไม่ได้ (ไม่ใช่เพราะไม่มีตาราง) — บอกข้อผิดพลาด ไม่แกล้งตอบว่า "ปิดอยู่"
+            if (!c.ok) return { on: false, group_set: false, last, err: scrub(c.error ?? "อ่านการตั้งค่าไม่ได้").slice(0, 160) };
+            const g = NEWS_GROUP_RE.test(String(c.val?.group ?? ""));
+            return { on: g && c.val?.on === true, group_set: g, last };
+          })(),
           line, facebook: fb,
           pending_analysis: cnt.count ?? 0, rules_only: rulesN.count ?? 0, ai_failed: failN.count ?? 0,
           last_analyzed: lastA.data?.[0]?.analyzed_at ?? null,
