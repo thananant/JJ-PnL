@@ -506,6 +506,7 @@ input.spl-saf{width:74px;padding:5px 8px;font-size:14px;text-align:right}
   /* ของใช้/อุปกรณ์: จอเล็กเอาปุ่มมาไว้ใต้ชื่อของ ซ่อนคอลัมน์เบิกล่าสุด (ดูได้ในประวัติ) */
   .spl-act.d,#view-sup .spl-lo{display:none}
   #modalBox .pvx{display:none} /* หน้าต่าง PV จอเล็ก: ซ่อน ก่อน VAT/VAT ให้ยอดโอน+ช่องติ๊กอยู่ในจอ (ใบพิมพ์ยังครบ) */
+  #dtList .dtl-n{display:none} /* รายการบิลเดือนนี้ จอเล็ก: ซ่อนคอลัมน์จำนวนรายการ ให้คอลัมน์ VAT/รวม อยู่ในจอ */
   .spl-act.m{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;white-space:normal}
   .spl-act.m button{margin-left:0}
   input.spl-saf{width:64px}
@@ -632,7 +633,8 @@ window.JJGate=(function(){
     invoice:{ic:'🧾',n:'ใบกำกับภาษี',d:'ออกใบเสร็จ/ใบกำกับภาษี',g:'#D8583E,#851F1A'},
     calendar:{ic:'📅',n:'JJ Calendar',d:'ปฏิทินนัดหมายองค์กร',g:'#B08BE0,#4A2E85'},
     admin:{ic:'🔑',n:'JJ Access',d:'จัดการผู้ใช้และสิทธิ์',g:'#8E7F70,#3A2E27'},
-    order:{ic:'🍽️',n:'สั่งอาหาร',d:'รับออเดอร์ผ่าน QR',g:'#C7843A,#6E4410'}
+    order:{ic:'🍽️',n:'สั่งอาหาร',d:'รับออเดอร์ผ่าน QR',g:'#C7843A,#6E4410'},
+    office:{ic:'🏢',n:'ออฟฟิศ AI',d:'agent AI ประจำทุกระบบ',g:'#C9962B,#6E4410'}
   };
   var CSS=''
   +'.jjlg-in{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;'
@@ -4539,7 +4541,7 @@ RENDER.detail = async (el)=>{
   // ขั้น 1: เริ่มที่วันที่เสมอ (จอคอม) · Enter จากวันที่ = ไปซัพ (ยังไม่เลือก = ไฮไลต์ตัวแรกเป็น default รอ Enter — ไม่เลือกให้เอง เพราะจะชนกับโฟลว์สแกนก่อนเลือกซัพ)
   const dEl=document.getElementById('dtDate'); if(dEl&&window.innerWidth>700) dEl.focus();
 };
-async function dtPickSup(v){
+async function dtPickSup(v,opt){ // opt.kb=true = มาจากคีย์บอร์ด (supKey) → ไม่แย่งโฟกัสจากปุ่มแบบบิล
   S.dtSup=v?parseInt(v):null;
   S.dtBillNo=1; S._dtIsNew=false; S._dtNewBill=false; // เปลี่ยนซัพ เริ่มใหม่
   const pend=S._ocrPending; S._ocrPending=null;
@@ -4549,7 +4551,16 @@ async function dtPickSup(v){
   if(pend&&S.dtSup){
     dtOcrApply(pend);
     toast('เติมผลสแกนลงบิลของ '+((S.core.supById[S.dtSup]||{}).name||'')+' แล้ว — ตรวจแล้วกดบันทึก');
-  }else ocrPendingBanner(); }
+  }else{ ocrPendingBanner(); if(!(opt&&opt.kb))dtFocusFirst(); } }
+}
+function dtFocusFirst(){ // เลือกซัพแล้วพิมพ์ต่อได้เลย: ช่องชื่อสินค้าแถวแรกที่ยังว่าง · ถ้ารายการประจำขึ้นครบแล้ว → ช่องจำนวนแถวแรก
+  if(('ontouchstart' in window)&&innerWidth<900)return; // มือถือจอแคบ: ไม่เปิดคีย์บอร์ดทับปุ่มสแกนบิล (แตะช่องเองเมื่อจะพิมพ์)
+  const box=document.getElementById('dtLines'); if(!box)return;
+  const empty=[...box.querySelectorAll('.dtrow input[data-c="0"]')].find(i=>!i.value.trim());
+  const el=empty||box.querySelector('.dtrow input[data-c="1"]')||box.querySelector('.dtrow input[data-c="0"]');
+  if(!el)return;
+  try{ el.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
+  setTimeout(()=>{ try{ el.focus({preventScroll:true}); if(el.value)el.select(); }catch(e){} },60);
 }
 async function dtHist(){
   // เก็บประวัติดิบไว้ แล้วคิดราคา "ณ วันของบิลที่กำลังลง" ตอนใช้จริง (ลงย้อนหลังได้ไม่เพี้ยน)
@@ -5171,7 +5182,7 @@ async function uconvSave(nk){
 function dtFocusSup(){ const c=supChips(); if(!c.length)return; (c.find(x=>x.classList.contains('on'))||c[0]).focus(); }
 function supKey(e,sid){
   const k=e.key, chips=supChips(), i=chips.indexOf(e.target);
-  if(k==='Enter'){ e.preventDefault(); Promise.resolve(dtPickSup(sid)).then(()=>dtFocusVat()); return; }
+  if(k==='Enter'){ e.preventDefault(); Promise.resolve(dtPickSup(sid,{kb:true})).then(()=>dtFocusVat()); return; }
   if(k!=='ArrowLeft'&&k!=='ArrowRight'&&k!=='ArrowUp'&&k!=='ArrowDown')return;
   e.preventDefault();
   let n=i;
@@ -5495,20 +5506,34 @@ async function dtMonthList(){
   const el=document.getElementById('dtList'); if(!el)return;
   try{
     const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
-    const rows=await selAll('pnl_bill_items',`select=d,supplier_id,qty,price,discount,bill_no,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)
-      .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,discount,bill_no&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)
-      .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)));
+    const Q=f=>`select=${f}&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`;
+    const rows=await selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode,bill_discount,ship_fee,other_fee'))   // อ่านเงียบ: ฐานที่ยังไม่มีคอลัมน์ใหม่ → ถอยชั้นถัดไปโดยไม่เด้ง toast แดง
+      .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode,bill_discount')))
+      .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode')))
+      .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no')))
+      .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price')));
     if(!rows.length){el.innerHTML='<div class="xs mut">เดือนนี้ยังไม่มีการลงรายละเอียดบิล</div>';return;}
+    // รวมเป็นรายบิล แล้วแยก ก่อน VAT / VAT / รวม VAT ตามโหมดที่ลง (สูตรเดียวกับหน้า "รายละเอียดบิล")
     const g={};
     rows.forEach(r=>{const bn=num(r.bill_no)||1; const k=r.d+'|'+r.supplier_id+'|'+bn;
-      const t=g[k]??(g[k]={d:r.d,sid:r.supplier_id,bn,vm:r.vat_mode||'none',n:0,tot:0}); t.n++; t.tot+=num(r.qty)*num(r.price)-num(r.discount);});
+      const t=g[k]??(g[k]={d:r.d,sid:r.supplier_id,bn,vm:r.vat_mode||'none',n:0,sub:0,bd:0,fee:0});
+      t.n++; t.sub+=num(r.qty)*num(r.price)-num(r.discount);
+      if(num(r.bill_discount))t.bd=num(r.bill_discount);
+      if(num(r.ship_fee)||num(r.other_fee))t.fee=num(r.ship_fee)+num(r.other_fee);});
     const list=Object.values(g).sort((a,b)=>b.d.localeCompare(a.d));
-    el.innerHTML='<div class="twrap"><table><tr><th>วันที่</th><th>ซัพพลายเออร์</th><th class="right">รายการ</th><th class="right">ยอดรวม</th><th></th></tr>'+
-      list.map(x=>`<tr style="cursor:pointer" onclick="dtJump('${x.d}',${x.sid},${x.bn})"><td>${thDate(x.d)}</td>
-        <td>${esc((S.core.supById[x.sid]||{}).name||'?')}${x.vm&&x.vm!=='none'?` <span class="chip gold" style="font-size:10px">${DT_VLBL[x.vm]||x.vm}</span>`:''}</td>
-        <td class="n">${x.n}</td><td class="n">฿${fmtI(x.tot)}</td>
+    list.forEach(x=>{ const base=x.sub-x.bd;
+      if(x.vm==='ex'){ x.pre=base; x.vat=base*0.07; }
+      else if(x.vm==='inc'){ x.pre=base/1.07; x.vat=base-base/1.07; }
+      else { x.vm='none'; x.pre=base; x.vat=0; }
+      x.net=x.pre+x.vat+x.fee; }); // ค่าส่ง/ค่าธรรมเนียมไม่มี VAT บวกท้ายยอดรวม (ก่อน VAT/VAT ตรงกับหน้า "รายละเอียดบิล" และบรรทัดสรุปในฟอร์ม)
+    const T=list.reduce((a,x)=>({pre:a.pre+x.pre,vat:a.vat+x.vat,net:a.net+x.net}),{pre:0,vat:0,net:0});
+    el.innerHTML='<div class="twrap"><table><tr><th>วันที่</th><th>ซัพพลายเออร์</th><th class="right dtl-n">รายการ</th><th class="right">ก่อน VAT</th><th class="right">VAT</th><th class="right">รวม VAT</th><th></th></tr>'+
+      list.map(x=>`<tr style="cursor:pointer" onclick="dtJump('${x.d}',${x.sid},${x.bn})"><td style="white-space:nowrap">${thDate(x.d)}</td>
+        <td>${esc((S.core.supById[x.sid]||{}).name||'?')}${x.vm!=='none'?` <span class="chip gold" style="font-size:10px">${DT_VLBL[x.vm]||x.vm}</span>`:''}${x.fee?`<div class="xs mut">ค่าส่ง/ค่าธรรมเนียม +฿${fmtI(x.fee)} (ไม่มี VAT)</div>`:''}</td>
+        <td class="n dtl-n">${x.n}</td><td class="n">฿${fmtI(x.pre)}</td><td class="n${x.vat?'':' mut'}">${x.vat?'฿'+fmtI(x.vat):'–'}</td><td class="n b">฿${fmtI(x.net)}</td>
         <td class="right" style="white-space:nowrap"><button class="hintlink" onclick="event.stopPropagation();dtJump('${x.d}',${x.sid},${x.bn})">แก้ไข</button>
-          <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="dtDeleteBill('${x.d}',${x.sid},event,${x.bn})">ลบ</button></td></tr>`).join('')+'</table></div>';
+          <button class="hintlink" style="color:var(--bad);margin-left:8px" onclick="dtDeleteBill('${x.d}',${x.sid},event,${x.bn})">ลบ</button></td></tr>`).join('')
+      +`<tr class="tot"><td colspan="2">รวม ${list.length} บิล</td><td class="dtl-n"></td><td class="n">฿${fmtI(T.pre)}</td><td class="n">${T.vat?'฿'+fmtI(T.vat):'–'}</td><td class="n">฿${fmtI(T.net)}</td><td></td></tr></table></div>`;
   }catch(e){ el.innerHTML='<div class="xs mut">โหลดไม่ได้ — ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อน</div>'; }
 }
 async function dtJump(d,sid,bn){
