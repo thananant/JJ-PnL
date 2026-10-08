@@ -33,7 +33,9 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_branches'))return T([{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]);
       if(url.includes('pnl_sup_items'))return T(url.includes('supplier_id=eq.2')?[{id:1,supplier_id:2,item:'ไก่สด',unit:'กก.',sort:1},{id:2,supplier_id:2,item:'เป็ดสด',unit:'กก.',sort:2}]:[]);
       if(url.includes('pnl_bill_items')&&url.includes('d=gte.2026-08-01')){
+        w.__monthReq=(w.__monthReq||0)+1; if(url.includes('ship_fee'))w.__feeReq=(w.__feeReq||0)+1;
         if(w.__noFee&&url.includes('ship_fee'))return {ok:false,status:400,text:async()=>'{"code":"42703","message":"column pnl_bill_items.ship_fee does not exist"}',json:async()=>({})};
+        if(w.__mixed)return T(MONTH.map(r=>r.supplier_id===3?Object.assign({},r,{vat_mode:r.price===50?null:'ex',price:r.price===50?50:100}):r)); // ตลาดสด: แถว 2×50 โหมดว่าง + แถว 1×100 ex
         return T(w.__noFee?MONTH.map(r=>{const {ship_fee,other_fee,...rest}=r;return rest;}):MONTH);}
       if(url.includes('pnl_bill_items'))return T([]);
       return T([]);
@@ -78,8 +80,19 @@ setTimeout(async()=>{
   out.push('Enter ที่ชิปซัพ (คีย์บอร์ด) → โฟกัสยังอยู่ปุ่มแบบบิล ไม่โดนแย่งไปช่องสินค้า: '+(d.activeElement&&d.activeElement.classList.contains('vch')));
   // ไม่มีคอลัมน์ค่าส่ง (ฐานเก่า) → ถอยไปคิวรีชั้นถัดไปแบบเงียบ ไม่มี toast แดง
   w.__noFee=true; d.getElementById('toast').textContent=''; await w.dtMonthList(); await sleep(60);
-  out.push('ฐานไม่มีคอลัมน์ค่าส่ง → ตารางยังขึ้น (ก่อน VAT 900 เท่าเดิม) และไม่มี toast แดง: '+(!!d.querySelector('#dtList table')&&!d.getElementById('toast').textContent.includes('400')&&JSON.stringify(nums([...d.querySelectorAll('#dtList tr')].find(tr=>tr.textContent.includes('VatShop'))))[1]!=='x'));
+  const fr=[...d.querySelectorAll('#dtList tr')].find(tr=>tr.textContent.includes('VatShop'));
+  out.push('ฐานไม่มีคอลัมน์ค่าส่ง → ถอยไปชั้นถัดไปเงียบ ๆ: VatShop 900 · 63 · 963 (ไม่มีค่าส่ง) ไม่มีโน้ตค่าส่ง ไม่มี toast แดง: '+(!!fr&&JSON.stringify(nums(fr))===JSON.stringify(['1','฿900','฿63','฿963'])&&!fr.textContent.includes('ค่าส่ง/ค่าธรรมเนียม')&&!d.getElementById('toast').textContent.includes('400')&&!d.getElementById('toast').classList.contains('err')));
+  out.push('คิวรีชั้นแรก (มี ship_fee) ถูกยิงก่อนแล้วค่อยถอย: '+(w.__feeReq>=1&&w.__monthReq>w.__feeReq));
   w.__noFee=false;
+  // บิลเดียวกันมีแถวที่ vat_mode ว่าง (แถวเก่า) ปน → ใช้แถวสุดท้ายที่มีค่า เหมือนหน้ารายละเอียดบิล
+  w.__mixed=true; await w.dtMonthList(); await sleep(60);
+  const mr=[...d.querySelectorAll('#dtList tr')].find(tr=>tr.textContent.includes('ตลาดสด'));
+  out.push('แถวโหมดว่าง + แถว +7% ในบิลเดียว → ถือเป็น +7%: ก่อน 200 · VAT 14 · รวม 214: '+(!!mr&&JSON.stringify(nums(mr))===JSON.stringify(['2','฿200','฿14','฿214'])&&mr.textContent.includes('+7%')));
+  w.__mixed=false;
+  // มีผลสแกน OCR ค้าง → เลือกซัพแล้วเติมผลสแกน ไม่แย่งโฟกัสไปตาราง
+  w.eval("S._ocrPending={rows:[{name:'หมูสามชั้น',qty:2,unit:'กก.',price:150}]}");
+  await w.dtPickSup(1); await sleep(200);
+  out.push('มีผลสแกนค้าง → เติมลงบิล (ไม่โฟกัสช่องสินค้าเอง): '+(w.eval("S.dtLines.some(l=>l.item==='หมูสามชั้น')")&&!(d.activeElement&&d.activeElement.closest&&d.activeElement.closest('#dtLines'))));
   out.push('ป้ายโหมด VAT ยังอยู่ (+7% / รวม VAT) และบิลไม่มี VAT ไม่มีป้าย: '+(row('VatShop').textContent.includes('+7%')&&row('ฟาร์มไก่').textContent.includes('รวม VAT')&&!row('ตลาดสด').querySelector('.chip')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
