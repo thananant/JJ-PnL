@@ -45,6 +45,21 @@ grant select on public.social_posts to anon, authenticated;
 grant all on public.social_posts to service_role;
 grant usage, select on sequence public.social_posts_id_seq to service_role;
 
+-- 2026-10-08: สถานะของระบบที่คีย์สาธารณะแก้ไม่ได้ (ฟังก์ชัน social-brain เขียนเท่านั้น · แอปอ่านได้)
+--   news_cfg = กลุ่ม LINE ที่ส่งสรุปประจำวัน · news_last = ผลส่งล่าสุด · news_push:<วันที่> / content_run:<วันที่> = กันส่ง/วิเคราะห์ซ้ำในวันเดียวกัน
+--   news_manual:<วัน>:<n> (≤5) / content_ai:<วัน>:<n> (≤6) / news_cfg_note:<วัน>:<n> (≤3) = โควต้ารายวันของปุ่มส่ง LINE / ปุ่มวิเคราะห์ / แจ้งกลุ่มเดิมตอนเปลี่ยนกลุ่ม
+create table if not exists public.social_sys (
+  id         text primary key,
+  val        jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.social_sys enable row level security;
+drop policy if exists social_sys_read on public.social_sys;
+create policy social_sys_read on public.social_sys for select to anon, authenticated using (true);
+revoke insert, update, delete on public.social_sys from anon, authenticated;
+grant select on public.social_sys to anon, authenticated;
+grant all on public.social_sys to service_role;
+
 -- ตรวจผล: ควรเห็น 0 แถว (ตารางใหม่) หรือจำนวนโพสต์ที่มีอยู่แล้ว · มียอดแชร์แล้วกี่โพสต์
 select channel, count(*) as posts, count(cm_pulled_at) as comments_pulled, count(shares) as with_shares
 from public.social_posts group by channel order by channel;
