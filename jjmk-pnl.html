@@ -3438,10 +3438,10 @@ RENDER.vatrep = async (el)=>{
   if(S.br==='ALL'){ el.innerHTML=allNotice('รายละเอียดบิล'); return; }
   const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
   let rows=[];
-  try{ rows=await selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount,bill_no,ship_fee,other_fee&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)
-    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount,bill_no&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`))
-    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)
-    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`))); }
+  try{ rows=await selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount,bill_no,ship_fee,other_fee&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d,id`)
+    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount,bill_no&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d,id`))
+    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode,discount,bill_discount&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d,id`)
+    .catch(()=>selAll('pnl_bill_items',`select=d,supplier_id,qty,price,vat_mode&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d,id`))); }
   catch(e){ el.innerHTML='<div class="empty">โหลดไม่ได้ — ต้องรัน jjmk_pnl_billitems.sql ใน Supabase ก่อนครับ</div>'; return; }
   if(!rows.length){
     el.innerHTML=`<div class="empty">เดือนนี้ยังไม่มีการบันทึกรายละเอียดบิล<br>
@@ -5376,7 +5376,10 @@ async function dtSave(){
         }
       }
     }catch(e2){}
-    await delQ('pnl_bill_items',`branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}${bn>1?bq:''}${bn===1&&S._dtDayBills&&Object.keys(S._dtDayBills).length>1?bq:''}`)
+    // บิลอื่นของวัน/ซัพนี้ ดูจากข้อมูลสด (ของที่โหลดค้างอาจเก่า: เครื่องอื่นเพิ่งเพิ่มบิลใบ 2) → ลบเฉพาะใบนี้ ไม่ลบทั้งวัน
+    const multi=Object.keys(freshDB||{}).some(b2=>Number(b2)!==bn);
+    if(multi&&!Object.keys(S._dtDayBills||{}).some(b2=>Number(b2)!==bn)) toast('ℹ️ วันนี้มีบิลใบอื่นของซัพนี้ถูกเพิ่มจากเครื่องอื่น — บันทึกเฉพาะใบนี้ ยอดวันรวมให้เอง');
+    await delQ('pnl_bill_items',`branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}${bn>1||multi?bq:''}`)
       .catch(async e=>{ // คอลัมน์ bill_no ยังไม่มี
         if(bn>1){ toast('ต้องรัน jjmk_pnl_billno.sql ก่อนถึงจะแยกหลายบิลต่อวันได้ครับ',true); throw e; }
         await delQ('pnl_bill_items',`branch=eq.${S.br}&d=eq.${d}&supplier_id=eq.${sid}`);
@@ -5427,7 +5430,7 @@ async function dtSave(){
       }
     }catch(e){} // ยังไม่รัน jjmk_pnl_supitems.sql ก็ข้ามเงียบๆ
     // ประวัติ: สร้าง/แก้อะไรบ้าง
-    const dayMulti=Object.keys(S._dtDayBills||{}).filter(b2=>Number(b2)!==bn).length>0;
+    const dayMulti=Object.keys(freshDB||{}).filter(b2=>Number(b2)!==bn).length>0; // ตรงกับ daySum ที่คิดจากข้อมูลสด
     const bpre=dayMulti?`บิลที่ ${bn} ${DT_VLBL[S.dtVat]||''}: `:'';
     if(!oldRows.length){
       await dtLogAdd(d,sid,`${bpre}สร้างบิล · ${lines.length} รายการ · ยอด ฿${fmt(total,2)}`);
@@ -5506,12 +5509,12 @@ async function dtMonthList(){
   const el=document.getElementById('dtList'); if(!el)return;
   try{
     const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
-    const Q=(f,o)=>`select=${f}&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=${o||'d,bill_no,sort'}`; // เรียงคงที่ (selAll แบ่งหน้า) · ชั้นล่างสุดไม่มี bill_no
+    const Q=(f,o)=>`select=${f}&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=${o||'d,bill_no,sort,id'}`; // เรียงคงที่ (selAll แบ่งหน้า · id = PK ตัดสินสุดท้าย) · ชั้นล่างสุดไม่มี bill_no
     const rows=await selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode,bill_discount,ship_fee,other_fee'))   // อ่านเงียบ: ฐานที่ยังไม่มีคอลัมน์ใหม่ → ถอยชั้นถัดไปโดยไม่เด้ง toast แดง
       .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode,bill_discount')))
       .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode')))
       .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no')))
-      .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price','d,sort')));
+      .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price','d,sort,id')));
     if(!rows.length){el.innerHTML='<div class="xs mut">เดือนนี้ยังไม่มีการลงรายละเอียดบิล</div>';return;}
     // รวมเป็นรายบิล แล้วแยก ก่อน VAT / VAT / รวม VAT ตามโหมดที่ลง (สูตรเดียวกับหน้า "รายละเอียดบิล")
     const g={};
