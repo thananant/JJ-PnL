@@ -5506,18 +5506,19 @@ async function dtMonthList(){
   const el=document.getElementById('dtList'); if(!el)return;
   try{
     const from=S.m+'-01', to=dstr(S.m,monthDays(S.m));
-    const Q=f=>`select=${f}&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`;
+    const Q=(f,o)=>`select=${f}&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=${o||'d,bill_no,sort'}`; // เรียงคงที่ (selAll แบ่งหน้า) · ชั้นล่างสุดไม่มี bill_no
     const rows=await selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode,bill_discount,ship_fee,other_fee'))   // อ่านเงียบ: ฐานที่ยังไม่มีคอลัมน์ใหม่ → ถอยชั้นถัดไปโดยไม่เด้ง toast แดง
       .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode,bill_discount')))
       .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no,vat_mode')))
       .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price,discount,bill_no')))
-      .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price')));
+      .catch(()=>selAllQ('pnl_bill_items',Q('d,supplier_id,qty,price','d,sort')));
     if(!rows.length){el.innerHTML='<div class="xs mut">เดือนนี้ยังไม่มีการลงรายละเอียดบิล</div>';return;}
     // รวมเป็นรายบิล แล้วแยก ก่อน VAT / VAT / รวม VAT ตามโหมดที่ลง (สูตรเดียวกับหน้า "รายละเอียดบิล")
     const g={};
     rows.forEach(r=>{const bn=num(r.bill_no)||1; const k=r.d+'|'+r.supplier_id+'|'+bn;
-      const t=g[k]??(g[k]={d:r.d,sid:r.supplier_id,bn,vm:r.vat_mode||'none',n:0,sub:0,bd:0,fee:0});
+      const t=g[k]??(g[k]={d:r.d,sid:r.supplier_id,bn,vm:'none',n:0,sub:0,bd:0,fee:0});
       t.n++; t.sub+=num(r.qty)*num(r.price)-num(r.discount);
+      if(r.vat_mode)t.vm=r.vat_mode;                       // โหมดบิล = แถวสุดท้ายที่มีค่า (สูตรเดียวกับหน้ารายละเอียดบิล)
       if(num(r.bill_discount))t.bd=num(r.bill_discount);
       if(num(r.ship_fee)||num(r.other_fee))t.fee=num(r.ship_fee)+num(r.other_fee);});
     const list=Object.values(g).sort((a,b)=>b.d.localeCompare(a.d));
