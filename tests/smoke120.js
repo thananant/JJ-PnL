@@ -33,7 +33,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_branches'))return T([{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]);
       if(url.includes('pnl_sup_items'))return T(url.includes('supplier_id=eq.2')?[{id:1,supplier_id:2,item:'ไก่สด',unit:'กก.',sort:1},{id:2,supplier_id:2,item:'เป็ดสด',unit:'กก.',sort:2}]:[]);
       if(url.includes('pnl_bill_items')&&url.includes('d=gte.2026-08-01')){
-        w.__monthReq=(w.__monthReq||0)+1; if(url.includes('ship_fee'))w.__feeReq=(w.__feeReq||0)+1;
+        w.__monthReq=(w.__monthReq||0)+1; if(url.includes('ship_fee'))w.__feeReq=(w.__feeReq||0)+1; (w.__orders=w.__orders||[]).push((url.match(/order=([^&]+)/)||[])[1]||'');
         if(w.__noFee&&url.includes('ship_fee'))return {ok:false,status:400,text:async()=>'{"code":"42703","message":"column pnl_bill_items.ship_fee does not exist"}',json:async()=>({})};
         if(w.__mixed)return T(MONTH.map(r=>r.supplier_id===3?Object.assign({},r,{vat_mode:r.price===50?null:'ex',price:r.price===50?50:100}):r)); // ตลาดสด: แถว 2×50 โหมดว่าง + แถว 1×100 ex
         return T(w.__noFee?MONTH.map(r=>{const {ship_fee,other_fee,...rest}=r;return rest;}):MONTH);}
@@ -94,6 +94,7 @@ setTimeout(async()=>{
   await w.dtPickSup(1); await sleep(200);
   out.push('มีผลสแกนค้าง → เติมลงบิล (ไม่โฟกัสช่องสินค้าเอง): '+(w.eval("S.dtLines.some(l=>l.item==='หมูสามชั้น')")&&!(d.activeElement&&d.activeElement.closest&&d.activeElement.closest('#dtLines'))));
   out.push('ป้ายโหมด VAT ยังอยู่ (+7% / รวม VAT) และบิลไม่มี VAT ไม่มีป้าย: '+(row('VatShop').textContent.includes('+7%')&&row('ฟาร์มไก่').textContent.includes('รวม VAT')&&!row('ตลาดสด').querySelector('.chip')));
+  out.push('คิวรีรายการเดือนทุกชั้นเรียงด้วย id ปิดท้าย (selAll แบ่งหน้านิ่ง): '+(w.__orders.length>=3&&w.__orders.every(o=>/,id$/.test(o))&&w.__orders.includes('d,bill_no,sort,id')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },500);
