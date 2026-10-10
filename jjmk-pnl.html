@@ -229,18 +229,22 @@ html,body{overscroll-behavior-y:contain}
 .mxwrap{max-height:70dvh;overflow:auto;border:1.5px solid var(--line);border-radius:14px}
 table.mx{border-collapse:separate;border-spacing:0;min-width:100%}
 table.mx th,table.mx td{border-bottom:1px solid #F0E8D6;border-right:1px solid #F3ECDD;padding:7px 9px;font-size:11.5px;white-space:nowrap}
-table.mx .mxd{position:sticky;left:0;background:#fff;z-index:3;font-family:'Prompt';font-weight:700;font-size:12.5px;cursor:pointer;min-width:70px;text-align:left;border-right:2px solid var(--line)}
-table.mx .mxd.sun{color:var(--red)}
-table.mx tr.sunrow td.ce{background:#FBF4EF}
+/* เมทริกซ์บิลทั้งเดือน (10 ต.ค. 2569 สลับแกน): แถว = ซัพพลายเออร์ (.mxd ตรึงซ้าย) · คอลัมน์ = วันที่ 1..N (.mxs ตรึงบน กดเปิดฟอร์มวัน) · คอลัมน์ท้าย รวม/ซัพ · แถวท้าย รวม/วัน */
+table.mx .mxd{position:sticky;left:0;background:#fff;z-index:3;font-family:'Prompt';font-weight:700;font-size:11.5px;line-height:1.2;cursor:default;min-width:118px;max-width:168px;white-space:normal;text-align:left;border-right:2px solid var(--line);color:#5E4A33}
+table.mx .mxd i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+table.mx .mxd.mxc{font-size:10px;color:var(--mut);font-weight:600;white-space:nowrap}
 table.mx tr:first-child th{position:sticky;top:0;background:linear-gradient(#FAF3E3,#F3EAD3);z-index:5;border-bottom:2px solid var(--line)}
 table.mx tr:first-child th.mxd{background:#F6EFDF}
-table.mx .mxs{min-width:92px;max-width:120px;text-align:center;vertical-align:bottom;padding-bottom:6px}
-table.mx .mxs i{display:block;width:7px;height:7px;border-radius:50%;margin:0 auto 4px}
-table.mx .mxs span{display:-webkit-box;font-size:10px;line-height:1.25;white-space:normal;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-family:'Prompt';font-weight:700;color:#5E4A33}
-table.mx .mxs.mxtc{border-left:2px solid var(--line)}
+table.mx .mxs{min-width:60px;text-align:center;vertical-align:bottom;padding:5px 4px 4px;cursor:pointer;font-family:'Prompt';font-weight:700;font-size:12px;color:#5E4A33}
+table.mx .mxs span{display:block;font-size:9.5px;line-height:1.2;font-weight:600;color:var(--mut)}
+table.mx .mxs.sun,table.mx .mxs.sun span{color:var(--red)}
+table.mx .mxs:hover{background:#F3E6C4}
+table.mx .mxs.mxtc{border-left:2px solid var(--line);cursor:default;min-width:84px}
+table.mx .mxs.mxtc:hover{background:linear-gradient(#FAF3E3,#F3EAD3)}
 table.mx td{text-align:right;cursor:pointer;font-variant-numeric:tabular-nums;font-size:11px;letter-spacing:-.01em}
 table.mx td.ce{background:#FCFAF4;color:transparent}
 table.mx tr:nth-child(even) td.ce{background:#F8F4EA}
+table.mx tr td.ce.sun{background:#FBF4EF} /* คอลัมน์วันอาทิตย์ (ช่องว่าง) แรเงาอ่อน */
 table.mx td.cw{background:#fff;font-weight:600;color:#3E3226}
 table.mx td.cy{background:#FFF0BF;font-weight:700;color:#8A6200;box-shadow:inset 0 0 0 1px #EED9A0}
 table.mx td.cg{background:#DCF1E0;color:#166B2E;font-weight:700;box-shadow:inset 0 0 0 1px #B7DFC2}
@@ -503,6 +507,7 @@ input.spl-saf{width:74px;padding:5px 8px;font-size:14px;text-align:right}
   .card{padding:12px}
   /* ตารางกว้าง ๆ ให้เลื่อนในกรอบตัวเอง ไม่ดันทั้งหน้าให้กว้างตาม */
   .twrap,.mxwrap,.tblwrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.mx .mxd{min-width:92px;max-width:124px;font-size:11px;padding-left:7px;padding-right:6px} /* เมทริกซ์บิล: คอลัมน์ชื่อซัพแคบลงบนจอเล็ก ให้เห็นวันได้มากขึ้น */
   /* ของใช้/อุปกรณ์: จอเล็กเอาปุ่มมาไว้ใต้ชื่อของ ซ่อนคอลัมน์เบิกล่าสุด (ดูได้ในประวัติ) */
   .spl-act.d,#view-sup .spl-lo{display:none}
   #modalBox .pvx{display:none} /* หน้าต่าง PV จอเล็ก: ซ่อน ก่อน VAT/VAT ให้ยอดโอน+ช่องติ๊กอยู่ในจอ (ใบพิมพ์ยังครบ) */
@@ -2666,34 +2671,33 @@ function expCell(d,sid){
   },150); });
 }
 function expMatrixHTML(c,days){
+  // 10 ต.ค. 2569 สลับแกนตามที่ user ขอ: แถว = ซัพพลายเออร์ · คอลัมน์ = วันที่ 1..N (กดหัววัน = เปิดฟอร์มวันนั้น) · คอลัมน์ท้าย = รวม/ซัพ · แถวท้าย = รวม/วัน
   const sups=S.core.sup.filter(x=>x.active);
   if(!sups.length) return '<div class="xs mut">ยังไม่มีซัพพลายเออร์</div>';
-  const cell=(ds,sid,nm)=>{
-    const r=c.exp[ds+'|'+sid], a=r?num(r.amount):0;
+  const DS=[]; for(let d2=1;d2<=days;d2++){ const ds=dstr(S.m,d2); DS.push({d:d2,ds,wd:new Date(ds).getDay()}); }
+  const cell=(x,sid,nm)=>{
+    const r=c.exp[x.ds+'|'+sid], a=r?num(r.amount):0;
     let cls='ce', txt='', st='';
     if(a>0){ txt=fmt(a,2); cls = r.slip_url?'cg' : (r.checked?'cy':'cw');
       st = r.slip_url?'แนบสลิปแล้ว ✅':(r.checked?'ตรวจสอบบิลแล้ว 🔍':'ยังไม่ตรวจ'); }
-    return `<td class="${cls}" data-mx="${ds}|${sid}" title="${esc(nm)} · ${thDate(ds)}${st?' · '+st:''}" onclick="expCell(${Number(ds.slice(-2))},${sid})">${txt}</td>`;
+    return `<td class="${cls}${x.wd===0?' sun':''}" data-mx="${x.ds}|${sid}" title="${esc(nm)} · ${thDate(x.ds)}${st?' · '+st:''}" onclick="expCell(${x.d},${sid})">${txt}</td>`;
   };
-  const supTot={}; let grand=0;
-  const rows=[];
-  for(let d2=1;d2<=days;d2++){
-    const ds=dstr(S.m,d2);
-    let dayT=0;
-    const wd=new Date(ds).getDay();
-    const tds=sups.map(sp=>{ const r=c.exp[ds+'|'+sp.id]; const a=r?num(r.amount):0;
-      dayT+=a; supTot[sp.id]=(supTot[sp.id]||0)+a; return cell(ds,sp.id,sp.name); }).join('');
-    grand+=dayT;
-    rows.push(`<tr class="${wd===0?'sunrow':''}"><th class="mxd ${wd===0?'sun':''}" onclick="expPick(${d2})">${d2} <span class="xs mut">${TH_D[wd]}</span></th>${tds}
-      <td class="mxt">${dayT?fmt(dayT,2):''}</td></tr>`);
-  }
+  const dayTot={}; let grand=0;
+  const rows=sups.map(sp=>{
+    let supT=0;
+    const tds=DS.map(x=>{ const r=c.exp[x.ds+'|'+sp.id]; const a=r?num(r.amount):0;
+      supT+=a; dayTot[x.d]=(dayTot[x.d]||0)+a; return cell(x,sp.id,sp.name); }).join('');
+    grand+=supT;
+    return `<tr><th class="mxd" title="${esc(sp.name)} · ${esc(sp.category)}"><i style="background:${catColor(sp.category)}"></i>${esc(sp.name)}</th>${tds}
+      <td class="mxt">${supT?fmt(supT,2):''}</td></tr>`;
+  });
   return `<div class="twrap mxwrap"><table class="mx">
-    <tr><th class="mxd" style="z-index:6">วันที่</th>
-      ${sups.map(sp=>`<th class="mxs" title="${esc(sp.name)} · ${esc(sp.category)}"><i style="background:${catColor(sp.category)}"></i><span>${esc(sp.name)}</span></th>`).join('')}
-      <th class="mxs mxtc"><span>รวม/วัน</span></th></tr>
+    <tr><th class="mxd mxc" style="z-index:6">ซัพ ↓ · วัน →</th>
+      ${DS.map(x=>`<th class="mxs${x.wd===0?' sun':''}" title="${thDate(x.ds)} · กดเพื่อเปิดฟอร์มคีย์บิลของวันนั้น" onclick="expPick(${x.d})">${x.d}<span>${TH_D[x.wd]}</span></th>`).join('')}
+      <th class="mxs mxtc">รวม/ซัพ</th></tr>
     ${rows.join('')}
-    <tr class="mxfoot"><th class="mxd">รวม</th>
-      ${sups.map(sp=>`<td>${supTot[sp.id]?fmt(supTot[sp.id],2):''}</td>`).join('')}
+    <tr class="mxfoot"><th class="mxd">รวม/วัน</th>
+      ${DS.map(x=>`<td>${dayTot[x.d]?fmt(dayTot[x.d],2):''}</td>`).join('')}
       <td style="color:var(--red)">${fmt(grand,2)}</td></tr>
   </table></div>`;
 }
@@ -2701,7 +2705,7 @@ function updMatrixCell(ds,sid){
   const td=document.querySelector(`[data-mx="${ds}|${sid}"]`); if(!td)return;
   const c=S.cache[mkey(S.br,S.m)]; const r=c&&c.exp[ds+'|'+sid]; const a=r?num(r.amount):0;
   td.textContent=a>0?fmt(a,2):'';
-  td.className = a>0 ? (r.slip_url?'cg':(r.checked?'cy':'cw')) : 'ce';
+  td.className = (a>0 ? (r.slip_url?'cg':(r.checked?'cy':'cw')) : 'ce') + (td.classList.contains('sun')?' sun':''); // คง .sun (คอลัมน์อาทิตย์) ไว้
 }
 function openSrc(c,day,sh){
   // แหล่งเก๊ะเปิด: เย็น ← เก๊ะเช้าวันเดียวกัน · เช้า ← เก๊ะเย็นเมื่อวาน (วันที่ 1 ← เก๊ะเย็นวันสุดท้ายเดือนก่อน)
