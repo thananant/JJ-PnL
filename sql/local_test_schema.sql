@@ -1378,6 +1378,74 @@ ALTER PUBLICATION supabase_realtime ADD TABLE ONLY public.pnl_stock_map;
 
 
 --
+-- JJ P&L · ตรวจสอบเงินในบัญชี (sql/jjmk_pnl_bank.sql) — เพิ่ม 11 ต.ค. 2569
+--   3 ตารางใหม่ + คอลัมน์ paid_d/pay_src ใน 3 ตารางรายจ่าย · เขียนแบบ if not exists รันซ้ำได้
+--
+
+CREATE TABLE IF NOT EXISTS public.pnl_bank_accts (
+    acct text NOT NULL,
+    label text NOT NULL,
+    beam_acct text,
+    daily_cap numeric,
+    sort integer DEFAULT 0 NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    CONSTRAINT pnl_bank_accts_pkey PRIMARY KEY (acct)
+);
+
+CREATE TABLE IF NOT EXISTS public.pnl_bank_snap (
+    acct text NOT NULL,
+    as_of date NOT NULL,
+    kind text DEFAULT 'actual'::text NOT NULL,
+    balance numeric DEFAULT 0 NOT NULL,
+    expected numeric,
+    diff numeric,
+    note text DEFAULT ''::text NOT NULL,
+    by_user text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT pnl_bank_snap_pkey PRIMARY KEY (acct, as_of, kind),
+    CONSTRAINT pnl_bank_snap_kind_check CHECK ((kind = ANY (ARRAY['actual'::text, 'opening'::text]))),
+    CONSTRAINT pnl_bank_snap_acct_fkey FOREIGN KEY (acct) REFERENCES public.pnl_bank_accts(acct)
+);
+
+CREATE TABLE IF NOT EXISTS public.pnl_bank_moves (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    d date NOT NULL,
+    acct text NOT NULL,
+    amount numeric DEFAULT 0 NOT NULL,
+    kind text DEFAULT 'other'::text NOT NULL,
+    descr text DEFAULT ''::text NOT NULL,
+    branch text,
+    by_user text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT pnl_bank_moves_kind_check CHECK ((kind = ANY (ARRAY['cash_deposit'::text, 'transfer_in'::text, 'transfer_out'::text, 'withdraw'::text, 'bank_fee'::text, 'interest'::text, 'other'::text]))),
+    CONSTRAINT pnl_bank_moves_acct_fkey FOREIGN KEY (acct) REFERENCES public.pnl_bank_accts(acct)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bank_moves_d ON public.pnl_bank_moves USING btree (acct, d);
+
+ALTER TABLE public.pnl_expense_daily  ADD COLUMN IF NOT EXISTS paid_d date, ADD COLUMN IF NOT EXISTS pay_src text;
+ALTER TABLE public.pnl_fixed_monthly  ADD COLUMN IF NOT EXISTS paid_d date, ADD COLUMN IF NOT EXISTS pay_src text;
+ALTER TABLE public.pnl_extra_expenses ADD COLUMN IF NOT EXISTS paid_d date, ADD COLUMN IF NOT EXISTS pay_src text;
+
+ALTER TABLE public.pnl_bank_accts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pnl_bank_snap ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pnl_bank_moves ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='pnl_bank_accts' AND policyname='allow_all') THEN
+    CREATE POLICY allow_all ON public.pnl_bank_accts USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='pnl_bank_snap' AND policyname='allow_all') THEN
+    CREATE POLICY allow_all ON public.pnl_bank_snap USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='pnl_bank_moves' AND policyname='allow_all') THEN
+    CREATE POLICY allow_all ON public.pnl_bank_moves USING (true) WITH CHECK (true);
+  END IF;
+END $$;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
