@@ -107,7 +107,9 @@ setTimeout(async()=>{
   // 1) Fix cost / นอกเหนือ ที่ยังไม่ลงวันจ่าย → บล็อกพับ + เลือกบัญชี + ลงวัน → PATCH
   await w.eval("show('bank')"); await sleep(500);
   const nod=d.querySelector('#view-bank details.bk-nod');
-  out.push('บล็อก Fix cost/นอกเหนือ ยังไม่ลงวันจ่าย 2 รายการ ฿53,500.00 (พับไว้): '+(!!nod&&!nod.open&&nod.textContent.includes('2 รายการ ฿53,500.00')&&nod.textContent.includes('ค่าเช่าพื้นที่')&&nod.textContent.includes('ซ่อมแอร์')));
+  out.push('บล็อก Fix cost ยังไม่ลงวันจ่าย 1 รายการ ฿50,000.00 (พับไว้): '+(!!nod&&!nod.open&&nod.textContent.includes('Fix cost เดือนนี้ที่ยังไม่ลงวันจ่าย 1 รายการ ฿50,000.00')&&nod.textContent.includes('ค่าเช่าพื้นที่')));
+  const B0=w.eval('S.bank');
+  out.push('รายจ่ายนอกเหนือไม่มีวันจ่าย (ซ่อมแอร์ 3,500 · 6 ส.ค.) นับตามวันที่ในสมการ: '+(B0.eqBy['2026-08-06'].other===3500&&d.getElementById('bkOutTbl').textContent.includes('ซ่อมแอร์')));
   // ค่าที่พิมพ์ค้าง ต้องไม่หายเมื่อหน้าโหลดใหม่หลังลงวัน
   d.getElementById('bkDate').value='2026-08-04'; w.bkDateChange(); d.getElementById('bkBal_A1').value='1234'; w.bkSnapPreview();
   d.getElementById('bkNoA_0').value='A2';
@@ -145,7 +147,7 @@ setTimeout(async()=>{
   MODE.noOpen=false;
   // 6) ยอดตั้งต้นกลางเดือน → ตารางสะสมบอกวันเริ่มนับ
   MODE.midOpen=true; await w.eval("show('bank')"); await sleep(400);
-  out.push('ยอดตั้งต้น 5 ส.ค. → ตารางสะสมขึ้น เริ่มนับจาก พฤ 6 ส.ค.: '+d.getElementById('bkAcc').textContent.includes('เริ่มนับจาก พฤ 6 ส.ค.'));
+  out.push('ยอดตั้งต้น 5 ส.ค. → ตารางรายวันขึ้น เริ่มนับจาก พฤ 6 ส.ค.: '+d.getElementById('bkDaily').textContent.includes('เริ่มนับจาก พฤ 6 ส.ค.'));
   MODE.midOpen=false;
   // 7) โหลดไม่สำเร็จ (500) ≠ ยังไม่มีตาราง (404)
   MODE.accErr=500; await w.eval("show('bank')"); await sleep(400);

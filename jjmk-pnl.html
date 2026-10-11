@@ -488,6 +488,19 @@ input.spl-saf{width:74px;padding:5px 8px;font-size:14px;text-align:right}
 .bk-cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .bk-cb{border:1px solid var(--line);border-radius:12px;padding:10px 13px 6px;background:#FCFAF4}
 .bk-cb.bk-tot{grid-column:1/-1}
+.bk-eq{margin-top:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.bk-ln{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px dashed #EFE7D8;font-size:14.5px}
+.bk-ln small{display:block;font-size:11.5px;color:var(--mut);line-height:1.3;margin-top:1px}
+.bk-ln b{font-family:'Prompt';font-weight:600;font-variant-numeric:tabular-nums;font-size:15.5px;white-space:nowrap}
+.bk-ln.in b{color:#1F7A43}.bk-ln.out b{color:#A8322C}.bk-ln.adj{background:#FCFAF4}.bk-ln.adj b{color:#6E6458}
+.bk-ln.tot{background:#F7F2E6;font-weight:700;border-bottom:1px solid var(--line)}.bk-ln.tot b,.bk-ln.act b{font-size:17px;font-weight:700}
+.bk-diff{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;font-family:'Prompt';font-weight:700;font-size:16px;background:#F3EFE8}
+.bk-diff small{font-family:'Sarabun';font-weight:500;font-size:12px;opacity:.75;margin-left:4px}
+.bk-diff b{font-size:24px;margin-left:auto;font-variant-numeric:tabular-nums}
+.bk-diff.ok{background:#E6F4EC;color:#166B2E}.bk-diff.over{background:#FFF6DA;color:#8A6200}.bk-diff.short{background:#FCE9E8;color:#B3261E}
+.bk-more{margin-bottom:12px}
+.bk-more>summary{cursor:pointer;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);font-size:14px;list-style-position:inside}
+.bk-more[open]>summary{margin-bottom:8px}
 .bk-nod summary{cursor:pointer;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;background:#FCFAF4;font-size:13px}
 .bk-nod[open] summary{margin-bottom:6px}
 .bk-cb.ok{background:#F2FAF4;border-color:#B7DFC2}.bk-cb.over{background:#FFFBEA;border-color:#EED9A0}.bk-cb.short{background:#FDF3F3;border-color:#F1C6C8}
@@ -578,6 +591,7 @@ input.spl-saf{width:74px;padding:5px 8px;font-size:14px;text-align:right}
   .spl-act.d,#view-sup .spl-lo{display:none}
   #modalBox .pvx{display:none} /* หน้าต่าง PV จอเล็ก: ซ่อน ก่อน VAT/VAT ให้ยอดโอน+ช่องติ๊กอยู่ในจอ (ใบพิมพ์ยังครบ) */
   #dtList .dtl-n{display:none}
+  .bk-ln{padding:8px 12px;font-size:14px} .bk-diff b{font-size:22px}
   .bk-cbx .row{flex-wrap:wrap} .bk-cbx .row>span:first-child{flex:1 0 auto} .bk-cbx .row>b{white-space:normal;text-align:right;flex:1 1 100%} /* การ์ดเงินสด: ชิปยาวไม่บีบป้าย */ /* รายการบิลเดือนนี้ จอเล็ก: ซ่อนคอลัมน์จำนวนรายการ ให้คอลัมน์ VAT/รวม อยู่ในจอ */
   .spl-act.m{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;white-space:normal}
   .spl-act.m button{margin-left:0}
@@ -6256,11 +6270,11 @@ function bkDm(ds){ if(!ds)return '–'; const [y,m,d]=ds.split('-').map(Number);
 function bkD(ds){ if(!ds)return '–'; return TH_D[bkDow(ds)]+' '+bkDm(ds); }                                          // "ศ 2 ต.ค."
 function bkR2(v){ return Math.round(num(v)*100)/100; }
 function bkBrN(bc){ return String(BRNAME[bc]||bc||'').replace('สาขา',''); }
-function bkStatus(diff,qrIn,res){ // res = บัญชีสำรองสะสม (ยอดช่วยกระทบ: ขาดแล้วบวกยอดนี้ตรง = ตรง) // สถานะเทียบ: |diff|<1 ตรง · diff+เงินเข้าวันนั้น≈0 = ดูยอดก่อนรอบเงินเข้า · >0 มากกว่าที่ควร · <0 ขาด
+function bkStatus(diff,qrIn,res){ // res = บัญชีสำรองสะสม — สมการนับว่าเข้าบัญชีแล้ว ถ้าจริงไม่ได้เข้า (เป็นเงินสด/อื่นๆ) ดิฟจะขาดเท่ายอดนี้ → ถือว่าตรง // สถานะเทียบ: |diff|<1 ตรง · diff+เงินเข้าวันนั้น≈0 = ดูยอดก่อนรอบเงินเข้า · >0 มากกว่าที่ควร · <0 ขาด
   if(diff==null)return null;
   if(Math.abs(diff)<1)return {cls:'ok',k:'ok',txt:'✓ ตรง'};
   if(qrIn&&Math.abs(diff+qrIn)<1)return {cls:'ok',k:'ok',txt:'✓ ตรง (ก่อนรอบเงินเข้า)'};
-  if(res>0&&diff<0&&Math.abs(diff+res)<1)return {cls:'ok',k:'ok',txt:'✓ ตรง (รวมบัญชีสำรอง ฿'+fmt(res,2)+')'};
+  if(res>0&&diff<0&&Math.abs(diff+res)<1)return {cls:'ok',k:'ok',txt:'✓ ตรง (ขาดเท่าบัญชีสำรอง ฿'+fmt(res,2)+')'};
   if(res>0&&qrIn&&Math.abs(diff+qrIn+res)<1)return {cls:'ok',k:'ok',txt:'✓ ตรง (ก่อนรอบเงินเข้า + บัญชีสำรอง)'};
   if(diff>0)return {cls:'gold',k:'over',txt:'มากกว่าที่ควร +'+fmt(diff,2)};
   return {cls:'bad',k:'short',txt:'ขาด −'+fmt(-diff,2)};
@@ -6296,7 +6310,7 @@ async function bkLoad(){
     P('pnl_fixed_monthly','select=*'+prng+'&order=paid_d,branch,month,item_id'),
     P('pnl_extra_expenses','select=*'+prng+'&order=paid_d,id'),
     P('pnl_fixed_monthly','select=*&month=eq.'+S.m+'&paid_d=is.null&amount=gt.0&order=branch,item_id'),
-    P('pnl_extra_expenses','select=*&paid_d=is.null&amount=gt.0&d=gte.'+mFrom+'&d=lte.'+mTo+'&order=d,id')]);
+    P('pnl_extra_expenses','select=*&paid_d=is.null&amount=gt.0&d=gte.'+from+'&d=lte.'+to+'&order=d,id')]);
   const month={}; for(const bc of brs){ try{ month[bc]=await loadMonth(bc,S.m); }catch(e){} } // เก๊ะล่าสุด/ปิดกะ สูตรเดิม
   return {accts,opening,actual,from,to,lo,lo0,mFrom,mTo,brs,O:Os[0]||null,inc:incAll.filter(r=>brs.includes(r.branch)),cash,beam,payout,moves,expPaid,expNoD,fixPaid,extraPaid,fixNoD,extraNoD,month,cols};
 }
@@ -6311,8 +6325,9 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
   const bm={}; L.beam.forEach(r=>{ (bm[r.d]||(bm[r.d]=[])).push(r); });
   const days=[]; let lastBeam='',approxN=0,Rsum=0; const incomplete=[],unmapped=new Set(),partialB=[];
   for(let ds=L.lo0; ds<=L.to; ds=bkAddDays(ds,1)){
-    const rows=inc[ds]||[]; let POS=0,T=0,R=0;
-    rows.forEach(r=>{ POS+=num(r.sales_pos_am)+num(r.sales_pos_pm); T+=num(r.transfer_total_am)+num(r.transfer_total_pm); R+=num(r.reserve_acct_am)+num(r.reserve_acct_pm); });
+    const rows=inc[ds]||[]; let POS=0,T=0,R=0,dep=0,dDraw=0;
+    rows.forEach(r=>{ POS+=num(r.sales_pos_am)+num(r.sales_pos_pm); T+=num(r.transfer_total_am)+num(r.transfer_total_pm); R+=num(r.reserve_acct_am)+num(r.reserve_acct_pm);
+      dep+=num(r.deposit_am)+num(r.deposit_pm); ['am','pm'].forEach(sh=>{ if(shiftHasData(r,sh))dDraw+=num(r['cash_drawer_'+sh])-num(r['drawer_open_'+sh]); }); });
     const CX=cashD[ds]||0, hasInc=rows.some(hasIncData), inM=ds>=L.mFrom&&ds<=L.mTo; if(inM)Rsum+=R;
     const G=zero(),F=zero(),N=zero(); let fee=0,net=0,approx=false,beamOK=false;
     if(bm[ds]&&bm[ds].length){ // มีไฟล์ Beam วันนี้ → ใช้ gross/fee/net จากไฟล์ ต่อบัญชีตาม beam_acct
@@ -6328,7 +6343,7 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
       A.forEach((a,i)=>{ let g=cap[a]!=null?Math.min(cap[a],rem):rem; if(i===A.length-1)g=rem; rem-=g; G[a]=g; F[a]=g*TRF_FEE; N[a]=g-F[a]; });
       fee=A.reduce((x,a)=>x+F[a],0); net=T-fee;
     }
-    days.push({ds,d:inM?+ds.slice(8):null,POS,T,R,CX,fee,net,G,F,N,approx,beamOK,hasInc,cash:POS-T-R,real:POS-fee,after:POS-fee-CX,payDate:bkPayDate(ds)});
+    days.push({ds,d:inM?+ds.slice(8):null,POS,T,R,CX,dep,dDraw,fee,net,G,F,N,approx,beamOK,hasInc,cash:POS-T-R,real:POS-fee,after:POS-fee-CX,payDate:bkPayDate(ds)});
   }
   // ---- เงินเข้า QR ต่อบัญชีตามวันเข้าธนาคาร: PAYOUT จริงจากไฟล์ (ถึงวัน lastPayout) · หลังจากนั้นประมาณจากวันขาย (กันนับซ้ำ) ----
   const QRin={},QRsrc={},lastPayout={},firstPayout={}; A.forEach(a=>{ QRin[a]={}; QRsrc[a]={}; });
@@ -6344,6 +6359,10 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
     outRows.push({src:'move',key:r.id,d:r.d,acct:r.acct,kind:r.kind,label:(BK_KIND[r.kind]||BK_KIND.other)[0],descr:(r.descr||'')+(r.branch?' · '+bkBrN(r.branch):''),amount:v,slip:null}); });
   L.expPaid.forEach(r=>{ const a=srcOf(r.pay_src),v=num(r.amount); if(a!=='CASH')add(outO,a,r.paid_d,v);
     const sp=S.core.supById[r.supplier_id]; outRows.push({src:'exp',key:r.branch+'|'+r.d+'|'+r.supplier_id,d:r.paid_d,acct:a,label:'บิลซัพ',descr:(sp?sp.name:'ซัพ #'+r.supplier_id)+' · บิล '+bkDm(r.d)+' ('+bkBrN(r.branch)+')',amount:-v,slip:r.slip_url||null}); });
+  (L.expNoD||[]).forEach(r=>{ const a=srcOf(r.pay_src),v=num(r.amount); if(a!=='CASH')add(outO,a,r.d,v);
+    const sp=S.core.supById[r.supplier_id]; outRows.push({src:'exp',nod:true,key:r.branch+'|'+r.d+'|'+r.supplier_id,d:r.d,acct:a,label:'บิลซัพ',descr:(sp?sp.name:'ซัพ #'+r.supplier_id)+' · บิล '+bkDm(r.d)+' ('+bkBrN(r.branch)+')',amount:-v,slip:r.slip_url||null}); });
+  (L.extraNoD||[]).forEach(r=>{ const a=srcOf(r.pay_src),v=num(r.amount); if(a!=='CASH')add(outO,a,r.d,v);
+    outRows.push({src:'extra',nod:true,key:r.id,d:r.d,acct:a,label:'นอกเหนือ',descr:(r.descr||'')+' · '+bkBrN(r.branch)+(r.requester?' ('+r.requester+')':''),amount:-v,slip:null}); });
   L.fixPaid.forEach(r=>{ const a=srcOf(r.pay_src),v=num(r.amount); if(a!=='CASH')add(outO,a,r.paid_d,v);
     const f=(S.core.fixed||[]).find(x=>x.id===r.item_id); outRows.push({src:'fix',key:r.branch+'|'+r.month+'|'+r.item_id,d:r.paid_d,acct:a,label:'Fix cost',descr:(f?f.name:'Fix cost #'+r.item_id)+' · '+bkBrN(r.branch)+' '+monthLabel(r.month),amount:-v,slip:null}); });
   L.extraPaid.forEach(r=>{ const a=srcOf(r.pay_src),v=num(r.amount); if(a!=='CASH')add(outO,a,r.paid_d,v);
@@ -6361,6 +6380,23 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
     }
     ledger[a]=rows;
   });
+  // ---- สมการเดียว (user 11 ต.ค.): ยอดตั้งต้น + ยอดขาย − เงินสดที่ฝาก − จ่ายสดหน้าร้าน − บิลที่จ่าย − รายจ่ายอื่น − ค่าธรรมเนียม ± ปรับอื่นๆ
+  //      = ยอดที่ควรมีในบัญชี 1 + 2 → เทียบยอดจริง ดิฟควรเป็น 0 · ปรับอื่นๆ = เงินทอนในเก๊ะที่เปลี่ยน + เงินเข้า/ออกอื่น + รอบเงินโอนเข้าวันถัดไป
+  const hasOpen=A.every(a=>openOf[a]), eqO=hasOpen?A.map(a=>openOf[a].as_of).sort()[0]:null, open0=hasOpen?A.reduce((x,a)=>x+openOf[a].balance,0):0;
+  const dayBy={}; days.forEach(x=>{ dayBy[x.ds]=x; });
+  const outBy={}; outRows.forEach(r=>{ if(!r.d||r.acct==='CASH')return; const o=outBy[r.d]||(outBy[r.d]={bills:0,other:0,mv:0});
+    if(r.src==='exp')o.bills+=-r.amount; else if(r.src==='move')o.mv+=r.amount; else o.other+=-r.amount; });
+  const eq=[],eqBy={};
+  if(hasOpen){ const c={pos:0,dep:0,cx:0,bills:0,other:0,fee:0,draw:0,mv:0,adj:0,R:0}; let run=open0;
+    for(let ds=bkAddDays(eqO,1); ds<=L.to; ds=bkAddDays(ds,1)){
+      const x=dayBy[ds]||{}, o=outBy[ds]||{}, arr=A.reduce((t,a)=>t+(QRin[a][ds]||0),0);
+      const e={ds,d:ds>=L.mFrom&&ds<=L.mTo?+ds.slice(8):null,pos:x.POS||0,dep:x.dep||0,cx:x.CX||0,bills:o.bills||0,other:o.other||0,fee:x.fee||0,draw:x.dDraw||0,mv:o.mv||0,adj:arr-(x.net||0),arr,R:x.R||0,hasInc:!!x.hasInc};
+      e.flow=e.pos-e.dep-e.cx-e.bills-e.other-e.fee-e.draw+e.mv+e.adj; run+=e.flow; e.should=run;
+      Object.keys(c).forEach(k=>{ c[k]+=e[k]; }); e.cum={...c};
+      let tot=0,all=true; A.forEach(a=>{ const sn=L.actual[a]&&L.actual[a][ds]; if(sn)tot+=num(sn.balance); else all=false; });
+      e.snap=all?tot:null; e.diff=all?tot-run:null; e.st=bkStatus(e.diff,arr,c.R);
+      eq.push(e); eqBy[ds]=e; }
+  }
   // ---- เงินสดในมือต่อสาขา (เก๊ะล่าสุด / ฝากรอเข้า / จ่ายสด / ปิดกะ สูตรเดิม shiftDiffCalc) ----
   const nd=monthDays(S.m), closeD={};
   const cashBr=L.brs.map(bc=>{
@@ -6385,7 +6421,7 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
   const mode={none:!need.length,exact:need.length>0&&need.every(x=>x.beamOK&&!x.approx),lastBeam,approxN,cap:A.map(a=>cap[a]).find(v=>v!=null)};
   const missInc=[]; days.forEach(x=>{ if(x.d==null||x.ds>today)return; const have=new Set((inc[x.ds]||[]).filter(hasIncData).map(r=>r.branch)); const miss=L.brs.filter(b=>!have.has(b)); if(miss.length)missInc.push({ds:x.ds,brs:miss}); });
   return {accts:L.accts,A,label,beamOf,cap,openOf,from:L.from,to:L.to,mFrom:L.mFrom,mTo:L.mTo,today,days,QRin,QRsrc,inO,outO,outRows,ledger,bal,Rcum,actual:L.actual,
-    cashBr,mode,Rsum,unmappedAccts:[...unmapped],incomplete:[...new Set(incomplete)],missInc,unpaidD:L.expNoD,fixNoD:L.fixNoD||[],extraNoD:L.extraNoD||[],cols:L.cols,lastPayout,firstPayout,partialB,unknownSrc:[...unknownSrc],O:L.O};
+    cashBr,mode,Rsum,unmappedAccts:[...unmapped],incomplete:[...new Set(incomplete)],missInc,unpaidD:L.expNoD,fixNoD:L.fixNoD||[],extraNoD:L.extraNoD||[],cols:L.cols,lastPayout,firstPayout,partialB,unknownSrc:[...unknownSrc],O:L.O,eq,eqBy,eqO,open0};
 }
 RENDER.bank = async (el)=>{
   const L=await bkLoad();
@@ -6393,37 +6429,32 @@ RENDER.bank = async (el)=>{
   if(L.loadErr){ el.innerHTML='<div class="card" style="background:#FDF3E7;border-color:#E8C9A0"><b>⚠ โหลดข้อมูลไม่สำเร็จ</b> <span class="sm">เช็คเน็ตแล้วกดลองใหม่</span> <button class="btn gh sm2" onclick="show(\'bank\')">↻ ลองใหม่</button><div class="xs mut" style="margin-top:4px">'+esc(L.loadErr.slice(0,160))+'</div></div>'; return; }
   const B=bkCalc(L); B.edit=permOf('bank')==='edit'; S.bank=B;
   if(!S.bankAcct||!B.A.includes(S.bankAcct))S.bankAcct=B.A[0];
-  el.innerHTML=bkHead(B)+bkSnapCard(B)+bkOpeningLine(B)+bkCashCard(B)+bkDailyCard(B)+bkLedgerCard(B)+bkOutCard(B);
+  el.innerHTML=bkHead(B)+bkSnapCard(B)+bkOpeningLine(B)+bkDayCard(B)+bkMore(B);
   const dr=S.bankDraft; // ค่าที่พิมพ์ค้าง (ยังไม่กดบันทึก) ไม่หายเมื่อแก้รายการอื่นแล้วหน้าโหลดใหม่ — อ่านก่อน bkDateChange (ซึ่งเขียนทับ)
   bkDateChange();
   const di=document.getElementById('bkDate');
   if(dr&&di&&dr.D===di.value){ Object.keys(dr.vals||{}).forEach(a=>{ const i=document.getElementById('bkBal_'+a); if(i&&dr.vals[a]!=='')i.value=dr.vals[a]; }); const n=document.getElementById('bkNote'); if(n&&dr.note)n.value=dr.note; bkSnapPreview(); }
 };
 function bkHead(B){
-  const m=B.mode;
-  const badge=m.none?'<span class="chip mid">— ยังไม่มียอดขายเดือนนี้</span>'
-    :m.exact?'<span class="chip ok">● แม่น — มีไฟล์ Beam ถึง '+bkDm(m.lastBeam)+'</span>'
-    :'<span class="chip gold">≈ ประมาณ — ใช้กฎ '+(m.cap!=null?fmtI(m.cap):'เพดาน')+'/วัน (อัปโหลดไฟล์ Beam ที่แท็บตรวจสอบยอดโอน)</span>';
   return '<div class="card" style="display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap">'
     +'<div><div class="b">🏦 ตรวจสอบเงินในบัญชี · '+monthLabel(S.m)+'</div>'
-    +'<div class="xs mut">เงินโอน QR เข้าธนาคาร <b>วันถัดไป</b> · ศุกร์–อาทิตย์เข้า<b>วันจันทร์</b> · วันนี้ '+bkD(B.today)+' · รวม '+B.cashBr.length+' สาขา</div></div>'
-    +badge
+    +'<div class="xs mut">ยอดตั้งต้น + ยอดขาย − เงินสดที่ฝาก − รายจ่ายทั้งหมด = เงินที่ควรอยู่ในบัญชี 1 + 2 → เทียบกับยอดจริง <b>ดิฟควรเป็น 0</b> · รวม '+B.cashBr.length+' สาขา</div></div>'
     +(B.edit?'<button class="btn gh sm2" style="margin-left:auto" onclick="bkAcctsModal()">⚙ บัญชี</button>':'')
-    +(B.cols?'':'<div class="dupbox" style="flex-basis:100%;margin:4px 0 0">⚠ ยังไม่ได้รัน SQL ส่วนคอลัมน์วันจ่าย (paid_d / pay_src) — รายจ่ายที่จ่ายจากบัญชียังไม่ถูกหัก · รัน <code>sql/jjmk_pnl_bank.sql</code> ใน Supabase</div>')
+    +(B.cols?'':'<div class="dupbox" style="flex-basis:100%;margin:4px 0 0">⚠ ยังไม่ได้รัน SQL ส่วนคอลัมน์วันจ่าย (paid_d / pay_src) — รายจ่ายที่จ่ายจากบัญชียังไม่ถูกหัก</div>')
     +'</div>';
 }
 function bkSnapCard(B){
   const inM=d=>d>=B.from&&d>=B.mFrom&&d<=B.mTo;
   const def=(S.bankDate&&inM(S.bankDate))?S.bankDate:(inM(B.today)?B.today:B.mTo);
-  const hasOpen=B.A.every(a=>B.openOf[a]); const ro=B.edit?'':' readonly';
-  return '<div class="card bk-key" id="bkSnapCard"><h3>📱 กรอกยอดจากแอพธนาคาร <span class="sp">เปิดแอพธนาคาร ดูยอดคงเหลือ แล้วพิมพ์ลงช่อง — ระบบเทียบกับยอดที่ควรมีให้ทันที</span></h3>'
+  const ro=B.edit?'':' readonly';
+  return '<div class="card bk-key" id="bkSnapCard"><h3>🧮 เช็คเงินในบัญชี <span class="sp">เปิดแอพธนาคาร ใส่ยอดคงเหลือทั้ง 2 บัญชี — ระบบบอกดิฟทันที</span></h3>'
     +'<div class="bk-form"><div class="bk-fld"><label>วันที่ดูยอด</label><input type="date" id="bkDate" value="'+def+'" min="'+B.from+'" max="'+B.mTo+'" onchange="bkDateChange()"></div>'
     +B.A.map(a=>'<div class="bk-fld"><label><b>'+esc(B.label[a])+'</b>'+(B.beamOf[a]?' <span class="mut">('+esc(B.beamOf[a])+')</span>':'')+'</label><div class="bk-pre"><span>฿</span><input type="number" step="any" inputmode="decimal" id="bkBal_'+a+'" placeholder="0.00"'+ro+' oninput="bkSnapPreview()"></div></div>').join('')
     +'<div class="bk-fld"><label>หมายเหตุ</label><input type="text" id="bkNote" placeholder="เช่น ดูยอดตอน 9 โมง"'+ro+'></div>'
-    +(B.edit?'<button class="btn sm2 bk-save" onclick="bkSnapSave()">บันทึก &amp; เทียบ</button>':'')+'</div>'
-    +(hasOpen?'<div class="bk-cmp" id="bkCmp"></div><div class="xs mut" id="bkRound" style="margin-top:8px"></div>'
-      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><button class="btn gh sm2" onclick="bkWhy()">🔍 ทำไมไม่ตรง</button><span class="xs mut">ระบบไล่รายการที่น่าจะทำให้ยอดเพี้ยน</span></div><div id="bkWhyBox" style="display:none"></div>'
-      :'<div class="empty" style="padding:14px 10px">ตั้งยอดตั้งต้นก่อน ↓ แล้วระบบจะคำนวณยอดที่ควรมีให้</div>')
+    +(B.edit?'<button class="btn sm2 bk-save" onclick="bkSnapSave()">บันทึก</button>':'')+'</div>'
+    +(B.eqO?'<div class="bk-eq" id="bkEq"></div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><button class="btn gh sm2" onclick="bkWhy()">🔍 ทำไมไม่ตรง</button><span class="xs mut">ระบบไล่รายการที่น่าจะทำให้ยอดเพี้ยน</span></div><div id="bkWhyBox" style="display:none"></div>'
+      :'<div class="empty" style="padding:14px 10px">ตั้งยอดตั้งต้นก่อน ↓ (ยอดในแอพธนาคารทั้ง 2 บัญชี ณ สิ้นวันเมื่อวาน) แล้วระบบจะคำนวณให้</div>')
     +'</div>';
 }
 function bkDateChange(){ // เปลี่ยนวัน → เติมยอดที่เคยกรอกของวันนั้น แล้วเทียบสด
@@ -6432,41 +6463,42 @@ function bkDateChange(){ // เปลี่ยนวัน → เติมย�
   const n=document.getElementById('bkNote'); if(n)n.value=note;
   bkSnapPreview();
 }
-function bkSnapPreview(){ // บล็อกผลต่อบัญชี: ควรมี / ตามแอพ / ผลต่าง + ชิป · อัปเดตสดจาก S.bank (ไม่คำนวณใหม่)
-  const B=S.bank; const box=document.getElementById('bkCmp'); if(!B||!box)return;
-  const D=document.getElementById('bkDate').value;
+function bkSnapPreview(){ // สมการถึงวันที่เลือก (สะสมตั้งแต่วันถัดจากยอดตั้งต้น) + ดิฟ · อ่านจาก S.bank ไม่คำนวณใหม่
+  const B=S.bank; if(!B)return; const di=document.getElementById('bkDate'); if(!di)return; const D=di.value;
   S.bankDraft={D,vals:Object.fromEntries(B.A.map(a=>{ const i=document.getElementById('bkBal_'+a); return [a,i?i.value:'']; })),note:(document.getElementById('bkNote')||{}).value||''};
-  box.innerHTML=B.A.map(a=>{
-    const should=B.bal[a][D]; const v=document.getElementById('bkBal_'+a).value; const ent=v===''?null:num(v);
-    const diff=(should==null||ent==null)?null:ent-should; const st=bkStatus(diff,B.QRin[a][D]||0,(B.Rcum[a]||{})[D]||0);
-    return '<div class="bk-cb '+(st?st.k:'')+'"><div class="t"><span>'+esc(B.label[a])+(B.beamOf[a]?' <small class="mut">'+esc(B.beamOf[a])+'</small>':'')+'</span>'
-      +(st?'<span class="chip '+st.cls+'">'+st.txt+'</span>':'<span class="chip mid">'+(should==null?'รอข้อมูล':'ยังไม่กรอก')+'</span>')+'</div>'
-      +'<div class="kv"><span>ยอดที่ควรมี ณ '+bkDm(D)+'</span><b>'+(should==null?'—':'฿'+fmt(should,2))+'</b></div>'
-      +'<div class="kv"><span>ยอดตามแอพธนาคาร</span><b>'+(ent==null?'—':'฿'+fmt(ent,2))+'</b></div>'
-      +'<div class="kv df"><span>ผลต่าง (แอพ − ควรมี)</span><b>'+(diff==null?'—':(diff>=1?'+':diff<=-1?'−':'')+fmt(Math.abs(diff),2))+'</b></div></div>';
-  }).join('')+bkTotalLine(B,D);
-  const r=document.getElementById('bkRound'); if(!r)return;
-  const src=B.days.filter(z=>z.payDate===D&&z.T>0).map(z=>bkDm(z.ds)); const x=B.days.find(z=>z.ds===D);
-  r.innerHTML='รวมเงินเข้าถึงรอบ <b>'+bkDm(D)+'</b> ('+(src.length?'ยอดขาย '+src.join(', '):'วันนี้ไม่มีรอบเงินเข้า')+')'
-    +(x&&x.T>0?' · ยอดขาย '+bkDm(D)+' โอนสุทธิ <b>฿'+fmt(x.net,2)+'</b> จะเข้า <b>'+bkD(x.payDate)+'</b> → '+B.A.map(a=>esc(B.label[a])+' '+fmt(x.N[a],2)).join(' · ')+(x.approx?' <span class="bk-apx">≈</span>':''):'');
-}
-function bkTotalLine(B,D){ // รวมทุกบัญชี: บัญชีสำรองไม่รู้ว่าเข้าบัญชีไหน → เทียบที่ยอดรวมด้วย
-  if(B.A.length<2)return '';
-  let should=0,ent=0,q=0,ok=true; B.A.forEach(a=>{ const s0=B.bal[a][D], i=document.getElementById('bkBal_'+a), v=i?i.value:''; if(s0==null||v===''){ok=false;return;} should+=s0; ent+=num(v); q+=B.QRin[a][D]||0; });
-  if(!ok)return '';
-  const res=Math.max(...B.A.map(a=>(B.Rcum[a]||{})[D]||0)), diff=ent-should, st=bkStatus(diff,q,res);
-  return '<div class="bk-cb bk-tot '+st.k+'"><div class="t"><span>รวมทุกบัญชี</span><span class="chip '+st.cls+'">'+st.txt+'</span></div>'
-    +'<div class="kv"><span>ควรมี / ตามแอพ</span><b>฿'+fmt(should,2)+' / ฿'+fmt(ent,2)+'</b></div>'
-    +'<div class="kv df"><span>ผลต่าง'+(res>0?' · บัญชีสำรองสะสม ฿'+fmt(res,2):'')+'</span><b>'+(diff>=1?'+':diff<=-1?'−':'')+fmt(Math.abs(diff),2)+'</b></div></div>';
+  const box=document.getElementById('bkEq'); if(!box)return;
+  const e=B.eqBy[D];
+  if(!e){ box.innerHTML='<div class="empty" style="padding:14px 10px">วันที่นี้อยู่ก่อนยอดตั้งต้น — เลือกวันหลัง '+bkDm(B.eqO)+'</div>'; return; }
+  const c=e.cum; let ent=0,n=0; B.A.forEach(a=>{ const v=(document.getElementById('bkBal_'+a)||{}).value; if(v!==''&&v!=null){ ent+=num(v); n++; } });
+  const full=n===B.A.length, diff=full?ent-e.should:null, st=full?bkStatus(diff,e.arr,c.R):null;
+  const ln=(sg,lab,v,sub,cls)=>'<div class="bk-ln'+(cls?' '+cls:'')+'"><span>'+lab+(sub?'<small>'+sub+'</small>':'')+'</span><b>'+(v==null?'—':sg+fmt(Math.abs(v),2))+'</b></div>';
+  const oth=c.mv+c.adj-c.draw, parts=[];
+  if(Math.abs(c.adj)>=0.005)parts.push('เงินโอน QR ที่ยังไม่เข้า/เพิ่งเข้าบัญชี (โอนวันนี้ เข้าวันถัดไป) '+(c.adj>0?'+':'−')+fmt(Math.abs(c.adj),2));
+  if(Math.abs(c.draw)>=0.005)parts.push('เงินทอนในเก๊ะ'+(c.draw>0?'เพิ่มขึ้น −':'ลดลง +')+fmt(Math.abs(c.draw),2));
+  if(Math.abs(c.mv)>=0.005)parts.push('เงินเข้า/ออกอื่น '+(c.mv>0?'+':'−')+fmt(Math.abs(c.mv),2));
+  box.innerHTML=
+     ln('','ยอดในบัญชีตั้งต้น',B.open0,'สิ้นวัน '+bkDm(B.eqO)+' · '+B.A.map(a=>esc(B.label[a])+' '+fmt(B.openOf[a].balance,2)).join(' + '))
+    +ln('+ ','ยอดขายทั้งหมด',c.pos,bkDm(bkAddDays(B.eqO,1))+' – '+bkDm(D)+' · ทุกสาขา','in')
+    +ln('− ','เงินสดที่ฝาก',c.dep,'','out')
+    +ln('− ','รายจ่ายเงินสดหน้าร้าน',c.cx,'ค่าดิฟ ฯลฯ ที่พนักงานจ่าย','out')
+    +ln('− ','บิลที่จ่ายแล้ว (มีสลิป)',c.bills,'','out')
+    +ln('− ','รายจ่ายอื่นๆ',c.other,'รายจ่ายนอกเหนือ + Fix cost ที่ลงวันจ่าย','out')
+    +ln('− ','ค่าธรรมเนียมโอน QR',c.fee,'ธนาคารหักก่อนเงินเข้าบัญชี','out')
+    +(parts.length?ln(oth>=0?'+ ':'− ','ปรับอื่นๆ',oth,parts.join(' · '),'adj'):'')
+    +ln('= ','ยอดที่ควรมีในบัญชี',e.should,'','tot')
+    +ln('','ยอดจริงในบัญชี ('+B.A.map(a=>esc(B.label[a])).join(' + ')+')',full?ent:null,full?'':'ใส่ยอดให้ครบทั้ง '+B.A.length+' บัญชี','act')
+    +'<div class="bk-diff '+(st?st.k:'')+'"><span>ดิฟ <small>ควรเป็น 0</small></span><b>'+(diff==null?'—':(diff>=0.005?'+':diff<=-0.005?'−':'')+fmt(Math.abs(diff),2))+'</b>'+(st?'<span class="chip '+st.cls+'">'+(st.k==='over'?'มากกว่าที่ควร':st.k==='short'?'ขาด':st.txt)+'</span>':'')+'</div>';
 }
 async function bkSnapSave(){
   const B=S.bank; if(!B)return; const D=document.getElementById('bkDate').value; if(!D){toast('เลือกวันที่ก่อน',true);return;}
   const note=(document.getElementById('bkNote')||{}).value||'', by=(S.user&&S.user.display_name)||null, now=new Date().toISOString();
-  const rows=[]; B.A.forEach(a=>{ const v=document.getElementById('bkBal_'+a).value; if(v==='')return; const bal=num(v), should=B.bal[a][D];
-    rows.push({acct:a,as_of:D,kind:'actual',balance:bal,expected:should==null?null:bkR2(should),diff:should==null?null:bkR2(bal-should),note,by_user:by,updated_at:now}); });
-  if(!rows.length){toast('ใส่ยอดอย่างน้อย 1 บัญชี',true);return;}
+  const vals=B.A.map(a=>(document.getElementById('bkBal_'+a)||{}).value);
+  if(vals.every(v=>v===''||v==null)){toast('ใส่ยอดอย่างน้อย 1 บัญชี',true);return;}
+  const e=B.eqBy[D], full=vals.every(v=>v!==''&&v!=null), tot=vals.reduce((x,v)=>x+num(v),0);
+  const rows=[]; B.A.forEach((a,i)=>{ const v=vals[i]; if(v===''||v==null)return;   // ยอดที่ควรมี/ดิฟ เป็นของ "รวมทุกบัญชี" เก็บไว้แถวแรก
+    rows.push({acct:a,as_of:D,kind:'actual',balance:num(v),expected:rows.length===0&&e?bkR2(e.should):null,diff:rows.length===0&&e&&full?bkR2(tot-e.should):null,note,by_user:by,updated_at:now}); });
   try{ await ups('pnl_bank_snap',rows,'acct,as_of,kind'); S.bankDate=D; S.bankDraft=null; toast('บันทึกยอด '+bkDm(D)+' แล้ว'); await show('bank'); }
-  catch(e){ if(String(e&&e.message)!=='view-only')toast('บันทึกไม่สำเร็จ — '+e.message,true); }
+  catch(e2){ if(String(e2&&e2.message)!=='view-only')toast('บันทึกไม่สำเร็จ — '+e2.message,true); }
 }
 function bkOpeningLine(B){
   const has=B.A.some(a=>B.openOf[a]); const Os=B.A.map(a=>B.openOf[a]&&B.openOf[a].as_of).filter(Boolean).sort(); const O=Os[0]||'';
@@ -6507,64 +6539,29 @@ function bkCashCard(B){
     +'</div></div>';
 }
 function bkGo(d){ if(typeof dashGoDay==='function')dashGoDay(d); }
-function bkDailyCard(B){
-  const M=B.days.filter(x=>x.d!=null&&(x.ds<=B.today||x.hasInc||x.CX>0)), showR=M.some(x=>x.R>0), n=B.A.length, nc=9+n+(showR?1:0); // วันอนาคตยังไม่มีข้อมูล ไม่ต้องโชว์แถวว่าง
-  const T={POS:0,cash:0,T:0,fee:0,net:0,R:0,CX:0,after:0}, TN={}; B.A.forEach(a=>TN[a]=0); let nIn=0,nWait=0,nBad=0,nData=0;
-  const rows=M.map(x=>{
-    const w=bkDow(x.ds); const has=x.hasInc||x.CX>0;
-    if(!has)return '<tr class="bk-dim"><td class="bk-d">'+x.d+' <small>'+TH_D[w]+'</small></td><td colspan="'+nc+'" class="l mut">—</td></tr>';
-    nData++; T.POS+=x.POS;T.cash+=x.cash;T.T+=x.T;T.fee+=bkR2(x.fee);T.net+=bkR2(x.net);T.R+=x.R;T.CX+=x.CX;T.after+=bkR2(x.after); B.A.forEach(a=>TN[a]+=bkR2(x.N[a]));
-    const arrived=x.payDate<=B.today; if(x.T>0){ if(arrived)nIn++; else nWait++; }
-    const cl=x.close; let closeTd;
-    if(!cl||!cl.n)closeTd='<span class="chip mid">ยังไม่ปิด</span>';
-    else if(!cl.bad)closeTd='<span style="color:var(--ok);font-weight:700">✓</span>';
-    else { nBad+=cl.bad; closeTd='<span class="chip '+(cl.sum>0?'gold':'bad')+'">'+(cl.sum>0?'เกิน':'ขาด')+' ฿'+fmt(Math.abs(cl.sum),2)+'</span>'; }
-    return '<tr class="bk-go'+(w===0?' bk-sun':'')+(x.ds===B.today?' bk-today':'')+'" onclick="bkGo('+x.d+')">'
-      +'<td class="bk-d">'+x.d+' <small>'+TH_D[w]+'</small></td>'
-      +'<td class="b">'+fmtI(x.POS)+'</td><td>'+fmtI(x.cash)+'</td><td>'+(x.T?fmtI(x.T):'<span class="mut">—</span>')+'</td>'
-      +'<td class="mut">'+(x.fee?'−'+fmt(x.fee,2):'—')+'</td><td class="b">'+(x.net?fmt(x.net,2):'<span class="mut">—</span>')+'</td>'
-      +B.A.map(a=>'<td>'+(x.N[a]?fmt(x.N[a],2)+(x.approx?' <span class="bk-apx" title="ประมาณจากกฎเพดาน/วัน">≈</span>':''):'<span class="mut">—</span>')+'</td>').join('')
-      +(showR?'<td>'+(x.R?fmtI(x.R):'<span class="mut">—</span>')+'</td>':'')
-      +'<td class="'+(x.CX?'bk-out':'mut')+'">'+(x.CX?'−'+fmtI(x.CX):'—')+'</td><td class="b">'+fmt(x.after,2)+'</td>'
-      +'<td class="c">'+(x.T>0?(arrived?bkD(x.payDate):'<span class="chip mid">รอ · '+bkD(x.payDate)+'</span>'):'<span class="mut">—</span>')+'</td>'
-      +'<td class="c">'+closeTd+'</td></tr>';
-  }).join('');
-  const sub=t=>'<span class="xs">'+t+'</span>';
-  return '<div class="card"><h3>💰 ยอดขายจริงรายวัน <span class="sp">'+monthLabel(S.m)+' · รวม '+B.cashBr.length+' สาขา · ค่าธรรมเนียม QR 0.3745% หักก่อนเข้าบัญชี · กดแถว = เปิดรายรับวันนั้น</span></h3>'
-    +'<div class="bk-sh">↔ เลื่อนตารางซ้าย-ขวาได้ · คอลัมน์ "วัน" ติดอยู่กับที่</div>'
-    +'<div class="twrap bk-tw"><table class="bk-tbl" id="bkDaily"><thead><tr><th>วัน</th><th>ยอดขาย POS</th><th>เงินสด</th><th>โอน QR'+sub('ก่อนหัก')+'</th><th>ค่าธรรมเนียม'+sub('0.3745%')+'</th><th>โอนสุทธิ</th>'
-    +B.A.map(a=>'<th>→'+esc(B.label[a])+sub(B.cap[a]!=null?'≤'+fmtI(B.cap[a])+'/วัน':'ส่วนเกิน')+'</th>').join('')
-    +(showR?'<th>บัญชีสำรอง'+sub('ยอดช่วยกระทบ')+'</th>':'')
-    +'<th>จ่ายสด'+sub('หน้าร้าน')+'</th><th>ยอดขายจริง'+sub('หลังจ่ายสด')+'</th><th class="c">เข้าธนาคาร'+sub('(วันที่)')+'</th><th class="c">ปิดกะ</th></tr></thead>'
-    +'<tbody>'+(rows||'<tr><td colspan="'+(nc+1)+'" class="empty">ยังไม่มีข้อมูลเดือนนี้</td></tr>')+'</tbody>'
-    +'<tfoot><tr class="bk-tot"><td>รวม '+nData+' วัน</td><td>'+fmtI(T.POS)+'</td><td>'+fmtI(T.cash)+'</td><td>'+fmtI(T.T)+'</td><td>−'+fmt(T.fee,2)+'</td><td>'+fmt(T.net,2)+'</td>'
-    +B.A.map(a=>'<td>'+fmt(TN[a],2)+'</td>').join('')+(showR?'<td>'+fmtI(T.R)+'</td>':'')+'<td>−'+fmtI(T.CX)+'</td><td>'+fmt(T.after,2)+'</td>'
-    +'<td class="c"><span class="xs mut">เข้าแล้ว '+nIn+' วัน'+(nWait?' · รอ '+nWait:'')+'</span></td><td class="c"><span class="xs mut">'+(nBad?'ไม่ลงตัว '+nBad+' กะ':'—')+'</span></td></tr></tfoot></table></div>'
-    +'<div class="xs mut" style="margin-top:8px">เงินสด = POS − โอน QR − บัญชีสำรอง · โอนสุทธิ = QR − ค่าธรรมเนียม · ≈ = ประมาณจากกฎเพดาน/วัน (ยังไม่มีไฟล์ Beam) · ยอดขายจริงหลังจ่ายสด = POS − ค่าธรรมเนียม − จ่ายสดหน้าร้าน · ปิดกะ: ✓ ลงตัว / เกิน / ขาด (สูตรเดียวกับหน้ารายรับ)</div></div>';
-}
-function bkLedgerCard(B){
-  const a=S.bankAcct, L=B.ledger[a].filter(r=>r.d!=null), op=B.openOf[a];
-  const tabs='<span class="seg bk-tabs">'+B.A.map(x=>'<button class="'+(x===a?'on':'')+'" onclick="bkAcctTab(\''+x+'\')">'+esc(B.label[x])+(B.beamOf[x]?'<small>'+esc(B.beamOf[x])+'</small>':'')+'</button>').join('')+'</span>';
-  let body='',sq=0,si=0,so=0,nSnap=0,last=null;
-  if(!op)body='<tr><td colspan="8" class="empty">ตั้งยอดตั้งต้นก่อน ↑ แล้วระบบจะคำนวณยอดที่ควรมีรายวันให้</td></tr>';
-  else if(op.as_of>=B.mFrom&&L.length)body='<tr class="bk-dim"><td colspan="8" class="l xs">เริ่มนับจาก '+bkD(bkAddDays(op.as_of,1))+' (ยอดตั้งต้น ณ สิ้นวัน '+bkDm(op.as_of)+' ฿'+fmt(op.balance,2)+') · วันก่อนหน้านี้ไม่คำนวณ</td></tr>';
-  else if(!L.length)body='<tr><td colspan="8" class="empty">รอข้อมูล — ยอดตั้งต้นอยู่หลังเดือนนี้ ('+bkDm(op.as_of)+')</td></tr>';
-  if(op&&L.length)body+=L.map(r=>{ const w=bkDow(r.ds); sq+=r.q;si+=r.i;so+=r.o; if(r.snap!=null)nSnap++; if(r.ds<=B.today)last=r;
-    return '<tr class="'+(r.snap!=null?'bk-hi ':'')+(r.ds>B.today?'bk-dim ':'')+(w===0?'bk-sun':'')+'">'
-      +'<td class="bk-d">'+r.d+' <small>'+TH_D[w]+'</small></td><td class="mut bk-x">'+fmt(r.carry,2)+'</td>'
-      +'<td class="'+(r.q?'bk-in':'mut')+'">'+(r.q?'+'+fmt(r.q,2)+'<div class="xs mut" style="line-height:1;margin-top:-2px">←'+esc(r.src.join(', '))+'</div>':((w===0||w===6)?'<span class="xs">— '+(w===0?'อาทิตย์':'เสาร์')+' ไม่มีรอบ</span>':'—'))+'</td>'
-      +'<td class="'+(r.i?'bk-in':'mut')+'">'+(r.i?'+'+fmt(r.i,2):'—')+'</td><td class="'+(r.o?'bk-out':'mut')+'">'+(r.o?'−'+fmt(r.o,2):'—')+'</td>'
+function bkDayCard(B){ // รายวัน: แต่ละแถว = เงินเข้า/ออกของวันนั้น · "ควรมี" = สะสมถึงสิ้นวัน → หาวันที่ดิฟเริ่มเกิด
+  if(!B.eqO)return '';
+  const rows=B.eq.filter(r=>r.d!=null&&(r.ds<=B.today||r.hasInc||r.snap!=null));
+  const v=(x,neg)=>Math.abs(x)<0.005?'<span class="mut">—</span>':(neg?'−':'')+fmt(Math.abs(x),2);
+  const body=rows.map(r=>{ const w=bkDow(r.ds), o=r.mv+r.adj-r.draw-r.fee;
+    return '<tr class="'+(r.snap!=null?'bk-hi ':'')+(w===0?'bk-sun ':'')+(r.ds===B.today?'bk-today':'')+'">'
+      +'<td class="bk-d">'+r.d+' <small>'+TH_D[w]+'</small></td>'
+      +'<td class="b">'+v(r.pos)+'</td><td class="bk-out">'+v(r.dep,1)+'</td><td class="bk-out">'+v(r.cx,1)+'</td><td class="bk-out">'+v(r.bills,1)+'</td><td class="bk-out">'+v(r.other,1)+'</td>'
+      +'<td class="mut">'+(Math.abs(o)<0.005?'—':(o>0?'+':'−')+fmt(Math.abs(o),2))+'</td>'
       +'<td class="b">'+fmt(r.should,2)+'</td><td class="'+(r.snap!=null?'b':'mut')+'">'+(r.snap!=null?fmt(r.snap,2):'—')+'</td>'
       +'<td class="c">'+(r.st?'<span class="chip '+r.st.cls+'">'+r.st.txt+'</span>':'<span class="xs mut">ยังไม่กรอก</span>')+'</td></tr>'; }).join('');
   const sub=t=>'<span class="xs">'+t+'</span>';
-  return '<div class="card" id="bkLedger"><h3>🏦 ยอดบัญชีสะสม '+tabs+'<span class="sp">ควรมี = ยกมา + เงินเข้า QR + เข้าอื่น − จ่ายออก · แถวเน้น = วันที่กรอกยอดจากแอพธนาคาร</span></h3>'
-    +'<div class="bk-sh">↔ เลื่อนตารางซ้าย-ขวาได้ · มือถือซ่อนคอลัมน์ "ยกมา" (= ควรมีของวันก่อน)</div>'
-    +'<div class="twrap bk-tw"><table class="bk-tbl" id="bkAcc"><thead><tr><th>วัน</th><th class="bk-x">ยกมา</th><th>+เงินเข้า QR'+sub('ตามวันเข้าธนาคาร')+'</th><th>+เข้าอื่น'+sub('ฝากสด/โอนเข้า')+'</th><th>−จ่ายออก</th><th>=ควรมี'+sub('สิ้นวัน')+'</th><th>ยอดที่กรอก'+sub('จากแอพธนาคาร')+'</th><th class="c">ผลต่าง / สถานะ</th></tr></thead>'
-    +'<tbody>'+body+'</tbody>'
-    +(op&&L.length?'<tfoot><tr class="bk-tot"><td>รวมเดือน</td><td class="bk-x"><span class="xs mut">ตั้งต้น '+fmt(op.balance,2)+'</span></td><td>+'+fmt(sq,2)+'</td><td>'+(si?'+'+fmt(si,2):'—')+'</td><td>−'+fmt(so,2)+'</td><td>'+(last?fmt(last.should,2):'—')+'</td><td colspan="2" class="c"><span class="xs mut">กรอกแล้ว '+nSnap+' วัน</span></td></tr></tfoot>':'')
-    +'</table></div></div>';
+  const pre=B.eqO>=B.mFrom?'<tr class="bk-dim"><td colspan="10" class="l xs">เริ่มนับจาก '+bkD(bkAddDays(B.eqO,1))+' (ยอดตั้งต้น ณ สิ้นวัน '+bkDm(B.eqO)+' ฿'+fmt(B.open0,2)+')</td></tr>':'';
+  return '<div class="card" id="bkDay"><h3>📅 รายวัน <span class="sp">เงินเข้า/ออกของแต่ละวัน · "ควรมีในบัญชี" = ยอดสะสมถึงสิ้นวันนั้น · แถวเน้น = วันที่กรอกยอดจริง</span></h3>'
+    +'<div class="bk-sh">↔ เลื่อนตารางซ้าย-ขวาได้ · คอลัมน์ "วัน" ติดอยู่กับที่</div>'
+    +'<div class="twrap bk-tw"><table class="bk-tbl" id="bkDaily"><thead><tr><th>วัน</th><th>ยอดขาย</th><th>−เงินสดที่ฝาก</th><th>−จ่ายสด'+sub('หน้าร้าน')+'</th><th>−บิลที่จ่าย</th><th>−รายจ่ายอื่น</th><th>ปรับอื่นๆ'+sub('ค่าธรรมเนียม/รอบโอน')+'</th><th>ควรมีในบัญชี</th><th>ยอดจริง</th><th class="c">ดิฟ</th></tr></thead>'
+    +'<tbody>'+pre+(body||'<tr><td colspan="10" class="empty">ยังไม่มีข้อมูลหลังวันตั้งต้นในเดือนนี้</td></tr>')+'</tbody></table></div></div>';
 }
-function bkAcctTab(a){ S.bankAcct=a; const el=document.getElementById('bkLedger'); if(el&&S.bank)el.outerHTML=bkLedgerCard(S.bank); }
+function bkMore(B){ // รายละเอียด (พับไว้) — รายการเงินออก (แก้วันจ่าย/บัญชี) · เงินสดในมือต่อสาขา
+  const rows=B.outRows.filter(r=>r.d&&r.d>=B.mFrom&&r.d<=B.mTo&&r.amount<0&&r.acct!=='CASH'), tot=rows.reduce((x,r)=>x-r.amount,0);
+  return '<details class="bk-more"><summary>💸 รายการที่หักออก เดือนนี้ <b>'+rows.length+' รายการ ฿'+fmt(tot,2)+'</b> <span class="xs mut">— กดดู / แก้วันจ่าย / เพิ่มเงินเข้า-ออกอื่น</span></summary>'+bkOutCard(B)+'</details>'
+    +'<details class="bk-more"><summary>💵 เงินสดในมือ ต่อสาขา <span class="xs mut">— เก๊ะล่าสุด · เงินฝากรอเข้าบัญชี · ปิดกะ</span></summary>'+bkCashCard(B)+'</details>';
+}
 function bkOutCard(B){
   const rows=B.outRows.filter(r=>r.d&&r.d>=B.mFrom&&r.d<=B.mTo);
   const tot={}; B.A.forEach(a=>tot[a]=0); let tAll=0,nOut=0;
@@ -6574,28 +6571,24 @@ function bkOutCard(B){
   const body=rows.map(r=>{ const out=r.amount<0; if(out&&r.acct!=='CASH'&&tot[r.acct]!=null){ tot[r.acct]+=-r.amount; tAll+=-r.amount; nOut++; }
     const tag={exp:'sup',fix:'fix',extra:'oth',move:r.amount>0?'dep':'oth'}[r.src];
     const dcell=(r.src==='move'||!B.edit)?bkD(r.d):'<input type="date" class="bk-date" value="'+r.d+'" onchange="if(!this.value){this.value=\''+r.d+'\';return;}bkSetPay(\''+r.src+'\',\''+esc(String(r.key))+'\',{paid_d:this.value})">';
-    return '<tr><td class="bk-d">'+dcell+'</td><td class="l">'+acctCell(r)+'</td><td class="l"><span class="bk-tag '+tag+'">'+esc(r.label)+'</span></td><td class="bk-nm">'+esc(r.descr)+'</td>'
+    return '<tr><td class="bk-d">'+dcell+'</td><td class="l">'+acctCell(r)+'</td><td class="l"><span class="bk-tag '+tag+'">'+esc(r.label)+'</span></td><td class="bk-nm">'+esc(r.descr)+(r.nod?' <span class="xs mut" title="ยังไม่ได้ลงวันจ่าย ระบบใช้วันที่ของบิล/รายการแทน">(ใช้วันบิล)</span>':'')+'</td>'
       +'<td class="b '+(out?'bk-out':'bk-in')+'">'+(out?'−':'+')+fmt(Math.abs(r.amount),2)+'</td>'
       +'<td class="c">'+(r.slip?'<a href="'+esc(r.slip)+'" target="_blank" title="ดูสลิป" onclick="event.stopPropagation()">📎</a>':(r.src==='move'&&B.edit)?'<button class="bk-x-btn" onclick="bkMoveDel('+r.key+')" title="ลบรายการ">✕</button>':'<span class="mut">—</span>')+'</td></tr>'; }).join('');
-  const un=B.unpaidD||[], unT=un.reduce((x,r)=>x+num(r.amount),0);
   return '<div class="card" id="bkOut"><h3>💸 เงินออกจากบัญชีเดือนนี้ <span class="sp">ดึงจากบิลซัพ / Fix cost / นอกเหนือ ที่ลงวันจ่ายแล้ว + รายการเคลื่อนไหวอื่น · เปลี่ยนวัน/บัญชีได้ตรงนี้</span></h3>'
     +'<div class="bk-sh">↔ เลื่อนตารางซ้าย-ขวาได้</div>'
     +'<div class="twrap bk-tw"><table class="bk-tbl" id="bkOutTbl"><thead><tr><th>วันจ่าย</th><th class="l">บัญชี</th><th class="l">แหล่ง</th><th class="l">รายการ</th><th>ยอด</th><th class="c">สลิป</th></tr></thead>'
     +'<tbody>'+(body||'<tr><td colspan="6" class="empty">ยังไม่มีรายการเงินออกที่ลงวันจ่ายในเดือนนี้</td></tr>')+'</tbody>'
     +'<tfoot><tr class="bk-tot"><td>รวมจ่ายออก</td><td colspan="3" class="l"><span class="xs mut">'+B.A.map(a=>esc(B.label[a])+' <b>'+fmt(tot[a],2)+'</b>').join(' · ')+' · '+nOut+' รายการ</span></td><td class="bk-out">−'+fmt(tAll,2)+'</td><td></td></tr></tfoot></table></div>'
-    +(un.length?'<div class="dupbox" style="margin-top:10px"><b>⚠ จ่ายแล้วแต่ยังไม่ลงวันจ่าย/บัญชี '+un.length+' รายการ ฿'+fmt(unT,2)+'</b> <span class="xs">— ยังไม่ถูกหักจาก "ควรมี" จนกว่าจะลงวัน (ลงวัน = จ่ายจาก'+esc(B.label[B.A[0]])+')</span>'
-      +un.map(r=>{ const sp=S.core.supById[r.supplier_id]; return '<div class="bk-unrow"><span>'+esc(sp?sp.name:'ซัพ #'+r.supplier_id)+' · บิล '+bkDm(r.d)+' ('+esc(bkBrN(r.branch))+') <b>฿'+fmt(num(r.amount),2)+'</b></span>'
-        +(B.edit?'<span class="xs mut">ลงวันจ่าย</span><input type="date" class="bk-date" onchange="bkUnpaidSet(\''+esc(r.branch)+'\',\''+r.d+'\','+r.supplier_id+',this.value)">':'')+'</div>'; }).join('')+'</div>':'')
     +bkNoDBlock(B)
     +(B.edit?'<div style="margin-top:10px"><button class="btn gh sm2" onclick="bkMoveModal()">➕ รายการเคลื่อนไหวอื่น <span class="xs mut">(ฝากเงินสด / โอนข้ามบัญชี / ถอน / ค่าธรรมเนียมธนาคาร)</span></button></div>':'')
     +'</div>';
 }
 function bkNoDBlock(B){ // Fix cost / รายจ่ายนอกเหนือ เดือนนี้ที่ยังไม่ลงวันจ่าย — เลือกบัญชี + ลงวัน (เงินสด = ไม่หักบัญชี)
   const rows=[...(B.fixNoD||[]).map(r=>{ const f=(S.core.fixed||[]).find(x=>x.id===r.item_id); return {src:'fix',key:r.branch+'|'+r.month+'|'+r.item_id,nm:(f?f.name:'Fix cost #'+r.item_id),br:r.branch,amt:num(r.amount),tag:'Fix cost'}; }),
-              ...(B.extraNoD||[]).map(r=>({src:'extra',key:String(r.id),nm:(r.descr||'(ไม่มีชื่อ)')+' · '+bkDm(r.d)+(r.requester?' ('+r.requester+')':''),br:r.branch,amt:num(r.amount),tag:'นอกเหนือ'}))];
+              ];
   if(!rows.length)return '';
   const tot=rows.reduce((x,r)=>x+r.amt,0);
-  return '<details class="bk-nod" style="margin-top:10px"><summary><b>📋 Fix cost / รายจ่ายนอกเหนือ เดือนนี้ที่ยังไม่ลงวันจ่าย '+rows.length+' รายการ ฿'+fmt(tot,2)+'</b> <span class="xs mut">— ถ้าโอนจากบัญชี เลือกบัญชีแล้วลงวัน · จ่ายเงินสดเลือก "เงินสด" (ไม่หักบัญชี)</span></summary>'
+  return '<details class="bk-nod" style="margin-top:10px"><summary><b>📋 Fix cost เดือนนี้ที่ยังไม่ลงวันจ่าย '+rows.length+' รายการ ฿'+fmt(tot,2)+'</b> <span class="xs mut">— ถ้าโอนจากบัญชี เลือกบัญชีแล้วลงวัน · จ่ายเงินสดเลือก "เงินสด" (ไม่หักบัญชี)</span></summary>'
     +rows.map((r,i)=>'<div class="bk-unrow"><span><span class="bk-tag '+(r.src==='fix'?'fix':'oth')+'">'+r.tag+'</span> '+esc(r.nm)+' · '+esc(bkBrN(r.br))+' <b>฿'+fmt(r.amt,2)+'</b></span>'
       +(B.edit?'<select class="bk-sel" id="bkNoA_'+i+'">'+B.A.map(a=>'<option value="'+a+'">'+esc(B.label[a])+'</option>').join('')+'<option value="CASH">เงินสด</option></select>'
         +'<input type="date" class="bk-date" onchange="if(this.value)bkSetPay(\''+r.src+'\',\''+esc(r.key)+'\',{paid_d:this.value,pay_src:document.getElementById(\'bkNoA_'+i+'\').value})">':'')+'</div>').join('')
@@ -6667,11 +6660,11 @@ async function bkWhy(){ // กล่องรายการต้องสง�
   box.style.display=''; box.innerHTML='<div class="spin"></div>';
   let adj=[]; try{ adj=await selAllQ('pnl_beam_moves','select=*&btype=eq.ADJUSTMENT&d=gte.'+B.from+'&d=lte.'+B.to+'&order=ts,acct'); }catch(e){}
   const D=(document.getElementById('bkDate')||{}).value||B.today; const li=[];
-  (B.unpaidD||[]).forEach(r=>{ const sp=S.core.supById[r.supplier_id]; li.push('<b>บิล '+esc(sp?sp.name:'#'+r.supplier_id)+' '+bkDm(r.d)+' ฿'+fmt(num(r.amount),2)+'</b> — ติ๊กจ่ายแล้วแต่ยังไม่ลงวันจ่าย/บัญชี → ถ้าจ่ายจากบัญชีจริง ยอดที่ควรมีจะลดลงอีกเมื่อลงวัน'); });
+  const nod=B.outRows.filter(r=>r.nod&&r.d<=D&&(!B.eqO||r.d>B.eqO)); if(nod.length)li.push('<b>รายการที่ยังไม่ลงวันจ่าย '+nod.length+' รายการ ฿'+fmt(nod.reduce((x,r)=>x-r.amount,0),2)+'</b> — ระบบใช้วันที่ของบิล/รายการแทน · ถ้าโอนวันอื่น แก้วันได้ใน "รายการที่หักออก"');
   B.missInc.filter(x=>x.ds<=D).forEach(x=>li.push('<b>'+bkD(x.ds)+' ยังไม่คีย์รายรับ</b> ('+x.brs.map(b=>esc(bkBrN(b))).join(', ')+') → เงินเข้า QR ของวันนั้นยังไม่ถูกนับ'));
   B.cashBr.forEach(c=>c.bad.filter(x=>x.ds<=D).forEach(x=>li.push('<b>'+(x.sh==='am'?'กะเช้า ':'กะเย็น ')+bkDm(x.ds)+' ('+esc(c.name)+') ปิดกะ'+(x.df>0?'เกิน':'ขาด')+' ฿'+fmt(Math.abs(x.df),2)+'</b> — '+(x.df>0?'น่าจะมีลูกค้าโอน QR แล้วพนักงานลงเป็นเงินสด':'เงินสดขาด หรือลงยอดโอนเกิน')+' → ตรวจสลิปกะนั้น')));
   adj.forEach(r=>li.push('<b>Beam ปรับยอดเอง (ADJUSTMENT) '+bkDm(r.d)+' '+(num(r.net)>0?'+':'')+fmt(num(r.net),2)+'</b> — ไม่อยู่ในสูตร ควรสอบถาม Beam'));
-  if(B.Rsum>0)li.push('<b>บัญชีสำรอง ฿'+fmt(B.Rsum,2)+' เดือนนี้</b> — ไม่บวกเข้ายอดที่ควรมี แต่ถ้ายอดขาดแล้วบวกยอดนี้ตรงพอดี ระบบถือว่าตรง (ดูบรรทัด "รวมทุกบัญชี")');
+  if(B.Rsum>0)li.push('<b>บัญชีสำรอง ฿'+fmt(B.Rsum,2)+' เดือนนี้</b> — สมการนับว่าเข้าบัญชีแล้ว ถ้าจริงๆ ไม่ได้เข้า (เป็นเงินสด/อื่นๆ) ดิฟจะขาดเท่ายอดนี้ ระบบถือว่าตรง');
   const apx=B.days.filter(x=>x.approx&&x.d!=null&&x.ds<=D); if(apx.length)li.push('<b>วันประมาณ ≈ '+apx.length+' วัน</b> ('+apx.slice(0,6).map(x=>bkDm(x.ds)).join(', ')+(apx.length>6?' …':'')+') — ยังไม่มีไฟล์ Beam ใช้กฎเพดาน/วัน ค่าธรรมเนียมจริงอาจต่างเล็กน้อย');
   if(B.partialB.length)li.push('<b>ไฟล์ Beam ไม่ครบบัญชี '+B.partialB.length+' วัน</b> ('+B.partialB.slice(0,6).map(bkDm).join(', ')+') — ส่วนที่ขาดประมาณด้วยกฎเพดาน ≈ · อัปโหลดไฟล์ของอีกบัญชีที่หน้า ตรวจสอบยอดโอน');
   if(!B.A.some(a=>B.lastPayout[a]))li.push('<b>ยังไม่มีไฟล์เงินเคลื่อนไหว (Balances)</b> — ระบบเดาวันเงินเข้าเป็นวันถัดไป แต่ยอดขายหลังเที่ยงคืนเข้าช้ากว่านั้น 1 วัน · ถ้าวันนี้ขาดเล็กน้อยแล้วพรุ่งนี้กลับมาตรง เป็นเพราะเรื่องนี้ · อัปโหลด Balances ที่หน้า ตรวจสอบยอดโอน จะได้วันเงินเข้าจริง');

@@ -9,6 +9,10 @@
 // ปิดกะ: JJLP กะเย็น 3 ส.ค. เงินฝากเกิน 50 → "เกิน ฿50.00" · JJRD ลงตัวหมด
 // snap 4 ส.ค.: A1 กรอก 314,900.20 → +50.00 มากกว่าที่ควร · A2 69,970.04 → ตรง · POST มี expected/diff
 // เคส Beam: ไฟล์ gross/fee/net ต่างจากสูตร (fee 150/30/75) → ต้องใช้ค่าไฟล์ · PAYOUT 4 ส.ค. −39,800 แทนค่าประมาณ
+// สมการเดียว (11 ต.ค.): ตั้งต้น 362,000 + ยอดขาย − เงินสดที่ฝาก − จ่ายสด − บิลที่จ่าย − รายจ่ายอื่น − ค่าธรรมเนียม ± (เงินทอน/เข้าออกอื่น/รอบโอน)
+//   3 ส.ค.: 107,000 − ฝาก 49,050 − จ่ายสด 2,000 − fee 179.76 − เงินทอนเพิ่ม 8,000 − โอนยังไม่เข้า 47,820.24 = −50 (= ลาดพร้าวปิดกะเกิน 50) → ควรมี 361,950.00
+//   4 ส.ค.: โอนเข้า +47,820.24 − บิล 25,000 → 384,770.24 · 5 ส.ค.: บิล Smilemeat 3,000 (ไม่มีวันจ่าย ใช้วันบิล) → 381,770.24
+//   7 ส.ค. (ศ): 50,000 − ฝาก 24,000 − เงินทอน 6,000 − fee 74.90 − โอนยังไม่เข้า 19,925.10 = 0 · 10 ส.ค. (จ) โอนเข้า +19,925.10 → 401,695.34
 const fs=require('fs');
 const {JSDOM}=require('jsdom');
 const html=fs.readFileSync('jjmk-pnl.html','utf8');
@@ -103,65 +107,62 @@ setTimeout(async()=>{
   // 3) หน้า bank โหมดประมาณ (ไม่มีไฟล์ Beam)
   await w.eval("show('bank')"); await sleep(500);
   const el=d.getElementById('view-bank'); let t=el.textContent;
-  out.push('pageTitle = ตรวจสอบเงินในบัญชี · หัวการ์ด: '+(d.getElementById('pageTitle').textContent==='ตรวจสอบเงินในบัญชี'&&t.includes('🏦 ตรวจสอบเงินในบัญชี · ส.ค. 2569')));
-  out.push('ป้ายโหมดประมาณ (ใช้กฎ 40,000): '+(t.includes('≈ ประมาณ')&&t.includes('ใช้กฎ 40,000')));
+  out.push('pageTitle = ตรวจสอบเงินในบัญชี · หัวการ์ดอธิบายสมการ: '+(d.getElementById('pageTitle').textContent==='ตรวจสอบเงินในบัญชี'&&t.includes('🏦 ตรวจสอบเงินในบัญชี · ส.ค. 2569')&&t.includes('ดิฟควรเป็น 0')));
   const B=w.eval('S.bank'); const x3=B.days.find(z=>z.ds==='2026-08-03');
-  out.push('bkCalc 3 ส.ค.: POS 107,000 · T 48,000 · CX 2,000 · fee 179.76 · net 47,820.24: '+(x3.POS===107000&&x3.T===48000&&x3.CX===2000&&near(x3.fee,179.76)&&near(x3.net,47820.24)&&x3.approx===true));
-  out.push('bkCalc 3 ส.ค.: A1 39,850.20 · A2 7,970.04 · เข้า 4 ส.ค.: '+(near(x3.N.A1,39850.20)&&near(x3.N.A2,7970.04)&&x3.payDate==='2026-08-04'));
-  out.push('bkCalc 7 ส.ค. (ศุกร์) → เข้า จ 10 ส.ค. 19,925.10: '+(near(B.QRin.A1['2026-08-10'],19925.10)&&B.days.find(z=>z.ds==='2026-08-07').payDate==='2026-08-10'));
-  out.push('ควรมี 4 ส.ค.: A1 314,850.20 · A2 69,970.04 · A1 10 ส.ค. 334,775.30: '+(near(B.bal.A1['2026-08-04'],314850.20)&&near(B.bal.A2['2026-08-04'],69970.04)&&near(B.bal.A1['2026-08-10'],334775.30)));
+  out.push('bkCalc 3 ส.ค.: POS 107,000 · ฝาก 49,050 · เงินทอนเพิ่ม 8,000 · จ่ายสด 2,000 · fee 179.76 · net 47,820.24: '+(x3.POS===107000&&x3.dep===49050&&x3.dDraw===8000&&x3.CX===2000&&near(x3.fee,179.76)&&near(x3.net,47820.24)&&x3.approx===true));
+  out.push('bkCalc 3 ส.ค.: A1 39,850.20 · A2 7,970.04 · เข้า 4 ส.ค. · 7 ส.ค. (ศ) เข้า จ 10 ส.ค.: '+(near(x3.N.A1,39850.20)&&near(x3.N.A2,7970.04)&&x3.payDate==='2026-08-04'&&B.days.find(z=>z.ds==='2026-08-07').payDate==='2026-08-10'));
+  const E=k=>B.eqBy[k];
+  out.push('สมการ: ยอดตั้งต้น 362,000 · ควรมี 3 ส.ค. 361,950.00 · 4 ส.ค. 384,770.24 · 5 ส.ค. 381,770.24 · 7 ส.ค. 381,770.24 · 10 ส.ค. 401,695.34: '+(near(B.open0,362000)&&B.eqO==='2026-07-31'&&near(E('2026-08-03').should,361950)&&near(E('2026-08-04').should,384770.24)&&near(E('2026-08-05').should,381770.24)&&near(E('2026-08-07').should,381770.24)&&near(E('2026-08-10').should,401695.34)));
+  const c4=E('2026-08-04').cum;
+  out.push('สะสมถึง 4 ส.ค.: ขาย 107,000 · ฝาก 49,050 · จ่ายสด 2,000 · บิล 25,000 · อื่น 0 · fee 179.76 · เงินทอน 8,000 · รอบโอน 0: '+(c4.pos===107000&&c4.dep===49050&&c4.cx===2000&&c4.bills===25000&&c4.other===0&&near(c4.fee,179.76)&&c4.draw===8000&&near(c4.adj,0)));
+  out.push('บิลไม่มีวันจ่าย (Smilemeat 5 ส.ค. 3,000) นับตามวันบิล: '+(E('2026-08-05').bills===3000));
   out.push('ยอดตั้งต้นบรรทัด: ณ สิ้นวัน ศ 31 ก.ค. · 300,000.00 · 62,000.00: '+(t.includes('ยอดตั้งต้น ณ สิ้นวัน ศ 31 ก.ค.')&&t.includes('฿300,000.00')&&t.includes('฿62,000.00')));
   // ตารางรายวัน
-  const daily=d.getElementById('bkDaily'); const r3=[...daily.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith('3 จ'));
-  const c3=[...r3.querySelectorAll('td')].map(td=>td.textContent.trim());
-  out.push('ตารางรายวัน 3 ส.ค.: POS 107,000 · เงินสด 59,000 · QR 48,000 · fee −179.76 · net 47,820.24 · A1 39,850.20≈ · A2 7,970.04≈ · จ่ายสด −2,000 · หลังจ่ายสด 104,820.24 · เข้า อ 4 ส.ค. · ปิดกะ เกิน ฿50.00: '
-    +(c3[1]==='107,000'&&c3[2]==='59,000'&&c3[3]==='48,000'&&c3[4]==='−179.76'&&c3[5]==='47,820.24'&&c3[6]==='39,850.20 ≈'&&c3[7]==='7,970.04 ≈'&&c3[8]==='−2,000'&&c3[9]==='104,820.24'&&c3[10]==='อ 4 ส.ค.'&&c3[11]==='เกิน ฿50.00'));
-  const cols=daily.querySelectorAll('thead th').length;
-  out.push('ไม่มีคอลัมน์บัญชีสำรอง (ทั้งเดือน 0) = 12 คอลัมน์ · วันไม่มีข้อมูลเป็น —: '+(cols===12&&[...daily.querySelectorAll('tbody tr.bk-dim')].length===29));
-  const tf=[...daily.querySelectorAll('tfoot td')].map(td=>td.textContent.trim());
-  out.push('แถวรวม: 2 วัน · POS 157,000 · fee −254.66 · หลังจ่ายสด 154,745.34 · เข้าแล้ว 2 วัน: '+(tf[0]==='รวม 2 วัน'&&tf[1]==='157,000'&&tf[4]==='−254.66'&&tf[9]==='154,745.34'&&tf[10].includes('เข้าแล้ว 2 วัน')));
-  out.push('กดแถว 7 ส.ค. → dashGoDay(7) → แท็บรายรับ incDay 7: '+await (async()=>{ [...daily.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith('7 ศ')).click(); await sleep(300); const ok=w.eval('S.tab')==='income'&&w.eval('S.incDay')===7; await w.eval("show('bank')"); await sleep(500); return ok; })());
-  t=el.textContent;
-  // เงินสดในมือ
+  const daily=d.getElementById('bkDaily'); const row=k=>[...daily.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith(k));
+  const c3=[...row('3 จ').querySelectorAll('td')].map(td=>td.textContent.trim());
+  out.push('รายวัน 3 ส.ค.: ขาย 107,000.00 · ฝาก −49,050.00 · จ่ายสด −2,000.00 · บิล — · อื่น — · ปรับ −56,000.00 · ควรมี 361,950.00 · ยังไม่กรอก: '
+    +(c3[1]==='107,000.00'&&c3[2]==='−49,050.00'&&c3[3]==='−2,000.00'&&c3[4]==='—'&&c3[5]==='—'&&c3[6]==='−56,000.00'&&c3[7]==='361,950.00'&&c3[8]==='—'&&c3[9]==='ยังไม่กรอก'));
+  const c4r=[...row('4 อ').querySelectorAll('td')].map(td=>td.textContent.trim());
+  out.push('รายวัน 4 ส.ค.: บิล −25,000.00 · ปรับ +47,820.24 (โอนเข้า) · ควรมี 384,770.24: '+(c4r[4]==='−25,000.00'&&c4r[6]==='+47,820.24'&&c4r[7]==='384,770.24'));
+  out.push('ตารางรายวัน 10 คอลัมน์ · ไม่มีตารางแยกบัญชีแล้ว: '+(daily.querySelectorAll('thead th').length===10&&!d.getElementById('bkAcc')));
+  // เงินสดในมือ (พับไว้ใน details)
   const cb=[...d.querySelectorAll('#view-bank .bk-cbx')].map(x=>x.textContent);
-  out.push('เงินสด รัชดา: เก๊ะล่าสุด 6,000 (กะเช้า 7 ส.ค.) · ฝากรอ 57,000 · จ่ายสด 2,000 (ดิฟ 500) · ลงตัวทุกกะ: '+(cb[0].includes('รัชดา')&&cb[0].includes('กะเช้า 7 ส.ค.')&&cb[0].includes('฿6,000')&&cb[0].includes('฿57,000')&&cb[0].includes('฿2,000 (ค่าดิฟ ฿500)')&&cb[0].includes('ลงตัวทุกกะ (3 กะ)')));
-  out.push('เงินสด ลาดพร้าว: เก๊ะ 3,000 (กะเย็น 3 ส.ค.) · ฝากรอ 16,050 · 1 กะ เกิน ฿50.00: '+(cb[1].includes('ลาดพร้าว')&&cb[1].includes('กะเย็น 3 ส.ค.')&&cb[1].includes('฿3,000')&&cb[1].includes('฿16,050')&&cb[1].includes('1 กะ')&&cb[1].includes('เกิน ฿50.00 · กะเย็น 3 ส.ค.')));
-  // ตารางสะสม A1
-  const acc=d.getElementById('bkAcc'); const a4=[...acc.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith('4 อ'));
-  const a4c=[...a4.querySelectorAll('td')].map(td=>td.textContent.trim());
-  out.push('สะสม A1 4 ส.ค.: ยกมา 300,000.00 · +39,850.20 ←ขาย 3 ส.ค. · −25,000.00 · ควรมี 314,850.20 · ยังไม่กรอก: '+(a4c[1]==='300,000.00'&&a4c[2].includes('+39,850.20')&&a4c[2].includes('←ขาย 3 ส.ค.')&&a4c[4]==='−25,000.00'&&a4c[5]==='314,850.20'&&a4c[7]==='ยังไม่กรอก'));
-  const a8=[...acc.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith('8 ส'));
-  out.push('สะสม A1 8 ส.ค. (เสาร์): ไม่มีรอบ · 10 ส.ค. +19,925.10 ←ขาย 7 ส.ค. = 334,775.30: '+(a8.textContent.includes('เสาร์ ไม่มีรอบ')&&[...acc.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith('10 จ')).textContent.includes('←ขาย 7 ส.ค.')&&acc.textContent.includes('334,775.30')));
-  w.bkAcctTab('A2'); await sleep(50);
-  const acc2=d.getElementById('bkAcc'); const b4=[...acc2.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith('4 อ'));
-  out.push('แท็บ A2 4 ส.ค.: +7,970.04 · ควรมี 69,970.04 · รวม ตั้งต้น 62,000.00: '+(b4.textContent.includes('+7,970.04')&&b4.textContent.includes('69,970.04')&&acc2.textContent.includes('ตั้งต้น 62,000.00')));
-  w.bkAcctTab('A1');
-  // เงินออก
+  out.push('เงินสด รัชดา: เก๊ะล่าสุด 6,000 · ฝากรอ 57,000 · จ่ายสด 2,000 (ดิฟ 500) · ลงตัวทุกกะ: '+(cb[0].includes('รัชดา')&&cb[0].includes('฿6,000')&&cb[0].includes('กะเช้า 7 ส.ค.')&&cb[0].includes('฿57,000')&&cb[0].includes('฿2,000')&&cb[0].includes('ค่าดิฟ ฿500')&&cb[0].includes('ลงตัวทุกกะ')));
+  out.push('เงินสด ลาดพร้าว: เก๊ะ 3,000 · ฝากรอ 16,050 · 1 กะ เกิน ฿50.00: '+(cb[1].includes('ลาดพร้าว')&&cb[1].includes('กะเย็น 3 ส.ค.')&&cb[1].includes('฿16,050')&&cb[1].includes('เกิน ฿50.00')));
+  out.push('รายละเอียดพับไว้ 2 กล่อง (รายการที่หักออก · เงินสดในมือ): '+(d.querySelectorAll('#view-bank details.bk-more').length===2&&[...d.querySelectorAll('#view-bank details.bk-more')].every(x=>!x.open)));
+  // รายการที่หักออก
   const ot=d.getElementById('bkOutTbl').textContent;
-  out.push('เงินออก: FarmFresh บิล 1 ส.ค. −25,000.00 จาก บัญชี 1 · มี 📎 · select pay_src · รวม บัญชี 1 25,000.00: '+(ot.includes('FarmFresh · บิล 1 ส.ค. (รัชดา)')&&ot.includes('−25,000.00')&&!!d.querySelector('#bkOutTbl select.bk-sel')&&d.querySelector('#bkOutTbl select.bk-sel').value==='A1'&&!!d.querySelector('#bkOutTbl a[href="https://x/slip.jpg"]')&&!!d.querySelector('#bkOutTbl input.bk-date[value="2026-08-04"]')));
-  out.push('แถบเหลือง จ่ายแล้วไม่ลงวัน 1 รายการ ฿3,000.00 (Smilemeat 5 ส.ค.): '+(t.includes('จ่ายแล้วแต่ยังไม่ลงวันจ่าย/บัญชี 1 รายการ ฿3,000.00')&&t.includes('Smilemeat · บิล 5 ส.ค. (ลาดพร้าว)')));
-  // 4) กรอก snap 4 ส.ค.
+  out.push('รายการหักออก: FarmFresh −25,000.00 จากบัญชี 1 + Smilemeat −3,000.00 (ใช้วันบิล): '+(ot.includes('FarmFresh · บิล 1 ส.ค. (รัชดา)')&&ot.includes('−25,000.00')&&ot.includes('Smilemeat · บิล 5 ส.ค. (ลาดพร้าว)')&&ot.includes('(ใช้วันบิล)')&&ot.includes('−3,000.00')));
+  out.push('หัวกล่อง: 2 รายการ ฿28,000.00: '+d.querySelector('#view-bank details.bk-more summary').textContent.includes('2 รายการ ฿28,000.00'));
+  // 4) กรอกยอด 4 ส.ค. → สมการ + ดิฟ
   d.getElementById('bkDate').value='2026-08-04'; w.bkDateChange();
-  d.getElementById('bkBal_A1').value='314900.20'; d.getElementById('bkBal_A2').value='69970.04'; w.bkSnapPreview();
-  let cmp=[...d.querySelectorAll('#bkCmp .bk-cb')].map(x=>x.textContent);
-  out.push('เทียบสด A1: ควรมี ฿314,850.20 · แอพ ฿314,900.20 · +50.00 มากกว่าที่ควร (เหลือง): '+(cmp[0].includes('฿314,850.20')&&cmp[0].includes('฿314,900.20')&&cmp[0].includes('+50.00')&&cmp[0].includes('มากกว่าที่ควร +50.00')&&d.querySelector('#bkCmp .bk-cb').classList.contains('over')));
-  out.push('เทียบสด A2: ✓ ตรง (เขียว): '+(cmp[1].includes('✓ ตรง')&&d.querySelectorAll('#bkCmp .bk-cb')[1].classList.contains('ok')));
-  out.push('บรรทัดรอบเงินเข้า 4 ส.ค. (ยอดขาย 3 ส.ค.): '+d.getElementById('bkRound').textContent.includes('รวมเงินเข้าถึงรอบ 4 ส.ค. (ยอดขาย 3 ส.ค.)'));
-  // ตรง (ก่อนรอบเงินเข้า): กรอก A1 = ควรมี − เงินเข้าวันนั้น
-  d.getElementById('bkBal_A1').value=String(300000-25000); w.bkSnapPreview();
-  out.push('A1 กรอก 275,000 (ก่อนรอบเงินเข้า 39,850.20) → ✓ ตรง (ก่อนรอบเงินเข้า): '+d.querySelector('#bkCmp .bk-cb').textContent.includes('✓ ตรง (ก่อนรอบเงินเข้า)'));
-  d.getElementById('bkBal_A1').value='314900.20'; w.bkSnapPreview();
-  d.getElementById('bkNote').value='ดูตอน 9 โมง';
+  const setV=(a1,a2)=>{ d.getElementById('bkBal_A1').value=String(a1); d.getElementById('bkBal_A2').value=String(a2); w.bkSnapPreview(); return d.getElementById('bkEq'); };
+  let eq=setV(314800.20,69970.04);
+  const lines=[...eq.querySelectorAll('.bk-ln')].map(x=>x.textContent.replace(/\s+/g,' ').trim());
+  out.push('สมการ 4 ส.ค.: ตั้งต้น 362,000.00 · +ขาย 107,000.00 · −ฝาก 49,050.00 · −จ่ายสด 2,000.00 · −บิล 25,000.00 · −อื่น 0.00 · −fee 179.76 · ปรับ −8,000.00 (เงินทอน) · =384,770.24 · จริง 384,770.24: '
+    +(lines[0].includes('362,000.00')&&lines[1].includes('+ 107,000.00')&&lines[2].includes('− 49,050.00')&&lines[3].includes('− 2,000.00')&&lines[4].includes('− 25,000.00')&&lines[5].includes('− 0.00')&&lines[6].includes('− 179.76')
+      &&lines[7].includes('ปรับอื่นๆ')&&lines[7].includes('− 8,000.00')&&lines[7].includes('เงินทอนในเก๊ะเพิ่มขึ้น −8,000.00')&&lines[8].includes('= 384,770.24')&&lines[9].includes('384,770.24')));
+  const df=()=>eq.querySelector('.bk-diff');
+  out.push('ยอดจริงตรง → ดิฟ 0.00 · ✓ ตรง (เขียว): '+(df().classList.contains('ok')&&df().textContent.includes('0.00')&&df().textContent.includes('✓ ตรง')));
+  eq=setV(314900.20,69970.04);
+  out.push('จริงเกิน 100 → ดิฟ +100.00 · มากกว่าที่ควร (เหลือง): '+(df().classList.contains('over')&&df().textContent.includes('+100.00')&&df().textContent.includes('มากกว่าที่ควร')));
+  eq=setV(275000,61950);
+  out.push('ดูยอดก่อนรอบเงินเข้า (ขาดเท่าโอนที่เข้าวันนั้น 47,820.24) → ✓ ตรง (ก่อนรอบเงินเข้า): '+df().textContent.includes('✓ ตรง (ก่อนรอบเงินเข้า)'));
+  eq=setV(300000,62000);
+  out.push('ขาด → ดิฟ −22,770.24 · ขาด (แดง): '+(df().classList.contains('short')&&df().textContent.includes('−22,770.24')));
+  d.getElementById('bkBal_A2').value=''; w.bkSnapPreview();
+  out.push('กรอกไม่ครบ 2 บัญชี → ดิฟ — · บอกให้ใส่ให้ครบ: '+(df().textContent.includes('—')&&d.getElementById('bkEq').textContent.includes('ใส่ยอดให้ครบทั้ง 2 บัญชี')));
+  setV(314900.20,69970.04); d.getElementById('bkNote').value='ดูตอน 9 โมง';
   await w.bkSnapSave(); await sleep(500);
   const sp=posts.find(p=>p.t==='snap');
-  out.push('POST pnl_bank_snap 2 แถว kind=actual · A1 expected 314,850.20 diff 50 · A2 diff 0 · note: '+(!!sp&&sp.rows.length===2&&sp.rows[0].kind==='actual'&&sp.rows[0].as_of==='2026-08-04'&&near(sp.rows[0].expected,314850.20)&&near(sp.rows[0].diff,50)&&sp.rows[0].balance===314900.2&&near(sp.rows[1].diff,0)&&sp.rows[0].note==='ดูตอน 9 โมง'));
-  t=el.textContent;
-  out.push('หลังบันทึก: วันที่คง 4 ส.ค. · ช่องเติมยอดเดิม · แถว 4 ส.ค. เน้น + ชิป มากกว่าที่ควร +50.00: '+(d.getElementById('bkDate').value==='2026-08-04'&&d.getElementById('bkBal_A1').value==='314900.2'&&!![...d.querySelectorAll('#bkAcc tbody tr.bk-hi')].find(tr=>tr.textContent.startsWith('4 อ')&&tr.textContent.includes('314,900.20')&&tr.textContent.includes('มากกว่าที่ควร +50.00'))));
-  out.push('รวมเดือน กรอกแล้ว 1 วัน: '+d.getElementById('bkAcc').textContent.includes('กรอกแล้ว 1 วัน'));
-  // 5) ทำไมไม่ตรง
+  out.push('POST pnl_bank_snap 2 แถว · แถวแรก expected 384,770.24 diff 100 (รวมทุกบัญชี) · แถว 2 null · note: '+(!!sp&&sp.rows.length===2&&sp.rows[0].kind==='actual'&&sp.rows[0].as_of==='2026-08-04'&&near(sp.rows[0].expected,384770.24)&&near(sp.rows[0].diff,100)&&sp.rows[1].expected===null&&sp.rows[1].diff===null&&sp.rows[0].note==='ดูตอน 9 โมง'));
+  out.push('หลังบันทึก: วันที่คง 4 ส.ค. · ช่องเติมยอดเดิม · แถว 4 ส.ค. ยอดจริง 384,870.24 + มากกว่าที่ควร: '+(d.getElementById('bkDate').value==='2026-08-04'&&d.getElementById('bkBal_A1').value==='314900.2'
+    &&(r4=>r4.classList.contains('bk-hi')&&r4.textContent.includes('384,870.24')&&r4.textContent.includes('มากกว่าที่ควร +100.00'))([...d.querySelectorAll('#bkDaily tbody tr')].find(tr=>tr.textContent.startsWith('4 อ')))));
+  // 5) ทำไมไม่ตรง (ดูถึง 10 ส.ค. ให้ครอบบิล 5 ส.ค.)
+  d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange();
   await w.bkWhy(); await sleep(200);
   const why=d.getElementById('bkWhyBox').textContent;
-  out.push('ทำไมไม่ตรง: บิล Smilemeat ไม่ลงวัน · กะเย็น 3 ส.ค. ลาดพร้าว เกิน 50 · วันประมาณ ≈: '+(why.includes('บิล Smilemeat 5 ส.ค. ฿3,000.00')&&why.includes('กะเย็น 3 ส.ค. (ลาดพร้าว) ปิดกะเกิน ฿50.00')&&why.includes('วันประมาณ ≈ 1 วัน')));
+  out.push('ทำไมไม่ตรง: รายการไม่มีวันจ่าย 1 รายการ ฿3,000.00 · กะเย็น 3 ส.ค. ลาดพร้าว เกิน 50 · วันประมาณ ≈ · ยังไม่มี Balances: '+(why.includes('รายการที่ยังไม่ลงวันจ่าย 1 รายการ ฿3,000.00')&&why.includes('กะเย็น 3 ส.ค. (ลาดพร้าว) ปิดกะเกิน ฿50.00')&&why.includes('วันประมาณ ≈')&&why.includes('ยังไม่มีไฟล์เงินเคลื่อนไหว')));
   // 6) ลงวันจ่ายบิลที่ยังไม่มีวัน → PATCH paid_d + pay_src A1
   await w.bkUnpaidSet('JJLP','2026-08-05',2,'2026-08-06'); await sleep(400);
   const pt=posts.find(p=>p.t==='patch');
@@ -174,17 +175,17 @@ setTimeout(async()=>{
   await w.bkMoveSave(); await sleep(400);
   const mv=posts.find(p=>p.t==='move');
   out.push('POST pnl_bank_moves 2 แถว: A1 −10,000 transfer_out + A2 +10,000 transfer_in: '+(!!mv&&mv.rows.length===2&&mv.rows[0].acct==='A1'&&mv.rows[0].amount===-10000&&mv.rows[0].kind==='transfer_out'&&mv.rows[1].acct==='A2'&&mv.rows[1].amount===10000&&mv.rows[1].kind==='transfer_in'));
-  // 8) เคสมีไฟล์ Beam → ใช้ค่าไฟล์ (fee 150/30 ไม่ใช่สูตร) · โหมดแม่น
+  // 8) เคสมีไฟล์ Beam → ใช้ค่าไฟล์ (fee 150/30 ไม่ใช่สูตร)
   MODE.beam=true; await w.eval("show('bank')"); await sleep(500);
   const B2=w.eval('S.bank'); const y3=B2.days.find(z=>z.ds==='2026-08-03');
   out.push('Beam: 3 ส.ค. fee 180 · net 47,820 · A1 39,850 · A2 7,970 (ค่าไฟล์) ไม่มี ≈: '+(y3.fee===180&&y3.net===47820&&y3.N.A1===39850&&y3.N.A2===7970&&y3.approx===false&&y3.beamOK===true));
-  out.push('Beam: ควรมี A1 4 ส.ค. 314,850.00 · A2 69,970.00 · 10 ส.ค. 334,775.00 · ป้าย ● แม่น ถึง 7 ส.ค.: '+(near(B2.bal.A1['2026-08-04'],314850)&&near(B2.bal.A2['2026-08-04'],69970)&&near(B2.bal.A1['2026-08-10'],334775)&&el.textContent.includes('● แม่น — มีไฟล์ Beam ถึง 7 ส.ค.')));
-  out.push('Beam: snap 4 ส.ค. เดิม 314,900.20 → ผลต่าง +50.20: '+[...d.querySelectorAll('#bkAcc tbody tr')].find(tr=>tr.textContent.startsWith('4 อ')).textContent.includes('มากกว่าที่ควร +50.20'));
-  // 9) PAYOUT ในไฟล์เงินเคลื่อนไหว แทนค่าประมาณสำหรับวัน ≤ lastPayout
+  out.push('Beam: ควรมี 4 ส.ค. 384,770.00 · 10 ส.ค. 401,695.00 · แถว 4 ส.ค. snap เดิม → มากกว่าที่ควร +100.24: '+(near(B2.eqBy['2026-08-04'].should,384770)&&near(B2.eqBy['2026-08-10'].should,401695)
+    &&[...d.querySelectorAll('#bkDaily tbody tr')].find(tr=>tr.textContent.startsWith('4 อ')).textContent.includes('มากกว่าที่ควร +100.24')));
+  // 9) PAYOUT ในไฟล์เงินเคลื่อนไหว แทนค่าประมาณสำหรับวันในช่วงไฟล์
   MODE.payout=true; await w.eval("show('bank')"); await sleep(500);
   const B3=w.eval('S.bank');
-  out.push('PAYOUT 4 ส.ค. −39,800 → A1 เงินเข้า 4 ส.ค. 39,800 (ไม่ใช่ 39,850) · 10 ส.ค. ยังประมาณ 19,925 · A2 ไม่มี PAYOUT ใช้ประมาณ 7,970: '+(B3.QRin.A1['2026-08-04']===39800&&B3.QRin.A1['2026-08-10']===19925&&B3.QRin.A2['2026-08-04']===7970&&B3.lastPayout.A1==='2026-08-04'));
-  out.push('PAYOUT: ควรมี A1 4 ส.ค. 314,800.00 · 10 ส.ค. 334,725.00 · แถวโชว์ ←Beam โอนเข้า: '+(near(B3.bal.A1['2026-08-04'],314800)&&near(B3.bal.A1['2026-08-10'],334725)&&[...d.querySelectorAll('#bkAcc tbody tr')].find(tr=>tr.textContent.startsWith('4 อ')).textContent.includes('←Beam โอนเข้า')));
+  out.push('PAYOUT 4 ส.ค. −39,800 → เงินเข้า A1 4 ส.ค. 39,800 · 10 ส.ค. ยังประมาณ 19,925 · A2 7,970: '+(B3.QRin.A1['2026-08-04']===39800&&near(B3.QRin.A1['2026-08-10'],19925)&&B3.QRin.A2['2026-08-04']===7970));
+  out.push('PAYOUT: ควรมี 4 ส.ค. 384,720.00 · 10 ส.ค. 401,645.00: '+(near(B3.eqBy['2026-08-04'].should,384720)&&near(B3.eqBy['2026-08-10'].should,401645)));
   // 10) header recon เปลี่ยนชื่อ
   await w.eval("show('recon')"); await sleep(400);
   out.push('หน้า recon หัว = 🛡 ตรวจสอบยอดโอน: '+d.getElementById('view-recon').textContent.includes('🛡 ตรวจสอบยอดโอน · ส.ค. 2569'));

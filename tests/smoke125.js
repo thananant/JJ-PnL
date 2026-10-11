@@ -1,5 +1,7 @@
 // smoke125 (ใช้ฟิกซ์เจอร์ชุดเดียวกับ smoke123 + บัญชีสำรอง 1,200 ที่ JJRD กะเย็น 3 ส.ค.): บัญชีสำรอง = ยอดช่วยกระทบ (user 11 ต.ค.)
-//   ถ้ายอดขาด แล้วบวกบัญชีสำรองสะสมแล้วตรง → ✓ ตรง (รวมบัญชีสำรอง) · ไม่บวกเข้ายอดที่ควรมี · เทียบรวมทุกบัญชีด้วย
+//   สมการเดียวนับบัญชีสำรองว่าเข้าบัญชีแล้ว (เพราะคิดจากยอดขาย − เงินสดที่ฝาก) · ถ้าจริงไม่ได้เข้า ดิฟขาดเท่ายอดนี้ → ✓ ตรง (ขาดเท่าบัญชีสำรอง)
+//   3 ส.ค.: 107,000 − ฝาก 47,850 − จ่ายสด 2,000 − fee 179.76 − เงินทอน 8,000 − โอนยังไม่เข้า 47,820.24 = +1,150 (สำรอง 1,200 − ลาดพร้าวเกิน 50)
+//   → ควรมี 3 ส.ค. 363,150.00 · 4 ส.ค. +47,820.24 − 25,000 = 385,970.24
 // (ต้นฉบับ smoke123: แท็บ "ตรวจสอบเงินในบัญชี" (bank) — ยอดที่ควรมี vs ยอดจากแอพธนาคาร + rename recon → ตรวจสอบยอดโอน
 // fixture 2 สาขา เดือน ส.ค. 2569 · ยอดตั้งต้น ณ 31 ก.ค.: A1 300,000 · A2 62,000
 // 3 ส.ค. (จันทร์): POS รวม 107,000 (JJRD 70,000 + JJLP 37,000) · โอน QR 48,000 (30,000+18,000) · สำรอง 0 · จ่ายสด 2,000 (ดิฟ 500 + น้ำแข็ง 1,500)
@@ -96,36 +98,32 @@ setTimeout(async()=>{
   const out=[];
   await sleep(450);
   await w.eval("show('bank')"); await sleep(500);
-  const B=w.eval('S.bank'); const x3=B.days.find(z=>z.ds==='2026-08-03');
-  out.push('Rcum A1/A2 4 ส.ค. = 1,200 · 2 ส.ค. = 0: '+(near(B.Rcum.A1['2026-08-04'],1200)&&near(B.Rcum.A2['2026-08-04'],1200)&&near(B.Rcum.A1['2026-08-02'],0)));
-  out.push('ควรมีไม่เปลี่ยน (บัญชีสำรองไม่บวกเข้า): A1 314,850.20 · A2 69,970.04: '+(near(B.bal.A1['2026-08-04'],314850.20)&&near(B.bal.A2['2026-08-04'],69970.04)));
-  out.push('3 ส.ค.: R 1,200 · เงินสด 57,800: '+(x3.R===1200&&x3.cash===57800));
-  const daily=d.getElementById('bkDaily');
-  out.push('คอลัมน์บัญชีสำรองโชว์ (13 คอลัมน์) หัว ยอดช่วยกระทบ: '+(daily.querySelectorAll('thead th').length===13&&daily.querySelector('thead').textContent.includes('ยอดช่วยกระทบ')));
-  out.push('ปิดกะ 3 ส.ค. ยังเหลือแค่ ลาดพร้าว เกิน ฿50 (รัชดาลงตัว แม้ฝากลดเท่าบัญชีสำรอง): '+([...daily.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith('3 จ')).textContent.includes('เกิน ฿50.00')));
+  const B=w.eval('S.bank'); const x3=B.days.find(z=>z.ds==='2026-08-03'); const e4=B.eqBy['2026-08-04'];
+  out.push('3 ส.ค.: R 1,200 · ฝาก 47,850 · เงินสด 57,800: '+(x3.R===1200&&x3.dep===47850&&x3.cash===57800));
+  out.push('ควรมี 3 ส.ค. 363,150.00 · 4 ส.ค. 385,970.24 (สำรองนับว่าเข้าบัญชี): '+(near(B.eqBy['2026-08-03'].should,363150)&&near(e4.should,385970.24)));
+  out.push('บัญชีสำรองสะสมถึง 4 ส.ค. = 1,200 · 2 ส.ค. = 0: '+(near(e4.cum.R,1200)&&near(B.eqBy['2026-08-02'].cum.R,0)));
   const set=(a1,a2)=>{ d.getElementById('bkDate').value='2026-08-04'; w.bkDateChange();
     d.getElementById('bkBal_A1').value=a1==null?'':String(a1); d.getElementById('bkBal_A2').value=a2==null?'':String(a2); w.bkSnapPreview();
-    return [...d.querySelectorAll('#bkCmp .bk-cb')]; };
-  let cb=set(313650.20,69970.04);
-  out.push('A1 ขาด 1,200 = บัญชีสำรอง → ✓ ตรง (รวมบัญชีสำรอง ฿1,200.00) เขียว: '+(cb[0].textContent.includes('✓ ตรง (รวมบัญชีสำรอง ฿1,200.00)')&&cb[0].classList.contains('ok')));
-  out.push('รวมทุกบัญชี: ✓ ตรง (รวมบัญชีสำรอง) · ผลต่าง −1,200.00 · บัญชีสำรองสะสม ฿1,200.00: '+(cb.length===3&&cb[2].classList.contains('bk-tot')&&cb[2].textContent.includes('✓ ตรง (รวมบัญชีสำรอง ฿1,200.00)')&&cb[2].textContent.includes('บัญชีสำรองสะสม ฿1,200.00')&&cb[2].textContent.includes('−1,200.00')));
-  cb=set(314850.20-700,69970.04-500);
-  out.push('แยกเข้า 2 บัญชี (ขาด 700 + 500): รายบัญชีขาด · รวมทุกบัญชี ✓ ตรง (รวมบัญชีสำรอง): '+(cb[0].textContent.includes('ขาด −700.00')&&cb[1].textContent.includes('ขาด −500.00')&&cb[2].textContent.includes('✓ ตรง (รวมบัญชีสำรอง ฿1,200.00)')));
-  cb=set(314850.20-1200-39850.20,69970.04);
-  out.push('ก่อนรอบเงินเข้า + บัญชีสำรอง → ✓ ตรง (ก่อนรอบเงินเข้า + บัญชีสำรอง): '+cb[0].textContent.includes('✓ ตรง (ก่อนรอบเงินเข้า + บัญชีสำรอง)'));
-  cb=set(314850.20-2000,69970.04);
-  out.push('ขาดมากกว่าบัญชีสำรอง → ขาด −2,000.00 (แดง): '+(cb[0].textContent.includes('ขาด −2,000.00')&&cb[0].classList.contains('short')));
-  cb=set(314850.20+1200,69970.04);
-  out.push('เกินเท่าบัญชีสำรอง → ยังเป็น มากกว่าที่ควร +1,200.00: '+cb[0].textContent.includes('มากกว่าที่ควร +1,200.00'));
-  cb=set(314850.20,null);
-  out.push('กรอกบัญชีเดียว → ไม่มีบรรทัดรวม: '+(cb.length===2));
-  set(313650.20,69970.04); await w.bkSnapSave(); await sleep(500);
+    return d.querySelector('#bkEq .bk-diff'); };
+  let df=set(314800.20,69970.04);
+  out.push('จริงขาด 1,200 = บัญชีสำรอง → ✓ ตรง (ขาดเท่าบัญชีสำรอง ฿1,200.00) เขียว: '+(df.textContent.includes('✓ ตรง (ขาดเท่าบัญชีสำรอง ฿1,200.00)')&&df.classList.contains('ok')&&df.textContent.includes('−1,200.00')));
+  df=set(316000.20,69970.04);
+  out.push('สำรองเข้าบัญชีจริง → ดิฟ 0.00 ✓ ตรง: '+(df.classList.contains('ok')&&df.textContent.includes('0.00')&&!df.textContent.includes('สำรอง')));
+  df=set(316000.20-700,69970.04-500);
+  out.push('ขาดแยก 2 บัญชี (700 + 500) → รวมกัน ✓ ตรง (ขาดเท่าบัญชีสำรอง): '+df.textContent.includes('✓ ตรง (ขาดเท่าบัญชีสำรอง ฿1,200.00)'));
+  df=set(385970.24-47820.24-1200-62000,62000);
+  out.push('ก่อนรอบเงินเข้า + บัญชีสำรอง → ✓ ตรง (ก่อนรอบเงินเข้า + บัญชีสำรอง): '+df.textContent.includes('✓ ตรง (ก่อนรอบเงินเข้า + บัญชีสำรอง)'));
+  df=set(385970.24-2000-69970.04,69970.04);
+  out.push('ขาดมากกว่าบัญชีสำรอง → ขาด −2,000.00 (แดง): '+(df.textContent.includes('−2,000.00')&&df.classList.contains('short')));
+  df=set(385970.24+1200-69970.04,69970.04);
+  out.push('เกินเท่าบัญชีสำรอง → มากกว่าที่ควร +1,200.00: '+(df.classList.contains('over')&&df.textContent.includes('+1,200.00')));
+  set(314800.20,69970.04); await w.bkSnapSave(); await sleep(500);
   const sp=posts.find(p=>p.t==='snap');
-  out.push('บันทึก: diff A1 เก็บค่าดิบ −1,200 (ไม่หักบัญชีสำรอง): '+(!!sp&&near(sp.rows[0].diff,-1200)));
-  const a4=[...d.querySelectorAll('#bkAcc tbody tr')].find(tr=>tr.textContent.startsWith('4 อ'));
-  out.push('ตารางสะสม A1 4 ส.ค. หลังบันทึก → ✓ ตรง (รวมบัญชีสำรอง ฿1,200.00): '+a4.textContent.includes('✓ ตรง (รวมบัญชีสำรอง ฿1,200.00)'));
+  out.push('บันทึก: diff เก็บค่าดิบ −1,200 (แถวแรก): '+(!!sp&&near(sp.rows[0].diff,-1200)));
+  const r4=[...d.querySelectorAll('#bkDaily tbody tr')].find(tr=>tr.textContent.startsWith('4 อ'));
+  out.push('ตารางรายวัน 4 ส.ค. หลังบันทึก → ✓ ตรง (ขาดเท่าบัญชีสำรอง ฿1,200.00): '+r4.textContent.includes('✓ ตรง (ขาดเท่าบัญชีสำรอง ฿1,200.00)'));
   await w.bkWhy(); await sleep(200);
-  out.push('ทำไมไม่ตรง: อธิบายบัญชีสำรองเป็นยอดช่วยกระทบ: '+d.getElementById('bkWhyBox').textContent.includes('ถ้ายอดขาดแล้วบวกยอดนี้ตรงพอดี'));
+  out.push('ทำไมไม่ตรง: อธิบายบัญชีสำรอง: '+d.getElementById('bkWhyBox').textContent.includes('ถ้าจริงๆ ไม่ได้เข้า (เป็นเงินสด/อื่นๆ) ดิฟจะขาดเท่ายอดนี้'));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },400);
