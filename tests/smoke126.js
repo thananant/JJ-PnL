@@ -138,16 +138,13 @@ setTimeout(async()=>{
   d.getElementById('bkMvBr').value='JJRD'; await w.bkMoveSave(); await sleep(300);
   const mv=posts.filter(p=>p.t==='move').pop();
   out.push('เลือกสาขาแล้ว → POST cash_deposit +5,000 branch JJRD: '+(!!mv&&mv.rows[0].kind==='cash_deposit'&&mv.rows[0].amount===5000&&mv.rows[0].branch==='JJRD'));
-  // 5) ยอดตั้งต้นต้องครบทุกบัญชี
+  // 5) ไม่ต้องตั้งยอดตั้งต้น (ปิดบัญชีทุกสิ้นเดือน) → ไม่มี opening ก็ขึ้นสมการเลย
   MODE.noOpen=true; await w.eval("show('bank')"); await sleep(400);
-  const nSnap=posts.filter(p=>p.t==='snap').length;
-  d.getElementById('bkOpen_A1').value='300000'; d.getElementById('bkOpen_A2').value='';
-  await w.bkOpeningSave(); await sleep(200);
-  out.push('ยอดตั้งต้นกรอกไม่ครบ → ไม่ POST + เตือน: '+(posts.filter(p=>p.t==='snap').length===nSnap&&d.getElementById('toast').textContent.includes('ใส่ยอดตั้งต้นให้ครบทุกบัญชี')));
+  out.push('ไม่มียอดตั้งต้นในฐาน → สมการขึ้นเลย เริ่มที่ 0: '+(!!d.getElementById('bkEq')&&w.eval('S.bank.open0')===0&&!d.getElementById('bkOpenForm')));
   MODE.noOpen=false;
-  // 6) ยอดตั้งต้นกลางเดือน → ตารางสะสมบอกวันเริ่มนับ
+  // 6) มียอดตั้งต้นเก่าค้างในฐาน (5 ส.ค.) → ไม่ใช้ · นับทั้งเดือนจากวันที่ 1 ที่ 0
   MODE.midOpen=true; await w.eval("show('bank')"); await sleep(400);
-  out.push('ยอดตั้งต้น 5 ส.ค. → ตารางรายวันขึ้น เริ่มนับจาก พฤ 6 ส.ค.: '+d.getElementById('bkDaily').textContent.includes('เริ่มนับจาก พฤ 6 ส.ค.'));
+  out.push('ยอดตั้งต้นในฐานถูกข้าม · eqO 31 ก.ค. · open0 0 · มีแถววันที่ 1–5: '+(w.eval("S.bank.eqO")==='2026-07-31'&&w.eval('S.bank.open0')===0&&!!w.eval("S.bank.eqBy['2026-08-03']")));
   MODE.midOpen=false;
   // 7) โหลดไม่สำเร็จ (500) ≠ ยังไม่มีตาราง (404)
   MODE.accErr=500; await w.eval("show('bank')"); await sleep(400);
