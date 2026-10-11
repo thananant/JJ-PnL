@@ -70,7 +70,7 @@ setTimeout(async()=>{
   // 0) ตรวจคอลัมน์ตอนโหลด
   out.push('loadCore ตรวจคอลัมน์ select=paid_d&limit=1 ครั้งเดียว: '+(gets.filter(u=>u.includes('select=paid_d&limit=1')).length===1));
   out.push('S.bankCols=true (ฐานมีคอลัมน์): '+(w.eval('S.bankCols')===true));
-  out.push('payFields(ไม่จ่าย) → paid_d/pay_src null: '+JSON.stringify(w.payFields({},false))+' : '+(JSON.stringify(w.payFields({},false))==='{"paid_d":null,"pay_src":null}'));
+  out.push('payFields(ไม่จ่าย) → {} (ไม่ล้างวันจ่าย — ติ๊กกลับได้วัน/บัญชีเดิม): '+(JSON.stringify(w.payFields({paid_d:'2026-08-02',pay_src:'A2'},false))==='{}'));
   out.push('payFields(จ่าย, มีค่าเดิม) เก็บค่าเดิม: '+(JSON.stringify(w.payFields({paid_d:'2026-08-02',pay_src:'A2'},true))==='{"paid_d":"2026-08-02","pay_src":"A2"}'));
   // 1) paidToggle บิลที่มีสลิป (6 ส.ค. sup1) → ติ๊กจ่าย → paid_d=วันนี้ pay_src=A1
   posts.length=0;
@@ -79,16 +79,25 @@ setTimeout(async()=>{
   out.push('paidToggle ติ๊กจ่าย → POST paid:true + paid_d=วันนี้ ('+today+') + pay_src=A1: '+(!!p&&p.paid===true&&p.paid_d===today&&p.pay_src==='A1'&&p.d==='2026-08-06'&&p.amount===5000));
   let r6=cache('2026-08-06|1');
   out.push('cache 6 ส.ค. ได้ paid_d/pay_src: '+(r6.paid===true&&r6.paid_d===today&&r6.pay_src==='A1'));
-  // 2) ติ๊กซ้ำ (ยกเลิกจ่าย) → null
+  // 2) ติ๊กซ้ำ (ยกเลิกจ่าย) → ส่งแค่ paid:false · วันจ่าย/บัญชีเดิมคงไว้ (หน้า bank กรอง paid=true อยู่แล้ว)
   await w.paidToggle('2026-08-06',1); await sleep(50);
   p=last()&&last()[0];
-  out.push('paidToggle ยกเลิก → POST paid:false + paid_d null + pay_src null: '+(!!p&&p.paid===false&&'paid_d' in p&&p.paid_d===null&&p.pay_src===null));
+  out.push('paidToggle ยกเลิก → POST paid:false ไม่มี key paid_d/pay_src (ไม่ล้าง): '+(!!p&&p.paid===false&&!('paid_d' in p)&&!('pay_src' in p)));
   r6=cache('2026-08-06|1');
-  out.push('cache 6 ส.ค. กลับเป็น null: '+(r6.paid===false&&r6.paid_d===null&&r6.pay_src===null));
+  out.push('cache 6 ส.ค. paid=false แต่ยังจำวันจ่าย/บัญชีเดิม: '+(r6.paid===false&&r6.paid_d===today&&r6.pay_src==='A1'));
+  // 2b) แก้วัน/บัญชีไว้ (เช่นจากหน้า bank) แล้วติ๊กกลับ → ได้ค่าที่แก้ไว้ ไม่ใช่วันนี้/A1
+  w.eval("(r=>{r.paid_d='2026-08-03';r.pay_src='A2';})(S.cache[mkey(S.br,S.m)].exp['2026-08-06|1'])");
+  await w.paidToggle('2026-08-06',1); await sleep(50);
+  p=last()&&last()[0];
+  out.push('ติ๊กกลับ → POST paid:true + paid_d 2026-08-03 + pay_src A2 (ค่าเดิม): '+(!!p&&p.paid===true&&p.paid_d==='2026-08-03'&&p.pay_src==='A2'));
+  out.push('toast บอกวันจ่าย/บัญชีที่ลงให้: '+((d.getElementById('toast')||{}).textContent||'').includes('ลงวันจ่าย 3 ส.ค. 2569 จากบัญชี 2'));
+  // คืนสภาพเดิมให้ขั้นถัดไป (ยกเลิกจ่าย + ล้างวันในเครื่อง)
+  await w.paidToggle('2026-08-06',1); await sleep(50);
+  w.eval("(r=>{r.paid_d=null;r.pay_src=null;})(S.cache[mkey(S.br,S.m)].exp['2026-08-06|1'])");
   // 3) slipDel (7 ส.ค. sup2 จ่ายแล้วมีสลิป) → ลบสลิป = ยกเลิกจ่าย → null
   await w.slipDel('2026-08-07',2); await sleep(50);
   p=last()&&last()[0];
-  out.push('slipDel → POST slip_url null, paid:false, paid_d null, pay_src null: '+(!!p&&p.d==='2026-08-07'&&p.slip_url===null&&p.paid===false&&p.paid_d===null&&p.pay_src===null));
+  out.push('slipDel → POST slip_url null, paid:false (ไม่ล้างวันจ่าย): '+(!!p&&p.d==='2026-08-07'&&p.slip_url===null&&p.paid===false&&!('paid_d' in p)));
   const r7=cache('2026-08-07|2');
   out.push('cache 7 ส.ค. paid_d null: '+(r7.paid===false&&r7.paid_d===null&&r7.pay_src===null));
   // 4) slipPicked เคสเดี่ยว (sup2 เหลือบิลเดียว 7 ส.ค.) → แนบสลิป + ติ๊กจ่ายอัตโนมัติ → paid_d วันนี้
