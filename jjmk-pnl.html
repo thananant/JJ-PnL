@@ -6289,7 +6289,7 @@ async function bkLoad(){
   const newer=(x,y)=>{ const tx=x.updated_at||x.created_at||'', ty=y.updated_at||y.created_at||''; return tx!==ty?tx>ty:x.as_of>y.as_of; }; // ยอดตั้งต้นที่บันทึกล่าสุดชนะ (แม้ย้ายวันให้เร็วขึ้น)
   snaps.forEach(r=>{ if(r.kind==='opening'){ if(!opening[r.acct]||newer(r,opening[r.acct]))opening[r.acct]=r; } else (actual[r.acct]||(actual[r.acct]={}))[r.as_of]=r; });
   const Os=accts.map(a=>opening[a.acct]&&opening[a.acct].as_of).filter(Boolean).sort();
-  const from=Os.length?bkAddDays(Os[0],1):mFrom;          // ช่วงคำนวณ: วันถัดจากยอดตั้งต้น → สิ้นเดือนที่ดู
+  const from=mFrom;                                        // ช่วงคำนวณ: ทั้งเดือน (user 11 ต.ค.: ปิดบัญชีทุกสิ้นเดือน ยอดต้นเดือน = 0 เสมอ)
   const lo=from<mFrom?from:mFrom, to=mTo;                  // ช่วงโหลด: ครอบทั้งเดือนที่ดูด้วย (ตารางรายวัน)
   const lo0=bkAddDays(lo,-3);                              // ยอดขาย ศ/ส/อา ก่อนช่วง เข้าธนาคารวันจันทร์ในช่วง → ต้องเห็น
   const rng='&d=gte.'+lo0+'&d=lte.'+to;
@@ -6312,7 +6312,7 @@ async function bkLoad(){
     P('pnl_fixed_monthly','select=*&month=eq.'+S.m+'&paid_d=is.null&amount=gt.0&order=branch,item_id'),
     P('pnl_extra_expenses','select=*&paid_d=is.null&amount=gt.0&d=gte.'+from+'&d=lte.'+to+'&order=d,id')]);
   const month={}; for(const bc of brs){ try{ month[bc]=await loadMonth(bc,S.m); }catch(e){} } // เก๊ะล่าสุด/ปิดกะ สูตรเดิม
-  return {accts,opening,actual,from,to,lo,lo0,mFrom,mTo,brs,O:Os[0]||null,inc:incAll.filter(r=>brs.includes(r.branch)),cash,beam,payout,moves,expPaid,expNoD,fixPaid,extraPaid,fixNoD,extraNoD,month,cols};
+  return {accts,opening,actual,from,to,lo,lo0,mFrom,mTo,brs,O:null,inc:incAll.filter(r=>brs.includes(r.branch)),cash,beam,payout,moves,expPaid,expNoD,fixPaid,extraPaid,fixNoD,extraNoD,month,cols};
 }
 function bkCalc(L){ // คืน object เดียว ใช้ทั้งหน้า (ห้ามคำนวณซ้ำคนละสูตรในการ์ด)
   const today=todayStr();
@@ -6382,7 +6382,7 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
   });
   // ---- สมการเดียว (user 11 ต.ค.): ยอดตั้งต้น + ยอดขาย − เงินสดที่ฝาก − จ่ายสดหน้าร้าน − บิลที่จ่าย − รายจ่ายอื่น − ค่าธรรมเนียม ± ปรับอื่นๆ
   //      = ยอดที่ควรมีในบัญชี 1 + 2 → เทียบยอดจริง ดิฟควรเป็น 0 · ปรับอื่นๆ = เงินทอนในเก๊ะที่เปลี่ยน + เงินเข้า/ออกอื่น + รอบเงินโอนเข้าวันถัดไป
-  const hasOpen=A.every(a=>openOf[a]), eqO=hasOpen?A.map(a=>openOf[a].as_of).sort()[0]:null, open0=hasOpen?A.reduce((x,a)=>x+openOf[a].balance,0):0;
+  const hasOpen=true, eqO=bkAddDays(L.mFrom,-1), open0=0; // ปิดบัญชีทุกสิ้นเดือน → เริ่มที่ 0 ทุกวันที่ 1 (ไม่ใช้ยอดตั้งต้น)
   const dayBy={}; days.forEach(x=>{ dayBy[x.ds]=x; });
   const outBy={}; outRows.forEach(r=>{ if(!r.d||r.acct==='CASH')return; const o=outBy[r.d]||(outBy[r.d]={bills:0,other:0,mv:0});
     if(r.src==='exp')o.bills+=-r.amount; else if(r.src==='move')o.mv+=r.amount; else o.other+=-r.amount; });
@@ -6429,7 +6429,7 @@ RENDER.bank = async (el)=>{
   if(L.loadErr){ el.innerHTML='<div class="card" style="background:#FDF3E7;border-color:#E8C9A0"><b>⚠ โหลดข้อมูลไม่สำเร็จ</b> <span class="sm">เช็คเน็ตแล้วกดลองใหม่</span> <button class="btn gh sm2" onclick="show(\'bank\')">↻ ลองใหม่</button><div class="xs mut" style="margin-top:4px">'+esc(L.loadErr.slice(0,160))+'</div></div>'; return; }
   const B=bkCalc(L); B.edit=permOf('bank')==='edit'; S.bank=B;
   if(!S.bankAcct||!B.A.includes(S.bankAcct))S.bankAcct=B.A[0];
-  el.innerHTML=bkHead(B)+bkSnapCard(B)+bkOpeningLine(B)+bkDayCard(B)+bkMore(B);
+  el.innerHTML=bkHead(B)+bkSnapCard(B)+bkDayCard(B)+bkMore(B);
   const dr=S.bankDraft; // ค่าที่พิมพ์ค้าง (ยังไม่กดบันทึก) ไม่หายเมื่อแก้รายการอื่นแล้วหน้าโหลดใหม่ — อ่านก่อน bkDateChange (ซึ่งเขียนทับ)
   bkDateChange();
   const di=document.getElementById('bkDate');
@@ -6438,7 +6438,7 @@ RENDER.bank = async (el)=>{
 function bkHead(B){
   return '<div class="card" style="display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap">'
     +'<div><div class="b">🏦 ตรวจสอบเงินในบัญชี · '+monthLabel(S.m)+'</div>'
-    +'<div class="xs mut">ยอดตั้งต้น + ยอดขาย − เงินสดที่ฝาก − รายจ่ายทั้งหมด = เงินที่ควรอยู่ในบัญชี 1 + 2 → เทียบกับยอดจริง <b>ดิฟควรเป็น 0</b> · รวม '+B.cashBr.length+' สาขา</div></div>'
+    +'<div class="xs mut">ยอดต้นเดือน 0 + ยอดขาย − เงินสดที่ฝาก − รายจ่ายทั้งหมด = เงินที่ควรอยู่ในบัญชี 1 + 2 → เทียบกับยอดจริง <b>ดิฟควรเป็น 0</b> · รวม '+B.cashBr.length+' สาขา</div></div>'
     +(B.edit?'<button class="btn gh sm2" style="margin-left:auto" onclick="bkAcctsModal()">⚙ บัญชี</button>':'')
     +(B.cols?'':'<div class="dupbox" style="flex-basis:100%;margin:4px 0 0">⚠ ยังไม่ได้รัน SQL ส่วนคอลัมน์วันจ่าย (paid_d / pay_src) — รายจ่ายที่จ่ายจากบัญชียังไม่ถูกหัก</div>')
     +'</div>';
@@ -6477,7 +6477,7 @@ function bkSnapPreview(){ // สมการถึงวันที่เลื
   if(Math.abs(c.draw)>=0.005)parts.push('เงินทอนในเก๊ะ'+(c.draw>0?'เพิ่มขึ้น −':'ลดลง +')+fmt(Math.abs(c.draw),2));
   if(Math.abs(c.mv)>=0.005)parts.push('เงินเข้า/ออกอื่น '+(c.mv>0?'+':'−')+fmt(Math.abs(c.mv),2));
   box.innerHTML=
-     ln('','ยอดในบัญชีตั้งต้น',B.open0,'สิ้นวัน '+bkDm(B.eqO)+' · '+B.A.map(a=>esc(B.label[a])+' '+fmt(B.openOf[a].balance,2)).join(' + '))
+     ln('','ยอดต้นเดือน',0,'ปิดบัญชีทุกสิ้นเดือน → เริ่มที่ 0 ทุกวันที่ 1')
     +ln('+ ','ยอดขายทั้งหมด',c.pos,bkDm(bkAddDays(B.eqO,1))+' – '+bkDm(D)+' · ทุกสาขา','in')
     +ln('− ','เงินสดที่ฝาก',c.dep,'','out')
     +ln('− ','รายจ่ายเงินสดหน้าร้าน',c.cx,'ค่าดิฟ ฯลฯ ที่พนักงานจ่าย','out')
