@@ -58,7 +58,8 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_beam_moves')&&MODE.payout10)return T(url.includes('btype=eq.PAYOUT')?[{acct:'jingjaimookt',ts:'2026-08-10T10:30:00',d:'2026-08-10',btype:'PAYOUT',gross:-19925,fee:0,net:-19925,bal:0}]:[]);
       if(url.includes('pnl_fixed_items'))return T([{id:9,name:'ค่าเช่าพื้นที่',grp:'รายเดือน',sort:1,default_amount:null}]);
       if(url.includes('pnl_fixed_monthly')){ if(method==='PATCH'){posts.push({t:'fixpatch',url,body:JSON.parse(opt.body)});return T([]);} return T(url.includes('paid_d=is.null')?FIXN:[]); }
-      if(url.includes('pnl_extra_expenses')){ if(method==='PATCH'){posts.push({t:'expatch',url,body:JSON.parse(opt.body)});return T([]);} return T(url.includes('paid_d=is.null')?EXTN:[]); }
+      if(url.includes('pnl_extra_expenses')){ if(method==='PATCH'){posts.push({t:'expatch',url,body:JSON.parse(opt.body)});return T([]);} return T(url.includes('paid_d=gte')?[]:EXTN); }
+      if(url.includes('pnl_shopee'))return T([{id:5,branch:'JJRD',d:'2026-08-09',item:'ถุงมือ',shop:'x',topup:0,price:120,qty:2,shipping:30}]);
       if(url.includes('pnl_bank_snap')){
         if(method==='POST'){ const rows=JSON.parse(opt.body); posts.push({t:'snap',rows});
           rows.forEach(r=>{ SNAPS=SNAPS.filter(x=>!(x.acct===r.acct&&x.as_of===r.as_of&&x.kind===r.kind)); SNAPS.push(r); }); return T(rows); }
@@ -109,7 +110,10 @@ setTimeout(async()=>{
   const nod=d.querySelector('#view-bank details.bk-nod');
   out.push('บล็อก Fix cost ยังไม่ลงวันจ่าย 1 รายการ ฿50,000.00 (พับไว้): '+(!!nod&&!nod.open&&nod.textContent.includes('Fix cost เดือนนี้ที่ยังไม่ลงวันจ่าย 1 รายการ ฿50,000.00')&&nod.textContent.includes('ค่าเช่าพื้นที่')));
   const B0=w.eval('S.bank');
-  out.push('รายจ่ายนอกเหนือไม่มีวันจ่าย (ซ่อมแอร์ 3,500 · 6 ส.ค.) นับตามวันที่ในสมการ: '+(B0.eqBy['2026-08-06'].other===3500&&d.getElementById('bkOutTbl').textContent.includes('ซ่อมแอร์')));
+  out.push('รายจ่ายอื่นๆ ทั้งเดือน = นอกเหนือ 3,500 + Shopee 270 (120×2+30) = 3,770 · หักจากควรมีทุกวัน: '+(B0.otherM===3770&&B0.extraMT===3500&&B0.shopMT===270&&Math.abs(B0.eqBy['2026-08-02'].should-(B0.eqBy['2026-08-02'].shouldX-3770))<0.005&&d.getElementById('bkOutTbl').textContent.includes('ซ่อมแอร์')));
+  d.getElementById('bkDate').value='2026-08-04'; w.bkDateChange();
+  const ol=[...d.getElementById('bkEq').querySelectorAll('.bk-ln')].map(x=>x.textContent.replace(/\s+/g,' ')).find(x=>x.includes('รายจ่ายอื่นๆ (ทั้งเดือน)'))||'';
+  out.push('บรรทัดสมการ: รายจ่ายอื่นๆ (ทั้งเดือน) − 3,770.00 · นอกเหนือ 1 รายการ ฿3,500.00 + Shopee 1 รายการ ฿270.00 (ดูถึง 4 ส.ค. ก็หักทั้งเดือน): '+(ol.includes('− 3,770.00')&&ol.includes('นอกเหนือ 1 รายการ ฿3,500.00')&&ol.includes('Shopee 1 รายการ ฿270.00')));
   // ค่าที่พิมพ์ค้าง ต้องไม่หายเมื่อหน้าโหลดใหม่หลังลงวัน
   d.getElementById('bkDate').value='2026-08-04'; w.bkDateChange(); d.getElementById('bkBal_A1').value='1234'; w.bkSnapPreview();
   d.getElementById('bkNoA_0').value='A2';

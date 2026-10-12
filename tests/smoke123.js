@@ -114,17 +114,17 @@ setTimeout(async()=>{
   const E=k=>B.eqBy[k];
   out.push('สมการ: ยอดต้นเดือน 0 (ไม่ใช้ยอดตั้งต้นที่บันทึกไว้) · ควรมี 1 ส.ค. 0 · 3 ส.ค. −50.00 · 4 ส.ค. 22,770.24 · 5 ส.ค. 19,770.24 · 7 ส.ค. 19,770.24 · 10 ส.ค. 39,695.34: '+(B.open0===0&&B.eqO==='2026-07-31'&&near(E('2026-08-01').should,0)&&near(E('2026-08-03').should,-50)&&near(E('2026-08-04').should,22770.24)&&near(E('2026-08-05').should,19770.24)&&near(E('2026-08-07').should,19770.24)&&near(E('2026-08-10').should,39695.34)));
   const c4=E('2026-08-04').cum;
-  out.push('สะสมถึง 4 ส.ค.: ขาย 107,000 · ฝาก 49,050 · จ่ายสด 2,000 · บิล 25,000 · อื่น 0 · fee 179.76 · เงินทอน 8,000 · รอบโอน 0: '+(c4.pos===107000&&c4.dep===49050&&c4.cx===2000&&c4.bills===25000&&c4.other===0&&near(c4.fee,179.76)&&c4.draw===8000&&near(c4.adj,0)));
+  out.push('สะสมถึง 4 ส.ค.: ขาย 107,000 · ฝาก 49,050 · จ่ายสด 2,000 · บิล 25,000 · อื่น 0 · fee 179.76 · เงินทอน 8,000 · รอบโอน 0: '+(c4.pos===107000&&c4.dep===49050&&c4.cx===2000&&c4.bills===25000&&c4.fix===0&&near(c4.fee,179.76)&&c4.draw===8000&&near(c4.adj,0)));
   out.push('บิลไม่มีวันจ่าย (Smilemeat 5 ส.ค. 3,000) นับตามวันบิล: '+(E('2026-08-05').bills===3000));
   out.push('ไม่มีบรรทัด/ฟอร์มยอดตั้งต้นแล้ว · หัวการ์ดบอกยอดต้นเดือน 0: '+(!d.getElementById('bkOpen')&&!d.getElementById('bkOpenForm')&&t.includes('ยอดต้นเดือน 0 + ยอดขาย')));
   // ตารางรายวัน
   const daily=d.getElementById('bkDaily'); const row=k=>[...daily.querySelectorAll('tbody tr')].find(tr=>tr.textContent.startsWith(k));
   const c3=[...row('3 จ').querySelectorAll('td')].map(td=>td.textContent.trim());
-  out.push('รายวัน 3 ส.ค.: ขาย 107,000.00 · ฝาก −49,050.00 · จ่ายสด −2,000.00 · บิล — · อื่น — · ปรับ −56,000.00 · ควรมี -50.00 · ยังไม่กรอก: '
-    +(c3[1]==='107,000.00'&&c3[2]==='−49,050.00'&&c3[3]==='−2,000.00'&&c3[4]==='—'&&c3[5]==='—'&&c3[6]==='−56,000.00'&&c3[7]==='-50.00'&&c3[8]==='—'&&c3[9]==='ยังไม่กรอก'));
+  out.push('รายวัน 3 ส.ค.: ขาย 107,000.00 · ฝาก −49,050.00 · จ่ายสด −2,000.00 · บิล — · ปรับ −56,000.00 · ควรมี -50.00 · ยังไม่กรอก: '
+    +(c3[1]==='107,000.00'&&c3[2]==='−49,050.00'&&c3[3]==='−2,000.00'&&c3[4]==='—'&&c3[5]==='−56,000.00'&&c3[6]==='-50.00'&&c3[7]==='—'&&c3[8]==='ยังไม่กรอก'));
   const c4r=[...row('4 อ').querySelectorAll('td')].map(td=>td.textContent.trim());
-  out.push('รายวัน 4 ส.ค.: บิล −25,000.00 · ปรับ +47,820.24 (โอนเข้า) · ควรมี 22,770.24: '+(c4r[4]==='−25,000.00'&&c4r[6]==='+47,820.24'&&c4r[7]==='22,770.24'));
-  out.push('ตารางรายวัน 10 คอลัมน์ · ไม่มีตารางแยกบัญชีแล้ว: '+(daily.querySelectorAll('thead th').length===10&&!d.getElementById('bkAcc')));
+  out.push('รายวัน 4 ส.ค.: บิล −25,000.00 · ปรับ +47,820.24 (โอนเข้า) · ควรมี 22,770.24: '+(c4r[4]==='−25,000.00'&&c4r[5]==='+47,820.24'&&c4r[6]==='22,770.24'));
+  out.push('ตารางรายวัน 9 คอลัมน์ (รายจ่ายอื่นหักทั้งเดือน) · ไม่มีตารางแยกบัญชีแล้ว: '+(daily.querySelectorAll('thead th').length===9&&!d.getElementById('bkAcc')));
   // เงินสดในมือ (พับไว้ใน details)
   const cb=[...d.querySelectorAll('#view-bank .bk-cbx')].map(x=>x.textContent);
   out.push('เงินสด รัชดา: เก๊ะล่าสุด 6,000 · ฝากรอ 57,000 · จ่ายสด 2,000 (ดิฟ 500) · ลงตัวทุกกะ: '+(cb[0].includes('รัชดา')&&cb[0].includes('฿6,000')&&cb[0].includes('กะเช้า 7 ส.ค.')&&cb[0].includes('฿57,000')&&cb[0].includes('฿2,000')&&cb[0].includes('ค่าดิฟ ฿500')&&cb[0].includes('ลงตัวทุกกะ')));
@@ -144,6 +144,13 @@ setTimeout(async()=>{
       &&lines[3].includes('เงินสดค้างในเก๊ะ ณ สิ้นวัน 4 ส.ค.')&&lines[3].includes('− 8,000.00')&&lines[4].includes('เก๊ะเปิดเช้าวันที่ 1')&&lines[4].includes('เงินของเดือนที่แล้ว')&&lines[4].includes('+ 0.00')
       &&lines[5].includes('− 2,000.00')&&lines[6].includes('− 25,000.00')&&lines[7].includes('− 0.00')&&lines[8].includes('− 179.76')&&lines[9].includes('= 22,770.24')&&lines[10].includes('22,770.24')));
   const df=()=>eq.querySelector('.bk-diff');
+  d.getElementById('bkFrom').value='2026-08-04'; w.bkFromChange();
+  const rl=[...d.getElementById('bkEq').querySelectorAll('.bk-ln')].map(x=>x.textContent.replace(/\s+/g,' ').trim());
+  out.push('ช่วง 4–4 ส.ค.: ยกมา −50.00 · ขาย 0.00 · เก๊ะค้าง −8,000.00 · เก๊ะยกมา +8,000.00 · บิล −25,000.00 · ปรับ +47,820.24 · =22,770.24 (เท่าดูทั้งเดือน): '
+    +(rl[0].includes('ยอดยกมา ณ สิ้นวัน 3 ส.ค.')&&rl[0].includes('− 50.00')&&rl[1].includes('+ 0.00')&&rl[3].includes('− 8,000.00')&&rl[4].includes('เงินในเก๊ะยกมา ณ สิ้นวัน 3 ส.ค.')&&rl[4].includes('+ 8,000.00')
+      &&rl[6].includes('− 25,000.00')&&rl.some(x=>x.includes('ปรับอื่นๆ')&&x.includes('+ 47,820.24'))&&rl.some(x=>x.includes('= 22,770.24'))&&df().textContent.includes('0.00')));
+  out.push('ตารางรายวันเหลือเฉพาะช่วง 4–4 ส.ค. (1 แถว): '+(d.querySelectorAll('#bkDaily tbody tr').length===1&&d.querySelector('#bkDaily tbody tr').textContent.startsWith('4 อ')));
+  d.getElementById('bkFrom').value='2026-08-01'; w.bkFromChange(); eq=d.getElementById('bkEq');
   out.push('ยอดจริงตรง → ดิฟ 0.00 · ✓ ตรง (เขียว): '+(df().classList.contains('ok')&&df().textContent.includes('0.00')&&df().textContent.includes('✓ ตรง')));
   eq=setV(15100.20,7770.04);
   out.push('จริงเกิน 100 → ดิฟ +100.00 · มากกว่าที่ควร (เหลือง): '+(df().classList.contains('over')&&df().textContent.includes('+100.00')&&df().textContent.includes('มากกว่าที่ควร')));
