@@ -37,8 +37,9 @@ input::placeholder{color:#C5BEB5}
 ::-webkit-scrollbar{height:6px;width:6px}::-webkit-scrollbar-thumb{background:#D8D1C7;border-radius:3px}
 
 /* ---------- Header ---------- */
-header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.hrow{display:flex;align-items:center;gap:10px;padding:10px clamp(14px,1.6vw,28px) 6px;max-width:none;margin:0 auto}
+header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+  padding-top:env(safe-area-inset-top)}   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง — ห้ามทับปุ่มบนหัวแอป (เจ้าของกดไม่ได้ 2026-10-12) */
+.hrow{display:flex;align-items:center;gap:10px;padding:10px max(clamp(14px,1.6vw,28px),env(safe-area-inset-right)) 6px max(clamp(14px,1.6vw,28px),env(safe-area-inset-left));max-width:none;margin:0 auto}
 .brand{display:flex;align-items:center;gap:8px;font-family:var(--fh);font-weight:700;font-size:18px;letter-spacing:.2px}
 .brand .hlogo{width:26px;height:26px;border-radius:8px;border:1.5px solid #E9B44C;background:var(--red);object-fit:cover;flex:none}
 .brand small{font-weight:500;color:var(--mut);font-size:11px;display:block;line-height:1}
@@ -49,7 +50,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 #syncDot.busy{background:var(--gold);animation:pul 1s infinite}
 #syncDot.err{background:var(--bad)}
 @keyframes pul{50%{opacity:.35}}
-.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px 10px 8px;max-width:none;margin:0 auto;scrollbar-width:none}
+.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left));max-width:none;margin:0 auto;scrollbar-width:none}
 .tabbar::-webkit-scrollbar{display:none}
 .tabbar button{flex:none;padding:8px 14px;border-radius:99px;font-weight:600;color:var(--mut);font-size:14px;display:inline-flex;align-items:center;gap:5px}
 .tabbar button.on{background:var(--ink);color:#fff}
@@ -62,7 +63,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
     padding:20px 36px calc(36px + env(safe-area-inset-bottom))}
   header{padding-left:236px}
   #sideNav{display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;width:236px;z-index:60;
-    background:linear-gradient(180deg,#7E1013 0%,#690C0F 100%);padding:18px 13px calc(14px + env(safe-area-inset-bottom));overflow-y:auto}
+    background:linear-gradient(180deg,#7E1013 0%,#690C0F 100%);padding:calc(18px + env(safe-area-inset-top)) 13px calc(14px + env(safe-area-inset-bottom)) max(13px,env(safe-area-inset-left));overflow-y:auto}
   #sideNav::-webkit-scrollbar{width:0}
   .sb-logo{display:flex;align-items:center;gap:10px;margin:2px 4px 14px}
   .sb-logo img{width:47px;height:47px;border-radius:13px;border:2px solid #E9B44C;box-shadow:0 2px 10px rgba(0,0,0,.35);object-fit:cover;flex:none}
@@ -87,7 +88,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
 }
 
 /* ---------- Layout ---------- */
-main{max-width:none;width:100%;margin:0 auto;padding:14px clamp(14px,1.6vw,28px) calc(30px + env(safe-area-inset-bottom))}
+main{max-width:none;width:100%;margin:0 auto;padding:14px max(clamp(14px,1.6vw,28px),env(safe-area-inset-right)) calc(30px + env(safe-area-inset-bottom)) max(clamp(14px,1.6vw,28px),env(safe-area-inset-left))}
 .view{display:none}.view.on{display:block;animation:fin .18s ease}
 @keyframes fin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
@@ -5614,7 +5615,7 @@ const SP_I18N={"th": {"nav_sups": "ร้านค้า (ซัพ)", "sp_hint"
    บรรทัดขึ้นต้น # = หัวข้อ เช่น "# เตรียมก่อนทำ" / "# วิธีทำ" — เลขขั้นเริ่ม 1 ใหม่ใต้หัวข้อ (เจ้าของส่งสูตรที่แยก "วิธีผสมก่อนทำ" ไว้ 2026-10-12) */
 function methodSteps(note){
   return String(note||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(x=>{
-    if(/^#/.test(x))return {head:true,tx:x.replace(/^#+\s*/,'').replace(/\s*[:：]$/,'')};
+    if(/^#+(?!\d)/.test(x))return {head:true,tx:x.replace(/^#+\s*/,'').replace(/\s*[:：]$/,'')};   // "#1 ..." = ขั้นธรรมดา ไม่ใช่หัวข้อ
     if(/^[*※]/.test(x))return {tip:true,tx:x.replace(/^[*※\s]+|[*\s]+$/g,'')};
     return {tip:false,tx:x.replace(/^\d+(?:\.\d+)*[.)](?!\d)\s*/,'')};}).filter(x=>x.tx);}
 function methodHtml(r,b,secCls){
@@ -6032,10 +6033,14 @@ async function boot(){
     return false;};
   const blocked=()=>busy||document.getElementById('modalWrap').classList.contains('on')||
     document.getElementById('loginOv').classList.contains('on');
-  const set=px=>{bar.style.transform='translateY('+px+'px)';};
+  /* แถบสถานะ iPhone (เปิดจากหน้าจอโฮม) บังวงหมุน — เลื่อนลงตามความสูงแถบสถานะ ค่อย ๆ เพิ่มตอนดึง ซ่อนอยู่ = พ้นจอเหมือนเดิม */
+  let SA=0;
+  const saTop=()=>{const p=document.createElement('div');p.style.cssText='position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';
+    document.body.appendChild(p);const h=p.getBoundingClientRect().height||0;p.remove();return h;};
+  const set=px=>{bar.style.transform='translateY('+(px+SA*Math.max(0,Math.min(1,(px+60)/60)))+'px)';};
   document.addEventListener('touchstart',e=>{
     if(blocked()||e.touches.length!==1||!atTop()||inScrollable(e.target)){on=false;return;}
-    y0=e.touches[0].clientY;d=0;on=true;
+    y0=e.touches[0].clientY;d=0;on=true;SA=saTop();
     bar.classList.add('drag');bar.classList.remove('rdy');
     txt.textContent=t('ptr_pull');
   },{passive:true});
