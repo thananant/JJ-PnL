@@ -6513,19 +6513,23 @@ function bkSnapPreview(){ // สมการช่วง ตั้งแต่ F
   // ช่วงวันขาย (user 12 ต.ค.): ค่าเริ่ม = ช่วงด้านบน · เลือกเองได้ ไม่เกินวันที่ดูยอด เช่น ดูยอดบัญชีวันนี้ แต่นับยอดขายถึงเมื่อวาน
   const sv=S.bankSale&&S.bankSale.m===S.m?S.bankSale:null; let SF=F,SD=D;
   if(sv){ SD=sv.t<D?sv.t:D; if(SD<B.mFrom)SD=B.mFrom; SF=sv.f<SD?sv.f:SD; if(SF<B.mFrom)SF=B.mFrom; }
-  const cust=SF!==F||SD!==D; if(sv&&!cust)S.bankSale=null; // ตัดแล้วตรงช่วงบน = ตามช่วงบน (ไม่เก็บค่าที่มองไม่เห็นไว้โผล่ทีหลัง)
+  const cust=SF!==F||SD!==D; // ค่าที่จำไว้ = ที่เห็นบนจอเสมอ: ตัดแล้วตรงช่วงบน → ตามช่วงบน · ถูกตัด → จำค่าที่ตัดแล้ว (ไม่เก็บค่าที่มองไม่เห็นไว้โผล่ทีหลัง)
+  if(sv){ if(!cust)S.bankSale=null; else if(SF!==sv.f||SD!==sv.t)S.bankSale={m:S.m,f:SF,t:SD}; }
   [['bkSFrom',SF],['bkSTo',SD]].forEach(([id,v])=>{ const i=document.getElementById(id); if(i){ i.min=B.mFrom; i.max=D; i.value=v; } });
   const rb=document.getElementById('bkSReset'); if(rb)rb.style.display=cust?'':'none';
   const es=B.eqBy[SD], ps=SF>B.mFrom?B.eqBy[bkAddDays(SF,-1)]:null, pb=F>B.mFrom?B.eqBy[bkAddDays(F,-1)]:null;
   const r={}; ['pos','dep','cx','fee','draw','R','net'].forEach(k=>{ r[k]=es.cum[k]-(ps?ps.cum[k]:0); });   // ยอดขาย/เงินสด/ค่าธรรมเนียม: วันขาย SF–SD
   ['bills','fix','mv'].forEach(k=>{ r[k]=e.cum[k]-(pb?pb.cum[k]:0); });                                   // บิล/เงินเข้าออกอื่น: ช่วงบัญชี F–D
   const Q=x=>x?x.cum.adj+x.cum.net:0; // เงินโอน QR ที่เข้าบัญชีจริงสะสมถึงสิ้นวันนั้น
-  // QR ของวันขายหลัง SD ที่เข้าบัญชีแล้ว ณ สิ้นวัน y → ไม่นับ (ไม่ได้เลือกวันขายนั้น) · ต่อบัญชี แบบเข้าก่อน-ออกก่อน: เงินเข้าจริง (QRin = PAYOUT/ประมาณ)
-  //   ใช้จ่ายให้วันขายที่นับก่อน (≤SD ที่เข้าในเดือนนี้) ส่วนเกินจึงเป็นของวันขายที่ไม่นับ (SD,D] · นับเฉพาะบัญชีที่ผูก (N[a]) ไม่ใช่ net รวมบัญชี Beam ที่ไม่ได้ผูก
-  const exQR=y=>{ let sum=0; const dd=new Set(); if(SD>=D)return {sum,dd};
-    B.A.forEach(a=>{ let arr=0,owed=0; const win=[]; for(let t=B.mFrom; t<=y; t=bkAddDays(t,1))arr+=(B.QRin[a]||{})[t]||0;
-      B.days.forEach(x=>{ const v=(x.N&&x.N[a])||0; if(!(v>0))return; if(x.ds<=SD){ if(x.payDate>=B.mFrom)owed+=v; } else if(x.ds<=D)win.push([x.ds,v]); });
-      let rem=Math.max(0,arr-owed); win.forEach(([d,v])=>{ const k=Math.min(rem,v); if(k>=0.005){ sum+=k; dd.add(d); } rem-=k; }); });
+  // QR ของวันขายหลัง SD ที่เข้าบัญชีแล้ว ณ สิ้นวัน y → ไม่นับ (ไม่ได้เลือกวันขายนั้น) · ต่อบัญชีที่ผูก (N[a] ไม่ใช่ net รวมบัญชี Beam ไม่ผูก)
+  //   ไล่เงินเข้าจริง (QRin = PAYOUT/ประมาณ) ทีละวัน: เงินเข้าวัน t จ่ายให้วันขายที่ถึงกำหนดแล้ว (payDate ≤ t) ที่ยังค้าง เก่าสุดก่อน (เข้าช้าตามลำดับ/วันหยุด ถูกต้อง)
+  //   ส่วนเกินที่ไม่ตรงวันไหน = ไม่ระบุ (ไม่ยกไปกินวันที่ยังไม่ถึงกำหนด) · รอบไหนจ่ายขาดเล็กน้อย (ได้ ≥99%) ถือว่าจบ ไม่ไปกินเงินรอบหลัง · ข้อจำกัด: Beam กั๊กวันเก่าแต่จ่ายวันใหม่ก่อน (สลับลำดับ) จะนับผิดวัน
+  const exQR=y=>{ let sum=0; const dd=new Set(); if(SD>=D||!B.days.length)return {sum,dd};
+    B.A.forEach(a=>{ const q=B.QRin[a]||{}, L=B.days.map(x=>({ds:x.ds,due:x.payDate,n:(x.N&&x.N[a])||0,paid:0,done:false})).filter(x=>x.n>0);
+      for(let t=B.days[0].ds; t<=y; t=bkAddDays(t,1)){ let pool=q[t]||0; if(pool<0.005)continue; const hit=[];
+        for(const x of L){ if(pool<0.005)break; if(x.done||x.due>t)continue; const k=Math.min(pool,x.n-x.paid); x.paid+=k; pool-=k; hit.push(x);
+          if(x.ds>SD&&x.ds<=D&&k>=0.005){ sum+=k; dd.add(x.ds); } if(x.n-x.paid<0.005)x.done=true; }
+        hit.forEach(x=>{ if(!x.done&&x.paid>=0.99*x.n)x.done=true; }); } });
     return {sum,dd}; };
   const exD=exQR(D), pend=exD.sum, pendD=[...exD.dd].sort(), pendOnD=pend-exQR(bkAddDays(D,-1)).sum; // pendOnD = ส่วนที่เข้าวัน D เอง
   const qrT=Q(e)-Q(ps)-r.net; r.adj=qrT-pend;

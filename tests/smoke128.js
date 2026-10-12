@@ -160,6 +160,13 @@ setTimeout(async()=>{
   d.getElementById('bkFrom').value='2026-08-01'; w.bkFromChange();
   sf().value='2026-07-20'; st().value='2026-08-09'; w.bkSaleChange(0);
   out.push('พิมพ์วันขายตั้งแต่ 20 ก.ค. (นอกเดือน) → เก็บเป็น 1 ส.ค.: '+(w.eval("S.bankSale&&S.bankSale.f==='2026-08-01'&&S.bankSale.t==='2026-08-09'")&&sf().value==='2026-08-01'));
+  // รีวิวรอบ 2: ถูกตัดแต่ไม่ตรงช่วงบน → จำค่าที่ตัดแล้ว (ไม่ให้ค่าเดิมที่มองไม่เห็นโผล่กลับ)
+  sf().value='2026-08-02'; st().value='2026-08-09'; w.bkSaleChange(1);
+  d.getElementById('bkDate').value='2026-08-05'; w.bkDateChange();
+  const s5=w.eval('JSON.stringify(S.bankSale)');
+  d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange();
+  out.push('วันขาย 2–9 → ดูยอด 5 ส.ค. (เห็น 2–5) → กลับ 10 ส.ค. ยังเป็น 2–5 ตามที่เห็นล่าสุด (ไม่ใช่ 2–9 ที่ซ่อนอยู่): '+(s5.includes('"f":"2026-08-02","t":"2026-08-05"')&&sf().value==='2026-08-02'&&st().value==='2026-08-05'&&rs().style.display===''));
+  sf().value='2026-08-01'; st().value='2026-08-09'; w.bkSaleChange(1);
   // หลังโหลดหน้าใหม่ วันขายที่เลือกไว้ยังอยู่ (เช่น กดบันทึกยอด)
   await w.eval("show('bank')"); await sleep(500);
   out.push('โหลดหน้าใหม่ → วันขาย 1–9 ยังอยู่ · ขาย 157,000.00: '+(st().value==='2026-08-09'&&L()[1].endsWith('+ 157,000.00')));
@@ -199,6 +206,20 @@ setTimeout(async()=>{
   const dflt=find(ls,'ยอดที่ควรมีในบัญชี');
   st().value='2026-08-06'; w.bkSaleChange(1); ls=L();
   out.push('PAYOUT เข้าช้า: ค่าเริ่ม =19,720.00 · วันขาย 1–6 =19,720.00 ไม่มีบรรทัด QR ที่ไม่นับ: '+(dflt.includes('19,720.00')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('19,720.00')&&!find(ls,'ปรับอื่นๆ').includes('QR ของวันขายที่ไม่ได้นับ')));
+  // รีวิวรอบ 2: PAYOUT ตรงเวลาแต่รอบ 4 ส.ค. จ่ายขาด 50 (39,800 จาก net 39,850) → ไม่ไปกินเงินของ 7 ส.ค. ที่เข้า 10 ส.ค.
+  PAYOUT.pop(); PAYOUT.push({acct:'jingjaimookt',ts:'2026-08-10T10:30:00',d:'2026-08-10',btype:'PAYOUT',gross:-19925,fee:0,net:-19925,bal:0});
+  w.eval('S.bankSale=null'); await w.eval("show('bank')"); await sleep(500);
+  d.getElementById('bkFrom').value='2026-08-01'; d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange(); w.bkFromChange();
+  st().value='2026-08-06'; w.bkSaleChange(1); ls=L();
+  out.push('PAYOUT ตรงเวลา + รอบก่อนขาด 50: วันขาย 1–6 → QR ที่ไม่นับ (7 ส.ค.) −19,925.00 (ไม่ใช่ 19,875) · =19,720.00: '+(find(ls,'ปรับอื่นๆ').includes('QR ของวันขายที่ไม่ได้นับ (7 ส.ค.) ที่เข้าบัญชีแล้ว −19,925.00')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('19,720.00')));
+  // รีวิวรอบ 2: ขายพฤ 30 ก.ค. (net 9,962.55) Beam โอนช้ามา จ 3 ส.ค. → ไม่ใช่เงินของวันขาย 10 ส.ค. (ยังไม่ถึงกำหนด 11 ส.ค.)
+  INC.push({...Z,branch:'JJRD',d:'2026-07-30',sales_pos_am:10000,transfer_total_am:10000});
+  PAYOUT.push({acct:'jingjaimookt',ts:'2026-08-03T10:30:00',d:'2026-08-03',btype:'PAYOUT',gross:-9962.55,fee:0,net:-9962.55,bal:0});
+  w.eval('S.bankSale=null'); await w.eval("show('bank')"); await sleep(500);
+  d.getElementById('bkFrom').value='2026-08-01'; d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange(); w.bkFromChange(); ls=L();
+  const dflt2=find(ls,'ยอดที่ควรมีในบัญชี');
+  st().value='2026-08-09'; w.bkSaleChange(1); ls=L();
+  out.push('เงินเดือนก่อนเข้าช้า 3 ส.ค.: ค่าเริ่ม =49,607.55 · วันขาย 1–9 เท่ากัน ไม่มีบรรทัด QR ที่ไม่นับ (10 ส.ค. ยังไม่ถึงกำหนด): '+(dflt2.includes('49,607.55')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('49,607.55')&&!find(ls,'ปรับอื่นๆ').includes('QR ของวันขายที่ไม่ได้นับ')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },400);
