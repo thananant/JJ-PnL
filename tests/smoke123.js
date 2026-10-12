@@ -139,9 +139,10 @@ setTimeout(async()=>{
   const setV=(a1,a2)=>{ d.getElementById('bkBal_A1').value=String(a1); d.getElementById('bkBal_A2').value=String(a2); w.bkSnapPreview(); return d.getElementById('bkEq'); };
   let eq=setV(15000.20,7770.04);
   const lines=[...eq.querySelectorAll('.bk-ln')].map(x=>x.textContent.replace(/\s+/g,' ').trim());
-  out.push('สมการ 4 ส.ค.: ยอดต้นเดือน 0.00 · +ขาย 107,000.00 · −ฝาก 49,050.00 · −จ่ายสด 2,000.00 · −บิล 25,000.00 · −อื่น 0.00 · −fee 179.76 · ปรับ −8,000.00 (เงินทอน) · =22,770.24 · จริง 22,770.24: '
-    +(lines[0].includes('ยอดต้นเดือน')&&lines[0].includes('0.00')&&lines[1].includes('+ 107,000.00')&&lines[2].includes('− 49,050.00')&&lines[3].includes('− 2,000.00')&&lines[4].includes('− 25,000.00')&&lines[5].includes('− 0.00')&&lines[6].includes('− 179.76')
-      &&lines[7].includes('ปรับอื่นๆ')&&lines[7].includes('− 8,000.00')&&lines[7].includes('เงินทอนในเก๊ะเพิ่มขึ้น −8,000.00')&&lines[8].includes('= 22,770.24')&&lines[9].includes('22,770.24')));
+  out.push('สมการ 4 ส.ค.: ยอดต้นเดือน 0.00 · +ขาย 107,000.00 · −ฝาก 49,050.00 · −เงินสดค้างในเก๊ะ 8,000.00 · +เก๊ะเปิดวันที่ 1 0.00 · −จ่ายสด 2,000.00 · −บิล 25,000.00 · −อื่น 0.00 · −fee 179.76 · =22,770.24 · จริง 22,770.24: '
+    +(lines.length===11&&lines[0].includes('ยอดต้นเดือน')&&lines[0].includes('0.00')&&lines[1].includes('+ 107,000.00')&&lines[2].includes('− 49,050.00')
+      &&lines[3].includes('เงินสดค้างในเก๊ะ ณ สิ้นวัน 4 ส.ค.')&&lines[3].includes('− 8,000.00')&&lines[4].includes('เก๊ะเปิดเช้าวันที่ 1')&&lines[4].includes('เงินของเดือนที่แล้ว')&&lines[4].includes('+ 0.00')
+      &&lines[5].includes('− 2,000.00')&&lines[6].includes('− 25,000.00')&&lines[7].includes('− 0.00')&&lines[8].includes('− 179.76')&&lines[9].includes('= 22,770.24')&&lines[10].includes('22,770.24')));
   const df=()=>eq.querySelector('.bk-diff');
   out.push('ยอดจริงตรง → ดิฟ 0.00 · ✓ ตรง (เขียว): '+(df().classList.contains('ok')&&df().textContent.includes('0.00')&&df().textContent.includes('✓ ตรง')));
   eq=setV(15100.20,7770.04);

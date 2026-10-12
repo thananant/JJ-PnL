@@ -154,6 +154,18 @@ setTimeout(async()=>{
   t=d.getElementById('view-bank').textContent;
   out.push('404 → ยังไม่ได้สร้างตาราง: '+t.includes('ยังไม่ได้สร้างตาราง'));
   MODE.accErr=0;
+  // 8) เก๊ะเปิดเช้าวันที่ 1 = เงินเดือนที่แล้ว (เดือนนี้เริ่มที่ 0) — เรียก bkCalc ตรงด้วยข้อมูลสังเคราะห์ (รัชดาสาขาเดียว)
+  //    1 ส.ค. (ส): เช้า เปิด 2,930 (ยกมา) ขาย 10,000 เงินสด → ปิด 12,930 · เย็น ขาย 20,000 (โอน 15,000) ฝาก 10,000 → ปิด 7,930 · ปิดกะลงตัวทั้ง 2 กะ
+  //    → ขาย 30,000 − ฝาก 10,000 − เก๊ะค้าง 7,930 + เก๊ะเปิดวันที่ 1 2,930 − fee 56.175 − โอนยังไม่เข้า 14,943.825 = 0 · จ 3 ส.ค. โอนเข้า → 14,943.83
+  const R=await w.eval(`(()=>{ const Z={sales_pos_am:0,sales_pos_pm:0,deposit_am:0,deposit_pm:0,cash_drawer_am:0,cash_drawer_pm:0,transfer_total_am:0,transfer_total_pm:0,reserve_acct_am:0,reserve_acct_pm:0,transfer_pending_prev_am:0,transfer_pending_prev_pm:0,drawer_open_am:0,drawer_open_pm:0};
+    const row={...Z,branch:'JJRD',d:'2026-08-01',drawer_open_am:2930,sales_pos_am:10000,cash_drawer_am:12930,drawer_open_pm:12930,sales_pos_pm:20000,transfer_total_pm:15000,deposit_pm:10000,cash_drawer_pm:7930};
+    const B=bkCalc({accts:BK_DEF_ACCTS.map(a=>({...a})),opening:{},actual:{},from:'2026-08-01',to:'2026-08-31',lo:'2026-08-01',lo0:'2026-07-29',mFrom:'2026-08-01',mTo:'2026-08-31',brs:['JJRD'],O:null,
+      inc:[row],cash:[],beam:[],payout:[],moves:[],expPaid:[],expNoD:[],fixPaid:[],extraPaid:[],fixNoD:[],extraNoD:[],month:{JJRD:{inc:{'2026-08-01':row},cash:[],exp:{}}},cols:true});
+    const e1=B.eqBy['2026-08-01'], e3=B.eqBy['2026-08-03'];
+    return {drawNow:e1.drawNow,open1:e1.open1,gap:e1.drawGap,s1:e1.should,s3:e3.should,cashOpen1:B.cashBr[0].open1}; })()`);
+  out.push('เก๊ะเปิดวันที่ 1 = 2,930 · เก๊ะค้าง 7,930 · ไม่มีส่วนต่างเก๊ะ: '+(R.open1===2930&&R.drawNow===7930&&Math.abs(R.gap)<0.005));
+  out.push('สมการ 1 ส.ค. = 0.00 (เงินเดือนที่แล้วในเก๊ะไม่นับเป็นของเดือนนี้) · 3 ส.ค. = 14,943.83 (โอนเข้า): '+(near(R.s1,0)&&near(R.s3,14943.825)));
+  out.push('การ์ดเงินสดในมือรู้เก๊ะเปิดวันที่ 1 = 2,930: '+(R.cashOpen1===2930));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },400);
