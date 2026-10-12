@@ -6388,20 +6388,25 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
     if(r.src==='exp')o.bills+=-r.amount; else if(r.src==='move')o.mv+=r.amount; else o.other+=-r.amount; });
   const eq=[],eqBy={};
   if(hasOpen){ const c={pos:0,dep:0,cx:0,bills:0,other:0,fee:0,draw:0,mv:0,adj:0,R:0}; let run=open0;
+    const open1={},lastClose={}; // user 12 ต.ค.: เก๊ะเปิดเช้าวันที่ 1 = เงินของเดือนที่แล้ว (เดือนนี้เริ่มที่ 0) → แยกบรรทัดให้เห็น
     for(let ds=bkAddDays(eqO,1); ds<=L.to; ds=bkAddDays(ds,1)){
+      (inc[ds]||[]).forEach(r=>{ ['am','pm'].forEach(sh=>{ if(!shiftHasData(r,sh))return; if(!(r.branch in open1))open1[r.branch]=num(r['drawer_open_'+sh]); lastClose[r.branch]=num(r['cash_drawer_'+sh]); }); });
       const x=dayBy[ds]||{}, o=outBy[ds]||{}, arr=A.reduce((t,a)=>t+(QRin[a][ds]||0),0);
       const e={ds,d:ds>=L.mFrom&&ds<=L.mTo?+ds.slice(8):null,pos:x.POS||0,dep:x.dep||0,cx:x.CX||0,bills:o.bills||0,other:o.other||0,fee:x.fee||0,draw:x.dDraw||0,mv:o.mv||0,adj:arr-(x.net||0),arr,R:x.R||0,hasInc:!!x.hasInc};
       e.flow=e.pos-e.dep-e.cx-e.bills-e.other-e.fee-e.draw+e.mv+e.adj; run+=e.flow; e.should=run;
       Object.keys(c).forEach(k=>{ c[k]+=e[k]; }); e.cum={...c};
       let tot=0,all=true; A.forEach(a=>{ const sn=L.actual[a]&&L.actual[a][ds]; if(sn)tot+=num(sn.balance); else all=false; });
       e.snap=all?tot:null; e.diff=all?tot-run:null; e.st=bkStatus(e.diff,arr,c.R);
+      e.drawNow=Object.values(lastClose).reduce((t,v)=>t+v,0); e.open1=Object.values(open1).reduce((t,v)=>t+v,0);
+      e.open1By={...open1}; e.drawGap=c.draw-(e.drawNow-e.open1); // ≠0 เมื่อเก๊ะเปิดกะไหนไม่เท่าเก๊ะปิดกะก่อน
       eq.push(e); eqBy[ds]=e; }
   }
   // ---- เงินสดในมือต่อสาขา (เก๊ะล่าสุด / ฝากรอเข้า / จ่ายสด / ปิดกะ สูตรเดิม shiftDiffCalc) ----
   const nd=monthDays(S.m), closeD={};
   const cashBr=L.brs.map(bc=>{
-    const c=L.month[bc]; let drawer=null,drawerAt='',paid=0,dif=0,nsh=0; const bad=[];
+    const c=L.month[bc]; let drawer=null,drawerAt='',paid=0,dif=0,nsh=0,open1=null; const bad=[];
     if(c){
+      for(let d=1; d<=nd&&open1==null; d++){ const r=c.inc[dstr(S.m,d)]; if(!r)continue; for(const sh of ['am','pm']){ if(shiftHasData(r,sh)){ open1=num(r['drawer_open_'+sh]); break; } } }
       for(let d=nd; d>=1&&drawer==null; d--){ const r=c.inc[dstr(S.m,d)]; if(!r)continue;
         for(const sh of ['pm','am']){ if(shiftHasData(r,sh)){ drawer=num(r['cash_drawer_'+sh]); drawerAt=(sh==='am'?'กะเช้า ':'กะเย็น ')+bkDm(dstr(S.m,d)); break; } } }
       c.cash.forEach(x=>{ paid+=num(x.amount); if(String(x.descr||'').includes('ดิฟ'))dif+=num(x.amount); });
@@ -6413,7 +6418,7 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
     const dF=L.O||L.from; // ยอดตั้งต้น ณ สิ้นวัน O ยังไม่รวมเงินฝากที่นับได้ในวัน O
     L.inc.forEach(r=>{ if(r.branch===bc&&r.d>=dF)dep+=num(r.deposit_am)+num(r.deposit_pm); });
     L.moves.forEach(r=>{ if(r.kind==='cash_deposit'&&r.branch===bc&&num(r.amount)>0&&r.d>=dF)depd+=num(r.amount); });
-    return {bc,name:bkBrN(bc),drawer,drawerAt,pend:dep-depd,paid,dif,bad,nsh};
+    return {bc,name:bkBrN(bc),drawer,drawerAt,open1,pend:dep-depd,paid,dif,bad,nsh};
   });
   days.forEach(x=>{ x.close=closeD[x.ds]||null; });
   // ---- โหมด: ทุกวันขาย ≤ วันนี้ ที่มีโอน มีไฟล์ Beam → แม่น · ไม่งั้นประมาณ ----
@@ -6472,14 +6477,16 @@ function bkSnapPreview(){ // สมการถึงวันที่เลื
   const c=e.cum; let ent=0,n=0; B.A.forEach(a=>{ const v=(document.getElementById('bkBal_'+a)||{}).value; if(v!==''&&v!=null){ ent+=num(v); n++; } });
   const full=n===B.A.length, diff=full?ent-e.should:null, st=full?bkStatus(diff,e.arr,c.R):null;
   const ln=(sg,lab,v,sub,cls)=>'<div class="bk-ln'+(cls?' '+cls:'')+'"><span>'+lab+(sub?'<small>'+sub+'</small>':'')+'</span><b>'+(v==null?'—':sg+fmt(Math.abs(v),2))+'</b></div>';
-  const oth=c.mv+c.adj-c.draw, parts=[];
+  const oth=c.mv+c.adj-e.drawGap, parts=[];
   if(Math.abs(c.adj)>=0.005)parts.push('เงินโอน QR ที่ยังไม่เข้า/เพิ่งเข้าบัญชี (โอนวันนี้ เข้าวันถัดไป) '+(c.adj>0?'+':'−')+fmt(Math.abs(c.adj),2));
-  if(Math.abs(c.draw)>=0.005)parts.push('เงินทอนในเก๊ะ'+(c.draw>0?'เพิ่มขึ้น −':'ลดลง +')+fmt(Math.abs(c.draw),2));
+  if(Math.abs(e.drawGap)>=0.005)parts.push('เก๊ะเปิดบางกะไม่เท่าเก๊ะปิดกะก่อน '+(e.drawGap>0?'−':'+')+fmt(Math.abs(e.drawGap),2));
   if(Math.abs(c.mv)>=0.005)parts.push('เงินเข้า/ออกอื่น '+(c.mv>0?'+':'−')+fmt(Math.abs(c.mv),2));
   box.innerHTML=
      ln('','ยอดต้นเดือน',0,'ปิดบัญชีทุกสิ้นเดือน → เริ่มที่ 0 ทุกวันที่ 1')
     +ln('+ ','ยอดขายทั้งหมด',c.pos,bkDm(bkAddDays(B.eqO,1))+' – '+bkDm(D)+' · ทุกสาขา','in')
     +ln('− ','เงินสดที่ฝาก',c.dep,'','out')
+    +ln('− ','เงินสดค้างในเก๊ะ ณ สิ้นวัน '+bkDm(D),e.drawNow,'ยังไม่ได้ฝาก · ทุกสาขา','out')
+    +ln('+ ','เก๊ะเปิดเช้าวันที่ 1',e.open1,'เงินของเดือนที่แล้ว ไม่ใช่ของเดือนนี้'+(Object.keys(e.open1By).length?' · '+Object.keys(e.open1By).map(b=>esc(bkBrN(b))+' '+fmtI(e.open1By[b])).join(' + '):''),'in')
     +ln('− ','รายจ่ายเงินสดหน้าร้าน',c.cx,'ค่าดิฟ ฯลฯ ที่พนักงานจ่าย','out')
     +ln('− ','บิลที่จ่ายแล้ว (มีสลิป)',c.bills,'','out')
     +ln('− ','รายจ่ายอื่นๆ',c.other,'รายจ่ายนอกเหนือ + Fix cost ที่ลงวันจ่าย','out')
@@ -6532,6 +6539,7 @@ function bkCashCard(B){
     +B.cashBr.map((c,i)=>{ const bs=c.bad.reduce((x,y)=>x+y.df,0);
       return '<div class="bk-cbx"><div class="bn"><i'+(i%2?' class="lp"':'')+'></i>'+esc(c.name)+'</div>'
         +'<div class="row"><span>เก๊ะล่าสุด<small>'+esc(c.drawerAt||'ยังไม่มีข้อมูลเดือนนี้')+'</small></span><b>'+(c.drawer==null?'—':'฿'+fmtI(c.drawer))+'</b></div>'
+        +(c.open1!=null?'<div class="row"><span>เก๊ะเปิดเช้าวันที่ 1<small>เงินของเดือนที่แล้ว ไม่นับเป็นของเดือนนี้</small></span><b>฿'+fmtI(c.open1)+'</b></div>':'')
         +'<div class="row"><span>เงินฝากรอเข้าบัญชี<small>ฝากสะสมตั้งแต่ '+bkDm(B.from)+' − ที่ลงฝากแล้ว</small></span><b>฿'+fmtI(c.pend)+'</b></div>'
         +'<div class="row"><span>จ่ายสดหน้าร้านเดือนนี้</span><b>฿'+fmtI(c.paid)+' <small>(ค่าดิฟ ฿'+fmtI(c.dif)+')</small></b></div>'
         +'<div class="row"><span>ปิดกะไม่ลงตัว</span><b>'+(c.nsh===0?'<span class="mut">ยังไม่มีข้อมูล</span>':c.bad.length===0?'<span class="chip ok">✓ ลงตัวทุกกะ ('+c.nsh+' กะ)</span>'
