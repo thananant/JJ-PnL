@@ -418,6 +418,8 @@ table.sttab th.right{text-align:right}
 .tmstep:last-child{border-bottom:0}
 .tmstep .n{flex:none;min-width:30px;height:30px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px}
 .tmstep.tip{color:var(--mut);font-size:15px}.tmstep.tip .n{background:none;color:inherit;font-size:18px}
+.tmhead{font-weight:800;font-size:16px;color:var(--red);padding:12px 0 6px;border-bottom:1px solid var(--line)}
+.tmhead:first-child{padding-top:8px}
 #mnNote{width:100%;font:inherit;font-size:16px;line-height:1.5;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;resize:vertical}
 .modal.task .brline{min-height:72px;padding:12px 8px;border-radius:14px;cursor:pointer}
 .modal.task .brline .grow b{font-size:18px}.modal.task .brtick input{width:34px;height:34px}
@@ -674,7 +676,7 @@ const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const EMAIL_DOMAIN='@jjmk.local';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='CK b8';
+const APP_VER='CK b9';
 
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
@@ -3958,7 +3960,8 @@ function paintMenuEdit(){
     '<div class="grid2"><div class="fld"><label>💰 '+t('kf_mk_lb')+'</label><input inputmode="decimal" placeholder="'+esc(t('kf_def',{v:fmtQ(kpCfg().markup)}))+'" value="'+esc(d.markup_pct)+'" oninput="MN_DRAFT.markup_pct=this.value"></div>'+
     '<div class="fld"><label>🛟 '+t('kf_sf_days')+'</label><input inputmode="decimal" placeholder="'+esc(t('kf_def',{v:fmtQ(kpCfg().safety_days)}))+'" value="'+esc(d.safety_days)+'" oninput="MN_DRAFT.safety_days=this.value"></div></div>'+
     '<div class="fld"><label>📌 '+t('kf_sf_qty')+' ('+esc(trUnit(d.yield_unit||''))+')</label><input inputmode="decimal" placeholder="'+esc(t('kf_sf_qty_ph'))+'" value="'+esc(d.safety_qty)+'" oninput="MN_DRAFT.safety_qty=this.value"></div>'+
-    '<div class="fld"><label>📝 '+t('mn_method')+'</label><textarea id="mnNote" rows="6" placeholder="'+esc(t('mn_method_ph'))+'" oninput="MN_DRAFT.note=this.value">'+esc(d.note)+'</textarea></div>'+
+    '<div class="fld"><label>📝 '+t('mn_method')+'</label><textarea id="mnNote" rows="6" placeholder="'+esc(t('mn_method_ph'))+'" oninput="MN_DRAFT.note=this.value">'+esc(d.note)+'</textarea>'+
+      '<div class="xs mut" style="margin-top:4px">'+t('mn_method_tip')+'</div></div>'+
     '<div class="secbar">'+t('mn_bom')+'<span class="sp">'+d.bom.length+'</span></div>';
   d.bom.forEach((l,i)=>{const it=itemById(l.item_id);
     h+='<div class="rowline"><div class="grow">'+esc(it?dispName(it):'?')+' <span class="xs mut">'+esc(trUnit(it?it.unit||'':''))+'</span></div>'+
@@ -5607,9 +5610,11 @@ const SP_I18N={"th": {"nav_sups": "ร้านค้า (ซัพ)", "sp_hint"
 ['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],SP_I18N[l]));   // ข้อความหน้าร้านค้า (sp_*)
 
 /* ---------- 📝 วิธีทำ (ck_recipes.note · 1 บรรทัด = 1 ขั้น) — โชว์ในหน้าทำของ + รายละเอียดเมนู ----------
-   เลขหน้าบรรทัด ("1." "5.1)") ตัดออก ระบบเรียงเลขให้เอง · บรรทัดขึ้นต้น * = เคล็ดลับ (ไม่นับเป็นขั้น) */
+   เลขหน้าบรรทัด ("1." "5.1)") ตัดออก ระบบเรียงเลขให้เอง · บรรทัดขึ้นต้น * = เคล็ดลับ (ไม่นับเป็นขั้น)
+   บรรทัดขึ้นต้น # = หัวข้อ เช่น "# เตรียมก่อนทำ" / "# วิธีทำ" — เลขขั้นเริ่ม 1 ใหม่ใต้หัวข้อ (เจ้าของส่งสูตรที่แยก "วิธีผสมก่อนทำ" ไว้ 2026-10-12) */
 function methodSteps(note){
   return String(note||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(x=>{
+    if(/^#/.test(x))return {head:true,tx:x.replace(/^#+\s*/,'').replace(/\s*[:：]$/,'')};
     if(/^[*※]/.test(x))return {tip:true,tx:x.replace(/^[*※\s]+|[*\s]+$/g,'')};
     return {tip:false,tx:x.replace(/^\d+(?:\.\d+)*[.)](?!\d)\s*/,'')};}).filter(x=>x.tx);}
 function methodHtml(r,b,secCls){
@@ -5617,9 +5622,12 @@ function methodHtml(r,b,secCls){
   let n=0;
   return '<div class="'+(secCls||'secbar')+'">📝 '+t('sx_method')+'</div>'+
     (b!=null&&Math.abs(num(b)-1)>1e-9?'<div class="tkhint">'+t('sx_method_scale',{y:fmtQ(r.yield_qty)+' '+esc(trUnit(r.yield_unit||''))})+'</div>':'')+
-    '<div class="tmsteps">'+st.map(x=>'<div class="tmstep'+(x.tip?' tip':'')+'"><span class="n">'+(x.tip?'💡':(++n))+'</span><span>'+esc(x.tx)+'</span></div>').join('')+'</div>';}
+    '<div class="tmsteps">'+st.map(x=>x.head?(n=0,'<div class="tmhead">'+esc(x.tx)+'</div>'):
+      '<div class="tmstep'+(x.tip?' tip':'')+'"><span class="n">'+(x.tip?'💡':(++n))+'</span><span>'+esc(x.tx)+'</span></div>').join('')+'</div>';}
 const MT_I18N={"th": {"mn_method": "วิธีทำ (1 บรรทัด = 1 ขั้น)", "mn_method_ph": "เช่น\nใส่ไข่ 10 ฟองลงในเครื่อง\nใส่น้ำตาล แล้วตีให้เข้ากัน\nอบไฟ 180 องศา 55 นาที", "sx_method": "วิธีทำ", "sx_method_scale": "ตัวเลขในวิธีทำเป็นของ 1 รอบ ({y}) — วันนี้ใช้จำนวนตาม \"ส่วนผสม\" ด้านบน"}, "en": {"mn_method": "Method (1 line = 1 step)", "mn_method_ph": "e.g.\nPut 10 eggs in the mixer\nAdd sugar and beat well\nBake at 180°C for 55 min", "sx_method": "How to make", "sx_method_scale": "Numbers in the steps are for 1 batch ({y}) — today use the amounts under \"Ingredients\" above"}, "lo": {"mn_method": "ວິທີເຮັດ (1 ແຖວ = 1 ຂັ້ນ)", "mn_method_ph": "ເຊັ່ນ\nໃສ່ໄຂ່ 10 ໜ່ວຍລົງໃນເຄື່ອງ\nໃສ່ນ້ຳຕານ ແລ້ວຕີໃຫ້ເຂົ້າກັນ\nອົບໄຟ 180 ອົງສາ 55 ນາທີ", "sx_method": "ວິທີເຮັດ", "sx_method_scale": "ຕົວເລກໃນວິທີເຮັດແມ່ນຂອງ 1 ຮອບ ({y}) — ມື້ນີ້ໃຊ້ຈຳນວນຕາມ \"ສ່ວນປະສົມ\" ຂ້າງເທິງ"}, "my": {"mn_method": "ပြုလုပ်နည်း (1 ကြောင်း = 1 အဆင့်)", "mn_method_ph": "ဥပမာ\nကြက်ဥ 10 လုံးကို စက်ထဲထည့်ပါ\nသကြားထည့်ပြီး ရောမွှေပါ\n180 ဒီဂရီ 55 မိနစ် ဖုတ်ပါ", "sx_method": "ပြုလုပ်နည်း", "sx_method_scale": "အဆင့်များထဲရှိ ကိန်းဂဏန်းများသည် 1 ကြိမ်စာ ({y}) ဖြစ်သည် — ယနေ့ အထက်ရှိ \"ပါဝင်ပစ္စည်း\" ပမာဏကို သုံးပါ"}};
 ['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],MT_I18N[l]));   // ข้อความวิธีทำ
+const MT2_I18N={"th": {"mn_method_tip": "ขึ้นต้นบรรทัดด้วย # = หัวข้อ เช่น # เตรียมก่อนทำ (เลขขั้นเริ่ม 1 ใหม่) · ขึ้นต้นด้วย * = เคล็ดลับ"}, "en": {"mn_method_tip": "Start a line with # for a heading, e.g. # Prep (steps restart at 1) · start with * for a tip"}, "lo": {"mn_method_tip": "ຂຶ້ນຕົ້ນແຖວດ້ວຍ # = ຫົວຂໍ້ ເຊັ່ນ # ກຽມກ່ອນເຮັດ (ເລກຂັ້ນເລີ່ມ 1 ໃໝ່) · ຂຶ້ນຕົ້ນດ້ວຍ * = ເຄັດລັບ"}, "my": {"mn_method_tip": "ခေါင်းစဉ်အတွက် စာကြောင်းကို # ဖြင့်စပါ ဥပမာ # ကြိုတင်ပြင်ဆင်ရန် (အဆင့် 1 မှ ပြန်စ) · အကြံပြုချက်အတွက် * ဖြင့်စပါ"}};
+['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],MT2_I18N[l]));   // หัวข้อในวิธีทำ (#)
 
 /* ============================================================
    📅 วันสั่งของ + วันรอของ ของแต่ละร้าน (เจ้าของสั่ง 2026-10-06 "บางซัพจะต้องกำหนดวันสั่งด้วย และวันรอรับของ")
