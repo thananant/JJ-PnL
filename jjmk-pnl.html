@@ -6513,22 +6513,30 @@ function bkSnapPreview(){ // สมการช่วง ตั้งแต่ F
   // ช่วงวันขาย (user 12 ต.ค.): ค่าเริ่ม = ช่วงด้านบน · เลือกเองได้ ไม่เกินวันที่ดูยอด เช่น ดูยอดบัญชีวันนี้ แต่นับยอดขายถึงเมื่อวาน
   const sv=S.bankSale&&S.bankSale.m===S.m?S.bankSale:null; let SF=F,SD=D;
   if(sv){ SD=sv.t<D?sv.t:D; if(SD<B.mFrom)SD=B.mFrom; SF=sv.f<SD?sv.f:SD; if(SF<B.mFrom)SF=B.mFrom; }
-  const cust=SF!==F||SD!==D;
+  const cust=SF!==F||SD!==D; if(sv&&!cust)S.bankSale=null; // ตัดแล้วตรงช่วงบน = ตามช่วงบน (ไม่เก็บค่าที่มองไม่เห็นไว้โผล่ทีหลัง)
   [['bkSFrom',SF],['bkSTo',SD]].forEach(([id,v])=>{ const i=document.getElementById(id); if(i){ i.min=B.mFrom; i.max=D; i.value=v; } });
   const rb=document.getElementById('bkSReset'); if(rb)rb.style.display=cust?'':'none';
   const es=B.eqBy[SD], ps=SF>B.mFrom?B.eqBy[bkAddDays(SF,-1)]:null, pb=F>B.mFrom?B.eqBy[bkAddDays(F,-1)]:null;
   const r={}; ['pos','dep','cx','fee','draw','R','net'].forEach(k=>{ r[k]=es.cum[k]-(ps?ps.cum[k]:0); });   // ยอดขาย/เงินสด/ค่าธรรมเนียม: วันขาย SF–SD
   ['bills','fix','mv'].forEach(k=>{ r[k]=e.cum[k]-(pb?pb.cum[k]:0); });                                   // บิล/เงินเข้าออกอื่น: ช่วงบัญชี F–D
   const Q=x=>x?x.cum.adj+x.cum.net:0; // เงินโอน QR ที่เข้าบัญชีจริงสะสมถึงสิ้นวันนั้น
-  let pend=0; const pendD=[]; // QR ของวันขายหลัง SD ที่เข้าบัญชีแล้ว ณ วัน D → ไม่นับ (ไม่ได้เลือกวันขายนั้น)
-  for(let ds=bkAddDays(SD,1); ds<=D; ds=bkAddDays(ds,1)){ const x=B.dayBy&&B.dayBy[ds]; if(x&&x.payDate<=D&&Math.abs(x.net)>=0.005){ pend+=x.net; pendD.push(ds); } }
+  // QR ของวันขายหลัง SD ที่เข้าบัญชีแล้ว ณ สิ้นวัน y → ไม่นับ (ไม่ได้เลือกวันขายนั้น) · ต่อบัญชี แบบเข้าก่อน-ออกก่อน: เงินเข้าจริง (QRin = PAYOUT/ประมาณ)
+  //   ใช้จ่ายให้วันขายที่นับก่อน (≤SD ที่เข้าในเดือนนี้) ส่วนเกินจึงเป็นของวันขายที่ไม่นับ (SD,D] · นับเฉพาะบัญชีที่ผูก (N[a]) ไม่ใช่ net รวมบัญชี Beam ที่ไม่ได้ผูก
+  const exQR=y=>{ let sum=0; const dd=new Set(); if(SD>=D)return {sum,dd};
+    B.A.forEach(a=>{ let arr=0,owed=0; const win=[]; for(let t=B.mFrom; t<=y; t=bkAddDays(t,1))arr+=(B.QRin[a]||{})[t]||0;
+      B.days.forEach(x=>{ const v=(x.N&&x.N[a])||0; if(!(v>0))return; if(x.ds<=SD){ if(x.payDate>=B.mFrom)owed+=v; } else if(x.ds<=D)win.push([x.ds,v]); });
+      let rem=Math.max(0,arr-owed); win.forEach(([d,v])=>{ const k=Math.min(rem,v); if(k>=0.005){ sum+=k; dd.add(d); } rem-=k; }); });
+    return {sum,dd}; };
+  const exD=exQR(D), pend=exD.sum, pendD=[...exD.dd].sort(), pendOnD=pend-exQR(bkAddDays(D,-1)).sum; // pendOnD = ส่วนที่เข้าวัน D เอง
   const qrT=Q(e)-Q(ps)-r.net; r.adj=qrT-pend;
   const sCarry=ps?ps.cum.pos-ps.cum.dep-ps.cum.cx-ps.cum.fee-ps.cum.draw+ps.cum.adj:0, bCarry=pb?-pb.cum.bills-pb.cum.fix+pb.cum.mv:0;
-  const carry=sCarry+bCarry, drawStart=ps?ps.drawNow:es.open1, gap=r.draw-(es.drawNow-drawStart);
+  const late=ps?Object.keys(es.open1By).filter(b=>!(b in ps.open1By)&&Math.abs(es.open1By[b])>=0.005):[];
+  const carry=sCarry+bCarry, drawStart=ps?ps.drawNow+late.reduce((t,b)=>t+es.open1By[b],0):es.open1, gap=r.draw-(es.drawNow-drawStart);
   const should=cust?carry+r.pos-r.dep-r.cx-r.fee-r.draw+r.adj-r.bills-r.fix+r.mv-B.otherM:e.should;
   let ent=0,n=0; B.A.forEach(a=>{ const v=(document.getElementById('bkBal_'+a)||{}).value; if(v!==''&&v!=null){ ent+=num(v); n++; } });
-  const full=n===B.A.length, diff=full?ent-should:null, st=full?bkStatus(diff,e.arr,es.cum.R):null;
-  const ln=(sg,lab,v,sub,cls)=>'<div class="bk-ln'+(cls?' '+cls:'')+'"><span>'+lab+(sub?'<small>'+sub+'</small>':'')+'</span><b>'+(v==null?'—':sg+fmt(Math.abs(v),2))+'</b></div>';
+  const full=n===B.A.length, diff=full?ent-should:null, st=full?bkStatus(diff,Math.max(0,e.arr-pendOnD),es.cum.R):null;
+  const sgn=(sg,v)=>!(v<-0.004)?sg:sg==='+ '?'− ':sg==='− '?'+ ':sg==='= '?'= − ':'− '; // ค่าติดลบ → กลับเครื่องหมาย ให้บวกลบตามบรรทัดได้ตรง
+  const ln=(sg,lab,v,sub,cls)=>'<div class="bk-ln'+(cls?' '+cls:'')+'"><span>'+lab+(sub?'<small>'+sub+'</small>':'')+'</span><b>'+(v==null?'—':sgn(sg,v)+fmt(Math.abs(v),2))+'</b></div>';
   const oth=r.mv+r.adj-gap, parts=[];
   if(Math.abs(qrT)>=0.005)parts.push('เงินโอน QR ที่ยังไม่เข้า/เพิ่งเข้าบัญชี (โอนวันนี้ เข้าวันถัดไป) '+(qrT>0?'+':'−')+fmt(Math.abs(qrT),2));
   if(Math.abs(pend)>=0.005)parts.push('QR ของวันขายที่ไม่ได้นับ ('+pendD.map(bkDm).join(', ')+') ที่เข้าบัญชีแล้ว '+(pend>0?'−':'+')+fmt(Math.abs(pend),2));
@@ -6537,31 +6545,32 @@ function bkSnapPreview(){ // สมการช่วง ตั้งแต่ F
   const rngS=bkDm(SF)+' – '+bkDm(SD), rngB=bkDm(F)+' – '+bkDm(D), m1=bkDm(B.mFrom);
   const cSub=!cust||ps===pb?'ยอดที่ควรมีตั้งแต่วันที่ 1 ถึงวันก่อนช่วงที่เลือก (ยังไม่หักรายจ่ายอื่นๆ)'
     :[ps?'ยอดขาย/เงินสด '+m1+' – '+bkDm(ps.ds):'', pb?'บิลที่จ่าย '+m1+' – '+bkDm(pb.ds):''].filter(Boolean).join(' + ')+' ที่นับไปแล้ว (ยังไม่หักรายจ่ายอื่นๆ)';
-  bA.innerHTML=(ps||pb)?ln(carry<-0.004?'− ':'',(ps&&pb&&ps===pb)?'ยอดยกมา ณ สิ้นวัน '+bkDm(pb.ds):'ยอดยกมา',carry,cSub)
+  bA.innerHTML=(ps||pb)?ln('',(ps&&pb&&ps===pb)?'ยอดยกมา ณ สิ้นวัน '+bkDm(pb.ds):'ยอดยกมา',carry,cSub)
        :ln('','ยอดต้นเดือน',0,'ปิดบัญชีทุกสิ้นเดือน → เริ่มที่ 0 ทุกวันที่ 1');
-  document.getElementById('bkEqPos').textContent='+ '+fmt(Math.abs(r.pos),2);
+  document.getElementById('bkEqPos').textContent=sgn('+ ',r.pos)+fmt(Math.abs(r.pos),2);
   document.getElementById('bkSSub').textContent=cust?'ทุกสาขา · เลือกวันขายเอง (บิลยังนับ '+rngB+')':'ทุกสาขา';
   bS.classList.toggle('bk-cust',cust);
   bB.innerHTML=
      ln('− ','เงินสดที่ฝาก',r.dep,rngS,'out')
     +ln('− ','เงินสดค้างในเก๊ะ ณ สิ้นวัน '+bkDm(SD),es.drawNow,'ยังไม่ได้ฝาก · ทุกสาขา','out')
-    +(ps?ln('+ ','เงินในเก๊ะยกมา ณ สิ้นวัน '+bkDm(ps.ds),drawStart,'นับไปแล้วในยอดยกมา','in')
+    +(ps?ln('+ ','เงินในเก๊ะยกมา ณ สิ้นวัน '+bkDm(ps.ds),drawStart,'นับไปแล้วในยอดยกมา'+(late.length?' · รวมเงินทอนในเก๊ะ (เดือนที่แล้ว) ของสาขาที่ยังไม่เปิดกะ: '+late.map(b=>esc(bkBrN(b))+' '+fmtI(es.open1By[b])).join(' + '):''),'in')
        :ln('+ ','เก๊ะเปิดเช้าวันที่ 1',es.open1,'เงินของเดือนที่แล้ว ไม่ใช่ของเดือนนี้'+(Object.keys(es.open1By).length?' · '+Object.keys(es.open1By).map(b=>esc(bkBrN(b))+' '+fmtI(es.open1By[b])).join(' + '):''),'in'))
     +ln('− ','รายจ่ายเงินสดหน้าร้าน',r.cx,'ค่าดิฟ ฯลฯ ที่พนักงานจ่าย · '+rngS,'out')
     +ln('− ','บิลที่จ่ายแล้ว (มีสลิป)',r.bills,rngB,'out')
     +ln('− ','รายจ่ายอื่นๆ (ทั้งเดือน)',B.otherM,'หน้า "อื่นๆ": รายจ่ายนอกเหนือ '+B.nExtra+' รายการ ฿'+fmt(B.extraMT,2)+' + Shopee '+B.nShop+' รายการ ฿'+fmt(B.shopMT,2)+' · ดึงทั้งเดือน ไม่ขึ้นกับวันที่ที่เลือก','out')
     +(Math.abs(r.fix)>=0.005?ln('− ','Fix cost ที่ลงวันจ่าย',r.fix,rngB,'out'):'')
     +ln('− ','ค่าธรรมเนียมโอน QR',r.fee,'ธนาคารหักก่อนเงินเข้าบัญชี'+(cust?' · วันขาย '+rngS:''),'out')
-    +(parts.length?ln(oth>=0?'+ ':'− ','ปรับอื่นๆ',oth,parts.join(' · '),'adj'):'')
+    +(parts.length?ln('+ ','ปรับอื่นๆ',oth,parts.join(' · '),'adj'):'')
     +ln('= ','ยอดที่ควรมีในบัญชี ณ สิ้นวัน '+bkDm(D),should,cust?'นับยอดขาย '+rngS+' · บิลที่จ่ายถึง '+bkDm(D):'','tot')
     +ln('','ยอดจริงในบัญชี ('+B.A.map(a=>esc(B.label[a])).join(' + ')+')',full?ent:null,full?'':'ใส่ยอดให้ครบทั้ง '+B.A.length+' บัญชี','act')
     +'<div class="bk-diff '+(st?st.k:'')+'"><span>ดิฟ <small>ควรเป็น 0</small></span><b>'+(diff==null?'—':(diff>=0.005?'+':diff<=-0.005?'−':'')+fmt(Math.abs(diff),2))+'</b>'+(st?'<span class="chip '+st.cls+'">'+(st.k==='over'?'มากกว่าที่ควร':st.k==='short'?'ขาด':st.txt)+'</span>':'')+'</div>';
 }
 function bkSaleChange(k){ // เลือกวันขายเอง (0 = ตั้งแต่ · 1 = ถึง) → ไม่ให้ตั้งแต่เกินถึง · ตรงกับช่วงด้านบน = กลับไปตามช่วงบน
   const f=document.getElementById('bkSFrom'), t=document.getElementById('bkSTo'), F=document.getElementById('bkFrom'), D=document.getElementById('bkDate'); if(!f||!t||!D)return;
-  if(!f.value)f.value=(F&&F.value)||S.bank.mFrom; if(!t.value)t.value=D.value;
+  const m1=S.bank.mFrom, cl=v=>v<m1?m1:v>D.value?D.value:v;
+  f.value=cl(f.value||(F&&F.value)||m1); t.value=cl(t.value||D.value);
   if(f.value>t.value){ if(k)f.value=t.value; else t.value=f.value; }
-  S.bankSale=(F&&f.value===F.value&&t.value===D.value)?null:{m:S.m,f:f.value,t:t.value}; bkSnapPreview();
+  S.bankSale={m:S.m,f:f.value,t:t.value}; bkSnapPreview(); // ตรงกับช่วงบน → bkSnapPreview ล้างเป็น null เอง
 }
 function bkSaleReset(){ S.bankSale=null; bkSnapPreview(); }
 async function bkSnapSave(){

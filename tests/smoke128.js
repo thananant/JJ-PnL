@@ -8,6 +8,8 @@
 // B) บัญชี 1–10 · ขาย 1–9 (ถึงเมื่อวาน): ขาย 157,000 ฝาก 73,050 เก๊ะค้าง ณ 9 ส.ค. 9,000 fee 254.66 ปรับ −5,000 (QR ไม่ต้องปรับ) = 39,695.34 (เท่าเดิม)
 // C) บัญชี 1–10 · ขาย 1–5: ขาย 107,000 ฝาก 49,050 เก๊ะ 8,000 จ่ายสด 2,000 บิล 28,000 fee 179.76 · QR เข้า 10 ส.ค. ของวันขาย 7 ส.ค. 19,925.10 ไม่นับ = 19,770.24
 // D) บัญชี 4–10 · ขาย 7–9: ยกมา 47,770.24 (ขาย/เงินสด 1–6 + บิล 1–3) + 50,000 − 24,000 − 9,000 + 8,000 − 28,000 − 74.90 − 5,000 = 39,695.34
+// รีวิว PR #131: ควรมีติดลบมีเครื่องหมาย (ขาย 1–2 = − 28,000) · QR ที่ไม่นับ = เงินเข้าจริงแบบเข้าก่อน-ออกก่อน ต่อบัญชีที่ผูก (ไม่รวมบัญชี Beam ไม่ผูก · PAYOUT เข้าช้าไม่หัก)
+//   · ชิปก่อนรอบเงินเข้าใช้เฉพาะ QR วันขายที่นับ · ตัดแล้วตรงช่วงบน = เลิกเลือกเอง · สาขาเปิดกะแรกหลังวันเริ่มขาย → เงินทอนเดือนที่แล้วเป็นเก๊ะยกมา
 const fs=require('fs');
 const {JSDOM}=require('jsdom');
 const html=fs.readFileSync('jjmk-pnl.html','utf8');
@@ -140,22 +142,63 @@ setTimeout(async()=>{
   // วันขายตรงกับช่วงบน → กลับไปตามช่วงบนเอง
   sf().value='2026-08-04'; w.bkSaleChange(0);
   out.push('เลือกให้ตรงช่วงบน (4–10) → กลับไปตามช่วงบน S.bankSale ว่าง · ↺ ซ่อน: '+(w.eval('S.bankSale')==null&&rs().style.display==='none'&&!d.getElementById('bkEqS').classList.contains('bk-cust')));
-  // เปลี่ยนวันที่ดูยอดตอนเลือกวันขายเอง → วันขายไม่เกินวันที่ดูยอด
+  // เปลี่ยนวันที่ดูยอดตอนเลือกวันขายเอง → วันขายไม่เกินวันที่ดูยอด · ตัดแล้วตรงช่วงบน = เลิกเลือกเอง (ไม่ซ่อนค่าค้าง)
   d.getElementById('bkFrom').value='2026-08-01'; w.bkFromChange();
   st().value='2026-08-09'; w.bkSaleChange(1);
   d.getElementById('bkDate').value='2026-08-05'; w.bkDateChange(); ls=L();
-  out.push('วันขาย 1–9 แล้วเปลี่ยนวันที่ดูยอดเป็น 5 ส.ค. → วันขายถูกตัดเหลือ 1–5 · max 5 ส.ค. · =19,770.24 (เท่าค่าเริ่ม): '+(st().value==='2026-08-05'&&st().max==='2026-08-05'&&find(ls,'ยอดที่ควรมีในบัญชี').includes('19,770.24')&&rs().style.display==='none'));
+  out.push('วันขาย 1–9 แล้วเปลี่ยนวันที่ดูยอดเป็น 5 ส.ค. → วันขายถูกตัดเหลือ 1–5 = ช่วงบน → กลับไปตามช่วงบน (S.bankSale ว่าง) · max 5 ส.ค. · =19,770.24: '+(st().value==='2026-08-05'&&st().max==='2026-08-05'&&find(ls,'ยอดที่ควรมีในบัญชี').includes('19,770.24')&&rs().style.display==='none'&&w.eval('S.bankSale')==null));
   d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange();
-  out.push('กลับไปดูยอด 10 ส.ค. → วันขายที่เลือกไว้ (1–9) กลับมา: '+(st().value==='2026-08-09'&&rs().style.display===''));
-  w.bkSaleReset(); ls=L();
+  out.push('กลับไปดูยอด 10 ส.ค. → ตามช่วงบน 1–10 (ไม่มีค่าที่มองไม่เห็นโผล่กลับมา): '+(st().value==='2026-08-10'&&rs().style.display==='none'));
+  st().value='2026-08-09'; w.bkSaleChange(1); w.bkSaleReset(); ls=L();
   out.push('↺ ตามช่วงด้านบน → 1–10 ส.ค. · ขาย 187,000.00: '+(w.eval('S.bankSale')==null&&st().value==='2026-08-10'&&ls[1].endsWith('+ 187,000.00')));
+  // รีวิว: ช่วงบนเปลี่ยนมาตรงกับวันขายที่เลือก → เลิกเลือกเอง · พิมพ์วันนอกเดือน → ตัดเข้าเดือนก่อนเก็บ
+  sf().value='2026-08-04'; w.bkSaleChange(0);
+  d.getElementById('bkFrom').value='2026-08-04'; w.bkFromChange();
+  out.push('วันขาย 4–10 แล้วช่วงบนเปลี่ยนเป็น 4–10 → S.bankSale ว่าง ↺ ซ่อน: '+(w.eval('S.bankSale')==null&&rs().style.display==='none'));
+  d.getElementById('bkFrom').value='2026-08-06'; w.bkFromChange();
+  out.push('ช่วงบนเปลี่ยนต่อเป็น 6–10 → วันขายตาม 6–10 (ไม่ย้อนเป็น 4–10): '+(sf().value==='2026-08-06'&&st().value==='2026-08-10'&&rs().style.display==='none'));
+  d.getElementById('bkFrom').value='2026-08-01'; w.bkFromChange();
+  sf().value='2026-07-20'; st().value='2026-08-09'; w.bkSaleChange(0);
+  out.push('พิมพ์วันขายตั้งแต่ 20 ก.ค. (นอกเดือน) → เก็บเป็น 1 ส.ค.: '+(w.eval("S.bankSale&&S.bankSale.f==='2026-08-01'&&S.bankSale.t==='2026-08-09'")&&sf().value==='2026-08-01'));
   // หลังโหลดหน้าใหม่ วันขายที่เลือกไว้ยังอยู่ (เช่น กดบันทึกยอด)
-  st().value='2026-08-09'; w.bkSaleChange(1);
   await w.eval("show('bank')"); await sleep(500);
   out.push('โหลดหน้าใหม่ → วันขาย 1–9 ยังอยู่ · ขาย 157,000.00: '+(st().value==='2026-08-09'&&L()[1].endsWith('+ 157,000.00')));
   // เปลี่ยนเดือน → ไม่ใช้วันขายของเดือนอื่น
   w.eval("S.bankSale={m:'2026-07',f:'2026-07-01',t:'2026-07-09'}"); w.bkSnapPreview();
   out.push('วันขายของเดือนอื่น → ไม่ใช้ (ตามช่วงบน): '+(st().value==='2026-08-10'&&rs().style.display==='none'));
+  w.eval('S.bankSale=null');
+  // รีวิว: ยอดที่ควรมีติดลบต้องมีเครื่องหมายลบ (วันขาย 1–2 ไม่มีขาย บิลถึง 10 ส.ค. 28,000)
+  sf().value='2026-08-01'; st().value='2026-08-02'; w.bkSaleChange(1);
+  d.getElementById('bkBal_A1').value='0'; d.getElementById('bkBal_A2').value='0'; w.bkSnapPreview(); ls=L();
+  out.push('ควรมีติดลบ: "= − 28,000.00" · ดิฟ +28,000.00 มากกว่าที่ควร: '+(find(ls,'ยอดที่ควรมีในบัญชี').endsWith('= − 28,000.00')&&df().textContent.includes('+28,000.00')&&df().classList.contains('over')));
+  // รีวิว: ชิป "ก่อนรอบเงินเข้า" ใช้เฉพาะ QR ของวันขายที่นับ
+  st().value='2026-08-05'; w.bkSaleChange(1);
+  d.getElementById('bkBal_A1').value='-154.86'; d.getElementById('bkBal_A2').value='0'; w.bkSnapPreview();
+  out.push('วันขาย 1–5 ดูยอด 10 ส.ค. ขาด 19,925.10 (QR ที่เข้าวันนี้เป็นของ 7 ส.ค. ที่ไม่ได้นับ) → ขาด ไม่ใช่ ✓ ตรง: '+(df().classList.contains('short')&&df().textContent.includes('−19,925.10')));
+  st().value='2026-08-09'; w.bkSaleChange(1);
+  d.getElementById('bkBal_A1').value='12000'; d.getElementById('bkBal_A2').value='7770.24'; w.bkSnapPreview();
+  out.push('วันขาย 1–9 ดูยอดจันทร์ 10 ส.ค. ก่อนเงินเข้า (ขาดเท่า QR ศ 7 ส.ค. ที่นับ) → ✓ ตรง (ก่อนรอบเงินเข้า): '+df().textContent.includes('✓ ตรง (ก่อนรอบเงินเข้า)'));
+  // รีวิว: สาขาที่กะแรกอยู่หลังวันเริ่มขาย → เงินทอนในเก๊ะเดือนที่แล้ว เป็นเก๊ะยกมา ไม่ใช่ "เก๊ะเปิดไม่เท่าปิด"
+  const lp3=INC.find(r=>r.branch==='JJLP'&&r.d==='2026-08-03'); Object.assign(lp3,{drawer_open_am:1000,cash_drawer_am:4000,drawer_open_pm:4000,cash_drawer_pm:4000});
+  w.eval('S.bankSale=null'); await w.eval("show('bank')"); await sleep(500);
+  d.getElementById('bkFrom').value='2026-08-01'; d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange(); w.bkFromChange();
+  sf().value='2026-08-02'; w.bkSaleChange(0); ls=L();
+  out.push('วันขาย 2–10 · ลาดพร้าวเปิดกะแรก 3 ส.ค. เก๊ะ 1,000 → เก๊ะยกมา ณ 1 ส.ค. +1,000.00 (ลาดพร้าว 1,000) · ปรับอื่นๆ เก๊ะไม่เท่า −5,000.00 (เดิม −4,000) · =39,695.34: '
+    +(find(ls,'เงินในเก๊ะยกมา ณ สิ้นวัน 1 ส.ค.').includes('ลาดพร้าว 1,000')&&find(ls,'เงินในเก๊ะยกมา ณ สิ้นวัน 1 ส.ค.').endsWith('+ 1,000.00')&&find(ls,'ปรับอื่นๆ').includes('เก๊ะเปิดบางกะไม่เท่าเก๊ะปิดกะก่อน −5,000.00')
+      &&find(ls,'เงินสดค้างในเก๊ะ ณ สิ้นวัน 10 ส.ค.').includes('− 30,000.00')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('39,695.34')));
+  // รีวิว: บัญชี Beam ที่ไม่ได้ผูก — QR ที่ไม่นับต้องเป็นเฉพาะเงินที่เข้าบัญชี 1/2 จริง
+  MODE.beam=true; BEAM.push({acct:'other_shop',d:'2026-08-07',gross:1000,fee:5,net:995,tx_count:1,pending_net:0,pending_count:0,complete:true});
+  w.eval('S.bankSale=null'); await w.eval("show('bank')"); await sleep(500);
+  d.getElementById('bkFrom').value='2026-08-01'; d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange(); w.bkFromChange();
+  st().value='2026-08-06'; w.bkSaleChange(1); ls=L();
+  out.push('Beam + บัญชีไม่ผูก 995: วันขาย 1–6 → QR ที่ไม่นับ (7 ส.ค.) −19,925.00 (ไม่ใช่ 20,920) · =19,770.00: '+(find(ls,'ปรับอื่นๆ').includes('QR ของวันขายที่ไม่ได้นับ (7 ส.ค.) ที่เข้าบัญชีแล้ว −19,925.00')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('19,770.00')));
+  // รีวิว: ไฟล์ PAYOUT — โอนของ 7 ส.ค. เข้าช้า (อ 11 ส.ค.) → ณ 10 ส.ค. ยังไม่เข้า ไม่ต้องหัก
+  BEAM.pop(); MODE.payout=true; PAYOUT.push({acct:'jingjaimookt',ts:'2026-08-11T10:30:00',d:'2026-08-11',btype:'PAYOUT',gross:-19925,fee:0,net:-19925,bal:0});
+  await w.eval("show('bank')"); await sleep(500);
+  d.getElementById('bkFrom').value='2026-08-01'; d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange(); w.bkFromChange(); ls=L();
+  const dflt=find(ls,'ยอดที่ควรมีในบัญชี');
+  st().value='2026-08-06'; w.bkSaleChange(1); ls=L();
+  out.push('PAYOUT เข้าช้า: ค่าเริ่ม =19,720.00 · วันขาย 1–6 =19,720.00 ไม่มีบรรทัด QR ที่ไม่นับ: '+(dflt.includes('19,720.00')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('19,720.00')&&!find(ls,'ปรับอื่นๆ').includes('QR ของวันขายที่ไม่ได้นับ')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },400);
