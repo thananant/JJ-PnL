@@ -494,6 +494,10 @@ input.spl-saf{width:74px;padding:5px 8px;font-size:14px;text-align:right}
 .bk-ln small{display:block;font-size:11.5px;color:var(--mut);line-height:1.3;margin-top:1px}
 .bk-ln b{font-family:'Prompt';font-weight:600;font-variant-numeric:tabular-nums;font-size:15.5px;white-space:nowrap}
 .bk-ln.in b{color:#1F7A43}.bk-ln.out b{color:#A8322C}.bk-ln.adj{background:#FCFAF4}.bk-ln.adj b{color:#6E6458}
+.bk-srng{display:flex!important;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:4px!important}
+.bk-srng input{width:136px;height:32px;padding:0 6px;font-size:13px;font-family:'Prompt';font-weight:600;background:#FFFDF8;border-radius:8px}
+.bk-sln.bk-cust{background:#F1F8F3}.bk-sln.bk-cust .bk-srng input{border-color:#1F7A43}
+.bk-sreset{border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px 10px;font-size:12px;color:var(--ink);cursor:pointer;font-family:inherit}
 .bk-ln.tot{background:#F7F2E6;font-weight:700;border-bottom:1px solid var(--line)}.bk-ln.tot b,.bk-ln.act b{font-size:17px;font-weight:700}
 .bk-diff{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;font-family:'Prompt';font-weight:700;font-size:16px;background:#F3EFE8}
 .bk-diff small{font-family:'Sarabun';font-weight:500;font-size:12px;opacity:.75;margin-left:4px}
@@ -593,6 +597,7 @@ input.spl-saf{width:74px;padding:5px 8px;font-size:14px;text-align:right}
   #modalBox .pvx{display:none} /* หน้าต่าง PV จอเล็ก: ซ่อน ก่อน VAT/VAT ให้ยอดโอน+ช่องติ๊กอยู่ในจอ (ใบพิมพ์ยังครบ) */
   #dtList .dtl-n{display:none}
   .bk-ln{padding:8px 12px;font-size:14px} .bk-diff b{font-size:22px}
+  .bk-sln{position:relative;flex-wrap:wrap} .bk-sln>span{flex:1 1 100%;min-width:0} .bk-sln>b{position:absolute;right:12px;top:8px} .bk-srng input{flex:1 1 calc(50% - 14px);width:auto;min-width:0;height:42px;font-size:16px;padding:0 4px} .bk-sl{flex-basis:100%} /* มือถือ: ยอดอยู่มุมขวาบน ช่องวันขายเต็มแถว ≥16px ไม่ซูม */
   .bk-cbx .row{flex-wrap:wrap} .bk-cbx .row>span:first-child{flex:1 0 auto} .bk-cbx .row>b{white-space:normal;text-align:right;flex:1 1 100%} /* การ์ดเงินสด: ชิปยาวไม่บีบป้าย */ /* รายการบิลเดือนนี้ จอเล็ก: ซ่อนคอลัมน์จำนวนรายการ ให้คอลัมน์ VAT/รวม อยู่ในจอ */
   .spl-act.m{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;white-space:normal}
   .spl-act.m button{margin-left:0}
@@ -6405,12 +6410,12 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
   const extraMT=(L.extraM||[]).filter(r=>String(r.pay_src||'').toUpperCase()!=='CASH').reduce((t,r)=>t+num(r.amount),0);
   const shopMT=(L.shopM||[]).reduce((t,r)=>t+num(r.price)*num(r.qty)+num(r.shipping),0), otherM=extraMT+shopMT;
   const eq=[],eqBy={};
-  if(hasOpen){ const c={pos:0,dep:0,cx:0,bills:0,fix:0,fee:0,draw:0,mv:0,adj:0,R:0}; let run=open0;
+  if(hasOpen){ const c={pos:0,dep:0,cx:0,bills:0,fix:0,fee:0,draw:0,mv:0,adj:0,R:0,net:0}; let run=open0;
     const open1={},lastClose={}; // user 12 ต.ค.: เก๊ะเปิดเช้าวันที่ 1 = เงินของเดือนที่แล้ว (เดือนนี้เริ่มที่ 0) → แยกบรรทัดให้เห็น
     for(let ds=bkAddDays(eqO,1); ds<=L.to; ds=bkAddDays(ds,1)){
       (inc[ds]||[]).forEach(r=>{ ['am','pm'].forEach(sh=>{ if(!shiftHasData(r,sh))return; if(!(r.branch in open1))open1[r.branch]=num(r['drawer_open_'+sh]); lastClose[r.branch]=num(r['cash_drawer_'+sh]); }); });
       const x=dayBy[ds]||{}, o=outBy[ds]||{}, arr=A.reduce((t,a)=>t+(QRin[a][ds]||0),0);
-      const e={ds,d:ds>=L.mFrom&&ds<=L.mTo?+ds.slice(8):null,pos:x.POS||0,dep:x.dep||0,cx:x.CX||0,bills:o.bills||0,fix:o.fix||0,fee:x.fee||0,draw:x.dDraw||0,mv:o.mv||0,adj:arr-(x.net||0),arr,R:x.R||0,hasInc:!!x.hasInc};
+      const e={ds,d:ds>=L.mFrom&&ds<=L.mTo?+ds.slice(8):null,pos:x.POS||0,dep:x.dep||0,cx:x.CX||0,bills:o.bills||0,fix:o.fix||0,fee:x.fee||0,draw:x.dDraw||0,mv:o.mv||0,adj:arr-(x.net||0),arr,R:x.R||0,net:x.net||0,hasInc:!!x.hasInc};
       e.flow=e.pos-e.dep-e.cx-e.bills-e.fix-e.fee-e.draw+e.mv+e.adj; run+=e.flow; e.shouldX=run; e.should=run-otherM; // ควรมี = สะสม − รายจ่ายอื่นๆ ทั้งเดือน
       Object.keys(c).forEach(k=>{ c[k]+=e[k]; }); e.cum={...c};
       let tot=0,all=true; A.forEach(a=>{ const sn=L.actual[a]&&L.actual[a][ds]; if(sn)tot+=num(sn.balance); else all=false; });
@@ -6444,7 +6449,7 @@ function bkCalc(L){ // คืน object เดียว ใช้ทั้งห
   const mode={none:!need.length,exact:need.length>0&&need.every(x=>x.beamOK&&!x.approx),lastBeam,approxN,cap:A.map(a=>cap[a]).find(v=>v!=null)};
   const missInc=[]; days.forEach(x=>{ if(x.d==null||x.ds>today)return; const have=new Set((inc[x.ds]||[]).filter(hasIncData).map(r=>r.branch)); const miss=L.brs.filter(b=>!have.has(b)); if(miss.length)missInc.push({ds:x.ds,brs:miss}); });
   return {accts:L.accts,A,label,beamOf,cap,openOf,from:L.from,to:L.to,mFrom:L.mFrom,mTo:L.mTo,today,days,QRin,QRsrc,inO,outO,outRows,ledger,bal,Rcum,actual:L.actual,
-    cashBr,mode,Rsum,unmappedAccts:[...unmapped],incomplete:[...new Set(incomplete)],missInc,unpaidD:L.expNoD,fixNoD:L.fixNoD||[],extraNoD:L.extraNoD||[],cols:L.cols,lastPayout,firstPayout,partialB,unknownSrc:[...unknownSrc],O:L.O,eq,eqBy,eqO,open0,otherM,extraMT,shopMT,nExtra:(L.extraM||[]).length,nShop:(L.shopM||[]).length};
+    cashBr,mode,Rsum,unmappedAccts:[...unmapped],incomplete:[...new Set(incomplete)],missInc,unpaidD:L.expNoD,fixNoD:L.fixNoD||[],extraNoD:L.extraNoD||[],cols:L.cols,lastPayout,firstPayout,partialB,unknownSrc:[...unknownSrc],O:L.O,eq,eqBy,dayBy,eqO,open0,otherM,extraMT,shopMT,nExtra:(L.extraM||[]).length,nShop:(L.shopM||[]).length};
 }
 RENDER.bank = async (el)=>{
   const L=await bkLoad();
@@ -6477,7 +6482,9 @@ function bkSnapCard(B){
     +B.A.map(a=>'<div class="bk-fld"><label><b>'+esc(B.label[a])+'</b>'+(B.beamOf[a]?' <span class="mut">('+esc(B.beamOf[a])+')</span>':'')+'</label><div class="bk-pre"><span>฿</span><input type="number" step="any" inputmode="decimal" id="bkBal_'+a+'" placeholder="0.00"'+ro+' oninput="bkSnapPreview()"></div></div>').join('')
     +'<div class="bk-fld"><label>หมายเหตุ</label><input type="text" id="bkNote" placeholder="เช่น ดูยอดตอน 9 โมง"'+ro+'></div>'
     +(B.edit?'<button class="btn sm2 bk-save" onclick="bkSnapSave()">บันทึก</button>':'')+'</div>'
-    +(B.eqO?'<div class="bk-eq" id="bkEq"></div>'
+    +(B.eqO?'<div class="bk-eq" id="bkEq"><div id="bkEqA"></div>'
+      +'<div class="bk-ln in bk-sln" id="bkEqS"><span>ยอดขายทั้งหมด<small class="bk-srng"><span class="bk-sl">วันที่ขาย</span><input type="date" id="bkSFrom" onchange="bkSaleChange(0)" title="ยอดขายตั้งแต่วันที่"><span>–</span><input type="date" id="bkSTo" onchange="bkSaleChange(1)" title="ยอดขายถึงวันที่"><button type="button" class="bk-sreset" id="bkSReset" onclick="bkSaleReset()" style="display:none">↺ ตามช่วงด้านบน</button><span id="bkSSub">ทุกสาขา</span></small></span><b id="bkEqPos">—</b></div>'
+      +'<div id="bkEqB"></div></div>'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><button class="btn gh sm2" onclick="bkWhy()">🔍 ทำไมไม่ตรง</button><span class="xs mut">ระบบไล่รายการที่น่าจะทำให้ยอดเพี้ยน</span></div><div id="bkWhyBox" style="display:none"></div>'
       :'<div class="empty" style="padding:14px 10px">ตั้งยอดตั้งต้นก่อน ↓ (ยอดในแอพธนาคารทั้ง 2 บัญชี ณ สิ้นวันเมื่อวาน) แล้วระบบจะคำนวณให้</div>')
     +'</div>';
@@ -6499,37 +6506,64 @@ function bkSnapPreview(){ // สมการช่วง ตั้งแต่ F
   S.bankDraft={D,vals:Object.fromEntries(B.A.map(a=>{ const i=document.getElementById('bkBal_'+a); return [a,i?i.value:'']; })),note:(document.getElementById('bkNote')||{}).value||''};
   bkDayRefresh(F,D);
   const box=document.getElementById('bkEq'); if(!box)return;
+  const bA=document.getElementById('bkEqA'), bS=document.getElementById('bkEqS'), bB=document.getElementById('bkEqB');
   const e=B.eqBy[D];
-  if(!e){ box.innerHTML='<div class="empty" style="padding:14px 10px">เลือกวันที่ในเดือน '+monthLabel(S.m)+'</div>'; return; }
-  const p=F>B.mFrom?B.eqBy[bkAddDays(F,-1)]:null, z={pos:0,dep:0,cx:0,bills:0,fix:0,fee:0,draw:0,mv:0,adj:0,R:0};
-  const r={}; Object.keys(z).forEach(k=>{ r[k]=e.cum[k]-(p?p.cum[k]:0); });   // เฉพาะช่วง F–D
-  const carry=p?p.shouldX:0, drawStart=p?p.drawNow:e.open1, gap=r.draw-(e.drawNow-drawStart);
+  if(!e){ bA.innerHTML='<div class="empty" style="padding:14px 10px">เลือกวันที่ในเดือน '+monthLabel(S.m)+'</div>'; bS.style.display='none'; bB.innerHTML=''; return; }
+  bS.style.display='';
+  // ช่วงวันขาย (user 12 ต.ค.): ค่าเริ่ม = ช่วงด้านบน · เลือกเองได้ ไม่เกินวันที่ดูยอด เช่น ดูยอดบัญชีวันนี้ แต่นับยอดขายถึงเมื่อวาน
+  const sv=S.bankSale&&S.bankSale.m===S.m?S.bankSale:null; let SF=F,SD=D;
+  if(sv){ SD=sv.t<D?sv.t:D; if(SD<B.mFrom)SD=B.mFrom; SF=sv.f<SD?sv.f:SD; if(SF<B.mFrom)SF=B.mFrom; }
+  const cust=SF!==F||SD!==D;
+  [['bkSFrom',SF],['bkSTo',SD]].forEach(([id,v])=>{ const i=document.getElementById(id); if(i){ i.min=B.mFrom; i.max=D; i.value=v; } });
+  const rb=document.getElementById('bkSReset'); if(rb)rb.style.display=cust?'':'none';
+  const es=B.eqBy[SD], ps=SF>B.mFrom?B.eqBy[bkAddDays(SF,-1)]:null, pb=F>B.mFrom?B.eqBy[bkAddDays(F,-1)]:null;
+  const r={}; ['pos','dep','cx','fee','draw','R','net'].forEach(k=>{ r[k]=es.cum[k]-(ps?ps.cum[k]:0); });   // ยอดขาย/เงินสด/ค่าธรรมเนียม: วันขาย SF–SD
+  ['bills','fix','mv'].forEach(k=>{ r[k]=e.cum[k]-(pb?pb.cum[k]:0); });                                   // บิล/เงินเข้าออกอื่น: ช่วงบัญชี F–D
+  const Q=x=>x?x.cum.adj+x.cum.net:0; // เงินโอน QR ที่เข้าบัญชีจริงสะสมถึงสิ้นวันนั้น
+  let pend=0; const pendD=[]; // QR ของวันขายหลัง SD ที่เข้าบัญชีแล้ว ณ วัน D → ไม่นับ (ไม่ได้เลือกวันขายนั้น)
+  for(let ds=bkAddDays(SD,1); ds<=D; ds=bkAddDays(ds,1)){ const x=B.dayBy&&B.dayBy[ds]; if(x&&x.payDate<=D&&Math.abs(x.net)>=0.005){ pend+=x.net; pendD.push(ds); } }
+  const qrT=Q(e)-Q(ps)-r.net; r.adj=qrT-pend;
+  const sCarry=ps?ps.cum.pos-ps.cum.dep-ps.cum.cx-ps.cum.fee-ps.cum.draw+ps.cum.adj:0, bCarry=pb?-pb.cum.bills-pb.cum.fix+pb.cum.mv:0;
+  const carry=sCarry+bCarry, drawStart=ps?ps.drawNow:es.open1, gap=r.draw-(es.drawNow-drawStart);
+  const should=cust?carry+r.pos-r.dep-r.cx-r.fee-r.draw+r.adj-r.bills-r.fix+r.mv-B.otherM:e.should;
   let ent=0,n=0; B.A.forEach(a=>{ const v=(document.getElementById('bkBal_'+a)||{}).value; if(v!==''&&v!=null){ ent+=num(v); n++; } });
-  const full=n===B.A.length, diff=full?ent-e.should:null, st=full?bkStatus(diff,e.arr,e.cum.R):null;
+  const full=n===B.A.length, diff=full?ent-should:null, st=full?bkStatus(diff,e.arr,es.cum.R):null;
   const ln=(sg,lab,v,sub,cls)=>'<div class="bk-ln'+(cls?' '+cls:'')+'"><span>'+lab+(sub?'<small>'+sub+'</small>':'')+'</span><b>'+(v==null?'—':sg+fmt(Math.abs(v),2))+'</b></div>';
   const oth=r.mv+r.adj-gap, parts=[];
-  if(Math.abs(r.adj)>=0.005)parts.push('เงินโอน QR ที่ยังไม่เข้า/เพิ่งเข้าบัญชี (โอนวันนี้ เข้าวันถัดไป) '+(r.adj>0?'+':'−')+fmt(Math.abs(r.adj),2));
+  if(Math.abs(qrT)>=0.005)parts.push('เงินโอน QR ที่ยังไม่เข้า/เพิ่งเข้าบัญชี (โอนวันนี้ เข้าวันถัดไป) '+(qrT>0?'+':'−')+fmt(Math.abs(qrT),2));
+  if(Math.abs(pend)>=0.005)parts.push('QR ของวันขายที่ไม่ได้นับ ('+pendD.map(bkDm).join(', ')+') ที่เข้าบัญชีแล้ว '+(pend>0?'−':'+')+fmt(Math.abs(pend),2));
   if(Math.abs(gap)>=0.005)parts.push('เก๊ะเปิดบางกะไม่เท่าเก๊ะปิดกะก่อน '+(gap>0?'−':'+')+fmt(Math.abs(gap),2));
   if(Math.abs(r.mv)>=0.005)parts.push('เงินเข้า/ออกอื่น '+(r.mv>0?'+':'−')+fmt(Math.abs(r.mv),2));
-  const rng=bkDm(F)+' – '+bkDm(D);
-  box.innerHTML=
-     (p?ln(carry<-0.004?'− ':'','ยอดยกมา ณ สิ้นวัน '+bkDm(p.ds),carry,'ยอดที่ควรมีตั้งแต่วันที่ 1 ถึงวันก่อนช่วงที่เลือก (ยังไม่หักรายจ่ายอื่นๆ)')
-       :ln('','ยอดต้นเดือน',0,'ปิดบัญชีทุกสิ้นเดือน → เริ่มที่ 0 ทุกวันที่ 1'))
-    +ln('+ ','ยอดขายทั้งหมด',r.pos,rng+' · ทุกสาขา','in')
-    +ln('− ','เงินสดที่ฝาก',r.dep,rng,'out')
-    +ln('− ','เงินสดค้างในเก๊ะ ณ สิ้นวัน '+bkDm(D),e.drawNow,'ยังไม่ได้ฝาก · ทุกสาขา','out')
-    +(p?ln('+ ','เงินในเก๊ะยกมา ณ สิ้นวัน '+bkDm(p.ds),drawStart,'นับไปแล้วในยอดยกมา','in')
-       :ln('+ ','เก๊ะเปิดเช้าวันที่ 1',e.open1,'เงินของเดือนที่แล้ว ไม่ใช่ของเดือนนี้'+(Object.keys(e.open1By).length?' · '+Object.keys(e.open1By).map(b=>esc(bkBrN(b))+' '+fmtI(e.open1By[b])).join(' + '):''),'in'))
-    +ln('− ','รายจ่ายเงินสดหน้าร้าน',r.cx,'ค่าดิฟ ฯลฯ ที่พนักงานจ่าย · '+rng,'out')
-    +ln('− ','บิลที่จ่ายแล้ว (มีสลิป)',r.bills,rng,'out')
+  const rngS=bkDm(SF)+' – '+bkDm(SD), rngB=bkDm(F)+' – '+bkDm(D), m1=bkDm(B.mFrom);
+  const cSub=!cust||ps===pb?'ยอดที่ควรมีตั้งแต่วันที่ 1 ถึงวันก่อนช่วงที่เลือก (ยังไม่หักรายจ่ายอื่นๆ)'
+    :[ps?'ยอดขาย/เงินสด '+m1+' – '+bkDm(ps.ds):'', pb?'บิลที่จ่าย '+m1+' – '+bkDm(pb.ds):''].filter(Boolean).join(' + ')+' ที่นับไปแล้ว (ยังไม่หักรายจ่ายอื่นๆ)';
+  bA.innerHTML=(ps||pb)?ln(carry<-0.004?'− ':'',(ps&&pb&&ps===pb)?'ยอดยกมา ณ สิ้นวัน '+bkDm(pb.ds):'ยอดยกมา',carry,cSub)
+       :ln('','ยอดต้นเดือน',0,'ปิดบัญชีทุกสิ้นเดือน → เริ่มที่ 0 ทุกวันที่ 1');
+  document.getElementById('bkEqPos').textContent='+ '+fmt(Math.abs(r.pos),2);
+  document.getElementById('bkSSub').textContent=cust?'ทุกสาขา · เลือกวันขายเอง (บิลยังนับ '+rngB+')':'ทุกสาขา';
+  bS.classList.toggle('bk-cust',cust);
+  bB.innerHTML=
+     ln('− ','เงินสดที่ฝาก',r.dep,rngS,'out')
+    +ln('− ','เงินสดค้างในเก๊ะ ณ สิ้นวัน '+bkDm(SD),es.drawNow,'ยังไม่ได้ฝาก · ทุกสาขา','out')
+    +(ps?ln('+ ','เงินในเก๊ะยกมา ณ สิ้นวัน '+bkDm(ps.ds),drawStart,'นับไปแล้วในยอดยกมา','in')
+       :ln('+ ','เก๊ะเปิดเช้าวันที่ 1',es.open1,'เงินของเดือนที่แล้ว ไม่ใช่ของเดือนนี้'+(Object.keys(es.open1By).length?' · '+Object.keys(es.open1By).map(b=>esc(bkBrN(b))+' '+fmtI(es.open1By[b])).join(' + '):''),'in'))
+    +ln('− ','รายจ่ายเงินสดหน้าร้าน',r.cx,'ค่าดิฟ ฯลฯ ที่พนักงานจ่าย · '+rngS,'out')
+    +ln('− ','บิลที่จ่ายแล้ว (มีสลิป)',r.bills,rngB,'out')
     +ln('− ','รายจ่ายอื่นๆ (ทั้งเดือน)',B.otherM,'หน้า "อื่นๆ": รายจ่ายนอกเหนือ '+B.nExtra+' รายการ ฿'+fmt(B.extraMT,2)+' + Shopee '+B.nShop+' รายการ ฿'+fmt(B.shopMT,2)+' · ดึงทั้งเดือน ไม่ขึ้นกับวันที่ที่เลือก','out')
-    +(Math.abs(r.fix)>=0.005?ln('− ','Fix cost ที่ลงวันจ่าย',r.fix,rng,'out'):'')
-    +ln('− ','ค่าธรรมเนียมโอน QR',r.fee,'ธนาคารหักก่อนเงินเข้าบัญชี','out')
+    +(Math.abs(r.fix)>=0.005?ln('− ','Fix cost ที่ลงวันจ่าย',r.fix,rngB,'out'):'')
+    +ln('− ','ค่าธรรมเนียมโอน QR',r.fee,'ธนาคารหักก่อนเงินเข้าบัญชี'+(cust?' · วันขาย '+rngS:''),'out')
     +(parts.length?ln(oth>=0?'+ ':'− ','ปรับอื่นๆ',oth,parts.join(' · '),'adj'):'')
-    +ln('= ','ยอดที่ควรมีในบัญชี ณ สิ้นวัน '+bkDm(D),e.should,'','tot')
+    +ln('= ','ยอดที่ควรมีในบัญชี ณ สิ้นวัน '+bkDm(D),should,cust?'นับยอดขาย '+rngS+' · บิลที่จ่ายถึง '+bkDm(D):'','tot')
     +ln('','ยอดจริงในบัญชี ('+B.A.map(a=>esc(B.label[a])).join(' + ')+')',full?ent:null,full?'':'ใส่ยอดให้ครบทั้ง '+B.A.length+' บัญชี','act')
     +'<div class="bk-diff '+(st?st.k:'')+'"><span>ดิฟ <small>ควรเป็น 0</small></span><b>'+(diff==null?'—':(diff>=0.005?'+':diff<=-0.005?'−':'')+fmt(Math.abs(diff),2))+'</b>'+(st?'<span class="chip '+st.cls+'">'+(st.k==='over'?'มากกว่าที่ควร':st.k==='short'?'ขาด':st.txt)+'</span>':'')+'</div>';
 }
+function bkSaleChange(k){ // เลือกวันขายเอง (0 = ตั้งแต่ · 1 = ถึง) → ไม่ให้ตั้งแต่เกินถึง · ตรงกับช่วงด้านบน = กลับไปตามช่วงบน
+  const f=document.getElementById('bkSFrom'), t=document.getElementById('bkSTo'), F=document.getElementById('bkFrom'), D=document.getElementById('bkDate'); if(!f||!t||!D)return;
+  if(!f.value)f.value=(F&&F.value)||S.bank.mFrom; if(!t.value)t.value=D.value;
+  if(f.value>t.value){ if(k)f.value=t.value; else t.value=f.value; }
+  S.bankSale=(F&&f.value===F.value&&t.value===D.value)?null:{m:S.m,f:f.value,t:t.value}; bkSnapPreview();
+}
+function bkSaleReset(){ S.bankSale=null; bkSnapPreview(); }
 async function bkSnapSave(){
   const B=S.bank; if(!B)return; const D=document.getElementById('bkDate').value; if(!D){toast('เลือกวันที่ก่อน',true);return;}
   const note=(document.getElementById('bkNote')||{}).value||'', by=(S.user&&S.user.display_name)||null, now=new Date().toISOString();
