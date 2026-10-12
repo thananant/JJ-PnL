@@ -220,6 +220,23 @@ setTimeout(async()=>{
   const dflt2=find(ls,'ยอดที่ควรมีในบัญชี');
   st().value='2026-08-09'; w.bkSaleChange(1); ls=L();
   out.push('เงินเดือนก่อนเข้าช้า 3 ส.ค.: ค่าเริ่ม =49,607.55 · วันขาย 1–9 เท่ากัน ไม่มีบรรทัด QR ที่ไม่นับ (10 ส.ค. ยังไม่ถึงกำหนด): '+(dflt2.includes('49,607.55')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('49,607.55')&&!find(ls,'ปรับอื่นๆ').includes('QR ของวันขายที่ไม่ได้นับ')));
+  // รีวิวรอบ 3: ไม่มีไฟล์ Beam รายวัน (แบ่งบัญชีตามเพดาน 40,000 = เดา) แต่ไฟล์ PAYOUT แบ่งจริง 50/50 → จับคู่รวมทุกบัญชี
+  //   3 ส.ค. โอน 48,000 → จริง บช1 23,910.12 + บช2 23,910.12 (เข้า 4 ส.ค.) · 7 ส.ค. โอน 20,000 → บช1 9,962.55 + บช2 9,962.55 (เข้า 10 ส.ค.)
+  MODE.beam=false; PAYOUT.length=0;
+  PAYOUT.push({acct:'jingjaimookt',ts:'2026-08-04T10:30:00',d:'2026-08-04',btype:'PAYOUT',gross:-23910.12,fee:0,net:-23910.12,bal:0},{acct:'jingjai',ts:'2026-08-04T10:31:00',d:'2026-08-04',btype:'PAYOUT',gross:-23910.12,fee:0,net:-23910.12,bal:0},
+              {acct:'jingjaimookt',ts:'2026-08-10T10:30:00',d:'2026-08-10',btype:'PAYOUT',gross:-9962.55,fee:0,net:-9962.55,bal:0},{acct:'jingjai',ts:'2026-08-10T10:31:00',d:'2026-08-10',btype:'PAYOUT',gross:-9962.55,fee:0,net:-9962.55,bal:0});
+  w.eval('S.bankSale=null'); await w.eval("show('bank')"); await sleep(500);
+  d.getElementById('bkFrom').value='2026-08-01'; d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange(); w.bkFromChange(); ls=L();
+  const dflt3=find(ls,'ยอดที่ควรมีในบัญชี');
+  st().value='2026-08-06'; w.bkSaleChange(1); ls=L();
+  out.push('PAYOUT แบ่งบัญชีต่างจากเพดาน: ค่าเริ่ม =39,695.34 · วันขาย 1–6 → QR ที่ไม่นับ (7 ส.ค.) −19,925.10 · =19,770.24: '+(dflt3.includes('39,695.34')&&find(ls,'ปรับอื่นๆ').includes('QR ของวันขายที่ไม่ได้นับ (7 ส.ค.) ที่เข้าบัญชีแล้ว −19,925.10')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('19,770.24')));
+  // รีวิวรอบ 3: รอบ 10 ส.ค. จ่ายเกิน 30 (≤1%) → เป็นของวันขาย 7 ส.ค. ที่ไม่นับ → ยอดควรมีแบบเลือกวันขายไม่เปลี่ยน
+  PAYOUT[3].net=PAYOUT[3].gross=-9992.55;
+  w.eval('S.bankSale=null'); await w.eval("show('bank')"); await sleep(500);
+  d.getElementById('bkFrom').value='2026-08-01'; d.getElementById('bkDate').value='2026-08-10'; w.bkDateChange(); w.bkFromChange(); ls=L();
+  const dflt4=find(ls,'ยอดที่ควรมีในบัญชี');
+  st().value='2026-08-06'; w.bkSaleChange(1); ls=L();
+  out.push('จ่ายเกิน 30: ค่าเริ่ม =39,725.34 · วันขาย 1–6 → QR ที่ไม่นับ −19,955.10 · =19,770.24 (เท่าเดิม): '+(dflt4.includes('39,725.34')&&find(ls,'ปรับอื่นๆ').includes('QR ของวันขายที่ไม่ได้นับ (7 ส.ค.) ที่เข้าบัญชีแล้ว −19,955.10')&&find(ls,'ยอดที่ควรมีในบัญชี').includes('19,770.24')));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },400);
