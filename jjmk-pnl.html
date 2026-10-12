@@ -3694,7 +3694,8 @@ RENDER.usage = async (el)=>{
   });
   const _mixU={}; Object.values(gi).forEach(t=>{ (_mixU[ocrNorm(t.item)]??=new Set()).add(t.unit); });
   const mixSet=new Set(Object.entries(_mixU).filter(x=>x[1].size>1).map(x=>x[0]));
-  S._uMix={}; Object.values(gi).forEach(t=>{ const nk=ocrNorm(t.item); if(mixSet.has(nk)){ (S._uMix[nk]??={item:t.item,units:[]}); if(!S._uMix[nk].units.includes(t.unit)) S._uMix[nk].units.push(t.unit); } });
+  S._uMix={}; Object.values(gi).forEach(t=>{ const nk=ocrNorm(t.item); if(mixSet.has(nk)){ const o=(S._uMix[nk]??={item:t.item,units:[],q:{}}); if(!o.units.includes(t.unit)) o.units.push(t.unit); o.q[t.unit]=(o.q[t.unit]||0)+t.qty; } });
+  Object.values(S._uMix).forEach(o=>o.units.sort((a,b)=>(o.q[b]||0)-(o.q[a]||0))); // หน่วยที่ใช้จำนวนมากสุดขึ้นก่อน = หน่วยหลักตั้งต้น
   S._usage={g,gi,gc,dd,salesG,daysG,salesBr};
   if(!S.usageMode) S.usageMode=LS.get('jj_usemode2','item');   // ค่าเริ่มต้น = ระดับสินค้า ไม่สนว่ามาจากกี่ซัพ (key ใหม่ให้ทุกเครื่องเริ่มที่โหมดนี้)
   if(S.usageMode==='cmp'&&!ALL) S.usageMode='item';            // โหมดเทียบสาขามีความหมายเฉพาะตอนดู "ทุกสาขา"
@@ -3832,15 +3833,22 @@ RENDER.usage = async (el)=>{
 const STK_MIN='2026-07-31'; // วันแรกที่ใช้ข้อมูลนับสต๊อก — ก่อนหน้านี้เป็นข้อมูลช่วงระบบเก่า ไม่เอามาคิดเลย
 const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'}; // id สาขาในระบบนับ (ใช้กับตัวนับเตือน)
 /* ---------- แปลงหน่วยรายสินค้า: สินค้าเดียวซัพส่งมาหลายหน่วย (ลัง/โล) ลงบิลตามจริง ระบบแปลงตอนคำนวณ ---------- */
+const UNIT_SYN={'กก':'กก.','กก.':'กก.','กิโล':'กก.','กิโลกรัม':'กก.','โล':'กก.','kg':'กก.','kgs':'กก.','kilo':'กก.',
+  'กรัม':'กรัม','g':'กรัม','gr':'กรัม','ลิตร':'ลิตร','l':'ลิตร','ltr':'ลิตร','แพ็ค':'แพ็ค','แพค':'แพ็ค','pack':'แพ็ค','pk':'แพ็ค'};
+function unitNorm(u){ // หน่วยในบิลสะกดต่างกัน (กก / กก. / กิโล / KG) = หน่วยเดียวกัน — ใช้ตอนรวมยอดทุกหน้า (ไม่แก้ข้อมูลในบิล)
+  const t=String(u||'').trim().replace(/\s+/g,' '); if(!t)return '';
+  const k=t.toLowerCase().replace(/\.+$/,'').trim();
+  return UNIT_SYN[k]||UNIT_SYN[k+'.']||t.replace(/\.+$/,'').trim()||t;
+}
 async function loadUconv(){
   const m={};
-  try{ (await selAllQ('pnl_unit_conv','select=item,from_unit,to_unit,factor&order=id')).forEach(r=>{ m[ocrNorm(r.item)+'|'+(r.from_unit||'')]={to:r.to_unit||'',f:num(r.factor)||0}; }); S._uconvOK=true; }
+  try{ (await selAllQ('pnl_unit_conv','select=item,from_unit,to_unit,factor&order=id')).forEach(r=>{ m[ocrNorm(r.item)+'|'+unitNorm(r.from_unit)]={to:unitNorm(r.to_unit),f:num(r.factor)||0}; }); S._uconvOK=true; }
   catch(e){ S._uconvOK=false; }
   S._uconv=m; return m;
 }
-function ucv(item,unit,qty,price){ // -> หน่วยหลัก (ถ้าตั้งอัตราแปลงไว้)
-  const c=(S._uconv||{})[ocrNorm(item)+'|'+(unit||'')];
-  if(!c||!(c.f>0)) return {unit:unit||'',qty,price:price||0,conv:false};
+function ucv(item,unit,qty,price){ // -> หน่วยหลัก (ถ้าตั้งอัตราแปลงไว้) · หน่วยสะกดต่างกันรวมก่อน (unitNorm)
+  const u=unitNorm(unit), c=(S._uconv||{})[ocrNorm(item)+'|'+u];
+  if(!c||!(c.f>0)) return {unit:u,qty,price:price||0,conv:false};
   return {unit:c.to,qty:qty*c.f,price:(price||0)/c.f,conv:true};
 }
 // สาขาเพิ่มสินค้าใหม่ในแอพนับ -> เตือนให้มาผูกชื่อ ไม่งั้นใช้จริงของตัวนั้นหายเงียบ ๆ
@@ -5271,16 +5279,19 @@ function uconvModal(nk){
   const others=info.units.filter(u=>u!==prim);
   openModal(`<h3>⚖ ตั้งอัตราแปลงหน่วย</h3>
     <div style="margin:4px 0 10px"><b>${esc(info.item)}</b> ลงบิลปนกันหลายหน่วย (${info.units.map(esc).join(' / ')}) — ตั้งครั้งเดียว ระบบจะรวมเป็นหน่วยหลักให้ทุกหน้า ลงบิลตามซัพส่งเหมือนเดิม</div>
-    <div class="xs" style="margin-bottom:8px">หน่วยหลัก: <select id="ucPrim" onchange="S._uconvPick=this.value;uconvModal('${nk}')" style="width:auto;display:inline-block;padding:6px 10px">${info.units.map(u=>`<option ${u===prim?'selected':''}>${esc(u)}</option>`).join('')}</select></div>
+    <div class="xs" style="margin-bottom:8px">รวมเป็นหน่วย: <select id="ucPrim" onchange="S._uconvPick=this.value;uconvModal('${nk}')" style="width:auto;display:inline-block;padding:6px 10px">${info.units.map(u=>`<option ${u===prim?'selected':''}>${esc(u)}</option>`).join('')}</select>
+      <span class="mut">· หน่วยสะกดต่างกันแค่จุด/ตัวสะกด (กก / กก. / กิโล) ระบบรวมให้เองแล้ว</span></div>
     ${others.map((u,i)=>{
       const c=(S._uconv||{})[nk+'|'+u];
-      return `<div style="margin:6px 0">1 ${esc(u)} = <input id="ucF${i}" type="text" inputmode="decimal" autocomplete="off" name="ucf_${Date.now()%9999}_${i}" value="${c&&c.to===prim?c.f:''}" placeholder="เช่น 12" style="width:80px;text-align:right;display:inline-block"> ${esc(prim)}</div>`;
+      return `<div style="margin:8px 0;font-size:15px"><b>1 ${esc(u)}</b> มี <input id="ucF${i}" type="text" inputmode="decimal" autocomplete="off" name="ucf_${Date.now()%9999}_${i}" value="${c&&c.to===prim?c.f:''}" placeholder="เช่น 15" style="width:90px;text-align:right;display:inline-block" oninput="uconvHint(${i},'${esc(u)}','${esc(prim)}')"> <b>${esc(prim)}</b>
+        <span class="xs mut" id="ucH${i}"></span>${info.q&&info.q[u]?` <span class="xs mut">(บิลเดือนนี้ ${fmt(info.q[u],Math.abs(info.q[u]%1)>0.004?2:0)} ${esc(u)})</span>`:''}</div>`;
     }).join('')}
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn sm2" onclick="uconvSave('${nk}')">บันทึก</button>
       <button class="btn gh sm2" style="margin-left:auto" onclick="S._uconvPick=null;closeModal()">ปิด</button>
     </div>`);
 }
+function uconvHint(i,u,prim){ const v=num((document.getElementById('ucF'+i)||{}).value), h=document.getElementById('ucH'+i); if(h)h.textContent=v>0?'→ 1 '+prim+' = '+fmt(Math.round(1/v*10000)/10000,4).replace(/\.?0+$/,'')+' '+u:''; }
 async function uconvSave(nk){
   const info=(S._uMix||{})[nk]; if(!info)return;
   const prim=(document.getElementById('ucPrim')||{}).value||info.units[0];
@@ -5290,7 +5301,7 @@ async function uconvSave(nk){
     const f=num((document.getElementById('ucF'+i)||{}).value);
     if(f>0) rows2.push({item:info.item,from_unit:others[i],to_unit:prim,factor:f});
   }
-  if(!rows2.length){ toast('กรอกอัตราแปลงก่อนครับ เช่น 1 ลัง = 12 กก.',true); return; }
+  if(!rows2.length){ toast('กรอกก่อนครับ เช่น 1 ลัง มี 15 กก.',true); return; }
   try{
     await api('DELETE',`pnl_unit_conv?item=eq.${encodeURIComponent(info.item)}&from_unit=eq.${encodeURIComponent(prim)}`).catch(()=>{});
     await ups('pnl_unit_conv',rows2,'item,from_unit');
