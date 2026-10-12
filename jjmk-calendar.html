@@ -50,12 +50,13 @@ input[type=date],input[type=time]{color-scheme:dark}
 ::-webkit-scrollbar-thumb:hover{background:rgba(255,64,70,.45)}
 
 /* ---------- layout ---------- */
-header{position:sticky;top:0;z-index:40;background:rgba(14,11,10,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+header{position:sticky;top:0;z-index:40;background:rgba(14,11,10,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line);
+  padding-top:env(safe-area-inset-top)}   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง — ห้ามทับปุ่มบนหัวแอป (เจ้าของกดไม่ได้ 2026-10-12) */
 header::after{content:'';display:block;height:2px;margin-top:-1px;
   background:linear-gradient(90deg,transparent,var(--red) 18%,var(--gold) 50%,var(--red) 82%,transparent);
   background-size:220% 100%;animation:scan 6s linear infinite;opacity:.85}
 @keyframes scan{to{background-position:-220% 0}}
-.hrow{display:flex;align-items:center;gap:10px;padding:10px clamp(14px,1.6vw,28px) 8px;flex-wrap:wrap}
+.hrow{display:flex;align-items:center;gap:10px;padding:10px max(clamp(14px,1.6vw,28px),env(safe-area-inset-right)) 8px max(clamp(14px,1.6vw,28px),env(safe-area-inset-left));flex-wrap:wrap}   /* แนวนอน: ไม่จมรอยบาก */
 .brand{display:flex;align-items:center;gap:9px;font-family:'Prompt';font-weight:700;font-size:18px}
 .brand .hlogo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--red-d),var(--red));display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 14px rgba(255,198,67,.35)}
 .brand>span{background:linear-gradient(90deg,#FFF3E0 0%,var(--gold) 45%,#FFF3E0 90%);background-size:200% 100%;
@@ -68,12 +69,13 @@ header::after{content:'';display:block;height:2px;margin-top:-1px;
 .seg button.on{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;box-shadow:var(--glow)}
 #mineBtn{border:1.5px solid var(--line);border-radius:99px;padding:7px 14px;font-weight:600;font-size:13.5px;color:var(--mut);white-space:nowrap;transition:.15s}
 #mineBtn.on{border-color:rgba(255,198,67,.55);color:var(--gold);background:var(--gold-t);box-shadow:0 0 14px rgba(255,198,67,.2)}
-#hdUser{margin-left:auto;font-size:12px;color:var(--mut);white-space:nowrap}
-.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px 10px 9px;scrollbar-width:none}
+#hdUser{margin-left:auto;font-size:12px;color:var(--mut);white-space:normal;min-width:0}   /* ชื่อยาว/จอแคบ: ตัดบรรทัดแทนการล้นจอ (ล้น = เบราว์เซอร์ย่อทั้งหน้า) */
+#hdUser a{white-space:nowrap}   /* ลิงก์ 🔄 โหลดใหม่ / ออก ห้ามแตกครึ่งบรรทัด */
+.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px max(10px,env(safe-area-inset-right)) 9px max(10px,env(safe-area-inset-left));scrollbar-width:none}
 .tabbar::-webkit-scrollbar{display:none}
 .tabbar button{flex:none;padding:8px 14px;border-radius:99px;font-weight:600;color:var(--mut);font-size:14px}
 .tabbar button.on{background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;box-shadow:var(--glow)}
-main{padding:16px clamp(12px,1.6vw,28px) 90px;max-width:1100px;margin:0 auto;position:relative}
+main{padding:16px max(clamp(12px,1.6vw,28px),env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) max(clamp(12px,1.6vw,28px),env(safe-area-inset-left));max-width:1100px;margin:0 auto;position:relative}
 .view{display:none}.view.on{display:block;animation:vin .3s ease}
 @keyframes vin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
@@ -207,7 +209,7 @@ input[type=date],input[type=time]{min-width:0;max-width:100%}
 /* ---------- misc ---------- */
 .fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .fbar input{flex:1 1 230px;min-width:150px;padding:9px 12px;font-size:16px}
-.fbar select{flex:0 1 200px;width:auto;padding:9px 30px 9px 12px;font-size:16px}
+.fbar select{flex:0 1 200px;width:auto;max-width:100%;padding:9px 30px 9px 12px;font-size:16px}   /* ชื่อพนักงานยาว: ช่องเลือกไม่ล้นจอ */
 .fbar .fcount{font-size:12px;color:var(--mut);flex:none}
 @media(max-width:560px){.fbar input,.fbar select{flex:1 1 100%}}
 .chip.f{cursor:pointer;user-select:none}
@@ -230,12 +232,14 @@ details.manual>summary::-webkit-details-marker{display:none}
 details.manual>summary::before{content:'▸ ';color:var(--gold)}
 details.manual[open]>summary::before{content:'▾ '}
 details.manual>div{padding-bottom:12px}
-#fab{position:fixed;right:18px;bottom:20px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;font-size:28px;line-height:1;box-shadow:0 6px 26px rgba(255,64,70,.55);z-index:45;display:none;align-items:center;justify-content:center;transition:.18s}
+#fab{position:fixed;right:calc(18px + env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--red-d),var(--red));color:#fff;font-size:28px;line-height:1;box-shadow:0 6px 26px rgba(255,64,70,.55);z-index:45;display:none;align-items:center;justify-content:center;transition:.18s}
 #fab:hover{transform:scale(1.08)}
-#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(90px);background:rgba(24,19,16,.92);backdrop-filter:blur(10px);border:1px solid rgba(255,64,70,.4);color:#fff;font-size:13.5px;font-weight:600;border-radius:13px;padding:11px 18px;transition:.28s;z-index:99;max-width:88vw;text-align:center;box-shadow:0 6px 30px rgba(0,0,0,.5),0 0 20px rgba(255,64,70,.15)}
+#toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(calc(90px + env(safe-area-inset-bottom)));background:rgba(24,19,16,.92);backdrop-filter:blur(10px);border:1px solid rgba(255,64,70,.4);color:#fff;font-size:13.5px;font-weight:600;border-radius:13px;padding:11px 18px;transition:.28s;z-index:99;max-width:88vw;text-align:center;box-shadow:0 6px 30px rgba(0,0,0,.5),0 0 20px rgba(255,64,70,.15)}
 #toast.on{transform:translateX(-50%) translateY(0)}
 #toast.err{border-color:var(--bad);box-shadow:0 6px 30px rgba(0,0,0,.5),0 0 24px rgba(255,92,92,.35)}
-#modalWrap{position:fixed;inset:0;background:rgba(5,3,2,.7);backdrop-filter:blur(6px);z-index:80;display:none;align-items:flex-start;justify-content:center;padding:5vh 14px;overflow-y:auto}
+#modalWrap{position:fixed;inset:0;background:rgba(5,3,2,.7);backdrop-filter:blur(6px);z-index:80;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;
+  top:env(safe-area-inset-top);box-shadow:0 calc(-1 * env(safe-area-inset-top)) 0 rgba(5,3,2,.7);   /* หน้าต่างเริ่มใต้แถบสถานะ — เลื่อนแล้วช่องกรอกไม่ลอดไปใต้นาฬิกา (เงาหรี่แถบสถานะให้เท่ากัน) */
+  padding:5vh max(14px,env(safe-area-inset-right)) calc(5vh + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}   /* แถบโฮม/แนวนอน: ปุ่มท้ายหน้าต่างไม่จม */
 #modalWrap.on{display:flex}
 .modal{background:#181310;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:18px 18px 16px;width:100%;max-width:560px;box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 40px rgba(255,64,70,.08);animation:vin .25s ease}
 .modal h3{margin:0 0 12px;font-size:16px}
@@ -1806,7 +1810,7 @@ async function startApp(){
     if(bar)return bar;
     bar=document.createElement('div');
     bar.setAttribute('aria-hidden','true');
-    bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;display:flex;'+
+    bar.style.cssText='position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);z-index:99999;display:flex;'+   /* ใต้แถบสถานะ iPhone (ไม่ได้ลาก = สูง 0 ไม่เห็นเหมือนเดิม) */
       'align-items:center;justify-content:center;pointer-events:none;'+
       'height:0;overflow:hidden;transition:none;'+
       'font:600 13px/1.2 "Prompt","Sarabun",system-ui,sans-serif;color:#F2CF7A;'+

@@ -37,10 +37,12 @@ body{background:radial-gradient(120% 90% at 50% 40%,var(--ground) 0%,var(--groun
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 .hud{position:fixed;z-index:5;display:flex;gap:10px;align-items:flex-start}
-.tl{top:calc(14px + env(safe-area-inset-top,0px));left:16px;flex-wrap:wrap;max-width:calc(100% - 420px)}
-.tr{top:calc(14px + env(safe-area-inset-top,0px));right:16px;flex-direction:column;align-items:flex-end}
-.br{bottom:calc(16px + env(safe-area-inset-bottom,0px));right:16px}
-.bl{bottom:calc(16px + env(safe-area-inset-bottom,0px));left:16px}
+/* มือถือแนวนอน: ปุ่มลอยมุมจอต้องไม่จมใต้รอยบากด้านข้าง (ไม่มีรอยบาก = 16px เท่าเดิม) */
+.tl{top:calc(14px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));flex-wrap:wrap;max-width:calc(100% - 420px)}
+.tr{top:calc(14px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));flex-direction:column;align-items:flex-end}
+.br{bottom:calc(16px + env(safe-area-inset-bottom,0px));right:max(16px,env(safe-area-inset-right,0px))}
+.bl{bottom:calc(16px + env(safe-area-inset-bottom,0px));left:max(16px,env(safe-area-inset-left,0px))}
+@media (max-width:760px),(max-height:500px){.hud.tr{z-index:6}}   /* มือถือ: รายการภารกิจ/เรื่องด่วนที่เปิดอยู่ต้องอยู่บนปุ่มซูม/หมุนมุมขวาล่าง — เดิมโดนปุ่มบังขอบขวาของรายการ */
 .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow)}
 .me{display:flex;gap:12px;align-items:center;padding:10px 14px 10px 10px;min-width:0}
 .ava{position:relative;width:52px;height:52px;flex:none;border-radius:50%;background:linear-gradient(145deg,var(--red),var(--red2));border:3px solid var(--gold2);display:grid;place-items:center;color:#fff;font-family:var(--display);font-size:19px}
@@ -94,7 +96,7 @@ button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(
 .meet b{font-family:var(--display);font-weight:500;font-size:16px;display:block}
 .meet small{opacity:.8;font-size:12px}
 .meet:disabled{opacity:.6;cursor:default}
-#sheet{position:fixed;z-index:8;top:calc(12px + env(safe-area-inset-top,0px));right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:410px;max-width:calc(100% - 24px);display:flex;flex-direction:column;overflow:hidden;transform:translateX(110%);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+#sheet{position:fixed;z-index:8;top:calc(12px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:410px;max-width:calc(100% - 24px);display:flex;flex-direction:column;overflow:hidden;transform:translateX(calc(110% + env(safe-area-inset-right,0px)));transition:transform .32s cubic-bezier(.2,.8,.2,1)}   /* ปิดอยู่ = พ้นจอทั้งแผ่น แม้ขยับหลบรอยบาก */
 #sheet.on{transform:none}
 .shHead{padding:18px 18px 14px;display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--line)}
 .tile{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-size:28px;flex:none;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
@@ -128,7 +130,8 @@ button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(
 .tags{display:flex;flex-wrap:wrap;gap:6px}
 .tags code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--card2);padding:3px 8px;border-radius:7px}
 .mode{font-size:13px;color:var(--muted);line-height:1.55}
-#veil{position:fixed;inset:0;z-index:9;background:rgba(43,33,28,.38);display:grid;place-items:center;padding:16px}
+#veil{position:fixed;inset:0;z-index:9;background:rgba(43,33,28,.38);display:grid;place-items:center;
+  padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง ห้ามทับหัวหน้าต่างประชุมเช้า */
 .modal{width:min(580px,100%);max-height:calc(100% - 32px);overflow:auto;padding:22px}
 .modal h2{margin:0 0 4px;font-family:var(--display);font-weight:500;font-size:22px;text-wrap:balance}
 .modal .sub{color:var(--muted);margin:0 0 14px}
@@ -1681,7 +1684,8 @@ init();
     if(bar)return bar;
     bar=document.createElement('div');
     bar.setAttribute('aria-hidden','true');
-    bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;display:flex;'+
+    /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง — เริ่มแถบใต้แถบสถานะ ไม่งั้นข้อความจมใต้นาฬิกา (ไม่ได้ลาก = สูง 0 ไม่เห็นเหมือนเดิม) */
+    bar.style.cssText='position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);z-index:99999;display:flex;'+
       'align-items:center;justify-content:center;pointer-events:none;'+
       'height:0;overflow:hidden;transition:none;'+
       'font:600 13px/1.2 "Prompt","Sarabun",system-ui,sans-serif;color:#F2CF7A;'+

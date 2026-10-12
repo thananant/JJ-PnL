@@ -25,7 +25,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:var(--fb);color:var(--ink);background:var(--bg);min-height:100vh;font-size:14px}
-.wrap{max-width:1180px;margin:0 auto;padding:0 14px 60px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 max(14px,env(safe-area-inset-right)) 60px max(14px,env(safe-area-inset-left))}   /* มือถือแนวนอน: ไม่จมใต้รอยบากด้านข้าง */
 
 header.top{
   position:sticky;top:0;z-index:20;background:linear-gradient(180deg,#1A1411,#150F0D);
@@ -157,7 +157,7 @@ tr.undone td{opacity:.55}
 
 /* modal */
 #ov{position:fixed;inset:0;background:rgba(8,5,4,.78);z-index:50;display:none;align-items:center;justify-content:center;overflow-y:auto;
-  padding:calc(20px + env(safe-area-inset-top)) 12px calc(20px + env(safe-area-inset-bottom))}   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง ห้ามทับหัวหน้าต่าง */
+  padding:calc(20px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง ห้ามทับหัวหน้าต่าง */
 #ov.on{display:flex}
 .modal{background:var(--card);border:1px solid var(--line2);border-radius:16px;padding:18px;
   max-width:760px;width:100%;margin:auto;max-height:calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
@@ -248,6 +248,12 @@ header.top{padding-top:calc(12px + env(safe-area-inset-top))}
 @media(max-width:480px){
   /* จอแคบมาก: ระดับ / ประจำที่ วางคนละบรรทัด ไม่งั้นชื่อในช่องเลือกโดนตัด ("ผู้ดูแลระ…") */
   table.mc-users td:nth-child(2),table.mc-users td:nth-child(3){grid-column:1/-1}
+}
+@media(max-width:340px){
+  /* Galaxy Fold / iPhone SE รุ่นแรก: ช่องติ๊กสิทธิ์ 5 ช่องต้องอยู่ในกรอบครบ — เดิมช่อง ลบ/ซ่อน ล้นขอบกล่องแล้วถูกตัดหาย กดไม่ได้ */
+  #modal .appbody{padding-left:8px;padding-right:8px}
+  .prow{grid-template-columns:minmax(0,1fr) repeat(5,30px);gap:3px}
+  .prow .nm{overflow-wrap:anywhere}
 }
 
 /* JJ Gate — ช่องล็อกอินบนมือถือต้องไม่ต่ำกว่า 16px ไม่งั้น iPhone จะซูมหน้าจอเองตอนกดพิมพ์ */
@@ -2057,7 +2063,8 @@ function logout(){localStorage.removeItem('jjpnl_auth');location.reload();}
     if(bar)return bar;
     bar=document.createElement('div');
     bar.setAttribute('aria-hidden','true');
-    bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;display:flex;'+
+    /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง — เริ่มแถบใต้แถบสถานะ ไม่งั้นข้อความจมใต้นาฬิกา (ไม่ได้ลาก = สูง 0 ไม่เห็นเหมือนเดิม) */
+    bar.style.cssText='position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);z-index:99999;display:flex;'+
       'align-items:center;justify-content:center;pointer-events:none;'+
       'height:0;overflow:hidden;transition:none;'+
       'font:600 13px/1.2 "Prompt","Sarabun",system-ui,sans-serif;color:#F2CF7A;'+
