@@ -34,6 +34,9 @@ body{
     radial-gradient(900px 420px at 85% 20%, rgba(233,180,76,.06), transparent 65%),
     var(--bg);
 }
+/* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง — พื้นทึบหลังแถบสถานะ (ลายเดียวกับพื้นหลังหน้า) เลื่อนหน้าแล้วเนื้อหาไม่โผล่ใต้นาฬิกา */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top);z-index:45;pointer-events:none;
+  background:radial-gradient(1200px 500px at 50% -100px, rgba(198,33,39,.16), transparent 70%),var(--bg)}
 h1,h2,h3,.num{font-family:'Prompt',sans-serif}
 .num,td.n{font-variant-numeric:tabular-nums}
 button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:15px;color:inherit}
@@ -52,7 +55,7 @@ a{color:var(--gold-soft)}
 }
 
 /* ---------- Header / Crest ---------- */
-.crest{position:relative;text-align:center;padding:34px 16px 6px}
+.crest{position:relative;text-align:center;padding:calc(34px + env(safe-area-inset-top)) 16px 6px}
 .crest .ring{
   width:92px;height:92px;border-radius:26px;margin:0 auto;position:relative;
   padding:4px;background:linear-gradient(160deg,var(--gold-hi),#8A621B 60%,var(--gold));
@@ -68,9 +71,9 @@ a{color:var(--gold-soft)}
 .orn span{font-size:13px;letter-spacing:.3em;margin-left:.3em}
 
 /* ---------- แถบควบคุม ปี/สาขา ---------- */
-.ctrlbar{position:sticky;top:0;z-index:40;background:rgba(20,16,15,.86);backdrop-filter:blur(12px);
+.ctrlbar{position:sticky;top:env(safe-area-inset-top);z-index:40;background:rgba(20,16,15,.86);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);margin-top:18px}
-.ctrl-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px clamp(14px,3vw,28px);flex-wrap:wrap}
+.ctrl-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px max(clamp(14px,3vw,28px),env(safe-area-inset-right)) 10px max(clamp(14px,3vw,28px),env(safe-area-inset-left));flex-wrap:wrap}
 .yearbox{display:flex;align-items:center;gap:4px;background:#1B1413;border:1.5px solid var(--line);border-radius:14px;padding:4px}
 .yearbox button{width:38px;height:38px;border-radius:10px;font-size:17px;color:var(--gold-soft);font-weight:700}
 .yearbox button:hover{background:rgba(233,180,76,.1)}
@@ -90,12 +93,13 @@ a{color:var(--gold-soft)}
 .lo-btn:hover{color:var(--bad);border-color:var(--bad)}
 
 /* ---------- โครงหน้า ---------- */
-main{max-width:1180px;margin:0 auto;padding:26px clamp(14px,3vw,28px) 70px}
+main{max-width:1180px;margin:0 auto;padding:26px max(clamp(14px,3vw,28px),env(safe-area-inset-right)) 70px max(clamp(14px,3vw,28px),env(safe-area-inset-left))}
 section{margin-bottom:40px;opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease}
 section.vis{opacity:1;transform:none}
 .sec-h{display:flex;align-items:baseline;gap:12px;margin:0 0 6px}
 .sec-h h2{margin:0;font-size:clamp(19px,2.6vw,25px);font-weight:800}
 .sec-h .en{color:var(--mut);font-size:11.5px;letter-spacing:.28em;text-transform:uppercase;font-family:'Prompt';font-weight:600}
+@media(max-width:340px){.sec-h{flex-wrap:wrap}}   /* จอเล็กมาก (Galaxy Fold 280px): ปุ่มท้ายหัวข้อขึ้นบรรทัดใหม่ ไม่ล้นจอ */
 .sec-sub{color:var(--mut);font-size:13px;margin:0 0 16px}
 
 /* ---------- การ์ด ---------- */
@@ -156,7 +160,7 @@ tbody tr:hover td{background:rgba(233,180,76,.04)}
 /* ---------- ผ่อนชำระ ---------- */
 .inst-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
 @media(max-width:760px){.inst-sum{grid-template-columns:1fr}}
-.inst-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+.inst-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:16px}   /* จอแคบกว่า 358px (iPhone SE 1 / Fold): การ์ดย่อตามจอ ไม่ดันหน้ากว้างเกิน */
 .inst{padding:18px 20px 16px}
 .inst .top{display:flex;align-items:flex-start;gap:10px}
 .inst .nm{font-family:'Prompt';font-weight:700;font-size:16.5px}
@@ -182,9 +186,10 @@ tbody tr:hover td{background:rgba(233,180,76,.04)}
 .empty{text-align:center;color:var(--mut);padding:34px 12px;font-size:13.5px}
 
 /* ---------- Modal ---------- */
-#modalWrap{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(10,7,6,.78);backdrop-filter:blur(6px);padding:16px}
+#modalWrap{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(10,7,6,.78);backdrop-filter:blur(6px);
+  padding:calc(16px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
 #modalWrap.on{display:flex}
-#modalBox{width:min(480px,100%);max-height:92dvh;overflow-y:auto;background:linear-gradient(175deg,var(--card2),var(--card));
+#modalBox{width:min(480px,100%);max-height:calc(92dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;background:linear-gradient(175deg,var(--card2),var(--card));
   border:1px solid var(--line-hi);border-radius:20px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
 #modalBox h3{margin:0 0 16px;font-family:'Prompt';font-size:18px}
 .fld{margin-bottom:12px}
@@ -206,7 +211,7 @@ tbody tr:hover td{background:rgba(233,180,76,.04)}
 .logincard .fld{text-align:left}
 .logincard .msg{font-size:12.5px;color:var(--bad);margin-top:10px;min-height:16px}
 
-#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:120;background:#2A211E;color:var(--ink);
+#toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translate(-50%,20px);z-index:120;background:#2A211E;color:var(--ink);
   border:1px solid var(--line-hi);border-radius:13px;padding:11px 20px;font-size:13.5px;opacity:0;pointer-events:none;transition:.25s;max-width:88vw}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 #toast.err{border-color:var(--bad);color:#FFD9D9}
@@ -1473,7 +1478,7 @@ async function enter(){
     if(bar)return bar;
     bar=document.createElement('div');
     bar.setAttribute('aria-hidden','true');
-    bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;display:flex;'+
+    bar.style.cssText='position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);z-index:99999;display:flex;'+   /* ใต้แถบสถานะ iPhone */
       'align-items:center;justify-content:center;pointer-events:none;'+
       'height:0;overflow:hidden;transition:none;'+
       'font:600 13px/1.2 "Prompt","Sarabun",system-ui,sans-serif;color:#F2CF7A;'+

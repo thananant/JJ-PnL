@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -18,7 +18,8 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
   body{font-family:'Sarabun',sans-serif;background:var(--paper);color:var(--ink);line-height:1.45}
-  header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;padding:10px 14px;
+  header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;
+    padding:calc(10px + env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left));   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง ห้ามทับปุ่มบนหัวแอป (เจ้าของกดไม่ได้ 2026-10-12) */
     background:linear-gradient(170deg,#611014,#3F080B 85%);color:#fbeee0;box-shadow:0 2px 14px rgba(63,8,11,.28)}
   header .hlogo{width:38px;height:38px;border-radius:50%;object-fit:cover;background:#fff;border:2px solid var(--gold-line);flex:none}
   header .htit{font-family:Prompt;font-weight:600;font-size:1.02rem;line-height:1.15}
@@ -29,10 +30,10 @@
   header select option{color:#222;background:#fff}
   header .hbtn{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;
     border-radius:10px;padding:7px 11px;font-family:Sarabun;font-weight:600;font-size:.85rem;cursor:pointer}
-  main{max-width:760px;margin:0 auto;padding:14px}
+  main{max-width:760px;margin:0 auto;padding:14px max(14px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}   /* แนวนอน: ติ่งกล้องซ้าย/ขวาไม่ทับเนื้อหา · ล่าง: เผื่อแถบโฮม */
   @media(min-width:940px){main{max-width:1120px}
     .wrap{display:grid;grid-template-columns:400px 1fr;gap:14px;align-items:start}
-    .calcard{position:sticky;top:72px}}
+    .calcard{position:sticky;top:calc(72px + env(safe-area-inset-top))}}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
   .hint{font-size:.78rem;color:var(--ink-soft)}
   .rempty{text-align:center;color:var(--ink-soft);padding:26px 10px}
@@ -47,14 +48,15 @@
   .field label{display:block;font-size:.8rem;color:var(--ink-soft);margin-bottom:4px;font-weight:600}
   .field input,.field select{width:100%;padding:11px;border:1.5px solid var(--line);border-radius:10px;font-family:Sarabun;font-size:.95rem;background:#fff}
   /* overlay + sheet */
-  .overlay{position:fixed;inset:0;z-index:100;background:rgba(42,23,19,.55);display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
+  .overlay{position:fixed;inset:0;z-index:100;background:rgba(42,23,19,.55);display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}   /* หน้าต่างไม่ขึ้นไปใต้นาฬิกา/ติ่งกล้อง */
   .overlay.on{display:flex}
-  .sheet{background:#fff;width:100%;max-width:560px;max-height:92vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden}
+  .sheet{background:#fff;width:100%;max-width:560px;max-height:min(92vh,calc(100vh - env(safe-area-inset-top)));border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden}
   @media(min-width:600px){.overlay{align-items:center}.sheet{border-radius:18px}}
   .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line)}
   .sheet-head h3{margin:0;font-family:Prompt;font-weight:600;font-size:1.02rem}
   .sheet-head .x{border:none;background:#f4ede0;border-radius:9px;width:32px;height:32px;font-size:1rem;cursor:pointer}
-  .sheet-body{padding:14px 16px;overflow-y:auto}
+  .sheet-body{padding:14px 16px calc(14px + env(safe-area-inset-bottom));overflow-y:auto}   /* ปุ่มท้ายหน้าต่างไม่อยู่ใต้แถบโฮม */
   .sub-title{font-family:Prompt;font-weight:600;font-size:.92rem;margin:14px 0 8px;color:var(--red-deep)}
   /* ปฏิทินรายเดือน */
   .calcard{margin-bottom:14px}
@@ -154,9 +156,14 @@
   #login.err .lcard{animation:shake .4s}
   @keyframes shake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
   /* toast */
-  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#2B1B17;color:#fff;
+  #toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#2B1B17;color:#fff;
     padding:11px 18px;border-radius:12px;font-size:.88rem;opacity:0;pointer-events:none;transition:.22s;z-index:500;max-width:88vw;text-align:center}
   #toast.show{opacity:1;transform:translateX(-50%)}
+  @media(max-width:480px){   /* โทรศัพท์ทุกขนาด (Galaxy Fold 280 – iPhone Pro Max 440): หัวแอปไม่ล้นจอ ชื่อแอปไม่ถูกบีบเป็นแท่งสูง — เลือกสาขาลงแถวสอง */
+    header{flex-wrap:wrap;row-gap:8px}
+    header .htit{flex:1 1 0;min-width:0}
+    header .hsp{display:none}
+    header select{order:9;flex:1 1 100%;max-width:none}}
 </style>
 <!-- ===== JJ Login — หน้าล็อกอินมาตรฐานทุกแอพ (เจ้าของเลือกแบบ A 2026-09-28) =====
      บล็อกนี้เหมือนกันทุกไฟล์ ต่างแค่ var APP= บรรทัดแรก — แก้ที่ไหนต้องแก้ให้ครบทุกไฟล์
@@ -1405,7 +1412,7 @@ boot();
     if(bar)return bar;
     bar=document.createElement('div');
     bar.setAttribute('aria-hidden','true');
-    bar.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;display:flex;'+
+    bar.style.cssText='position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);z-index:99999;display:flex;'+   /* ใต้แถบสถานะ iPhone */
       'align-items:center;justify-content:center;pointer-events:none;'+
       'height:0;overflow:hidden;transition:none;'+
       'font:600 13px/1.2 "Prompt","Sarabun",system-ui,sans-serif;color:#F2CF7A;'+
