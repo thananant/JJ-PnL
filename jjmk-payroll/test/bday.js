@@ -84,6 +84,11 @@ setTimeout(async ()=>{ try{
   ok(!writes.some(x=>x.table==='payroll_settings') && toasts.some(t=>/มีคนเพิ่งแก้/.test(t)) && $('bdGroup').value===G2 && !$('bdDay').checked,'อีกเครื่องแก้ระหว่างเปิดการ์ด = ไม่บันทึกทับ · โหลดค่าล่าสุดให้');
   writes.length=0; await w.eval(`saveBday()`); await tick();
   ok(writes.some(x=>x.table==='payroll_settings' && x.row.bday_line.group===G2 && x.row.bday_line.since==='2026-10-01T00:00:00Z'),'กดบันทึกอีกครั้ง (ค่าไม่เปลี่ยนแล้ว) = บันทึกได้ · since เดิม');
+  TABLES.payroll_settings=[{id:1,bday_line:{since:'2026-10-01T00:00:00Z',month:true,group:G2,day:false,day_at:'09:00',month_at:'09:00'}}];
+  E(`renderBday()`); await tick();
+  TABLES.payroll_settings=[{id:1,bday_line:{group:G2,day_at:'09:00',month_at:'09:00',day:false,month:true,since:'2026-10-01T00:00:00Z'}}];
+  writes.length=0; toasts=[]; await w.eval(`saveBday()`); await tick();
+  ok(writes.some(x=>x.table==='payroll_settings') && !toasts.some(t=>/มีคนเพิ่งแก้/.test(t)),'ค่าเดียวกันแต่คีย์เรียงต่างกัน (jsonb) = ไม่ขึ้น "มีคนแก้" ผิด ๆ');
   delete TABLES.payroll_settings;
   console.log('[ใส่ไอดีกลุ่มเอง]');
   $('bdGroup').value='__manual'; E(`bdayGroupChanged()`);
@@ -149,6 +154,12 @@ setTimeout(async ()=>{ try{
   ok(/รายชื่อเดือนตุลาคม 2569 · ✅ ส่งแล้ว/.test(lg) && /เช้าวันเกิด .*❌ ส่งไม่สำเร็จ/.test(lg) && /bot not in group/.test(lg) && /ลองครบ 3 ครั้ง/.test(lg) && /พฤศจิกายน 2569 · ⏳ ส่งแล้ว รอผล/.test(lg),'แสดงผล ✅ / ❌ (+เหตุผล · ลองครบแล้ว) / ⏳');
   ok(/กันยายน 2569 · ❔ ส่งแล้ว ไม่ทราบผล/.test(lg),'รอผลเกิน 30 นาที = ❔ ไม่ทราบผล (ให้ดูในกลุ่ม)');
   ok(/HTTP 502 · เลยช่วงส่งแล้ว/.test(lg) && /HTTP 503 · ระบบจะลองใหม่ให้เอง/.test(lg),'ไม่สำเร็จ: เลยช่วงลองใหม่แล้ว = บอกให้กดส่งเอง · ยังทัน = ระบบลองให้');
+  const realNow=w.Date.now, lbl=E(`bdayLogLabel`), row={kind:'bday_month',period_key:'2026-11',ok:false,tries:1,detail:'HTTP 502',sent_at:'2026-11-03T05:00:00Z'};
+  w.Date.now=()=>Date.parse('2026-11-04T16:00:00Z');   // 4 พ.ย. 23:00 ไทย
+  ok(/ระบบจะลองใหม่ให้เอง/.test(lbl(row)),'รายเดือนไม่สำเร็จ วันที่ 4 = ยังบอกว่าระบบลองให้ (ตรงกับฐานข้อมูล)');
+  w.Date.now=()=>Date.parse('2026-11-04T17:10:00Z');   // 5 พ.ย. 00:10 ไทย
+  ok(/เลยช่วงส่งแล้ว/.test(lbl(row)),'วันที่ 5 = เลยช่วงลองใหม่ ให้กดส่งเอง');
+  w.Date.now=realNow;
   TABLES.payroll_line_log=[]; E(`renderBday()`); await tick();
   ok(/ยังไม่เคยส่ง — รอบถัดไป (วันนี้|วันที่ 1 เดือนหน้า) เวลา [0-2][0-9]:[0-5][0-9] น\./.test($('bdLog').textContent),'ยังไม่เคยส่ง = บอกว่ารอบถัดไปเมื่อไร');
   console.log('[สิทธิ์]');

@@ -1446,9 +1446,10 @@ grant execute on function public.payroll_bday_day_text(date)   to anon, authenti
 -- ---------- งานที่ถึงเวลาส่งแล้วแต่ยังไม่ได้ส่ง ----------
 -- · ไม่มีกลุ่ม/ไอดีกลุ่มผิดรูปแบบ = ไม่ส่ง
 -- · since = เวลาที่กดบันทึกครั้งแรกในแอป — เพิ่งตั้งค่ากลางเดือน จะไม่ย้อนส่งของวันที่ 1 ให้ (กด 📤 ส่งเดี๋ยวนี้ในแอปแทน)
--- · รายเดือนมองย้อนหลัง 3 วัน (ฐานข้อมูล/cron หยุดไปแล้วกลับมา ส่งตามให้) · เช้าวันเกิดส่งได้เฉพาะวันนั้น
+-- · รายเดือนส่ง/ลองใหม่ได้ถึงวันที่ 4 (มองย้อนหลัง 3 วัน — cron หยุดไปแล้วกลับมา ส่งตามให้) · เช้าวันเกิดส่งได้เฉพาะวันนั้น
 -- · เวลาส่งช้าสุด 23:30 (ตั้งเกินกว่านี้ = 23:30 — cron ทุก 10 นาทีต้องทันก่อนข้ามวัน)
--- · ส่งไม่สำเร็จ ลองใหม่หลัง 30 นาที แล้ว 60 นาที (รวม 3 ครั้ง) — เหตุผลครั้งก่อนเก็บไว้จนผลครั้งใหม่มา
+-- · ส่งไม่สำเร็จ ลองใหม่รวม 3 ครั้ง: รายเดือนเว้น 30 แล้ว 60 นาที · เช้าวันเกิดเว้น 10 นาที — เหตุผลครั้งก่อนเก็บไว้จนผลครั้งใหม่มา
+-- · วันที่ 1 ที่มีคนเกิด: ส่งรายชื่อทั้งเดือนก่อน แล้ว "วันนี้วันเกิด" ตามในรอบถัดไป
 create or replace function public.payroll_line_due(p_now timestamptz default now())
 returns table (kind text, period_key text, group_id text, d date, due_at timestamptz)
 language sql
@@ -1480,18 +1481,29 @@ as $$
                     where coalesce(e.active, false) and e.birth_date is not null
                       and extract(month from e.birth_date) = extract(month from s.today)
                       and public.payroll_bday_in(e.birth_date, extract(year from s.today)::int) = s.today)
+  ), ready as (
+    select c.* from cand c cross join s
+     where s.gid ~ '^[CRU][0-9a-f]{32}$'
+       and c.due_at <= p_now
+       and c.due_at >= s.since
+       and not exists (
+         select 1 from payroll_line_log l
+          where l.kind = c.kind and l.period_key = c.period_key
+            and (l.ok is not false or l.tries >= 3
+                 -- ลองใหม่เว้นระยะ: รายเดือน 30 แล้ว 60 นาที (มีเวลา 4 วัน) · เช้าวันเกิดทุก 10 นาที (ต้องทันภายในวันนั้น)
+                 or l.sent_at > p_now - case when c.kind = 'bday_day' then interval '10 minutes'
+                                             else interval '30 minutes' * l.tries end))
   )
-  select c.kind, c.period_key, s.gid, c.d, c.due_at
-    from cand c cross join s
-   where s.gid ~ '^[CRU][0-9a-f]{32}$'
-     and c.due_at <= p_now
-     and c.due_at >= s.since
-     and not exists (
-       select 1 from payroll_line_log l
-        where l.kind = c.kind and l.period_key = c.period_key
-          and (l.ok is not false or l.tries >= 3
-               or l.sent_at > p_now - interval '30 minutes' * l.tries))   -- ลองใหม่ห่างขึ้นเรื่อย ๆ (30 / 60 นาที)
-   order by c.due_at, (c.kind = 'bday_day'), c.kind;               -- วันที่ 1 ที่มีคนเกิด: รายชื่อทั้งเดือนก่อน
+  select r.kind, r.period_key, s.gid, r.d, r.due_at
+    from ready r cross join s
+   -- วันที่ 1 ที่มีคนเกิด: "วันนี้วันเกิด" รอให้รายชื่อทั้งเดือนออกไปก่อน 1 รอบ (ส่งรอบเดียวกัน pg_net ยิงพร้อมกัน ลำดับในไลน์สลับได้)
+   where not (r.kind = 'bday_day' and exists (
+           select 1 from ready m where m.kind = 'bday_month' and m.d = r.d)
+          or r.kind = 'bday_day' and exists (
+           select 1 from payroll_line_log l
+            where l.kind = 'bday_month' and l.period_key = to_char(r.d, 'YYYY-MM')
+              and l.ok is null and l.sent_at > p_now - interval '9 minutes'))
+   order by r.due_at, r.kind;
 $$;
 
 -- ---------- ตัวเดินงาน (cron เรียกทุก 10 นาที · p_now มีไว้ทดสอบ — cron เรียกแบบไม่ใส่) ----------
@@ -7012,6 +7024,8 @@ const BDAY_HINT = /daily|report|รายงาน|เข้างาน|สร�
 let bdayCfg;            // undefined = ยังไม่โหลด · null = ยังไม่รัน SQL (ไม่มีช่อง bday_line) · {} = ค่าตั้ง
 let bdayGroups = [], bdayLog = [], bdayErr = '', bdayLoadSeq = 0, bdayDrawn = '', bdayCh = null;
 const bdayC = () => bdayCfg || {};
+/* รูปแบบคงที่ไว้เทียบ "มีคนแก้ไหม" — jsonb จากฐานข้อมูลเรียงคีย์คนละแบบกับออบเจกต์ในแอป ห้ามเทียบ JSON ตรง ๆ */
+const bdayCanon = o => { o = o || {}; return JSON.stringify(['group','month','month_at','day','day_at','since'].map(k => o[k] === undefined ? null : o[k])); };
 const bdayOn = k => { const v = bdayC()[k]; return (v === undefined || v === null) ? BDAY_DEF[k] : v === true; };
 const BDAY_LATEST = '23:30';   // ส่งช้าสุด — ฐานข้อมูลก็ตัดที่ 23:30 (cron ทุก 10 นาทีต้องทันก่อนข้ามวัน)
 const bdayHM = (s, d) => { s = String(s || '').trim(); if(!BDAY_HM.test(s)) return d; s = s.padStart(5,'0'); return s > BDAY_LATEST ? BDAY_LATEST : s; };
@@ -7078,9 +7092,9 @@ function bdayLogLabel(l){
   const age = l.sent_at ? (Date.now() - new Date(l.sent_at).getTime()) / 60000 : 0;   // นาที
   const st = l.ok === true ? '✅ ส่งแล้ว' : l.ok === false ? '❌ ส่งไม่สำเร็จ'
     : age > 30 ? '❔ ส่งแล้ว ไม่ทราบผล (ดูในกลุ่มไลน์)' : '⏳ ส่งแล้ว รอผล';
-  /* ฐานข้อมูลลองใหม่ให้เฉพาะช่วงที่ยังทัน: เช้าวันเกิด = วันนั้น · รายเดือน = 3 วันแรกของเดือน */
+  /* ฐานข้อมูลลองใหม่ให้เฉพาะช่วงที่ยังทัน (ต้องตรงกับ payroll_line_due): เช้าวันเกิด = วันนั้น · รายเดือน = วันที่ 1–4 */
   const key = String(l.period_key || ''), t = bdayToday();
-  const over = l.kind === 'bday_day' ? key < t : (key + '-04') <= t;
+  const over = l.kind === 'bday_day' ? key < t : (key + '-05') <= t;
   const what = l.kind === 'bday_month'
     ? 'รายชื่อเดือน' + (BDAY_MON[+String(l.period_key).slice(5,7)-1] || l.period_key) + ' ' + (+String(l.period_key).slice(0,4)+543)
     : 'เช้าวันเกิด ' + dayLabel(String(l.period_key));
@@ -7125,7 +7139,7 @@ async function renderBday(){
   if(seq !== bdayLoadSeq || !document.getElementById('bdayBody')) return;   // มีการวาดรอบใหม่ระหว่างรอ
   if(bdayCfg === null){ box.innerHTML = bdaySetupHtml(); return; }
   bdayRealtime();   // เพิ่งรัน SQL หลังเปิดแอป → เริ่มรับผลการส่งแบบสด
-  bdayDrawn = JSON.stringify(bdayC());   // ค่าที่วาดบนจอ — saveBday เทียบกับค่าล่าสุดก่อนเขียน
+  bdayDrawn = bdayCanon(bdayC());   // ค่าที่วาดบนจอ — saveBday เทียบกับค่าล่าสุดก่อนเขียน
   const ro = !bdayCanEdit(), dis = ro ? ' disabled' : '';
   const cur = String(bdayC().group || '').trim();
   const known = bdayGroups.some(g => String(g.group_id) === cur);
@@ -7227,7 +7241,7 @@ async function saveBday(){
   const form = { group: gid, month: !!v('bdMonth').checked, day: !!v('bdDay').checked,
     month_at: bdayHM(v('bdMonthAt').value, BDAY_DEF.month_at), day_at: bdayHM(v('bdDayAt').value, BDAY_DEF.day_at) };
   /* อีกเครื่องแก้ไปแล้วหลังเราเปิดการ์ด = ไม่บันทึกทับ · โหลดค่าล่าสุดให้ดูก่อน */
-  if(await bdayFresh() && JSON.stringify(bdayC()) !== bdayDrawn){
+  if(await bdayFresh() && bdayCanon(bdayC()) !== bdayDrawn){
     renderBday();
     return toast('⚠️ มีคนเพิ่งแก้การตั้งค่านี้จากอีกเครื่อง — โหลดค่าล่าสุดให้แล้ว ตรวจแล้วกด 💾 บันทึกอีกครั้ง');
   }
