@@ -10,7 +10,9 @@ NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ย
   → เก็บเป็น <สาขา>/<MMYYYY>/<เลขบิล>.pdf เช่น JJRD/092026/JJRD1244.pdf (ชื่อไฟล์ = เลขบิล เรียงตามเลขเอง)
   → บิลที่ถูกแก้ไข = ลบใบเดิมทิ้งแล้วเก็บใบใหม่ · บิลยกเลิก = ลบใบเดิม แล้วเก็บใบที่มีตรา "ยกเลิก"
     ลงโฟลเดอร์ย่อย ยกเลิก/ ของเดือนนั้น · เรียกคืน = ย้ายกลับ (แอปสั่งให้ NAS ทำเองทั้งหมด)
-  → Supabase เก็บแค่ตัวหนังสือ ไม่มีไฟล์ใด ๆ ขึ้นไป
+  → Supabase เก็บแค่ตัวหนังสือ ไม่มีไฟล์ PDF ขึ้นไป (รูปเดียวที่มีคือลายเซ็นผู้รับเงินที่ตั้งในแอป)
+  → ลายเซ็น: อ่านจากแอปเอง (⚙ ตั้งค่า → ลายเซ็นผู้รับเงิน) · อ่านไม่ได้/รูปเสีย = รอบนั้นไม่สร้างไฟล์ (รอบหน้าลองใหม่)
+    signature.png ข้างสคริปต์ใช้เฉพาะตอนยังไม่เคยตั้งลายเซ็นในแอป (และ --test ตอนอ่านแอปไม่ได้)
 
 วิธีติดตั้ง (ทำครั้งเดียว — ขั้นตอนละเอียดอยู่ในหน้า ⚙ ตั้งค่า ของแอปใบกำกับภาษี)
   🔒 สคริปต์นี้รันด้วย root → เก็บไว้ในโฟลเดอร์แชร์ที่ "เฉพาะ administrators" เข้าได้ แยกจากโฟลเดอร์เก็บบิล
@@ -18,7 +20,7 @@ NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ย
   1) Control Panel → Shared Folder → สร้างโฟลเดอร์แชร์ชื่อ scripts
        สิทธิ์: administrators = อ่าน/เขียน · ผู้ใช้อื่นทุกคน = ไม่มีสิทธิ์ (No access)
      สร้างโฟลเดอร์ย่อย inv_sync แล้ววางไฟล์นี้ลงไป → /volume1/scripts/inv_sync/inv_nas_sync.py
-     (ถ้ามีลายเซ็น วาง signature.png ไว้ในโฟลเดอร์ inv_sync เดียวกัน)
+     (ลายเซ็นตั้งในแอปที่เดียว สคริปต์อ่านเอง · อัปเดตสคริปต์ = วางไฟล์นี้ทับไฟล์เดิม ไม่ต้อง --install ใหม่)
   2) Task Scheduler → User-defined script (user: root) รันครั้งเดียว:
        python3 "/volume1/scripts/inv_sync/inv_nas_sync.py" --install --base "/volume1/Tax invoice"
      แล้วเปิดไฟล์ inv_sync/inv_nas_sync.log ต้องเห็นบรรทัด "พร้อมใช้งาน"
@@ -39,16 +41,19 @@ NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ย
 
 คำสั่งเสริม (ใส่ --base "<โฟลเดอร์เก็บบิล>" ต่อท้ายได้ทุกคำสั่ง)
   --install        ติดตั้งไลบรารีสร้าง PDF (fpdf2 + uharfbuzz) ลงโฟลเดอร์ _lib ข้างไฟล์นี้
-  --check          ตรวจความพร้อมทุกข้อ (Python / ไลบรารี / ฟอนต์ / โฟลเดอร์เก็บบิลที่ใช้อยู่ / Supabase / ลายเซ็น)
+  --check          ตรวจความพร้อมทุกข้อ (Python / ไลบรารี / ฟอนต์ / โฟลเดอร์เก็บบิลที่ใช้อยู่ / Supabase / ลายเซ็น / รุ่นสคริปต์)
   --test           สร้างบิลตัวอย่างลงโฟลเดอร์ _test (ไม่แตะข้อมูลจริง) ไว้เปิดดูว่าตัวหนังสือไทยถูกต้อง
   --force JJRD1006 สร้างไฟล์บิลใบนั้นใหม่ทันที
   --base "<path>"  โฟลเดอร์เก็บบิล (ชนะ BASE_DIR และกฎโฟลเดอร์แม่ของ _sync)
 
 ที่มาของไฟล์: https://github.com/thananant/JJ-PnL/blob/main/jjmk-invoice/inv_nas_sync.py
 """
+import io
 import os
 import sys
 import re
+import base64
+import struct
 import stat
 import errno
 import json
@@ -77,7 +82,14 @@ WITH_COPY = None         # None = ทำตามสวิตช์ "แนบ�
                          # True / False = บังคับแนบ / ไม่แนบหน้า "สำเนา" ทุกไฟล์ (หน้าแรกเป็นต้นฉบับเสมอ)
 MAX_PER_RUN = 100        # เก็บสูงสุดกี่ใบต่อรอบ (รอบแรกที่มีบิลเก่าค้างเยอะจะทยอยเก็บ)
 # ======================================================================
-SCRIPT_VER = '2026-10-15.1'   # รุ่นสคริปต์ (รายงานที่ inv_settings.nas_sync_ver) — แอปเทียบกับ NAS_HEAD_VER เพื่อเตือนให้ดาวน์โหลดสคริปต์ใหม่
+# รุ่นสคริปต์ (รายงานที่ inv_settings.nas_sync_ver) — แอปเทียบเพื่อเตือนให้ดาวน์โหลดสคริปต์ใหม่:
+#   NAS_HEAD_VER (หัวบิลรายสาขา · 2026-10-15.1) · NAS_SIG_MIN (อ่านลายเซ็นจากแอปเอง · 2026-10-15.2) · แก้สคริปต์แล้วเลื่อนเลขนี้ทุกครั้ง
+SCRIPT_VER = '2026-10-15.2'
+SIG_MAX = 400 * 1024     # รูปลายเซ็นจากระบบ (หลังถอด base64) ใหญ่สุดเท่านี้ · แอปย่อไว้ไม่เกิน ~260KB
+SIG_MAX_SIDE = 2000      # กว้าง/สูงไม่เกินกี่จุด · แอปย่อให้พอดี 900x300 (ต้องตรงกับ SIG_MAX_SIDE ใน jjmk-invoice.html)
+SIG_MAX_PX = 1000000     # จำนวนจุดทั้งรูปไม่เกินเท่านี้ (ต้องตรงกับ SIG_MAX_PX ในแอป)
+SIG_BOX = (900, 300)     # ย่อลายเซ็นให้พอดีกรอบนี้ก่อนใส่ PDF (ทั้งของแอปและ signature.png)
+LEGACY_SIG_MAX = 20 * 1024 * 1024   # signature.png ข้างสคริปต์ (ไฟล์ของผู้ดูแล) ใหญ่สุดเท่านี้
 
 SUPABASE_URL = os.environ.get('JJ_SB_URL') or 'https://aikyxvluaiubdidqxwnd.supabase.co'
 SUPABASE_KEY = os.environ.get('JJ_SB_KEY') or (
@@ -145,7 +157,9 @@ _RUN = {'copy': None,        # สวิตช์ "แนบหน้า สำ�
         'heads': None,       # หัวบิลรายสาขาจากทะเบียน pnl_branches ของรอบนี้ (None = ยังไม่ได้อ่าน) — ดู branch_heads()
         'known': None,       # อ่านทะเบียนไม่ได้: รหัสสาขาที่รู้จัก (None = อ่านได้ ทุกรหัสใช้ได้)
         'src': None,         # ทะเบียนรอบนี้มาจากไหน: 'db' อ่านได้ · 'none' ไม่มีตาราง (400/404) · 'cache' อ่านไม่ได้ ใช้ที่จำไว้
-        'opened': None}      # {รหัส: 'YYYY-MM-DD'} วันเปิดสาขา (เฉพาะรอบที่อ่านทะเบียนได้) — ใช้ใน requeue_tax_branches()
+        'opened': None,      # {รหัส: 'YYYY-MM-DD'} วันเปิดสาขา (เฉพาะรอบที่อ่านทะเบียนได้) — ใช้ใน requeue_tax_branches()
+        'sig': None,         # ลายเซ็นของรอบนี้ (bytes|None, ที่มา, (กว้าง, สูง)|None) · None = ยังไม่ได้อ่าน
+        'sig_fail': False}   # รอบนี้มีบิลที่ใส่ signature.png ไม่ได้ (บอกในสถานะที่ส่งกลับแอป)
 
 
 def base_dir():
@@ -666,6 +680,200 @@ def find_signature():
     return None
 
 
+_PNG_MAGIC = bytes([137, 80, 78, 71, 13, 10, 26, 10])
+_PNG_DEPTH = {0: (1, 2, 4, 8), 2: (8,), 3: (1, 2, 4, 8), 4: (8,), 6: (8,)}   # ชนิดสี → ความลึกที่รับ (แอปสร้าง 8 บิต)
+
+
+def png_clean(b):
+    """ตรวจไฟล์ PNG เองทุกส่วนก่อนส่งให้ Pillow — สคริปต์รันด้วย root และรูปมาจากตารางที่คีย์สาธารณะเขียนได้
+    · ความยาว + CRC ทุกส่วนต้องถูก · ลำดับส่วนต้องถูก · ขนาด/ชนิดสีต้องอยู่ในช่วงที่แอปสร้าง
+    · เก็บไว้แค่ IHDR/PLTE/tRNS/IDAT/IEND — ทิ้งส่วนเสริมอื่น (iCCP/zTXt/tEXt …) ไม่ให้ไปถึงตัวถอดของ Pillow/LittleCMS
+    → (bytes ที่เหลือแต่ส่วนจำเป็น, None) หรือ (None, ข้อความปัญหา)"""
+    import zlib
+    if len(b) < 45 or len(b) > SIG_MAX:
+        return None, 'ขนาดไฟล์ผิดปกติ (%d ไบต์)' % len(b)
+    if b[:8] != _PNG_MAGIC:
+        return None, 'ไม่ใช่ไฟล์ PNG'
+    pos, keep, seen, ctype = 8, [_PNG_MAGIC], [], None
+    while True:
+        if pos + 12 > len(b):
+            return None, 'ไฟล์ PNG ไม่ครบ'
+        ln = struct.unpack('>I', b[pos:pos + 4])[0]
+        typ = b[pos + 4:pos + 8]
+        end = pos + 12 + ln
+        if end > len(b):
+            return None, 'ไฟล์ PNG ไม่ครบ'
+        data = b[pos + 8:end - 4]
+        if (zlib.crc32(typ + data) & 0xffffffff) != struct.unpack('>I', b[end - 4:end])[0]:
+            return None, 'ไฟล์ PNG เสีย (CRC ไม่ตรง)'
+        chunk = b[pos:end]
+        pos = end
+        if not seen:
+            if typ != b'IHDR' or ln != 13:
+                return None, 'หัวไฟล์ PNG เสีย'
+            w, h, depth, ctype, comp, flt, ilace = struct.unpack('>IIBBBBB', data)
+            if not (0 < w <= SIG_MAX_SIDE and 0 < h <= SIG_MAX_SIDE and w * h <= SIG_MAX_PX):
+                return None, 'ขนาดรูปผิดปกติ (%dx%d)' % (w, h)
+            if depth not in _PNG_DEPTH.get(ctype, ()) or comp or flt or ilace > 1:
+                return None, 'ชนิดสีของ PNG ไม่รองรับ'
+        elif typ == b'IEND':
+            seen.append(typ)
+            keep.append(chunk)
+            break
+        elif typ == b'IDAT':
+            if b'IDAT' in seen and seen[-1] != b'IDAT':
+                return None, 'ไฟล์ PNG เสีย (ข้อมูลรูปไม่ต่อกัน)'
+        elif typ in (b'PLTE', b'tRNS'):
+            if typ in seen or b'IDAT' in seen or (typ == b'PLTE' and b'tRNS' in seen):
+                return None, 'ไฟล์ PNG เสีย (ลำดับไม่ถูก)'
+            if (typ == b'PLTE' and ctype in (0, 4)) or (typ == b'tRNS' and ctype in (4, 6)):
+                return None, 'ไฟล์ PNG เสีย (ส่วน %s ไม่เข้ากับชนิดสี)' % typ.decode('ascii')
+        elif not (typ[0] & 0x20):
+            return None, 'ไฟล์ PNG มีส่วนที่ไม่รู้จัก'
+        else:
+            continue                       # ส่วนเสริมอื่น — ทิ้ง (ไม่ส่งต่อ)
+        seen.append(typ)
+        keep.append(chunk)
+    if b'IDAT' not in seen:
+        return None, 'ไฟล์ PNG ไม่มีข้อมูลรูป'
+    if ctype == 3 and b'PLTE' not in seen:
+        return None, 'ไฟล์ PNG ไม่มีจานสี'
+    return b''.join(keep), None
+
+
+def png_problem(b):
+    """ข้อความปัญหาของไฟล์ PNG หรือ None ถ้าใช้ได้ (ดู png_clean)"""
+    return png_clean(b)[1]
+
+
+def sig_image(raw, central):
+    """ถอดรูปลายเซ็นทั้งรูป แล้วทำเป็น PNG ใหม่ที่ย่อพอดี SIG_BOX (ไม่มี ICC/ข้อความใด ๆ) → (bytes, (กว้าง, สูง))
+    central = รูปจากระบบกลาง: ผ่าน png_clean มาแล้ว · เปิดด้วยตัวถอด PNG อย่างเดียว + เพดานจุดของแอป
+    ไม่ใช่ (signature.png ของผู้ดูแล) = เปิดได้ทุกแบบที่ Pillow รู้จัก เพดานตามค่าตั้งต้นของ Pillow เหมือนสคริปต์รุ่นก่อน
+    อ่าน/ถอดไม่ได้ = ข้อผิดพลาด (ห้ามคืนรูปที่ยังไม่ได้ถอดจริง)"""
+    try:
+        from PIL import Image
+    except ImportError:
+        raise RuntimeError('ยังไม่ได้ติดตั้ง Pillow (มากับ fpdf2) — รันคำสั่ง --install ก่อน')
+    old = Image.MAX_IMAGE_PIXELS
+    if central:
+        Image.MAX_IMAGE_PIXELS = SIG_MAX_PX
+    try:
+        try:
+            im = Image.open(io.BytesIO(raw), formats=['PNG'] if central else None)
+        except TypeError:                  # Pillow รุ่นเก่ามากไม่มี formats=
+            im = Image.open(io.BytesIO(raw))
+        with im:
+            if central and im.format != 'PNG':
+                raise ValueError('ไม่ใช่ PNG')
+            if im.format == 'JPEG':
+                im.draft('RGB', (SIG_BOX[0] * 2, SIG_BOX[1] * 2))   # รูปถ่ายใหญ่ ๆ ถอดแบบย่อเลย ประหยัดหน่วยความจำ
+            im.load()
+            alpha = im.mode in ('RGBA', 'LA', 'PA', 'RGBa', 'La') or 'transparency' in im.info
+            out = im.convert('RGBA' if alpha else 'RGB')
+        out.thumbnail(SIG_BOX)
+        out.info = {}
+        buf = io.BytesIO()
+        out.save(buf, 'PNG')
+        return buf.getvalue(), out.size
+    finally:
+        Image.MAX_IMAGE_PIXELS = old
+
+
+def central_signature():
+    """ลายเซ็นที่ตั้งในแอป (inv_settings: signature + signature_at) → (bytes|None, ที่มา, (กว้าง, สูง)|None)
+    ไม่เคยตั้งในแอป (ไม่มีทั้ง 2 แถว) = (None, None, None) · ลบในแอปแล้ว = (None, 'ลบแล้วในแอป', None)
+    อ่านไม่ได้/รูปเสีย/ถอดรูปไม่ได้ = RuntimeError · ที่คืนคือ PNG ที่ทำใหม่แล้ว (ไม่ใช่ไบต์จากตารางตรง ๆ)"""
+    rows = sb_req('GET', '/rest/v1/inv_settings?select=key,value&key=in.(signature,signature_at)') or []
+    m = {}
+    for r in rows:
+        if isinstance(r, dict) and r.get('key') in ('signature', 'signature_at'):
+            m[r['key']] = str(r.get('value') or '')
+    if not m:
+        return None, None, None
+    v = m.get('signature', '')
+    if not v:                              # แอปลบ = signature '' · ไม่มีแถว signature แต่มี signature_at = ถือว่าลบเหมือนแอป
+        return None, 'ลบแล้วในแอป', None
+    pre = 'data:image/png;base64,'
+    if not v.startswith(pre) or len(v) > len(pre) + (SIG_MAX * 4) // 3 + 8:
+        raise RuntimeError('รูปลายเซ็นในระบบผิดรูปแบบ — อัพโหลดใหม่ในแอป')
+    try:
+        b = base64.b64decode(v[len(pre):], validate=True)
+    except Exception:
+        raise RuntimeError('รูปลายเซ็นในระบบถอดรหัสไม่ได้ — อัพโหลดใหม่ในแอป')
+    clean, bad = png_clean(b)
+    if bad:
+        raise RuntimeError('รูปลายเซ็นในระบบใช้ไม่ได้ (%s) — อัพโหลดใหม่ในแอป' % bad)
+    try:
+        out, size = sig_image(clean, True)
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError('รูปลายเซ็นในระบบเปิดไม่ได้ (%s) — อัพโหลดใหม่ในแอป' % str(e)[:80])
+    return out, 'ระบบกลาง', size
+
+
+def file_signature():
+    """signature.png ข้างสคริปต์ (แบบเดิม — ใช้เฉพาะตอนยังไม่เคยตั้งลายเซ็นในแอป) → (bytes|None, ที่มา, ขนาด|None)
+    เปิดแบบไม่เดินตามลิงก์ลัด · ต้องเป็นไฟล์ธรรมดา (กันลิงก์ไป /dev/zero / FIFO ทำให้ค้างหรือกินหน่วยความจำ)
+    ใช้ไม่ได้ = (None, '<ชื่อไฟล์> ใช้ไม่ได้', None) + จด log บอกเหตุผล (ไม่ทำให้รอบนั้นล้ม)"""
+    p = find_signature()
+    if not p:
+        return None, None, None
+    name = os.path.basename(p)
+    try:
+        fd = os.open(p, os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_NOFOLLOW', 0))
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode):
+                raise ValueError('ไม่ใช่ไฟล์ธรรมดา')
+            if st.st_size > LEGACY_SIG_MAX:
+                raise ValueError('ไฟล์ใหญ่เกิน %d MB' % (LEGACY_SIG_MAX // (1024 * 1024)))
+            chunks, got = [], 0
+            while got <= LEGACY_SIG_MAX:
+                c = os.read(fd, 1024 * 1024)
+                if not c:
+                    break
+                chunks.append(c)
+                got += len(c)
+        finally:
+            os.close(fd)
+        if got > LEGACY_SIG_MAX:
+            raise ValueError('ไฟล์ใหญ่เกิน %d MB' % (LEGACY_SIG_MAX // (1024 * 1024)))
+        out, size = sig_image(b''.join(chunks), False)
+        return out, name, size
+    except Exception as e:
+        log('ไม่ใช้ %s (%s) — ตั้งลายเซ็นในแอปแทน: ⚙ ตั้งค่า → ลายเซ็นผู้รับเงิน' % (name, str(e)[:120]))
+        return None, '%s ใช้ไม่ได้' % name, None
+
+
+def signature(strict=False):
+    """ลายเซ็นของรอบนี้ (อ่านครั้งเดียวต่อรอบ) → (bytes|None, ที่มา, (กว้าง, สูง)|None)
+    ระบบกลางชนะ signature.png · ลบในแอปแล้ว = ไม่มีลายเซ็น (ไม่ใช้ไฟล์ข้างสคริปต์)
+    strict = รอบที่เก็บไฟล์จริง (ทุก 5 นาที / --force): อ่านระบบไม่ได้/รูปเสีย = ยกเลิก
+    (ไม่สร้างไฟล์ที่ไม่มีลายเซ็นหรือใช้ signature.png เก่า ทั้งที่ตั้งไว้ในแอปแล้ว) · ไม่ strict = --test เท่านั้น"""
+    if _RUN['sig'] is None:
+        try:
+            b, src, size = central_signature()
+        except Exception as e:
+            if strict:
+                raise
+            log('อ่านลายเซ็นจากระบบไม่ได้ (%s) — ไฟล์ทดสอบนี้ใช้ signature.png ข้างสคริปต์ถ้ามี' % e)
+            b, src, size = None, None, None
+        if b is None and src is None:
+            b, src, size = file_signature()
+        _RUN['sig'] = (b, src or 'ไม่มี', size)
+    return _RUN['sig']
+
+
+def signature_note():
+    """ลายเซ็นที่ใช้จริงในรอบนี้ — ไว้บอกในสถานะที่ส่งกลับแอป"""
+    b, src, _ = signature()
+    if b and _RUN['sig_fail']:
+        return src + ' ใส่ไม่ได้'
+    return src
+
+
 # ------------------------------------------------------------------ ตัดบรรทัดภาษาไทย
 # fpdf2 ตัดข้อความไทยที่ไม่มีเว้นวรรคตรงตัวอักษรไหนก็ได้ → บรรทัดใหม่ขึ้นต้นด้วยสระบน/ล่าง/วรรณยุกต์
 # หรือสระหน้า (เ แ โ ใ ไ) ค้างท้ายบรรทัดแยกจากพยัญชนะของมัน เช่น "...กระดูกหมูแ" / "ละน้ำจิ้ม"
@@ -1060,20 +1268,21 @@ def draw_sheet(pdf, inv, copy_label):
     sx = X0 + flw + padx
     sw = frw - padx * 2
     ly = y + P(8) + sig_h
-    sig = find_signature()
-    if sig:
+    sig, sig_src, sig_size = signature()     # PNG ที่ถอด+ทำใหม่แล้ว (ย่อพอดี SIG_BOX) + ขนาด
+    if sig and sig_size:
         try:
-            from PIL import Image
-            with Image.open(sig) as im:
-                iw, ih = im.size
+            iw, ih = sig_size
             ih_pt = P(58)
             iw_pt = ih_pt * iw / float(ih)
             if iw_pt > sw * 0.96:
                 iw_pt = sw * 0.96
                 ih_pt = iw_pt * ih / float(iw)
-            pdf.image(sig, x=sx + (sw - iw_pt) / 2, y=ly + P(6) - ih_pt, w=iw_pt, h=ih_pt)
+            pdf.image(io.BytesIO(sig), x=sx + (sw - iw_pt) / 2, y=ly + P(6) - ih_pt, w=iw_pt, h=ih_pt)
         except Exception as e:
-            log('ใส่ลายเซ็นไม่ได้ (%s) — ข้ามลายเซ็น' % e)
+            if sig_src == 'ระบบกลาง':       # ลายเซ็นจากแอปต้องอยู่ในไฟล์ — ไม่งั้นไม่สร้างไฟล์ (บิลค้างในคิว รอบหน้าลองใหม่)
+                raise RuntimeError('ใส่ลายเซ็นจากแอปไม่ได้ (%s)' % e)
+            _RUN['sig_fail'] = True
+            log('ใส่ลายเซ็น %s ไม่ได้ (%s) — ข้ามลายเซ็น · ตั้งลายเซ็นในแอปแทน' % (sig_src, e))
     pdf.line(sx, ly, sx + sw, ly)
     S.put(sx, ly + P(4), sw, FS * 1.5, 'ผู้รับเงิน / Collecter', '', FS, INK, 'C')
     ffs = P(10.5)
@@ -1439,9 +1648,22 @@ def cmd_check():
                                      'ทุกสาขาใช้ %s (ยังไม่มีสาขาที่จดภาษีแยกในทะเบียนสาขา)' % SHOP['taxBranch']))
     except Exception as e:
         log('[ข้อมูล] หัวบิลรายสาขา: อ่านทะเบียนสาขาไม่ได้ (%s)' % e)
-    sig = find_signature()
-    log(('[ผ่าน] ลายเซ็น %s' % os.path.basename(sig)) if sig else
-        '[ไม่บังคับ] ไม่มี signature.png ในโฟลเดอร์นี้ — บิลจะเว้นช่องให้เซ็นเอง')
+    try:
+        cb, csrc, csize = central_signature()
+        if cb:
+            row(True, 'ลายเซ็นจากแอป (ใส่ในไฟล์ขนาด %dx%d จุด)' % csize)
+        elif csrc:
+            log('[ข้อมูล] ลายเซ็นถูกลบในแอปแล้ว — บิลจะเว้นช่องให้เซ็นเอง (ไม่ใช้ signature.png)')
+        else:
+            fb, fsrc, _ = file_signature()
+            if fb:
+                log('[ผ่าน] ลายเซ็น %s (ยังไม่ได้ตั้งในแอป)' % fsrc)
+            elif fsrc:
+                log('[ไม่บังคับ] %s — ตั้งลายเซ็นในแอปแทน: ⚙ ตั้งค่า → ลายเซ็นผู้รับเงิน' % fsrc)
+            else:
+                log('[ไม่บังคับ] ยังไม่มีลายเซ็น — ตั้งในแอป: ⚙ ตั้งค่า → ลายเซ็นผู้รับเงิน (ไม่มี = เว้นช่องให้เซ็นเอง)')
+    except Exception as e:
+        ok = row(False, 'ลายเซ็นจากแอป: %s' % e) and ok
     log('พร้อมใช้งาน ✅ — ตั้ง Task Scheduler ให้รันทุก 5 นาทีได้เลย' if ok else
         'ยังไม่พร้อม — แก้ข้อที่ขึ้น [ยังไม่พร้อม] ก่อน')
     return 0 if ok else 1
@@ -1527,6 +1749,13 @@ def run_sync():
         return 1
     done = fail = 0
     last_err = ''
+    if rows:
+        try:
+            signature(strict=True)
+        except Exception as e:
+            log('ยังไม่สร้างไฟล์รอบนี้ — %s' % e)
+            heartbeat('ผิดพลาด: ลายเซ็น — %s' % e)
+            return 1
     for inv in rows:
         try:
             if process(inv):
@@ -1542,7 +1771,7 @@ def run_sync():
         pass
     parts = []
     if done:
-        parts.append('รอบล่าสุดเก็บ %d ใบ' % done)
+        parts.append('รอบล่าสุดเก็บ %d ใบ (ลายเซ็น: %s)' % (done, signature_note()))
     if fail:
         parts.append('ผิดพลาด %d ใบ (%s)' % (fail, last_err[:120]))
     if left is not None:
@@ -1563,6 +1792,8 @@ def main(argv):
     _OPT['base'] = base
     _RUN['copy'] = None                  # อ่านสวิตช์หน้าสำเนาจากแอปใหม่ทุกรอบ (รอบละครั้ง)
     _RUN['heads'] = _RUN['known'] = _RUN['src'] = _RUN['opened'] = None  # ทะเบียนสาขา (หัวบิลรายสาขา) ก็อ่านใหม่ทุกรอบ
+    _RUN['sig'] = None                   # ลายเซ็นก็อ่านใหม่ทุกรอบ
+    _RUN['sig_fail'] = False
     try:
         return _main(argv)
     finally:
@@ -1591,7 +1822,17 @@ def _main(argv):
         if not inv:
             log('ไม่พบบิล %s' % bill)
             return 1
-        return 0 if process(inv, force=True) else 1
+        try:                             # เก็บไฟล์จริง = ใช้กติกาเดียวกับรอบปกติ: อ่านลายเซ็นจากแอปไม่ได้ = ไม่สร้างไฟล์
+            load_fpdf()
+            signature(strict=True)
+        except Exception as e:
+            log('ยังไม่สร้างไฟล์ %s — %s' % (bill, e))
+            return 1
+        try:
+            return 0 if process(inv, force=True) else 1
+        except Exception as e:
+            log('สร้างไฟล์ %s ไม่ได้: %s' % (bill, e))
+            return 1
 
     # กันรอบซ้อนกัน (ถ้ารอบก่อนยังไม่เสร็จใน 5 นาที)
     lockf = open(LOCK_FILE, 'w')
