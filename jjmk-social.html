@@ -609,6 +609,110 @@ button,.btn,.sb-item,.tabbar button,.seg button{touch-action:manipulation}
   window.JJLogin=JJLogin;
 })();
 </script>
+<!-- JJBR-BEGIN ทะเบียนสาขากลาง · บล็อกนี้ต้องเหมือนกันทุกไฟล์ทุกตัวอักษร (แก้ที่ไฟล์ใดไฟล์หนึ่งแล้ว sync ด้วยสคริปต์) -->
+<script>
+/* JJBR — ทะเบียนสาขากลาง (ตาราง pnl_branches) ใช้ร่วมทุกแอพ (เจ้าของสั่ง 2026-10-15: "เพิ่มสาขาใหม่ ให้เพิ่มไปในทุกระบบเลย แบบปุ่มเดียว")
+   · สาขาหน้าร้านมาจากตาราง pnl_branches (ปุ่ม 🏪 เปิดสาขาใหม่ ใน JJ Access เพิ่มให้) · ครัวกลาง JJCK / ออฟฟิศ OFFICE เป็นหน่วยงานคงที่
+   · ไม่ต้องรอเน็ต: เริ่มจากแคชในเครื่อง (localStorage.jjbr_cache) → ไม่มีแคช = JJRD/JJLP · JJBR.load() อ่านของจริงแล้วแจ้ง onChange
+   · ออฟฟิศ: บัญชี/สิทธิ์ใช้ OFFICE · P&L ใช้ JJOF → JJBR.canon('JJOF')='OFFICE' · JJBR.pnl('OFFICE')='JJOF'
+   · แอพเดิมยังใช้ชื่อ/สีของตัวเองกับสาขาเดิมได้ — ใช้ JJBR.extra(รหัสที่แอพรู้จักแล้ว) เติมเฉพาะสาขาที่แอพยังไม่รู้จัก */
+(function(){
+  var VER='2026-10-15.1', CK='jjbr_cache', MAXAGE=90*864e5;
+  var BASE=[
+    {code:'JJRD',name:'สาขารัชดา',short:'รัชดา',kind:'store',sort:1,stk_id:'b19f0a17b4472'},
+    {code:'JJLP',name:'สาขาลาดพร้าว',short:'ลาดพร้าว',kind:'store',sort:2,stk_id:'b19f0a17b448212'}];
+  var UNITS=[
+    {code:'JJCK',name:'ครัวกลาง',short:'ครัวกลาง',kind:'kitchen',sort:900},
+    {code:'OFFICE',name:'ออฟฟิศ',short:'ออฟฟิศ',kind:'office',sort:901}];
+  var STK={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};
+  var PALETTE=['#2E8B57','#8E44AD','#D35400','#16A085','#2C3E50','#B7950B','#C0392B','#1F618D'];
+  function s(v,n){ return v==null?'':String(v).trim().slice(0,n||80); }
+  function norm(r){
+    if(!r||typeof r!=='object')return null;
+    var code=s(r.code,12).toUpperCase();
+    if(!/^[A-Z][A-Z0-9_]{1,11}$/.test(code))return null;
+    var kind=r.kind==='store'||r.kind==='office'||r.kind==='kitchen'?r.kind:
+      (code==='JJOF'||code==='OFFICE'?'office':code==='JJCK'?'kitchen':r.is_central?'office':'store');
+    var name=s(r.name||r.display_name,60)||code;
+    var short=s(r.short,30)||name.replace(/^สาขา\s*/,'')||code;
+    return {code:code,name:name,short:short,kind:kind,sort:isFinite(+r.sort)?+r.sort:0,
+      stk_id:s(r.stk_id,40)||STK[code]||'',color:/^#[0-9A-Fa-f]{6}$/.test(s(r.color))?s(r.color):'',
+      active:r.active!==false,is_central:kind!=='store',tax_branch:/^[0-9]{5}$/.test(s(r.tax_branch))?s(r.tax_branch):'',
+      addr:s(r.addr,300),opened_on:/^\d{4}-\d{2}-\d{2}/.test(s(r.opened_on))?s(r.opened_on).slice(0,10):''};
+  }
+  function clean(arr){
+    var out=[],seen={};
+    (Array.isArray(arr)?arr:[]).forEach(function(r){ var x=norm(r); if(x&&!seen[x.code]){seen[x.code]=1;out.push(x);} });
+    return out;
+  }
+  function bySort(a,b){ return (a.sort-b.sort)||(a.code<b.code?-1:a.code>b.code?1:0); }
+  var J={VER:VER,rows:clean(BASE),src:'base',cols:false,at:0,_cb:[],_p:null};
+  try{
+    var c=JSON.parse(localStorage.getItem(CK)||'null');
+    if(c&&Array.isArray(c.rows)&&c.rows.length&&Date.now()-(+c.t||0)<MAXAGE){ J.rows=clean(c.rows); J.src='cache'; J.cols=!!c.cols; J.at=+c.t||0; }
+  }catch(e){}
+  /* สาขาหน้าร้านที่เปิดอยู่ (เรียงตาม sort แล้วรหัส) */
+  J.stores=function(all){ return J.rows.filter(function(r){ return r.kind==='store'&&(all||r.active); }).sort(bySort); };
+  J.storeCodes=function(all){ return J.stores(all).map(function(r){ return r.code; }); };
+  /* สาขาหน้าร้าน + ครัวกลาง + ออฟฟิศ (ตัวเลือก "ประจำที่"/สิทธิ์รายสาขา) — ใช้รหัส OFFICE ไม่ใช่ JJOF */
+  J.units=function(){ return J.stores().concat(UNITS.map(function(u){ var r=J.get(u.code); return r&&r.kind===u.kind?Object.assign({},u,{name:r.name||u.name,short:r.short||u.short}):u; })); };
+  J.unitCodes=function(){ return J.units().map(function(r){ return r.code; }); };
+  J.canon=function(c){ c=s(c,12).toUpperCase(); return c==='JJOF'?'OFFICE':c; };
+  J.pnl=function(c){ c=s(c,12).toUpperCase(); return c==='OFFICE'?'JJOF':c; };
+  J.get=function(c){
+    c=s(c,12).toUpperCase(); if(!c)return null;
+    var r=null,i;
+    for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===c){ r=J.rows[i]; break; } }
+    if(!r&&(c==='OFFICE'||c==='JJOF')){ for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===(c==='OFFICE'?'JJOF':'OFFICE')){ r=J.rows[i]; break; } } }
+    if(!r){ for(i=0;i<UNITS.length;i++){ if(UNITS[i].code===J.canon(c)){ r=UNITS[i]; break; } } }
+    return r;
+  };
+  J.known=function(c){ return !!J.get(c); };
+  J.isStore=function(c){ var r=J.get(c); return !!(r&&r.kind==='store'); };
+  J.name=function(c,fb){ var r=J.get(c); return r?r.name:(fb!=null?fb:s(c)); };
+  J.short=function(c,fb){ var r=J.get(c); return r?r.short:(fb!=null?fb:s(c)); };
+  J.stk=function(c){ var r=J.get(c); return (r&&r.stk_id)||STK[s(c,12).toUpperCase()]||''; };
+  J.byStk=function(id){ id=s(id,40); if(!id)return null; for(var i=0;i<J.rows.length;i++){ if(J.rows[i].stk_id===id)return J.rows[i]; } for(var k in STK){ if(STK[k]===id)return J.get(k); } return null; };
+  J.color=function(c,i){ var r=J.get(c); if(r&&r.color)return r.color; var st=J.storeCodes(true),k=st.indexOf(s(c,12).toUpperCase()); return PALETTE[(k<0?(i||0):k)%PALETTE.length]; };
+  /* สาขาหน้าร้านที่แอพยังไม่รู้จัก (known = รายการรหัส หรือ object ที่มีรหัสเป็น key) */
+  J.extra=function(known){
+    var have={}; (Array.isArray(known)?known:Object.keys(known||{})).forEach(function(k){ have[s(k,12).toUpperCase()]=1; });
+    return J.stores().filter(function(r){ return !have[r.code]; });
+  };
+  /* รหัสสาขาใหม่ที่ใช้ได้: อังกฤษพิมพ์ใหญ่ล้วน 2–8 ตัว (ใช้เป็นตัวหน้าเลขใบกำกับภาษีด้วย) */
+  J.codeOk=function(c){ return /^[A-Z]{2,8}$/.test(s(c,12)); };
+  J.onChange=function(fn){ if(typeof fn==='function')J._cb.push(fn); };
+  /* อ่านทะเบียนจริง (ไม่ throw) — url/key ของ Supabase · opts.force = อ่านใหม่แม้เพิ่งอ่าน · คืน rows */
+  J.load=function(url,key,opts){
+    opts=opts||{};
+    if(J._p&&!opts.force)return J._p;
+    if(J.src==='db'&&!opts.force&&Date.now()-J.at<60000)return Promise.resolve(J.rows);
+    url=s(url,300).replace(/\/+$/,''); key=s(key,500);
+    if(!url||!key||typeof fetch!=='function')return Promise.resolve(J.rows);
+    var get=function(q){
+      var ac=typeof AbortController==='function'?new AbortController():null, tm=ac?setTimeout(function(){ ac.abort(); },opts.timeout||8000):0;
+      return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
+        .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
+    };
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
+      .then(function(d){
+        if(!Array.isArray(d))throw new Error('bad');
+        var rows=clean(d), before=JSON.stringify(J.rows);
+        if(!rows.some(function(r){ return r.kind==='store'; }))rows=rows.concat(clean(BASE)); /* ตารางว่าง/มีแต่ออฟฟิศ = ใช้สาขาเดิมไปก่อน */
+        J.rows=rows; J.src='db'; J.at=Date.now(); J.cols=d.length>0&&d.every(function(r){ return r&&Object.prototype.hasOwnProperty.call(r,'kind'); });
+        try{ localStorage.setItem(CK,JSON.stringify({t:J.at,cols:J.cols,rows:d})); }catch(e){}
+        if(JSON.stringify(J.rows)!==before)J._cb.forEach(function(fn){ try{ fn(J); }catch(e){ if(window.console)console.error(e); } });
+        return J.rows;
+      })
+      .catch(function(){ return J.rows; })
+      .then(function(r){ J._p=null; return r; });
+    return J._p;
+  };
+  window.JJBR=J;
+})();
+</script>
+<!-- JJBR-END -->
 </head>
 <body>
 
@@ -746,7 +850,7 @@ function timeago(iso){
   return new Date(iso).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
 }
 function stars(r){if(r==null)return '';const n=Math.round(num(r));return '<span class="stars">'+'★'.repeat(n)+'☆'.repeat(Math.max(0,5-n))+'</span>'}
-function brName(c){const b=S.branches.find(x=>x.code===c);return b?b.name:(c||'ไม่ระบุสาขา')}
+function brName(c){const b=S.branches.find(x=>x.code===c);return b?b.name:(c&&JJBR.isStore(c)?JJBR.name(c):(c||'ไม่ระบุสาขา'))}   // สาขาหน้าร้านที่ไม่อยู่ในปุ่ม (เช่น ปิดสาขาแล้ว) = ชื่อจากทะเบียนกลาง
 function daysLabel(){return S.days>=3650?'ทั้งหมด':S.days+' วัน'}
 let busyCount=0;
 function setBusy(b){busyCount+=b?1:-1;if(busyCount<0)busyCount=0;$('#syncDot').className=busyCount>0?'busy':(_rtLive?'':'')}
@@ -831,8 +935,12 @@ function sessSet(u){try{sessionStorage.setItem(SESS,JSON.stringify(u))}catch(e){
 function sessClear(){try{sessionStorage.removeItem(SESS)}catch(e){}}
 
 async function fetchUser(username){   // select=* กันพังเวลาคอลัมน์ apps/unit ยังไม่มีในฐานข้อมูล
+  // ทะเบียนสาขากลางอ่านเบื้องหลัง (ไม่ throw) — รอเฉพาะบัญชีที่ _br มีรหัสที่ยังไม่รู้จัก (brWait) · ทะเบียนช้าต้องไม่ถ่วงการเข้าระบบของคนอื่น
+  const reg=brReg();
   const rows=await sel('pnl_users',`select=*&username=eq.${encodeURIComponent(username)}&limit=1`);
-  return rows&&rows[0]?rows[0]:null;
+  const usr=rows&&rows[0]?rows[0]:null;
+  await brWait(usr,reg);
+  return usr;
 }
 function useUser(usr){               // เก็บเฉพาะที่ใช้ + แฮชไว้ตรวจซ้ำตอนรีเฟรช
   S.user={username:usr.username,display_name:usr.display_name||usr.username,
@@ -905,7 +1013,7 @@ async function authBoot(){
   if(s&&s.username){
     let usr;
     try{usr=await fetchUser(s.username)}
-    catch(e){ S.user=s; S.scope=scopeOf(s); return startApp(); }      // เน็ตสะดุด → ใช้ของเดิมในแท็บไปก่อน
+    catch(e){ await brWait(s); S.user=s; S.scope=scopeOf(s); return startApp(); }      // เน็ตสะดุด → ใช้ของเดิมในแท็บไปก่อน
     if(usr&&usr.active!==false&&usr.pass_hash===s.h){
       useUser(usr);
       if(!firstAllowedTab())return showLogin(noBranch()?noAccessMsg():'สิทธิ์ของบัญชีนี้ถูกเปลี่ยน — ติดต่อผู้ดูแลระบบ');
@@ -955,8 +1063,10 @@ function permOf(v){                 // 'edit' | 'view' | 'none'
 }
 function firstAllowedTab(){return noBranch()?null:(VIEWS.find(v=>permOf(v)!=='none')||null)}
 function noAccessMsg(){
+  // _br มีแต่รหัสที่ไม่รู้จัก + อ่านทะเบียนสาขากลางไม่ได้ (เน็ต/เซิร์ฟเวอร์) = บอกให้ลองใหม่ ไม่ใช่บอกว่าไม่มีข้อมูล (ยังไม่ให้เข้าเหมือนเดิม)
+  if(noBranch()&&!S.scope.length&&JJBR.src!=='db')return 'อ่านรายชื่อสาขาจากระบบกลางไม่ได้ตอนนี้ (บัญชีนี้ได้สิทธิ์เฉพาะ '+brRaw(S.user).join(', ')+') — ลองโหลดหน้าใหม่อีกครั้ง';
   return noBranch()
-    ?'บัญชีนี้ได้สิทธิ์เฉพาะ '+S.scope.map(c=>UNIT_LABEL[c]||c).join(', ')+' ซึ่งไม่มีข้อมูลใน JJ Social'
+    ?'บัญชีนี้ได้สิทธิ์เฉพาะ '+(S.scope.length?S.scope:brRaw(S.user)).map(c=>UNIT_LABEL[c]||c).join(', ')+' ซึ่งไม่มีข้อมูลใน JJ Social'
     :'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ JJ Social';
 }
 
@@ -970,15 +1080,43 @@ function noAccessMsg(){
    - แชทลูกค้า (social_chat_log) ไม่มีช่องสาขา → ยังเห็นทุกแชทเหมือนเดิม
    - กันเขียนข้ามสาขาที่ api() จุดเดียว (scopeDeny) + brain('send_reply')
    ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
-const ALL_BR=['JJLP','JJRD','JJCK','OFFICE'];
+const ALL_BR=['JJLP','JJRD','JJCK','OFFICE'];   // + สาขาหน้าร้านใหม่จากทะเบียนกลาง (JJBR.unitCodes) — ดู scopeOf
 const GLOBAL_VIEWS=['bot','ch'];
+function brRaw(u){const a=u&&u.apps&&typeof u.apps==='object'&&u.apps.social;return a&&typeof a==='object'?String(a._br||'').split(',').map(x=>x.trim()).filter(Boolean):[]}
 function scopeOf(u){
   if(!u||u.role==='admin'||u.role==='owner')return null;
   const apps=u.apps;
   if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return null;
   const a=apps.social; if(!a||typeof a!=='object')return null;
-  const br=String(a._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
-  return br.length?br:null;
+  const raw=brRaw(u); if(!raw.length)return null;
+  // ตั้ง _br ไว้แต่ไม่เหลือรหัสที่รู้จักเลย = [] → ไม่เห็นอะไร (fail closed · เดิมคืน null = เห็นทุกสาขา)
+  return raw.filter(x=>ALL_BR.includes(x)||JJBR.unitCodes().includes(x));
+}
+/* ทะเบียนสาขากลาง (JJBR · เจ้าของสั่ง 2026-10-15 "เพิ่มสาขาใหม่ ให้ขึ้นทุกระบบ ปุ่มเดียว")
+   - รายการสาขาหลักยังอ่านจาก pnl_branches เองที่ loadBranches เหมือนเดิม · brSeed เติมเฉพาะสาขาหน้าร้านที่ยังไม่อยู่ในรายการ
+     (ก่อนอ่าน/อ่านไม่ได้ = จากแคชของ JJBR) + ป้ายหน่วยงานของสาขาใหม่ · อ่านไม่ได้และไม่มีแคช = รัชดา/ลาดพร้าว แบบเดิม
+   - อ่าน pnl_branches ของแอพเองได้แล้ว (BR_DB) = รายการมาจากฐานข้อมูล ไม่เติมจากแคช/ทะเบียนที่อ่านทีหลังอีก */
+let BR_DB=false;
+function brSeed(){
+  if(!BR_DB)JJBR.extra(S.branches.map(b=>b.code)).forEach(r=>S.branches.push({code:r.code,name:r.short,sort:r.sort}));
+  JJBR.extra(UNIT_LABEL).forEach(r=>{UNIT_LABEL[r.code]=r.name});
+}
+function brReg(){const {url,key}=cfg();return JJBR.load(url,key).then(brSeed).catch(()=>{})}
+brSeed();
+/* _br มีรหัสที่แอพยังไม่รู้จัก (เช่น สาขาใหม่ที่แคชในเครื่องยังไม่มี) = รอทะเบียนกลางก่อนตัดสินสิทธิ์ ไม่เกิน 9 วิ (ครอบรอบแรกของ JJBR.load)
+   · ผู้ดูแล/เจ้าของ · ไม่จำกัดสาขา · รหัสที่รู้จักแล้ว = ไม่รอเลย · ทะเบียนช้า/อ่านไม่ได้ = scope [] → noAccessMsg บอกให้ลองใหม่ */
+function brUnknown(u){return !!u&&u.role!=='admin'&&u.role!=='owner'&&brRaw(u).some(c=>!ALL_BR.includes(c)&&!JJBR.unitCodes().includes(c))}
+function brWait(u,p){return brUnknown(u)?Promise.race([p||brReg(),new Promise(r=>setTimeout(r,9000))]):Promise.resolve()}
+/* ลำดับปุ่มสาขา: แถวเดิมคงลำดับจากฐานข้อมูลทุกตัว (เหมือนก่อนมีทะเบียนกลาง — ไม่เรียงใหม่) · สาขาหน้าร้านใหม่ (kind='store' ที่ไม่ใช่ JJRD/JJLP)
+   เรียงตาม sort (เท่ากัน = ลำดับในฐานข้อมูล) แล้วแทรกต่อจากรัชดา/ลาดพร้าวตัวท้าย → อยู่ก่อนออฟฟิศเสมอ */
+function brOrder(bs){
+  const isNew=b=>b.kind==='store'&&!['JJRD','JJLP'].includes(b.code);
+  const old=bs.filter(b=>!isNew(b)), nw=bs.filter(isNew);
+  if(!nw.length)return old;
+  const k=b=>b.sort==null||b.sort===''||!isFinite(+b.sort)?Infinity:+b.sort;
+  nw.sort((a,b)=>{const x=k(a),y=k(b);return x===y?0:x<y?-1:1});   // sort ของ JS เสถียร
+  let at=0; old.forEach((b,i)=>{if(['JJRD','JJLP'].includes(b.code))at=i+1});
+  return [...old.slice(0,at),...nw,...old.slice(at)];
 }
 function myBranches(){return S.branches.filter(b=>!S.scope||S.scope.includes(b.code))}
 function inScope(code){return !S.scope||S.scope.includes(code)}       // null/ไม่ระบุสาขา = ไม่ผ่าน (เมื่อถูกจำกัด)
@@ -2745,6 +2883,11 @@ async function ctRestat(btn){
 }
 
 /* ============ ตั้งค่าแชทบอท ============ */
+/* สาขาใหม่ (ทะเบียนกลาง) ที่ "ข้อมูลร้าน" ยังไม่พูดถึง → บอท/AI ยังตอบลูกค้าตามข้อมูลเดิม (เช่น "มี 2 สาขา") — เตือนให้แก้เอง (ที่อยู่/เวลาต้องเป็นข้อมูลจริง) */
+function brInfoHint(info){
+  const miss=JJBR.extra(['JJRD','JJLP']).filter(r=>!String(info||'').includes(r.short));
+  return miss.length?`<div class="xs" style="margin-top:4px;color:var(--gold)">⚠️ ยังไม่พูดถึง <b>${esc(miss.map(r=>r.name).join(', '))}</b> — บอทจะตอบลูกค้าตามข้อมูลเดิม (เช่น จำนวนสาขา) · เพิ่มชื่อ/ที่อยู่/เวลาเปิดของสาขาใหม่ แล้วกด 💾 บันทึกการตั้งค่าบอท (คำถามพบบ่อยที่บอกที่อยู่สาขาก็แก้ด้วย)</div>`:'';
+}
 async function vBot(el){
   el.innerHTML='<div class="spin"></div>';
   await loadSettings();
@@ -2776,7 +2919,7 @@ async function vBot(el){
     </div>
     <div class="card"><h3>🗣️ บุคลิกบอท & ข้อมูลร้าน</h3>
       <div class="fld"><label>บุคลิก/วิธีพูดของบอท</label><textarea id="btPersona" style="min-height:70px">${esc(bot.persona||'')}</textarea></div>
-      <div class="fld"><label>ข้อมูลร้าน (บอทใช้ตอบ)</label><textarea id="shInfo" style="min-height:70px">${esc(shop.info||'')}</textarea></div>
+      <div class="fld"><label>ข้อมูลร้าน (บอทใช้ตอบ)</label><textarea id="shInfo" style="min-height:70px">${esc(shop.info||'')}</textarea>${brInfoHint(shop.info)}</div>
       <div class="fld"><label>เวลาเปิด-ปิด</label><input id="shHours" value="${esc(shop.hours||'')}"></div>
     </div>
   </div>
@@ -2906,7 +3049,7 @@ async function vCh(el){
         <div class="sm" style="color:var(--ok)">✓ เชื่อมต่อบัญชีแล้ว${gbp.last_sync?` · ซิงค์ล่าสุด ${timeago(gbp.last_sync)}`:' · ยังไม่เคยซิงค์'}</div>
         ${(gbp.locations||[]).map((l,i)=>`<div class="copyline">
           <input readonly value="${esc(l.title||l.id)}">
-          <select data-gbpbr="${i}" style="width:130px"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${b.code}" ${l.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}<option value="skip" ${l.branch==='skip'?'selected':''}>🚫 ไม่ดึง</option></select>
+          <select data-gbpbr="${i}" style="width:130px"><option value="">ไม่ระบุ</option>${S.branches.map(b=>`<option value="${esc(b.code)}" ${l.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}<option value="skip" ${l.branch==='skip'?'selected':''}>🚫 ไม่ดึง</option></select>
         </div>${(gbp.history_gaps||{})[l.id]?`<div class="xs" style="color:var(--gold);margin:-2px 0 6px">⏳ รีวิวย้อนหลังยังไม่ครบ (${esc(String(gbp.history_gaps[l.id].reason||'').slice(0,100))}) — กด "⟳ ซิงค์รีวิวทั้งหมด"</div>`:''}${(gbp.loc_errors||{})[l.id]?`<div class="xs" style="color:var(--bad);margin:-2px 0 6px">⚠️ ดึงรีวิวของโปรไฟล์นี้ไม่ได้ (${timeago(gbp.loc_errors[l.id].at)}) — ถ้าไม่ใช่ของร้าน/ซ้ำ ให้เลือก "ไม่ดึง"<br>${esc(String(gbp.loc_errors[l.id].error||'').slice(0,140))}</div>`:''}`).join('')}
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 4px">
           <button class="btn sm" onclick="gbpSync(true)">⟳ ซิงค์รีวิวทั้งหมด</button>
@@ -2921,7 +3064,7 @@ async function vCh(el){
       <div class="sm b" style="margin-bottom:6px">วิธีที่ 2: Place ID — ง่ายกว่า แต่ได้เฉพาะรีวิวล่าสุด ~5-10 อัน/รอบ และตอบจากระบบไม่ได้</div>
       <div id="gpList">${gp.map((p,i)=>`<div class="copyline">
         <input value="${esc(p.place_id)}" placeholder="Place ID" data-gpid="${i}">
-        <select data-gpbr="${i}" style="width:130px">${S.branches.map(b=>`<option value="${b.code}" ${p.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+        <select data-gpbr="${i}" style="width:130px">${S.branches.map(b=>`<option value="${esc(b.code)}" ${p.branch===b.code?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
         <button class="icb" onclick="this.parentElement.remove()">✕</button></div>
         ${gstat[p.place_id]?`<div class="xs mut" style="margin:-2px 0 6px">คะแนนรวม ${esc(String(gstat[p.place_id].rating??'—'))}★ จาก ${esc(String(gstat[p.place_id].count??'—'))} รีวิว · ดึงล่าสุด ${esc(timeago(gstat[p.place_id].at))}</div>`:''}`).join('')}
       </div>
@@ -3044,7 +3187,8 @@ function apCardHtml(){
   let src=Array.isArray(chs.apify_sources)?chs.apify_sources:[];
   const gbpOn=!!(chs.gbp&&chs.gbp.rt_enc);
   // ตัวอย่างให้กรอกต่อ: รีวิว Google Maps ของสาขาหน้าร้าน — เชื่อม Business Profile แล้วไม่ต้อง (ได้ครบ+ฟรีอยู่แล้ว ไม่เปลืองเครดิต)
-  if(!src.length&&!gbpOn)src=S.branches.filter(b=>!/^(OFFICE|JJOF|JJCK|ALL)$/.test(b.code)).map(b=>({id:apId(),kind:'gmaps',branch:b.code,on:true,url:''}));
+  // หน้าร้าน = ไม่ใช่รหัสหน่วยงานกลาง และทะเบียนกลาง (JJBR) ไม่ได้บอกว่าเป็นออฟฟิศ/ครัว
+  if(!src.length&&!gbpOn)src=S.branches.filter(b=>!/^(OFFICE|JJOF|JJCK|ALL)$/.test(b.code)&&(!JJBR.known(b.code)||JJBR.isStore(b.code))).map(b=>({id:apId(),kind:'gmaps',branch:b.code,on:true,url:''}));
   const con=!!(A.tok_enc||A.env);   // env = เชื่อมผ่าน secret APIFY_TOKEN ใน Supabase (ฟังก์ชันจดธงไว้ให้)
   return `<div class="card" id="apCard" style="border-left:4px solid var(--gold)">
     <h3>⚡ ดึงจากทุกแอพอัตโนมัติ <span class="sp">ทางที่ง่ายที่สุด — ผ่าน Apify · เครดิตฟรี $5/เดือน</span></h3>
@@ -3276,7 +3420,7 @@ async function gbpSaveMap(){
 }
 function addGp(){
   $('#gpList').insertAdjacentHTML('beforeend',`<div class="copyline">
-    <input placeholder="Place ID (ChIJ...)"><select style="width:130px">${S.branches.map(b=>`<option value="${b.code}">${esc(b.name)}</option>`).join('')}</select>
+    <input placeholder="Place ID (ChIJ...)"><select style="width:130px">${S.branches.map(b=>`<option value="${esc(b.code)}">${esc(b.name)}</option>`).join('')}</select>
     <button class="icb" onclick="this.parentElement.remove()">✕</button></div>`);
 }
 async function saveGp(silent){
@@ -3413,6 +3557,20 @@ async function resetAiFailed(btn){
   try{const r=await brain('reset_ai_failed',{});if(r.error)throw new Error(r.error);
     toast(`คืนเข้าคิวอัพเกรดแล้ว ${r.reset||0} รายการ ✓ ระบบจะให้ AI ลองใหม่ทีละน้อย`);renderHealth()}
   catch(e){toast('ทำไม่ได้: '+e.message,true);if(btn){btn.disabled=false;btn.textContent='↺ ลองใหม่'}}
+}
+/* ค่าใช้จ่าย Places API — cron ดึงทุก 3 ชม. = วันละ 8 ครั้ง ต่อ Place ID ที่ใส่ไว้ (ไม่ใช่ต่อสาขา) · ฟรี ~1,000 ครั้ง/เดือน ·
+   เพดานรายวันที่แนะนำไว้ 30 ครั้ง/API (README-SOCIAL) · ทะเบียนกลาง (JJBR) มีสาขาหน้าร้าน ≤2 = ข้อความเดิมทุกตัวอักษร
+   · เกิน 2 สาขา: คิดจากจำนวน Place ID จริง (g.places · ยังไม่ใส่ = คิดจากจำนวนสาขา) + บอกล่วงหน้าถ้าใส่ครบทุกสาขาแล้วจะเกินเพดาน */
+function placesCost(g){
+  const n=JJBR.storeCodes().length||2;
+  if(n<=2)return {cap:false,over:false,html:'<br><span class="xs">ค่าใช้จ่าย: ~480 ครั้ง/เดือน อยู่ในโควต้าฟรี 1,000 ครั้ง · ต้องผูกบัตร → ตั้งเพดาน Quotas <b>รายวัน</b> ไม่เกิน 30 ครั้ง ต่อ API (ถ้าตั้งได้แค่รายนาที จะกันเกินรายเดือนไม่ได้) · งบ US$1 แค่ส่งอีเมลเตือน ไม่ได้ตัดการใช้งาน</span>'};
+  const p=Math.max(0,Math.floor(Number(g&&g.places)||0)), k=p||n, m=k*240, d=k*8, cap=d>30, over=m>1000, nd=n*8;
+  return {cap,over,html:'<br><span class="xs">ค่าใช้จ่าย: ~'+m.toLocaleString('en-US')+' ครั้ง/เดือน ('+(p?p+' Place ID · ':'')+n+' สาขา)'
+    +(over?' <b>เกินโควต้าฟรี 1,000 ครั้ง → มีค่าใช้จ่ายส่วนเกิน</b>':' อยู่ในโควต้าฟรี 1,000 ครั้ง')
+    +' · ต้องผูกบัตร → ตั้งเพดาน Quotas <b>รายวัน</b> ไม่เกิน '+Math.max(30,d)+' ครั้ง ต่อ API (ถ้าตั้งได้แค่รายนาที จะกันเกินรายเดือนไม่ได้) · งบ US$1 แค่ส่งอีเมลเตือน ไม่ได้ตัดการใช้งาน'
+    +(cap?'<br>⚠️ <b>'+(p?p+' Place ID':n+' สาขา')+' ดึงวันละ ~'+d+' ครั้ง เกินเพดาน 30 ครั้ง/วัน ที่ตั้งไว้ตอนมี 2 สาขา</b> → Google Cloud → Places API → Quotas ขยายเพดานรายวันเป็นอย่างน้อย '+d+' ครั้ง ไม่งั้น Google ปฏิเสธบางสาขา'
+      :p<n&&nd>30?'<br>ถ้าใส่ Place ID ครบ '+n+' สาขา จะดึงวันละ ~'+nd+' ครั้ง (~'+(n*240).toLocaleString('en-US')+'/เดือน) — ขยายเพดานรายวันเป็นอย่างน้อย '+nd+' ครั้งก่อน':'')
+    +'</span>'};
 }
 async function renderHealth(){
   const box=document.getElementById('healthBox'); if(!box)return;
@@ -3554,8 +3712,10 @@ async function renderHealth(){
       else if(httpBad.length){s3='bad';d3='ดึงรอบล่าสุดไม่สำเร็จ: '+httpBad.map(d=>esc(brName(d.branch))+' HTTP '+esc(String(d.http))+' '+esc(String(d.error||'').slice(0,120))).join(' · ')+'<br>ส่วนใหญ่คือยังไม่ผูกบัตรกับโปรเจกต์ Google Cloud หรือจำกัดคีย์ไม่ให้ใช้ Places API'}
       else if(noNew){s3='warn';d3=`ได้แค่ 5 รีวิวเด่นซ้ำ ๆ ไม่ได้รีวิวใหม่ล่าสุด (Legacy: ${esc(dg.map(d=>d.legacy||'?').join(', '))}) → เปิด <a href="https://console.cloud.google.com/apis/library/places-backend.googleapis.com" target="_blank" rel="noopener">Places API (Legacy)</a> ในโปรเจกต์เดียวกับคีย์ และอนุญาตในข้อจำกัดของคีย์`}
       else d3=`ดึงอัตโนมัติทุก 3 ชม. (${Number(g.places)||0} สาขา)`+(g.places_last_poll?' · ดึงล่าสุด '+ago(g.places_last_poll):' · ยังไม่เคยดึง');
-      if(s3!=='off')d3+='<br><span class="xs">ค่าใช้จ่าย: ~480 ครั้ง/เดือน อยู่ในโควต้าฟรี 1,000 ครั้ง · ต้องผูกบัตร → ตั้งเพดาน Quotas <b>รายวัน</b> ไม่เกิน 30 ครั้ง ต่อ API (ถ้าตั้งได้แค่รายนาที จะกันเกินรายเดือนไม่ได้) · งบ US$1 แค่ส่งอีเมลเตือน ไม่ได้ตัดการใช้งาน</span>';
-      rows.push(hRow(s3,'รีวิว Google — Place ID'+(g.gbp_connected?' (สำรองระหว่างรอ Business Profile)':''),d3,s3==='off'?'':'ฟรีในโควต้า'));
+      const pc=placesCost(g);   // จำนวน Place ID ที่ใส่จริง (g.places)
+      if(s3!=='off')d3+=pc.html;
+      if(s3==='ok'&&pc.cap)s3='warn';   // Place ID เยอะจนเกินเพดานรายวัน 30 ครั้ง
+      rows.push(hRow(s3,'รีวิว Google — Place ID'+(g.gbp_connected?' (สำรองระหว่างรอ Business Profile)':''),d3,s3==='off'?'':pc.over?'เสียเงินส่วนเกิน':'ฟรีในโควต้า'));
     }
   }
   // --- Apify (ดึงทุกแอพผ่านบริการภายนอก) ---
@@ -3696,18 +3856,23 @@ function rtBanner(){
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){S.cache={};refreshBadges();if(['dash','feed','chat'].includes(S.tab)||(PLAT[S.tab]&&!pfOf(S.tab).open))show(S.tab)}});
 
 /* ---------- boot ---------- */
+/* ชื่อบนปุ่มสาขา: สาขาเดิมตัดคำว่า "สาขา" แบบเดิม · สาขาใหม่ใช้ชื่อสั้นจากทะเบียนกลาง */
+function brBtn(b){return (!['JJRD','JJLP'].includes(b.code)&&JJBR.isStore(b.code)&&JJBR.short(b.code,''))||b.name.replace('สาขา','')}
 async function loadBranches(){
+  let got=false;
   try{
     const rows=await sel('pnl_branches','select=*');
-    const bs=(rows||[]).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code})).filter(b=>b.code);
-    if(bs.length)S.branches=bs;
+    const bs=(rows||[]).filter(r=>r&&r.active!==false)   // ปิดสาขาแล้ว (active=false) ไม่ขึ้นปุ่ม/ตัวเลือก — ชื่อในรายการเก่ายังหาได้ (brName)
+      .map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code,sort:r.sort,kind:r.kind})).filter(b=>b.code);
+    if(bs.length){S.branches=brOrder(bs);got=BR_DB=true}   // ลำดับเดิมจากฐานข้อมูล + สาขาใหม่ต่อท้ายรัชดา/ลาดพร้าว
   }catch(e){}
+  if(!got)brSeed();   // อ่านไม่ได้ = รัชดา/ลาดพร้าว + สาขาใหม่จากแคชทะเบียนกลาง
   const my=myBranches();   // เห็นเฉพาะสาขา: ปุ่มเหลือเฉพาะสาขาที่ดูแล · สาขาเดียว = ล็อกไว้ ไม่มี "ทุกสาขา"
   if(!localStorage.getItem('jjsocial_br')&&S.user&&my.find(b=>b.code===S.user.unit))S.br=S.user.unit;  // สังกัดสาขาไหน เปิดมาที่สาขานั้น
   if(S.br!=='ALL'&&!my.find(b=>b.code===S.br))S.br='ALL';
   if(S.scope&&my.length===1)S.br=my[0].code;
   const lock=S.scope&&my.length===1?'🔒 ':'';
-  $('#brSeg').innerHTML=[...my.map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}${lock?' title="บัญชีนี้เห็นเฉพาะสาขานี้"':''}>${lock}${esc(b.name.replace('สาขา',''))}</button>`),
+  $('#brSeg').innerHTML=[...my.map(b=>`<button data-br="${esc(b.code)}" ${S.br===b.code?'class="on"':''}${lock?' title="บัญชีนี้เห็นเฉพาะสาขานี้"':''}>${lock}${esc(brBtn(b))}</button>`),
     ...(!S.scope||my.length>1?[`<button data-br="ALL" ${S.br==='ALL'?'class="on"':''}>${S.scope?'ทุกสาขาที่ดูแล':'ทุกสาขา'}</button>`]:[])].join('');
   paintUser();
   $('#brSeg').addEventListener('click',e=>{

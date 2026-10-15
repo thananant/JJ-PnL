@@ -18,13 +18,24 @@ const USERS = [
   { id: 6, username: 'rdmgr', display_name: 'ผจก.รัชดา', role: 'manager', unit: 'JJRD', active: true, pass_hash: pwHash('rdmgr', 'kpi1234'), apps: { kpi: { dash: 'vae', kiosk: 'v', _br: 'JJRD' } } },
   { id: 7, username: 'twobr', display_name: 'ผจก.เขต', role: 'manager', unit: 'ALL', active: true, pass_hash: pwHash('twobr', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJLP,JJRD' } } },
   { id: 8, username: 'ckonly', display_name: 'ครัวกลาง', role: 'staff', unit: 'JJCK', active: true, pass_hash: pwHash('ckonly', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJCK' } } },
-  { id: 9, username: 'ownbr', display_name: 'เจ้าของ (ติด _br)', role: 'owner', unit: 'ALL', active: true, pass_hash: pwHash('ownbr', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJLP' } } }
+  { id: 9, username: 'ownbr', display_name: 'เจ้าของ (ติด _br)', role: 'owner', unit: 'ALL', active: true, pass_hash: pwHash('ownbr', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJLP' } } },
+  /* สาขาใหม่จากทะเบียนสาขากลาง (JJBR) — bnmgr = เห็นแค่ JJBN · badbr = รหัสที่ไม่มีในระบบ (ต้องไม่เห็นอะไร) · mixbr = JJBN+JJRD */
+  { id: 10, username: 'bnmgr', display_name: 'ผจก.บางนา', role: 'manager', unit: 'JJBN', active: true, pass_hash: pwHash('bnmgr', 'kpi1234'), apps: { kpi: { dash: 'vae', kiosk: 'v', _br: 'JJBN' } } },
+  { id: 11, username: 'badbr', display_name: 'สาขาพิมพ์ผิด', role: 'manager', unit: 'ALL', active: true, pass_hash: pwHash('badbr', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'XXXX' } } },
+  { id: 12, username: 'mixbr', display_name: 'ผจก.บางนา+รัชดา', role: 'manager', unit: 'ALL', active: true, pass_hash: pwHash('mixbr', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJBN,JJRD' } } }
 ];
 const userOf = n => USERS.find(x => x.username === n) || {};
 /* ใบผ่านจากหน้าศูนย์รวมแอพ (localStorage · ใช้ครั้งเดียว อายุ 2 นาที) */
 const ticketFor = (username, ageMs, app) => JSON.stringify({ u: username, h: userOf(username).pass_hash, app: app || 'kpi', t: Date.now() - (ageMs || 0) });
 /* ใบอนุญาตของแท็บ (sessionStorage · เหลือรอดตอนลากหน้าลง/รีเฟรช) */
 const sessFor = username => { const u = userOf(username); return JSON.stringify({ username: u.username, display_name: u.display_name, role: u.role, unit: u.unit, apps: u.apps || null, h: u.pass_hash }); };
+/* ทะเบียนสาขากลาง pnl_branches (JJBR) — ROWS_A = สาขาที่มีวันนี้ (รัน jjmk-branches.sql แล้ว) · ROWS_B = + สาขาใหม่ JJBN บางนา */
+const ROWS_A = [
+  { code: 'JJRD', name: 'สาขารัชดา', short: 'รัชดา', kind: 'store', sort: 1, stk_id: 'b19f0a17b4472', color: null, active: true, is_central: false },
+  { code: 'JJLP', name: 'สาขาลาดพร้าว', short: 'ลาดพร้าว', kind: 'store', sort: 2, stk_id: 'b19f0a17b448212', color: null, active: true, is_central: false },
+  { code: 'JJOF', name: 'ออฟฟิศ', short: 'ออฟฟิศ', kind: 'office', sort: 99, stk_id: null, color: null, active: true, is_central: true }
+];
+const ROWS_B = ROWS_A.concat([{ code: 'JJBN', name: 'สาขาบางนา', short: 'บางนา', kind: 'store', sort: 3, stk_id: 'JJBN', color: '#2E8B57', active: true, is_central: false }]);
 let failures = 0;
 function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures++; console.log('  ✗ ' + msg); } }
 
@@ -32,6 +43,8 @@ function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures+
 function makeDb(opts) {
   opts = opts || {};
   const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], punches: opts.punches || [], settings: opts.settings || [], users: opts.users || USERS.map(u => Object.assign({}, u)), nextId: 1,
+    /* pnl_branches (อ่านผ่าน fetch ของบล็อก JJBR) — branchesFail = ตอบ HTTP 500 */
+    branches: opts.branches || ROWS_A, branchesFail: !!opts.branchesFail,
     /* ตาราง line_groups = ของระบบนับสต๊อก (บอทจดกลุ่มที่ตัวเองอยู่) — KPI อ่านอย่างเดียว · kpi_line_log = ประวัติการส่งสรุป */
     lineGroups: opts.lineGroups || [
       { group_id: 'C00000000000000000000000000000001', name: 'หัวหน้า JJ (แจ้งใบสมัคร)' },
@@ -52,6 +65,8 @@ function makeDb(opts) {
       { id: 4, branch: 'JJLP', name: 'มานี', nickname: 'นี', position: 'เสิร์ฟ', sort_order: 1, active: true },
       { id: 5, branch: 'JJLP', name: 'มานะ', nickname: null, position: 'ครัว', sort_order: 2, active: true }
     ];
+    /* สาขาใหม่จากทะเบียน (opts.extraBr = 'JJBN') — มีพนักงาน 1 คน + ข้อมูลคะแนน */
+    if (opts.extraBr) db.staff.push({ id: 6, branch: opts.extraBr, name: 'สมศรี บางนา', nickname: 'ศรี', position: 'เสิร์ฟ', sort_order: 1, active: true });
     /* พนักงานชุดเดียวกันในระบบเงินเดือน (แอปจะ sync ผูก employee_id ให้เองตอน loadMeta)
        + สแกนเข้างานวันนี้คนละ 1 ครั้ง (คี่ = ยังอยู่ในร้าน) → จอลูกค้าจึงมีชื่อให้กด */
     if (!opts.employees) db.employees = [
@@ -59,7 +74,7 @@ function makeDb(opts) {
       { id: 202, code: 'S202', branch: 'JJRD', nick: 'หญิง', full_name: 'สมหญิง', position: 'แคชเชียร์', active: true },
       { id: 204, code: 'S204', branch: 'JJLP', nick: 'นี', full_name: 'มานี', position: 'เสิร์ฟ', active: true },
       { id: 205, code: 'S205', branch: 'JJLP', nick: null, full_name: 'มานะ', position: 'ครัว', active: true }
-    ];
+    ].concat(opts.extraBr ? [{ id: 206, code: 'S206', branch: opts.extraBr, nick: 'ศรี', full_name: 'สมศรี บางนา', position: 'เสิร์ฟ', active: true }] : []);
     if (!opts.employees && !opts.punches) {
       const now = new Date(); const bz = new Date(now); if (now.getHours() < 6) bz.setDate(bz.getDate() - 1);
       const at = (hh, mm) => new Date(bz.getFullYear(), bz.getMonth(), bz.getDate(), hh, mm);
@@ -71,7 +86,7 @@ function makeDb(opts) {
     for (let back = 0; back < 45; back++) {
       const d = new Date(today); d.setDate(d.getDate() - back);
       const biz = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      for (const br of ['JJRD', 'JJLP']) {
+      for (const br of ['JJRD', 'JJLP'].concat(opts.extraBr ? [opts.extraBr] : [])) {
         const n = 10 + Math.floor(rnd() * 30);
         for (let i = 0; i < n; i++) {
           const hour = [11, 12, 13, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2][Math.floor(rnd() * 13)];
@@ -203,8 +218,14 @@ function boot(url, db, extra) {
       w.prompt = () => (extra && extra.pin) || null; w.alert = () => {}; w.open = u => { w._opened = u; };
       w.TextEncoder = require('util').TextEncoder;   // เบราว์เซอร์จริงมีให้อยู่แล้ว (ใช้ตอน hash รหัสผ่าน) — jsdom ไม่มี
       /* ส่งเข้ากลุ่มไลน์ผ่าน Edge Function line-order — จำลองไว้ดูว่าแอปยิงอะไรไปบ้าง */
-      w._posts = [];
-      w.fetch = (url, o) => { w._posts.push({ url: url, body: JSON.parse((o && o.body) || '{}'), headers: (o && o.headers) || {} });
+      w._posts = []; w._brGets = [];
+      w.fetch = (url, o) => {
+        /* ทะเบียนสาขากลาง (บล็อก JJBR อ่าน pnl_branches ด้วย fetch ตรง) — แยกจาก _posts ของไลน์ */
+        if (/\/rest\/v1\/pnl_branches/.test(String(url))) {
+          w._brGets.push(String(url)); const bad = db.branchesFail;
+          return Promise.resolve({ ok: !bad, status: bad ? 500 : 200, json: () => Promise.resolve(bad ? { message: 'boom' } : JSON.parse(JSON.stringify(db.branches))) });
+        }
+        w._posts.push({ url: url, body: JSON.parse((o && o.body) || '{}'), headers: (o && o.headers) || {} });
         return Promise.resolve({ ok: !(extra && extra.lineFail), status: (extra && extra.lineFail) ? 500 : 200, json: () => Promise.resolve((extra && extra.lineFail) ? { error: 'บอทไม่อยู่ในกลุ่มนี้' } : { ok: true }) }); };
       w.confirm = () => !(extra && extra.sayNo);   // jsdom ไม่มี confirm จริง — ตั้งต้นคือกด "ตกลง"
       w.HTMLElement.prototype.requestFullscreen = () => Promise.resolve();
@@ -226,4 +247,4 @@ async function click(w, d, sel) { const el = d.querySelector(sel); if (!el) thro
 async function change(w, d, sel, value) { const el = d.querySelector(sel); el.value = value; el.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(40); }
 
 
-module.exports = { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, USERS, ticketFor, sessFor, failures: () => failures };
+module.exports = { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, USERS, ticketFor, sessFor, ROWS_A, ROWS_B, failures: () => failures };

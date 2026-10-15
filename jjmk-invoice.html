@@ -504,6 +504,110 @@ window.JJGate=(function(){
   window.JJLogin=JJLogin;
 })();
 </script>
+<!-- JJBR-BEGIN ทะเบียนสาขากลาง · บล็อกนี้ต้องเหมือนกันทุกไฟล์ทุกตัวอักษร (แก้ที่ไฟล์ใดไฟล์หนึ่งแล้ว sync ด้วยสคริปต์) -->
+<script>
+/* JJBR — ทะเบียนสาขากลาง (ตาราง pnl_branches) ใช้ร่วมทุกแอพ (เจ้าของสั่ง 2026-10-15: "เพิ่มสาขาใหม่ ให้เพิ่มไปในทุกระบบเลย แบบปุ่มเดียว")
+   · สาขาหน้าร้านมาจากตาราง pnl_branches (ปุ่ม 🏪 เปิดสาขาใหม่ ใน JJ Access เพิ่มให้) · ครัวกลาง JJCK / ออฟฟิศ OFFICE เป็นหน่วยงานคงที่
+   · ไม่ต้องรอเน็ต: เริ่มจากแคชในเครื่อง (localStorage.jjbr_cache) → ไม่มีแคช = JJRD/JJLP · JJBR.load() อ่านของจริงแล้วแจ้ง onChange
+   · ออฟฟิศ: บัญชี/สิทธิ์ใช้ OFFICE · P&L ใช้ JJOF → JJBR.canon('JJOF')='OFFICE' · JJBR.pnl('OFFICE')='JJOF'
+   · แอพเดิมยังใช้ชื่อ/สีของตัวเองกับสาขาเดิมได้ — ใช้ JJBR.extra(รหัสที่แอพรู้จักแล้ว) เติมเฉพาะสาขาที่แอพยังไม่รู้จัก */
+(function(){
+  var VER='2026-10-15.1', CK='jjbr_cache', MAXAGE=90*864e5;
+  var BASE=[
+    {code:'JJRD',name:'สาขารัชดา',short:'รัชดา',kind:'store',sort:1,stk_id:'b19f0a17b4472'},
+    {code:'JJLP',name:'สาขาลาดพร้าว',short:'ลาดพร้าว',kind:'store',sort:2,stk_id:'b19f0a17b448212'}];
+  var UNITS=[
+    {code:'JJCK',name:'ครัวกลาง',short:'ครัวกลาง',kind:'kitchen',sort:900},
+    {code:'OFFICE',name:'ออฟฟิศ',short:'ออฟฟิศ',kind:'office',sort:901}];
+  var STK={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};
+  var PALETTE=['#2E8B57','#8E44AD','#D35400','#16A085','#2C3E50','#B7950B','#C0392B','#1F618D'];
+  function s(v,n){ return v==null?'':String(v).trim().slice(0,n||80); }
+  function norm(r){
+    if(!r||typeof r!=='object')return null;
+    var code=s(r.code,12).toUpperCase();
+    if(!/^[A-Z][A-Z0-9_]{1,11}$/.test(code))return null;
+    var kind=r.kind==='store'||r.kind==='office'||r.kind==='kitchen'?r.kind:
+      (code==='JJOF'||code==='OFFICE'?'office':code==='JJCK'?'kitchen':r.is_central?'office':'store');
+    var name=s(r.name||r.display_name,60)||code;
+    var short=s(r.short,30)||name.replace(/^สาขา\s*/,'')||code;
+    return {code:code,name:name,short:short,kind:kind,sort:isFinite(+r.sort)?+r.sort:0,
+      stk_id:s(r.stk_id,40)||STK[code]||'',color:/^#[0-9A-Fa-f]{6}$/.test(s(r.color))?s(r.color):'',
+      active:r.active!==false,is_central:kind!=='store',tax_branch:/^[0-9]{5}$/.test(s(r.tax_branch))?s(r.tax_branch):'',
+      addr:s(r.addr,300),opened_on:/^\d{4}-\d{2}-\d{2}/.test(s(r.opened_on))?s(r.opened_on).slice(0,10):''};
+  }
+  function clean(arr){
+    var out=[],seen={};
+    (Array.isArray(arr)?arr:[]).forEach(function(r){ var x=norm(r); if(x&&!seen[x.code]){seen[x.code]=1;out.push(x);} });
+    return out;
+  }
+  function bySort(a,b){ return (a.sort-b.sort)||(a.code<b.code?-1:a.code>b.code?1:0); }
+  var J={VER:VER,rows:clean(BASE),src:'base',cols:false,at:0,_cb:[],_p:null};
+  try{
+    var c=JSON.parse(localStorage.getItem(CK)||'null');
+    if(c&&Array.isArray(c.rows)&&c.rows.length&&Date.now()-(+c.t||0)<MAXAGE){ J.rows=clean(c.rows); J.src='cache'; J.cols=!!c.cols; J.at=+c.t||0; }
+  }catch(e){}
+  /* สาขาหน้าร้านที่เปิดอยู่ (เรียงตาม sort แล้วรหัส) */
+  J.stores=function(all){ return J.rows.filter(function(r){ return r.kind==='store'&&(all||r.active); }).sort(bySort); };
+  J.storeCodes=function(all){ return J.stores(all).map(function(r){ return r.code; }); };
+  /* สาขาหน้าร้าน + ครัวกลาง + ออฟฟิศ (ตัวเลือก "ประจำที่"/สิทธิ์รายสาขา) — ใช้รหัส OFFICE ไม่ใช่ JJOF */
+  J.units=function(){ return J.stores().concat(UNITS.map(function(u){ var r=J.get(u.code); return r&&r.kind===u.kind?Object.assign({},u,{name:r.name||u.name,short:r.short||u.short}):u; })); };
+  J.unitCodes=function(){ return J.units().map(function(r){ return r.code; }); };
+  J.canon=function(c){ c=s(c,12).toUpperCase(); return c==='JJOF'?'OFFICE':c; };
+  J.pnl=function(c){ c=s(c,12).toUpperCase(); return c==='OFFICE'?'JJOF':c; };
+  J.get=function(c){
+    c=s(c,12).toUpperCase(); if(!c)return null;
+    var r=null,i;
+    for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===c){ r=J.rows[i]; break; } }
+    if(!r&&(c==='OFFICE'||c==='JJOF')){ for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===(c==='OFFICE'?'JJOF':'OFFICE')){ r=J.rows[i]; break; } } }
+    if(!r){ for(i=0;i<UNITS.length;i++){ if(UNITS[i].code===J.canon(c)){ r=UNITS[i]; break; } } }
+    return r;
+  };
+  J.known=function(c){ return !!J.get(c); };
+  J.isStore=function(c){ var r=J.get(c); return !!(r&&r.kind==='store'); };
+  J.name=function(c,fb){ var r=J.get(c); return r?r.name:(fb!=null?fb:s(c)); };
+  J.short=function(c,fb){ var r=J.get(c); return r?r.short:(fb!=null?fb:s(c)); };
+  J.stk=function(c){ var r=J.get(c); return (r&&r.stk_id)||STK[s(c,12).toUpperCase()]||''; };
+  J.byStk=function(id){ id=s(id,40); if(!id)return null; for(var i=0;i<J.rows.length;i++){ if(J.rows[i].stk_id===id)return J.rows[i]; } for(var k in STK){ if(STK[k]===id)return J.get(k); } return null; };
+  J.color=function(c,i){ var r=J.get(c); if(r&&r.color)return r.color; var st=J.storeCodes(true),k=st.indexOf(s(c,12).toUpperCase()); return PALETTE[(k<0?(i||0):k)%PALETTE.length]; };
+  /* สาขาหน้าร้านที่แอพยังไม่รู้จัก (known = รายการรหัส หรือ object ที่มีรหัสเป็น key) */
+  J.extra=function(known){
+    var have={}; (Array.isArray(known)?known:Object.keys(known||{})).forEach(function(k){ have[s(k,12).toUpperCase()]=1; });
+    return J.stores().filter(function(r){ return !have[r.code]; });
+  };
+  /* รหัสสาขาใหม่ที่ใช้ได้: อังกฤษพิมพ์ใหญ่ล้วน 2–8 ตัว (ใช้เป็นตัวหน้าเลขใบกำกับภาษีด้วย) */
+  J.codeOk=function(c){ return /^[A-Z]{2,8}$/.test(s(c,12)); };
+  J.onChange=function(fn){ if(typeof fn==='function')J._cb.push(fn); };
+  /* อ่านทะเบียนจริง (ไม่ throw) — url/key ของ Supabase · opts.force = อ่านใหม่แม้เพิ่งอ่าน · คืน rows */
+  J.load=function(url,key,opts){
+    opts=opts||{};
+    if(J._p&&!opts.force)return J._p;
+    if(J.src==='db'&&!opts.force&&Date.now()-J.at<60000)return Promise.resolve(J.rows);
+    url=s(url,300).replace(/\/+$/,''); key=s(key,500);
+    if(!url||!key||typeof fetch!=='function')return Promise.resolve(J.rows);
+    var get=function(q){
+      var ac=typeof AbortController==='function'?new AbortController():null, tm=ac?setTimeout(function(){ ac.abort(); },opts.timeout||8000):0;
+      return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
+        .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
+    };
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
+      .then(function(d){
+        if(!Array.isArray(d))throw new Error('bad');
+        var rows=clean(d), before=JSON.stringify(J.rows);
+        if(!rows.some(function(r){ return r.kind==='store'; }))rows=rows.concat(clean(BASE)); /* ตารางว่าง/มีแต่ออฟฟิศ = ใช้สาขาเดิมไปก่อน */
+        J.rows=rows; J.src='db'; J.at=Date.now(); J.cols=d.length>0&&d.every(function(r){ return r&&Object.prototype.hasOwnProperty.call(r,'kind'); });
+        try{ localStorage.setItem(CK,JSON.stringify({t:J.at,cols:J.cols,rows:d})); }catch(e){}
+        if(JSON.stringify(J.rows)!==before)J._cb.forEach(function(fn){ try{ fn(J); }catch(e){ if(window.console)console.error(e); } });
+        return J.rows;
+      })
+      .catch(function(){ return J.rows; })
+      .then(function(r){ J._p=null; return r; });
+    return J._p;
+  };
+  window.JJBR=J;
+})();
+</script>
+<!-- JJBR-END -->
 </head>
 <body>
 <!-- ===== หน้า login (บัญชีเดียวกับระบบ P&L) ===== -->
@@ -1111,6 +1215,33 @@ var CONFIG = {
 };
 var SB_URL  = 'https://aikyxvluaiubdidqxwnd.supabase.co';
 var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
+/* สาขาใหม่จากทะเบียนสาขากลาง (JJBR · ปุ่ม 🏪 เปิดสาขาใหม่ ใน JJ Access — เจ้าของสั่ง 2026-10-15 "เพิ่มสาขาใหม่ ให้ขึ้นทุกระบบ")
+   รัชดา/ลาดพร้าว ใช้ค่าเดิมข้างบนเสมอ · สาขาใหม่: ตัวหน้าเลขบิล = รหัสสาขา · ชื่อ = ชื่อย่อในทะเบียน · start 1 เป็นแค่ค่าสำรอง
+   (ปุ่มเปิดสาขาสร้างแถว inv_counters ไว้แล้วตามเลขใบแรกที่ตั้ง · ทางสำรองของ nextBillNo อ่านตัวนับนี้ด้วย — reg:1)
+   · ปิดสาขา (active=false) = ไม่อยู่ในรายการนี้ (ออกบิล/ตัวกรอง) แต่บิลเก่ายังขึ้นใน "ทุกสาขา" · รหัสต้องเป็นอังกฤษล้วน 2–8 ตัว (สาขาของบิลดูจากตัวอักษรหน้าเลขบิล)
+   และห้ามเป็นตัวต้น/มีตัวต้นเป็นรหัสเดิม (ตัวกันเลขถอยหลังค้นด้วย LIKE '<รหัส>%') · อ่านทะเบียนไม่ได้ = 2 สาขาเดิม */
+var INV_BR_BASE=CONFIG.BRANCHES.length;
+function invBrExtend(){
+  if(!window.JJBR) return;
+  CONFIG.BRANCHES.splice(INV_BR_BASE);
+  JJBR.extra(CONFIG.BRANCHES.map(function(b){ return b.prefix; })).forEach(function(r){
+    if(!JJBR.codeOk(r.code)||CONFIG.BRANCHES.some(function(b){ return b.prefix.indexOf(r.code)===0||r.code.indexOf(b.prefix)===0; })) return;
+    CONFIG.BRANCHES.push({ label:r.short||r.name||r.code, prefix:r.code, start:1, reg:1 });
+  });
+}
+invBrExtend();   // จากแคชในเครื่องทันที · ของจริงตามมาที่ init (JJBR.load → onChange)
+/* หัวบิลรายสาขา — สาขาที่จดภาษีแยก (pnl_branches.tax_branch 5 หลัก) พิมพ์ "สาขาที่ 0000X" + ที่อยู่สาขา (ช่อง addr)
+   ไม่มี tax_branch / อ่านทะเบียนไม่ได้ = หัวเดิม (สำนักงานใหญ่) ทุกตัวอักษร · ชื่อบริษัท/เลขผู้เสียภาษีเหมือนเดิมทุกสาขา
+   สาขาของบิล = ตัวอักษรหน้าเลขบิล (รหัสตรงตัว) · ⚠️ ต้องตรงกับ shop_head() ใน jjmk-invoice/inv_nas_sync.py */
+function shopHead(billNo){
+  var h={ name:CONFIG.SHOP.name, taxBranch:CONFIG.SHOP.taxBranch, taxId:CONFIG.SHOP.taxId, address:CONFIG.SHOP.address };
+  var c=nasBranch(billNo), r=((window.JJBR&&JJBR.rows)||[]).filter(function(x){ return x.code===c; })[0];
+  if(r&&/^[0-9]{5}$/.test(String(r.tax_branch||''))){
+    h.taxBranch='สาขาที่ '+r.tax_branch;
+    var a=String(r.addr||'').replace(/\s+/g,' ').trim(); if(a) h.address=a;
+  }
+  return h;
+}
 var ZIP_URLS = [
   'https://cdn.jsdelivr.net/gh/thailand-geography-data/thailand-geography-json@main/src/geography.json',
   'https://raw.githubusercontent.com/thailand-geography-data/thailand-geography-json/main/src/geography.json',
@@ -1246,9 +1377,9 @@ function nasSyncActive(){
 async function refreshNasSync(){
   if(!dbReady) return;
   try{
-    var r=await sb.from('inv_settings').select('key,value').in('key',['nas_sync_last','nas_sync_info']);
+    var r=await sb.from('inv_settings').select('key,value').in('key',['nas_sync_last','nas_sync_info','nas_sync_ver']);
     if(!r.error)(r.data||[]).forEach(function(x){
-      if(x.key==='nas_sync_last'||x.key==='nas_sync_info') settings[x.key]=x.value; });
+      if(x.key==='nas_sync_last'||x.key==='nas_sync_info'||x.key==='nas_sync_ver') settings[x.key]=x.value; });
   }catch(e){}
   renderNasStatus(); renderMissingNas();
 }
@@ -1282,6 +1413,22 @@ function renderNasSync(){
     el.textContent='🟢 ทำงานอยู่ · รายงานตัวล่าสุด '+agoText(Math.max(0,a))+(info?(' · '+info):'');
     el.style.color='var(--ok)';
   }
+  /* มีสาขาที่จดภาษีแยกแล้ว แต่สคริปต์บน NAS ยังเป็นรุ่นก่อนมีหัวบิลรายสาขา → ไฟล์ใน NAS ของสาขานั้นจะพิมพ์หัวสำนักงานใหญ่
+     (ไม่มีสาขาจดภาษีแยก = ไม่ขึ้นอะไรเพิ่ม เหมือนเดิมทุกตัวอักษร) */
+  var tb=invTaxBranches();
+  if(a!==null&&a>=-10&&a<=NAS_SYNC_STALE_MIN&&tb.length&&nasVerOld(settings.nas_sync_ver)){
+    el.textContent+=' · ⚠️ สคริปต์บน NAS เป็นรุ่นเก่า ไฟล์ใน NAS ของสาขา '+tb.join(', ')+' จะยังพิมพ์ "'+CONFIG.SHOP.taxBranch+
+      '" — กด "⬇ ดาวน์โหลด inv_nas_sync.py" (ใน 📋 ขั้นตอนติดตั้งบน Synology ข้างล่าง) แล้ววางทับไฟล์เดิมบน NAS'+
+      ' (รอบแรกที่รันสคริปต์ใหม่ จะสร้างไฟล์ของสาขานี้ที่เก็บไปแล้วใหม่ให้เอง)';
+    el.style.color='var(--warn)';
+  }
+}
+/* หัวบิลรายสาขา: สาขาในทะเบียนที่จดภาษีแยก · สคริปต์ NAS รุ่นที่พิมพ์หัวสาขาได้ (= SCRIPT_VER ใน inv_nas_sync.py รุ่นแรกที่ทำ) */
+var NAS_HEAD_VER='2026-10-15.1';
+function invTaxBranches(){ return ((window.JJBR&&JJBR.rows)||[]).filter(function(r){ return /^[0-9]{5}$/.test(String(r.tax_branch||'')); }).map(function(r){ return r.code; }); }
+function nasVerOld(v){
+  var re=/^(\d{4}-\d{2}-\d{2})(?:\.(\d+))?$/, m=re.exec(String(v||'').trim()), n=re.exec(NAS_HEAD_VER);
+  return !m || m[1]<n[1] || (m[1]===n[1] && (+m[2]||0)<(+n[2]||0));
 }
 /* บิลที่ยังไม่มีไฟล์ใน NAS — รวมบิลที่ถูกแก้/ยกเลิก/เรียกคืน (แอปล้าง nas_path ให้ NAS สร้างไฟล์ใหม่) */
 function missingNas(){
@@ -1521,15 +1668,17 @@ function buildSheetNode(inv, copyLabel){
   var sigImg=sigDataUrl?('<img src="'+sigDataUrl+'" alt="ลายเซ็น">'):'';
   var voidMark=(inv.status===STATUS.CANCELLED)?'<div class="iv-void">ยกเลิก</div>':'';
 
+  var head=shopHead(inv.bill_no);   // หัวบิลของสาขานี้ (สาขาที่จดภาษีแยก = สาขาที่ 0000X + ที่อยู่สาขา)
+
   var el=document.createElement('div');
   el.className='iv-sheet';
   el.innerHTML=
   '<div class="iv-box">'+voidMark+
     '<div class="iv-pad"><div class="iv-orig">'+esc(copyLabel)+'</div>'+
       '<div class="iv-hrow"><div class="iv-hL">'+
-        '<div class="iv-cname">'+esc(CONFIG.SHOP.name)+' ('+esc(CONFIG.SHOP.taxBranch)+')</div>'+
-        '<div class="iv-muted">ที่อยู่ : '+esc(CONFIG.SHOP.address)+'<br>'+
-        'เลขประจำตัวผู้เสียภาษีอากร : '+esc(CONFIG.SHOP.taxId)+'</div>'+
+        '<div class="iv-cname">'+esc(head.name)+' ('+esc(head.taxBranch)+')</div>'+
+        '<div class="iv-muted">ที่อยู่ : '+esc(head.address)+'<br>'+
+        'เลขประจำตัวผู้เสียภาษีอากร : '+esc(head.taxId)+'</div>'+
       '</div><div class="iv-hR iv-muted">'+
         '<div><span class="iv-lbl">เลขที่บิล</span><br>'+esc(inv.bill_no)+'</div>'+
         '<div style="margin-top:6px"><span class="iv-lbl">วันที่</span><br>'+fmtDate(inv.issued_at)+'</div>'+
@@ -1710,9 +1859,14 @@ function setCurrentUser(usr){
     apps:(usr.apps&&typeof usr.apps==='object')?usr.apps:null };
   INV_SCOPE=null;
   if(!isBoss()){
-    var p=invPerms(), br=p&&p._br?String(p._br).split(',').map(function(x){ return x.trim(); })
-      .filter(function(x){ return ['JJLP','JJRD','JJCK','OFFICE'].indexOf(x)>=0; }):[];
+    /* รหัสที่รับ = 4 หน่วยเดิม + สาขา/หน่วยงานในทะเบียนสาขากลาง · ตั้ง _br ไว้แต่ไม่เหลือรหัสที่รู้จักเลย = ไม่เห็นสาขาไหน
+       (ปิดไว้ก่อน — เดิมตกเป็น "ทุกสาขา" ทำให้คนที่ได้แค่สาขาใหม่เห็นบิลทุกสาขา) */
+    var p=invPerms(), ok=['JJLP','JJRD','JJCK','OFFICE'].concat(window.JJBR?JJBR.unitCodes():[]),
+      set=!!(p&&p._br&&String(p._br).trim()),
+      br=set?String(p._br).split(',').map(function(x){ return x.trim().toUpperCase(); })
+      .filter(function(x){ return ok.indexOf(x)>=0; }):[];
     if(br.length) INV_SCOPE=br;
+    else if(set) INV_SCOPE=[];
   }
 }
 function isBoss(){ return !!currentUser&&(currentUser.role==='admin'||currentUser.role==='owner'); }
@@ -2186,6 +2340,11 @@ async function nextBillNo(branch){
   var q=await sb.from('inv_invoices').select('bill_no')
     .like('bill_no',branch.prefix+'%').order('bill_no',{ascending:false}).limit(50);
   var next=branch.start;
+  if(branch.reg){   // สาขาใหม่จากทะเบียน: เลขใบแรกที่ตั้งตอนเปิดสาขาอยู่ในตัวนับ (inv_counters) ไม่ใช่ start — ห้ามเริ่ม 0001 ทับที่ตั้งไว้
+    var cq=await sb.from('inv_counters').select('prefix,last_no').eq('prefix',branch.prefix).limit(1);
+    var cr=((!cq.error&&cq.data)||[]).filter(function(x){ return x.prefix===branch.prefix; })[0];
+    if(cr&&isFinite(Number(cr.last_no))) next=Math.max(next,Number(cr.last_no)+1);
+  }
   if(!q.error && q.data) q.data.forEach(function(r){
     var n=billSeq(r.bill_no,branch.prefix); if(n!==null) next=Math.max(next,n+1); });
   var s=String(next); while(s.length<4)s='0'+s;
@@ -2381,7 +2540,9 @@ function validateForm(){
 
 async function issueOrUpdate(){
   if(!dbReady){ toast('ยังเชื่อมต่อฐานข้อมูลไม่ได้','err'); return; }
-  if(!currentUser){ showLogin('เข้าสู่ระบบก่อนทำรายการครับ'); return; }
+  if(!currentUser){
+    if(INV_BOOT){ toast('กำลังเปิดระบบ — รอสักครู่แล้วกด ส่ง อีกครั้งครับ'); return; }   // ยังกู้ session ไม่เสร็จ
+    showLogin('เข้าสู่ระบบก่อนทำรายการครับ'); return; }
   if(editingBillNo? !can('list','e') : !can('new','a')){
     toast(editingBillNo?'บัญชีนี้ไม่มีสิทธิ์แก้ไขบิล':'บัญชีนี้ไม่มีสิทธิ์ออกบิล','err'); return; }
   var payload=validateForm();
@@ -3358,6 +3519,7 @@ $('sigRemoveBtn').onclick=async function(){
 // ================= init =================
 var draftDone=false;
 function startApp(){
+  $('loginWrap').style.display='none';   // หน้าล็อกอินที่เด้งขึ้นระหว่างเปิดแอป (เช่น กด ส่ง ก่อนกู้ session เสร็จ) ต้องปิดเมื่อเข้าระบบได้แล้ว
   renderUserChip();
   applyPerms();
   if(!draftDone){
@@ -3369,8 +3531,41 @@ function startApp(){
   loadInvoices();
   // เปิดแอปค้างไว้ทั้งวัน — อัปเดตสถานะ NAS ทุก 5 นาที (ไม่งั้นผ่านไป 30 นาทีจะนึกว่า NAS ดับ)
   if(!startApp._nasTimer) startApp._nasTimer=setInterval(refreshNasSync, 5*60000);
+  // ทะเบียนสาขา — เปิดสาขาใหม่ระหว่างวัน แท็บที่เปิดค้างไว้เห็นเองภายใน 15 นาที (ไม่เปลี่ยน = ไม่ทำอะไร)
+  if(!startApp._brTimer&&window.JJBR) startApp._brTimer=setInterval(function(){ JJBR.load(SB_URL,SB_ANON); }, 15*60000);
 }
+/* ทะเบียนสาขาเปลี่ยน (อ่านจากฐานข้อมูลได้ต่างจากแคช) → เติมสาขาใหม่ + คิดสิทธิ์รายสาขาใหม่ + ทำช่องสาขาใหม่ */
+var invBrRetry=false;
+if(window.JJBR) JJBR.onChange(function(){
+  invBrExtend();
+  if(!currentUser){
+    /* ทะเบียนมาช้ากว่าที่รอตอนเปิดแอป แล้วบัญชีที่ได้สาขาใหม่ (_br) ถูกปัดเป็น "ไม่มีสิทธิ์" → ลองกู้ session อีกรอบด้วยทะเบียนใหม่ */
+    if(NO_ACCESS&&dbReady&&!invBrRetry){
+      invBrRetry=true;
+      restoreSession().then(function(ok){ invBrRetry=false;
+        if(ok&&currentUser){ NO_ACCESS=false; $('liMsg').textContent=''; startApp(); } }, function(){ invBrRetry=false; });
+    }
+    return;
+  }
+  var ib=$('issueBtn'), busy=!!(ib&&ib.querySelector('.spin')),   // กำลังออกบิล/บันทึกอยู่ — ห้ามปลดล็อกปุ่มกลางทาง
+    scope0=JSON.stringify(INV_SCOPE);
+  setCurrentUser(currentUser); renderUserChip(); applyPerms();
+  if(busy) ib.disabled=true;
+  if(dbReady){
+    var at=document.querySelector('.tab.active');
+    /* สาขาที่เห็นได้เปลี่ยน (เช่น _br='JJRD,JJBN' แล้ว JJBN เพิ่งเปิด) → รายการ/ประวัติที่โหลดไว้กรองด้วยสิทธิ์เดิม ต้องโหลดใหม่ */
+    if(JSON.stringify(INV_SCOPE)!==scope0){ loadInvoices(); loadHistory(); }
+    else { renderList(); renderHistory(); }
+    if(at&&at.dataset.tab==='settings') loadCounters();   // การ์ดเลขบิลรายสาขา
+    renderNasSync();
+  }
+});
+/* รอทะเบียนสาขาก่อนคิดสิทธิ์รายสาขา แต่ไม่เกิน 2 วิ (มีแคชในเครื่องแล้ว) / 5 วิ (เครื่องที่ยังไม่เคยอ่าน) —
+   JJBR.load() เองอาจนานถึง ~16 วิ (หมดเวลา 8 วิแล้วลองใหม่อีกรอบ) · ของจริงที่มาทีหลังเข้าทาง onChange ข้างบน */
+var INV_BR_WAIT={cache:2000, base:5000};
+var INV_BOOT=true;   // ระหว่างเปิดแอป ยังไม่รู้ว่าเข้าระบบค้างไว้ไหม — กด ส่ง ตอนนี้ = บอกให้รอ (ไม่เด้งหน้าล็อกอินทับ)
 (async function init(){
+  var brP=window.JJBR?JJBR.load(SB_URL,SB_ANON):null;   // อ่านทะเบียนสาขาไปพร้อมกับเช็คฐานข้อมูล (ไม่ throw)
   $('shopName').innerHTML=esc(CONFIG.SHOP.senderName)+'<span class="chipmore"> · '+esc(CONFIG.SHOP.name)+'</span>';
   var sel=$('fBranch');
   CONFIG.BRANCHES.forEach(function(b){
@@ -3385,11 +3580,15 @@ function startApp(){
   try{ localStorage.removeItem('jjinv_nasnet'); }catch(e){}   // ค่าของตัวรับไฟล์ PHP รุ่นก่อน (เลิกใช้แล้ว)
   renderNasStatus(); renderSig();
 
-  if(await checkDb()){
-    if(await restoreSession()){ startApp(); }
-    else if(NO_ACCESS){ showLogin(''); $('liMsg').innerHTML=NO_ACCESS_MSG; }
-    else { showLogin(''); if(GATE_RELOCK)JJGate.note(GATE_RELOCK,'liUser','liPass'); }
-  }
+  try{
+    if(await checkDb()){
+      // สาขาใหม่ต้องเข้า CONFIG.BRANCHES ก่อนคิดสิทธิ์รายสาขา (_br) ของผู้ใช้ — รอแบบมีเพดาน (ดู INV_BR_WAIT)
+      if(brP) await Promise.race([brP, new Promise(function(r){ setTimeout(r, JJBR.src==='base'?INV_BR_WAIT.base:INV_BR_WAIT.cache); })]);
+      if(await restoreSession()){ startApp(); }
+      else if(NO_ACCESS){ showLogin(''); $('liMsg').innerHTML=NO_ACCESS_MSG; }
+      else { showLogin(''); if(GATE_RELOCK)JJGate.note(GATE_RELOCK,'liUser','liPass'); }
+    }
+  }finally{ INV_BOOT=false; }
   // โหลดฐานรหัสไปรษณีย์ล่วงหน้าแบบเงียบๆ
   getZipDb().catch(function(){});
 })();

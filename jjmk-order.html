@@ -70,6 +70,8 @@ label.ck input{width:auto}
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#2E2119;color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;z-index:120;pointer-events:none;max-width:92vw;text-align:center}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)} #toast.err{background:var(--red)}
 @media print{header,.tabs,#toast{display:none!important} #ovl{position:static;background:none;display:block} .box{max-width:none;box-shadow:none} .btns,.noprint{display:none!important}}
+/* มือถือ (กติกาทุกแอป): ช่องกรอก ≥16px กัน iPhone ซูมเอง · ปุ่มสาขา/แท็บ/ปุ่มทั่วไปสูง ≥44px — แท็บเล็ต (>700px) หน้าตาเดิม */
+@media (max-width:700px){input,select,textarea{font-size:16px}.seg button,.tabs button,.b{min-height:44px}}
 </style>
 <!-- ===== JJ Login — หน้าล็อกอินมาตรฐานทุกแอพ (เจ้าของเลือกแบบ A 2026-09-28) =====
      บล็อกนี้เหมือนกันทุกไฟล์ ต่างแค่ var APP= บรรทัดแรก — แก้ที่ไหนต้องแก้ให้ครบทุกไฟล์
@@ -235,6 +237,110 @@ label.ck input{width:auto}
   window.JJLogin=JJLogin;
 })();
 </script>
+<!-- JJBR-BEGIN ทะเบียนสาขากลาง · บล็อกนี้ต้องเหมือนกันทุกไฟล์ทุกตัวอักษร (แก้ที่ไฟล์ใดไฟล์หนึ่งแล้ว sync ด้วยสคริปต์) -->
+<script>
+/* JJBR — ทะเบียนสาขากลาง (ตาราง pnl_branches) ใช้ร่วมทุกแอพ (เจ้าของสั่ง 2026-10-15: "เพิ่มสาขาใหม่ ให้เพิ่มไปในทุกระบบเลย แบบปุ่มเดียว")
+   · สาขาหน้าร้านมาจากตาราง pnl_branches (ปุ่ม 🏪 เปิดสาขาใหม่ ใน JJ Access เพิ่มให้) · ครัวกลาง JJCK / ออฟฟิศ OFFICE เป็นหน่วยงานคงที่
+   · ไม่ต้องรอเน็ต: เริ่มจากแคชในเครื่อง (localStorage.jjbr_cache) → ไม่มีแคช = JJRD/JJLP · JJBR.load() อ่านของจริงแล้วแจ้ง onChange
+   · ออฟฟิศ: บัญชี/สิทธิ์ใช้ OFFICE · P&L ใช้ JJOF → JJBR.canon('JJOF')='OFFICE' · JJBR.pnl('OFFICE')='JJOF'
+   · แอพเดิมยังใช้ชื่อ/สีของตัวเองกับสาขาเดิมได้ — ใช้ JJBR.extra(รหัสที่แอพรู้จักแล้ว) เติมเฉพาะสาขาที่แอพยังไม่รู้จัก */
+(function(){
+  var VER='2026-10-15.1', CK='jjbr_cache', MAXAGE=90*864e5;
+  var BASE=[
+    {code:'JJRD',name:'สาขารัชดา',short:'รัชดา',kind:'store',sort:1,stk_id:'b19f0a17b4472'},
+    {code:'JJLP',name:'สาขาลาดพร้าว',short:'ลาดพร้าว',kind:'store',sort:2,stk_id:'b19f0a17b448212'}];
+  var UNITS=[
+    {code:'JJCK',name:'ครัวกลาง',short:'ครัวกลาง',kind:'kitchen',sort:900},
+    {code:'OFFICE',name:'ออฟฟิศ',short:'ออฟฟิศ',kind:'office',sort:901}];
+  var STK={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};
+  var PALETTE=['#2E8B57','#8E44AD','#D35400','#16A085','#2C3E50','#B7950B','#C0392B','#1F618D'];
+  function s(v,n){ return v==null?'':String(v).trim().slice(0,n||80); }
+  function norm(r){
+    if(!r||typeof r!=='object')return null;
+    var code=s(r.code,12).toUpperCase();
+    if(!/^[A-Z][A-Z0-9_]{1,11}$/.test(code))return null;
+    var kind=r.kind==='store'||r.kind==='office'||r.kind==='kitchen'?r.kind:
+      (code==='JJOF'||code==='OFFICE'?'office':code==='JJCK'?'kitchen':r.is_central?'office':'store');
+    var name=s(r.name||r.display_name,60)||code;
+    var short=s(r.short,30)||name.replace(/^สาขา\s*/,'')||code;
+    return {code:code,name:name,short:short,kind:kind,sort:isFinite(+r.sort)?+r.sort:0,
+      stk_id:s(r.stk_id,40)||STK[code]||'',color:/^#[0-9A-Fa-f]{6}$/.test(s(r.color))?s(r.color):'',
+      active:r.active!==false,is_central:kind!=='store',tax_branch:/^[0-9]{5}$/.test(s(r.tax_branch))?s(r.tax_branch):'',
+      addr:s(r.addr,300),opened_on:/^\d{4}-\d{2}-\d{2}/.test(s(r.opened_on))?s(r.opened_on).slice(0,10):''};
+  }
+  function clean(arr){
+    var out=[],seen={};
+    (Array.isArray(arr)?arr:[]).forEach(function(r){ var x=norm(r); if(x&&!seen[x.code]){seen[x.code]=1;out.push(x);} });
+    return out;
+  }
+  function bySort(a,b){ return (a.sort-b.sort)||(a.code<b.code?-1:a.code>b.code?1:0); }
+  var J={VER:VER,rows:clean(BASE),src:'base',cols:false,at:0,_cb:[],_p:null};
+  try{
+    var c=JSON.parse(localStorage.getItem(CK)||'null');
+    if(c&&Array.isArray(c.rows)&&c.rows.length&&Date.now()-(+c.t||0)<MAXAGE){ J.rows=clean(c.rows); J.src='cache'; J.cols=!!c.cols; J.at=+c.t||0; }
+  }catch(e){}
+  /* สาขาหน้าร้านที่เปิดอยู่ (เรียงตาม sort แล้วรหัส) */
+  J.stores=function(all){ return J.rows.filter(function(r){ return r.kind==='store'&&(all||r.active); }).sort(bySort); };
+  J.storeCodes=function(all){ return J.stores(all).map(function(r){ return r.code; }); };
+  /* สาขาหน้าร้าน + ครัวกลาง + ออฟฟิศ (ตัวเลือก "ประจำที่"/สิทธิ์รายสาขา) — ใช้รหัส OFFICE ไม่ใช่ JJOF */
+  J.units=function(){ return J.stores().concat(UNITS.map(function(u){ var r=J.get(u.code); return r&&r.kind===u.kind?Object.assign({},u,{name:r.name||u.name,short:r.short||u.short}):u; })); };
+  J.unitCodes=function(){ return J.units().map(function(r){ return r.code; }); };
+  J.canon=function(c){ c=s(c,12).toUpperCase(); return c==='JJOF'?'OFFICE':c; };
+  J.pnl=function(c){ c=s(c,12).toUpperCase(); return c==='OFFICE'?'JJOF':c; };
+  J.get=function(c){
+    c=s(c,12).toUpperCase(); if(!c)return null;
+    var r=null,i;
+    for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===c){ r=J.rows[i]; break; } }
+    if(!r&&(c==='OFFICE'||c==='JJOF')){ for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===(c==='OFFICE'?'JJOF':'OFFICE')){ r=J.rows[i]; break; } } }
+    if(!r){ for(i=0;i<UNITS.length;i++){ if(UNITS[i].code===J.canon(c)){ r=UNITS[i]; break; } } }
+    return r;
+  };
+  J.known=function(c){ return !!J.get(c); };
+  J.isStore=function(c){ var r=J.get(c); return !!(r&&r.kind==='store'); };
+  J.name=function(c,fb){ var r=J.get(c); return r?r.name:(fb!=null?fb:s(c)); };
+  J.short=function(c,fb){ var r=J.get(c); return r?r.short:(fb!=null?fb:s(c)); };
+  J.stk=function(c){ var r=J.get(c); return (r&&r.stk_id)||STK[s(c,12).toUpperCase()]||''; };
+  J.byStk=function(id){ id=s(id,40); if(!id)return null; for(var i=0;i<J.rows.length;i++){ if(J.rows[i].stk_id===id)return J.rows[i]; } for(var k in STK){ if(STK[k]===id)return J.get(k); } return null; };
+  J.color=function(c,i){ var r=J.get(c); if(r&&r.color)return r.color; var st=J.storeCodes(true),k=st.indexOf(s(c,12).toUpperCase()); return PALETTE[(k<0?(i||0):k)%PALETTE.length]; };
+  /* สาขาหน้าร้านที่แอพยังไม่รู้จัก (known = รายการรหัส หรือ object ที่มีรหัสเป็น key) */
+  J.extra=function(known){
+    var have={}; (Array.isArray(known)?known:Object.keys(known||{})).forEach(function(k){ have[s(k,12).toUpperCase()]=1; });
+    return J.stores().filter(function(r){ return !have[r.code]; });
+  };
+  /* รหัสสาขาใหม่ที่ใช้ได้: อังกฤษพิมพ์ใหญ่ล้วน 2–8 ตัว (ใช้เป็นตัวหน้าเลขใบกำกับภาษีด้วย) */
+  J.codeOk=function(c){ return /^[A-Z]{2,8}$/.test(s(c,12)); };
+  J.onChange=function(fn){ if(typeof fn==='function')J._cb.push(fn); };
+  /* อ่านทะเบียนจริง (ไม่ throw) — url/key ของ Supabase · opts.force = อ่านใหม่แม้เพิ่งอ่าน · คืน rows */
+  J.load=function(url,key,opts){
+    opts=opts||{};
+    if(J._p&&!opts.force)return J._p;
+    if(J.src==='db'&&!opts.force&&Date.now()-J.at<60000)return Promise.resolve(J.rows);
+    url=s(url,300).replace(/\/+$/,''); key=s(key,500);
+    if(!url||!key||typeof fetch!=='function')return Promise.resolve(J.rows);
+    var get=function(q){
+      var ac=typeof AbortController==='function'?new AbortController():null, tm=ac?setTimeout(function(){ ac.abort(); },opts.timeout||8000):0;
+      return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
+        .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
+    };
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
+      .then(function(d){
+        if(!Array.isArray(d))throw new Error('bad');
+        var rows=clean(d), before=JSON.stringify(J.rows);
+        if(!rows.some(function(r){ return r.kind==='store'; }))rows=rows.concat(clean(BASE)); /* ตารางว่าง/มีแต่ออฟฟิศ = ใช้สาขาเดิมไปก่อน */
+        J.rows=rows; J.src='db'; J.at=Date.now(); J.cols=d.length>0&&d.every(function(r){ return r&&Object.prototype.hasOwnProperty.call(r,'kind'); });
+        try{ localStorage.setItem(CK,JSON.stringify({t:J.at,cols:J.cols,rows:d})); }catch(e){}
+        if(JSON.stringify(J.rows)!==before)J._cb.forEach(function(fn){ try{ fn(J); }catch(e){ if(window.console)console.error(e); } });
+        return J.rows;
+      })
+      .catch(function(){ return J.rows; })
+      .then(function(r){ J._p=null; return r; });
+    return J._p;
+  };
+  window.JJBR=J;
+})();
+</script>
+<!-- JJBR-END -->
 </head>
 <body>
 <header>
@@ -250,9 +356,15 @@ label.ck input{width:auto}
 <script>
 const CONFIG={URL:'https://aikyxvluaiubdidqxwnd.supabase.co',KEY:'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'};
 const BR_NAME={JJRD:'รัชดา',JJLP:'ลาดพร้าว'};
+/* สาขาที่เปิดใหม่จากทะเบียนสาขากลาง (JJBR · pnl_branches) ต่อท้าย 2 สาขาเดิม (ชื่อ/ลำดับเดิมไม่เปลี่ยน) —
+   เติมจากแคชในเครื่องทันที แล้วเติมอีกรอบเมื่ออ่านทะเบียนจริงได้ (brSync) · อ่านไม่ได้ = 2 สาขาเดิม */
+const brAdd=()=>JJBR.extra(BR_NAME).forEach(r=>{BR_NAME[r.code]=r.short;});
+brAdd();
+const brOk=b=>!!b&&Object.prototype.hasOwnProperty.call(BR_NAME,b);
+const brPick=()=>{const b=localStorage.getItem('jjqr_br');return brOk(b)?b:'JJRD';};   // สาขาที่จำไว้ต้องเป็นสาขาที่มีจริง ไม่งั้นกลับไปสาขาแรก
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const S={br:localStorage.getItem('jjqr_br')||'JJRD',tab:localStorage.getItem('jjqr_tab')||'tables',cfg:{},sessions:[],orders:[],menu:[],
+const S={br:brPick(),tab:localStorage.getItem('jjqr_tab')||'tables',cfg:{},sessions:[],orders:[],menu:[],
   seenNew:null,box:null,pkPick:null,ordFilter:'active',menuEdit:null,pollT:null};
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2800);}
 async function api(method,path,body,prefer){
@@ -267,8 +379,20 @@ const pkName=c=>{const p=packages().find(x=>x.code===c);return p?p.name:c;};
 const menuUrl=tok=>(cfgGet('menu_url','')||new URL('jjmk-menu.html',location.href).href)+'?s='+encodeURIComponent(tok);
 /* ---- ล็อกอินด้วยรหัสพนักงาน (เก็บใน qr_settings.pin) ---- */
 async function loadCfg(){ const rows=await api('GET','qr_settings?select=key,value'); S.cfg={}; rows.forEach(r=>S.cfg[r.key]=r.value); }
+/* อ่านทะเบียนแล้ว: เติมสาขาใหม่ + ตรวจสาขาที่เลือกอีกรอบ (สาขาที่จำไว้เพิ่งมีในทะเบียน = กลับไปสาขานั้น) · คืน true ถ้าเปลี่ยนสาขา */
+function brSync(){
+  brAdd();
+  const want=localStorage.getItem('jjqr_br'), nb=brOk(want)?want:brOk(S.br)?S.br:'JJRD';
+  if(nb===S.br)return false;
+  S.br=nb; S.seenNew=null; return true;
+}
+JJBR.onChange(()=>{ const n=Object.keys(BR_NAME).length, moved=brSync();
+  if(!S.live)return;                                                  // ยังไม่เข้างาน (หน้ารหัสพนักงาน) = ไม่ต้องวาด
+  if(moved)refresh(); else if(Object.keys(BR_NAME).length!==n&&S.tab!=='settings'&&!S.box)render(); else renderHead(); });
 async function boot(){
+  const reg=JJBR.load(CONFIG.URL,CONFIG.KEY);                         // ทะเบียนสาขา โหลดคู่กับตั้งค่า (ไม่ throw)
   try{ await loadCfg(); }catch(e){ $('#main').innerHTML='<div class="note">⚠ โหลดตั้งค่าไม่ได้ — ต้องรัน sql/jjmk_qr_order.sql ก่อน ('+esc(e.message)+')</div>'; return; }
+  await Promise.race([reg,new Promise(r=>setTimeout(r,3000))]); brSync();   // รอไม่เกิน 3 วิ — มาช้า = onChange วาดให้ทีหลัง
   const saved=localStorage.getItem('jjqr_pin');
   if(saved&&saved===String(cfgGet('pin','1234'))){ start(); } else { $('#loginOv').classList.add('on'); setTimeout(()=>$('#pin').focus(),50); }
 }
@@ -278,7 +402,7 @@ function login(){
   localStorage.setItem('jjqr_pin',v); $('#loginOv').classList.remove('on'); start();
 }
 function logout(){localStorage.removeItem('jjqr_pin');location.reload();}
-async function start(){ renderHead(); await refresh(); if(!S.pollT)S.pollT=setInterval(()=>{if(document.visibilityState==='visible')refresh(true);},5000); }
+async function start(){ S.live=true; renderHead(); await refresh(); if(!S.pollT)S.pollT=setInterval(()=>{if(document.visibilityState==='visible')refresh(true);},5000); }
 /* ---- โหลดข้อมูลสาขานี้ ---- */
 async function refresh(quiet){
   try{
@@ -304,7 +428,7 @@ const hhmm=d=>new Date(d).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-d
 const newOf=sid=>S.orders.filter(o=>o.session_id===sid&&o.status==='new').length;
 /* ---- หัว + แท็บ ---- */
 function renderHead(){
-  $('#brSeg').innerHTML=Object.keys(BR_NAME).map(b=>'<button class="'+(S.br===b?'on':'')+'" onclick="setBr(\''+b+'\')">'+BR_NAME[b]+'</button>').join('');
+  $('#brSeg').innerHTML=Object.keys(BR_NAME).map(b=>'<button class="'+(S.br===b?'on':'')+'" onclick="setBr(\''+b+'\')">'+esc(BR_NAME[b])+'</button>').join('');
   const nNew=S.orders.filter(o=>o.status==='new').length;
   const T=[['tables','🪑 โต๊ะ'],['orders','🧾 ออเดอร์'],['menu','🍽 เมนู'],['settings','⚙️ ตั้งค่า']];
   $('#tabs').innerHTML=T.map(([k,l])=>'<button class="'+(S.tab===k?'on':'')+'" onclick="setTab(\''+k+'\')">'+l+(k==='orders'&&nNew?'<span class="badge">'+nNew+'</span>':'')+'</button>').join('');
@@ -321,7 +445,7 @@ function render(){
 /* ---- 🪑 โต๊ะ ---- */
 function renderTables(){
   const n=tablesOf(S.br);
-  if(!n){$('#main').innerHTML='<div class="note">⚠ ยังไม่ตั้งจำนวนโต๊ะของสาขา'+BR_NAME[S.br]+' — ไปที่ ⚙️ ตั้งค่า</div>';return;}
+  if(!n){$('#main').innerHTML='<div class="note">⚠ ยังไม่ตั้งจำนวนโต๊ะของสาขา'+esc(BR_NAME[S.br])+' — ไปที่ ⚙️ ตั้งค่า</div>';return;}
   const open=openSess();
   let html='<div class="note">แตะโต๊ะที่ว่าง → เลือกแพ็กเกจ → ได้ QR ให้ลูกค้าสแกน (จับเวลา '+minutes()+' นาทีตั้งแต่สร้าง) · เปิดอยู่ <b>'+open.length+'</b>/'+n+' โต๊ะ · แตะโต๊ะที่เปิดอยู่เพื่อดู QR/ออเดอร์/ต่อเวลา/ปิดโต๊ะ</div><div class="grid">';
   for(let i=1;i<=n;i++){
@@ -340,7 +464,7 @@ function closeBox(){S.box=null;$('#ovl').classList.remove('on');}
 function renderBox(){
   const b=S.box; if(!b)return;
   if(b.type==='new'){
-    $('#box').innerHTML='<h3>🪑 โต๊ะ '+b.table+' · '+BR_NAME[S.br]+'</h3><div style="font-size:14px;color:var(--mut)">เลือกแพ็กเกจของโต๊ะนี้ (เปลี่ยนทีหลังไม่ได้ ต้องปิดโต๊ะแล้วสร้างใหม่)</div>'
+    $('#box').innerHTML='<h3>🪑 โต๊ะ '+b.table+' · '+esc(BR_NAME[S.br])+'</h3><div style="font-size:14px;color:var(--mut)">เลือกแพ็กเกจของโต๊ะนี้ (เปลี่ยนทีหลังไม่ได้ ต้องปิดโต๊ะแล้วสร้างใหม่)</div>'
       +'<div class="pk">'+packages().map(p=>'<button class="'+(S.pkPick===p.code?'on':'')+'" style="border-color:'+(S.pkPick===p.code?p.color:'')+'" onclick="S.pkPick=\''+esc(p.code)+'\';renderBox()">'+esc(p.name)+'</button>').join('')+'</div>'
       +'<div style="font-size:13px;color:var(--mut);margin-bottom:10px">⏱ เวลา '+minutes()+' นาที เริ่มนับทันทีที่กดสร้าง</div>'
       +'<div class="btns"><button class="b gray" onclick="closeBox()">ยกเลิก</button><button class="b pri" id="genBtn" '+(S.pkPick?'':'disabled')+' onclick="genQR()">✨ สร้าง QR</button></div>';
@@ -429,7 +553,7 @@ function renderMenu(){
   const list=cats.map(c=>'<div class="card"><h3>'+esc(c)+'<span class="sp"></span><span style="font-size:12px;color:var(--mut);font-weight:400">'+S.menu.filter(m=>(m.category||'อื่น ๆ')===c).length+' เมนู</span></h3>'
     +S.menu.filter(m=>(m.category||'อื่น ๆ')===c).map(m=>'<div class="mrow'+(m.active?'':' off')+'"><div><div class="nm">'+esc(m.name)+(m.active?'':' <span class="tag cancelled">ปิดขาย</span>')+'</div><div class="sub">'+(m.packages||[]).map(pkName).map(esc).join(' · ')+' · '+esc(m.unit_label)+(m.max_per_order?' · ไม่เกิน '+m.max_per_order+'/ครั้ง':'')+'</div></div>'
       +'<div class="btns" style="margin:0"><button class="b" onclick="menuEditRow('+m.id+')">✏️</button><button class="b" onclick="menuToggle('+m.id+')">'+(m.active?'ปิดขาย':'เปิดขาย')+'</button><button class="b gray" onclick="menuDel('+m.id+')">🗑</button></div></div>').join('')+'</div>').join('');
-  $('#main').innerHTML='<div class="note">เมนูชุดเดียวใช้ทั้ง 2 สาขา · ติ๊กแพ็กเกจที่สั่งเมนูนั้นได้ (เช่น เนื้อวากิว = Premium เท่านั้น) · ปิดขายชั่วคราวได้โดยไม่ต้องลบ</div>'+form+(list||'<div class="note">ยังไม่มีเมนู — เพิ่มด้านบน</div>');
+  $('#main').innerHTML='<div class="note">เมนูชุดเดียวใช้ทั้ง '+Object.keys(BR_NAME).length+' สาขา · ติ๊กแพ็กเกจที่สั่งเมนูนั้นได้ (เช่น เนื้อวากิว = Premium เท่านั้น) · ปิดขายชั่วคราวได้โดยไม่ต้องลบ</div>'+form+(list||'<div class="note">ยังไม่มีเมนู — เพิ่มด้านบน</div>');
 }
 function menuEditRow(id){const m=S.menu.find(x=>x.id===id);if(m){S.menuEdit={...m};render();window.scrollTo({top:0});}}
 async function menuSave(){
@@ -450,8 +574,8 @@ async function menuDel(id){const m=S.menu.find(x=>x.id===id);if(!m||!confirm('�
   try{await api('DELETE','qr_menu_items?id=eq.'+id,null,'return=minimal');S.menu=S.menu.filter(x=>x.id!==id);render();toast('ลบแล้ว');}catch(e){toast('ลบไม่สำเร็จ — '+String(e.message).slice(0,80),true);}}
 /* ---- ⚙️ ตั้งค่า ---- */
 function renderSettings(){
-  const t=cfgGet('tables',{}),pks=packages();
-  $('#main').innerHTML='<div class="card"><h3>🪑 จำนวนโต๊ะ</h3><div class="row">'+Object.keys(BR_NAME).map(b=>'<label>'+BR_NAME[b]+'<input id="tb_'+b+'" type="number" min="1" max="200" value="'+(t[b]||'')+'"></label>').join('')+'</div>'
+  const t=cfgGet('tables',{})||{},pks=packages();
+  $('#main').innerHTML='<div class="card"><h3>🪑 จำนวนโต๊ะ</h3><div class="row">'+Object.keys(BR_NAME).map(b=>'<label>'+esc(BR_NAME[b])+'<input id="tb_'+b+'" type="number" min="1" max="200" value="'+esc(t[b]||'')+'"></label>').join('')+'</div>'
     +'<h3>⏱ เวลาต่อโต๊ะ (นาที)</h3><input id="cMin" type="number" min="10" max="600" value="'+minutes()+'" style="max-width:160px">'
     +'<h3 style="margin-top:12px">🎫 แพ็กเกจ</h3>'+pks.map((p,i)=>'<div class="row"><input id="pkc_'+i+'" value="'+esc(p.code)+'" placeholder="รหัส (a-z)"><input id="pkn_'+i+'" value="'+esc(p.name)+'" placeholder="ชื่อที่ลูกค้าเห็น"><input id="pkl_'+i+'" type="color" value="'+esc(p.color||'#5B7FA6')+'" style="max-width:60px"></div>').join('')
     +'<div style="font-size:12px;color:var(--mut)">รหัสแพ็กเกจต้องคงเดิม (เมนูผูกไว้กับรหัส) เปลี่ยนได้แค่ชื่อ/สี</div>'
@@ -460,12 +584,19 @@ function renderSettings(){
     +'<div class="btns" style="margin-top:14px"><button class="b pri" onclick="cfgSave()">💾 บันทึกตั้งค่า</button><button class="b gray" onclick="logout()">ออกจากระบบ</button></div></div>'
     +'<div class="note">รอบโต๊ะที่เปิดอยู่ใช้เวลาที่ตั้งตอนสร้าง การเปลี่ยนเวลาที่นี่มีผลกับ QR ที่สร้างใหม่เท่านั้น</div>';
 }
+/* จำนวนโต๊ะ: อ่านค่าล่าสุดในฐานข้อมูลก่อน แล้วแก้เฉพาะสาขาที่มีช่องบนจอ (tb) — สาขาอื่นในค่าเดิม (ตั้งจากอีกเครื่อง/สาขาที่ปิดไปแล้ว) ไม่หาย */
+async function tablesMerged(tb){
+  const cur=await api('GET','qr_settings?select=value&key=eq.tables');
+  let t={}; try{ t=cur&&cur[0]&&cur[0].value?JSON.parse(cur[0].value):{}; }catch(e){ t={}; }
+  return {...(t&&typeof t==='object'&&!Array.isArray(t)?t:{}),...tb};
+}
 async function cfgSave(){
-  const tables={}; Object.keys(BR_NAME).forEach(b=>{tables[b]=parseInt($('#tb_'+b).value,10)||0;});
+  const tb={}; Object.keys(BR_NAME).forEach(b=>{const el=$('#tb_'+b); if(el)tb[b]=parseInt(el.value,10)||0;});
   const pks=packages().map((p,i)=>({code:($('#pkc_'+i).value||p.code).trim().toLowerCase(),name:$('#pkn_'+i).value.trim()||p.code,color:$('#pkl_'+i).value}));
-  const rows=[{key:'tables',value:JSON.stringify(tables)},{key:'minutes',value:String(parseInt($('#cMin').value,10)||110)},{key:'packages',value:JSON.stringify(pks)},
+  const rows=[{key:'tables',value:JSON.stringify(tb)},{key:'minutes',value:String(parseInt($('#cMin').value,10)||110)},{key:'packages',value:JSON.stringify(pks)},
     {key:'menu_url',value:$('#cUrl').value.trim()},{key:'pin',value:$('#cPin').value.trim()||'1234'}];
-  try{ await api('POST','qr_settings?on_conflict=key',rows.map(r=>({...r,updated_at:new Date().toISOString()})),'resolution=merge-duplicates,return=minimal');
+  try{ rows[0].value=JSON.stringify(await tablesMerged(tb));
+    await api('POST','qr_settings?on_conflict=key',rows.map(r=>({...r,updated_at:new Date().toISOString()})),'resolution=merge-duplicates,return=minimal');
     rows.forEach(r=>S.cfg[r.key]=r.value); localStorage.setItem('jjqr_pin',S.cfg.pin); toast('✅ บันทึกตั้งค่าแล้ว'); render(); }
   catch(e){toast('บันทึกไม่สำเร็จ — '+String(e.message).slice(0,100),true);}
 }

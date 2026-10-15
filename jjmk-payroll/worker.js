@@ -27,10 +27,10 @@
  *    LINE_TOKEN     = Channel access token (LINE Developers → Messaging API)
  *    LINE_GROUP_ID  = Cxxxxxxxx... (พิมพ์ "groupid" ในกลุ่มหลังเชิญบอทเพื่อดู)
  *    LATE_GRACE_MIN = 5            (ไม่บังคับ — เกินกี่นาทีถึงนับว่าสาย)
- *    BRANCH_MAP     = (ไม่บังคับ) แมพเครื่องสแกน -> สาขา กรณี dept ว่าง
- *                     รูปแบบ:  SN1=ลาดพร้าว,SN2=รัชดา
- *                     เช่น:    GG1207018=ลาดพร้าว,GG9999999=รัชดา
- *                     (ดูรายชื่อเครื่องที่เคยส่งข้อมูลได้ที่ /report/check)
+ *    BRANCH_MAP     = (ไม่บังคับ) แมพเครื่องสแกน -> สาขา (ทับ devices.branch)
+ *                     รูปแบบ:  SN1=รหัสสาขา,SN2=รหัสสาขา   (ต้องเป็น "รหัส" แบบเดียวกับ employees.branch ไม่ใช่ชื่อไทย)
+ *                     เช่น:    GG1207018=JJLP,GG9999999=JJRD
+ *                     (ดูรายชื่อเครื่องที่เคยส่งข้อมูลได้ที่ /report/check · ปกติผูกเครื่องในแอปเงินเดือน ⚙️ ตั้งค่า → 📟 เครื่องสแกน)
  *
  *  ตั้ง Webhook URL ใน LINE Developers:
  *    https://<worker>/line-webhook   (เปิด Use webhook)
@@ -183,19 +183,58 @@ async function runScheduled(event, env) {
 
 /* =============================================================
  *  เอนจินรายงาน — พอร์ตตรรกะชุดเดียวกับหน้า index (Today Dashboard)
- *  · สาขา: employees.branch (JJLP/JJRD/OFFICE) · เครื่องสแกน: devices.branch
+ *  · สาขา: employees.branch (JJLP/JJRD/JJCK/OFFICE + สาขาใหม่จากทะเบียน pnl_branches) · เครื่องสแกน: devices.branch
  *  · จุดตัดวัน cutoff_hour (ตอกก่อนตี 6 = กะของเมื่อวาน)
  *  · จับกะจากเวลาออก (ตอกออกใกล้เวลาเลิกกะไหนสุด = กะนั้น) + กะล็อกรายคน + dept_only
  *  · อนุโลมเข้า/ออก ตาม in_grace / out_grace ของแต่ละกะ
  *  · Parttime = work_mode 'hourly' · ออฟฟิศสแกนที่ลาดพร้าว = ไม่ใช่ข้ามสาขา
  * ============================================================= */
 const BRT = { JJLP: 'ลาดพร้าว', JJRD: 'รัชดา', JJCK: 'ครัวกลาง', OFFICE: 'ออฟฟิศ' };
-const brName = (b) => BRT[b] || (b || 'ไม่ระบุสาขา');
+const brName = (b) => BRT[b] || REG.names[b] || (b || 'ไม่ระบุสาขา');
+
+/* ---------- ทะเบียนสาขากลาง (ตาราง pnl_branches — ปุ่ม 🏪 เปิดสาขาใหม่ ใน JJ Access เพิ่มให้) — 2026-10-15 ----------
+ *  สาขาเดิมใช้ชื่อ/ลำดับใน BRT เหมือนเดิม · สาขาหน้าร้านใหม่ได้ชื่อสั้นจากทะเบียน + เรียงต่อจากรัชดา (ก่อนครัวกลาง/ออฟฟิศ)
+ *  อ่านรอบละครั้ง (จำไว้ 5 นาที) ด้วยคีย์เดิม SUPABASE_KEY · อ่านไม่ได้/ยังไม่รัน SQL = ใช้ BRT อย่างเดียว (เหมือนเดิมทุกอย่าง) */
+let REG = { names: {}, stores: [], at: 0 };
+function branchReg(rows) {
+  const names = {}, list = [];
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const code = String((r && r.code) || '').trim().toUpperCase();
+    if (!/^[A-Z][A-Z0-9_]{1,11}$/.test(code)) continue;
+    const kind = ['store', 'office', 'kitchen'].includes(r.kind) ? r.kind
+      : (code === 'JJOF' || code === 'OFFICE') ? 'office' : code === 'JJCK' ? 'kitchen' : r.is_central ? 'office' : 'store';
+    const name = String(r.name || '').trim();
+    names[code] = (String(r.short || '').trim() || name.replace(/^สาขา\s*/, '') || code).slice(0, 30);
+    if (kind === 'store' && r.active !== false) list.push({ code, sort: isFinite(+r.sort) ? +r.sort : 0 });
+  }
+  list.sort((a, b) => (a.sort - b.sort) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+  return { names, stores: list.map((x) => x.code) };
+}
+async function loadBranchReg(env) {
+  if (Date.now() - REG.at < 5 * 60000) return REG;
+  let rows = [];
+  try {
+    rows = await safeJson(await sb(env, 'pnl_branches?select=*&order=sort.asc,code.asc', { method: 'GET' }));
+    if (!rows.length) rows = await safeJson(await sb(env, 'pnl_branches?select=*&order=code.asc', { method: 'GET' }));
+  } catch (_) { rows = []; }
+  if (rows.length) REG = branchReg(rows);   // อ่านไม่ได้ = ใช้ของเดิม (ครั้งแรก = BRT อย่างเดียว)
+  REG.at = Date.now();
+  return REG;
+}
+/* ลำดับสาขา: ลาดพร้าว รัชดา → สาขาหน้าร้านใหม่ (ตามทะเบียน) → ครัวกลาง ออฟฟิศ → รหัสอื่นเรียงตามตัวอักษร */
+const OLD_BR = ['JJLP', 'JJRD', 'JJCK', 'OFFICE'];
+const mainOrder = () => ['JJLP', 'JJRD', ...REG.stores.filter((b) => !OLD_BR.includes(b)), 'JJCK', 'OFFICE'];
+function branchOrder(codes) {
+  const set = new Set(codes), main = mainOrder();
+  const rest = [...set].filter((b) => !main.includes(b)).sort();
+  return [...main.filter((b) => set.has(b)), ...rest];
+}
 
 /* ---------- โหลดข้อมูลของ 1 วันทำงาน (business day) ---------- */
 async function loadDay(env, day) {
   const d2 = nextDayStr(day);
-  const [st, defsRaw, empRows, devRows, holiRows, pRows] = await Promise.all([
+  const [, st, defsRaw, empRows, devRows, holiRows, pRows] = await Promise.all([
+    loadBranchReg(env),
     safeJson(await sb(env, 'payroll_settings?select=cutoff_hour&id=eq.1', { method: 'GET' })),
     safeJson(await sb(env, 'shifts?select=*&order=sort_order', { method: 'GET' })),
     safeJson(await sb(env, 'employees?select=*&active=eq.true&limit=2000', { method: 'GET' })),
@@ -410,14 +449,12 @@ async function usualShifts(env, data) {
   return usual;
 }
 
-/* ---------- ลำดับสาขา: หลัก 3 สาขาก่อน แล้วตามด้วยสาขาใหม่ในอนาคต ---------- */
+/* ---------- ลำดับสาขา: สาขาหลักก่อน (ลาดพร้าว รัชดา + สาขาใหม่จากทะเบียน → ครัวกลาง ออฟฟิศ) แล้วตามด้วยรหัสอื่น ---------- */
 function branchList(data, recs) {
   const set = new Set();
   for (const e of data.emps.values()) if (e.branch) set.add(e.branch);
   for (const r of recs.values()) if (r.wb) set.add(r.wb);
-  const main = ['JJLP', 'JJRD', 'JJCK', 'OFFICE'];
-  const rest = [...set].filter((b) => !main.includes(b)).sort();
-  return [...main.filter((b) => set.has(b)), ...rest];
+  return branchOrder([...set]);
 }
 
 /* =============================================================
@@ -586,24 +623,39 @@ async function runReportCheck(env) {
   for (const ts of data.byEmp.values()) for (const t of ts) if (t.sn) seen.set(t.sn, (seen.get(t.sn) || 0) + 1);
   if (!seen.size) o.push('  (วันนี้ยังไม่มีสแกน)');
   for (const [sn, n] of seen)
-    o.push(`  • ${sn} : ${n} ครั้ง  ->  ${data.devBranch[sn] ? brName(data.devBranch[sn]) : '⚠️ ยังไม่ผูกสาขา! ไปที่ตาราง devices ใส่คอลัมน์ branch = JJLP หรือ JJRD (หรือตั้ง BRANCH_MAP)'}`);
+    o.push(`  • ${sn} : ${n} ครั้ง  ->  ${data.devBranch[sn] ? brName(data.devBranch[sn]) : `⚠️ ยังไม่ผูกสาขา! ไปที่ตาราง devices ใส่คอลัมน์ branch = ${storeHint()} (หรือตั้ง BRANCH_MAP)`}`);
 
   o.push('', '[ ผลคำนวณวันนี้ ]');
-  const cnt = { JJLP: 0, JJRD: 0, OFFICE: 0, other: 0 };
+  o.push(`  เข้างาน: ${checkCounts(data, recs)}`);
   let lateN = 0, ptN = 0, workingN = 0;
   for (const r of recs.values()) {
-    const e = data.emps.get(r.code);
-    const wb = r.wb || (e && e.branch) || '';
-    if (cnt[wb] != null) cnt[wb]++; else cnt.other++;
     if (r.lateMin > 0) lateN++;
     if (r.mode === 'hourly') ptN++;
     if (r.working) workingN++;
   }
-  o.push(`  เข้างาน: ลาดพร้าว ${cnt.JJLP} · รัชดา ${cnt.JJRD} · ออฟฟิศ ${cnt.OFFICE}${cnt.other ? ` · ไม่ระบุ ${cnt.other}` : ''}`);
   o.push(`  สาย ${lateN} คน · Parttime ${ptN} คน · กำลังทำงานอยู่ (ยังไม่ตอกออก) ${workingN} คน`);
 
   o.push('', 'พรีวิวข้อความจริง: /report/daily และ /report/shift (เติม ?send=1 เพื่อส่งเข้ากลุ่ม)');
   return o.join('\n');
+}
+
+/* นับคนเข้างานต่อสาขา (หน้า /report/check) — ลาดพร้าว/รัชดา/ออฟฟิศ ขึ้นเสมอแบบเดิม + ทุกสาขาที่มีคนสแกน (ครัวกลาง/สาขาใหม่ — เดิมตกไปอยู่ "ไม่ระบุ") */
+function checkCounts(data, recs) {
+  const cnt = {};
+  let none = 0;
+  for (const r of recs.values()) {
+    const e = data.emps.get(r.code);
+    const wb = r.wb || (e && e.branch) || '';
+    if (wb) cnt[wb] = (cnt[wb] || 0) + 1; else none++;
+  }
+  const always = ['JJLP', 'JJRD', 'OFFICE'];
+  const show = branchOrder([...always, ...Object.keys(cnt)]).filter((b) => cnt[b] || always.includes(b));
+  return show.map((b) => `${brName(b)} ${cnt[b] || 0}`).join(' · ') + (none ? ` · ไม่ระบุ ${none}` : '');
+}
+/* รหัสสาขาหน้าร้านที่ใส่ใน devices.branch ได้ (ข้อความเตือนหน้า /report/check) */
+function storeHint() {
+  const sc = mainOrder().filter((b) => b !== 'JJCK' && b !== 'OFFICE');
+  return sc.length > 1 ? sc.slice(0, -1).join(', ') + ' หรือ ' + sc[sc.length - 1] : sc[0];
 }
 
 /* ============ ตัวช่วยเล็กๆ ============ */

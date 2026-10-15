@@ -329,6 +329,110 @@
   window.JJLogin=JJLogin;
 })();
 </script>
+<!-- JJBR-BEGIN ทะเบียนสาขากลาง · บล็อกนี้ต้องเหมือนกันทุกไฟล์ทุกตัวอักษร (แก้ที่ไฟล์ใดไฟล์หนึ่งแล้ว sync ด้วยสคริปต์) -->
+<script>
+/* JJBR — ทะเบียนสาขากลาง (ตาราง pnl_branches) ใช้ร่วมทุกแอพ (เจ้าของสั่ง 2026-10-15: "เพิ่มสาขาใหม่ ให้เพิ่มไปในทุกระบบเลย แบบปุ่มเดียว")
+   · สาขาหน้าร้านมาจากตาราง pnl_branches (ปุ่ม 🏪 เปิดสาขาใหม่ ใน JJ Access เพิ่มให้) · ครัวกลาง JJCK / ออฟฟิศ OFFICE เป็นหน่วยงานคงที่
+   · ไม่ต้องรอเน็ต: เริ่มจากแคชในเครื่อง (localStorage.jjbr_cache) → ไม่มีแคช = JJRD/JJLP · JJBR.load() อ่านของจริงแล้วแจ้ง onChange
+   · ออฟฟิศ: บัญชี/สิทธิ์ใช้ OFFICE · P&L ใช้ JJOF → JJBR.canon('JJOF')='OFFICE' · JJBR.pnl('OFFICE')='JJOF'
+   · แอพเดิมยังใช้ชื่อ/สีของตัวเองกับสาขาเดิมได้ — ใช้ JJBR.extra(รหัสที่แอพรู้จักแล้ว) เติมเฉพาะสาขาที่แอพยังไม่รู้จัก */
+(function(){
+  var VER='2026-10-15.1', CK='jjbr_cache', MAXAGE=90*864e5;
+  var BASE=[
+    {code:'JJRD',name:'สาขารัชดา',short:'รัชดา',kind:'store',sort:1,stk_id:'b19f0a17b4472'},
+    {code:'JJLP',name:'สาขาลาดพร้าว',short:'ลาดพร้าว',kind:'store',sort:2,stk_id:'b19f0a17b448212'}];
+  var UNITS=[
+    {code:'JJCK',name:'ครัวกลาง',short:'ครัวกลาง',kind:'kitchen',sort:900},
+    {code:'OFFICE',name:'ออฟฟิศ',short:'ออฟฟิศ',kind:'office',sort:901}];
+  var STK={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};
+  var PALETTE=['#2E8B57','#8E44AD','#D35400','#16A085','#2C3E50','#B7950B','#C0392B','#1F618D'];
+  function s(v,n){ return v==null?'':String(v).trim().slice(0,n||80); }
+  function norm(r){
+    if(!r||typeof r!=='object')return null;
+    var code=s(r.code,12).toUpperCase();
+    if(!/^[A-Z][A-Z0-9_]{1,11}$/.test(code))return null;
+    var kind=r.kind==='store'||r.kind==='office'||r.kind==='kitchen'?r.kind:
+      (code==='JJOF'||code==='OFFICE'?'office':code==='JJCK'?'kitchen':r.is_central?'office':'store');
+    var name=s(r.name||r.display_name,60)||code;
+    var short=s(r.short,30)||name.replace(/^สาขา\s*/,'')||code;
+    return {code:code,name:name,short:short,kind:kind,sort:isFinite(+r.sort)?+r.sort:0,
+      stk_id:s(r.stk_id,40)||STK[code]||'',color:/^#[0-9A-Fa-f]{6}$/.test(s(r.color))?s(r.color):'',
+      active:r.active!==false,is_central:kind!=='store',tax_branch:/^[0-9]{5}$/.test(s(r.tax_branch))?s(r.tax_branch):'',
+      addr:s(r.addr,300),opened_on:/^\d{4}-\d{2}-\d{2}/.test(s(r.opened_on))?s(r.opened_on).slice(0,10):''};
+  }
+  function clean(arr){
+    var out=[],seen={};
+    (Array.isArray(arr)?arr:[]).forEach(function(r){ var x=norm(r); if(x&&!seen[x.code]){seen[x.code]=1;out.push(x);} });
+    return out;
+  }
+  function bySort(a,b){ return (a.sort-b.sort)||(a.code<b.code?-1:a.code>b.code?1:0); }
+  var J={VER:VER,rows:clean(BASE),src:'base',cols:false,at:0,_cb:[],_p:null};
+  try{
+    var c=JSON.parse(localStorage.getItem(CK)||'null');
+    if(c&&Array.isArray(c.rows)&&c.rows.length&&Date.now()-(+c.t||0)<MAXAGE){ J.rows=clean(c.rows); J.src='cache'; J.cols=!!c.cols; J.at=+c.t||0; }
+  }catch(e){}
+  /* สาขาหน้าร้านที่เปิดอยู่ (เรียงตาม sort แล้วรหัส) */
+  J.stores=function(all){ return J.rows.filter(function(r){ return r.kind==='store'&&(all||r.active); }).sort(bySort); };
+  J.storeCodes=function(all){ return J.stores(all).map(function(r){ return r.code; }); };
+  /* สาขาหน้าร้าน + ครัวกลาง + ออฟฟิศ (ตัวเลือก "ประจำที่"/สิทธิ์รายสาขา) — ใช้รหัส OFFICE ไม่ใช่ JJOF */
+  J.units=function(){ return J.stores().concat(UNITS.map(function(u){ var r=J.get(u.code); return r&&r.kind===u.kind?Object.assign({},u,{name:r.name||u.name,short:r.short||u.short}):u; })); };
+  J.unitCodes=function(){ return J.units().map(function(r){ return r.code; }); };
+  J.canon=function(c){ c=s(c,12).toUpperCase(); return c==='JJOF'?'OFFICE':c; };
+  J.pnl=function(c){ c=s(c,12).toUpperCase(); return c==='OFFICE'?'JJOF':c; };
+  J.get=function(c){
+    c=s(c,12).toUpperCase(); if(!c)return null;
+    var r=null,i;
+    for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===c){ r=J.rows[i]; break; } }
+    if(!r&&(c==='OFFICE'||c==='JJOF')){ for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===(c==='OFFICE'?'JJOF':'OFFICE')){ r=J.rows[i]; break; } } }
+    if(!r){ for(i=0;i<UNITS.length;i++){ if(UNITS[i].code===J.canon(c)){ r=UNITS[i]; break; } } }
+    return r;
+  };
+  J.known=function(c){ return !!J.get(c); };
+  J.isStore=function(c){ var r=J.get(c); return !!(r&&r.kind==='store'); };
+  J.name=function(c,fb){ var r=J.get(c); return r?r.name:(fb!=null?fb:s(c)); };
+  J.short=function(c,fb){ var r=J.get(c); return r?r.short:(fb!=null?fb:s(c)); };
+  J.stk=function(c){ var r=J.get(c); return (r&&r.stk_id)||STK[s(c,12).toUpperCase()]||''; };
+  J.byStk=function(id){ id=s(id,40); if(!id)return null; for(var i=0;i<J.rows.length;i++){ if(J.rows[i].stk_id===id)return J.rows[i]; } for(var k in STK){ if(STK[k]===id)return J.get(k); } return null; };
+  J.color=function(c,i){ var r=J.get(c); if(r&&r.color)return r.color; var st=J.storeCodes(true),k=st.indexOf(s(c,12).toUpperCase()); return PALETTE[(k<0?(i||0):k)%PALETTE.length]; };
+  /* สาขาหน้าร้านที่แอพยังไม่รู้จัก (known = รายการรหัส หรือ object ที่มีรหัสเป็น key) */
+  J.extra=function(known){
+    var have={}; (Array.isArray(known)?known:Object.keys(known||{})).forEach(function(k){ have[s(k,12).toUpperCase()]=1; });
+    return J.stores().filter(function(r){ return !have[r.code]; });
+  };
+  /* รหัสสาขาใหม่ที่ใช้ได้: อังกฤษพิมพ์ใหญ่ล้วน 2–8 ตัว (ใช้เป็นตัวหน้าเลขใบกำกับภาษีด้วย) */
+  J.codeOk=function(c){ return /^[A-Z]{2,8}$/.test(s(c,12)); };
+  J.onChange=function(fn){ if(typeof fn==='function')J._cb.push(fn); };
+  /* อ่านทะเบียนจริง (ไม่ throw) — url/key ของ Supabase · opts.force = อ่านใหม่แม้เพิ่งอ่าน · คืน rows */
+  J.load=function(url,key,opts){
+    opts=opts||{};
+    if(J._p&&!opts.force)return J._p;
+    if(J.src==='db'&&!opts.force&&Date.now()-J.at<60000)return Promise.resolve(J.rows);
+    url=s(url,300).replace(/\/+$/,''); key=s(key,500);
+    if(!url||!key||typeof fetch!=='function')return Promise.resolve(J.rows);
+    var get=function(q){
+      var ac=typeof AbortController==='function'?new AbortController():null, tm=ac?setTimeout(function(){ ac.abort(); },opts.timeout||8000):0;
+      return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
+        .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
+    };
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
+      .then(function(d){
+        if(!Array.isArray(d))throw new Error('bad');
+        var rows=clean(d), before=JSON.stringify(J.rows);
+        if(!rows.some(function(r){ return r.kind==='store'; }))rows=rows.concat(clean(BASE)); /* ตารางว่าง/มีแต่ออฟฟิศ = ใช้สาขาเดิมไปก่อน */
+        J.rows=rows; J.src='db'; J.at=Date.now(); J.cols=d.length>0&&d.every(function(r){ return r&&Object.prototype.hasOwnProperty.call(r,'kind'); });
+        try{ localStorage.setItem(CK,JSON.stringify({t:J.at,cols:J.cols,rows:d})); }catch(e){}
+        if(JSON.stringify(J.rows)!==before)J._cb.forEach(function(fn){ try{ fn(J); }catch(e){ if(window.console)console.error(e); } });
+        return J.rows;
+      })
+      .catch(function(){ return J.rows; })
+      .then(function(r){ J._p=null; return r; });
+    return J._p;
+  };
+  window.JJBR=J;
+})();
+</script>
+<!-- JJBR-END -->
 </head>
 <body>
 
@@ -658,30 +762,45 @@ $('#hOut').onclick=doLogout;
 /* ================= เข้าแอพ + สาขา ================= */
 function paintTabBranch(){
   const el=$('#tabBranch');if(!el)return;
-  const b=(BRANCHES.find(x=>x.id===CUR_B)||{}).name||'';
+  const b=brName(BRANCHES.find(x=>x.id===CUR_B));
   el.textContent=b?' · '+b:'';
 }
 /* ---- เห็นเฉพาะสาขา (เจ้าของสั่ง 2026-10-02 "อยากให้ทุกระบบกำหนดได้ว่าใครเห็นของสาขาไหน แบบ payroll") ----
    ตั้งที่ 🔑 JJ Access → กล่องซ่อมบำรุง → apps.maint._br = 'JJLP,JJCK' · ไม่ตั้ง = ทุกสาขา
    · ใช้กับบัญชีกลาง (pnl_users) เท่านั้น · ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ · apps ว่าง (ยังไม่เคยตั้งสิทธิ์) = ไม่จำกัด
    · บัญชีเดิม app_users ใช้ branch_ids ของตัวเองเหมือนเดิม
-   · ตาราง branches ไม่มีรหัสสาขา → เดารหัสจากชื่อ (brCode) · สาขาที่เดาไม่ได้ = ซ่อนจากคนที่ถูกจำกัดสาขา
+   · ตาราง branches หารหัสสาขาจาก: สาขาใหม่ = ช่อง code / ทะเบียนสาขากลาง (pnl_branches.stk_id) → 4 รหัสเดิม = ลำดับเดิม (id → เดาจากชื่อ ครัวกลาง/ออฟฟิศก่อน → id สต๊อก) → ช่อง code
+     สาขาที่หารหัสไม่ได้ = ซ่อนจากคนที่ถูกจำกัดสาขา
+   · 🏪 สาขาใหม่ (ปุ่มเปิดสาขาใหม่ใน JJ Access → ทะเบียนสาขากลาง JJBR) ตั้งสิทธิ์ได้เลย · ตั้ง _br ไว้แต่ไม่เหลือรหัสที่รู้จัก = ไม่เห็นสาขาไหน (ห้ามกลายเป็นทุกสาขา)
    ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
 const ALL_BR=['JJLP','JJRD','JJCK','OFFICE'];
 const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};   // id สาขาเดิมของแอพนับสต๊อก (สำรองเผื่อชื่อไม่ตรง)
-let SCOPE=null;   // null = ทุกสาขา · ['JJLP'] = เฉพาะสาขาเหล่านี้
+const ALL_BR0=ALL_BR.slice();   // รหัสเดิมของแอพ — ชื่อสาขาเดิมใช้ชื่อจากตาราง branches เหมือนเดิม
+/* สาขาใหม่จากทะเบียนสาขากลาง → เติมเข้า ALL_BR/STK_BR เดิม (แก้ของเดิมในที่) · อ่านไม่ได้ = แคชในเครื่อง → JJRD/JJLP แบบเดิม */
+function brSync(){
+  JJBR.unitCodes().forEach(c=>{if(!ALL_BR.includes(c))ALL_BR.push(c);});
+  JJBR.stores().forEach(r=>{if(r.stk_id&&!STK_BR[r.code]&&!Object.values(STK_BR).includes(r.stk_id))STK_BR[r.code]=r.stk_id;});
+}
+brSync();JJBR.onChange(brSync);
+let SCOPE=null,SCOPE_RAW=[];   // null = ทุกสาขา · ['JJLP'] = เฉพาะสาขาเหล่านี้ · [] = ตั้งไว้แต่ไม่มีรหัสที่รู้จัก (ไม่เห็นสาขาไหน)
 function applyScope(prof){
-  SCOPE=null;
+  SCOPE=null;SCOPE_RAW=[];
   if(!prof||prof.kind!=='central'||prof.role==='admin'||prof.role==='owner')return;
   const apps=prof.apps;
   if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return;   // ยังไม่เคยตั้งสิทธิ์ = ไม่จำกัด
   const m=(apps.maint&&typeof apps.maint==='object')?apps.maint:{};
-  const br=String(m._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
-  if(br.length)SCOPE=br;
+  const raw=String(m._br||'').split(',').map(x=>x.trim()).filter(Boolean);
+  if(!raw.length)return;
+  SCOPE_RAW=raw;SCOPE=raw.map(x=>JJBR.canon(x)).filter((x,i,a)=>ALL_BR.includes(x)&&a.indexOf(x)===i);   // JJOF/ตัวเล็ก = รหัสเดียวกัน · ไม่รู้จักสักรหัส = [] (fail closed)
 }
-function brCode(b){   // แถวในตาราง branches → รหัสสาขา (JJLP/JJRD/JJCK/OFFICE) · ไม่รู้จัก = ''
+const scopeText=()=>(SCOPE&&SCOPE.length?SCOPE:SCOPE_RAW).join(',');
+function brCode(b){   // แถวในตาราง branches → รหัสสาขา (JJLP/JJRD/JJCK/OFFICE/สาขาในทะเบียน) · ไม่รู้จัก = ''
   if(!b)return'';
-  const c=String(b.code||'').trim().toUpperCase();if(ALL_BR.includes(c))return c;
+  const isNew=x=>!!x&&ALL_BR.includes(x)&&!ALL_BR0.includes(x);   // สาขาใหม่จากทะเบียน (ไม่ใช่ 4 รหัสเดิม)
+  const c=JJBR.canon(b.code);if(isNew(c))return c;   // ช่อง code (ปุ่มเปิดสาขาใหม่ใส่ให้) — ชนะการเดาจากชื่อ
+  const r=JJBR.byStk(b.id),rc=r?JJBR.canon(r.code):'';if(isNew(rc))return rc;   // ทะเบียนสาขากลาง: pnl_branches.stk_id = branches.id
+  /* 4 รหัสเดิม = ลำดับเดิมทุกอย่าง · ช่อง code ที่ jjmk-branches.sql เติมให้ไล่รัชดา/ลาดพร้าวก่อนครัวกลาง/ออฟฟิศ
+     (ชื่อ "ครัวกลาง รัชดา" จะได้ JJRD) จึงเชื่อทีหลังสุด — เฉพาะแถวที่ชื่อ/รหัสสต๊อกไม่บอกอะไรเลย */
   const id=String(b.id||'').trim().toUpperCase();if(ALL_BR.includes(id))return id;
   const n=String(b.name||'');
   if(/ครัวกลาง|central\s*kitchen/i.test(n))return'JJCK';   // เช็คครัวกลาง/ออฟฟิศก่อน เผื่อชื่อมีทำเลต่อท้าย
@@ -689,7 +808,13 @@ function brCode(b){   // แถวในตาราง branches → รหั�
   if(/รัชดา|ratchada/i.test(n))return'JJRD';
   if(/ลาดพร้าว|lad\s*prao|lat\s*phrao/i.test(n))return'JJLP';
   for(const k in STK_BR)if(STK_BR[k]===b.id)return k;
-  return'';
+  return ALL_BR0.includes(c)?c:(ALL_BR0.includes(rc)?rc:'');
+}
+/* ชื่อที่โชว์: สาขาเดิมใช้ชื่อในตาราง branches เหมือนเดิม · สาขาใหม่ใช้ชื่อจากทะเบียนสาขากลาง */
+function brName(b){
+  if(!b)return'';
+  const c=brCode(b);
+  return c&&!ALL_BR0.includes(c)&&JJBR.isStore(c)?JJBR.name(c,b.name||c):(b.name||'');
 }
 function accessibleBranches(){
   if(isAdmin())return BRANCHES;
@@ -707,13 +832,15 @@ function showNoBranch(prof){   // ได้สิทธิ์เฉพาะส�
   el.style.display='';
   el.innerHTML=`<div class="card" style="text-align:center;padding:22px 16px">
     <b style="font-family:Prompt;font-size:1.05rem">🔒 ยังไม่มีสาขาที่เปิดให้บัญชีนี้</b>
-    <p class="hint" style="font-size:.9rem;margin:8px 0 0">บัญชี <b>${escapeHtml(prof.name||prof.username||'')}</b> ได้สิทธิ์เห็นเฉพาะ ${escapeHtml((SCOPE||[]).join(', '))} ซึ่งยังไม่มีในระบบซ่อมบำรุง — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access</p>
+    <p class="hint" style="font-size:.9rem;margin:8px 0 0">บัญชี <b>${escapeHtml(prof.name||prof.username||'')}</b> ได้สิทธิ์เห็นเฉพาะ ${escapeHtml(scopeText().split(',').join(', '))} ซึ่งยังไม่มีในระบบซ่อมบำรุง — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access</p>
   </div>`;
 }
 async function enterApp(prof){
   PROF=prof;applyScope(prof);
   {const nb=$('#noBr');if(nb)nb.style.display='none';}
-  const {data,error}=await sb.from('branches').select('*').order('sort');
+  const [{data,error}]=await Promise.all([sb.from('branches').select('*').order('sort'),
+    JJBR.load(SB_URL,SB_ANON,{timeout:3000})]);   // ทะเบียนสาขากลาง (ไม่ throw · รอนานสุด ~6 วิ = 3 วิ × ลองซ้ำ 1 ครั้ง · อ่านไม่ได้ = แคช/JJRD+JJLP แบบเดิม)
+  brSync();applyScope(prof);   // สาขาใหม่: สิทธิ์ _br + รหัสสต๊อก — ก่อนกรองสาขาที่เห็น
   if(error){loginErr('โหลดสาขาไม่ได้: '+error.message);return;}
   BRANCHES=data||[];
   const acc=accessibleBranches();
@@ -722,13 +849,13 @@ async function enterApp(prof){
     :((prof.branch_ids&&prof.branch_ids[0]&&acc.some(b=>b.id===prof.branch_ids[0]))?prof.branch_ids[0]:(acc[0]&&acc[0].id));
   const RN={admin:'ผู้ดูแลระบบ',owner:'เจ้าของ',manager:'ผู้จัดการ',staff:'พนักงาน'};
   $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(RN[prof.role]||prof.role||'พนักงาน')
-    +(SCOPE?' · 🔒 '+SCOPE.join(','):'');
+    +(SCOPE?' · 🔒 '+scopeText():'');
   if(!CUR_B&&SCOPE&&BRANCHES.length){showNoBranch(prof);return;}
   if(!CUR_B){loginErr('ยังไม่มีสาขาในระบบ');return;}
   $('#login').classList.remove('on');
   $('#hdr').style.display='flex';$('#main').style.display='block';
   const sel=$('#hBranch');
-  if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
+  if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(brName(b))}</option>`).join('');
     sel.onchange=()=>{if(!brOk(sel.value)){sel.value=CUR_B;toast(NO_BR_MSG);return;}
       CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}
       paintTabBranch();maintLoad();if(TAB==='asset')astLoad();};}
@@ -1024,9 +1151,9 @@ function maintManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์ตั้งค่างาน');return;}
   if(!brOk(CUR_B)){toast(NO_BR_MSG);return;}
   const acc=accessibleBranches();
-  const bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
+  const bname=brName(acc.find(b=>b.id===CUR_B));
   const ov=document.createElement('div');ov.className='overlay on';
-  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(brName(b))}</label>`).join('');
   ov.innerHTML=`<div class="sheet">
     <div class="sheet-head"><h3>⚙️ จัดการงานบำรุงรักษา</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
@@ -1317,9 +1444,9 @@ function astPhotoOverlay(a,r){
 function astManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์จัดการรายการอุปกรณ์');return;}
   if(!brOk(CUR_B)){toast(NO_BR_MSG);return;}
-  const acc=accessibleBranches(),bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
+  const acc=accessibleBranches(),bname=brName(acc.find(b=>b.id===CUR_B));
   const ov=document.createElement('div');ov.className='overlay on';
-  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(brName(b))}</label>`).join('');
   ov.innerHTML=`<div class="sheet">
     <div class="sheet-head"><h3>⚙️ จัดการรายการอุปกรณ์</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
