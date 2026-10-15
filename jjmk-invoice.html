@@ -174,6 +174,7 @@
     .actions{gap:8px;}
     .toast{bottom:calc(16px + env(safe-area-inset-bottom));font-size:13.5px;}
     #sigInfo,#nasSigState{font-size:13.5px;}   /* บรรทัดสถานะลายเซ็น/NAS — อ่านบนมือถือได้ */
+    #sigCard{scroll-margin-top:calc(64px + env(safe-area-inset-top));}   /* แตะแถบเตือนลายเซ็นแล้วหัวการ์ดไม่จมใต้แถบแท็บ */
     .codebox{height:170px;font-size:11px;}
     .logincard{margin-top:5vh;}
     .setupbox .steps{padding-left:18px;}
@@ -949,7 +950,7 @@ window.JJGate=(function(){
       </div>
       <div class="detail" id="sigInfo" style="margin-top:8px;line-height:1.6"></div>
       <div id="sigLegacyBox" class="notice" style="display:none;margin:10px 0 0">
-        เครื่องนี้เคยตั้งลายเซ็นของตัวเองไว้ก่อนมีระบบกลาง (คนละรูปกับที่ใช้อยู่ตอนนี้):
+        <span id="sigLegacyMsg">เครื่องนี้เคยตั้งลายเซ็นของตัวเองไว้ก่อนมีระบบกลาง (คนละรูปกับที่ใช้อยู่ตอนนี้):</span>
         <div style="margin:8px 0"><img id="sigLegacyImg" class="sigprev" alt="ลายเซ็นเดิมของเครื่องนี้"></div>
         <div class="actions" style="border:none;padding-top:0;margin-top:4px">
           <button class="btn btn-ghost btn-sm" id="sigLegacyUseBtn">ใช้รูปนี้แทน (ทุกเครื่อง)</button>
@@ -1396,21 +1397,23 @@ function nasSyncActive(){
    · แล้วเรียก sigRedoCheck (สั่ง NAS ทำ PDF ใหม่ให้มีลายเซ็น ครั้งเดียว เมื่อถึงเงื่อนไข) */
 async function refreshNasSync(){
   if(!dbReady) return;
+  var sa=null, reload=false;     // sa = signature_at ในระบบ (null = อ่านไม่ได้)
   try{
     var r=await sb.from('inv_settings').select('key,value').in('key',['nas_sync_last','nas_sync_info','nas_sync_ver','nas_sig_redo','signature_at']);
     if(!r.error){
-      var sa='', redo=null;
+      var redo=null; sa='';
       (r.data||[]).forEach(function(x){
         if(x.key==='signature_at') sa=String(x.value||'');
         else if(x.key==='nas_sig_redo') redo=x.value;
         else if(x.key==='nas_sync_last'||x.key==='nas_sync_info'||x.key==='nas_sync_ver') settings[x.key]=x.value; });
       if(redo) settings.nas_sig_redo=redo; else delete settings.nas_sig_redo;
       sigCheckedAt=Date.now();
-      if(currentUser && sigNeedsLoad(sa)) loadSignature().then(sigRedoCheck);   // มีคนเปลี่ยน/ลบลายเซ็นจากเครื่องอื่น
+      reload=!!currentUser && sigNeedsLoad(sa);
+      if(reload) loadSignature().then(sigRedoCheck);   // มีคนเปลี่ยน/ลบลายเซ็นจากเครื่องอื่น — สั่ง NAS ทำใหม่หลังโหลดเสร็จเท่านั้น
     }
   }catch(e){}
   try{ renderNasStatus(); renderMissingNas(); }catch(e){}   // หน้าจอพังห้ามขวางการเก็บไฟล์ (storePdf รอฟังก์ชันนี้อยู่)
-  sigRedoCheck();
+  if(!reload && sa!==null && sa===String(sigMeta.at||'')) sigRedoCheck();   // ลายเซ็นในเครื่องตรงกับระบบแล้วเท่านั้น
 }
 function nasBtnLabel(){ return (!nasHandle && nasSyncActive())?'🔄 ให้ NAS เก็บใหม่':'💾 บันทึกลง NAS'; }
 function agoText(min){
@@ -1726,14 +1729,34 @@ async function sigCache(u, at){
    (ก่อนหน้านี้แต่ละเครื่องตั้งคนละรูปได้ เครื่องแรกที่ย้ายขึ้นระบบชนะ) · รูปเดียวกับลายเซ็นกลาง = ไม่ต้องเก็บ */
 async function sigBackupLegacy(lu, cv){
   if(!lu) return;
-  if(cv && (lu===cv || (await sigNormalize(lu))===cv)) return;
+  if(cv){
+    var n=await sigNormalize(lu);
+    if(lu===cv || n===cv || (await sigSameLook(n||lu, cv))) return;   // รูปเดียวกัน (คนละเบราว์เซอร์เข้ารหัสต่างกัน) = ไม่ต้องเก็บ
+  }
   try{ if(!(await idbGet('sigLegacy'))) await idbSet('sigLegacy',lu); sigLegacyU=await idbGet('sigLegacy')||lu; }
   catch(e){ sigLegacyU=lu; }
+}
+/* รูปสองรูปหน้าตาเหมือนกันไหม — ขนาดต่างกันไม่เกิน 1 จุด + ย่อเหลือ 180×60 บนพื้นขาวแล้วต่างกันเฉลี่ย < 3/255
+   (เทียบไบต์ไม่ได้: Safari/Chrome ย่อและเข้ารหัส PNG ต่างกัน) · เทียบไม่ได้ = ถือว่าต่าง */
+function sigSameLook(a, b){
+  var load=function(u){ return new Promise(function(res){ var i=new Image(); i.onload=function(){ res(i); }; i.onerror=function(){ res(null); }; i.src=u; }); };
+  return Promise.all([load(a), load(b)]).then(function(im){
+    if(!im[0]||!im[1]) return false;
+    if(Math.abs(im[0].naturalWidth-im[1].naturalWidth)>1 || Math.abs(im[0].naturalHeight-im[1].naturalHeight)>1) return false;
+    var px=im.map(function(x){
+      var c=document.createElement('canvas'); c.width=180; c.height=60;
+      var g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,180,60); g.drawImage(x,0,0,180,60);
+      return g.getImageData(0,0,180,60).data;
+    });
+    var d=0; for(var i=0;i<px[0].length;i++) d+=Math.abs(px[0][i]-px[1][i]);
+    return d/px[0].length<3;
+  }).catch(function(){ return false; });
 }
 function sigUse(u, src, meta){
   meta=meta||{};
   sigDataUrl=u||null;
-  sigMeta={src:sigDataUrl?src:'none', at:meta.at||'', by:meta.by||'', err:meta.err||'', removed:!!meta.removed};
+  sigMeta={src:sigDataUrl?src:'none', at:meta.at||'', by:meta.by||'', err:meta.err||'', removed:!!meta.removed,
+           retry:!!meta.retry};   // retry = อ่านระบบพลาดชั่วคราว (ต้องลองใหม่ แม้ signature_at จะยังว่างเท่าเดิม)
   renderSig();
 }
 /* รูป (data URL / ไฟล์) → PNG ย่อให้พอดี SIG_BOX และไม่เกิน SIG_MAX_CHARS · อ่านไม่ได้ = null */
@@ -1794,9 +1817,11 @@ function loadSignature(){
   }
   return sigLoading.p;
 }
-/* ต้องโหลดลายเซ็นใหม่ไหม (sa = signature_at ในระบบตอนนี้) — โหลดพลาดอยู่ = ไม่ลองถี่กว่านาทีละครั้ง */
+/* ต้องโหลดลายเซ็นใหม่ไหม (sa = signature_at ในระบบตอนนี้) — โหลดพลาดอยู่ = ไม่ลองถี่กว่านาทีละครั้ง
+   อ่านพลาดชั่วคราว (retry) = ลองใหม่แม้ signature_at ยังเหมือนเดิม (เช่น ยังไม่เคยตั้ง '' = '') ·
+   รูปในระบบเสีย = ไม่มี retry (at = รุ่นในระบบ) → ไม่โหลดซ้ำจนกว่าจะมีคนอัปโหลดใหม่ */
 function sigNeedsLoad(sa){
-  if(sa===String(sigMeta.at||'')) return false;
+  if(sa===String(sigMeta.at||'') && !sigMeta.retry) return false;
   return !(sigMeta.err && Date.now()-sigTriedAt<60000);
 }
 async function loadSignature_(noMigrate, g){
@@ -1804,11 +1829,11 @@ async function loadSignature_(noMigrate, g){
   sigTriedAt=Date.now();
   var L=await sigLocal();
   var fallback=L.u?(L.at?'cache':'unknown'):'none';
-  if(!dbReady){ if(!stale()) sigUse(L.u, fallback); return; }
+  if(!dbReady){ if(!stale()) sigUse(L.u, fallback, {retry:true}); return; }
   var r;
   try{ r=await sb.from('inv_settings').select('key,value').in('key',['signature_at','signature_by']); }catch(e){ r={error:e}; }
   if(stale()) return;
-  if(r.error){ sigUse(L.u, fallback, {err:'อ่านลายเซ็นจากระบบไม่ได้'}); return; }
+  if(r.error){ sigUse(L.u, fallback, {err:'อ่านลายเซ็นจากระบบไม่ได้', retry:true}); return; }
   sigCheckedAt=Date.now();
   var m={};
   (r.data||[]).forEach(function(x){ m[x.key]=x.value; });
@@ -1836,7 +1861,7 @@ async function loadSignature_(noMigrate, g){
   var s;
   try{ s=await sb.from('inv_settings').select('value').eq('key','signature').limit(1); }catch(e){ s={error:e}; }
   if(stale()) return;
-  if(s.error){ sigUse(L.u, fallback, {err:'โหลดรูปลายเซ็นจากระบบไม่ได้'}); return; }
+  if(s.error){ sigUse(L.u, fallback, {err:'โหลดรูปลายเซ็นจากระบบไม่ได้', retry:true}); return; }
   var v=String(((s.data||[])[0]||{}).value||'');
   if(!v){
     if(L.u && !L.at) await sigBackupLegacy(L.u, null);
@@ -1902,9 +1927,18 @@ function renderSig_(){
   }
   var info=$('sigInfo'); info.textContent=t; info.style.color=c;
   // ลายเซ็นเดิมของเครื่องนี้ที่ถูกลายเซ็นกลางแทน — ให้เลือกว่าจะใช้แทน/ทิ้ง (เฉพาะคนแก้ตั้งค่าได้)
-  var lb=$('sigLegacyBox'), showL=edit && !!sigLegacyU && sigLegacyU!==sigDataUrl && (src==='central'||src==='none');
+  //   อ่านระบบไม่ได้ (err) = ไม่โชว์ — ไม่รู้ว่าระบบมีลายเซ็นอะไรอยู่ กดแล้วอาจทับของจริง
+  var lb=$('sigLegacyBox'), showL=edit && !!sigLegacyU && sigLegacyU!==sigDataUrl && !er && (src==='central'||src==='none');
   lb.style.display=showL?'block':'none';
-  if(showL) $('sigLegacyImg').src=sigLegacyU; else $('sigLegacyImg').removeAttribute('src');
+  if(showL){
+    $('sigLegacyImg').src=sigLegacyU;
+    $('sigLegacyMsg').textContent= src==='central'
+      ? 'เครื่องนี้เคยตั้งลายเซ็นของตัวเองไว้ก่อนมีระบบกลาง (อาจเป็นคนละรูปกับที่ใช้อยู่ตอนนี้ — เทียบกับรูปข้างบนได้):'
+      : (sigMeta.removed
+          ? 'ลายเซ็นกลางถูกลบแล้ว'+(sigMeta.by?(' โดย '+sigMeta.by):'')+(sigMeta.at?(' เมื่อ '+fmtDT(sigMeta.at)):'')+' — เครื่องนี้ยังมีลายเซ็นเดิมจากก่อนมีระบบกลาง:'
+          : 'เครื่องนี้ยังมีลายเซ็นเดิมจากก่อนมีระบบกลาง:');
+    $('sigLegacyUseBtn').textContent= src==='central' ? 'ใช้รูปนี้แทน (ทุกเครื่อง)' : 'ตั้งรูปนี้เป็นลายเซ็นของทุกเครื่อง';
+  }else $('sigLegacyImg').removeAttribute('src');
   // แถบเตือนในหน้าออกบิล: ไม่มีลายเซ็น (ไม่เตือนถ้าเจ้าของตั้งใจลบเอง)
   var w=$('sigWarn');
   if(w){
@@ -1973,7 +2007,21 @@ async function sigPushLocal(){
 }
 async function sigLegacyUse(){
   if(!sigLegacyU||!can('settings','e')||INV_SCOPE) return;
-  if(!confirm('ใช้ลายเซ็นเดิมของเครื่องนี้แทนลายเซ็นที่ใช้อยู่?\nทุกเครื่องและไฟล์ที่ NAS เก็บหลังจากนี้จะเปลี่ยนตาม')) return;
+  var was=sigMeta, q= was.src==='central'
+    ? 'ใช้ลายเซ็นเดิมของเครื่องนี้แทนลายเซ็นที่ใช้อยู่?\nทุกเครื่องและไฟล์ที่ NAS เก็บหลังจากนี้จะเปลี่ยนตาม'
+    : (was.removed
+        ? 'ลายเซ็นกลางถูกลบ'+(was.by?(' โดย '+was.by):'')+(was.at?(' เมื่อ '+fmtDT(was.at)):'')+
+          ' — ตั้งรูปเดิมของเครื่องนี้เป็นลายเซ็นของทุกเครื่องอีกครั้ง?\nทุกเครื่องและไฟล์ที่ NAS เก็บหลังจากนี้จะมีลายเซ็นนี้'
+        : 'ตั้งรูปเดิมของเครื่องนี้เป็นลายเซ็นของทุกเครื่อง?\nทุกเครื่องและไฟล์ที่ NAS เก็บหลังจากนี้จะมีลายเซ็นนี้');
+  if(!confirm(q)) return;
+  // อ่านระบบอีกครั้งก่อนเขียน — ระหว่างนี้มีคนตั้ง/ลบลายเซ็น = ไม่ทับ ให้ดูของใหม่ก่อน
+  var r;
+  try{ r=await sb.from('inv_settings').select('value').eq('key','signature_at').limit(1); }catch(e){ r={error:e}; }
+  if(r.error){ toast('อ่านระบบไม่ได้ — เช็คอินเทอร์เน็ตแล้วลองใหม่','err'); return; }
+  if(String(((r.data||[])[0]||{}).value||'')!==String(was.at||'')){
+    toast('มีคนเปลี่ยนลายเซ็นในระบบระหว่างนี้ — โหลดของใหม่ให้แล้ว ลองดูอีกครั้ง','err');
+    sigGen++; await loadSignature(); return;
+  }
   var u=await sigNormalize(sigLegacyU);
   if(!u){ toast('อ่านรูปลายเซ็นเดิมไม่ได้','err'); return; }
   if(!(await sigPush(u,false))){ toast('บันทึกลายเซ็นไม่สำเร็จ — ลองใหม่','err'); loadSignature(); return; }
@@ -2036,14 +2084,34 @@ function renderNasSigState(){
     el.innerHTML='สคริปต์บน NAS รุ่น '+ver+' รองรับลายเซ็นจากระบบแล้ว — แต่ตอนนี้ NAS ไม่ได้ทำงาน (ดูสถานะ NAS ข้างบน)';
     el.style.color='var(--muted)'; return;
   }
-  var t='✅ ไฟล์ใน NAS ใช้ลายเซ็นเดียวกับแอป (สคริปต์รุ่น '+ver+')', st=sigRedoState(), c='var(--ok)';
-  if(st.s==='done') t+=' · สั่งให้ NAS ทำ PDF บิลที่ออกจากแอปนี้ใหม่ให้มีลายเซ็นแล้ว '+esc(st.o.n)+' ใบ (เมื่อ '+fmtDT(st.o.at)+
-    ') — ดูความคืบหน้าที่ "บิลที่รอเก็บไฟล์ลง NAS"';
-  else if(st.s==='busy') t+=' · กำลังสั่งให้ NAS ทำ PDF ใหม่ให้มีลายเซ็น…';
-  else if(sigMeta.src==='central') t+=' · บิลที่ออกจากแอปนี้ไปแล้วจะถูกสั่งทำ PDF ใหม่ให้มีลายเซ็น 1 ครั้ง'+
-    ' (หลัง NAS ทำงานด้วยลายเซ็นใหม่ครบ 1 รอบ — ตอนผู้ดูแล/เจ้าของเปิดแอป)';
-  else if(sigMeta.src==='none'||sigMeta.src==='local'){ t+=' · ยังไม่มีลายเซ็นในระบบ — ไฟล์ใน NAS จะเว้นช่องให้เซ็นเอง'; c='var(--muted)'; }
-  else { t+=' · เครื่องนี้ยังโหลดลายเซ็นจากระบบไม่ได้'; c='var(--warn)'; }
+  // ✅ เฉพาะตอนเครื่องนี้ใช้ลายเซ็นกลางจริง · ที่เหลือบอกตามสถานะลายเซ็น (สถานะงานทำ PDF ใหม่บอกเฉพาะตอนมีลายเซ็นกลาง)
+  var src=sigMeta.src, er=sigMeta.err, base='สคริปต์บน NAS รุ่น '+ver+' อ่านลายเซ็นจากระบบได้', t, c;
+  if(src==='central'){
+    var st=sigRedoState();
+    t='✅ ไฟล์ใน NAS ใช้ลายเซ็นเดียวกับแอป (สคริปต์รุ่น '+ver+')'; c='var(--ok)';
+    if(st.s==='done'){
+      var ag=(Date.now()-Date.parse(st.o.at||''))/86400000;
+      t+=' · สั่งให้ NAS ทำ PDF บิลที่ออกจากแอปนี้ใหม่ให้มีลายเซ็นแล้ว '+esc(st.o.n)+' ใบ (เมื่อ '+fmtDT(st.o.at)+')'+
+        ((ag>=0&&ag<3)?' — ดูความคืบหน้าที่ "บิลที่รอเก็บไฟล์ลง NAS"':'');
+    }
+    else if(st.s==='busy') t+=' · กำลังสั่งให้ NAS ทำ PDF ใหม่ให้มีลายเซ็น…';
+    else t+=' · บิลที่ออกจากแอปนี้ไปแล้วจะถูกสั่งทำ PDF ใหม่ให้มีลายเซ็น 1 ครั้ง'+
+      ' (หลัง NAS ทำงานด้วยลายเซ็นใหม่ครบ 1 รอบ — ตอนผู้ดูแล/เจ้าของเปิดแอป)';
+  }else if(src==='none' && sigMeta.removed && !er){
+    t=base+' · ลบลายเซ็นในระบบแล้ว — ไฟล์ใน NAS จะเว้นช่องให้เซ็นเอง (ไม่ใช้ signature.png)'; c='var(--muted)';
+  }else if((src==='none'||src==='local') && !er){
+    // ยังไม่เคยตั้งในระบบ → สคริปต์ใช้ signature.png ข้างสคริปต์ (ถ้ามี) แบบเดิม
+    var used=/\(ลายเซ็น: ([^)]+)\)/.exec(String(settings.nas_sync_info||'')), uf=used?used[1]:'';
+    t=base+' · ยังไม่ได้ตั้งลายเซ็นในระบบ — '+
+      (/^signature\.(png|jpe?g)$/.test(uf) ? 'NAS ใช้ '+esc(uf)+' ข้างสคริปต์ (รอบล่าสุด)'
+        : uf ? 'NAS ใช้ signature.png ข้างสคริปต์ถ้ามี (รอบล่าสุด: '+esc(uf)+')'
+        : 'NAS ใช้ signature.png ข้างสคริปต์ถ้ามี (ไม่มี = เว้นช่องให้เซ็นเอง)')+
+      (src==='local'?' · ลายเซ็นของเครื่องนี้ยังไม่ได้ใช้กับไฟล์ใน NAS':'')+
+      ' · ตั้งลายเซ็นในการ์ด "ลายเซ็นผู้รับเงิน" ให้ทุกเครื่องและ NAS ใช้รูปเดียวกัน';
+    c='var(--warn)';
+  }else{
+    t=base+' · เครื่องนี้ยังโหลดลายเซ็นจากระบบไม่ได้'+(er?(' ('+esc(er)+')'):''); c='var(--warn)';
+  }
   el.innerHTML=t; el.style.color=c;
 }
 /* ทำ PDF ใน NAS ใหม่ให้มีลายเซ็น (เจ้าของเลือก 2026-10-15: "เฉพาะบิลระบบใหม่") — ครั้งเดียว
@@ -2071,6 +2139,14 @@ async function sigRedoCheck(){
       return;
     }
     settings.nas_sig_redo=val;
+    // จองได้แล้ว — อ่านลายเซ็นในระบบซ้ำ: ต้องยังเป็นรุ่นเดียวกับที่เครื่องนี้ใช้และไม่ถูกลบ ไม่งั้นคืนที่จอง (ไม่ใช้สิทธิ์ทำครั้งเดียวไปกับลายเซ็นที่ไม่ใช่ของจริง)
+    var chk=await sb.from('inv_settings').select('key,value').in('key',['signature_at','signature']);
+    var cm={}; if(!chk.error) (chk.data||[]).forEach(function(x){ cm[x.key]=String(x.value||''); });
+    if(chk.error || cm.signature_at!==String(sigMeta.at||'') || !cm.signature){
+      try{ await sb.from('inv_settings').delete().eq('key','nas_sig_redo').eq('value',val); delete settings.nas_sig_redo; }catch(e){}
+      if(!chk.error) loadSignature();
+      return;
+    }
     var u=await sb.from('inv_invoices').update({nas_path:null})
       .or('created_by.is.null,created_by.neq."'+IMP_BY+'"').not('nas_path','is',null).select('id');
     if(u.error){                                    // คืนที่จอง ให้ลองใหม่รอบหน้า (คืนไม่ได้ = ค้าง 15 นาทีแล้วทำแทนได้เอง)
