@@ -79,8 +79,10 @@ alter table public.cal_special_days add  constraint cal_sd_status check (pay_sta
 alter table public.cal_special_days drop constraint if exists cal_sd_grp;
 alter table public.cal_special_days add  constraint cal_sd_grp   check (order_rate_group is null or order_rate_group in (0,1,2));
 alter table public.cal_special_days drop constraint if exists cal_sd_br;
+-- รหัสสาขาอะไรก็ได้ที่เป็นรูปแบบรหัส (เปิดสาขาใหม่จาก JJ Access ไม่ต้องแก้ SQL — ตรงกับ jjmk-branches.sql)
 alter table public.cal_special_days add  constraint cal_sd_br    check (order_branches is null or
-  (cardinality(order_branches) between 1 and 4 and order_branches <@ array['JJLP','JJRD','JJCK','OFFICE']::text[]));
+  (cardinality(order_branches) between 1 and 30
+   and array_to_string(order_branches, ',') ~ '^[A-Z][A-Z0-9]{1,9}(,[A-Z][A-Z0-9]{1,9})*$'));
 alter table public.cal_special_days drop constraint if exists cal_sd_om;
 alter table public.cal_special_days add  constraint cal_sd_om    check (order_multiplier is null or order_multiplier between 0.5 and 3);
 -- ปฏิทินเดียวกันห้ามซ้อนวัน (🏢 กับ 🏢 · 💰 กับ 💰) — คนละปฏิทินซ้อนกันได้ (เช่น สงกรานต์ อยู่ทั้ง 🏢 และ 💰)

@@ -180,6 +180,14 @@ declare
   n_updated int;
   n_hidden  int;
 begin
+  -- 0) รวมสาขาหน้าร้านจากทะเบียนสาขากลางเสมอ — แท็บเล็ต/แอปรุ่นเก่าที่ยังไม่รู้จักสาขาใหม่ จะได้ไม่ไปปิดพนักงานสาขาใหม่
+  --    (เพิ่มได้อย่างเดียว ไม่ตัดสาขาที่แอปส่งมา)
+  begin
+    p_branches := array(select distinct x from unnest(coalesce(p_branches, '{}'::text[])
+                     || array(select code from pnl_branches where kind = 'store' and active is not false)) x where x is not null);
+  exception when others then null;
+  end;
+
   -- 1) ผูกแถวที่เคยกรอกมือเข้ากับพนักงาน payroll (ชื่อ/ชื่อเล่นตรงกัน สาขาเดียวกัน) กันได้แถวซ้ำ
   update kpi_staff k
      set employee_id = m.emp_id

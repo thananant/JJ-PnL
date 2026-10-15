@@ -84,7 +84,10 @@ declare
   i         int := 0;
 begin
   -- ชื่อสาขา — ต้องตรงกับ CONFIG.BRANCHES ในแอป
-  v_bname := case p_branch when 'JJRD' then 'รัชดา' when 'JJLP' then 'ลาดพร้าว-วังหิน' else p_branch end;
+  -- สาขาเดิมใช้ชื่อเดิม · สาขาใหม่อ่านจากทะเบียนสาขากลาง (pnl_branches) — เปิดสาขาใหม่ไม่ต้องแก้ SQL
+  v_bname := case p_branch when 'JJRD' then 'รัชดา' when 'JJLP' then 'ลาดพร้าว-วังหิน'
+               else coalesce((select coalesce(nullif(btrim(b.short), ''), nullif(regexp_replace(btrim(b.name), '^สาขา\s*', ''), ''))
+                                from pnl_branches b where b.code = p_branch limit 1), p_branch) end;
 
   v_head := '📊 สรุปความพึงพอใจลูกค้า · ' || p_branch || ' ' || v_bname || chr(10)
          || case when p_from = p_to then kpi_th_date(p_from, true)
@@ -197,7 +200,8 @@ as $$
            coalesce(nullif(v->>'daily_at', '')::time, time '09:00')   as daily_at,
            coalesce(nullif(v->>'period_at', '')::time, time '09:10')  as period_at,
            coalesce(nullif(v->>'since', '')::timestamptz, p_now - interval '20 hours') as since,
-           coalesce(v->'groups', '{}'::jsonb)                         as groups
+           coalesce(v->'groups', '{}'::jsonb)                         as groups,
+           coalesce(v->'since_br', '{}'::jsonb)                       as since_br
       from cfg
   ), br as (
     select g.key as branch, btrim(g.value) as group_id
@@ -228,7 +232,7 @@ as $$
   select k.kind, br.branch, br.group_id, k.period_key, k.d_from, k.d_to, k.due_at
     from k cross join br cross join s
    where k.due_at <= p_now
-     and k.due_at >= s.since
+     and k.due_at >= greatest(s.since, coalesce(nullif(s.since_br->>br.branch, '')::timestamptz, s.since))  -- กลุ่มที่เพิ่งตั้ง (สาขาใหม่) ไม่ย้อนส่งของเก่า
      and not exists (
        select 1 from kpi_line_log l
         where l.kind = k.kind and l.branch = br.branch and l.period_key = k.period_key

@@ -16,7 +16,7 @@ alter table pnl_users add column if not exists unit text not null default 'ALL';
 do $$ begin
   if not exists (select 1 from pg_constraint where conname='pnl_users_unit_ck') then
     alter table pnl_users add constraint pnl_users_unit_ck
-      check (unit in ('ALL','OFFICE','JJCK','JJLP','JJRD'));
+      check (unit = 'ALL' or unit ~ '^[A-Z][A-Z0-9]{1,9}$');   -- รหัสสาขา/หน่วยงาน (สาขาใหม่เปิดจาก JJ Access → jjmk-branches.sql)
   end if;
   if not exists (select 1 from pg_constraint where conname='pnl_users_role_ck') then
     alter table pnl_users add constraint pnl_users_role_ck
