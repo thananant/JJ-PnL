@@ -1,5 +1,7 @@
 'use strict';
-const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, ticketFor, failures: getFailures } = require('./harness');
+const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, ticketFor, ROWS_A, ROWS_B, failures: getFailures } = require('./harness');
+/* รายชื่อสาขาที่แอปรู้จักตอนนี้ (CONFIG.BRANCHES = ของเดิม + สาขาใหม่จากทะเบียน) — เทสอิงจากตรงนี้ ไม่ฝังเลข 2 สาขา */
+const appBranches = w => Array.from(w.eval('Object.keys(CONFIG.BRANCHES)'));
 (async () => {
   console.log('\n[1] dashboard — daily / monthly / staff / settings');
   {
@@ -180,9 +182,11 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
 
   console.log('\n[5] kiosk — bad branch param → chooser');
   {
-    const db = makeDb(); const { d } = boot('https://x.test/a.html?kiosk=', db);
+    const db = makeDb(); const { w, d } = boot('https://x.test/a.html?kiosk=', db);
     await sleep(40);
-    ok(d.querySelectorAll('a.k-chip').length === 2, 'branch chooser shows 2 links');
+    const chips = Array.from(d.querySelectorAll('a.k-chip')).map(a => a.getAttribute('href'));
+    ok(JSON.stringify(chips) === JSON.stringify(appBranches(w).map(b => '?kiosk=' + b)), 'branch chooser = ทุกสาขาที่แอปรู้จัก: ' + chips.join(' '));
+    ok(JSON.stringify(appBranches(w)) === '["JJRD","JJLP"]' && chips.length === 2, 'ทะเบียนวันนี้ → 2 สาขาเหมือนเดิม (JJRD, JJLP)');
   }
 
   console.log('\n[6] payroll sync — รายชื่อพนักงานจากระบบเงินเดือน + กรองตำแหน่ง/คนเข้างาน');
@@ -517,7 +521,7 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(w.eval('S.branch') === 'JJRD', 'เปลี่ยนตัวเลือกเป็นสาขาอื่นไม่ได้');
     /* ห้ามส่งสาขาที่ถูกจำกัดให้ RPC ซิงก์ (ไม่งั้นพนักงานสาขาอื่นถูกปิดทิ้ง) */
     const sync = client._calls.filter(c => c.name === 'kpi_sync_staff');
-    ok(sync.length && sync.every(c => JSON.stringify(c.args.p_branches.slice().sort()) === '["JJLP","JJRD"]'), 'kpi_sync_staff ยังส่งครบทุกสาขา');
+    ok(sync.length && sync.every(c => JSON.stringify(c.args.p_branches.slice().sort()) === JSON.stringify(appBranches(w).sort())), 'kpi_sync_staff ยังส่งครบทุกสาขา');
     ok(db.staff.filter(s => s.branch === 'JJLP').every(s => s.active), 'พนักงานลาดพร้าวไม่ถูกปิด');
     /* หน้าตั้งค่า */
     await click(w, d, '[data-tab=settings]'); await sleep(220);
@@ -563,9 +567,9 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
   }
   {
     /* เจ้าของ = ทุกสาขาเสมอ แม้มี _br ค้างอยู่ */
-    const db = makeDb(); const { d } = boot(URL0, db, { as: 'ownbr' });
+    const db = makeDb(); const { w, d } = boot(URL0, db, { as: 'ownbr' });
     await sleep(200);
-    ok(optVals(d, '#branchSel').length === 3 && !/🔒/.test(txt(d, '.who') || ''), 'เจ้าของที่มี _br → ยังเห็นทุกสาขา ไม่มี 🔒');
+    ok(optVals(d, '#branchSel').length === appBranches(w).length + 1 && !/🔒/.test(txt(d, '.who') || ''), 'เจ้าของที่มี _br → ยังเห็นทุกสาขา ไม่มี 🔒');
   }
   {
     /* เน็ตล่มตอนรีเฟรช → ใช้สิทธิ์ในแท็บเดิม (ยังจำกัดสาขาเหมือนเดิม) */
@@ -600,7 +604,7 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     await sleep(100); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(200);
     const body = () => txt(d, '#lineBody') || '';
     ok(/ส่งสรุปเข้ากลุ่มไลน์/.test(txt(d, '#main')), 'มีการ์ด "ส่งสรุปเข้ากลุ่มไลน์"');
-    ok(d.querySelectorAll('#lineBody select.lg-sel').length === 2, 'มีช่องเลือกกลุ่มครบ 2 สาขา');
+    ok(d.querySelectorAll('#lineBody select.lg-sel').length === appBranches(w).length && appBranches(w).length === 2, 'มีช่องเลือกกลุ่มครบ 2 สาขา');
     ok(/หัวหน้า JJ/.test(body()) && /ซัพผัก/.test(body()), 'รายชื่อกลุ่มมาจากตาราง line_groups');
     ok(/ซัพพลายเออร์/.test(txt(d, '#main')), 'เตือนว่าส่วนใหญ่เป็นกลุ่มซัพพลายเออร์');
     ok(/รายวัน .*✅/.test(body()) && /❌/.test(body()) && /bad group/.test(body()), 'โชว์ประวัติการส่ง (สำเร็จ/ไม่สำเร็จ + เหตุผล)');
@@ -689,6 +693,188 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     const before = client._calls.length;
     await w.eval('saveLineCfg()'); await w.eval('lineSend("JJRD", {textContent:"x"})'); await sleep(200);
     ok(!client._calls.slice(before).some(c => c.table === 'kpi_settings' && c.op === 'upsert') && w._posts.length === 0, 'สั่งบันทึก/ส่งตรง ๆ ก็ไม่ผ่าน');
+  }
+
+  console.log('\n[15] ทะเบียนสาขากลาง (JJBR) — เปิดสาขาใหม่ปุ่มเดียวแล้วขึ้นใน KPI เอง');
+  const BN_CACHE = w => w.localStorage.setItem('jjbr_cache', JSON.stringify({ t: Date.now(), cols: true, rows: ROWS_B }));
+  const optTxt = (d, sel) => Array.from(d.querySelectorAll(sel + ' option')).map(o => o.textContent).join('|');
+  const syncArgs = client => client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_sync_staff').map(c => JSON.stringify(c.args.p_branches));
+  {
+    /* A: ทะเบียนมีแค่สาขาวันนี้ → ทุกอย่างเหมือนเดิมทุกตัวอักษร */
+    const db = makeDb(); const { w, d, client, errors } = boot(URL0, db);
+    await sleep(200);
+    ok(JSON.stringify(w.eval('CONFIG.BRANCHES')) === JSON.stringify({ JJRD: 'รัชดา', JJLP: 'ลาดพร้าว-วังหิน' }), 'A: CONFIG.BRANCHES เหมือนเดิม (ลาดพร้าว-วังหิน)');
+    ok(optTxt(d, '#branchSel') === 'JJRD · รัชดา|JJLP · ลาดพร้าว-วังหิน|ทุกสาขา' && JSON.stringify(optVals(d, '#branchSel')) === '["JJRD","JJLP","ALL"]', 'A: ตัวเลือกสาขาเหมือนเดิม: ' + optTxt(d, '#branchSel'));
+    ok(syncArgs(client).length && syncArgs(client).every(x => x === '["JJRD","JJLP"]'), 'A: ซิงก์พนักงานส่ง ["JJRD","JJLP"] เหมือนเดิม: ' + syncArgs(client).join(' '));
+    ok(w._brGets.length === 1 && w._posts.length === 0, 'A: อ่านทะเบียน 1 ครั้ง (ไม่ปนกับการส่งไลน์)');
+    await change(w, d, '#branchSel', 'ALL'); await sleep(120);
+    const rows = Array.from(d.querySelectorAll('#main .card table tbody tr td:first-child')).map(td => td.textContent).filter(t => /^JJ/.test(t));
+    ok(rows.join('|') === 'JJRD รัชดา|JJLP ลาดพร้าว-วังหิน', 'A: ตารางเปรียบเทียบสาขาเหมือนเดิม: ' + rows.join('|'));
+    ok(!errors.length, 'A: ไม่มี error');
+  }
+  {
+    /* C: อ่านทะเบียนไม่ได้ (HTTP 500) → เหมือนเดิม ไม่ค้าง ไม่พัง */
+    const db = makeDb({ branchesFail: true }); const { w, d, client } = boot(URL0, db);
+    await sleep(200);
+    ok(!!d.querySelector('.summary') && noErr(d), 'C: ทะเบียนล่ม → แดชบอร์ดเปิดได้ปกติ');
+    ok(JSON.stringify(appBranches(w)) === '["JJRD","JJLP"]' && optTxt(d, '#branchSel') === 'JJRD · รัชดา|JJLP · ลาดพร้าว-วังหิน|ทุกสาขา', 'C: สาขา/ตัวเลือกเหมือนเดิม');
+    ok(syncArgs(client).every(x => x === '["JJRD","JJLP"]'), 'C: ซิงก์พนักงานส่ง JJRD,JJLP');
+  }
+  {
+    /* C: ไม่มีแคช + ทะเบียนล่ม → ?kiosk=JJBN = หน้าเลือกสาขาแบบเดิม */
+    const db = makeDb({ branchesFail: true }); const { d } = boot('https://x.test/a.html?kiosk=JJBN', db, { noAuth: true });
+    await sleep(120);
+    const chips = Array.from(d.querySelectorAll('a.k-chip')).map(a => a.getAttribute('href'));
+    ok(!d.querySelector('.k-start') && chips.join(' ') === '?kiosk=JJRD ?kiosk=JJLP', 'C: สาขาที่ไม่รู้จัก → หน้าเลือกสาขา 2 สาขาเดิม: ' + chips.join(' '));
+  }
+  {
+    /* B: แท็บเล็ตใหม่ที่สาขาบางนา (ยังไม่มีแคช) เปิด ?kiosk=JJBN → รออ่านทะเบียนแล้วเข้าจอลูกค้าได้เลย ไม่ต้องล็อกอิน */
+    const db = makeDb({ branches: ROWS_B, extraBr: 'JJBN' }); const before = db.responses.length;
+    const { w, d, client, errors } = boot('https://x.test/a.html?kiosk=JJBN', db, { noAuth: true });
+    await sleep(160);
+    ok(!!d.querySelector('.k-start') && !d.querySelector('#lgU') && d.body.classList.contains('kiosk'), 'B: ?kiosk=JJBN เปิดจอลูกค้าได้ (ไม่ต้องล็อกอิน)');
+    ok(/JJBN · บางนา/.test(txt(d, '.k-branch') || '') && /สาขาบางนา/.test(txt(d, '.k-sub') || ''), 'B: หัวจอ ' + txt(d, '.k-branch') + ' / ' + txt(d, '.k-sub'));
+    ok(syncArgs(client).length && syncArgs(client).every(x => x === '["JJRD","JJLP","JJBN"]'), 'B: ซิงก์พนักงานส่งครบ JJRD,JJLP,JJBN: ' + syncArgs(client).join(' '));
+    ok(/JJBN/.test(w.localStorage.getItem('jjbr_cache') || ''), 'B: จำทะเบียนไว้ในเครื่อง (เปิดครั้งหน้าไม่ต้องรอ)');
+    await toStaff(w, d);
+    const names = Array.from(d.querySelectorAll('.k-chip .n')).map(x => x.textContent);
+    ok(names.join(',') === 'ศรี', 'B: จอลูกค้าบางนาเห็นพนักงานบางนาที่สแกนเข้างาน: ' + names.join(','));
+    const chip = d.querySelector('.k-chip'); if (chip) { await click(w, d, '.k-chip'); await sleep(320); }
+    const sub = client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_submit').pop();
+    ok(!!sub && sub.args.p_branch === 'JJBN' && db.responses.length === before + 1 && /^JJBN-/.test(sub.args.p_device || ''), 'B: ส่งคะแนนในนามสาขา JJBN');
+    ok(!errors.length, 'B: ไม่มี error: ' + errors.slice(0, 2).join(' | '));
+  }
+  {
+    /* B: มีแคช JJBN แล้ว แต่ตอนเปิดอ่านทะเบียนไม่ได้ → จอลูกค้าบางนายังใช้ได้จากแคช */
+    const db = makeDb({ branchesFail: true, extraBr: 'JJBN' });
+    const { d } = boot('https://x.test/a.html?kiosk=JJBN', db, { noAuth: true, before: BN_CACHE });
+    await sleep(140);
+    ok(!!d.querySelector('.k-start') && /JJBN · บางนา/.test(txt(d, '.k-branch') || ''), 'B: แคชในเครื่อง + ทะเบียนล่ม → จอลูกค้าบางนายังเปิดได้');
+  }
+  {
+    /* B: หน้าเลือกสาขามีสาขาใหม่ด้วย */
+    const db = makeDb({ branches: ROWS_B }); const { d } = boot('https://x.test/a.html?kiosk=', db, { noAuth: true });
+    await sleep(120);
+    const chips = Array.from(d.querySelectorAll('a.k-chip')).map(a => a.textContent);
+    ok(chips.join('|') === 'JJRDรัชดา|JJLPลาดพร้าว-วังหิน|JJBNบางนา', 'B: หน้าเลือกสาขา 3 สาขา: ' + chips.join('|'));
+  }
+  {
+    /* B: แดชบอร์ดเจ้าของ — สาขาใหม่ขึ้นทุกที่ + ส่งสรุปไลน์ */
+    const LC = { groups: { JJRD: 'C00000000000000000000000000000001' }, daily: true, period: true, daily_at: '09:00', period_at: '09:10', since: '2026-10-01T00:00:00.000Z', since_br: { JJXX: '2026-01-01T00:00:00.000Z' }, foo: 1 };
+    const db = makeDb({ branches: ROWS_B, extraBr: 'JJBN', settings: [{ key: 'line_cfg', value: JSON.parse(JSON.stringify(LC)) }] });
+    const { w, d, client, errors } = boot(URL0, db, { before: w => w.localStorage.setItem('kpi_branch', 'JJBN') });
+    await sleep(220);
+    ok(w.eval('S.branch') === 'JJBN' && !!d.querySelector('.summary') && noErr(d), 'B: สาขาที่จำไว้ (JJBN) ใช้ได้หลังอ่านทะเบียน + แดชบอร์ดขึ้น');
+    ok(optTxt(d, '#branchSel') === 'JJRD · รัชดา|JJLP · ลาดพร้าว-วังหิน|JJBN · บางนา|ทุกสาขา', 'B: ตัวเลือกสาขา: ' + optTxt(d, '#branchSel'));
+    const day = await w.eval('loadDayRaw(S.branch, S.date)');
+    ok(day.length > 0 && day.every(r => r.branch === 'JJBN'), 'B: ข้อมูลรายวันของบางนา (' + day.length + ' แถว)');
+    ok(syncArgs(client).length && syncArgs(client).every(x => x === '["JJRD","JJLP","JJBN"]'), 'B: ซิงก์พนักงานส่ง JJRD,JJLP,JJBN');
+    await change(w, d, '#branchSel', 'ALL'); await sleep(140);
+    const rows = Array.from(d.querySelectorAll('#main .card table tbody tr td:first-child')).map(td => td.textContent).filter(t => /^JJ/.test(t));
+    ok(rows.join('|') === 'JJRD รัชดา|JJLP ลาดพร้าว-วังหิน|JJBN บางนา', 'B: ตารางเปรียบเทียบสาขามีบางนา: ' + rows.join('|'));
+    await click(w, d, '[data-tab=monthly]'); await sleep(140);
+    const mrows = Array.from(d.querySelectorAll('#main .card table tbody tr td:first-child')).map(td => td.textContent).filter(t => /^JJ/.test(t));
+    ok(mrows.length === 3 && /JJBN บางนา/.test(mrows.join('|')) && noErr(d), 'B: รายเดือนเปรียบเทียบ 3 สาขา');
+    await click(w, d, '[data-tab=settings]'); await sleep(260);
+    ok(d.body.textContent.includes('?kiosk=JJBN') && !!d.querySelector('[data-act=openKioskB][data-branch=JJBN]'), 'B: การ์ดลิงก์หน้าจอลูกค้ามี ?kiosk=JJBN');
+    const duty = txt(d, '#dutyBody') || '';
+    ok(/JJBN · บางนา/.test(duty) && /ศรี/.test(duty), 'B: การ์ดคนเข้างานมีบางนา: ' + duty.slice(0, 80));
+    ok(optVals(d, '#setBranch').indexOf('JJBN') >= 0, 'B: ตัวเลือกสาขาของรายชื่อพนักงานมี JJBN');
+    ok(d.querySelectorAll('#lineBody select.lg-sel').length === 3 && !!d.querySelector('#lineBody select.lg-sel[data-branch="JJBN"]'), 'B: การ์ดไลน์มีช่องเลือกกลุ่มของ JJBN');
+    ok(/JJBN <small>บางนา<\/small>|JJBN บางนา/.test(d.querySelector('#lineBody').innerHTML.replace(/\s+/g, ' ')) , 'B: การ์ดไลน์บอกชื่อสาขาบางนา');
+    w.eval("openKiosk('JJBN')"); ok(/\?kiosk=JJBN$/.test(w._opened || ''), 'B: ปุ่มเปิดหน้าจอลูกค้า JJBN');
+    /* มีคนเพิ่มคีย์ใน line_cfg ระหว่างเปิดการ์ด (อ่าน→รวม→เขียน ต้องไม่ทับ) */
+    db.settings[0].value.since_br.JJZZ = '2026-02-02T00:00:00.000Z';
+    d.querySelector('#lineBody select.lg-sel[data-branch="JJBN"]').value = 'C00000000000000000000000000000002';
+    const t0 = Date.now();
+    await click(w, d, '[data-act="saveLine"]'); await sleep(220);
+    const up = client._calls.filter(c => c.table === 'kpi_settings' && c.op === 'upsert').pop();
+    const cfg = up ? up.payload[0].value : {};
+    ok(cfg.groups && cfg.groups.JJBN === 'C00000000000000000000000000000002' && cfg.groups.JJRD === LC.groups.JJRD, 'B: บันทึกกลุ่มของ JJBN (JJRD คงเดิม)');
+    ok(cfg.since === LC.since, 'B: since เดิมไม่ถูกเปลี่ยน');
+    const sb1 = cfg.since_br || {};
+    ok(sb1.JJBN && Date.parse(sb1.JJBN) >= t0 - 1000, 'B: since_br.JJBN = ตอนที่ตั้งกลุ่ม (ไม่ย้อนส่งของเก่า): ' + sb1.JJBN);
+    ok(!sb1.JJRD && sb1.JJXX === LC.since_br.JJXX && sb1.JJZZ === '2026-02-02T00:00:00.000Z' && cfg.foo === 1, 'B: คีย์อื่นใน line_cfg อยู่ครบ (อ่าน→รวม→เขียน): ' + JSON.stringify(sb1));
+    /* บันทึกซ้ำ (JJBN มีกลุ่มอยู่แล้ว) → since_br.JJBN ไม่ขยับ */
+    await sleep(20); await click(w, d, '[data-act="saveLine"]'); await sleep(220);
+    const cfg2 = client._calls.filter(c => c.table === 'kpi_settings' && c.op === 'upsert').pop().payload[0].value;
+    ok(cfg2.since_br.JJBN === sb1.JJBN, 'B: บันทึกซ้ำ since_br.JJBN คงเดิม');
+    await click(w, d, '[data-act="linePrev"][data-branch="JJBN"]'); await sleep(160);
+    const rpc = client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_line_text').pop();
+    ok(!!rpc && rpc.args.p_branch === 'JJBN', 'B: ดูตัวอย่างสรุปของ JJBN');
+    ok(!errors.length, 'B: ไม่มี error: ' + errors.slice(0, 2).join(' | '));
+  }
+  {
+    /* B: ตั้งกลุ่มครั้งแรกสุด (ยังไม่มี since) → เก็บแบบเดิมทุกคีย์ ไม่มี since_br */
+    const db = makeDb({ branches: ROWS_B, extraBr: 'JJBN' }); const { w, d, client } = boot(URL0, db);
+    await sleep(140); await click(w, d, '[data-tab=settings]'); await sleep(260);
+    d.querySelector('#lineBody select.lg-sel[data-branch="JJBN"]').value = 'C00000000000000000000000000000002';
+    await click(w, d, '[data-act="saveLine"]'); await sleep(220);
+    const cfg = client._calls.filter(c => c.table === 'kpi_settings' && c.op === 'upsert').pop().payload[0].value;
+    ok(JSON.stringify(Object.keys(cfg).sort()) === '["daily","daily_at","groups","period","period_at","since"]' && cfg.groups.JJBN, 'B: ตั้งครั้งแรก = คีย์เหมือนเดิม (since ครอบทุกสาขาอยู่แล้ว): ' + Object.keys(cfg).join(','));
+  }
+  {
+    /* D: ผู้จัดการบางนา (_br=JJBN) → เห็นแค่ JJBN · ซิงก์ยังส่งครบทุกสาขา */
+    const db = makeDb({ branches: ROWS_B, extraBr: 'JJBN' }); const { w, d, client } = boot(URL0, db, { as: 'bnmgr' });
+    await sleep(220);
+    ok(!!d.querySelector('.summary') && JSON.stringify(optVals(d, '#branchSel')) === '["JJBN"]' && w.eval('SCOPE.join()') === 'JJBN', 'D: _br=JJBN → เห็นแค่ JJBN: ' + optVals(d, '#branchSel').join(','));
+    ok(/🔒 JJBN/.test(txt(d, '.who') || ''), 'D: ชิปผู้ใช้ 🔒 JJBN');
+    const al = await w.eval("loadRangeRaw(ALL, addDays(S.date,-40), S.date)");
+    ok(al.length > 0 && al.every(r => r.branch === 'JJBN'), 'D: บังคับขอทุกสาขา → ได้แค่ JJBN (' + al.length + ' แถว)');
+    ok(syncArgs(client).every(x => x === '["JJRD","JJLP","JJBN"]'), 'D: kpi_sync_staff ยังส่งครบ (ไม่กรองตามสิทธิ์)');
+    await click(w, d, '[data-tab=settings]'); await sleep(240);
+    const links = Array.from(d.querySelectorAll('[data-act=openKioskB]')).map(b => b.dataset.branch);
+    ok(JSON.stringify(links) === '["JJBN"]' && /บางนา/.test(txt(d, '#main')), 'D: ลิงก์หน้าจอลูกค้าเหลือแค่ JJBN');
+  }
+  {
+    /* D: _br=XXXX (ไม่มีในระบบ) → ไม่เห็นอะไรเลย (เดิมกลายเป็นเห็นทุกสาขา) */
+    const db = makeDb({ branches: ROWS_B, extraBr: 'JJBN' }); const { w, d, client } = boot(URL0, db, { as: 'badbr' });
+    await sleep(200);
+    ok(!d.querySelector('.hdr') && !d.querySelector('.summary') && /ไม่ตรงกับสาขาใด/.test(txt(d, '#app') || ''), 'D: _br=XXXX → เข้าไม่ได้ + บอกเหตุผล: ' + (txt(d, '#app') || '').replace(/\s+/g, ' ').slice(0, 120));
+    ok(!client._calls.some(c => c.table === 'kpi_responses' || c.table === 'kpi_daily'), 'D: ไม่ได้อ่านข้อมูลลูกค้าเลย');
+    ok(w.eval("JSON.stringify(scopeOf({role:'manager',apps:{kpi:{dash:'v',_br:'XXXX'}}}))") === '[]', 'D: scopeOf = [] (ไม่ใช่ null = ทุกสาขา)');
+  }
+  {
+    /* D: ล็อกอินเองด้วย _br=XXXX → ข้อความบอกเหตุผล */
+    const db = makeDb(); const { w, d } = boot(URL0, db, { noAuth: true });
+    await sleep(120);
+    d.querySelector('#lgU').value = 'badbr'; d.querySelector('#lgP').value = 'kpi1234';
+    await click(w, d, '#lgBtn'); await sleep(140);
+    ok(/ไม่ตรงกับสาขาใด/.test(txt(d, '#lgMsg') || '') && !d.querySelector('.hdr'), 'D: ล็อกอิน _br=XXXX → ไม่ให้เข้า: ' + (txt(d, '#lgMsg') || ''));
+  }
+  {
+    /* D: _br=JJBN แต่ทะเบียนอ่านไม่ได้และไม่มีแคช → ไม่เห็นอะไร (ไม่หลุดเป็นทุกสาขา) */
+    const db = makeDb({ branchesFail: true }); const { d } = boot(URL0, db, { as: 'bnmgr' });
+    await sleep(200);
+    ok(!d.querySelector('.summary') && /ยังไม่ได้รับสิทธิ์/.test(txt(d, '#app') || ''), 'D: ทะเบียนล่ม + _br=JJBN → ไม่เห็นข้อมูล');
+  }
+  {
+    /* D: แท็บที่ล็อกอินค้าง (_br=JJBN) + รีเฟรชตอนเน็ตล่ม แต่มีแคชทะเบียน → ยังเห็นแค่ JJBN */
+    const db = makeDb({ branchesFail: true, usersMissing: true, extraBr: 'JJBN' }); const { w, d } = boot(URL0, db, { sess: 'bnmgr', before: BN_CACHE });
+    await sleep(220);
+    ok(!!d.querySelector('.summary') && JSON.stringify(optVals(d, '#branchSel')) === '["JJBN"]', 'D: ใช้แคชทะเบียน → ยังเห็นแค่ JJBN');
+  }
+  {
+    /* D: _br=JJBN,JJRD — ทะเบียนมี JJBN → 2 สาขา · ทะเบียนไม่มี JJBN → เหลือแค่ JJRD */
+    const db1 = makeDb({ branches: ROWS_B, extraBr: 'JJBN' }); const r1 = boot(URL0, db1, { as: 'mixbr' });
+    await sleep(200);
+    ok(JSON.stringify(optVals(r1.d, '#branchSel')) === '["JJRD","JJBN","ALL"]' && /ทุกสาขาที่ดูแล/.test(r1.d.querySelector('#branchSel').textContent), 'D: JJBN,JJRD → 2 สาขา + "ทุกสาขาที่ดูแล"');
+    const db2 = makeDb(); const r2 = boot(URL0, db2, { as: 'mixbr' });
+    await sleep(200);
+    ok(JSON.stringify(optVals(r2.d, '#branchSel')) === '["JJRD"]', 'D: ทะเบียนไม่มี JJBN → เหลือแค่ JJRD');
+  }
+  {
+    /* _br=JJOF (รหัสออฟฟิศของ P&L) = ออฟฟิศ → ไม่มีข้อมูลใน KPI (เหมือน OFFICE) */
+    const db = makeDb(); db.users.push({ id: 20, username: 'ofonly', display_name: 'ออฟฟิศ', role: 'staff', unit: 'OFFICE', active: true, pass_hash: pwHash('ofonly', 'kpi1234'), apps: { kpi: { dash: 'v', _br: 'JJOF' } } });
+    const { d } = boot(URL0, db, { before: w => w.localStorage.setItem('jjsso_ticket', JSON.stringify({ u: 'ofonly', h: pwHash('ofonly', 'kpi1234'), app: 'kpi', t: Date.now() })) });
+    await sleep(200);
+    ok(!d.querySelector('.summary') && /ออฟฟิศ/.test(txt(d, '#app') || ''), 'D: _br=JJOF → ออฟฟิศ ไม่มีข้อมูลใน KPI (ไม่หลุดเป็นทุกสาขา)');
+  }
+  {
+    /* สาขาที่ยกเลิกในทะเบียนแล้ว (แคชเก่ายังมี JJBN) → อ่านทะเบียนแล้วหายไปเอง */
+    const db = makeDb(); const { w, d } = boot(URL0, db, { before: BN_CACHE });
+    await sleep(200);
+    ok(JSON.stringify(appBranches(w)) === '["JJRD","JJLP"]' && optTxt(d, '#branchSel') === 'JJRD · รัชดา|JJLP · ลาดพร้าว-วังหิน|ทุกสาขา', 'แคชเก่ามี JJBN แต่ทะเบียนไม่มีแล้ว → เหลือ 2 สาขาเดิม');
   }
 
   const failures = getFailures(); console.log('\n' + (failures ? failures + ' FAILED' : 'ALL PASSED'));

@@ -210,6 +210,8 @@ main{max-width:1220px;margin:0 auto;padding:14px max(16px,env(safe-area-inset-ri
 #sideNav #ctl input[type=text]::placeholder{color:rgba(255,255,255,.55)}
 header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px;border:0}
 #sideNav #ctl .seg button{flex:1}
+#sideNav #ctl .seg.many{flex-wrap:wrap}   /* 3 สาขาขึ้นไป (สาขาใหม่จากทะเบียน) = ขึ้นบรรทัดใหม่ ไม่ล้นแถบซ้าย */
+#sideNav #ctl .seg.many button{flex:1 1 auto;white-space:nowrap}
 #cfgBox{margin-top:auto}
 #cfgSub{display:none;margin:2px 0 4px}
 #cfgSub.on{display:block}
@@ -583,7 +585,8 @@ header #ctl input[type=date]{border-radius:10px;padding:7px 9px;font-size:13.5px
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -714,6 +717,8 @@ const TICKET_TTL=120000;                               /* ใบผ่านอ�
               ⤷ ตั้ง "เห็นเฉพาะสาขา" ใน JJ Access (apps.stock._br = 'JJLP,JJRD') = ใช้ค่านั้นแทนสังกัด
                 (เจ้าของสั่ง 2026-10-02 "กำหนดได้ว่าใครเห็นของสาขาไหน แบบ payroll") · ผู้ดูแลระบบ/เจ้าของ ไม่ถูกจำกัดด้วย _br
                 ได้แค่ JJCK/OFFICE (ไม่มีสต๊อกสาขา) = noBr → ไม่เห็นสาขาไหนเลย (ห้ามตีความว่า "ทุกสาขา")
+              ⤷ สาขาใหม่จากทะเบียนกลาง JJBR (2026-10-15): ประจำที่ = สาขาหน้าร้านใดก็ได้ในทะเบียน = เห็นเฉพาะสาขาตัวเอง
+                · _br ตั้งไว้แต่ไม่เหลือรหัสที่รู้จัก/ไม่มีสต๊อก = noBr (ปิดไว้ก่อน ห้ามตกเป็น "ทุกสาขา")
    depts : บัญชีกลางไม่ได้แยกแผนก → นับได้ทุกแผนก */
 function mapCentral(u){
   const apps=(u&&u.apps&&typeof u.apps==='object')?u.apps:{};
@@ -721,12 +726,16 @@ function mapCentral(u){
   const boss=u.role==='admin'||u.role==='owner';
   const has=k=>!!(st&&String(st[k]||'').indexOf('v')>=0);
   const isAdm=boss||has('cfg')||has('set')||has('items')||has('sched');
-  let brs = (u.unit==='JJLP'||u.unit==='JJRD') ? [u.unit] : [], noBr=false;
-  const raw=boss?[]:String((st&&st._br)||'').split(',').map(x=>x.trim())
-    .filter(x=>['JJLP','JJRD','JJCK','OFFICE'].includes(x));
-  if(raw.length){ brs=raw.filter(b=>STK_BR[b]); noBr=!brs.length; }
+  const un=String(u.unit||'');   // ประจำที่: สาขาเดิม/สาขาในทะเบียน/รหัสที่ไม่รู้จัก = สาขาตัวเอง · ALL/OFFICE/JJCK (หน่วยงานกลาง) = ทุกสาขา
+  const own=un==='JJLP'||un==='JJRD'||JJBR.isStore(un)||(/^[A-Z][A-Z0-9]{1,9}$/.test(un)&&!['ALL','OFFICE','JJOF','JJCK'].includes(un)&&!JJBR.known(un));
+  let brs = own ? [un] : [], noBr=false;
+  const tok=boss?[]:String((st&&st._br)||'').split(',').map(x=>x.trim()).filter(Boolean).map(x=>x==='JJOF'?'OFFICE':x);
+  const okC=['JJLP','JJRD','JJCK','OFFICE'].concat(JJBR.unitCodes());   // รหัสที่ JJ Access ติ๊กได้ (สาขาใหม่มาจากทะเบียน)
+  const raw=tok.filter(x=>okC.includes(x));
+  if(tok.length){ brs=raw.filter(b=>STK_BR[b]); noBr=!brs.length; }   // ตั้ง _br แล้วไม่เหลือสาขาที่มีสต๊อก = ไม่เห็นอะไร
+  const miss=(tok.length?tok:brs).filter(b=>b!=='JJCK'&&b!=='OFFICE'&&!STK_BR[b]);   // สาขาที่ตั้งให้แต่ยังไม่มีในแอพนี้ (บอกเหตุผลบนจอ)
   return {username:u.username, display_name:u.display_name||u.username,
-          role:isAdm?'admin':'staff', branches:brs, noBr, brScoped:raw.length>0, depts:[], central:true,
+          role:isAdm?'admin':'staff', branches:brs, noBr, brScoped:tok.length>0, brMiss:miss, boss, depts:[], central:true,
           apps:apps, stockPerm:st};
 }
 /* ผู้ใช้ต้องได้รับสิทธิ์แอพนับสต๊อก — ยังไม่เคยตั้งสิทธิ์เลย (apps ว่าง) = ไม่ล็อกใคร */
@@ -770,6 +779,24 @@ function spdNames(bid,from,to){
   return out;}
 /* SPD-END */
 const BR_NAME={JJRD:'รัชดา',JJLP:'ลาดพร้าว'};
+/* 🏪 สาขาใหม่จากทะเบียนกลาง JJBR (ปุ่ม "เปิดสาขาใหม่" ใน JJ Access · เจ้าของสั่ง 2026-10-15)
+   เติม STK_BR (รหัส→branches.id) + BR_NAME (ชื่อสั้น) แบบแก้ในที่ → ปุ่มสาขา/สิทธิ์/SPD/สั่งของ/บันทึกนับ เห็นสาขาใหม่เอง
+   · รัชดา/ลาดพร้าว ใช้ค่าเดิมเสมอ · สาขาที่ปิด/ไม่มี stk_id = ไม่ขึ้น · ทะเบียนอ่านไม่ได้ = แคชในเครื่อง → ไม่มีแคช = 2 สาขาเดิม */
+const BR_BASE=Object.keys(STK_BR), BR_ADDED={};
+function brSync(){   // คืน true ถ้ารายชื่อสาขาเปลี่ยน
+  const want=[],ids=BR_BASE.map(b=>STK_BR[b]);
+  JJBR.extra(BR_BASE).forEach(r=>{ if(/^[A-Za-z0-9_-]{1,40}$/.test(r.stk_id)&&!ids.includes(r.stk_id)){ ids.push(r.stk_id);   // id ใช้ต่อใน URL ตรง ๆ = ตัวอักษรปลอดภัยเท่านั้น
+    want.push({code:r.code,id:r.stk_id,nm:String(r.short||'').replace(/[<>"'&`\\]/g,'').trim()||r.code}); } });   // ชื่อจากตาราง (คีย์สาธารณะแก้ได้) ตัดอักขระ HTML ทิ้ง
+  const cur=Object.keys(BR_ADDED).map(c=>c+'='+STK_BR[c]+'='+BR_NAME[c]).join('|');
+  if(want.map(r=>r.code+'='+r.id+'='+r.nm).join('|')===cur)return false;
+  Object.keys(BR_ADDED).forEach(c=>{ delete STK_BR[c]; delete BR_NAME[c]; delete BR_ADDED[c]; });   // ลบแล้วใส่ใหม่ตามลำดับ sort ของทะเบียน
+  want.forEach(r=>{ STK_BR[r.code]=r.id; BR_NAME[r.code]=r.nm; BR_ADDED[r.code]=1; });
+  return true;
+}
+brSync();   // จากแคชในเครื่องทันที (ไม่ต้องรอเน็ต) · อ่านทะเบียนจริงตอน boot() → brReady()
+let BR_P=null;
+const brReady=()=>BR_P||(BR_P=JJBR.load(CONFIG.URL,CONFIG.KEY).then(()=>{brSync();},()=>{}));
+const brN=()=>Object.keys(STK_BR).length;   // จำนวนสาขาในแอพนี้ (ข้อความ "ทั้ง 2 สาขา" เดิม)
 const DEPT_IC={'บาร์น้ำ':'🥤','ครัว':'🍳','ครัวกลาง':'🍲','หน้าเตา':'🔥','ล้างจาน':'🧽','ของหวาน':'🍧','ผัก':'🥬','เนื้อสัตว์':'🥩'};
 const S={br:localStorage.getItem('jjsc_br')||'JJRD',tab:'dash',items:[],all:[],map:{},cur:{},q:'',dept:null,deptOk:true,imgTarget:null};
 const $=s=>document.querySelector(s);
@@ -1201,10 +1228,10 @@ async function loadAll(){
   if(S.authOn&&!S.user)return;
   if(!brOk()){
     S.all=[]; S.items=[]; S.cur={}; S.recv={}; S.depts=[]; S.allBr=null; S.nameBrN=null;
-    $('#list').innerHTML=NOBR_HTML; return;
+    $('#list').innerHTML=nobrHtml(); return;
   }
   $('#list').innerHTML='<div class="empty">กำลังโหลด...</div>';
-  const bid=STK_BR[S.br];
+  const br0=S.br, bid=STK_BR[S.br];
   const base='products?select=id,branch_id,cat_label,name,unit,sup,safety,max,rate_wk,rate_fri,rate_we,image_url,sort';
   let prods;S.deptOk=true;S.zoneOk=true;
   try{ prods=await selAll(base+',dept,zone&deleted_at=is.null&branch_id=eq.'+bid+'&order=sort'); }
@@ -1243,6 +1270,7 @@ async function loadAll(){
     // 🌏 คำแปลชื่อสินค้าที่ตั้งไว้ในแอพนับเดิม (products.i18n — คนแก้มือ) ชนะคำแปลกูเกิล · อ่านทุกสาขา (ชื่อเดียวกันใช้ร่วมกัน) · ไม่มีคอลัมน์/อ่านไม่ได้ = ใช้กูเกิลเหมือนเดิม
     selAll('products?select=name,i18n,branch_id&deleted_at=is.null&i18n=not.is.null&branch_id=in.('+Object.values(STK_BR).join(',')+')').catch(()=>null)
   ]);
+  if(S.br!==br0)return;   // ระหว่างโหลดเปลี่ยนสาขาไปแล้ว (กดสาขาอื่น/ทะเบียนสาขาเพิ่งมา) — รอบใหม่วาดให้เอง ห้ามเอาของสาขาเดิมมาใส่
   spdSet(spdRows);
   prodTrSeed(i18nRows);
   S.lastOrd={}; (lastRows||[]).forEach(r=>{ const k=supKey(r.sup),d=String(r.order_date||'').slice(0,10); if(!k||!d)return;
@@ -1257,7 +1285,7 @@ async function loadAll(){
   S.sups=sups;
   S.map={}; map.forEach(r=>{ if(r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-')S.map[r.product_id]=r; });
   S.mapRows=map.filter(r=>r.product_id&&!String(r.product_id).startsWith('none')&&r.pnl_item&&r.pnl_item!=='-');
-  S.all=prods.map(p=>({...p,qty:null,out:false,dirty:{}}));
+  S.all=prods.map(p=>({...p,qty:null,out:false,dirty:{}})); S.allFor=S.br;
   S.items=S.all; // นับได้ทุกตัว รวมที่ยังไม่ผูกชื่อบิล (ของต้องถูกนับอยู่ดี)
   S.cur={}; cur.forEach(r=>{S.cur[r.product_id]=r;});
   const seenC=new Set(); // แถวล่าสุดต่อสินค้า (เรียง created_at desc แล้ว)
@@ -1297,7 +1325,9 @@ function imgCell(it){
     :'<div class="pimg" onclick="pickImg(\''+it.id+'\')" title="แตะเพื่อใส่รูป">📷</div>';
 }
 function render(){
-  if(S.user&&!brOk()){ $('#deptbar').style.display='none'; $('#list').innerHTML=NOBR_HTML; return; }   // ไม่มีสิทธิ์สาขาไหนเลย
+  if(S.user&&!brOk()){ $('#deptbar').style.display='none'; $('#list').innerHTML=nobrHtml(); return; }   // ไม่มีสิทธิ์สาขาไหนเลย
+  if(BR_ADDED[S.br]&&S.allFor===S.br&&!S.all.length&&!(S.tab==='sched'||S.tab==='items'||isCfgTab(S.tab))){   // สาขาใหม่ที่ยังไม่ได้เลือกสินค้า
+    $('#deptbar').style.display='none'; $('#pills').innerHTML=''; $('#list').innerHTML=brEmptyHtml(); refresh(); return; }
   $('#deptbar').style.display=S.tab==='count'?'':'none';
   if(S.tab==='dash')renderDash();
   else if(S.tab==='count')renderCount();
@@ -1313,6 +1343,14 @@ function render(){
   refresh();
   if(LANG!=='th')trMark();
   trPrewarmSoon(6000);   // แปลล่วงหน้าทุกภาษาเงียบ ๆ (เฉพาะคำที่ยังไม่มีในแคช)
+}
+/* สาขาใหม่ (จากทะเบียนกลาง) ที่ยังไม่มีสินค้า — สินค้าเลือกตอนเปิดสาขาที่ JJ Access (แอพนี้เพิ่มสินค้าเองไม่ได้) · ลิงก์เฉพาะผู้ดูแลระบบ/เจ้าของ */
+function brEmptyHtml(){
+  return '<div class="dhead">🏪 สาขา'+esc(BR_NAME[S.br])+'</div><div class="card"><div class="empty" style="padding:30px 14px;line-height:1.7">'
+    +'<div style="font-size:34px">📦</div><b>ยังไม่มีสินค้าของสาขานี้ — ให้ผู้ดูแลเลือกสินค้าที่ JJ Access → 🏪 สาขา → ➕ เพิ่มสินค้า</b>'
+    +'<div style="font-size:12.5px;margin-top:4px">เลือกสินค้าเสร็จแล้วกลับมาที่หน้านี้ ลากหน้าลงเพื่อรีเฟรช</div>'
+    +(S.user&&S.user.boss?'<a id="brEmptyGo" href="jjmk-admin.html" style="display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:14px;padding:10px 20px;border-radius:12px;background:var(--red);color:#fff;font-weight:700;text-decoration:none">🔑 เปิด JJ Access</a>':'')
+    +'</div></div>';
 }
 /* ---- 🛒 สั่งของ: แยกรายซัพ · ต้องสั่ง = ยอดใช้ของ "วันที่ของมาส่ง" − ยอดที่นับได้ ---- */
 function addDays(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);
@@ -1729,7 +1767,7 @@ function renderCount(){
         +'<div><div class="t">'+esc(it.name)+' '+(ok?(it.out?'<span class="st-n" style="color:var(--red)">✗ หมด</span>':'<span class="st-y">✓ นับแล้ว</span>'):'<span class="st-n">⚠ ยังไม่นับ</span>')+'</div>'
         +(cn?'<div class="cn">🧾 บิล: '+esc(billName(it))+'</div>':'')
         +(!S.map[it.id]?'<div class="cn" style="color:var(--amber)">⚠ ยังไม่ผูกชื่อบิล</div>':'')
-        +(onlySome(it.name)?'<div class="cn" style="color:var(--mut)">เฉพาะสาขา'+BR_NAME[S.br]+'</div>':'')+'</div>'
+        +(onlySome(it.name)?'<div class="cn" style="color:var(--mut)">'+someTxt(it.name)+'</div>':'')+'</div>'
         +'<button class="cam" onclick="pickImg(\''+it.id+'\')">✏️</button></div>'
         +'<div class="mid"><span class="chip">'+esc(it.unit||'หน่วย')+'</span>'
         +'<div class="step"><button onclick="bump(\''+it.id+'\',-1)">−</button>'
@@ -1751,7 +1789,7 @@ function renderLink(){
     return '<div class="lrow">'+imgCell(it)
       +'<div><b>'+(m?esc(m.pnl_item):'–')+'</b><div style="font-size:11px;color:var(--mut)">ชื่อจริง (บิล P&L)</div></div>'
       +'<div><span id="cn_'+it.id+'">'+esc(it.name)
-      +(canEdit?' <button class="outb" style="padding:3px 8px;font-size:12px" onclick="editCn(\''+it.id+'\')" title="แก้ชื่อนับ (มีผลทั้ง 2 สาขา)">✏️</button>':'')
+      +(canEdit?' <button class="outb" style="padding:3px 8px;font-size:12px" onclick="editCn(\''+it.id+'\')" title="แก้ชื่อนับ (มีผลทั้ง '+brN()+' สาขา)">✏️</button>':'')
       +'</span><div style="font-size:11px;color:var(--mut)">ชื่อนับ · '+esc(deptOf(it))+'</div></div>'
       +(m?'<span class="okt">✓ ผูกแล้ว</span>':'<span class="wat">⚠ ยังไม่ผูก</span>')+'</div>';};
   // การผูกต้องตรงกันทั้งสองทาง (เช็ครวม 2 สาขา):
@@ -1764,13 +1802,13 @@ function renderLink(){
   });
   const pick=m=>Object.keys(m).map(k=>[k,[...m[k]].filter(Boolean)]).filter(x=>x[1].length>1);
   const dup=pick(byBill),dup2=pick(byCnt);
-  const dupCard=(title,rows,l1,l2,hint)=>'<div class="card"><div class="h">🚨 '+title+' <span class="n">'+rows.length+' ชื่อ (เช็ครวม 2 สาขา)</span></div>'
+  const dupCard=(title,rows,l1,l2,hint)=>'<div class="card"><div class="h">🚨 '+title+' <span class="n">'+rows.length+' ชื่อ (เช็ครวม '+brN()+' สาขา)</span></div>'
     +rows.map(x=>'<div class="lrow" style="grid-template-columns:minmax(140px,1fr) 2fr"><div><b>'+esc(x[0])+'</b><div style="font-size:11px;color:var(--mut)">'+l1+'</div></div>'
       +'<div>'+x[1].map(esc).join(' <span style="color:var(--red);font-weight:700">≠</span> ')+'<div style="font-size:11px;color:var(--mut)">'+l2+' — '+hint+'</div></div></div>').join('')+'</div>';
   const dupHtml=(dup.length||dup2.length)
     ?(dup.length?dupCard('ชื่อบิลเดียวกัน แต่ชื่อนับไม่ตรงกัน',dup,'ชื่อบิล','ชื่อนับที่พบ','ชื่อนับไม่ตรงกัน → <b>แก้ชื่อสินค้าในระบบ stock (แอพนับ)</b> ให้เหลือชื่อเดียว'):'')
       +(dup2.length?dupCard('ชื่อนับเดียวกัน แต่ชื่อบิลไม่ตรงกัน',dup2,'ชื่อนับ','ชื่อบิลที่พบ','ชื่อบิลไม่ตรงกัน → <b>แก้ในระบบ P&L</b> (เปลี่ยนชื่อบิลในบิล หรือแก้การผูกที่หน้า "ใช้จริง (สต๊อก)")'):'')
-    :'<div class="note" style="border-color:#B9D9B0;background:#F0F8F1;color:#2E5B3C">✓ การผูกตรงกันหมดทั้งสองทาง (ชื่อบิล↔ชื่อนับ) ทั้ง 2 สาขา — ไม่มีตัวที่ต้องแก้</div>';
+    :'<div class="note" style="border-color:#B9D9B0;background:#F0F8F1;color:#2E5B3C">✓ การผูกตรงกันหมดทั้งสองทาง (ชื่อบิล↔ชื่อนับ) ทั้ง '+brN()+' สาขา — ไม่มีตัวที่ต้องแก้</div>';
   $('#list').innerHTML=
     '<div class="dhead">🔗 การผูกชื่อ · สาขา'+BR_NAME[S.br]+'</div>'
     +dupHtml
@@ -1864,7 +1902,7 @@ function usersCard(){
       line('เพิ่มคน / ตั้งรหัสผ่าน / เลือกว่าใครเข้าแอพไหนได้ ทำที่ '+
         '<a href="jjmk-admin.html" style="color:var(--gold,#D9A441)"><b>🔑 JJ Access</b></a> ที่เดียว')+
       line('<b>เห็นสาขาไหน</b> — ตั้ง “เห็นเฉพาะสาขา” ใต้กล่องสิทธิ์ของแอพนี้ใน JJ Access ได้เลย (เช่น ให้เห็นแค่รัชดา) · '+
-        'ถ้าไม่ได้ตั้ง ดูจาก “ประจำที่” ของบัญชี: สาขาลาดพร้าว/รัชดา = เห็นเฉพาะสาขาตัวเอง · ส่วนกลาง/ออฟฟิศ/ครัวกลาง = เห็นทุกสาขา · '+
+        'ถ้าไม่ได้ตั้ง ดูจาก “ประจำที่” ของบัญชี: สาขา'+['ลาดพร้าว','รัชดา'].concat(Object.keys(BR_ADDED).map(b=>BR_NAME[b])).join('/')+' = เห็นเฉพาะสาขาตัวเอง · ส่วนกลาง/ออฟฟิศ/ครัวกลาง = เห็นทุกสาขา · '+
         'ได้แค่ครัวกลาง/ออฟฟิศ = ไม่เห็นสาขาไหนในแอพนี้ · ผู้ดูแลระบบ/เจ้าของ ไม่ถูกจำกัดด้วยค่า “เห็นเฉพาะสาขา”'+
         (me&&me.brScoped?' <span style="color:var(--mut)">(ตอนนี้คุณเห็น: '+esc(brScopeTxt())+')</span>':''))+
       line('<b>เข้าหน้าตั้งค่าได้ไหม</b> — ผู้ดูแลระบบและเจ้าของได้เสมอ · คนอื่นได้เมื่อเปิดสิทธิ์หน้า “ตั้งค่าระบบ/รายการสินค้า/รอบสั่งของ/Safety stock” ให้ใน JJ Access'+
@@ -1885,7 +1923,7 @@ function deptOpts(cur){const l=deptNames();if(cur&&l.indexOf(cur)<0)l.unshift(cu
 function renderSched(){
   if(S.user&&S.user.role!=='admin'){$('#list').innerHTML='<div class="empty">หน้ารอบสั่งซัพสำหรับแอดมินเท่านั้น</div>';return;}
   $('#list').innerHTML='<div class="dhead">🚚 รอบสั่ง–ส่งของซัพ</div>'
-    +'<div class="note">ตั้งวันสั่ง→วันส่ง เช่น สั่งจันทร์→ส่งอังคาร หรือสั่งได้ทุกวัน+จำนวนวันส่ง · ใช้ร่วมกับโฟลว์สั่งของแอพนับ · ค่าเดียวใช้ทั้ง 2 สาขา</div>'
+    +'<div class="note">ตั้งวันสั่ง→วันส่ง เช่น สั่งจันทร์→ส่งอังคาร หรือสั่งได้ทุกวัน+จำนวนวันส่ง · ใช้ร่วมกับโฟลว์สั่งของแอพนับ · ค่าเดียวใช้ทั้ง '+brN()+' สาขา</div>'
     +(schedCard()||'<div class="empty">ยังไม่มีซัพในรายการสินค้า</div>');
 }
 /* ---- ⚙️ ตั้งค่า: แยกหน้าละหัวข้อ (สิทธิ์ผู้ใช้ · แผนก · หน่วยซื้อ↔หน่วยนับ) ---- */
@@ -1989,7 +2027,8 @@ function itemsCard(){
   const st=S._apLoading?'<div class="note" style="margin:10px 15px">⏳ กำลังโหลดรายการสินค้าทุกสาขา...</div>'
     :(S.apErr?'<div class="note" style="margin:10px 15px">⚠ โหลดไม่สำเร็จ ('+esc(S.apErr)+') <button class="outb" onclick="ensureAllProducts(true)">↻ ลองใหม่</button></div>':'');
   return '<div class="card"><div class="h">📦 รายการสินค้าทั้งหมด <span class="n">'+total+' รายการ · '+(part?'🔒 เฉพาะสาขา'+esc(brScopeTxt()):'รวมทุกสาขา')+' แยกตามแผนก</span></div>'
-    +'<div class="note" style="margin:10px 15px">ดูได้ว่าสินค้าตัวไหน <b>สาขาไหนใช้บ้าง</b> — กด ✕ บนชื่อสาขา = เอาออกเฉพาะสาขานั้น · ปุ่ม 🗑 เลิกใช้ = เอาออก'+(part?'ทุกสาขาที่คุณดูแล':'ทุกสาขา')+' (ข้อมูลเก่ายังอยู่ในระบบ กู้คืนได้ที่ 🗑 ถังขยะ) · เปลี่ยนซัพได้ที่ช่องหน่วย/ซัพ · แผนกจัดตามสาขาที่เปิดอยู่ (สาขา'+BR_NAME[S.br]+')</div>'
+    +'<div class="note" style="margin:10px 15px">ดูได้ว่าสินค้าตัวไหน <b>สาขาไหนใช้บ้าง</b> — กด ✕ บนชื่อสาขา = เอาออกเฉพาะสาขานั้น · ปุ่ม 🗑 เลิกใช้ = เอาออก'+(part?'ทุกสาขาที่คุณดูแล':'ทุกสาขา')+' (ข้อมูลเก่ายังอยู่ในระบบ กู้คืนได้ที่ 🗑 ถังขยะ) · เปลี่ยนซัพได้ที่ช่องหน่วย/ซัพ · แผนกจัดตามสาขาที่เปิดอยู่ (สาขา'+BR_NAME[S.br]+')'
+      +(Object.keys(BR_ADDED).length&&S.user&&S.user.boss?' · สาขาใหม่: กด ➕ เพิ่มสินค้าใหม่ หรือคัดลอกจากสาขาต้นแบบที่ <a href="jjmk-admin.html" style="color:var(--red);font-weight:700">🔑 JJ Access</a> → 🏪 สาขา → ➕ เพิ่มสินค้า':'')+'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 15px 0"><button class="outb" style="background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700" onclick="newProdOpen()">➕ เพิ่มสินค้าใหม่</button>'
     +'<button class="outb" onclick="trashToggle()">'+(S.trashOpen?'▴ ซ่อนถังขยะ':'🗑 ถังขยะ (สินค้าที่เลิกใช้)'+(S.trash?' '+S.trash.length:''))+'</button></div>'
     +(S.trashOpen?trashCard():'')
@@ -2513,7 +2552,7 @@ function deptCard(){
     return head+body;
   }).join('');
   return '<div class="card"><div class="h">🗂 แผนก + ของที่ต้องนับ <span class="n">สาขา'+BR_NAME[S.br]+' · '+depts.filter(k=>k!=='ยังไม่จัดแผนก').length+' แผนก</span></div>'
-    +'<div class="note" style="margin:10px 15px">แผนกและของในแต่ละแผนก <b>แยกกันคนละสาขา</b> (สลับสาขาที่แถบซ้ายเพื่อตั้งอีกสาขา) · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ · เพิ่ม/ลบแผนกที่นี่ แถบแผนกหน้านับสต๊อกเปลี่ยนตามทันที'
+    +'<div class="note" style="margin:10px 15px">แผนกและของในแต่ละแผนก <b>แยกกันคนละสาขา</b> (สลับสาขาที่แถบซ้ายเพื่อตั้งอีกสาขา) · ที่ใช้ร่วม '+brN()+' สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ · เพิ่ม/ลบแผนกที่นี่ แถบแผนกหน้านับสต๊อกเปลี่ยนตามทันที'
     +(S.deptTbl?'':' · ⚠ ยังไม่ได้รัน <b>sql/jjmk_stockcheck_depts.sql</b> — แผนกที่ยังไม่มีของจะยังไม่ถูกจำ')+' · หมวดเดิมของแอพนับ (cat_label) ไม่ถูกแก้/ลบจากหน้านี้ ระบบนับเดิมยังใช้งานได้ปกติ'+'</div>'
     +'<div class="lrow" style="grid-template-columns:1fr 150px 130px;gap:8px"><div><input class="di" id="cfgQ" value="'+esc(S.cfgQ||'')+'" placeholder="🔍 ค้นหาสินค้าในทุกแผนก" oninput="cfgSearch(this.value)"></div>'
     +'<div><input class="di" id="ndName" placeholder="ชื่อแผนกใหม่" onkeydown="if(event.key===\'Enter\')addDept()"></div>'
@@ -2642,8 +2681,15 @@ async function ensureBillUnits(force){ // หน่วยซื้อ = หน�
 const buOf=n=>(S.billUnits||{})[String(n||'').trim()]||null;
 /* ---- ลำดับรายการมาตรฐาน (ใช้ทุกเมนู): ของที่มีครบทุกสาขาก่อน เรียงตามชื่อ · ของที่มีบางสาขาไว้ท้ายกลุ่ม ---- */
 const nBr=n=>(S.nameBrN||{})[String(n||'').trim()]||Object.keys(STK_BR).length;
+/* สาขาที่นับรวม: 2 สาขาเดิมเสมอ + สาขาใหม่ที่มีสินค้าแล้ว (สาขาใหม่ที่ยังว่างไม่ทำให้ของทุกตัวกลายเป็น "บางสาขา") */
+let _brTot={a:null,k:'',n:0};
+const brTot=()=>{const k=Object.keys(STK_BR).join(); if(!Object.keys(BR_ADDED).length)return Object.keys(STK_BR).length;
+  if(_brTot.a===S.allBr&&_brTot.k===k)return _brTot.n;   // จำไว้ต่อชุดข้อมูล (เรียกทุกครั้งที่เรียงรายการ)
+  const has={}; (S.allBr||[]).forEach(r=>{has[r.branch_id]=1;});
+  _brTot={a:S.allBr,k,n:Object.keys(STK_BR).filter(b=>!BR_ADDED[b]||has[STK_BR[b]]).length}; return _brTot.n;};
+/* ของที่มีสาขาเดียว (เฉพาะสาขา) ไว้ท้ายกลุ่ม — 2 สาขา = เหมือนเดิมทุกอย่าง · 3 สาขาขึ้นไป: ของที่สาขาใหม่ยังไม่มี ไม่ถูกดันลงท้าย */
 function cmpName(a,b){
-  const na=String(a||'').trim(),nb2=String(b||'').trim(),tot=Object.keys(STK_BR).length;
+  const na=String(a||'').trim(),nb2=String(b||'').trim(),tot=Math.min(2,brTot());
   const pa=nBr(na)>=tot?0:1,pb=nBr(nb2)>=tot?0:1;
   return (pa-pb)||na.localeCompare(nb2,'th');
 }
@@ -2653,7 +2699,9 @@ const cmpSupName=(a,b)=>{   // หน้า Safety: เรียงตามซ�
   const sa=String((a&&a.sup)||'').trim(),sb=String((b&&b.sup)||'').trim();
   return (sa?0:1)-(sb?0:1)||sa.localeCompare(sb,'th')||cmpNameTH(a,b);
 };
-const onlySome=n=>nBr(n)<Object.keys(STK_BR).length; // มีบางสาขา
+const onlySome=n=>nBr(n)<brTot(); // มีบางสาขา
+const someTxt=n=>{const k=nBr(n),t=brTot();   // ป้ายใต้ชื่อในหน้านับ: สาขาเดียว = "เฉพาะสาขา…" · หลายสาขาแต่ไม่ครบ = "มี 2/3 สาขา"
+  return k>=t?'':k<=1?'เฉพาะสาขา'+BR_NAME[S.br]:'มี '+k+'/'+t+' สาขา';};
 async function fillBillUnits(){ // เติมหน่วยซื้อจากบิลให้ทุกตัวที่ยังไม่ตรง
   const todo=S.all.map(it=>({it,m:S.map[it.id],b:buOf(billName(it))}))
     .filter(x=>x.m&&x.b&&String(x.m.bill_unit||'').trim()!==x.b.top);
@@ -2776,7 +2824,7 @@ function unitCard0(){ // แผงหน่วยทั้งหมด (พั�
       +(show.length?show.map(row).join(''):'<div class="empty">ไม่พบหน่วย "'+esc(q)+'"</div>')
       +(nAl?'<div class="lrow" style="grid-template-columns:1fr auto"><div style="font-size:12px">มีบิลที่เขียนชื่อพ้อง <b>'+nAl+'</b> รายการที่ยังไม่มีตัวคูณ 1:1 (ฝั่ง P&L ต้องใช้)</div>'
         +'<div><button class="outb" onclick="fillAliasConv()">⬇ ใส่ตัวคูณ 1:1 ให้ชื่อพ้อง</button></div></div>':'')
-      +'<div class="note"><b>🔗 รวม</b> = หน่วยคนละชื่อแต่ของเดียวกัน (โล / กก. / กก) → เลือกหน่วยหลัก 1 ชื่อ ระบบจะเปลี่ยนสินค้าทั้ง 2 สาขาให้ใช้ชื่อหลัก '
+      +'<div class="note"><b>🔗 รวม</b> = หน่วยคนละชื่อแต่ของเดียวกัน (โล / กก. / กก) → เลือกหน่วยหลัก 1 ชื่อ ระบบจะเปลี่ยนสินค้าทั้ง '+brN()+' สาขาให้ใช้ชื่อหลัก '
       +'และจำไว้ว่าชื่อเดิม = ชื่อหลัก · <b>บิลเก่าไม่ถูกแก้</b> (เป็นของที่ซัพส่งมาจริง) แต่ระบบจะถือว่าเป็นหน่วยเดียวกันและใส่ตัวคูณ 1:1 ให้ฝั่ง P&L เอง — ไม่มีอะไรเสีย · '
       +'แก้ชื่อหน่วย = เปลี่ยนชื่อให้ทุกที่ที่ใช้อยู่ · ลบได้เมื่อไม่มีสินค้าใช้หน่วยนั้นแล้ว</div>'
     ):'')+'</div>';
@@ -2814,7 +2862,7 @@ async function unitAdoptAll(){
 }
 async function unitRename(old){
   old=uKey(old); const u=unitAll().find(x=>x.name===old)||{cnt:0,map:0,bill:0,conv:0};
-  const nn=uKey(ask('เปลี่ยนชื่อหน่วย "'+old+'" เป็น\n(จะเปลี่ยนให้ทุกที่: สินค้าทั้ง 2 สาขา · ชื่อที่ผูกกับ P&L · ตัวคูณ'
+  const nn=uKey(ask('เปลี่ยนชื่อหน่วย "'+old+'" เป็น\n(จะเปลี่ยนให้ทุกที่: สินค้าทั้ง '+brN()+' สาขา · ชื่อที่ผูกกับ P&L · ตัวคูณ'
     +(u.bill?' — หน่วยในบิลเก่ายังเป็น "'+old+'" ตามเดิม':'')+')',old));
   if(!nn||nn===old)return;
   try{
@@ -2858,7 +2906,7 @@ async function unitMerge(src,main){ // รวมหน่วย: src กลา�
   if(!src||!main||src===main)return;
   const u=unitAll(true).find(x=>x.name===src)||{cnt:0,map:0,bill:0,conv:0};
   if(!cfm('รวมหน่วย "'+src+'" เข้ากับ "'+main+'" ?\n\n'
-    +'• สินค้าที่ใช้หน่วย "'+src+'" ('+u.cnt+' รายการ ทั้ง 2 สาขา) จะเปลี่ยนเป็น "'+main+'"\n'
+    +'• สินค้าที่ใช้หน่วย "'+src+'" ('+u.cnt+' รายการ ทั้ง '+brN()+' สาขา) จะเปลี่ยนเป็น "'+main+'"\n'
     +'• ระบบจะจำว่า "'+src+'" = "'+main+'" (บิลที่เขียน "'+src+'" ถือว่าเป็น "'+main+'")\n'
     +'• บิลเก่าไม่ถูกแก้ · ตัวคูณ 1:1 ใส่ให้อัตโนมัติ'))return;
   try{
@@ -3139,7 +3187,7 @@ function renderSet(){
     (a==='ยังไม่จัดแผนก'?1:0)-(b==='ยังไม่จัดแผนก'?1:0)||a.localeCompare(b,'th'));
   $('#list').innerHTML='<div class="dhead">🛟 Safety · อัตราใช้ต่อวัน + แผนก · สาขา'+BR_NAME[S.br]+'</div>'
 
-    +'<div class="note">จ–พฤ / ศ / ส–อา = ใช้ของกี่หน่วยต่อวัน (ช่องเหลือง = กลุ่มของวันนี้) · ค่าลงช่องเดิมของแอพนับ → ระบบคำนวณสั่งของ + ส่ง LINE ซัพใช้ต่อได้เลย · แผนกเลือกจากรายชื่อในหน้า ⚙️ ตั้งค่า › แผนก (เพิ่ม/ลบ/แก้ชื่อที่นั่น) · <b>แผนกแยกกันคนละสาขา</b> · ที่ใช้ร่วม 2 สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ · <b>เรียง: แผนก → ซัพ → ชื่อสินค้า (ก–ฮ)</b> · 🗑 = เลิกใช้สินค้าตัวนั้นที่สาขานี้ (ข้อมูลเดิมไม่ได้ถูกลบทิ้ง)'+(S.deptOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ก่อนถึงตั้งแผนกได้')+'</div>'
+    +'<div class="note">จ–พฤ / ศ / ส–อา = ใช้ของกี่หน่วยต่อวัน (ช่องเหลือง = กลุ่มของวันนี้) · ค่าลงช่องเดิมของแอพนับ → ระบบคำนวณสั่งของ + ส่ง LINE ซัพใช้ต่อได้เลย · แผนกเลือกจากรายชื่อในหน้า ⚙️ ตั้งค่า › แผนก (เพิ่ม/ลบ/แก้ชื่อที่นั่น) · <b>แผนกแยกกันคนละสาขา</b> · ที่ใช้ร่วม '+brN()+' สาขาคือ ชื่อบิล↔ชื่อนับ และ หน่วยบิล↔หน่วยนับ · <b>เรียง: แผนก → ซัพ → ชื่อสินค้า (ก–ฮ)</b> · 🗑 = เลิกใช้สินค้าตัวนั้นที่สาขานี้ (ข้อมูลเดิมไม่ได้ถูกลบทิ้ง)'+(S.deptOk?'':' · ⚠ รัน sql/jjmk_stockcheck_dept.sql ก่อนถึงตั้งแผนกได้')+'</div>'
     +filBar
     +(keys.length?keys.map(k=>{
       const rows=ds[k].slice().sort(cmpSupName).map(it=>{   // ในแผนก: เรียงตามซัพ แล้วค่อยชื่อสินค้า ก–ฮ
@@ -3188,7 +3236,7 @@ async function delItemSet(id){ // เลิกใช้สินค้า (ซ�
   if(!cfm('เลิกใช้ "'+it.name+'" ที่สาขา'+BR_NAME[S.br]+'?\n\n'
     +'จะไม่ขึ้นหน้านับสต๊อก / ใบสั่งของ / Safety ของสาขานี้อีก\n'
     +'(ยอดนับเดิม ประวัติบิล และการผูกชื่อยังอยู่ครบ ไม่ได้ลบทิ้ง)'
-    +(both?'\n\nอีกสาขายังใช้ตัวนี้อยู่ ไม่กระทบกัน':'')))return;
+    +(both?(n2>2?'\n\nสาขาอื่นอีก '+(n2-1)+' สาขายังใช้ตัวนี้อยู่ ไม่กระทบกัน':'\n\nอีกสาขายังใช้ตัวนี้อยู่ ไม่กระทบกัน'):'')))return;
   try{
     await api('PATCH','products?id=eq.'+encodeURIComponent(id),{deleted_at:new Date().toISOString()},'return=minimal');
     S.all=(S.all||[]).filter(x=>x.id!==id); S.items=S.all;
@@ -3344,7 +3392,7 @@ async function saveCn(id){
     S.all.forEach(x=>{if(x.name===old)x.name=nn;});
     (S.mapRows||[]).forEach(r=>{if(r.product_name===old)r.product_name=nn;});
     Object.values(S.map).forEach(r=>{if(r.product_name===old)r.product_name=nn;});
-    toast('✅ เปลี่ยนชื่อนับ "'+old+'" → "'+nn+'" (ทั้ง 2 สาขา + ตารางผูก)');
+    toast('✅ เปลี่ยนชื่อนับ "'+old+'" → "'+nn+'" (ทั้ง '+brN()+' สาขา + ตารางผูก)');
     render();
   }catch(e){toast('เปลี่ยนชื่อไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
@@ -3385,7 +3433,7 @@ async function upImg(file){
       headers:{apikey:CONFIG.KEY,Authorization:'Bearer '+CONFIG.KEY,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
     if(!r.ok)throw new Error(await r.text().catch(()=>r.status));
     await setImgUrl(it.name,CONFIG.URL+'/storage/v1/object/public/product-images/'+path);
-    toast('✅ ใส่รูป '+billName(it)+' แล้ว (เห็นทั้ง 2 สาขา)');render();
+    toast('✅ ใส่รูป '+billName(it)+' แล้ว (เห็นทั้ง '+brN()+' สาขา)');render();
   }catch(e){toast('อัปโหลดรูปไม่สำเร็จ — '+String(e.message||e).slice(0,100),true);}
 }
 /* ---- บันทึก ---- */
@@ -3460,6 +3508,8 @@ async function acceptUser(usr,remember){      // ตรวจกับฐาน�
     $('#lgMsg').textContent='บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ระบบนับสต๊อก — แจ้งผู้ดูแลให้เปิดสิทธิ์ที่ JJ Access';
     return false;
   }
+  await Promise.race([brReady(),new Promise(r=>setTimeout(r,3000))]);   // ทะเบียนสาขากลางก่อน (สาขาใหม่/สิทธิ์รายสาขา) · ช้าเกิน 3 วิ = ใช้แคช/2 สาขาเดิมไปก่อน มาทีหลังค่อยปรับ (onChange)
+  S._u={username:usr.username,display_name:usr.display_name,role:usr.role,unit:usr.unit,apps:usr.apps};   // ไว้คิดสิทธิ์ใหม่ถ้าทะเบียนเปลี่ยน
   S.user=mapCentral(usr);
   if(remember)try{ sessionStorage.setItem(SC_SESS,JSON.stringify({u:usr.username,h:usr.pass_hash})); }catch(e){}
   return true;
@@ -3495,7 +3545,7 @@ async function doLogin(){
 }
 function logout(){
   try{ sessionStorage.removeItem(SC_SESS); localStorage.removeItem('jjsc_auth'); }catch(e){}
-  S.user=null; S.users=null; showLogin(); applyAuth();
+  S.user=null; S._u=null; S.users=null; showLogin(); applyAuth();
 }
 const allowedBr=()=>{const u=S.user;const all=Object.keys(STK_BR);
   if(u&&u.noBr)return [];                      // ได้สิทธิ์แค่ครัวกลาง/ออฟฟิศ = ไม่มีสาขาในแอพนี้ (ไม่ใช่ทุกสาขา)
@@ -3503,13 +3553,18 @@ const allowedBr=()=>{const u=S.user;const all=Object.keys(STK_BR);
 const brOk=b=>allowedBr().includes(b===undefined?S.br:b);   // สาขานี้ (ตั้งต้น = ที่เปิดอยู่) อยู่ในสิทธิ์ไหม
 const brScopeTxt=()=>allowedBr().map(b=>BR_NAME[b]).join(', ')||'—';
 const NOBR_HTML='<div class="empty">🔒 ไม่มีสิทธิ์สาขาในแอพนี้<br><span style="font-size:13px">บัญชีนี้ได้สิทธิ์เฉพาะสาขาที่ไม่มีสต๊อกหน้าร้าน (ครัวกลาง/ออฟฟิศ) — ให้ผู้ดูแลตั้ง “เห็นเฉพาะสาขา” ที่ 🔑 JJ Access</span></div>';
+const nobrHtml=()=>{const m=(S.user&&S.user.brMiss)||[];   // สาขาที่ตั้งให้ยังไม่มีในแอพนี้ (สาขาใหม่ที่ยังโหลดทะเบียนไม่ได้ / รหัสผิด / สาขาที่ปิดแล้ว)
+  return m.length?'<div class="empty">🔒 ไม่มีสิทธิ์สาขาในแอพนี้<br><span style="font-size:13px">สาขาที่ตั้งให้บัญชีนี้ ('+esc(m.map(b=>JJBR.short(b)).join(', '))
+    +') ยังไม่มีในระบบนับสต๊อก — ลองรีเฟรชอีกครั้ง หรือให้ผู้ดูแลตรวจ “เห็นเฉพาะสาขา”/“ประจำที่” ที่ 🔑 JJ Access</span></div>':NOBR_HTML;};
 const canDept=d=>{const u=S.user;
   return !u||u.role==='admin'||!Array.isArray(u.depts)||!u.depts.length||u.depts.includes(d);};
 function renderBr(){
   const bs=allowedBr();
   if(!bs.length){ $('#brSeg').innerHTML='<span style="padding:6px 10px;font-size:12.5px;font-weight:700;color:#F2DCDC">🔒 ไม่มีสิทธิ์สาขาในแอพนี้</span>'; return; }   // ห้ามตกไปสาขาแรก
-  if(!bs.includes(S.br))S.br=bs[0];
-  $('#brSeg').innerHTML=bs.map(b=>'<button data-br="'+b+'" class="'+(S.br===b?'on':'')+'">'+BR_NAME[b]+'</button>').join('');
+  let sv=''; try{ sv=localStorage.getItem('jjsc_br')||''; }catch(e){}
+  if(!bs.includes(S.br)||(S._brAuto&&BR_ADDED[sv]&&S.br!==sv&&bs.includes(sv))){ S.br=bs.includes(sv)?sv:bs[0]; S._brAuto=S.br!==sv; }   // สาขาที่เลือกไว้ก่อน (สาขาใหม่ที่เพิ่งได้จากทะเบียน = กลับไปสาขานั้น)
+  $('#brSeg').classList.toggle('many',bs.length>2);
+  $('#brSeg').innerHTML=bs.map(b=>'<button data-br="'+b+'" class="'+(S.br===b?'on':'')+'">'+esc(BR_NAME[b])+'</button>').join('');
 }
 function applyAuth(){
   renderBr();
@@ -3527,6 +3582,12 @@ function placeCtl(){
   if(c&&t&&c.parentElement!==t)t.appendChild(c);
 }
 function boot(){
+  brReady();   // อ่านทะเบียนสาขากลางพร้อมกับเช็คบัญชี (ไม่รอกัน)
+  JJBR.onChange(()=>{ if(!brSync())return;   // ทะเบียนเปลี่ยน (เพิ่ม/ปิดสาขา) = คิดสิทธิ์+ปุ่มสาขาใหม่
+    if(!S._u){ renderBr(); return; }
+    const was=allowedBr().join()+'|'+S.br; S.user=mapCentral(S._u); applyAuth();
+    if(allowedBr().join()+'|'+S.br!==was)loadAll(); else { S.allBr=null; S.nameBrN=null; ensureAllProducts(); }
+  });
   ['scLogo','hdLogo','lgLogo'].forEach(id=>{const el=document.getElementById(id);if(el)el.src=LOGO_B64;});
   ['icon','apple-touch-icon'].forEach(rel=>{const l=document.createElement('link');l.rel=rel;l.href=LOGO_B64;document.head.appendChild(l);});
   renderBr(); placeCtl(); window.addEventListener('resize',placeCtl);

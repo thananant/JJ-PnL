@@ -685,7 +685,8 @@ table.sttab th.right{text-align:right}
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -1026,12 +1027,19 @@ function mapCentralProf(u){
      งานในครัวเอง (ผลิต · สต๊อกครัว · สั่งซื้อ · สูตร) ไม่ผูกสาขา เห็นเหมือนเดิม
      ได้แค่ JJCK/OFFICE = เห็นเฉพาะงานในครัว ไม่เห็นข้อมูลสาขาไหนเลย (ไม่ล็อกแอพ — ครัวกลางคือ JJCK เอง)
      ⚠️ อย่าใช้ชื่อ S.br — นั่นคือแคชยอดที่สาขาต้องการ */
-  const sc=boss?[]:String((k&&k._br)||'').split(',').map(x=>x.trim())
-    .filter(x=>['JJLP','JJRD','JJCK','OFFICE'].includes(x));
-  const brScope=sc.length?sc:null;
+  const brRaw=boss?'':String((k&&k._br)||'');
+  const brScope=brScopeOf(brRaw);
   return {username:u.username, name:u.display_name||u.username, role, status:'active',
-          auth_uid:'central:'+u.username, branch_ids:brScope||[], brScope, perms:{}, central:true,
+          auth_uid:'central:'+u.username, branch_ids:brScope||[], brScope, brRaw, perms:{}, central:true,
           unit:u.unit||'ALL', apps:apps, kitchenPerm:k, pass_hash:u.pass_hash};
+}
+/* _br → รายการสาขาที่เห็น · null = ทุกสาขา
+   รับรหัสเดิม (JJLP/JJRD/JJCK/OFFICE) + สาขาหน้าร้านในทะเบียนสาขากลาง (JJBR — เปิดสาขาใหม่ใน JJ Access แล้วตั้งสิทธิ์ได้เลย)
+   ตั้งไว้แต่ไม่เหลือรหัสที่รู้จัก (เช่นสาขาที่ยังโหลดทะเบียนไม่ได้) = [] ไม่เห็นสาขาไหน — ห้ามกลายเป็นทุกสาขา */
+function brScopeOf(raw){
+  if(!String(raw||'').trim())return null;
+  const ok=['JJLP','JJRD','JJCK','OFFICE'].concat(JJBR.unitCodes());
+  return String(raw).split(',').map(x=>x.trim()).filter(x=>ok.includes(x));
 }
 async function centralUser(username){
   const {data,error}=await sb.from('pnl_users')
@@ -1172,9 +1180,11 @@ const MISSING_TBL=e=>{const c=(e&&e.code)||'',m=String((e&&e.message)||e||'');
 async function loadAll(){
   setBusy(true);
   try{
+    const jbr=JJBR.load(SB_URL,SB_ANON);   // ทะเบียนสาขากลาง (ไม่ throw · ≤8 วิ · อ่านไม่ได้ = แคช/JJRD+JJLP แบบเดิม)
     const probe=await sb.from('ck_items').select('id').limit(1);
     if(probe.error){if(MISSING_TBL(probe.error)){S.setupNeeded=true;return;}throw probe.error;}
     S.setupNeeded=false;
+    await jbr;brRegSync();   // สาขาใหม่: สิทธิ์ _br + รหัสสต๊อก (STK_BR) — ก่อนดึงออเดอร์ตามสิทธิ์
     const from90=addDays(todayStr(),-45);
     const [it,sp,rc,bm,pl,po,poi,pr,od,odi,br,xc,un,ks,bl,sc1,sc2,dpc]=await Promise.all([
       sbAll(()=>sb.from('ck_items').select('*').is('deleted_at',null).order('sort').order('name').order('id')),
@@ -1208,7 +1218,8 @@ async function loadAll(){
     S.boms={};bm.forEach(l=>{(S.boms[l.recipe_id]=S.boms[l.recipe_id]||[]).push(l);});
     S.poItems={};poi.forEach(l=>{(S.poItems[l.po_id]=S.poItems[l.po_id]||[]).push(l);});
     S.orderItems={};odi.forEach(l=>{(S.orderItems[l.order_id]=S.orderItems[l.order_id]||[]).push(l);});
-    S.branchesAll=(br&&br.length)?br:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}];   // ไว้หาชื่อสาขา
+    S.branchesAll=(br&&br.length)?br:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]   // ไว้หาชื่อสาขา
+      .concat(JJBR.extra(['JJRD','JJLP']).map(r=>({code:r.code,name:r.name,sort:r.sort})));   // อ่าน pnl_branches ไม่ได้ = เติมสาขาใหม่จากแคชทะเบียน
     // สาขาปลายทางที่เลือกส่งได้ — เห็นเฉพาะสาขา = เฉพาะที่ได้สิทธิ์ (ไม่นับแถวครัวกลางของ P&L) · ว่างได้ (ได้แค่ JJCK/OFFICE)
     S.branches=brScoped()?S.branchesAll.filter(b=>inBr(b.code)&&!b.is_central):S.branchesAll;
     S.expCats=(xc||[]).filter(c=>c&&typeof c.n==='string'&&c.n.trim());
@@ -3261,6 +3272,28 @@ function spdNames(bid,from,to){
 const BR_DOW=['sun','mon','tue','wed','thu','fri','sat'];
 const BR_SRC_RE=/ครัวกลาง|jjck|central\s*kitchen/i;
 S.br={t:0,data:null,loading:null,err:null,src:null,links:{},sups:[],needTbl:true};
+/* 🏪 สาขาใหม่จากทะเบียนสาขากลาง (JJBR · pnl_branches.stk_id) → เติมเข้า STK_BR เดิม (แก้ object เดิม — บล็อก SPD อ้างชื่อ STK_BR ตรง ๆ)
+   JJRD/JJLP ใช้ค่าในโค้ดเสมอ · สาขาที่ปิด/หายจากทะเบียน = เอาออก (เฉพาะที่เติมจากทะเบียน) · การ์ดเรียงตามทะเบียนต่อท้ายสาขาเดิม */
+const STK_BR0=Object.assign({},STK_BR);
+function stkRegSync(){
+  const want={},used=Object.values(STK_BR0);
+  JJBR.stores().forEach(r=>{if(r.stk_id&&!STK_BR0[r.code]&&!used.includes(r.stk_id)){want[r.code]=r.stk_id;used.push(r.stk_id);}});
+  const before=JSON.stringify(STK_BR);
+  Object.keys(STK_BR).forEach(k=>{if(!STK_BR0[k]&&STK_BR[k]!==want[k])delete STK_BR[k];});
+  Object.keys(want).forEach(k=>{if(STK_BR[k]!==want[k])STK_BR[k]=want[k];});
+  return JSON.stringify(STK_BR)!==before;
+}
+stkRegSync();   // จากแคชทะเบียนในเครื่อง — ไม่ต้องรอเน็ต (loadAll อ่านของจริงแล้วเรียก brRegSync ซ้ำ)
+/* หลังอ่านทะเบียน: รหัสสต๊อก + สิทธิ์ _br ใหม่ (สาขาที่เพิ่งเปิด) · เปลี่ยน = ล้างแคชยอดที่สาขาต้องการ */
+function brRegSync(){
+  let ch=stkRegSync();
+  const p=S.prof;
+  if(p&&p.brRaw!=null){const sc=brScopeOf(p.brRaw);
+    if(JSON.stringify(sc)!==JSON.stringify(p.brScope)){p.brScope=sc;p.branch_ids=sc||[];ch=true;}}
+  if(ch){S.br.t=0;S.br.data=null;}
+}
+/* ชื่อสาขาที่เขียนลง stock_receipts — สาขาใหม่ใช้ชื่อสั้นในทะเบียน (แบบแอพนับสต๊อก) · JJRD/JJLP เหมือนเดิม */
+const brStkName=code=>STK_BR0[code]?branchName(code):JJBR.short(code,branchName(code));
 
 /* ---------- สูตรพอร์ตจากแอพนับสต๊อก (ห้ามเปลี่ยนพฤติกรรม) ---------- */
 function brAddDays(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);
@@ -3431,7 +3464,10 @@ async function brLoad(force){
         .eq('cancelled',false).not('order_rate_group','is',null)
         .gte('day_to',brAddDays(today,-16)).lte('day_from',brAddDays(today,130))).catch(()=>[]));
       const data=[];
-      for(const code of stkCodes())data.push(await brLoadBranch(code,today));   // เห็นเฉพาะสาขา = โหลดเฉพาะสาขาที่ได้สิทธิ์
+      for(const code of stkCodes()){   // เห็นเฉพาะสาขา = โหลดเฉพาะสาขาที่ได้สิทธิ์
+        try{data.push(await brLoadBranch(code,today));}
+        catch(e){data.push({code,bid:STK_BR[code],err:(e&&e.message)||String(e),prods:[],cnt:{},cd:null,lastAt:null,recv:{},needs:{}});}}   // สาขาเดียวอ่านไม่ได้ (เช่นสาขาใหม่ที่ตั้งไม่ครบ) ไม่ลากสาขาอื่นหายไปด้วย
+      if(data.length&&data.every(B=>B.err))throw new Error(data[0].err);   // อ่านไม่ได้ทุกสาขา = การ์ดเตือน + ลองใหม่ แบบเดิม
       S.br.data=data;S.br.err=null;S.br.t=Date.now();
     }catch(e){S.br.err=(e&&e.message)||String(e);S.br.data=null;}
     finally{S.br.loading=null;}
@@ -3471,6 +3507,7 @@ async function brPaint(elId,mode,force){
   el2.innerHTML=mode==='compact'?brCompactHtml():brFullHtml();
 }
 function brStatus(B,P){
+  if(B.err)return {chip:'<span class="chip bad">⚠ '+t('br_err')+'</span>',n:0};   // สาขานี้สาขาเดียวอ่านไม่ได้
   if(!B.cd)return {chip:'<span class="chip mid">'+t('br_no_count')+'</span>',n:0};
   if(P.sent)return {chip:'<span class="chip ok">'+t('br_sent_ok')+'</span>',n:0};
   if(!P.need.length)return {chip:'<span class="chip mid">'+t('br_nothing')+'</span>',n:0};
@@ -3484,6 +3521,7 @@ function brIvText(P){ // ซัพโหมด interval ในรายการ
   return out.map(o=>' · '+(out.length>1?esc(o.sup)+': ':'')+o.txt).join('');
 }
 function brMetaLine(B,P){
+  if(B.err)return '<div class="xs mut" style="overflow-wrap:anywhere">'+esc(B.err)+'</div>';
   if(!B.cd)return '';
   const ago=brDaysAgo(B.cd);
   return '<div class="xs mut">'+t('br_counted_at',{d:dispDate(B.cd)})+
@@ -3517,7 +3555,8 @@ function brFullHtml(){
   const prep={};
   data.forEach(B=>{const P=brPlan(B),st=brStatus(B,P);
     h+='<div class="card"><h3>🏪 '+esc(branchName(B.code))+'<span class="sp">'+st.chip+'</span></h3>'+brMetaLine(B,P);
-    if(!P.all.length)h+='<div class="xs mut" style="margin-top:6px">'+t('br_none_found')+'</div>';
+    if(B.err)h+='<button class="btn gh" style="margin-top:10px" onclick="brPaintAll(true)">⟳ '+t('br_retry')+'</button>';
+    else if(!P.all.length)h+='<div class="xs mut" style="margin-top:6px">'+t('br_none_found')+'</div>';
     else if(B.cd&&!P.sent){
       P.need.slice(0,6).forEach(x=>{
         h+='<div class="rowline" style="padding:6px 0"><div class="grow">'+esc(x.p.name)+
@@ -3658,7 +3697,7 @@ async function brSend(){await once(async()=>{
   }
   // บอกแอพนับสต๊อกว่าของกำลังไป — รอบนับถัดไปจะได้ไม่สั่งซ้ำ (ช่อง "ของที่กำลังมา")
   if(lines.length){
-    const r=await sb.from('stock_receipts').upsert(lines.map(x=>({branch_id:B.bid,branch_name:branchName(d.code),
+    const r=await sb.from('stock_receipts').upsert(lines.map(x=>({branch_id:B.bid,branch_name:brStkName(d.code),
       product_id:x.p.id,name:x.p.name,cat_label:x.p.cat_label||brDeptOf(x.p)||null,unit:x.p.unit||'',
       sup:x.p.sup||'',order_date:B.cd,ordered:val(x)})),{onConflict:'branch_id,product_id,order_date'});
     if(r&&r.error)warn=warn||r.error.message||'';
@@ -3676,7 +3715,7 @@ async function brUnsendHook(o){
   const rows=(r&&!r.error&&r.data)||[];
   if(rows.length){
     await sb.from('ck_br_needs').update({sent:null,order_id:null,d_send:null}).eq('order_id',o.id);
-    const bid=STK_BR[o.branch],cd=rows[0].count_date;
+    const bid=STK_BR[o.branch]||JJBR.stk(o.branch),cd=rows[0].count_date;   // สาขาที่ปิดไปแล้วยังหารหัสสต๊อกจากทะเบียนได้
     if(bid&&cd)await sb.from('stock_receipts').update({ordered:0}).eq('branch_id',bid).eq('order_date',cd)
       .in('product_id',rows.map(x=>x.product_id));
   }
@@ -4745,6 +4784,7 @@ function kpCheckHtml(){
     (K?'<button class="btn sm2" onclick="kpOrderModal()">🍳 '+t('kf_order_btn')+'</button>':'')+'</span></h3>'+
     '<div class="xs mut" style="margin-bottom:8px">'+t('kf_s1_hint',{d:fmtQ(c.safety_days),n:c.avg_days})+'</div>';
   if(!S.br.data&&stkCodes().length)h+='<div class="xs mut">⏳ '+t('kf_br_loading')+'</div>';
+  (b=>{if(b.length)h+='<div class="hintbox">⚠ '+t('br_err')+': '+esc(b.map(B=>branchName(B.code)).join(', '))+'</div>';})((S.br.data||[]).filter(B=>B.err));   // ยอดสาขานี้ไม่ได้นับรวม
   if(P.unl)h+='<div class="hintbox">⚠ '+t('kf_unlinked',{n:P.unl})+'</div>';
   if(!P.rows.length)h+='<div class="empty">'+t('kf_no_need')+'</div>';
   else{
@@ -4767,12 +4807,12 @@ function kpSteps(){ // 6 ขั้นของวัน — คำง่าย �
   const D=bizTodayISO();
   const nU=tkItems('urgent').length,nR=tkItems('refill').length;
   const brs=(S.br.data||[]).filter(B=>B.cd&&brPlan(B).need.length);
-  const brLeft=brs.filter(B=>!brPlan(B).sent).length;
+  const brLeft=brs.filter(B=>!brPlan(B).sent).length,brBad=(S.br.data||[]).some(B=>B.err);   // บางสาขาอ่านยอดไม่ได้ = ยังไม่ถือว่าเสร็จ
   const nBuy=kpBuyRows().filter(r=>r.short>0&&(r.orderToday||r.runOut)).length+S.pos.filter(p=>p.status==='draft').length;
   const nRecv=S.pos.filter(p=>p.status==='ordered').length;
   return [
     {k:1,ic:'⚡',lb:t('sx_s1'),ok:!nU,sub:nU?t('sx_todo_n',{n:nU}):t('sx_ok_enough'),go:"taskMake('urgent')"},
-    {k:2,ic:'🚚',lb:t('sx_s2'),ok:S.br.data?!brLeft:null,sub:S.br.data?(brLeft?t('sx_br_n',{n:brLeft}):(brs.length?t('sx_br_ok'):t('sx_br_none'))):'…',go:'taskSend()'},
+    {k:2,ic:'🚚',lb:t('sx_s2'),ok:S.br.data?!brLeft&&!brBad:null,sub:S.br.data?(brLeft?t('sx_br_n',{n:brLeft}):brBad?'⚠ '+t('br_err'):(brs.length?t('sx_br_ok'):t('sx_br_none'))):'…',go:'taskSend()'},
     {k:3,ic:'🍳',lb:t('sx_s3'),ok:!nR,sub:nR?t('sx_todo_n',{n:nR}):t('sx_ok_full'),go:"taskMake('refill')"},
     {k:4,ic:'📋',lb:t('sx_s4'),ok:!!S._countedToday,sub:S._countedToday?t('sx_cnt_ok'):t('sx_cnt_no'),go:"countOpen()"},
     {k:5,ic:'🛒',lb:t('sx_s5'),ok:!nBuy,sub:nBuy?t('sx_buy_n',{n:nBuy}):t('sx_buy_ok'),go:'taskBuy()'},
@@ -5436,7 +5476,8 @@ async function taskSend(){
   data.forEach(B=>{const P=brPlan(B);
     const o=S.orders.find(x=>x.branch===B.code&&x.d===D&&String(x.note||'').startsWith('📋'));
     let cls='',sub='',go=true;
-    if(!B.cd){cls='wait';sub='⏳ '+t('sx_br_wait');go=false;}
+    if(B.err){cls='wait';sub='⚠ '+t('br_err');go=false;}
+    else if(!B.cd){cls='wait';sub='⏳ '+t('sx_br_wait');go=false;}
     else if(P.sent){cls='done';sub='✓ '+t('sx_br_sent')+(o&&o.bill_no?' · 🧾 '+esc(o.bill_no):'');}
     else if(!P.need.length){cls='done';sub=t('sx_br_nothing');go=false;}
     else sub='<span class="tkqty">'+t('sx_br_send_n',{n:P.need.length})+'</span>';

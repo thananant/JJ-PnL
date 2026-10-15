@@ -150,7 +150,8 @@ textarea{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -186,6 +187,14 @@ textarea{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10
 <script>
 const CONFIG={URL:'https://aikyxvluaiubdidqxwnd.supabase.co',KEY:'sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm'};
 const BR_NAME={JJRD:'สาขารัชดา',JJLP:'สาขาลาดพร้าว'};
+/* สาขาที่เปิดใหม่ (ไม่อยู่ใน BR_NAME) = ชื่อจากทะเบียนสาขากลาง JJBR (แคชในเครื่องก่อน) แล้วอ่านทะเบียนจริงเงียบ ๆ ครั้งเดียว
+   (หน้าลูกค้า ไม่ต้องล็อกอิน · อ่านไม่ได้ = โชว์รหัสสาขาแบบเดิม) · 2 สาขาเดิมไม่อ่านทะเบียนเลย */
+let brLoaded=false;
+function brLabel(b){
+  if(Object.prototype.hasOwnProperty.call(BR_NAME,b))return BR_NAME[b];
+  if(!brLoaded&&window.JJBR){ brLoaded=true; JJBR.load(CONFIG.URL,CONFIG.KEY).then(()=>{ if(S.info)$('#brName').textContent=brLabel(S.info.session.branch); }); }
+  return window.JJBR?JJBR.name(b,b):b;
+}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const S={token:new URLSearchParams(location.search).get('s')||'',info:null,cart:{},cat:'',skew:0,fetchedAt:0,sending:false,pollT:null};
@@ -220,7 +229,7 @@ function tick(){
 }
 function render(){
   const j=S.info,ss=j.session;
-  $('#brName').textContent=BR_NAME[ss.branch]||ss.branch;
+  $('#brName').textContent=brLabel(ss.branch);
   $('#tblChip').textContent='โต๊ะ '+ss.table_no;
   $('#pkChip').textContent=pkName(ss.package);
   tick();

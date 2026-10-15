@@ -374,6 +374,7 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
 @media (max-width:700px){#bdayCard input,#bdayCard select,#bdayCard textarea{font-size:16px}#bdayCard .btn{min-height:44px}}
 @media (max-width:560px){.bd-act .btn{flex:1 1 auto}.bd-act span[style*="flex:1"]{display:none}}
 @media (max-width:700px){.pi-form input,.pi-form select,.pi-form textarea{font-size:16px}}
+@media (max-width:700px){#tipBg input,#devCard select{font-size:16px}#devCard select{min-height:44px}#tipBg .btn-sm{min-height:44px}}   /* ช่องทิปต่อสาขา + การ์ดเครื่องสแกน (2026-10-15): มือถือช่องกรอก 16px ปุ่มสูง 44px */
 @media (max-width:560px){.pi-act .btn,.pi-bar .btn{flex:1 1 0}}
 .dt-doc{font-size:12px;font-weight:600;color:var(--amber);background:var(--amber-soft);border-radius:7px;padding:3px 8px;justify-self:start}
 .dt-doc.bad{color:var(--red);background:var(--red-soft)}
@@ -738,7 +739,8 @@ window.JJGate=(function(){
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -1214,6 +1216,10 @@ window.JJGate=(function(){
       <button class="btn btn-ember" onclick="addOrgPos()">＋ เพิ่ม</button>
     </div>
     <div id="orgList"></div>
+
+    <div class="section-title">📟 เครื่องสแกน → สาขา</div>
+    <p class="muted" style="margin-bottom:10px">เครื่องสแกนใหม่ (เช่น สาขาที่เพิ่งเปิด) ส่งข้อมูลครั้งแรกแล้วจะขึ้นที่นี่เอง — เลือกสาขาให้เครื่อง แล้วเวลาสแกนจากเครื่องนั้นจะนับเป็นสาขานั้น (ผู้จัดการพนักงานใหม่ที่ยังไม่ระบุสาขาก็เห็นได้)</p>
+    <div id="devCard" style="margin-bottom:14px"></div>
 
     <div class="section-title">นำเข้าไฟล์การเข้างาน (.xlsx) — ช่องทางสำรอง</div>
     <p class="muted" style="margin-bottom:10px">ปกติข้อมูลเข้าจากเครื่องสแกนอัตโนมัติแล้ว — ใช้ตรงนี้เฉพาะดึงข้อมูลย้อนหลัง หรือช่วงเครื่อง/เน็ตมีปัญหา (นำเข้าซ้ำได้ ระบบกันข้อมูลเบิ้ล และจะอัปเดตแผนก/ชื่อของคนเดิมให้ด้วย)</p>
@@ -2312,7 +2318,7 @@ function renderWho(){
 let PERM = null;       // null = ไม่จำกัดหน้าจอ · {} = สิทธิ์รายหน้าจอของ payroll
 let SCOPE = null;      // null = ทุกสาขา · ['JJLP',...] = เฉพาะสาขาเหล่านี้
 let NO_ACCESS = false; // มีบัญชีแต่ไม่ได้รับสิทธิ์ payroll เลย
-const ALL_BR = ['JJLP','JJRD','JJCK','OFFICE'];
+const ALL_BR = ['JJLP','JJRD','JJCK','OFFICE'];   // + สาขาหน้าร้านใหม่จากทะเบียนกลาง (brSync แทรกก่อน JJCK)
 const PAGES = ['today','emp','detail','payroll','cal','adv','loan','dep','sso','mou','shift','holi','audit','settings'];
 const isBoss = u => !!u && (u.role === 'admin' || u.role === 'owner');
 function applyUser(u){
@@ -2323,8 +2329,10 @@ function applyUser(u){
   const a = (apps.payroll && typeof apps.payroll === 'object') ? apps.payroll : {};
   PERM = {}; PAGES.forEach(pg => { if(typeof a[pg] === 'string') PERM[pg] = a[pg]; });
   if(!PAGES.some(pg => String(PERM[pg]||'').includes('v'))) NO_ACCESS = true;
-  const br = String(a._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
+  const want = String(a._br||'').split(',').map(x=>x.trim()).filter(Boolean).map(x=>window.JJBR ? JJBR.canon(x) : x);
+  const br = want.filter(x=>ALL_BR.includes(x));
   if(br.length) SCOPE = br;
+  else if(want.length) SCOPE = [];   // ตั้งสาขาไว้แต่ไม่มีรหัสที่รู้จักเลย (สาขาปิด/พิมพ์ผิด) = ไม่เห็นใคร — เดิมหลุดเป็น "ทุกสาขา"
 }
 const canSee = pg => !PERM || String(PERM[pg]||'').includes('v');
 const canDo = (pg, f) => !PERM || String(PERM[pg]||'').includes(f);
@@ -2355,7 +2363,7 @@ function applyPermUI(){
   }
   const box = document.getElementById('permNote');
   if(box) box.innerHTML = (PERM || SCOPE)
-    ? '🔒 สิทธิ์: ' + (SCOPE ? 'เห็นเฉพาะ ' + SCOPE.map(b=>(BR[b]||{t:b}).t).join(', ') : 'ทุกสาขา')
+    ? '🔒 สิทธิ์: ' + (SCOPE ? (SCOPE.length ? 'เห็นเฉพาะ ' + SCOPE.map(b=>(BR[b]||{t:b}).t).join(', ') : 'ไม่มีสาขาที่เปิดให้ดู — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access') : 'ทุกสาขา')
     : '';
   if(NO_ACCESS){
     document.querySelector('main').innerHTML = '<div class="card" style="max-width:520px;margin:40px auto;text-align:center">' +
@@ -2892,7 +2900,7 @@ function go(p){
   document.querySelectorAll('aside nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));
   document.querySelector('main').style.maxWidth = (p==='cal'||p==='today'||p==='mou'||p==='dep'||p==='loan'||p==='sso'||p==='audit') ? 'none' : '';
   if(p==='emp')renderEmp(); if(p==='payroll')renderPayroll(); if(p==='cal')renderCalendar(); if(p==='adv')renderAdv(); if(p==='dep')renderDeposit(); if(p==='mou')renderMou(); if(p==='loan')renderLoan(); if(p==='sso')renderSso(); if(p==='holi')renderHoli(); if(p==='audit')renderAudit();
-  if(p==='detail'){renderDetailSelector();renderDetail();} if(p==='shift')renderShifts(); if(p==='today')renderToday(); if(p==='settings'){ renderOrg(); renderBday(); }
+  if(p==='detail'){renderDetailSelector();renderDetail();} if(p==='shift')renderShifts(); if(p==='today')renderToday(); if(p==='settings'){ renderOrg(); renderBday(); renderDevCard(); }
   window.scrollTo(0,0);
 }
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
@@ -4453,7 +4461,7 @@ async function delShift(id){
 
 /* ================= EMPLOYEES PAGE ================= */
 const BR = { JJLP:{t:'ลาดพร้าว', c:'chip-blue'}, JJRD:{t:'รัชดา', c:'chip-violet'}, JJCK:{t:'ครัวกลาง', c:'chip-green'}, OFFICE:{t:'ออฟฟิศ', c:'chip-amber'} };
-const branchChip = e => { const b = BR[e.branch]; return b? `<span class="chip ${b.c}">${b.t}</span>` : '<span class="chip chip-gray">–</span>'; };
+const branchChip = e => { const b = BR[e.branch]; return b? `<span class="chip ${b.c}"${b.col?` style="background:${b.col}22;color:${b.col}"`:''}>${b.t}</span>` : '<span class="chip chip-gray">–</span>'; };
 const avatar = (e, size) => e.photo
   ? `<img src="${e.photo}" style="width:${size}px;height:${size}px;border-radius:${Math.round(size/4)}px;object-fit:cover;background:#eee" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ava',textContent:'${(e.nick||'?')[0]}',style:'width:${size}px;height:${size}px;border-radius:${Math.round(size/4)}px;background:linear-gradient(160deg,#ff922b,#e8590c);color:#fff;display:flex;align-items:center;justify-content:center;font-family:Prompt,sans-serif;font-size:${Math.round(size/2.4)}px;font-weight:600'}))">`
   : `<div style="width:${size}px;height:${size}px;border-radius:${Math.round(size/4)}px;background:linear-gradient(160deg,#ff922b,#e8590c);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Prompt',sans-serif;font-size:${Math.round(size/2.4)}px;font-weight:600">${(e.nick||'?')[0]}</div>`;
@@ -4622,7 +4630,13 @@ function openEmpForm(id){
   document.getElementById('fCode').value = e? e.code : '';
   document.getElementById('fStart').value = e? (e.startDate||'') : '';
   document.getElementById('fEnd').value = e? (e.endDate||'') : '';
-  document.getElementById('fBranch').value = e? (e.branch||(SCOPE?homeBranch(e):'')) : (SCOPE? myBranches()[0] : '');
+  const fbv = e? (e.branch||(SCOPE?homeBranch(e):'')) : (SCOPE? (myBranches()[0]||'') : ''), fbs = document.getElementById('fBranch');
+  [...fbs.options].forEach(o=>{ if(o.dataset.tmp) o.remove(); });
+  if(fbv && ![...fbs.options].some(o=>o.value===fbv)){   // สาขาที่ยังไม่อยู่ในรายการ (ทะเบียนยังไม่มา/รหัสเก่า) — ใส่ไว้ก่อน ไม่งั้นกดบันทึกแล้วสาขาหาย
+    const o = Object.assign(document.createElement('option'), { value:fbv, textContent:((BR[fbv]||{}).t||fbv)+' ('+fbv+')' });
+    o.dataset.tmp = '1'; fbs.add(o);
+  }
+  fbs.value = fbv;
   const curDept = e? (e.dept||'') : '';
   const depts = orgDepts();
   if(curDept && !depts.includes(curDept)) depts.unshift(curDept);
@@ -4678,6 +4692,7 @@ async function saveEmpForm(){
     target: +document.getElementById('fTarget').value||10,
     active: +document.getElementById('fActive').value
   };
+  if(SCOPE && !SCOPE.includes(data.branch)) return toast('❌ เลือกสาขาสังกัดที่คุณดูแลก่อน');   // ผู้จัดการรายสาขา (รวมกรณีไม่มีสาขาที่ใช้ได้เลย) สร้าง/ย้ายคนออกนอกสาขาไม่ได้
   { const e0 = id ? employees.find(x=>x.id==id) : null;
     data.depTarget  = e0 ? e0.depTarget  : 5000;
     data.depMonthly = e0 ? e0.depMonthly : 500;
@@ -6703,7 +6718,7 @@ function renderCalendar(){
       byShift[k] = (byShift[k]||0)+1;
     });
     const brLine = cnt && !bf
-      ? ['JJLP','JJRD','JJCK','OFFICE','?'].filter(b=>byBr[b])
+      ? [...ALL_BR,'?'].filter(b=>byBr[b])
           .map(b=>`<b style="color:${BR_COLOR[b]||'#6b625b'}">${BR_SHORT[b]||'?'} ${byBr[b]}</b>`).join(' · ')
       : '';
     const shLine = cnt? Object.entries(byShift).map(([k,v])=>k+' '+v).join(' · ') : '';
@@ -6887,7 +6902,7 @@ function openKbizBranch(mode){
     : mode==='pay' ? 'ยอดสุทธิของแต่ละคน (หักเบิกกลางเดือน/ผ่อน/ประกันแล้ว) ของงวดที่เลือกในหน้าสรุปเงินเดือน'
                  : 'รวมยอดเบิกทั้งงวดต่อคน ของงวดที่เลือกในหน้าเบิกกลางเดือน';
   document.getElementById('kbizBtns').innerHTML =
-    ['', ...Object.keys(BR)].map(b=>
+    ['', ...Object.keys(BR).filter(b=>!BR[b].off)].map(b=>
       `<button class="btn ${b?'btn-light':'btn-ember'}" style="width:100%;justify-content:center;font-size:16px"
         onclick="kbizGo('${b}')">${b? '🏢 '+BR[b].t : '🏢 ทุกสาขา'}</button>`).join('');
   document.getElementById('kbizBg').classList.add('show');
@@ -7564,13 +7579,106 @@ async function renderAudit(){
   <div style="font-size:12px;color:var(--ink-soft);margin-top:8px">แสดง ${shown.length} จาก ${rows.length} รายการล่าสุด (เก็บสูงสุด 400 รายการต่อการแสดงผล · ระบบจดอัตโนมัติทุกการบันทึก/แก้ไข/ลบ)</div>`;
 }
 
+/* ---- 📟 เครื่องสแกน → สาขา (2026-10-15) — เครื่องใหม่ Worker สร้างแถวให้เอง (sn, last_seen) แต่ยังไม่มีสาขา
+   เดิมต้องไปใส่ devices.branch ใน Table Editor · ตอนนี้เลือกในหน้าตั้งค่า (ต้องมีสิทธิ์แก้หน้าตั้งค่า · จดประวัติอัตโนมัติผ่าน db.from) ---- */
+let devRows = [];
+async function renderDevCard(){
+  const box = document.getElementById('devCard'); if(!box) return;
+  if(!devRows.length) box.innerHTML = '<span class="muted">กำลังโหลดรายชื่อเครื่องสแกน…</span>';
+  let r = await db.from('devices').select('sn,branch,name,last_seen');
+  if(r.error) r = await db.from('devices').select('sn,branch,name');   // ยังไม่มีคอลัมน์ last_seen
+  if(r.error){ box.innerHTML = '<span class="muted">อ่านรายชื่อเครื่องสแกนไม่ได้: '+audEsc(r.error.message||r.error)+'</span>'; return; }
+  devRows = r.data || [];
+  const known = b => !!(b && BR[b]);   // รหัสที่แอปนี้รู้จัก (สาขาเดิม 4 แห่ง + สาขาหน้าร้านในทะเบียน) — JJOF ไม่นับ (เงินเดือนใช้ OFFICE)
+  const need = devRows.filter(d => !known(d.branch)), done = devRows.filter(d => known(d.branch) && (!SCOPE || SCOPE.includes(d.branch)));
+  const seen = d => d.last_seen ? ' · ส่งข้อมูลล่าสุด ' + audTime(d.last_seen) : '';
+  const lb = b => (BR[b]||{}).t || audEsc(b);
+  const can = canDo('settings','e'), brs = myBranches();
+  box.innerHTML = (need.length
+    ? `<div class="warn-note" style="margin:0 0 10px">⚠️ <b>มี ${need.length} เครื่องที่ยังไม่ผูกสาขา</b> — เวลาสแกนจากเครื่องเหล่านี้ยังไม่ถูกนับเป็นสาขาไหน</div>` +
+      need.map(d => `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
+        <span style="flex:1 1 200px;min-width:0;overflow-wrap:anywhere"><b>${audEsc(d.sn)}</b>${d.name?' <span class="muted">('+audEsc(d.name)+')</span>':''}
+          <span class="muted" style="font-size:12.5px">${d.branch?'· สาขาในตาราง "'+audEsc(d.branch)+'" ไม่รู้จัก':''}${seen(d)}</span></span>
+        ${can && brs.length ? `<select data-devsn="${audEsc(d.sn)}" onchange="devSetBranch(this)" style="flex:1 1 160px;max-width:240px">
+            <option value="">— เลือกสาขาของเครื่องนี้ —</option>${brs.map(b=>`<option value="${b}">${lb(b)}</option>`).join('')}</select>`
+          : `<span class="muted" style="font-size:12.5px">${can ? 'ไม่มีสาขาที่ดูแล' : 'ไม่มีสิทธิ์แก้หน้าตั้งค่า'}</span>`}
+      </div>`).join('')
+    : `<div class="muted">✓ เครื่องสแกนทุกเครื่องผูกสาขาแล้ว${devRows.length?' ('+devRows.length+' เครื่อง)':''}</div>`) +
+    (done.length ? `<details style="margin-top:8px"><summary class="muted" style="cursor:pointer;padding:6px 0">เครื่องที่ผูกสาขาแล้ว ${done.length} เครื่อง</summary>
+      ${done.map(d=>`<div style="padding:4px 0;font-size:13.5px;overflow-wrap:anywhere"><b>${audEsc(d.sn)}</b>${d.name?' ('+audEsc(d.name)+')':''} → ${lb(d.branch)}<span class="muted" style="font-size:12.5px">${seen(d)}</span></div>`).join('')}</details>` : '');
+}
+async function devSetBranch(sel){
+  const sn = sel.dataset.devsn, b = sel.value;
+  if(!sn || !b) return;
+  if(!confirm(`ผูกเครื่องสแกน ${sn} กับสาขา${(BR[b]||{}).t||b}?\nเวลาสแกนจากเครื่องนี้ (รวมที่สแกนไปแล้ว) จะนับเป็นสาขานี้`)){ sel.value = ''; return; }
+  sel.disabled = true;
+  const { data, error } = await db.from('devices').update({ branch:b }).eq('sn', sn).select('sn');
+  sel.disabled = false;
+  if(error || !(data||[]).length){ sel.value = ''; return toast('❌ ผูกเครื่องสแกนไม่สำเร็จ: '+((error && error.message) || 'ฐานข้อมูลไม่ยอมให้แก้ตาราง devices')); }
+  devBranch[sn] = b;
+  recomputeAll(); renderAll(); renderDevCard();
+  toast('📟 ผูกเครื่อง '+sn+' กับสาขา'+((BR[b]||{}).t||b)+' แล้ว'+(SCOPE?' · รีเฟรชเพื่อดูพนักงานใหม่ของสาขา':''));
+}
+
+/* ================= สาขาจากทะเบียนกลาง (JJBR · ตาราง pnl_branches) — เจ้าของสั่ง 2026-10-15 "เปิดสาขาใหม่ปุ่มเดียว ให้ขึ้นทุกระบบ" =================
+   สาขาเดิม (JJLP/JJRD/JJCK/OFFICE) ชื่อ/สี/ลำดับเหมือนเดิมทุกอย่าง · สาขาหน้าร้านใหม่ต่อท้ายสาขาหน้าร้าน (ก่อนครัวกลาง/ออฟฟิศ) ใน
+   ALL_BR (สิทธิ์ _br · การ์ดหน้าวันนี้/ปฏิทิน/ข้อมูลพนักงาน) · BR/BR_SHORT/BR_COLOR · ตัวกรองสาขา 9 หน้า + ฟอร์มพนักงาน · ช่องทิป · ปุ่ม K BIZ
+   · กฎเงินเดือนไม่เปลี่ยน: ไม่ใช่ 'OFFICE' = หน้าร้าน (รอบ 26→25 · วันหยุดแบบหน้าร้าน) เหมือนเดิม
+   · อ่านทะเบียนไม่ได้/ยังไม่รัน SQL = แคชในเครื่อง → ไม่มีแคช = สาขาเดิม (ทุกอย่างเหมือนเดิม) */
+const BR_FILTERS = ['empBranchFilter','detailBranch','advBranch','ssoBranch','loanBranch','calBranch','payBranch','depBranch','mouBranch'];
+const brSafe = v => String(v||'').replace(/[<>&"'`\\]/g,'').trim();   // ชื่อจากตาราง (คีย์สาธารณะแก้ได้) — ตัดอักขระ HTML ทิ้ง
+function brSync(){
+  const J = window.JJBR; if(!J) return;
+  let added = false;
+  J.stores(true).forEach(r => {      // ป้ายชื่อ/สี: ทุกสาขาในทะเบียน รวมที่ปิดแล้ว (พนักงานเก่าไม่กลายเป็น "–") · ปิดแล้ว = ไม่ขึ้นในรายการเลือก
+    if(BR[r.code] && !BR[r.code].reg) return;
+    const t = brSafe(r.short) || r.code, col = J.color(r.code);
+    if(!BR[r.code]) added = true;
+    BR[r.code] = { t, c:'chip-gray', col, off:!r.active, reg:1 };
+    if(!BR_SHORT[r.code]) BR_SHORT[r.code] = t;
+    if(!BR_COLOR[r.code]) BR_COLOR[r.code] = col;
+  });
+  const add = J.unitCodes().filter(c => !ALL_BR.includes(c) && BR[c]);
+  if(add.length){ const i = ALL_BR.indexOf('JJCK'); ALL_BR.splice(i < 0 ? ALL_BR.length : i, 0, ...add); }
+  if(added){   // เรียงคีย์ BR ใหม่ให้ปุ่ม K BIZ/ช่องทิป เรียงแบบเดียวกับ ALL_BR (สาขาหน้าร้าน → ครัวกลาง → ออฟฟิศ)
+    const keep = { ...BR }; Object.keys(BR).forEach(k => delete BR[k]);
+    [...ALL_BR, ...Object.keys(keep)].forEach(k => { if(keep[k] && !(k in BR)) BR[k] = keep[k]; });
+  }
+  const stores = ALL_BR.filter(c => BR[c] && BR[c].reg);   // เฉพาะสาขาใหม่ที่แอปยังไม่มีในหน้าจอ (สาขาเดิมเป็น HTML อยู่แล้ว)
+  if(!stores.length) return;
+  const opt = (sel, c, label) => {
+    if(!sel || [...sel.options].some(o => o.value === c && !o.dataset.tmp)) return;
+    [...sel.options].forEach(o => { if(o.value === c) o.remove(); });
+    const ref = [...sel.options].find(o => o.value === 'JJCK');
+    sel.insertBefore(Object.assign(document.createElement('option'), { value:c, textContent:label }), ref || null);
+  };
+  BR_FILTERS.forEach(id => { const sel = document.getElementById(id); stores.forEach(c => opt(sel, c, BR[c].t)); });
+  stores.forEach(c => opt(document.getElementById('fBranch'), c, BR[c].t + ' (' + c + ')'));
+  const ck = document.getElementById('tip_JJCK'), ref = ck && ck.closest('label');
+  if(ref) stores.forEach(c => {      // ช่องทิปต่อสาขา — หน้าตาเดียวกับของเดิม (ตาราง tips รับรหัสสาขาอะไรก็ได้อยู่แล้ว)
+    if(document.getElementById('tip_'+c)) return;
+    ref.insertAdjacentHTML('beforebegin', `<label style="margin:0">${BR[c].t} (${c})
+        <input type="number" id="tip_${c}" min="0" step="any" inputmode="decimal" placeholder="ยอดทิปรวม (บาท)" oninput="tipPreview()">
+        <span class="muted" id="tipPrev_${c}" style="font-size:12.5px"></span>
+      </label>
+      <div style="margin:-6px 0 0">
+        <button class="btn btn-light btn-sm" id="tipPickBtn_${c}" onclick="tipTogglePick('${c}')">👥 เลือกคน</button>
+        <div id="tipPick_${c}" hidden style="margin-top:6px;max-height:200px;overflow-y:auto;border:1px solid var(--line);border-radius:10px"></div>
+      </div>`);
+  });
+}
+brSync();   // จากแคชในเครื่องทันที (เปิดครั้งที่ 2 เป็นต้นไปไม่ต้องรอเน็ต) · startApp อ่านของจริงอีกรอบ
+if(window.JJBR) JJBR.onChange(() => { brSync(); if(AUTH) applyPermUI(); });
+
 /* ================= BOOT ================= */
 window.addEventListener('hashchange', ()=>{
   const p = location.hash.replace('#','');
   if(p && document.getElementById('page-'+p) && !document.getElementById('page-'+p).classList.contains('active')) go(p);
 });
 async function startApp(){
-  if(!(await refreshMe())) return;
+  const [me] = await Promise.all([refreshMe(), window.JJBR ? JJBR.load(SUPABASE_URL, SUPABASE_KEY, { timeout:4000 }) : null]);
+  if(!me) return;
+  brSync(); applyUser(AUTH);   // ทะเบียนสาขามาแล้ว — คิดสิทธิ์ _br ใหม่ด้วยรายชื่อสาขาล่าสุด (สาขาที่เพิ่งเปิดไม่ถูกตัดทิ้ง)
   applyPermUI();
   if(NO_ACCESS){ busy(false); return; }
   loadAll().then(()=>{

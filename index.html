@@ -455,6 +455,7 @@ window.JJGate=(function(){
 #signup textarea:focus{border-color:#E5B03C;box-shadow:0 0 0 3px rgba(229,176,60,.16)}
 #signup textarea::placeholder{color:#8C7561}
 .jjsu-err{outline:2px solid #FF6B6B!important;outline-offset:1px}
+@media (max-width:700px){#signup input[type=date]{font-size:16px}}   /* ช่องวันเกิด ≥16px กัน iPhone ซูมเอง */
 .jjsu-ok{text-align:center;padding:14px 4px 4px}
 .jjsu-ok .big{font-size:48px;line-height:1}
 .icon .badge.num{background:#D8272E;border-color:#FFD9A0;color:#fff;font-weight:800;font-size:11.5px;
@@ -545,7 +546,8 @@ window.JJGate=(function(){
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -792,10 +794,12 @@ function paintUser(){
   bar.hidden=false;
   var RN={admin:'🛡️ ผู้ดูแลระบบ',owner:'👑 เจ้าของ',manager:'📋 ผู้จัดการ',staff:'👤 พนักงาน'};
   var UN={ALL:'',OFFICE:'ออฟฟิศ',JJCK:'ครัวกลาง',JJLP:'สาขาลาดพร้าว',JJRD:'สาขารัชดา'};
-  var un=UN[ME.unit]||'';
+  /* สาขาหน้าร้านที่เปิดใหม่ (ไม่อยู่ใน UN) = ชื่อจากทะเบียนสาขากลาง JJBR · 5 รหัสเดิมใช้ชื่อเดิม */
+  var un=Object.prototype.hasOwnProperty.call(UN,ME.unit)?UN[ME.unit]:
+    (window.JJBR&&JJBR.isStore(ME.unit)?JJBR.name(ME.unit):'');
   bar.innerHTML='<span class="chip">'+(RN[ME.role]||RN.staff).split(' ')[0]+' <b>'+
     String(ME.display_name||ME.username).replace(/[<>&]/g,'')+'</b> · '+
-    (RN[ME.role]||RN.staff).split(' ').slice(1).join(' ')+(un?' · '+un:'')+'</span>'+
+    (RN[ME.role]||RN.staff).split(' ').slice(1).join(' ')+(un?' · '+suEsc(un):'')+'</span>'+
     '<a href="javascript:" onclick="logout()">ออกจากระบบ</a>';
 }
 
@@ -863,6 +867,26 @@ function logout(){ clearSession(); ME=null; paintUser(); paintApps(); showLogin(
    ============================================================ */
 var SU={gender:'',unit:''};
 var UNITS=[['JJLP','ลาดพร้าว'],['JJRD','รัชดา'],['JJCK','ครัวกลาง'],['OFFICE','ออฟฟิศ']];
+/* ตัวเลือก "สาขาที่จะทำงาน" = 4 ตัวเลือกเดิม (ชื่อ/ลำดับเดิม) + สาขาหน้าร้านที่เปิดใหม่จากทะเบียนสาขากลาง (JJBR)
+   ต่อท้ายสาขาเดิม ก่อนครัวกลาง/ออฟฟิศ · เสนอสาขาใหม่เฉพาะเมื่อรัน jjmk-branches.sql แล้ว (JJBR.cols — SQL ชุดนั้น
+   ปลด CHECK ของ pnl_users.unit · ยังไม่รัน = เลือกสาขาใหม่แล้วสมัครไม่ผ่าน) และรหัสต้องผ่านรูปแบบของ CHECK นั้น */
+function suUnits(){
+  var ex=[];
+  try{
+    if(window.JJBR&&JJBR.cols) ex=JJBR.extra(UNITS.map(function(x){ return x[0]; }))
+      .filter(function(r){ return /^[A-Z][A-Z0-9]{1,9}$/.test(r.code); })
+      .map(function(r){ return [r.code,r.short]; });
+  }catch(e){ ex=[]; }
+  return UNITS.slice(0,2).concat(ex,UNITS.slice(2));
+}
+/* ทะเบียนสาขามาถึงหลังเปิดฟอร์มสมัคร = วาดปุ่มสาขาใหม่ (คงตัวที่เลือกไว้ · ตัวที่เลือกหายจากรายการ = ล้าง) */
+function suUnitRepaint(){
+  var p=document.querySelector('#signup .jjsu-pill[data-p="unit"]'); if(!p)return;
+  var box=p.parentNode, list=suUnits();
+  if(!list.some(function(x){ return x[0]===SU.unit; }))SU.unit='';
+  var t=document.createElement('div'); t.innerHTML=suPills('unit',list,SU.unit,1);
+  box.parentNode.replaceChild(t.firstChild,box);
+}
 
 function suEsc(v){ return String(v==null?'':v).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -916,7 +940,7 @@ function suHtml(){
       '<div class="jjlg-f"><label for="su_p2">ยืนยันรหัสผ่าน <span class="jjsu-req">*</span></label>'+
         '<input id="su_p2" type="password" autocomplete="new-password" placeholder="พิมพ์ซ้ำอีกครั้ง"></div></div>'+
     '<div class="jjlg-f"><label>สาขาที่จะทำงาน <span style="font-weight:400;color:#9E8874">(ไม่บังคับ)</span></label>'+
-      suPills('unit',UNITS,'',1)+'</div>'+
+      suPills('unit',suUnits(),'',1)+'</div>'+
 
     '<div class="jjlg-msg" id="su_msg"></div>'+
     '<button class="jjlg-btn" id="su_go" type="button" onclick="suSubmit()">ส่งใบสมัคร</button>'+
@@ -1040,6 +1064,9 @@ async function suSubmit(){
 /* แจ้งเตือน LINE ผ่าน Edge Function signup-notify — ไม่มีก็ข้ามไปเงียบ ๆ */
 function suNotify(username,fullname,nick,unit){
   try{
+    /* ฟังก์ชัน signup-notify ที่ deploy อยู่รู้จักแค่ 5 รหัสนี้ (พิมพ์ UNIT[b.unit]||b.unit) → สาขาที่เปิดใหม่ส่งชื่อไทยแทนรหัส
+       (เฉพาะข้อความแจ้ง LINE · บัญชี/ใบสมัครยังเก็บรหัส) ไม่ต้องแก้/deploy ฟังก์ชันใหม่ */
+    if(unit&&!{JJLP:1,JJRD:1,JJCK:1,OFFICE:1,ALL:1}.hasOwnProperty(unit)&&window.JJBR&&JJBR.known(unit))unit=JJBR.name(unit);
     fetch(CFG.URL+'/functions/v1/signup-notify',{method:'POST',
       headers:{'Content-Type':'application/json',apikey:CFG.KEY},
       body:JSON.stringify({username:username,name:fullname,nickname:nick,unit:unit})}).catch(function(){});
@@ -1291,6 +1318,8 @@ function rqBackLogin(){
 /* เปิดหน้า: ถ้าค้างอยู่ขั้นใส่รหัสในแท็บนี้ (ลากหน้าลงรีเฟรช) = กลับไปหน้านั้นเลย · แล้วเช็คว่าจะโชว์ปุ่มไหม */
 (function(){
   function boot(){
+    /* ทะเบียนสาขากลาง (ไม่ throw · ไม่รอ) — ชื่อสาขาบนแถบผู้ใช้ + ตัวเลือกสาขาในฟอร์มสมัคร */
+    if(window.JJBR){ JJBR.onChange(function(){ paintUser(); suUnitRepaint(); }); JJBR.load(CFG.URL,CFG.KEY); }
     rqReady();
     if(rqLoad()&&document.getElementById('login').classList.contains('on'))showReset();
   }

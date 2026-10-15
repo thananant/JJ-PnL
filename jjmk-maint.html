@@ -414,7 +414,8 @@
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -761,30 +762,45 @@ $('#hOut').onclick=doLogout;
 /* ================= เข้าแอพ + สาขา ================= */
 function paintTabBranch(){
   const el=$('#tabBranch');if(!el)return;
-  const b=(BRANCHES.find(x=>x.id===CUR_B)||{}).name||'';
+  const b=brName(BRANCHES.find(x=>x.id===CUR_B));
   el.textContent=b?' · '+b:'';
 }
 /* ---- เห็นเฉพาะสาขา (เจ้าของสั่ง 2026-10-02 "อยากให้ทุกระบบกำหนดได้ว่าใครเห็นของสาขาไหน แบบ payroll") ----
    ตั้งที่ 🔑 JJ Access → กล่องซ่อมบำรุง → apps.maint._br = 'JJLP,JJCK' · ไม่ตั้ง = ทุกสาขา
    · ใช้กับบัญชีกลาง (pnl_users) เท่านั้น · ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ · apps ว่าง (ยังไม่เคยตั้งสิทธิ์) = ไม่จำกัด
    · บัญชีเดิม app_users ใช้ branch_ids ของตัวเองเหมือนเดิม
-   · ตาราง branches ไม่มีรหัสสาขา → เดารหัสจากชื่อ (brCode) · สาขาที่เดาไม่ได้ = ซ่อนจากคนที่ถูกจำกัดสาขา
+   · ตาราง branches หารหัสสาขาจาก: สาขาใหม่ = ช่อง code / ทะเบียนสาขากลาง (pnl_branches.stk_id) → 4 รหัสเดิม = ลำดับเดิม (id → เดาจากชื่อ ครัวกลาง/ออฟฟิศก่อน → id สต๊อก) → ช่อง code
+     สาขาที่หารหัสไม่ได้ = ซ่อนจากคนที่ถูกจำกัดสาขา
+   · 🏪 สาขาใหม่ (ปุ่มเปิดสาขาใหม่ใน JJ Access → ทะเบียนสาขากลาง JJBR) ตั้งสิทธิ์ได้เลย · ตั้ง _br ไว้แต่ไม่เหลือรหัสที่รู้จัก = ไม่เห็นสาขาไหน (ห้ามกลายเป็นทุกสาขา)
    ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
 const ALL_BR=['JJLP','JJRD','JJCK','OFFICE'];
 const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};   // id สาขาเดิมของแอพนับสต๊อก (สำรองเผื่อชื่อไม่ตรง)
-let SCOPE=null;   // null = ทุกสาขา · ['JJLP'] = เฉพาะสาขาเหล่านี้
+const ALL_BR0=ALL_BR.slice();   // รหัสเดิมของแอพ — ชื่อสาขาเดิมใช้ชื่อจากตาราง branches เหมือนเดิม
+/* สาขาใหม่จากทะเบียนสาขากลาง → เติมเข้า ALL_BR/STK_BR เดิม (แก้ของเดิมในที่) · อ่านไม่ได้ = แคชในเครื่อง → JJRD/JJLP แบบเดิม */
+function brSync(){
+  JJBR.unitCodes().forEach(c=>{if(!ALL_BR.includes(c))ALL_BR.push(c);});
+  JJBR.stores().forEach(r=>{if(r.stk_id&&!STK_BR[r.code]&&!Object.values(STK_BR).includes(r.stk_id))STK_BR[r.code]=r.stk_id;});
+}
+brSync();JJBR.onChange(brSync);
+let SCOPE=null,SCOPE_RAW=[];   // null = ทุกสาขา · ['JJLP'] = เฉพาะสาขาเหล่านี้ · [] = ตั้งไว้แต่ไม่มีรหัสที่รู้จัก (ไม่เห็นสาขาไหน)
 function applyScope(prof){
-  SCOPE=null;
+  SCOPE=null;SCOPE_RAW=[];
   if(!prof||prof.kind!=='central'||prof.role==='admin'||prof.role==='owner')return;
   const apps=prof.apps;
   if(!apps||typeof apps!=='object'||!Object.keys(apps).length)return;   // ยังไม่เคยตั้งสิทธิ์ = ไม่จำกัด
   const m=(apps.maint&&typeof apps.maint==='object')?apps.maint:{};
-  const br=String(m._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
-  if(br.length)SCOPE=br;
+  const raw=String(m._br||'').split(',').map(x=>x.trim()).filter(Boolean);
+  if(!raw.length)return;
+  SCOPE_RAW=raw;SCOPE=raw.map(x=>JJBR.canon(x)).filter((x,i,a)=>ALL_BR.includes(x)&&a.indexOf(x)===i);   // JJOF/ตัวเล็ก = รหัสเดียวกัน · ไม่รู้จักสักรหัส = [] (fail closed)
 }
-function brCode(b){   // แถวในตาราง branches → รหัสสาขา (JJLP/JJRD/JJCK/OFFICE) · ไม่รู้จัก = ''
+const scopeText=()=>(SCOPE&&SCOPE.length?SCOPE:SCOPE_RAW).join(',');
+function brCode(b){   // แถวในตาราง branches → รหัสสาขา (JJLP/JJRD/JJCK/OFFICE/สาขาในทะเบียน) · ไม่รู้จัก = ''
   if(!b)return'';
-  const c=String(b.code||'').trim().toUpperCase();if(ALL_BR.includes(c))return c;
+  const isNew=x=>!!x&&ALL_BR.includes(x)&&!ALL_BR0.includes(x);   // สาขาใหม่จากทะเบียน (ไม่ใช่ 4 รหัสเดิม)
+  const c=JJBR.canon(b.code);if(isNew(c))return c;   // ช่อง code (ปุ่มเปิดสาขาใหม่ใส่ให้) — ชนะการเดาจากชื่อ
+  const r=JJBR.byStk(b.id),rc=r?JJBR.canon(r.code):'';if(isNew(rc))return rc;   // ทะเบียนสาขากลาง: pnl_branches.stk_id = branches.id
+  /* 4 รหัสเดิม = ลำดับเดิมทุกอย่าง · ช่อง code ที่ jjmk-branches.sql เติมให้ไล่รัชดา/ลาดพร้าวก่อนครัวกลาง/ออฟฟิศ
+     (ชื่อ "ครัวกลาง รัชดา" จะได้ JJRD) จึงเชื่อทีหลังสุด — เฉพาะแถวที่ชื่อ/รหัสสต๊อกไม่บอกอะไรเลย */
   const id=String(b.id||'').trim().toUpperCase();if(ALL_BR.includes(id))return id;
   const n=String(b.name||'');
   if(/ครัวกลาง|central\s*kitchen/i.test(n))return'JJCK';   // เช็คครัวกลาง/ออฟฟิศก่อน เผื่อชื่อมีทำเลต่อท้าย
@@ -792,7 +808,13 @@ function brCode(b){   // แถวในตาราง branches → รหั�
   if(/รัชดา|ratchada/i.test(n))return'JJRD';
   if(/ลาดพร้าว|lad\s*prao|lat\s*phrao/i.test(n))return'JJLP';
   for(const k in STK_BR)if(STK_BR[k]===b.id)return k;
-  return'';
+  return ALL_BR0.includes(c)?c:(ALL_BR0.includes(rc)?rc:'');
+}
+/* ชื่อที่โชว์: สาขาเดิมใช้ชื่อในตาราง branches เหมือนเดิม · สาขาใหม่ใช้ชื่อจากทะเบียนสาขากลาง */
+function brName(b){
+  if(!b)return'';
+  const c=brCode(b);
+  return c&&!ALL_BR0.includes(c)&&JJBR.isStore(c)?JJBR.name(c,b.name||c):(b.name||'');
 }
 function accessibleBranches(){
   if(isAdmin())return BRANCHES;
@@ -810,13 +832,15 @@ function showNoBranch(prof){   // ได้สิทธิ์เฉพาะส�
   el.style.display='';
   el.innerHTML=`<div class="card" style="text-align:center;padding:22px 16px">
     <b style="font-family:Prompt;font-size:1.05rem">🔒 ยังไม่มีสาขาที่เปิดให้บัญชีนี้</b>
-    <p class="hint" style="font-size:.9rem;margin:8px 0 0">บัญชี <b>${escapeHtml(prof.name||prof.username||'')}</b> ได้สิทธิ์เห็นเฉพาะ ${escapeHtml((SCOPE||[]).join(', '))} ซึ่งยังไม่มีในระบบซ่อมบำรุง — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access</p>
+    <p class="hint" style="font-size:.9rem;margin:8px 0 0">บัญชี <b>${escapeHtml(prof.name||prof.username||'')}</b> ได้สิทธิ์เห็นเฉพาะ ${escapeHtml(scopeText().split(',').join(', '))} ซึ่งยังไม่มีในระบบซ่อมบำรุง — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access</p>
   </div>`;
 }
 async function enterApp(prof){
   PROF=prof;applyScope(prof);
   {const nb=$('#noBr');if(nb)nb.style.display='none';}
-  const {data,error}=await sb.from('branches').select('*').order('sort');
+  const [{data,error}]=await Promise.all([sb.from('branches').select('*').order('sort'),
+    JJBR.load(SB_URL,SB_ANON,{timeout:3000})]);   // ทะเบียนสาขากลาง (ไม่ throw · รอนานสุด ~6 วิ = 3 วิ × ลองซ้ำ 1 ครั้ง · อ่านไม่ได้ = แคช/JJRD+JJLP แบบเดิม)
+  brSync();applyScope(prof);   // สาขาใหม่: สิทธิ์ _br + รหัสสต๊อก — ก่อนกรองสาขาที่เห็น
   if(error){loginErr('โหลดสาขาไม่ได้: '+error.message);return;}
   BRANCHES=data||[];
   const acc=accessibleBranches();
@@ -825,13 +849,13 @@ async function enterApp(prof){
     :((prof.branch_ids&&prof.branch_ids[0]&&acc.some(b=>b.id===prof.branch_ids[0]))?prof.branch_ids[0]:(acc[0]&&acc[0].id));
   const RN={admin:'ผู้ดูแลระบบ',owner:'เจ้าของ',manager:'ผู้จัดการ',staff:'พนักงาน'};
   $('#hUser').textContent='👤 '+(prof.name||prof.username||'')+' · '+(RN[prof.role]||prof.role||'พนักงาน')
-    +(SCOPE?' · 🔒 '+SCOPE.join(','):'');
+    +(SCOPE?' · 🔒 '+scopeText():'');
   if(!CUR_B&&SCOPE&&BRANCHES.length){showNoBranch(prof);return;}
   if(!CUR_B){loginErr('ยังไม่มีสาขาในระบบ');return;}
   $('#login').classList.remove('on');
   $('#hdr').style.display='flex';$('#main').style.display='block';
   const sel=$('#hBranch');
-  if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(b.name)}</option>`).join('');
+  if(acc.length>1){sel.style.display='';sel.innerHTML=acc.map(b=>`<option value="${b.id}" ${b.id===CUR_B?'selected':''}>🏪 ${escapeHtml(brName(b))}</option>`).join('');
     sel.onchange=()=>{if(!brOk(sel.value)){sel.value=CUR_B;toast(NO_BR_MSG);return;}
       CUR_B=sel.value;try{localStorage.setItem('jjmt_branch',CUR_B)}catch(e){}
       paintTabBranch();maintLoad();if(TAB==='asset')astLoad();};}
@@ -1127,9 +1151,9 @@ function maintManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์ตั้งค่างาน');return;}
   if(!brOk(CUR_B)){toast(NO_BR_MSG);return;}
   const acc=accessibleBranches();
-  const bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
+  const bname=brName(acc.find(b=>b.id===CUR_B));
   const ov=document.createElement('div');ov.className='overlay on';
-  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="mm_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(brName(b))}</label>`).join('');
   ov.innerHTML=`<div class="sheet">
     <div class="sheet-head"><h3>⚙️ จัดการงานบำรุงรักษา</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">
@@ -1420,9 +1444,9 @@ function astPhotoOverlay(a,r){
 function astManageOverlay(){
   if(!canManage()){toast('ไม่มีสิทธิ์จัดการรายการอุปกรณ์');return;}
   if(!brOk(CUR_B)){toast(NO_BR_MSG);return;}
-  const acc=accessibleBranches(),bname=(acc.find(b=>b.id===CUR_B)||{}).name||'';
+  const acc=accessibleBranches(),bname=brName(acc.find(b=>b.id===CUR_B));
   const ov=document.createElement('div');ov.className='overlay on';
-  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(b.name)}</label>`).join('');
+  const bChecks=acc.map(b=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" class="am_br" value="${b.id}" ${b.id===CUR_B?'checked':''}>🏪 ${escapeHtml(brName(b))}</label>`).join('');
   ov.innerHTML=`<div class="sheet">
     <div class="sheet-head"><h3>⚙️ จัดการรายการอุปกรณ์</h3><button class="x" data-x>✕</button></div>
     <div class="sheet-body">

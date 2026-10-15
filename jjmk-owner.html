@@ -568,7 +568,8 @@ window.JJGate=(function(){
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -746,6 +747,19 @@ const S={
   charts:{}
 };
 const BRNAME={JJRD:'สาขารัชดา',JJLP:'สาขาลาดพร้าว',ALL:'ทุกสาขา'};
+/* ทะเบียนสาขากลาง (pnl_branches · JJBR) — สาขาที่เปิดจาก JJ Access ขึ้นปุ่ม/กราฟเอง (เจ้าของสั่ง 2026-10-15)
+   ชื่อที่เปิดจาก JJ Access มีคำว่า "สาขา" นำหน้าแล้ว → brNm() ตัดออกก่อนต่อ กันขึ้น "สาขาสาขา…" */
+function brNm(n){ return String(n==null?'':n).trim().replace(/^สาขา\s*/,''); }
+const BR_COLS=['#C62127','#E9B44C','#5E96A8','#8AA05E'];   // สีกราฟเทียบสาขาเดิม (ตามลำดับ)
+function brColors(rows){ // สาขาเดิม/หน่วยงานเดิม = ชุดสีเดิมตามลำดับ · สาขาใหม่จากทะเบียน = สีประจำสาขา (pnl_branches.color / JJBR) · สีชนกัน = เลื่อนไปสีถัดไปที่ยังไม่ใช้
+  const used=new Set();
+  return rows.map((b,i)=>{
+    const c=b.code, old=['JJRD','JJLP'].includes(c)||!window.JJBR||(JJBR.known(c)&&!JJBR.isStore(c));
+    let col=old?BR_COLS[i%BR_COLS.length]:(/^#[0-9A-Fa-f]{6}$/.test(String(b.color||''))?b.color:JJBR.color(c,i));
+    for(let k=0;used.has(String(col).toUpperCase())&&k<24;k++) col=k<BR_COLS.length?BR_COLS[k]:JJBR.color('',k);
+    used.add(String(col).toUpperCase()); return col;
+  });
+}
 const CAT_COLOR={'อาหาร':'#C62127','ของใช้':'#E07B39','ของหวาน':'#E9B44C','น้ำ':'#5E96A8','ไอศกรีม':'#9B6E93','Delivery':'#8AA05E','เงินสดหน้าร้าน':'#8B8B8B','Shopee':'#C05A50','อื่นๆ':'#7A6A5A'};
 const CAT_PALETTE=['#2E7D6B','#A0522D','#5C6BC0','#C2185B','#6D8B3A','#8D6E63','#00838F','#9E7B2F'];
 function catColor(c){
@@ -869,7 +883,10 @@ async function loadCore(){
   S.supByName=Object.fromEntries(sup.map(x=>[x.name,x]));
   S.fixed=fix;
   if(brs&&brs.length)S.branches=brs;
-  S.branches.forEach(b=>{ if(b.name)BRNAME[b.code]='สาขา'+b.name; });
+  else if(window.JJBR&&JJBR.src!=='base'&&JJBR.stores().length)   // อ่านตารางไม่ได้ แต่มีแคชทะเบียนในเครื่อง = ใช้สาขาจากแคช (ไม่มีแคช = 2 สาขาเดิมเหมือนเดิม)
+    S.branches=JJBR.stores().map(r=>({code:r.code,name:r.name,sort:r.sort,is_central:false}));
+  S.branches.forEach(b=>{ if(b.name)BRNAME[b.code]='สาขา'+brNm(b.name); });
+  if(S.br!=='ALL'&&!realBranches().some(b=>b.code===S.br)){ S.br='ALL'; } // สาขาที่จำไว้ไม่มีแล้ว/เป็นส่วนกลาง → ทุกสาขา
 }
 /* โหลดข้อมูลทั้งปี (ทุกสาขา — กรองสาขาในหน่วยความจำ) */
 async function loadYear(y,force){
@@ -934,6 +951,20 @@ function pickManual(list,mo){
   if(!br.length)return null;
   const sum=k=>br.some(x=>x[k]!=null)?br.reduce((a,x)=>a+(x[k]!=null?num(x[k]):0),0):null;
   return {sales:sum('sales'),profit:sum('profit')};
+}
+/* สาขาหน้าร้านใหม่ (เปิดจากทะเบียนกลาง) + ยอดใส่เองแถว branch='ALL' ของเดือนที่สาขาใหม่เปิดแล้ว/มียอดขาย → ตัวเลขมือทับยอดคำนวณ
+   ยอดของสาขาใหม่จึงไม่ถูกนับในเดือนนั้น — แค่บอกเจ้าของ ไม่แก้ตัวเลขให้เอง · ไม่มีสาขาใหม่ = null (หน้าเหมือนเดิม) */
+function manNewWarn(bundle){
+  if(S.br!=='ALL'||!bundle)return null;
+  const NB=realBranches().filter(b=>b.code!=='JJRD'&&b.code!=='JJLP'&&(b.kind?b.kind==='store':!(window.JJBR&&JJBR.known(b.code)&&!JJBR.isStore(b.code)))); // เฉพาะสาขาหน้าร้าน (ออฟฟิศ/ครัวกลางไม่นับ)
+  if(!NB.length)return null;
+  const mos=[...new Set((bundle.manual||[]).filter(r=>r.branch==='ALL'&&(r.sales!=null||r.profit!=null)).map(r=>String(r.month||'').slice(0,7)))].sort();
+  const hit=[],brs=new Set();
+  mos.forEach(mo=>{ let h=false;
+    NB.forEach(b=>{ const op=String(b.opened_on||b.created_at||'').slice(0,7);
+      if((/^\d{4}-\d{2}$/.test(op)&&mo>=op)||(bundle.inc||[]).some(r=>r.branch===b.code&&String(r.d).slice(0,7)===mo)){ h=true; brs.add(b.code); } });
+    if(h)hit.push(mo); });
+  return hit.length?{mos:hit,brs:[...brs]}:null;
 }
 function buildMonths(y,bundle){
   const M={};
@@ -1067,6 +1098,7 @@ async function render(){
     if(seq!==_seq)return; // มีการกดเปลี่ยนปี/สาขาแทรก
     const rows=buildMonths(S.y,bundle);
     S._rows=rows; // ไว้โชว์ค่าระบบในฟอร์มใส่ยอดเอง
+    S._manNew=manNewWarn(bundle);
     const brSeries=buildBranchSeries(S.y,bundle);
     const prev=pb?prevYearTotals(S.y-1,pb):null;
     el.innerHTML=heroHTML(rows,prev)+chartsHTML()+plHTML(rows)+structureHTML(rows)+instHTML();
@@ -1114,10 +1146,12 @@ function heroHTML(rows,prev){
   (S.inst||[]).forEach(r=>{ if(!r.active)return; const c=instCalc(r); if(c.done)return; burden+=c.monthly; remain+=c.remain; nAct++; });
   const histN=rows.filter(r=>r.src==='hist').length;
   const manN=rows.filter(r=>r.manual).length;
+  const MW=S._manNew;
   return `
   <section id="secHero">
     <div class="sec-h"><h2 class="gold-txt">ภาพรวมทั้งปี ${S.y+543}</h2><span class="en">Annual Overview</span></div>
     <p class="sec-sub">${esc(BRNAME[S.br]||S.br)} · มีข้อมูล ${has.length} เดือน${histN?` (จากข้อมูลย้อนหลัง ${histN} เดือน)`:''}${manN?` · ✍️ ใส่ยอดเอง ${manN} เดือน`:''}${S.br==='ALL'&&S.branches.some(b=>b.is_central)?' · รวมค่าใช้จ่ายส่วนกลาง (ออฟฟิศ) แล้ว':''}</p>
+    ${MW?`<p class="sec-sub" id="manNewWarn" style="color:var(--bad);margin-top:-10px">⚠️ เดือน ${MW.mos.map(m=>TH_M[+m.slice(5,7)-1]||m).join(', ')} มียอดใส่เองแบบรวมทุกสาขา ซึ่งทับยอดคำนวณ — ยอดของ${MW.brs.map(c=>esc(BRNAME[c]||c)).join(', ')} (เปิดทีหลัง) ไม่ถูกนับในเดือนนั้น · ตรวจ/แก้ที่ ✍️ ใส่ยอดเอง</p>`:''}
     <div class="hero">
       <div class="card gold kpi">
         <div class="lab"><span class="ic">🏮</span>ยอดขายรวมทั้งปี</div>
@@ -1492,10 +1526,10 @@ function drawCharts(rows,brSeries){
   killChart('br');
   const cb=document.getElementById('chBr');
   if(cb){
-    const cols=['#C62127','#E9B44C','#5E96A8','#8AA05E'];
+    const RB=realBranches(), cols=brColors(RB);
     S.charts.br=new Chart(cb,{type:'bar',
-      data:{labels,datasets:realBranches().map((b,i)=>({label:BRNAME[b.code]||b.code,
-        data:(brSeries[b.code]||[]).map(v=>v||null),backgroundColor:cols[i%cols.length],borderRadius:6,maxBarThickness:26}))},
+      data:{labels,datasets:RB.map((b,i)=>({label:BRNAME[b.code]||b.code,
+        data:(brSeries[b.code]||[]).map(v=>v||null),backgroundColor:cols[i],borderRadius:6,maxBarThickness:26}))},
       options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{labels:{usePointStyle:true,boxWidth:8}},
           tooltip:{backgroundColor:'#241B19',borderColor:'rgba(233,180,76,.4)',borderWidth:1,

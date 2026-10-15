@@ -32,6 +32,10 @@ NAS เป็นฝ่าย "ดึง" ข้อมูลบิลที่ย
     → แก้คำสั่งใน Task Scheduler เป็นแบบข้อ 3 → รัน --check ดูว่าบรรทัด "โฟลเดอร์เก็บบิล" ถูก → ลบ _sync เดิมทิ้ง
   * ไฟล์ที่เคยเก็บแบบเดิม (YYYY-MM/ และ _ฉบับก่อนหน้า) สคริปต์ย้ายเข้าโครงใหม่ให้เองแล้วลบของเดิมทิ้ง
   * หน้า "สำเนา" ทำตามสวิตช์ "แนบหน้า สำเนา" ในแอป (อ่านจาก inv_settings รอบละครั้ง) — บังคับเองได้ที่ WITH_COPY
+  * หัวบิลรายสาขา: สาขาที่จดภาษีแยก (ตั้งตอนกด 🏪 เปิดสาขาใหม่ ใน JJ Access) พิมพ์ "สาขาที่ 0000X" + ที่อยู่สาขา
+    (อ่านทะเบียนสาขา pnl_branches รอบละครั้ง · จำไว้ที่ .inv_branches.json ข้างไฟล์นี้เผื่อรอบที่อ่านไม่ได้)
+    รอบแรกที่รันสคริปต์รุ่นนี้ บิลของสาขาใหม่ที่จดภาษีแยกซึ่งสคริปต์รุ่นก่อนเก็บเป็นหัวสำนักงานใหญ่ไว้ จะถูกสร้างใหม่ให้เอง
+    (ครั้งเดียว — จดไว้ที่ .inv_heads_requeued ข้างไฟล์นี้)
 
 คำสั่งเสริม (ใส่ --base "<โฟลเดอร์เก็บบิล>" ต่อท้ายได้ทุกคำสั่ง)
   --install        ติดตั้งไลบรารีสร้าง PDF (fpdf2 + uharfbuzz) ลงโฟลเดอร์ _lib ข้างไฟล์นี้
@@ -73,6 +77,7 @@ WITH_COPY = None         # None = ทำตามสวิตช์ "แนบ�
                          # True / False = บังคับแนบ / ไม่แนบหน้า "สำเนา" ทุกไฟล์ (หน้าแรกเป็นต้นฉบับเสมอ)
 MAX_PER_RUN = 100        # เก็บสูงสุดกี่ใบต่อรอบ (รอบแรกที่มีบิลเก่าค้างเยอะจะทยอยเก็บ)
 # ======================================================================
+SCRIPT_VER = '2026-10-15.1'   # รุ่นสคริปต์ (รายงานที่ inv_settings.nas_sync_ver) — แอปเทียบกับ NAS_HEAD_VER เพื่อเตือนให้ดาวน์โหลดสคริปต์ใหม่
 
 SUPABASE_URL = os.environ.get('JJ_SB_URL') or 'https://aikyxvluaiubdidqxwnd.supabase.co'
 SUPABASE_KEY = os.environ.get('JJ_SB_KEY') or (
@@ -80,6 +85,7 @@ SUPABASE_KEY = os.environ.get('JJ_SB_KEY') or (
     'ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM')
 
 # หัวบิล — ต้องตรงกับ CONFIG.SHOP ในแอป jjmk-invoice.html
+# (สาขาที่จดภาษีแยกในทะเบียนสาขา pnl_branches.tax_branch → "สาขาที่ 0000X" + ที่อยู่สาขา แทน 2 ช่องล่าง — ดู shop_head())
 SHOP = {
     'name': 'บริษัท พากันรวย ฟู้ด คอร์ปอเรชั่น จำกัด',
     'taxBranch': 'สำนักงานใหญ่',
@@ -135,7 +141,11 @@ def log(msg):
 
 # ค่าที่ได้จากคำสั่งรอบนี้ (main() ตั้งให้ แล้วล้างทิ้งเมื่อจบ)
 _OPT = {'base': None}        # --base "<path>"
-_RUN = {'copy': None}        # สวิตช์ "แนบหน้า สำเนา" ที่อ่านจากแอปแล้วในรอบนี้ (None = ยังไม่ได้อ่าน)
+_RUN = {'copy': None,        # สวิตช์ "แนบหน้า สำเนา" ที่อ่านจากแอปแล้วในรอบนี้ (None = ยังไม่ได้อ่าน)
+        'heads': None,       # หัวบิลรายสาขาจากทะเบียน pnl_branches ของรอบนี้ (None = ยังไม่ได้อ่าน) — ดู branch_heads()
+        'known': None,       # อ่านทะเบียนไม่ได้: รหัสสาขาที่รู้จัก (None = อ่านได้ ทุกรหัสใช้ได้)
+        'src': None,         # ทะเบียนรอบนี้มาจากไหน: 'db' อ่านได้ · 'none' ไม่มีตาราง (400/404) · 'cache' อ่านไม่ได้ ใช้ที่จำไว้
+        'opened': None}      # {รหัส: 'YYYY-MM-DD'} วันเปิดสาขา (เฉพาะรอบที่อ่านทะเบียนได้) — ใช้ใน requeue_tax_branches()
 
 
 def base_dir():
@@ -260,12 +270,208 @@ def want_copy():
     return _RUN['copy']
 
 
+# ------------------------------------------------------------------ หัวบิลรายสาขา (ทะเบียนสาขากลาง pnl_branches · 2026-10-15)
+# สาขาที่จดภาษีแยก (tax_branch 5 หลัก) พิมพ์ "สาขาที่ 0000X" + ที่อยู่สาขา (addr) แทน "สำนักงานใหญ่" + ที่อยู่สำนักงานใหญ่
+# ไม่มี tax_branch = หัวเดิม (SHOP) ทุกตัวอักษร · ชื่อบริษัท/เลขผู้เสียภาษีเหมือนเดิมทุกสาขา · สาขาของบิล = ตัวอักษรหน้าเลขบิล
+# ⚠️ ต้องตรงกับ shopHead() ในแอป jjmk-invoice.html (กรองค่าแบบเดียวกับบล็อก JJBR ในแอป)
+BRANCH_CACHE = '.inv_branches.json'     # ทะเบียนที่อ่านได้ล่าสุด (ข้างสคริปต์) — ใช้เฉพาะรอบที่อ่านจาก Supabase ไม่ได้
+BRANCH_CACHE_DAYS = 90                  # อายุแคช = เท่ากับแคช jjbr_cache ของแอป (เก่ากว่านี้ = ถือว่าไม่มี)
+TAX_MARK = '.inv_heads_requeued'        # มีไฟล์นี้ = ส่งบิลของสาขาที่จดภาษีแยกกลับเข้าคิวครั้งแรกแล้ว (requeue_tax_branches)
+BASE_BRANCHES = ('JJRD', 'JJLP')        # สาขาเดิม — อ่านทะเบียนไม่ได้ก็ทำต่อด้วยหัวเดิม (หรือหัวจากที่อ่านได้ล่าสุด) เหมือนก่อนมีทะเบียน
+_CODE_RE = re.compile(r'[A-Z][A-Z0-9_]{1,11}')
+_TAXBR_RE = re.compile(r'[0-9]{5}')
+_DATE_RE = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}')
+# ช่องว่างตามนิยามของ JavaScript (trim / \s) — ไม่ใช่ของ Python: Python นับ \x1c-\x1f กับ \x85 เป็นช่องว่างแต่ JS ไม่นับ
+# และ JS นับ \ufeff แต่ Python ไม่นับ · ต้องใช้ชุดเดียวกับแอป ไม่งั้นหัวบิลใน NAS กับที่ส่งอีเมลหาลูกค้าต่างกันได้
+_JS_WS = ('\t\n\x0b\x0c\r \xa0\u1680' + ''.join(chr(c) for c in range(0x2000, 0x200b)) +
+          '\u2028\u2029\u202f\u205f\u3000\ufeff')
+_JS_WS_RUN = re.compile('[' + re.escape(_JS_WS) + ']+')
+
+
+def _js_s(v, n=80):
+    """s() ของบล็อก JJBR ในแอป = String(v).trim().slice(0, n) — ตัดช่องว่างแบบ JS + นับความยาวแบบ UTF-16 (อีโมจิ = 2)
+    (JS ตัดกลางอีโมจิได้ เหลือครึ่งตัวที่พิมพ์ไม่ได้อยู่แล้ว — ฝั่งนี้ทิ้งทั้งตัว)"""
+    if v is None:
+        return ''
+    t = ('true' if v else 'false') if isinstance(v, bool) else str(v)
+    out, u = [], 0
+    for ch in t.strip(_JS_WS):
+        u += 2 if ord(ch) > 0xFFFF else 1
+        if u > n:
+            break
+        out.append(ch)
+    return ''.join(out)
+
+
+def _row_code(r):
+    """รหัสสาขาของแถว (แบบ norm() ในบล็อก JJBR) — ใช้ไม่ได้ = ''"""
+    if not isinstance(r, dict):
+        return ''
+    code = _js_s(r.get('code'), 12).upper()
+    return code if _CODE_RE.fullmatch(code) else ''
+
+
+def branch_rows(rows):
+    """แถว pnl_branches → (รหัสทั้งหมด, {รหัส: {'tax_branch','addr'}} เฉพาะสาขาที่จดภาษีแยก) — รหัสซ้ำ = ใช้แถวแรก"""
+    codes, heads = [], {}
+    for r in rows if isinstance(rows, list) else []:
+        code = _row_code(r)
+        if not code or code in codes:
+            continue
+        codes.append(code)
+        tb = _js_s(r.get('tax_branch'))
+        if _TAXBR_RE.fullmatch(tb):
+            addr = _JS_WS_RUN.sub(' ', _js_s(r.get('addr'), 300)).strip(_JS_WS)
+            heads[code] = {'tax_branch': tb, 'addr': addr}
+    return codes, heads
+
+
+def branch_opened(rows):
+    """{รหัส: 'YYYY-MM-DD'} วันเปิดสาขาจากแถว pnl_branches (ไม่มี/ผิดรูปแบบ = ไม่ใส่) — รหัสซ้ำ = ใช้แถวแรก"""
+    seen, out = set(), {}
+    for r in rows if isinstance(rows, list) else []:
+        code = _row_code(r)
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        d = _js_s(r.get('opened_on'))
+        if _DATE_RE.match(d):
+            out[code] = d[:10]
+    return out
+
+
+def shop_head(bill_no, heads=None):
+    """หัวบิลของบิลใบนี้ {name, taxBranch, taxId, address} — heads = ผลของ branch_rows() (None = อ่านทะเบียนรอบนี้)"""
+    code = bill_branch(bill_no)
+    if heads is None:
+        heads = branch_heads(code)
+    h = dict(SHOP)
+    b = heads.get(code)
+    if b:
+        h['taxBranch'] = 'สาขาที่ ' + b['tax_branch']
+        if b['addr']:
+            h['address'] = b['addr']
+    return h
+
+
+def _cache_rw(data=None):
+    """อ่าน (data=None) / เขียนแคชทะเบียนข้างสคริปต์ — ผ่านที่จับโฟลเดอร์ ไม่เดินตามลิงก์ลัด · ไฟล์แปลก/ใหญ่เกิน = ไม่ใช้"""
+    hfd = os.open(os.path.realpath(HERE), _DIRFLAGS)
+    try:
+        if data is not None:
+            _write_atomic(hfd, BRANCH_CACHE, json.dumps(data, ensure_ascii=False).encode('utf-8'))
+            return None
+        rfd = os.open(BRANCH_CACHE, os.O_RDONLY | _NOFOLLOW | getattr(os, 'O_NONBLOCK', 0), dir_fd=hfd)
+        with os.fdopen(rfd, 'rb') as f:
+            st = os.fstat(f.fileno())
+            if not stat.S_ISREG(st.st_mode) or st.st_size > 262144:
+                return None
+            return json.loads(f.read(262145).decode('utf-8'))
+    finally:
+        os.close(hfd)
+
+
+def _cache_load():
+    """แคชทะเบียนข้างสคริปต์ที่ยังไม่หมดอายุ (dict) — ไม่มี/เสีย/เก่ากว่า BRANCH_CACHE_DAYS = {} (แบบเดียวกับแคชในแอป)"""
+    try:
+        c = _cache_rw()
+        if isinstance(c, dict) and isinstance(c.get('t'), str) and c['t'].strip():
+            if datetime.datetime.now(BKK) - bkk(c['t']) < datetime.timedelta(days=BRANCH_CACHE_DAYS):
+                return c
+    except Exception:
+        pass
+    return {}
+
+
+def branch_heads(code=None):
+    """หัวสาขาที่จดภาษีแยกของรอบนี้ (อ่าน pnl_branches รอบละครั้ง เฉพาะรอบที่มีไฟล์ต้องสร้าง)
+    · ยังไม่รัน SQL / ไม่มีตาราง (HTTP 400/404) = ทุกรหัสใช้ได้ · หัวสาขาจากที่อ่านได้ล่าสุด (ถ้ามี — แบบเดียวกับแอปที่ใช้แคชในเครื่อง)
+      ไม่เคยอ่านได้ = ไม่มีสาขาจดภาษีแยก → หัวเดิมทุกบิล (เหมือนก่อนมีทะเบียน)
+    · อ่านไม่ได้ด้วยเหตุอื่น (เน็ต/5xx/สิทธิ์) = ใช้ทะเบียนที่อ่านได้ล่าสุด · บิลของรหัสที่ไม่รู้จักเลย (สาขาเพิ่งเปิด)
+      ยังไม่สร้างไฟล์ (raise → รอบหน้าลองใหม่) กันใบกำกับภาษีของสาขาที่จดภาษีแยกออกมาเป็นหัวสำนักงานใหญ่ค้างใน NAS"""
+    if _RUN.get('heads') is None:
+        try:
+            rows = sb_req('GET', '/rest/v1/pnl_branches?select=*')
+            codes, heads = branch_rows(rows)
+            _RUN['heads'], _RUN['known'], _RUN['src'], _RUN['opened'] = heads, None, 'db', branch_opened(rows)
+            try:
+                _cache_rw({'t': now_iso(), 'codes': codes, 'heads': heads})
+            except Exception as e:
+                log('จำทะเบียนสาขาไว้ข้างสคริปต์ไม่ได้ (%s) — ไม่เป็นไร รอบหน้าอ่านใหม่' % e)
+        except Exception as e:
+            m = re.search(r'HTTP (\d{3})', str(e))
+            c = _cache_load()
+            hs = c.get('heads') if isinstance(c.get('heads'), dict) else {}
+            codes, heads = branch_rows([dict(v, code=k) for k, v in hs.items() if isinstance(v, dict)])
+            _RUN['opened'] = {}
+            if m and m.group(1) in ('400', '404'):
+                _RUN['heads'], _RUN['known'], _RUN['src'] = heads, None, ('cache' if c else 'none')
+                log('ยังไม่มีทะเบียนสาขา (pnl_branches · HTTP %s) — %s' % (m.group(1), 'ใช้หัวสาขาที่อ่านได้ล่าสุด' if c else
+                                                                     'ทุกบิลใช้หัวสำนักงานใหญ่เหมือนเดิม'))
+            else:
+                known = branch_rows([{'code': k} for k in (c.get('codes') or []) if isinstance(k, str)])[0]
+                _RUN['heads'], _RUN['known'], _RUN['src'] = heads, set(known) | set(codes) | set(BASE_BRANCHES), 'cache'
+                log('อ่านทะเบียนสาขา (pnl_branches) ไม่ได้ (%s) — ใช้ที่อ่านได้ล่าสุด%s'
+                    % (str(e)[:160], '' if c else ' (ยังไม่เคยอ่านได้ = หัวสำนักงานใหญ่)'))
+    if code is not None and _RUN.get('known') is not None and code not in _RUN['known']:
+        raise RuntimeError('อ่านทะเบียนสาขาไม่ได้ และไม่รู้จักสาขา %s — ยังไม่สร้างไฟล์ (รอบหน้าลองใหม่)' % code)
+    return _RUN['heads']
+
+
+def _tax_mark(write=False):
+    """ไฟล์ TAX_MARK ข้างสคริปต์ — write=False: มีแล้วไหม · write=True: จดว่าทำแล้ว (ผ่านที่จับโฟลเดอร์ ไม่เดินตามลิงก์ลัด)"""
+    hfd = os.open(os.path.realpath(HERE), _DIRFLAGS)
+    try:
+        if write:
+            _write_atomic(hfd, TAX_MARK, ('%s %s\n' % (SCRIPT_VER, now_iso())).encode('utf-8'))
+            return True
+        try:
+            os.stat(TAX_MARK, dir_fd=hfd, follow_symlinks=False)
+            return True
+        except FileNotFoundError:
+            return False
+    finally:
+        os.close(hfd)
+
+
+def requeue_tax_branches():
+    """ครั้งแรกที่สคริปต์รุ่นที่พิมพ์หัวสาขาได้รัน: บิลของสาขาใหม่ที่จดภาษีแยก ซึ่งสคริปต์รุ่นก่อน (ไม่รู้จักหัวสาขา) เก็บลง NAS
+    เป็นหัว "สำนักงานใหญ่" ไปแล้ว → ส่งกลับเข้าคิว (nas_path = null) ให้สร้างใหม่ด้วยหัวสาขา · ทำครั้งเดียว (จดไฟล์ TAX_MARK)
+    · ไม่แตะ JJRD/JJLP (บิลเก่าออกในนามสำนักงานใหญ่จริง) · เฉพาะบิลตั้งแต่วันเปิดสาขา (opened_on ถ้ามี) · เลขบิล = รหัส+ตัวเลขล้วน
+    · ทีหลังตั้ง tax_branch ให้สาขาเดิม = ไม่ย้อนสร้างไฟล์เก่า (มีผลกับบิลที่สร้างไฟล์หลังจากนั้น)
+    · อ่านทะเบียนไม่ได้ (เน็ต/5xx) = ยังไม่ทำ รอบหน้าลองใหม่ · อ่านก่อน มีจริงค่อยแก้ (แบบ requeue_old_layout)"""
+    if _tax_mark():
+        return 0
+    heads = branch_heads()
+    if _RUN.get('src') not in ('db', 'none'):
+        return 0
+    n = 0
+    for code in sorted(heads):
+        if code in BASE_BRANCHES:
+            continue
+        flt = 'nas_path=not.is.null&bill_no=match.' + q('^' + code + '[0-9]+$')
+        op = (_RUN.get('opened') or {}).get(code)
+        if op:
+            flt += '&issued_at=gte.' + q(op + 'T00:00:00+07:00')
+        if not sb_req('GET', '/rest/v1/inv_invoices?select=bill_no&limit=1&' + flt):
+            continue
+        rows = sb_req('PATCH', '/rest/v1/inv_invoices?select=bill_no&' + flt,
+                      {'nas_path': None}, prefer='return=representation') or []
+        if rows:
+            n += len(rows)
+            log('หัวบิลสาขา %s (สาขาที่ %s): ส่งบิลที่เก็บไว้แล้ว %d ใบกลับเข้าคิว ให้สร้างใหม่ด้วยหัวสาขา'
+                % (code, heads[code]['tax_branch'], len(rows)))
+    _tax_mark(write=True)
+    return n
+
+
 def heartbeat(info):
     """บอกแอปว่า NAS ทำงานล่าสุดเมื่อไหร่ (แสดงในหน้าตั้งค่า) — เก็บแค่ตัวหนังสือ"""
     try:
         sb_req('POST', '/rest/v1/inv_settings',
                [{'key': 'nas_sync_last', 'value': now_iso()},
-                {'key': 'nas_sync_info', 'value': info[:300]}],
+                {'key': 'nas_sync_info', 'value': info[:300]},
+                {'key': 'nas_sync_ver', 'value': SCRIPT_VER}],
                prefer='resolution=merge-duplicates,return=minimal')
     except Exception as e:
         log('แจ้งสถานะกลับไปที่แอปไม่ได้: %s' % e)
@@ -695,10 +901,11 @@ def draw_sheet(pdf, inv, copy_label):
     left_w = W - padx * 2 - right_w - P(8)
     xl = X0 + padx
     yl = y
-    yl += S.para(xl, yl, left_w, '%s (%s)' % (SHOP['name'], SHOP['taxBranch']), 'B', P(15), RED, lh=P(15) * 1.5)
+    head = shop_head(inv.get('bill_no'))       # หัวบิลของสาขานี้ (สาขาที่จดภาษีแยก = สาขาที่ 0000X + ที่อยู่สาขา)
+    yl += S.para(xl, yl, left_w, '%s (%s)' % (head['name'], head['taxBranch']), 'B', P(15), RED, lh=P(15) * 1.5)
     lh = FS * 1.55
-    yl += S.para(xl, yl, left_w, 'ที่อยู่ : ' + SHOP['address'], '', FS, MUTED, lh=lh)
-    yl += S.para(xl, yl, left_w, 'เลขประจำตัวผู้เสียภาษีอากร : ' + SHOP['taxId'], '', FS, MUTED, lh=lh)
+    yl += S.para(xl, yl, left_w, 'ที่อยู่ : ' + head['address'], '', FS, MUTED, lh=lh)
+    yl += S.para(xl, yl, left_w, 'เลขประจำตัวผู้เสียภาษีอากร : ' + head['taxId'], '', FS, MUTED, lh=lh)
     xr = X0 + W - padx - right_w
     yr = y
     S.put(xr, yr, right_w, lh, 'เลขที่บิล', 'B', FS, RED, 'R'); yr += lh
@@ -1152,6 +1359,7 @@ def cmd_test():
         log('ไม่พบโฟลเดอร์เก็บบิล %s — เช็ค --base หรือ BASE_DIR' % base_dir())
         return 1
     folder = os.path.join(base_dir(), '_test')
+    _RUN['heads'], _RUN['known'] = {}, None     # บิลตัวอย่าง = หัวสำนักงานใหญ่ (ไม่ต้องอ่านทะเบียนสาขา ใช้ได้แม้ออฟไลน์)
     samples = [(build_pdf(sample_invoice()), 'TEST0001.pdf'),
                (build_pdf(sample_invoice(STATUS_CANCELLED, 'TEST0002')), 'TEST0002-ยกเลิก.pdf')]
     bfd = os.open(os.path.realpath(base_dir()), _DIRFLAGS)   # เขียนผ่านที่จับโฟลเดอร์ ไม่เดินตามลิงก์ลัด (เหมือนบิลจริง)
@@ -1176,6 +1384,7 @@ def cmd_check():
         return good
 
     row(sys.version_info >= (3, 8), 'Python %s (%s)' % (platform.python_version(), platform.machine()))
+    log('[ข้อมูล] สคริปต์รุ่น %s' % SCRIPT_VER)
     try:
         fpdf = load_fpdf()
         import uharfbuzz
@@ -1223,6 +1432,13 @@ def cmd_check():
         log('[ข้อมูล] หน้าสำเนา: %s (บังคับไว้ที่ WITH_COPY)' % ('แนบ' if WITH_COPY else 'ไม่แนบ'))
     else:
         log('[ข้อมูล] หน้าสำเนา: %s (ตามสวิตช์ "แนบหน้า สำเนา" ในแอป)' % ('แนบ' if want_copy() else 'ไม่แนบ'))
+    try:
+        hs = branch_heads()
+        log('[ข้อมูล] หัวบิล: %s' % (' · '.join('%s = สาขาที่ %s' % (k, hs[k]['tax_branch']) for k in sorted(hs)) +
+                                     ' · สาขาอื่น = %s' % SHOP['taxBranch'] if hs else
+                                     'ทุกสาขาใช้ %s (ยังไม่มีสาขาที่จดภาษีแยกในทะเบียนสาขา)' % SHOP['taxBranch']))
+    except Exception as e:
+        log('[ข้อมูล] หัวบิลรายสาขา: อ่านทะเบียนสาขาไม่ได้ (%s)' % e)
     sig = find_signature()
     log(('[ผ่าน] ลายเซ็น %s' % os.path.basename(sig)) if sig else
         '[ไม่บังคับ] ไม่มี signature.png ในโฟลเดอร์นี้ — บิลจะเว้นช่องให้เซ็นเอง')
@@ -1300,6 +1516,10 @@ def run_sync():
     except Exception as e:
         log('ส่งบิลโครงเก่ากลับเข้าคิวไม่ได้: %s' % e)
     try:
+        requeue_tax_branches()
+    except Exception as e:
+        log('ส่งบิลของสาขาที่จดภาษีแยกกลับเข้าคิวไม่ได้: %s' % e)
+    try:
         rows = fetch_pending(MAX_PER_RUN)
     except Exception as e:
         log('ดึงรายการบิลไม่ได้: %s' % e)
@@ -1342,6 +1562,7 @@ def main(argv):
         return 1
     _OPT['base'] = base
     _RUN['copy'] = None                  # อ่านสวิตช์หน้าสำเนาจากแอปใหม่ทุกรอบ (รอบละครั้ง)
+    _RUN['heads'] = _RUN['known'] = _RUN['src'] = _RUN['opened'] = None  # ทะเบียนสาขา (หัวบิลรายสาขา) ก็อ่านใหม่ทุกรอบ
     try:
         return _main(argv)
     finally:

@@ -55,7 +55,73 @@ setTimeout(async ()=>{ try{
   ok(E(`myBranches().join()`)==='JJRD','หน้าวันนี้/ปฏิทินแสดงแค่การ์ดสาขารัชดา');
   E(`applyUser({role:'owner'}); employees=[{id:1,code:'A',branch:'JJRD'},{id:2,code:'B',branch:'JJLP'}]; scopeEmployees();`);
   ok(E(`employees.length`)===2,'เจ้าของเห็นทุกสาขา');
+  console.log('[_br รหัสที่ไม่รู้จัก = ไม่เห็นใคร (fail closed) — ทะเบียนสาขายังไม่มา/อ่านไม่ได้]');
+  ok(E(`ALL_BR.join()`)==='JJLP,JJRD,JJCK,OFFICE','ไม่มีทะเบียนสาขา = รายการสาขาเดิม 4 แห่ง');
+  const mk2=`const mk=(id,code,branch)=>fromDbEmp({id,code,nick:code,branch,wage_type:'monthly',rate:12000,active:true,shift_id:1}); employees=[mk(1,'A','JJRD'),mk(2,'B','JJLP'),mk(9,'N','JJBN')];`;
+  E(`applyUser({role:'manager',apps:{payroll:{today:'v',_br:'JJBN'}}}); ${mk2} scopeEmployees();`);
+  ok(E(`JSON.stringify(SCOPE)`)==='[]' && E(`employees.length`)===0 && E(`myBranches().length`)===0,'_br = สาขาใหม่ที่ยังไม่รู้จัก → เห็น 0 คน (เดิมหลุดเป็นทุกสาขา)');
+  E(`applyPermUI()`); ok(/ไม่มีสาขาที่เปิดให้ดู/.test(d.getElementById('permNote').textContent),'แถบสิทธิ์บอกว่าไม่มีสาขาที่เปิดให้ดู');
+  ok([...d.querySelectorAll('#empBranchFilter option')].filter(o=>o.value).every(o=>o.disabled),'ตัวกรองสาขาเลือกสาขาไหนไม่ได้เลย');
+  E(`applyUser({role:'manager',apps:{payroll:{today:'v',_br:'XXXX, '}}})`); ok(E(`JSON.stringify(SCOPE)`)==='[]','_br พิมพ์ผิด/ไม่มีจริง → ไม่เห็นใคร');
+  E(`applyUser({role:'manager',apps:{payroll:{today:'v',_br:'JJRD,XXXX'}}})`); ok(E(`JSON.stringify(SCOPE)`)==='["JJRD"]','_br มีรหัสที่ใช้ได้ปนอยู่ = เห็นเฉพาะรหัสที่ใช้ได้ (เหมือนเดิม)');
+  E(`applyUser({role:'manager',apps:{payroll:{today:'v',_br:''}}})`); ok(E(`SCOPE===null`),'_br ว่าง = ทุกสาขา (เหมือนเดิม)');
+  E(`applyUser({role:'manager',apps:{payroll:{today:'v',_br:'jjrd'}}})`); ok(E(`JSON.stringify(SCOPE)`)==='["JJRD"]','_br ตัวพิมพ์เล็ก = รหัสเดียวกัน (เดิมหลุดเป็นทุกสาขา)');
+  E(`applyUser({role:'owner',apps:{payroll:{_br:'XXXX'}}})`); ok(E(`SCOPE===null`),'เจ้าของไม่ถูกจำกัดแม้ _br ผิด');
+  E(`applyUser({role:'manager',apps:{payroll:{emp:'va',_br:'XXXX'}}}); go('emp'); openEmpForm(null)`);
+  d.getElementById('fNick').value='ทดสอบ'; writes.length=0; await w.eval(`saveEmpForm()`);
+  ok(!writes.some(x=>x.startsWith('employees:')),'ไม่มีสาขาที่ดูแล = เพิ่มพนักงานไม่ได้ (ไม่หลุดไปสร้างคนไม่มีสาขา)');
+  E(`applyUser({role:'manager',apps:{payroll:{emp:'va',_br:'JJRD'}}}); applyPermUI(); go('emp'); openEmpForm(null)`);
+  d.getElementById('fNick').value='ทดสอบ'; writes.length=0; await w.eval(`saveEmpForm()`);
+  ok(d.getElementById('fBranch').value==='JJRD' && writes.includes('employees:insert'),'(เทียบ) ผู้จัดการรัชดาเพิ่มพนักงานรัชดาได้ตามเดิม');
+  await regTests();
 }catch(e){ console.log('CRASH',e.stack); fail++; }
  if(errs.length) console.log('jsdom:',errs.slice(0,3).join(' | '));
  console.log(fail?fail+' FAILED':'ALL PASSED'); process.exit(fail?1:0);
 },400);
+
+/* ---- ทะเบียนสาขากลาง (JJBR · pnl_branches) มีสาขาใหม่ JJBN — โหลดจากแคชในเครื่อง (localStorage.jjbr_cache) ---- */
+function regTests(){ return new Promise(done=>{
+  const REG=[{code:'JJRD',name:'สาขารัชดา',short:'รัชดา',kind:'store',sort:1,stk_id:'b19f0a17b4472',active:true},
+    {code:'JJLP',name:'สาขาลาดพร้าว',short:'ลาดพร้าว',kind:'store',sort:2,stk_id:'b19f0a17b448212',active:true},
+    {code:'JJBN',name:'สาขาบางนา',short:'บางนา',kind:'store',sort:3,stk_id:'JJBN',color:'#2E8B57',active:true},
+    {code:'JJOF',name:'ออฟฟิศ',short:'ออฟฟิศ',kind:'office',sort:9,active:true}];
+  const dom2=new JSDOM(html,{url:'https://thananant.github.io/JJ-PnL/jjmk-payroll.html',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,
+    beforeParse(w){ w.localStorage.setItem('jjbr_cache',JSON.stringify({t:Date.now(),cols:true,rows:REG}));
+      w.supabase={createClient:()=>({from:t=>chain(t),channel:()=>chain('ch'),rpc:()=>chain('rpc'),removeChannel(){} })}; w.TextEncoder=require('util').TextEncoder; w.alert=()=>{}; w.confirm=()=>true; w.indexedDB=undefined; }});
+  const w=dom2.window, d=w.document, E=s=>w.eval(s);
+  setTimeout(()=>{ try{
+    console.log('[ทะเบียนสาขามีสาขาใหม่ JJBN (บางนา)]');
+    ok(E(`ALL_BR.join()`)==='JJLP,JJRD,JJBN,JJCK,OFFICE','สาขาใหม่ต่อท้ายสาขาหน้าร้าน ก่อนครัวกลาง/ออฟฟิศ');
+    ok(E(`BR.JJBN.t`)==='บางนา' && E(`BR.JJLP.t`)==='ลาดพร้าว' && E(`BR.OFFICE.t`)==='ออฟฟิศ','ป้ายชื่อสาขาใหม่ = ชื่อสั้นจากทะเบียน · สาขาเดิมชื่อเดิม');
+    ok(E(`Object.keys(BR).join()`)==='JJLP,JJRD,JJBN,JJCK,OFFICE','ลำดับปุ่มสาขา (K BIZ/ทิป) เรียงแบบเดียวกัน');
+    const opts=id=>[...d.querySelectorAll('#'+id+' option')].map(o=>o.value+'='+o.textContent.trim()).join('|');
+    for(const id of ['empBranchFilter','detailBranch','advBranch','ssoBranch','loanBranch','calBranch','payBranch','depBranch','mouBranch'])
+      ok(opts(id)==='=ทุกสาขา|JJLP=ลาดพร้าว|JJRD=รัชดา|JJBN=บางนา|JJCK=ครัวกลาง|OFFICE=ออฟฟิศ','ตัวกรอง '+id+' มีบางนา (ก่อนครัวกลาง)');
+    ok(opts('fBranch')==='=– อัตโนมัติตามแผนก –|JJLP=ลาดพร้าว (JJLP)|JJRD=รัชดา (JJRD)|JJBN=บางนา (JJBN)|JJCK=ครัวกลาง (JJCK)|OFFICE=ส่วนกลาง / ออฟฟิศ','ฟอร์มพนักงานเลือกบางนาได้');
+    ok(d.getElementById('tip_JJBN') && d.getElementById('tipPick_JJBN') && d.getElementById('tipPickBtn_JJBN') && d.getElementById('tipPrev_JJBN'),'มีช่องทิปของบางนา');
+    const tipOrder=[...d.querySelectorAll('#tipBg input[type=number]')].map(i=>i.id).join();
+    ok(tipOrder==='tip_JJLP,tip_JJRD,tip_JJBN,tip_JJCK,tip_OFFICE','ช่องทิปเรียง ลาดพร้าว รัชดา บางนา ครัวกลาง ออฟฟิศ');
+    E(`brSync(); brSync();`);
+    ok(d.querySelectorAll('#empBranchFilter option[value=JJBN]').length===1 && d.querySelectorAll('#tip_JJBN').length===1 && E(`ALL_BR.join()`)==='JJLP,JJRD,JJBN,JJCK,OFFICE','เรียกซ้ำไม่เพิ่มซ้ำ');
+    ok(E(`branchChip({branch:'JJBN'})`).includes('บางนา') && E(`branchChip({branch:'JJBN'})`).includes('#2E8B57'),'ชิปสาขาบางนาใช้สีจากทะเบียน');
+    ok(E(`branchChip({branch:'JJLP'})`)==='<span class="chip chip-blue">ลาดพร้าว</span>','ชิปสาขาเดิมเหมือนเดิมทุกตัวอักษร');
+    ok(E(`BR_SHORT.JJBN`)==='บางนา' && E(`BR_COLOR.JJBN`)==='#2E8B57' && E(`BR_SHORT.JJLP`)==='ลพ.','ปฏิทิน: ชื่อย่อ/สีของบางนา · สาขาเดิมเหมือนเดิม');
+    console.log('[_br กับสาขาใหม่]');
+    E(`applyUser({role:'manager',apps:{payroll:{today:'v',emp:'vae',_br:'JJBN'}}});
+       devBranch={SN_RD:'JJRD',SN_BN:'JJBN'};
+       shiftDefs=[fromDbShift({id:1,name:'กะ',start_time:'09:00',end_time:'18:00',in_grace:5,out_grace:0,sort_order:1})];
+       const mk=(id,code,branch)=>fromDbEmp({id,code,nick:code,branch,wage_type:'monthly',rate:12000,active:true,shift_id:1});
+       employees=[mk(1,'A','JJRD'),mk(2,'B','JJBN'),mk(3,'C',''),mk(4,'D','JJLP')];
+       punches=[{code:'C',date:'2026-09-28',time:'09:00',sn:'SN_BN'}];
+       scopeEmployees();`);
+    ok(E(`JSON.stringify(SCOPE)`)==='["JJBN"]' && E(`employees.map(e=>e.code).join()`)==='B,C','_br = JJBN → เห็นเฉพาะพนักงานบางนา + คนใหม่ที่สแกนที่เครื่องบางนา');
+    ok(E(`myBranches().join()`)==='JJBN','การ์ดหน้าวันนี้/ปฏิทิน = บางนาอย่างเดียว');
+    E(`applyPermUI()`);
+    ok([...d.querySelectorAll('#fBranch option')].every(o=>o.value==='JJBN'?!o.disabled:o.disabled),'ฟอร์มพนักงานเลือกได้เฉพาะบางนา');
+    ok(/เห็นเฉพาะ บางนา/.test(d.getElementById('permNote').textContent),'แถบสิทธิ์บอกชื่อบางนา');
+    E(`applyUser({role:'manager',apps:{payroll:{today:'v',_br:'JJRD,JJBN'}}})`); ok(E(`myBranches().join()`)==='JJRD,JJBN','_br หลายสาขารวมสาขาใหม่ได้');
+    E(`applyUser({role:'manager',apps:{payroll:{today:'v',_br:'XXXX'}}})`); ok(E(`JSON.stringify(SCOPE)`)==='[]','รหัสที่ไม่อยู่ในทะเบียน → ไม่เห็นใคร');
+    console.log('[กฎเงินเดือนของสาขาใหม่ = หน้าร้าน (ไม่เปลี่ยน)]');
+    ok(!E(`isOfficeCycle({branch:'JJBN'})`) && E(`isOfficeCycle({branch:'OFFICE'})`),'บางนาใช้รอบ 26→25 แบบหน้าร้าน · ออฟฟิศเหมือนเดิม');
+  }catch(e){ console.log('CRASH',e.stack); fail++; } done(); },400);
+}); }

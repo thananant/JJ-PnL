@@ -198,6 +198,7 @@ details>summary::-webkit-details-marker{display:none}
 .usearch{display:flex;gap:8px;align-items:center;margin:0 0 10px}
 .usearch input{flex:1;min-width:0}
 .usearch button{white-space:nowrap}
+@media(max-width:640px){.useg,.usearch{flex-wrap:wrap}.usearch input{flex:1 1 100%}} /* มือถือ: ปุ่มโหมด/ค้นหา/ส่งออก ขึ้นบรรทัดใหม่ ไม่ดันหน้าให้เลื่อนแนวนอน */
 .unitwrap{display:flex;flex-wrap:wrap;gap:7px}
 .unitchip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 8px 6px 13px;font-size:13px;font-weight:600}
 .unitchip button{color:var(--bad);font-weight:800;font-size:13px;padding:0 4px;border-radius:50%}
@@ -383,6 +384,7 @@ tr:last-child td{border-bottom:none}
 .fld input{padding:8px 10px}
 .dsum{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-top:1px dashed var(--line);padding-top:8px;margin-top:4px;font-size:12.5px}
 .hintlink{color:var(--red);font-size:11px;font-weight:600;cursor:pointer}
+@media(max-width:700px){.brm .btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center}} /* หน้าต่างสาขา: ปุ่มบนมือถือสูง ≥44px */
 
 /* ---------- Expense ---------- */
 .daychips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
@@ -974,7 +976,8 @@ window.JJGate=(function(){
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -1197,7 +1200,7 @@ function brPickable(br){                         // เลือกสาขา�
   const L=(S.core&&S.core.branches)||[];
   return br==='ALL' ? (!SCOPE||L.length>1) : L.some(b=>b.code===br);
 }
-function scopeLabel(){ return ((S.core&&S.core.branches)||[]).map(b=>(b.name||(BRNAME[b.code]||b.code).replace('สาขา',''))).join(', ')||'—'; }
+function scopeLabel(){ return ((S.core&&S.core.branches)||[]).map(b=>(b.short||brNm(b.name)||(BRNAME[b.code]||b.code).replace('สาขา',''))).join(', ')||'—'; }
 function scopeDenied(method,path,body){          // คำขอนี้แตะข้อมูลสาขาที่ไม่มีสิทธิ์ไหม
   if(!SCOPE)return false;
   const [t,q]=[path.split('?')[0],path.split('?')[1]||''];
@@ -1343,6 +1346,36 @@ const S = {
   charts: {}
 };
 const BRNAME = {JJRD:'สาขารัชดา', JJLP:'สาขาลาดพร้าว', ALL:'ทุกสาขา (รวม)'};
+/* ---------- ทะเบียนสาขากลาง (pnl_branches = ทะเบียนของทุกแอพ · JJBR) — เจ้าของสั่ง 2026-10-15 "เพิ่มสาขาใหม่ ให้ขึ้นทุกระบบ" ----------
+   สาขาเดิม 2 สาขา (JJRD/JJLP) คงป้าย/ลำดับ/คอลัมน์เดิมทุกจุดที่เคยเขียนตายตัว · สาขาใหม่ = ชื่อ/ชื่อสั้นจากทะเบียน
+   ชื่อสาขาที่เปิดจาก JJ Access มีคำว่า "สาขา" นำหน้าแล้ว (เช่น สาขาบางนา) → brNm() ตัดออกก่อนต่อ "สาขา" กันขึ้น "สาขาสาขา…" */
+const BR_OLD=['JJRD','JJLP'];
+const BR_TH={JJRD:'รัชดา',JJLP:'ลาดพร้าว'};       // ป้ายสั้นเดิมของ 2 สาขาแรก
+const BR_AB={JJRD:'รด.',JJLP:'ลพ.'};             // ตัวย่อเดิมในหัวคอลัมน์ "ต่าง"
+const BRSHORT={};                                 // รหัส -> ชื่อสั้นจากทะเบียน (เติมใน loadCore ทุกแถว ก่อนกรองสิทธิ์)
+function brNm(n){ return String(n==null?'':n).trim().replace(/^สาขา\s*/,''); }
+function brTh(code){ // ป้ายสั้นของสาขา (หัวคอลัมน์/ข้อความ)
+  if(BR_TH[code])return BR_TH[code];
+  return BRSHORT[code]||brNm(BRNAME[code])||(window.JJBR?JJBR.short(code,code):String(code||''));
+}
+function brStore(b){ // สาขาหน้าร้าน (ไม่ใช่ส่วนกลาง) · มีคอลัมน์ kind (รัน jjmk-branches.sql แล้ว) ใช้ kind · ไม่มี = ดูจาก is_central + หน่วยงานที่ทะเบียนรู้จัก (JJOF/JJCK)
+  if(!b||b.is_central)return false;
+  if(b.kind)return b.kind==='store';
+  return !(window.JJBR&&JJBR.known(b.code)&&!JJBR.isStore(b.code));
+}
+function brStores(){ // สาขาหน้าร้านที่เห็นได้ ตามลำดับปุ่ม (sort) — มีแค่สาขาเดิม = [JJRD,JJLP] ลำดับเดิมเป๊ะ (แทนทุกจุดที่เคยเขียนตายตัว 2 สาขา)
+  const L=((S.core&&S.core.branches)||[]).filter(brStore).map(b=>b.code);
+  return L.every(c=>BR_OLD.includes(c))?BR_OLD.slice():L;
+}
+function brOrList(codes){ // "A" · "A หรือ B" · "A, B หรือ C"
+  const a=codes.map(c=>`"${BRNAME[c]||('สาขา'+brTh(c))}"`);
+  return a.length<=2?a.join(' หรือ '):a.slice(0,-1).join(', ')+' หรือ '+a[a.length-1];
+}
+function brFallback(){ // อ่านตาราง pnl_branches ไม่ได้: มีแคชทะเบียน (JJBR) = ใช้สาขาหน้าร้านจากแคช · ไม่มี = 2 สาขาเดิมเหมือนเดิม
+  const st=(window.JJBR&&JJBR.src!=='base')?JJBR.stores():[];
+  return st.length?st.map(r=>({code:r.code,name:r.name,short:r.short,sort:r.sort,stk_id:r.stk_id||null,kind:'store',is_central:false}))
+    :[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}];
+}
 const CAT_ORDER = ['อาหาร','ของใช้','ของหวาน','น้ำ','ไอศกรีม','Delivery'];
 const CAT_COLOR = {'อาหาร':'#C62127','ของใช้':'#E07B39','ของหวาน':'#B98A2F','น้ำ':'#4E7D8C','ไอศกรีม':'#8B5E83','Delivery':'#7A8B5A','เงินสดหน้าร้าน':'#6B6B6B','Shopee':'#B0413E'};
 const CAT_PALETTE = ['#2E7D6B','#A0522D','#5C6BC0','#C2185B','#6D8B3A','#8D6E63','#00838F','#9E7B2F'];
@@ -1376,9 +1409,10 @@ async function loadCore(){
   const units=await sel('pnl_units','select=*&order=sort').catch(()=>null);
   await loadStkNames(); // ชื่อนับ (ระบบนับสต๊อก) ไว้กำกับข้างชื่อบิลทุกหน้า
   S.core = { units, sup, supById:Object.fromEntries(sup.map(s=>[s.id,s])), bench, fixed:fix,
-    branches:(brs&&brs.length?brs:[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}]),
+    branches:(brs&&brs.length?brs:brFallback()),
     fixGroups: fgs||[] };
-  S.core.branches.forEach(b=>{ if(b.name) BRNAME[b.code]='สาขา'+b.name; }); // ชื่อครบทุกสาขา (ไว้แสดงป้าย)
+  S.core.branches.forEach(b=>{ if(b.name) BRNAME[b.code]='สาขา'+brNm(b.name); const sh=String(b.short||'').trim()||brNm(b.name); if(sh)BRSHORT[b.code]=sh; }); // ชื่อครบทุกสาขา (ไว้แสดงป้าย)
+  stkBrSync(S.core.branches);                                              // id สาขาในระบบนับของสาขาใหม่ (pnl_branches.stk_id)
   if(SCOPE) S.core.branches=S.core.branches.filter(b=>brOk(b.code));      // เห็นเฉพาะสาขา: เหลือแค่สาขาที่ได้สิทธิ์ (ทุกหน้า/ยอดรวมใช้รายการนี้)
   BRNAME.ALL=SCOPE?'สาขาที่ดูแล (รวม)':'ทุกสาขา (รวม)';
   // คอลัมน์วันจ่าย/บัญชีที่จ่าย (paid_d/pay_src — sql/jjmk_pnl_bank.sql) มีแล้วหรือยัง: ตรวจเงียบครั้งเดียว ถ้ายังไม่มีก็ไม่ส่งคอลัมน์ใหม่ตอนติ๊กจ่าย
@@ -1567,49 +1601,95 @@ function allNotice(title){
 function brModal(code){
   if(SCOPE){ toast('🔒 จัดการสาขาได้เฉพาะบัญชีที่เห็นทุกสาขา',true); return; }
   const b=code?S.core.branches.find(x=>x.code===code):{code:'',name:''};
-  openModal(`<h3>${code?'แก้ไขสาขา':'เพิ่มสาขาใหม่'}</h3>
-    <div class="fld"><label>รหัสสาขา (อังกฤษ/ตัวเลข 2–10 ตัว เช่น JJBN)</label>
+  // สาขาหน้าร้านใหม่ = เปิดที่ JJ Access ปุ่มเดียวขึ้นทุกระบบ (เจ้าของสั่ง 2026-10-15) · หน้านี้เพิ่มได้เฉพาะหน่วยงาน 🏢 ส่วนกลางของ P&L
+  const hasShort=!!(code&&b&&('short' in b));    // มีคอลัมน์ short (รัน jjmk-branches.sql แล้ว) = แก้ชื่อสั้นบนปุ่มได้ด้วย
+  openModal(`<div class="brm"><h3>${code?'แก้ไขสาขา':'เพิ่มหน่วยงาน 🏢 ส่วนกลาง'}</h3>
+    ${code?`<div class="xs mut" style="margin:-6px 0 10px">ชื่อที่แก้ตรงนี้อยู่ในทะเบียนสาขากลาง (pnl_branches) — สาขาที่เปิดใหม่และแอพที่อ่านชื่อจากทะเบียนเห็นชื่อใหม่ตอนเปิดครั้งถัดไป · ป้ายของ รัชดา/ลาดพร้าว ในบางแอพ (รวมหัวตาราง/รายงานของ P&L) เป็นค่าคงที่เดิม ไม่เปลี่ยนตาม · ติ๊ก 🏢 มีผลเฉพาะ P&L (ถ้าทำให้ประเภทสาขาในทุกระบบเปลี่ยน จะถามก่อน) · รหัสแก้ไม่ได้</div>`
+    :`<div class="dupbox" style="margin-top:0"><b>🏪 เปิดสาขาหน้าร้านใหม่ → JJ Access → 🏪 สาขา → ➕ เปิดสาขาใหม่</b>
+      <div class="xs" style="margin:4px 0 8px">ปุ่มเดียวสร้างสาขาให้ทุกระบบพร้อมกัน (P&L · Owner · นับสต๊อก · ใบกำกับภาษี · เงินเดือน · KPI · ซ่อมบำรุง ฯลฯ) และคัดลอกสินค้า/Fix cost/ของใช้จากสาขาต้นแบบได้ — P&L เห็นสาขาใหม่เอง (ปุ่มเลือกสาขา ทุกหน้า รายงาน)</div>
+      ${isBoss(S.user)?`<a class="btn sm2" href="jjmk-admin.html" onclick="return brGoAccess()">ไปหน้า JJ Access → 🏪 สาขา</a>`:`<div class="xs b">เปิดสาขาได้เฉพาะผู้ดูแลระบบ/เจ้าของ</div>`}</div>
+    <div class="sm b" style="margin:14px 0 8px">หรือเพิ่มหน่วยงานส่วนกลางเฉพาะใน P&L (เช่น ออฟฟิศ/คลัง) — ลงได้เฉพาะรายจ่าย ไม่โชว์ในหน้ารายรับ/เทียบสาขา</div>`}
+    <div class="fld"><label>${code?'รหัสสาขา (อังกฤษ/ตัวเลข 2–10 ตัว เช่น JJBN)':'รหัสหน่วยงาน (ขึ้นต้นตัวอักษรอังกฤษ 2–10 ตัว เช่น JJWH)'}</label>
       <input id="brCode" value="${esc(b.code)}" ${code?'disabled':''} style="text-transform:uppercase" placeholder="JJXX"></div>
-    <div class="fld"><label>ชื่อสาขา</label><input id="brName" value="${esc(b.name||'')}" placeholder="เช่น บางนา"></div>
-    <label class="sm" style="display:flex;gap:8px;align-items:center;margin:4px 0 6px">
+    <div class="fld"><label>${code?'ชื่อสาขา':'ชื่อหน่วยงาน'}</label><input id="brName" value="${esc(b.name||'')}" placeholder="${code?'เช่น บางนา':'เช่น คลังสินค้า'}"></div>
+    ${hasShort?`<div class="fld"><label>ชื่อสั้นบนปุ่ม (เว้นว่าง = ใช้ชื่อสาขาตัดคำว่า "สาขา")</label><input id="brShort" value="${esc(b.short||'')}" maxlength="30"></div>`:''}
+    ${code?`<label class="sm" style="display:flex;gap:8px;align-items:center;margin:4px 0 6px">
       <input type="checkbox" id="brCen" ${b.is_central?'checked':''} style="width:18px;height:18px">
-      🏢 ส่วนกลาง (เช่น ออฟฟิศ) — ลงได้เฉพาะรายจ่าย ไม่โชว์ในหน้ารายรับ/เทียบสาขา</label>
+      🏢 ส่วนกลาง (เช่น ออฟฟิศ) — ลงได้เฉพาะรายจ่าย ไม่โชว์ในหน้ารายรับ/เทียบสาขา</label>`:''}
     <div style="display:flex;gap:8px;margin-top:12px">
       ${code&&isBoss(S.user)?`<button class="btn gh sm2" style="color:var(--bad)" onclick="brDelete('${code}')">🗑 ลบสาขา</button>`:''}
       <button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
-      <button class="btn sm2" style="margin-left:auto" onclick="brSave(${code?`'${code}'`:'null'})">บันทึก</button></div>`);
+      <button class="btn sm2" style="margin-left:auto" onclick="brSave(${code?`'${code}'`:'null'})">${code?'บันทึก':'เพิ่มหน่วยงานส่วนกลาง'}</button></div></div>`);
+}
+function brGoAccess(){ // ไป JJ Access แท็บ 🏪 สาขา: ออกใบผ่าน JJ Gate ให้ (ลิงก์ข้ามแอพ ไม่ต้องใส่รหัสซ้ำ) · ออกไม่ได้ = ลิงก์ธรรมดา JJ Access ถามรหัสเอง
+  try{ localStorage.setItem('jjacc_tab','branches'); }catch(e){}
+  try{ if(S.user&&S.user.username&&!S.user.legacy&&window.JJGate)JJGate.issue('admin',S.user.username); }catch(e){}
+  return true;
 }
 async function brSave(code){
   const name=(document.getElementById('brName').value||'').trim();
   if(!name){toast('ใส่ชื่อสาขาก่อนครับ',true);return;}
-  const cen=!!(document.getElementById('brCen')&&document.getElementById('brCen').checked);
+  const cen=code?!!(document.getElementById('brCen')&&document.getElementById('brCen').checked):true; // เพิ่มจากหน้านี้ = หน่วยงานส่วนกลางเสมอ (สาขาหน้าร้านเปิดที่ JJ Access)
   const noCenCol=e=>{ toast('ติ๊ก "ส่วนกลาง" ยังไม่ทำงาน — รัน sql/jjmk_pnl_central.sql ใน Supabase ก่อนครับ',true); };
+  const kindCol=(S.core.branches||[]).some(x=>x&&('kind' in x));   // มีคอลัมน์ kind (รัน jjmk-branches.sql แล้ว)
   try{
     if(code){
-      try{ await upd('pnl_branches','code=eq.'+code,{name,is_central:cen}); }
-      catch(e){ if(/is_central/i.test(String(e.message))){ await upd('pnl_branches','code=eq.'+code,{name}); if(cen)noCenCol(e); } else throw e; }
+      const b0=S.core.branches.find(x=>x.code===code)||{};
+      let body={name,is_central:cen};
+      /* ประเภทในทะเบียนกลาง (kind) = ทุกแอพใช้ — บันทึกปกติ/แก้ชื่อ ไม่ส่ง kind (ติ๊ก 🏢 เดิมมีผลเฉพาะ P&L)
+         ส่งเฉพาะตอนเพิ่งติ๊ก 🏢 ให้สาขาหน้าร้าน (store → office/kitchen) · ไม่เคยส่ง 'store' (เอาติ๊กออก = ประเภทในทะเบียนคงเดิม ไม่ลดชั้นออฟฟิศ/ครัวกลาง)
+         ประเภทในทะเบียนจะเปลี่ยน (ทั้งทาง kind และทาง is_central ตอนยังไม่มีคอลัมน์ kind) = ถามก่อน */
+      const typ=r=>r.kind==='store'||r.kind==='office'||r.kind==='kitchen'?r.kind:
+        (code==='JJOF'||code==='OFFICE'?'office':code==='JJCK'?'kitchen':r.is_central?'office':'store'); // สูตรเดียวกับ JJBR (norm)
+      const t0=typ(b0);
+      if(kindCol&&('kind' in b0)&&cen!==!!b0.is_central){
+        const k=cen&&t0==='store'?(code==='JJCK'?'kitchen':'office'):t0;
+        if(k!==b0.kind)body.kind=k; }
+      const t1=body.kind||typ(Object.assign({},b0,{is_central:cen}));
+      if(t1!==t0&&!confirm(t0==='store'
+        ?`⚠️ ติ๊ก 🏢 ส่วนกลางให้ "${b0.name||code}" (${code}) = เปลี่ยนประเภทสาขานี้ในทุกระบบ\n\nสาขานี้จะไม่ใช่สาขาหน้าร้านแล้ว — หายจากรายการสาขาของแอพอื่น (นับสต๊อก · ใบกำกับภาษี · KPI · เงินเดือน · ซ่อมบำรุง ฯลฯ) ไม่ใช่แค่ใน P&L\n\nยืนยันเปลี่ยนไหม?`
+        :`⚠️ เอาติ๊ก 🏢 ส่วนกลางออกจาก "${b0.name||code}" (${code}) = เปลี่ยนประเภทในทุกระบบ\n\nหน่วยงานนี้จะกลายเป็นสาขาหน้าร้าน — โผล่ในรายการสาขาของแอพอื่น (นับสต๊อก · ใบกำกับภาษี · KPI · เงินเดือน ฯลฯ) ไม่ใช่แค่ใน P&L\n\nยืนยันเปลี่ยนไหม?`))return;
+      const shEl=document.getElementById('brShort'); if(shEl)body.short=(shEl.value||'').trim()||null;
+      for(let i=0;i<4;i++){
+        try{ await upd('pnl_branches','code=eq.'+code,body); break; }
+        catch(e){ const msg=String(e.message);
+          if(/is_central/i.test(msg)&&'is_central' in body){ delete body.is_central; if(cen)noCenCol(e); }
+          else if(/\bkind\b/i.test(msg)&&'kind' in body){ delete body.kind; }
+          else if(/\bshort\b/i.test(msg)&&'short' in body){ delete body.short; }
+          else throw e; }
+      }
     }
     else{
       const c=(document.getElementById('brCode').value||'').trim().toUpperCase();
-      if(!/^[A-Z0-9]{2,10}$/.test(c)){toast('รหัสสาขาใช้ A-Z / 0-9 ยาว 2–10 ตัว',true);return;}
+      if(!/^[A-Z][A-Z0-9]{1,9}$/.test(c)){toast('รหัสขึ้นต้นด้วยตัวอักษร A-Z ตามด้วย A-Z / 0-9 รวม 2–10 ตัว',true);return;} // ขึ้นต้นด้วยตัวเลข = ทะเบียนกลาง (JJBR) ของแอพอื่นไม่รับ
+      if(c==='ALL'||c==='OFFICE'){toast('รหัส '+c+' ใช้กับส่วนอื่นของระบบอยู่แล้ว เลือกรหัสอื่น',true);return;}
       if(S.core.branches.some(x=>x.code===c)){toast('รหัส '+c+' มีอยู่แล้ว',true);return;}
+      { // กติกาเดียวกับปุ่มเปิดสาขาใหม่ (jj_branch_open): รหัสห้ามเป็นตัวหน้าของรหัสอื่น/มีรหัสอื่นเป็นตัวหน้า (JJB ↔ JJBN) — เลขใบกำกับภาษีปนกัน และจะเปิดสาขาชื่อนั้นทีหลังไม่ได้
+        const px=[...new Set([...S.core.branches.map(x=>String(x.code||'').toUpperCase()),...(window.JJBR?JJBR.rows.map(r=>r.code):[])])]
+          .find(x=>x&&x!==c&&(x.startsWith(c)||c.startsWith(x)));
+        if(px){toast('รหัส '+c+' ขึ้นต้นเหมือน '+px+' — เลขเอกสารจะปนกัน และกันไม่ให้เปิดสาขาหน้าร้านรหัสนั้นทีหลัง เลือกรหัสอื่น',true);return;} }
       const srt=(S.core.branches.length?Math.max(...S.core.branches.map(x=>num(x.sort)||0)):0)+1;
       let body={code:c,name,sort:srt,is_central:cen};
-      for(let i=0;i<3;i++){
+      if(kindCol)body.kind=c==='JJCK'?'kitchen':'office';
+      for(let i=0;i<4;i++){
         try{ await ins('pnl_branches',body); break; }
         catch(e){ const msg=String(e.message);
           if(/is_central/i.test(msg)&&'is_central' in body){ delete body.is_central; if(cen)noCenCol(e); }
+          else if(/\bkind\b/i.test(msg)&&'kind' in body){ delete body.kind; }
           else if(msg.includes('sort')&&'sort' in body){ delete body.sort; }
           else throw e; }
       }
     }
     await loadCore(); renderBrSeg(); closeModal(); toast('บันทึกสาขาแล้ว'); show('set');
+    try{ if(window.JJBR){ const k=cfg(); JJBR.load(k.url,k.key,{force:true}); } }catch(e){} // แคชทะเบียนในเครื่องนี้ (แอพอื่นที่เปิดในเครื่องเดียวกัน) ตามชื่อใหม่ทันที
   }catch(e){ toast('บันทึกไม่สำเร็จ: '+e.message,true); }
 }
 async function brDelete(code){
   if(!isBoss(S.user)){toast('ลบสาขาได้เฉพาะผู้ดูแลระบบ/เจ้าของเท่านั้น',true);return;}
   if((S.core.branches||[]).length<=1){toast('ต้องเหลืออย่างน้อย 1 สาขา ลบไม่ได้',true);return;}
   const b=S.core.branches.find(x=>x.code===code); const nm=b?(b.name||code):code;
+  // สาขาหน้าร้านที่เปิดจาก JJ Access (ทะเบียนกลาง) — ลบที่นี่ไม่ลบของระบบอื่น · ทางที่ถูก = JJ Access → ↩️ ยกเลิกสาขาที่เปิดผิด (ลบครบทุกระบบ)
+  if(b&&!BR_OLD.includes(code)&&b.kind==='store'&&!confirm(`⚠️ "${nm}" (${code}) เป็นสาขาหน้าร้านในทะเบียนกลาง (เปิดจาก JJ Access)\n\nลบจากหน้านี้ = ลบเฉพาะข้อมูล P&L + ชื่อในทะเบียน — สินค้าในระบบนับ/เลขใบกำกับภาษี/งานซ่อมบำรุงของสาขานี้ยังค้างอยู่\nถ้าเปิดผิด ให้ยกเลิกที่ JJ Access → 🏪 สาขา → ↩️ ยกเลิกสาขาที่เปิดผิด (ลบครบทุกระบบ)\n\nยังจะลบเฉพาะใน P&L ต่อไหม?`))return;
   const TBS=[['pnl_income_daily','รายรับ'],['pnl_cash_expenses','เงินสดจ่าย'],['pnl_expense_daily','รายจ่าย'],
     ['pnl_bill_items','บันทึกข้อมูลบิล'],['pnl_bill_log','ประวัติแก้บิล'],['pnl_fixed_monthly','Fix cost รายเดือน'],
     ['pnl_fixed_items','รายการ Fix cost'],['pnl_pv','ใบสำคัญจ่าย'],['pnl_extra_expenses','รายจ่ายอื่นๆ'],
@@ -1646,7 +1726,7 @@ function renderBrSeg(){
   // เห็นเฉพาะสาขา: มีกุญแจนำหน้า · ปุ่ม "รวม" โชว์เมื่อเห็นได้ ≥2 สาขา (รวมเฉพาะสาขาที่ดูแล)
   seg.title=SCOPE?'🔒 บัญชีนี้เห็นเฉพาะ '+scopeLabel():'';
   seg.innerHTML = (SCOPE?'<span class="seglock" aria-hidden="true">🔒</span>':'')
-    + S.core.branches.map(b=>`<button data-br="${b.code}" class="${S.br===b.code?'on':''}">${esc(b.name||(BRNAME[b.code]||b.code).replace('สาขา',''))}</button>`).join('')
+    + S.core.branches.map(b=>`<button data-br="${b.code}" class="${S.br===b.code?'on':''}">${esc(b.short||brNm(b.name)||(BRNAME[b.code]||b.code).replace('สาขา',''))}</button>`).join('')
     + (brPickable('ALL')?`<button data-br="ALL" class="${S.br==='ALL'?'on':''}">${SCOPE?'รวมที่ดูแล':'ทุกสาขา'}</button>`:'');
   applyNav();
 }
@@ -3823,28 +3903,34 @@ RENDER.usage = async (el)=>{
   const b10=(b,sv)=>(sv>0&&b>0)?fmtI(b/(sv/10000)):'–';         // มูลค่า ฿ ต่อยอดขาย ฿10,000
   const dAvg=gx=>daysG[gx]>0?salesG[gx]/daysG[gx]:0;            // ยอดขายเฉลี่ย/วันของกลุ่ม
   const pDay=(q,gx)=>(salesAll>0&&q>0&&dAvg(gx)>0)?fq((q/(salesAll/10000))*(dAvg(gx)/10000)):'–'; // คาดการณ์ใช้/วันของกลุ่มวัน
+  const CB=ALL?brStores():[], CBn=CB.map(c=>esc(brTh(c)));        // สาขาในโหมด 🆚 เทียบสาขา
+  const TC=S.usageMode==='cmp'?2*CB.length+3:7;                     // จำนวนคอลัมน์ตาราง (เทียบสาขา = สินค้า + ใช้/หมื่น×สาขา + ต่าง + ฿/หมื่น×สาขา + ว่าง)
   let body='', grand=0;
-  if(S.usageMode==='cmp'){
-    const sRD=salesBr['JJRD']||0, sLP=salesBr['JJLP']||0;
+  if(S.usageMode==='cmp'){ // 🆚 เทียบสาขา: ทุกสาขาหน้าร้านตามลำดับ (มีแค่ 2 สาขาเดิม = คอลัมน์/ป้ายเดิมเป๊ะ) · 2 สาขา = ▲▼ สาขาที่ 2 เทียบสาขาแรก · 3 สาขาขึ้นไป = ↕ มากสุดเทียบน้อยสุด
+    const sB=CB.map(c=>salesBr[c]||0), nB=CBn, two=CB.length===2;
     const items=Object.entries(gc).map(([k,t])=>{
-      const rd=t.br['JJRD']||{qty:0,baht:0}, lp2=t.br['JJLP']||{qty:0,baht:0};
-      const rRD=sRD>0?rd.qty/(sRD/10000):0, rLP=sLP>0?lp2.qty/(sLP/10000):0;
-      const bRD=sRD>0?rd.baht/(sRD/10000):0, bLP=sLP>0?lp2.baht/(sLP/10000):0;
-      return {k,item:t.item,unit:t.unit,rd,lp:lp2,rRD,rLP,bRD,bLP,imp:Math.abs(bRD-bLP)};
+      const q=CB.map(c=>t.br[c]||{qty:0,baht:0});
+      const r=q.map((v,i)=>sB[i]>0?v.qty/(sB[i]/10000):0), bb=q.map((v,i)=>sB[i]>0?v.baht/(sB[i]/10000):0);
+      return {k,item:t.item,unit:t.unit,q,r,bb,imp:two?Math.abs(bb[0]-bb[1]):(bb.length?Math.max(...bb)-Math.min(...bb):0)};
     }).sort((a,b)=>b.imp-a.imp);
-    grand=items.reduce((a,x)=>a+x.rd.baht+x.lp.baht,0);
+    grand=items.reduce((a,x)=>x.q.reduce((a2,v)=>a2+v.baht,a),0);
     body=items.map(x=>{
       let chip='';
-      if(x.rRD>0&&x.rLP>0){ const df=(x.rLP-x.rRD)/x.rRD;
-        chip=`<span class="chip ${Math.abs(df)>0.2?'bad':'mid'}" title="อัตราใช้ต่อ ฿10,000 ของลาดพร้าว เทียบรัชดา">${df>0?'▲':'▼'} ${pctF(Math.abs(df))}</span>`; }
-      else chip=`<span class="chip mid">${x.rRD>0?'เฉพาะรัชดา':'เฉพาะลาดพร้าว'}</span>`;
-      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+stkNm(x.item)).toLowerCase())}" data-grp="all" data-baht="${x.rd.baht+x.lp.baht}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
+      if(two){
+        if(x.r[0]>0&&x.r[1]>0){ const df=(x.r[1]-x.r[0])/x.r[0];
+          chip=`<span class="chip ${Math.abs(df)>0.2?'bad':'mid'}" title="อัตราใช้ต่อ ฿10,000 ของ${nB[1]} เทียบ${nB[0]}">${df>0?'▲':'▼'} ${pctF(Math.abs(df))}</span>`; }
+        else chip=`<span class="chip mid">${x.r[0]>0?'เฉพาะ'+nB[0]:'เฉพาะ'+nB[1]}</span>`;
+      }else{
+        const P=x.r.map((v,i)=>i).filter(i=>x.r[i]>0);
+        if(P.length>1){ const hi=P.reduce((a,i)=>x.r[i]>x.r[a]?i:a,P[0]), lo=P.reduce((a,i)=>x.r[i]<x.r[a]?i:a,P[0]), df=(x.r[hi]-x.r[lo])/x.r[lo];
+          chip=`<span class="chip ${df>0.2?'bad':'mid'}" title="อัตราใช้ต่อ ฿10,000 ของ${nB[hi]} (มากสุด) เทียบ${nB[lo]} (น้อยสุด)">↕ ${pctF(df)}</span>`; }
+        else chip=`<span class="chip mid">${P.length?'เฉพาะ'+nB[P[0]]:'–'}</span>`;
+      }
+      return `<tr class="urow" data-k="${esc(x.k)}" data-s="${esc((x.item+' '+stkNm(x.item)).toLowerCase())}" data-grp="all" data-baht="${x.q.reduce((a,v)=>a+v.baht,0)}" style="cursor:pointer" onclick="usageDetailItem('${x.k.replace(/'/g,"\\'")}')">
         <td>${esc(x.item)} <span class="xs mut">${esc(x.unit)}</span>${stkNmHtml(x.item)}${mixSet.has(ocrNorm(x.item))?`<span class="chip bad" style="cursor:pointer;margin-left:6px" onclick="event.stopPropagation();uconvModal('${ocrNorm(x.item)}')" title="สินค้าเดียวกันลงบิลหลายหน่วย — ตั้งอัตราแปลงครั้งเดียว ระบบจะรวมเป็นบรรทัดเดียวให้">⚠ หน่วยปน</span>`:''}</td>
-        <td class="n b">${x.rRD>0?fq(x.rRD):'–'}</td>
-        <td class="n b">${x.rLP>0?fq(x.rLP):'–'}</td>
+        ${x.r.map(v=>`<td class="n b">${v>0?fq(v):'–'}</td>`).join('\n        ')}
         <td class="right">${chip}</td>
-        <td class="n">${x.bRD>0?fmtI(x.bRD):'–'}</td>
-        <td class="n">${x.bLP>0?fmtI(x.bLP):'–'}</td>
+        ${x.bb.map(v=>`<td class="n">${v>0?fmtI(v):'–'}</td>`).join('\n        ')}
         <td></td></tr>`;
     }).join('');
   } else if(S.usageMode==='item'){
@@ -3915,10 +4001,10 @@ RENDER.usage = async (el)=>{
     <div class="useg">
       <button class="${S.usageMode==='item'?'on':''}" onclick="usageModeSet('item')">รายสินค้า (รวมทุกซัพ)</button>
       <button class="${S.usageMode==='sup'?'on':''}" onclick="usageModeSet('sup')">แยกตามซัพ</button>
-      ${ALL?`<button class="${S.usageMode==='cmp'?'on':''}" onclick="usageModeSet('cmp')" title="เทียบอัตราใช้ต่อยอดขาย ฿10,000 ของสองสาขา รายสินค้า">🆚 เทียบสาขา</button>`:''}
+      ${ALL?`<button class="${S.usageMode==='cmp'?'on':''}" onclick="usageModeSet('cmp')" title="เทียบอัตราใช้ต่อยอดขาย ฿10,000 ของ${CB.length===2?'สอง':'ทุก'}สาขา รายสินค้า">🆚 เทียบสาขา</button>`:''}
       ${S.usageMode==='cmp'?'':`<button class="${K10?'on':''}" onclick="usage10kSet(${K10?'false':'true'})" title="อัตราการใช้ต่อยอดขาย ฿10,000 แยก จ–พฤ / ศ / ส–อา">⚖ ต่อยอดขาย ฿10,000</button>`}
     </div>
-    ${S.usageMode==='cmp'?`<div class="xs mut" style="margin:-4px 0 8px">เทียบ <b>อัตราใช้ต่อยอดขาย ฿10,000</b> ของแต่ละสาขา (ตัดผลร้านขายมาก/น้อยออก เทียบกันแฟร์ ๆ) · ยอดขายรวม VAT: รัชดา ฿${fmtI(salesBr['JJRD']||0)} · ลาดพร้าว ฿${fmtI(salesBr['JJLP']||0)} · ▲ = ลาดพร้าวใช้มากกว่ารัชดา ▼ = น้อยกว่า · เกิน ±20% ทาแดง · เรียงตามผลต่างมูลค่า/หมื่นมากสุด · แตะแถวดูประวัติ</div>`
+    ${S.usageMode==='cmp'?`<div class="xs mut" style="margin:-4px 0 8px">เทียบ <b>อัตราใช้ต่อยอดขาย ฿10,000</b> ของแต่ละสาขา (ตัดผลร้านขายมาก/น้อยออก เทียบกันแฟร์ ๆ) · ยอดขายรวม VAT: ${CB.map((c,i)=>`${CBn[i]} ฿${fmtI(salesBr[c]||0)}`).join(' · ')} · ${CB.length===2?`▲ = ${CBn[1]}ใช้มากกว่า${CBn[0]} ▼ = น้อยกว่า`:'↕ = สาขาที่ใช้มากสุดเทียบน้อยสุด'} · เกิน ±20% ทาแดง · เรียงตามผลต่างมูลค่า/หมื่นมากสุด · แตะแถวดูประวัติ</div>`
     :K10?`<div class="xs mut" style="margin:-4px 0 8px"><b>อัตรา (ต่อ ฿10,000)</b> = ใช้ทั้งเดือน ÷ (ยอดขายรวมทั้งเดือน ÷ 10,000) · <b>ใช้/วัน รายกลุ่ม</b> = อัตรา × (ยอดขายเฉลี่ย/วันของกลุ่ม ÷ 10,000) — ยอดขายเฉลี่ย/วัน (รวม VAT): <b>จ–พฤ</b> ฿${daysG[0]?fmtI(salesG[0]/daysG[0]):'–'} (${daysG[0]} วัน) · <b>ศ</b> ฿${daysG[1]?fmtI(salesG[1]/daysG[1]):'–'} (${daysG[1]} วัน) · <b>ส–อา</b> ฿${daysG[2]?fmtI(salesG[2]/daysG[2]):'–'} (${daysG[2]} วัน) · แตะแถวเพื่อดูประวัติรายวัน</div>`
     :`<div class="xs mut" style="margin:-4px 0 8px">คิดจากรายการในหน้า "บันทึกข้อมูลบิล" · <b>ใช้/วัน หารด้วยวันที่มีรายรับ ${dd} วัน</b> · แตะแถวเพื่อดูประวัติรายวัน · ▲▼ เทียบจำนวนกับเดือนก่อน${S.usageMode==='item'?' · สินค้าตัวเดียวกันนับรวมทุกซัพ · ✓ เขียว = ซัพที่ราคาล่าสุดถูกสุด':''}</div>`}
     <div class="usearch"><input id="useQ" type="search" placeholder="🔍 ค้นหาชื่อสินค้า${S.usageMode==='item'?'':' / ซัพ'} (พิมพ์หลายคำได้ เช่น หมู สามชั้น)" value="${esc(S._usageQ||'')}" autocomplete="off" oninput="usageFilter(this.value)">
@@ -3928,15 +4014,15 @@ RENDER.usage = async (el)=>{
       <button class="btn gh sm2" onclick="usagePdf()" title="รายงานสินค้าละ 1 หน้า A4 ตามแถวที่แสดงอยู่ (กรองก่อนได้) — สั่งพิมพ์แล้วเลือก Save as PDF">📄 PDF รายสินค้า</button></div>
     <div class="twrap"><table id="useTbl">
       ${S.usageMode==='cmp'
-        ?`<tr><th>สินค้า</th><th class="right">รัชดา ใช้/หมื่น</th><th class="right">ลาดพร้าว ใช้/หมื่น</th><th class="right">ต่าง (ลพ. vs รด.)</th><th class="right">รัชดา ฿/หมื่น</th><th class="right">ลาดพร้าว ฿/หมื่น</th><th></th></tr>`
+        ?`<tr><th>สินค้า</th>${CBn.map(n=>`<th class="right">${n} ใช้/หมื่น</th>`).join('')}<th class="right">ต่าง (${CB.length===2?`${esc(BR_AB[CB[1]]||brTh(CB[1]))} vs ${esc(BR_AB[CB[0]]||brTh(CB[0]))}`:'มากสุด vs น้อยสุด'})</th>${CBn.map(n=>`<th class="right">${n} ฿/หมื่น</th>`).join('')}<th></th></tr>`
         :K10
         ?`<tr><th>สินค้า</th><th class="right">ต่อ ฿10,000</th><th class="right">จ–พฤ ใช้/วัน</th><th class="right">ศ ใช้/วัน</th><th class="right">ส–อา ใช้/วัน</th><th class="right">฿/หมื่น</th><th></th></tr>`
         :S.usageMode==='item'
         ?`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">ซัพ</th><th class="right">ราคาล่าสุดรายซัพ</th><th class="right">มูลค่า ฿</th><th></th></tr>`
         :`<tr><th>สินค้า</th><th class="right">ใช้ทั้งเดือน</th><th class="right">เฉลี่ย/วัน</th><th class="right">บิล</th><th class="right">ราคาล่าสุด</th><th class="right">มูลค่า ฿</th><th></th></tr>`}
       ${body}
-      <tr id="useNone" style="display:none"><td colspan="7" class="mut" style="text-align:center;padding:18px">ไม่พบสินค้าที่ค้นหา</td></tr>
-      <tr class="cat" id="useTot" data-grand="${K10?(salesAll>0?grand/(salesAll/10000):0):grand}" style="border-top:2px solid var(--line)"><td colspan="5"><b id="useTotL" data-def="${K10?'มูลค่าของรวม ต่อยอดขาย ฿10,000':'รวมมูลค่าของที่ลงรายละเอียด'}">${K10?'มูลค่าของรวม ต่อยอดขาย ฿10,000':'รวมมูลค่าของที่ลงรายละเอียด'}</b></td>
+      <tr id="useNone" style="display:none"><td colspan="${TC}" class="mut" style="text-align:center;padding:18px">ไม่พบสินค้าที่ค้นหา</td></tr>
+      <tr class="cat" id="useTot" data-grand="${K10?(salesAll>0?grand/(salesAll/10000):0):grand}" style="border-top:2px solid var(--line)"><td colspan="${TC-2}"><b id="useTotL" data-def="${K10?'มูลค่าของรวม ต่อยอดขาย ฿10,000':'รวมมูลค่าของที่ลงรายละเอียด'}">${K10?'มูลค่าของรวม ต่อยอดขาย ฿10,000':'รวมมูลค่าของที่ลงรายละเอียด'}</b></td>
         <td class="n" id="useTotV" style="color:var(--red);font-weight:700">${K10?(salesAll>0?fmtI(grand/(salesAll/10000)):'–'):fmtI(grand)}</td><td></td></tr>
     </table></div>
   </div>`;
@@ -3948,6 +4034,28 @@ RENDER.usage = async (el)=>{
    -> ช่วง (P -> C): ซื้อเข้า = บิลที่ P < วันที่ ≤ C · ยอดขายคู่กัน = วัน P ถึง C−1 */
 const STK_MIN='2026-07-31'; // วันแรกที่ใช้ข้อมูลนับสต๊อก — ก่อนหน้านี้เป็นข้อมูลช่วงระบบเก่า ไม่เอามาคิดเลย
 const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'}; // id สาขาในระบบนับ (ใช้กับตัวนับเตือน)
+/* สาขาใหม่: id ในระบบนับมาจากทะเบียนสาขา (pnl_branches.stk_id ที่ปุ่ม 🏪 เปิดสาขาใหม่ ตั้งให้ / แคช JJBR) — เติมเฉพาะรหัสที่ยังไม่มี สาขาเดิมใช้ค่าเดิม */
+const STK_FIX=Object.keys(STK_BR);   // id เดิมที่เขียนตายตัว (JJRD/JJLP) ไม่ถูกทับเลย
+function stkBrSync(rows){ // แคช JJBR = เติมเฉพาะรหัสที่ยังไม่มี · แถวจากตาราง (loadCore) = ค่าล่าสุด ทับของที่มาจากแคชได้ (เช่น ยกเลิกสาขาแล้วเปิดใหม่ id เปลี่ยน)
+  const put=(r,live)=>{ const c=r&&String(r.code||'').trim().toUpperCase(), id=r&&String(r.stk_id||'').trim();
+    if(c&&id&&!STK_FIX.includes(c)&&(live||!STK_BR[c])&&brStore(r)) STK_BR[c]=id; };
+  (window.JJBR?JJBR.stores(true):[]).forEach(r=>put(r,false));
+  (rows||[]).forEach(r=>put(r,true));
+}
+stkBrSync();
+function stkBrList(){ return brStores().filter(c=>STK_BR[c]); } // สาขาที่มีระบบนับสต๊อก (ไว้บอกให้เลือก)
+/* หา id สาขาในระบบนับจากแถวนับ (branch_name ติดมา) · สาขาเดิม: จับชื่อก่อน แล้วค่อย id ที่รู้จัก (ลำดับเดิม) · สาขาใหม่: id จากทะเบียนก่อน แล้วค่อยจับชื่อสั้น */
+function stkSbid(code,bn2){
+  const byName=w=>w?Object.keys(bn2).find(id2=>String(bn2[id2]).includes(w)):'';
+  if(BR_TH[code]) return byName(BR_TH[code])||STK_BR[code];
+  if(STK_BR[code]) return STK_BR[code];
+  const w=brTh(code), taken=new Set(Object.keys(STK_BR).filter(c=>c!==code).map(c=>STK_BR[c]));   // ไม่เอา id ที่เป็นของสาขาอื่นอยู่แล้ว
+  return (w&&Object.keys(bn2).find(id2=>!taken.has(id2)&&String(bn2[id2]).includes(w)))||'';
+}
+function stkCan(code){ // สาขานี้มีระบบนับได้ไหม (สาขาหน้าร้านเท่านั้น — ส่วนกลาง/ออฟฟิศไม่มี)
+  if(BR_TH[code])return true;
+  return brStore(((S.core&&S.core.branches)||[]).find(b=>b.code===code));
+}
 /* ---------- แปลงหน่วยรายสินค้า: สินค้าเดียวซัพส่งมาหลายหน่วย (ลัง/โล) ลงบิลตามจริง ระบบแปลงตอนคำนวณ ---------- */
 const UNIT_SYN={'กก':'กก.','กก.':'กก.','กิโล':'กก.','กิโลกรัม':'กก.','โล':'กก.','kg':'กก.','kgs':'กก.','kilo':'กก.',
   'กรัม':'กรัม','g':'กรัม','gr':'กรัม','ลิตร':'ลิตร','l':'ลิตร','ltr':'ลิตร','แพ็ค':'แพ็ค','แพค':'แพ็ค','pack':'แพ็ค','pk':'แพ็ค'};
@@ -4035,7 +4143,7 @@ function stkNmHtml(item,br){ // ป้ายเล็ก: 📦 ชื่อน�
   return ` <span class="chip warn stknm" style="${can?'cursor:pointer':''}" ${can?`onclick="event.stopPropagation();stkBindBill('${esc(item).replace(/'/g,"\\'")}')"`:''} title="${can?'ยังไม่ผูกกับระบบนับสต๊อก — แตะเพื่อผูก หรือบอกว่าไม่มีในระบบนับ':'ยังไม่ผูก — สลับไปดูสาขาเดียวเพื่อผูก'}">⚠ ยังไม่ผูก</span>`;
 }
 async function stkBindBill(item){ // ผูกจากฝั่งชื่อบิล (หน้าการใช้ของ/บันทึกบิล): เลือกสินค้าในระบบนับที่ยังไม่ถูกผูก
-  if(!STK_BR[S.br]){ toast('สลับไปดูสาขาเดียว (รัชดา/ลาดพร้าว) ก่อนครับ',true); return; }
+  if(!STK_BR[S.br]){ toast(`สลับไปดูสาขาเดียว (${stkBrList().map(brTh).join('/')}) ก่อนครับ`,true); return; }
   let prods=[],map=[];
   try{ [prods,map]=await Promise.all([
     selAllQ('products','select=id,branch_id,name,unit,sup&deleted_at=is.null&order=id'),
@@ -4070,12 +4178,14 @@ async function stkLoad(){
   ]);
   if(map){ const pn={}; (prods||[]).forEach(x=>{ pn[x.id]=x.name; }); loadStkNames(map.map(r=>({...r,stock_name:pn[r.product_id]||r.product_name}))); } // ชื่อนับสดจาก products
   // จับคู่สาขาจากข้อมูลนับสต๊อกเอง (แถวนับมี branch_name ติดมา) — ห้ามใช้ตาราง branches เพราะเป็นของระบบเงินเดือน id คนละชุด
-  const want=S.br==='JJRD'?'รัชดา':S.br==='JJLP'?'ลาดพร้าว':null;
-  if(!want) return {ok:map!==null, permDenied, noStockBranch:true, prods:[], map:{}, C:{}, B:{}, sales:{}, from, to};
+  // สาขาใหม่ใช้ id จากทะเบียนสาขา (pnl_branches.stk_id) ก่อน ไม่มีค่อยจับชื่อสั้น · ส่วนกลาง/ออฟฟิศ = ไม่มีระบบนับ
   const bn2={}; (counts||[]).forEach(c=>{ if(c.branch_id&&c.branch_name&&!bn2[c.branch_id])bn2[c.branch_id]=c.branch_name; });
-  const sbid=Object.keys(bn2).find(id2=>String(bn2[id2]).includes(want)) || (S.br==='JJRD'?'b19f0a17b4472':'b19f0a17b448212'); // สำรอง: id ที่รู้จัก
-  const wantOther=S.br==='JJRD'?'ลาดพร้าว':'รัชดา', brOther=S.br==='JJRD'?'JJLP':'JJRD';
-  const sbidOther=Object.keys(bn2).find(id2=>String(bn2[id2]).includes(wantOther)) || (brOther==='JJRD'?'b19f0a17b4472':'b19f0a17b448212');
+  const sbid=stkCan(S.br)?stkSbid(S.br,bn2):'';
+  if(!sbid) return {ok:map!==null, permDenied, noStockBranch:true, prods:[], map:{}, C:{}, B:{}, sales:{}, from, to};
+  if(!STK_BR[S.br]) STK_BR[S.br]=sbid;   // สาขาใหม่ที่ยังไม่มี id ในทะเบียน แต่จับชื่อเจอ → ให้ป้ายเตือน/ปุ่มผูกใช้ id เดียวกัน
+  // สาขาพี่น้อง (ผูกชื่อให้อัตโนมัติ): ทุกสาขาหน้าร้านอื่นที่มีระบบนับ · มีแค่ 2 สาขาเดิม = อีกสาขาหนึ่งเหมือนเดิม
+  const others=brStores().filter(c=>c!==S.br&&stkCan(c)).map(c=>({br:c,sbid:stkSbid(c,bn2)})).filter(o=>o.sbid);
+  const brOther=(others[0]||{}).br||'', sbidOther=(others[0]||{}).sbid||'';
   const sales={}; (inc||[]).forEach(r=>{ sales[r.d]=(sales[r.d]||0)+num(r.sales_pos_am)+num(r.sales_pos_pm); });
   const P=(prods||[]).filter(x=>x.branch_id===sbid);
   // สินค้า 1 ตัวผูกได้หลายชื่อบิล (หลายแถวใน pnl_stock_map) — รวมเป็นระเบียนเดียว เก็บลิสต์ไว้ใน items
@@ -4094,7 +4204,7 @@ async function stkLoad(){
   await loadUconv();
   const B={}; (bills||[]).forEach(r=>{ const k=ocrNorm(r.item); ((B[k]??={})[r.d]??=0); B[k][r.d]+=ucv(r.item,r.unit,num(r.qty)).qty; });
   const spdR=(spd||[]).filter(r=>r&&!r.cancelled&&r.day_from&&r.day_to&&[0,1,2].includes(r.order_rate_group)); // กรองแบบ spdSet ของแอพนับ
-  return {ok:map!==null, permDenied, sbid, sbidOther, brOther, prods:P, prodsAll:(prods||[]), map:M, C, B, sales, spd:spdR, from, to};
+  return {ok:map!==null, permDenied, sbid, sbidOther, brOther, others, prods:P, prodsAll:(prods||[]), map:M, C, B, sales, spd:spdR, from, to};
 }
 function stkBillNames(){ // ชื่อสินค้าในบิลของสาขานี้ (ไว้ให้เลือกผูก)
   const st=S._stk; if(!st)return [];
@@ -4109,10 +4219,10 @@ function stkGuess(name,bn){ // เดาชื่อบิลจากชื่�
 }
 RENDER.actual = async (el)=>{
   if(S._autoSelK!==S.br+'|'+S.m){ S._autoSel={}; S._autoSelK=S.br+'|'+S.m; } // 🤖 ติ๊ก/เอาออกเอง จำไว้ข้ามการรีเฟรช (เครื่องอื่นบันทึก / เปลี่ยนเผื่อ ×) · เปลี่ยนสาขา/เดือน = ล้าง
-  if(S.br==='ALL'){ el.innerHTML=`<div class="card"><div class="empty">หน้านี้ดูรายสาขา — เลือก "สาขารัชดา" หรือ "สาขาลาดพร้าว" ข้างบนก่อนครับ</div></div>`; return; }
+  if(S.br==='ALL'){ el.innerHTML=`<div class="card"><div class="empty">หน้านี้ดูรายสาขา — เลือก ${esc(brOrList(stkBrList()))} ข้างบนก่อนครับ</div></div>`; return; }
   const st=await stkLoad();
   if(st.permDenied){ el.innerHTML=`<div class="card"><div class="empty">🔒 แอพนี้ยังไม่มีสิทธิ์อ่านตารางระบบนับสต๊อก (permission denied)<br>รัน <b>jjmk_pnl_stockread.sql</b> ใน Supabase SQL Editor ครั้งเดียว (เปิดสิทธิ์อ่านอย่างเดียว ไม่ให้เขียน) แล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
-  if(st.noStockBranch){ el.innerHTML=`<div class="card"><div class="empty">สาขานี้ไม่มีระบบนับสต๊อก — เลือก "สาขารัชดา" หรือ "สาขาลาดพร้าว" ครับ</div></div>`; return; }
+  if(st.noStockBranch){ el.innerHTML=`<div class="card"><div class="empty">สาขานี้ไม่มีระบบนับสต๊อก — เลือก ${esc(brOrList(stkBrList()))} ครับ</div></div>`; return; }
   if(!st.prods.length){ el.innerHTML=`<div class="card"><div class="empty">อ่านรายการสินค้าจากระบบนับได้ <b>0 ตัว</b> ทั้งที่ระบบนับมีข้อมูล — เกือบทุกครั้งคือตารางเปิด RLS ให้เฉพาะผู้ใช้ล็อกอิน<br>รัน <b>jjmk_pnl_stockread2.sql</b> ใน Supabase SQL Editor ครั้งเดียว (ท้ายไฟล์มีตัวเลขตรวจ ต้องมากกว่า 0) แล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
   if(!st.ok){ el.innerHTML=`<div class="card"><div class="empty">⚠ ยังไม่ได้รัน <b>jjmk_pnl_stockmap.sql</b> ใน Supabase — รันครั้งเดียวแล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
   // เก็บชื่อบิลตัวจริง (ไม่ norm) ไว้โชว์
@@ -4176,7 +4286,7 @@ RENDER.actual = async (el)=>{
     </div>`; };
   el.innerHTML=`
   <div class="card">
-    <div class="secbar">ใช้จริงรายวัน (จากการนับสต๊อก) <span class="sp">${monthLabel(S.m)} · ${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}</span></div>
+    <div class="secbar">ใช้จริงรายวัน (จากการนับสต๊อก) <span class="sp">${monthLabel(S.m)} · ${esc(brTh(S.br))}</span></div>
     <div class="xs mut" style="margin:6px 0 10px">อ่านผลนับจากแอพนับสต๊อกโดยตรง (พนักงานนับตามเดิม ไม่ต้องทำอะไรเพิ่ม) · <b>ใช้ข้อมูลนับตั้งแต่ 31 ก.ค. 2569 เป็นต้นไป</b> · <b>ใช้จริง = นับครั้งก่อน + ซื้อเข้า (บิลในแอพนี้ × ตัวคูณหน่วย) − นับครั้งนี้</b> · นับก่อนเปิดร้าน: บิลวันเดียวกันนับเป็นของเข้าก่อนนับ · ยอดขายคู่กับคืนที่ขายจริง · ใช้/หมื่น = ใช้จริง ÷ (ยอดขายรวม VAT ÷ 10,000) · ▲▼ เทียบค่าเฉลี่ยเดือน เกิน ±20% ทาสี</div>
     <div class="useg" style="margin:0 0 10px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
       <button class="${V==='last'?'on':''}" onclick="stkViewSet('last')">ช่วงล่าสุด</button>
@@ -4391,7 +4501,7 @@ async function stkAutoWrite(){
   const li=rows2.map(x=>{ const w2=(S._auto||[]).find(y=>String(y.r.pr.id)===x.id), pr=w2?w2.r.pr:{};
     return `<div><b>${esc(pr.name||x.id)}</b> <span class="mut">${STK_RG.filter(g=>g.f in x.body).map(g=>`${g.l} ${pr[g.f]==null||pr[g.f]===''?'–':fmt(num(pr[g.f]))} → <b>${fmt(x.body[g.f])}</b>`).join(' · ')}</span></div>`; }).join('');
   openModal(`<h3>ยืนยันเขียนอัตราใช้เข้าแอพนับสต๊อก</h3>
-    <div style="margin:6px 0 8px">จะอัปเดต <b>อัตราใช้ต่อวัน จ–พฤ / ศ / ส–อา ของ ${rows2.length} สินค้า</b> (สาขา${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}) — ร่างสั่งของในแอพนับใช้อัตราใหม่ทันที ค่าเดิมถูกทับ · กลุ่มวันที่ยังไม่มีข้อมูลคงค่าเดิม</div>
+    <div style="margin:6px 0 8px">จะอัปเดต <b>อัตราใช้ต่อวัน จ–พฤ / ศ / ส–อา ของ ${rows2.length} สินค้า</b> (สาขา${esc(brTh(S.br))}) — ร่างสั่งของในแอพนับใช้อัตราใหม่ทันที ค่าเดิมถูกทับ · กลุ่มวันที่ยังไม่มีข้อมูลคงค่าเดิม</div>
     <div class="xs" style="max-height:40vh;overflow:auto;margin:0 0 12px;line-height:1.7">${li}</div>
     <div style="display:flex;gap:8px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
     <button class="btn sm2" id="autoOkBtn" style="margin-left:auto" onclick="stkAutoWrite2()">✅ ยืนยันเขียน ${rows2.length} ตัว</button></div>`);
@@ -4441,16 +4551,18 @@ function stkRowPayload(row){ // อ่านค่าจากแถวผูก
   const pr=(st&&st.prods.find(x=>x.id===pid))||{};
   return {row:{branch:S.br,product_id:pid,product_name:pr.name||'',pnl_item:item,bill_unit:'',stock_unit:pr.unit||'',factor:f,active:true}};
 }
-function stkMirrorRows(baseRows){ // ผูกที่สาขานี้ -> สร้างแถวผูกของอีกสาขาให้อัตโนมัติ (ชื่อ+หน่วยต้องตรง และยังไม่เคยผูก)
+function stkMirrorRows(baseRows){ // ผูกที่สาขานี้ -> สร้างแถวผูกของสาขาอื่นที่มีระบบนับให้อัตโนมัติ (ชื่อ+หน่วยต้องตรง และยังไม่เคยผูก)
   const st=S._stk; if(!st)return [];
-  if(!brOk(st.brOther))return [];   // เห็นเฉพาะสาขา: อีกสาขาไม่ได้รับสิทธิ์ = ไม่ผูกให้
   const used={}; const out=[];
-  baseRows.forEach(r=>{
-    const sib=(st.prodsAll||[]).find(x=>x.branch_id===st.sbidOther&&ocrNorm(x.name)===ocrNorm(r.product_name)&&String(x.unit||'')===String(r.stock_unit||'')&&!st.map[x.id]&&!used[x.id]);
-    if(sib){ used[sib.id]=1; out.push({branch:st.brOther,product_id:sib.id,product_name:sib.name||'',pnl_item:r.pnl_item,bill_unit:'',stock_unit:sib.unit||'',factor:r.factor,active:true}); }
+  (st.others||[]).filter(o=>brOk(o.br)).forEach(o=>{   // เห็นเฉพาะสาขา: สาขาที่ไม่ได้รับสิทธิ์ = ไม่ผูกให้
+    baseRows.forEach(r=>{
+      const sib=(st.prodsAll||[]).find(x=>x.branch_id===o.sbid&&ocrNorm(x.name)===ocrNorm(r.product_name)&&String(x.unit||'')===String(r.stock_unit||'')&&!st.map[x.id]&&!used[x.id]);
+      if(sib){ used[sib.id]=1; out.push({branch:o.br,product_id:sib.id,product_name:sib.name||'',pnl_item:r.pnl_item,bill_unit:'',stock_unit:sib.unit||'',factor:r.factor,active:true}); }
+    });
   });
   return out;
 }
+function stkMirNm(mir){ return [...new Set(mir.map(r=>r.branch))].map(brTh).join(', '); } // ชื่อสาขาที่ผูกให้อัตโนมัติ (ไว้บอกใน toast)
 async function stkBind(i,pid){
   const el=document.getElementById('bnd'+i); if(!el)return;
   const pl=stkRowPayload(el);
@@ -4459,7 +4571,7 @@ async function stkBind(i,pid){
   try{
     const mir=stkMirrorRows([pl.row]);
     await ins('pnl_stock_map',[pl.row,...mir]);
-    toast(`✅ ผูก "${pl.row.product_name}" = "${pl.row.pnl_item}" แล้ว จำตลอด${mir.length?` · ผูกของ${S._stk.brOther==='JJRD'?'รัชดา':'ลาดพร้าว'}ให้ด้วย`:''}`);
+    toast(`✅ ผูก "${pl.row.product_name}" = "${pl.row.pnl_item}" แล้ว จำตลอด${mir.length?` · ผูกของ${stkMirNm(mir)}ให้ด้วย`:''}`);
     show('actual');
   }catch(e){ toast('ผูกไม่สำเร็จ: '+(e.message||''),true); }
 }
@@ -4474,7 +4586,7 @@ async function stkBindSel(){ // ผูกทีเดียวทุกแถว
   try{
     const mir=stkMirrorRows(ok);
     await ins('pnl_stock_map',[...ok,...mir]);
-    toast(`✅ ผูกแล้ว ${ok.length} ตัว${mir.length?` (+${mir.length} ตัวของ${S._stk.brOther==='JJRD'?'รัชดา':'ลาดพร้าว'}ให้อัตโนมัติ)`:''}${bad.length?` · ข้าม ${bad.length} ตัว (ชื่อว่าง/ไม่ตรงบิล)`:''} — จำตลอด`);
+    toast(`✅ ผูกแล้ว ${ok.length} ตัว${mir.length?` (+${mir.length} ตัวของ${stkMirNm(mir)}ให้อัตโนมัติ)`:''}${bad.length?` · ข้าม ${bad.length} ตัว (ชื่อว่าง/ไม่ตรงบิล)`:''} — จำตลอด`);
     show('actual');
   }catch(e){ toast('ผูกไม่สำเร็จ: '+(e.message||''),true); }
 }
@@ -4605,7 +4717,7 @@ function usageXlsx(){ // ข้อมูลดิบทั้งเดือน 
   const p10=q=>salesAll>0?+(q/(salesAll/10000)).toFixed(4):null;
   const pd=(q,i)=>(salesAll>0&&U.daysG&&U.daysG[i]>0)?+((q/(salesAll/10000))*((U.salesG[i]/U.daysG[i])/10000)).toFixed(3):null; // ใช้/วันของกลุ่ม = อัตราต่อหมื่น × ยอดขายเฉลี่ย/วันของกลุ่ม (ของใช้ทุกวันตามยอดขาย ไม่อิงวันที่ลงบิล)
   const r2=v=>+(+v).toFixed(2);
-  const brName={ALL:'ทุกสาขา',JJRD:'รัชดา',JJLP:'ลาดพร้าว',JJOF:'ออฟฟิศ'}[S.br]||S.br;
+  const brName={ALL:'ทุกสาขา',JJRD:'รัชดา',JJLP:'ลาดพร้าว',JJOF:'ออฟฟิศ'}[S.br]||brTh(S.br);
   const rows1=Object.values(U.gi||{}).sort((a,b)=>b.baht-a.baht).map(t=>({
     'สินค้า':t.item,'หน่วย':t.unit||'','ชื่อนับ':stkNm(t.item),'ปริมาณรวม':r2(t.qty),'มูลค่า (บาท)':r2(t.baht),'จำนวนบรรทัดบิล':t.n,
     'ราคาเฉลี่ย/หน่วย':t.qty?r2(t.baht/t.qty):null,'ต่อ ฿10,000':p10(t.qty),
@@ -4623,14 +4735,17 @@ function usageXlsx(){ // ข้อมูลดิบทั้งเดือน 
   add(rows1,'รายสินค้า',[34,8,24,12,14,10,14,12,12,12,12,12,12,12,12,40]);
   add(rows2,'แยกตามซัพ',[26,34,8,24,12,14,10,14,12,14,12,12,12,12]);
   if(S.br==='ALL'&&U.gc){
-    const sRD=(U.salesBr||{}).JJRD||0, sLP=(U.salesBr||{}).JJLP||0;
+    // ชีตเทียบสาขา: 4 คอลัมน์ต่อสาขาหน้าร้าน ตามลำดับ (มีแค่ 2 สาขาเดิม = หัวคอลัมน์เดิมเป๊ะ) · 2 สาขา = ต่าง % สาขาที่ 2 เทียบสาขาแรก · 3 สาขาขึ้นไป = มากสุดเทียบน้อยสุด
+    const CB=brStores(), nB=CB.map(brTh), sB=CB.map(c=>(U.salesBr||{})[c]||0), two=CB.length===2;
     const rate=(q,s2)=>s2>0?+(q/(s2/10000)).toFixed(4):null;
-    const rows3=Object.values(U.gc).map(t=>{ const rd=t.br.JJRD||{qty:0,baht:0}, lp=t.br.JJLP||{qty:0,baht:0};
-      const a=rate(rd.qty,sRD), b=rate(lp.qty,sLP);
-      return {'สินค้า':t.item,'หน่วย':t.unit||'','รัชดา ปริมาณ':r2(rd.qty),'รัชดา มูลค่า':r2(rd.baht),'รัชดา ต่อ ฿10,000':a,'รัชดา ฿/หมื่น':sRD>0?r2(rd.baht/(sRD/10000)):null,
-        'ลาดพร้าว ปริมาณ':r2(lp.qty),'ลาดพร้าว มูลค่า':r2(lp.baht),'ลาดพร้าว ต่อ ฿10,000':b,'ลาดพร้าว ฿/หมื่น':sLP>0?r2(lp.baht/(sLP/10000)):null,
-        'ต่าง % (ลพ. vs รด.)':a>0&&b!=null?r2((b-a)/a*100):null}; }).sort((x,y)=>(y['รัชดา มูลค่า']+y['ลาดพร้าว มูลค่า'])-(x['รัชดา มูลค่า']+x['ลาดพร้าว มูลค่า']));
-    add(rows3,'เทียบสาขา',[34,8,12,12,14,12,12,12,14,12,14]);
+    const dfK=two?`ต่าง % (${BR_AB[CB[1]]||nB[1]} vs ${BR_AB[CB[0]]||nB[0]})`:'ต่าง % (มากสุด vs น้อยสุด)';
+    const rows3=Object.values(U.gc).map(t=>{ const q=CB.map(c=>t.br[c]||{qty:0,baht:0}), rt=q.map((v,i)=>rate(v.qty,sB[i]));
+      const o={'สินค้า':t.item,'หน่วย':t.unit||''};
+      q.forEach((v,i)=>{ o[nB[i]+' ปริมาณ']=r2(v.qty); o[nB[i]+' มูลค่า']=r2(v.baht); o[nB[i]+' ต่อ ฿10,000']=rt[i]; o[nB[i]+' ฿/หมื่น']=sB[i]>0?r2(v.baht/(sB[i]/10000)):null; });
+      if(two){ const a=rt[0], b=rt[1]; o[dfK]=a>0&&b!=null?r2((b-a)/a*100):null; }
+      else{ const P=rt.filter(v=>v>0); o[dfK]=P.length>1?r2((Math.max(...P)-Math.min(...P))/Math.min(...P)*100):null; }
+      return o; }).sort((x,y)=>nB.reduce((a,n)=>a+y[n+' มูลค่า'],0)-nB.reduce((a,n)=>a+x[n+' มูลค่า'],0));
+    add(rows3,'เทียบสาขา',[34,8,...[].concat(...CB.map(()=>[12,12,14,12])),14]);
   }
   add([{'สาขา':brName,'เดือน':S.m,'ยอดขายรวม VAT ทั้งเดือน':r2(salesAll),'วันขาย':U.dd,
     'ยอดขาย จ–พฤ':r2(U.salesG[0]),'วัน จ–พฤ':U.daysG[0],'ยอดขาย ศ':r2(U.salesG[1]),'วัน ศ':U.daysG[1],'ยอดขาย ส–อา':r2(U.salesG[2]),'วัน ส–อา':U.daysG[2],
@@ -4673,8 +4788,8 @@ function usagePdfBuild(keys){
     const rate=salesAll>0?x.qty/(salesAll/10000):null;
     const gbr=(S.usageMode==='item'&&U.gc&&U.gc[k])?U.gc[k].br:null; // ยอดแยกสาขา (มีเมื่อดูทุกสาขา)
     const brLine=gbr
-      ?['JJRD','JJLP'].filter(b2=>gbr[b2]&&gbr[b2].qty>0).map(b2=>`${b2==='JJRD'?'รัชดา':'ลาดพร้าว'} <b>${fq(gbr[b2].qty)} ${esc(x.unit||'')}</b>`).join(' · ')
-      :`${S.br==='JJRD'?'รัชดา':S.br==='JJLP'?'ลาดพร้าว':'รวม'} <b>${fq(x.qty)} ${esc(x.unit||'')}</b>`;
+      ?brStores().filter(b2=>gbr[b2]&&gbr[b2].qty>0).map(b2=>`${esc(brTh(b2))} <b>${fq(gbr[b2].qty)} ${esc(x.unit||'')}</b>`).join(' · ')
+      :`${BR_TH[S.br]||(S.br!=='ALL'&&brStore(S.core.branches.find(b2=>b2.code===S.br))?esc(brTh(S.br)):'รวม')} <b>${fq(x.qty)} ${esc(x.unit||'')}</b>`;
     const dAvg=gx=>daysG[gx]>0?salesG[gx]/daysG[gx]:0;
     const pDay=gx=>(rate!=null&&dAvg(gx)>0)?fq(rate*(dAvg(gx)/10000)):'–';
     // กราฟ: ราคาต่อวัน (แยกซัพเมื่อรวมโหมดสินค้า)
@@ -4686,7 +4801,7 @@ function usagePdfBuild(keys){
     const more=hist.length-rows.length;
     return `<section class="ppage">
       <h2>${esc(x.item)} <span style="font-weight:400;font-size:13px">(${esc(x.unit||'')})</span></h2>
-      <div class="pmeta">${monthLabel(S.m)} · สาขา ${S.br==='ALL'?'รวมทุกสาขา':(S.br==='JJRD'?'รัชดา':'ลาดพร้าว')} · ซัพพลายเออร์: ${sups.filter(Boolean).map(esc).join(', ')||'–'}${stkNm(x.item)?` · ชื่อในระบบนับ: ${esc(stkNm(x.item))}`:''} · จริงใจหมูกระทะ</div>
+      <div class="pmeta">${monthLabel(S.m)} · สาขา ${S.br==='ALL'?'รวมทุกสาขา':esc(brTh(S.br))} · ซัพพลายเออร์: ${sups.filter(Boolean).map(esc).join(', ')||'–'}${stkNm(x.item)?` · ชื่อในระบบนับ: ${esc(stkNm(x.item))}`:''} · จริงใจหมูกระทะ</div>
       <div class="pgrid">
         <div class="pbox"><b class="h">📦 การสั่งซื้อเดือนนี้</b>
           ซื้อรวม <b>${fq(x.qty)} ${esc(x.unit||'')}</b> · ${x.n} ครั้ง<br>มูลค่า <b>฿${fmtI(x.baht)}</b><br>เฉลี่ย ${dd?fq(x.qty/dd):'–'} ${esc(x.unit||'')}/วัน (${dd} วันขาย)</div>
@@ -7062,7 +7177,7 @@ function makeHistTemplate(){
     ['เทมเพลตข้อมูลย้อนหลัง · JJ P&L','กรอกคอลัมน์ B แล้วอัปโหลดกลับที่หน้าตั้งค่า'],
     [],
     ['เดือน (พิมพ์แบบ 2026-06)',''],
-    ['สาขา (JJRD หรือ JJLP)','JJRD'],
+    ['สาขา ('+brStores().join(' หรือ ')+')',brStores()[0]||'JJRD'],
     ['ยอดขายดิบรวมทั้งเดือน (รวม VAT)',0],
     ['Grab (ถ้ามี)',0],
     ['Lineman (ถ้ามี)',0],
@@ -7204,7 +7319,7 @@ RENDER.set = async (el)=>{
       <div id="hiList" style="margin-top:10px"></div>
     </div>
     ${SCOPE?'':`<div class="card"><h3>สาขา <span class="sp"><button class="hintlink" onclick="brModal(null)">+ เพิ่มสาขา</button></span></h3>
-      <div class="xs mut" style="margin-bottom:8px">เพิ่มสาขาใหม่ได้เลย — ปุ่มเลือกสาขา ทุกหน้า รายงาน และสำรอง NAS รองรับอัตโนมัติ · รหัสใช้ภาษาอังกฤษ (ไปโชว์ในเลข PV และชื่อโฟลเดอร์สำรอง)</div>
+      <div class="xs mut" style="margin-bottom:8px">🏪 เปิดสาขาหน้าร้านใหม่ที่ <b>JJ Access → 🏪 สาขา → ➕ เปิดสาขาใหม่</b> (ปุ่มเดียวขึ้นทุกระบบ) — P&L เห็นสาขาใหม่เอง: ปุ่มเลือกสาขา ทุกหน้า รายงาน และปุ่มสำรองข้อมูลด้านล่าง · ปุ่ม + ที่นี่เพิ่มได้เฉพาะหน่วยงาน 🏢 ส่วนกลางของ P&L · แก้ชื่อที่นี่ = แก้ในทะเบียนสาขากลาง (สาขาที่เปิดใหม่และแอพที่อ่านชื่อจากทะเบียนเห็นชื่อใหม่ · ป้าย รัชดา/ลาดพร้าว ในบางแอพ รวมหัวตาราง/รายงานของ P&L เป็นค่าคงที่เดิม) · รหัสใช้ภาษาอังกฤษ (ไปโชว์ในเลข PV และชื่อโฟลเดอร์สำรอง — สคริปต์สำรองบน NAS ให้เช็คว่ามีโฟลเดอร์ของรหัสใหม่)</div>
       <div class="twrap"><table>
       ${S.core.branches.map(b=>`<tr><td><span class="b sm">${esc(b.name||'')}</span> <span class="xs mut">· ${esc(b.code)}</span>${b.is_central?' <span class="xs" style="color:var(--blue)">🏢 ส่วนกลาง</span>':''}</td>
         <td class="right"><button class="hintlink" onclick="brModal('${b.code}')">แก้ไขชื่อ</button></td></tr>`).join('')}

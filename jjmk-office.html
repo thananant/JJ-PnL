@@ -509,7 +509,8 @@ window.JJGate=(function(){
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -634,7 +635,7 @@ const thD=iso=>{const p=String(iso||'').slice(0,10).split('-').map(Number);retur
 const bkkTime=iso=>{const d=new Date(Date.parse(iso)+7*36e5);return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')};
 const ageMin=iso=>{const t=Date.parse(iso||'');return isNaN(t)?null:(Date.now()-t)/6e4};
 const BRN={JJRD:'รัชดา',JJLP:'ลาดพร้าว',JJCK:'ครัวกลาง',OFFICE:'ออฟฟิศ',JJOF:'ออฟฟิศ'};
-const brName=c=>BRN[c]||c||'-';
+const brName=c=>{if(BRN[c])return BRN[c];const r=JJBR.rows.find(x=>x.code===c);return (r&&r.kind==='store'&&r.short)||c||'-'};   // สาขาเดิมใช้ชื่อเดิม · รหัสที่ตรงกับสาขาในทะเบียนเป๊ะ (รวมที่ปิดแล้ว) = ชื่อสั้นจากทะเบียน · อื่น ๆ = รหัสตามเดิม
 
 /* ---------- ผู้ใช้ + สิทธิ์ ---------- */
 let ME=null;
@@ -660,6 +661,25 @@ const scoped=key=>!!brList(key);
    agent ทั้ง 9 ห้อง — ห้อง/ที่นั่ง/ประตูบนผัง + ฟังก์ชันตรวจข้อมูลจริง
    ===================================================================== */
 const STK_BR={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};
+/* สาขาใหม่จากทะเบียนสาขากลาง (JJBR · pnl_branches) → เติมชื่อ (BRN) + id สาขาของแอพนับสต๊อก (STK_BR) ในที่ · สาขาเดิมใช้ค่าเดิมทุกตัว
+   อ่านทะเบียนไม่ได้ = แคชในเครื่อง → JJRD/JJLP แบบเดิม · สาขาที่หายจากทะเบียน (ยกเลิก/ปิด) = เอาที่เคยเติมออก */
+const BRN0=Object.keys(BRN),STK0=Object.keys(STK_BR),KPI_BR=['JJRD','JJLP'];
+let brAddN=[],brAddS=[];
+function brSync(){
+  brAddN.forEach(c=>delete BRN[c]);brAddS.forEach(c=>delete STK_BR[c]);
+  brAddN=JJBR.extra(BRN0).map(r=>(BRN[r.code]=r.short,r.code));
+  brAddS=JJBR.extra(STK0).filter(r=>r.stk_id).map(r=>(STK_BR[r.code]=r.stk_id,r.code));
+}
+brSync();
+/* วันเปิดสาขา (ทะเบียน opened_on) — สาขาที่ยังไม่ถึงวันเปิดไม่ต้องตามยอดขาย/การนับ/คะแนน · สาขาเดิมไม่มีวันเปิด = ตามเหมือนเดิม */
+const opOf=r=>{const v=String((r&&r.opened_on)||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(v)?v:''};
+const notOpen=(code,d)=>{const o=opOf(JJBR.get(code));return !!o&&o>d};
+/* ทะเบียนสาขาอ่านแบบไม่รอใน runAll — ห้องอื่นไม่รอเลย · ห้องที่ใช้ทะเบียน (บัญชี·KPI·สต๊อก·ซ่อมบำรุง): มีแคช/เพิ่งอ่าน = ไม่รอ ·
+   ยังไม่เคยอ่านได้ในเครื่องนี้ = รอได้ไม่เกิน 2.5 วิ แล้วใช้สาขาเดิมไปก่อน · ทะเบียนมาทีหลังแล้วสาขาเปลี่ยน = runAll ตรวจใหม่อีกรอบเอง */
+let REG=null,RUN={late:false};
+const regSig=()=>JSON.stringify(JJBR.stores(true));
+function regWait(){const R=RUN;let t;
+  return Promise.race([REG?REG.then(()=>1):1,new Promise(r=>{t=setTimeout(r,JJBR.src==='base'?2500:0,0)})]).then(v=>{clearTimeout(t);if(!v)R.late=true})}
 const AG=[
  {id:'pnl',app:'pnl',ic:'📒',g:['#C72A34','#6E1016'],name:'พี่บัญชี',title:'นักบัญชี AI · JJ P&L',file:'jjmk-pnl.html',short:'บัญชี',
   room:[0,0,5,6],seat:[1.8,2.45],door:[[4.3,4],[5.5,4],[5.5,7.2]],doing:'ไล่ดูว่าสาขาไหนยังไม่ลงยอดขาย',
@@ -709,9 +729,9 @@ const list=(arr,n)=>arr.slice(0,n).join(' · ')+(arr.length>n?` · และอ�
 async function chkPnl(){
   const T=bkk(0),Y=bkk(-1),from=bkk(-7);
   let brs=(await opt(sel('pnl_branches','select=*&order=sort')))||[];
-  brs=brs.filter(b=>b&&b.code&&!b.is_central);
-  if(!brs.length)brs=[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}];
-  brs=brs.filter(b=>brOK('pnl',b.code));
+  brs=brs.filter(b=>b&&b.code&&!b.is_central&&b.active!==false);   // สาขาที่ปิดในทะเบียน (active=false) ไม่ต้องตามยอด
+  if(!brs.length){await regWait();brs=[{code:'JJRD',name:'รัชดา'},{code:'JJLP',name:'ลาดพร้าว'}].concat(JJBR.extra(['JJRD','JJLP']).map(r=>({code:r.code,name:r.short,opened_on:r.opened_on})))}
+  brs=brs.filter(b=>brOK('pnl',b.code)&&!(opOf(b)>Y));   // วันเปิดสาขาหลังเมื่อวาน = ยังไม่ต้องตามยอด
   const F=['sales_pos','deposit','cash_drawer','transfer_total','reserve_acct'];
   const cols='branch,d,'+F.map(f=>f+'_am,'+f+'_pm').join(',');
   const m0=T.slice(0,8)+'01';const lo=m0<from?m0:from;
@@ -720,8 +740,8 @@ async function chkPnl(){
   const out=[];
   for(const b of brs){
     const mine=rows.filter(r=>r.branch===b.code);
-    const ok=new Set(mine.filter(has).map(r=>r.d));
-    const miss=[];for(let d=from;d<=Y;d=addD(d,1))if(!ok.has(d))miss.push(d);
+    const ok=new Set(mine.filter(has).map(r=>r.d)),op=opOf(b),f0=op>from?op:from;   // เพิ่งเปิดไม่ถึง 7 วัน = นับตั้งแต่วันเปิด
+    const miss=[];for(let d=f0;d<=Y;d=addD(d,1))if(!ok.has(d))miss.push(d);
     const nm=b.name||brName(b.code);
     if(miss.includes(Y))out.push(it(`p_miss_${b.code}_${Y}`,'crit',`${nm} ยังไม่ลงยอดขายเมื่อวาน (${thD(Y)})`,
       miss.length>1?`ย้อนหลัง 7 วันยังขาด ${miss.length} วัน: ${list(miss.map(thD),5)}`:'กำไรเดือนนี้จะต่ำกว่าจริงจนกว่าจะลงครบ',{br:b.code}));
@@ -835,8 +855,8 @@ async function chkKpi(){
     sel('kpi_daily',`select=branch,biz_date,n,avg_score&biz_date=gte.${from}&biz_date=lte.${to}&limit=5000`),
     opt(sel('kpi_daily_responses',`select=branch,biz_date,n_responses&biz_date=gte.${from}&biz_date=lte.${to}`)),
     opt(sel('kpi_staff_daily',`select=staff_id,votes,branch&biz_date=gte.${from}&biz_date=lte.${to}`)),
-    opt(sel('kpi_staff','select=id,name,nickname'))]);
-  for(const b of ['JJRD','JJLP']){if(!brOK('kpi',b))continue;
+    opt(sel('kpi_staff','select=id,name,nickname')),regWait()]);
+  for(const b of KPI_BR.concat(JJBR.extra(KPI_BR).map(r=>r.code))){if(!brOK('kpi',b)||notOpen(b,to))continue;   // สาขาเดิม + สาขาหน้าร้านในทะเบียน (ที่ถึงวันเปิดแล้ว)
     const r=daily.filter(x=>x.branch===b);const n=r.reduce((s,x)=>s+(Number(x.n)||0),0);if(!n)continue;
     const avg=r.reduce((s,x)=>s+(Number(x.avg_score)||0)*(Number(x.n)||0),0)/n;
     const nr=(resp||[]).filter(x=>x.branch===b).reduce((s,x)=>s+(Number(x.n_responses)||0),0);
@@ -871,9 +891,10 @@ async function chkKitchen(){
 
 const DOWK=['sun','mon','tue','wed','thu','fri','sat'];
 async function chkStock(){
-  const out=[],D=bizDay(6),h=bkkHour();
-  for(const code of Object.keys(STK_BR)){if(!brOK('stock',code))continue;
-    const r=await sel('stock_counts',`select=id,created_at&branch_id=eq.${STK_BR[code]}&count_date=eq.${D}&order=created_at.desc&limit=1`);
+  const out=[],D=bizDay(6),h=bkkHour();await regWait();
+  const SB=Object.assign({},STK_BR);   // สาขาเดิม + สาขาใหม่ในทะเบียนที่มี id ของแอพนับสต๊อก (brSync)
+  for(const code of Object.keys(SB)){if(!brOK('stock',code)||notOpen(code,D))continue;   // ยังไม่ถึงวันเปิด = ยังไม่ต้องนับ
+    const r=await sel('stock_counts',`select=id,created_at&branch_id=eq.${enc(SB[code])}&count_date=eq.${D}&order=created_at.desc&limit=1`);
     if(r.length)out.push(it('t_ok_'+code,'info',`${brName(code)} นับสต๊อกแล้ว`,`ล่าสุด ${bkkTime(r[0].created_at)} น.`,{br:code}));
     else out.push(it(`t_none_${code}_${D}`,h>=11&&h<23?'crit':'warn',`${brName(code)} ยังไม่นับสต๊อกวันนี้`,h>=11?'เลย 11:00 แล้ว ครัวกลางยังคิดยอดส่งของสาขานี้ไม่ได้':'ครัวกลางใช้ยอดนับเพื่อคิดของที่ต้องส่ง',{br:code}));
   }
@@ -884,14 +905,22 @@ async function chkStock(){
   return out;
 }
 
-function maintCode(b){const n=String((b&&b.name)||'');
-  if(b&&b.code)return b.code;if(/ครัวกลาง/.test(n))return 'JJCK';if(/ออฟฟิศ|สำนักงาน/.test(n))return 'OFFICE';
-  if(/รัชดา/.test(n))return 'JJRD';if(/ลาดพร้าว/.test(n))return 'JJLP';
-  for(const k in STK_BR)if(b&&b.id===STK_BR[k])return k;return ''}
+/* แถวในตาราง branches → รหัสสาขา · ลำดับเดียวกับ brCode() ของแอพซ่อมบำรุง: ช่อง code → id ที่เป็นรหัส → ทะเบียนสาขากลาง (stk_id) → ชื่อ → STK_BR */
+const MT_BR=['JJLP','JJRD','JJCK','OFFICE'];
+function maintCode(b){if(!b)return '';   // ลำดับเดียวกับ brCode() ของแอพซ่อมบำรุง — แก้ที่หนึ่งต้องแก้อีกที่
+  const isNew=c=>!!c&&!MT_BR.includes(c)&&JJBR.unitCodes().includes(c);   // สาขาใหม่จากทะเบียน
+  const c=JJBR.canon(b.code);if(isNew(c))return c;   // ช่อง code (ปุ่มเปิดสาขาใหม่ใส่ให้) — ชนะการเดาจากชื่อ
+  const r=JJBR.byStk(b.id),rc=r?JJBR.canon(r.code):'';if(isNew(rc))return rc;
+  const id=String(b.id||'').trim().toUpperCase();if(MT_BR.includes(id))return id;
+  const n=String(b.name||'');
+  if(/ครัวกลาง|central\s*kitchen/i.test(n))return 'JJCK';if(/ออฟฟิศ|สำนักงาน|office/i.test(n))return 'OFFICE';
+  if(/รัชดา|ratchada/i.test(n))return 'JJRD';if(/ลาดพร้าว|lad\s*prao|lat\s*phrao/i.test(n))return 'JJLP';
+  for(const k in STK_BR)if(b.id===STK_BR[k])return k;
+  return MT_BR.includes(c)?c:(MT_BR.includes(rc)?rc:'')}
 async function chkMaint(){
   const out=[],T=bkk(0);
   const [brs,tasks,logs]=await Promise.all([sel('branches','select=*'),sel('maint_tasks','select=id,branch_id,name,freq_days&deleted_at=is.null'),
-    sel('maint_logs','select=task_id,done_date&order=done_date.desc&limit=5000')]);
+    sel('maint_logs','select=task_id,done_date&order=done_date.desc&limit=5000'),regWait()]);
   const last={};logs.forEach(l=>{if(!last[l.task_id])last[l.task_id]=String(l.done_date).slice(0,10)});
   const sc=scoped('maint');
   for(const b of brs){const code=maintCode(b);if(sc?!brOK('maint',code):false)continue;
@@ -1675,6 +1704,8 @@ function copyBrief(){const tx=briefText();const ok=()=>toast('คัดลอก
 let busy=false,lastRun=null;
 async function runAll(){
   if(busy)return;busy=true;$('reBtn').classList.add('spin');$('liveDot').className='dot busy';$('liveTxt').textContent='กำลังตรวจข้อมูล…';
+  const R=RUN={late:false},sig0=regSig();
+  REG=JJBR.load(CFG.URL,CFG.KEY).then(()=>{try{brSync()}catch(e){}});   // ทะเบียนสาขากลาง ไม่รอ (ไม่ throw · จำไว้ 60 วิ · อ่านไม่ได้ = แคช/สาขาเดิม) — ห้องที่ใช้รอเองใน regWait()
   await Promise.all(AG.map(async a=>{
     if(!visible(a)){a.state='lock';a.items=[];return}
     if(!a.items.length)a.state='load';
@@ -1685,6 +1716,7 @@ async function runAll(){
   const bad=AG.filter(a=>a.state==='err').length;
   $('liveDot').className='dot live';$('liveTxt').innerHTML=`ข้อมูลจริง · ${bkkTime(lastRun.toISOString())} น.${bad?` <small>· อ่านไม่ได้ ${bad} ห้อง</small>`:''}`;
   paintHud();if(sel_)openAgent(sel_);
+  REG.then(()=>{if(R.late&&regSig()!==sig0)setTimeout(runAll,0)});   // ทะเบียนมาช้ากว่าที่ห้องรอ + สาขาเปลี่ยน = ตรวจใหม่อีกรอบ
 }
 
 /* ---------- ล็อกอิน (pnl_users · JJ Login + JJ Gate) ---------- */

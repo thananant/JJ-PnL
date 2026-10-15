@@ -595,7 +595,8 @@ window.JJGate=(function(){
       return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
         .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
     };
-    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+    /* ลองแบบไม่เรียงตาม sort เฉพาะตอนเซิร์ฟเวอร์ตอบ 4xx (เช่นตารางไม่มีช่อง sort) · หมดเวลา/เน็ตหลุด = ไม่ลองซ้ำ (ไม่ให้แอพรอนานเป็น 2 เท่า) */
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(e){ if(!/^HTTP 4/.test(String(e&&e.message)))throw e; return get('select=*&order=code.asc'); })
       .then(function(d){
         if(!Array.isArray(d))throw new Error('bad');
         var rows=clean(d), before=JSON.stringify(J.rows);
@@ -854,8 +855,10 @@ function dstart(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
 function dkey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function thDate(d,short){const x=new Date(d);return (short?TH_DS[x.getDay()]+'. ':'วัน'+TH_D[x.getDay()]+'ที่ ')+x.getDate()+' '+(short?TH_MS[x.getMonth()]:TH_M[x.getMonth()])+' '+(x.getFullYear()+543)}
 function thTime(d){const x=new Date(d);return pad(x.getHours())+':'+pad(x.getMinutes())}
-function brLabel(c){if(c==='ALL')return 'ทุกสาขา';const b=allBranches().find(x=>x.code===c);return b?b.name:(c||'')}
-function brColor(c){return BR_C[c]||'#CFC6BB'}
+/* ออฟฟิศ: P&L เก็บเป็น JJOF · ปฏิทินใช้ OFFICE → นัดที่ลงไว้เป็น JJOF โชว์/กรองเป็นออฟฟิศ (JJBR.canon)
+   สาขาใหม่ (ทะเบียนสาขากลาง JJBR) ที่ไม่อยู่ในรายการ = ชื่อ/สีจากทะเบียน · สาขาเดิมใช้ชื่อ/สีเดิม */
+function brLabel(c){if(c==='ALL')return 'ทุกสาขา';const k=JJBR.canon(c),all=allBranches();const b=all.find(x=>x.code===c)||all.find(x=>x.code===k);return b?b.name:(JJBR.isStore(k)?JJBR.name(k):(c||''))}
+function brColor(c){const k=JJBR.canon(c);return BR_C[k]||(JJBR.isStore(k)?JJBR.color(k):'#CFC6BB')}
 function allBranches(){
   const out=[...S.branches];
   BR_EXTRA.forEach(x=>{if(!out.find(b=>b.code===x.code))out.push(x)});
@@ -874,19 +877,23 @@ function canEdit(e){return !!S.user&&(isBoss()||(e.created_by===S.user.username&
    · เห็นนัด = สาขาที่ดูแล + นัดส่วนกลาง (ALL) + นัดที่ตัวเองสร้าง/ถูกเชิญ (สาขาไหนก็ได้ จะได้ไม่พลาดประชุม)
    · ลงนัดได้เฉพาะสาขาที่ดูแล — ลงนัดส่วนกลางใหม่ไม่ได้ (นัดส่วนกลางกระจายถึงทุกสาขา) · แก้นัดส่วนกลางที่ตัวเองสร้างไว้ได้
    · 🎌 วันพิเศษ = ข้อมูลกลางทั้งองค์กร ไม่จำกัดตามสาขา · ฟีดมือถือเหลือแค่ "นัดของฉัน" (ฟีดรวมทั้งองค์กรซ่อนไว้)
+   · 🏪 สาขาใหม่ (ทะเบียนสาขากลาง JJBR) ตั้งสิทธิ์ได้เลย · ตั้ง _br ไว้แต่ไม่เหลือรหัสที่รู้จัก = ไม่เห็นสาขาไหน (ห้ามกลายเป็นทุกสาขา)
    ⚠️ ข้อมูลยังอ่านได้ด้วยคีย์สาธารณะ (ข้อจำกัดของทั้งระบบ) — นี่คือการจำกัดในแอพ แบบเดียวกับระบบเงินเดือน */
 const ALL_BR=['JJLP','JJRD','JJCK','OFFICE'];
-let SCOPE=null;   // null = ทุกสาขา · ['JJLP'] = เฉพาะสาขาเหล่านี้
+let SCOPE=null,SCOPE_RAW=[];   // null = ทุกสาขา · ['JJLP'] = เฉพาะสาขาเหล่านี้ · [] = ตั้งไว้แต่ไม่มีรหัสที่รู้จัก (ไม่เห็นสาขาไหน)
 function applyUser(u){
-  SCOPE=null;
+  SCOPE=null;SCOPE_RAW=[];
   if(!u||u.role==='admin'||u.role==='owner')return;
   const apps=(u.apps&&typeof u.apps==='object')?u.apps:null;
   if(!apps||!Object.keys(apps).length)return;   // ยังไม่เคยตั้งสิทธิ์ = ไม่จำกัด
   const a=(apps.calendar&&typeof apps.calendar==='object')?apps.calendar:{};
-  const br=String(a._br||'').split(',').map(x=>x.trim()).filter(x=>ALL_BR.includes(x));
-  if(br.length)SCOPE=br;
+  const raw=String(a._br||'').split(',').map(x=>x.trim()).filter(Boolean);
+  if(!raw.length)return;
+  const ok=ALL_BR.concat(JJBR.unitCodes());   // รหัสเดิม + สาขาหน้าร้านในทะเบียน (JJCK/OFFICE)
+  SCOPE_RAW=raw;SCOPE=raw.map(x=>JJBR.canon(x)).filter((x,i,a)=>ok.includes(x)&&a.indexOf(x)===i);   // JJOF/ตัวเล็ก = รหัสเดียวกัน · ไม่รู้จักสักรหัส = [] (fail closed)
 }
-function inScope(c){return !SCOPE||c==='ALL'||SCOPE.includes(c)}
+const scopeText=()=>(SCOPE&&SCOPE.length?SCOPE:SCOPE_RAW).join(',');
+function inScope(c){return !SCOPE||c==='ALL'||SCOPE.includes(c)||SCOPE.includes(JJBR.canon(c))}
 function myBranches(){return allBranches().filter(b=>!SCOPE||SCOPE.includes(b.code))}   // อย่ากรอง allBranches() เอง — brLabel ใช้ตั้งชื่อทุกสาขา
 function brHome(){const my=myBranches();return SCOPE&&my.length===1?my[0].code:'ALL'}       // เห็นสาขาเดียว = ล็อกปุ่มสาขาไว้ที่สาขานั้น
 function brOk(c){return c==='ALL'?brHome()==='ALL':myBranches().some(b=>b.code===c)}       // ปุ่มสาขาที่กดได้
@@ -943,12 +950,17 @@ function logout(){localStorage.removeItem('jjcal_sess');location.reload()}
 function hardReload(){location.replace(location.pathname+'?v='+Date.now())}
 
 /* ---------- โหลดข้อมูล ---------- */
-async function loadBranches(){
+async function loadBranches(pre){   // pre = คำขอที่ startApp ยิงไว้ก่อนแล้ว (ไม่ต้องรอทะเบียน JJBR เสร็จก่อนค่อยอ่าน)
   try{
-    const rows=await sel('pnl_branches','select=*');
-    const bs=(rows||[]).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code})).filter(b=>b.code);
+    const rows=await (pre||sel('pnl_branches','select=*'));
+    /* JJOF (ออฟฟิศของ P&L) = ปุ่มออฟฟิศ OFFICE ตัวเดียว (BR_EXTRA) ไม่ขึ้นซ้ำ · สาขาที่ปิดแล้ว (active=false) ไม่มีปุ่ม (ชื่อยังมาจากทะเบียน) */
+    const bs=(rows||[]).filter(r=>r&&r.active!==false).map(r=>({code:r.code||r.id,name:r.name||r.display_name||r.code}))
+      .filter(b=>b.code&&!(JJBR.canon(b.code)==='OFFICE'&&b.code!=='OFFICE'));
     if(bs.length)S.branches=bs;
   }catch(e){}
+  /* สาขาหน้าร้านในทะเบียนที่ยังไม่อยู่ในรายการ (อ่าน pnl_branches ไม่ได้ = จากแคชในเครื่อง) */
+  JJBR.extra(allBranches().map(b=>b.code)).forEach(r=>S.branches.push({code:r.code,name:r.name}));
+  if(S.br!=='ALL')S.br=JJBR.canon(S.br);   // ค่าเก่าที่เคยกดปุ่ม JJOF = ออฟฟิศ
   if(!brOk(S.br))S.br=brHome();   // ค่าเก่า/เสีย/สาขาที่ไม่มีสิทธิ์ → ทุกที่ (ที่ดูแล) · เห็นสาขาเดียว = สาขานั้น
   renderSeg();
 }
@@ -980,7 +992,7 @@ async function loadEvents(force){
 function filtered(){
   let out=S.events;
   /* นัดสาขาอื่นที่ตัวเองถูกเชิญ (มีใน S.events ก็เพราะเป็นนัดของตัวเอง) โชว์เสมอ — คนที่ล็อกไว้สาขาเดียวจะได้ไม่พลาด */
-  if(S.br!=='ALL')out=out.filter(e=>e.branch===S.br||e.branch==='ALL'||!inScope(e.branch));
+  if(S.br!=='ALL')out=out.filter(e=>e.branch===S.br||JJBR.canon(e.branch)===S.br||e.branch==='ALL'||!inScope(e.branch));
   if(S.mine)out=out.filter(e=>isMine(e));
   if(S.who)out=out.filter(e=>e.created_by===S.who||att(e).some(a=>a.username===S.who));
   if(S.q){
@@ -1165,7 +1177,11 @@ function openEventForm(id,presetDate){
   /* สาขาของนัด: บัญชีที่เห็นเฉพาะสาขา เลือกได้แค่สาขาที่ดูแล (ไม่มี "ทุกสาขา/ส่วนกลาง" ยกเว้นแก้นัดส่วนกลางเดิมของตัวเอง)
      นัดใหม่ตั้งต้นที่สาขาที่ดูอยู่ · คนที่ไม่จำกัดสาขา ตั้งต้น "ทุกสาขา" เหมือนเดิม */
   const brList=(!SCOPE||(e&&e.branch==='ALL')?[{code:'ALL',name:'ทุกสาขา / ส่วนกลาง'}]:[]).concat(myBranches());
-  const brPick=e?e.branch:(!SCOPE?'ALL':(S.br!=='ALL'&&brOk(S.br)?S.br:(myBranches()[0]||{}).code));
+  let brPick=e?e.branch:(!SCOPE?'ALL':(S.br!=='ALL'&&brOk(S.br)?S.br:(myBranches()[0]||{}).code));
+  if(e&&!brList.some(b=>b.code===brPick)){   // นัดเดิมลงไว้เป็น JJOF = ออฟฟิศ · สาขาที่ไม่มีปุ่มแล้ว = คงสาขาเดิมไว้
+    const k=JJBR.canon(brPick);
+    if(brList.some(b=>b.code===k))brPick=k;else if(!SCOPE&&brPick)brList.push({code:brPick,name:brLabel(brPick)});
+  }
   const brOpts=brList.map(b=>`<option value="${esc(b.code)}" ${brPick===b.code?'selected':''}>${esc(b.name)}</option>`).join('');
   const remOpts=REM_OPTS.map(([v,t])=>`<option value="${v}" ${(e?e.reminder_min:60)===v?'selected':''}>${t}</option>`).join('');
   const userCks=S.users.map(u=>`<label data-unit="${esc(u.unit||'')}"><input type="checkbox" class="attck" value="${esc(u.username)}" ${picked.includes(u.username)?'checked':''} onchange="attCount()"> <span>${esc(u.display_name||u.username)}</span>${u.unit&&UNIT_TH[u.unit]?` <span class="xs mut">·${esc(UNIT_TH[u.unit])}</span>`:''}</label>`).join('');
@@ -1559,6 +1575,14 @@ const SD_KINDS=['office','pay','order'];
 const SD_PAY=[[2,'×2'],[3,'×3'],[1.5,'×1.5']];
 const SD_NAMES=['ปีใหม่','สงกรานต์','วันแรงงาน','วันเฉลิมฯ','วันแม่','วันพ่อ','ลอยกระทง','ตรุษจีน','สิ้นปี'];
 const SD_ORD_BR=[['JJLP','ลาดพร้าว'],['JJRD','รัชดา']];
+/* 🏪 สาขาใหม่จากทะเบียนสาขากลาง (JJBR) → ป้ายสังกัด (UNIT_TH) + ตัวเลือกสาขาวันขายดี (SD_ORD_BR) · แก้ของเดิมในที่ สาขาเดิมใช้ชื่อเดิม */
+const SD_ORD_N=SD_ORD_BR.length;
+function calBrSync(){
+  JJBR.extra(UNIT_TH).forEach(r=>{UNIT_TH[r.code]=r.short;});
+  SD_ORD_BR.length=SD_ORD_N;
+  JJBR.extra(SD_ORD_BR.map(x=>x[0])).forEach(r=>SD_ORD_BR.push([r.code,r.short]));
+}
+calBrSync();JJBR.onChange(calBrSync);
 /* วันหยุดราชการที่วันที่ตายตัว — วันพระ/ลอยกระทง/ตรุษจีน/วันหยุดชดเชย เลื่อนทุกปี ให้กรอกเองด้วยปุ่ม ＋ */
 const SD_PRESET=[['01-01','01-01','วันขึ้นปีใหม่'],['04-06','04-06','วันจักรี'],['04-13','04-15','สงกรานต์'],
   ['05-01','05-01','วันแรงงาน'],['05-04','05-04','วันฉัตรมงคล'],['06-03','06-03','วันเฉลิมฯ พระราชินี'],
@@ -1583,9 +1607,10 @@ function sdHere(x){
   const k=sdKind(x);
   if(k&&!sdShown(k))return false;
   if(S.br==='ALL'||!k)return true;
-  if(k==='office')return S.br==='OFFICE';
-  if(k==='pay')return S.br!=='OFFICE';
-  return !x.order_branches||x.order_branches.includes(S.br);
+  const b=JJBR.canon(S.br);   // JJOF = ออฟฟิศ
+  if(k==='office')return b==='OFFICE';
+  if(k==='pay')return b!=='OFFICE';
+  return !x.order_branches||x.order_branches.includes(S.br)||x.order_branches.some(c=>JJBR.canon(c)===b);
 }
 function sdOn(k){
   return (S.days||[]).filter(x=>!x.cancelled&&x.day_from<=k&&k<=x.day_to&&sdHere(x));
@@ -1716,7 +1741,7 @@ function openDayForm(id,presetDate,kind){
       <div class="pick" id="sdMult">${SD_PAY.map(([v,t])=>`<span class="chip${pay===v?' on':''}" data-sv="${v}" onclick="sdPick(this)">${t}</span>`).join('')}</div>
       <div class="sdnote">×2 = ได้เพิ่มอีก 1 เท่าของค่าแรงวัน · ×3 = เพิ่ม 2 เท่า · ×1.5 = เพิ่มครึ่งเท่า</div></div>`:''}
     ${K==='order'?`<div class="fld"><label>สาขาที่ขายดี</label>
-      <div class="pick" id="sdBr"><span class="chip${!obr.length?' on':''}" data-sv="" onclick="sdBrPick(this)">ทุกสาขา</span>${SD_ORD_BR.map(([c,n])=>`<span class="chip${obr.includes(c)?' on':''}" data-sv="${c}" onclick="sdBrPick(this)">${n}</span>`).join('')}</div></div>`:''}
+      <div class="pick" id="sdBr"><span class="chip${!obr.length?' on':''}" data-sv="" onclick="sdBrPick(this)">ทุกสาขา</span>${SD_ORD_BR.concat(obr.filter(c=>!SD_ORD_BR.some(x=>x[0]===c)).map(c=>[c,JJBR.short(c,brLabel(c))])).map(([c,n])=>`<span class="chip${obr.includes(c)?' on':''}" data-sv="${esc(c)}" onclick="sdBrPick(this)">${esc(n)}</span>`).join('')}</div></div>`:''}
     <div class="fld"><label>หมายเหตุ</label><input id="sdNote" maxlength="200" value="${x?esc(x.note||''):''}" placeholder="(ไม่บังคับ)"></div>
     <div class="acts">
       <button class="btn" id="sdSave" onclick="saveDay(${x?`'${x.id}'`:'null'},'${K}')">💾 บันทึก</button>
@@ -1736,6 +1761,7 @@ function sdErr(e){
   if(/cal_sd_off_once/.test(t))return 'มีวันใน🏢 ปฏิทินออฟฟิศหยุดครอบวันนี้อยู่แล้ว — แก้รายการเดิม หรือเลือกวันอื่นครับ';
   if(/cal_sd_pay_once|exclusion/i.test(t))return 'มีวันใน💰 ปฏิทินค่าแรง ×2 ครอบวันนี้อยู่แล้ว — แก้รายการเดิม หรือเลือกวันอื่นครับ';
   if(/cal_sd_range/.test(t))return 'ช่วงวันไม่ถูกต้อง (วันสุดท้ายต้องไม่ก่อนวันแรก และยาวไม่เกิน 32 วัน)';
+  if(/cal_sd_br/.test(t))return 'ยังไม่ได้รัน jjmk-branches.sql — วันขายดีเลือกสาขาใหม่ไม่ได้';
   if(/"kind"|'kind'|cal_sd_kind/.test(t))return 'ต้องรัน jjmk-calendar-days.sql รุ่นล่าสุดใน Supabase ก่อน (แยก 3 ปฏิทิน)';
   if(/cal_special_days|relation|schema cache/i.test(t))return 'ยังไม่ได้รัน jjmk-calendar-days.sql ใน Supabase';
   return 'บันทึกไม่สำเร็จ: '+t.slice(0,140);
@@ -1851,15 +1877,17 @@ async function startApp(){
   $('#login').style.display='none';$('#app').style.display='block';
   $('#mineBtn').classList.toggle('on',S.mine);
   fLoad();
+  const brReq=sel('pnl_branches','select=*');brReq.catch(()=>{});   // ปุ่มสาขา: ยิงคู่กับทะเบียน ไม่ต่อคิวกัน (ผิดพลาด = loadBranches จัดการเองแบบเดิม)
+  await JJBR.load(cfg().url,cfg().key,{timeout:3000});   // ทะเบียนสาขากลาง ก่อนตั้งสิทธิ์รายสาขา (ไม่ throw · รอนานสุด ~6 วิ = 3 วิ × ลองซ้ำ 1 ครั้ง · อ่านไม่ได้ = แคช/JJRD+JJLP แบบเดิม)
   applyUser(S.user);   // สาขาที่เห็น (apps.calendar._br) — อ่านจากข้อมูลบัญชีล่าสุดที่เพิ่งตรวจกับ pnl_users
-  const lock=SCOPE?` · <span title="เห็นเฉพาะ ${esc(SCOPE.map(brLabel).join(', '))}">🔒 ${esc(SCOPE.join(','))}</span>`:'';
+  const lock=SCOPE?` · <span title="เห็นเฉพาะ ${esc(SCOPE.map(brLabel).join(', '))}">🔒 ${esc(scopeText())}</span>`:'';
   $('#hdUser').innerHTML=`<span id="rtDot" title="สถานะการเชื่อมต่อสด">⚪</span>👤 ${esc(S.user.display_name||S.user.username)}${lock} · <a class="hintlink" href="javascript:hardReload()">🔄 โหลดใหม่</a> · <a class="hintlink" href="javascript:logout()">ออก</a>`;
-  await loadBranches();
+  await loadBranches(brReq);
   if(SCOPE&&!myBranches().length){   // ได้สิทธิ์เฉพาะสาขาที่ไม่มีในปฏิทิน — บอกให้ชัด ไม่โชว์ปฏิทินว่าง ๆ
     ['#brSeg','#mineBtn','.tabbar','#fab'].forEach(s=>{const x=$(s);if(x)x.style.display='none'});
     $('main').innerHTML=`<div class="card" style="max-width:520px;margin:30px auto;text-align:center">
       <h3>🔒 ยังไม่มีสาขาที่เปิดให้บัญชีนี้</h3>
-      <p class="sm mut" style="margin:0">บัญชี <b>${esc(S.user.display_name||S.user.username)}</b> ได้สิทธิ์เห็นเฉพาะ ${esc(SCOPE.join(', '))} ซึ่งยังไม่มีในปฏิทิน — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access</p>
+      <p class="sm mut" style="margin:0">บัญชี <b>${esc(S.user.display_name||S.user.username)}</b> ได้สิทธิ์เห็นเฉพาะ ${esc(scopeText().split(',').join(', '))} ซึ่งยังไม่มีในปฏิทิน — ให้ผู้ดูแลระบบตั้งสาขาที่หน้า 🔑 JJ Access</p>
       <p style="margin:14px 0 0"><a class="hintlink" href="javascript:logout()">เข้าด้วยบัญชีอื่น</a></p></div>`;
     return;
   }
@@ -1874,6 +1902,7 @@ async function startApp(){
   });
 }
 (async function init(){
+  JJBR.load(cfg().url,cfg().key,{timeout:3000});   // เริ่มอ่านทะเบียนสาขากลางไปพร้อมกับตรวจบัญชี (startApp รอผลตัวเดียวกัน)
   const sess=LS.get('jjcal_sess',null);
   /* JJ Gate — เข้าทางลิงก์ตรง = ต้องใส่รหัสใหม่ */
   if(sess&&sess.username&&JJGate.ok(sess.username)){
