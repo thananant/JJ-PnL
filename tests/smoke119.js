@@ -8,11 +8,13 @@ const html=fs.readFileSync('jjmk-stockcheck.html','utf8');
 const patched=html.replace(/<link href="https:\/\/fonts[^>]*>/g,'');
 const BID='b19f0a17b4472',BID2='b19f0a17b448212';
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
+const HP=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJPNL').digest('hex'); // บัญชีกลาง pnl_users (main ย้ายล็อกอินมาใช้ 28 ก.ย.)
 const reqs=[];
 function mk(preLS){
   const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
     beforeParse(w){
       w.localStorage.setItem('jjsc_auth',JSON.stringify({u:'admin',h:H('admin','jjmk1234')}));
+      try{w.sessionStorage.setItem('jjsc_sess',JSON.stringify({u:'admin',h:HP('admin','jjmk1234')}));}catch(e){} // main: เซสชันบัญชีกลาง (ไม่ล็อกอิน = loadAll ไม่โหลด)
       w.localStorage.setItem('jjsc_tab','order');
       if(preLS)Object.entries(preLS).forEach(([k,v])=>w.localStorage.setItem(k,v));
       w.JJSC_NOPREWARM=1; w.confirm=()=>true;
@@ -22,7 +24,7 @@ function mk(preLS){
         const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),json:async()=>v});
         if(method!=='GET'){reqs.push({method,url,body});return T([]);}
         if(url.includes('sc_users'))return T([{id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true}]);
-        if(url.includes('pnl_users'))return T([{id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',active:true,apps:{},perms:{}}]);
+        if(url.includes('pnl_users'))return T([{id:1,username:'admin',pass_hash:HP('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',unit:'ALL',active:true,apps:{}}]);
         if(url.includes('sc_units'))return T([{id:1,name:'กก.',kind:'both',sort:0,alias_of:null},{id:2,name:'ลัง',kind:'both',sort:1,alias_of:null}]);
         if(url.includes('pnl_unit_conv'))return T([{item:'น้ำดื่ม',from_unit:'ลัง',to_unit:'ขวด',factor:12}]);
         if(url.includes('pnl_bill_items'))return T([{item:'น้ำดื่ม',unit:'ลัง',d:'2026-09-10',supplier_id:1}]);

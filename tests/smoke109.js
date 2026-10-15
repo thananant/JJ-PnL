@@ -49,6 +49,11 @@ const tev=(type,y,target)=>{ // จำลองนิ้ว 1 นิ้ว (jsdo
 const setScroll=v=>Object.defineProperty(w,'scrollY',{value:v,configurable:true});
 const ptr=()=>d.getElementById('ptr');
 const pull=()=>ptr().style.transform;
+// main (เปิดจากหน้าจอโฮม iPhone): transform = translate(-50%, calc(<px>px + env(safe-area-inset-top,0px)[ * k]))
+//   px = ตำแหน่งเดิม (ดึง*0.5−56 · หมุน 16 · เก็บ −56) · k = สัดส่วนที่เลื่อนพ้นแถบสถานะ = min(1, ดึง/56) (ตอนหมุน = 1 เต็ม)
+const pos=()=>{const m=pull().match(/^translate\(-50%, calc\((-?[\d.]+)px \+ env\(safe-area-inset-top,0px\)(?: \* ([\d.]+))?\)\)$/);
+  return m?{px:+m[1],k:m[2]===undefined?1:+m[2]}:null;};
+const at=(px,k)=>{const p=pos();return !!p&&p.px===px&&Math.abs(p.k-k)<1e-9;};
 setTimeout(async()=>{
   const out=[];
   await sleep(400);
@@ -60,7 +65,7 @@ setTimeout(async()=>{
   let n0=prodHits;
   tev('touchstart',100); tev('touchmove',160); await sleep(30);
   out.push('ลากลงนิดเดียว: วงกลมโผล่ตามนิ้ว แต่ยังไม่ขึ้น "ปล่อยเพื่อรีเฟรช": '
-    +(pull()==='translate(-50%, -26px)'&&!ptr().classList.contains('rel')));
+    +(at(-26,0.536)&&!ptr().classList.contains('rel')));   // ดึง 60px → หนืดครึ่ง = 30 → 30−56 = −26 · k = 30/56 = 0.536
   tev('touchend',160); await sleep(200);
   out.push('ปล่อยตอนลากไม่ถึงเกณฑ์ → เด้งกลับ ไม่โหลดข้อมูลใหม่: '+(prodHits===n0&&!ptr().classList.contains('spin')));
 
@@ -73,11 +78,11 @@ setTimeout(async()=>{
   out.push('กันเบราว์เซอร์รีโหลดทั้งหน้าเอง (preventDefault ตอนลาก): '+mv.defaultPrevented);
   tev('touchend',300);
   out.push('ระหว่างโหลด วงกลมค้างไว้แล้วหมุน: '
-    +(ptr().classList.contains('spin')&&pull()==='translate(-50%, 16px)'));
+    +(ptr().classList.contains('spin')&&at(16,1)));
   await sleep(450);
   out.push('ปล่อยแล้วโหลดข้อมูลใหม่จริง + ขึ้นข้อความบอก + วงกลมเก็บกลับ: '
     +(prodHits>n0&&d.getElementById('toast').textContent.includes('อัปเดตข้อมูลล่าสุด')
-      &&!ptr().classList.contains('spin')&&pull()==='translate(-50%, -56px)'));
+      &&!ptr().classList.contains('spin')&&at(-56,0)));
   out.push('อยู่หน้าเดิม ไม่เด้งกลับหน้าแรก: '+(w.eval('S.tab')==='count'));
 
   // 3) ค่านับที่ยังไม่กดบันทึกต้องไม่หายหลังรีเฟรช
@@ -91,18 +96,18 @@ setTimeout(async()=>{
   setScroll(300);
   tev('touchstart',100); const mv2=tev('touchmove',300); await sleep(30);
   out.push('หน้ายังเลื่อนค้างอยู่กลางหน้า → ไม่ทำงาน (ปล่อยให้เลื่อนหน้าตามปกติ): '
-    +(!mv2.defaultPrevented&&pull()==='translate(-50%, -56px)'));
+    +(!mv2.defaultPrevented&&at(-56,0)));
   tev('touchend',300); await sleep(60);
   setScroll(0);
   d.getElementById('ovl').classList.add('on');
   tev('touchstart',100); const mv3=tev('touchmove',300); await sleep(30);
-  out.push('กล่องยืนยันเปิดอยู่ → ไม่ทำงาน: '+(!mv3.defaultPrevented&&pull()==='translate(-50%, -56px)'));
+  out.push('กล่องยืนยันเปิดอยู่ → ไม่ทำงาน: '+(!mv3.defaultPrevented&&at(-56,0)));
   tev('touchend',300); d.getElementById('ovl').classList.remove('on'); await sleep(60);
   const box=d.createElement('div'); d.body.appendChild(box);
   Object.defineProperty(box,'scrollTop',{value:40,configurable:true});
   tev('touchstart',100,box); const mv4=tev('touchmove',300,box); await sleep(30);
   out.push('นิ้วอยู่ในกล่อง/ตารางที่กำลังเลื่อนอยู่ → ไม่แย่ง gesture: '
-    +(!mv4.defaultPrevented&&pull()==='translate(-50%, -56px)'));
+    +(!mv4.defaultPrevented&&at(-56,0)));
   tev('touchend',300,box); await sleep(60);
 
   // 5) ลากขึ้น (เลื่อนหน้าปกติ) ต้องไม่ทำอะไร

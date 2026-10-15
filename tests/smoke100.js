@@ -8,11 +8,13 @@ const html=fs.readFileSync('jjmk-stockcheck.html','utf8');
 const patched=html.replace(/<link href="https:\/\/fonts[^>]*>/g,'');
 const BID='b19f0a17b4472';
 const H=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJSC').digest('hex');
+const HP=(u,p)=>crypto.createHash('sha256').update(u+'|'+p+'|JJPNL').digest('hex'); // บัญชีกลาง pnl_users (main ย้ายล็อกอินมาใช้ 28 ก.ย.)
 const DB=[{src:'📋 นับสต๊อก',txt:'Count stock'},{src:'🛒 สั่งของ',txt:'Place order'}];
 const trQ=[],posts=[]; let nGetEn=0;
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
     w.localStorage.setItem('jjsc_auth',JSON.stringify({u:'admin',h:H('admin','jjmk1234')}));
+    try{w.sessionStorage.setItem('jjsc_sess',JSON.stringify({u:'admin',h:HP('admin','jjmk1234')}));}catch(e){} // main: เซสชันบัญชีกลาง (ไม่ล็อกอิน = loadAll ไม่โหลด)
     w.localStorage.setItem('jjsc_tab','count');
     w.fetch=async(url,opt)=>{
       const method=opt&&opt.method||'GET';
@@ -30,6 +32,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
         return T([]);
       }
       if(method!=='GET')return T([]);
+      if(url.includes('pnl_users'))return T([{id:1,username:'admin',pass_hash:HP('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',unit:'ALL',active:true,apps:{}}]);
       if(url.includes('sc_users'))return T([{id:1,username:'admin',pass_hash:H('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',branches:[],depts:[],active:true}]);
       if(url.includes('sc_depts'))return T([]);
       if(url.includes('line_groups'))return T([]);
