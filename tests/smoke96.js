@@ -27,7 +27,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v),json:async()=>v}); // ของจริงมี json()
       if(url.includes('/functions/v1/line-order')){sent.push(JSON.parse(opt.body));return T({ok:true});}
       if(url.includes('/functions/v1/sync-line-groups')){syncs.push(1);return T({updated:2});}
-      if(url.includes('stock_receipts')){receipts.push(JSON.parse(opt.body));return T([]);}
+      if(url.includes('stock_receipts')){if(method==='GET')return T([]);receipts.push(JSON.parse(opt.body));return T([]);}   // GET = อ่านตัวสะกดใบสั่งเก่าตอนเปลี่ยนชื่อซัพ
       if(url.includes('suppliers')&&method==='POST'){supPosts.push(JSON.parse(opt.body));return T([]);}
       if(url.includes('suppliers')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}
       if(url.includes('products')&&method==='PATCH'){supPatches.push({url,body:JSON.parse(opt.body)});return T([]);}

@@ -2253,34 +2253,40 @@ async function supRename(old){
   const x=supSched(old);
   const nn=(ask('เปลี่ยนชื่อซัพ "'+old+'" เป็น\n(จะแก้ชื่อซัพในสินค้าทุกสาขาให้ด้วย)',old)||'').trim();
   if(!nn||nn===old)return;
-  if(supKey(nn)!==supKey(old)&&supSched(nn)){toast('มีซัพชื่อ "'+nn+'" อยู่แล้ว',true);return;}
+  const ko=supKey(old),kn=supKey(nn);
+  if(kn!==ko&&(supSched(nn)||supAllNames().some(s=>supKey(s)===kn))){toast('มีซัพชื่อ "'+nn+'" อยู่แล้ว — ถ้าจะรวมกัน ใช้ ↔ ย้ายของ',true);return;}
   try{
-    // ชื่อที่ใบสั่งเก่าอาจใช้ (ชื่อในสินค้า · ตารางซัพ · แบบไม่ตัดช่องว่างที่ครัวกลางเขียน) — ย้ายประวัติสั่งไปชื่อใหม่ด้วย ไม่งั้นซัพ "สั่งทุก N วัน" เริ่มนับรอบใหม่
-    const ko=supKey(old),kn=supKey(nn),olds=await supSpellings(old,x);
-    // ใบสั่งเก่าที่สะกดต่างจากสินค้าปัจจุบัน (ตัวพิมพ์/ช่องว่าง) — อ่านจากฐานจริง ไม่งั้นรอบสั่งกลับมานับใหม่หลังรีโหลด
-    let rcOk=true;
+    // อ่านให้ครบก่อนเขียน (ไม่ครบ = ไม่แก้อะไรเลย): ทุกตัวสะกดของชื่อนี้ในสินค้าทุกสาขา + ในใบสั่งเก่า (ตัวพิมพ์/ช่องว่างต่างกัน) — ฐานกรองแบบตรงตัว ต้องยิงทีละตัวสะกด
+    // ไม่ย้ายใบสั่งเก่า = ซัพ "สั่งทุก N วัน" เริ่มนับรอบใหม่หลังรีโหลด
+    const olds=await supSpellings(old,x);
+    if(!olds){toast('โหลดรายการสินค้าทุกสาขาไม่สำเร็จ — ยังไม่ได้เปลี่ยนชื่อ ลองใหม่อีกครั้ง',true);return;}
     const rs=await selAll('stock_receipts?select=sup&sup=ilike.'+encodeURIComponent('*'+ko.replace(/[*%_\\]/g,'*').split(' ').join('*')+'*')
-      +'&order_date=gte.'+addDays(bizToday(),-130)).catch(()=>{rcOk=false;return [];});
-    const rOlds=[...new Set(olds.concat(rs.map(r=>r.sup)))].filter(s=>s&&s!==nn&&supKey(s)===ko);
+      +'&order_date=gte.'+addDays(bizToday(),-130)).catch(()=>null);
+    if(!rs){toast('อ่านประวัติสั่งไม่สำเร็จ — ยังไม่ได้เปลี่ยนชื่อ ลองใหม่อีกครั้ง',true);return;}
+    const all=[...new Set(olds.concat(rs.map(r=>r.sup)))].filter(s=>s&&s!==nn&&supKey(s)===ko);
     if(x)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x.name),{name:nn},'return=minimal');
-    let pOk=true;
-    for(const o of olds.filter(o=>o!==nn))await api('PATCH','products?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{pOk=false;});   // ทุกตัวสะกดของชื่อนี้ในสินค้า (ทั้ง 2 สาขา)
-    for(const o of rOlds){
+    let pOk=true,rcOk=true;
+    for(const o of all){
+      await api('PATCH','products?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{pOk=false;});         // สินค้าทั้ง 2 สาขา
       await api('PATCH','stock_receipts?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{rcOk=false;});   // ประวัติสั่ง = ตัวนับรอบสั่งทุก N วัน
       await api('PATCH','stock_counts?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{});              // ประวัตินับ — ไม่มีสิทธิ์แก้ก็ข้าม (ไม่กระทบตัวเลข)
     }
     if(x)x.name=nn;
+    if(!pOk){await loadAll().catch(()=>render());toast('เปลี่ยนชื่อซัพแล้ว แต่แก้ชื่อซัพในสินค้าบางตัวไม่สำเร็จ — โหลดใหม่ให้ตรงกับฐานข้อมูลแล้ว ลองเปลี่ยนชื่อซ้ำอีกครั้ง',true);return;}
     [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===ko)p2.sup=nn;}));
     if(rcOk&&ko!==kn&&S.lastOrd&&S.lastOrd[ko]){S.lastOrd[kn]=[...new Set((S.lastOrd[kn]||[]).concat(S.lastOrd[ko]))];delete S.lastOrd[ko];}
     if(S.sentToday&&S.sentToday[old]!=null){S.sentToday[nn]=S.sentToday[old];delete S.sentToday[old];}
-    if(!pOk){toast('เปลี่ยนชื่อซัพแล้ว แต่แก้ชื่อซัพในสินค้าบางตัวไม่สำเร็จ — กำลังโหลดใหม่ให้ตรงกับฐานข้อมูล',true);await loadAll();return;}
     if(rcOk)toast('✅ เปลี่ยนชื่อซัพ "'+old+'" → "'+nn+'" (แก้ในสินค้าทุกสาขาแล้ว)');
     else toast('เปลี่ยนชื่อแล้ว แต่ย้ายประวัติสั่งไม่ได้ — ซัพ "สั่งทุก N วัน" จะเริ่มนับรอบใหม่',true);
     render();
   }catch(e){toast('เปลี่ยนชื่อไม่สำเร็จ — '+errMsg(e),true);}
 }
-async function supSpellings(name,x){ // ทุกตัวสะกดของชื่อซัพนี้ที่เก็บอยู่ในสินค้าทุกสาขา (supKey เดียวกัน — ต่างแค่ตัวพิมพ์/ช่องว่าง) · ฐานกรองแบบตรงตัว ต้องยิงทีละตัวสะกด
-  await ensureAllProducts().catch(()=>{});
+function supAllNames(){ // ชื่อซัพทั้งหมดที่ระบบรู้จัก: ตารางซัพ + ที่สินค้าทุกสาขาใช้
+  return [...new Set((S.sups||[]).map(x=>x.name).concat(...[S.all,S.allBr].map(a=>(a||[]).map(p2=>p2.sup))))].filter(Boolean);
+}
+async function supSpellings(name,x){ // ทุกตัวสะกดของชื่อซัพนี้ที่เก็บอยู่ในสินค้าทุกสาขา (supKey เดียวกัน) · โหลดสินค้าทุกสาขาไม่ได้ = null (ห้ามเดา — สาขาอื่นอาจสะกดต่าง)
+  await ensureAllProducts(!S.allBr).catch(()=>{});   // ยังไม่มีรายการ = โหลดเดี๋ยวนี้ (ผู้ใช้กดเอง ไม่ต้องรอรอบลองใหม่ 15 วิ)
+  if(!S.allBr)return null;
   const k=supKey(name);
   return [...new Set([name,x&&x.name].concat(...[S.all,S.allBr].map(a=>(a||[]).map(p2=>p2.sup))))].filter(s=>s&&supKey(s)===k);
 }
@@ -2289,11 +2295,15 @@ async function supMove(from){
   const to=(ask('ย้ายสินค้าของ "'+from+'" ('+supCount(from)+' ตัว) ไปซัพไหน?\n\nซัพที่มี: '+others.join(', '),'')||'').trim();
   if(!to)return;
   if(!supSched(to)&&!others.some(x=>supKey(x)===supKey(to))){toast('ไม่พบซัพ "'+to+'" — เพิ่มซัพก่อนครับ',true);return;}
-  try{
-    for(const o of (await supSpellings(from)).filter(o=>o!==to))await api('PATCH','products?sup=eq.'+encodeURIComponent(o),{sup:to},'return=minimal');
-    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(from))p2.sup=to;}));
-    toast('✅ ย้ายสินค้าของ "'+from+'" → "'+to+'" แล้ว');render();
-  }catch(e){toast('ย้ายไม่สำเร็จ — '+errMsg(e),true);}
+  // ใช้ชื่อที่สะกดตามตารางซัพ/ที่ใช้อยู่ ไม่ใช่ตามที่พิมพ์ (พิมพ์ makro แต่ซัพชื่อ Makro → ใบสั่งไม่แตกเป็น 2 ใบ)
+  const tx=supSched(to),toN=tx?String(tx.name).trim():(others.find(x=>supKey(x)===supKey(to))||to);
+  const olds=await supSpellings(from);
+  if(!olds){toast('โหลดรายการสินค้าทุกสาขาไม่สำเร็จ — ยังไม่ได้ย้าย ลองใหม่อีกครั้ง',true);return;}
+  let ok=true;
+  for(const o of olds.filter(o=>o!==toN))await api('PATCH','products?sup=eq.'+encodeURIComponent(o),{sup:toN},'return=minimal').catch(()=>{ok=false;});
+  if(!ok){await loadAll().catch(()=>render());toast('ย้ายได้ไม่ครบ — โหลดใหม่ให้ตรงกับฐานข้อมูลแล้ว ลองย้ายซ้ำอีกครั้ง',true);return;}
+  [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(from))p2.sup=toN;}));
+  toast('✅ ย้ายสินค้าของ "'+from+'" → "'+toN+'" แล้ว');render();
 }
 async function supDel(name){
   const n=supCount(name);

@@ -36,7 +36,7 @@ const PRODS=[
   {id:'p4',branch_id:BID,cat_label:'ของแห้ง',name:'กระดาษ',unit:'แพ็ค',sup:'ซัพใหม่',rate_wk:1,rate_fri:1,rate_we:1,dept:'ครัว',image_url:null,sort:4}];
 const COUNTS={p1:10,p2:20,p3:3,p4:9};
 const SPD_ROWS=[];
-let APPLY=false,RCFAIL=false;   // APPLY = mock แก้ข้อมูลตาม PATCH (ใช้ช่วงทดสอบเปลี่ยนชื่อ) · RCFAIL = PATCH stock_receipts ไม่สำเร็จ
+let APPLY=false,RCFAIL=false,APFAIL=false,RRFAIL=false,PFAIL=false;   // APFAIL = โหลดสินค้าทุกสาขาไม่ได้ · RRFAIL = อ่านตัวสะกดใบสั่งเก่าไม่ได้ · PFAIL = PATCH products ไม่สำเร็จ   // APPLY = mock แก้ข้อมูลตาม PATCH (ใช้ช่วงทดสอบเปลี่ยนชื่อ) · RCFAIL = PATCH stock_receipts ไม่สำเร็จ
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
     w.fetch=async(url,opt)=>{
@@ -45,6 +45,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(method==='POST'){posts.push({url,rows:JSON.parse(opt.body)});return T([]);}
       if(method==='PATCH'){const body=JSON.parse(opt.body);patches.push({url,body});
         if(RCFAIL&&url.includes('stock_receipts'))return {ok:false,status:403,text:async()=>'permission denied'};
+        if(PFAIL&&url.includes('/products?'))return {ok:false,status:403,text:async()=>'permission denied'};
         if(APPLY){const tb=(url.match(/\/rest\/v1\/([a-z_]+)\?/)||[])[1],fm=url.match(/[?&](\w+)=eq\.([^&]*)/),fv=fm&&decodeURIComponent(fm[2]);
           const arr=tb==='suppliers'?SUPS:tb==='products'?PRODS:tb==='stock_receipts'?RECEIPTS:null;
           if(arr&&fm)arr.forEach(r=>{if(String(r[fm[1]])===fv)Object.assign(r,body);});}
@@ -52,6 +53,8 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('pnl_users')){const um=url.match(/username=eq\.([^&]+)/);const PU=[
         {id:1,username:'admin',pass_hash:HP('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',unit:'ALL',active:true,apps:{}}];
         return T(um?PU.filter(x=>x.username===decodeURIComponent(um[1])):PU);}
+      if(APFAIL&&url.includes('products')&&url.includes('branch_id=in.'))return {ok:false,status:500,text:async()=>'boom'};
+      if(RRFAIL&&url.includes('stock_receipts')&&url.includes('ilike.'))return {ok:false,status:500,text:async()=>'boom'};
       if(url.includes('products')&&url.includes('branch_id=eq.'+BID))return T(JSON.parse(JSON.stringify(PRODS)));
       if(url.includes('products'))return T([]);
       if(url.includes('cal_special_days')){
@@ -162,6 +165,27 @@ setTimeout(async()=>{
   out.push('หลังโหลดใหม่: น้ำแข็งอยู่ซัพ Siam Ice Co (สั่งทุก 10 วัน) · สั่งล่าสุด 13 · รอบหน้า 23 · ยังไม่ครบรอบ: '
     +(!!si&&si.rows.some(r=>r.it.id==='p9')&&si.dl.mode==='interval'&&si.dl.iv&&si.dl.iv.last==='2026-10-13'&&si.dl.iv.next==='2026-10-23'&&si.dl.iv.due===false&&si.nOrder===0));
   APPLY=false;
+  // 🛡 อ่านไม่ครบ = ไม่เขียนอะไรเลย · เขียนไม่ครบ = เตือน + โหลดใหม่ · ย้ายของใช้ชื่อตามตารางซัพ
+  const toastT=()=>d.getElementById('toast').textContent;
+  w.eval('S.allBr=null;S.apErr=null;S._apErrAt=0'); APFAIL=true; patches.length=0; w.prompt=()=>'Siam Ice X';
+  await w.supRename('Siam Ice Co'); await sleep(50);
+  out.push('โหลดสินค้าทุกสาขาไม่ได้ → ไม่เปลี่ยนชื่อ (ไม่มี PATCH เลย) + เตือน: '+(patches.length===0&&toastT().includes('ยังไม่ได้เปลี่ยนชื่อ')));
+  APFAIL=false; RRFAIL=true; patches.length=0;
+  await w.supRename('Siam Ice Co'); await sleep(50);
+  out.push('อ่านใบสั่งเก่าไม่ได้ → ไม่เปลี่ยนชื่อ (ไม่มี PATCH เลย) + เตือน: '+(patches.length===0&&toastT().includes('อ่านประวัติสั่งไม่สำเร็จ')));
+  RRFAIL=false; PFAIL=true; patches.length=0;
+  await w.supRename('Siam Ice Co'); await sleep(250);
+  out.push('แก้สินค้าไม่สำเร็จ → เตือนให้ลองซ้ำ (ไม่ขึ้น "เปลี่ยนชื่อไม่สำเร็จ") + โหลดใหม่ (สินค้ายังอยู่ชื่อเดิมตามฐาน): '
+    +(toastT().includes('แก้ชื่อซัพในสินค้าบางตัวไม่สำเร็จ')&&!toastT().includes('เปลี่ยนชื่อไม่สำเร็จ')&&w.eval("S.all.find(p=>p.id==='p9').sup")==='Siam Ice Co'));
+  PFAIL=false;
+  w.prompt=()=>'smilemeat'; patches.length=0;
+  await w.supRename('Siam Ice Co'); await sleep(50);
+  out.push('เปลี่ยนชื่อไปซ้ำกับซัพที่มีอยู่ (smilemeat ≈ Smilemeat) → ไม่ให้ทำ (ให้ใช้ย้ายของ): '+(patches.length===0&&toastT().includes('มีซัพชื่อ')));
+  patches.length=0;
+  await w.supMove('ซัพใหม่'); await sleep(50);
+  const pm=patches.find(p=>p.url.includes('products?sup=eq.'+encodeURIComponent('ซัพใหม่')));
+  out.push('ย้ายของ พิมพ์ "smilemeat" → เขียนชื่อตามตารางซัพ "Smilemeat" (ใบสั่งไม่แตกเป็น 2 กลุ่ม): '+(!!pm&&pm.body.sup==='Smilemeat'&&w.eval("S.all.find(p=>p.id==='p4').sup")==='Smilemeat'));
+  w.prompt=()=>'Siam Ice Co';
 
   // 📏 รอบยาวเกิน 31 วัน
   SUPS.push({name:'ข้าวรอบยาว',order_mode:'interval',cycle_days:45,lead_days:1,line_group_id:null});
