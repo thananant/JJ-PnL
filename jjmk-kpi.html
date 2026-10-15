@@ -30,7 +30,7 @@ html,body{background:var(--bg);color:var(--ink);font-family:var(--fb);font-size:
 body{min-height:100vh}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touch-action:manipulation}
 input,select{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;min-height:42px}
-input[type=date]{color-scheme:dark}
+input[type=date],input[type=time]{color-scheme:dark}
 select option{background:var(--bg2);color:var(--ink)}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 ::selection{background:var(--red);color:var(--gold2)}
@@ -243,6 +243,19 @@ tr:last-child td{border-bottom:0}
 .link-row:last-child{border-bottom:0}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
 .kv b{color:var(--ink2);font-weight:500}
+/* การ์ดส่งสรุปเข้ากลุ่มไลน์ */
+.lg-row{padding:9px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:130px minmax(0,1fr) auto;gap:8px;align-items:center}
+.lg-row:last-child{border-bottom:0}
+.lg-b{font-family:var(--fd);font-size:15px}
+.lg-row select{width:100%;min-width:0}
+.lg-act{display:flex;gap:6px;flex-wrap:wrap}
+.lg-row .duty-d{grid-column:1/-1;margin:0}
+@media (max-width:620px){.lg-row{grid-template-columns:minmax(0,1fr)}.lg-act{justify-content:flex-end}}
+.lg-when{display:flex;gap:10px 14px;flex-wrap:wrap;align-items:center;padding:10px 0 2px}
+.lg-when input[type=time]{min-width:118px}
+#lgWhen{flex:1 1 200px;min-width:0;max-width:100%;text-overflow:ellipsis}
+.lg-pre{display:none;white-space:pre-wrap;overflow-wrap:break-word;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px;line-height:1.7;margin-top:10px}
+.lg-pre.show{display:block}
 
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--card2);color:var(--gold2);border:1px solid var(--goldDim);padding:10px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.25s;z-index:99;font-family:var(--fd);max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -634,6 +647,11 @@ const S = {
   hidePos: null,
   recentAll: false,        // กาง "รายการล่าสุด" ดูครบทั้งวันหรือยัง
   posTableOk: true,        // ตาราง kpi_settings มีในฐานข้อมูลหรือยัง (ยังไม่มี = บันทึกตำแหน่งไม่ได้)
+  lineCfg: null,           // kpi_settings.line_cfg (กลุ่มไลน์ของแต่ละสาขา + เวลาส่ง)
+  lineGroups: [],          // รายชื่อกลุ่มที่บอทอยู่ (ตาราง line_groups ของระบบนับสต๊อก — อ่านอย่างเดียว)
+  lineLog: [],             // ประวัติการส่ง (kpi_line_log)
+  lineOk: true,            // รัน jjmk_kpi_line.sql แล้วหรือยัง
+  lineErr: '',
   token: 0
 };
 const app = $('#app');
@@ -965,6 +983,158 @@ async function loadDutyInfo() {
   }
   box.innerHTML = rows.join('');
 }
+/* ---- การ์ด "ส่งสรุปเข้ากลุ่มไลน์" (หน้าตั้งค่า · เจ้าของสั่ง 2026-10-15) ----
+   ตัวตั้งเวลาอยู่ฝั่งฐานข้อมูล: pg_cron เรียก kpi_line_tick() ทุก 10 นาที → ยิง Edge Function 'line-order'
+   (บอทตัวเดียวกับระบบนับสต๊อก/ครัวกลาง · body = {to,text}) — ไม่ต้องเปิดแอปค้างไว้
+   ที่นี่ทำแค่: เลือกกลุ่มของแต่ละสาขา · เปิด/ปิด+เวลาส่ง · ดูตัวอย่าง · กดส่งเอง · ดูประวัติการส่ง
+   ⚠️ ตาราง line_groups เป็นของระบบนับสต๊อก (บอทจดไว้ว่าตัวเองอยู่กลุ่มไหน) — อ่านอย่างเดียว ห้ามเขียน */
+const LINE_FN = CONFIG.SUPABASE_URL + '/functions/v1/line-order';
+const LINE_DEF = { daily: true, period: true, daily_at: '09:00', period_at: '09:10' };  // ต้องตรงกับค่าตั้งต้นใน jjmk_kpi_line.sql
+const LINE_SQL_MSG = 'ยังใช้ไม่ได้ — ฐานข้อมูลยังไม่มีตาราง <code>kpi_line_log</code><br>ให้รัน <code>jjmk_kpi_line.sql</code> ใน Supabase SQL Editor ก่อน (Ctrl+A → Run) แล้วกด 🔄 ตรวจใหม่';
+function lineCfg() { return S.lineCfg || {}; }
+function lineGroupOf(b) { const g = lineCfg().groups || {}; return String(g[b] === null || g[b] === undefined ? '' : g[b]).trim(); }
+function lineOn(k) { const v = lineCfg()[k]; return (v === undefined || v === null) ? LINE_DEF[k] : !!v; }
+function lineAt(k) { const v = String(lineCfg()[k] || ''); return /^\d{1,2}:\d{2}$/.test(v) ? v : LINE_DEF[k]; }
+function lineGroupName(id) {
+  for (const g of S.lineGroups) if (String(g.group_id) === String(id)) return g.name || String(id).slice(0, 12) + '…';
+  return String(id).slice(0, 12) + '… (ไม่อยู่ในรายชื่อกลุ่มของบอท)';
+}
+/* ช่วงวันของปุ่ม "ดูตัวอย่าง / ส่งเดี๋ยวนี้" — ฐานข้อมูลคิดช่วงของตัวเองตอนส่งอัตโนมัติ */
+function lineRange(when) {
+  const today = bizDateOf();
+  if (when === 'today') return [today, today];
+  if (when === 'period') {
+    if (parseYmd(today).getDate() >= 16) { const ym = today.slice(0, 7); return [ym + '-01', ym + '-15']; }
+    const pm = addMonths(today.slice(0, 7), -1); return [pm + '-16', monthRange(pm)[1]];
+  }
+  const y = addDays(today, -1); return [y, y];
+}
+/* "1–15 ต.ค. 69" / "16 ก.ย. 69 – 15 ต.ค. 69" — ช่วงวันแบบสั้น ไม่ต้องมีชื่อวัน */
+function thNoDow(s) { const t = parseYmd(s); return t.getDate() + ' ' + TH_MONTHS[t.getMonth()] + ' ' + String(t.getFullYear() + 543).slice(2); }
+function thSpan(a, b) {
+  if (a === b) return thNoDow(a);
+  const pa = parseYmd(a), pb = parseYmd(b);
+  return (pa.getFullYear() === pb.getFullYear() && pa.getMonth() === pb.getMonth()) ? pa.getDate() + '–' + thNoDow(b) : thNoDow(a) + ' – ' + thNoDow(b);
+}
+function lineRangeLabel(when) { const r = lineRange(when); return r[0] === r[1] ? thDate(r[0]) : thSpan(r[0], r[1]); }
+function lineLogLabel(l) {
+  const span = thSpan(l.d_from, l.d_to);
+  const st = l.ok === true ? '✅' : l.ok === false ? '❌' : '⏳';
+  return (l.kind === 'daily' ? 'รายวัน ' : 'รอบ ') + span + ' ' + st + (l.sent_at ? ' ' + bkkTime(l.sent_at) : '') +
+    (l.ok === false ? ' <span class="bad">ส่งไม่สำเร็จ' + (l.detail ? ' · ' + esc(String(l.detail).slice(0, 90)) : '') + '</span>' : '');
+}
+function lineLastHTML(b) {
+  const rows = S.lineLog.filter(l => l.branch === b).slice(0, 3);
+  if (!rows.length) return lineGroupOf(b) ? 'ยังไม่เคยส่ง — รอรอบถัดไป (' + lineAt('daily_at') + ' น.)' : 'ยังไม่ได้ตั้งกลุ่ม = สาขานี้ไม่ส่ง';
+  return 'ส่งแล้ว: ' + rows.map(lineLogLabel).join(' · ');
+}
+async function lineText(b, from, to) {
+  const r = await sb.rpc('kpi_line_text', { p_branch: b, p_from: from, p_to: to });
+  if (r.error) throw r.error;
+  return String(r.data || '');
+}
+function lineBodyHTML() {
+  if (!S.lineOk) return '<div class="lg-msg">⚠️ ' + LINE_SQL_MSG + '</div>';
+  const ro = !!SCOPE || !can('dash', 'e');   // ค่ากลางทุกสาขา — บัญชีที่เห็นเฉพาะบางสาขาดูได้ ไม่ให้แก้
+  const rows = myBranches().map(b => {
+    const cur = lineGroupOf(b);
+    const opts = ['<option value="">— ไม่ส่ง —</option>'];
+    for (const g of S.lineGroups) opts.push('<option value="' + esc(g.group_id) + '"' + (String(g.group_id) === cur ? ' selected' : '') + '>' + esc(g.name || g.group_id) + '</option>');
+    if (cur && !S.lineGroups.some(g => String(g.group_id) === cur)) opts.push('<option value="' + esc(cur) + '" selected>' + esc(cur) + '</option>');
+    return '<div class="lg-row"><div class="lg-b">' + b + ' <small>' + esc(CONFIG.BRANCHES[b]) + '</small></div>' +
+      '<select class="lg-sel" data-branch="' + b + '" aria-label="กลุ่มไลน์ของสาขา ' + b + '"' + (ro ? ' disabled' : '') + '>' + opts.join('') + '</select>' +
+      '<div class="lg-act"><button class="btn ghost sm" data-act="linePrev" data-branch="' + b + '">👁 ดูตัวอย่าง</button>' +
+      (ro ? '' : '<button class="btn sm" data-act="lineSend" data-branch="' + b + '">📤 ส่งเดี๋ยวนี้</button>') + '</div>' +
+      '<div class="duty-d mute">' + lineLastHTML(b) + '</div></div>';
+  }).join('');
+  return rows +
+    '<div class="lg-when">' +
+      '<label class="chk"><input type="checkbox" id="lgDaily"' + (lineOn('daily') ? ' checked' : '') + (ro ? ' disabled' : '') + '> สรุปทุกวัน เวลา</label>' +
+      '<input type="time" id="lgDailyAt" value="' + esc(lineAt('daily_at')) + '"' + (ro ? ' disabled' : '') + ' aria-label="เวลาส่งสรุปรายวัน">' +
+      '<label class="chk"><input type="checkbox" id="lgPeriod"' + (lineOn('period') ? ' checked' : '') + (ro ? ' disabled' : '') + '> สรุปรอบ (วันที่ 1 และ 16) เวลา</label>' +
+      '<input type="time" id="lgPeriodAt" value="' + esc(lineAt('period_at')) + '"' + (ro ? ' disabled' : '') + ' aria-label="เวลาส่งสรุปรอบ">' +
+    '</div>' +
+    '<div class="toolbar" style="margin-top:8px"><select id="lgWhen" aria-label="ช่วงที่จะดูตัวอย่าง/ส่งเอง">' +
+      '<option value="yday">สรุปเมื่อวาน (' + thDate(lineRange('yday')[0], true) + ')</option>' +
+      '<option value="today">สรุปวันนี้ ถึงตอนนี้</option>' +
+      '<option value="period">สรุปรอบล่าสุด (' + lineRangeLabel('period') + ')</option>' +
+    '</select><span class="grow"></span>' +
+    (ro ? '' : '<button class="btn sm" data-act="saveLine">บันทึกการส่งไลน์</button>') + '</div>' +
+    (ro ? '<div class="hint" style="margin:8px 0 0">🔒 บัญชีนี้ดูได้ แต่แก้ไม่ได้ — การส่งสรุปเป็นค่ากลาง ผู้ที่ดูได้ทุกสาขาเป็นคนตั้ง</div>' : '') +
+    '<pre class="lg-pre" id="lgPre"></pre>' +
+    (S.lineErr ? '<div class="lg-msg">อ่านประวัติการส่งไม่ได้: ' + esc(S.lineErr) + '</div>' : '');
+}
+async function loadLineCfg() {
+  const box = $('#lineBody'); if (!box) return;
+  box.innerHTML = '<div class="loading">กำลังโหลด…</div>';
+  S.lineErr = '';
+  try { const r = await sb.from('kpi_settings').select('*').eq('key', 'line_cfg');
+    if (!r.error) S.lineCfg = (r.data && r.data[0] && r.data[0].value && typeof r.data[0].value === 'object') ? r.data[0].value : {};
+  } catch (e) {}
+  try {
+    const r = await sb.from('kpi_line_log').select('*').gte('d_to', addDays(bizDateOf(), -45));
+    if (r.error) throw r.error;
+    S.lineLog = (r.data || []).slice().sort((a, b) => String(b.first_at || '').localeCompare(String(a.first_at || '')));
+    S.lineOk = true;
+  } catch (e) {
+    const m = String((e && e.message) || e);
+    /* ยังไม่ได้รัน SQL (ไม่มีตาราง) = ปิดการ์ด · เน็ตสะดุด = ยังให้ตั้งค่าได้ แค่ไม่มีประวัติ */
+    if (/kpi_line_log|does not exist|schema cache|Could not find/i.test(m)) { S.lineOk = false; S.lineLog = []; }
+    else { S.lineOk = true; S.lineLog = []; S.lineErr = m; }
+  }
+  try { const r = await sb.from('line_groups').select('group_id,name').order('name'); S.lineGroups = r.error ? [] : (r.data || []); }
+  catch (e) { S.lineGroups = []; }
+  const el = $('#lineBody'); if (el) el.innerHTML = lineBodyHTML();
+}
+function lineSelVal(b) { const el = $('#lineBody select.lg-sel[data-branch="' + b + '"]'); return el ? String(el.value || '').trim() : lineGroupOf(b); }
+function lineWhenVal() { const el = $('#lgWhen'); return el ? el.value : 'yday'; }
+async function linePrev(b) {
+  const pre = $('#lgPre'); if (!pre) return;
+  const r = lineRange(lineWhenVal());
+  pre.textContent = 'กำลังสร้างข้อความ…'; pre.classList.add('show');
+  try { pre.textContent = await lineText(b, r[0], r[1]); }
+  catch (e) { pre.textContent = 'ดูตัวอย่างไม่ได้: ' + ((e && e.message) || e) + '\n(ยังไม่ได้รัน jjmk_kpi_line.sql ใน Supabase?)'; }
+}
+async function lineSend(b, btn) {
+  if (!can('dash', 'e') || SCOPE) { toast('บัญชีนี้ไม่มีสิทธิ์ส่งสรุปเข้ากลุ่ม'); return; }
+  const gid = lineSelVal(b);
+  if (!gid) { toast('เลือกกลุ่มไลน์ของสาขา ' + b + ' ก่อน'); return; }
+  const when = lineWhenVal(), r = lineRange(when);
+  /* ส่งออกไปที่กลุ่มจริง ทุกคนในกลุ่มเห็นทันที — ถามยืนยันก่อนเสมอ */
+  if (!confirm('ส่งสรุป ' + lineRangeLabel(when) + ' ของสาขา ' + b + ' (' + CONFIG.BRANCHES[b] + ')\nเข้ากลุ่มไลน์ "' + lineGroupName(gid) + '" เลยไหม?\n\nทุกคนในกลุ่มจะได้รับข้อความนี้')) return;
+  const old = btn.textContent; btn.disabled = true; btn.textContent = 'กำลังส่ง…';
+  try {
+    const text = await lineText(b, r[0], r[1]);
+    const res = await fetch(LINE_FN, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: CONFIG.SUPABASE_KEY, Authorization: 'Bearer ' + CONFIG.SUPABASE_KEY }, body: JSON.stringify({ to: gid, text: text }) });
+    let j = {}; try { j = await res.json(); } catch (e) {}
+    if (!res.ok || j.ok === false) throw new Error(j.error || j.message || ('HTTP ' + res.status));
+    toast('✅ ส่งเข้ากลุ่ม ' + lineGroupName(gid) + ' แล้ว', 3000); btn.textContent = '✅ ส่งแล้ว';
+  } catch (e) {
+    toast('ส่งไม่สำเร็จ: ' + String((e && e.message) || e).slice(0, 120) + ' — เช็กว่าบอทอยู่ในกลุ่มนี้', 5000);
+    btn.disabled = false; btn.textContent = old;
+  }
+}
+async function saveLineCfg() {
+  if (!can('dash', 'e')) { toast('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูล'); return; }
+  if (SCOPE) { toast('การส่งสรุปเข้าไลน์เป็นค่ากลางของทุกสาขา — บัญชีที่เห็นเฉพาะบางสาขาแก้ไม่ได้', 3500); return; }
+  const cfg = Object.assign({}, lineCfg());
+  const groups = Object.assign({}, cfg.groups || {});
+  for (const b of myBranches()) { const v = lineSelVal(b); if (v) groups[b] = v; else delete groups[b]; }
+  cfg.groups = groups;
+  cfg.daily = !!($('#lgDaily') && $('#lgDaily').checked);
+  cfg.period = !!($('#lgPeriod') && $('#lgPeriod').checked);
+  const t1 = ($('#lgDailyAt') || {}).value || '', t2 = ($('#lgPeriodAt') || {}).value || '';
+  cfg.daily_at = /^\d{1,2}:\d{2}$/.test(t1) ? t1 : LINE_DEF.daily_at;
+  cfg.period_at = /^\d{1,2}:\d{2}$/.test(t2) ? t2 : LINE_DEF.period_at;
+  /* เริ่มส่งตั้งแต่ตอนตั้งค่า — ไม่ย้อนส่งสรุปของวันเก่า ๆ พรวดเดียวตอนเพิ่งเปิดใช้ */
+  if (!cfg.since) cfg.since = new Date().toISOString();
+  try {
+    const r = await sb.from('kpi_settings').upsert([{ key: 'line_cfg', value: cfg }]);
+    if (r.error) throw r.error;
+    await loadLineCfg();
+    toast(Object.keys(groups).length ? 'บันทึกแล้ว — ฐานข้อมูลจะส่งให้เองตามเวลาที่ตั้ง' : 'บันทึกแล้ว — ยังไม่ได้ตั้งกลุ่ม จึงยังไม่ส่งสรุป', 3500);
+  } catch (e) { toast('บันทึกไม่สำเร็จ: ' + ((e && e.message) || e) + ' — ต้องรัน jjmk_kpi_line.sql ใน Supabase ก่อน', 5000); }
+}
 function renderSettings() {
   const staff = S.staff.filter(s => inScope(s.branch) && (S.setBranch === ALL || s.branch === S.setBranch));
   setMain(
@@ -976,9 +1146,14 @@ function renderSettings() {
     '<div class="card"><h3>รายชื่อพนักงาน <small>(ซิงก์จากระบบเงินเดือน — ดูอย่างเดียว)</small></h3><div class="toolbar"><select id="setBranch">' + branchOptsHTML(S.setBranch, true) + '</select></div><details class="stf-wrap"><summary>ดูรายชื่อรายคน (ปกติไม่ต้องแตะ)</summary><div id="staffList">' + staffListHTML() + '</div><div class="toolbar" style="margin-top:10px"><span class="grow"></span><button class="btn ghost sm" data-act="saveStaff">บันทึกการซ่อนรายคน</button></div><div class="hint">' + (S.syncOk ? '' : '⚠️ ซิงก์รายชื่อจากระบบเงินเดือนไม่สำเร็จ — ตอนนี้ใช้รายชื่อที่บันทึกไว้ล่าสุด<br>') + 'เพิ่ม/แก้ชื่อ/ย้ายสาขา ทำที่แอป Payroll แล้วที่นี่อัปเดตตาม · ติ๊กออกเฉพาะกรณียกเว้นรายคน (เช่น ไม่อยากให้ขึ้นชื่อชั่วคราว) · คนลาออกระบบซ่อนให้เอง</div></details></div>' +
     (can('kiosk') ? '<div class="card"><h3>หน้าจอลูกค้า (Kiosk)</h3>' + myBranches().map(b => '<div class="link-row"><b>' + b + '</b><code>' + esc(kioskUrl(b)) + '</code><span class="grow"></span><button class="btn ghost sm" data-act="copy" data-text="' + esc(kioskUrl(b)) + '">คัดลอก</button><button class="btn sm" data-act="openKioskB" data-branch="' + b + '">เปิด</button></div>').join('') +
     '<div class="hint">เปิดลิงก์บนแท็บเล็ต/จอสัมผัส แล้วแตะ "เริ่ม" จะเข้าโหมดเต็มจอ (แนะนำ Add to Home Screen หรือแอป kiosk browser เพื่อล็อกหน้าจอ)<br>ออกจากหน้าจอลูกค้า: กดค้างชื่อสาขามุมซ้ายบน 2.5 วินาที แล้วใส่ PIN<br>ถ้าเน็ตหลุด คะแนนจะเก็บในเครื่องและส่งให้เองเมื่อกลับมาออนไลน์</div></div>' : '') +
+    '<div class="card"><h3>📤 ส่งสรุปเข้ากลุ่มไลน์ <small>(ทุกวัน + รอบ 1–15 / 16–สิ้นเดือน)</small> <button class="btn ghost sm" data-act="reloadLine">🔄 ตรวจใหม่</button></h3><div id="lineBody"><div class="loading">กำลังโหลด…</div></div>' +
+    '<div class="hint">ข้อความมี: คะแนนเฉลี่ย · แยกตามหัวข้อ · ชมพนักงานรายคน (ใครไม่ได้ถูกชมเลย ไม่ขึ้นในข้อความ)<br>' +
+    'ส่งโดยฐานข้อมูลเอง (ไม่ต้องเปิดแอปค้างไว้) ผ่านบอทไลน์ตัวเดียวกับระบบนับสต๊อก/ครัวกลาง · สรุปรายวัน = วันทำการเมื่อวาน (' + pad2(CONFIG.CUTOFF_HOUR) + ':00 ถึง ' + pad2(CONFIG.CUTOFF_HOUR) + ':00)<br>' +
+    '⚠️ รายชื่อกลุ่มมาจากบอท <b>ส่วนใหญ่เป็นกลุ่มซัพพลายเออร์</b> — เลือกผิดสรุปคะแนนจะไปโผล่ที่ร้านค้า กด 👁 ดูตัวอย่าง แล้ว 📤 ส่งเดี๋ยวนี้ เพื่อลองก่อนได้<br>' +
+    'ยังไม่เห็นกลุ่มที่ต้องการ: เชิญบอทเข้ากลุ่มก่อน แล้วไปกด "🔄 ดึงกลุ่มไลน์ใหม่" ในแอปครัวกลาง/นับสต๊อก</div></div>' +
     '<div class="card"><h3>ใครเข้างานตอนนี้ <small>(จอลูกค้าโชว์เฉพาะคนที่สแกนเข้างานอยู่จริง)</small> <button class="btn ghost sm" data-act="reloadDuty">🔄 ตรวจใหม่</button></h3><div id="dutyBody"><div class="loading">กำลังตรวจ…</div></div><div class="hint">ดึงจากเครื่องสแกนของระบบเงินเดือน (นับสแกนของวันทำการ ตัด 06:00 — จำนวนคี่ = ยังอยู่ในร้าน) · คนที่ยังไม่ผูกกับระบบเงินเดือน หรือช่วงที่ไม่มีใครสแกนเข้า จะไม่ขึ้นให้ลูกค้ากด</div></div>' +
     '<div class="card"><h3>ค่าตั้งระบบ <small>(แก้ใน CONFIG ต้นไฟล์)</small></h3><div class="kv"><b>วันทำการเริ่ม</b><span>' + pad2(CONFIG.CUTOFF_HOUR) + ':00 (ก่อนเวลานี้นับเป็นวันก่อนหน้า)</span><b>เป้าคะแนน</b><span>' + CONFIG.TARGET.toFixed(2) + ' (ทอง ≥ ' + CONFIG.TARGET.toFixed(1) + ' · ส้ม ≥ ' + (CONFIG.TARGET - 0.5).toFixed(1) + ' · แดง ต่ำกว่านั้น)</span><b>PIN ออก Kiosk</b><span>' + '•'.repeat(CONFIG.KIOSK_PIN.length) + '</span><b>รีเซ็ตเมื่อไม่แตะ</b><span>' + CONFIG.KIOSK_IDLE_SEC + ' วินาที</span><b>ฐานข้อมูล</b><span><code>' + esc(CONFIG.SUPABASE_URL) + '</code> · ตาราง kpi_*</span></div></div>');
-  loadDutyInfo();
+  loadDutyInfo(); loadLineCfg();
 }
 function moveRow(row, dir) { if (!row) return; const sib = dir < 0 ? row.previousElementSibling : row.nextElementSibling; if (!sib) return; if (dir < 0) row.parentNode.insertBefore(row, sib); else row.parentNode.insertBefore(sib, row); }
 async function saveRows(table, rows) {
@@ -1029,6 +1204,10 @@ function onDashClick(e) {
   else if (a === 'saveStaff') saveStaff();
   else if (a === 'saveHidePos') saveHidePos();
   else if (a === 'reloadDuty') loadDutyInfo();
+  else if (a === 'reloadLine') loadLineCfg();
+  else if (a === 'saveLine') saveLineCfg();
+  else if (a === 'linePrev') linePrev(t.dataset.branch);
+  else if (a === 'lineSend') lineSend(t.dataset.branch, t);
   else if (a === 'toggleRecent') { S.recentAll = !S.recentAll; const el = $('#recentCard'); if (el) el.outerHTML = recentHTML(recentRows); }
   else if (a === 'rowUp' || a === 'rowDown') moveRow(t.closest('.edit-row'), a === 'rowUp' ? -1 : 1);
 }
