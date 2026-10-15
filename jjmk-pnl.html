@@ -1130,7 +1130,7 @@ function applyNav(){
 }
 function applyPerms(){ applyNav(); paintUser(); }
 /* ---------- log การใช้งานอัตโนมัติ ---------- */
-const LOGN={pnl_income_daily:'รายรับ',pnl_cash_expenses:'เงินสดจ่าย',pnl_expense_daily:'รายจ่าย',pnl_bill_items:'บันทึกข้อมูลบิล',pnl_sup_items:'สินค้าประจำซัพ',pnl_fixed_monthly:'Fix cost',pnl_fixed_items:'ตั้งค่า Fix cost',pnl_fix_groups:'หมวด Fix cost',pnl_month_meta:'ข้อมูลเดือน',pnl_pv:'ใบสำคัญจ่าย',pnl_pv_items:'ใบสำคัญจ่าย',pnl_extra_expenses:'รายจ่ายอื่นๆ',pnl_shopee_orders:'Shopee',pnl_suppliers:'ตั้งค่าซัพ',pnl_branches:'ตั้งค่าสาขา',pnl_meat_daily:'เนื้อรายวัน',pnl_history:'ข้อมูลย้อนหลัง',pnl_history_items:'ข้อมูลย้อนหลัง',pnl_users:'ผู้ใช้',pnl_benchmarks:'มาตรฐาน',pnl_beam_daily:'ตรวจสอบยอดโอน (ไฟล์ Beam)',pnl_beam_moves:'ตรวจสอบยอดโอน (เงินเคลื่อนไหว Beam)',pnl_bank_snap:'ตรวจสอบเงินในบัญชี (ยอดจากแอพธนาคาร)',pnl_bank_moves:'ตรวจสอบเงินในบัญชี (เงินเข้า/ออก)',pnl_bank_accts:'ตั้งค่าบัญชีธนาคาร',pnl_supply_items:'ของใช้/อุปกรณ์',pnl_supply_moves:'ของใช้/อุปกรณ์ (เบิก/รับเข้า)'};
+const LOGN={pnl_income_daily:'รายรับ',pnl_cash_expenses:'เงินสดจ่าย',pnl_expense_daily:'รายจ่าย',pnl_bill_items:'บันทึกข้อมูลบิล',pnl_sup_items:'สินค้าประจำซัพ',pnl_fixed_monthly:'Fix cost',pnl_fixed_items:'ตั้งค่า Fix cost',pnl_fix_groups:'หมวด Fix cost',pnl_month_meta:'ข้อมูลเดือน',pnl_pv:'ใบสำคัญจ่าย',pnl_pv_items:'ใบสำคัญจ่าย',pnl_extra_expenses:'รายจ่ายอื่นๆ',pnl_shopee_orders:'Shopee',pnl_suppliers:'ตั้งค่าซัพ',pnl_branches:'ตั้งค่าสาขา',pnl_meat_daily:'เนื้อรายวัน',pnl_history:'ข้อมูลย้อนหลัง',pnl_history_items:'ข้อมูลย้อนหลัง',pnl_users:'ผู้ใช้',pnl_benchmarks:'มาตรฐาน',pnl_beam_daily:'ตรวจสอบยอดโอน (ไฟล์ Beam)',pnl_beam_moves:'ตรวจสอบยอดโอน (เงินเคลื่อนไหว Beam)',pnl_bank_snap:'ตรวจสอบเงินในบัญชี (ยอดจากแอพธนาคาร)',pnl_bank_moves:'ตรวจสอบเงินในบัญชี (เงินเข้า/ออก)',pnl_bank_accts:'ตั้งค่าบัญชีธนาคาร',pnl_supply_items:'ของใช้/อุปกรณ์',pnl_supply_moves:'ของใช้/อุปกรณ์ (เบิก/รับเข้า)',products:'อัตราใช้สินค้า (แอพนับ)'};
 let _alast={};
 function alogAuto(method,path,body){
   try{
@@ -3950,17 +3950,20 @@ function billNmHtml(pnlItem,stockName){ // กลับด้าน: หน้�
 }
 function stkAddDays(ds,n){ const t=new Date(ds+'T00:00:00'); t.setDate(t.getDate()+n); const z=x=>String(x).padStart(2,'0'); return t.getFullYear()+'-'+z(t.getMonth()+1)+'-'+z(t.getDate()); }
 function stkRound05(v){ if(!(v>0))return 0; const u=Math.ceil(v); const r=u%5; return r===0?u:(u%10===0?u:u+(5-(u%5))); } // ปัดขึ้นให้ลงท้าย 0/5 (ไว้ใช้เฟส 2)
+const STK_PQ='id,branch_id,name,unit,sup,cat_label,cat_key,sort,safety,max';
 async function stkLoad(){
   const m=S.m; let from=stkAddDays(m+'-01',-7); if(from<STK_MIN)from=STK_MIN; // ตัดข้อมูลก่อนวันเริ่มนับทิ้งตั้งแต่ต้นทาง
   const to=dstr(m,monthDays(m));
   let permDenied=false;
   const stkSel=(t,q)=>selAllQ(t,q).catch(e=>{ if(/42501|permission denied|401/i.test(String(e.message)))permDenied=true; return []; });
-  const [prods,map,counts,bills,inc]=await Promise.all([
-    stkSel('products',`select=id,branch_id,name,unit,sup,cat_label,cat_key,sort,safety,max&deleted_at=is.null&order=id`),
+  const [prods,map,counts,bills,inc,spd]=await Promise.all([
+    selAllQ('products',`select=${STK_PQ},rate_wk,rate_fri,rate_we&deleted_at=is.null&order=id`).catch(()=>stkSel('products',`select=${STK_PQ}&deleted_at=is.null&order=id`)), // อัตราใช้ จ–พฤ/ศ/ส–อา (ไม่มีคอลัมน์ = อ่านแบบเดิม)
     selAllQ('pnl_stock_map','select=*&order=id').catch(()=>null),
     stkSel('stock_counts',`select=branch_id,branch_name,count_date,product_id,qty,out_of_stock,created_at&count_date=gte.${from}&count_date=lte.${to}&order=count_date,created_at`),
     selAll('pnl_bill_items',`select=branch,d,item,unit,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>selAll('pnl_bill_items',`select=branch,d,item,qty&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`)).catch(()=>[]),
-    selAll('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[])
+    selAll('pnl_income_daily',`select=d,sales_pos_am,sales_pos_pm&branch=eq.${S.br}&d=gte.${from}&d=lte.${to}&order=d`).catch(()=>[]),
+    // 🎌 วันพิเศษจากปฏิทิน (cal_special_days) เหมือนแอพนับ — ยังไม่มีตาราง/อ่านไม่ได้ = ไม่มีวันพิเศษ
+    selAllQ('cal_special_days',`select=id,name,day_from,day_to,order_rate_group,order_branches,cancelled&cancelled=eq.false&order_rate_group=not.is.null&day_to=gte.${from}&day_from=lte.${to}&order=day_from`).catch(()=>[])
   ]);
   if(map){ const pn={}; (prods||[]).forEach(x=>{ pn[x.id]=x.name; }); loadStkNames(map.map(r=>({...r,stock_name:pn[r.product_id]||r.product_name}))); } // ชื่อนับสดจาก products
   // จับคู่สาขาจากข้อมูลนับสต๊อกเอง (แถวนับมี branch_name ติดมา) — ห้ามใช้ตาราง branches เพราะเป็นของระบบเงินเดือน id คนละชุด
@@ -3982,12 +3985,13 @@ async function stkLoad(){
   Object.values(M).forEach(m0=>{ if(m0.items.length>1) m0.pnl_names=m0.items.map(x=>x.pnl_item).join(' + '); });
   // นับล่าสุดต่อ (สินค้า,วัน) — วันเดียวนับซ้ำเอาครั้งหลังสุด
   const C={}; (counts||[]).filter(c=>c.branch_id===sbid).forEach(c=>{
-    const k=c.product_id; (C[k]??={})[c.count_date]={qty:c.out_of_stock?0:num(c.qty),at:c.created_at};
+    const k=c.product_id; (C[k]??={})[c.count_date]={qty:c.out_of_stock?0:num(c.qty),oos:!!c.out_of_stock||!(num(c.qty)>0),at:c.created_at}; // oos = ของหมด (กดหมด/นับได้ 0) ตอนนับ
   });
   // บิลตามชื่อสินค้า: วัน -> qty (แปลงเป็นหน่วยหลักก่อน ถ้าตั้งอัตราแปลงไว้)
   await loadUconv();
   const B={}; (bills||[]).forEach(r=>{ const k=ocrNorm(r.item); ((B[k]??={})[r.d]??=0); B[k][r.d]+=ucv(r.item,r.unit,num(r.qty)).qty; });
-  return {ok:map!==null, permDenied, sbid, sbidOther, brOther, prods:P, prodsAll:(prods||[]), map:M, C, B, sales, from, to};
+  const spdR=(spd||[]).filter(r=>r&&!r.cancelled&&r.day_from&&r.day_to&&[0,1,2].includes(r.order_rate_group)); // กรองแบบ spdSet ของแอพนับ
+  return {ok:map!==null, permDenied, sbid, sbidOther, brOther, prods:P, prodsAll:(prods||[]), map:M, C, B, sales, spd:spdR, from, to};
 }
 function stkBillNames(){ // ชื่อสินค้าในบิลของสาขานี้ (ไว้ให้เลือกผูก)
   const st=S._stk; if(!st)return [];
@@ -4001,6 +4005,7 @@ function stkGuess(name,bn){ // เดาชื่อบิลจากชื่�
   g=bn.find(x=>ocrNorm(x).includes(n)||n.includes(ocrNorm(x))); return g||'';
 }
 RENDER.actual = async (el)=>{
+  if(S._autoSelK!==S.br+'|'+S.m){ S._autoSel={}; S._autoSelK=S.br+'|'+S.m; } // 🤖 ติ๊ก/เอาออกเอง จำไว้ข้ามการรีเฟรช (เครื่องอื่นบันทึก / เปลี่ยนเผื่อ ×) · เปลี่ยนสาขา/เดือน = ล้าง
   if(S.br==='ALL'){ el.innerHTML=`<div class="card"><div class="empty">หน้านี้ดูรายสาขา — เลือก "สาขารัชดา" หรือ "สาขาลาดพร้าว" ข้างบนก่อนครับ</div></div>`; return; }
   const st=await stkLoad();
   if(st.permDenied){ el.innerHTML=`<div class="card"><div class="empty">🔒 แอพนี้ยังไม่มีสิทธิ์อ่านตารางระบบนับสต๊อก (permission denied)<br>รัน <b>jjmk_pnl_stockread.sql</b> ใน Supabase SQL Editor ครั้งเดียว (เปิดสิทธิ์อ่านอย่างเดียว ไม่ให้เขียน) แล้วเปิดหน้านี้ใหม่ครับ</div></div>`; return; }
@@ -4031,19 +4036,19 @@ RENDER.actual = async (el)=>{
   const rows=mapped.map(pr=>{
     const mp=st.map[pr.id];
     const days=Object.keys(st.C[pr.id]||{}).sort();
-    const per=[];
+    const per=[], pre=[];
     for(let i=1;i<days.length;i++){
       const Pd=days[i-1], Cd=days[i];
-      if(Cd<mStart) continue; // เอาช่วงที่จบในเดือนที่ดู
-      const q0=st.C[pr.id][Pd].qty, q1=st.C[pr.id][Cd].qty;
       let buy=0; (mp.items||[]).forEach(it=>{ Object.entries(st.B[ocrNorm(it.pnl_item)]||{}).forEach(([d2,q])=>{ if(d2>Pd&&d2<=Cd) buy+=q*num(it.factor||1); }); }); // รวมซื้อเข้าจากทุกชื่อบิลที่ผูก
+      const q0=st.C[pr.id][Pd].qty, q1=st.C[pr.id][Cd].qty;
+      if(Cd<mStart){ pre.push({Pd,Cd,buy,use:q0+buy-q1,oos0:st.C[pr.id][Pd].oos,oos1:st.C[pr.id][Cd].oos}); continue; } // เอาช่วงที่จบในเดือนที่ดู · ช่วงก่อนเดือน (ย้อน 7 วันที่โหลดไว้) เก็บแค่ประวัติของเข้า+ใช้จริง ไว้ดูว่าปกติมีของเข้าทุกรอบนับไหม / ปกติใช้วันละเท่าไร (🤖)
       let sale=0,dd=0; for(let d2=Pd; d2<Cd; d2=stkAddDays(d2,1)){ const v=st.sales[d2]||0; if(v>0){sale+=v;dd++;} }
       const use=q0+buy-q1;
-      per.push({Pd,Cd,q0,q1,buy,use,sale,dd,p10:sale>0?use/(sale/10000):null});
+      per.push({Pd,Cd,q0,q1,buy,use,sale,dd,p10:sale>0?use/(sale/10000):null,oos0:st.C[pr.id][Pd].oos,oos1:st.C[pr.id][Cd].oos});
     }
     const totU=per.reduce((a,c)=>a+c.use,0), totS=per.reduce((a,c)=>a+c.sale,0);
     const avg10=totS>0?totU/(totS/10000):null;
-    return {pr,mp,per,totU,totS,avg10,last:per[per.length-1]||null,lastQty:days.length?st.C[pr.id][days[days.length-1]].qty:null,lastD:days[days.length-1]||''};
+    return {pr,mp,per,pre,totU,totS,avg10,last:per[per.length-1]||null,lastQty:days.length?st.C[pr.id][days[days.length-1]].qty:null,lastD:days[days.length-1]||''};
   }).filter(r=>r.per.length||r.lastQty!=null);
   rows.sort((a,b)=>(b.totU*num(b.mp.factor)||0)-(a.totU*num(a.mp.factor)||0));
   S._stkRows=rows;
@@ -4074,7 +4079,7 @@ RENDER.actual = async (el)=>{
       <button class="${V==='last'?'on':''}" onclick="stkViewSet('last')">ช่วงล่าสุด</button>
       <button class="${V==='day'?'on':''}" onclick="stkViewSet('day')">📅 รายวัน</button>
       <button class="${V==='range'?'on':''}" onclick="stkViewSet('range')">↔ ช่วงวันที่</button>
-      <button class="${V==='auto'?'on':''}" onclick="stkViewSet('auto')" title="คำนวณ safety/max รายวันจันทร์–อาทิตย์ จากใช้จริง แล้วเขียนกลับเข้าแอพนับ (ยืนยันก่อนเขียนทุกครั้ง)">🤖 ตั้งค่าอัตโนมัติ <span style="font-size:10px;background:#8E1B1B;color:#fff;border-radius:6px;padding:1px 5px">β</span></button>
+      <button class="${V==='auto'?'on':''}" onclick="stkViewSet('auto')" title="คำนวณอัตราใช้ต่อวัน จ–พฤ / ศ / ส–อา จากใช้จริง แล้วเขียนกลับเข้าแอพนับ (ยืนยันก่อนเขียนทุกครั้ง)">🤖 ตั้งอัตราใช้อัตโนมัติ <span style="font-size:10px;background:#8E1B1B;color:#fff;border-radius:6px;padding:1px 5px">β</span></button>
       ${V==='day'?`<span class="xs" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px">
         <button class="btn gh sm2" onclick="stkDayStep(-1)" title="วันนับก่อนหน้า">‹</button>
         <input type="date" value="${S.stkDay||''}" onchange="S.stkDay=this.value;show('actual')" style="width:auto;display:inline-block;padding:6px 8px">
@@ -4100,8 +4105,8 @@ RENDER.actual = async (el)=>{
       <datalist id="stkNamesDL">${names.map(n2=>`<option value="${esc(n2)}">`).join('')}</datalist>
       ${unbound.map((x,i)=>bindRow(x,i)).join('')}</div>`:''}
     </div>`:''}
-    ${(()=>{ // นับวันล่าสุดแล้ว แต่บิลวันนั้นยังไม่ถูกลงเลย -> ช่วงล่าสุดจะติดลบ/เกินจริงชั่วคราว (เฉพาะโหมดช่วงล่าสุด)
-      if(V!=='last') return '';
+    ${(()=>{ // นับวันล่าสุดแล้ว แต่บิลวันนั้นยังไม่ถูกลงเลย -> ช่วงล่าสุดจะติดลบ/เกินจริงชั่วคราว (โหมดช่วงล่าสุด + 🤖 ตั้งอัตรา)
+      if(V!=='last'&&V!=='auto') return '';
       const allD2=S._stkAllD||[]; const maxD2=allD2[allD2.length-1];
       if(!maxD2) return '';
       const hasBill=Object.values(st.B||{}).some(m2=>num(m2[maxD2])>0);
@@ -4152,82 +4157,162 @@ RENDER.actual = async (el)=>{
   </div>`;
   stkBadge(); // อัปเดตป้ายเตือนตามข้อมูลล่าสุด
 };
-const TH_D2=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
-function stkAutoCalc(rows,st){ // ใช้เฉลี่ยราย จ–อา ต่อสินค้า: ถัวใช้จริงของแต่ละช่วงตามสัดส่วนยอดขายรายวัน
-  return rows.map(r=>{
-    const acc=[0,0,0,0,0,0,0], cnt=[0,0,0,0,0,0,0];
+// 🤖β ตั้งอัตราใช้อัตโนมัติ: แอพนับสั่งของจากอัตราใช้ต่อวัน 3 กลุ่ม (ตรงกับ dayGrp ของแอพนับ) — เจ้าของเคาะ 15 ต.ค. 2569 เลิกใช้ safety/max
+const STK_RG=[{f:'rate_wk',k:'wk',l:'จ–พฤ',d:[1,2,3,4]},{f:'rate_fri',k:'fri',l:'ศ',d:[5]},{f:'rate_we',k:'we',l:'ส–อา',d:[6,0]}];
+// วันพิเศษของสาขา code ในวัน ds — ตรรกะเดียวกับ spdHit ของแอพนับ: แถวเจาะจงสาขาชนะแถวทุกสาขา · เท่ากันเอากลุ่มเลขมากกว่า → {g,r} | null
+function stkSpdHit(rows,code,ds){ let best=null;
+  (rows||[]).forEach(r=>{ const own=!!(r.order_branches&&r.order_branches.length); if(r.day_from>ds||r.day_to<ds||(own&&r.order_branches.indexOf(code)<0))return;
+    const sc=(own?10:0)+r.order_rate_group; if(!best||sc>best.sc)best={sc,g:r.order_rate_group,r}; });
+  return best; }
+// 🤖 บิลวันนับล่าสุดยังไม่ลง? — ช่วงล่าสุดซื้อเข้า 0 ทั้งที่สินค้านี้ปกติมีของเข้าแทบทุกรอบนับ และใช้จริงช่วงนั้นต่ำผิดปกติ (≈ 0 ไม่ติดลบ ป้าย "ติดลบ" จับไม่ได้) → คืนช่วงนั้น | null
+// ปกติมีของเข้า = ช่วงนับก่อนหน้า (รวมย้อน 7 วันก่อนเดือน) ≥ 4 ช่วง และมีบิลเข้า ≥ 2 ใน 3 ของช่วง (ของส่งรายวัน)
+// วันในสัปดาห์ของวันนับล่าสุด ต้องเคยมีของเข้าในประวัติ: ไม่เคยมีของเข้าวันนั้น (ซัพหยุดส่งอาทิตย์) = ไม่เตือน · ยังไม่เคยเห็นวันนั้นเลย (วันที่ 1 ของเดือน ประวัติย้อนแค่ 7 วัน / สินค้าเพิ่งเริ่มนับ) = ไม่รู้ว่าเป็นวันส่งไหม → ไม่เตือน
+// ใช้จริงช่วงล่าสุด < ครึ่งของที่ควรใช้ (มัธยฐานใช้จริงต่อวันของช่วงก่อนหน้าที่ไม่หมด × จำนวนวันของช่วงล่าสุด): บิลขาดจริง ของที่เข้ามาไม่ถูกบวก ใช้จริง ≈ 0/ติดลบ · ไม่มีของเข้าจริง (ซัพหยุด/สั่งตามของ) ของลดตามปกติ ใช้จริงปกติ = ไม่เตือน
+// ไม่ดูว่าเดือนที่ดูจบแล้วหรือยัง: บิลย้อนหลังยังลงได้ (บิลวันสิ้นเดือนมักลงต้นเดือนถัดไป) และถ้าไม่ตัด ช่วงที่ใช้ ≈ 0 จะดึงอัตราต่ำลงแล้วติ๊กให้เอง
+// ไม่ถึง 2/3 (ส่งรายสัปดาห์/2–3 ครั้งต่อสัปดาห์/วันเว้นวัน) = ช่วงไม่มีบิลเป็นเรื่องปกติ ไม่เตือน — ของส่งห่างแบบนี้ ถ้าบิลขาด ของ 1 รอบส่งใช้หลายช่วง ใช้จริงจะติดลบชัด ป้าย "ติดลบ" จับอยู่แล้ว
+// ต้นช่วง/ปลายช่วงของหมด = ปล่อยตามกติกาของหมดเดิม
+function stkMissLast(r){
+  const L=r.per[r.per.length-1]; if(!L||L.buy>0||L.oos0||L.oos1) return null;
+  const H=[...(r.pre||[]),...r.per.slice(0,-1)];
+  if(H.length<4||H.filter(p=>p.buy>0).length*3<H.length*2) return null;
+  const wd=x=>new Date(x+'T00:00:00').getDay(), sw=H.filter(p=>wd(p.Cd)===wd(L.Cd));
+  if(!sw.some(p=>p.buy>0)) return null; // วันหยุดส่ง หรือยังไม่เคยเห็นวันนี้ (ไม่รู้) = ไม่เตือน
+  const nd=p=>Math.round((new Date(p.Cd+'T00:00:00')-new Date(p.Pd+'T00:00:00'))/864e5)||1;
+  const rt=H.filter(p=>!p.oos0&&!p.oos1&&Number.isFinite(p.use)).map(p=>p.use/nd(p)).sort((a,b)=>a-b);
+  if(!rt.length) return null; // ไม่มีใช้จริงปกติให้เทียบ = ไม่รู้ → ไม่เตือน
+  const md=rt.length%2?rt[rt.length>>1]:(rt[rt.length/2-1]+rt[rt.length/2])/2;
+  if(!(md>0)||!(L.use<0.5*md*nd(L))) return null; // ใช้จริงไม่ต่ำผิดปกติ = วันไม่มีของเข้าจริง ไม่ใช่บิลขาด
+  return L;
+}
+function stkAutoCalc(rows,st){ // ใช้จริงราย จ–อา ต่อสินค้า: ถัวใช้จริงของแต่ละช่วงตามสัดส่วนยอดขายรายวัน
+  // วันพิเศษในปฏิทิน = ไม่เอามาเฉลี่ย (แอพนับใช้อัตรา ส–อา วันนั้นอยู่แล้ว → อัตราที่เขียน = ของวันปกติ)
+  // ของหมด: ต้นช่วงหมด+ไม่มีของเข้า = ข้าม (ไม่มีของให้ใช้) · ต้นช่วงหมด(มีของเข้า)/ปลายช่วงหมด = ค่าต่ำกว่าจริง (cens) ไม่เฉลี่ยรวม เว้นกลุ่มที่มีแต่ช่วงแบบนี้ (lb = ≥)
+  const spDays=new Set();
+  const W=rows.map(r=>{
+    const A=[0,0,0,0,0,0,0], N=[0,0,0,0,0,0,0], AC=[0,0,0,0,0,0,0], NC=[0,0,0,0,0,0,0], iv=[]; let cens=0, skip=0, miss=null;
+    const mi=stkMissLast(r); // ช่วงล่าสุดน่าจะบิลยังไม่ลง → ไม่เอามาเฉลี่ย (แบบช่วงที่ข้าม) + ไม่ติ๊กให้
     r.per.forEach(pp=>{
+      if(pp.oos0&&!(pp.buy>0)){ skip++; return; }
+      const lo=!!(pp.oos0||pp.oos1), ms=pp===mi;
       const ds=[]; for(let d2=pp.Pd; d2<pp.Cd; d2=stkAddDays(d2,1)) ds.push(d2);
+      let used=0;
       ds.forEach(d2=>{
+        if(stkSpdHit(st.spd,S.br,d2)){ spDays.add(d2); return; }
+        used++; if(ms) return;
         const w=new Date(d2+'T00:00:00').getDay();
         const share=pp.sale>0?((st.sales[d2]||0)/pp.sale):(1/ds.length);
-        acc[w]+=pp.use*share; cnt[w]++;
+        (lo?AC:A)[w]+=pp.use*share; (lo?NC:N)[w]++;
       });
+      if(!used) return;
+      if(ms){ miss={Pd:pp.Pd,Cd:pp.Cd,use:pp.use}; return; }
+      if(lo) cens++;
+      iv.push({Pd:pp.Pd,Cd:pp.Cd,use:pp.use,ws:ds.map(d2=>new Date(d2+'T00:00:00').getDay())});
     });
-    return {r,avg:acc.map((v,i)=>cnt[i]?v/cnt[i]:null),n:cnt};
+    const acc=[...A], cnt=[...N], lb=[];
+    STK_RG.forEach(g=>{ if(!g.d.some(i=>N[i])&&g.d.some(i=>NC[i])){ g.d.forEach(i=>{ acc[i]=AC[i]; cnt[i]=NC[i]; }); lb.push(g.k); } });
+    return {r,acc,n:cnt,avg:acc.map((v,i)=>cnt[i]?v/cnt[i]:null),cens,skip,iv,lb,miss};
+  });
+  W.spd=[...spDays].sort();
+  return W;
+}
+function stkRateRound(v){ // ปัดขึ้นอัตราใช้/วัน: ต่ำกว่า 10 ทีละ 0.1 · 10–50 ทีละ 0.5 · เกิน 50 จำนวนเต็ม (ติดลบ/ไม่มี = 0)
+  if(!(v>0)) return 0;
+  const k=v<10?10:v<=50?2:1;
+  return Math.max(0, Math.ceil(v*k-1e-9)/k);
+}
+function stkAutoRates(x,mul){ // อัตราใหม่ 3 กลุ่ม · nu=null = กลุ่มนี้ไม่มีข้อมูล → ไม่แตะค่าเดิม
+  return STK_RG.map(g=>{
+    const a=g.d.reduce((t,i)=>t+x.acc[i],0), n=g.d.reduce((t,i)=>t+x.n[i],0);
+    const avg=n?a/n:null, o=x.r.pr[g.f];
+    return {...g,n,avg,lb:(x.lb||[]).includes(g.k),nu:avg==null?null:stkRateRound(avg*mul),old:(o==null||o==='')?null:num(o)};
   });
 }
-function stkRoundSm(v){ return v<8?Math.ceil(v):stkRound05(v); } // เลขเล็กปัดขึ้นจำนวนเต็ม เลขใหญ่ลงท้าย 0/5
 function stkAutoHtml(rows,st){
-  if(S.autoDay===undefined) S.autoDay=new Date().getDay();
-  if(!S.autoFS) S.autoFS=1.2;
-  if(!S.autoFM) S.autoFM=2;
-  if(S.autoHolF===undefined) S.autoHolF=1.3;
+  if(!(num(S.autoMul)>0)) S.autoMul=1;
+  const mul=num(S.autoMul)||1;
   const W=stkAutoCalc(rows,st); S._auto=W;
-  const D=S.autoDay, hol=!!S.autoHol;
-  const dayN=Math.max(...W.map(x=>x.n[D]),0);
-  const rowsH=W.map((x,i)=>{
-    const base=x.avg[D];
-    if(base==null) return `<tr class="mut"><td colspan="6" class="xs">— ${esc(x.r.pr.name)} <span class="mut">ยังไม่มีข้อมูลวัน${TH_D2[D]}</span></td></tr>`;
-    const eff=base*(hol?num(S.autoHolF)||1:1);
-    const sf=stkRoundSm(eff*(num(S.autoFS)||1.2));
-    const mx=stkRoundSm(eff*(num(S.autoFS)||1.2)*(num(S.autoFM)||2));
-    const cs=num(x.r.pr.safety), cm=num(x.r.pr.max);
-    const thin=x.n[D]<2;
+  const noCol=(st.prods||[]).length&&!(st.prods||[]).some(p=>'rate_wk' in p);
+  let nCk=0;
+  const fr=v=>v==null?'–':fmt(v);
+  const rowsH=W.map(x=>{
+    const R=stkAutoRates(x,mul);
+    const nm=`<b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${billNmHtml(x.r.mp&&(x.r.mp.pnl_names||x.r.mp.pnl_item),x.r.pr.name)}`;
+    if(R.every(g=>g.avg==null)) return `<tr class="mut"><td>${nm}</td><td colspan="7" class="xs mut">${x.miss?`บิลวัน ${thDate(x.miss.Cd)} ยังไม่ลง? — ไม่มีช่วงอื่นในเดือนนี้ให้คำนวณ · ลงบิลแล้วเลขขึ้นเอง`:x.skip?'ของหมดทุกช่วงที่นับ — ยังคำนวณใช้จริงไม่ได้':'ยังไม่มีข้อมูลใช้จริงในเดือนนี้ (ต้องนับอย่างน้อย 2 ครั้ง)'}</td></tr>`;
+    // ช่วงที่ใช้จริงติดลบเกินเศษนับ (เกิน 0.5 และเกิน 25% ของที่ควรใช้ในช่วงนั้น) = บิลยังไม่ลง/นับพลาด — จับรายช่วง แม้เฉลี่ยกลุ่มยังเป็นบวก
+    const gA=w=>{ const g=R.find(g2=>g2.d.includes(w)); return g&&g.avg>0?g.avg:0; };
+    const negI=x.iv.filter(v=>v.use< -Math.max(0.5,0.25*v.ws.reduce((t,w)=>t+gA(w),0)));
+    const ivT=v=>`${thDate(v.Pd)}→${thDate(v.Cd)} ใช้จริง ${fmt(v.use)}`;
+    const thin=R.some(g=>g.n<2), neg=negI.length>0||R.some(g=>g.avg!=null&&g.avg<0), cens=x.cens>0, miss=!!x.miss;
+    const on=!thin&&!neg&&!cens&&!miss;
+    const ov=(S._autoSel||{})[S.br+'|'+x.r.pr.id], ck=ov===undefined?on:!!ov; if(ck) nCk++;
+    const useTd=g=>`<td class="n">${g.avg==null?'<span class="mut">–</span>':(g.lb?'≥':'')+fmt(g.avg)+(g.avg<0?' ⚠':'')} <span class="xs mut">· ${g.n} วัน</span></td>`;
+    const rateTd=g=>g.nu==null
+      ? `<td class="n mut" title="ยังไม่มีข้อมูลวัน${g.l} — ไม่แตะค่าเดิม">${fr(g.old)} <span class="xs">(คงเดิม)</span></td>`
+      : `<td class="n">${fr(g.old)} → <b ${g.old!==g.nu?'style="color:var(--red)"':''}>${fr(g.nu)}</b></td>`;
     return `<tr>
-      <td><input type="checkbox" class="autock" data-pid="${esc(x.r.pr.id)}" data-sf="${sf}" data-mx="${mx}" ${thin?'':'checked'} onchange="stkAutoCnt()"></td>
-      <td><b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${billNmHtml(x.r.mp&&(x.r.mp.pnl_names||x.r.mp.pnl_item),x.r.pr.name)}${thin?` <span class="chip mid" title="มีข้อมูลวันนี้แค่ ${x.n[D]} จุด — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}</td>
-      <td class="n">${fmt(base,2)} <span class="xs mut">· ${x.n[D]} จุด</span></td>
-      <td class="n">${cs?fmt(cs,0):'–'} → <b ${sf!==cs?'style="color:var(--red)"':''}>${sf}</b></td>
-      <td class="n">${cm?fmt(cm,0):'–'} → <b ${mx!==cm?'style="color:var(--red)"':''}>${mx}</b></td>
-      <td class="n xs mut">${sf>cs?'▲':sf<cs?'▼':'='}</td></tr>`;
+      <td>${nm}${thin?` <span class="chip mid" title="มีกลุ่มวันที่ข้อมูลไม่ถึง 2 วัน — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}${neg?` <span class="chip bad" title="${negI.length?esc(negI.map(ivT).join(' · '))+' — บิลยังไม่ลง? (หรือนับ/ผูกพลาด) เช็คก่อนใช้':'ใช้จริงเฉลี่ยติดลบ = บิลยังไม่ลง/นับหรือผูกพลาด — เช็คก่อนใช้'}">ติดลบ</span>`:''}${cens?` <span class="chip mid" title="มี ${x.cens} ช่วงที่ของหมดตอนนับ (กดหมด/นับได้ 0) — ใช้จริงช่วงนั้นต่ำกว่าที่ต้องใช้จริง ไม่เอามาเฉลี่ย (กลุ่มที่มีแต่ช่วงแบบนี้ขึ้น ≥) · เช็คก่อนใช้">เคยของหมด</span>`:''}${miss?` <span class="chip mid" title="${esc(`ช่วง ${thDate(x.miss.Pd)}→${thDate(x.miss.Cd)} ไม่มีบิลของเข้าเลย (ใช้จริง ${fmt(x.miss.use)}) ทั้งที่ปกติมีของเข้าแทบทุกรอบนับ — ไม่เอาช่วงนี้มาเฉลี่ย · ลงบิลแล้วเลขปรับเอง · ถ้าวันนั้นไม่มีของเข้าจริง ติ๊กเองได้`)}">บิลวัน ${thDate(x.miss.Cd)} ยังไม่ลง?</span>`:''}${negI.length?`<div class="xs" style="color:var(--red)">⚠ ${esc(negI.slice(0,2).map(ivT).join(' · '))}${negI.length>2?` (+${negI.length-2} ช่วง)`:''} — บิลยังไม่ลง?</div>`:''}</td>
+      ${R.map(useTd).join('')}${R.map(rateTd).join('')}
+      <td><input type="checkbox" class="autock" data-pid="${esc(x.r.pr.id)}" ${R.map(g=>`data-${g.k}="${g.nu==null?'':g.nu}"`).join(' ')} ${ck?'checked':''} onchange="stkAutoPick(this)"></td></tr>`;
   }).join('');
-  return `<div class="dupbox" style="margin-bottom:10px">🤖 <b>ตั้งค่า safety/max อัตโนมัติ (beta)</b> <span class="xs mut">— คำนวณจากใช้จริงรายวัน${dayN?` (ข้อมูลวัน${TH_D2[D]} ~${dayN} สัปดาห์)`:''} · <b>ไม่เขียนอะไรจนกว่าจะกดยืนยัน</b> · เขียนแล้วโฟลว์สั่งของในแอพนับใช้เลขใหม่ทันที</span></div>
+  return `<div class="dupbox" style="margin-bottom:10px">🤖 <b>ตั้งอัตราใช้อัตโนมัติ (beta)</b> <span class="xs mut">— คำนวณอัตราใช้ต่อวัน (หน่วยนับ) 3 กลุ่มวัน <b>จ–พฤ / ศ / ส–อา</b> จากใช้จริงรายวัน (ถัวตามยอดขายรายวัน) · แอพนับใช้อัตรานี้ร่างสั่งของ + ส่ง LINE ซัพ · วันพิเศษ/วันขายดีตั้งในปฏิทินของแอพนับ · <b>ไม่เขียนอะไรจนกว่าจะกดยืนยัน</b></span></div>
+  ${W.spd.length?`<div class="xs" style="margin-bottom:8px">🎌 <b>ตัดวันพิเศษ ${W.spd.length} วัน</b> <span class="mut">(${W.spd.map(thDate).join(', ')}) — ใช้จริงวันนั้นไม่เอามาเฉลี่ย เพราะแอพนับคิดวันพิเศษตามปฏิทินอยู่แล้ว · อัตราที่ได้ = ของวันปกติ</span></div>`:''}
+  ${(ms=>ms.length?`<div class="xs" style="margin-bottom:8px">⏳ <b>บิลวันนับล่าสุดยังไม่ลง? ${ms.length} ตัว</b> <span class="mut">(${ms.slice(0,6).map(x=>esc(x.r.pr.name)+' '+thDate(x.miss.Cd)).join(', ')}${ms.length>6?` +${ms.length-6} ตัว`:''}) — ปกติมีของเข้าแทบทุกรอบนับ แต่ช่วงล่าสุดไม่มีบิลเลย → ไม่เอาช่วงนั้นมาเฉลี่ย + ไม่ติ๊กให้ · ลงบิลแล้วเลขปรับเอง</span></div>`:'')(W.filter(x=>x.miss))}
+  ${noCol?`<div class="dupbox" style="margin-bottom:10px">⚠ อ่านอัตราเดิม (rate_wk/rate_fri/rate_we) จากแอพนับไม่ได้ — ค่าเดิมจะขึ้น "–"</div>`:''}
   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px" class="xs">
-    <span>ตั้งค่าสำหรับวัน <select onchange="S.autoDay=+this.value;show('actual')" style="width:auto;display:inline-block;padding:6px 10px">${TH_D2.map((d2,i)=>`<option value="${i}" ${i===D?'selected':''}>${d2}</option>`).join('')}</select></span>
-    <span>safety = ใช้เฉลี่ย × <input type="text" inputmode="decimal" value="${S.autoFS}" onchange="S.autoFS=num(this.value)||1.2;show('actual')" style="width:52px;text-align:right;display:inline-block"></span>
-    <span>max = safety × <input type="text" inputmode="decimal" value="${S.autoFM}" onchange="S.autoFM=num(this.value)||2;show('actual')" style="width:52px;text-align:right;display:inline-block"></span>
-    <label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" ${hol?'checked':''} onchange="S.autoHol=this.checked;show('actual')"> วันหยุดพิเศษ ×<input type="text" inputmode="decimal" value="${S.autoHolF}" onchange="S.autoHolF=num(this.value)||1.3;show('actual')" style="width:48px;text-align:right;display:inline-block"></label>
-    <button class="btn sm2" id="autoGoBtn" style="margin-left:auto" onclick="stkAutoWrite()">เขียนค่าที่เลือกเข้าแอพนับ</button>
+    <span>เผื่อ × <input id="autoMul" type="text" inputmode="decimal" value="${mul}" onchange="S.autoMul=num(this.value)||1;show('actual')" style="width:52px;text-align:right;display:inline-block"> <span class="mut">(1 = ตามใช้จริง · 1.1 = เผื่อ 10% ทุกกลุ่ม)</span></span>
+    <button class="btn sm2" id="autoGoBtn" style="margin-left:auto" onclick="stkAutoWrite()">เขียนอัตราที่เลือกเข้าแอพนับ (${nCk})</button>
   </div>
   <div class="twrap"><table>
-    <tr><th></th><th>สินค้า</th><th class="right">ใช้เฉลี่ยวัน${TH_D2[D]}</th><th class="right">safety เดิม → ใหม่</th><th class="right">max เดิม → ใหม่</th><th></th></tr>
+    <tr><th rowspan="2">สินค้า</th><th colspan="3" style="text-align:center">ใช้จริง/วัน (จำนวนวันที่มีข้อมูล)</th><th colspan="3" style="text-align:center">อัตราเดิม → ใหม่</th><th rowspan="2">เลือก</th></tr>
+    <tr>${STK_RG.map(g=>`<th class="right">${g.l}</th>`).join('')}${STK_RG.map(g=>`<th class="right">${g.l}</th>`).join('')}</tr>
     ${rowsH}
   </table></div>
-  <div class="xs mut" style="margin-top:8px">ปัดเลข: ต่ำกว่า 8 ปัดขึ้นจำนวนเต็ม · ตั้งแต่ 8 ปัดขึ้นลงท้าย 0/5 · ตัว "ข้อมูลน้อย" ไม่ติ๊กให้อัตโนมัติ · เฟสถัดไปค่อยให้ระบบเขียนเองทุกเช้า</div>`;
+  <div class="xs mut" style="margin-top:8px">ปัดขึ้น: ต่ำกว่า 10 ทีละ 0.1 · 10–50 ทีละ 0.5 · เกิน 50 เป็นจำนวนเต็ม · กลุ่มที่ยังไม่มีข้อมูล = คงค่าเดิม ไม่เขียนทับ · ตัว "ข้อมูลน้อย" (กลุ่มใดมีไม่ถึง 2 วัน) / "ติดลบ" (เฉลี่ยหรือช่วงใดติดลบชัด) / "เคยของหมด" / "บิลวัน … ยังไม่ลง?" (ปกติมีของเข้า ≥ 2 ใน 3 ของรอบนับ แต่ช่วงล่าสุดไม่มีบิล และใช้จริงไม่ถึงครึ่งของปกติ — ไม่เอาช่วงนั้นมาเฉลี่ย) ไม่ติ๊กให้อัตโนมัติ · ต้นช่วงของหมดและไม่มีของเข้า = ข้ามช่วงนั้น${(n2=>n2?` (${n2} ช่วง)`:'')(W.reduce((t,x)=>t+x.skip,0))} · ติ๊ก/เอาออกเองจำไว้จนเปลี่ยนสาขา/เดือน</div>`;
 }
-function stkAutoCnt(){ const n=document.querySelectorAll('.autock:checked').length; const b=document.getElementById('autoGoBtn'); if(b)b.textContent=`เขียนค่าที่เลือกเข้าแอพนับ (${n})`; }
+function stkAutoPick(c){ (S._autoSel??={})[S.br+'|'+c.dataset.pid]=c.checked; stkAutoCnt(); } // จำการติ๊กเอง (รีเฟรชแล้วไม่เด้งกลับ)
+function stkAutoCnt(){ const n=document.querySelectorAll('.autock:checked').length; const b=document.getElementById('autoGoBtn'); if(b)b.textContent=`เขียนอัตราที่เลือกเข้าแอพนับ (${n})`; }
+async function stkPool(items,n,fn){ // รันพร้อมกันทีละไม่เกิน n งาน · คืน [{ok,v|err}] ตามลำดับเดิม
+  const out=new Array(items.length); let i=0;
+  const worker=async()=>{ while(i<items.length){ const k=i++; try{ out[k]={ok:true,v:await fn(items[k],k)}; }catch(e){ out[k]={ok:false,err:e}; } } };
+  await Promise.all(Array.from({length:Math.min(n,items.length)},worker));
+  return out;
+}
+const STK_RATE_PERM='ยังไม่มีสิทธิ์เขียนอัตราใช้ — ต้องรัน SQL grant update on products (rate_wk, rate_fri, rate_we) ให้ anon ใน Supabase ครั้งเดียวครับ';
 async function stkAutoWrite(){
+  if(S.user&&permOf('actual')!=='edit'){ toast('👁 บัญชีของคุณดูหน้านี้ได้อย่างเดียว — แก้ไขไม่ได้',true); return; }
   const cks=[...document.querySelectorAll('.autock:checked')];
   if(!cks.length){ toast('ยังไม่ได้เลือกสักตัวครับ',true); return; }
-  const rows2=cks.map(c=>({id:c.dataset.pid,safety:num(c.dataset.sf),max:num(c.dataset.mx)}));
-  openModal(`<h3>ยืนยันเขียนค่าเข้าแอพนับสต๊อก</h3>
-    <div style="margin:6px 0 12px">จะอัปเดต <b>safety/max ของ ${rows2.length} สินค้า</b> (สาขา${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}) สำหรับวัน<b>${TH_D2[S.autoDay]}</b> — โฟลว์สั่งของใช้เลขใหม่ทันที ค่าเดิมถูกทับ</div>
+  const rows2=cks.map(c=>{ const body={}; STK_RG.forEach(g=>{ const v=c.dataset[g.k]; if(v!==undefined&&v!=='') body[g.f]=num(v); }); return {id:c.dataset.pid,body}; })
+    .filter(x=>Object.keys(x.body).length);
+  if(!rows2.length){ toast('ตัวที่เลือกยังไม่มีข้อมูลใช้จริงสักกลุ่มวันครับ',true); return; }
+  const li=rows2.map(x=>{ const w2=(S._auto||[]).find(y=>String(y.r.pr.id)===x.id), pr=w2?w2.r.pr:{};
+    return `<div><b>${esc(pr.name||x.id)}</b> <span class="mut">${STK_RG.filter(g=>g.f in x.body).map(g=>`${g.l} ${pr[g.f]==null||pr[g.f]===''?'–':fmt(num(pr[g.f]))} → <b>${fmt(x.body[g.f])}</b>`).join(' · ')}</span></div>`; }).join('');
+  openModal(`<h3>ยืนยันเขียนอัตราใช้เข้าแอพนับสต๊อก</h3>
+    <div style="margin:6px 0 8px">จะอัปเดต <b>อัตราใช้ต่อวัน จ–พฤ / ศ / ส–อา ของ ${rows2.length} สินค้า</b> (สาขา${S.br==='JJRD'?'รัชดา':'ลาดพร้าว'}) — ร่างสั่งของในแอพนับใช้อัตราใหม่ทันที ค่าเดิมถูกทับ · กลุ่มวันที่ยังไม่มีข้อมูลคงค่าเดิม</div>
+    <div class="xs" style="max-height:40vh;overflow:auto;margin:0 0 12px;line-height:1.7">${li}</div>
     <div style="display:flex;gap:8px"><button class="btn gh sm2" onclick="closeModal()">ยกเลิก</button>
     <button class="btn sm2" id="autoOkBtn" style="margin-left:auto" onclick="stkAutoWrite2()">✅ ยืนยันเขียน ${rows2.length} ตัว</button></div>`);
   S._autoRows=rows2;
 }
 async function stkAutoWrite2(){
-  const rows2=S._autoRows||[]; closeModal();
-  try{
-    await ups('products',rows2,'id');
-    const st=S._stk; rows2.forEach(x=>{ const pr2=st&&st.prods.find(pp=>pp.id===x.id); if(pr2){pr2.safety=x.safety;pr2.max=x.max;} });
-    toast(`✅ เขียน safety/max ${rows2.length} ตัวเข้าแอพนับแล้ว`);
-    show('actual');
-  }catch(e){
-    const m2=String(e.message||'');
-    toast(m2.includes('permission')||m2.includes('42501')?'ยังไม่มีสิทธิ์เขียน — รัน jjmk_pnl_stockwrite.sql ใน Supabase ครั้งเดียวครับ':'เขียนไม่สำเร็จ: '+m2,true);
-  }
+  const rows2=S._autoRows||[]; S._autoRows=null; closeModal();
+  if(!rows2.length) return;
+  // PATCH ทีละสินค้า (anon ไม่มีสิทธิ์ INSERT products → ห้าม upsert) · select=id ไว้จับกรณี RLS ไม่ให้แก้ (ได้ 0 แถว)
+  const res=await stkPool(rows2,6,x=>api('PATCH','products?id=eq.'+encodeURIComponent(x.id)+'&select=id',x.body,'return=representation',true)
+    .then(r=>{ if(Array.isArray(r)&&!r.length) throw new Error('no-row (RLS/ไม่พบสินค้า)'); return r; }));
+  const st=S._stk; let ok=0, perm=0; const errs=[];
+  res.forEach((r,i)=>{
+    const x=rows2[i];
+    if(r.ok){ ok++; const pr2=st&&(st.prods||[]).find(pp=>pp.id===x.id); if(pr2) Object.assign(pr2,x.body); if(S._autoSel) delete S._autoSel[S.br+'|'+x.id]; return; } // เขียนแล้ว = ล้างที่ติ๊กเองของตัวนั้น
+    const m2=String((r.err&&r.err.message)||r.err||'');
+    if(/permission|42501|401|403|no-row/i.test(m2)) perm++;
+    errs.push(m2);
+  });
+  const bad=rows2.length-ok;
+  if(!bad) toast(`✅ เขียนอัตราใช้ จ–พฤ/ศ/ส–อา ${ok} ตัวเข้าแอพนับแล้ว`);
+  else if(!ok&&perm===bad) toast(STK_RATE_PERM,true);
+  else toast(`เขียนสำเร็จ ${ok} ตัว · ไม่สำเร็จ ${bad} ตัว — `+(perm?STK_RATE_PERM:'เขียนไม่สำเร็จ: '+(errs[0]||'').slice(0,120)),true);
+  show('actual');
 }
 function stkViewSet(v){ S.stkView=v; LS.set('jj_stkview',v); show('actual'); }
 function stkDayStep(dir){
