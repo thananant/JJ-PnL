@@ -3295,7 +3295,7 @@ async function brLoadBranch(code,today){
       (recv[r.product_id]=recv[r.product_id]||{})[String(r.order_date).slice(0,10)]=q;});
   }
   // ซัพโหมด interval (สั่งทุก N วัน): วันสั่งล่าสุดของสาขานี้ต่อซัพ — order_date < cd (ใบที่สั่งวันนี้ไม่เลื่อนรอบของวันนี้) ย้อน 120 วัน
-  // กรองเฉพาะชื่อซัพ interval ที่สินค้าของสาขานี้ใช้ (แถวน้อย) · อ่านไม่ได้ = ถือว่ายังไม่เคยสั่ง (ครบรอบ)
+  // กรองเฉพาะชื่อซัพ interval ที่สินค้าของสาขานี้ใช้ (แถวน้อย) · อ่านไม่ได้ = ถือว่ายังไม่เคยสั่ง (ครบรอบ) · ใบที่ยกเลิกส่ง (ordered=0) ไม่นับ
   const last={};
   if(cd){
     const names=new Set();
@@ -3303,7 +3303,7 @@ async function brLoadBranch(code,today){
       [p.sup,String(p.sup||'').trim(),x.name,String(x.name||'').trim()].forEach(n=>{if(n)names.add(n);});});
     if(names.size){
       const lr=await sbAll(()=>sb.from('stock_receipts').select('sup,order_date')
-        .eq('branch_id',bid).in('sup',[...names]).gte('order_date',brAddDays(cd,-120)).lt('order_date',cd)
+        .eq('branch_id',bid).in('sup',[...names]).gt('ordered',0).gte('order_date',brAddDays(cd,-120)).lt('order_date',cd)
         .order('order_date',{ascending:false})).catch(()=>[]);
       lr.forEach(r=>{const k=brSupKey(r.sup),d=String(r.order_date||'').slice(0,10);
         if(k&&d&&d<cd&&(!last[k]||d>last[k]))last[k]=d;});

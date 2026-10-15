@@ -33,7 +33,7 @@ function mkDB(opt){
     products:[P('rA',RD,'IV3',1),P('rB',RD,'IV15',2),P('rC',RD,'ANY',3),P('rD',RD,'FIX',4),
               P('lA',LP,'IV3',1),P('lB',LP,'IV15',2),P('lC',LP,'ANY',3),P('lD',LP,'FIX',4)],
     stock_counts:[C('rA',RD,4),C('rB',RD,0),C('rC',RD,1),C('rD',RD,0),C('lA',LP,4),C('lB',LP,0),C('lC',LP,1),C('lD',LP,0)],
-    stock_receipts:[R('rA',RD,'IV3','2026-10-13',6),R('rB',RD,'IV15','2026-06-01',9),R('rC',RD,'ANY','2026-10-14',3),
+    stock_receipts:[R('rA',RD,'IV3','2026-10-13',6),R('rA',RD,'IV3','2026-10-14',0),R('rB',RD,'IV15','2026-06-01',9),R('rC',RD,'ANY','2026-10-14',3),
                     R('lA',LP,'IV3','2026-10-12',5),R('lA',LP,'IV3','2026-10-15',7),R('lB',LP,'IV15','2026-10-01',9)],
     ck_settings:[],ck_br_needs:[],cal_special_days:[]};
 }
@@ -116,7 +116,7 @@ const row=(P,id)=>P.rows.find(x=>x.p.id===id);
   out.push('กรองเฉพาะซัพ interval (IV3, IV15 — ไม่มี ANY/FIX): '+(inl.includes('IV3')&&inl.includes('IV15')&&!inl.includes('ANY')&&!inl.includes('FIX')));
   const rq=calls.find(c=>c.t==='stock_receipts'&&c.cols==='product_id,order_date,ordered'&&c.q.includes('eq.branch_id='+RD));
   out.push('ของกำลังมายังอ่านช่วงเดิม 10 วัน (10-05..10-15): '+(!!rq&&rq.q.includes('gte.order_date=2026-10-05')&&rq.q.includes('lte.order_date=2026-10-15')));
-  out.push('วันสั่งล่าสุด JJRD: IV3 = 10-13 · IV15 ไม่มี (ใบ 06-01 เกิน 120 วัน): '+(RDb.last.iv3==='2026-10-13'&&!RDb.last.iv15));
+  out.push('วันสั่งล่าสุด JJRD: IV3 = 10-13 (ใบยกเลิกส่ง 10-14 ordered=0 ไม่นับ) · IV15 ไม่มี (ใบ 06-01 เกิน 120 วัน): '+(RDb.last.iv3==='2026-10-13'&&!RDb.last.iv15));
   out.push('วันสั่งล่าสุด JJLP: IV3 = 10-12 (ใบของวันขาย 10-15 ไม่นับ) · IV15 = 10-01: '+(LPb.last.iv3==='2026-10-12'&&LPb.last.iv15==='2026-10-01'));
 
   // 2) ตัวเลข JJRD

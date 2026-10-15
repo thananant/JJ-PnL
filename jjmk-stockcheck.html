@@ -1089,8 +1089,8 @@ async function loadAll(){
     // 🎌 วันขายดีจากปฏิทิน (cal_special_days) — ยังไม่รัน SQL / อ่านไม่ได้ = ไม่มีวันพิเศษ ตัวเลขเหมือนเดิม
     selAll('cal_special_days?select=id,name,day_from,day_to,order_rate_group,order_branches,cancelled&cancelled=eq.false'
       +'&order_rate_group=not.is.null&day_to=gte.'+addDays(cd,-12)+'&day_from=lte.'+addDays(cd,50)).catch(()=>[]),
-    // 🔁 ซัพ "สั่งทุก N วัน": วันที่ส่งใบสั่งล่าสุดของสาขานี้ (ย้อน 120 วัน) — นับรอบต่อสาขา
-    selAll('stock_receipts?select=sup,order_date&branch_id=eq.'+bid
+    // 🔁 ซัพ "สั่งทุก N วัน": วันที่ส่งใบสั่งล่าสุดของสาขานี้ (ย้อน 120 วัน) — นับรอบต่อสาขา · ใบที่ยกเลิกส่ง (ordered=0) ไม่นับ
+    selAll('stock_receipts?select=sup,order_date&branch_id=eq.'+bid+'&ordered=gt.0'
       +'&order_date=gte.'+addDays(cd,-120)+'&order_date=lte.'+cd+'&order=order_date').catch(()=>[]),
     // 🌏 คำแปลชื่อสินค้าที่ตั้งไว้ในแอพนับเดิม (products.i18n — คนแก้มือ) ชนะคำแปลกูเกิล · ไม่มีคอลัมน์/อ่านไม่ได้ = ใช้กูเกิลเหมือนเดิม
     selAll('products?select=name,i18n&deleted_at=is.null&i18n=not.is.null&branch_id=eq.'+bid).catch(()=>[])

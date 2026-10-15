@@ -23,7 +23,8 @@ const RECEIPTS=[ // stock_receipts ของสาขานี้
   {sup:'Freshy Syrup',order_date:'2026-10-01',product_id:'p1',ordered:12},
   {sup:'Freshy Syrup',order_date:'2026-10-08',product_id:'p1',ordered:14},
   {sup:'Freshy Syrup',order_date:'2026-10-15',product_id:'p1',ordered:9},   // ส่งไปแล้ววันนี้ — ต้องไม่ทำให้รอบเลื่อน
-  {sup:'หจก.รักษ์ข้าว',order_date:'2026-10-05',product_id:'p2',ordered:60}];
+  {sup:'หจก.รักษ์ข้าว',order_date:'2026-10-05',product_id:'p2',ordered:60},
+  {sup:'หจก.รักษ์ข้าว',order_date:'2026-10-10',product_id:'p2',ordered:0}];  // ยกเลิกส่ง — ต้องไม่นับเป็นใบสั่งล่าสุด
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
     w.fetch=async(url,opt)=>{
@@ -43,7 +44,7 @@ const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
       if(url.includes('suppliers'))return T(SUPS);
       if(url.includes('stock_receipts')){
         const lo=(url.match(/order_date=gte\.([0-9-]+)/)||[])[1]||'0000', hi=(url.match(/order_date=lte\.([0-9-]+)/)||[])[1]||'9999';
-        return T(RECEIPTS.filter(r=>r.order_date>=lo&&r.order_date<=hi));
+        return T(RECEIPTS.filter(r=>r.order_date>=lo&&r.order_date<=hi&&(!url.includes('ordered=gt.0')||r.ordered>0)));
       }
       if(url.includes('stock_counts')&&method==='GET'){ const cd=decodeURIComponent((url.match(/count_date=eq\.([^&]+)/)||[])[1]||'');
         return T([{product_id:'p1',qty:10,out_of_stock:false,created_at:cd+'T10:00:00Z'},{product_id:'p2',qty:20,out_of_stock:false,created_at:cd+'T10:00:00Z'},
