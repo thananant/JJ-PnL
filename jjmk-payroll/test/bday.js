@@ -4,17 +4,19 @@ const fs=require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
 const html=fs.readFileSync(__dirname+'/../../jjmk-payroll.html','utf8').replace(/<script src="[^"]+"><\/script>/g,'').replace(/<link[^>]+>/g,'');
 const vc=new VirtualConsole(); const errs=[]; vc.on('jsdomError',e=>errs.push(e.message));
-const writes=[], rpcs=[], fetches=[];
+const writes=[], rpcs=[], fetches=[], channels=[];
 const TABLES={ line_groups:[], payroll_line_log:[] };
 const RPC={};
-function chain(table){ let op='select', row=null; const b={};
-  for(const m of ['select','eq','neq','gte','lte','lt','gt','in','is','not','or','order','limit','range','single','maybeSingle','on','subscribe']) b[m]=()=>b;
+function chain(table){ let op='select', row=null, one=false; const b={};
+  for(const m of ['select','eq','neq','gte','lte','lt','gt','in','is','not','or','order','limit','range','on','subscribe']) b[m]=()=>b;
+  for(const m of ['single','maybeSingle']) b[m]=()=>{ one=true; return b; };
   for(const m of ['insert','update','upsert','delete']) b[m]=(r)=>{ op=m; row=r; return b; };
   b.then=(ok,er)=>{ if(op!=='select') writes.push({table,op,row});
-    return Promise.resolve({data: op==='select' ? (TABLES[table]||[]) : [], error:null}).then(ok,er); };
+    const arr=op==='select' ? (TABLES[table]||[]) : [];
+    return Promise.resolve({data: one ? (arr[0]||null) : arr, error:null}).then(ok,er); };
   return b; }
 const dom=new JSDOM(html,{url:'https://thananant.github.io/JJ-PnL/jjmk-payroll.html',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,
-  beforeParse(w){ w.supabase={createClient:()=>({from:t=>chain(t),channel:()=>chain('ch'),removeChannel(){},storage:{from:()=>({})},
+  beforeParse(w){ w.supabase={createClient:()=>({from:t=>chain(t),channel:n=>{ channels.push(n); return chain('ch'); },removeChannel(){},storage:{from:()=>({})},
       rpc:(fn,args)=>{ rpcs.push({fn,args}); return Promise.resolve(RPC[fn] ? RPC[fn](args) : {data:null,error:{message:'function '+fn+' does not exist'}}); } })};
     w.TextEncoder=require('util').TextEncoder; w.alert=()=>{}; w.confirm=()=>true; w.indexedDB=undefined; w.scrollTo=()=>{};
     w.fetch=async (url,opts)=>{ fetches.push({url,opts}); const r=w.__fetchRes||{status:200,body:{ok:true}};
@@ -31,16 +33,22 @@ setTimeout(async ()=>{ try{
   E(`bdayCfg=null; go('settings')`); await tick();
   ok($('bdaySqlBox') && /payroll_line_tick/.test($('bdaySqlBox').value) && /คัดลอก SQL \(jj_birthday_line\.sql\)/.test($('bdayBody').textContent),'ไม่มีช่อง bday_line = บอกให้รัน SQL + ปุ่มคัดลอก');
   await w.eval(`saveBday()`); ok(!writes.length && toasts.some(t=>/jj_birthday_line\.sql/.test(t)),'ยังไม่รัน SQL = บันทึกไม่ได้ (ไม่แกล้งทำเป็นบันทึก)');
+  channels.length=0; E(`startRealtime()`);
+  ok(channels.join()==='jjmk-live','ยังไม่รัน SQL = ไม่เปิดช่อง realtime ของวันเกิด (ไม่ทำให้ sync สดหลักหลุด)');
+  const liveSrc=E(`startRealtime.toString()`);
+  ok(!/payroll_line_log/.test(liveSrc.slice(0, liveSrc.indexOf('bdayRealtime()'))),'ช่องหลัก jjmk-live ไม่มีตาราง payroll_line_log');
   console.log('[ค่าตั้ง + กลุ่มไลน์]');
   TABLES.line_groups=[{group_id:G1,name:'ซัพผักสด'},{group_id:G2,name:'JJ Daily Report'}];
   E(`bdayCfg={}; go('settings')`); await tick();
   const sel=$('bdGroup');
   ok(sel && [...sel.options].map(o=>o.value).join()===['',G1,G2,'__manual'].join(),'ตัวเลือก: ไม่ส่ง + กลุ่มจาก line_groups + ใส่ไอดีเอง');
   ok($('bdMonth').checked && !$('bdDay').checked && $('bdMonthAt').value==='09:00','ค่าตั้งต้น: รายเดือนเปิด 09:00 · เช้าวันเกิดปิด');
+  ok(channels.filter(n=>n==='jjmk-bday').length===1,'รัน SQL แล้ว = เปิดช่อง jjmk-bday แยกต่างหาก (ครั้งเดียว)');
+  E(`renderBday()`); await tick(); ok(channels.filter(n=>n==='jjmk-bday').length===1,'วาดซ้ำ = ไม่เปิดช่องซ้ำ');
   ok(/กลุ่มที่น่าจะใช่: JJ Daily Report/.test($('bdayBody').textContent),'แนะนำกลุ่มที่ชื่อเหมือน daily report (ไม่เลือกให้เอง)');
-  ok(sel.value==='','ยังไม่เลือกกลุ่มให้เอง');
+  ok($('bdGroup').value==='','ยังไม่เลือกกลุ่มให้เอง');
   [...$('bdayBody').querySelectorAll('button')].find(b=>/ใช้กลุ่มนี้/.test(b.textContent)).click();
-  ok(sel.value===G2 && !writes.length,'กด "ใช้กลุ่มนี้" = เลือกในช่อง ยังไม่บันทึก');
+  ok($('bdGroup').value===G2 && !writes.length,'กด "ใช้กลุ่มนี้" = เลือกในช่อง ยังไม่บันทึก');
   $('bdDay').checked=true; $('bdDayAt').value='08:30';
   toasts=[]; writes.length=0; await w.eval(`saveBday()`); await tick();
   let up=writes.find(x=>x.table==='payroll_settings'&&x.op==='update');
@@ -53,6 +61,30 @@ setTimeout(async ()=>{ try{
   ok(up && up.row.bday_line.since===c1.since && up.row.bday_line.month_at==='07:05','บันทึกซ้ำ: since เดิม (ไม่เลื่อน) · เวลาใหม่ 07:05');
   E(`bdayCfg=Object.assign({},bdayCfg,{month_at:'7:05',day_at:'25:00'}); renderBday()`); await tick();
   ok($('bdMonthAt').value==='07:05' && $('bdDayAt').value==='09:00','ค่าเก่า "7:05" เติม 0 ให้ · ค่าเพี้ยน (25:00) ใช้ค่าตั้งต้น');
+  ok($('bdDayAt').getAttribute('max')==='23:30','ช่องเวลาตั้งได้ถึง 23:30');
+  $('bdDayAt').value='23:55'; writes.length=0; await w.eval(`saveBday()`); await tick();
+  ok(writes.find(x=>x.table==='payroll_settings').row.bday_line.day_at==='23:30','ตั้งเกิน 23:30 = บันทึก 23:30 (ฐานข้อมูลก็ตัดที่ 23:30)');
+  console.log('[กลุ่มแปลก ๆ จาก line_groups]');
+  const EVIL="x');window.__pwn=1;('";
+  TABLES.line_groups=[{group_id:G1,name:'ซัพผักสด'},{group_id:EVIL,name:'Daily Report (ปลอม)'},{group_id:G2,name:'JJ Daily Report'}];
+  E(`bdayCfg=Object.assign({},bdayCfg,{group:''}); renderBday()`); await tick();
+  ok(![...$('bdGroup').options].some(o=>o.value===EVIL) && /JJ Daily Report/.test($('bdayBody').querySelector('.bd-hint').textContent),'ไอดีกลุ่มผิดรูปแบบ = ไม่ขึ้นในตัวเลือก/คำแนะนำ');
+  const hb=[...$('bdayBody').querySelectorAll('button')].find(b=>/ใช้กลุ่มนี้/.test(b.textContent));
+  ok(hb.getAttribute('onclick')==='bdayUseHint(this.dataset.gid)' && hb.dataset.gid===G2,'ปุ่มใช้กลุ่มนี้ส่งไอดีทาง data-gid (ไม่ต่อสตริง JS)');
+  hb.click(); ok(!w.__pwn && $('bdGroup').value===G2,'กดแล้วไม่มีโค้ดแปลกปลอมทำงาน');
+  E(`bdayUseHint("${EVIL.replace(/"/g,'\\"')}")`); ok($('bdGroup').value===G2,'bdayUseHint รับเฉพาะไอดีรูปแบบถูกต้อง');
+  TABLES.line_groups=[{group_id:G1,name:'ซัพผักสด'},{group_id:G2,name:'JJ Daily Report'}];
+  E(`bdayCfg=Object.assign({},bdayCfg,{group:'${G2}'}); renderBday()`); await tick();
+  console.log('[อ่านค่าล่าสุดก่อนวาด/ก่อนบันทึก]');
+  TABLES.payroll_settings=[{id:1,bday_line:{group:G1,month:true,since:'2026-10-01T00:00:00Z'}}];
+  E(`renderBday()`); await tick();
+  ok($('bdGroup').value===G1,'วาดการ์ด = อ่านค่าล่าสุดจากฐานข้อมูล (อีกเครื่องเพิ่งเปลี่ยนกลุ่ม)');
+  TABLES.payroll_settings=[{id:1,bday_line:{group:G2,month:true,since:'2026-10-01T00:00:00Z'}}];
+  $('bdDay').checked=true; writes.length=0; toasts=[]; await w.eval(`saveBday()`); await tick();
+  ok(!writes.some(x=>x.table==='payroll_settings') && toasts.some(t=>/มีคนเพิ่งแก้/.test(t)) && $('bdGroup').value===G2 && !$('bdDay').checked,'อีกเครื่องแก้ระหว่างเปิดการ์ด = ไม่บันทึกทับ · โหลดค่าล่าสุดให้');
+  writes.length=0; await w.eval(`saveBday()`); await tick();
+  ok(writes.some(x=>x.table==='payroll_settings' && x.row.bday_line.group===G2 && x.row.bday_line.since==='2026-10-01T00:00:00Z'),'กดบันทึกอีกครั้ง (ค่าไม่เปลี่ยนแล้ว) = บันทึกได้ · since เดิม');
+  delete TABLES.payroll_settings;
   console.log('[ใส่ไอดีกลุ่มเอง]');
   $('bdGroup').value='__manual'; E(`bdayGroupChanged()`);
   ok($('bdGroupId').style.display==='','เลือก ✏️ = ช่องใส่ไอดีโผล่');
@@ -104,15 +136,21 @@ setTimeout(async ()=>{ try{
   await w.eval(`bdaySend(document.getElementById('bdSendBtn'))`);
   ok(!fetches.length && toasts.some(t=>/เลือกกลุ่มไลน์ก่อน/.test(t)),'ยังไม่เลือกกลุ่ม = ไม่ส่ง');
   console.log('[ผลการส่ง]');
+  const nowIso=new Date().toISOString(), oldIso=new Date(Date.now()-3600e3).toISOString();
   TABLES.payroll_line_log=[
     {kind:'bday_month',period_key:'2026-10',ok:true,tries:1,sent_at:'2026-10-01T02:00:05Z'},
     {kind:'bday_day',period_key:'2026-10-15',ok:false,tries:3,detail:'HTTP 400 {"error":"bot not in group"}',sent_at:'2026-10-15T02:20:00Z'},
-    {kind:'bday_month',period_key:'2026-11',ok:null,tries:1,sent_at:'2026-11-01T02:00:05Z'}];
+    {kind:'bday_month',period_key:'2026-11',ok:null,tries:1,sent_at:nowIso},
+    {kind:'bday_month',period_key:'2026-09',ok:null,tries:1,sent_at:oldIso},
+    {kind:'bday_day',period_key:'2020-01-05',ok:false,tries:1,detail:'HTTP 502',sent_at:'2020-01-05T02:00:00Z'},
+    {kind:'bday_day',period_key:'2999-01-05',ok:false,tries:1,detail:'HTTP 503',sent_at:'2999-01-05T02:00:00Z'}];
   E(`renderBday()`); await tick();
   const lg=$('bdLog').textContent;
-  ok(/รายชื่อเดือนตุลาคม 2569 · ✅ ส่งแล้ว/.test(lg) && /เช้าวันเกิด .*❌ ส่งไม่สำเร็จ/.test(lg) && /bot not in group/.test(lg) && /ลองครบ 3 ครั้ง/.test(lg) && /⏳/.test(lg),'แสดงผล ✅ / ❌ (+เหตุผล · ลองครบแล้ว) / ⏳');
+  ok(/รายชื่อเดือนตุลาคม 2569 · ✅ ส่งแล้ว/.test(lg) && /เช้าวันเกิด .*❌ ส่งไม่สำเร็จ/.test(lg) && /bot not in group/.test(lg) && /ลองครบ 3 ครั้ง/.test(lg) && /พฤศจิกายน 2569 · ⏳ ส่งแล้ว รอผล/.test(lg),'แสดงผล ✅ / ❌ (+เหตุผล · ลองครบแล้ว) / ⏳');
+  ok(/กันยายน 2569 · ❔ ส่งแล้ว ไม่ทราบผล/.test(lg),'รอผลเกิน 30 นาที = ❔ ไม่ทราบผล (ให้ดูในกลุ่ม)');
+  ok(/HTTP 502 · เลยช่วงส่งแล้ว/.test(lg) && /HTTP 503 · ระบบจะลองใหม่ให้เอง/.test(lg),'ไม่สำเร็จ: เลยช่วงลองใหม่แล้ว = บอกให้กดส่งเอง · ยังทัน = ระบบลองให้');
   TABLES.payroll_line_log=[]; E(`renderBday()`); await tick();
-  ok(/ยังไม่เคยส่ง — รอบถัดไป (วันนี้|วันที่ 1 เดือนหน้า) เวลา 07:05 น\./.test($('bdLog').textContent),'ยังไม่เคยส่ง = บอกว่ารอบถัดไปเมื่อไร');
+  ok(/ยังไม่เคยส่ง — รอบถัดไป (วันนี้|วันที่ 1 เดือนหน้า) เวลา [0-2][0-9]:[0-5][0-9] น\./.test($('bdLog').textContent),'ยังไม่เคยส่ง = บอกว่ารอบถัดไปเมื่อไร');
   console.log('[สิทธิ์]');
   E(`applyUser({role:'staff',apps:{payroll:{settings:'v'}}}); renderBday()`); await tick();
   ok($('bdGroup').disabled && $('bdMonth').disabled && !$('bdSendBtn') && !/💾 บันทึก/.test($('bdayBody').textContent) && /ดูได้อย่างเดียว/.test($('bdayBody').textContent),'ไม่มีสิทธิ์แก้หน้าตั้งค่า = ดูอย่างเดียว ไม่มีปุ่มส่ง/บันทึก');
