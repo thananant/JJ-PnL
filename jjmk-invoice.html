@@ -504,6 +504,109 @@ window.JJGate=(function(){
   window.JJLogin=JJLogin;
 })();
 </script>
+<!-- JJBR-BEGIN ทะเบียนสาขากลาง · บล็อกนี้ต้องเหมือนกันทุกไฟล์ทุกตัวอักษร (แก้ที่ไฟล์ใดไฟล์หนึ่งแล้ว sync ด้วยสคริปต์) -->
+<script>
+/* JJBR — ทะเบียนสาขากลาง (ตาราง pnl_branches) ใช้ร่วมทุกแอพ (เจ้าของสั่ง 2026-10-15: "เพิ่มสาขาใหม่ ให้เพิ่มไปในทุกระบบเลย แบบปุ่มเดียว")
+   · สาขาหน้าร้านมาจากตาราง pnl_branches (ปุ่ม 🏪 เปิดสาขาใหม่ ใน JJ Access เพิ่มให้) · ครัวกลาง JJCK / ออฟฟิศ OFFICE เป็นหน่วยงานคงที่
+   · ไม่ต้องรอเน็ต: เริ่มจากแคชในเครื่อง (localStorage.jjbr_cache) → ไม่มีแคช = JJRD/JJLP · JJBR.load() อ่านของจริงแล้วแจ้ง onChange
+   · ออฟฟิศ: บัญชี/สิทธิ์ใช้ OFFICE · P&L ใช้ JJOF → JJBR.canon('JJOF')='OFFICE' · JJBR.pnl('OFFICE')='JJOF'
+   · แอพเดิมยังใช้ชื่อ/สีของตัวเองกับสาขาเดิมได้ — ใช้ JJBR.extra(รหัสที่แอพรู้จักแล้ว) เติมเฉพาะสาขาที่แอพยังไม่รู้จัก */
+(function(){
+  var VER='2026-10-15.1', CK='jjbr_cache', MAXAGE=90*864e5;
+  var BASE=[
+    {code:'JJRD',name:'สาขารัชดา',short:'รัชดา',kind:'store',sort:1,stk_id:'b19f0a17b4472'},
+    {code:'JJLP',name:'สาขาลาดพร้าว',short:'ลาดพร้าว',kind:'store',sort:2,stk_id:'b19f0a17b448212'}];
+  var UNITS=[
+    {code:'JJCK',name:'ครัวกลาง',short:'ครัวกลาง',kind:'kitchen',sort:900},
+    {code:'OFFICE',name:'ออฟฟิศ',short:'ออฟฟิศ',kind:'office',sort:901}];
+  var STK={JJRD:'b19f0a17b4472',JJLP:'b19f0a17b448212'};
+  var PALETTE=['#2E8B57','#8E44AD','#D35400','#16A085','#2C3E50','#B7950B','#C0392B','#1F618D'];
+  function s(v,n){ return v==null?'':String(v).trim().slice(0,n||80); }
+  function norm(r){
+    if(!r||typeof r!=='object')return null;
+    var code=s(r.code,12).toUpperCase();
+    if(!/^[A-Z][A-Z0-9_]{1,11}$/.test(code))return null;
+    var kind=r.kind==='store'||r.kind==='office'||r.kind==='kitchen'?r.kind:
+      (code==='JJOF'||code==='OFFICE'?'office':code==='JJCK'?'kitchen':r.is_central?'office':'store');
+    var name=s(r.name||r.display_name,60)||code;
+    var short=s(r.short,30)||name.replace(/^สาขา\s*/,'')||code;
+    return {code:code,name:name,short:short,kind:kind,sort:isFinite(+r.sort)?+r.sort:0,
+      stk_id:s(r.stk_id,40)||STK[code]||'',color:/^#[0-9A-Fa-f]{6}$/.test(s(r.color))?s(r.color):'',
+      active:r.active!==false,is_central:kind!=='store',tax_branch:/^[0-9]{5}$/.test(s(r.tax_branch))?s(r.tax_branch):'',
+      addr:s(r.addr,300),opened_on:/^\d{4}-\d{2}-\d{2}/.test(s(r.opened_on))?s(r.opened_on).slice(0,10):''};
+  }
+  function clean(arr){
+    var out=[],seen={};
+    (Array.isArray(arr)?arr:[]).forEach(function(r){ var x=norm(r); if(x&&!seen[x.code]){seen[x.code]=1;out.push(x);} });
+    return out;
+  }
+  function bySort(a,b){ return (a.sort-b.sort)||(a.code<b.code?-1:a.code>b.code?1:0); }
+  var J={VER:VER,rows:clean(BASE),src:'base',cols:false,at:0,_cb:[],_p:null};
+  try{
+    var c=JSON.parse(localStorage.getItem(CK)||'null');
+    if(c&&Array.isArray(c.rows)&&c.rows.length&&Date.now()-(+c.t||0)<MAXAGE){ J.rows=clean(c.rows); J.src='cache'; J.cols=!!c.cols; J.at=+c.t||0; }
+  }catch(e){}
+  /* สาขาหน้าร้านที่เปิดอยู่ (เรียงตาม sort แล้วรหัส) */
+  J.stores=function(all){ return J.rows.filter(function(r){ return r.kind==='store'&&(all||r.active); }).sort(bySort); };
+  J.storeCodes=function(all){ return J.stores(all).map(function(r){ return r.code; }); };
+  /* สาขาหน้าร้าน + ครัวกลาง + ออฟฟิศ (ตัวเลือก "ประจำที่"/สิทธิ์รายสาขา) — ใช้รหัส OFFICE ไม่ใช่ JJOF */
+  J.units=function(){ return J.stores().concat(UNITS.map(function(u){ var r=J.get(u.code); return r&&r.kind===u.kind?Object.assign({},u,{name:r.name||u.name,short:r.short||u.short}):u; })); };
+  J.unitCodes=function(){ return J.units().map(function(r){ return r.code; }); };
+  J.canon=function(c){ c=s(c,12).toUpperCase(); return c==='JJOF'?'OFFICE':c; };
+  J.pnl=function(c){ c=s(c,12).toUpperCase(); return c==='OFFICE'?'JJOF':c; };
+  J.get=function(c){
+    c=s(c,12).toUpperCase(); if(!c)return null;
+    var r=null,i;
+    for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===c){ r=J.rows[i]; break; } }
+    if(!r&&(c==='OFFICE'||c==='JJOF')){ for(i=0;i<J.rows.length;i++){ if(J.rows[i].code===(c==='OFFICE'?'JJOF':'OFFICE')){ r=J.rows[i]; break; } } }
+    if(!r){ for(i=0;i<UNITS.length;i++){ if(UNITS[i].code===J.canon(c)){ r=UNITS[i]; break; } } }
+    return r;
+  };
+  J.known=function(c){ return !!J.get(c); };
+  J.isStore=function(c){ var r=J.get(c); return !!(r&&r.kind==='store'); };
+  J.name=function(c,fb){ var r=J.get(c); return r?r.name:(fb!=null?fb:s(c)); };
+  J.short=function(c,fb){ var r=J.get(c); return r?r.short:(fb!=null?fb:s(c)); };
+  J.stk=function(c){ var r=J.get(c); return (r&&r.stk_id)||STK[s(c,12).toUpperCase()]||''; };
+  J.byStk=function(id){ id=s(id,40); if(!id)return null; for(var i=0;i<J.rows.length;i++){ if(J.rows[i].stk_id===id)return J.rows[i]; } for(var k in STK){ if(STK[k]===id)return J.get(k); } return null; };
+  J.color=function(c,i){ var r=J.get(c); if(r&&r.color)return r.color; var st=J.storeCodes(true),k=st.indexOf(s(c,12).toUpperCase()); return PALETTE[(k<0?(i||0):k)%PALETTE.length]; };
+  /* สาขาหน้าร้านที่แอพยังไม่รู้จัก (known = รายการรหัส หรือ object ที่มีรหัสเป็น key) */
+  J.extra=function(known){
+    var have={}; (Array.isArray(known)?known:Object.keys(known||{})).forEach(function(k){ have[s(k,12).toUpperCase()]=1; });
+    return J.stores().filter(function(r){ return !have[r.code]; });
+  };
+  /* รหัสสาขาใหม่ที่ใช้ได้: อังกฤษพิมพ์ใหญ่ล้วน 2–8 ตัว (ใช้เป็นตัวหน้าเลขใบกำกับภาษีด้วย) */
+  J.codeOk=function(c){ return /^[A-Z]{2,8}$/.test(s(c,12)); };
+  J.onChange=function(fn){ if(typeof fn==='function')J._cb.push(fn); };
+  /* อ่านทะเบียนจริง (ไม่ throw) — url/key ของ Supabase · opts.force = อ่านใหม่แม้เพิ่งอ่าน · คืน rows */
+  J.load=function(url,key,opts){
+    opts=opts||{};
+    if(J._p&&!opts.force)return J._p;
+    if(J.src==='db'&&!opts.force&&Date.now()-J.at<60000)return Promise.resolve(J.rows);
+    url=s(url,300).replace(/\/+$/,''); key=s(key,500);
+    if(!url||!key||typeof fetch!=='function')return Promise.resolve(J.rows);
+    var get=function(q){
+      var ac=typeof AbortController==='function'?new AbortController():null, tm=ac?setTimeout(function(){ ac.abort(); },opts.timeout||8000):0;
+      return fetch(url+'/rest/v1/pnl_branches?'+q,{headers:{apikey:key,Authorization:'Bearer '+key},signal:ac?ac.signal:undefined,cache:'no-store'})
+        .then(function(r){ if(tm)clearTimeout(tm); if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
+    };
+    J._p=get('select=*&order=sort.asc,code.asc').catch(function(){ return get('select=*&order=code.asc'); })
+      .then(function(d){
+        if(!Array.isArray(d))throw new Error('bad');
+        var rows=clean(d), before=JSON.stringify(J.rows);
+        if(!rows.some(function(r){ return r.kind==='store'; }))rows=rows.concat(clean(BASE)); /* ตารางว่าง/มีแต่ออฟฟิศ = ใช้สาขาเดิมไปก่อน */
+        J.rows=rows; J.src='db'; J.at=Date.now(); J.cols=d.length>0&&d.every(function(r){ return r&&Object.prototype.hasOwnProperty.call(r,'kind'); });
+        try{ localStorage.setItem(CK,JSON.stringify({t:J.at,cols:J.cols,rows:d})); }catch(e){}
+        if(JSON.stringify(J.rows)!==before)J._cb.forEach(function(fn){ try{ fn(J); }catch(e){ if(window.console)console.error(e); } });
+        return J.rows;
+      })
+      .catch(function(){ return J.rows; })
+      .then(function(r){ J._p=null; return r; });
+    return J._p;
+  };
+  window.JJBR=J;
+})();
+</script>
+<!-- JJBR-END -->
 </head>
 <body>
 <!-- ===== หน้า login (บัญชีเดียวกับระบบ P&L) ===== -->
