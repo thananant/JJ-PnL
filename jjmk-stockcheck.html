@@ -769,11 +769,93 @@ function i18nLoad(l){
       const map=trLoad(l); let n=0,chg=0;
       rows.forEach(r=>{ if(!r||!r.src||!r.txt)return; const v=(r.txt===r.src)?TRSAME:r.txt; // คลังกลางชนะของในเครื่อง (แก้คำแปลผ่าน SQL แล้วทุกเครื่องได้ตาม)
         if(map[r.src]===v)return; if(map[r.src])chg++; map[r.src]=v; n++; });
+      n+=prodTrApply(l);   // คำแปลชื่อสินค้าจาก products.i18n ชนะคลังกลาง (คลังกลางอาจมีคำแปลกูเกิลของชื่อเดียวกัน)
       _i18nOk[l]=1; _i18nGot[l]=1; if(n)trCacheSave(l);
       return {n:n,chg:chg};
     }catch(e){ _i18nGot[l]=1; setTimeout(()=>{ delete _i18nGot[l]; },60000); return {n:0,chg:0}; } // ยังไม่ได้รัน SQL/ไม่มีสิทธิ์ → พัก 1 นาทีค่อยลองใหม่ ไม่ยิงซ้ำทุกรอบ
     finally{ delete _i18nP[l]; }
   })();
+}
+/* 🌏 คำแปลชื่อสินค้าที่คนตั้งไว้ (products.i18n {en,lo,my} — ของแอพนับเดิม · เจ้าของสั่ง 2026-10-15 ให้ย้ายมาก่อนปิดแอพเดิม)
+   เก็บใน S.prodTr แล้วเขียนทับแคชคำแปลแบบตรงตัว (คีย์ = ชื่อสินค้าเต็ม) → ชนะทั้งแคชในเครื่อง คลังกลาง sc_i18n และกูเกิล
+   อ่านทุกสาขา (ชื่อเดียวกัน = คำแปลเดียวกัน) · ภาษาไหนสาขาที่เปิดอยู่มีค่า ใช้ของสาขานี้ ไม่มีค่อยเอาของสาขาอื่น
+   คำแปลที่ตั้งเองไม่เขียนลงคลังกลาง sc_i18n (ทุกเครื่องได้จาก products.i18n ตอนโหลดอยู่แล้ว) → ล้างแล้วกลับไปแปลอัตโนมัติได้จริง */
+const PTR_LANGS=['en','lo','my'];
+const ptrJ=j=>{ if(typeof j==='string'){ try{ j=JSON.parse(j); }catch(e){ j=null; } } return (j&&typeof j==='object'&&!Array.isArray(j))?j:null; };
+function ptrMerge(rows){ // [{name,branch_id,i18n}] → {ชื่อ:{en,lo,my}} รวมทุกสาขา (รายภาษา สาขาที่เปิดอยู่ชนะ)
+  const bid=STK_BR[S.br],out={};
+  [...(rows||[])].sort((a,b)=>((a&&a.branch_id)===bid?0:1)-((b&&b.branch_id)===bid?0:1)).forEach(r=>{
+    const n=String((r&&r.name)||'').trim(),j=ptrJ(r&&r.i18n); if(!n||!j)return;
+    const o=out[n]=out[n]||{};
+    Object.keys(j).forEach(k=>{ const v=typeof j[k]==='string'?j[k].trim():j[k]; if(v!=null&&v!==''&&!(k in o))o[k]=v; });
+  });
+  return out;
+}
+const PTRK=l=>'jjsc_ptr_'+l;   // {ชื่อ:ค่า} ที่ prodTrSeed เขียนทับแคชไว้รอบก่อน — products.i18n ถูกล้างแล้ว = ลบออกจากแคชด้วย
+function prodTrSeed(rows){ // rows=null = อ่านไม่ได้ → ไม่ลบของในเครื่อง
+  const o={}; PTR_LANGS.forEach(l=>{o[l]={};});
+  const m=ptrMerge(rows);
+  Object.keys(m).forEach(n=>PTR_LANGS.forEach(l=>{ const v=String(m[n][l]==null?'':m[n][l]).trim(); if(v)o[l][n]=v; }));
+  S.prodTr=o; let chg=0;
+  PTR_LANGS.forEach(l=>{ const c=(rows?ptrPrune(l):0)+prodTrApply(l); if(c){ chg+=c; trCacheSave(l); } });
+  if(chg&&LANG!=='th'&&typeof trRepaint==='function')try{ trRepaint(); }catch(e){}
+}
+function ptrPrune(l){ // คำแปลที่เคยตั้งไว้แต่ตอนนี้ถูกล้างแล้ว (ค่าในแคชยังเป็นของที่เราเขียนไว้) → ลบออก ให้กลับไปแปลอัตโนมัติ · จำชุดใหม่ไว้รอบหน้า
+  let prev={}; try{ prev=JSON.parse(localStorage.getItem(PTRK(l))||'{}')||{}; }catch(e){ prev={}; }
+  const o=S.prodTr[l]||{},map=trLoad(l),now={}; let c=0;
+  Object.keys(prev).forEach(n=>{ if(!(n in o)&&map[n]===prev[n]){ delete map[n]; c++; } });
+  Object.keys(o).forEach(n=>{ now[n]=(o[n]===n)?TRSAME:o[n]; });
+  try{ localStorage.setItem(PTRK(l),JSON.stringify(now)); }catch(e){}
+  return c;
+}
+function prodTrApply(l){ // คืนจำนวนคำที่เปลี่ยน
+  const o=(S.prodTr||{})[l]; if(!o)return 0;
+  const map=trLoad(l); let c=0;
+  Object.keys(o).forEach(n=>{ const v=(o[n]===n)?TRSAME:o[n]; if(map[n]!==v){ map[n]=v; c++; } });
+  return c;
+}
+async function ptrFetch(name){ // products.i18n ของชื่อนี้ทุกสาขา (อ่านสดจากฐาน) รวมเป็นก้อนเดียว · อ่านไม่ได้ = throw
+  const rows=await selAll('products?select=name,branch_id,i18n&name=eq.'+encodeURIComponent(name)+'&deleted_at=is.null&i18n=not.is.null&branch_id=in.('+Object.values(STK_BR).join(',')+')');
+  return ptrMerge(rows)[String(name).trim()]||{};
+}
+async function prodTrOpen(name){ // 🌏 แก้คำแปลชื่อสินค้า (แทนช่องคำแปลของแอพนับเดิม) — ว่าง = ใช้คำแปลอัตโนมัติ
+  /* ช่องขึ้นเฉพาะคำแปลที่ตั้งไว้จริง (products.i18n ทุกสาขา อ่านสด) ไม่เอาคำแปลกูเกิล/คลังกลางมาใส่ — ช่องว่าง = ยังไม่ได้ตั้ง */
+  let j; try{ j=await ptrFetch(name); }catch(e){ toast('โหลดคำแปลไม่สำเร็จ — '+errMsg(e),true); return; }
+  S._trBase={name:name,j:j};
+  modalOpen('<h3>🌏 คำแปลชื่อสินค้า</h3><div style="font-size:14px;margin-bottom:8px"><b>'+esc(name)+'</b></div>'
+    +[['en','English'],['lo','ລາວ (ลาว)'],['my','မြန်မာ (พม่า)']].map(x=>'<div style="margin-bottom:8px"><div style="font-size:12px;color:var(--mut);margin-bottom:3px">'+x[1]+'</div>'
+      +'<input class="di" id="ptr_'+x[0]+'" value="'+esc(j[x[0]]==null?'':String(j[x[0]]))+'" autocomplete="off"></div>').join('')
+    +'<div class="note" style="margin:4px 0 0">ใช้กับทุกสาขาที่มีสินค้าชื่อนี้ · เว้นว่าง = ให้ระบบแปลอัตโนมัติ</div>'
+    +'<div class="ovlfoot"><button class="cx" onclick="modalClose()">ยกเลิก</button><button class="go" id="ptrGo" data-n="'+esc(name)+'" onclick="prodTrSave(this.dataset.n)">บันทึกคำแปล</button></div>');
+}
+async function prodTrSave(name){
+  const B=S._trBase; if(!B||B.name!==name){ toast('เปิดหน้าแก้คำแปลใหม่อีกครั้ง',true); return; }
+  if(S._ptrBusy)return; S._ptrBusy=true;
+  const btn=document.getElementById('ptrGo'); if(btn)btn.disabled=true;
+  /* เขียน {คำแปลเดิมทุกภาษา + เฉพาะช่องที่แก้/ล้าง} — ภาษาที่ไม่ได้แตะไม่หาย (เดิมเขียนทับทั้งก้อน) */
+  const nj={...B.j},clr=[]; let chg=0;
+  PTR_LANGS.forEach(l=>{ const el=document.getElementById('ptr_'+l); if(!el)return;
+    const v=String(el.value||'').trim(),was=String(B.j[l]==null?'':B.j[l]).trim(); if(v===was)return;
+    chg++; if(v)nj[l]=v; else{ delete nj[l]; clr.push(l); } });
+  if(!chg){ S._ptrBusy=false; if(btn)btn.disabled=false; S._trBase=null; modalClose(); toast('คำแปลไม่ได้เปลี่ยน'); return; }
+  try{
+    await api('PATCH','products?name=eq.'+encodeURIComponent(name),{i18n:Object.keys(nj).length?nj:null},'return=minimal');
+    S.prodTr=S.prodTr||{}; PTR_LANGS.forEach(l=>{ const o=S.prodTr[l]=S.prodTr[l]||{},map=trLoad(l),v=String(nj[l]==null?'':nj[l]).trim();
+      if(v)o[name]=v; else{ if(o[name]||clr.includes(l))delete map[name]; delete o[name]; } prodTrApply(l); trCacheSave(l); });
+    clr.forEach(l=>{ ptrAutoBack(name,l); });   // ล้างแล้ว → เอาคำแปลอัตโนมัติกลับมา (ไม่ต้องรอ)
+    S._trBase=null; modalClose(); toast('✅ บันทึกคำแปล "'+name+'" แล้ว'); if(LANG!=='th')trRepaint(); else render();
+  }catch(e){toast('บันทึกคำแปลไม่สำเร็จ — '+errMsg(e),true);}
+  finally{ S._ptrBusy=false; if(btn)btn.disabled=false; }
+}
+async function ptrAutoBack(name,l){ // ล้างคำแปลที่ตั้งเอง → แปลอัตโนมัติใหม่ + เขียนทับแถวชื่อเต็มในคลังกลาง (แถวเก่าอาจเป็นคำที่ตั้งเองค้างไว้ · anon ลบแถวไม่ได้)
+  try{
+    const map=trLoad(l); let v=trGet(name,map);
+    if(!v){ const got=await trFetch([name],l); if(!got[name]||((S.prodTr||{})[l]||{})[name])return;
+      map[name]=got[name]; trCacheSave(l); v=trGet(name,map); }
+    if(!v||((S.prodTr||{})[l]||{})[name])return;   // ระหว่างรอมีคนตั้งคำแปลใหม่แล้ว = ไม่ทับ
+    await i18nSave({[name]:(v===name?TRSAME:v)},l);
+    if(l===LANG)trRepaint();
+  }catch(e){}
 }
 async function i18nSave(map,l){ // เก็บคำที่เพิ่งแปลเข้าคลังกลาง (ค่อย ๆ ส่ง ไม่บล็อกหน้าจอ)
   l=l||LANG;
@@ -1028,7 +1110,7 @@ async function loadAll(){
     catch(e2){ S.deptOk=false; prods=await selAll(base+'&deleted_at=is.null&branch_id=eq.'+bid+'&order=sort'); }
   }
   const cd=($('#cd')&&$('#cd').value)||bizToday();
-  const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows,lcfgRows,unitRows,recvRows,spdRows]=await Promise.all([
+  const [map,cur,sups,todayCnt,deptRows,lineRows,cfgRows,lcfgRows,unitRows,recvRows,spdRows,lastRows,i18nRows]=await Promise.all([
     selAll('pnl_stock_names?select=*&order=id').catch(()=>selAll('pnl_stock_map?select=*&order=id')).catch(()=>[]),
     selAll('stock_current?select=product_id,qty,updated_at&branch_id=eq.'+bid).catch(()=>[]),
     /* ต้องอ่าน order_ahead + prepay ด้วย (แก้ 2026-09-29) — เดิมไม่ได้อ่าน แอพนี้เลยไม่รู้ว่าซัพต้อง "สั่งล่วงหน้า"
@@ -1049,11 +1131,19 @@ async function loadAll(){
     // ใบสั่งที่ส่งไปแล้ว 10 วันล่าสุด — ใช้หัก "ของที่กำลังมา" ออกจากยอดสั่งรอบนี้
     selAll('stock_receipts?select=product_id,order_date,ordered&branch_id=eq.'+bid
       +'&order_date=gte.'+addDays(cd,-10)+'&order_date=lte.'+cd+'&order=order_date').catch(()=>[]),
-    // 🎌 วันขายดีจากปฏิทิน (cal_special_days) — ยังไม่รัน SQL / อ่านไม่ได้ = ไม่มีวันพิเศษ ตัวเลขเหมือนเดิม
+    // 🎌 วันขายดีจากปฏิทิน (cal_special_days) — ยังไม่รัน SQL / อ่านไม่ได้ = ไม่มีวันพิเศษ ตัวเลขเหมือนเดิม · ถึง +130 วัน (สั่งทุก N วันครอบคลุมได้ 90 วัน + เวลาส่ง)
     selAll('cal_special_days?select=id,name,day_from,day_to,order_rate_group,order_branches,cancelled&cancelled=eq.false'
-      +'&order_rate_group=not.is.null&day_to=gte.'+addDays(cd,-12)+'&day_from=lte.'+addDays(cd,50)).catch(()=>[])
+      +'&order_rate_group=not.is.null&day_to=gte.'+addDays(cd,-12)+'&day_from=lte.'+addDays(cd,130)).catch(()=>[]),
+    // 🔁 ซัพ "สั่งทุก N วัน": วันที่ส่งใบสั่งล่าสุดของสาขานี้ (ย้อน 120 วัน) — นับรอบต่อสาขา · ใบที่ยกเลิกส่ง (ordered=0) ไม่นับ
+    selAll('stock_receipts?select=sup,order_date&branch_id=eq.'+bid+'&ordered=gt.0'
+      +'&order_date=gte.'+addDays(cd,-120)+'&order_date=lte.'+cd+'&order=order_date').catch(()=>[]),
+    // 🌏 คำแปลชื่อสินค้าที่ตั้งไว้ในแอพนับเดิม (products.i18n — คนแก้มือ) ชนะคำแปลกูเกิล · อ่านทุกสาขา (ชื่อเดียวกันใช้ร่วมกัน) · ไม่มีคอลัมน์/อ่านไม่ได้ = ใช้กูเกิลเหมือนเดิม
+    selAll('products?select=name,i18n,branch_id&deleted_at=is.null&i18n=not.is.null&branch_id=in.('+Object.values(STK_BR).join(',')+')').catch(()=>null)
   ]);
   spdSet(spdRows);
+  prodTrSeed(i18nRows);
+  S.lastOrd={}; (lastRows||[]).forEach(r=>{ const k=supKey(r.sup),d=String(r.order_date||'').slice(0,10); if(!k||!d)return;
+    const a=S.lastOrd[k]=S.lastOrd[k]||[]; if(a.indexOf(d)<0)a.push(d); });
   S.depts=deptRows||[];
   S.units=unitRows||[]; uDirty();
   S.recv={}; (recvRows||[]).forEach(r=>{ const q=num(r.ordered); if(!r.product_id||!q)return;
@@ -1073,7 +1163,7 @@ async function loadAll(){
     it.qty=num(r.qty); it.out=!!r.out_of_stock; it._saved=String(num(r.qty))+'|'+(it.out?1:0);
   });
   draftApply(cd); // ค่านับที่ยังไม่ได้กดบันทึก (จำไว้ตอนรีเฟรช)
-  S.dept=null; S.allBr=null; S.nameBrN=null;
+  S.dept=null; S.allBr=null; S.nameBrN=null; S.apErr=null;
   S.setDept=''; S.setSup=''; S.setQ='';   // ตัวกรองหน้า Safety — เปลี่ยนสาขา/โหลดใหม่ = เริ่มใหม่ (กันกรองแล้วว่างเปล่า)
   render();
   ensureAllProducts(); // รายการทุกสาขา (ใช้จัดลำดับให้เหมือนกันทุกเมนู)
@@ -1144,7 +1234,7 @@ function deliveryDate(sup,cd){ // ของจะมาส่งวันไห�
     return {d:'',od:'',ahead:0,mode:'fixed'};
   }
   const l=parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1;
-  return {d:addDays(cd,l),od:cd,ahead:0,mode:'any',lead:l};
+  return {d:addDays(cd,l),od:cd,ahead:0,mode:m==='interval'?'interval':'any',lead:l};
 }
 function nextDeliveryAfter(sup,od,curD){ // ของ "ชุดถัดไป" จะมาวันไหน (หลังชุดที่สั่งรอบนี้)
   const x=supSched(sup); if(!x||!curD)return addDays(curD||od,1);
@@ -1153,16 +1243,17 @@ function nextDeliveryAfter(sup,od,curD){ // ของ "ชุดถัดไป"
       if(dd){ const del=nextDow(d2,dd); if(del>curD)return del; } }
     return addDays(curD,1);
   }
+  if(supModeOf(x)==='interval')return addDays(curD,supCyc(x));   // สั่งทุก N วัน = ของชุดนี้ต้องพอ N วัน
   return addDays(curD,1);   // สั่งได้ทุกวัน = พรุ่งนี้สั่งใหม่ได้ ของชุดนี้ครอบคลุม 1 วัน
 }
 function sumRate(it,from,to){ // ยอดใช้รวมช่วง [from, to) — to ไม่รวม
   let s=0,n=0; if(!from||!to)return {sum:0,days:0};
-  for(let d2=from; d2<to && n<31; d2=addDays(d2,1),n++) s+=rateOn(it,d2);
+  for(let d2=from; d2<to && n<400; d2=addDays(d2,1),n++) s+=rateOn(it,d2);   // n<400 แค่กันลูปไม่จบ (เดิม 31 = ซัพสั่งทุก 32–90 วันได้ยอดแค่ 31 วัน) · ต้องเท่ากับ brSumRate ของครัวกลาง
   return {sum:+s.toFixed(3),days:n};
 }
 function covRange(from,days){ // "ส,อา" — ช่วงวันที่ของชุดนี้ต้องครอบคลุม
   const out=[]; for(let i=0,d2=from;i<days&&i<14;i++,d2=addDays(d2,1))out.push(dowTH(d2));
-  return out.join(',');
+  return out.join(',')+(days>14?',…':'');   // เกิน 14 วัน (สั่งทุก N วัน) = มี … ต่อท้าย
 }
 function inTransit(sup,it,cd,delD){ // ของที่สั่งไว้แล้วและจะมาถึงก่อนชุดนี้ (จาก stock_receipts ของระบบเดิม)
   const rc=(S.recv||{})[it.id]; if(!rc||!delD)return 0;
@@ -1207,7 +1298,9 @@ function orderPlan(){ // คิดใบสั่งของทุกซัพ�
     (g[sp]=g[sp]||{sup:sp,rows:[]}).rows.push(it);
   });
   return Object.values(g).map(x=>{
-    const dl=deliveryDate(x.sup,cd);
+    let dl=deliveryDate(x.sup,cd);
+    const iv=ivState(x.sup,cd);   // สั่งทุก N วัน: ยังไม่ครบรอบ = วันนี้ไม่ใช่รอบสั่ง (เหมือนวันสั่งตายตัวที่ไม่ใช่วันสั่ง)
+    if(iv)dl=iv.due?{...dl,iv}:{d:'',od:'',ahead:0,mode:'interval',iv};
     const nx=dl.d?nextDeliveryAfter(x.sup,dl.od||cd,dl.d):'';   // ของชุดถัดไปมาวันไหน
     const gap=addDays(cd,1);                                     // นับตอนปิดร้าน = ยอดของวันขายนี้ถูกใช้ไปแล้ว
     const rows=x.rows.map(it=>{
@@ -1313,7 +1406,7 @@ function sendAllOpen(){
   const gList=[...(S.lineGroups||[])].sort((a,b)=>lgLabel(a).localeCompare(lgLabel(b),'th'));
   const rows=plan.map(g=>{
     const ln=lineOf(g.sup),ok=!!(ln&&ln.group_id),on=!!S._sendPick[g.sup];
-    return '<label class="mrow'+(on?'':' off')+'"><input type="checkbox" '+(on?'checked':'')+' onchange="sendPick(\''+esc(g.sup).replace(/'/g,"\\'")+'\',this.checked)">'
+    return '<label class="mrow'+(on?'':' off')+'"><input type="checkbox" '+(on?'checked':'')+' data-n="'+esc(g.sup)+'" onchange="sendPick(this.dataset.n,this.checked)">'
       +'<span class="nm"><b>'+esc(g.sup)+'</b> · '+g.nOrder+' รายการ'
       +'<small>'+(ok?('กลุ่ม: '+esc(lgLabel({group_id:ln.group_id,name:ln.group_name}))):'<span style="color:var(--red)">⚠ ยังไม่ผูกกลุ่มไลน์ — จะข้ามซัพนี้</span>')
       +' · ส่ง '+(g.dl.d?esc(g.dl.d):'-')+'</small></span></label>';
@@ -1388,7 +1481,7 @@ function renderOrder(){
   const q=(S.ordQ||'').trim().toLowerCase();
   const G='grid-template-columns:40px minmax(150px,1.4fr) 92px 96px 124px';
   const secs=plan.map(g=>{
-    const key=g.sup,esk=esc(key).replace(/'/g,"\\'");
+    const key=g.sup,dnk=' data-n="'+esc(key)+'"';   // ชื่อซัพส่งผ่าน data-n (ชื่อมี ' ก็กดได้ · ไม่รันเป็นโค้ด)
     const open=!!q||(S.ordOpen[key]!==undefined?S.ordOpen[key]:(g.nOrder>0)); // ค้นหา = กางให้เองทุกซัพ
     (S._ordNow=S._ordNow||{})[key]=open; // จำสถานะจริงไว้ให้ปุ่มพับสลับถูก
     const due=!!g.dl.d;
@@ -1414,17 +1507,17 @@ function renderOrder(){
         +'<span class="lbl" data-l="สั่งเพิ่ม">'+val
         +(r.packs!=null?'<div style="font-size:11px;color:var(--mut)">≈ '+fq(r.packs)+' '+esc(r.bu)+'</div>':'')+'</span></div>';
     }).join('');
-    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleOrd(\''+esk+'\')">'
+    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer"'+dnk+' onclick="toggleOrd(this.dataset.n)">'
       +'<div><b>'+(open?'▾':'▸')+' 🏷 '+esc(key)+'</b> '
-      +'<span style="font-size:11.5px;color:var(--mut)">'+(due?('ส่ง '+esc(g.dl.d)+' ('+dowTH(g.dl.d)+')'+(g.dl.mode==='any'?(' · สั่งวันนี้ +'+g.dl.lead+' วัน'):' · วันสั่งตายตัว')):'วันนี้ไม่ใช่รอบสั่งของซัพนี้')
+      +'<span style="font-size:11.5px;color:var(--mut)">'+(due?('ส่ง '+esc(g.dl.d)+' ('+dowTH(g.dl.d)+')'+(g.dl.mode==='interval'?esc(ivTxt(g.dl)):g.dl.mode==='any'?(' · สั่งวันนี้ +'+g.dl.lead+' วัน'):' · วันสั่งตายตัว')):(g.dl.mode==='interval'?esc(ivTxt(g.dl)):'วันนี้ไม่ใช่รอบสั่งของซัพนี้'))
       +(g.dl.ahead>0?(' · <b style="color:var(--wine)">สั่งล่วงหน้า '+g.dl.ahead+' วัน</b> (วันสั่งจริง '+dowTH(g.dl.od)+')'):'')
       +(g.covTxt?(' · <b>'+esc(g.covTxt)+'</b>'+(g.nx?(' — ชุดหน้ามา '+dowTH(g.nx)):'')):'')
       +(g.dl.unset?' · ⚠ ยังไม่ตั้งรอบสั่ง (เดาว่าพรุ่งนี้)':'')+'</span></div>'
       +'<div class="hbtns">'
       +'<span style="font-size:12px;font-weight:700;color:'+(g.nOrder?'var(--red)':'var(--green)')+'">'+(g.nOrder?('ต้องสั่ง '+g.nOrder+' รายการ'):'ไม่ต้องสั่ง')+(g.nOvr?' <span style="color:var(--wine)">· ✏️ แก้เอง '+g.nOvr+'</span>':'')+'</span>'
-      +(g.nOvr?'<button class="outb" onclick="event.stopPropagation();ordReset(\''+esk+'\')" title="กลับไปใช้ค่าแนะนำทั้งซัพนี้">↺ ค่าแนะนำ</button>':'')
-      +(g.nOrder?'<button class="outb" onclick="event.stopPropagation();copyOrder(\''+esk+'\')">📋 คัดลอก</button>'
-        +'<button class="outb" style="background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700" onclick="event.stopPropagation();sendLine(\''+esk+'\')">'
+      +(g.nOvr?'<button class="outb"'+dnk+' onclick="event.stopPropagation();ordReset(this.dataset.n)" title="กลับไปใช้ค่าแนะนำทั้งซัพนี้">↺ ค่าแนะนำ</button>':'')
+      +(g.nOrder?'<button class="outb"'+dnk+' onclick="event.stopPropagation();copyOrder(this.dataset.n)">📋 คัดลอก</button>'
+        +'<button class="outb" style="background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700"'+dnk+' onclick="event.stopPropagation();sendLine(this.dataset.n)">'
         +(lineOf(key)&&lineOf(key).group_id?'📤 ส่งเข้าไลน์':'📤 ส่งไลน์ (ยังไม่ผูกกลุ่ม)')+'</button>':'')+'</div></div>';
     return head+(open?(body||'<div class="lrow" style="grid-template-columns:1fr;color:var(--mut);font-size:13px">ไม่พบรายการที่ค้นหา</div>')
       +(g.nNoCount?'<div class="lrow" style="grid-template-columns:1fr;font-size:12px;color:var(--amber)">⚠ ยังไม่ได้นับ '+g.nNoCount+' รายการ — ยอดสั่งยังไม่ครบ</div>':'')
@@ -1464,7 +1557,7 @@ function renderDash(){
     return '<div class="pbar"><i style="width:'+p3+'%;background:'+(p3===100?'var(--green)':p3>=50?'var(--gold)':'#E0A9A9')+'"></i></div>';};
   const deptRows=ds.map(d2=>{
     const dn=d2.items.filter(counted).length,dt=d2.items.length;
-    return '<div class="lrow" style="grid-template-columns:minmax(120px,1fr) 1.4fr 96px;cursor:pointer" onclick="goCount(\''+esc(d2.label).replace(/'/g,"\\'")+'\')">'
+    return '<div class="lrow" style="grid-template-columns:minmax(120px,1fr) 1.4fr 96px;cursor:pointer" data-n="'+esc(d2.label)+'" onclick="goCount(this.dataset.n)">'
       +'<div><b>'+(DEPT_IC[d2.label]||'🗂')+' '+esc(d2.label)+'</b>'+(deptZone(d2.label)?' <span style="font-size:11px;color:var(--mut)">'+esc(deptZone(d2.label))+'</span>':'')+'</div>'
       +'<div>'+bar(dn,dt)+'</div>'
       +'<div style="text-align:right;font-size:12.5px;'+(dn===dt&&dt?'color:var(--green);font-weight:700':'color:var(--mut)')+'">'+dn+'/'+dt+(dn===dt&&dt?' ✓':'')+'</div></div>';
@@ -1502,7 +1595,7 @@ function renderCount(){
   if(!S.dept||!ds.some(d2=>d2.label===S.dept))S.dept=ds[0].label;
   const pillHtml=dp=>{
     const done=dp.items.filter(counted).length,all=dp.items.length;
-    return '<button class="pill'+(dp.label===S.dept?' on':'')+(done<all?' needc':'')+'" onclick="pickDept(\''+esc(dp.label).replace(/'/g,"\\'")+'\')">'
+    return '<button class="pill'+(dp.label===S.dept?' on':'')+(done<all?' needc':'')+'" data-n="'+esc(dp.label)+'" onclick="pickDept(this.dataset.n)">'
       +(DEPT_IC[dp.label]||'🗂')+' '+esc(dp.label)
       +' <span class="bdg">'+(done<all?(all-done):all)+'</span>'+(done===all?' <span class="ok">✓</span>':'')+'</button>';
   };
@@ -1592,20 +1685,22 @@ function supObj(n){const e=S.supEdit=S.supEdit||{};
   if(!e[n]){const x=supSched(n)||{};
     e[n]={exists:!!supSched(n),mode:supModeOf(x),
       lead:(parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1),schedule:{...(x.schedule||{})},
-      ahead:supAhead(x),prepay:!!x.prepay};}
+      ahead:supAhead(x),prepay:!!x.prepay,cyc:supCyc(x)};}
   return e[n];}
 function supSetMode(i,v){supObj(S.supList[i]).mode=v;render();}
 function supSetLead(i,v){supObj(S.supList[i]).lead=Math.max(1,parseInt(v,10)||1);render();}
+function supSetCyc(i,v){const n=parseInt(v,10);supObj(S.supList[i]).cyc=(n>=2&&n<=90)?n:15;if(!(n>=2&&n<=90))toast('สั่งทุก N วัน ใส่ได้ 2–90 วัน — ใช้ 15 ไปก่อน',true);render();}
 function supSetDay(i,k,v){const o=supObj(S.supList[i]);if(v)o.schedule[k]=v;else delete o.schedule[k];render();}
 function supSetAhead(i,v){const o=supObj(S.supList[i]);o.ahead=Math.max(0,Math.min(6,parseInt(v,10)||0));o.aheadSet=true;render();}
 function supSetPrepay(i,v){const o=supObj(S.supList[i]);o.prepay=!!v;o.prepaySet=true;render();}
 async function supSave(i){
   const n=S.supList[i],o=supObj(n);
   const body={order_mode:o.mode,lead_days:o.lead,schedule:o.schedule};
+  if(o.mode==='interval')body.cycle_days=o.cyc||15;   // สั่งทุก N วัน
   let warn='';
   try{
-    const x0=supSched(n);
-    if(!x0){toast('ไม่พบซัพ "'+n+'" ในตาราง suppliers ของระบบเดิม — เพิ่มชื่อซัพที่แอพนับเดิมก่อนครับ',true);return;}
+    const x0=await supEnsure(n);   // ยังไม่มีในตารางซัพ = สร้างให้เลย (ไม่ต้องไปแอพนับเดิมแล้ว)
+
     /* ส่ง "สั่งล่วงหน้า/จ่ายก่อนส่ง" เฉพาะเมื่ออ่านค่าจริงมาได้ หรือผู้ใช้เพิ่งแก้ช่องนั้น
        — ห้ามส่งค่าตั้งต้น (0/ไม่ติ๊ก) ทับของจริงที่ไม่ได้อ่านมา (เคยล้างค่าที่ตั้งไว้ในตาราง suppliers ที่ใช้ร่วมกัน) */
     if(('order_ahead' in x0)||o.aheadSet) body.order_ahead=o.ahead|0;
@@ -1630,7 +1725,13 @@ function schedCard(){
       +(o.mode==='fixed'?('<span style="font-size:12px;color:var(--mut)">สั่งล่วงหน้า <input class="ri" style="max-width:56px;display:inline-block" type="text" inputmode="numeric" value="'+o.ahead+'" onchange="supSetAhead('+i+',this.value)"> วัน '
         +'<span style="font-size:11px">(0 = สั่งวันจริง · 1 = ขึ้นให้สั่งก่อน 1 วัน ไม่ต้องลุ้นเวลาตัดรอบ)</span></span>'):'')
       +'<label style="font-size:12px;white-space:nowrap"><input type="checkbox" '+(o.prepay?'checked':'')+' onchange="supSetPrepay('+i+',this.checked)"> 💸 ต้องจ่ายก่อนส่ง</label></div>';
-    const detail=o.mode==='any'
+    const ivs=o.mode==='interval'?ivState(n,($('#cd')&&$('#cd').value)||bizToday()):null;
+    const detail=o.mode==='interval'
+      ?('สั่งทุก <input class="ri" style="max-width:64px;display:inline-block" type="text" inputmode="numeric" value="'+o.cyc+'" onchange="supSetCyc('+i+',this.value)"> วัน'
+        +' · ส่งหลังสั่ง <input class="ri" style="max-width:56px;display:inline-block" type="text" inputmode="numeric" value="'+o.lead+'" onchange="supSetLead('+i+',this.value)"> วัน'
+        +'<div style="font-size:11px;color:var(--mut);margin-top:4px">นับจากวันส่งใบสั่งเข้าไลน์ครั้งล่าสุดของสาขานี้ · ครบรอบแล้วขึ้น "ถึงรอบสั่ง" · ยอดแนะนำพอใช้ N วัน'
+        +(ivs?(' · '+(ivs.last?('สั่งล่าสุด '+esc(thDate(ivs.last))+' · รอบหน้า '+esc(thDate(ivs.next))):'ยังไม่เคยสั่ง')+(ivs.due?' · <b style="color:var(--red)">ครบรอบแล้ว</b>':'')):'')+'</div>')
+      :o.mode==='any'
       ?'ส่งหลังสั่ง <input class="ri" style="max-width:64px;display:inline-block" type="text" inputmode="numeric" value="'+o.lead+'" onchange="supSetLead('+i+',this.value)"> วัน <span style="font-size:11px;color:var(--mut)">(1 = สั่งวันนี้ได้พรุ่งนี้)</span>'
       :'<div style="display:flex;gap:6px;flex-wrap:wrap">'+DOW_EN.slice(1).concat(['sun']).map(k=>{
         const v=o.schedule[k]||'';
@@ -1641,13 +1742,13 @@ function schedCard(){
       }).join('')+'</div>';
     return '<div class="lrow" style="grid-template-columns:150px 160px 1fr 90px">'
       +'<div><b>'+esc(n)+'</b>'+(o.exists?'':'<div style="font-size:10.5px;color:var(--amber)">ยังไม่มีในตารางซัพ — กด 💾 เพื่อสร้าง</div>')+'</div>'
-      +'<div><select class="zsel" style="margin-left:0" onchange="supSetMode('+i+',this.value)"><option value="any"'+(o.mode==='any'?' selected':'')+'>สั่งได้ทุกวัน</option><option value="fixed"'+(o.mode==='fixed'?' selected':'')+'>วันสั่งตายตัว</option></select></div>'
+      +'<div><select class="zsel" style="margin-left:0" onchange="supSetMode('+i+',this.value)"><option value="any"'+(o.mode==='any'?' selected':'')+'>สั่งได้ทุกวัน</option><option value="fixed"'+(o.mode==='fixed'?' selected':'')+'>วันสั่งตายตัว</option><option value="interval"'+(o.mode==='interval'?' selected':'')+'>สั่งทุก N วัน</option></select></div>'
       +'<div>'+detail+extra+'</div>'
       +'<div><button class="outb" onclick="supSave('+i+')">💾</button></div></div>';
   }).join('');
   const nFound=S.supList.filter(n=>supSched(n)).length;
   const warn=nFound?'':'<div class="note" style="margin:10px 15px">⚠ อ่านตาราง <code>suppliers</code> ของระบบเดิมไม่ได้เลย (0/'+S.supList.length+') — ต้องรัน <b>sql/jjmk_stockcheck_grants.sql</b> ให้สิทธิ์ก่อน ไม่งั้นรอบสั่ง/กลุ่มไลน์จะไม่ขึ้น</div>';
-  return '<div class="card"><div class="h">🚚 รอบสั่ง–ส่งของซัพ <span class="n">เจอในระบบเดิม '+nFound+'/'+S.supList.length+' ซัพ · ใช้ร่วมกับแอพนับ</span></div>'+warn+rows+'</div>';
+  return '<div class="card"><div class="h">🚚 รอบสั่ง–ส่งของซัพ <span class="n">ตั้งแล้ว '+nFound+'/'+S.supList.length+' ซัพ · ครัวกลางใช้ค่าชุดเดียวกัน</span></div>'+warn+rows+'</div>';
 }
 function usersCard(){
   /* ผู้ใช้ย้ายไปจัดการรวมที่ JJ Access แล้ว (2026-09-24) — ที่นี่แค่บอกทางไป
@@ -1705,21 +1806,23 @@ function renderCfgDept(){
   if(cfgDeny())return;
   $('#list').innerHTML=cfgHead('cfgd')+deptCard();
 }
-async function ensureAllProducts(force){ // รายการสินค้าทุกสาขา (ดูว่าสาขาไหนใช้ตัวไหน)
-  if((S.allBr&&!force)||S._apLoading)return;
+function ensureAllProducts(force){ // รายการสินค้าทุกสาขา (ดูว่าสาขาไหนใช้ตัวไหน) · คืน promise — กำลังโหลดอยู่ = รอตัวเดิม (เดิมคืนทันทีทั้งที่ S.allBr ยังว่าง)
+  if(S._apP)return S._apP;
+  if(!force&&(S.allBr||(S.apErr&&Date.now()-(S._apErrAt||0)<15000)))return Promise.resolve();   // โหลดพัง = หน้าจอลองใหม่เองได้ทุก 15 วิ (กันวนยิงรัว)
   S._apLoading=true;
-  try{
+  return S._apP=(async()=>{ try{
     const ids=Object.values(STK_BR).join(',');
-    const base='products?select=id,branch_id,name,unit,sup,cat_label,image_url&deleted_at=is.null&branch_id=in.('+ids+')&order=name';
+    const base='products?select=id,branch_id,name,unit,sup,cat_label,sort,image_url&deleted_at=is.null&branch_id=in.('+ids+')&order=name';
     let rows;
     try{ rows=await selAll(base.replace('image_url','image_url,dept')); }
     catch(e){ rows=await selAll(base); }
     S.allBr=rows; S.apErr=null;
     const nb={}; rows.forEach(r=>{const n=String(r.name||'').trim(); if(!n)return;(nb[n]=nb[n]||{})[r.branch_id]=1;});
     S.nameBrN={}; Object.keys(nb).forEach(n=>{S.nameBrN[n]=Object.keys(nb[n]).length;});
-  }catch(e){ S.allBr=[]; S.apErr=String(e.message||e).slice(0,90); }
-  S._apLoading=false;
+  }catch(e){ S.allBr=null; S.nameBrN=null; S.apErr=String(e.message||e).slice(0,90); S._apErrAt=Date.now(); }   // พัง = null ไม่ใช่ [] (เดิม [] → ตรวจชื่อซ้ำผ่านหมด)
+  finally{ S._apLoading=false; S._apP=null; }
   if(isCfgTab(S.tab)||S.tab==='items'||S.tab==='order'||S.tab==='dash')render(); // โหลดเสร็จแล้ววาดใหม่
+  })();
 }
 function renderItems(){
   if(S.user&&S.user.role!=='admin'){$('#list').innerHTML='<div class="empty">หน้ารายการสินค้าสำหรับแอดมินเท่านั้น</div>';return;}
@@ -1755,8 +1858,7 @@ function itemsCard(){
       ||String(billOfName(e)||'').toLowerCase().includes(q)).sort(cmpItem);
     if(q&&!list.length)return '';
     const open=!!S.itemOpen[k]||!!q;
-    const esk=esc(k).replace(/'/g,"\\'");
-    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleItemGrp(\''+esk+'\')">'
+    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" data-n="'+esc(k)+'" onclick="toggleItemGrp(this.dataset.n)">'
       +'<div><b>'+(open?'▾':'▸')+' '+(DEPT_IC[k]||'🗂')+' '+esc(k)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+groups[k].length+' รายการ'
       +(groups[k].some(e=>Object.keys(e.rows).some(b=>String(e.rows[b].dept||'').trim()))?'':' · หมวดเดิมจากแอพนับ')+'</span></div>'
       +'<div style="font-size:11.5px;color:var(--mut)">'+BRK.filter(b=>groups[k].some(e=>e.rows[b])).map(b=>BR_NAME[b]).join(' · ')+'</div></div>';
@@ -1768,20 +1870,26 @@ function itemsCard(){
         return r?'<span class="brchip on">'+BR_NAME[b]+'<button title="เอาออกจากสาขานี้" onclick="delProd(\''+r.id+'\')">✕</button></span>'
           :'<span class="brchip">'+BR_NAME[b]+' –</span>';
       }).join(' ');
-      const esn=esc(e.name).replace(/'/g,"\\'");
+      const dnn=' data-n="'+esc(e.name)+'"';   // ชื่อสินค้าส่งผ่าน data-n — ห้ามใส่ชื่อลงสตริง JS ใน onclick (ชื่อมี ' = กดไม่ติด/ชื่อแปลก ๆ รันเป็นโค้ดได้)
       return '<div class="lrow" style="'+G+'">'
         +(e.image_url?'<img class="pimg" style="width:40px;height:40px" src="'+esc(e.image_url)+'" loading="lazy">':'<div class="pimg" style="width:40px;height:40px;font-size:16px">📦</div>')
         +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(e.name)+'</div>'
         +'<div class="s">'+(bill?'<span class="cn">🧾 '+esc(bill)+'</span>':'<span class="wat">⚠ ยังไม่ผูกชื่อบิล</span>')+'</div></div>'
         +'<span class="lbl" data-l="สาขาที่ใช้">'+chips+'</span>'
-        +'<span class="lbl" data-l="หน่วย/ซัพ"><div style="font-size:12.5px">'+esc(e.unit||'–')+'</div><div style="font-size:11px;color:var(--mut)">'+esc(e.sup||'')+'</div></span>'
-        +'<button class="outb" style="color:var(--red);border-color:#E4A6A6" onclick="delProdAll(\''+esn+'\')">🗑 เลิกใช้</button></div>';
+        +'<span class="lbl" data-l="หน่วย/ซัพ"><div style="font-size:12.5px">'+esc(e.unit||'–')+'</div>'
+        +'<select class="zsel" style="margin-left:0;margin-top:3px;max-width:150px;font-size:11.5px" title="เปลี่ยนซัพของสินค้านี้"'+dnn+' onchange="prodSetSup(this.dataset.n,this.value)">'
+        +'<option value=""'+(e.sup?'':' selected')+'>(ไม่ระบุซัพ)</option>'+supNames(e.sup).map(n=>'<option value="'+esc(n)+'"'+(n===String(e.sup||'').trim()?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select></span>'
+        +'<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="outb" style="padding:5px 9px" title="แก้คำแปลชื่อสินค้า (อังกฤษ/ลาว/พม่า)"'+dnn+' onclick="prodTrOpen(this.dataset.n)">🌏</button>'
+        +'<button class="outb" style="color:var(--red);border-color:#E4A6A6"'+dnn+' onclick="delProdAll(this.dataset.n)">🗑 เลิกใช้</button></div></div>';
     }).join('');
   }).join('');
   const st=S._apLoading?'<div class="note" style="margin:10px 15px">⏳ กำลังโหลดรายการสินค้าทุกสาขา...</div>'
-    :(S.apErr?'<div class="note" style="margin:10px 15px">⚠ โหลดไม่สำเร็จ ('+esc(S.apErr)+')</div>':'');
+    :(S.apErr?'<div class="note" style="margin:10px 15px">⚠ โหลดไม่สำเร็จ ('+esc(S.apErr)+') <button class="outb" onclick="ensureAllProducts(true)">↻ ลองใหม่</button></div>':'');
   return '<div class="card"><div class="h">📦 รายการสินค้าทั้งหมด <span class="n">'+total+' รายการ · '+(part?'🔒 เฉพาะสาขา'+esc(brScopeTxt()):'รวมทุกสาขา')+' แยกตามแผนก</span></div>'
-    +'<div class="note" style="margin:10px 15px">ดูได้ว่าสินค้าตัวไหน <b>สาขาไหนใช้บ้าง</b> — กด ✕ บนชื่อสาขา = เอาออกเฉพาะสาขานั้น · ปุ่ม 🗑 เลิกใช้ = เอาออก'+(part?'ทุกสาขาที่คุณดูแล':'ทุกสาขา')+' (ข้อมูลเก่ายังอยู่ในระบบ กู้คืนได้ที่ฐานข้อมูล) · แผนกจัดตามสาขาที่เปิดอยู่ (สาขา'+BR_NAME[S.br]+')</div>'
+    +'<div class="note" style="margin:10px 15px">ดูได้ว่าสินค้าตัวไหน <b>สาขาไหนใช้บ้าง</b> — กด ✕ บนชื่อสาขา = เอาออกเฉพาะสาขานั้น · ปุ่ม 🗑 เลิกใช้ = เอาออก'+(part?'ทุกสาขาที่คุณดูแล':'ทุกสาขา')+' (ข้อมูลเก่ายังอยู่ในระบบ กู้คืนได้ที่ 🗑 ถังขยะ) · เปลี่ยนซัพได้ที่ช่องหน่วย/ซัพ · แผนกจัดตามสาขาที่เปิดอยู่ (สาขา'+BR_NAME[S.br]+')</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 15px 0"><button class="outb" style="background:#EAF4EC;border-color:#9DBFA6;color:#2E5B3C;font-weight:700" onclick="newProdOpen()">➕ เพิ่มสินค้าใหม่</button>'
+    +'<button class="outb" onclick="trashToggle()">'+(S.trashOpen?'▴ ซ่อนถังขยะ':'🗑 ถังขยะ (สินค้าที่เลิกใช้)'+(S.trash?' '+S.trash.length:''))+'</button></div>'
+    +(S.trashOpen?trashCard():'')
     +'<div class="lrow" style="grid-template-columns:1fr"><input class="di" id="cfgQ" value="'+esc(S.cfgQ||'')+'" placeholder="🔍 ค้นหาชื่อสินค้า / ชื่อบิล / ซัพ" oninput="cfgSearch(this.value)"></div>'
     +st
     +'<div class="hd2" style="'+G+'"><span></span><span>สินค้า (ชื่อนับ / ชื่อบิล)</span><span>สาขาที่ใช้</span><span>หน่วย / ซัพ</span><span></span></div>'
@@ -1794,6 +1902,141 @@ function billOfName(e){ // ชื่อบิลของสินค้า (จ
   return m?m.pnl_item:'';
 }
 function toggleItemGrp(k){S.itemOpen=S.itemOpen||{};S.itemOpen[k]=!S.itemOpen[k];render();}
+/* ---- ➕ เพิ่มสินค้าใหม่ · 🗑 ถังขยะ/กู้คืน · ตั้งซัพรายสินค้า (เจ้าของสั่ง 2026-10-15: ทำในแอพนี้ได้ ไม่ต้องไปแอพนับเดิม)
+   ต้องรัน SQL grant insert on products to anon ก่อน (เดิม anon มีแค่ select/update) — ยังไม่รัน = บอกให้รัน ไม่พัง
+   สินค้าใหม่ = 1 แถวต่อสาขาที่เลือก (id 'p'+hex สุ่ม แบบแถวที่สร้างด้วย SQL) · cat_label = แผนกที่เลือก (ครัวกลาง/P&L จัดกลุ่มด้วยคอลัมน์นี้)
+   cat_key/cat_ic เอาของสินค้าเดิมที่หมวดเดียวกัน ถ้าไม่มีก็สร้างคีย์ใหม่ · ชื่อซ้ำในสาขาเดียวกัน = ไม่สร้าง · อยู่ในถังขยะ = เสนอกู้คืน (ได้ id เดิม) */
+const pKey=n=>String(n||'').replace(/\s+/g,' ').trim();
+function supNames(cur){ return [...new Set([].concat((S.sups||[]).map(x=>pKey(x.name)),(S.allBr||S.all||[]).map(x=>pKey(x.sup)),cur?[pKey(cur)]:[]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th')); }
+function unitNames(){ return [...new Set([].concat((S.units||[]).map(u=>pKey(u.name)),(S.allBr||S.all||[]).map(x=>pKey(x.unit))).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th')); }
+function newPid(){ let h=''; try{ const a=new Uint8Array(8); (window.crypto||{}).getRandomValues(a); a.forEach(b=>{h+=b.toString(16).padStart(2,'0');}); }catch(e){} if(h.length<16)h=(Date.now().toString(16)+Math.random().toString(16).slice(2)).slice(0,16); return 'p'+h; }
+function newProdOpen(){
+  if(!S.allBr)ensureAllProducts(true);
+  const my=allowedBr();
+  const dl=(id,list)=>'<datalist id="'+id+'">'+list.map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist>';
+  const fld=(lab,inner)=>'<div style="margin-bottom:9px"><div style="font-size:12px;color:var(--mut);margin-bottom:3px">'+lab+'</div>'+inner+'</div>';
+  modalOpen('<h3>➕ เพิ่มสินค้าใหม่</h3>'
+    +fld('ชื่อสินค้า (ชื่อที่ใช้นับ) *','<input class="di" id="np_name" placeholder="เช่น หมูสามชั้นสไลด์" autocomplete="off">')
+    +fld('หน่วยนับ *','<input class="di" id="np_unit" list="np_units" placeholder="เช่น กก. / ถุง / ขวด" autocomplete="off">'+dl('np_units',unitNames()))
+    +fld('แผนก','<input class="di" id="np_dept" list="np_depts" placeholder="เลือกหรือพิมพ์แผนก" autocomplete="off" value="'+esc(S.dept||'')+'">'+dl('np_depts',deptNames()))
+    +fld('ซัพพลายเออร์','<input class="di" id="np_sup" list="np_sups" placeholder="เว้นได้ · ชื่อใหม่ = เพิ่มเข้าตารางซัพให้" autocomplete="off">'+dl('np_sups',supNames()))
+    +fld('ใช้ที่สาขา',my.map(b=>'<label style="margin-right:14px;font-size:14px;white-space:nowrap"><input type="checkbox" id="np_br_'+b+'" checked> '+esc(BR_NAME[b])+'</label>').join(''))
+    +fld('อัตราใช้/วัน (เว้นได้ ตั้งทีหลังที่ 🛟 Safety)','<div style="display:flex;gap:8px">'
+      +[['np_wk','จ–พฤ'],['np_fri','ศ'],['np_we','ส–อา']].map(x=>'<label style="flex:1;font-size:12px">'+x[1]+'<input class="di" id="'+x[0]+'" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></label>').join('')+'</div>')
+    +'<div class="note" style="margin:4px 0 0">ชื่อนับไม่ต้องตรงกับชื่อในบิล — ผูกชื่อบิลทีหลังได้ที่หน้า P&L › ใช้จริง (สต๊อก) · คำแปลภาษาอื่นแปลให้อัตโนมัติ</div>'
+    +'<div class="ovlfoot"><button class="cx" onclick="modalClose()">ยกเลิก</button><button class="go" id="npGo" onclick="newProdSave()">บันทึกสินค้า</button></div>');
+  setTimeout(()=>{ const el=document.getElementById('np_name'); if(el)el.focus(); },30);
+}
+async function catOf(label){ // cat_key/cat_ic ของหมวดเดิมที่ชื่อตรงกัน (ไม่มี = สร้างคีย์ใหม่)
+  if(!label)return {cat_key:'c_misc',cat_ic:'📦'};
+  try{ const r=await api('GET','products?select=cat_key,cat_ic&cat_label=eq.'+encodeURIComponent(label)+'&cat_key=not.is.null&limit=1');
+    if(r&&r[0]&&r[0].cat_key)return {cat_key:r[0].cat_key,cat_ic:r[0].cat_ic||'📦'}; }catch(e){}
+  let h=0; for(const ch of label)h=(h*31+ch.codePointAt(0))>>>0;
+  return {cat_key:'c_'+h.toString(36),cat_ic:'📦'};
+}
+async function newProdSave(){ // กันกดซ้ำ: ระหว่างบันทึกปุ่มกดไม่ได้ (เดิมกด 2 ที = ได้สินค้าซ้ำ 2 ชุดทุกสาขา)
+  if(S._npBusy)return;
+  const b=document.getElementById('npGo'),bt=b&&b.textContent;
+  S._npBusy=true; if(b){ b.disabled=true; b.textContent='⏳ กำลังบันทึก...'; }
+  try{ await npSave(); }
+  finally{ S._npBusy=false; if(b){ b.disabled=false; b.textContent=bt; } }
+}
+async function npSave(){
+  const v=id=>pKey((document.getElementById(id)||{}).value);
+  const name=v('np_name'), unit=v('np_unit'), dept=v('np_dept'), sup=v('np_sup');
+  if(!name){toast('ใส่ชื่อสินค้าก่อนครับ',true);return;}
+  if(!unit){toast('ใส่หน่วยนับก่อนครับ',true);return;}
+  const brs=allowedBr().filter(b=>{const c=document.getElementById('np_br_'+b);return c&&c.checked;});
+  if(!brs.length){toast('เลือกสาขาที่ใช้อย่างน้อย 1 สาขา',true);return;}
+  await ensureAllProducts(true);   // ตรวจชื่อซ้ำกับรายการสดทุกครั้ง (ห้ามใช้แคชที่กำลังโหลด/โหลดพัง)
+  if(!S.allBr||S.apErr){toast('โหลดรายการสินค้าไม่สำเร็จ — ตรวจชื่อซ้ำไม่ได้ ลองใหม่อีกครั้ง',true);return;}
+  const has=(list,b)=>(list||[]).some(r=>r.branch_id===STK_BR[b]&&pKey(r.name)===name);
+  const dup=brs.filter(b=>has(S.allBr,b));
+  let todo=brs.filter(b=>!dup.includes(b));
+  if(!todo.length){toast('มี "'+name+'" อยู่แล้วที่'+dup.map(b=>'สาขา'+BR_NAME[b]).join(', '),true);return;}
+  await ensureTrash(true);
+  const old=todo.filter(b=>has(S.trash,b));
+  let restored=0;
+  if(old.length&&cfm('"'+name+'" เคยมีที่'+old.map(b=>'สาขา'+BR_NAME[b]).join(', ')+' (อยู่ในถังขยะ)\n\nตกลง = กู้คืนตัวเดิม (ยอดนับเก่า อัตราใช้ และการผูกชื่อบิลกลับมาด้วย)\nยกเลิก = สร้างเป็นสินค้าใหม่')){
+    const sb={},ids=(S.trash||[]).filter(r=>pKey(r.name)===name&&old.some(b=>r.branch_id===STK_BR[b])&&!sb[r.branch_id]&&(sb[r.branch_id]=1)).map(r=>r.id);   // สาขาละ 1 ตัว = ตัวที่ลบล่าสุด (ถังขยะเรียง deleted_at ใหม่→เก่า) ห้ามกู้ตัวซ้ำที่เคยรวมทิ้ง
+    try{ await api('PATCH','products?id=in.('+ids.map(encodeURIComponent).join(',')+')',{deleted_at:null},'return=minimal'); restored=ids.length; }
+    catch(e){ toast('กู้คืนไม่สำเร็จ — '+errMsg(e),true); return; }
+    todo=todo.filter(b=>!old.includes(b));
+  }
+  const rate=id=>{ const t=v(id); if(t==='')return null; const n=+t; return isFinite(n)&&n>=0?n:null; };
+  if(todo.length){
+    const ck=await catOf(dept);
+    const maxSort=b=>Math.max(0,...(S.allBr||[]).filter(r=>r.branch_id===STK_BR[b]).map(r=>num(r.sort)));
+    let tr=null;   // ชื่อนี้มีที่สาขาอื่นแล้ว → เอาคำแปลที่ตั้งไว้ (products.i18n) มาด้วย ไม่งั้นสาขาใหม่ไม่มีคำแปล
+    if((S.allBr||[]).some(r=>pKey(r.name)===name)){ let j={}; try{ j=await ptrFetch(name); }catch(e){}
+      if(!Object.keys(j).length)PTR_LANGS.forEach(l=>{ const t=((S.prodTr||{})[l]||{})[name]; if(t)j[l]=t; });
+      if(Object.keys(j).length)tr=j; }
+    const rows=todo.map(b=>{ const r={id:newPid(),branch_id:STK_BR[b],name,unit,sup:sup||'',cat_label:dept||'ยังไม่จัดแผนก',cat_key:ck.cat_key,cat_ic:ck.cat_ic,
+      sort:maxSort(b)+1,rate_wk:rate('np_wk'),rate_fri:rate('np_fri'),rate_we:rate('np_we')}; if(S.deptOk&&dept)r.dept=dept; if(tr)r.i18n=tr; return r; });
+    try{ if(sup)await supEnsure(sup); }catch(e){}   // ซัพชื่อใหม่ = เพิ่มเข้าตารางซัพให้ด้วย (ไม่ได้ก็ยังเพิ่มสินค้าต่อ)
+    try{ await api('POST','products',rows,'return=minimal'); }
+    catch(e){ const m=String(e.message||e);
+      toast(/42501|permission|denied|401|403|row-level/i.test(m)?'ยังไม่มีสิทธิ์เพิ่มสินค้า — ต้องรัน SQL ที่ส่งให้ (grant insert on products) ใน Supabase ก่อนครับ':'เพิ่มสินค้าไม่สำเร็จ — '+errMsg(e),true);
+      if(restored){ S.trash=null; await loadAll(); } return; }
+  }
+  modalClose();
+  toast('✅ '+(todo.length?'เพิ่ม "'+name+'" ที่'+todo.map(b=>'สาขา'+BR_NAME[b]).join(', '):'')+(restored?(todo.length?' · ':'')+'กู้คืน "'+name+'" '+restored+' สาขา':'')
+    +(dup.length?' · สาขา'+dup.map(b=>BR_NAME[b]).join(', ')+'มีอยู่แล้ว':'')+' — ตั้งอัตราใช้/แผนกต่อได้ที่ 🛟 Safety');
+  S.trash=null; await loadAll();
+}
+async function ensureTrash(force){ // สินค้าที่เลิกใช้ (deleted_at) ของสาขาที่ดูแล
+  if(S.trash&&!force)return;
+  const ids=allowedBr().map(b=>STK_BR[b]).join(',');
+  try{ S.trash=await selAll('products?select=id,branch_id,name,unit,sup,deleted_at&deleted_at=not.is.null&branch_id=in.('+ids+')&order=deleted_at.desc'); S.trashErr=null; }
+  catch(e){ S.trash=[]; S.trashErr=errMsg(e); }
+}
+async function trashToggle(){ S.trashOpen=!S.trashOpen; if(S.trashOpen){ render(); await ensureTrash(true); } render(); }
+function trashCard(){
+  if(!S.trash)return '<div class="note" style="margin:10px 15px">⏳ กำลังโหลดถังขยะ...</div>';
+  if(S.trashErr)return '<div class="note" style="margin:10px 15px">⚠ โหลดถังขยะไม่สำเร็จ ('+esc(S.trashErr)+')</div>';
+  const by={}; S.trash.forEach(r=>{ const n=pKey(r.name); if(n)(by[n]=by[n]||[]).push(r); });
+  const names=Object.keys(by).sort((a,b)=>a.localeCompare(b,'th'));
+  if(!names.length)return '<div class="note" style="margin:10px 15px">🗑 ถังขยะว่าง — ไม่มีสินค้าที่เลิกใช้</div>';
+  const B2BR={}; Object.keys(STK_BR).forEach(b=>{B2BR[STK_BR[b]]=b;});
+  return '<div class="card" style="margin:10px 15px;border-color:#E4A6A6"><div class="h">🗑 ถังขยะ <span class="n">'+names.length+' รายการ · กู้คืนแล้วได้ตัวเดิม (ยอดนับเก่า อัตราใช้ การผูกชื่อบิลกลับมาด้วย)</span></div>'
+    +names.map(n=>{ const rs=by[n], nb=new Set(rs.map(r=>r.branch_id)).size;   // ปุ่ม "ทุกสาขา" นับสาขาจริง (ชื่อซ้ำในสาขาเดียวกันไม่นับ)
+      return '<div class="lrow" style="grid-template-columns:minmax(150px,1.4fr) 1.4fr auto">'
+        +'<div class="nm"><div class="t" style="font-size:13.5px">'+esc(n)+'</div><div class="s">'+esc(rs[0].unit||'')+(rs[0].sup?' · '+esc(rs[0].sup):'')+'</div></div>'
+        +'<span>'+rs.map(r=>'<span class="brchip">'+esc(BR_NAME[B2BR[r.branch_id]]||'?')+' <button title="กู้คืนเฉพาะสาขานี้" data-id="'+esc(r.id)+'" onclick="prodRestore([this.dataset.id])">↩️</button></span>').join(' ')+'</span>'
+        +'<button class="outb" data-n="'+esc(n)+'" onclick="prodRestoreName(this.dataset.n)">↩️ กู้คืน'+(nb>1?'ทุกสาขา':'')+'</button></div>'; }).join('')+'</div>';
+}
+function prodRestoreName(name){ prodRestore((S.trash||[]).filter(r=>pKey(r.name)===name).map(r=>r.id)); }
+async function prodRestore(ids){
+  if(S._prBusy)return;
+  const rows=(S.trash||[]).filter(r=>ids.includes(r.id)); if(!rows.length)return;
+  S._prBusy=true;
+  try{
+  await ensureAllProducts(true);   // ตรวจชื่อซ้ำกับรายการสด (ห้ามใช้แคชที่กำลังโหลด/โหลดพัง)
+  if(!S.allBr||S.apErr){toast('โหลดรายการสินค้าไม่สำเร็จ — ตรวจชื่อซ้ำไม่ได้ ลองใหม่อีกครั้ง',true);return;}
+  const B2BR={}; Object.keys(STK_BR).forEach(b=>{B2BR[STK_BR[b]]=b;});
+  const live=r=>(S.allBr||[]).some(x=>x.branch_id===r.branch_id&&pKey(x.name)===pKey(r.name));
+  const sb={},ok=rows.filter(r=>brOk(B2BR[r.branch_id])&&!live(r)).filter(r=>!sb[r.branch_id]&&(sb[r.branch_id]=1)), clash=rows.filter(live);   // สาขาละ 1 ตัว = ตัวที่ลบล่าสุด
+  if(!ok.length){toast(clash.length?'ชื่อนี้มีตัวที่ใช้อยู่แล้วในสาขาเดียวกัน — ไม่ต้องกู้คืน':'บัญชีนี้ไม่มีสิทธิ์ในสาขานี้',true);return;}
+  if(!cfm('กู้คืน "'+pKey(ok[0].name)+'" ที่'+ok.map(r=>'สาขา'+BR_NAME[B2BR[r.branch_id]]).join(', ')+'?\n\nจะกลับมาขึ้นหน้านับ/สั่งของ/Safety ตามเดิม'))return;
+  try{
+    await api('PATCH','products?id=in.('+ok.map(r=>encodeURIComponent(r.id)).join(',')+')',{deleted_at:null},'return=minimal');
+    S.trash=S.trash.filter(r=>!ok.includes(r));
+    toast('✅ กู้คืน "'+pKey(ok[0].name)+'" แล้ว ('+ok.length+' สาขา)'+(clash.length?' · ข้าม '+clash.length+' สาขาที่มีชื่อนี้อยู่แล้ว':''));
+    await loadAll();
+  }catch(e){toast('กู้คืนไม่สำเร็จ — '+errMsg(e),true);}
+  }finally{ S._prBusy=false; }
+}
+async function prodSetSup(name,sup){ // เปลี่ยนซัพของสินค้า (ทุกสาขาที่ดูแล · ชื่อเดียวกัน)
+  const my=allowedBr(),part=my.length<Object.keys(STK_BR).length,ids=my.map(b=>STK_BR[b]);
+  sup=pKey(sup);
+  if(!cfm('เปลี่ยนซัพของ "'+name+'" เป็น '+(sup||'(ไม่ระบุซัพ)')+(part?' (เฉพาะสาขาที่คุณดูแล)':' (ทุกสาขา)')+'?\n\nใบสั่งของรอบถัดไปจะไปอยู่ใต้ซัพนี้')){render();return;}
+  try{
+    if(sup)await supEnsure(sup);
+    await api('PATCH','products?name=eq.'+encodeURIComponent(name)+'&deleted_at=is.null'+(part?'&branch_id=in.('+ids.join(',')+')':''),{sup:sup},'return=minimal');
+    [].concat(S.allBr||[],S.all||[]).forEach(x=>{ if(pKey(x.name)===name&&(!part||ids.includes(x.branch_id)))x.sup=sup; });
+    toast('✅ "'+name+'" → '+(sup||'(ไม่ระบุซัพ)')); render();
+  }catch(e){toast('เปลี่ยนซัพไม่สำเร็จ — '+errMsg(e),true);render();}
+}
 async function delProd(id){ // เอาสินค้าออกจากสาขาเดียว (soft delete)
   const r=(S.allBr||[]).find(x=>x.id===id); if(!r)return;
   const br=Object.keys(STK_BR).find(b=>STK_BR[b]===r.branch_id)||'';
@@ -1849,19 +2092,19 @@ function lineCard(){
   S._gpUse=gUse; S._gpList=gList;
   const rows=sups.map((sp,i)=>{
     const g=lineOf(sp),ok=!!(g&&g.group_id),inDb=!!supSched(sp),n=supCount(sp);
-    const esp=esc(sp).replace(/'/g,"\\'");
+    const dns=' data-n="'+esc(sp)+'"';   // ชื่อซัพส่งผ่าน data-n
     return '<div class="lrow" style="'+G+'">'
       +'<div><b>'+esc(sp)+'</b><div style="font-size:11px;font-weight:'+(ok?'400':'700')+';color:'+(ok?'var(--green)':'var(--red)')+'">'
       +(inDb?(ok?('✓ '+esc(lgLabel({group_id:g.group_id,name:g.group_name}))):'⚠ ยังไม่ผูกกลุ่มไลน์'):'⚠ ยังไม่มีในตารางซัพ')+'</div></div>'
       +'<span class="lbl" data-l="กลุ่มไลน์">'+(inDb?gPick(i,g&&g.group_id,ok,gTag)
-        +(ok&&!lgNamed(g.group_id)?'<div><button class="outb" style="padding:3px 8px;font-size:11.5px;margin-top:3px" onclick="lgRename(\''+esc(g.group_id)+'\')">✏️ ตั้งชื่อกลุ่มนี้</button></div>':'')
-        :'<button class="outb" onclick="supAdd(\''+esp+'\')">➕ เพิ่มเข้าตารางซัพ</button>')+'</span>'
+        +(ok&&!lgNamed(g.group_id)?'<div><button class="outb" style="padding:3px 8px;font-size:11.5px;margin-top:3px" data-n="'+esc(g.group_id)+'" onclick="lgRename(this.dataset.n)">✏️ ตั้งชื่อกลุ่มนี้</button></div>':'')
+        :'<button class="outb"'+dns+' onclick="supAdd(this.dataset.n)">➕ เพิ่มเข้าตารางซัพ</button>')+'</span>'
       +'<span class="lbl" data-l="สินค้า"><span style="font-size:12.5px;color:var(--mut)">'+n+' ตัว</span></span>'
       +'<div style="display:flex;gap:5px;flex-wrap:wrap">'
       +(inDb?'<button class="outb" style="padding:5px 9px;font-size:12px" onclick="lineTest('+i+')">🔔 ทดสอบ</button>':'')
-      +'<button class="outb" style="padding:5px 9px;font-size:12px" onclick="supRename(\''+esp+'\')">✏️ ชื่อ</button>'
-      +(n?'<button class="outb" style="padding:5px 9px;font-size:12px" onclick="supMove(\''+esp+'\')">↔ ย้ายของ</button>'
-         :'<button class="outb" style="padding:5px 9px;font-size:12px;color:var(--red);border-color:#E4A6A6" onclick="supDel(\''+esp+'\')">🗑 ลบ</button>')
+      +'<button class="outb" style="padding:5px 9px;font-size:12px"'+dns+' onclick="supRename(this.dataset.n)">✏️ ชื่อ</button>'
+      +(n?'<button class="outb" style="padding:5px 9px;font-size:12px"'+dns+' onclick="supMove(this.dataset.n)">↔ ย้ายของ</button>'
+         :'<button class="outb" style="padding:5px 9px;font-size:12px;color:var(--red);border-color:#E4A6A6"'+dns+' onclick="supDel(this.dataset.n)">🗑 ลบ</button>')
       +'</div></div>';
   }).join('');
   S._lineSups=sups; S._gpTag=gTag;
@@ -1873,7 +2116,7 @@ function lineCard(){
       +(S.lgChanged.length>6?' …':'')+' <button class="outb" style="padding:2px 8px;font-size:11.5px" onclick="lgChgClear()">✕ ปิด</button></div>':'';
   return '<div class="card ovok"><div class="h">🏭 ซัพพลายเออร์ + กลุ่มไลน์ <span class="n">'+sups.length+' ซัพ · อยู่ในระบบเดิม '+nDb+' · ผูกกลุ่มไลน์ '+nOk+'</span></div>'
     +chgHtml
-    +'<div class="note" style="margin:10px 15px">ใช้ข้อมูลชุดเดียวกับ<b>แอพนับสต๊อกเดิม</b> (<code>suppliers</code>) — เพิ่ม/เปลี่ยนชื่อ/ลบ ที่นี่ แอพเดิมเห็นทันที · '
+    +'<div class="note" style="margin:10px 15px">ตารางซัพ (<code>suppliers</code>) ใช้ร่วมกับครัวกลาง — เพิ่ม/เปลี่ยนชื่อ/ลบ ที่นี่ได้เลย · '
     +'เปลี่ยนชื่อซัพจะตามไปแก้ชื่อซัพในสินค้าทุกสาขาให้เอง · ลบได้เมื่อไม่มีสินค้าใช้ซัพนั้นแล้ว (ถ้ายังมีให้กด ↔ ย้ายของ ไปซัพอื่นก่อน) · '
     +'ส่งใบสั่งผ่าน Edge Function <code>line-order</code> ของระบบเดิม</div>'
     +(nDb<sups.length?'<div class="note" style="margin:0 15px 10px">⚠ บางซัพยังไม่มีในตาราง <code>suppliers</code> — กด "➕ เพิ่มเข้าตารางซัพ" (ถ้าเพิ่มไม่ได้ ให้รัน <b>sql/jjmk_stockcheck_grants.sql</b> ก่อน)</div>':'')
@@ -1988,6 +2231,12 @@ function lgAutoSync(){ // เข้าหน้าซัพ/ส่งไลน�
   if(Date.now()-last<LGSYNC_MS)return;
   syncLineGroups(true);
 }
+async function supEnsure(name){ // แถวซัพในตาราง suppliers — ไม่มี = สร้าง (สั่งได้ทุกวัน · ส่ง +1) แล้วคืนแถวนั้น
+  const x=supSched(name); if(x)return x;
+  const nm=String(name||'').trim(); if(!nm)throw new Error('ไม่มีชื่อซัพ');
+  await api('POST','suppliers',{name:nm,order_mode:'any',lead_days:1},'return=minimal');
+  const row={name:nm,order_mode:'any',lead_days:1,line_group_id:null}; (S.sups=S.sups||[]).push(row); return row;
+}
 async function supAdd(nm){
   const el=document.getElementById('nsName');
   const name=String(nm||(el&&el.value)||'').trim();
@@ -2004,25 +2253,57 @@ async function supRename(old){
   const x=supSched(old);
   const nn=(ask('เปลี่ยนชื่อซัพ "'+old+'" เป็น\n(จะแก้ชื่อซัพในสินค้าทุกสาขาให้ด้วย)',old)||'').trim();
   if(!nn||nn===old)return;
-  if(supKey(nn)!==supKey(old)&&supSched(nn)){toast('มีซัพชื่อ "'+nn+'" อยู่แล้ว',true);return;}
+  const ko=supKey(old),kn=supKey(nn);
+  if(kn!==ko&&(supSched(nn)||supAllNames().some(s=>supKey(s)===kn))){toast('มีซัพชื่อ "'+nn+'" อยู่แล้ว — ถ้าจะรวมกัน ใช้ ↔ ย้ายของ',true);return;}
   try{
+    // อ่านให้ครบก่อนเขียน (ไม่ครบ = ไม่แก้อะไรเลย): ทุกตัวสะกดของชื่อนี้ในสินค้าทุกสาขา + ในใบสั่งเก่า (ตัวพิมพ์/ช่องว่างต่างกัน) — ฐานกรองแบบตรงตัว ต้องยิงทีละตัวสะกด
+    // ไม่ย้ายใบสั่งเก่า = ซัพ "สั่งทุก N วัน" เริ่มนับรอบใหม่หลังรีโหลด
+    const olds=await supSpellings(old,x);
+    if(!olds){toast('โหลดรายการสินค้าทุกสาขาไม่สำเร็จ — ยังไม่ได้เปลี่ยนชื่อ ลองใหม่อีกครั้ง',true);return;}
+    const rs=await selAll('stock_receipts?select=sup&sup=ilike.'+encodeURIComponent('*'+ko.replace(/[*%_\\]/g,'*').split(' ').join('*')+'*')
+      +'&order_date=gte.'+addDays(bizToday(),-130)).catch(()=>null);
+    if(!rs){toast('อ่านประวัติสั่งไม่สำเร็จ — ยังไม่ได้เปลี่ยนชื่อ ลองใหม่อีกครั้ง',true);return;}
+    const all=[...new Set(olds.concat(rs.map(r=>r.sup)))].filter(s=>s&&s!==nn&&supKey(s)===ko);
     if(x)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x.name),{name:nn},'return=minimal');
-    await api('PATCH','products?sup=eq.'+encodeURIComponent(old),{sup:nn},'return=minimal').catch(()=>{});
+    let pOk=true,rcOk=true;
+    for(const o of all){
+      await api('PATCH','products?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{pOk=false;});         // สินค้าทั้ง 2 สาขา
+      await api('PATCH','stock_receipts?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{rcOk=false;});   // ประวัติสั่ง = ตัวนับรอบสั่งทุก N วัน
+      await api('PATCH','stock_counts?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{});              // ประวัตินับ — ไม่มีสิทธิ์แก้ก็ข้าม (ไม่กระทบตัวเลข)
+    }
     if(x)x.name=nn;
-    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(old))p2.sup=nn;}));
-    toast('✅ เปลี่ยนชื่อซัพ "'+old+'" → "'+nn+'" (แก้ในสินค้าทุกสาขาแล้ว)');render();
+    if(!pOk){await loadAll().catch(()=>render());toast('เปลี่ยนชื่อซัพแล้ว แต่แก้ชื่อซัพในสินค้าบางตัวไม่สำเร็จ — โหลดใหม่ให้ตรงกับฐานข้อมูลแล้ว ลองเปลี่ยนชื่อซ้ำอีกครั้ง',true);return;}
+    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===ko)p2.sup=nn;}));
+    if(rcOk&&ko!==kn&&S.lastOrd&&S.lastOrd[ko]){S.lastOrd[kn]=[...new Set((S.lastOrd[kn]||[]).concat(S.lastOrd[ko]))];delete S.lastOrd[ko];}
+    if(S.sentToday&&S.sentToday[old]!=null){S.sentToday[nn]=S.sentToday[old];delete S.sentToday[old];}
+    if(rcOk)toast('✅ เปลี่ยนชื่อซัพ "'+old+'" → "'+nn+'" (แก้ในสินค้าทุกสาขาแล้ว)');
+    else toast('เปลี่ยนชื่อแล้ว แต่ย้ายประวัติสั่งไม่ได้ — ซัพ "สั่งทุก N วัน" จะเริ่มนับรอบใหม่',true);
+    render();
   }catch(e){toast('เปลี่ยนชื่อไม่สำเร็จ — '+errMsg(e),true);}
+}
+function supAllNames(){ // ชื่อซัพทั้งหมดที่ระบบรู้จัก: ตารางซัพ + ที่สินค้าทุกสาขาใช้
+  return [...new Set((S.sups||[]).map(x=>x.name).concat(...[S.all,S.allBr].map(a=>(a||[]).map(p2=>p2.sup))))].filter(Boolean);
+}
+async function supSpellings(name,x){ // ทุกตัวสะกดของชื่อซัพนี้ที่เก็บอยู่ในสินค้าทุกสาขา (supKey เดียวกัน) · โหลดสินค้าทุกสาขาไม่ได้ = null (ห้ามเดา — สาขาอื่นอาจสะกดต่าง)
+  await ensureAllProducts(!S.allBr).catch(()=>{});   // ยังไม่มีรายการ = โหลดเดี๋ยวนี้ (ผู้ใช้กดเอง ไม่ต้องรอรอบลองใหม่ 15 วิ)
+  if(!S.allBr)return null;
+  const k=supKey(name);
+  return [...new Set([name,x&&x.name].concat(...[S.all,S.allBr].map(a=>(a||[]).map(p2=>p2.sup))))].filter(s=>s&&supKey(s)===k);
 }
 async function supMove(from){
   const others=(S._lineSups||[]).filter(x=>supKey(x)!==supKey(from));
   const to=(ask('ย้ายสินค้าของ "'+from+'" ('+supCount(from)+' ตัว) ไปซัพไหน?\n\nซัพที่มี: '+others.join(', '),'')||'').trim();
   if(!to)return;
   if(!supSched(to)&&!others.some(x=>supKey(x)===supKey(to))){toast('ไม่พบซัพ "'+to+'" — เพิ่มซัพก่อนครับ',true);return;}
-  try{
-    await api('PATCH','products?sup=eq.'+encodeURIComponent(from),{sup:to},'return=minimal');
-    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(from))p2.sup=to;}));
-    toast('✅ ย้ายสินค้าของ "'+from+'" → "'+to+'" แล้ว');render();
-  }catch(e){toast('ย้ายไม่สำเร็จ — '+errMsg(e),true);}
+  // ใช้ชื่อที่สะกดตามตารางซัพ/ที่ใช้อยู่ ไม่ใช่ตามที่พิมพ์ (พิมพ์ makro แต่ซัพชื่อ Makro → ใบสั่งไม่แตกเป็น 2 ใบ)
+  const tx=supSched(to),toN=tx?String(tx.name).trim():(others.find(x=>supKey(x)===supKey(to))||to);
+  const olds=await supSpellings(from);
+  if(!olds){toast('โหลดรายการสินค้าทุกสาขาไม่สำเร็จ — ยังไม่ได้ย้าย ลองใหม่อีกครั้ง',true);return;}
+  let ok=true;
+  for(const o of olds.filter(o=>o!==toN))await api('PATCH','products?sup=eq.'+encodeURIComponent(o),{sup:toN},'return=minimal').catch(()=>{ok=false;});
+  if(!ok){await loadAll().catch(()=>render());toast('ย้ายได้ไม่ครบ — โหลดใหม่ให้ตรงกับฐานข้อมูลแล้ว ลองย้ายซ้ำอีกครั้ง',true);return;}
+  [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(from))p2.sup=toN;}));
+  toast('✅ ย้ายสินค้าของ "'+from+'" → "'+toN+'" แล้ว');render();
 }
 async function supDel(name){
   const n=supCount(name);
@@ -2041,7 +2322,7 @@ function gpRows(i,cur){ // รายการกลุ่มในกล่อ�
   const gList=S._gpList||[],tag=S._gpTag||(()=>'');
   const hit=g=>!q||lgLabel(g).toLowerCase().includes(q)||String(g.group_id||'').toLowerCase().includes(q);
   const show=gList.filter(hit);
-  const item=(gid,html,on)=>'<button class="gpitem'+(on?' on':'')+'" onclick="gpPick('+gpArg(i)+',\''+esc(String(gid)).replace(/'/g,"\\'")+'\')">'+html+'</button>';
+  const item=(gid,html,on)=>'<button class="gpitem'+(on?' on':'')+'" data-g="'+esc(String(gid))+'" onclick="gpPick('+gpArg(i)+',this.dataset.g)">'+html+'</button>';
   return (q?'':item('','<span class="gpn">— ไม่ผูกกลุ่ม —</span>',!cur))
     +(show.length?show.map(g=>item(g.group_id,'<span class="gpn">'+esc(lgLabel(g))+'</span>'+tag(g.group_id),
         String(cur||'')===String(g.group_id))).join(''):'<div class="empty" style="padding:10px">ไม่พบกลุ่ม "'+esc(q)+'"</div>');
@@ -2073,8 +2354,7 @@ async function lineSave(i,gid){ // เขียนลง suppliers.line_group_id
   const sp=(S._lineSups||[])[i]; if(!sp)return;
   const gi=String(gid!=null?gid:((document.getElementById('lgi_'+i)||{}).value||'')).trim();
   try{
-    const x=supSched(sp);
-    if(!x){toast('ไม่พบซัพ "'+sp+'" ในตาราง suppliers ของระบบเดิม — เพิ่มชื่อซัพที่แอพนับเดิมก่อนครับ',true);return;}
+    const x=await supEnsure(sp);   // ยังไม่มีในตารางซัพ = สร้างให้เลย
     await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x.name),{line_group_id:gi||null},'return=minimal');
     x.line_group_id=gi||null;
     const g=(S.lineGroups||[]).find(y=>String(y.group_id)===gi);
@@ -2113,12 +2393,12 @@ function deptCard(){
     const real=k!=='ยังไม่จัดแผนก'; // แผนกจริง (แก้ชื่อ/ลบได้) · "ยังไม่จัดแผนก" คือถังรวมของที่ยังไม่ตั้ง
     const open=!!S.deptOpen[k]||!!q;
     const z=deptZone(k)||'';
-    const esk=esc(k).replace(/'/g,"\\'");
-    const zsel=(real&&(S.zoneOk||S.deptTbl))?'<select class="zsel" onclick="event.stopPropagation()" onchange="setZone(\''+esk+'\',this.value)"><option value="">โซน…</option>'
+    const dnd=' data-n="'+esc(k)+'"';   // ชื่อแผนกส่งผ่าน data-n
+    const zsel=(real&&(S.zoneOk||S.deptTbl))?'<select class="zsel" onclick="event.stopPropagation()"'+dnd+' onchange="setZone(this.dataset.n,this.value)"><option value="">โซน…</option>'
       +['หน้าร้าน','หลังร้าน'].map(o=>'<option'+(z===o?' selected':'')+'>'+o+'</option>').join('')+'</select>':'';
-    const btns=real?'<button class="outb" style="padding:3px 9px;font-size:12px" onclick="event.stopPropagation();renameDept(\''+esk+'\')">✏️ แก้ชื่อ</button>'
-      +' <button class="outb" style="padding:3px 9px;font-size:12px;color:var(--red);border-color:#E4A6A6" onclick="event.stopPropagation();delDept(\''+esk+'\')">🗑 ลบ</button>':'';
-    const head='<div class="lrow dhrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleDept(\''+esk+'\')">'
+    const btns=real?'<button class="outb" style="padding:3px 9px;font-size:12px"'+dnd+' onclick="event.stopPropagation();renameDept(this.dataset.n)">✏️ แก้ชื่อ</button>'
+      +' <button class="outb" style="padding:3px 9px;font-size:12px;color:var(--red);border-color:#E4A6A6"'+dnd+' onclick="event.stopPropagation();delDept(this.dataset.n)">🗑 ลบ</button>':'';
+    const head='<div class="lrow dhrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer"'+dnd+' onclick="toggleDept(this.dataset.n)">'
       +'<div><b>'+(open?'▾':'▸')+' '+(DEPT_IC[k]||'🗂')+' '+esc(k)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+ds[k].length+' รายการ'+(z?(' · '+esc(z)):'')+'</span></div>'
       +'<div class="hbtns">'+zsel+' '+btns+'</div></div>';
     if(!open)return head;
@@ -2351,7 +2631,7 @@ function unitCard0(){ // แผงหน่วยทั้งหมด (พั�
   const show=q?list.filter(u=>u.name.toLowerCase().includes(q)):list;
   const nNew=list.filter(u=>!u.row).length;
   const KIND={count:['หน่วยนับ','#2E5B3C'],buy:['หน่วยซื้อ (บิล)','#24466F'],both:['ใช้ทั้งสองแบบ','#7A5B12']};
-  const esq=n=>esc(n).replace(/'/g,"\\'");
+  const dnu=n=>' data-n="'+esc(n)+'"';   // ชื่อหน่วยส่งผ่าน data-n
   const mainNames=list.map(u=>u.name);
   const row=u=>{
     const k=unitKind(u),kk=KIND[k]||KIND.both,canEdit=!!(u.cnt||u.map||u.row),inUse=!!(u.cnt||u.map);
@@ -2361,7 +2641,7 @@ function unitCard0(){ // แผงหน่วยทั้งหมด (พั�
       +'<div><b style="font-size:15px">'+esc(u.name)+'</b>'
       +'<div style="font-size:10.5px;color:'+kk[1]+'">'+kk[0]+(u.row?'':' · ⚠ ยังไม่อยู่ในรายการ')+'</div>'
       +(al.length?'<div style="font-size:11px;margin-top:3px">🔗 ชื่อพ้อง: '+al.map(a=>'<span class="bchip" style="font-size:11px">'+esc(a)
-        +' <button class="outb" style="padding:0 5px;font-size:11px" title="แยก '+esc(a)+' ออกจาก '+esc(u.name)+'" onclick="unitUnmerge(\''+esq(a)+'\')">✕</button></span>').join(' ')+'</div>':'')+'</div>'
+        +' <button class="outb" style="padding:0 5px;font-size:11px" title="แยก '+esc(a)+' ออกจาก '+esc(u.name)+'"'+dnu(a)+' onclick="unitUnmerge(this.dataset.n)">✕</button></span>').join(' ')+'</div>':'')+'</div>'
       +'<div style="font-size:11.5px;color:var(--mut)">'
       +(u.cnt?'หน่วยนับ <b>'+u.cnt+'</b> รายการ':'<span style="opacity:.6">ไม่ได้ใช้เป็นหน่วยนับ</span>')
       +(u.bill?' · พบในบิล <b>'+u.bill+'</b> ครั้ง':'')
@@ -2369,14 +2649,14 @@ function unitCard0(){ // แผงหน่วยทั้งหมด (พั�
       +(al.length?'<div style="margin-top:2px">รวมชื่อพ้องแล้ว '+al.length+' ชื่อ · บิลที่เขียนชื่อพ้องถือว่าเป็น "'+esc(u.name)+'"</div>':'')
       +(merging?'<div style="margin-top:5px">รวม <b>'+esc(u.name)+'</b> เข้ากับ '
         +'<select class="zsel" id="uMg">'+mainNames.filter(n=>n!==u.name).map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join('')+'</select> '
-        +'<button class="outb" onclick="unitMergeGo(\''+esq(u.name)+'\')">✅ รวม</button> '
+        +'<button class="outb"'+dnu(u.name)+' onclick="unitMergeGo(this.dataset.n)">✅ รวม</button> '
         +'<button class="outb" onclick="unitMergeCancel()">ยกเลิก</button></div>':'')
       +'</div>'
       +'<div class="hbtns">'
-      +(u.row?'':'<button class="outb" onclick="unitAdopt(\''+esq(u.name)+'\')">➕ เพิ่มเข้ารายการ</button>')
-      +(canEdit?'<button class="outb" onclick="unitRename(\''+esq(u.name)+'\')" title="แก้ชื่อหน่วยนี้ทุกที่ที่ใช้อยู่">✏️ แก้ชื่อ</button>':'')
-      +(mainNames.length>1&&!merging?'<button class="outb" onclick="unitMergeOpen(\''+esq(u.name)+'\')" title="หน่วยนี้กับอีกหน่วยคือของเดียวกัน">🔗 รวม</button>':'')
-      +(u.row||!inUse?'<button class="outb" onclick="unitDel(\''+esq(u.name)+'\')">🗑 ลบ</button>':'')
+      +(u.row?'':'<button class="outb"'+dnu(u.name)+' onclick="unitAdopt(this.dataset.n)">➕ เพิ่มเข้ารายการ</button>')
+      +(canEdit?'<button class="outb"'+dnu(u.name)+' onclick="unitRename(this.dataset.n)" title="แก้ชื่อหน่วยนี้ทุกที่ที่ใช้อยู่">✏️ แก้ชื่อ</button>':'')
+      +(mainNames.length>1&&!merging?'<button class="outb"'+dnu(u.name)+' onclick="unitMergeOpen(this.dataset.n)" title="หน่วยนี้กับอีกหน่วยคือของเดียวกัน">🔗 รวม</button>':'')
+      +(u.row||!inUse?'<button class="outb"'+dnu(u.name)+' onclick="unitDel(this.dataset.n)">🗑 ลบ</button>':'')
       +'</div></div>';
   };
   return '<div class="card"><div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleUM()">'
@@ -2569,8 +2849,7 @@ function unitCard(){
       });
     });
     const open=!!S.supOpen[sp]||!!q;
-    const esp=esc(sp).replace(/'/g,"\\'");
-    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" onclick="toggleSup(\''+esp+'\')">'
+    const head='<div class="lrow" style="grid-template-columns:1fr auto;background:#FBF6EA;cursor:pointer" data-n="'+esc(sp)+'" onclick="toggleSup(this.dataset.n)">'
       +'<div><b>'+(open?'▾':'▸')+' 🏷 '+esc(sp)+'</b> <span style="font-size:11.5px;color:var(--mut)">'+items.length+' สินค้า · '+nUnit+' หน่วยซื้อ</span></div>'
       +'<div style="font-size:11.5px;color:'+(nTodo?'var(--amber)':'var(--green)')+';font-weight:700">'+(nTodo?('⚠ ยังไม่ใส่ตัวคูณ '+nTodo):'✓ ครบ')+'</div></div>';
     secs.push(head+(open?(body||'<div class="lrow" style="grid-template-columns:1fr;color:var(--mut);font-size:13px">ไม่พบสินค้าที่ค้นหาในซัพนี้</div>'):''));
@@ -2771,7 +3050,7 @@ function renderSet(){
           +'<span class="lbl" data-l="เลิกใช้"><button class="delx" title="เลิกใช้สินค้านี้" onclick="delItemSet(\''+it.id+'\')">🗑</button></span></div>';
       }).join('');
       const z0=(ds[k].find(i=>i.zone)||{}).zone||'';
-      const zsel=(S.zoneOk&&ds[k][0].dept)?'<select class="zsel" onchange="setZone(\''+esc(k).replace(/'/g,"\\'")+'\',this.value)"><option value="">โซน…</option><option'+(z0==='หน้าร้าน'?' selected':'')+'>หน้าร้าน</option><option'+(z0==='หลังร้าน'?' selected':'')+'>หลังร้าน</option></select>':'';
+      const zsel=(S.zoneOk&&ds[k][0].dept)?'<select class="zsel" data-n="'+esc(k)+'" onchange="setZone(this.dataset.n,this.value)"><option value="">โซน…</option><option'+(z0==='หน้าร้าน'?' selected':'')+'>หน้าร้าน</option><option'+(z0==='หลังร้าน'?' selected':'')+'>หลังร้าน</option></select>':'';
       return '<div class="card"><div class="h">'+(DEPT_IC[k]||'🗂')+' '+esc(k)+zsel+' <span class="n">'+ds[k].length+' รายการ</span></div>'
         +'<div class="hd2"><span></span><span>สินค้า</span><span>แผนก</span><span>หน่วยนับ</span><span style="text-align:center">จ–พฤ/วัน</span><span style="text-align:center">ศ/วัน</span><span style="text-align:center">ส–อา/วัน</span><span></span></div>'
         +rows+'</div>';
@@ -2853,6 +3132,23 @@ const supKey=n=>String(n||'').replace(/\s+/g,' ').trim().toLowerCase();
 function supSched(n){const k=supKey(n); if(!k)return null;
   return (S.sups||[]).find(x=>supKey(x.name)===k)||null;}
 function supModeOf(x){return (x.order_mode==='fixed'||(!x.order_mode&&x.schedule&&Object.keys(x.schedule||{}).length))?'fixed':(x.order_mode||'any');}
+/* 🔁 โหมด "สั่งทุก N วัน" (order_mode='interval' — เจ้าของสั่ง 2026-10-15 ให้แอพนี้รองรับแทนแอพนับเดิม)
+   ครบรอบ = ใบสั่งล่าสุดของสาขานี้ (stock_receipts ก่อนวันขาย cd) + N วัน ≤ cd · ยังไม่เคยสั่ง = ครบรอบ (เริ่มนับ)
+   ของชุดนี้ต้องพอ N วัน (nextDeliveryAfter = วันของมา + N) · N ไม่ได้ตั้ง/ผิดช่วง = 15 วัน (ค่าเดิมของแอพนับเดิม cycleDays)
+   ⚠ ครัวกลาง (jjmk-kitchen.html ฟังก์ชัน br*) ต้องคิดแบบเดียวกัน */
+function supCyc(x){const n=x?parseInt(x.cycle_days,10):NaN;return (n>=2&&n<=90)?n:15;}
+function ivState(sup,cd){ // {cyc,last,next,due} หรือ null ถ้าไม่ใช่ซัพโหมดนี้
+  const x=supSched(sup); if(!x||supModeOf(x)!=='interval')return null;
+  const cyc=supCyc(x); let last=null;
+  ((S.lastOrd||{})[supKey(sup)]||[]).forEach(d=>{ if(d<cd&&(!last||d>last))last=d; });
+  const next=last?addDays(last,cyc):null;
+  return {cyc,last,next,due:!last||next<=cd};
+}
+function ivTxt(dl){ // ข้อความหัวซัพในหน้าสั่งของ
+  const iv=dl&&dl.iv; if(!iv)return '';
+  return iv.due?(' · 🔁 ครบรอบสั่งทุก '+iv.cyc+' วัน'+(iv.last?' (สั่งล่าสุด '+thDate(iv.last)+')':' (ยังไม่เคยสั่ง — เริ่มนับรอบ)'))
+    :('🔁 ยังไม่ครบรอบ (สั่งทุก '+iv.cyc+' วัน) · สั่งล่าสุด '+thDate(iv.last)+' · รอบหน้า '+thDate(iv.next));
+}
 function orderBanner(){ // แถบ "รอบสั่งวันนี้" — สรุปสั้น กดดูรายชื่อได้ (เมื่อก่อนยาวเป็นพืดอ่านไม่ออก)
   if(!(S.sups||[]).length)return '';
   const cd=($('#cd')&&$('#cd').value)||bizToday();
@@ -2862,11 +3158,13 @@ function orderBanner(){ // แถบ "รอบสั่งวันนี้" �
   names.forEach(n=>{const x=supSched(n); if(!x)return;
     const m=supModeOf(x);
     if(m==='fixed'){const dd=(x.schedule||{})[key]; if(dd)due.push({n,to:(DOW_SH[dd]||dd)});}
+    else if(m==='interval'){const iv=ivState(n,cd); if(iv&&iv.due){const l=parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1;
+      due.push({n,to:(l===1?'พรุ่งนี้':'+'+l+' วัน')+' · 🔁 ครบ '+iv.cyc+' วัน'});}}
     else if(m==='any'){const l=parseInt(x.lead_days,10)>=1?parseInt(x.lead_days,10):1;
       daily.push({n,to:(l===1?'พรุ่งนี้':'+'+l+' วัน')});}
   });
   if(!due.length&&!daily.length)return '';
-  const chip=(x,cls)=>'<button class="obchip'+(cls||'')+'" onclick="goOrder(\''+esc(x.n).replace(/'/g,"\\'")+'\')" title="ดูใบสั่งของ '+esc(x.n)+'">'
+  const chip=(x,cls)=>'<button class="obchip'+(cls||'')+'" data-n="'+esc(x.n)+'" onclick="goOrder(this.dataset.n)" title="ดูใบสั่งของ '+esc(x.n)+'">'
     +esc(x.n)+' <span>→ '+esc(x.to)+'</span></button>';
   const open=!!S.obOpen;
   const head='<div class="obhead"><b>🚚 รอบสั่งวันนี้ ('+(DOW_SH[key]||'')+')</b>'
