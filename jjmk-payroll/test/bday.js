@@ -1,0 +1,186 @@
+// เทสการ์ด 🎂 แจ้งวันเกิดเข้ากลุ่มไลน์ (หน้าตั้งค่า) กับโค้ดจริงใน jjmk-payroll.html
+// ตัวส่งจริงอยู่ใน SQL (jj_birthday_line.sql) — เทสฝั่งฐานข้อมูลรันกับ PostgreSQL จริงแยกต่างหาก
+const fs=require('fs');
+const { JSDOM, VirtualConsole } = require('jsdom');
+const html=fs.readFileSync(__dirname+'/../../jjmk-payroll.html','utf8').replace(/<script src="[^"]+"><\/script>/g,'').replace(/<link[^>]+>/g,'');
+const vc=new VirtualConsole(); const errs=[]; vc.on('jsdomError',e=>errs.push(e.message));
+const writes=[], rpcs=[], fetches=[], channels=[];
+const TABLES={ line_groups:[], payroll_line_log:[] };
+const RPC={};
+function chain(table){ let op='select', row=null, one=false; const b={};
+  for(const m of ['select','eq','neq','gte','lte','lt','gt','in','is','not','or','order','limit','range','on','subscribe']) b[m]=()=>b;
+  for(const m of ['single','maybeSingle']) b[m]=()=>{ one=true; return b; };
+  for(const m of ['insert','update','upsert','delete']) b[m]=(r)=>{ op=m; row=r; return b; };
+  b.then=(ok,er)=>{ if(op!=='select') writes.push({table,op,row});
+    const arr=op==='select' ? (TABLES[table]||[]) : [];
+    return Promise.resolve({data: one ? (arr[0]||null) : arr, error:null}).then(ok,er); };
+  return b; }
+const dom=new JSDOM(html,{url:'https://thananant.github.io/JJ-PnL/jjmk-payroll.html',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,
+  beforeParse(w){ w.supabase={createClient:()=>({from:t=>chain(t),channel:n=>{ channels.push(n); return chain('ch'); },removeChannel(){},storage:{from:()=>({})},
+      rpc:(fn,args)=>{ rpcs.push({fn,args}); return Promise.resolve(RPC[fn] ? RPC[fn](args) : {data:null,error:{message:'function '+fn+' does not exist'}}); } })};
+    w.TextEncoder=require('util').TextEncoder; w.alert=()=>{}; w.confirm=()=>true; w.indexedDB=undefined; w.scrollTo=()=>{};
+    w.fetch=async (url,opts)=>{ fetches.push({url,opts}); const r=w.__fetchRes||{status:200,body:{ok:true}};
+      return { ok:r.status>=200&&r.status<300, status:r.status, json:async()=>r.body }; }; }});
+const w=dom.window, d=w.document; const E=s=>w.eval(s);
+let fail=0; const ok=(c,m)=>{console.log((c?'  ✓ ':'  ✗ ')+m); if(!c) fail++;};
+const tick=()=>new Promise(r=>setTimeout(r,30));
+const G1='C'+'1'.repeat(32), G2='C'+'a'.repeat(32), G3='C'+'b'.repeat(32);
+const $=id=>d.getElementById(id);
+setTimeout(async ()=>{ try{
+  let toasts=[]; w.toast=m=>toasts.push(m);
+  E(`AUTH={username:'boss',display_name:'บอส',role:'owner'}; applyUser(AUTH); auditReady=true;`);
+  console.log('[ยังไม่รัน SQL]');
+  E(`bdayCfg=null; go('settings')`); await tick();
+  ok($('bdaySqlBox') && /payroll_line_tick/.test($('bdaySqlBox').value) && /คัดลอก SQL \(jj_birthday_line\.sql\)/.test($('bdayBody').textContent),'ไม่มีช่อง bday_line = บอกให้รัน SQL + ปุ่มคัดลอก');
+  await w.eval(`saveBday()`); ok(!writes.length && toasts.some(t=>/jj_birthday_line\.sql/.test(t)),'ยังไม่รัน SQL = บันทึกไม่ได้ (ไม่แกล้งทำเป็นบันทึก)');
+  channels.length=0; E(`startRealtime()`);
+  ok(channels.join()==='jjmk-live','ยังไม่รัน SQL = ไม่เปิดช่อง realtime ของวันเกิด (ไม่ทำให้ sync สดหลักหลุด)');
+  const liveSrc=E(`startRealtime.toString()`);
+  ok(!/payroll_line_log/.test(liveSrc.slice(0, liveSrc.indexOf('bdayRealtime()'))),'ช่องหลัก jjmk-live ไม่มีตาราง payroll_line_log');
+  console.log('[ค่าตั้ง + กลุ่มไลน์]');
+  TABLES.line_groups=[{group_id:G1,name:'ซัพผักสด'},{group_id:G2,name:'JJ Daily Report'}];
+  E(`bdayCfg={}; go('settings')`); await tick();
+  const sel=$('bdGroup');
+  ok(sel && [...sel.options].map(o=>o.value).join()===['',G1,G2,'__manual'].join(),'ตัวเลือก: ไม่ส่ง + กลุ่มจาก line_groups + ใส่ไอดีเอง');
+  ok($('bdMonth').checked && !$('bdDay').checked && $('bdMonthAt').value==='09:00','ค่าตั้งต้น: รายเดือนเปิด 09:00 · เช้าวันเกิดปิด');
+  ok(channels.filter(n=>n==='jjmk-bday').length===1,'รัน SQL แล้ว = เปิดช่อง jjmk-bday แยกต่างหาก (ครั้งเดียว)');
+  E(`renderBday()`); await tick(); ok(channels.filter(n=>n==='jjmk-bday').length===1,'วาดซ้ำ = ไม่เปิดช่องซ้ำ');
+  ok(/กลุ่มที่น่าจะใช่: JJ Daily Report/.test($('bdayBody').textContent),'แนะนำกลุ่มที่ชื่อเหมือน daily report (ไม่เลือกให้เอง)');
+  ok($('bdGroup').value==='','ยังไม่เลือกกลุ่มให้เอง');
+  [...$('bdayBody').querySelectorAll('button')].find(b=>/ใช้กลุ่มนี้/.test(b.textContent)).click();
+  ok($('bdGroup').value===G2 && !writes.length,'กด "ใช้กลุ่มนี้" = เลือกในช่อง ยังไม่บันทึก');
+  $('bdDay').checked=true; $('bdDayAt').value='08:30';
+  toasts=[]; writes.length=0; await w.eval(`saveBday()`); await tick();
+  let up=writes.find(x=>x.table==='payroll_settings'&&x.op==='update');
+  const c1=up&&up.row.bday_line;
+  ok(c1 && c1.group===G2 && c1.month===true && c1.day===true && c1.month_at==='09:00' && c1.day_at==='08:30' && /^\d{4}-\d\d-\d\dT/.test(c1.since),'บันทึก payroll_settings.bday_line ครบ + since (กันย้อนส่ง)');
+  ok(toasts.some(t=>/เดือนหน้า/.test(t) && /ส่งเดี๋ยวนี้/.test(t)),'ตั้งครั้งแรกหลังวันที่ 1 = บอกว่าเริ่มเดือนหน้า + ให้กดส่งเอง');
+  ok($('bdGroup').value===G2,'วาดใหม่หลังบันทึก ยังเลือกกลุ่มเดิม');
+  writes.length=0; $('bdMonthAt').value='07:05'; await w.eval(`saveBday()`); await tick();
+  up=writes.find(x=>x.table==='payroll_settings');
+  ok(up && up.row.bday_line.since===c1.since && up.row.bday_line.month_at==='07:05','บันทึกซ้ำ: since เดิม (ไม่เลื่อน) · เวลาใหม่ 07:05');
+  E(`bdayCfg=Object.assign({},bdayCfg,{month_at:'7:05',day_at:'25:00'}); renderBday()`); await tick();
+  ok($('bdMonthAt').value==='07:05' && $('bdDayAt').value==='09:00','ค่าเก่า "7:05" เติม 0 ให้ · ค่าเพี้ยน (25:00) ใช้ค่าตั้งต้น');
+  ok($('bdDayAt').getAttribute('max')==='23:30','ช่องเวลาตั้งได้ถึง 23:30');
+  $('bdDayAt').value='23:55'; writes.length=0; await w.eval(`saveBday()`); await tick();
+  ok(writes.find(x=>x.table==='payroll_settings').row.bday_line.day_at==='23:30','ตั้งเกิน 23:30 = บันทึก 23:30 (ฐานข้อมูลก็ตัดที่ 23:30)');
+  console.log('[กลุ่มแปลก ๆ จาก line_groups]');
+  const EVIL="x');window.__pwn=1;('";
+  TABLES.line_groups=[{group_id:G1,name:'ซัพผักสด'},{group_id:EVIL,name:'Daily Report (ปลอม)'},{group_id:G2,name:'JJ Daily Report'}];
+  E(`bdayCfg=Object.assign({},bdayCfg,{group:''}); renderBday()`); await tick();
+  ok(![...$('bdGroup').options].some(o=>o.value===EVIL) && /JJ Daily Report/.test($('bdayBody').querySelector('.bd-hint').textContent),'ไอดีกลุ่มผิดรูปแบบ = ไม่ขึ้นในตัวเลือก/คำแนะนำ');
+  const hb=[...$('bdayBody').querySelectorAll('button')].find(b=>/ใช้กลุ่มนี้/.test(b.textContent));
+  ok(hb.getAttribute('onclick')==='bdayUseHint(this.dataset.gid)' && hb.dataset.gid===G2,'ปุ่มใช้กลุ่มนี้ส่งไอดีทาง data-gid (ไม่ต่อสตริง JS)');
+  hb.click(); ok(!w.__pwn && $('bdGroup').value===G2,'กดแล้วไม่มีโค้ดแปลกปลอมทำงาน');
+  E(`bdayUseHint("${EVIL.replace(/"/g,'\\"')}")`); ok($('bdGroup').value===G2,'bdayUseHint รับเฉพาะไอดีรูปแบบถูกต้อง');
+  TABLES.line_groups=[{group_id:G1,name:'ซัพผักสด'},{group_id:G2,name:'JJ Daily Report'}];
+  E(`bdayCfg=Object.assign({},bdayCfg,{group:'${G2}'}); renderBday()`); await tick();
+  console.log('[อ่านค่าล่าสุดก่อนวาด/ก่อนบันทึก]');
+  TABLES.payroll_settings=[{id:1,bday_line:{group:G1,month:true,since:'2026-10-01T00:00:00Z'}}];
+  E(`renderBday()`); await tick();
+  ok($('bdGroup').value===G1,'วาดการ์ด = อ่านค่าล่าสุดจากฐานข้อมูล (อีกเครื่องเพิ่งเปลี่ยนกลุ่ม)');
+  TABLES.payroll_settings=[{id:1,bday_line:{group:G2,month:true,since:'2026-10-01T00:00:00Z'}}];
+  $('bdDay').checked=true; writes.length=0; toasts=[]; await w.eval(`saveBday()`); await tick();
+  ok(!writes.some(x=>x.table==='payroll_settings') && toasts.some(t=>/มีคนเพิ่งแก้/.test(t)) && $('bdGroup').value===G2 && !$('bdDay').checked,'อีกเครื่องแก้ระหว่างเปิดการ์ด = ไม่บันทึกทับ · โหลดค่าล่าสุดให้');
+  writes.length=0; await w.eval(`saveBday()`); await tick();
+  ok(writes.some(x=>x.table==='payroll_settings' && x.row.bday_line.group===G2 && x.row.bday_line.since==='2026-10-01T00:00:00Z'),'กดบันทึกอีกครั้ง (ค่าไม่เปลี่ยนแล้ว) = บันทึกได้ · since เดิม');
+  TABLES.payroll_settings=[{id:1,bday_line:{since:'2026-10-01T00:00:00Z',month:true,group:G2,day:false,day_at:'09:00',month_at:'09:00'}}];
+  E(`renderBday()`); await tick();
+  TABLES.payroll_settings=[{id:1,bday_line:{group:G2,day_at:'09:00',month_at:'09:00',day:false,month:true,since:'2026-10-01T00:00:00Z'}}];
+  writes.length=0; toasts=[]; await w.eval(`saveBday()`); await tick();
+  ok(writes.some(x=>x.table==='payroll_settings') && !toasts.some(t=>/มีคนเพิ่งแก้/.test(t)),'ค่าเดียวกันแต่คีย์เรียงต่างกัน (jsonb) = ไม่ขึ้น "มีคนแก้" ผิด ๆ');
+  delete TABLES.payroll_settings;
+  console.log('[ใส่ไอดีกลุ่มเอง]');
+  $('bdGroup').value='__manual'; E(`bdayGroupChanged()`);
+  ok($('bdGroupId').style.display==='','เลือก ✏️ = ช่องใส่ไอดีโผล่');
+  $('bdGroupId').value='C123'; toasts=[]; writes.length=0; await w.eval(`saveBday()`);
+  ok(!writes.length && toasts.some(t=>/ไอดีกลุ่มไม่ถูกต้อง/.test(t)),'ไอดีผิดรูปแบบ = ไม่บันทึก');
+  $('bdGroupId').value='  '+G3+' '; writes.length=0; await w.eval(`saveBday()`); await tick();
+  up=writes.find(x=>x.table==='payroll_settings');
+  ok(up && up.row.bday_line.group===G3,'ไอดีถูกต้อง (ตัดช่องว่าง) = บันทึก');
+  ok([...$('bdGroup').options].some(o=>o.value===G3 && o.selected && /ใส่เอง/.test(o.textContent)),'ไอดีที่ใส่เองโผล่เป็นตัวเลือกที่เลือกอยู่');
+  $('bdGroup').value=''; writes.length=0; toasts=[]; await w.eval(`saveBday()`); await tick();
+  ok(writes.find(x=>x.table==='payroll_settings').row.bday_line.group==='' && toasts.some(t=>/ยังไม่ได้เลือกกลุ่ม/.test(t)),'เลือก "ไม่ส่ง" = ปิดการส่ง');
+  console.log('[ดูตัวอย่าง]');
+  E(`bdayCfg=Object.assign({},bdayCfg,{group:'${G2}'}); renderBday()`); await tick();
+  RPC.payroll_bday_month_text=a=>({data:'🎂 วันเกิดพนักงาน เดือน'+a.p_day,error:null});
+  RPC.payroll_bday_day_text=a=>({data:null,error:null});
+  const today=new Date(Date.now()+7*3600e3).toISOString().slice(0,10);
+  const y=+today.slice(0,4), m=+today.slice(5,7), nm=m===12?(y+1)+'-01-01':y+'-'+String(m+1).padStart(2,'0')+'-01';
+  $('bdWhen').value='next'; rpcs.length=0; await w.eval(`bdayPreview()`);
+  ok(rpcs[0] && rpcs[0].fn==='payroll_bday_month_text' && rpcs[0].args.p_day===nm && $('bdPre').textContent.endsWith(nm) && !$('bdPre').hidden,'เดือนหน้า = RPC ด้วยวันที่ 1 เดือนหน้า ('+nm+')');
+  $('bdWhen').value='this'; rpcs.length=0; await w.eval(`bdayPreview()`);
+  ok(rpcs[0].args.p_day===today.slice(0,8)+'01','เดือนนี้ = วันที่ 1 เดือนนี้');
+  $('bdWhen').value='today'; rpcs.length=0; await w.eval(`bdayPreview()`);
+  ok(rpcs[0].fn==='payroll_bday_day_text' && rpcs[0].args.p_day===today && /วันนี้ไม่มีพนักงานเกิด/.test($('bdPre').textContent),'เช้าวันเกิด = RPC วันนี้ (เวลาไทย) · ไม่มีใครเกิดบอกชัด');
+  RPC.payroll_bday_month_text=()=>({data:null,error:{message:'function payroll_bday_month_text does not exist'}});
+  $('bdWhen').value='this'; await w.eval(`bdayPreview()`);
+  ok(/ดูตัวอย่างไม่ได้/.test($('bdPre').textContent) && /jj_birthday_line\.sql/.test($('bdPre').textContent),'RPC ไม่มี = บอกให้รัน SQL');
+  RPC.payroll_bday_month_text=a=>({data:'🎂 วันเกิดพนักงาน เดือนทดสอบ\nรวม 2 คน',error:null});
+  console.log('[ส่งเดี๋ยวนี้]');
+  const sendBtn=()=>$('bdSendBtn');
+  fetches.length=0; writes.length=0; toasts=[]; let asked='';
+  w.confirm=m=>{ asked=m; return true; };
+  await w.eval(`bdaySend(document.getElementById('bdSendBtn'))`); await tick();
+  const f=fetches[0];
+  ok(f && f.url==='https://aikyxvluaiubdidqxwnd.supabase.co/functions/v1/line-order' && JSON.parse(f.opts.body).to===G2 && JSON.parse(f.opts.body).text.startsWith('🎂 วันเกิดพนักงาน') && f.opts.headers.apikey,'ยิง line-order {to,text} ด้วยคีย์สาธารณะ');
+  ok(/JJ Daily Report/.test(asked) && /ทุกคนในกลุ่ม/.test(asked),'ถามยืนยันก่อนส่ง พร้อมชื่อกลุ่ม');
+  ok(writes.some(x=>x.table==='payroll_audit' && x.row.action==='line' && /JJ Daily Report/.test(x.row.detail)),'จดประวัติการทำรายการ "📤 ส่งไลน์"');
+  ok(toasts.some(t=>/✅ ส่งเข้ากลุ่ม JJ Daily Report แล้ว/.test(t)) && !sendBtn().disabled,'ส่งสำเร็จ = แจ้ง + ปุ่มกลับมากดได้');
+  fetches.length=0; w.confirm=()=>false; await w.eval(`bdaySend(document.getElementById('bdSendBtn'))`);
+  ok(!fetches.length,'กดยกเลิก = ไม่ส่ง');
+  w.confirm=()=>true; w.__fetchRes={status:200,body:{ok:false,error:'bot is not a member'}}; toasts=[]; writes.length=0;
+  await w.eval(`bdaySend(document.getElementById('bdSendBtn'))`);
+  ok(toasts.some(t=>/ส่งไม่สำเร็จ: bot is not a member/.test(t)) && !writes.some(x=>x.table==='payroll_audit'),'line-order ตอบ ok:false = แจ้งไม่สำเร็จ ไม่จดว่าส่งแล้ว');
+  w.__fetchRes={status:500,body:{}}; toasts=[]; await w.eval(`bdaySend(document.getElementById('bdSendBtn'))`);
+  ok(toasts.some(t=>/HTTP 500/.test(t)),'HTTP 500 = แจ้งไม่สำเร็จ');
+  w.__fetchRes=null; fetches.length=0; $('bdWhen').value='today'; toasts=[];
+  await w.eval(`bdaySend(document.getElementById('bdSendBtn'))`);
+  ok(!fetches.length && toasts.some(t=>/ไม่มีอะไรจะส่ง/.test(t)),'วันนี้ไม่มีใครเกิด = ไม่ส่ง');
+  $('bdGroup').value=''; fetches.length=0; toasts=[]; $('bdWhen').value='this';
+  await w.eval(`bdaySend(document.getElementById('bdSendBtn'))`);
+  ok(!fetches.length && toasts.some(t=>/เลือกกลุ่มไลน์ก่อน/.test(t)),'ยังไม่เลือกกลุ่ม = ไม่ส่ง');
+  console.log('[ผลการส่ง]');
+  const nowIso=new Date().toISOString(), oldIso=new Date(Date.now()-3600e3).toISOString();
+  TABLES.payroll_line_log=[
+    {kind:'bday_month',period_key:'2026-10',ok:true,tries:1,sent_at:'2026-10-01T02:00:05Z'},
+    {kind:'bday_day',period_key:'2026-10-15',ok:false,tries:3,detail:'HTTP 400 {"error":"bot not in group"}',sent_at:'2026-10-15T02:20:00Z'},
+    {kind:'bday_month',period_key:'2026-11',ok:null,tries:1,sent_at:nowIso},
+    {kind:'bday_month',period_key:'2026-09',ok:null,tries:1,sent_at:oldIso},
+    {kind:'bday_day',period_key:'2020-01-05',ok:false,tries:1,detail:'HTTP 502',sent_at:'2020-01-05T02:00:00Z'},
+    {kind:'bday_day',period_key:'2999-01-05',ok:false,tries:1,detail:'HTTP 503',sent_at:'2999-01-05T02:00:00Z'}];
+  E(`renderBday()`); await tick();
+  const lg=$('bdLog').textContent;
+  ok(/รายชื่อเดือนตุลาคม 2569 · ✅ ส่งแล้ว/.test(lg) && /เช้าวันเกิด .*❌ ส่งไม่สำเร็จ/.test(lg) && /bot not in group/.test(lg) && /ลองครบ 3 ครั้ง/.test(lg) && /พฤศจิกายน 2569 · ⏳ ส่งแล้ว รอผล/.test(lg),'แสดงผล ✅ / ❌ (+เหตุผล · ลองครบแล้ว) / ⏳');
+  ok(/กันยายน 2569 · ❔ ส่งแล้ว ไม่ทราบผล/.test(lg),'รอผลเกิน 30 นาที = ❔ ไม่ทราบผล (ให้ดูในกลุ่ม)');
+  ok(/HTTP 502 · เลยช่วงส่งแล้ว/.test(lg) && /HTTP 503 · ระบบจะลองใหม่ให้เอง/.test(lg),'ไม่สำเร็จ: เลยช่วงลองใหม่แล้ว = บอกให้กดส่งเอง · ยังทัน = ระบบลองให้');
+  const realNow=w.Date.now, lbl=E(`bdayLogLabel`), row={kind:'bday_month',period_key:'2026-11',ok:false,tries:1,detail:'HTTP 502',sent_at:'2026-11-03T05:00:00Z'};
+  w.Date.now=()=>Date.parse('2026-11-04T16:00:00Z');   // 4 พ.ย. 23:00 ไทย
+  ok(/ระบบจะลองใหม่ให้เอง/.test(lbl(row)),'รายเดือนไม่สำเร็จ วันที่ 4 = ยังบอกว่าระบบลองให้ (ตรงกับฐานข้อมูล)');
+  w.Date.now=()=>Date.parse('2026-11-04T17:10:00Z');   // 5 พ.ย. 00:10 ไทย
+  ok(/เลยช่วงส่งแล้ว/.test(lbl(row)),'วันที่ 5 = เลยช่วงลองใหม่ ให้กดส่งเอง');
+  w.Date.now=realNow;
+  TABLES.payroll_line_log=[]; E(`renderBday()`); await tick();
+  ok(/ยังไม่เคยส่ง — รอบถัดไป (วันนี้|วันที่ 1 เดือนหน้า) เวลา [0-2][0-9]:[0-5][0-9] น\./.test($('bdLog').textContent),'ยังไม่เคยส่ง = บอกว่ารอบถัดไปเมื่อไร');
+  console.log('[สิทธิ์]');
+  E(`applyUser({role:'staff',apps:{payroll:{settings:'v'}}}); renderBday()`); await tick();
+  ok($('bdGroup').disabled && $('bdMonth').disabled && !$('bdSendBtn') && !/💾 บันทึก/.test($('bdayBody').textContent) && /ดูได้อย่างเดียว/.test($('bdayBody').textContent),'ไม่มีสิทธิ์แก้หน้าตั้งค่า = ดูอย่างเดียว ไม่มีปุ่มส่ง/บันทึก');
+  writes.length=0; toasts=[]; await w.eval(`saveBday()`); fetches.length=0; await w.eval(`bdaySend(null)`);
+  ok(!writes.length && !fetches.length && toasts.filter(t=>/🔒/.test(t)).length===2,'เรียกฟังก์ชันตรง ๆ ก็ถูกกัน (บันทึก/ส่ง)');
+  E(`applyUser({role:'staff',apps:{payroll:{settings:'vae',_br:'JJRD'}}}); renderBday()`); await tick();
+  rpcs.length=0;
+  ok(!$('bdGroup') && /🔒 บัญชีนี้เห็นเฉพาะ รัชดา/.test($('bdayBody').textContent) && !rpcs.length,'เห็นเฉพาะบางสาขา = ไม่เห็นการ์ด (ค่ากลาง + ตัวอย่างมีชื่อทุกสาขา)');
+  writes.length=0; await w.eval(`saveBday()`); ok(!writes.length,'เห็นเฉพาะบางสาขา = บันทึกไม่ได้');
+  E(`applyUser({role:'owner'})`);
+  console.log('[อื่น ๆ]');
+  ok(E(`AUD_ACT_TH.line`)==='📤 ส่งไลน์' && [...$('audAct').options].some(o=>o.value==='line'),'หน้าประวัติรู้จักการกระทำ "ส่งไลน์" + กรองได้');
+  console.log('[SQL ที่ฝังในแอป]');
+  const emb=$('sqlBday').textContent.trim();
+  let file=null; try{ file=require('child_process').execSync('git show origin/sql:jjmk-payroll/jj_birthday_line.sql',{cwd:__dirname,stdio:['ignore','pipe','ignore']}).toString().trim(); }catch(_){}
+  if(file===null){ try{ file=fs.readFileSync(__dirname+'/../../sql/jj_birthday_line.sql','utf8').trim(); }catch(_){} }
+  if(file===null) console.log('  – ข้ามการเทียบ SQL (ไม่มี origin/sql ในเครื่องนี้ — git fetch origin sql ก่อน)');
+  else ok(emb===file,'SQL ในแอปตรงกับ jj_birthday_line.sql ทุกตัวอักษร');
+}catch(e){ console.log('CRASH',e.stack); fail++; }
+ if(errs.length) console.log('jsdom:',errs.filter(x=>!/scrollTo/.test(x)).slice(0,3).join(' | '));
+ console.log(fail?fail+' FAILED':'ALL PASSED'); process.exit(fail?1:0);
+},400);

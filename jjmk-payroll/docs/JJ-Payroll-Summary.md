@@ -15,6 +15,7 @@
 | ตัวรับข้อมูลเครื่องสแกน + รายงาน LINE | Cloudflare Worker (`worker.js`) | `steep-hill-7d52.thananantpatt.workers.dev` |
 | เครื่องสแกน | ZKTeco (`/iclock/*`) + Hikvision (`/hik`) | ที่สาขา |
 | รายงาน LINE | Cron 11:01 / 15:01 / 18:01 (รายกะ) + 21:00 (สรุปวัน) เวลาไทย | กลุ่ม LINE ร้าน |
+| 🎂 แจ้งวันเกิด LINE | วันที่ 1 ทุกเดือน 09:00 (ตั้งได้) + เช้าวันเกิด (เปิดเองได้) — ฐานข้อมูลส่งเองผ่าน `line-order` (`jj_birthday_line.sql`) | กลุ่มที่เลือกในการ์ด 🎂 หน้าตั้งค่า (กลุ่ม daily report) |
 | ไฟล์โอนเงิน | K BIZ กสิกร (Beneficiary Upload + Transaction Upload) | ดาวน์โหลดจากแอป |
 
 **สาขา**: JJLP ลาดพร้าว · JJRD รัชดา · JJCK ครัวกลาง (แยกออกจากลาดพร้าว 2026-08-12 ใช้เครื่องสแกนลาดพร้าว) · OFFICE ส่วนกลาง

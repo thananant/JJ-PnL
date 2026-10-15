@@ -30,6 +30,9 @@
 - ฐานข้อมูล Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd` (ตาราง employees/punches/adjustments/advances/... ดู `jjmk-payroll/docs/JJ-Payroll-Summary.md`)
 - **งวดเงินเดือน = 26 เดือนก่อน → 25 เดือนนี้ (ไม่ตรงเดือนปฏิทิน)** — เวลาเอาค่าแรงเข้า PnL ต้องตกลงวิธีแบ่งก่อน · จุดเชื่อม Payroll↔PnL ดูข้อ 8 ใน `jjmk-payroll/docs/JJ-Payroll-Summary.md`
 - `jjmk-payroll/worker.js` deploy ผ่าน Cloudflare dashboard (ไม่ใช่ GitHub) — เครื่องสแกน/รายงาน LINE ชี้ที่ Worker เดิม ไม่เกี่ยวกับการย้าย repo
+- **🎂 แจ้งวันเกิดเข้ากลุ่มไลน์ daily report (เจ้าของสั่ง 2026-10-15)**: วันที่ 1 ทุกเดือน ส่งว่าเดือนนั้นใครเกิดบ้าง กี่คน วันไหน (+ เช้าวันเกิด เปิดเองได้) ·
+  ฐานข้อมูลส่งเอง (`pg_cron` → `payroll_line_tick()` → `line-order` · บอทเดียวกับรายงานเข้างาน) · **ต้องรัน `jjmk-payroll/jj_birthday_line.sql` (branch `sql`)** ·
+  เลือกกลุ่ม/เวลาที่แอปเงินเดือน → ⚙️ ตั้งค่า → การ์ด 🎂 · realtime ของ log ต้องอยู่**ช่องแยก** (`jjmk-bday`) ห้ามใส่ใน `jjmk-live` — ดู `jjmk-payroll/CLAUDE.md` หัวข้อ 🎂
 
 ## ระบบฟังเสียงลูกค้า (JJ Social)
 
