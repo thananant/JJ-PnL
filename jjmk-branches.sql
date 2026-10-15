@@ -266,7 +266,7 @@ begin
                   else jsonb_build_object('rate_wk', null, 'rate_fri', null, 'rate_we', null, 'safety', null, 'max', null) end,
         case when exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'products'
                             and column_name = 'id' and data_type in ('text', 'character varying'))
-             then jsonb_build_object('id', format('''it'' || substr(md5(%L || '':'' || t.id::text), 1, 14)', v_code))
+             then jsonb_build_object('id', format('''p'' || substr(md5(%L || '':'' || t.id::text), 1, 16)', v_code))
              else '{}'::jsonb end);
       v_steps := v_steps || jsonb_build_object('products', n);
     exception when others then
