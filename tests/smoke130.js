@@ -146,7 +146,22 @@ setTimeout(async()=>{
   await w.supRename('เซ็นซอรี่'); await sleep(50);
   const tt=d.getElementById('toast');
   out.push('ย้ายประวัติสั่งไม่ได้ → เตือน (สีแดง) "ย้ายประวัติสั่งไม่ได้": '+(tt.textContent.includes('ย้ายประวัติสั่งไม่ได้')&&tt.className.includes('err')));
-  RCFAIL=false; APPLY=false;
+  RCFAIL=false;
+  // ✏️ ชื่อสะกดต่างกันแค่ตัวพิมพ์/ช่องว่าง: สินค้าเก็บ 'siam  ice' · ใบสั่งเก่าเก็บ 'SIAM ICE' (ไม่มีสินค้าไหนใช้ตัวสะกดนี้แล้ว) → ต้องแก้ครบทุกตัวสะกด
+  SUPS.push({name:'Siam Ice',order_mode:'interval',cycle_days:10,lead_days:1,line_group_id:null});
+  PRODS.push({id:'p9',branch_id:BID,cat_label:'ของสด',name:'น้ำแข็งหลอด',unit:'ถุง',sup:'siam  ice',rate_wk:2,rate_fri:2,rate_we:2,dept:'บาร์น้ำ',image_url:null,sort:9});
+  COUNTS.p9=5; RECEIPTS.push({sup:'SIAM ICE',order_date:'2026-10-13',product_id:'p9',ordered:20});
+  await w.loadAll(); await sleep(200);
+  out.push('ก่อนเปลี่ยนชื่อ: น้ำแข็ง (ซัพสะกด siam  ice) สั่งล่าสุด 13 (ใบสั่งสะกด SIAM ICE) · ยังไม่ครบรอบ: '+w.eval("(s=>!!s&&s.last==='2026-10-13'&&s.due===false)(ivState('siam  ice','2026-10-20'))"));
+  patches.length=0; w.prompt=()=>'Siam Ice Co';
+  await w.supRename('Siam Ice'); await sleep(50);
+  out.push('เปลี่ยนชื่อ Siam Ice → Siam Ice Co: แก้สินค้าตัวสะกด "siam  ice" + ใบสั่งตัวสะกด "SIAM ICE" ที่อ่านจากฐาน: '
+    +(patches.some(p=>p.url.endsWith('products?sup=eq.'+encodeURIComponent('siam  ice')))&&patches.some(p=>p.url.endsWith('stock_receipts?sup=eq.'+encodeURIComponent('SIAM ICE')))
+      &&PRODS.find(p=>p.id==='p9').sup==='Siam Ice Co'&&RECEIPTS.filter(r=>r.product_id==='p9').every(r=>r.sup==='Siam Ice Co')));
+  await w.loadAll(); await sleep(200); const si=G('Siam Ice Co');
+  out.push('หลังโหลดใหม่: น้ำแข็งอยู่ซัพ Siam Ice Co (สั่งทุก 10 วัน) · สั่งล่าสุด 13 · รอบหน้า 23 · ยังไม่ครบรอบ: '
+    +(!!si&&si.rows.some(r=>r.it.id==='p9')&&si.dl.mode==='interval'&&si.dl.iv&&si.dl.iv.last==='2026-10-13'&&si.dl.iv.next==='2026-10-23'&&si.dl.iv.due===false&&si.nOrder===0));
+  APPLY=false;
 
   // 📏 รอบยาวเกิน 31 วัน
   SUPS.push({name:'ข้าวรอบยาว',order_mode:'interval',cycle_days:45,lead_days:1,line_group_id:null});

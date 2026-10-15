@@ -2256,11 +2256,16 @@ async function supRename(old){
   if(supKey(nn)!==supKey(old)&&supSched(nn)){toast('มีซัพชื่อ "'+nn+'" อยู่แล้ว',true);return;}
   try{
     // ชื่อที่ใบสั่งเก่าอาจใช้ (ชื่อในสินค้า · ตารางซัพ · แบบไม่ตัดช่องว่างที่ครัวกลางเขียน) — ย้ายประวัติสั่งไปชื่อใหม่ด้วย ไม่งั้นซัพ "สั่งทุก N วัน" เริ่มนับรอบใหม่
-    const ko=supKey(old),kn=supKey(nn),olds=[...new Set([old,x&&x.name].concat(...[S.all,S.allBr].map(a=>(a||[]).map(p2=>p2.sup))))].filter(s=>s&&s!==nn&&supKey(s)===ko);
-    if(x)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x.name),{name:nn},'return=minimal');
-    await api('PATCH','products?sup=eq.'+encodeURIComponent(old),{sup:nn},'return=minimal').catch(()=>{});
+    const ko=supKey(old),kn=supKey(nn),olds=await supSpellings(old,x);
+    // ใบสั่งเก่าที่สะกดต่างจากสินค้าปัจจุบัน (ตัวพิมพ์/ช่องว่าง) — อ่านจากฐานจริง ไม่งั้นรอบสั่งกลับมานับใหม่หลังรีโหลด
     let rcOk=true;
-    for(const o of olds){
+    const rs=await selAll('stock_receipts?select=sup&sup=ilike.'+encodeURIComponent('*'+ko.replace(/[*%_\\]/g,'*').split(' ').join('*')+'*')
+      +'&order_date=gte.'+addDays(bizToday(),-130)).catch(()=>{rcOk=false;return [];});
+    const rOlds=[...new Set(olds.concat(rs.map(r=>r.sup)))].filter(s=>s&&s!==nn&&supKey(s)===ko);
+    if(x)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x.name),{name:nn},'return=minimal');
+    let pOk=true;
+    for(const o of olds.filter(o=>o!==nn))await api('PATCH','products?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{pOk=false;});   // ทุกตัวสะกดของชื่อนี้ในสินค้า (ทั้ง 2 สาขา)
+    for(const o of rOlds){
       await api('PATCH','stock_receipts?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{rcOk=false;});   // ประวัติสั่ง = ตัวนับรอบสั่งทุก N วัน
       await api('PATCH','stock_counts?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{});              // ประวัตินับ — ไม่มีสิทธิ์แก้ก็ข้าม (ไม่กระทบตัวเลข)
     }
@@ -2268,10 +2273,16 @@ async function supRename(old){
     [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===ko)p2.sup=nn;}));
     if(rcOk&&ko!==kn&&S.lastOrd&&S.lastOrd[ko]){S.lastOrd[kn]=[...new Set((S.lastOrd[kn]||[]).concat(S.lastOrd[ko]))];delete S.lastOrd[ko];}
     if(S.sentToday&&S.sentToday[old]!=null){S.sentToday[nn]=S.sentToday[old];delete S.sentToday[old];}
+    if(!pOk){toast('เปลี่ยนชื่อซัพแล้ว แต่แก้ชื่อซัพในสินค้าบางตัวไม่สำเร็จ — กำลังโหลดใหม่ให้ตรงกับฐานข้อมูล',true);await loadAll();return;}
     if(rcOk)toast('✅ เปลี่ยนชื่อซัพ "'+old+'" → "'+nn+'" (แก้ในสินค้าทุกสาขาแล้ว)');
     else toast('เปลี่ยนชื่อแล้ว แต่ย้ายประวัติสั่งไม่ได้ — ซัพ "สั่งทุก N วัน" จะเริ่มนับรอบใหม่',true);
     render();
   }catch(e){toast('เปลี่ยนชื่อไม่สำเร็จ — '+errMsg(e),true);}
+}
+async function supSpellings(name,x){ // ทุกตัวสะกดของชื่อซัพนี้ที่เก็บอยู่ในสินค้าทุกสาขา (supKey เดียวกัน — ต่างแค่ตัวพิมพ์/ช่องว่าง) · ฐานกรองแบบตรงตัว ต้องยิงทีละตัวสะกด
+  await ensureAllProducts().catch(()=>{});
+  const k=supKey(name);
+  return [...new Set([name,x&&x.name].concat(...[S.all,S.allBr].map(a=>(a||[]).map(p2=>p2.sup))))].filter(s=>s&&supKey(s)===k);
 }
 async function supMove(from){
   const others=(S._lineSups||[]).filter(x=>supKey(x)!==supKey(from));
@@ -2279,7 +2290,7 @@ async function supMove(from){
   if(!to)return;
   if(!supSched(to)&&!others.some(x=>supKey(x)===supKey(to))){toast('ไม่พบซัพ "'+to+'" — เพิ่มซัพก่อนครับ',true);return;}
   try{
-    await api('PATCH','products?sup=eq.'+encodeURIComponent(from),{sup:to},'return=minimal');
+    for(const o of (await supSpellings(from)).filter(o=>o!==to))await api('PATCH','products?sup=eq.'+encodeURIComponent(o),{sup:to},'return=minimal');
     [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(from))p2.sup=to;}));
     toast('✅ ย้ายสินค้าของ "'+from+'" → "'+to+'" แล้ว');render();
   }catch(e){toast('ย้ายไม่สำเร็จ — '+errMsg(e),true);}
