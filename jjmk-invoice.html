@@ -1678,7 +1678,7 @@ async function storePdf(inv, blob){
 var SIG_MAX_CHARS=350000;      // ~260KB หลังถอด base64 · สคริปต์ NAS รับไม่เกิน 400KB
 var SIG_BOX={w:900,h:300};     // ย่อให้พอดีกรอบนี้ (บนบิลแสดงสูงราว 60px)
 var SIG_MAX_SIDE=2000, SIG_MAX_PX=1000000;   // ต้องตรงกับ SIG_MAX_SIDE/SIG_MAX_PX ของ inv_nas_sync.py
-var sigMeta={src:'none', at:'', by:'', err:'', removed:false};
+var sigMeta={src:'none', at:'', by:'', err:'', removed:false, loaded:false};   // loaded = ได้คำตอบจากระบบแล้ว (ยังไม่ได้ = กำลังโหลด)
 // src: central = ของระบบกลาง · cache = ใช้สำเนาของลายเซ็นกลางที่เครื่องนี้เคยโหลด (อ่านระบบไม่ได้/รูปในระบบเสีย)
 //      unknown = อ่านระบบไม่ได้ เลยใช้ลายเซ็นเดิมของเครื่องนี้ไปก่อน (ไม่รู้ว่าระบบมีลายเซ็นหรือยัง — ห้ามเสนอปุ่ม ⬆)
 //      local = ระบบยืนยันแล้วว่ายังไม่เคยตั้ง ลายเซ็นอยู่แค่เครื่องนี้ · none = ไม่มี
@@ -1736,27 +1736,33 @@ async function sigBackupLegacy(lu, cv){
   try{ if(!(await idbGet('sigLegacy'))) await idbSet('sigLegacy',lu); sigLegacyU=await idbGet('sigLegacy')||lu; }
   catch(e){ sigLegacyU=lu; }
 }
-/* รูปสองรูปหน้าตาเหมือนกันไหม — ขนาดต่างกันไม่เกิน 1 จุด + ย่อเหลือ 180×60 บนพื้นขาวแล้วต่างกันเฉลี่ย < 3/255
-   (เทียบไบต์ไม่ได้: Safari/Chrome ย่อและเข้ารหัส PNG ต่างกัน) · เทียบไม่ได้ = ถือว่าต่าง */
+/* รูปสองรูปหน้าตาเหมือนกันไหม (เทียบไบต์ไม่ได้: Safari/Chrome ย่อและเข้ารหัส PNG ต่างกัน)
+   ขนาดต่างกันไม่เกิน 1 จุด + วาดบนพื้นขาว 300×100 แล้ววัดความต่าง**เทียบกับหมึก** (RGB เท่านั้น):
+   ต่าง / หมึก < 0.15 และต้องมีหมึกจริง — ห้ามเฉลี่ยทั้งภาพ (ลายเซ็นส่วนใหญ่เป็นที่ว่าง ลายเซ็นคนละคนเคยถูกนับว่าเหมือน
+   แล้วรูปเดิมของเครื่องหายถาวร · ตรวจอิสระรอบสาม) · เทียบไม่ได้/สงสัย = ถือว่าต่าง (เก็บรูปเดิมไว้ให้เลือก) */
 function sigSameLook(a, b){
   var load=function(u){ return new Promise(function(res){ var i=new Image(); i.onload=function(){ res(i); }; i.onerror=function(){ res(null); }; i.src=u; }); };
   return Promise.all([load(a), load(b)]).then(function(im){
     if(!im[0]||!im[1]) return false;
     if(Math.abs(im[0].naturalWidth-im[1].naturalWidth)>1 || Math.abs(im[0].naturalHeight-im[1].naturalHeight)>1) return false;
     var px=im.map(function(x){
-      var c=document.createElement('canvas'); c.width=180; c.height=60;
-      var g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,180,60); g.drawImage(x,0,0,180,60);
-      return g.getImageData(0,0,180,60).data;
+      var c=document.createElement('canvas'); c.width=300; c.height=100;
+      var g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,300,100); g.drawImage(x,0,0,300,100);
+      return g.getImageData(0,0,300,100).data;
     });
-    var d=0; for(var i=0;i<px[0].length;i++) d+=Math.abs(px[0][i]-px[1][i]);
-    return d/px[0].length<3;
+    var d=0, ink=0, A=px[0], B=px[1];
+    for(var i=0;i<A.length;i+=4) for(var k=0;k<3;k++){
+      d+=Math.abs(A[i+k]-B[i+k]); ink+=Math.max(255-A[i+k],255-B[i+k]);
+    }
+    return ink>255*60 && d/ink<0.15;
   }).catch(function(){ return false; });
 }
 function sigUse(u, src, meta){
   meta=meta||{};
   sigDataUrl=u||null;
   sigMeta={src:sigDataUrl?src:'none', at:meta.at||'', by:meta.by||'', err:meta.err||'', removed:!!meta.removed,
-           retry:!!meta.retry};   // retry = อ่านระบบพลาดชั่วคราว (ต้องลองใหม่ แม้ signature_at จะยังว่างเท่าเดิม)
+           retry:!!meta.retry,    // retry = อ่านระบบพลาดชั่วคราว (ต้องลองใหม่ แม้ signature_at จะยังว่างเท่าเดิม)
+           loaded:meta.loaded!==false};
   renderSig();
 }
 /* รูป (data URL / ไฟล์) → PNG ย่อให้พอดี SIG_BOX และไม่เกิน SIG_MAX_CHARS · อ่านไม่ได้ = null */
@@ -1829,7 +1835,7 @@ async function loadSignature_(noMigrate, g){
   sigTriedAt=Date.now();
   var L=await sigLocal();
   var fallback=L.u?(L.at?'cache':'unknown'):'none';
-  if(!dbReady){ if(!stale()) sigUse(L.u, fallback, {retry:true}); return; }
+  if(!dbReady){ if(!stale()) sigUse(L.u, fallback, {retry:true, loaded:false}); return; }
   var r;
   try{ r=await sb.from('inv_settings').select('key,value').in('key',['signature_at','signature_by']); }catch(e){ r={error:e}; }
   if(stale()) return;
@@ -1920,6 +1926,8 @@ function renderSig_(){
   }else if(src==='local'){
     t='⚠ ลายเซ็นนี้อยู่แค่ในเครื่องนี้ บิลที่ออกจากเครื่องอื่นจะไม่มีลายเซ็น — '+
       (edit?'กด ⬆ ใช้กับทุกเครื่อง':'ให้ผู้ดูแล/เจ้าของเปิดหน้าตั้งค่าแล้วอัพโหลดลายเซ็น')+(er?(' · '+er):''); c='var(--warn)';
+  }else if(!sigMeta.loaded && !er){
+    t='⏳ กำลังโหลดลายเซ็นจากระบบ…';
   }else{
     t=(sigMeta.removed?('ลบลายเซ็นแล้ว'+(sigMeta.at?(' เมื่อ '+fmtDT(sigMeta.at)):'')+(sigMeta.by?(' โดย '+sigMeta.by):'')+' — '):'')+
       'บิลจะเว้นช่องให้เซ็นเอง'+(er?(' · ⚠ '+er):'');
@@ -1942,7 +1950,7 @@ function renderSig_(){
   // แถบเตือนในหน้าออกบิล: ไม่มีลายเซ็น (ไม่เตือนถ้าเจ้าของตั้งใจลบเอง)
   var w=$('sigWarn');
   if(w){
-    if(has||!currentUser||(sigMeta.removed&&!er)){ w.style.display='none'; }
+    if(has||!currentUser||(sigMeta.removed&&!er)||(!sigMeta.loaded&&!er)){ w.style.display='none'; }   // กำลังโหลด = ยังไม่เตือน
     else{
       w.style.display='block';
       w.textContent='✒️ ยังไม่มีลายเซ็นผู้รับเงิน — บิลจะเว้นช่องให้เซ็นเอง'+
@@ -2086,7 +2094,9 @@ function renderNasSigState(){
   }
   // ✅ เฉพาะตอนเครื่องนี้ใช้ลายเซ็นกลางจริง · ที่เหลือบอกตามสถานะลายเซ็น (สถานะงานทำ PDF ใหม่บอกเฉพาะตอนมีลายเซ็นกลาง)
   var src=sigMeta.src, er=sigMeta.err, base='สคริปต์บน NAS รุ่น '+ver+' อ่านลายเซ็นจากระบบได้', t, c;
-  if(src==='central'){
+  if(src!=='central' && !sigMeta.loaded && !er){
+    t=base+' · ⏳ กำลังโหลดลายเซ็นจากระบบ…'; c='var(--muted)';
+  }else if(src==='central'){
     var st=sigRedoState();
     t='✅ ไฟล์ใน NAS ใช้ลายเซ็นเดียวกับแอป (สคริปต์รุ่น '+ver+')'; c='var(--ok)';
     if(st.s==='done'){
@@ -2104,7 +2114,8 @@ function renderNasSigState(){
     var used=/\(ลายเซ็น: ([^)]+)\)/.exec(String(settings.nas_sync_info||'')), uf=used?used[1]:'';
     t=base+' · ยังไม่ได้ตั้งลายเซ็นในระบบ — '+
       (/^signature\.(png|jpe?g)$/.test(uf) ? 'NAS ใช้ '+esc(uf)+' ข้างสคริปต์ (รอบล่าสุด)'
-        : uf ? 'NAS ใช้ signature.png ข้างสคริปต์ถ้ามี (รอบล่าสุด: '+esc(uf)+')'
+        : uf==='ไม่มี' ? 'ไม่มี signature.png ข้างสคริปต์ — ไฟล์ใน NAS เว้นช่องให้เซ็นเอง'
+        : uf ? 'รอบล่าสุด NAS ใช้: '+esc(uf)
         : 'NAS ใช้ signature.png ข้างสคริปต์ถ้ามี (ไม่มี = เว้นช่องให้เซ็นเอง)')+
       (src==='local'?' · ลายเซ็นของเครื่องนี้ยังไม่ได้ใช้กับไฟล์ใน NAS':'')+
       ' · ตั้งลายเซ็นในการ์ด "ลายเซ็นผู้รับเงิน" ให้ทุกเครื่องและ NAS ใช้รูปเดียวกัน';
