@@ -31,6 +31,11 @@
   + RPC `kpi_submit` + `kpi_sync_staff` + `kpi_on_duty`
   (ซิงก์รายชื่อพนักงานจาก `employees` + เช็คคนกำลังเข้างานจาก `punches` ของ payroll — อ่านอย่างเดียว · รันซ้ำได้)
   ย้ายมาจาก repo `thananant/JJ-KPI` (2026-09-06) — รายละเอียดดู `kpi/CLAUDE.md` บน main
+- `jjmk_kpi_line.sql` — ส่งสรุปความพึงพอใจเข้ากลุ่มไลน์แยกสาขา (เจ้าของสั่ง 2026-10-15 · รันหลัง `jjmk-kpi.sql`)
+  ตาราง `kpi_line_log` (กันส่งซ้ำ) + `kpi_line_text` (ข้อความสรุปภาษาไทย) + `kpi_line_due` + `kpi_line_tick`
+  + pg_cron `kpi-line-push` ทุก 10 นาที → Edge Function `line-order` (บอทตัวเดียวกับนับสต๊อก/ครัวกลาง)
+  รายวัน 09:00 (วันทำการเมื่อวาน) · รอบ 1–15 ส่งวันที่ 16 · รอบ 16–สิ้นเดือน ส่งวันที่ 1 (09:10)
+  เลือกกลุ่มของแต่ละสาขาในหน้าตั้งค่าของแอป (`kpi_settings.line_cfg`) — ยังไม่เลือก = ไม่ส่ง · รันซ้ำได้
 
 ## ระบบปฏิทินองค์กร (JJ Calendar — แอพ `jjmk-calendar.html` บน main)
 
