@@ -1086,9 +1086,9 @@ async function loadAll(){
     // ใบสั่งที่ส่งไปแล้ว 10 วันล่าสุด — ใช้หัก "ของที่กำลังมา" ออกจากยอดสั่งรอบนี้
     selAll('stock_receipts?select=product_id,order_date,ordered&branch_id=eq.'+bid
       +'&order_date=gte.'+addDays(cd,-10)+'&order_date=lte.'+cd+'&order=order_date').catch(()=>[]),
-    // 🎌 วันขายดีจากปฏิทิน (cal_special_days) — ยังไม่รัน SQL / อ่านไม่ได้ = ไม่มีวันพิเศษ ตัวเลขเหมือนเดิม
+    // 🎌 วันขายดีจากปฏิทิน (cal_special_days) — ยังไม่รัน SQL / อ่านไม่ได้ = ไม่มีวันพิเศษ ตัวเลขเหมือนเดิม · ถึง +130 วัน (สั่งทุก N วันครอบคลุมได้ 90 วัน + เวลาส่ง)
     selAll('cal_special_days?select=id,name,day_from,day_to,order_rate_group,order_branches,cancelled&cancelled=eq.false'
-      +'&order_rate_group=not.is.null&day_to=gte.'+addDays(cd,-12)+'&day_from=lte.'+addDays(cd,50)).catch(()=>[]),
+      +'&order_rate_group=not.is.null&day_to=gte.'+addDays(cd,-12)+'&day_from=lte.'+addDays(cd,130)).catch(()=>[]),
     // 🔁 ซัพ "สั่งทุก N วัน": วันที่ส่งใบสั่งล่าสุดของสาขานี้ (ย้อน 120 วัน) — นับรอบต่อสาขา · ใบที่ยกเลิกส่ง (ordered=0) ไม่นับ
     selAll('stock_receipts?select=sup,order_date&branch_id=eq.'+bid+'&ordered=gt.0'
       +'&order_date=gte.'+addDays(cd,-120)+'&order_date=lte.'+cd+'&order=order_date').catch(()=>[]),
@@ -1203,12 +1203,12 @@ function nextDeliveryAfter(sup,od,curD){ // ของ "ชุดถัดไป"
 }
 function sumRate(it,from,to){ // ยอดใช้รวมช่วง [from, to) — to ไม่รวม
   let s=0,n=0; if(!from||!to)return {sum:0,days:0};
-  for(let d2=from; d2<to && n<31; d2=addDays(d2,1),n++) s+=rateOn(it,d2);
+  for(let d2=from; d2<to && n<400; d2=addDays(d2,1),n++) s+=rateOn(it,d2);   // n<400 แค่กันลูปไม่จบ (เดิม 31 = ซัพสั่งทุก 32–90 วันได้ยอดแค่ 31 วัน) · ต้องเท่ากับ brSumRate ของครัวกลาง
   return {sum:+s.toFixed(3),days:n};
 }
 function covRange(from,days){ // "ส,อา" — ช่วงวันที่ของชุดนี้ต้องครอบคลุม
   const out=[]; for(let i=0,d2=from;i<days&&i<14;i++,d2=addDays(d2,1))out.push(dowTH(d2));
-  return out.join(',');
+  return out.join(',')+(days>14?',…':'');   // เกิน 14 วัน (สั่งทุก N วัน) = มี … ต่อท้าย
 }
 function inTransit(sup,it,cd,delD){ // ของที่สั่งไว้แล้วและจะมาถึงก่อนชุดนี้ (จาก stock_receipts ของระบบเดิม)
   const rc=(S.recv||{})[it.id]; if(!rc||!delD)return 0;
@@ -2191,11 +2191,22 @@ async function supRename(old){
   if(!nn||nn===old)return;
   if(supKey(nn)!==supKey(old)&&supSched(nn)){toast('มีซัพชื่อ "'+nn+'" อยู่แล้ว',true);return;}
   try{
+    // ชื่อที่ใบสั่งเก่าอาจใช้ (ชื่อในสินค้า · ตารางซัพ · แบบไม่ตัดช่องว่างที่ครัวกลางเขียน) — ย้ายประวัติสั่งไปชื่อใหม่ด้วย ไม่งั้นซัพ "สั่งทุก N วัน" เริ่มนับรอบใหม่
+    const ko=supKey(old),kn=supKey(nn),olds=[...new Set([old,x&&x.name].concat(...[S.all,S.allBr].map(a=>(a||[]).map(p2=>p2.sup))))].filter(s=>s&&s!==nn&&supKey(s)===ko);
     if(x)await api('PATCH','suppliers?name=eq.'+encodeURIComponent(x.name),{name:nn},'return=minimal');
     await api('PATCH','products?sup=eq.'+encodeURIComponent(old),{sup:nn},'return=minimal').catch(()=>{});
+    let rcOk=true;
+    for(const o of olds){
+      await api('PATCH','stock_receipts?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{rcOk=false;});   // ประวัติสั่ง = ตัวนับรอบสั่งทุก N วัน
+      await api('PATCH','stock_counts?sup=eq.'+encodeURIComponent(o),{sup:nn},'return=minimal').catch(()=>{});              // ประวัตินับ — ไม่มีสิทธิ์แก้ก็ข้าม (ไม่กระทบตัวเลข)
+    }
     if(x)x.name=nn;
-    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===supKey(old))p2.sup=nn;}));
-    toast('✅ เปลี่ยนชื่อซัพ "'+old+'" → "'+nn+'" (แก้ในสินค้าทุกสาขาแล้ว)');render();
+    [S.all,S.allBr].forEach(arr=>(arr||[]).forEach(p2=>{if(supKey(p2.sup)===ko)p2.sup=nn;}));
+    if(rcOk&&ko!==kn&&S.lastOrd&&S.lastOrd[ko]){S.lastOrd[kn]=[...new Set((S.lastOrd[kn]||[]).concat(S.lastOrd[ko]))];delete S.lastOrd[ko];}
+    if(S.sentToday&&S.sentToday[old]!=null){S.sentToday[nn]=S.sentToday[old];delete S.sentToday[old];}
+    if(rcOk)toast('✅ เปลี่ยนชื่อซัพ "'+old+'" → "'+nn+'" (แก้ในสินค้าทุกสาขาแล้ว)');
+    else toast('เปลี่ยนชื่อแล้ว แต่ย้ายประวัติสั่งไม่ได้ — ซัพ "สั่งทุก N วัน" จะเริ่มนับรอบใหม่',true);
+    render();
   }catch(e){toast('เปลี่ยนชื่อไม่สำเร็จ — '+errMsg(e),true);}
 }
 async function supMove(from){

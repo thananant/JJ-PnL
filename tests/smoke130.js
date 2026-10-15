@@ -6,6 +6,10 @@
 //   วันขาย 20 ต.ค. (อ): ครบรอบ · ของมา 22 · ช่วง 22 ถึง 22+15 = 6 พ.ย. = 15 วัน × 5 = 75 · ใช้ระหว่างรอ [21,22) = 5 · นับได้ 20 → เหลือ 15 → แนะนำ 60
 // เซ็นซอรี่: ทุก 10 วัน ยังไม่เคยสั่ง → ครบรอบ (เริ่มนับ) · ของมา 16 · 10 วัน × 1 = 10 · นับได้ 3 → แนะนำ 7
 // ใบสั่งวันนี้ (stock_receipts ของวัน 15 เอง) ไม่ทำให้รอบเลื่อน — นับเฉพาะใบสั่งก่อนวันขาย
+// ✏️ เปลี่ยนชื่อซัพ interval (วันขาย 20 ต.ค. Freshy สั่งล่าสุด 15 → รอบหน้า 22): ต้อง PATCH stock_receipts.sup ด้วย + ย้าย S.lastOrd → ยังไม่ครบรอบเหมือนเดิม (ทั้งในจอและหลังโหลดใหม่)
+// 📏 รอบยาวเกิน 31 วัน (ซัพ "ข้าวรอบยาว" ทุก 45 วัน ส่ง +1 · ยังไม่เคยสั่ง) วันขาย 15 ต.ค.: ของมา ศ 16 · ชุดหน้า 16+45 = 30 พ.ย.
+//   ข้าวหอม 5/5/5 → 45 × 5 = 225 · น้ำปลา 1/1/2 → 45 + ส–อา 14 วัน = 59 (16 ต.ค.–29 พ.ย. = 6 สัปดาห์ ศ–พฤ ×2 + ศ ส อา) · นับได้ 0 → สั่งเท่ายอดใช้
+//   เปลี่ยนเป็นทุก 90 วัน: ชุดหน้า 14 ม.ค. 2570 · ข้าวหอม 450 · น้ำปลา 90 + ส–อา 26 + วันขายดี พ 23 ธ.ค. (เกิน +50 วันจากวันขาย) 1 = 117
 const fs=require('fs');
 const {JSDOM}=require('jsdom');
 const crypto=require('crypto');
@@ -25,30 +29,42 @@ const RECEIPTS=[ // stock_receipts ของสาขานี้
   {sup:'Freshy Syrup',order_date:'2026-10-15',product_id:'p1',ordered:9},   // ส่งไปแล้ววันนี้ — ต้องไม่ทำให้รอบเลื่อน
   {sup:'หจก.รักษ์ข้าว',order_date:'2026-10-05',product_id:'p2',ordered:60},
   {sup:'หจก.รักษ์ข้าว',order_date:'2026-10-10',product_id:'p2',ordered:0}];  // ยกเลิกส่ง — ต้องไม่นับเป็นใบสั่งล่าสุด
+const PRODS=[
+  {id:'p1',branch_id:BID,cat_label:'เครื่องดื่ม',name:'น้ำเชื่อม',unit:'ขวด',sup:'Freshy Syrup',rate_wk:2,rate_fri:3,rate_we:4,dept:'บาร์น้ำ',image_url:null,sort:1},
+  {id:'p2',branch_id:BID,cat_label:'ของแห้ง',name:'ข้าวสาร',unit:'กก.',sup:'หจก.รักษ์ข้าว',rate_wk:5,rate_fri:5,rate_we:5,dept:'ครัว',image_url:null,sort:2},
+  {id:'p3',branch_id:BID,cat_label:'ของแห้ง',name:'ซอสพริก',unit:'ขวด',sup:'เซ็นซอรี่',rate_wk:1,rate_fri:1,rate_we:1,dept:'ครัว',image_url:null,sort:3},
+  {id:'p4',branch_id:BID,cat_label:'ของแห้ง',name:'กระดาษ',unit:'แพ็ค',sup:'ซัพใหม่',rate_wk:1,rate_fri:1,rate_we:1,dept:'ครัว',image_url:null,sort:4}];
+const COUNTS={p1:10,p2:20,p3:3,p4:9};
+const SPD_ROWS=[];
+let APPLY=false,RCFAIL=false;   // APPLY = mock แก้ข้อมูลตาม PATCH (ใช้ช่วงทดสอบเปลี่ยนชื่อ) · RCFAIL = PATCH stock_receipts ไม่สำเร็จ
 const vc=new JSDOM(patched,{runScripts:'dangerously',url:'https://x.test/',
   beforeParse(w){
     w.fetch=async(url,opt)=>{
       const method=opt&&opt.method||'GET';
       const T=async v=>({ok:true,status:200,text:async()=>JSON.stringify(v)});
       if(method==='POST'){posts.push({url,rows:JSON.parse(opt.body)});return T([]);}
-      if(method==='PATCH'){patches.push({url,body:JSON.parse(opt.body)});return T([]);}
+      if(method==='PATCH'){const body=JSON.parse(opt.body);patches.push({url,body});
+        if(RCFAIL&&url.includes('stock_receipts'))return {ok:false,status:403,text:async()=>'permission denied'};
+        if(APPLY){const tb=(url.match(/\/rest\/v1\/([a-z_]+)\?/)||[])[1],fm=url.match(/[?&](\w+)=eq\.([^&]*)/),fv=fm&&decodeURIComponent(fm[2]);
+          const arr=tb==='suppliers'?SUPS:tb==='products'?PRODS:tb==='stock_receipts'?RECEIPTS:null;
+          if(arr&&fm)arr.forEach(r=>{if(String(r[fm[1]])===fv)Object.assign(r,body);});}
+        return T([]);}
       if(url.includes('pnl_users')){const um=url.match(/username=eq\.([^&]+)/);const PU=[
         {id:1,username:'admin',pass_hash:HP('admin','jjmk1234'),display_name:'ผู้ดูแลระบบ',role:'admin',unit:'ALL',active:true,apps:{}}];
         return T(um?PU.filter(x=>x.username===decodeURIComponent(um[1])):PU);}
-      if(url.includes('products')&&url.includes('branch_id=eq.'+BID))return T([
-        {id:'p1',branch_id:BID,cat_label:'เครื่องดื่ม',name:'น้ำเชื่อม',unit:'ขวด',sup:'Freshy Syrup',rate_wk:2,rate_fri:3,rate_we:4,dept:'บาร์น้ำ',image_url:null,sort:1},
-        {id:'p2',branch_id:BID,cat_label:'ของแห้ง',name:'ข้าวสาร',unit:'กก.',sup:'หจก.รักษ์ข้าว',rate_wk:5,rate_fri:5,rate_we:5,dept:'ครัว',image_url:null,sort:2},
-        {id:'p3',branch_id:BID,cat_label:'ของแห้ง',name:'ซอสพริก',unit:'ขวด',sup:'เซ็นซอรี่',rate_wk:1,rate_fri:1,rate_we:1,dept:'ครัว',image_url:null,sort:3},
-        {id:'p4',branch_id:BID,cat_label:'ของแห้ง',name:'กระดาษ',unit:'แพ็ค',sup:'ซัพใหม่',rate_wk:1,rate_fri:1,rate_we:1,dept:'ครัว',image_url:null,sort:4}]);
+      if(url.includes('products')&&url.includes('branch_id=eq.'+BID))return T(JSON.parse(JSON.stringify(PRODS)));
       if(url.includes('products'))return T([]);
+      if(url.includes('cal_special_days')){
+        const lo=(url.match(/day_to=gte\.([0-9-]+)/)||[])[1]||'0000', hi=(url.match(/day_from=lte\.([0-9-]+)/)||[])[1]||'9999';
+        return T(SPD_ROWS.filter(r=>r.day_to>=lo&&r.day_from<=hi));
+      }
       if(url.includes('suppliers'))return T(SUPS);
       if(url.includes('stock_receipts')){
         const lo=(url.match(/order_date=gte\.([0-9-]+)/)||[])[1]||'0000', hi=(url.match(/order_date=lte\.([0-9-]+)/)||[])[1]||'9999';
         return T(RECEIPTS.filter(r=>r.order_date>=lo&&r.order_date<=hi&&(!url.includes('ordered=gt.0')||r.ordered>0)));
       }
       if(url.includes('stock_counts')&&method==='GET'){ const cd=decodeURIComponent((url.match(/count_date=eq\.([^&]+)/)||[])[1]||'');
-        return T([{product_id:'p1',qty:10,out_of_stock:false,created_at:cd+'T10:00:00Z'},{product_id:'p2',qty:20,out_of_stock:false,created_at:cd+'T10:00:00Z'},
-                  {product_id:'p3',qty:3,out_of_stock:false,created_at:cd+'T10:00:00Z'},{product_id:'p4',qty:9,out_of_stock:false,created_at:cd+'T10:00:00Z'}]); }
+        return T(Object.keys(COUNTS).map(id=>({product_id:id,qty:COUNTS[id],out_of_stock:false,created_at:cd+'T10:00:00Z'}))); }
       return T([]);
     };
     w.TextEncoder=TextEncoder;
@@ -111,6 +127,44 @@ setTimeout(async()=>{
     +(rk.dl.d==='2026-10-22'&&rk.nx==='2026-11-06'&&R(rk,'p2').need===75&&R(rk,'p2').pre.sum===5&&R(rk,'p2').order===60));
   fr=G('Freshy Syrup');
   out.push('วันขาย 20 ต.ค.: Freshy สั่งล่าสุด 15 (ใบสั่งวันนั้นนับแล้ว) → รอบหน้า 22 ยังไม่ครบรอบ: '+(fr.dl.d===''&&fr.dl.iv.last==='2026-10-15'&&fr.dl.iv.next==='2026-10-22'));
+
+  // ✏️ เปลี่ยนชื่อซัพ interval → รอบสั่งต้องไม่หาย
+  APPLY=true; patches.length=0; w.prompt=()=>'Freshy Syrup Co.';
+  await w.supRename('Freshy Syrup'); await sleep(50);
+  const prc=patches.find(p=>p.url.includes('stock_receipts?sup=eq.'+encodeURIComponent('Freshy Syrup')));
+  out.push('เปลี่ยนชื่อ Freshy Syrup → Freshy Syrup Co.: PATCH stock_receipts?sup=eq.Freshy%20Syrup {sup:ชื่อใหม่} (+ suppliers, products): '
+    +(!!prc&&prc.url.endsWith('stock_receipts?sup=eq.Freshy%20Syrup')&&prc.body.sup==='Freshy Syrup Co.'
+      &&patches.some(p=>p.url.includes('suppliers?name=eq.Freshy%20Syrup'))&&patches.some(p=>p.url.includes('products?sup=eq.Freshy%20Syrup'))));
+  let fc=G('Freshy Syrup Co.');
+  out.push('หลังเปลี่ยนชื่อ (ในจอ): ยังไม่ครบรอบ · สั่งล่าสุด 15 · รอบหน้า 22 · ไม่มียอดสั่ง · ไม่มีกลุ่มชื่อเดิม: '
+    +(!!fc&&!G('Freshy Syrup')&&fc.dl.d===''&&fc.dl.iv.last==='2026-10-15'&&fc.dl.iv.next==='2026-10-22'&&fc.dl.iv.due===false&&fc.nOrder===0));
+  await w.loadAll(); await sleep(200); fc=G('Freshy Syrup Co.');
+  w.eval('S.obOpen=true'); const ob2=w.eval('orderBanner()');
+  out.push('หลังโหลดใหม่: ยังไม่ครบรอบ (สั่งล่าสุด 15 · รอบหน้า 22) · แถบรอบสั่งไม่มี Freshy: '
+    +(!!fc&&fc.dl.d===''&&fc.dl.iv.last==='2026-10-15'&&fc.dl.iv.due===false&&fc.nOrder===0&&!ob2.includes('Freshy')));
+  RCFAIL=true; w.prompt=()=>'เซ็นซอรี่ ใหม่';
+  await w.supRename('เซ็นซอรี่'); await sleep(50);
+  const tt=d.getElementById('toast');
+  out.push('ย้ายประวัติสั่งไม่ได้ → เตือน (สีแดง) "ย้ายประวัติสั่งไม่ได้": '+(tt.textContent.includes('ย้ายประวัติสั่งไม่ได้')&&tt.className.includes('err')));
+  RCFAIL=false; APPLY=false;
+
+  // 📏 รอบยาวเกิน 31 วัน
+  SUPS.push({name:'ข้าวรอบยาว',order_mode:'interval',cycle_days:45,lead_days:1,line_group_id:null});
+  PRODS.push({id:'p5',branch_id:BID,cat_label:'ของแห้ง',name:'ข้าวหอม',unit:'กก.',sup:'ข้าวรอบยาว',rate_wk:5,rate_fri:5,rate_we:5,dept:'ครัว',image_url:null,sort:5},
+             {id:'p6',branch_id:BID,cat_label:'ของแห้ง',name:'น้ำปลา',unit:'ขวด',sup:'ข้าวรอบยาว',rate_wk:1,rate_fri:1,rate_we:2,dept:'ครัว',image_url:null,sort:6});
+  COUNTS.p5=0; COUNTS.p6=0;
+  SPD_ROWS.push({id:1,name:'วันขายดีไกล',day_from:'2026-12-23',day_to:'2026-12-23',order_rate_group:2,order_branches:null,cancelled:false});
+  d.getElementById('cd').value='2026-10-15'; await w.loadAll(); await sleep(200);
+  let lg=G('ข้าวรอบยาว');
+  out.push('ทุก 45 วัน: ส่ง 16 ต.ค. · ชุดหน้า 30 พ.ย. · ครอบคลุม 45 วัน · ข้าวหอม 45×5 = 225 สั่ง 225 · น้ำปลา 59: '
+    +(!!lg&&lg.dl.d==='2026-10-16'&&lg.nx==='2026-11-30'&&lg.covDays===45&&R(lg,'p5').cov.days===45&&R(lg,'p5').need===225&&R(lg,'p5').order===225&&R(lg,'p6').need===59&&R(lg,'p6').order===59));
+  out.push('หัวซัพ "ครอบคลุม 45 วัน (…)" — เกิน 14 วันมี … ต่อท้าย ไม่ตัดเงียบ: '
+    +(!!lg&&lg.covTxt.startsWith('ครอบคลุม 45 วัน (ศุกร์,เสาร์,')&&lg.covTxt.endsWith(',…)')&&w.eval("covRange('2026-10-16',2)")==='ศุกร์,เสาร์'));
+  w.setTab('order'); await sleep(80);
+  out.push('หน้าสั่งของ: มีข้อความ "ครอบคลุม 45 วัน": '+d.getElementById('list').textContent.includes('ครอบคลุม 45 วัน'));
+  SUPS[SUPS.length-1].cycle_days=90; await w.loadAll(); await sleep(200); lg=G('ข้าวรอบยาว');
+  out.push('ทุก 90 วัน: ชุดหน้า 14 ม.ค. 2570 · ครอบคลุม 90 วัน · ข้าวหอม 450 · น้ำปลา 117 (รวมวันขายดี 23 ธ.ค. ที่เกิน +50 วัน): '
+    +(!!lg&&lg.nx==='2027-01-14'&&lg.covDays===90&&R(lg,'p5').need===450&&R(lg,'p6').need===117&&R(lg,'p6').order===117));
   out.push('errors: '+JSON.stringify(w.errors));
   console.log(out.join('\n')); process.exit(0);
 },400);

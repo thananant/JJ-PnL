@@ -3211,7 +3211,7 @@ function brNextAfter(sup,od,curD){
   return brAddDays(curD,1);
 }
 function brSumRate(p,from,to){let s=0,n=0;if(!from||!to)return {sum:0,days:0};
-  for(let d2=from;d2<to&&n<31;d2=brAddDays(d2,1),n++)s+=brRateOn(p,d2);
+  for(let d2=from;d2<to&&n<400;d2=brAddDays(d2,1),n++)s+=brRateOn(p,d2);   // n<400 แค่กันลูปไม่จบ (เดิม 31 = ซัพสั่งทุก 32–90 วันได้ยอดแค่ 31 วัน) · ต้องเท่ากับ sumRate ของแอพนับสต๊อก
   return {sum:+s.toFixed(3),days:n};}
 function brInTransit(sup,p,cd,delD,recv){
   const rc=(recv||{})[p.id];if(!rc||!delD)return 0;
@@ -3295,19 +3295,15 @@ async function brLoadBranch(code,today){
       (recv[r.product_id]=recv[r.product_id]||{})[String(r.order_date).slice(0,10)]=q;});
   }
   // ซัพโหมด interval (สั่งทุก N วัน): วันสั่งล่าสุดของสาขานี้ต่อซัพ — order_date < cd (ใบที่สั่งวันนี้ไม่เลื่อนรอบของวันนี้) ย้อน 120 วัน
-  // กรองเฉพาะชื่อซัพ interval ที่สินค้าของสาขานี้ใช้ (แถวน้อย) · อ่านไม่ได้ = ถือว่ายังไม่เคยสั่ง (ครบรอบ) · ใบที่ยกเลิกส่ง (ordered=0) ไม่นับ
+  // ไม่กรองชื่อซัพใน query (ใบสั่งอาจสะกดต่างตัวพิมพ์/ช่องว่าง) — จับคู่ด้วย brSupKey เหมือนแอพนับสต๊อก · อ่านเฉพาะสาขาที่มีสินค้าของซัพ interval
+  // อ่านไม่ได้ = ถือว่ายังไม่เคยสั่ง (ครบรอบ) · ใบที่ยกเลิกส่ง (ordered=0) ไม่นับ
   const last={};
-  if(cd){
-    const names=new Set();
-    prods.forEach(p=>{const x=brSup(p.sup);if(!x||brMode(x)!=='interval')return;
-      [p.sup,String(p.sup||'').trim(),x.name,String(x.name||'').trim()].forEach(n=>{if(n)names.add(n);});});
-    if(names.size){
-      const lr=await sbAll(()=>sb.from('stock_receipts').select('sup,order_date')
-        .eq('branch_id',bid).in('sup',[...names]).gt('ordered',0).gte('order_date',brAddDays(cd,-120)).lt('order_date',cd)
-        .order('order_date',{ascending:false})).catch(()=>[]);
-      lr.forEach(r=>{const k=brSupKey(r.sup),d=String(r.order_date||'').slice(0,10);
-        if(k&&d&&d<cd&&(!last[k]||d>last[k]))last[k]=d;});
-    }
+  if(cd&&prods.some(p=>{const x=brSup(p.sup);return x&&brMode(x)==='interval';})){
+    const lr=await sbAll(()=>sb.from('stock_receipts').select('sup,order_date')
+      .eq('branch_id',bid).gt('ordered',0).gte('order_date',brAddDays(cd,-120)).lt('order_date',cd)
+      .order('order_date',{ascending:false}).order('product_id')).catch(()=>[]);
+    lr.forEach(r=>{const k=brSupKey(r.sup),d=String(r.order_date||'').slice(0,10);
+      if(k&&d&&d<cd&&(!last[k]||d>last[k]))last[k]=d;});
   }
   const needs={};
   if(cd&&S.br.needTbl!==false){
@@ -3327,10 +3323,10 @@ async function brLoad(force){
       S.br.sups=await brQ(sb.from('suppliers').select('name,order_mode,schedule,lead_days,order_ahead,cycle_days'))
         .catch(()=>brQ(sb.from('suppliers').select('name,order_mode,schedule,lead_days,order_ahead')))
         .catch(()=>brQ(sb.from('suppliers').select('name,order_mode,schedule,lead_days'))).catch(()=>[]);
-      // 🎌 วันขายดีจากปฏิทิน — ยังไม่รัน SQL / อ่านไม่ได้ = ไม่มีวันพิเศษ ตัวเลขเหมือนเดิม
+      // 🎌 วันขายดีจากปฏิทิน — ยังไม่รัน SQL / อ่านไม่ได้ = ไม่มีวันพิเศษ ตัวเลขเหมือนเดิม · ถึง +130 วัน (สั่งทุก N วันครอบคลุมได้ 90 วัน + เวลาส่ง)
       spdSet(await brQ(sb.from('cal_special_days').select('id,name,day_from,day_to,order_rate_group,order_branches,cancelled')
         .eq('cancelled',false).not('order_rate_group','is',null)
-        .gte('day_to',brAddDays(today,-16)).lte('day_from',brAddDays(today,50))).catch(()=>[]));
+        .gte('day_to',brAddDays(today,-16)).lte('day_from',brAddDays(today,130))).catch(()=>[]));
       const data=[];
       for(const code of stkCodes())data.push(await brLoadBranch(code,today));   // เห็นเฉพาะสาขา = โหลดเฉพาะสาขาที่ได้สิทธิ์
       S.br.data=data;S.br.err=null;S.br.t=Date.now();

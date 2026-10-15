@@ -9,6 +9,8 @@
 //   JJLP IV3 (ครบ): ของถึง 10-19 (จ) · ชุดหน้า 10-22 → ครอบคลุม 3 วัน จ+อ+พ = 3 · ระหว่างรอ 10-16..10-18 = 2+3+3 = 8 ·
 //        กำลังมา: ใบ 10-12 ×5 ถึง 10-16 (> cd และ < 10-19) = 5 · นับได้ 4 → เหลือ 4−8+5 = 1 → ต้องส่ง 3−1 = 2
 //   ANY: ถึง 10-16 ครอบคลุม 1 วัน (ศ) = 2 · นับได้ 1 → ต้องส่ง 1 · FIX: ถึง 10-17 ชุดหน้า 10-24 = 3+3+1+1+1+1+2 = 12 · รอ 2 · นับ 0 → 12
+// + ใบสั่งสะกดชื่อซัพต่างตัวพิมพ์/ช่องว่าง ยังนับรอบได้ (ไม่กรอง in.sup ตรงตัว) · ไม่มีซัพ interval = ไม่ query วันสั่งล่าสุด
+// + รอบยาวเกิน 31 วัน (IV45 = 90 · IV90 = 117 รวมวันขายดีที่เกิน +50 วัน) — คิดมืออยู่ที่ข้อ 6d
 // + เทียบกับโค้ดครัวกลางก่อนแก้ (commit bed4816) ตอนไม่มีซัพ interval: ทุกแถวต้องเหมือนเดิมทุกตัวเลข
 const fs=require('fs');
 const {JSDOM}=require('jsdom');
@@ -28,14 +30,24 @@ function mkDB(opt){
     rate_wk:1,rate_fri:2,rate_we:3,sort:s,image_url:null,deleted_at:null});
   const C=(pid,bid,q)=>({id:pid+'c',product_id:pid,branch_id:bid,qty:q,out_of_stock:false,created_at:CD+'T20:00:00Z',count_date:CD});
   const R=(pid,bid,sp,od,q)=>({id:pid+od,product_id:pid,branch_id:bid,sup:sp,order_date:od,ordered:q});
-  return {
+  const V=opt.recvVar?{IV3:' iv3 ',IV15:'iv15'}:{};   // recvVar: ใบสั่งสะกดชื่อซัพต่างตัวพิมพ์/ช่องว่างจากสินค้า (แอพนับสต๊อกยังจับคู่ได้ด้วย supKey)
+  const rs=s=>V[s]||s;
+  const DB={
     suppliers:sup,
     products:[P('rA',RD,'IV3',1),P('rB',RD,'IV15',2),P('rC',RD,'ANY',3),P('rD',RD,'FIX',4),
               P('lA',LP,'IV3',1),P('lB',LP,'IV15',2),P('lC',LP,'ANY',3),P('lD',LP,'FIX',4)],
     stock_counts:[C('rA',RD,4),C('rB',RD,0),C('rC',RD,1),C('rD',RD,0),C('lA',LP,4),C('lB',LP,0),C('lC',LP,1),C('lD',LP,0)],
-    stock_receipts:[R('rA',RD,'IV3','2026-10-13',6),R('rA',RD,'IV3','2026-10-14',0),R('rB',RD,'IV15','2026-06-01',9),R('rC',RD,'ANY','2026-10-14',3),
-                    R('lA',LP,'IV3','2026-10-12',5),R('lA',LP,'IV3','2026-10-15',7),R('lB',LP,'IV15','2026-10-01',9)],
+    stock_receipts:[R('rA',RD,rs('IV3'),'2026-10-13',6),R('rA',RD,'IV3','2026-10-14',0),R('rB',RD,'IV15','2026-06-01',9),R('rC',RD,'ANY','2026-10-14',3),
+                    R('lA',LP,'IV3','2026-10-12',5),R('lA',LP,'IV3','2026-10-15',7),R('lB',LP,rs('IV15'),'2026-10-01',9)],
     ck_settings:[],ck_br_needs:[],cal_special_days:[]};
+  if(opt.long){   // รอบยาวเกิน 31 วัน (JJRD): IV45 ทุก 45 วัน · IV90 ทุก 90 วัน · ส่ง +1 · ยังไม่เคยสั่ง · นับได้ 0 · วันขายดี พ 23 ธ.ค. (เกิน +50 วัน)
+    sup.push({name:'IV45',order_mode:'interval',cycle_days:45,lead_days:1,schedule:null,order_ahead:0},
+             {name:'IV90',order_mode:'interval',cycle_days:90,lead_days:1,schedule:null,order_ahead:0});
+    DB.products.push(Object.assign(P('rE',RD,'IV45',5),{rate_wk:2,rate_fri:2,rate_we:2}),Object.assign(P('rF',RD,'IV90',6),{rate_wk:1,rate_fri:1,rate_we:2}));
+    DB.stock_counts.push(C('rE',RD,0),C('rF',RD,0));
+    DB.cal_special_days.push({id:1,name:'วันขายดีไกล',day_from:'2026-12-23',day_to:'2026-12-23',order_rate_group:2,order_branches:null,cancelled:false});
+  }
+  return DB;
 }
 
 /* supabase-js ปลอม: from(t).select().eq/gte/lt/in/...order().range() → {data,error} (กรองจริงตามเงื่อนไข + คืนเฉพาะคอลัมน์ที่ select) */
@@ -111,9 +123,8 @@ const row=(P,id)=>P.rows.find(x=>x.p.id===id);
   const lqRD=lq.find(c=>c.q.includes('eq.branch_id='+RD));
   out.push('อ่านวันสั่งล่าสุดต่อสาขา ย้อน 120 วัน (≥ 2026-06-17) ถึงก่อนวันขาย (< 2026-10-15) · 2 สาขา: '
     +(lq.length===2&&!!lqRD&&lqRD.q.includes('gte.order_date=2026-06-17')&&lqRD.q.includes('lt.order_date=2026-10-15')));
-  const inq=lqRD&&lqRD.q.find(x=>x.startsWith('in.sup='));
-  const inl=inq?JSON.parse(inq.slice(7)):[];
-  out.push('กรองเฉพาะซัพ interval (IV3, IV15 — ไม่มี ANY/FIX): '+(inl.includes('IV3')&&inl.includes('IV15')&&!inl.includes('ANY')&&!inl.includes('FIX')));
+  out.push('ไม่กรองชื่อซัพใน query (จับคู่ด้วย brSupKey เหมือนแอพนับสต๊อก) · ยังกรอง ordered>0: '
+    +(!!lqRD&&!lqRD.q.some(x=>x.startsWith('in.sup=')||x.startsWith('eq.sup='))&&lqRD.q.includes('gt.ordered=0')));
   const rq=calls.find(c=>c.t==='stock_receipts'&&c.cols==='product_id,order_date,ordered'&&c.q.includes('eq.branch_id='+RD));
   out.push('ของกำลังมายังอ่านช่วงเดิม 10 วัน (10-05..10-15): '+(!!rq&&rq.q.includes('gte.order_date=2026-10-05')&&rq.q.includes('lte.order_date=2026-10-15')));
   out.push('วันสั่งล่าสุด JJRD: IV3 = 10-13 (ใบยกเลิกส่ง 10-14 ordered=0 ไม่นับ) · IV15 ไม่มี (ใบ 06-01 เกิน 120 วัน): '+(RDb.last.iv3==='2026-10-13'&&!RDb.last.iv15));
@@ -166,6 +177,32 @@ const row=(P,id)=>P.rows.find(x=>x.p.id===id);
   out.push('ไม่มีคอลัมน์ cycle_days: ยังโหลดได้ (fallback) · IV3 ใช้ 15 วัน → 10-12+15 ยังไม่ครบ ไม่มียอด: '
     +(!S2.br.err&&!!a2&&S2.br.sups.length===4&&a2.dl.cyc===15&&a2.dl.d===''&&a2.order===null));
 
+  // 6b) ใบสั่งสะกดชื่อซัพต่างตัวพิมพ์/ช่องว่าง (' iv3 ' · 'iv15') — ต้องยังนับรอบได้เหมือนแอพนับสต๊อก (เดิมกรอง in.sup ตรงตัว = หาไม่เจอ → ครบรอบผิด)
+  const calls3=[];const w3=boot(html,mkDB({recvVar:true}),calls3);
+  await sleep(300); await w3.brLoad(true);
+  const S3=w3.eval('S'),RD3=S3.br.data&&S3.br.data.find(b=>b.code==='JJRD'),LP3=S3.br.data&&S3.br.data.find(b=>b.code==='JJLP');
+  const a3=RD3&&row(w3.brPlan(RD3),'rA'),b3=LP3&&row(w3.brPlan(LP3),'lB');
+  out.push('ใบสั่งสะกด " iv3 " / "iv15": JJRD IV3 ล่าสุด 10-13 ยังไม่ครบรอบ ไม่มียอด · JJLP IV15 ล่าสุด 10-01 ยังไม่ครบ: '
+    +(!!a3&&!!b3&&RD3.last.iv3==='2026-10-13'&&a3.dl.d===''&&a3.order===null&&LP3.last.iv15==='2026-10-01'&&b3.dl.d===''&&b3.order===null));
+
+  // 6c) ไม่มีสินค้าของซัพ interval = ไม่อ่านวันสั่งล่าสุดเลย (ไม่เสีย query)
+  const calls4=[];const w4=boot(html,mkDB({noInterval:true}),calls4);
+  await sleep(300); await w4.brLoad(true);
+  out.push('ไม่มีซัพ interval: ไม่ query วันสั่งล่าสุด (sup,order_date): '+(!w4.eval('S').br.err&&!calls4.some(c=>c.t==='stock_receipts'&&c.cols==='sup,order_date')));
+
+  // 6d) รอบยาวเกิน 31 วัน — ต้องครอบคลุมครบรอบ (เดิมตัดที่ 31 วัน) + วันขายดีที่เกิน +50 วันต้องโหลดมาด้วย
+  //   IV45: ถึง 10-16 · ชุดหน้า 10-16+45 = 11-30 · 45 วัน × 2 = 90 · รอ 0 · นับ 0 → ต้องส่ง 90
+  //   IV90: ถึง 10-16 · ชุดหน้า 2027-01-14 · 90 วัน × 1 + ส–อา 26 วัน (12 สัปดาห์ ศ–พฤ ×2 + ศ ส อา จ อ พ) + วันขายดี พ 23 ธ.ค. 1 = 117
+  const calls5=[];const w5=boot(html,mkDB({long:true}),calls5);
+  await sleep(300); await w5.brLoad(true);
+  const S5=w5.eval('S'),RD5=S5.br.data&&S5.br.data.find(b=>b.code==='JJRD'),P5=RD5&&w5.brPlan(RD5);
+  const e5=P5&&row(P5,'rE'),f5=P5&&row(P5,'rF');
+  out.push('IV45 (ทุก 45 วัน): ถึง 10-16 · ครอบคลุม 45 วัน = 45×2 = 90 · ต้องส่ง 90: '
+    +(!!e5&&e5.dl.d==='2026-10-16'&&e5.dl.cyc===45&&e5.cov.days===45&&e5.cov.sum===90&&e5.pre.sum===0&&e5.order===90&&w5.brNextAfter('IV45','2026-10-15','2026-10-16')==='2026-11-30'));
+  const spq=calls5.find(c=>c.t==='cal_special_days');
+  out.push('IV90 (ทุก 90 วัน): ครอบคลุม 90 วัน = 117 (รวมวันขายดี 23 ธ.ค.) · โหลดวันพิเศษถึง +130 วัน (2027-02-22): '
+    +(!!f5&&f5.cov.days===90&&f5.cov.sum===117&&f5.order===117&&!!spq&&spq.q.includes('lte.day_from=2027-02-22')));
+
   // 7) เทียบโค้ดก่อนแก้ (bed4816) — ไม่มีซัพ interval = ทุกแถวเหมือนเดิมทุกตัวเลข · มี interval = แถว ANY/FIX เหมือนเดิม
   let old=null;try{old=execSync('git show bed4816:jjmk-kitchen.html',{encoding:'utf8',maxBuffer:64<<20,stdio:['ignore','pipe','ignore']});}catch(e){}
   if(!old)out.push('(ข้ามการเทียบโค้ดเดิม — ไม่มี commit bed4816)');
@@ -183,6 +220,6 @@ const row=(P,id)=>P.rows.find(x=>x.p.id===id);
     out.push('มีซัพ interval: แถว ANY/FIX ตรงกับโค้ดเดิม: '+(JSON.stringify(only(o2,['rC','rD','lC','lD']))===JSON.stringify(only(n2,['rC','rD','lC','lD']))&&only(n2,['rC','rD','lC','lD']).length===4));
   }
 
-  out.push('errors: '+JSON.stringify(w.errors.concat(w2.errors)));
+  out.push('errors: '+JSON.stringify(w.errors.concat(w2.errors,w3.errors,w4.errors,w5.errors)));
   console.log(out.join('\n')); process.exit(0);
 })().catch(e=>{console.log('CRASH '+(e&&e.stack||e));process.exit(1);});
