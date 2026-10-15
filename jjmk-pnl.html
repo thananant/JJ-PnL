@@ -4030,19 +4030,19 @@ RENDER.actual = async (el)=>{
   const rows=mapped.map(pr=>{
     const mp=st.map[pr.id];
     const days=Object.keys(st.C[pr.id]||{}).sort();
-    const per=[];
+    const per=[], pre=[];
     for(let i=1;i<days.length;i++){
       const Pd=days[i-1], Cd=days[i];
-      if(Cd<mStart) continue; // เอาช่วงที่จบในเดือนที่ดู
-      const q0=st.C[pr.id][Pd].qty, q1=st.C[pr.id][Cd].qty;
       let buy=0; (mp.items||[]).forEach(it=>{ Object.entries(st.B[ocrNorm(it.pnl_item)]||{}).forEach(([d2,q])=>{ if(d2>Pd&&d2<=Cd) buy+=q*num(it.factor||1); }); }); // รวมซื้อเข้าจากทุกชื่อบิลที่ผูก
+      if(Cd<mStart){ pre.push({Pd,Cd,buy}); continue; } // เอาช่วงที่จบในเดือนที่ดู · ช่วงก่อนเดือน (ย้อน 7 วันที่โหลดไว้) เก็บแค่ประวัติของเข้า ไว้ดูว่าปกติมีของเข้าทุกรอบนับไหม (🤖)
+      const q0=st.C[pr.id][Pd].qty, q1=st.C[pr.id][Cd].qty;
       let sale=0,dd=0; for(let d2=Pd; d2<Cd; d2=stkAddDays(d2,1)){ const v=st.sales[d2]||0; if(v>0){sale+=v;dd++;} }
       const use=q0+buy-q1;
       per.push({Pd,Cd,q0,q1,buy,use,sale,dd,p10:sale>0?use/(sale/10000):null,oos0:st.C[pr.id][Pd].oos,oos1:st.C[pr.id][Cd].oos});
     }
     const totU=per.reduce((a,c)=>a+c.use,0), totS=per.reduce((a,c)=>a+c.sale,0);
     const avg10=totS>0?totU/(totS/10000):null;
-    return {pr,mp,per,totU,totS,avg10,last:per[per.length-1]||null,lastQty:days.length?st.C[pr.id][days[days.length-1]].qty:null,lastD:days[days.length-1]||''};
+    return {pr,mp,per,pre,totU,totS,avg10,last:per[per.length-1]||null,lastQty:days.length?st.C[pr.id][days[days.length-1]].qty:null,lastD:days[days.length-1]||''};
   }).filter(r=>r.per.length||r.lastQty!=null);
   rows.sort((a,b)=>(b.totU*num(b.mp.factor)||0)-(a.totU*num(a.mp.factor)||0));
   S._stkRows=rows;
@@ -4158,30 +4158,45 @@ function stkSpdHit(rows,code,ds){ let best=null;
   (rows||[]).forEach(r=>{ const own=!!(r.order_branches&&r.order_branches.length); if(r.day_from>ds||r.day_to<ds||(own&&r.order_branches.indexOf(code)<0))return;
     const sc=(own?10:0)+r.order_rate_group; if(!best||sc>best.sc)best={sc,g:r.order_rate_group,r}; });
   return best; }
+// 🤖 บิลวันนับล่าสุดยังไม่ลง? — ช่วงล่าสุดซื้อเข้า 0 ทั้งที่สินค้านี้ปกติมีของเข้าแทบทุกรอบนับ → ใช้จริงช่วงนั้น ≈ 0 (ไม่ติดลบ ป้าย "ติดลบ" จับไม่ได้) → คืนช่วงนั้น | null
+// ปกติมีของเข้า = ช่วงนับก่อนหน้า (รวมย้อน 7 วันก่อนเดือน) ≥ 4 ช่วง และมีบิลเข้า ≥ 2 ใน 3 ของช่วง (ของส่งรายวัน) · และวันในสัปดาห์ของวันนับล่าสุดไม่ใช่วันที่ไม่เคยมีของเข้า (เช่น ซัพหยุดส่งวันอาทิตย์)
+// ไม่ถึง 2/3 (ส่งรายสัปดาห์/2–3 ครั้งต่อสัปดาห์/วันเว้นวัน) = ช่วงไม่มีบิลเป็นเรื่องปกติ ไม่เตือน — ของส่งห่างแบบนี้ ถ้าบิลขาด ของ 1 รอบส่งใช้หลายช่วง ใช้จริงจะติดลบชัด ป้าย "ติดลบ" จับอยู่แล้ว
+// ต้นช่วง/ปลายช่วงของหมด = ปล่อยตามกติกาของหมดเดิม
+function stkMissLast(r){
+  const L=r.per[r.per.length-1]; if(!L||L.buy>0||L.oos0||L.oos1) return null;
+  const H=[...(r.pre||[]),...r.per.slice(0,-1)];
+  if(H.length<4||H.filter(p=>p.buy>0).length*3<H.length*2) return null;
+  const wd=x=>new Date(x+'T00:00:00').getDay(), sw=H.filter(p=>wd(p.Cd)===wd(L.Cd));
+  if(sw.length&&sw.every(p=>!(p.buy>0))) return null;
+  return L;
+}
 function stkAutoCalc(rows,st){ // ใช้จริงราย จ–อา ต่อสินค้า: ถัวใช้จริงของแต่ละช่วงตามสัดส่วนยอดขายรายวัน
   // วันพิเศษในปฏิทิน = ไม่เอามาเฉลี่ย (แอพนับใช้อัตรา ส–อา วันนั้นอยู่แล้ว → อัตราที่เขียน = ของวันปกติ)
   // ของหมด: ต้นช่วงหมด+ไม่มีของเข้า = ข้าม (ไม่มีของให้ใช้) · ต้นช่วงหมด(มีของเข้า)/ปลายช่วงหมด = ค่าต่ำกว่าจริง (cens) ไม่เฉลี่ยรวม เว้นกลุ่มที่มีแต่ช่วงแบบนี้ (lb = ≥)
   const spDays=new Set();
   const W=rows.map(r=>{
-    const A=[0,0,0,0,0,0,0], N=[0,0,0,0,0,0,0], AC=[0,0,0,0,0,0,0], NC=[0,0,0,0,0,0,0], iv=[]; let cens=0, skip=0;
+    const A=[0,0,0,0,0,0,0], N=[0,0,0,0,0,0,0], AC=[0,0,0,0,0,0,0], NC=[0,0,0,0,0,0,0], iv=[]; let cens=0, skip=0, miss=null;
+    const mi=stkMissLast(r); // ช่วงล่าสุดน่าจะบิลยังไม่ลง → ไม่เอามาเฉลี่ย (แบบช่วงที่ข้าม) + ไม่ติ๊กให้
     r.per.forEach(pp=>{
       if(pp.oos0&&!(pp.buy>0)){ skip++; return; }
-      const lo=!!(pp.oos0||pp.oos1);
+      const lo=!!(pp.oos0||pp.oos1), ms=pp===mi;
       const ds=[]; for(let d2=pp.Pd; d2<pp.Cd; d2=stkAddDays(d2,1)) ds.push(d2);
       let used=0;
       ds.forEach(d2=>{
         if(stkSpdHit(st.spd,S.br,d2)){ spDays.add(d2); return; }
+        used++; if(ms) return;
         const w=new Date(d2+'T00:00:00').getDay();
         const share=pp.sale>0?((st.sales[d2]||0)/pp.sale):(1/ds.length);
-        (lo?AC:A)[w]+=pp.use*share; (lo?NC:N)[w]++; used++;
+        (lo?AC:A)[w]+=pp.use*share; (lo?NC:N)[w]++;
       });
       if(!used) return;
+      if(ms){ miss={Pd:pp.Pd,Cd:pp.Cd,use:pp.use}; return; }
       if(lo) cens++;
       iv.push({Pd:pp.Pd,Cd:pp.Cd,use:pp.use,ws:ds.map(d2=>new Date(d2+'T00:00:00').getDay())});
     });
     const acc=[...A], cnt=[...N], lb=[];
     STK_RG.forEach(g=>{ if(!g.d.some(i=>N[i])&&g.d.some(i=>NC[i])){ g.d.forEach(i=>{ acc[i]=AC[i]; cnt[i]=NC[i]; }); lb.push(g.k); } });
-    return {r,acc,n:cnt,avg:acc.map((v,i)=>cnt[i]?v/cnt[i]:null),cens,skip,iv,lb};
+    return {r,acc,n:cnt,avg:acc.map((v,i)=>cnt[i]?v/cnt[i]:null),cens,skip,iv,lb,miss};
   });
   W.spd=[...spDays].sort();
   return W;
@@ -4208,25 +4223,26 @@ function stkAutoHtml(rows,st){
   const rowsH=W.map(x=>{
     const R=stkAutoRates(x,mul);
     const nm=`<b>${esc(x.r.pr.name)}</b> <span class="xs mut">${esc(x.r.pr.unit||'')}</span>${billNmHtml(x.r.mp&&(x.r.mp.pnl_names||x.r.mp.pnl_item),x.r.pr.name)}`;
-    if(R.every(g=>g.avg==null)) return `<tr class="mut"><td>${nm}</td><td colspan="7" class="xs mut">${x.skip?'ของหมดทุกช่วงที่นับ — ยังคำนวณใช้จริงไม่ได้':'ยังไม่มีข้อมูลใช้จริงในเดือนนี้ (ต้องนับอย่างน้อย 2 ครั้ง)'}</td></tr>`;
+    if(R.every(g=>g.avg==null)) return `<tr class="mut"><td>${nm}</td><td colspan="7" class="xs mut">${x.miss?`บิลวัน ${thDate(x.miss.Cd)} ยังไม่ลง? — ไม่มีช่วงอื่นในเดือนนี้ให้คำนวณ · ลงบิลแล้วเลขขึ้นเอง`:x.skip?'ของหมดทุกช่วงที่นับ — ยังคำนวณใช้จริงไม่ได้':'ยังไม่มีข้อมูลใช้จริงในเดือนนี้ (ต้องนับอย่างน้อย 2 ครั้ง)'}</td></tr>`;
     // ช่วงที่ใช้จริงติดลบเกินเศษนับ (เกิน 0.5 และเกิน 25% ของที่ควรใช้ในช่วงนั้น) = บิลยังไม่ลง/นับพลาด — จับรายช่วง แม้เฉลี่ยกลุ่มยังเป็นบวก
     const gA=w=>{ const g=R.find(g2=>g2.d.includes(w)); return g&&g.avg>0?g.avg:0; };
     const negI=x.iv.filter(v=>v.use< -Math.max(0.5,0.25*v.ws.reduce((t,w)=>t+gA(w),0)));
     const ivT=v=>`${thDate(v.Pd)}→${thDate(v.Cd)} ใช้จริง ${fmt(v.use)}`;
-    const thin=R.some(g=>g.n<2), neg=negI.length>0||R.some(g=>g.avg!=null&&g.avg<0), cens=x.cens>0;
-    const on=!thin&&!neg&&!cens;
+    const thin=R.some(g=>g.n<2), neg=negI.length>0||R.some(g=>g.avg!=null&&g.avg<0), cens=x.cens>0, miss=!!x.miss;
+    const on=!thin&&!neg&&!cens&&!miss;
     const ov=(S._autoSel||{})[S.br+'|'+x.r.pr.id], ck=ov===undefined?on:!!ov; if(ck) nCk++;
     const useTd=g=>`<td class="n">${g.avg==null?'<span class="mut">–</span>':(g.lb?'≥':'')+fmt(g.avg)+(g.avg<0?' ⚠':'')} <span class="xs mut">· ${g.n} วัน</span></td>`;
     const rateTd=g=>g.nu==null
       ? `<td class="n mut" title="ยังไม่มีข้อมูลวัน${g.l} — ไม่แตะค่าเดิม">${fr(g.old)} <span class="xs">(คงเดิม)</span></td>`
       : `<td class="n">${fr(g.old)} → <b ${g.old!==g.nu?'style="color:var(--red)"':''}>${fr(g.nu)}</b></td>`;
     return `<tr>
-      <td>${nm}${thin?` <span class="chip mid" title="มีกลุ่มวันที่ข้อมูลไม่ถึง 2 วัน — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}${neg?` <span class="chip bad" title="${negI.length?esc(negI.map(ivT).join(' · '))+' — บิลยังไม่ลง? (หรือนับ/ผูกพลาด) เช็คก่อนใช้':'ใช้จริงเฉลี่ยติดลบ = บิลยังไม่ลง/นับหรือผูกพลาด — เช็คก่อนใช้'}">ติดลบ</span>`:''}${cens?` <span class="chip mid" title="มี ${x.cens} ช่วงที่ของหมดตอนนับ (กดหมด/นับได้ 0) — ใช้จริงช่วงนั้นต่ำกว่าที่ต้องใช้จริง ไม่เอามาเฉลี่ย (กลุ่มที่มีแต่ช่วงแบบนี้ขึ้น ≥) · เช็คก่อนใช้">เคยของหมด</span>`:''}${negI.length?`<div class="xs" style="color:var(--red)">⚠ ${esc(negI.slice(0,2).map(ivT).join(' · '))}${negI.length>2?` (+${negI.length-2} ช่วง)`:''} — บิลยังไม่ลง?</div>`:''}</td>
+      <td>${nm}${thin?` <span class="chip mid" title="มีกลุ่มวันที่ข้อมูลไม่ถึง 2 วัน — เช็คก่อนใช้">ข้อมูลน้อย</span>`:''}${neg?` <span class="chip bad" title="${negI.length?esc(negI.map(ivT).join(' · '))+' — บิลยังไม่ลง? (หรือนับ/ผูกพลาด) เช็คก่อนใช้':'ใช้จริงเฉลี่ยติดลบ = บิลยังไม่ลง/นับหรือผูกพลาด — เช็คก่อนใช้'}">ติดลบ</span>`:''}${cens?` <span class="chip mid" title="มี ${x.cens} ช่วงที่ของหมดตอนนับ (กดหมด/นับได้ 0) — ใช้จริงช่วงนั้นต่ำกว่าที่ต้องใช้จริง ไม่เอามาเฉลี่ย (กลุ่มที่มีแต่ช่วงแบบนี้ขึ้น ≥) · เช็คก่อนใช้">เคยของหมด</span>`:''}${miss?` <span class="chip mid" title="${esc(`ช่วง ${thDate(x.miss.Pd)}→${thDate(x.miss.Cd)} ไม่มีบิลของเข้าเลย (ใช้จริง ${fmt(x.miss.use)}) ทั้งที่ปกติมีของเข้าแทบทุกรอบนับ — ไม่เอาช่วงนี้มาเฉลี่ย · ลงบิลแล้วเลขปรับเอง · ถ้าวันนั้นไม่มีของเข้าจริง ติ๊กเองได้`)}">บิลวัน ${thDate(x.miss.Cd)} ยังไม่ลง?</span>`:''}${negI.length?`<div class="xs" style="color:var(--red)">⚠ ${esc(negI.slice(0,2).map(ivT).join(' · '))}${negI.length>2?` (+${negI.length-2} ช่วง)`:''} — บิลยังไม่ลง?</div>`:''}</td>
       ${R.map(useTd).join('')}${R.map(rateTd).join('')}
       <td><input type="checkbox" class="autock" data-pid="${esc(x.r.pr.id)}" ${R.map(g=>`data-${g.k}="${g.nu==null?'':g.nu}"`).join(' ')} ${ck?'checked':''} onchange="stkAutoPick(this)"></td></tr>`;
   }).join('');
   return `<div class="dupbox" style="margin-bottom:10px">🤖 <b>ตั้งอัตราใช้อัตโนมัติ (beta)</b> <span class="xs mut">— คำนวณอัตราใช้ต่อวัน (หน่วยนับ) 3 กลุ่มวัน <b>จ–พฤ / ศ / ส–อา</b> จากใช้จริงรายวัน (ถัวตามยอดขายรายวัน) · แอพนับใช้อัตรานี้ร่างสั่งของ + ส่ง LINE ซัพ · วันพิเศษ/วันขายดีตั้งในปฏิทินของแอพนับ · <b>ไม่เขียนอะไรจนกว่าจะกดยืนยัน</b></span></div>
   ${W.spd.length?`<div class="xs" style="margin-bottom:8px">🎌 <b>ตัดวันพิเศษ ${W.spd.length} วัน</b> <span class="mut">(${W.spd.map(thDate).join(', ')}) — ใช้จริงวันนั้นไม่เอามาเฉลี่ย เพราะแอพนับคิดวันพิเศษตามปฏิทินอยู่แล้ว · อัตราที่ได้ = ของวันปกติ</span></div>`:''}
+  ${(ms=>ms.length?`<div class="xs" style="margin-bottom:8px">⏳ <b>บิลวันนับล่าสุดยังไม่ลง? ${ms.length} ตัว</b> <span class="mut">(${ms.slice(0,6).map(x=>esc(x.r.pr.name)+' '+thDate(x.miss.Cd)).join(', ')}${ms.length>6?` +${ms.length-6} ตัว`:''}) — ปกติมีของเข้าแทบทุกรอบนับ แต่ช่วงล่าสุดไม่มีบิลเลย → ไม่เอาช่วงนั้นมาเฉลี่ย + ไม่ติ๊กให้ · ลงบิลแล้วเลขปรับเอง</span></div>`:'')(W.filter(x=>x.miss))}
   ${noCol?`<div class="dupbox" style="margin-bottom:10px">⚠ อ่านอัตราเดิม (rate_wk/rate_fri/rate_we) จากแอพนับไม่ได้ — ค่าเดิมจะขึ้น "–"</div>`:''}
   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px" class="xs">
     <span>เผื่อ × <input id="autoMul" type="text" inputmode="decimal" value="${mul}" onchange="S.autoMul=num(this.value)||1;show('actual')" style="width:52px;text-align:right;display:inline-block"> <span class="mut">(1 = ตามใช้จริง · 1.1 = เผื่อ 10% ทุกกลุ่ม)</span></span>
@@ -4237,7 +4253,7 @@ function stkAutoHtml(rows,st){
     <tr>${STK_RG.map(g=>`<th class="right">${g.l}</th>`).join('')}${STK_RG.map(g=>`<th class="right">${g.l}</th>`).join('')}</tr>
     ${rowsH}
   </table></div>
-  <div class="xs mut" style="margin-top:8px">ปัดขึ้น: ต่ำกว่า 10 ทีละ 0.1 · 10–50 ทีละ 0.5 · เกิน 50 เป็นจำนวนเต็ม · กลุ่มที่ยังไม่มีข้อมูล = คงค่าเดิม ไม่เขียนทับ · ตัว "ข้อมูลน้อย" (กลุ่มใดมีไม่ถึง 2 วัน) / "ติดลบ" (เฉลี่ยหรือช่วงใดติดลบชัด) / "เคยของหมด" ไม่ติ๊กให้อัตโนมัติ · ต้นช่วงของหมดและไม่มีของเข้า = ข้ามช่วงนั้น${(n2=>n2?` (${n2} ช่วง)`:'')(W.reduce((t,x)=>t+x.skip,0))} · ติ๊ก/เอาออกเองจำไว้จนเปลี่ยนสาขา/เดือน</div>`;
+  <div class="xs mut" style="margin-top:8px">ปัดขึ้น: ต่ำกว่า 10 ทีละ 0.1 · 10–50 ทีละ 0.5 · เกิน 50 เป็นจำนวนเต็ม · กลุ่มที่ยังไม่มีข้อมูล = คงค่าเดิม ไม่เขียนทับ · ตัว "ข้อมูลน้อย" (กลุ่มใดมีไม่ถึง 2 วัน) / "ติดลบ" (เฉลี่ยหรือช่วงใดติดลบชัด) / "เคยของหมด" / "บิลวัน … ยังไม่ลง?" (ปกติมีของเข้า ≥ 2 ใน 3 ของรอบนับ แต่ช่วงล่าสุดไม่มีบิล — ไม่เอาช่วงนั้นมาเฉลี่ย) ไม่ติ๊กให้อัตโนมัติ · ต้นช่วงของหมดและไม่มีของเข้า = ข้ามช่วงนั้น${(n2=>n2?` (${n2} ช่วง)`:'')(W.reduce((t,x)=>t+x.skip,0))} · ติ๊ก/เอาออกเองจำไว้จนเปลี่ยนสาขา/เดือน</div>`;
 }
 function stkAutoPick(c){ (S._autoSel??={})[S.br+'|'+c.dataset.pid]=c.checked; stkAutoCnt(); } // จำการติ๊กเอง (รีเฟรชแล้วไม่เด้งกลับ)
 function stkAutoCnt(){ const n=document.querySelectorAll('.autock:checked').length; const b=document.getElementById('autoGoBtn'); if(b)b.textContent=`เขียนอัตราที่เลือกเข้าแอพนับ (${n})`; }
