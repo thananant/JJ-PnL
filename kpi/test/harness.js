@@ -31,7 +31,13 @@ function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { failures+
 /* ---------- fake database ---------- */
 function makeDb(opts) {
   opts = opts || {};
-  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], punches: opts.punches || [], settings: opts.settings || [], users: opts.users || USERS.map(u => Object.assign({}, u)), nextId: 1 };
+  const db = { departments: [], staff: [], responses: [], scores: [], employees: opts.employees || [], punches: opts.punches || [], settings: opts.settings || [], users: opts.users || USERS.map(u => Object.assign({}, u)), nextId: 1,
+    /* ตาราง line_groups = ของระบบนับสต๊อก (บอทจดกลุ่มที่ตัวเองอยู่) — KPI อ่านอย่างเดียว · kpi_line_log = ประวัติการส่งสรุป */
+    lineGroups: opts.lineGroups || [
+      { group_id: 'C00000000000000000000000000000001', name: 'หัวหน้า JJ (แจ้งใบสมัคร)' },
+      { group_id: 'C00000000000000000000000000000002', name: 'ซัพผัก เจ๊หมวย' }
+    ],
+    lineLog: opts.lineLog || [] };
   if (!opts.empty) {
     db.departments = [
       { id: 1, name: 'อาหาร', icon: '🍖', sort_order: 1, active: true },
@@ -86,6 +92,8 @@ function makeDb(opts) {
       case 'kpi_departments': return db.departments;
       case 'kpi_staff': return db.staff;
       case 'kpi_settings': { if (opts.noSettingsTable) throw new Error("Could not find the table 'public.kpi_settings' in the schema cache"); return db.settings; }
+      case 'line_groups': { if (opts.noLineGroups) throw new Error('relation "public.line_groups" does not exist'); return db.lineGroups; }
+      case 'kpi_line_log': { if (opts.noLineSql) throw new Error("Could not find the table 'public.kpi_line_log' in the schema cache"); if (opts.lineLogDown) throw new Error('TypeError: Failed to fetch'); return db.lineLog; }
       case 'kpi_responses': return db.responses.map(r => Object.assign({}, r, { kpi_scores: db.scores.filter(s => s.response_id === r.id).map(s => ({ department_id: s.department_id, score: s.score })) }));
       case 'kpi_daily': {
         const joined = db.scores.map(s => { const r = db.responses.find(x => x.id === s.response_id); return { branch: r.branch, biz_date: r.biz_date, department_id: s.department_id, score: s.score }; });
@@ -130,6 +138,15 @@ function makeDb(opts) {
         .filter(e => db.punches.filter(p => p.emp_code === e.code && p.ts >= start && p.ts < end).length % 2 === 1)
         .map(e => e.id);
       return { data: ids, error: null };
+    }
+    if (name === 'kpi_line_text') {
+      if (opts.noLineSql) return { data: null, error: { message: 'Could not find the function public.kpi_line_text(p_branch, p_from, p_to) in the schema cache' } };
+      const rows = db.responses.filter(r => r.branch === args.p_branch && r.biz_date >= args.p_from && r.biz_date <= args.p_to);
+      const votes = {}; for (const r of rows) if (r.staff_id) votes[r.staff_id] = (votes[r.staff_id] || 0) + 1;
+      const names = Object.keys(votes).sort((a, b) => votes[b] - votes[a])
+        .map(id => { const st = db.staff.find(x => x.id === Number(id)); return (st ? (st.nickname || st.name) : '?') + ' ' + votes[id] + ' ครั้ง'; });
+      return { data: '📊 สรุปความพึงพอใจลูกค้า · ' + args.p_branch + '\n' + args.p_from + (args.p_to === args.p_from ? '' : '–' + args.p_to) +
+        '\n\n🙋 ลูกค้ากดให้คะแนน ' + rows.length + ' ครั้ง\n\n💖 ลูกค้าชมพนักงาน\n' + names.join('\n'), error: null };
     }
     if (name !== 'kpi_submit') return { data: null, error: { message: 'no fn' } };
     const id = db.nextId++;
@@ -185,6 +202,11 @@ function boot(url, db, extra) {
       w.supabase = { createClient: () => client };
       w.prompt = () => (extra && extra.pin) || null; w.alert = () => {}; w.open = u => { w._opened = u; };
       w.TextEncoder = require('util').TextEncoder;   // เบราว์เซอร์จริงมีให้อยู่แล้ว (ใช้ตอน hash รหัสผ่าน) — jsdom ไม่มี
+      /* ส่งเข้ากลุ่มไลน์ผ่าน Edge Function line-order — จำลองไว้ดูว่าแอปยิงอะไรไปบ้าง */
+      w._posts = [];
+      w.fetch = (url, o) => { w._posts.push({ url: url, body: JSON.parse((o && o.body) || '{}'), headers: (o && o.headers) || {} });
+        return Promise.resolve({ ok: !(extra && extra.lineFail), status: (extra && extra.lineFail) ? 500 : 200, json: () => Promise.resolve((extra && extra.lineFail) ? { error: 'บอทไม่อยู่ในกลุ่มนี้' } : { ok: true }) }); };
+      w.confirm = () => !(extra && extra.sayNo);   // jsdom ไม่มี confirm จริง — ตั้งต้นคือกด "ตกลง"
       w.HTMLElement.prototype.requestFullscreen = () => Promise.resolve();
       w.URL.createObjectURL = () => 'blob:x'; w.HTMLAnchorElement.prototype.click = function () { w._download = this.download; };
       /* ค่าเริ่มต้น: จำลองว่ากดเข้ามาจากหน้าศูนย์รวมแอพ (มีใบผ่าน)

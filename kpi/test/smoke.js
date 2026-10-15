@@ -584,6 +584,113 @@ const { makeDb, makeClient, boot, sleep, ok, txt, noErr, click, change, pwHash, 
     ok(names.includes('นี'), 'จอลูกค้าลาดพร้าวยังเห็นพนักงานลาดพร้าว: ' + names.join(','));
   }
 
+
+  console.log('\n[14] ส่งสรุปเข้ากลุ่มไลน์ (หน้าตั้งค่า)');
+  /* วันทำการ "เมื่อวาน" แบบที่แอปคิด (ตัด 05:00 เวลาไทย) — ปุ่มดูตัวอย่าง/ส่งเองใช้ช่วงนี้ */
+  const YDAY = (() => { const t = new Date(); t.setHours(t.getHours() - 5); t.setDate(t.getDate() - 1);
+    return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); })();
+  {
+    /* เจ้าของเปิดหน้าตั้งค่า → การ์ดขึ้นครบ 2 สาขา + รายชื่อกลุ่มจากบอท */
+    const db = makeDb();
+    db.lineLog = [
+      { id: 1, kind: 'daily', branch: 'JJRD', period_key: 'D' + YDAY, d_from: YDAY, d_to: YDAY, group_id: 'C00000000000000000000000000000001', tries: 1, ok: true, sent_at: new Date().toISOString(), first_at: new Date().toISOString() },
+      { id: 2, kind: 'daily', branch: 'JJLP', period_key: 'D' + YDAY, d_from: YDAY, d_to: YDAY, group_id: 'C9', tries: 2, ok: false, detail: 'HTTP 400 bad group', sent_at: new Date().toISOString(), first_at: new Date().toISOString() }
+    ];
+    const { w, d, client } = boot(URL0, db);
+    await sleep(100); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(200);
+    const body = () => txt(d, '#lineBody') || '';
+    ok(/ส่งสรุปเข้ากลุ่มไลน์/.test(txt(d, '#main')), 'มีการ์ด "ส่งสรุปเข้ากลุ่มไลน์"');
+    ok(d.querySelectorAll('#lineBody select.lg-sel').length === 2, 'มีช่องเลือกกลุ่มครบ 2 สาขา');
+    ok(/หัวหน้า JJ/.test(body()) && /ซัพผัก/.test(body()), 'รายชื่อกลุ่มมาจากตาราง line_groups');
+    ok(/ซัพพลายเออร์/.test(txt(d, '#main')), 'เตือนว่าส่วนใหญ่เป็นกลุ่มซัพพลายเออร์');
+    ok(/รายวัน .*✅/.test(body()) && /❌/.test(body()) && /bad group/.test(body()), 'โชว์ประวัติการส่ง (สำเร็จ/ไม่สำเร็จ + เหตุผล)');
+    ok(!client._calls.some(c => c.table === 'line_groups' && c.op !== 'select'), 'ไม่เขียนตาราง line_groups ของระบบอื่น');
+
+    /* เลือกกลุ่ม + ตั้งเวลา → บันทึก */
+    const sel = d.querySelector('#lineBody select.lg-sel[data-branch="JJRD"]');
+    sel.value = 'C00000000000000000000000000000001';
+    d.querySelector('#lgDailyAt').value = '08:30';
+    d.querySelector('#lgPeriod').checked = false;
+    await click(w, d, '[data-act="saveLine"]'); await sleep(200);
+    const up = client._calls.filter(c => c.table === 'kpi_settings' && c.op === 'upsert').pop();
+    ok(!!up && up.payload[0].key === 'line_cfg', 'บันทึกลง kpi_settings key line_cfg');
+    const cfg = up.payload[0].value;
+    ok(cfg.groups.JJRD === 'C00000000000000000000000000000001' && !cfg.groups.JJLP, 'เก็บกลุ่มเฉพาะสาขาที่เลือก');
+    ok(cfg.daily === true && cfg.daily_at === '08:30' && cfg.period === false, 'เก็บเวลา/สวิตช์ตามที่ตั้ง');
+    ok(typeof cfg.since === 'string' && cfg.since.length > 10, 'ใส่ since ให้ (เพิ่งเปิดใช้ = ไม่ย้อนส่งของเก่า)');
+    ok(/บันทึกแล้ว/.test(txt(d, '#toast') || ''), 'แจ้งว่าบันทึกแล้ว');
+
+    /* ดูตัวอย่างข้อความ */
+    await click(w, d, '[data-act="linePrev"][data-branch="JJRD"]'); await sleep(200);
+    const rpc = client._calls.filter(c => c.op === 'rpc' && c.name === 'kpi_line_text').pop();
+    ok(!!rpc && rpc.args.p_branch === 'JJRD' && rpc.args.p_from === YDAY && rpc.args.p_to === YDAY, 'ดูตัวอย่าง = ขอข้อความของเมื่อวาน');
+    ok(/สรุปความพึงพอใจ/.test(txt(d, '#lgPre') || ''), 'โชว์ข้อความตัวอย่างในหน้า');
+
+    /* กดส่งเดี๋ยวนี้ → ยิง line-order */
+    await click(w, d, '[data-act="lineSend"][data-branch="JJRD"]'); await sleep(250);
+    ok(w._posts.length === 1, 'ส่ง 1 ครั้ง');
+    const p = w._posts[0] || { body: {}, headers: {} };
+    ok(String(p.url).endsWith('/functions/v1/line-order'), 'ยิงไปที่ Edge Function line-order');
+    ok(p.body.to === 'C00000000000000000000000000000001' && /สรุปความพึงพอใจ/.test(p.body.text || ''), 'body = {to,text}');
+    ok(/^Bearer /.test(p.headers.Authorization || '') && !!p.headers.apikey, 'แนบคีย์ของโปรเจกต์');
+    ok(/ส่งเข้ากลุ่ม/.test(txt(d, '#toast') || ''), 'แจ้งว่าส่งแล้ว');
+  }
+  {
+    /* ไม่ยืนยันในกล่องถาม = ไม่ส่ง · ไม่ได้เลือกกลุ่ม = ไม่ส่ง + บอกให้เลือกก่อน */
+    const db = makeDb(); const { w, d } = boot(URL0, db, { sayNo: true });
+    await sleep(100); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(200);
+    d.querySelector('#lineBody select.lg-sel[data-branch="JJRD"]').value = 'C00000000000000000000000000000001';
+    await click(w, d, '[data-act="lineSend"][data-branch="JJRD"]'); await sleep(200);
+    ok(w._posts.length === 0, 'กดยกเลิกในกล่องยืนยัน = ไม่ส่งออกไป');
+  }
+  {
+    const db = makeDb(); const { w, d } = boot(URL0, db);
+    await sleep(100); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(200);
+    await click(w, d, '[data-act="lineSend"][data-branch="JJLP"]'); await sleep(200);
+    ok(w._posts.length === 0 && /เลือกกลุ่มไลน์/.test(txt(d, '#toast') || ''), 'ยังไม่เลือกกลุ่ม = ไม่ส่ง + บอกให้เลือกก่อน');
+  }
+  {
+    /* ส่งไม่สำเร็จ (บอทไม่อยู่ในกลุ่ม) → บอกเหตุผล ปุ่มกลับมากดได้ */
+    const db = makeDb(); const { w, d } = boot(URL0, db, { lineFail: true });
+    await sleep(100); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(200);
+    d.querySelector('#lineBody select.lg-sel[data-branch="JJRD"]').value = 'C00000000000000000000000000000002';
+    await click(w, d, '[data-act="lineSend"][data-branch="JJRD"]'); await sleep(250);
+    const btn = d.querySelector('[data-act="lineSend"][data-branch="JJRD"]');
+    ok(/ส่งไม่สำเร็จ/.test(txt(d, '#toast') || '') && !btn.disabled, 'ส่งไม่สำเร็จ = บอกเหตุผล + กดใหม่ได้');
+  }
+  {
+    /* ยังไม่ได้รัน jjmk_kpi_line.sql → การ์ดบอกให้รัน ไม่ให้ตั้งค่า */
+    const db = makeDb({ noLineSql: true }); const { w, d } = boot(URL0, db);
+    await sleep(100); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(250);
+    ok(/jjmk_kpi_line\.sql/.test(txt(d, '#lineBody') || ''), 'บอกให้รัน jjmk_kpi_line.sql');
+    ok(!d.querySelector('#lineBody select.lg-sel') && !d.querySelector('[data-act="saveLine"]'), 'ไม่มีช่องตั้งค่า/ปุ่มบันทึก');
+    ok(noErr(d) && /ตำแหน่งที่ให้ลูกค้าชม/.test(txt(d, '#main')), 'การ์ดอื่นในหน้าตั้งค่ายังใช้ได้ (fail-soft)');
+  }
+  {
+    /* อ่านประวัติไม่ได้เพราะเน็ตสะดุด (ไม่ใช่ยังไม่รัน SQL) → ยังตั้งค่าได้ */
+    const db = makeDb({ lineLogDown: true }); const { w, d } = boot(URL0, db);
+    await sleep(100); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(250);
+    ok(!!d.querySelector('#lineBody select.lg-sel') && /อ่านประวัติการส่งไม่ได้/.test(txt(d, '#lineBody') || ''), 'เน็ตสะดุด = ยังตั้งค่าได้ แค่บอกว่าอ่านประวัติไม่ได้');
+  }
+  {
+    /* ไม่มีตาราง line_groups (ยังไม่ได้ใช้บอทกับระบบอื่น) → การ์ดยังเปิดได้ */
+    const db = makeDb({ noLineGroups: true }); const { w, d } = boot(URL0, db);
+    await sleep(100); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(250);
+    ok(!!d.querySelector('#lineBody select.lg-sel') && noErr(d), 'ไม่มีตาราง line_groups ก็ไม่พัง');
+  }
+  {
+    /* เห็นเฉพาะสาขา = ดูได้ แก้ไม่ได้ (ค่ากลางทุกสาขา) */
+    const db = makeDb(); const { w, d, client } = boot(URL0, db, { as: 'rdmgr' });
+    await sleep(120); await click(w, d, '[data-act="tab"][data-tab="settings"]'); await sleep(250);
+    const sels = d.querySelectorAll('#lineBody select.lg-sel');
+    ok(sels.length === 1 && sels[0].dataset.branch === 'JJRD', 'เห็นเฉพาะสาขาที่ดูแล');
+    ok(sels[0].disabled && !d.querySelector('[data-act="saveLine"]') && !d.querySelector('[data-act="lineSend"]'), 'ช่องเลือก/ปุ่มบันทึก/ปุ่มส่ง ถูกล็อก');
+    ok(!!d.querySelector('[data-act="linePrev"]'), 'ยังดูตัวอย่างข้อความได้');
+    const before = client._calls.length;
+    await w.eval('saveLineCfg()'); await w.eval('lineSend("JJRD", {textContent:"x"})'); await sleep(200);
+    ok(!client._calls.slice(before).some(c => c.table === 'kpi_settings' && c.op === 'upsert') && w._posts.length === 0, 'สั่งบันทึก/ส่งตรง ๆ ก็ไม่ผ่าน');
+  }
+
   const failures = getFailures(); console.log('\n' + (failures ? failures + ' FAILED' : 'ALL PASSED'));
   process.exit(failures ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(2); });
