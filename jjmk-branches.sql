@@ -56,10 +56,22 @@ grant select on public.pnl_branches to anon, authenticated;
 do $$ begin
   if to_regclass('public.branches') is not null then
     alter table public.branches add column if not exists code text;
-    update public.branches set code = 'JJRD'   where code is null and (id = 'b19f0a17b4472'   or name ~* 'รัชดา|ratchada');
-    update public.branches set code = 'JJLP'   where code is null and (id = 'b19f0a17b448212' or name ~* 'ลาดพร้าว|lad ?prao');
-    update public.branches set code = 'JJCK'   where code is null and name ~* 'ครัวกลาง|central kitchen';
-    update public.branches set code = 'OFFICE' where code is null and name ~* 'ออฟฟิศ|สำนักงาน|office';
+    -- ① รหัสร้านเดิมจาก id ตรงตัว ② ครัวกลาง/ออฟฟิศจากชื่อ (ก่อนชื่อสาขา — ชื่ออาจมีทำเลต่อท้าย เช่น "ครัวกลาง รัชดา")
+    -- ③ รัชดา/ลาดพร้าวจากชื่อ เฉพาะเมื่อยังไม่มีแถวไหนได้รหัสนั้น และชื่อตรงแถวเดียว (กันรหัสซ้ำ)
+    update public.branches set code = 'JJRD' where code is null and id = 'b19f0a17b4472'   and not exists (select 1 from public.branches z where z.code = 'JJRD');
+    update public.branches set code = 'JJLP' where code is null and id = 'b19f0a17b448212' and not exists (select 1 from public.branches z where z.code = 'JJLP');
+    update public.branches set code = 'JJCK'   where code is null and name ~* 'ครัวกลาง|central ?kitchen'
+      and not exists (select 1 from public.branches z where z.code = 'JJCK')
+      and (select count(*) from public.branches z where z.code is null and z.name ~* 'ครัวกลาง|central ?kitchen') = 1;
+    update public.branches set code = 'OFFICE' where code is null and name ~* 'ออฟฟิศ|สำนักงาน|office'
+      and not exists (select 1 from public.branches z where z.code = 'OFFICE')
+      and (select count(*) from public.branches z where z.code is null and z.name ~* 'ออฟฟิศ|สำนักงาน|office') = 1;
+    update public.branches set code = 'JJRD'   where code is null and name ~* 'รัชดา|ratchada'
+      and not exists (select 1 from public.branches z where z.code = 'JJRD')
+      and (select count(*) from public.branches z where z.code is null and z.name ~* 'รัชดา|ratchada') = 1;
+    update public.branches set code = 'JJLP'   where code is null and name ~* 'ลาดพร้าว|lad ?prao|lat ?phrao'
+      and not exists (select 1 from public.branches z where z.code = 'JJLP')
+      and (select count(*) from public.branches z where z.code is null and z.name ~* 'ลาดพร้าว|lad ?prao|lat ?phrao') = 1;
     begin
       create unique index if not exists branches_code_uq on public.branches (code) where code is not null;
     exception when others then raise notice 'branches: รหัสซ้ำ — ข้าม unique index (%)', sqlerrm; end;
