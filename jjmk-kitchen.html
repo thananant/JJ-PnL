@@ -14,11 +14,12 @@
 <style>
 :root{
   --fh:'Prompt','Noto Sans Lao Looped','Noto Sans Myanmar',sans-serif;
-  --red:#C62127; --red-d:#A31B20; --red-t:#FBEBEB;
-  --ink:#241F1E; --mut:#8B837B; --bg:#F5F2ED; --card:#FFFFFF; --line:#E7E1D8;
-  --ok:#1E8E5A; --ok-t:#E6F4EC; --bad:#D23B3B; --bad-t:#FCE9E8; --gold:#B98A2F; --gold-t:#F7EEDC;
-  --blue:#3D6E8C; --blue-t:#E7F0F5;
-  --r:14px; --sh:0 1px 2px rgba(35,25,20,.05),0 4px 14px rgba(35,25,20,.06);
+  /* โทนสีเดียวกับแอพนับสต๊อก (เจ้าของสั่ง 2026-10-16 "ปรับหน้าตาการใช้งานให้เหมือนระบบนับสต๊อก") */
+  --red:#C62127; --red-d:#A31B20; --red-t:#FBEBEB; --dk:#7E1013; --wine:#6B0F12; --goldf:#E5B03C;
+  --ink:#2E2119; --mut:#8A7A66; --bg:#F6F1E5; --card:#FFFDF7; --line:#E8DFCC;
+  --ok:#1F7A43; --ok-t:#EAF4EC; --bad:#D23B3B; --bad-t:#FCE9E8; --gold:#A66A00; --gold-t:#FBF6EA;
+  --blue:#5B7FA6; --blue-t:#EAF3FC;
+  --r:16px; --sh:0 1px 2px rgba(35,25,20,.05),0 4px 14px rgba(35,25,20,.06);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -37,23 +38,24 @@ input::placeholder{color:#C5BEB5}
 ::-webkit-scrollbar{height:6px;width:6px}::-webkit-scrollbar-thumb{background:#D8D1C7;border-radius:3px}
 
 /* ---------- Header ---------- */
-header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
-  padding-top:env(safe-area-inset-top)}   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง — ห้ามทับปุ่มบนหัวแอป (เจ้าของกดไม่ได้ 2026-10-12) */
+header{position:sticky;top:0;z-index:40;background:linear-gradient(180deg,var(--dk),#690C0F);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25);
+  padding-top:env(safe-area-inset-top)}   /* หัวแอปแดงเข้มแบบแอพนับสต๊อก */   /* เปิดจากไอคอนหน้าจอโฮม iPhone: แถบสถานะโปร่ง — ห้ามทับปุ่มบนหัวแอป (เจ้าของกดไม่ได้ 2026-10-12) */
 .hrow{display:flex;align-items:center;gap:10px;padding:10px max(clamp(14px,1.6vw,28px),env(safe-area-inset-right)) 6px max(clamp(14px,1.6vw,28px),env(safe-area-inset-left));max-width:none;margin:0 auto}
-.brand{display:flex;align-items:center;gap:8px;font-family:var(--fh);font-weight:700;font-size:18px;letter-spacing:.2px}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--fh);font-weight:700;font-size:17px;letter-spacing:.2px;color:#fff}
 .brand .hlogo{width:26px;height:26px;border-radius:8px;border:1.5px solid #E9B44C;background:var(--red);object-fit:cover;flex:none}
-.brand small{font-weight:500;color:var(--mut);font-size:11px;display:block;line-height:1}
+.brand small{font-weight:500;color:#F2DCDC;font-size:11px;display:block;line-height:1}
 .ptitle{display:none}
-.hbtn{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px solid var(--line);border-radius:99px;padding:6px 12px;font-weight:600;font-size:13px;white-space:nowrap}
+.hbtn{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:99px;padding:6px 12px;font-weight:600;font-size:13px;white-space:nowrap;font-family:var(--fh)}
 .hbtn:active{transform:scale(.96)}
 #syncDot{width:9px;height:9px;border-radius:50%;background:var(--ok);margin-left:auto;flex:none;transition:.2s}
 #syncDot.busy{background:var(--gold);animation:pul 1s infinite}
 #syncDot.err{background:var(--bad)}
 @keyframes pul{50%{opacity:.35}}
-.tabbar{display:flex;gap:4px;overflow-x:auto;padding:4px max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left));max-width:none;margin:0 auto;scrollbar-width:none}
+.tabbar{display:flex;gap:6px;overflow-x:auto;padding:2px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left));max-width:none;margin:0 auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .tabbar::-webkit-scrollbar{display:none}
-.tabbar button{flex:none;padding:8px 14px;border-radius:99px;font-weight:600;color:var(--mut);font-size:14px;display:inline-flex;align-items:center;gap:5px}
-.tabbar button.on{background:var(--ink);color:#fff}
+/* แถบแท็บแบบแอพนับสต๊อก: ทุกหน้าอยู่ในแถบเดียว เลื่อนข้างได้ (ไม่มี ☰ เมนู) · ปุ่มที่เปิดอยู่สีทอง */
+.tabbar button{flex:none;padding:8px 14px;border-radius:10px;font-weight:700;font-family:var(--fh);color:#F2DCDC;background:rgba(255,255,255,.14);font-size:13.5px;display:inline-flex;align-items:center;gap:5px;min-height:44px;white-space:nowrap}
+.tabbar button.on{background:var(--goldf);color:#5A3E00}
 
 /* ---------- Sidebar (desktop) ---------- */
 #sideNav{display:none}
@@ -83,7 +85,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(245,242,237,.92);backdro
   header .brand{display:none}
   .tabbar{display:none}
   .hrow{padding:13px 36px 11px;max-width:1220px;margin:0 auto}
-  .ptitle{display:block;font-family:inherit;font-weight:700;font-size:20px;margin-right:auto}
+  .ptitle{display:block;font-family:var(--fh);font-weight:700;font-size:20px;margin-right:auto;color:#fff}
   #syncDot{margin-left:0}
 }
 
@@ -92,14 +94,14 @@ main{max-width:none;width:100%;margin:0 auto;padding:14px max(clamp(14px,1.6vw,2
 .view{display:none}.view.on{display:block;animation:fin .18s ease}
 @keyframes fin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
-.card h3{margin:0 0 10px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3{margin:-14px -14px 12px;padding:10px 14px;font-size:15px;font-weight:700;font-family:var(--fh);display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#FBF6EA;border-bottom:1px solid #F0E8D6;border-radius:var(--r) var(--r) 0 0}   /* แถบหัวการ์ดสีครีมแบบแอพนับสต๊อก */
 .card canvas{max-width:100%}   /* จอแคบ (Galaxy Fold 280 · iPhone SE 320): กราฟก่อน Chart.js วาดเสร็จต้องไม่ดันหน้าให้เลื่อนข้าง */
 .card h3 .sp{margin-left:auto;font-weight:500;color:var(--mut);font-size:12.5px}
 .mut{color:var(--mut)}.sm{font-size:12.5px}.xs{font-size:11.5px}
 .b{font-weight:700}.right{text-align:right}
 .btn{background:var(--red);color:#fff;font-weight:600;padding:10px 16px;border-radius:11px;box-shadow:0 2px 8px rgba(198,33,39,.3);display:inline-flex;align-items:center;gap:6px;justify-content:center}
 .btn:active{transform:scale(.97)}
-.btn.gh{background:#fff;color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
+.btn.gh{background:#fff;color:var(--wine);border:1.5px solid var(--line);box-shadow:none}
 .btn.dk{background:var(--ink);box-shadow:none;color:#fff}
 .btn.ok{background:var(--ok);box-shadow:0 2px 8px rgba(30,142,90,.3)}
 .btn.sm2{padding:7px 12px;font-size:13.5px;border-radius:9px}
@@ -118,7 +120,7 @@ main{max-width:none;width:100%;margin:0 auto;padding:14px max(clamp(14px,1.6vw,2
 .kpi .t{font-size:12px;color:var(--mut);font-weight:600}
 .kpi-v{font-size:22px;font-weight:700;margin-top:2px;line-height:1.15}
 .kpi .s{font-size:12px;margin-top:3px}
-.kpi.hero{background:linear-gradient(135deg,var(--red),#8F171C);border:none;color:#fff}
+.kpi.hero{background:linear-gradient(135deg,var(--dk),var(--wine));border:none;color:#fff}
 .kpi.hero .t{color:rgba(255,255,255,.75)}.kpi.hero .s{color:rgba(255,255,255,.8)}
 .kpi.tap{cursor:pointer}
 #modalWrap{position:fixed;inset:0;background:rgba(30,24,20,.45);z-index:100;display:none;align-items:flex-end;justify-content:center;
@@ -142,8 +144,12 @@ main{max-width:none;width:100%;margin:0 auto;padding:14px max(clamp(14px,1.6vw,2
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .stickysum{position:sticky;bottom:0;background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;display:flex;gap:14px;align-items:center;font-family:var(--fh);box-shadow:0 -4px 20px rgba(0,0,0,.15);z-index:10;flex-wrap:wrap}
 .stickysum .v{font-weight:700;font-size:18px}
-.secbar{background:var(--ink);color:#fff;border-radius:10px;padding:8px 12px;font-family:var(--fh);font-weight:600;font-size:13.5px;display:flex;margin:16px 0 8px;align-items:center;gap:8px}
-.secbar .sp{margin-left:auto;font-weight:700}
+/* หัวหมวดแบบ .dhead ของแอพนับสต๊อก: ตัวหนังสือสีไวน์ + เส้นทอง */
+.secbar{display:flex;align-items:center;gap:10px;margin:16px 0 8px;font-family:var(--fh);font-weight:700;font-size:16px;color:var(--wine)}
+.secbar::after{content:'';flex:1;height:2px;background:var(--goldf);border-radius:2px;order:1}
+.secbar .sp{order:2;font-weight:700;font-size:12.5px;color:var(--mut)}
+.dhead{display:flex;align-items:center;gap:12px;margin:4px 0 12px;font-family:var(--fh);font-weight:700;font-size:19px;color:var(--wine)}
+.dhead::after{content:'';flex:1;height:2px;background:var(--goldf);border-radius:2px}
 .twrap{overflow-x:auto;margin:0 -14px;padding:0 14px}
 table.t{width:100%;border-collapse:collapse;font-size:13.5px}
 table.t th{font-size:11.5px;color:var(--mut);font-weight:700;text-align:left;padding:6px 8px;border-bottom:1.5px solid var(--line);white-space:nowrap;font-family:var(--fh)}
@@ -156,6 +162,8 @@ table.t tr.tap:hover{background:#FFF8F3}
 /* ---------- Item / photo cards ---------- */
 .igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
 @media(max-width:430px){.igrid{grid-template-columns:1fr 1fr}}
+@media(max-width:339px){.igrid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}}   /* Galaxy Fold ปก 280px: การ์ดนับ (− ช่อง ＋) + การ์ดตัวเลขกว้างเกินครึ่งจอ */
+.skstep input{width:0}
 .icard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:8px;position:relative}
 .icard.low{border-color:var(--bad);background:#FFF7F6}
 .icard.cnt{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-t)}
@@ -177,8 +185,10 @@ table.t tr.tap:hover{background:#FFF8F3}
 .stepper input{width:76px;height:44px;text-align:center;font-family:var(--fh);font-weight:700;font-size:17px;border-radius:12px;padding:4px}
 .catbar{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
 .catbar::-webkit-scrollbar{display:none}
-.catbar button{flex:none;padding:7px 13px;border-radius:99px;font-weight:600;font-size:13px;background:#fff;border:1.5px solid var(--line);color:var(--mut);display:inline-flex;gap:5px;align-items:center}
-.catbar button.on{background:var(--red);border-color:var(--red);color:#fff}
+.catbar button{flex:none;padding:8px 15px;border-radius:99px;font-weight:700;font-family:var(--fh);font-size:13.5px;background:#fff;border:1.8px solid var(--wine);color:var(--wine);display:inline-flex;gap:6px;align-items:center;min-height:40px}
+.catbar button.on{background:var(--wine);border-color:var(--wine);color:#fff}
+.catbar button .skcn{background:#F6E7E7;color:var(--wine);border-radius:99px;padding:1px 8px;font-size:11.5px;font-weight:700;opacity:1}
+.catbar button.on .skcn{background:rgba(255,255,255,.22);color:#fff}
 .dpbar{display:flex;gap:8px;margin:2px 0 10px}
 .stacts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .icard.selable{cursor:pointer;user-select:none}
@@ -204,12 +214,13 @@ table.sttab th.right{text-align:right}
 }
 .dpbar button{flex:1 1 0;min-width:0;min-height:52px;padding:6px 8px;border-radius:14px;border:2px solid var(--line);background:#fff;color:var(--ink);font-weight:700;font-size:15px;line-height:1.2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;text-align:center}
 .dpbar button small{font-size:12px;font-weight:700;color:var(--mut)}
-.dpbar button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.dpbar button{border:1.8px solid var(--wine);color:var(--wine);border-radius:99px;font-family:var(--fh)}
+.dpbar button.on{background:var(--wine);border-color:var(--wine);color:#fff}
 .dpbar button.on small{color:#fff;opacity:.8}
 /* ชิปในฟอร์ม — ขึ้นบรรทัดใหม่ได้ เห็นครบทุกตัวไม่ต้องเลื่อน */
 .catwrap{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.catwrap button{padding:8px 13px;border-radius:99px;font-weight:600;font-size:13.5px;background:#fff;border:1.5px solid var(--line);color:var(--mut);display:inline-flex;gap:5px;align-items:center;min-height:40px}
-.catwrap button.on{background:var(--red);border-color:var(--red);color:#fff}
+.catwrap button{padding:8px 13px;border-radius:99px;font-weight:700;font-family:var(--fh);font-size:13.5px;background:#fff;border:1.8px solid var(--wine);color:var(--wine);display:inline-flex;gap:5px;align-items:center;min-height:40px}
+.catwrap button.on{background:var(--wine);border-color:var(--wine);color:#fff}
 .catwrap button.add{border-style:dashed;color:var(--red);border-color:var(--red)}
 .catwrap button.add.on{background:var(--red-t);color:var(--red)}
 /* ใบจัดส่งตามยอดนับสาขา */
@@ -325,12 +336,12 @@ table.sttab th.right{text-align:right}
 .tdhi{font-size:17px;font-weight:600;margin-top:2px}.tdhint{font-size:15px;color:var(--mut);margin-top:4px}
 .bsteps{display:grid;gap:12px;grid-template-columns:1fr}
 @media(min-width:900px){.bsteps{grid-template-columns:1fr 1fr}}
-.bstep{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:3px solid #F2C27B;border-radius:22px;padding:14px 16px;
-  background:#FFF8EC;min-height:96px;font:inherit;color:var(--ink);cursor:pointer;box-shadow:var(--sh);position:relative}
-.bstep .bnum{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:800;background:#fff;color:#B7791F;border:3px solid #F2C27B}
+.bstep{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:2.5px solid #E9C98A;border-radius:var(--r);padding:14px 16px;
+  background:#FFFDF7;min-height:96px;font:inherit;color:var(--ink);cursor:pointer;box-shadow:var(--sh);position:relative}
+.bstep .bnum{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:800;background:#fff;color:var(--wine);border:3px solid #E9C98A}
 .bstep .bic{font-size:40px;flex:none;line-height:1}
 .bstep .btx{min-width:0;flex:1}.bstep b{display:block;font-size:21px;font-family:var(--fh);line-height:1.25}
-.bstep small{display:block;font-size:16px;color:#7A5A1E;margin-top:3px}
+.bstep small{display:block;font-size:16px;color:var(--mut);margin-top:3px}
 .bstep em{display:inline-block;font-style:normal;margin-top:6px;background:var(--red);color:#fff;font-weight:700;font-size:15px;padding:3px 12px;border-radius:99px}
 .bstep .bgo{font-size:34px;color:var(--mut);flex:none}
 .bstep.ok{background:var(--ok-t);border-color:#9FD3B6}.bstep.ok .bnum{background:var(--ok);color:#fff;border-color:var(--ok)}.bstep.ok small{color:#145C3B}
@@ -344,8 +355,6 @@ table.sttab th.right{text-align:right}
   font:inherit;font-weight:700;font-size:16px;min-height:100px;cursor:pointer;color:var(--ink);text-align:center}
 .navtile span{font-size:36px;line-height:1}.navtile.on{background:var(--ink);color:#fff}
 .navfoot{display:flex;gap:10px;margin-top:14px}.navfoot .btn{flex:1;min-height:52px;font-size:16px}
-.tabbar #tbMenu{font-weight:700}.tabbar #tbMenu.on{background:var(--ink);color:#fff}
-@media(max-width:1023px){.tabbar{justify-content:space-around}.tabbar button{flex:1;justify-content:center;font-size:16px;padding:10px 6px;min-height:46px}}
 .sb-moreb{display:flex;align-items:center;gap:11px;width:100%;text-align:left;color:#F2DCDC;font-weight:600;font-size:14.5px;padding:10px 12px;border-radius:11px;margin:6px 0 2px;background:rgba(255,255,255,.08);cursor:pointer}
 .sb-moreb .car{margin-left:auto;transition:transform .15s}.sb-moreb.open .car{transform:rotate(180deg)}
 .sb-morebox{display:none}.sb-morebox.open{display:block}
@@ -405,6 +414,34 @@ table.sttab th.right{text-align:right}
 .sdlater>summary{text-align:left}
 .skin{display:flex;align-items:center;gap:6px;margin-top:6px}.skin input{flex:1;min-width:0;font-size:20px;font-weight:700;text-align:center;min-height:48px}
 .skin span{font-weight:700;white-space:nowrap}
+/* การ์ดนับแบบแอพนับสต๊อก: − [จำนวน] ＋ + ปุ่ม "หมด" · ขอบไวน์ = ยังไม่นับ · เขียว = นับแล้ว */
+.skstep{display:flex;align-items:center;gap:6px;margin-top:8px}
+.skstep button{width:44px;height:44px;min-height:44px;border-radius:11px;border:1.5px solid var(--line);background:#FBF6EA;color:var(--mut);font-size:22px;font-weight:700;flex:none;padding:0;line-height:1}
+.skstep button.plus{background:var(--wine);border-color:var(--wine);color:#fff}
+.skstep input{flex:1;min-width:0;height:44px;min-height:44px;font-size:18px;font-weight:700;text-align:center;background:#FBF6EA;padding:0 4px}
+.skstep input.has{border-color:var(--ok);background:#F0F8F1}
+.skfoot{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;color:var(--mut);min-height:36px}
+.skfoot .skeq{font-size:12px}
+.skfoot .outb{margin-left:auto;border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:6px 12px;font-size:13px;color:var(--mut);min-height:36px;flex:none}
+.skfoot .outb.on{background:#FBEAEA;border-color:#E4A6A6;color:var(--red);font-weight:700}
+.icard.skcard{border:1.8px solid var(--wine)}.icard.skcard.cnt{border-color:#9DBFA6;background:#FBFDFA;box-shadow:none}
+/* หน้างานประจำวันเป็นแท็บ (นับของ · สั่งของ · รับของ · ทำของ · ส่งของ) — วาดใน main ไม่ใช่หน้าต่างเต็มจอ · ตัวใหญ่เท่าหน้างานเดิม */
+.view.taskv{font-size:17px;padding-bottom:8px}
+.taskv input,.taskv select{font-size:18px;min-height:52px}
+.taskv .btn{min-height:52px;font-size:17px}.taskv .btn.big{min-height:64px;font-size:20px;width:100%}.taskv .btn.sm2{min-height:44px;font-size:15px}
+.taskv .skstep input{min-height:44px;height:44px;font-size:18px}
+.taskv .stickysum{position:fixed;left:0;right:0;bottom:0;border-radius:0;background:#fff;color:var(--ink);border-top:1px solid var(--line);
+  padding:10px max(16px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));box-shadow:0 -3px 12px rgba(0,0,0,.07);z-index:30}
+.taskv .stickysum .v{font-size:16px}
+.view.taskv.hasbar{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+@media(min-width:900px){.taskv .stickysum{left:236px}}
+.mkpills{margin-bottom:10px}
+.shrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F5EFE1}.shrow:last-child{border-bottom:0}.shrow.dim{opacity:.55}
+.shrow .shn{flex:1;min-width:0;font-size:16px;font-weight:700}.shrow .shn small{display:block;font-size:12.5px;color:var(--mut);font-weight:500}
+.shrow .shq{display:flex;align-items:center;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end;max-width:52%}
+.shrow .shq input{width:84px;min-height:44px;font-size:17px;font-weight:700;color:var(--red);text-align:right;background:#fff;padding:6px 8px}
+.shrow .shq input.ov{border-color:var(--wine);background:#FFF7E6}
+.shrow .shq small{flex-basis:100%;text-align:right;font-size:11.5px;color:var(--mut)}.shrow .shq small button{border:none;background:none;color:var(--wine);font-weight:700;font-size:13px;padding:0 4px;min-height:0}
 .skcn{font-size:12px;opacity:.75}
 .curow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}.curow .mthumb{width:48px;height:48px;font-size:24px;flex:none}
 .cugrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 4px}.cugrid label{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--mut)}
@@ -712,21 +749,24 @@ table.sttab th.right{text-align:right}
   <div class="sb-note">🍳 <span id="sbNote">ผลิต–คิดต้นทุน–ส่งสาขา</span></div>
   <div class="sb-sec" id="sbSec1">งานประจำวัน</div>
   <button class="sb-item on" data-v="today"><span class="ic">☀️</span><span class="lb"></span></button>
-  <button class="sb-item" data-v="dash"><span class="ic">🏠</span><span class="lb"></span></button>
-  <button class="sb-moreb" id="sbMoreBtn" onclick="sbMoreToggle()">☰ <span id="sbMoreLb">เมนูอื่น</span><span class="car">▾</span></button>
-  <div class="sb-morebox" id="sbMore">
-  <button class="sb-item" data-v="plan"><span class="ic">📅</span><span class="lb"></span></button>
-  <button class="sb-item" data-v="buy"><span class="ic">🛒</span><span class="lb"></span><span class="sbadge" id="bdBuy" style="display:none"></span></button>
-  <button class="sb-item" data-v="produce"><span class="ic">🍳</span><span class="lb"></span></button>
-  <button class="sb-item" data-v="orders"><span class="ic">🚚</span><span class="lb"></span><span class="sbadge" id="bdOrd" style="display:none"></span></button>
+  <button class="sb-item" data-v="count"><span class="ic">📋</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="shop"><span class="ic">🛒</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="recv"><span class="ic">📥</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="make"><span class="ic">🍳</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="send"><span class="ic">🚚</span><span class="lb"></span></button>
   <div class="sb-sec" id="sbSec2">ข้อมูล & รายงาน</div>
   <button class="sb-item" data-v="stock"><span class="ic">📦</span><span class="lb"></span></button>
   <button class="sb-item" data-v="menus"><span class="ic">📖</span><span class="lb"></span></button>
   <button class="sb-item" data-v="items"><span class="ic">🥬</span><span class="lb"></span></button>
   <button class="sb-item" data-v="sups"><span class="ic">🏷️</span><span class="lb"></span></button>
+  <div class="sb-sec" id="sbSec3">หัวหน้า</div>
+  <button class="sb-item" data-v="dash"><span class="ic">🏠</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="plan"><span class="ic">📅</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="buy"><span class="ic">🧾</span><span class="lb"></span><span class="sbadge" id="bdBuy" style="display:none"></span></button>
+  <button class="sb-item" data-v="produce"><span class="ic">📜</span><span class="lb"></span></button>
+  <button class="sb-item" data-v="orders"><span class="ic">📝</span><span class="lb"></span><span class="sbadge" id="bdOrd" style="display:none"></span></button>
   <button class="sb-item" data-v="stats"><span class="ic">📈</span><span class="lb"></span></button>
   <button class="sb-item" data-v="acc"><span class="ic">💰</span><span class="lb"></span></button>
-  </div>
   <div class="sb-foot">
     <div id="sbUser"></div>
     <button class="sb-item" data-v="set"><span class="ic">⚙️</span><span class="lb"></span></button>
@@ -743,13 +783,33 @@ table.sttab th.right{text-align:right}
   </div>
   <nav class="tabbar" id="tabbar">
     <button data-v="today" class="on">☀️ <span class="lb"></span></button>
+    <button data-v="count">📋 <span class="lb"></span></button>
+    <button data-v="shop">🛒 <span class="lb"></span></button>
+    <button data-v="recv">📥 <span class="lb"></span></button>
+    <button data-v="make">🍳 <span class="lb"></span></button>
+    <button data-v="send">🚚 <span class="lb"></span></button>
+    <button data-v="stock">📦 <span class="lb"></span></button>
+    <button data-v="menus">📖 <span class="lb"></span></button>
+    <button data-v="items">🥬 <span class="lb"></span></button>
+    <button data-v="sups">🏷️ <span class="lb"></span></button>
     <button data-v="dash">🏠 <span class="lb"></span></button>
-    <button id="tbMenu" onclick="navMenu()">☰ <span id="tbMenuLb">เมนู</span></button>
+    <button data-v="plan">📅 <span class="lb"></span></button>
+    <button data-v="buy">🧾 <span class="lb"></span></button>
+    <button data-v="produce">📜 <span class="lb"></span></button>
+    <button data-v="orders">📝 <span class="lb"></span></button>
+    <button data-v="stats">📈 <span class="lb"></span></button>
+    <button data-v="acc">💰 <span class="lb"></span></button>
+    <button data-v="set">⚙️ <span class="lb"></span></button>
   </nav>
 </header>
 
 <main id="app">
   <section class="view on" id="view-today"></section>
+  <section class="view" id="view-count"></section>
+  <section class="view" id="view-shop"></section>
+  <section class="view" id="view-recv"></section>
+  <section class="view" id="view-make"></section>
+  <section class="view" id="view-send"></section>
   <section class="view" id="view-dash"></section>
   <section class="view" id="view-plan"></section>
   <section class="view" id="view-buy"></section>
@@ -784,7 +844,7 @@ const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const EMAIL_DOMAIN='@jjmk.local';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='CK b9';
+const APP_VER='CK c1';
 
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k)) ?? d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
@@ -1601,17 +1661,20 @@ const KITCHEN_SQL=[
 /* ============================================================
    Shell: nav + chrome
    ============================================================ */
-const VIEWS=['today','dash','plan','buy','produce','orders','stock','menus','items','sups','stats','acc','set'];
+const VIEWS=['today','count','shop','recv','make','send','stock','menus','items','sups','dash','plan','buy','produce','orders','stats','acc','set'];
+const PAGE_TABS={count:1,shop:1,recv:1,make:1,send:1};   // งานประจำวันเป็นแท็บ (แบบแอพนับสต๊อก) — เนื้อหาวาดใน main ด้วย openPage()
 function applyChrome(){
   document.body.setAttribute('data-lang',LANG);
   document.querySelectorAll('[data-v]').forEach(b=>{
-    const lb=b.querySelector('.lb');if(lb)lb.textContent=t('nav_'+b.dataset.v);});
+    const lb=b.querySelector('.lb');if(lb)lb.textContent=t('nav_'+b.dataset.v);
+    if(PAGE_TABS[b.dataset.v])b.style.display=canKitchen()?'':'none';});   // แท็บงานครัวเฉพาะคนทำงานครัว
   const el=id=>document.getElementById(id);
   if(el('hdSub'))el('hdSub').textContent=t('app_sub');
   if(el('sbSub'))el('sbSub').textContent=t('app_sub');
   if(el('sbNote'))el('sbNote').textContent=t('sb_note');
   if(el('sbSec1'))el('sbSec1').textContent=t('sec_daily');
   if(el('sbSec2'))el('sbSec2').textContent=t('sec_data');
+  if(el('sbSec3'))el('sbSec3').textContent=t('sec_boss');
   if(el('langCur'))el('langCur').textContent=I18N[LANG].lang_name;
   if(el('tbMenuLb'))el('tbMenuLb').textContent=t('sx_menu');
   if(el('sbMoreLb'))el('sbMoreLb').textContent=t('sx_menu_more');
@@ -1632,6 +1695,8 @@ function show(v){
 
   S.tab=v;LS.set('jjck_tab',v);
   document.querySelectorAll('.tabbar button,.sb-item').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  const tb=document.getElementById('tabbar'),ab=tb&&tb.querySelector('button.on');   // เลื่อนแถบให้เห็นแท็บที่เปิดอยู่
+  if(ab&&tb.scrollWidth>tb.clientWidth)tb.scrollLeft=Math.max(0,ab.offsetLeft-(tb.clientWidth-ab.offsetWidth)/2);
   if(typeof navSync==='function')navSync(v);
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='view-'+v));
   const el=document.getElementById('view-'+v);
@@ -3902,6 +3967,7 @@ function skDraftSave(){const e={};Object.entries(SK_CNT).forEach(([k,x])=>{if(sk
 function skDraftClear(){try{localStorage.removeItem(CNT_DRAFT);}catch(e){}}
 function countOpen(){
   if(!canKitchen())return;
+  if(S.tab!=='count'){show('count');return;}   // แท็บ 📋 นับของ (RENDER.count เรียกกลับมาที่นี่)
   if(!Object.values(SK_CNT).some(skIsCounted)){const d=skDraftGet();
     if(d){SK_CNT={};Object.entries(d.e).forEach(([k,x])=>{const p=k.indexOf('|'),kind=k.slice(0,p),id=k.slice(p+1);
         if(kind==='item'?itemById(id):recipeById(id))SK_CNT[k]={kind,id,v:x&&x.v!=null?String(x.v):String(x),u:(x&&x.u)||''};});
@@ -3915,6 +3981,8 @@ function skCountCancel(){
 function skInput(kind,id,el){ // พิมพ์แล้วไม่วาดหน้าใหม่ (คีย์บอร์ดมือถือไม่หุบ) — อัปเดตเฉพาะการ์ดนี้กับตัวนับ
   const e=skEnt(kind,id);e.v=el.value;
   const card=el.closest('.icard');if(card)card.classList.toggle('cnt',skIsCounted(e));
+  el.classList.toggle('has',skIsCounted(e));
+  const ob=card&&card.querySelector('.skfoot .outb');if(ob)ob.classList.toggle('on',skIsCounted(e)&&num(e.v)===0);
   const o=kind==='item'?itemById(id):recipeById(id);const eq=card&&card.querySelector('.skeq');
   if(o)e.u=skUnit(kind,o).u;
   if(eq&&o){const U=skUnit(kind,o),base=kind==='item'?(o.unit||''):(o.yield_unit||'');
@@ -3925,7 +3993,7 @@ function skPaintMeta(){
   const n=aI.filter(i=>skIsCounted(SK_CNT['item|'+i.id])).length+aR.filter(r=>skIsCounted(SK_CNT['recipe|'+r.id])).length,all=aI.length+aR.length;
   const v=document.getElementById('skN');if(v)v.textContent=t('skc_counted',{a:n,b:all});
   const b=document.getElementById('skGo');if(b)b.disabled=!Object.values(SK_CNT).some(skIsCounted);
-  document.querySelectorAll('#modalBox .skcats button[data-c]').forEach(x=>{const c=x.dataset.c;if(!c)return;
+  document.querySelectorAll('#view-count .skcats button[data-c]').forEach(x=>{const c=x.dataset.c;if(!c)return;
     const L=c==='__menu'?aR.map(r=>'recipe|'+r.id):aI.filter(i=>(i.cat||'อื่นๆ')===c).map(i=>'item|'+i.id);
     const k=L.filter(id=>skIsCounted(SK_CNT[id])).length;const sp=x.querySelector('.skcn');if(sp)sp.textContent=k+'/'+L.length;});}
 function skCountCard(kind,o){
@@ -3933,13 +4001,21 @@ function skCountCard(kind,o){
   const base=kind==='item'?(o.unit||''):(o.yield_unit||'');
   const U=skUnit(kind,o);
   const ic=kind==='item'?catIc(o.cat):'🍲';
-  return '<div class="icard skcard'+(counted?' cnt':'')+'" data-n="'+esc(supKey(dispName(o)+' '+o.name))+'">'+
+  return '<div class="icard skcard'+(counted?' cnt':'')+'" data-k="'+esc(kind+'|'+o.id)+'" data-n="'+esc(supKey(dispName(o)+' '+o.name))+'">'+
     '<div class="ithumb" style="height:64px">'+(o.image_url?'<img src="'+esc(o.image_url)+'" loading="lazy">':ic)+'</div>'+
     '<div class="iname" style="min-height:auto">'+esc(dispName(o))+'</div>'+
     '<div class="isub">'+t('skc_sys')+' '+fmtQ(rnd2(num(o.qty)/U.f))+' '+esc(trUnit(U.u))+'</div>'+
     (U.u!==base&&kind==='item'?'<div class="xs mut">'+esc(unitEqTxt(o,U.u))+'</div>':'')+
-    '<div class="skin"><input inputmode="decimal" placeholder="0" value="'+esc(e?e.v:'')+'" oninput="skInput(\''+kind+'\',\''+esc(o.id)+'\',this)"><span>'+esc(trUnit(U.u))+'</span></div>'+
-    '<div class="xs b skeq" style="color:var(--gold)">'+(counted&&U.u!==base?'= '+fmtQ(skTotal(e,o,kind))+' '+esc(trUnit(base)):'')+'</div></div>';}
+    '<div class="skstep"><button type="button" onclick="skBump(\''+kind+'\',\''+esc(o.id)+'\',-1)">−</button>'+
+    '<input inputmode="decimal" placeholder="0" class="'+(counted?'has':'')+'" value="'+esc(e?e.v:'')+'" oninput="skInput(\''+kind+'\',\''+esc(o.id)+'\',this)">'+
+    '<button type="button" class="plus" onclick="skBump(\''+kind+'\',\''+esc(o.id)+'\',1)">＋</button></div>'+
+    '<div class="skfoot"><span class="b">'+esc(trUnit(U.u))+'</span><span class="b skeq" style="color:var(--gold)">'+(counted&&U.u!==base?'= '+fmtQ(skTotal(e,o,kind))+' '+esc(trUnit(base)):'')+'</span>'+
+    '<button type="button" class="outb'+(counted&&num(e.v)===0?' on':'')+'" onclick="skZero(\''+kind+'\',\''+esc(o.id)+'\')">'+t('skc_out')+'</button></div></div>';}
+function skCardEl(kind,id){return document.querySelector('#view-count .skcard[data-k="'+CSS.escape(kind+'|'+id)+'"]');}
+function skBump(kind,id,d){ // ปุ่ม −/＋ ทีละ 1 หน่วยนับ (ไม่ต่ำกว่า 0) — แก้ในที่ ไม่วาดหน้าใหม่
+  const c=skCardEl(kind,id),inp=c&&c.querySelector('.skstep input');if(!inp)return;
+  let v=num(inp.value)+d;if(v<0)v=0;inp.value=String(rnd4(v));skInput(kind,id,inp);}
+function skZero(kind,id){const c=skCardEl(kind,id),inp=c&&c.querySelector('.skstep input');if(!inp)return;inp.value='0';skInput(kind,id,inp);}
 let SK_CAT=LS.get('jjck_skcat','')||'';
 function skSetCat(c){SK_CAT=c;LS.set('jjck_skcat',c);paintCount();}
 function cntDept(d){deptSet(d);paintCount();}
@@ -3948,7 +4024,7 @@ function skNormUnits(){ // หน่วยนับของสินค้า�
     const U=skUnit('item',o);if(e.u===U.u)return;const f0=unitFactor(o,e.u);
     if(f0){e.v=String(rnd4(num(e.v)*f0/U.f));}e.u=U.u;});}
 function paintCount(keep){
-  const box0=document.getElementById('modalBox');const st=keep&&box0?box0.scrollTop:0;
+  const st=keep?window.scrollY:0;
   skNormUnits();
   const actI=S.items.filter(i=>i.active!==false&&inDept('item',i)),actR=S.recipes.filter(r=>r.active!==false&&inDept('recipe',r));
   const cats=allItemCats().filter(c=>actI.some(i=>(i.cat||'อื่นๆ')===c));
@@ -3979,10 +4055,9 @@ function paintCount(keep){
     '<span style="margin-left:auto;display:flex;gap:8px">'+
     '<button class="btn gh sm2" onclick="skCountCancel()">'+t('cancel')+'</button>'+
     '<button class="btn ok" id="skGo" onclick="skCountSum()" '+(nAll?'':'disabled')+'>'+t('skc_save')+'</button></span></div>';
-  MODAL_BACK=null;openTask(h);skFilter();
-  const box=document.getElementById('modalBox');if(box){box.classList.add('cntw');box.scrollTop=st;}}
+  MODAL_BACK=null;openPage(h);skFilter();if(st)window.scrollTo(0,st);}
 function skFilter(){const q=supKey(SK_Q);let any=0;
-  document.querySelectorAll('#modalBox .sksec').forEach(s=>{let n=0;
+  document.querySelectorAll('#view-count .sksec').forEach(s=>{let n=0;
     s.querySelectorAll('.skcard').forEach(c=>{const v=!q||c.dataset.n.indexOf(q)>=0;c.style.display=v?'':'none';if(v)n++;});
     s.style.display=n?'':'none';any+=n;});
   const e=document.getElementById('skNone');if(e)e.style.display=any?'none':'';}
@@ -5357,7 +5432,7 @@ function prActual(d){return (d.actual==null||String(d.actual).trim()==='')?num(d
    ออกแบบให้เด็ก 5 ขวบ / ผู้ใหญ่ที่เพิ่งหัดใช้สมาร์ทโฟน ใช้ได้")
    หน้าวันนี้ = ปุ่มใหญ่ 6 ขั้น · กดแล้วเข้าหน้างานทีละเรื่อง (ปุ่มใหญ่ ตัวหนังสือใหญ่ คำง่าย)
    ============================================================ */
-const NAV_IC={today:'☀️',dash:'🏠',plan:'📅',buy:'🛒',produce:'🍳',orders:'🚚',stock:'📦',menus:'📖',items:'🥬',sups:'🏷️',stats:'📈',acc:'💰',set:'⚙️'};
+const NAV_IC={today:'☀️',count:'📋',shop:'🛒',recv:'📥',make:'🍳',send:'🚚',dash:'🏠',plan:'📅',buy:'🧾',produce:'📜',orders:'📝',stock:'📦',menus:'📖',items:'🥬',sups:'🏷️',stats:'📈',acc:'💰',set:'⚙️'};
 function navMenu(){ // มือถือ: ปุ่ม ☰ เมนู = ตารางปุ่มใหญ่ของทุกหน้า
   openModal('<h3>☰ '+t('sx_menu')+'</h3><div class="navgrid">'+
     VIEWS.map(v=>'<button class="navtile'+(v===S.tab?' on':'')+'" data-go="'+v+'" onclick="closeModal();show(this.dataset.go)"><span>'+NAV_IC[v]+'</span>'+esc(t('nav_'+v))+'</button>').join('')+
@@ -5381,6 +5456,21 @@ function kpBigStepsHtml(){
 /* ---------- หน้างาน (เต็มจอบนมือถือ ปุ่มใหญ่) ---------- */
 function taskify(){const b=document.getElementById('modalBox');if(b)b.classList.add('task');}
 function openTask(html){openModal(html,true);taskify();}
+/* หน้างานประจำวันเป็นแท็บ (เจ้าของสั่ง 2026-10-16 ให้เหมือนแอพนับสต๊อก): อยู่แท็บงานนั้น = วาดลงใน main (หัวแอป+แถบแท็บยังอยู่ ไม่ต้องกด ‹ กลับ)
+   ไม่ได้อยู่ = เปิดหน้าต่างเต็มจอแบบเดิม · ปิดหน้าต่างย่อยที่เปิดค้าง (ทำของทีละเมนู/ใบส่งสาขา/สรุปนับ) ให้เอง */
+function openPage(html){
+  const v=S.tab,el=PAGE_TABS[v]&&document.getElementById('view-'+v);
+  if(!el){openTask(html);return;}
+  const w=document.getElementById('modalWrap');if(w&&w.classList.contains('on')){MODAL_BACK=null;w.classList.remove('on');}
+  el.innerHTML=html.replace(/^<div class="tkhead"><button class="tkback"[^>]*>[^<]*<\/button><div class="tktitle">([\s\S]*?)<\/div><\/div>/,'<div class="dhead">$1</div>');
+  el.classList.add('taskv');el.classList.toggle('hasbar',!!el.querySelector('.stickysum'));}
+const noPermHtml=()=>'<div class="card empty">🔒 '+t('sx_no_perm')+'</div>';
+let MK_KIND=LS.get('jjck_mk','urgent')==='refill'?'refill':'urgent';
+RENDER.count=function(el){if(!canKitchen()){el.innerHTML=noPermHtml();return;}countOpen();};
+RENDER.shop=function(el){if(!canKitchen()){el.innerHTML=noPermHtml();return;}taskBuy();};
+RENDER.recv=function(el){if(!canKitchen()){el.innerHTML=noPermHtml();return;}taskRecv();};
+RENDER.make=function(el){if(!canKitchen()){el.innerHTML=noPermHtml();return;}taskMake(MK_KIND);};
+RENDER.send=function(el){if(!canKitchen()){el.innerHTML=noPermHtml();return;}taskSend();};
 function tkHead(title,hint,back){
   return '<div class="tkhead"><button class="tkback" onclick="'+(back||'closeModal()')+'">‹ '+t('sx_back')+'</button>'+
     '<div class="tktitle">'+title+'</div></div>'+(hint?'<div class="tkhint">'+hint+'</div>':'');}
@@ -5396,16 +5486,20 @@ function tkItems(kind){
   return out;}
 async function taskMake(kind){
   if(!canKitchen())return;
+  kind=kind==='refill'?'refill':'urgent';MK_KIND=kind;LS.set('jjck_mk',kind);
+  if(S.tab!=='make'){show('make');return;}   // แท็บ 🍳 ทำของ (RENDER.make เรียกกลับมาที่นี่)
   const title=(kind==='urgent'?'⚡ ':'🍳 ')+t(kind==='urgent'?'sx_s1':'sx_s3');
   const hint=t(kind==='urgent'?'sx_s1_hint':'sx_s3_hint');
   if(!S.kpAvg||(kind==='urgent'&&stkCodes().length&&!S.br.data)){
-    openTask(tkHead(title,hint)+'<div class="spin"></div>');
+    openPage(tkHead(title,hint)+'<div class="spin"></div>');
     try{await Promise.all([kpAvgLoad(),stkCodes().length?brLoad():null]);}catch(e){}}
   const D=bizTodayISO(),items=tkItems(kind);
   const done=S.prods.filter(p=>{if(p.d!==D)return false;const pl=p.plan_id&&S.plans.find(x=>x.id===p.plan_id);
     return ((pl&&kpKind(pl))||'refill')===kind;});
   TK={kind,items};
-  let h=tkHead(title,hint);
+  const nU=kind==='urgent'?items.length:tkItems('urgent').length,nR=kind==='refill'?items.length:tkItems('refill').length;
+  let h=tkHead(title,hint)+'<div class="catbar mkpills"><button class="'+(kind==='urgent'?'on':'')+'" onclick="taskMake(\'urgent\')">⚡ '+t('sx_s1')+' <span class="skcn">'+nU+'</span></button>'+
+    '<button class="'+(kind==='refill'?'on':'')+'" onclick="taskMake(\'refill\')">🍳 '+t('sx_s3')+' <span class="skcn">'+nR+'</span></button></div>';
   if(!items.length)h+=tkEmpty(t('sx_nothing'));
   items.forEach((x,i)=>{h+='<button class="tkcard" onclick="taskMakeOne('+i+')">'+thumbHtml(x.r,'🍲')+
     '<div class="tkmid"><div class="tkname">'+esc(dispName(x.r))+'</div>'+
@@ -5414,7 +5508,7 @@ async function taskMake(kind){
     done.forEach(p=>{const r=recipeById(p.recipe_id);
       h+='<div class="tkcard done small">'+thumbHtml(r,'🍲')+'<div class="tkmid"><div class="tkname">'+esc(r?dispName(r):p.name||'')+'</div>'+
         '<div>'+fmtQ(p.qty)+' '+esc(trUnit(r?r.yield_unit||'':''))+'</div></div><span class="tkgo">✓</span></div>';});}
-  openTask(h);}
+  openPage(h);}
 function taskMakeOne(i){
   const x=TK&&TK.items[i];if(!x)return;
   TM={kind:TK.kind,rid:x.r.id,ordered:x.q,actual:String(x.q),planId:x.planId,editQ:false,busy:false};
@@ -5468,8 +5562,9 @@ async function tmSave(){
 /* ② ส่งของให้สาขา */
 async function taskSend(){
   if(!canKitchen())return;
+  if(S.tab!=='send'){show('send');return;}   // แท็บ 🚚 ส่งของ
   const head=tkHead('🚚 '+t('sx_s2'),t('sx_s2_hint'));
-  if(!S.br.data){openTask(head+'<div class="spin"></div>');try{await brLoad();}catch(e){}}
+  if(!S.br.data){openPage(head+'<div class="spin"></div>');try{await brLoad();}catch(e){}}
   const D=bizTodayISO();let h=head;
   if(S.br.err)h+=brErrHtml();
   const data=S.br.data||[];
@@ -5489,7 +5584,7 @@ async function taskSend(){
     man.forEach(o=>{h+='<button class="tkcard" data-id="'+esc(o.id)+'" onclick="orderDetail(this.dataset.id)"><div class="mthumb">🏪</div>'+
       '<div class="tkmid"><div class="tkname">'+esc(o.branch_name||branchName(o.branch))+'</div><div>'+t('sx_items_n',{n:(S.orderItems[o.id]||[]).length})+'</div></div><span class="tkgo">›</span></button>';});}
   if(!data.length&&!man.length)h+=tkEmpty(t('sx_br_none'));
-  openTask(h);}
+  openPage(h);}
 function brSendFromTask(code){brSendModal(code);MODAL_BACK=taskSend;taskify();}
 function brRowTap(e,row){ // แตะตรงไหนของแถวก็ติ๊กได้ (ยกเว้นช่องตัวเลข)
   if(e.target.closest('input,a,button'))return;
@@ -5500,8 +5595,9 @@ function brRowTap(e,row){ // แตะตรงไหนของแถวก็
 let TB=null;
 async function taskBuy(){
   if(!canKitchen())return;
-  const head=tkHead('🛒 '+t('sx_s5'),t('sx_s5_hint'));
-  if(!S.kpAvg){openTask(head+'<div class="spin"></div>');try{await kpAvgLoad();}catch(e){}}
+  if(S.tab!=='shop'){show('shop');return;}   // แท็บ 🛒 สั่งของ
+  const head=tkHead('🛒 '+t('sx_s5'),t('sx_s5_hint'))+'<div class="hintbox">'+t('sx_ovr_hint')+'</div>';
+  if(!S.kpAvg){openPage(head+'<div class="spin"></div>');try{await kpAvgLoad();}catch(e){}}
   const by={};const g=s=>(by[s]=by[s]||{sup:s,rows:[],po:null});
   kpBuyRows().filter(r=>r.short>0).forEach(r=>g(r.it.sup||'').rows.push(r));
   S.pos.filter(p=>p.status==='draft'&&(S.poItems[p.id]||[]).length).forEach(p=>{g(p.sup||'').po=p;});
@@ -5519,16 +5615,29 @@ async function taskBuy(){
   const sent=S.pos.filter(p=>p.status==='ordered'&&p.d_order===bizTodayISO());
   if(sent.length){h+='<div class="tksec">✅ '+t('sx_buy_sent')+'</div>';
     sent.forEach(p=>{h+='<div class="tkcard done small"><div class="tkmid"><div class="tkname">🏷️ '+esc(p.sup||'-')+'</div><div>'+t('sx_items_n',{n:(S.poItems[p.id]||[]).length})+'</div></div><span class="tkgo">✓</span></div>';});}
-  openTask(h);}
+  openPage(h);}
+/* ช่อง "สั่งเพิ่ม" แก้ได้แบบแอพนับสต๊อก (เจ้าของสั่ง 2026-10-16): ค่าตั้งต้น = ที่ระบบแนะนำ (buyN) · พิมพ์ทับ = ใช้ค่านั้นวันนี้ (localStorage jjck_shop_ovr · วันถัดไปทิ้ง) ·
+   ว่าง = กลับค่าแนะนำ · 0 = ไม่สั่งรายการนั้น · ข้อความไลน์/ใบสั่งซื้อใช้ค่าที่แก้ */
+const SHOP_OVR='jjck_shop_ovr';
+function buyOvrAll(){const o=LS.get(SHOP_OVR,null);return o&&o.d===bizTodayISO()&&o.v&&typeof o.v==='object'?o.v:{};}
+function buyOvrGet(sup,iid){const v=buyOvrAll()[sup+'|'+iid];return v==null?null:Math.max(0,num(v));}
+function buyQty(sup,r){const o=buyOvrGet(sup,r.it.id);return o==null?r.buyN:o;}
+function buyOvrSave(v){LS.set(SHOP_OVR,{d:bizTodayISO(),v});}
+function buyOvrSet(el){const v=buyOvrAll(),k=el.dataset.sup+'|'+el.dataset.iid,raw=String(el.value||'').trim();
+  if(raw==='')delete v[k];else v[k]=Math.max(0,num(raw));buyOvrSave(v);taskBuy();}
+function buyOvrReset(el){const v=buyOvrAll();delete v[el.dataset.sup+'|'+el.dataset.iid];buyOvrSave(v);taskBuy();}
 function buyCardHtml(k,x){
-  const lines=x.po?(S.poItems[x.po.id]||[]).map(l=>esc(l.name)+' <b>'+fmtQ(l.qty)+' '+esc(trUnit(l.unit||''))+'</b>')
-    :x.rows.map(r=>esc(dispName(r.it))+' <b>'+r.buyN+' '+esc(trUnit(r.it.buy_unit||r.it.unit||''))+'</b>');
+  const lines=x.po?(S.poItems[x.po.id]||[]).map(l=>'<div>• '+esc(l.name)+' <b>'+fmtQ(l.qty)+' '+esc(trUnit(l.unit||''))+'</b></div>')
+    :x.rows.map(r=>{const q=buyQty(k,r),ov=buyOvrGet(k,r.it.id),bu=esc(trUnit(r.it.buy_unit||r.it.unit||''));
+      return '<div class="shrow'+(q>0?'':' dim')+'"><span class="shn">'+esc(dispName(r.it))+'<small>'+t('sx_have')+' '+fmtQ(r.have)+' '+esc(trUnit(r.it.unit||''))+'</small></span>'+
+        '<span class="shq"><input class="oq'+(ov!=null?' ov':'')+'" type="number" inputmode="decimal" step="any" min="0" data-sup="'+esc(k)+'" data-iid="'+esc(r.it.id)+'" value="'+(q>0?String(q):(ov!=null?'0':''))+'" placeholder="0" onchange="buyOvrSet(this)"> <b>'+bu+'</b>'+
+        (ov!=null?'<small>✏️ '+t('sx_sug')+' '+r.buyN+' '+bu+' <button type="button" data-sup="'+esc(k)+'" data-iid="'+esc(r.it.id)+'" onclick="buyOvrReset(this)">↺</button></small>':'')+'</span></div>';});
   const hasG=!!supLineId(k),s=supByName(k);
   return '<div class="tkcard col'+(x.runOut&&!x.today?' warn':'')+'"><div class="tkname">🏷️ '+esc(k||t('sx_no_sup'))+'</div>'+
     (k&&s?'<div class="xs mut">'+supSchedLine(s)+'</div>':'')+
     (!x.today?'<div class="sdnext'+(x.runOut?' bad':'')+'">'+(x.runOut?'⚠ '+t('sd_runout',{d:shortDate(x.oDay)}):'📅 '+t('sd_next',{d:shortDate(x.oDay)}))+'</div>'
       :(x.arrive&&x.rows.length?'<div class="xs mut">🚚 '+t('sd_arrive',{d:shortDate(x.arrive)})+' · '+t('sd_cover',{d:shortDate(addDays(x.rows.map(r=>r.nextArrive).sort()[0],-1))})+'</div>':''))+
-    '<div class="tklist">'+lines.map(t2=>'<div>• '+t2+'</div>').join('')+'</div>'+
+    '<div class="tklist">'+lines.join('')+'</div>'+
     (k?'<div class="tkbtns"><button class="btn big ok" data-sup="'+esc(k)+'" onclick="buySupGo(this.dataset.sup,false)">📤 '+t(hasG?'sx_buy_send':'sx_buy_open_line')+'</button>'+
       '<button class="btn gh" data-sup="'+esc(k)+'" onclick="buySupGo(this.dataset.sup,true)">📋 '+t('kf_copy')+'</button></div>'
      :'<div class="xs mut">'+t('sx_no_sup_hint')+'</div>')+
@@ -5538,18 +5647,20 @@ function buyText(x){ // ข้อความใบสั่งจากรา�
   if(x.po)return poText(x.po);
   const due=x.rows.map(r=>r.arrive||r.produceD).sort()[0];
   const L=['🛒 จริงใจหมูกระทะ','🏭 ครัวกลาง','🏷️ '+(x.sup||'-'),'📅 สั่งวันที่ '+thDate(bizTodayISO()),'🚚 ส่งวันที่ '+(due?thDate(due):'-'),''];
-  x.rows.forEach(r=>L.push('• '+r.it.name+' — '+fmtQ(r.buyN)+' '+(r.it.buy_unit||r.it.unit||'')));
-  L.push('','รวม '+x.rows.length+' รายการ');return L.join('\n');}
+  let n=0;x.rows.forEach(r=>{const q=buyQty(x.sup,r);if(!(q>0))return;n++;L.push('• '+r.it.name+' — '+fmtQ(q)+' '+(r.it.buy_unit||r.it.unit||''));});
+  L.push('','รวม '+n+' รายการ');return L.join('\n');}
 async function buyEnsurePo(x){ // ยังไม่มีใบสั่ง → ทำใบสั่งของร้านนี้ (เหมือนปุ่มสร้างใบสั่งซื้อเดิม)
-  if(x.po||!x.rows.length)return x.po;
+  const rows=x.rows.filter(r=>buyQty(x.sup,r)>0);   // ใช้ค่าที่แก้ · 0 = ไม่สั่ง
+  if(x.po||!rows.length)return x.po;
   const po={id:uid('po'),po_no:nextPoNo(),sup:x.sup,d_order:bizTodayISO(),d_due:x.rows.map(r=>r.arrive||r.produceD).sort()[0],
     order_by:x.rows.map(r=>r.orderBy).sort()[0],status:'draft',by_name:S.user.name,note:t('pr_from_plan')};
   await insFallback('ck_pos',[po],['order_by']);
-  const lines=x.rows.map((r,i)=>({po_id:po.id,item_id:r.it.id,name:r.it.name,unit:r.it.buy_unit||r.it.unit||'',qty:r.buyN,price:r.it.price,sort:i}));
+  const lines=rows.map((r,i)=>({po_id:po.id,item_id:r.it.id,name:r.it.name,unit:r.it.buy_unit||r.it.unit||'',qty:buyQty(x.sup,r),price:r.it.price,sort:i}));
   const ins=await dbi(()=>sb.from('ck_po_items').insert(lines).select());
   S.pos.unshift(po);S.poItems[po.id]=ins||lines;x.po=po;return po;}
 async function buySupGo(sup,copy){
   const x=TB&&TB[sup];if(!x||TB_BUSY)return;
+  if(!x.po&&!x.rows.some(r=>buyQty(sup,r)>0)){toast(t('sx_nothing'),true);return;}   // แก้เป็น 0 หมดทุกรายการ = ไม่มีอะไรจะสั่ง
   const gid=supLineId(sup);
   if(copy||!gid){ // คัดลอก / เปิดไลน์ต้องทำทันทีตอนกด (มือถือบล็อกถ้ารอบันทึกก่อน) แล้วค่อยถามว่าส่งแล้วหรือยัง
     const tx=buyText(x);
@@ -5568,6 +5679,7 @@ async function buySupGo(sup,copy){
 /* ⑥ รับของ */
 function taskRecv(){
   if(!canKitchen())return;
+  if(S.tab!=='recv'){show('recv');return;}   // แท็บ 📥 รับของ
   const D=bizTodayISO();
   const pos=S.pos.filter(p=>p.status==='ordered').sort((a,b)=>String(a.d_due||'').localeCompare(String(b.d_due||'')));
   let h=tkHead('📥 '+t('sx_s6'),t('sx_s6_hint'));
@@ -5580,7 +5692,7 @@ function taskRecv(){
   if(today.length){h+='<div class="tksec">✅ '+t('sx_recv_today')+'</div>';
     today.forEach(b=>{h+='<button class="tkcard done small" data-id="'+esc(b.id)+'" onclick="billOpen(this.dataset.id)"><div class="tkmid"><div class="tkname">🏷️ '+esc(b.sup||'-')+'</div>'+
       '<div>฿'+fmt(b.total,2)+(b.bill_no?' · #'+esc(b.bill_no):'')+'</div></div><span class="tkgo">✓</span></button>';});}
-  openTask(h);}
+  openPage(h);}
 
 /* ============================================================
    🏷️ ร้านค้า (ซัพ) — กลุ่มไลน์ของแต่ละร้าน + วัตถุดิบที่ซื้อร้านนั้น (เจ้าของสั่ง 2026-10-06:
@@ -6125,7 +6237,17 @@ function offBtn(kind,o){ // ปุ่มในฟอร์มแก้ไข
   return o.active===false?'<button class="btn gh" onclick="offSet(\''+kind+'\',\''+esc(o.id)+'\',true)">'+t('off_restore')+'</button>'
     :'<button class="btn gh" title="'+esc(t('off_chip'))+'" onclick="offSet(\''+kind+'\',\''+esc(o.id)+'\',false)">🗄️</button>';}
 const OFF_I18N={"th": {"off_btn": "เลือกที่ไม่ใช้แล้ว", "off_chip": "ไม่ใช้แล้ว", "off_one": "ไม่ใช้แล้ว", "off_hint_sel": "แตะเลือกรายการที่ไม่ใช้แล้ว แล้วกดปุ่มด้านล่าง — จะหายจากหน้าวันนี้ ทำของ นับของ สั่งของ และสต๊อก แต่ประวัติยังอยู่ กลับมาใช้ได้ทุกเมื่อ", "off_sel_n": "เลือกแล้ว {n}", "off_do": "🗄️ ไม่ใช้แล้ว ({n})", "off_q_r": "ซ่อน {n} เมนูนี้เพราะไม่ใช้แล้ว?\nจะไม่ขึ้นในหน้าวันนี้ ทำของ นับของ และสต๊อก — ประวัติยังอยู่ กด \"ใช้ต่อ\" ได้ทุกเมื่อ", "off_q_i": "ซ่อน {n} วัตถุดิบนี้เพราะไม่ใช้แล้ว?\nจะไม่ขึ้นในหน้านับของ สั่งของ และสต๊อก — ประวัติยังอยู่ กด \"ใช้ต่อ\" ได้ทุกเมื่อ", "off_in_use": "⚠️ ยังอยู่ในสูตรเมนู: {list}", "off_has_stock": "📦 ยังมีของเหลือ (จะไม่นับในมูลค่าสต๊อก): {list}", "off_done": "ซ่อนแล้ว {n} อย่าง", "off_restore": "↩️ ใช้ต่อ", "off_restored": "กลับมาใช้แล้ว", "off_none": "ไม่มีรายการที่ซ่อนไว้", "off_view_h": "รายการที่ไม่ใช้แล้ว — กด \"↩️ ใช้ต่อ\" เพื่อเอากลับมา", "off_orphans_t": "วัตถุดิบที่ไม่มีเมนูไหนใช้แล้ว", "off_orphans_h": "วัตถุดิบพวกนี้ใช้แค่ในเมนูที่เพิ่งซ่อน ซ่อนด้วยไหม? (เอาติ๊กออกตัวที่ยังใช้อยู่)", "off_orphans_go": "🗄️ ซ่อนวัตถุดิบที่ติ๊กไว้", "off_skip": "ไม่ต้อง เก็บไว้ก่อน", "off_unused_pick": "ติ๊กตัวที่ไม่อยู่ในเมนูไหน ({n})"}, "en": {"off_btn": "Pick ones no longer used", "off_chip": "No longer used", "off_one": "No longer used", "off_hint_sel": "Tap the items no longer used, then press the button below — they disappear from Today, making, counting, ordering and stock, but history stays and you can bring them back any time", "off_sel_n": "{n} selected", "off_do": "🗄️ No longer used ({n})", "off_q_r": "Hide these {n} menus as no longer used?\nThey will not show in Today, making, counting or stock — history stays, press \"Use again\" any time", "off_q_i": "Hide these {n} ingredients as no longer used?\nThey will not show in counting, ordering or stock — history stays, press \"Use again\" any time", "off_in_use": "⚠️ Still in recipes: {list}", "off_has_stock": "📦 Still in stock (not counted in stock value): {list}", "off_done": "Hid {n}", "off_restore": "↩️ Use again", "off_restored": "Back in use", "off_none": "Nothing hidden", "off_view_h": "No longer used — press \"↩️ Use again\" to bring one back", "off_orphans_t": "Ingredients no menu uses any more", "off_orphans_h": "These were only used by the menus you just hid. Hide them too? (untick any still in use)", "off_orphans_go": "🗄️ Hide ticked ingredients", "off_skip": "No, keep them", "off_unused_pick": "Tick ones in no menu ({n})"}, "lo": {"off_btn": "ເລືອກອັນທີ່ບໍ່ໃຊ້ແລ້ວ", "off_chip": "ບໍ່ໃຊ້ແລ້ວ", "off_one": "ບໍ່ໃຊ້ແລ້ວ", "off_hint_sel": "ແຕະເລືອກລາຍການທີ່ບໍ່ໃຊ້ແລ້ວ ແລ້ວກົດປຸ່ມລຸ່ມ — ຈະຫາຍຈາກໜ້າມື້ນີ້ ເຮັດເຄື່ອງ ນັບເຄື່ອງ ສັ່ງເຄື່ອງ ແລະ ສະຕັອກ ແຕ່ປະຫວັດຍັງຢູ່ ເອົາກັບມາໃຊ້ໄດ້ທຸກເມື່ອ", "off_sel_n": "ເລືອກແລ້ວ {n}", "off_do": "🗄️ ບໍ່ໃຊ້ແລ້ວ ({n})", "off_q_r": "ເຊື່ອງ {n} ເມນູນີ້ເພາະບໍ່ໃຊ້ແລ້ວ?\nຈະບໍ່ຂຶ້ນໃນໜ້າມື້ນີ້ ເຮັດເຄື່ອງ ນັບເຄື່ອງ ແລະ ສະຕັອກ — ປະຫວັດຍັງຢູ່ ກົດ \"ໃຊ້ຕໍ່\" ໄດ້ທຸກເມື່ອ", "off_q_i": "ເຊື່ອງ {n} ວັດຖຸດິບນີ້ເພາະບໍ່ໃຊ້ແລ້ວ?\nຈະບໍ່ຂຶ້ນໃນໜ້ານັບເຄື່ອງ ສັ່ງເຄື່ອງ ແລະ ສະຕັອກ — ປະຫວັດຍັງຢູ່ ກົດ \"ໃຊ້ຕໍ່\" ໄດ້ທຸກເມື່ອ", "off_in_use": "⚠️ ຍັງຢູ່ໃນສູດເມນູ: {list}", "off_has_stock": "📦 ຍັງມີເຄື່ອງເຫຼືອ (ຈະບໍ່ນັບໃນມູນຄ່າສະຕັອກ): {list}", "off_done": "ເຊື່ອງແລ້ວ {n} ຢ່າງ", "off_restore": "↩️ ໃຊ້ຕໍ່", "off_restored": "ກັບມາໃຊ້ແລ້ວ", "off_none": "ບໍ່ມີລາຍການທີ່ເຊື່ອງໄວ້", "off_view_h": "ລາຍການທີ່ບໍ່ໃຊ້ແລ້ວ — ກົດ \"↩️ ໃຊ້ຕໍ່\" ເພື່ອເອົາກັບມາ", "off_orphans_t": "ວັດຖຸດິບທີ່ບໍ່ມີເມນູໃດໃຊ້ແລ້ວ", "off_orphans_h": "ວັດຖຸດິບເຫຼົ່ານີ້ໃຊ້ແຕ່ໃນເມນູທີ່ຫາກໍ່ເຊື່ອງ ເຊື່ອງນຳບໍ? (ເອົາໝາຍອອກອັນທີ່ຍັງໃຊ້ຢູ່)", "off_orphans_go": "🗄️ ເຊື່ອງວັດຖຸດິບທີ່ໝາຍໄວ້", "off_skip": "ບໍ່ຕ້ອງ ເກັບໄວ້ກ່ອນ", "off_unused_pick": "ໝາຍອັນທີ່ບໍ່ຢູ່ໃນເມນູໃດ ({n})"}, "my": {"off_btn": "မသုံးတော့သည်များ ရွေးရန်", "off_chip": "မသုံးတော့", "off_one": "မသုံးတော့", "off_hint_sel": "မသုံးတော့သည့်အရာများကို နှိပ်ရွေးပြီး အောက်ခလုတ်ကို နှိပ်ပါ — ယနေ့၊ ထုတ်လုပ်၊ ရေတွက်၊ မှာယူ၊ စတော့ စာမျက်နှာများမှ ပျောက်မည် သို့သော် မှတ်တမ်းကျန်ပြီး အချိန်မရွေး ပြန်သုံးနိုင်သည်", "off_sel_n": "{n} ခု ရွေးပြီး", "off_do": "🗄️ မသုံးတော့ ({n})", "off_q_r": "ဤမီနူး {n} ခုကို မသုံးတော့၍ ဝှက်မလား?\nယနေ့၊ ထုတ်လုပ်၊ ရေတွက်၊ စတော့ တွင် မပေါ်တော့ — မှတ်တမ်းကျန်သည် \"ပြန်သုံး\" ကို အချိန်မရွေး နှိပ်နိုင်", "off_q_i": "ဤကုန်ကြမ်း {n} ခုကို မသုံးတော့၍ ဝှက်မလား?\nရေတွက်၊ မှာယူ၊ စတော့ တွင် မပေါ်တော့ — မှတ်တမ်းကျန်သည် \"ပြန်သုံး\" ကို အချိန်မရွေး နှိပ်နိုင်", "off_in_use": "⚠️ ဖော်မြူလာတွင် ရှိနေဆဲ: {list}", "off_has_stock": "📦 လက်ကျန်ရှိနေဆဲ (စတော့တန်ဖိုးတွင် မထည့်တော့): {list}", "off_done": "{n} ခု ဝှက်ပြီး", "off_restore": "↩️ ပြန်သုံး", "off_restored": "ပြန်သုံးပြီ", "off_none": "ဝှက်ထားသည့်အရာ မရှိ", "off_view_h": "မသုံးတော့သည့်အရာများ — ပြန်ယူရန် \"↩️ ပြန်သုံး\" နှိပ်ပါ", "off_orphans_t": "မည်သည့်မီနူးမှ မသုံးတော့သော ကုန်ကြမ်း", "off_orphans_h": "ဤကုန်ကြမ်းများကို ယခုဝှက်လိုက်သော မီနူးတွင်သာ သုံးသည်။ အတူဝှက်မလား? (သုံးနေဆဲကို အမှန်ခြစ်ဖြုတ်ပါ)", "off_orphans_go": "🗄️ အမှန်ခြစ်ထားသည်များ ဝှက်", "off_skip": "မလိုပါ ထားမည်", "off_unused_pick": "မီနူးမရှိသည်များကို ခြစ် ({n})"}};
-['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],OFF_I18N[l]));   // ไม่ใช้แล้ว
+['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],OFF_I18N[l]));
+// หน้าตาแบบแอพนับสต๊อก (2026-10-16): แท็บงานประจำวัน + ช่องสั่งเพิ่มแก้ได้ + ปุ่มหมด
+const SC2_I18N={"th":{"nav_count":"นับของ","nav_shop":"สั่งของ","nav_recv":"รับของ","nav_make":"ทำของ","nav_send":"ส่งของ","nav_buy":"ใบสั่งซื้อ","nav_produce":"ประวัติทำของ","sec_boss":"หัวหน้า",
+  "sx_no_perm":"หน้านี้สำหรับพนักงานครัว","skc_out":"หมด","sx_have":"มี","sx_sug":"แนะนำ","sx_ovr_hint":"ช่องจำนวนเป็นค่าที่ระบบแนะนำ — พิมพ์ทับได้ · ใส่ 0 = ไม่สั่งรายการนั้น · ลบว่าง = กลับค่าแนะนำ"},
+ "en":{"nav_count":"Count","nav_shop":"Order","nav_recv":"Receive","nav_make":"Make","nav_send":"Send","nav_buy":"Purchase orders","nav_produce":"Production log","sec_boss":"Manager",
+  "sx_no_perm":"Kitchen staff only","skc_out":"Out","sx_have":"Have","sx_sug":"Suggested","sx_ovr_hint":"Quantities are suggestions — edit them · 0 = skip that line · clear = back to suggestion"},
+ "lo":{"nav_count":"ນັບເຄື່ອງ","nav_shop":"ສັ່ງເຄື່ອງ","nav_recv":"ຮັບເຄື່ອງ","nav_make":"ເຮັດເຄື່ອງ","nav_send":"ສົ່ງເຄື່ອງ","nav_buy":"ໃບສັ່ງຊື້","nav_produce":"ປະຫວັດເຮັດເຄື່ອງ","sec_boss":"ຫົວໜ້າ",
+  "sx_no_perm":"ໜ້ານີ້ສຳລັບພະນັກງານຄົວ","skc_out":"ໝົດ","sx_have":"ມີ","sx_sug":"ແນະນຳ","sx_ovr_hint":"ຊ່ອງຈຳນວນເປັນຄ່າທີ່ລະບົບແນະນຳ — ແກ້ໄດ້ · ໃສ່ 0 = ບໍ່ສັ່ງລາຍການນັ້ນ · ລຶບວ່າງ = ກັບຄ່າແນະນຳ"},
+ "my":{"nav_count":"ရေတွက်","nav_shop":"မှာယူ","nav_recv":"လက်ခံ","nav_make":"ထုတ်လုပ်","nav_send":"ပို့","nav_buy":"ဝယ်ယူအော်ဒါ","nav_produce":"ထုတ်လုပ်မှတ်တမ်း","sec_boss":"မန်နေဂျာ",
+  "sx_no_perm":"မီးဖိုချောင်ဝန်ထမ်းများအတွက်သာ","skc_out":"ကုန်","sx_have":"ရှိ","sx_sug":"အကြံပြု","sx_ovr_hint":"အရေအတွက်သည် စနစ်အကြံပြုချက်ဖြစ်သည် — ပြင်နိုင်သည် · 0 = ထိုစာကြောင်းကို မမှာ · ဖျက်ထားလျှင် = အကြံပြုချက်သို့ပြန်"}};
+['th','en','lo','my'].forEach(l=>Object.assign(I18N[l],SC2_I18N[l]));   // ไม่ใช้แล้ว
 
 sbMoreSet(LS.get('jjck_sbmore',0)==1);
 
