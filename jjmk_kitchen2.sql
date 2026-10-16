@@ -1,0 +1,138 @@
+-- jjmk_kitchen2.sql — JJ Kitchen v2 (ครัวกลาง จริงใจหมูกระทะ · rebuild 2026-10-16)
+-- รันครั้งเดียวใน Supabase → SQL Editor (รันซ้ำได้ · ไม่ลบ/ไม่แก้ข้อมูลเดิม)
+-- ใช้ตารางหลักเดิม ck_items / ck_recipes / ck_recipe_items / ck_sups / ck_settings + ตารางงานใหม่ prefix kc_*
+-- แอพเข้าด้วยบัญชีกลาง pnl_users ผ่าน anon key (สิทธิ์รายคนตรวจที่ตัวแอพ / JJ Access) → เปิด RLS ให้ anon แบบเดียวกับ jjmk_kitchen_central.sql
+
+-- ---------- 1) คอลัมน์ใหม่ในตารางหลักเดิม ----------
+alter table ck_items add column if not exists avg_cost numeric;          -- ต้นทุนถัวเฉลี่ย/หน่วยหลัก
+alter table ck_items add column if not exists last_price numeric;        -- ราคารับเข้าล่าสุด/หน่วยหลัก
+alter table ck_items add column if not exists last_price_at date;
+alter table ck_items add column if not exists packs jsonb;               -- [{"u":"ถุง","q":1000}] 1 u = q หน่วยหลัก
+alter table ck_items add column if not exists count_unit text;
+alter table ck_items add column if not exists dept text;
+alter table ck_items add column if not exists min_qty numeric;
+alter table ck_items add column if not exists active boolean default true;
+alter table ck_recipes add column if not exists avg_cost numeric;        -- ต้นทุนถัวเฉลี่ย/หน่วยผลิต (จากล็อตจริง)
+alter table ck_recipes add column if not exists target_qty numeric;      -- สต๊อกสำเร็จรูปที่ควรมี (ตายตัว)
+alter table ck_recipes add column if not exists target_days numeric;     -- หรือ = กี่วันของยอดส่งเฉลี่ย
+alter table ck_recipes add column if not exists markup_pct numeric;
+alter table ck_recipes add column if not exists note text;
+alter table ck_recipes add column if not exists active boolean default true;
+alter table ck_recipe_items add column if not exists unit text;          -- null = หน่วยหลักของวัตถุดิบ
+alter table ck_sups add column if not exists credit_days integer default 0;
+alter table ck_sups add column if not exists line_group_id text;
+alter table ck_sups add column if not exists order_days smallint[];
+alter table ck_sups add column if not exists lead_days integer default 1;
+alter table ck_sups add column if not exists active boolean default true;
+
+-- ---------- 2) ตารางงานใหม่ kc_* ----------
+create table if not exists kc_receipts (                      -- รับของ (หัวบิล)
+  id text primary key, d date not null, sup_id text, sup_name text, bill_no text, total numeric default 0, note text, po_id text,
+  by_name text, created_at timestamptz default now());
+create table if not exists kc_receipt_lines (
+  id bigserial primary key, receipt_id text not null references kc_receipts(id) on delete cascade,
+  item_id text, name text, packs numeric, pack_unit text, pack_qty numeric, unit text, qty_base numeric,
+  price_mode text, price numeric, price_total numeric, price_base numeric, sort integer default 0,
+  prev_avg numeric, prev_last numeric, prev_last_at date, prev_qty numeric);   -- ค่าก่อนรับ (ไว้คืน/คิดใหม่ตอนยกเลิก)
+alter table kc_receipt_lines add column if not exists prev_avg numeric;
+alter table kc_receipt_lines add column if not exists prev_last numeric;
+alter table kc_receipt_lines add column if not exists prev_last_at date;
+alter table kc_receipt_lines add column if not exists prev_qty numeric;
+create table if not exists kc_productions (                   -- ทำของ (ล็อต)
+  id text primary key, d date not null, recipe_id text, name text, lots numeric, plan_qty numeric, actual_qty numeric, unit text,
+  cost_items numeric, cost_overhead numeric, cost_total numeric, cost_unit numeric, kind text, note text,
+  prev_avg numeric, prev_unit_cost numeric, prev_qty numeric,                               -- ต้นทุน/ยอดสินค้าก่อนล็อตนี้ (ไว้คืน/คิดใหม่ตอนยกเลิก)
+  by_name text, created_at timestamptz default now());
+alter table kc_productions add column if not exists prev_avg numeric;
+alter table kc_productions add column if not exists prev_unit_cost numeric;
+alter table kc_productions add column if not exists prev_qty numeric;
+create table if not exists kc_production_lines (
+  id bigserial primary key, production_id text not null references kc_productions(id) on delete cascade,
+  item_id text, name text, qty_plan numeric, qty_used numeric, qty_waste numeric, unit text, unit_cost numeric, cost numeric, sort integer default 0);
+create table if not exists kc_moves (                         -- สมุดสต๊อก (วัตถุดิบ + สินค้า)
+  id bigserial primary key, d date not null, kind text not null, ref_kind text not null, ref_id text not null, name text,
+  qty numeric not null, cost numeric, ref_table text, ref_id2 text, note text, by_name text, created_at timestamptz default now());
+create table if not exists kc_counts (                        -- นับสต๊อก
+  id text primary key, d date not null, kind text not null, n integer default 0, diff integer default 0, note text,
+  by_name text, created_at timestamptz default now());
+create table if not exists kc_count_lines (
+  id bigserial primary key, count_id text not null references kc_counts(id) on delete cascade,
+  ref_id text, name text, sys_qty numeric, counted_qty numeric, delta numeric, unit text, count_unit text, count_qty numeric);
+create table if not exists kc_deliveries (                    -- บิลส่งสาขา
+  id text primary key, bill_no text, d date not null, branch text, branch_name text, order_date date, status text default 'sent',
+  subtotal numeric default 0, overhead numeric default 0, total numeric default 0, line_sent_at timestamptz, line_group_id text, paid_at date, note text,
+  by_name text, created_at timestamptz default now());
+create table if not exists kc_delivery_lines (
+  id bigserial primary key, delivery_id text not null references kc_deliveries(id) on delete cascade,
+  recipe_id text, name text, stk_product_id text, ordered numeric, sent numeric, unit text, unit_cost numeric, unit_price numeric, amount numeric, sort integer default 0);
+create table if not exists kc_links (                         -- ชื่อสินค้าสาขา (แอพนับสต๊อก) ↔ เมนูครัว
+  id bigserial primary key, stk_name text not null unique, recipe_id text, factor numeric default 1,
+  by_name text, created_at timestamptz default now());
+create table if not exists kc_pos (                           -- ใบสั่งซื้อ
+  id text primary key, po_no text, d date not null, sup_id text, sup_name text, status text default 'draft', text text, note text, line_sent_at timestamptz,
+  by_name text, created_at timestamptz default now());
+create table if not exists kc_po_lines (
+  id bigserial primary key, po_id text not null references kc_pos(id) on delete cascade,
+  item_id text, name text, packs numeric, pack_unit text, pack_qty numeric, qty_base numeric, unit text, price_est numeric, sort integer default 0);
+create table if not exists kc_expenses (                      -- ค่าใช้จ่ายแฝง (overhead)
+  id text primary key, d date not null, ym text not null, cat text, name text, amount numeric default 0, recurring boolean default false, note text,
+  by_name text, created_at timestamptz default now());
+
+create index if not exists kc_moves_d_idx on kc_moves (d);
+create index if not exists kc_moves_ref_idx on kc_moves (ref_kind, ref_id);
+create index if not exists kc_receipts_d_idx on kc_receipts (d);
+create index if not exists kc_productions_d_idx on kc_productions (d);
+create index if not exists kc_productions_recipe_idx on kc_productions (recipe_id);
+create index if not exists kc_deliveries_d_idx on kc_deliveries (d);
+create index if not exists kc_deliveries_branch_idx on kc_deliveries (branch, order_date);
+create index if not exists kc_expenses_ym_idx on kc_expenses (ym);
+create index if not exists kc_counts_d_idx on kc_counts (d);
+
+-- ---------- 3) บวก/ลบยอดแบบ atomic (ชื่อ/พารามิเตอร์เดียวกับแอพเดิม) ----------
+-- รุ่นนี้ปัด 4 ตำแหน่ง (แอพใหม่เก็บยอดเป็นหน่วยหลัก 4 ตำแหน่ง — 4 กรัมของของที่นับเป็น กก. = 0.004 · รุ่นเดิมปัด 2 ตำแหน่งทำให้ยอดเล็ก ๆ หายไป)
+-- · p_kind ต้องเป็น item/recipe เท่านั้น · p_delta เป็น null = ไม่แตะยอด คืนยอดปัจจุบัน (เดิมทำให้ qty กลายเป็น null)
+create or replace function ck_add_qty(p_kind text, p_id text, p_delta numeric)
+returns numeric language plpgsql security definer set search_path = public as $fn$
+declare v numeric;
+begin
+  if p_kind is null or p_kind not in ('item','recipe') then
+    raise exception 'ck_add_qty: p_kind must be item or recipe (got %)', coalesce(p_kind, 'null');
+  end if;
+  if p_delta is null then
+    if p_kind = 'item' then select qty into v from ck_items where id = p_id; else select qty into v from ck_recipes where id = p_id; end if;
+    return v;
+  end if;
+  if p_kind = 'item' then
+    update ck_items set qty = round(coalesce(qty,0) + p_delta, 4) where id = p_id returning qty into v;
+  else
+    update ck_recipes set qty = round(coalesce(qty,0) + p_delta, 4) where id = p_id returning qty into v;
+  end if;
+  return v;
+end $fn$;
+revoke execute on function ck_add_qty(text,text,numeric) from public;
+grant execute on function ck_add_qty(text,text,numeric) to anon, authenticated;
+
+-- ---------- 4) สิทธิ์: anon อ่าน-เขียนได้ (แอพตรวจสิทธิ์รายคนเอง) ----------
+do $$ declare tb text; begin
+  foreach tb in array array['ck_items','ck_sups','ck_recipes','ck_recipe_items','ck_settings',
+    'kc_receipts','kc_receipt_lines','kc_productions','kc_production_lines','kc_moves','kc_counts','kc_count_lines',
+    'kc_deliveries','kc_delivery_lines','kc_links','kc_pos','kc_po_lines','kc_expenses'] loop
+    if exists (select 1 from information_schema.tables where table_schema='public' and table_name=tb) then
+      execute format('alter table %I enable row level security', tb);
+      if not exists (select 1 from pg_policies where schemaname='public' and tablename=tb and policyname='ck_all') then
+        execute format('create policy ck_all on %I for all to anon, authenticated using (true) with check (true)', tb);
+      end if;
+      execute format('grant select, insert, update, delete on %I to anon, authenticated', tb);
+    end if;
+  end loop;
+end $$;
+grant usage, select on all sequences in schema public to anon, authenticated;
+-- ตารางของระบบอื่นที่อ่านอย่างเดียว (มีสิทธิ์อยู่แล้วตามแอพเดิม — ใส่ซ้ำกันพลาด · ไม่มีตาราง = ข้าม)
+do $$ declare tb text; begin
+  foreach tb in array array['pnl_users','pnl_branches','line_groups','products','stock_receipts','branches','suppliers'] loop
+    if exists (select 1 from information_schema.tables where table_schema='public' and table_name=tb) then
+      execute format('grant select on %I to anon, authenticated', tb);
+    end if;
+  end loop;
+end $$;
+-- รูปภาพ (bucket เดิมที่แอพนับสต๊อก/ครัวกลางใช้อยู่) — มีอยู่แล้วจาก jjmk_kitchen_central.sql · ไม่แตะ
