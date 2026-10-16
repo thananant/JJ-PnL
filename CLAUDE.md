@@ -756,6 +756,27 @@
 - **ถ้าจะเลิกแอพเดิม ห้ามลบ/ปิด**: โปรเจกต์ Supabase · แถวในตาราง `branches` (FK `ON DELETE CASCADE` ลบสต๊อกทั้งสาขา) · LINE token + webhook · Edge Functions + cron (เตือนสั่งของ ฯลฯ) · bucket `product-images` · สคริปต์สำรองบน NAS
   (⚠️ `nas/archive_jjmk.sh` ของ repo เดิมย้าย/ลบ `stock_counts` เก่าตามรอบ — เช็ค Task Scheduler บน NAS ก่อน)
 
+## 🆕 ครัวกลาง v2 — รื้อสร้างใหม่ทั้งระบบ (เจ้าของสั่ง 2026-10-16 *"รื้อใหม่ทั้งระบบ สร้างใหม่เลย เก็บ CI ไว้อย่างเดียว … ระบบนี้ใช้งานจริงยากและใช้ไม่ได้"*)
+
+> **ทุกหัวข้อ "ครัวกลาง: …" ด้านล่างนี้คือแอปรุ่นเก่า** (`jjmk-kitchen.html` ตัวปัจจุบัน) — กำลังถูกแทนที่ · รอบแรกขึ้นเป็นไฟล์ทดลอง **`jjmk-kitchen-new.html`** (2026-10-16 กลางคืน) ·
+> รอบสอง (ส่งสาขา+บิล · สั่งซื้อซัพ · บัญชี) เสร็จแล้วจะทับ `jjmk-kitchen.html` และลบไฟล์ทดลอง · กติกาที่ยังใช้จากรุ่นเก่า: CI/หน้าตาแบบแอพนับสต๊อก · ล็อกอินกลาง + JJ Login/JJBR/ลากลงรีเฟรช byte-identical ·
+> safe-area 15 รุ่น · 4 ภาษา · คำง่ายบนจอพนักงาน · สูตรเดิม/วิธีทำ/รูปเมนูเก็บไว้ (เจ้าของสั่ง) · **ราคาสินค้า = ต้นทุนจริงของล็อตที่ผลิต + ค่าแฝง** (เจ้าของสั่ง)
+
+- **สเปกเต็ม + สัญญาโมดูล**: `jjmk-kitchen/src/SPEC.md` (บรีฟเจ้าของ 8 ข้อ + data model + สูตรต้นทุน + หน้าจอ) และ `jjmk-kitchen/src/CONTRACT.md` (API กลางที่ทุกโมดูลใช้ · prefix ต่อโมดูล) — **อ่านก่อนแก้ทุกครั้ง**
+- **ไฟล์ต้นฉบับอยู่ใน repo**: `jjmk-kitchen/src/shell.html` (โครง + CSS + ไลบรารีกลาง + login/boot + nav + components · มีบล็อก `K2:JJLOGIN/JJBR/PTR-BEGIN…END` ที่ต้อง byte-identical กับแอปอื่น) +
+  `mod_<แท็บ>.js` ทีละหน้า (`today recv make count menus items sups hist set` · รอบสองเพิ่ม `send bills buy acc`) + `modules.json` (ลำดับ) → **`node jjmk-kitchen/src/build.mjs`** รวมเป็นไฟล์เดียว
+  (ตรวจ syntax ทุก `<script>` · ห้ามประกาศ `const/let` ชื่อซ้ำข้ามโมดูล · ฝัง SQL ลง `#kcSql` — ไม่มีไฟล์ `.sql` ใน main จึงเอาจากไฟล์ที่สร้างไว้ก่อนหน้า) · **แก้ที่ src แล้ว build ห้ามแก้ไฟล์ที่ build ออกมาตรง ๆ**
+- **ฐานข้อมูล — ต้องรัน `jjmk_kitchen2.sql` (branch `sql`) 1 ครั้ง (รันซ้ำได้ ไม่ลบอะไร)**: ข้อมูลหลักใช้ตารางเดิม `ck_items / ck_recipes / ck_recipe_items / ck_sups / ck_settings` (+ คอลัมน์ใหม่ `avg_cost last_price last_price_at target_qty target_days` · `ck_recipe_items.unit`) ·
+  งานประจำวันลงตารางใหม่ **`kc_*`**: `kc_receipts/_lines` (รับของ · เก็บ `prev_*` ไว้ย้อนตอนยกเลิก) · `kc_productions/_lines` (ล็อต · ใช้จริง/เศษทิ้ง) · `kc_moves` (สมุดสต๊อกทั้ง 2 กอง · ทุกการเปลี่ยนยอด = insert + `ck_add_qty`) ·
+  `kc_counts/_lines` · `kc_deliveries/_lines` (บิลสาขา) · `kc_links` (ชื่อสินค้าสาขา ↔ เมนู) · `kc_pos/_lines` · `kc_expenses` (ค่าแฝงรายเดือน) · ตั้งค่า `ck_settings.kc_cfg` · **ตารางงานของรุ่นเก่า (`ck_moves ck_productions ck_bills …`) ไม่อ่านไม่เขียน** ·
+  `ck_add_qty` รุ่นใหม่ปัด 4 ตำแหน่ง (เดิม 2 — 4 กรัมของของที่นับเป็น กก. เคยหาย) · `p_delta` null = คืนยอดปัจจุบัน · RLS `ck_all` ให้ anon ทุกตาราง (สิทธิ์รายคนตรวจในแอพ/JJ Access เหมือนเดิม)
+- **ต้นทุนจริง (กติกาเจ้าของ)**: รับของ = ราคาต่อหน่วยหลักจากราคาที่จ่ายจริง → `last_price` + `avg_cost` ถัวเฉลี่ยกับของที่มีอยู่ · ผลิต = Σ(ใช้จริง+เศษทิ้ง)×`avg_cost` ของวัตถุดิบ ณ ตอนนั้น + ค่าแฝง (`kc_cfg.overhead_mode` per_unit/pct) + `extra_cost`×รอบ
+  → `cost_unit` ของล็อต · สินค้า `avg_cost` ถัวเฉลี่ยกับสต๊อกสำเร็จรูปที่เหลือ (`unit_cost` = ล็อตล่าสุด) · ราคาบิลสาขา = `avg_cost`×(1+markup%) (ตั้งต้น 0) · **เศษเหลือวัตถุดิบ = ของเสีย ตัดสต๊อก+คิดเป็นต้นทุนของล็อต** (เจ้าของยืนยัน 2026-10-16) ·
+  **ค่าแฝง (ค่าแรง แก๊ส ไฟ …) ใส่รายเดือนในหน้าบัญชี → บาทต่อหน่วยที่ผลิต บวกในต้นทุนทุกล็อต** (เจ้าของยืนยัน) · ยกเลิกรับของ/ผลิตได้เฉพาะวันเดียวกัน = ย้อนสต๊อก + คืนค่า `prev_*`
+- **ออเดอร์สาขา** (รอบสอง) อ่านจาก `stock_receipts` ที่แอพนับสต๊อกเขียนตอนสาขากดส่งไลน์ (`sup` ตรงกับ `kc_cfg.ck_sup_names` · ย้อน `order_lookback_days`) − ที่ส่งแล้วใน `kc_deliveries` → สั่งมา/มี/ส่ง/ขาด → บิลต่อสาขา → ไลน์กลุ่มสาขา (`kc_cfg.branch_line`) ผ่าน `line-order`
+- **หน่วย**: หน่วยหลักต่อวัตถุดิบ (`unit`) · `UNIT_STD` กรัม/ขีด/กก. · มล./ลิตร · ชิ้น/โหล · บรรจุต่อสินค้า `buy_unit/buy_qty` + `packs[{u,q}]` · `unitFactor(item,u)` · สูตรใส่หน่วยไหนก็ได้ที่แปลงได้ (`ck_recipe_items.unit`) · นับเป็น `count_unit`
+- เทส (Playwright + Supabase จำลอง `sbstub2.js` + PGlite สำหรับ SQL) อยู่ `/tmp/…/scratchpad/k2/` ของ session: `t_shell`(171) `t_sql`(85) `t_recv`(286) `t_master`(274) `t_make` `t_count` `t_integ` `t_devices`(90) `t_fix2`(71) `v_e2e2` + ผู้ตรวจอิสระ 2 รอบ (e2e · 15 รุ่นโทรศัพท์+4 ภาษา+CI · code review XSS/เลข/SQL)
+
 ## ครัวกลาง: หน่วยรับเข้า + ตั้งค่าหน่วย (เจ้าของสั่ง 2026-10-06)
 
 - รับของเข้า (📥 `qrModal`) ใส่ได้หลายบรรทัดหลายหน่วย เช่น `10 ชุด + 2 กก.` → แปลงเป็น**หน่วยใช้** (`ck_items.unit`) ก่อนบวกสต๊อก
