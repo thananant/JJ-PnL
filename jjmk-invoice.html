@@ -165,14 +165,15 @@
     font-size:14.5px;color:var(--muted);cursor:pointer;padding:0 8px;}
   .sgm-tab.on{background:var(--brand);border-color:var(--brand);color:#fff;}
   .sgm-padwrap{width:100%;display:flex;justify-content:center;}
-  .sgm-pad{position:relative;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+  .sgm-pad{position:relative;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
     background:#fff;border:2px dashed #d9cbb6;border-radius:10px;}   /* ขอบอยู่ที่กรอบ ไม่ใช่ canvas — พิกัดนิ้วตรงกับหมึกพอดี */
   .sgm-pad canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;border-radius:8px;}
   .sgm button{touch-action:manipulation;}   /* แตะปุ่มรัว ๆ (ย้อน) ไม่ซูมจอ */
   .sgm-guide{position:absolute;left:7%;right:7%;top:70%;border-top:1px solid #e3d6c4;pointer-events:none;}
   .sgm-guide span{position:absolute;left:-2px;top:-21px;color:#c9b79d;font-size:16px;}
-  .sgm-hint{position:absolute;left:0;right:0;top:34%;text-align:center;color:#b6a58c;font-size:15px;pointer-events:none;padding:0 12px;}
-  .sgm-rot{text-align:center;}
+  .sgm-hint{position:absolute;left:0;right:0;top:34%;text-align:center;color:#b6a58c;font-size:15px;pointer-events:none;padding:0 12px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  body.sgm-open::before{z-index:81;}   /* แถบสีหลังนาฬิกา iPhone อยู่เหนือหน้าต่างเต็มจอ (ไม่งั้นขาวบนขาว) */
   .sgm-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
   .sgm-sp{flex:1 1 auto;}
   .sgm-chip{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:#fff;font-family:"Mitr";
@@ -206,9 +207,11 @@
     .sgm-foot .btn{flex:1 1 auto;}
     .sgm-foot .sgm-sp{display:none;}
   }
+  @media(max-height:700px){   /* จอเตี้ย (iPhone SE · Fold · มือถือแนวนอน): ตัวอย่างบนบิลซ่อน ให้กรอบเซ็นใหญ่ขึ้น — เห็นลายเซ็นในกรอบอยู่แล้ว */
+    .sgm-tip,.sgm-prev{display:none;}
+  }
   @media(max-height:520px){   /* มือถือแนวนอน: เก็บที่ให้กรอบเซ็นสูงพอ */
     .sgm-box{gap:7px;padding-top:calc(6px + env(safe-area-inset-top));}
-    .sgm-tip,.sgm-prev{display:none;}   /* ตัวอย่างบนบิลซ่อน — เห็นลายเซ็นในกรอบอยู่แล้ว */
     .sgm-tools[style]{margin-top:4px!important;}
   }
 
@@ -1289,7 +1292,6 @@ function sbPatch_(row, fields) {
         <div class="sgm-guide"><span>✕</span></div>
         <div class="sgm-hint" id="sgmHint">เซ็นในกรอบนี้ ด้วยนิ้ว เมาส์ หรือปากกา</div>
       </div></div>
-      <div class="detail sgm-rot" id="sgmRot" hidden>📱 หมุนจอเป็นแนวนอน จะได้กรอบเซ็นกว้างขึ้น</div>
       <div class="sgm-tools" style="margin-top:8px">
         <span class="detail">เส้น</span>
         <button type="button" class="sgm-chip" data-sw="1">บาง</button>
@@ -2215,7 +2217,7 @@ function sgmOpen(){
   SGM.width=SGM_W.hasOwnProperty(p.w)?+p.w:2;
   SGM.font=sgmFont(p.f)?p.f:'';
   SGM.name=typeof p.n==='string'?sgmCleanName(p.n):'';
-  SGM.strokes=[]; SGM.cur=null; SGM.curId=null; SGM.undo=null; SGM.busy=false; SGM.list='';
+  SGM.strokes=[]; SGM.cur=null; SGM.curId=null; SGM.undo=null; SGM.busy=false; SGM.list=''; SGM.pen=false;
   $('sgmName').value=SGM.name;
   $('sgmSave').textContent=sigDataUrl?'เปลี่ยนเป็นลายเซ็นนี้ (ทุกเครื่อง)':'ใช้ลายเซ็นนี้ (ทุกเครื่อง)';
   sgmMsg('');
@@ -2263,11 +2265,14 @@ function sgmBusy(on){
 function sgmFit(){
   if(!SGM.open||SGM.mode!=='draw') return;
   var wrap=$('sgmPadWrap'), pad=$('sgmPad'), cv=$('sgmCanvas'), box=$('sgmBox'), ov=$('sigMk');
-  $('sgmRot').hidden=!(IS_TOUCH && window.innerWidth<window.innerHeight && window.innerWidth<600);
   var B=4;                                            // ขอบกรอบ 2px × 2 ด้าน (canvas อยู่ข้างใน = w × h พอดี)
   var aw=Math.max(160, (wrap.clientWidth||0)-B);
   var cs=getComputedStyle(ov), vh=ov.clientHeight-(parseFloat(cs.paddingTop)||0)-(parseFloat(cs.paddingBottom)||0);
+  // ความสูงจริงของส่วนอื่น ๆ: มือถือหน้าต่างสูงเต็มจอ (height:100%) → วัดตอนสูงตามเนื้อหาก่อน แล้วคืนค่า
+  var bh=box.style.height, bm=box.style.maxHeight;
+  box.style.height='auto'; box.style.maxHeight='none';
   var other=box.scrollHeight-pad.offsetHeight;
+  box.style.height=bh; box.style.maxHeight=bm;
   var ah=Math.max(96, Math.min(420, vh-other-B));
   var w=Math.floor(Math.min(aw, ah*SGM_ASPECT)), h=Math.floor(w/SGM_ASPECT);
   pad.style.width=(w+B)+'px'; pad.style.height=(h+B)+'px';
@@ -2329,11 +2334,19 @@ function sgmPt(e, r){
   return o;
 }
 function sgmDown(e){
-  if(!SGM.open||SGM.busy||SGM.cur) return;          // เซ็นอยู่ด้วยนิ้วหนึ่ง = ไม่รับนิ้วที่สอง (ฝ่ามือแตะจอ)
+  if(!SGM.open||SGM.busy) return;
   if(e.pointerType==='mouse' && e.button!==0) return;
+  var pen=e.pointerType==='pen';
+  // ปากกา (Apple Pencil) มาก่อนเสมอ: ฝ่ามือที่วางอยู่ก่อนถูกทิ้ง · เห็นปากกาแล้ว = นิ้ว/ฝ่ามือไม่นับอีก
+  if(pen) SGM.pen=true;
+  else if(SGM.pen && e.pointerType==='touch') return;
+  if(SGM.cur){
+    if(!(pen && SGM.curType!=='pen')) return;        // เซ็นอยู่ด้วยนิ้วหนึ่ง = ไม่รับนิ้วที่สอง (ฝ่ามือแตะจอ)
+    SGM.cur=null; SGM.curId=null;                     // เส้นของฝ่ามือ — ไม่เก็บ
+  }
   e.preventDefault();
   var cv=$('sgmCanvas'); try{ cv.setPointerCapture(e.pointerId); }catch(_){}
-  SGM.curId=e.pointerId; SGM.cur=[sgmPt(e, cv.getBoundingClientRect())]; SGM.undo=null;
+  SGM.curId=e.pointerId; SGM.curType=e.pointerType; SGM.cur=[sgmPt(e, cv.getBoundingClientRect())]; SGM.undo=null;
   sgmMsg(''); sgmFrameSoon();
 }
 function sgmMove(e){
@@ -2354,6 +2367,11 @@ function sgmUp(e){
   if(!SGM.cur||e.pointerId!==SGM.curId) return;
   SGM.strokes.push(SGM.cur); SGM.cur=null; SGM.curId=null;
   sgmBaseDraw(); sgmFrame(); sgmTools(); sgmPreviewSoon();
+}
+/* ระบบยกเลิกการแตะ (กันฝ่ามือ / ท่าทางของระบบ) = ทิ้งเส้นนั้น ไม่นับเป็นหมึก */
+function sgmCancelPtr(e){
+  if(!SGM.cur||e.pointerId!==SGM.curId) return;
+  SGM.cur=null; SGM.curId=null; sgmFrame();
 }
 function sgmUndo(){
   if(SGM.cur) return;
@@ -2540,7 +2558,7 @@ async function sgmDownload(){
   cv.addEventListener('pointerdown', sgmDown);
   cv.addEventListener('pointermove', sgmMove);
   cv.addEventListener('pointerup', sgmUp);
-  cv.addEventListener('pointercancel', sgmUp);
+  cv.addEventListener('pointercancel', sgmCancelPtr);
   cv.addEventListener('lostpointercapture', sgmUp);
   // Safari รุ่นเก่าที่ยังเลื่อนจอตอนลากบน canvas (touch-action ไม่ครบ) — กันไว้อีกชั้น
   cv.addEventListener('touchmove', function(e){ if(e.cancelable) e.preventDefault(); }, {passive:false});
