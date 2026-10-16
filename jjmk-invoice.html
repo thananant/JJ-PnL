@@ -198,6 +198,7 @@
   .sgm-bill .sgm-none{color:#b6a58c;font-size:12px;line-height:52px;}
   .sgm-msg{padding:8px 12px;border-radius:8px;background:var(--bad-bg);color:var(--bad);font-size:13.5px;}
   .sgm-tip{font-size:12.5px;line-height:1.55;}
+  .sgm-main,.sgm-side{display:flex;flex-direction:column;gap:inherit;min-width:0;}
   .sgm-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
   .sgm-foot .btn{min-height:44px;}
   @media(max-width:700px){
@@ -210,11 +211,28 @@
   }
   @media(max-height:700px){   /* จอเตี้ย (iPhone SE · Fold · มือถือแนวนอน): ซ่อนตัวอย่างบนบิลเฉพาะตอนเซ็นบนจอ (เห็นลายเซ็นในกรอบอยู่แล้ว)
                                  ให้กรอบเซ็นใหญ่ขึ้น · แบบพิมพ์ชื่อยังโชว์ตัวอย่าง — ต้องเห็นรูปจริงก่อนบันทึก */
-    .sgm-tip,.sgm:not(.sgm-typing) .sgm-prev{display:none;}
+    .sgm:not(.sgm-typing) .sgm-tip,.sgm:not(.sgm-typing) .sgm-prev{display:none;}   /* คำเตือน "ชื่อผู้รับเงินจริง" โชว์เสมอตอนพิมพ์ชื่อ */
   }
   @media(max-height:520px){   /* มือถือแนวนอน: เก็บที่ให้กรอบเซ็นสูงพอ */
     .sgm-box{gap:7px;padding-top:calc(6px + env(safe-area-inset-top));}
     .sgm-tools[style]{margin-top:4px!important;}
+  }
+  /* จอเตี้ยและกว้าง (มือถือแนวนอนในเบราว์เซอร์ที่มีแถบ — สูงแค่ ~280–390px): เต็มจอ 2 คอลัมน์
+     กรอบเซ็นซ้าย · ปุ่มขวา (ไม่งั้นกรอบเหลือขั้นต่ำ และปุ่มบันทึกตกจอ) */
+  @media(max-height:520px) and (min-aspect-ratio:3/2){
+    .sgm{padding:0;}
+    .sgm-box{display:grid;grid-template-columns:minmax(0,1fr) 210px;grid-template-rows:auto auto 1fr;column-gap:14px;row-gap:7px;
+      max-width:none;height:100%;max-height:none;border-radius:0;
+      padding:calc(6px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));}
+    .sgm-head{grid-column:2;grid-row:1;}
+    .sgm-tabs{grid-column:2;grid-row:2;}
+    .sgm-tab{font-size:13.5px;padding:0 4px;}
+    .sgm-main{grid-column:1;grid-row:1 / span 3;}
+    .sgm-side{grid-column:2;grid-row:3;justify-content:flex-end;}
+    .sgm-foot{flex-direction:column;align-items:stretch;}
+    .sgm-foot .btn{flex:0 0 auto;}
+    .sgm-foot .sgm-sp,#sgmDl{display:none;}   /* ดาวน์โหลดรูปใช้ได้ตอนจอแนวตั้ง — แนวนอนเก็บที่ให้ปุ่มบันทึก */
+    .sgm-styles{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}
   }
 
   /* ===== ใช้งานบนโทรศัพท์ ===== */
@@ -1281,7 +1299,7 @@ function sbPatch_(row, fields) {
 }
 </script>
 <!-- ✍️ สร้างลายเซ็น: เซ็นบนจอ / พิมพ์ชื่อแล้วเลือกลายมือ (เปิดจากการ์ดลายเซ็นในหน้าตั้งค่า) -->
-<div id="sigMk" class="sgm" hidden role="dialog" aria-modal="true" aria-labelledby="sgmTitle">
+<div id="sigMk" class="sgm" hidden role="dialog" aria-modal="true" aria-labelledby="sgmTitle" data-html2canvas-ignore>
   <div class="sgm-box" id="sgmBox">
     <div class="sgm-head"><span id="sgmTitle">✍️ สร้างลายเซ็นผู้รับเงิน</span>
       <button type="button" class="btn btn-ghost btn-sm" id="sgmClose" aria-label="ปิด">✕</button></div>
@@ -1289,6 +1307,7 @@ function sbPatch_(row, fields) {
       <button type="button" class="sgm-tab" data-sgm="draw" role="tab">✍️ เซ็นบนจอ</button>
       <button type="button" class="sgm-tab" data-sgm="type" role="tab">🔤 พิมพ์ชื่อ</button>
     </div>
+    <div class="sgm-main">
     <div id="sgmDraw">
       <div class="sgm-padwrap" id="sgmPadWrap"><div class="sgm-pad" id="sgmPad">
         <canvas id="sgmCanvas" aria-label="กรอบเซ็นชื่อ"></canvas>
@@ -1313,12 +1332,14 @@ function sbPatch_(row, fields) {
       <input type="text" id="sgmName" maxlength="40" autocomplete="off" placeholder="เช่น สมชาย ใจดี">
       <div class="detail" id="sgmFontNote" style="margin:6px 0">แตะเลือกแบบลายมือ</div>
       <div class="sgm-styles" id="sgmStyles"></div>
-      <div class="sgm-tools" style="margin-top:8px">
+      <div class="sgm-tools sgm-tcol" style="margin-top:8px">
         <span class="detail">สีหมึก</span>
         <button type="button" class="sgm-chip" data-sc="k"><i style="background:#1a1a1a"></i>ดำ</button>
         <button type="button" class="sgm-chip" data-sc="b"><i style="background:#1c3f94"></i>น้ำเงิน</button>
       </div>
     </div>
+    </div>
+    <div class="sgm-side">
     <div class="sgm-prev">
       <div class="detail">บนบิลจะเห็นแบบนี้</div>
       <div class="sgm-bill">
@@ -1333,6 +1354,7 @@ function sbPatch_(row, fields) {
       <span class="sgm-sp"></span>
       <button type="button" class="btn btn-ghost" id="sgmCancel">ยกเลิก</button>
       <button type="button" class="btn btn-primary" id="sgmSave" disabled>ใช้ลายเซ็นนี้ (ทุกเครื่อง)</button>
+    </div>
     </div>
   </div>
 </div>
@@ -1921,7 +1943,20 @@ function fileDataUrl(file){
   });
 }
 /* เขียนลายเซ็นขึ้นระบบกลาง · onlyIfNew = ไม่ทับของที่มีคนตั้งไว้แล้ว (ย้ายจากเครื่อง) · คืน true เมื่อเขียนของเราได้จริง */
+/* ส่งลายเซ็นขึ้นระบบทีละครั้ง — รอบที่ช้า (เน็ตช้า) ห้ามมาทับลายเซ็นที่ตั้งทีหลัง (upsert ไม่มีเงื่อนไข: อันที่ถึงทีหลังชนะ) */
+var sigWriting=null;
+function sigWriteBusy(){
+  if(!sigWriting) return false;
+  toast('กำลังบันทึกลายเซ็นก่อนหน้าอยู่ — รอให้เสร็จก่อน แล้วค่อยลองใหม่','err');
+  return true;
+}
 async function sigPush(url, onlyIfNew){
+  if(sigWriting) return false;
+  var p=sigPush_(url, onlyIfNew); sigWriting=p;
+  try{ return await p; }
+  finally{ if(sigWriting===p) sigWriting=null; try{ sgmWriteDone(); }catch(e){} }
+}
+async function sigPush_(url, onlyIfNew){
   sigGen++;                                   // ผลโหลดที่ค้างอยู่ (ของก่อนหน้านี้) ห้ามมาทับ
   var at=new Date().toISOString(), by=userName()||'-';
   var rows=[{key:'signature',value:url},{key:'signature_at',value:at},{key:'signature_by',value:by}];
@@ -2098,16 +2133,19 @@ async function handleSigFile(file){
   if(!can('settings','e')||INV_SCOPE){ toast('บัญชีนี้ไม่มีสิทธิ์ตั้งลายเซ็น','err'); return; }
   if(!/^image\/(png|jpeg)$/.test(file.type||'')){ toast('ใช้รูป PNG หรือ JPG เท่านั้น','err'); return; }
   if(file.size>8*1024*1024){ toast('ไฟล์ใหญ่เกิน 8MB — ย่อรูปก่อนอัพโหลด','err'); return; }
+  if(sigWriteBusy()) return;
   var b=$('sigUploadBtn'); b.disabled=true;
   try{
     var raw=await fileDataUrl(file);
     var u=raw?await sigNormalize(raw):null;
     if(!u){ toast('อ่านรูปลายเซ็นไม่ได้ — ลองรูปอื่น','err'); return; }
+    if(sigWriteBusy()) return;
     await sigSaveNew(u,'');
   }finally{ b.disabled=false; }
 }
 /* ตั้งลายเซ็นใหม่ของทุกเครื่อง (อัพโหลดรูป / ✍️ สร้างลายเซ็น) · how = ทำมาแบบไหน (จดในประวัติ) · คืน true เมื่อบันทึกได้ */
 async function sigSaveNew(u, how){
+  if(sigWriteBusy()) return false;
   if(!(await sigPush(u,false))){ toast('บันทึกลายเซ็นไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วลองใหม่','err'); loadSignature(); return false; }
   logActivity('ตั้งลายเซ็นผู้รับเงิน','',(how?how+' · ':'')+'ใช้กับทุกเครื่อง');
   toast('บันทึกลายเซ็นแล้ว — ใช้กับทุกเครื่อง','ok');
@@ -2120,7 +2158,9 @@ async function sigRemove(){
     if(!confirm('ลบลายเซ็นที่อยู่ในเครื่องนี้?')) return;
     sigGen++; await sigCache(null); sigUse(null,'none'); toast('ลบลายเซ็นในเครื่องนี้แล้ว'); return;
   }
+  if(sigWriteBusy()) return;
   if(!confirm('ลบลายเซ็นออกจากทุกเครื่อง?\nบิลที่ออก/เปิดดู/ส่งซ้ำหลังจากนี้จะเว้นช่องให้เซ็นเอง\n(ไฟล์ที่ส่งอีเมลหรือเก็บไปแล้วไม่เปลี่ยน)')) return;
+  if(sigWriteBusy()) return;
   if(!(await sigPush('',false))){ toast('ลบลายเซ็นไม่สำเร็จ — ลองใหม่','err'); loadSignature(); return; }
   logActivity('ลบลายเซ็นผู้รับเงิน','','ทุกเครื่อง');
   toast('ลบลายเซ็นแล้ว (ทุกเครื่อง)');
@@ -2129,6 +2169,7 @@ async function sigRemove(){
 async function sigPushLocal(){
   if(sigMeta.src!=='local'||!sigDataUrl) return;
   if(!can('settings','e')||INV_SCOPE){ toast('บัญชีนี้ไม่มีสิทธิ์ตั้งลายเซ็น','err'); return; }
+  if(sigWriteBusy()) return;
   var b=$('sigPushBtn'); b.disabled=true;
   try{
     var r;
@@ -2148,6 +2189,7 @@ async function sigPushLocal(){
 }
 async function sigLegacyUse(){
   if(!sigLegacyU||!can('settings','e')||INV_SCOPE) return;
+  if(sigWriteBusy()) return;
   var was=sigMeta, q= was.src==='central'
     ? 'ใช้ลายเซ็นเดิมของเครื่องนี้แทนลายเซ็นที่ใช้อยู่?\nทุกเครื่องและไฟล์ที่ NAS เก็บหลังจากนี้จะเปลี่ยนตาม'
     : (was.removed
@@ -2165,6 +2207,7 @@ async function sigLegacyUse(){
   }
   var u=await sigNormalize(sigLegacyU);
   if(!u){ toast('อ่านรูปลายเซ็นเดิมไม่ได้','err'); return; }
+  if(sigWriteBusy()) return;
   if(!(await sigPush(u,false))){ toast('บันทึกลายเซ็นไม่สำเร็จ — ลองใหม่','err'); loadSignature(); return; }
   try{ await idbDel('sigLegacy'); }catch(e){}
   sigLegacyU=null; renderSig();
@@ -2204,7 +2247,7 @@ var SGM_CSS='https://fonts.googleapis.com/css2?family=Charm:wght@700&family=Char
   '&family=Sacramento&family=Alex+Brush&family=Dancing+Script:wght@600&family=Homemade+Apple&display=swap';
 var SGM={open:false, mode:'draw', strokes:[], cur:null, curId:null, undo:null, color:'k', width:2, font:'', name:'',
          css:null, cssEl:null, ok:{}, list:'', w:0, h:0, base:null, raf:0, pv:0, pseq:0, nt:0, fit:0, busy:false,
-         sess:0, dl:false, pen:false, curType:'', opener:null, inert:[]};
+         sess:0, dl:false, pen:false, curType:'', opener:null, inert:[], rev:0};
 function sgmFont(k){ for(var i=0;i<SGM_FONTS.length;i++) if(SGM_FONTS[i].k===k) return SGM_FONTS[i]; return null; }
 function sgmThai(s){ return /[\u0E00-\u0E7F]/.test(s||''); }
 function sgmCleanName(s){ return String(s||'').replace(/[\u0000-\u001F\u007F]/g,'').replace(/\s+/g,' ').trim().slice(0,40); }
@@ -2264,17 +2307,20 @@ function sgmClose(force){
   try{ if(o && o.isConnected && o.offsetParent!==null) o.focus(); else if($('sigMakeBtn').offsetParent!==null) $('sigMakeBtn').focus(); }catch(e){}
 }
 function sgmMode(m){
-  SGM.mode=(m==='type')?'type':'draw';
+  SGM.mode=(m==='type')?'type':'draw'; SGM.rev++;
   $('sgmDraw').hidden=SGM.mode!=='draw'; $('sgmType').hidden=SGM.mode!=='type';
   $('sigMk').classList.toggle('sgm-typing', SGM.mode==='type');
   sgmPrevReset();
   document.querySelectorAll('#sigMk .sgm-tab').forEach(function(b){
     var on=b.getAttribute('data-sgm')===SGM.mode; b.classList.toggle('on',on); b.setAttribute('aria-selected',on?'true':'false');
   });
-  sgmMsg(''); sgmTools();
+  sgmMsgClear(); sgmTools();
   if(SGM.mode==='draw') requestAnimationFrame(sgmFit);
   else{
-    for(var fk in SGM.ok) if(SGM.ok[fk]===false) delete SGM.ok[fk];   // โหลดไม่ได้รอบก่อน = เปิดแบบนี้ใหม่แล้วลองอีกครั้ง
+    // โหลดไม่ได้รอบก่อน = เปิดแบบนี้ใหม่แล้วลองอีกครั้ง · ฟอนต์ที่โหลดพลาด (status error) ใช้ซ้ำไม่ได้ → ทิ้ง stylesheet เดิมให้สร้างใหม่
+    var hadBad=false;
+    for(var fk in SGM.ok) if(SGM.ok[fk]===false){ delete SGM.ok[fk]; hadBad=true; }
+    if(hadBad){ if(SGM.cssEl){ SGM.cssEl.remove(); SGM.cssEl=null; } SGM.css=null; SGM.ok={}; }
     sgmStyles(); if(!IS_TOUCH) setTimeout(function(){ if(SGM.open&&SGM.mode==='type') $('sgmName').focus(); },60); }
   sgmPreviewSoon(); sgmPrefSave();
 }
@@ -2285,7 +2331,9 @@ function sgmTools(){
   $('sgmClear').disabled=SGM.busy||!SGM.strokes.length;
   $('sgmStyles').style.color=SGM_INK[SGM.color]||SGM_INK.k;      // แบบลายมือแสดงด้วยสีหมึกที่เลือก
 }
-function sgmMsg(t,kind){ var m=$('sgmMsg'); m.textContent=t||''; m.hidden=!t; }
+/* sticky = ข้อความสถานะการบันทึก (ทำรูปใหม่/เซ็นต่อแล้วไม่ลบทิ้ง) · ข้อความทั่วไปลบเองเมื่อทำรูปได้ */
+function sgmMsg(t,sticky){ var m=$('sgmMsg'); m.textContent=t||''; m.hidden=!t; SGM.msgSticky=!!(t&&sticky); }
+function sgmMsgClear(){ if(!SGM.msgSticky) sgmMsg(''); }
 function sgmBusy(on){
   SGM.busy=!!on;
   $('sgmSave').disabled=!!on; $('sgmDl').disabled=!!on; $('sgmName').disabled=!!on;
@@ -2302,10 +2350,16 @@ function sgmFit(){
   var aw=Math.max(160, (wrap.clientWidth||0)-B);
   var cs=getComputedStyle(ov), vh=ov.clientHeight-(parseFloat(cs.paddingTop)||0)-(parseFloat(cs.paddingBottom)||0);
   // ความสูงจริงของส่วนอื่น ๆ: มือถือหน้าต่างสูงเต็มจอ (height:100%) → วัดตอนสูงตามเนื้อหาก่อน แล้วคืนค่า
-  var bh=box.style.height, bm=box.style.maxHeight;
-  box.style.height='auto'; box.style.maxHeight='none';
-  var other=box.scrollHeight-pad.offsetHeight;
-  box.style.height=bh; box.style.maxHeight=bm;
+  //   จอเตี้ย 2 คอลัมน์ (grid): กรอบเซ็นอยู่คอลัมน์ซ้าย → นับแค่ของในคอลัมน์ซ้าย + ขอบบนล่างของหน้าต่าง
+  var bcs=getComputedStyle(box), other;
+  if(bcs.display==='grid'){
+    other=$('sgmDraw').offsetHeight-pad.offsetHeight+(parseFloat(bcs.paddingTop)||0)+(parseFloat(bcs.paddingBottom)||0);
+  }else{
+    var bh=box.style.height, bm=box.style.maxHeight;
+    box.style.height='auto'; box.style.maxHeight='none';
+    other=box.scrollHeight-pad.offsetHeight;
+    box.style.height=bh; box.style.maxHeight=bm;
+  }
   var ah=Math.max(96, Math.min(420, vh-other-B));
   var w=Math.floor(Math.min(aw, ah*SGM_ASPECT)), h=Math.floor(w/SGM_ASPECT);
   pad.style.width=(w+B)+'px'; pad.style.height=(h+B)+'px';
@@ -2381,7 +2435,7 @@ function sgmDown(e){
   e.preventDefault();
   var cv=$('sgmCanvas'); try{ cv.setPointerCapture(e.pointerId); }catch(_){}
   SGM.curId=e.pointerId; SGM.curType=e.pointerType; SGM.cur=[sgmPt(e, cv.getBoundingClientRect())]; SGM.undo=null;
-  sgmMsg(''); sgmFrameSoon();
+  sgmMsgClear(); sgmFrameSoon();
 }
 function sgmMove(e){
   if(!SGM.cur||e.pointerId!==SGM.curId) return;
@@ -2428,6 +2482,7 @@ function sgmCssLoad(){
     if(l && l._ok){ res(true); return; }               // รอบก่อนหมดเวลา แต่โหลดเสร็จทีหลัง
     if(l) l.remove();                                  // (ลิงก์ที่โหลดพลาดก็มี .sheet ว่าง ๆ — ดูจาก onload เท่านั้น)
     l=document.createElement('link'); l.rel='stylesheet'; l.href=SGM_CSS; SGM.cssEl=l;
+    l.setAttribute('data-html2canvas-ignore','');     // ทำ PDF บิลไม่ต้องรอ/คัดลอกฟอนต์ลายมือ (เน็ตช้าเคยทำให้ PDF ช้า 15–70 วิ)
     var done=false, fin=function(v){ if(!done){ done=true; res(v); } };
     l.onload=function(){ l._ok=true; fin(true); }; l.onerror=function(){ fin(false); };
     setTimeout(function(){ fin(!!l._ok); },12000);
@@ -2488,9 +2543,9 @@ function sgmStyleMark(){
   else note.textContent=sgmThai(name)?'แตะเลือกแบบลายมือ (แบบที่มีตัวไทย)':'แตะเลือกแบบลายมือ';
 }
 function sgmNameInput(){
-  SGM.name=sgmCleanName($('sgmName').value);
+  SGM.name=sgmCleanName($('sgmName').value); SGM.rev++;
   clearTimeout(SGM.nt);
-  SGM.nt=setTimeout(function(){ if(SGM.open&&SGM.mode==='type'){ sgmStyles(); sgmPreview(); sgmPrefSave(); } },220);
+  SGM.nt=setTimeout(function(){ if(SGM.open&&SGM.mode==='type'&&!SGM.busy){ sgmStyles(); sgmPreview(); sgmPrefSave(); } },220);
 }
 
 /* --- รูปผลลัพธ์ --- */
@@ -2538,7 +2593,12 @@ async function sgmTypeExport(){
   return {u:t.c.toDataURL('image/png'), how:'สร้างจากชื่อ (แบบ '+fo.f+')'};
 }
 function sgmExport(){ return SGM.mode==='draw'?Promise.resolve(sgmDrawExport()):sgmTypeExport(); }
-function sgmPreviewSoon(){ clearTimeout(SGM.pv); SGM.pv=setTimeout(sgmPreview,160); }
+function sgmPreviewSoon(){ SGM.rev++; clearTimeout(SGM.pv); SGM.pv=setTimeout(sgmPreview,160); }
+/* ส่งขึ้นระบบเสร็จ (ของหน้าต่างนี้หรือที่อื่น) → ปุ่มบันทึกกลับมากดได้ */
+function sgmWriteDone(){
+  if(!SGM.open||SGM.busy) return;
+  $('sgmSave').disabled=!SGM.last||!!sigWriting; $('sgmDl').disabled=!SGM.last;
+}
 /* ทำรูปจากสิ่งที่อยู่บนจอตอนนี้ แล้วโชว์ในตัวอย่าง · คืนผล (null = มีการเปลี่ยนระหว่างทำ/ปิดไปแล้ว) */
 async function sgmPreview(){
   if(!SGM.open) return null;
@@ -2554,16 +2614,21 @@ async function sgmPreview(){
     none.textContent=r.empty?(SGM.mode==='draw'?'ยังไม่ได้เซ็น':'ยังไม่ได้พิมพ์ชื่อ'):'—';
     if(!r.empty) sgmMsg(r.err);
   }
-  if(r.u) sgmMsg('');
-  if(!SGM.busy){ $('sgmSave').disabled=!r.u; $('sgmDl').disabled=!r.u; }
+  if(r.u) sgmMsgClear();
+  if(!SGM.busy){ $('sgmSave').disabled=!r.u||!!sigWriting; $('sgmDl').disabled=!r.u; }
   return r;
 }
 function sgmLimit(p, ms){ return Promise.race([p, new Promise(function(res){ setTimeout(function(){ res('timeout'); }, ms); })]); }
 async function sgmSave(){
   if(!SGM.open||SGM.busy) return;
   if(!can('settings','e')||INV_SCOPE){ toast('บัญชีนี้ไม่มีสิทธิ์ตั้งลายเซ็น','err'); return; }
+  if(sigWriting){ sgmMsg('กำลังบันทึกลายเซ็นก่อนหน้าอยู่ — รอให้เสร็จก่อน',true); $('sgmSave').disabled=true; return; }
+  sgmMsg('');
+  // ชื่อที่เพิ่งพิมพ์ (ยังไม่ถึงรอบอัปเดต) — ใช้เลย ไม่งั้นรอบอัปเดตมาแทรกแล้วการกดบันทึกหายเงียบ
+  if(SGM.mode==='type'){ clearTimeout(SGM.nt); sgmStyles(); sgmPrefSave(); }
   var label=$('sgmSave').textContent, saved=false, sess=SGM.sess, late=false;
   sgmBusy(true);
+  var rev0=SGM.rev;
   try{
     // ทำรูปจากสิ่งที่อยู่บนจอ แล้วโชว์ในตัวอย่างก่อน — สิ่งที่บันทึก = สิ่งที่เห็น
     var r=await sgmLimit(sgmPreview(), 25000);
@@ -2574,10 +2639,16 @@ async function sgmSave(){
     var u=await sigNormalize(r.u);
     if(sess!==SGM.sess) return;
     if(!u){ sgmMsg('ทำรูปลายเซ็นไม่สำเร็จ — ลองใหม่'); return; }
-    var res=await sgmLimit(sigSaveNew(u, r.how), 20000);
+    var job=sigSaveNew(u, r.how), res=await sgmLimit(job, 20000);
     if(res==='timeout'){
-      if(sess===SGM.sess) sgmMsg('ยังบันทึกไม่เสร็จ (เน็ตช้า) — ปิดหน้าต่างได้ ระบบบันทึกต่อเอง ผลจะขึ้นที่การ์ดลายเซ็น');
-      late=true; return;
+      if(sess===SGM.sess) sgmMsg('ยังบันทึกไม่เสร็จ (เน็ตช้า) — ปิดหน้าต่างได้ ระบบบันทึกต่อเอง ผลจะขึ้นที่การ์ดลายเซ็น',true);
+      late=true; rev0=SGM.rev;
+      job.then(function(ok){                            // ผลที่มาช้า: ยังเปิดหน้าต่างเดิมอยู่และไม่ได้แก้อะไรต่อ = ปิดให้ · แก้ต่อแล้ว = แค่บอก
+        if(sess!==SGM.sess||!SGM.open) return;
+        if(ok && SGM.rev===rev0) sgmClose(true);
+        else{ sgmMsg(ok?'บันทึกรูปก่อนหน้าแล้ว — ถ้าต้องการใช้รูปที่แก้ล่าสุด กดบันทึกอีกครั้ง':'บันทึกไม่สำเร็จ — ลองใหม่',true); sgmWriteDone(); }
+      });
+      return;
     }
     saved=!!res;
   }catch(e){ if(sess===SGM.sess) sgmMsg('บันทึกไม่สำเร็จ — ลองใหม่'); }
@@ -2587,7 +2658,7 @@ async function sgmSave(){
       if(saved) sgmClose(true);
       else if(SGM.open){
         $('sgmSave').textContent=label;
-        if(late){ $('sgmSave').disabled=!SGM.last; $('sgmDl').disabled=!SGM.last; }   // คงข้อความ "ยังบันทึกไม่เสร็จ" ไว้
+        if(late){ $('sgmSave').disabled=!SGM.last||!!sigWriting; $('sgmDl').disabled=!SGM.last; }   // คงข้อความ · ส่งค้างอยู่ = ยังบันทึกซ้ำไม่ได้
         else sgmPreview();
       }
     }
