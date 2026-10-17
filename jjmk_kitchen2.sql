@@ -87,6 +87,13 @@ create index if not exists kc_deliveries_d_idx on kc_deliveries (d);
 create index if not exists kc_deliveries_branch_idx on kc_deliveries (branch, order_date);
 create index if not exists kc_expenses_ym_idx on kc_expenses (ym);
 create index if not exists kc_counts_d_idx on kc_counts (d);
+-- เลขบิลสาขา / เลขใบสั่งซื้อ ห้ามซ้ำ (สองเครื่องกดออกบิลพร้อมกัน → เครื่องหลังได้ 23505 แล้วแอพอ่านเลขใหม่เอง) · มีเลขซ้ำอยู่แล้ว = แจ้งเตือน ไม่สร้าง index (แก้เลขซ้ำก่อนแล้วรันใหม่)
+do $$ begin
+  create unique index if not exists kc_deliveries_bill_no_uq on kc_deliveries (bill_no) where bill_no is not null;
+exception when unique_violation then raise notice 'kc_deliveries: bill_no ซ้ำอยู่ — แก้เลขซ้ำก่อนแล้วรันใหม่ (ยังไม่สร้าง kc_deliveries_bill_no_uq)'; end $$;
+do $$ begin
+  create unique index if not exists kc_pos_po_no_uq on kc_pos (po_no) where po_no is not null;
+exception when unique_violation then raise notice 'kc_pos: po_no ซ้ำอยู่ — แก้เลขซ้ำก่อนแล้วรันใหม่ (ยังไม่สร้าง kc_pos_po_no_uq)'; end $$;
 
 -- ---------- 3) บวก/ลบยอดแบบ atomic (ชื่อ/พารามิเตอร์เดียวกับแอพเดิม) ----------
 -- รุ่นนี้ปัด 4 ตำแหน่ง (แอพใหม่เก็บยอดเป็นหน่วยหลัก 4 ตำแหน่ง — 4 กรัมของของที่นับเป็น กก. = 0.004 · รุ่นเดิมปัด 2 ตำแหน่งทำให้ยอดเล็ก ๆ หายไป)
