@@ -85,7 +85,8 @@ CSS.add(`
 @media(max-width:339px){.rcl-grid{grid-template-columns:1fr}}
 .rcl-size{flex-wrap:nowrap}.rcl-size input{flex:1;min-width:0;width:0;text-align:center;font-weight:700}
 .rcl-size span{flex:none;white-space:nowrap;font-size:13.5px;color:var(--mut)}
-.rcl-pm{padding:0;margin:0 0 6px}.rcl-pm .pill{min-height:40px;padding:6px 13px}
+.rcl-pm{padding:0;margin:0 0 6px}.rcl-pm .pill{min-height:44px;padding:8px 13px}
+.rcl-acts{position:sticky;bottom:0;background:#fff;padding:10px 0 4px;margin-top:12px;box-shadow:0 -8px 10px -8px rgba(0,0,0,.12)}   /* ปุ่ม ✓/🗑 ติดขอบล่างของแผ่น — จอเตี้ย (iPhone SE) ไม่ต้องเลื่อนก่อนกด (ผู้ตรวจ V1) */
 .rcl-sum{margin-top:8px;background:#FBF6EA;border:1.5px solid #F0E8D6;border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.55}
 .rcl-sum b{font-family:var(--fh);font-size:16px}
 .rcl-sum .cmp{font-size:12.5px;color:var(--mut)}
@@ -155,7 +156,7 @@ function rcBar(){
 function rcIcon(it){try{return itIcon(it);}catch(e){return '🥬';}}
 function rcCatIcon(c){try{return IT_IC[c]||'🧺';}catch(e){return '🧺';}}
 function rcThumb(o,cls){ // รูปในช่อง — ไม่ใส่ซูมแบบ thumbHtml (แตะรูป = เลือกสินค้า)
-  const url=o&&imgOk(o.image_url)?String(o.image_url):'';return '<div class="'+(cls||'ithumb')+'">'+(url?'<img src="'+esc(url)+'" loading="lazy">':rcIcon(o))+'</div>';}
+  const url=o&&imgOk(o.image_url)?String(o.image_url):'';return '<div class="'+(cls||'ithumb')+'">'+(url?'<img src="'+esc(url)+'" loading="lazy" data-ic="'+esc(rcIcon(o))+'" onerror="this.parentNode.textContent=this.dataset.ic">':rcIcon(o))+'</div>';}   // รูปเสีย = กลับเป็นอิโมจิ
 function rcCatOf(it){return String(it&&it.cat||'').trim()||'อื่นๆ';}
 function rcSupItems(){const k=supKey(RC.sup_name);return k?activeItems().filter(it=>supKey(it.sup)===k):[];}
 function rcCats(){const c=[];activeItems().forEach(it=>{const x=rcCatOf(it);if(!c.includes(x))c.push(x);});return ITEM_CATS.filter(x=>c.includes(x)).concat(c.filter(x=>!ITEM_CATS.includes(x)));}
@@ -217,7 +218,7 @@ function rcEditorHtml(l,i){ // id rcL<i> = หน้าต่างของร�
     '<button class="pill'+(l.price_mode==='total'?' on':'')+'" onclick="rcSetMode('+i+',\'total\')">'+esc(t('rc_total_all'))+'</button></div>'+
     '<input id="rcPr'+i+'" inputmode="decimal" placeholder="฿ 0.00" value="'+esc(l.price)+'" oninput="rcSetPrice('+i+',this.value)">');
   h+='<div class="rcl-sum" id="rcS'+i+'"></div>';
-  h+='<div class="row" style="margin-top:12px"><button class="btn gh" style="color:var(--bad)" onclick="rcDelLine('+i+')">🗑 '+esc(t('rc_remove'))+'</button><button class="btn" style="flex:1" onclick="rcEditDone('+i+')">✓ '+esc(t('rc_ok'))+'</button></div></div>';
+  h+='<div class="row rcl-acts"><button class="btn gh" style="color:var(--bad)" onclick="rcDelLine('+i+')">🗑 '+esc(t('rc_remove'))+'</button><button class="btn" style="flex:1" onclick="rcEditDone('+i+')">✓ '+esc(t('rc_ok'))+'</button></div></div>';
   return h;}
 function rcEditDone(i){MODAL_BACK=null;closeModal();rcPaintForm();}
 function rcPaintLine(i){const l=RC.lines[i];if(!l)return;const old=document.getElementById('rcL'+i);   // หน้าต่างเปิดอยู่ = วาดหน้าต่างใหม่ · ไม่ได้เปิด = วาดหน้าทั้งหมด

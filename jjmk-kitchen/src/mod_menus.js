@@ -136,6 +136,7 @@ CSS.add(`
 .mnacts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.mnacts .btn.big{flex:1;min-width:140px}
 .mnreal{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 `);
+I18N.add({th:{mn_tg_days_lbl:'{n} วัน'},en:{mn_tg_days_lbl:'{n} days'},lo:{mn_tg_days_lbl:'{n} ມື້'},my:{mn_tg_days_lbl:'{n} ရက်'}});   // ป้าย 🎯 บนการ์ดเมนูแบบ N วัน (เดิม '2d' — ผู้ตรวจ V1)
 let MN_CAT=String(LS.get('jjck_mncat','')||'');   // '' ทั้งหมด · ชื่อหมวด · '__off' ไม่ใช้แล้ว
 let MN_Q='';
 let MN_D=null;                                     // ร่างฟอร์ม
@@ -178,7 +179,7 @@ RENDER.menus=function(el){
   h+=searchBox('mnQ','mnSearch')+'<div id="mnGrid" class="igrid"></div>';
   el.innerHTML=h;const q=document.getElementById('mnQ');if(q)q.value=MN_Q;mnPaintGrid();
 };
-function mnSetCat(k){MN_CAT=k||'';LS.set('jjck_mncat',MN_CAT);show('menus');}
+function mnSetCat(k){MN_CAT=k||'';LS.set('jjck_mncat',MN_CAT);show('menus');const on=document.querySelector('#view-menus .pills .pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}}   // วาดหน้าใหม่แล้วแถบชิปเด้งซ้ายสุด — เลื่อนชิปที่เลือกกลับเข้าจอ (ผู้ตรวจ V1)
 function mnSearch(v){MN_Q=v||'';mnPaintGrid();}
 function mnPaintGrid(){
   const box=document.getElementById('mnGrid');if(!box)return;
@@ -200,7 +201,7 @@ function mnCardHtml(r,off,K){
     '<div class="isub">'+esc(t('mn_lot_eq',{q:fmtQ(r.yield_qty),u:trUnit(r.yield_unit)}))+' · '+esc(t('mn_lines_n',{n}))+'</div>'+
     '<div class="isub">'+cost+(sp!=null?' · '+esc(t('mn_sell'))+' <b>'+esc(mnMoney(sp))+'</b>':'')+'</div>'+
     '<div class="row" style="justify-content:space-between"><span class="chip '+(num(r.qty)>0?'ok':'mid')+'">📦 '+fmtQ(r.qty)+' '+esc(trUnit(r.yield_unit))+'</span>'+
-      (r.target_qty!=null&&num(r.target_qty)>0?'<span class="xs mut">🎯 '+fmtQ(r.target_qty)+mnMaxTxt(r)+'</span>':(r.target_days!=null&&num(r.target_days)>0?'<span class="xs mut">🎯 '+fmtQ(r.target_days)+'d'+mnMaxTxt(r)+'</span>':''))+'</div>'+
+      (r.target_qty!=null&&num(r.target_qty)>0?'<span class="xs mut">🎯 '+fmtQ(r.target_qty)+mnMaxTxt(r)+'</span>':(r.target_days!=null&&num(r.target_days)>0?'<span class="xs mut">🎯 '+esc(t('mn_tg_days_lbl',{n:fmtQ(r.target_days)}))+mnMaxTxt(r)+'</span>':''))+'</div>'+
     (off&&K?'<button class="btn sm2 gh" data-id="'+esc(r.id)+'" onclick="event.stopPropagation();mnOff(this.dataset.id,true)">'+esc(t('mn_restore'))+'</button>':'')+'</div>';}
 
 /* ---------- 🎯 Safety / Max ของสินค้าแต่ละตัว ---------- */

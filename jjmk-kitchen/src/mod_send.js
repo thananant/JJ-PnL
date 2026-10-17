@@ -109,6 +109,12 @@ CSS.add(`
 @media(max-width:700px){#sdBody .sd-card:last-child{margin-bottom:72px}}
 .sdl-send .chip.bad{white-space:normal;line-height:1.35;padding:4px 10px;max-width:100%}   /* ⛔ ไม่มีราคา — ข้อความยาว พับบรรทัดบนจอแคบ */
 `);
+I18N.add({ // ➕ ส่งเพิ่ม: ของไม่พอส่ง (จัดให้ใบสั่งสาขาก่อน) — ผู้ตรวจ V1 เจอว่าขึ้น "ยังไม่ได้ใส่จำนวนที่ส่ง" ทั้งที่การ์ดเรียกเพิ่มไม่มีช่องส่ง
+th:{sd_m_nothing:'ของไม่พอส่ง — จัดให้ใบสั่งสาขาก่อนแล้ว · ⚡ ทำของก่อน หรือลดจำนวนที่ขอ',sd_m_nothing_s:'⛔ ของไม่พอส่ง (จัดให้ใบสั่งสาขาก่อน)'},
+en:{sd_m_nothing:'Not enough stock to send — branch orders are served first · make more first, or lower the requested amount',sd_m_nothing_s:'⛔ Not enough stock (branch orders first)'},
+lo:{sd_m_nothing:'ເຄື່ອງບໍ່ພໍສົ່ງ — ຈັດໃຫ້ໃບສັ່ງສາຂາກ່ອນແລ້ວ · ⚡ ເຮັດເຄື່ອງກ່ອນ ຫຼືຫຼຸດຈຳນວນທີ່ຂໍ',sd_m_nothing_s:'⛔ ເຄື່ອງບໍ່ພໍສົ່ງ (ຈັດໃຫ້ໃບສັ່ງສາຂາກ່ອນ)'},
+my:{sd_m_nothing:'ပို့ရန် လက်ကျန်မလုံလောက်ပါ — ဆိုင်ခွဲအော်ဒါများကို ဦးစွာထုတ်ပေးပြီးပါပြီ · ⚡ အရင်ထုတ်လုပ်ပါ သို့မဟုတ် တောင်းဆိုအရေအတွက် လျှော့ပါ',sd_m_nothing_s:'⛔ လက်ကျန်မလုံလောက် (ဆိုင်ခွဲအော်ဒါ ဦးစွာ)'}
+});
 let SD={at:0,ok:true,err:null,groups:[],raw:null,loading:null,quiet:false};
 document.addEventListener('kc:booted',()=>{ // บูตบนแท็บอื่น = ป้าย 🚚 ต้องขึ้นเหมือนกัน (☀️ วันนี้/🚚 ส่งสาขา โหลดเองอยู่แล้ว)
   if(!S.user||!canKitchen()||S.tab==='today'||S.tab==='send'||SD.at)return;sdLoad({noRefresh:true}).catch(()=>{});});
@@ -223,11 +229,12 @@ function sdPaint(){
 }
 function sdCardHtml(g,gi){
   const td=bizTodayISO(),partial=g.lines.some(l=>l.already>0),linked=g.lines.filter(l=>l.link&&!l.noPrice).length,anyLink=g.lines.some(l=>l.link);
+  const mZero=!!g.manual&&linked>0&&!g.lines.some(l=>l.link&&!l.noPrice&&num(l.sent)>0);   // เรียกเพิ่มแต่ของถูกจัดให้ใบสั่งสาขาหมดแล้ว = บอกตรง ๆ แทนปุ่ม ✅ (ผู้ตรวจ V1)
   let h='<div class="card sd-card'+(g.manual?' sd-manual':'')+'" id="sdG'+gi+'" data-key="'+esc(g.key)+'"><h3><span class="sd-dot" style="background:'+esc(sdBrColor(g.code,g.color))+'"></span>'+esc(g.short||g.name)+
     '<span class="sp">'+(g.manual?'<span class="chip warn sd-mchip">'+esc(t('sd_m_chip'))+'</span>':'')+'<span class="chip '+(g.od===td?'blue':'warn')+'">'+esc(g.od===td?t('today'):t('sd_order_d',{d:dispDate(g.od)}))+'</span>'+(partial?'<span class="chip warn">⏳ '+esc(t('sd_partial'))+'</span>':'')+'</span></h3>';
   h+=g.lines.map((l,li)=>sdLineHtml(gi,l,li,li===g.lines.length-1)).join('');
   h+='<div class="sd-foot"><div class="sd-tot"><span class="mut sm">'+esc(t('sd_lines_n',{n:g.lines.length}))+'</span><b id="sdTot'+gi+'">'+esc(money(sdGroupTotal(g)))+'</b></div>'+
-    (linked?'<button type="button" class="btn big sd-go" id="sdGo'+gi+'" onclick="sdSend('+gi+')">'+esc(t('sd_go'))+'</button>':anyLink?'<span class="chip bad">⛔ '+esc(t('no_price'))+'</span>':'<span class="chip warn">🔗 '+esc(t('sd_link_first'))+'</span>')+
+    (linked?(mZero?'<span class="chip bad">'+esc(t('sd_m_nothing_s'))+'</span><button type="button" class="btn gh sm2" onclick="sdMake()">'+esc(t('sd_make'))+'</button>':'<button type="button" class="btn big sd-go" id="sdGo'+gi+'" onclick="sdSend('+gi+')">'+esc(t('sd_go'))+'</button>'):anyLink?'<span class="chip bad">⛔ '+esc(t('no_price'))+'</span>':'<span class="chip warn">🔗 '+esc(t('sd_link_first'))+'</span>')+
     (g.manual?'<button type="button" class="btn gh sm2 sd-drop" style="color:var(--bad)" onclick="sdManualDrop('+gi+')">'+esc(t('sd_m_drop'))+'</button>':'')+'</div></div>';
   return h;}
 function sdLineHtml(gi,l,li,last){
@@ -326,7 +333,7 @@ async function sdSend(gi){await once(async()=>{
   const g=SD.groups[gi];if(!g||!canKitchen())return;
   if(!S.kcSql){toast(t('sd_sql_block'),true);return;}
   const bad=g.lines.find(l=>l.link&&num(l.sent)>0&&sdPriceOf(l)==null);if(bad){toast(t('sd_no_price',{n:bad.name}),true);sdCalc();sdRefresh();return;}
-  const L=g.lines.filter(l=>l.link&&num(l.sent)>0);if(!L.length){toast(t('sd_nothing'),true);return;}
+  const L=g.lines.filter(l=>l.link&&num(l.sent)>0);if(!L.length){toast(t(g.manual?'sd_m_nothing':'sd_nothing'),true);return;}
   const d=bizTodayISO(),rids=[...new Set(L.map(l=>l.link.recipe_id))];
   if(!(await sdStockOk(L,rids)))return;   // ยอดสด — อีกเครื่องอาจเพิ่งส่ง/ทำของ (อ่านไม่ได้ = ไม่ออกบิล)
   let no;try{no=await sdBillNo(g.code,d);}catch(e){toast(t('sd_not_saved')+' · '+((e&&e.message)||e),true);return;}
@@ -384,7 +391,7 @@ function sdManualGroups(){ // ร่าง → กลุ่มรูปแบบ
     if(!lines.length)return;
     out.push({key:'manual|'+b.code+'|'+td,code:b.code,name:b.name,short:b.short||b.name,color:b.color||'',od:td,lines,unlinked:0,manual:true});});
   return out;}
-function sdThumb(o){const url=o&&imgOk(o.image_url)?String(o.image_url):'';return '<div class="ithumb">'+(url?'<img src="'+esc(url)+'" loading="lazy">':'🍳')+'</div>';}   // รูปในช่อง — ไม่ใส่ซูม (แตะรูป = เลือกเมนู)
+function sdThumb(o){const url=o&&imgOk(o.image_url)?String(o.image_url):'';return '<div class="ithumb">'+(url?'<img src="'+esc(url)+'" loading="lazy" data-ic="🍳" onerror="this.parentNode.textContent=this.dataset.ic">':'🍳')+'</div>';}   // รูปเสีย = กลับเป็นอิโมจิ (ผู้ตรวจ V1)   // รูปในช่อง — ไม่ใส่ซูม (แตะรูป = เลือกเมนู)
 function sdManualLineHtml(gi,l,li,last){ // บรรทัดเรียกเพิ่ม: ชื่อเมนู + ✕ · มี X · ราคา · ช่อง "ขอเพิ่ม" = แก้ร่างในที่ · ขาด/⚡ เหมือนบรรทัดปกติ
   const id=gi+'_'+li,u=trUnit(l.unit),r=recipeById(l.link.recipe_id),p=sdPriceOf(l);
   let h='<div class="sdl'+(last?' last':'')+'" id="sdL'+id+'"><div class="sdl-top sdm"><b class="sdl-name">'+esc(r?dispName(r):l.name)+'</b>'+
