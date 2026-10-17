@@ -138,7 +138,7 @@ For your own tab's device sweep: `import { sweep } from './t_devices.mjs'; await
 
 ## 9. Integrator notes (2026-10-17, phase 2 — send · bills · buy · acc are in; no placeholder tab is left)
 - **One open-order calculator for ☀️ today, 🚚 send and 🍳 make**: `sdCalcGroups({sr,dl,dll}, branches)` (mod_send.js, pure) → `{groups, ordered, sent, need, unlinked, lines}`.
-  Orders = `stock_receipts` (sup ∈ `cfg.ck_sup_names`, order_date ≥ today − lookback) minus what was delivered **line by line** (`kc_delivery_lines` of non-void `kc_deliveries`,
+  Orders = `stock_receipts` (sup ∈ `cfg.ck_sup_names`, order_date ≥ today − lookback; the real table has **no `id`** — line key `rid` = `branch_id|order_date|product_id`, lines sorted by `cat_label` → name (Thai) → product_id; `sbstub2.js` `SCHEMA` rejects unknown columns like PostgREST) minus what was delivered **line by line** (`kc_delivery_lines` of non-void `kc_deliveries`,
   keyed `branch|order_date|stk_product_id`, name fallback for legacy rows). A partial send keeps the remainder open (⏳ ค้างส่ง) on every page; a delivery with every line
   `sent = ordered` closes the order. `tdOpenOrders(sr,dl,dll)` (today), `sdCalc()` (send, + sequential stock allocation) and `mkOrdersCalc()` (make → `MK_ORD.ordered/sent`)
   all call it, so today's 🚚/⚡ counts, the send badge, make's ⚡ list and send's ขาด always agree (`t_integ` [7] asserts it before/after a partial send and after a void).
