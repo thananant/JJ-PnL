@@ -1,6 +1,7 @@
 /* ============================================================
    📥 รับของ (recv · rc*) — จดของที่รับเข้าวันนี้ + ราคาจริงของวันนั้น
-   ฟอร์ม: ร้านค้า · วันที่ · เลขบิล · รายการ (กี่ห่อ × ขนาดห่อ · ราคาต่อห่อ/รวม) → kc_receipts + kc_receipt_lines
+   ฟอร์ม (2026-10-17 เจ้าของสั่ง "เลือกเป็นรูปเลย แล้วใส่ข้อมูลหลังกดรูป · เลขบิลไม่ต้องใส่"): ร้านค้า · วันที่ · หมายเหตุ → ตารางรูปสินค้า (ชิปหมวด/ร้านนี้ + ค้นหา) แตะรูป = เพิ่มรายการ + หน้าต่างใส่ กี่ห่อ × ขนาดห่อ · ราคาต่อห่อ/รวม
+   → แถวสรุป (แตะ = แก้ · ✕ = เอาออก) · ช่องที่เลือกแล้วขึ้น ✓ จำนวน · ไม่มีช่องเลขบิล (bill_no = null) → kc_receipts + kc_receipt_lines
    + kc_moves 'receive' + ck_items.avg_cost/last_price (ถัวเฉลี่ย — applyItemReceipt ก่อน pushMoves)
    รายการที่รับแล้ว (14 วัน) → รายละเอียด → ยกเลิกได้เฉพาะวันเดียวกัน (คืนสต๊อก + ต้นทุน: ใบล่าสุด = คืนค่าที่จดไว้ · ใบเก่ากว่า = เล่นซ้ำด้วยใบที่เหลือ — costAfterVoid)
    บันทึก = หัว → บรรทัด → ต้นทุน → สต๊อก · พลาดขั้นไหน = ถอนทุกอย่างที่เขียนไป (rcRollback) ไม่เหลือใบรับของค้างทั้งที่สต๊อกไม่ขยับ
@@ -56,8 +57,26 @@ my:{rc_new:'လက်ခံမှုအသစ်',rc_recent:'လက်ခံပ�
   rc_pack_new_saved:'{i} အတွက် ယူနစ် {u} သိမ်းပြီး (1 {u} = {q} {b})',rc_prev_na:'လက်ခံမီ ကုန်ကျစရိတ် မသိမ်းထားပါ — လက်ရှိအတိုင်းထား',rc_prev_cols:'မှတ်ချက်: ဇယားတွင် prev_avg ကော်လံ မရှိသေးပါ — ပယ်ဖျက်လျှင် ကုန်ကျစရိတ် ပြန်မရပါ',
   rc_n_bills:'{n} စောင်',rc_14d:'နောက်ဆုံး ၁၄ ရက်',rc_not_saved:'မသိမ်းရသေးပါ — ထပ်စမ်းပါ',rc_cost_fix:'သိမ်းနေစဉ် လက်ကျန်ပြောင်းသွား၍ ပျမ်းမျှစရိတ် ပြန်တွက်ပြီး',rc_lines_hint:'တစ်ကြောင်းချင်း: ထုပ်ဘယ်နှစ်ခု · ထုပ်အရွယ် · ပေးချေငွေ — ယူနစ်ကုန်ကျစရိတ်ကို အလိုအလျောက်တွက်ပေးသည်'}
 });
+I18N.add({ // หน้ารับของแบบแตะรูป (2026-10-17)
+th:{rc_tap_pic:'แตะรูปสินค้าที่รับมา',rc_this_sup:'ร้านนี้',rc_all:'ทั้งหมด',rc_lines_title:'รายการที่รับ',rc_no_lines:'ยังไม่ได้เลือกสินค้า — แตะรูปสินค้าด้านล่าง',rc_ok:'ตกลง',rc_remove:'เอาออก',rc_change:'เปลี่ยน'},
+en:{rc_tap_pic:'Tap the items you received',rc_this_sup:'This supplier',rc_all:'All',rc_lines_title:'Received lines',rc_no_lines:'Nothing chosen yet — tap an item picture below',rc_ok:'Done',rc_remove:'Remove',rc_change:'Change'},
+lo:{rc_tap_pic:'ແຕະຮູບເຄື່ອງທີ່ຮັບມາ',rc_this_sup:'ຮ້ານນີ້',rc_all:'ທັງໝົດ',rc_lines_title:'ລາຍການທີ່ຮັບ',rc_no_lines:'ຍັງບໍ່ໄດ້ເລືອກເຄື່ອງ — ແຕະຮູບເຄື່ອງຂ້າງລຸ່ມ',rc_ok:'ຕົກລົງ',rc_remove:'ເອົາອອກ',rc_change:'ປ່ຽນ'},
+my:{rc_tap_pic:'လက်ခံရသော ပစ္စည်းပုံကို နှိပ်ပါ',rc_this_sup:'ဤဆိုင်',rc_all:'အားလုံး',rc_lines_title:'လက်ခံသောကြောင်းများ',rc_no_lines:'မရွေးရသေးပါ — အောက်ရှိ ပစ္စည်းပုံကို နှိပ်ပါ',rc_ok:'ပြီးပြီ',rc_remove:'ဖယ်ရှား',rc_change:'ပြောင်း'}
+});
 CSS.add(`
-.rcline{padding:12px}
+.rc-sec{display:flex;align-items:center;gap:8px;font-family:var(--fh);font-weight:700;color:var(--wine);font-size:14.5px;margin:12px 2px 8px}
+.rc-sec .bdg{background:var(--wine);color:#fff;border-radius:999px;padding:1px 8px;font-size:12px}
+.rcln{padding:10px 12px;margin-bottom:8px}
+.rcln .rcln-tap{display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer}
+.rcln-th{width:48px;height:48px;border-radius:12px;background:#F3ECE0;display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex:none}
+.rcln-th img{width:100%;height:100%;object-fit:cover}
+.rcln-sub{font-size:13px;color:var(--mut);margin-top:2px;overflow-wrap:anywhere}.rcln-sub b{font-family:var(--fh);color:var(--ink)}.rcln-sub .red{color:var(--bad);font-weight:700}
+.rcgrid{margin-top:10px;margin-bottom:14px}
+.rctile{padding:8px;gap:6px}.rctile .ithumb{height:96px;font-size:36px;cursor:pointer}.rctile .iname{font-size:13.5px;min-height:auto}
+.rctile.on{border:2px solid #3E9E64;background:#F4FBF6}
+.rcbadge{position:absolute;top:6px;right:6px;background:#2E7D4F;color:#fff;border-radius:999px;padding:3px 9px;font-size:12.5px;font-weight:800;box-shadow:var(--sh);z-index:2;white-space:nowrap}
+.rctile.rcnew{border-style:dashed;color:var(--mut)}.rctile.rcnew .ithumb{background:#FBF6EA;color:var(--gold)}
+.rcline{padding:0}
 .rcl-top{align-items:flex-start;flex-wrap:nowrap}
 .rcl-pick{width:100%;text-align:left;font:inherit;font-weight:700;font-size:16px;padding:6px 0;min-height:44px;color:var(--ink);background:none;border:none;overflow-wrap:anywhere;font-family:var(--fh)}
 .rcl-pick.empty{color:var(--red);border:1.5px dashed var(--red);border-radius:11px;padding:10px 12px;font-weight:600;min-height:44px}
@@ -92,7 +111,9 @@ function rcDraft(){clearTimeout(RC_T);RC_T=setTimeout(()=>{if(!RC)return;const h
   if(has)LS.set(RC_DRAFT,{t:Date.now(),d:bizTodayISO(),data:RC});else LS.del(RC_DRAFT);},250);}
 function rcDraftClear(){clearTimeout(RC_T);LS.del(RC_DRAFT);}
 
-/* ---------- หน้า ---------- */
+/* ---------- หน้า (เจ้าของสั่ง 2026-10-17: "เลือกเป็นรูปเลย แล้วใส่ข้อมูลหลังจากกดรูป · เลขบิลไม่ต้องใส่") ---------- */
+let RC_CAT='';               // ชิปของตารางรูป: '' ทั้งหมด · '__sup' ร้านที่เลือก · ชื่อหมวด
+let RC_Q='';                 // คำค้นในตารางรูป (คงไว้ตอนวาดใหม่)
 RENDER.recv=function(el){
   if(!RC)RC=rcDraftLoad()||rcBlank();
   el.innerHTML=dhead('📥 '+t('nav_recv'),esc(dispDate(bizTodayISO())))+sqlNeedBox()+
@@ -100,27 +121,29 @@ RENDER.recv=function(el){
     '<div id="rcBody"></div>';
   if(RC_VIEW==='form')rcPaintForm();else rcPaintList();
 };
-function rcPaintForm(){
+function rcPaintForm(){ // หัว (ร้าน·วันที่·หมายเหตุ) → รายการที่รับแล้ว (แตะ = แก้) → ตารางรูปสินค้า (แตะ = เพิ่ม/แก้) → แถบบันทึก
   const b=document.getElementById('rcBody');if(!b)return;
-  b.innerHTML=rcHeadHtml()+'<div id="rcLines">'+RC.lines.map((l,i)=>rcLineHtml(l,i)).join('')+'</div>'+
-    (RC.lines.length?'':'<div class="note">'+esc(t('rc_lines_hint'))+'</div>')+
-    '<div class="row" style="margin:4px 0 14px"><button class="btn gh" style="flex:1" onclick="rcAddLine()">＋ '+esc(t('rc_add_line'))+'</button>'+
-    (RC.lines.length?'<button class="btn gh" onclick="rcClearAsk()">🗑 '+esc(t('rc_clear'))+'</button>':'')+'</div>';
-  RC.lines.forEach((l,i)=>rcSum(i));rcBar();
+  b.innerHTML=rcHeadHtml()+
+    '<div class="rc-sec">🧾 '+esc(t('rc_lines_title'))+(RC.lines.length?' <span class="bdg">'+RC.lines.length+'</span>':'')+
+      (RC.lines.length?'<button class="btn gh sm2" style="margin-left:auto" onclick="rcClearAsk()">🗑 '+esc(t('rc_clear'))+'</button>':'')+'</div>'+
+    '<div id="rcLines">'+(RC.lines.length?RC.lines.map((l,i)=>rcLineRow(l,i)).join(''):'<div class="note">'+esc(t('rc_no_lines'))+'</div>')+'</div>'+
+    '<div class="rc-sec">🖼️ '+esc(t('rc_tap_pic'))+'</div><div id="rcChips">'+rcChipsHtml()+'</div>'+searchBox('rcGridQ','rcGridSearch')+
+    '<div class="igrid rcgrid" id="rcGrid">'+rcGridHtml()+'</div>';
+  const q=document.getElementById('rcGridQ');if(q&&RC_Q)q.value=RC_Q;
+  rcBar();
 }
 function rcSupOpts(){const act=S.sups.filter(s=>s.active!==false||s.id===RC.sup_id);
   return '<option value="">'+esc(t('rc_sup_pick'))+'</option>'+act.map(s=>'<option value="'+esc(s.id)+'"'+(s.id===RC.sup_id?' selected':'')+'>'+esc(s.name)+'</option>').join('');}
-function rcHeadHtml(){
+function rcHeadHtml(){ // ไม่มีช่องเลขบิลแล้ว (bill_no ในตารางเป็น null · ใบเก่าที่มีเลขยังโชว์ในรายการ/รายละเอียด)
   return card('🏷️ '+esc(t('sup')),
     fld(t('sup'),'<div class="row" style="flex-wrap:nowrap"><select id="rcSup" class="grow" style="min-width:0" onchange="rcSetSup(this.value)">'+rcSupOpts()+'</select>'+
       '<button class="btn gh sm2" style="flex:none" onclick="rcNewSup()">'+esc(t('rc_sup_new'))+'</button></div>')+
     '<div class="grid2">'+fld(t('date'),'<input type="date" id="rcD" value="'+esc(RC.d)+'" max="'+esc(bizTodayISO())+'" onchange="RC.d=this.value||bizTodayISO();rcDraft()">')+
-      fld(t('rc_bill_no'),'<input id="rcBill" value="'+esc(RC.bill_no)+'" placeholder="—" oninput="RC.bill_no=this.value;rcDraft()">')+'</div>'+
-    fld(t('note'),'<input id="rcNote" value="'+esc(RC.note)+'" oninput="RC.note=this.value;rcDraft()">')+
+      fld(t('note'),'<input id="rcNote" value="'+esc(RC.note)+'" oninput="RC.note=this.value;rcDraft()">')+'</div>'+
     '<div class="row"><button class="btn gh sm2" onclick="rcPoPick()">📋 '+esc(t('rc_from_po'))+'</button>'+
       (RC.po_id?'<span class="chip blue rc-po-chip">'+esc(t('rc_po_tag'))+' '+esc(RC.po_no||RC.po_id)+' <a onclick="rcPoClear()" style="cursor:pointer">✕</a></span>':'')+'</div>');
 }
-function rcSetSup(id){const s=supById(id);RC.sup_id=s?s.id:'';RC.sup_name=s?s.name:'';rcDraft();}
+function rcSetSup(id){const s=supById(id);RC.sup_id=s?s.id:'';RC.sup_name=s?s.name:'';RC_CAT=rcSupItems().length?'__sup':'';rcDraft();rcGridPaint();}
 function rcBar(){
   if(S.tab!=='recv'||RC_VIEW!=='form')return;
   if(!RC.lines.length){pinnedBar(null);return;}
@@ -128,7 +151,46 @@ function rcBar(){
   pinnedBar('<span class="v">'+RC.lines.length+' '+esc(t('rc_lines_n'))+' · '+esc(money(tot))+'</span><button class="btn" id="rcSaveBtn" onclick="rcSave()">💾 '+esc(t('save'))+'</button>');
 }
 
-/* ---------- บรรทัด ---------- */
+/* ---------- ตารางรูปสินค้า (แตะรูป = เพิ่มรายการแล้วเปิดหน้าต่างใส่ข้อมูล · แตะซ้ำ = แก้) ---------- */
+function rcIcon(it){try{return itIcon(it);}catch(e){return '🥬';}}
+function rcCatIcon(c){try{return IT_IC[c]||'🧺';}catch(e){return '🧺';}}
+function rcThumb(o,cls){ // รูปในช่อง — ไม่ใส่ซูมแบบ thumbHtml (แตะรูป = เลือกสินค้า)
+  const url=o&&imgOk(o.image_url)?String(o.image_url):'';return '<div class="'+(cls||'ithumb')+'">'+(url?'<img src="'+esc(url)+'" loading="lazy">':rcIcon(o))+'</div>';}
+function rcCatOf(it){return String(it&&it.cat||'').trim()||'อื่นๆ';}
+function rcSupItems(){const k=supKey(RC.sup_name);return k?activeItems().filter(it=>supKey(it.sup)===k):[];}
+function rcCats(){const c=[];activeItems().forEach(it=>{const x=rcCatOf(it);if(!c.includes(x))c.push(x);});return ITEM_CATS.filter(x=>c.includes(x)).concat(c.filter(x=>!ITEM_CATS.includes(x)));}
+function rcCatCur(){const cats=rcCats();if(RC_CAT==='__sup')return rcSupItems().length?'__sup':'';return cats.includes(RC_CAT)?RC_CAT:'';}
+function rcChipsHtml(){const sup=rcSupItems().length,items=[];
+  if(sup)items.push({k:'__sup',lb:t('rc_this_sup'),ic:'🏷️',n:sup});
+  items.push({k:'',lb:t('rc_all'),ic:'🧺'});rcCats().forEach(c=>items.push({k:c,lb:trCat(c),ic:rcCatIcon(c)}));
+  return pillBar(items,rcCatCur(),'rcSetCat',{scroll:1});}
+function rcGridList(){const q=supKey(RC_Q),cat=rcCatCur();let L=cat==='__sup'?rcSupItems():activeItems().filter(it=>!cat||rcCatOf(it)===cat);
+  if(q)L=L.filter(it=>supKey(it.name).includes(q)||supKey(dispName(it)).includes(q)||supKey(it.sup).includes(q)||supKey(it.cat).includes(q));
+  return L.slice().sort((a,b)=>dispName(a).localeCompare(dispName(b),'th'));}
+function rcGridHtml(){const L=rcGridList(),inL={};RC.lines.forEach((l,i)=>{if(l.item_id&&inL[l.item_id]==null)inL[l.item_id]=i;});
+  return L.map(it=>{const i=inL[it.id],l=i!=null?RC.lines[i]:null,c=l?rcCalc(l):null;
+    return '<div class="icard rctile tap'+(l?' on':'')+'" data-id="'+esc(it.id)+'" onclick="rcTileTap(this.dataset.id)">'+rcThumb(it,'ithumb')+
+      (l?'<span class="rcbadge">✓'+(c.packs>0?' '+fmtQ(c.packs)+' '+esc(trUnit(l.pack_unit||it.unit)):'')+'</span>':'')+
+      '<div class="iname">'+esc(dispName(it))+'</div><div class="isub">'+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+(itemCost(it)!=null?' · ฿'+rcP(itemCost(it))+'/'+esc(trUnit(it.unit)):'')+'</div></div>';}).join('')+
+    '<div class="icard rctile tap rcnew" onclick="rcNewItem(null)"><div class="ithumb">➕</div><div class="iname">'+esc(t('rc_item_new'))+'</div><div class="isub">&nbsp;</div></div>'+
+    (L.length?'':'<div class="empty" style="grid-column:1/-1">'+esc(t('empty'))+'</div>');}
+function rcGridPaint(){const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();const c=document.getElementById('rcChips');if(c)c.innerHTML=rcChipsHtml();}
+function rcSetCat(k){RC_CAT=k||'';rcGridPaint();}
+function rcGridSearch(v){RC_Q=String(v||'');const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();}   // กรองในที่ — คีย์บอร์ดไม่หุบ
+function rcTileTap(id){const it=itemById(id);if(!it)return;const i=RC.lines.findIndex(l=>l.item_id===id);if(i>=0){rcEdit(i);return;}
+  RC.lines.push(rcLineBlank());rcSetItem(RC.lines.length-1,it);}
+
+/* ---------- รายการที่รับแล้ว (แถวสรุป · แตะ = หน้าต่างแก้) ---------- */
+function rcLineRow(l,i){const it=itemById(l.item_id);
+  if(!it)return '<div class="card rcln" id="rcR'+i+'"><div class="row" style="flex-wrap:nowrap"><button class="rcl-pick empty grow" onclick="rcPickItem('+i+')">🥬 '+esc(t('rc_pick_item'))+'</button><button class="rcl-x" aria-label="x" onclick="rcDelLine('+i+')">✕</button></div></div>';
+  const c=rcCalc(l),base=it.unit||'';let sub='';
+  if(!(c.qty_base>0))sub='<span class="red">'+esc(c.packs>0?t('rc_need_size',{u:trUnit(l.pack_unit||base),b:trUnit(base)}):t('rc_need_qty'))+'</span>';
+  else{sub='<b>'+fmtQ(c.packs)+' '+esc(trUnit(l.pack_unit||base))+'</b>'+(l.pack_unit&&l.pack_unit!==base?' × '+fmtQ(c.pack_qty)+' = '+fmtQ(c.qty_base)+' '+esc(trUnit(base)):'');
+    sub+=c.price_total==null?' · <span class="red">'+esc(t('rc_no_price_yet'))+'</span>':' · '+esc(money(c.price_total))+' <span class="mut">(฿'+rcP(c.price_base)+'/'+esc(trUnit(base))+')</span>';}
+  return '<div class="card rcln" id="rcR'+i+'"><div class="row" style="flex-wrap:nowrap"><div class="rcln-tap" onclick="rcEdit('+i+')">'+rcThumb(it,'rcln-th')+'<div style="min-width:0;flex:1"><b>'+esc(dispName(it))+'</b><div class="rcln-sub">'+sub+'</div></div></div>'+
+    '<button class="rcl-x" aria-label="x" onclick="rcDelLine('+i+')">✕</button></div></div>';}
+
+/* ---------- หน้าต่างใส่ข้อมูลของรายการ (เปิดหลังแตะรูป) ---------- */
 function rcCalc(l){ // → {it,packs,pack_qty,qty_base,price,price_total,price_base}
   const it=itemById(l.item_id);const packs=num(l.packs),pq=num(l.pack_qty);const qty_base=rnd4(packs*pq);
   const ps=String(l.price==null?'':l.price).trim();const price=ps===''?null:num(ps);
@@ -138,29 +200,31 @@ function rcCalc(l){ // → {it,packs,pack_qty,qty_base,price,price_total,price_b
 function rcUnitOpts(it,l){const list=[it.unit].concat(packsOf(it).map(p=>p.u));if(l.pack_unit&&!list.includes(l.pack_unit))list.push(l.pack_unit);
   return list.map(u=>'<option value="'+esc(u)+'"'+(u===l.pack_unit?' selected':'')+'>'+esc(trUnit(u))+(u!==it.unit&&unitFactor(it,u)!=null?' (= '+fmtQ(unitFactor(it,u))+' '+esc(trUnit(it.unit))+')':'')+'</option>').join('')+
     '<option value="__new">'+esc(t('rc_unit_new'))+'</option>';}
-function rcLineHtml(l,i){
-  const it=itemById(l.item_id);
-  let h='<div class="card rcline" id="rcL'+i+'"><div class="row rcl-top">'+(it?thumbHtml(it,'🥬'):'')+'<div class="grow">'+
-    (it?'<button class="rcl-pick" onclick="rcPickItem('+i+')">'+esc(dispName(it))+'</button><div class="rcl-stk">'+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+
-        (itemCost(it)!=null?' · '+esc(t('rc_cost_unit'))+' ฿'+rcP(itemCost(it))+'/'+esc(trUnit(it.unit)):'')+'</div>'
-      :'<button class="rcl-pick empty" onclick="rcPickItem('+i+')">🥬 '+esc(t('rc_pick_item'))+'</button>')+
-    '</div><button class="rcl-x" aria-label="x" onclick="rcDelLine('+i+')">✕</button></div>';
-  if(it){const base=it.unit||'';const isBase=l.pack_unit===base;
-    h+='<div class="rcl-grid">'+fld(t('rc_packs'),stepper('rcP'+i,l.packs,{step:1,min:0,on:(v,id)=>rcSetPacks(i,v)}))+
-      fld(t('rc_pack_unit'),'<select id="rcU'+i+'" onchange="rcSetUnit('+i+',this.value)">'+rcUnitOpts(it,l)+'</select>')+'</div>';
-    if(l.newu)h+='<div class="rcl-newu"><div class="xs mut">'+esc(t('rc_unit_eq',{u:'…',b:trUnit(base)}))+'</div><div class="row"><select id="rcNU'+i+'" onchange="RC.lines['+i+'].newu.n=this.value">'+
-      '<option value="">'+esc(t('rc_unit_name'))+'</option>'+allUnits().filter(u=>u!==base&&unitFactor(it,u)==null).map(u=>'<option value="'+esc(u)+'"'+(u===l.newu.n?' selected':'')+'>'+esc(trUnit(u))+'</option>').join('')+'</select>'+
-      '<span>=</span><input id="rcNQ'+i+'" inputmode="decimal" placeholder="?" value="'+esc(l.newu.q)+'" oninput="RC.lines['+i+'].newu.q=this.value"><span style="flex:none">'+esc(trUnit(base))+'</span></div>'+
-      '<div class="row"><button class="btn gh sm2" style="flex:1" onclick="rcNewUnitCancel('+i+')">'+esc(t('cancel'))+'</button><button class="btn sm2" style="flex:1" onclick="rcNewUnitOk('+i+')">'+esc(t('rc_unit_save'))+'</button></div></div>';
-    h+=fld(t('rc_pack_size'),'<div class="row rcl-size"><span>1 '+esc(trUnit(l.pack_unit||base))+' =</span><input id="rcQ'+i+'" inputmode="decimal" value="'+esc(isBase?1:l.pack_qty)+'"'+(isBase?' disabled':'')+' oninput="rcSetPackQty('+i+',this.value)"><span>'+esc(trUnit(base))+'</span></div>');
-    h+=fld(t('rc_price'),'<div class="pills rcl-pm"><button class="pill'+(l.price_mode!=='total'?' on':'')+'" onclick="rcSetMode('+i+',\'pack\')">'+esc(t('rc_per',{u:trUnit(l.pack_unit||base)}))+'</button>'+
-      '<button class="pill'+(l.price_mode==='total'?' on':'')+'" onclick="rcSetMode('+i+',\'total\')">'+esc(t('rc_total_all'))+'</button></div>'+
-      '<input id="rcPr'+i+'" inputmode="decimal" placeholder="฿ 0.00" value="'+esc(l.price)+'" oninput="rcSetPrice('+i+',this.value)">');
-    h+='<div class="rcl-sum" id="rcS'+i+'"></div>';}
-  return h+'</div>';}
-function rcPaintLine(i){const old=document.getElementById('rcL'+i);if(!old)return;const w=document.createElement('div');w.innerHTML=rcLineHtml(RC.lines[i],i);old.replaceWith(w.firstElementChild);rcSum(i);}
+function rcEdit(i){const l=RC.lines[i];if(!l)return;if(!itemById(l.item_id)){rcPickItem(i);return;}MODAL_BACK=null;openModal(rcEditorHtml(l,i));rcSum(i);}
+function rcEditorHtml(l,i){ // id rcL<i> = หน้าต่างของรายการนั้น (ช่อง rcP/rcU/rcQ/rcPr/rcS ตามเดิม)
+  const it=itemById(l.item_id),base=it.unit||'',isBase=l.pack_unit===base;
+  let h='<div class="rcline" id="rcL'+i+'"><div class="row rcl-top">'+thumbHtml(it,rcIcon(it))+'<div class="grow" style="min-width:0"><h3 style="margin:0 0 2px">'+esc(dispName(it))+'</h3><div class="rcl-stk">'+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(base))+
+      (itemCost(it)!=null?' · '+esc(t('rc_cost_unit'))+' ฿'+rcP(itemCost(it))+'/'+esc(trUnit(base)):'')+'</div></div>'+
+    '<button class="btn gh sm2" style="flex:none" onclick="rcPickItem('+i+')">'+esc(t('rc_change'))+'</button></div>';
+  h+='<div class="rcl-grid">'+fld(t('rc_packs'),stepper('rcP'+i,l.packs,{step:1,min:0,on:(v,id)=>rcSetPacks(i,v)}))+
+    fld(t('rc_pack_unit'),'<select id="rcU'+i+'" onchange="rcSetUnit('+i+',this.value)">'+rcUnitOpts(it,l)+'</select>')+'</div>';
+  if(l.newu)h+='<div class="rcl-newu"><div class="xs mut">'+esc(t('rc_unit_eq',{u:'…',b:trUnit(base)}))+'</div><div class="row"><select id="rcNU'+i+'" onchange="RC.lines['+i+'].newu.n=this.value">'+
+    '<option value="">'+esc(t('rc_unit_name'))+'</option>'+allUnits().filter(u=>u!==base&&unitFactor(it,u)==null).map(u=>'<option value="'+esc(u)+'"'+(u===l.newu.n?' selected':'')+'>'+esc(trUnit(u))+'</option>').join('')+'</select>'+
+    '<span>=</span><input id="rcNQ'+i+'" inputmode="decimal" placeholder="?" value="'+esc(l.newu.q)+'" oninput="RC.lines['+i+'].newu.q=this.value"><span style="flex:none">'+esc(trUnit(base))+'</span></div>'+
+    '<div class="row"><button class="btn gh sm2" style="flex:1" onclick="rcNewUnitCancel('+i+')">'+esc(t('cancel'))+'</button><button class="btn sm2" style="flex:1" onclick="rcNewUnitOk('+i+')">'+esc(t('rc_unit_save'))+'</button></div></div>';
+  h+=fld(t('rc_pack_size'),'<div class="row rcl-size"><span>1 '+esc(trUnit(l.pack_unit||base))+' =</span><input id="rcQ'+i+'" inputmode="decimal" value="'+esc(isBase?1:l.pack_qty)+'"'+(isBase?' disabled':'')+' oninput="rcSetPackQty('+i+',this.value)"><span>'+esc(trUnit(base))+'</span></div>');
+  h+=fld(t('rc_price'),'<div class="pills rcl-pm"><button class="pill'+(l.price_mode!=='total'?' on':'')+'" onclick="rcSetMode('+i+',\'pack\')">'+esc(t('rc_per',{u:trUnit(l.pack_unit||base)}))+'</button>'+
+    '<button class="pill'+(l.price_mode==='total'?' on':'')+'" onclick="rcSetMode('+i+',\'total\')">'+esc(t('rc_total_all'))+'</button></div>'+
+    '<input id="rcPr'+i+'" inputmode="decimal" placeholder="฿ 0.00" value="'+esc(l.price)+'" oninput="rcSetPrice('+i+',this.value)">');
+  h+='<div class="rcl-sum" id="rcS'+i+'"></div>';
+  h+='<div class="row" style="margin-top:12px"><button class="btn gh" style="color:var(--bad)" onclick="rcDelLine('+i+')">🗑 '+esc(t('rc_remove'))+'</button><button class="btn" style="flex:1" onclick="rcEditDone('+i+')">✓ '+esc(t('rc_ok'))+'</button></div></div>';
+  return h;}
+function rcEditDone(i){MODAL_BACK=null;closeModal();rcPaintForm();}
+function rcPaintLine(i){const l=RC.lines[i];if(!l)return;const old=document.getElementById('rcL'+i);   // หน้าต่างเปิดอยู่ = วาดหน้าต่างใหม่ · ไม่ได้เปิด = วาดหน้าทั้งหมด
+  if(old&&modalOpen()){const w=document.createElement('div');w.innerHTML=rcEditorHtml(l,i);old.replaceWith(w.firstElementChild);rcSum(i);return;}
+  rcPaintForm();}
 const rcP=v=>Math.abs(v)<1&&v!==0?Number(v).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:4}):fmt(v,2);   // ราคาต่อหน่วยเล็ก ๆ (0.0488) ไม่ปัดเป็น 0.05
-function rcSum(i){ // สรุปใต้บรรทัด — อัปเดตในที่ (คีย์บอร์ดไม่หุบ)
+function rcSum(i){ // สรุปใต้ช่องกรอก — อัปเดตในที่ (คีย์บอร์ดไม่หุบ)
   const l=RC.lines[i],el=document.getElementById('rcS'+i);if(!l||!el)return;const c=rcCalc(l);if(!c.it){el.innerHTML='';return;}
   const base=c.it.unit||'';let h='';
   if(!(c.qty_base>0)){el.className='rcl-sum need';el.innerHTML=esc(c.packs>0?t('rc_need_size',{u:trUnit(l.pack_unit||base),b:trUnit(base)}):t('rc_need_qty'));return;}
@@ -170,8 +234,8 @@ function rcSum(i){ // สรุปใต้บรรทัด — อัปเ�
   const old=itemCost(c.it);h+='<br>'+esc(money(c.price_total))+' · <b>฿'+rcP(c.price_base)+'</b>/'+esc(trUnit(base));
   if(old!=null&&old>0){const pc=(c.price_base-old)/old*100;h+=' <span class="cmp">('+esc(t('rc_old_cost'))+' ฿'+rcP(old)+(Math.abs(pc)>=0.5?' · <span class="'+(pc>0?'red':'green')+'">'+(pc>0?'▲':'▼')+fmt(Math.abs(pc),0)+'%</span>':'')+')</span>';}
   el.className='rcl-sum';el.innerHTML=h;}
-function rcAddLine(){RC.lines.push(rcLineBlank());const i=RC.lines.length-1;rcPaintForm();rcPickItem(i);}
-function rcDelLine(i){RC.lines.splice(i,1);rcDraft();rcPaintForm();}
+function rcAddLine(){RC.lines.push(rcLineBlank());const i=RC.lines.length-1;rcPaintForm();rcPickItem(i);}   // ทางโปรแกรม/ค้นหาแบบรายการ (ทางหลักคือแตะรูป)
+function rcDelLine(i){RC.lines.splice(i,1);rcDraft();if(modalOpen()&&document.getElementById('rcL'+i)){MODAL_BACK=null;closeModal();}rcPaintForm();}
 function rcSetPacks(i,v){const l=RC.lines[i];if(!l)return;l.packs=v;rcSum(i);rcBar();rcDraft();}
 function rcSetPackQty(i,v){const l=RC.lines[i];if(!l)return;l.pack_qty=v;rcSum(i);rcBar();rcDraft();}
 function rcSetPrice(i,v){const l=RC.lines[i];if(!l)return;l.price=v;rcSum(i);rcBar();rcDraft();}
@@ -185,34 +249,35 @@ function rcNewUnitOk(i){const l=RC.lines[i],it=l&&itemById(l.item_id);if(!it||!l
   const n=String(l.newu.n||'').trim(),q=num(l.newu.q);
   if(!n){toast(t('rc_unit_name'),true);return;}if(!(q>0)){toast(t('rc_need_size',{u:trUnit(n),b:trUnit(it.unit)}),true);return;}
   l.pack_unit=n;l.pack_qty=q;l.newu=null;rcDraft();rcPaintLine(i);rcBar();}
-function rcSetItem(i,it){const l=RC.lines[i];if(!l||!it)return;
+function rcSetItem(i,it){ // ตั้งสินค้าให้รายการ i แล้วเปิดหน้าต่างใส่ข้อมูลทันที
+  const l=RC.lines[i];if(!l||!it)return;
   l.item_id=it.id;l.name=it.name;l.unit=it.unit||'';const bu=it.buy_unit&&it.buy_unit!==it.unit&&num(it.buy_qty)>0?it.buy_unit:'';
   l.pack_unit=bu||it.unit||'';l.pack_qty=bu?num(it.buy_qty):1;l.price_mode=l.price_mode||'pack';l.newu=null;
-  if(!RC.sup_id&&it.sup){const s=supByName(it.sup);if(s){RC.sup_id=s.id;RC.sup_name=s.name;const se=document.getElementById('rcSup');if(se)se.value=s.id;}}
-  rcDraft();rcPaintLine(i);rcBar();
+  if(!RC.sup_id&&it.sup){const s=supByName(it.sup);if(s){RC.sup_id=s.id;RC.sup_name=s.name;if(!RC_CAT)RC_CAT='__sup';}}
+  rcDraft();rcPaintForm();rcEdit(i);
   const p=document.getElementById('rcP'+i);if(p){try{p.focus();p.select();}catch(e){}}}
 
-/* ---------- เลือกวัตถุดิบ (ค้นหาในที่) ---------- */
+/* ---------- เลือกวัตถุดิบแบบรายการ (ค้นหาในที่) — ใช้ตอน "เปลี่ยน" ในหน้าต่าง / rcAddLine ---------- */
 function rcPickItem(i){
   const rows=activeItems();
   const list=q=>{q=supKey(q);return rows.filter(it=>!q||supKey(it.name).includes(q)||supKey(dispName(it)).includes(q)||supKey(it.sup).includes(q)||supKey(it.cat).includes(q))
     .map(it=>'<div class="rowline tap" onclick="rcPickGo('+i+',\''+esc(it.id)+'\')">'+thumbHtml(it,'🥬')+'<div class="grow"><b>'+esc(dispName(it))+'</b><div class="xs mut">'+esc(trCat(it.cat))+(it.sup?' · '+esc(it.sup):'')+
       ' · '+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+'</div></div>'+(itemCost(it)!=null?'<span class="sm mut">฿'+rcP(itemCost(it))+'/'+esc(trUnit(it.unit))+'</span>':'')+'</div>').join('')||'<div class="empty">'+esc(t('empty'))+'</div>';};
-  openModal('<h3>🥬 '+esc(t('item'))+'</h3>'+searchBox('rcPickQ',v=>{const b=document.getElementById('rcPickList');if(b)b.innerHTML=list(v);})+
+  MODAL_BACK=null;openModal('<h3>🥬 '+esc(t('item'))+'</h3>'+searchBox('rcPickQ',v=>{const b=document.getElementById('rcPickList');if(b)b.innerHTML=list(v);})+
     '<button class="btn gh" style="width:100%;margin-bottom:8px" onclick="rcNewItem('+i+')">'+esc(t('rc_item_new'))+'</button><div class="rc-pick-list" id="rcPickList">'+list('')+'</div>');
   setTimeout(()=>{const q=document.getElementById('rcPickQ');if(q&&!('ontouchstart' in window))q.focus();},50);}
-function rcPickGo(i,id){const it=itemById(id);closeModal();rcSetItem(i,it);}
+function rcPickGo(i,id){const it=itemById(id);MODAL_BACK=null;closeModal();rcSetItem(i,it);}
 
-/* ---------- วัตถุดิบใหม่ / ร้านใหม่ (ในฟอร์มเลย) ---------- */
+/* ---------- วัตถุดิบใหม่ / ร้านใหม่ (ในฟอร์มเลย) · rcNewItem(null) = จากช่อง ➕ ในตารางรูป ---------- */
 function rcNewItem(i){
-  const sup=RC.sup_name||'';
+  const sup=RC.sup_name||'',ii=i==null?'null':String(i);
   openModal('<h3>'+esc(t('rc_item_new'))+'</h3>'+fld(t('rc_item_name'),'<input id="rcNiName" maxlength="80">')+
-    '<div class="grid2">'+fld(t('rc_item_cat'),'<select id="rcNiCat">'+selOpts(ITEM_CATS,'อื่นๆ',trCat)+'</select>')+
+    '<div class="grid2">'+fld(t('rc_item_cat'),'<select id="rcNiCat">'+selOpts(ITEM_CATS,rcCatCur()&&rcCatCur()!=='__sup'?rcCatCur():'อื่นๆ',trCat)+'</select>')+
       fld(t('rc_item_unit'),'<select id="rcNiUnit" onchange="rcNiUnitLbl()">'+unitOptions(allUnits(),'กก.')+'</select>')+'</div>'+
     '<div class="grid2">'+fld(t('rc_item_pack'),'<select id="rcNiBu" onchange="rcNiUnitLbl()"><option value="">'+esc(t('none'))+'</option>'+unitOptions(allUnits(),'')+'</select>')+
       fld(t('rc_item_pack_q'),'<div class="row rcl-size"><span>1 <span id="rcNiBuL">—</span> =</span><input id="rcNiBq" inputmode="decimal" placeholder="?"><span id="rcNiBaseL">กก.</span></div>')+'</div>'+
     fld(t('rc_item_sup'),'<input id="rcNiSup" value="'+esc(sup)+'" list="rcSupDl"><datalist id="rcSupDl">'+S.sups.map(s=>'<option value="'+esc(s.name)+'">').join('')+'</datalist>')+
-    '<div class="row" style="margin-top:8px"><button class="btn gh" style="flex:1" onclick="rcPickItem('+i+')">'+esc(t('back'))+'</button><button class="btn" style="flex:1" onclick="rcNewItemSave('+i+')">💾 '+esc(t('save'))+'</button></div>');
+    '<div class="row" style="margin-top:8px"><button class="btn gh" style="flex:1" onclick="'+(i==null?'MODAL_BACK=null;closeModal();rcPaintForm()':'rcPickItem('+ii+')')+'">'+esc(t('back'))+'</button><button class="btn" style="flex:1" onclick="rcNewItemSave('+ii+')">💾 '+esc(t('save'))+'</button></div>');
   rcNiUnitLbl();setTimeout(()=>{const n=document.getElementById('rcNiName');if(n&&!('ontouchstart' in window))n.focus();},50);}
 function rcNiUnitLbl(){const u=document.getElementById('rcNiUnit'),b=document.getElementById('rcNiBu');
   const bl=document.getElementById('rcNiBaseL'),ul=document.getElementById('rcNiBuL');if(bl&&u)bl.textContent=trUnit(u.value);if(ul&&b)ul.textContent=b.value?trUnit(b.value):'—';}
@@ -224,17 +289,19 @@ async function rcNewItemSave(i){await once(async()=>{
   const supName=String(g('rcNiSup').value||'').trim();
   const row={id:uid('it'),name,cat:g('rcNiCat').value||'อื่นๆ',unit,buy_unit:bu||unit,buy_qty:bu?bq:1,sup:supName||null,qty:0,active:true,sort:(S.items.reduce((a,x)=>Math.max(a,num(x.sort)),0)+1)};
   try{await db(()=>sb.from('ck_items').insert(row));}catch(e){return;}
-  S.items.push(row);toast(t('sv_ok'));closeModal();rcSetItem(i,row);});}
+  S.items.push(row);toast(t('sv_ok'));MODAL_BACK=null;closeModal();
+  if(i==null||!RC.lines[i]){RC.lines.push(rcLineBlank());i=RC.lines.length-1;}
+  rcSetItem(i,row);});}
 function rcNewSup(){
   openModal('<h3>'+esc(t('rc_sup_new'))+'</h3>'+fld(t('rc_sup_name'),'<input id="rcNsName" maxlength="80">')+fld(t('rc_sup_phone'),'<input id="rcNsPhone" inputmode="tel">')+
     '<div class="row" style="margin-top:8px"><button class="btn gh" style="flex:1" onclick="closeModal()">'+esc(t('cancel'))+'</button><button class="btn" style="flex:1" onclick="rcNewSupSave()">💾 '+esc(t('save'))+'</button></div>');
   setTimeout(()=>{const n=document.getElementById('rcNsName');if(n&&!('ontouchstart' in window))n.focus();},50);}
 async function rcNewSupSave(){await once(async()=>{
   const name=String((document.getElementById('rcNsName')||{}).value||'').trim();if(!name){toast(t('need_name'),true);return;}
-  const ex=supByName(name);if(ex){RC.sup_id=ex.id;RC.sup_name=ex.name;closeModal();rcPaintForm();return;}
+  const ex=supByName(name);if(ex){RC.sup_id=ex.id;RC.sup_name=ex.name;RC_CAT=rcSupItems().length?'__sup':'';closeModal();rcPaintForm();return;}
   const row={id:uid('sp'),name,phone:String((document.getElementById('rcNsPhone')||{}).value||'').trim()||null,lead_days:1,credit_days:0,active:true};
   try{await db(()=>sb.from('ck_sups').insert(row));}catch(e){return;}
-  S.sups.push(row);S.sups.sort((a,b)=>String(a.name).localeCompare(String(b.name),'th'));RC.sup_id=row.id;RC.sup_name=row.name;rcDraft();toast(t('sv_ok'));closeModal();rcPaintForm();});}
+  S.sups.push(row);S.sups.sort((a,b)=>String(a.name).localeCompare(String(b.name),'th'));RC.sup_id=row.id;RC.sup_name=row.name;RC_CAT='';rcDraft();toast(t('sv_ok'));closeModal();rcPaintForm();});}
 
 /* ---------- รับตามที่สั่งไว้ (kc_pos status sent) ---------- */
 async function rcPoPick(){
@@ -253,7 +320,7 @@ async function rcFromPo(poId){ // โมดูลสั่งของเรี�
     if(pl.price_est!=null&&num(pl.price_est)>0){l.price_mode='total';l.price=num(pl.price_est);}return l;}).filter(Boolean);
   RC_VIEW='form';rcDraft();if(modalOpen())closeModal();if(S.tab==='recv')rerender();else show('recv');}
 function rcPoClear(){RC.po_id=null;RC.po_no='';rcDraft();rcPaintForm();}
-function rcClearAsk(){confirm2(t('rc_clear_q'),{danger:true}).then(ok=>{if(!ok)return;RC=rcBlank();rcDraftClear();rcPaintForm();});}
+function rcClearAsk(){confirm2(t('rc_clear_q'),{danger:true}).then(ok=>{if(!ok)return;RC=rcBlank();rcDraftClear();RC_CAT='';rcPaintForm();});}
 
 /* ---------- บันทึก ---------- */
 function rcValidate(){ // → ข้อความผิดพลาด หรือ null

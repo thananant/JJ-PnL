@@ -13,25 +13,25 @@ th:{td_orders:'ออเดอร์สาขาที่ยังไม่ส�
   td_urgent:'ต้องทำด่วน',td_urgent_s:'{n} เมนู ของไม่พอส่ง',td_urgent_ok:'ของพอส่งทุกเมนู',td_refill:'ต้องทำเติม',td_refill_s:'{n} เมนู ต่ำกว่าที่ควรมี',td_refill_ok:'สต๊อกสำเร็จรูปพอ',
   td_low:'วัตถุดิบต่ำกว่าขั้นต่ำ',td_low_s:'{n} รายการ ต้องสั่งของ',td_low_ok:'วัตถุดิบครบตามขั้นต่ำ',
   td_count:'นับล่าสุด',td_count_never:'ยังไม่เคยนับ — แตะเพื่อนับสต๊อก',td_count_s:'{d} {t} · {n} รายการ · ต่าง {x}',td_count_today:'วันนี้',
-  td_recv:'รับของวันนี้',td_made:'ทำของวันนี้',td_sent:'ส่งสาขาวันนี้',td_lots:'{n} รอบ',td_bills:'{n} บิล',td_rcpts:'{n} ใบ',td_menus:'{n} เมนู',
+  td_recv:'รับของวันนี้',td_recv_s:'รับแล้ววันนี้ {n} ใบ · {m} — แตะเพื่อรับของ',td_recv_none:'ยังไม่ได้รับของวันนี้ — แตะเพื่อรับของ',td_made:'ทำของวันนี้',td_sent:'ส่งสาขาวันนี้',td_lots:'{n} รอบ',td_bills:'{n} บิล',td_rcpts:'{n} ใบ',td_menus:'{n} เมนู',
   td_noread:'อ่านข้อมูลไม่ได้ — แตะเพื่อดู',td_loading:'กำลังโหลด…',td_hello:'สวัสดี {n} 👋',td_unlinked:'{n} ชื่อยังไม่ผูกกับเมนู'},
 en:{td_orders:'Branch orders not yet sent',td_orders_s:'{b} branches · {o} orders · {n} lines',td_orders_ok:'All branches delivered',
   td_urgent:'Produce urgently',td_urgent_s:'{n} products short for orders',td_urgent_ok:'Enough stock for every order',td_refill:'Produce to refill',td_refill_s:'{n} products below target',td_refill_ok:'Finished stock is fine',
   td_low:'Ingredients below minimum',td_low_s:'{n} items to order',td_low_ok:'All ingredients above minimum',
   td_count:'Last count',td_count_never:'Never counted — tap to count stock',td_count_s:'{d} {t} · {n} lines · {x} differ',td_count_today:'Today',
-  td_recv:'Received today',td_made:'Produced today',td_sent:'Delivered today',td_lots:'{n} lots',td_bills:'{n} bills',td_rcpts:'{n} receipts',td_menus:'{n} products',
+  td_recv:'Received today',td_recv_s:'{n} receipt(s) today · {m} — tap to receive',td_recv_none:'Nothing received yet today — tap to receive',td_made:'Produced today',td_sent:'Delivered today',td_lots:'{n} lots',td_bills:'{n} bills',td_rcpts:'{n} receipts',td_menus:'{n} products',
   td_noread:'Could not read — tap to open',td_loading:'Loading…',td_hello:'Hello {n} 👋',td_unlinked:'{n} names not linked to a product'},
 lo:{td_orders:'ອໍເດີສາຂາທີ່ຍັງບໍ່ສົ່ງ',td_orders_s:'{b} ສາຂາ · {o} ໃບສັ່ງ · {n} ລາຍການ',td_orders_ok:'ສົ່ງຄົບທຸກສາຂາແລ້ວ',
   td_urgent:'ຕ້ອງເຮັດດ່ວນ',td_urgent_s:'{n} ເມນູ ເຄື່ອງບໍ່ພໍສົ່ງ',td_urgent_ok:'ເຄື່ອງພໍສົ່ງທຸກເມນູ',td_refill:'ຕ້ອງເຮັດຕື່ມ',td_refill_s:'{n} ເມນູ ຕ່ຳກວ່າທີ່ຄວນມີ',td_refill_ok:'ສະຕັອກສຳເລັດຮູບພໍ',
   td_low:'ວັດຖຸດິບຕ່ຳກວ່າຂັ້ນຕ່ຳ',td_low_s:'{n} ລາຍການ ຕ້ອງສັ່ງເຄື່ອງ',td_low_ok:'ວັດຖຸດິບຄົບຕາມຂັ້ນຕ່ຳ',
   td_count:'ນັບລ່າສຸດ',td_count_never:'ຍັງບໍ່ເຄີຍນັບ — ແຕະເພື່ອນັບສະຕັອກ',td_count_s:'{d} {t} · {n} ລາຍການ · ຕ່າງ {x}',td_count_today:'ມື້ນີ້',
-  td_recv:'ຮັບເຄື່ອງມື້ນີ້',td_made:'ເຮັດເຄື່ອງມື້ນີ້',td_sent:'ສົ່ງສາຂາມື້ນີ້',td_lots:'{n} ຮອບ',td_bills:'{n} ບິນ',td_rcpts:'{n} ໃບ',td_menus:'{n} ເມນູ',
+  td_recv:'ຮັບເຄື່ອງມື້ນີ້',td_recv_s:'ຮັບແລ້ວມື້ນີ້ {n} ໃບ · {m} — ແຕະເພື່ອຮັບເຄື່ອງ',td_recv_none:'ຍັງບໍ່ໄດ້ຮັບເຄື່ອງມື້ນີ້ — ແຕະເພື່ອຮັບເຄື່ອງ',td_made:'ເຮັດເຄື່ອງມື້ນີ້',td_sent:'ສົ່ງສາຂາມື້ນີ້',td_lots:'{n} ຮອບ',td_bills:'{n} ບິນ',td_rcpts:'{n} ໃບ',td_menus:'{n} ເມນູ',
   td_noread:'ອ່ານຂໍ້ມູນບໍ່ໄດ້ — ແຕະເພື່ອເບິ່ງ',td_loading:'ກຳລັງໂຫຼດ…',td_hello:'ສະບາຍດີ {n} 👋',td_unlinked:'{n} ຊື່ຍັງບໍ່ຜູກກັບເມນູ'},
 my:{td_orders:'မပို့ရသေးသော ဆိုင်ခွဲအော်ဒါ',td_orders_s:'ဆိုင်ခွဲ {b} · အော်ဒါ {o} · {n} ကြောင်း',td_orders_ok:'ဆိုင်ခွဲအားလုံး ပို့ပြီး',
   td_urgent:'အရေးပေါ် ထုတ်လုပ်ရန်',td_urgent_s:'အော်ဒါအတွက် မလုံလောက်သော ထုတ်ကုန် {n} မျိုး',td_urgent_ok:'အော်ဒါတိုင်းအတွက် လက်ကျန်လုံလောက်',td_refill:'ဖြည့်ရန် ထုတ်လုပ်',td_refill_s:'ပစ်မှတ်အောက် ထုတ်ကုန် {n} မျိုး',td_refill_ok:'ထုတ်ကုန်လက်ကျန် လုံလောက်',
   td_low:'အနည်းဆုံးအောက် ကုန်ကြမ်း',td_low_s:'မှာယူရန် {n} မျိုး',td_low_ok:'ကုန်ကြမ်းအားလုံး အနည်းဆုံးအထက်',
   td_count:'နောက်ဆုံးရေတွက်မှု',td_count_never:'မရေတွက်ရသေး — စာရင်းကောက်ရန် နှိပ်ပါ',td_count_s:'{d} {t} · {n} ကြောင်း · ကွာခြား {x}',td_count_today:'ယနေ့',
-  td_recv:'ယနေ့လက်ခံ',td_made:'ယနေ့ထုတ်လုပ်',td_sent:'ယနေ့ဆိုင်ခွဲပို့',td_lots:'{n} အသုတ်',td_bills:'ဘေလ် {n}',td_rcpts:'{n} စောင်',td_menus:'ထုတ်ကုန် {n}',
+  td_recv:'ယနေ့လက်ခံ',td_recv_s:'ယနေ့ {n} စောင် · {m} — လက်ခံရန် နှိပ်ပါ',td_recv_none:'ယနေ့ မလက်ခံရသေးပါ — လက်ခံရန် နှိပ်ပါ',td_made:'ယနေ့ထုတ်လုပ်',td_sent:'ယနေ့ဆိုင်ခွဲပို့',td_lots:'{n} အသုတ်',td_bills:'ဘေလ် {n}',td_rcpts:'{n} စောင်',td_menus:'ထုတ်ကုန် {n}',
   td_noread:'ဖတ်မရပါ — ကြည့်ရန် နှိပ်ပါ',td_loading:'ဖွင့်နေသည်…',td_hello:'မင်္ဂလာပါ {n} 👋',td_unlinked:'ထုတ်ကုန်နှင့် မချိတ်ရသေးသော အမည် {n}'}
 });
 CSS.add(`
@@ -50,7 +50,8 @@ RENDER.today=function(el){
     '<div class="tdhello">'+esc(t('td_hello',{n:(S.user&&S.user.name)||''}))+'</div>'+
     '<div class="bigacts">'+
       tdBig('orders','🚚',t('td_orders'),t('td_loading'),'dim','send')+tdBig('urgent','⚡',t('td_urgent'),t('td_loading'),'dim','make')+
-      tdBig('refill','🔄',t('td_refill'),t('td_loading'),'dim','make')+tdLowHtml()+tdBig('count','📋',t('td_count'),t('td_loading'),'dim','count')+'</div>'+
+      tdBig('refill','🔄',t('td_refill'),t('td_loading'),'dim','make')+tdLowHtml()+tdBig('count','📋',t('td_count'),t('td_loading'),'dim','count')+
+      tdBig('recv','📥',t('nav_recv'),t('td_loading'),'dim','recv')+'</div>'+
     '<div class="kpis tdk">'+tdKpi('recv',t('td_recv'),'hero','recv')+tdKpi('made',t('td_made'),'','make')+tdKpi('sent',t('td_sent'),'','bills')+'</div>';
   if(K)tdLoad();
 };
@@ -121,6 +122,7 @@ function tdPaintCount(D){
   tdSet('count',t('td_count_s',{d:isToday?t('td_count_today'):dispDate(c.d),t:dispTime(c.created_at),n:fmtI(c.n),x:fmtI(c.diff)})+(c.by_name?' · '+c.by_name:''),isToday?'ok':'');}
 /* ---------- ยอดวันนี้ ---------- */
 function tdPaintKpis(D){
-  if(D.rc.ok){const tot=D.rc.rows.reduce((a,r)=>a+num(r.total),0);tdSetKpi('recv',money(tot),t('td_rcpts',{n:D.rc.rows.length}));}else tdSetKpi('recv','—',t('td_noread'));
+  if(D.rc.ok){const tot=D.rc.rows.reduce((a,r)=>a+num(r.total),0),n=D.rc.rows.length;tdSetKpi('recv',money(tot),t('td_rcpts',{n}));tdSet('recv',n?t('td_recv_s',{n,m:money(tot)}):t('td_recv_none'),n?'ok':'');}
+  else{tdSetKpi('recv','—',t('td_noread'));tdSet('recv',t('td_noread'),'');}
   if(D.pd.ok){const lots=D.pd.rows.reduce((a,r)=>a+num(r.lots),0),menus=new Set(D.pd.rows.map(r=>r.recipe_id)).size;tdSetKpi('made',t('td_lots',{n:fmtQ(lots)}),t('td_menus',{n:menus}));}else tdSetKpi('made','—',t('td_noread'));
   if(D.dl.ok){const rows=D.dl.rows.filter(d=>String(d.d).slice(0,10)===D.today&&d.status!=='void'&&inBr(d.branch));tdSetKpi('sent',money(rows.reduce((a,r)=>a+num(r.total),0)),t('td_bills',{n:rows.length}));}else tdSetKpi('sent','—',t('td_noread'));}

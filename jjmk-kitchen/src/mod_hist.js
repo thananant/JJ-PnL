@@ -57,11 +57,16 @@ function hsRange(){const td=bizTodayISO();
 RENDER.hist=function(el){
   const sv=LS.get(HS_F,null);if(sv&&typeof sv==='object'){HS=Object.assign(HS,sv);if(!HS_TYPES.includes(HS.type))HS.type='all';if(!HS_RANGES.includes(HS.range))HS.range='7';}
   el.innerHTML=dhead('📜 '+t('nav_hist'),'<span id="hsCount"></span>')+sqlNeedBox()+
-    pillBar(HS_TYPES.map(k=>({k,lb:t('hs_t_'+k)})),HS.type,k=>{HS.type=k;HS_SHOW=60;hsSaveF();hsPaint();},{scroll:1})+
-    pillBar(HS_RANGES.map(k=>({k,lb:t('hs_r_'+k)})),HS.range,k=>{HS.range=k;HS_SHOW=60;hsSaveF();hsRangeBox();hsLoad();},{scroll:1,cls:'hs-rpills'})+
+    '<div id="hsPills">'+hsPillsHtml()+'</div>'+
     '<div id="hsRangeBox"></div>'+searchBox('hsQ',v=>{HS.q=v;HS_SHOW=60;hsSaveF();hsPaint();},t('hs_search_ph'))+'<div id="hsBody"><div class="spin"></div></div>';
   const q=document.getElementById('hsQ');if(q)q.value=HS.q||'';
   hsRangeBox();hsLoad();};
+function hsPillsHtml(){ // ชิปประเภท + ช่วงเวลา — กดแล้ววาดชิปใหม่ด้วย (pillBar ไม่เปลี่ยนสีให้เอง · เจ้าของเจอ 2026-10-17 ว่า "ปุ่มเหมือนใช้ไม่ได้")
+  return pillBar(HS_TYPES.map(k=>({k,lb:t('hs_t_'+k)})),HS.type,'hsSetType',{scroll:1})+
+    pillBar(HS_RANGES.map(k=>({k,lb:t('hs_r_'+k)})),HS.range,'hsSetRange',{scroll:1,cls:'hs-rpills'});}
+function hsPillsPaint(){const b=document.getElementById('hsPills');if(b)b.innerHTML=hsPillsHtml();}
+function hsSetType(k){if(!HS_TYPES.includes(k))k='all';HS.type=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsPaint();}
+function hsSetRange(k){if(!HS_RANGES.includes(k))k='7';HS.range=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsRangeBox();hsLoad();}
 function hsSaveF(){LS.set(HS_F,{type:HS.type,range:HS.range,from:HS.from,to:HS.to,q:HS.q});}
 function hsRangeBox(){const b=document.getElementById('hsRangeBox');if(!b)return;if(HS.range!=='custom'){b.innerHTML='';return;}
   const [a,z]=hsRange();b.innerHTML='<div class="hs-range"><span class="xs mut">'+esc(t('hs_from'))+'</span><input type="date" id="hsFrom" value="'+esc(a)+'" onchange="HS.from=this.value;hsSaveF();hsLoad()">'+

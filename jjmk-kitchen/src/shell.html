@@ -231,11 +231,11 @@ table.t input,table.t select{min-height:40px;padding:6px 8px}
 .bigact:active{transform:scale(.98)}
 /* วิธีทำ */
 .tmsteps{border:2px solid var(--line);border-radius:16px;padding:4px 12px;margin-bottom:6px}
-.tmstep{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);font-size:16px;line-height:1.45}
+.tmstep{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);font-size:17px;line-height:1.45}
 .tmstep:last-child{border-bottom:0}
 .tmstep .n{flex:none;min-width:30px;height:30px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px}
-.tmstep.tip{color:var(--mut);font-size:14.5px}.tmstep.tip .n{background:none;color:inherit;font-size:18px}
-.tmhead{font-weight:800;font-size:15px;color:var(--red);padding:12px 0 6px;border-bottom:1px solid var(--line)}
+.tmstep.tip{color:var(--mut);font-size:15px}.tmstep.tip .n{background:none;color:inherit;font-size:18px}
+.tmhead{font-weight:800;font-size:16px;color:var(--red);padding:12px 0 6px;border-bottom:1px solid var(--line)}
 .tmhead:first-child{padding-top:8px}
 /* Modal · toast · confirm */
 #modalWrap,#cfmWrap{position:fixed;inset:0;background:rgba(30,24,20,.45);z-index:100;display:none;align-items:flex-end;justify-content:center;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
@@ -794,11 +794,11 @@ function copyFallback(tx,done){const ta=document.createElement('textarea');ta.va
   try{document.execCommand('copy');done();}catch(e){toast(t('copy_fail'),true);}ta.remove();}
 const supKey=n=>String(n||'').replace(/\s+/g,' ').trim().toLowerCase();   // ชื่อร้าน/ซัพแบบไม่สนตัวพิมพ์+ช่องว่าง
 const nameKey=supKey;
-function methodSteps(note){ // วิธีทำ: 1 บรรทัด = 1 ขั้น · '#' = หัวข้อ · '*' = เคล็ดลับ
+function methodSteps(note){ // วิธีทำ (สูตรเดียวกับระบบเดิม): 1 บรรทัด = 1 ขั้น · '#' = หัวข้อ เลขขั้นเริ่ม 1 ใหม่ ("#1 …" = ขั้นธรรมดา · โคลอนท้ายหัวข้อตัดออก) · '*'/'※' = เคล็ดลับ · เลขหน้าบรรทัด "1." "5.1)" ตัดออก ระบบเรียงเอง
   const out=[];let n=0;String(note||'').split(/\r?\n/).forEach(l=>{l=l.trim();if(!l)return;
-    if(/^#(?!\d)/.test(l)){out.push({head:l.replace(/^#+\s*/,'')});n=0;return;}
-    if(/^\*/.test(l)){out.push({tip:l.replace(/^\*+\s*/,'')});return;}
-    out.push({n:++n,text:l.replace(/^\d+[.)]\s*/,'')});});return out;}
+    if(/^#+(?!\d)/.test(l)){const h=l.replace(/^#+\s*/,'').replace(/\s*[:：]$/,'');if(h)out.push({head:h});n=0;return;}
+    if(/^[*※]/.test(l)){const x=l.replace(/^[*※\s]+|[*\s]+$/g,'');if(x)out.push({tip:x});return;}
+    const x=l.replace(/^\d+(?:\.\d+)*[.)](?!\d)\s*/,'');if(x)out.push({n:++n,text:x});});return out;}
 function methodHtml(note){const st=methodSteps(note);if(!st.length)return '';
   return '<div class="tmsteps">'+st.map(s=>s.head?'<div class="tmhead">'+esc(s.head)+'</div>':s.tip?'<div class="tmstep tip"><span class="n">💡</span><span>'+esc(s.tip)+'</span></div>'
     :'<div class="tmstep"><span class="n">'+s.n+'</span><span>'+esc(s.text)+'</span></div>').join('')+'</div>';}

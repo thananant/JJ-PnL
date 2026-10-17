@@ -14,7 +14,7 @@ th:{mn_new:'เพิ่มเมนู',mn_edit:'แก้เมนู',mn_n:'{
   mn_yield:'ทำ 1 รอบ ได้',mn_yield_hint:'เช่น 1 รอบ = 10 ถุง · ต้นทุน/ราคาขายคิดต่อหน่วยนี้',mn_lot_eq:'1 รอบ = {q} {u}',mn_per_lot:'/รอบ',
   mn_markup:'บวกกำไร % (ราคาขายสาขา)',mn_markup_def:'ว่าง = ใช้ค่ากลาง {p}%',mn_sell:'ราคาขายสาขา',
   mn_target:'สต๊อกสำเร็จรูปที่ควรมี',mn_target_qty:'จำนวนตายตัว',mn_target_days:'หรือ = กี่วันของยอดส่งเฉลี่ย',mn_target_hint:'ต่ำกว่านี้จะขึ้นใน 🍳 ทำของ → 🔄 เติม',
-  mn_extra:'ค่าอื่นต่อรอบ (แก๊ส/น้ำ/ถุง) บาท',mn_method:'📝 วิธีทำ',mn_method_tip:'1 บรรทัด = 1 ขั้น · ขึ้นต้นด้วย # = หัวข้อ · ขึ้นต้นด้วย * = เคล็ดลับ · ตัวเลขเป็นของ 1 รอบ',mn_method_ph:'# เตรียมก่อนทำ\nปอกกระเทียม\n# วิธีทำ\nต้มน้ำปลา+น้ำตาล\n* ชิมก่อนบรรจุ',
+  mn_extra:'ค่าอื่นต่อรอบ (แก๊ส/น้ำ/ถุง) บาท',mn_method:'📝 วิธีทำ',mn_method_edit:'แก้วิธีทำ',mn_method_ok:'เสร็จ — ดูแบบขั้นตอน',mn_method_tip:'1 บรรทัด = 1 ขั้น · ขึ้นต้นด้วย # = หัวข้อ · ขึ้นต้นด้วย * = เคล็ดลับ · ตัวเลขเป็นของ 1 รอบ',mn_method_ph:'# เตรียมก่อนทำ\nปอกกระเทียม\n# วิธีทำ\nต้มน้ำปลา+น้ำตาล\n* ชิมก่อนบรรจุ',
   mn_bom:'🥬 ส่วนผสมต่อ 1 รอบ',mn_bom_add:'＋ เพิ่มส่วนผสม',mn_bom_none:'ยังไม่มีส่วนผสม — กด ＋ เพิ่มส่วนผสม',mn_lines_n:'{n} อย่าง',
   mn_pick_t:'เลือกวัตถุดิบ',mn_pick_none:'ไม่พบวัตถุดิบ',mn_pick_new:'➕ วัตถุดิบใหม่ (ไปที่ 🥬 วัตถุดิบ)',mn_line_eq:'= {q} {u}',mn_line_bad:'หน่วยนี้แปลงเป็น {u} ไม่ได้',mn_line_qty:'จำนวน',
   mn_cost_t:'💰 ต้นทุนต่อรอบ (ราคาวัตถุดิบปัจจุบัน)',mn_cost_items:'ส่วนผสม',mn_cost_extra:'ค่าอื่น',mn_cost_oh:'ค่าใช้จ่ายแฝง',mn_cost_total:'รวม/รอบ',mn_cost_unit:'ต่อ {u}',
@@ -32,7 +32,7 @@ en:{mn_new:'Add menu',mn_edit:'Edit menu',mn_n:'{n} menus',mn_none:'No menus yet
   mn_yield:'One lot makes',mn_yield_hint:'e.g. 1 lot = 10 bags · cost/price are per this unit',mn_lot_eq:'1 lot = {q} {u}',mn_per_lot:'/lot',
   mn_markup:'Markup % (branch price)',mn_markup_def:'blank = default {p}%',mn_sell:'Branch price',
   mn_target:'Finished stock to keep',mn_target_qty:'Fixed quantity',mn_target_days:'or = days of average sending',mn_target_hint:'Below this it shows in 🍳 Produce → 🔄 Refill',
-  mn_extra:'Other cost per lot (gas/water/bags) THB',mn_method:'📝 Method',mn_method_tip:'1 line = 1 step · start with # = heading · start with * = tip · numbers are for 1 lot',mn_method_ph:'# Prepare\nPeel garlic\n# Method\nBoil fish sauce + sugar\n* Taste before packing',
+  mn_extra:'Other cost per lot (gas/water/bags) THB',mn_method:'📝 Method',mn_method_edit:'Edit method',mn_method_ok:'Done — show as steps',mn_method_tip:'1 line = 1 step · start with # = heading · start with * = tip · numbers are for 1 lot',mn_method_ph:'# Prepare\nPeel garlic\n# Method\nBoil fish sauce + sugar\n* Taste before packing',
   mn_bom:'🥬 Ingredients per lot',mn_bom_add:'＋ Add ingredient',mn_bom_none:'No ingredients yet — tap ＋ Add ingredient',mn_lines_n:'{n} items',
   mn_pick_t:'Pick an ingredient',mn_pick_none:'No ingredient found',mn_pick_new:'➕ New ingredient (go to 🥬 Ingredients)',mn_line_eq:'= {q} {u}',mn_line_bad:'This unit cannot convert to {u}',mn_line_qty:'Qty',
   mn_cost_t:'💰 Cost per lot (current ingredient prices)',mn_cost_items:'Ingredients',mn_cost_extra:'Other',mn_cost_oh:'Overhead',mn_cost_total:'Total/lot',mn_cost_unit:'per {u}',
@@ -50,7 +50,7 @@ lo:{mn_new:'ເພີ່ມເມນູ',mn_edit:'ແກ້ເມນູ',mn_n:'{
   mn_yield:'ເຮັດ 1 ຮອບ ໄດ້',mn_yield_hint:'ເຊັ່ນ 1 ຮອບ = 10 ຖົງ · ຕົ້ນທຶນ/ລາຄາຂາຍຄິດຕໍ່ຫົວໜ່ວຍນີ້',mn_lot_eq:'1 ຮອບ = {q} {u}',mn_per_lot:'/ຮອບ',
   mn_markup:'ບວກກຳໄລ % (ລາຄາຂາຍສາຂາ)',mn_markup_def:'ຫວ່າງ = ໃຊ້ຄ່າກາງ {p}%',mn_sell:'ລາຄາຂາຍສາຂາ',
   mn_target:'ສະຕັອກສຳເລັດຮູບທີ່ຄວນມີ',mn_target_qty:'ຈຳນວນຕາຍຕົວ',mn_target_days:'ຫຼື = ຈັກມື້ຂອງຍອດສົ່ງສະເລ່ຍ',mn_target_hint:'ຕ່ຳກວ່ານີ້ຈະຂຶ້ນໃນ 🍳 ເຮັດເຄື່ອງ → 🔄 ເຕີມ',
-  mn_extra:'ຄ່າອື່ນຕໍ່ຮອບ (ແກັສ/ນ້ຳ/ຖົງ) ບາດ',mn_method:'📝 ວິທີເຮັດ',mn_method_tip:'1 ແຖວ = 1 ຂັ້ນ · ຂຶ້ນຕົ້ນດ້ວຍ # = ຫົວຂໍ້ · ຂຶ້ນຕົ້ນດ້ວຍ * = ເຄັດລັບ · ຕົວເລກເປັນຂອງ 1 ຮອບ',mn_method_ph:'# ກຽມກ່ອນເຮັດ\nປອກຜັກທຽມ\n# ວິທີເຮັດ\nຕົ້ມນ້ຳປາ+ນ້ຳຕານ\n* ຊີມກ່ອນບັນຈຸ',
+  mn_extra:'ຄ່າອື່ນຕໍ່ຮອບ (ແກັສ/ນ້ຳ/ຖົງ) ບາດ',mn_method:'📝 ວິທີເຮັດ',mn_method_edit:'ແກ້ວິທີເຮັດ',mn_method_ok:'ແລ້ວ — ເບິ່ງແບບຂັ້ນຕອນ',mn_method_tip:'1 ແຖວ = 1 ຂັ້ນ · ຂຶ້ນຕົ້ນດ້ວຍ # = ຫົວຂໍ້ · ຂຶ້ນຕົ້ນດ້ວຍ * = ເຄັດລັບ · ຕົວເລກເປັນຂອງ 1 ຮອບ',mn_method_ph:'# ກຽມກ່ອນເຮັດ\nປອກຜັກທຽມ\n# ວິທີເຮັດ\nຕົ້ມນ້ຳປາ+ນ້ຳຕານ\n* ຊີມກ່ອນບັນຈຸ',
   mn_bom:'🥬 ສ່ວນປະສົມຕໍ່ 1 ຮອບ',mn_bom_add:'＋ ເພີ່ມສ່ວນປະສົມ',mn_bom_none:'ຍັງບໍ່ມີສ່ວນປະສົມ — ກົດ ＋ ເພີ່ມສ່ວນປະສົມ',mn_lines_n:'{n} ຢ່າງ',
   mn_pick_t:'ເລືອກວັດຖຸດິບ',mn_pick_none:'ບໍ່ພົບວັດຖຸດິບ',mn_pick_new:'➕ ວັດຖຸດິບໃໝ່ (ໄປທີ່ 🥬 ວັດຖຸດິບ)',mn_line_eq:'= {q} {u}',mn_line_bad:'ຫົວໜ່ວຍນີ້ແປງເປັນ {u} ບໍ່ໄດ້',mn_line_qty:'ຈຳນວນ',
   mn_cost_t:'💰 ຕົ້ນທຶນຕໍ່ຮອບ (ລາຄາວັດຖຸດິບປັດຈຸບັນ)',mn_cost_items:'ສ່ວນປະສົມ',mn_cost_extra:'ຄ່າອື່ນ',mn_cost_oh:'ຄ່າໃຊ້ຈ່າຍແຝງ',mn_cost_total:'ລວມ/ຮອບ',mn_cost_unit:'ຕໍ່ {u}',
@@ -68,7 +68,7 @@ my:{mn_new:'မီနူးထည့်ရန်',mn_edit:'မီနူးပြ
   mn_yield:'တစ်သုတ် လုပ်လျှင် ရသည်',mn_yield_hint:'ဥပမာ 1 သုတ် = 10 အိတ် · ကုန်ကျစရိတ်/ဈေးကို ဤယူနစ်ဖြင့် တွက်သည်',mn_lot_eq:'1 သုတ် = {q} {u}',mn_per_lot:'/သုတ်',
   mn_markup:'အမြတ် % (ဆိုင်ခွဲဈေး)',mn_markup_def:'ဗလာ = ပုံသေ {p}%',mn_sell:'ဆိုင်ခွဲဈေး',
   mn_target:'ထားရမည့် ထုတ်ကုန်လက်ကျန်',mn_target_qty:'ပုံသေပမာဏ',mn_target_days:'သို့မဟုတ် = ပျမ်းမျှပို့မှု ရက်အရေအတွက်',mn_target_hint:'ဤထက်နည်းလျှင် 🍳 ထုတ်လုပ် → 🔄 ဖြည့် တွင် ပေါ်မည်',
-  mn_extra:'တစ်သုတ်လျှင် အခြားစရိတ် (ဂက်စ်/ရေ/အိတ်) ဘတ်',mn_method:'📝 လုပ်နည်း',mn_method_tip:'1 ကြောင်း = 1 အဆင့် · # ဖြင့်စ = ခေါင်းစဉ် · * ဖြင့်စ = အကြံပြုချက် · ကိန်းဂဏန်းများသည် 1 သုတ်အတွက်',mn_method_ph:'# ကြိုပြင်ရန်\nကြက်သွန်ဖြူ အခွံခွာ\n# လုပ်နည်း\nငံပြာရည်+သကြား ကျို\n* မထုပ်မီ မြည်းပါ',
+  mn_extra:'တစ်သုတ်လျှင် အခြားစရိတ် (ဂက်စ်/ရေ/အိတ်) ဘတ်',mn_method:'📝 လုပ်နည်း',mn_method_edit:'လုပ်နည်းပြင်',mn_method_ok:'ပြီးပြီ — အဆင့်လိုက်ကြည့်',mn_method_tip:'1 ကြောင်း = 1 အဆင့် · # ဖြင့်စ = ခေါင်းစဉ် · * ဖြင့်စ = အကြံပြုချက် · ကိန်းဂဏန်းများသည် 1 သုတ်အတွက်',mn_method_ph:'# ကြိုပြင်ရန်\nကြက်သွန်ဖြူ အခွံခွာ\n# လုပ်နည်း\nငံပြာရည်+သကြား ကျို\n* မထုပ်မီ မြည်းပါ',
   mn_bom:'🥬 တစ်သုတ်အတွက် ပါဝင်ပစ္စည်း',mn_bom_add:'＋ ပါဝင်ပစ္စည်းထည့်',mn_bom_none:'ပါဝင်ပစ္စည်း မရှိသေး — ＋ ပါဝင်ပစ္စည်းထည့် နှိပ်ပါ',mn_lines_n:'{n} မျိုး',
   mn_pick_t:'ကုန်ကြမ်းရွေးပါ',mn_pick_none:'ကုန်ကြမ်း မတွေ့ပါ',mn_pick_new:'➕ ကုန်ကြမ်းအသစ် (🥬 ကုန်ကြမ်း သို့သွားပါ)',mn_line_eq:'= {q} {u}',mn_line_bad:'ဤယူနစ်ကို {u} သို့ ပြောင်း၍မရ',mn_line_qty:'အရေအတွက်',
   mn_cost_t:'💰 တစ်သုတ်ကုန်ကျစရိတ် (လက်ရှိကုန်ကြမ်းဈေး)',mn_cost_items:'ပါဝင်ပစ္စည်း',mn_cost_extra:'အခြား',mn_cost_oh:'ဝှက်ထားစရိတ်',mn_cost_total:'စုစုပေါင်း/သုတ်',mn_cost_unit:'{u} တစ်ခုလျှင်',
@@ -100,6 +100,7 @@ CSS.add(`
 let MN_CAT=String(LS.get('jjck_mncat','')||'');   // '' ทั้งหมด · ชื่อหมวด · '__off' ไม่ใช้แล้ว
 let MN_Q='';
 let MN_D=null;                                     // ร่างฟอร์ม
+let MN_EDITM=false;                                // วิธีทำ: false = โชว์เป็นขั้น ๆ แบบระบบเดิม (เจ้าของสั่ง 2026-10-17 "เอาแบบระบบที่แล้ว ดูสวยดี") · true = กล่องพิมพ์ + ตัวอย่างสด
 const MN_DRAFT='jjck_mn_draft',MN_DRAFT_MS=12*3600*1000;
 const MN_IC={'น้ำจิ้ม':'🥣','ของหมัก':'🥩','น้ำซุป':'🍲','ของหวาน':'🍰','อื่นๆ':'🍳'};
 const mnIcon=r=>MN_IC[(r&&r.cat)||'']||'🍳';
@@ -167,6 +168,7 @@ function mnEdit(id){
   const dr=mnDraftRead(id);
   MN_D=dr?Object.assign(mnDraftFrom(r),dr,{restored:true}):mnDraftFrom(r);
   MN_D.lines=(MN_D.lines||[]).filter(l=>itemById(l.item_id));
+  MN_EDITM=!String(MN_D.note||'').trim();   // ยังไม่มีวิธีทำ = เปิดกล่องพิมพ์ให้เลย · มีแล้ว = โชว์เป็นขั้น ๆ
   delete MN_D._hist;delete MN_D._link;   // ร่างเก่าอาจจำสถานะไว้ — ถามฐานข้อมูลใหม่ทุกครั้งที่เปิดฟอร์ม
   if(r&&MN_D.yield_unit!==r.yield_unit&&mnLockWhy(MN_D))MN_D.yield_unit=r.yield_unit;
   mnPaintForm();mnHistCheck(MN_D);
@@ -201,7 +203,7 @@ function mnPaintForm(){
     '<div class="fld"><label>'+esc(t('mn_bom'))+'</label><div id="mnLines">'+mnLinesHtml()+'</div>'+
       '<button type="button" class="btn gh sm2" onclick="mnPick()">'+esc(t('mn_bom_add'))+'</button></div>'+
     '<div id="mnCost">'+mnCostHtml()+'</div>'+
-    fld(t('mn_method'),'<textarea id="mnNote" rows="6" placeholder="'+esc(t('mn_method_ph'))+'" oninput="MN_D.note=this.value;mnDraftSave()">'+esc(d.note)+'</textarea><div class="xs mut">'+esc(t('mn_method_tip'))+'</div>')+
+    '<div class="fld"><label>'+esc(t('mn_method'))+'</label><div id="mnMethod">'+mnMethodHtml()+'</div></div>'+
     '<div class="grid2">'+fld(t('mn_extra'),'<input id="mnExtra" type="text" inputmode="decimal" value="'+esc(d.extra_cost)+'" oninput="MN_D.extra_cost=this.value;mnDraftSave();mnPaintCost()">')+
       fld(t('mn_markup'),'<input id="mnMk" type="text" inputmode="decimal" placeholder="'+esc(t('mn_markup_def',{p:fmtQ((S.cfg||{}).markup_pct||0)}))+'" value="'+esc(d.markup_pct)+'" oninput="MN_D.markup_pct=this.value;mnDraftSave();mnPaintCost()">')+'</div>'+
     '<div class="fld"><label>🎯 '+esc(t('mn_target'))+'</label><div class="grid2">'+
@@ -214,6 +216,16 @@ function mnPaintForm(){
       '<button class="btn big" id="mnSaveBtn" onclick="mnSave()">💾 '+esc(t('save'))+'</button></div></div>';
   MODAL_BACK=null;openModal(h);
 }
+function mnMethodHtml(){ // วิธีทำ: โชว์เป็นขั้น ๆ (วงกลมแดง · หัวข้อ # · เคล็ดลับ *) แบบหน้ารายละเอียดเมนูของระบบเดิม · ✏️ = กล่องพิมพ์ + ตัวอย่างสดใต้กล่อง
+  const d=MN_D;if(!d)return '';const note=String(d.note||'');
+  if(MN_EDITM||!note.trim())return '<textarea id="mnNote" rows="7" placeholder="'+esc(t('mn_method_ph'))+'" oninput="mnMethodInput(this.value)">'+esc(note)+'</textarea><div class="xs mut">'+esc(t('mn_method_tip'))+'</div>'+
+    '<div id="mnMethodPrev" style="margin-top:8px">'+methodHtml(note)+'</div>'+(note.trim()?'<button type="button" class="btn gh sm2" onclick="mnMethodDone()">✓ '+esc(t('mn_method_ok'))+'</button>':'');
+  return methodHtml(note)+'<button type="button" class="btn gh sm2" onclick="mnMethodEdit()">✏️ '+esc(t('mn_method_edit'))+'</button>';}
+function mnMethodPaint(){const b=document.getElementById('mnMethod');if(b)b.innerHTML=mnMethodHtml();}
+function mnMethodInput(v){if(!MN_D)return;MN_D.note=v;mnDraftSave();const p=document.getElementById('mnMethodPrev');if(p)p.innerHTML=methodHtml(v);
+  const b=document.querySelector('#mnMethod button[onclick="mnMethodDone()"]');if(b&&!String(v||'').trim())b.remove();}
+function mnMethodEdit(){MN_EDITM=true;mnMethodPaint();const ta=document.getElementById('mnNote');if(ta&&!('ontouchstart' in window))ta.focus();}
+function mnMethodDone(){MN_EDITM=false;mnMethodPaint();}
 function mnThumbHtml(){const d=MN_D,url=imgOk(d.image_url)?String(d.image_url):'';return '<div class="mthumb lg" '+(url?'data-url="'+esc(url)+'" onclick="zoomImg(this.dataset.url)"':'')+'>'+(url?'<img src="'+esc(url)+'">':mnIcon({cat:d.cat==='__new'?'':d.cat}))+'</div>';}
 function mnPhoto(){const d=MN_D;if(!d)return;pickImage('recipe',d.id,url=>{if(!MN_D||!url)return;MN_D.image_url=url;mnDraftSave();const b=document.getElementById('mnThumb');if(b)b.innerHTML=mnThumbHtml();if(S.tab==='menus')mnPaintGrid();});}
 function mnYuChange(v){const d=MN_D;if(!d)return;const lock=mnLockWhy(d);
