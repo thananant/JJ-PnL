@@ -118,18 +118,20 @@ sec('3. ทะเบียนสาขากลาง (JJBR) — 15 ไฟล์
   same('บล็อก JJBR', blocks);
 }
 
-sec('4. วันขายดีจากปฏิทิน (SPD) — ครัวกลาง ↔ นับสต๊อก เหมือนกันทุกไบต์');
+sec('4. วันขายดีจากปฏิทิน (SPD) — ทุกไฟล์ที่มีบล็อกต้องเหมือนกันทุกไบต์');
 {
-  const blocks = {};
-  for (const f of SPD_FILES) {
-    const s = rd(f);
-    const i = s.indexOf('SPD-BEGIN'), j = s.indexOf('SPD-END');
-    blocks[f] = i < 0 || j < 0 ? null : s.slice(i, j);
+  // ครัวกลาง v2 (2026-10-17) ไม่คิดสูตรสั่งของเองแล้ว (อ่านออเดอร์ที่แอปนับสต๊อกเขียนลง stock_receipts) → บล็อก SPD/STK_BR เหลือเฉพาะแอปนับ
+  const withSpd = SPD_FILES.filter(f => has(f) && rd(f).includes('SPD-BEGIN'));
+  if (!withSpd.includes('jjmk-stockcheck.html')) fail('jjmk-stockcheck.html: บล็อก SPD หายไป');
+  if (withSpd.length < 2) pass(`บล็อก SPD มีเฉพาะ ${withSpd.join(', ')} (ครัวกลาง v2 อ่านออเดอร์จาก stock_receipts ไม่พอร์ตสูตร)`);
+  else {
+    const blocks = {};
+    for (const f of withSpd) { const s = rd(f); const i = s.indexOf('SPD-BEGIN'), j = s.indexOf('SPD-END'); blocks[f] = i < 0 || j < 0 ? null : s.slice(i, j); }
+    same('บล็อก SPD', blocks);
+    const stk = {};
+    for (const f of withSpd) { const m = rd(f).match(/const STK_BR\s*=\s*([^;]+);/); stk[f] = m ? m[1].replace(/\s+/g, '') : null; }
+    same('ค่า STK_BR (รหัสสาขาของแอปนับ)', stk);
   }
-  same('บล็อก SPD', blocks);
-  const stk = {};
-  for (const f of SPD_FILES) { const m = rd(f).match(/const STK_BR\s*=\s*([^;]+);/); stk[f] = m ? m[1].replace(/\s+/g, '') : null; }
-  same('ค่า STK_BR (รหัสสาขาของแอปนับ)', stk);
 }
 
 sec('5. ล็อกอินของนับสต๊อก (เคยหายจากการเขียนทับ 2026-09-24)');
@@ -212,15 +214,17 @@ sec('8. ค่าที่ต้องตรงกันข้ามไฟล์
   const gas = g('jjmk-invoice.html', /var VERSION = '([^']+)';/);
   gas ? pass(`ใบกำกับ: โค้ด Apps Script ที่ฝังมีเวอร์ชัน ${gas}`) : fail('ใบกำกับ: โค้ด Apps Script (#gasCodeSrc) ไม่มี var VERSION');
   // บล็อกในครัวกลาง v2 ต้องไม่ใช่ไฟล์ที่แก้มือ — build ใหม่แล้วต้องได้เหมือนเดิม (ยกเว้นเวลา build)
-  if (has('jjmk-kitchen/src/build.mjs') && EXTRA.includes('jjmk-kitchen-new.html')) {
+  // ครัวกลาง v2: jjmk-kitchen.html คือไฟล์ที่ build จาก jjmk-kitchen/src — build ใหม่แล้วต้องได้เหมือนเดิม (ยกเว้นตราเวลาใน APP_VER)
+  for (const built of ['jjmk-kitchen.html', ...EXTRA.filter(f => /^jjmk-kitchen-.*\.html$/.test(f))]) {
+    if (!has('jjmk-kitchen/src/build.mjs') || !has(built)) continue;
     const tmp = path.join(fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'jjpc-')), 'k.html');
     try {
-      fs.copyFileSync(path.join(ROOT, 'jjmk-kitchen-new.html'), tmp);   // ให้ build เอา SQL ที่ฝังไว้เดิมมาใช้
+      fs.copyFileSync(path.join(ROOT, built), tmp);   // ให้ build เอา SQL ที่ฝังไว้เดิม (#kcSql) มาใช้ — ไฟล์ .sql ไม่อยู่ใน main
       execFileSync(process.execPath, [path.join(ROOT, 'jjmk-kitchen/src/build.mjs'), tmp], { stdio: 'pipe' });
       const norm = s => s.replace(/const APP_VER='KC 2\.0[^']*';/, '');
-      norm(fs.readFileSync(tmp, 'utf8')) === norm(rd('jjmk-kitchen-new.html'))
-        ? pass('ครัวกลาง v2: jjmk-kitchen-new.html ตรงกับ build จาก jjmk-kitchen/src')
-        : fail('ครัวกลาง v2: jjmk-kitchen-new.html ไม่ตรงกับ src — แก้ไฟล์ที่ build แล้วตรง ๆ หรือลืม `node jjmk-kitchen/src/build.mjs`');
+      norm(fs.readFileSync(tmp, 'utf8')) === norm(rd(built))
+        ? pass(`ครัวกลาง v2: ${built} ตรงกับ build จาก jjmk-kitchen/src`)
+        : fail(`ครัวกลาง v2: ${built} ไม่ตรงกับ src — แก้ไฟล์ที่ build แล้วตรง ๆ หรือลืม \`node jjmk-kitchen/src/build.mjs\``);
     } catch (e) { fail('ครัวกลาง v2: build ไม่ผ่าน — ' + String(e.stderr || e.message).trim().split('\n').pop()); }
   }
 }
