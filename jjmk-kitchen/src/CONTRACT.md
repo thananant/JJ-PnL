@@ -2,7 +2,7 @@
 
 Everything below is defined in `shell.html` (generated from `_shell_src.html` by `python3 _mkshell.py` — edit the src, never shell.html).
 Modules are `k2/mod_<tab>.js`, inlined by `node build.mjs` (order = `modules.json`) into ONE `<script>` at `/*__MODULES__*/`,
-output `/home/user/JJ-PnL/jjmk-kitchen-new.html`. A module is plain top-level JS (no `import`, no `</script`, no `<script>`), it shares the
+output `/home/user/JJ-PnL/jjmk-kitchen.html`. A module is plain top-level JS (no `import`, no `</script`, no `<script>`), it shares the
 global scope with the shell and every other module → **prefix all your top-level names** (functions, consts, lets) with your module prefix.
 `new Function(src)` is run on each module and on the whole built script: a duplicate top-level `const/let` anywhere fails the build.
 
@@ -135,3 +135,52 @@ For your own tab's device sweep: `import { sweep } from './t_devices.mjs'; await
 - 📜 history: `HS_CAP` (a table hit the 400-row limit in the range) → `hs_load_cap` banner.
 - Login card: the shared JJ Login block renders `.jjlg-in` (fixed, `overflow-y:auto`, card `margin:auto`) inside `#loginOv` — that wrapper is the scroll container on landscape/short screens; tests must measure `card.parentElement`, not `#loginOv`.
 - Stub: `cfg.failOps` entries accept `n` (fail only the next n calls) for one-shot network failures. Regression tests: `t_fix2.mjs` (71).
+
+## 9. Integrator notes (2026-10-17, phase 2 — send · bills · buy · acc are in; no placeholder tab is left)
+- **One open-order calculator for ☀️ today, 🚚 send and 🍳 make**: `sdCalcGroups({sr,dl,dll}, branches)` (mod_send.js, pure) → `{groups, ordered, sent, need, unlinked, lines}`.
+  Orders = `stock_receipts` (sup ∈ `cfg.ck_sup_names`, order_date ≥ today − lookback) minus what was delivered **line by line** (`kc_delivery_lines` of non-void `kc_deliveries`,
+  keyed `branch|order_date|stk_product_id`, name fallback for legacy rows). A partial send keeps the remainder open (⏳ ค้างส่ง) on every page; a delivery with every line
+  `sent = ordered` closes the order. `tdOpenOrders(sr,dl,dll)` (today), `sdCalc()` (send, + sequential stock allocation) and `mkOrdersCalc()` (make → `MK_ORD.ordered/sent`)
+  all call it, so today's 🚚/⚡ counts, the send badge, make's ⚡ list and send's ขาด always agree (`t_integ` [7] asserts it before/after a partial send and after a void).
+  make passes `S.branchesAll` (production is kitchen-wide), today/send pass `S.branches` (`_br` scope). Never re-implement the subtraction in a module.
+- **Badge 🚚 on any tab**: the shell dispatches `document.dispatchEvent(new CustomEvent('kc:booted'))` after the first `show()`; mod_send listens and runs
+  `sdLoad({noRefresh:true})` (orders only, no `refreshRows`) when the app boots on a tab other than today/send. A later full `sdLoad()` waits for a quiet load, then reads live stock.
+- **Cache invalidation**: `sdSend` (after the moves) and `blAfter` (paid/unpaid/void) set `MK_ORD.at=0` so 🍳 re-reads orders on its next render (it otherwise caches 60 s);
+  `blAfter` also runs `sdLoad()` so the badge and the reopened order are current even when 🧾 is the active tab.
+- today's cards carry state: ⚡ → `mkSetPill('urgent')` + `show('make')`, 🔄 → `refill` pill (`tdGo(key,tab)`); 🚚 → send, ⚠️ → buy, 📋 → count, KPIs → recv/make/bills.
+- Tests updated for phase 2: `t_shell` [3] (send renders the module, every tab has a RENDER), `t_count` [8] (fully delivered seed carries its lines), `v_e2e` [K] (same),
+  `t_integ` rewritten (390 checks: modules ×4 langs, permissions, reload, language switch on all 13 tabs, SQL card on all tabs, today↔send↔make seam incl. partial send + void,
+  boot badge incl. `_br` user, recv→make costing, hist→detail incl. send→`blDetail`, 15-device sweep on send/bills/buy/acc with data, desktop sidebar).
+  Screenshots: `k2/shots_p2/` (390: today, send, send confirm/done/partial, bill detail, bills, buy, acc · 1280: send, acc).
+
+## 10. Fixer notes (2026-10-17, phase 2 round 1 — after the r3 verifiers)
+- **🚚 never computes from half the data**: `sdLoad` keeps `SD.raw`/`SD.groups` from the last good read when `stock_receipts`/`kc_deliveries`/`kc_delivery_lines` cannot be read (`SD.ok=false`);
+  `sdPaint` then shows only the ⚠ banner + ⟳ and `sdSend` refuses with `sd_noread`. An unreadable `kc_delivery_lines` used to come back as "nothing delivered" → the same order could be billed and deducted twice.
+  Only with `S.kcSql===false` **and** a table that does not exist (`sdTblGone`: 42P01/PGRST205 — *not* permission denied) do `kc_deliveries`/`kc_delivery_lines` count as empty (nothing could have been delivered; billing is blocked by `sd_sql_block` anyway).
+  🍳 does the same (`mkOrdersCalc(…, ok)` → no ⚡ from partial data, `mk_orders_na` banner).
+- **No price = cannot send**: `sdCalc` sets `l.noPrice` (`sdPriceOf(l)==null`) → `sent` forced 0, no stepper (⛔ chip + 📖 button), `sdSetSent` ignores it, the ✅ button only renders when a priced linked line exists,
+  `sdSend` refuses a forced quantity by name (`sd_no_price`). The bill keeps the line as `sent 0 / unit_price null` (ค้างส่ง). Rule: branch price = actual lot cost — never a silent ฿0 line.
+- **Bill price rounding**: `sdPriceOf` rounds to 2 dp from ฿1 (≤4 dp below ฿1, like `moneyU`) so the printed `qty × price = amount` on the LINE bill; `kc_delivery_lines.unit_price` stores that rounded price. Tests' independent arithmetic (`v_e2e3` `price()`) follows the same rule.
+- **Line names**: `kc_delivery_lines.name` = the product name the BRANCH ordered (`l.name`), `recipe_id` = the kitchen product; LINE text/ค้างส่ง print the branch name, 🧾 detail shows "🍳 <kitchen name>" under it when different. `sdCalcGroups` already keys by `stk_product_id` (name fallback for legacy rows).
+- **LINE delivered but status write failed** (send + buy): the update is retried once; if it still fails the device remembers it (`LS jjck_line_ok` / `jjck_po_lineok` `{id:iso}`, 3 days) → amber toast, honest state in the done dialog / 🧾 detail (`bl_line_local`) / 🛒 detail (`po_line_local` + ✅ ส่งแล้ว = `poMarkSent`),
+  resend asks first (`bl_resend_q` / `po_resend_q`); a draft PO the supplier already received counts as incoming (`poIsIncoming`) so 🛒 does not suggest ordering it again.
+- **Void needs the moves**: `blVoidDone` returns `null` when `kc_moves` cannot be read and `blVoid` aborts with `bl_moves_noread` (never guess the reversal). The lines fallback (bill with no moves at all) converts branch units with the link factor (`tdLinkOf(l.name)`).
+- **`_br` on 🧾 write paths**: `blScopeOk(x)` (= `inBr(x.branch)` + `bl_br_deny` toast) guards `blDetail/blResend/blPaid/blUnpaid/blVoid`. ☀️ today's "ส่งสาขาวันนี้" KPI is `inBr`-filtered like the orders card.
+- **Shell**: `.btn` is Prompt (`font-family:var(--fh)`), `#toast` has `pointer-events:none` and `.err/.warn` toasts wrap (`white-space:normal`), `lineTextBox` textarea is 16px, `#sbUser a` has a 44px hit area; 🚚 last card gets 72px bottom room on phones.
+  🧾 sums rows ≥44px; at ≤339px the bills-count column (`.c-n`) is hidden on 🧾/💰 tables.
+- 💰 markup field: only `^\d+(\.\d+)?$` (comma → dot, ≤1000) is saved; anything else → `ac_mk_bad`, value untouched. CSV cells starting with `= + - @ \t \r` get a leading `'`.
+- 🍳 ⚡ card chip says why the suggestion exceeds the shortfall: `แนะนำ n รอบ · ถึงที่ควรมี q` (`mk_sugg_tgt`).
+- Verifier suites updated to the fixed behaviour: `v_review3_send` [C][D][E][G][I][J][K][L][N], `v_review3_buy` [B], `v_review3_acc` [A][E]; `v_e2e3` price helper + sanity numbers; `t_send` line names. Screenshots: `k2/shots_fx1/`.
+
+## 11. Fixer notes (2026-10-17, phase 2 round 2 — after the r4 verifiers)
+- **🚚 sdSend re-checks everything AFTER the ✅ dialog** (the dialog can stay open while another device delivers / produces / bills): `sdStockOk(L,rids)` (= `refreshRows` → **false = refuse with `sd_live_fail`**, never the cached stock · then need > have → `sd_stock_short`) runs before *and* after the dialog;
+  then `sdRead()` (the read part of `sdLoad`, no state) → `sdCalcGroups` → the group's `sdSig` (pid · name · remaining) and the re-priced rows (`sdRowsOf`) must equal what was confirmed, otherwise `sd_changed` + repaint, no bill;
+  the bill number is read again after the dialog, and the header insert (`sdInsertHead`) retries ≤3× on **23505** with a fresh number. Nothing is written until all of that passed — `v_review3_r2_send` [A1][A2][A3], `t_fix3` [1][2][3].
+- **SQL**: `kc_deliveries_bill_no_uq` / `kc_pos_po_no_uq` partial unique indexes (null allowed), created in a `do` block that only *notices* if duplicates already exist. The stub enforces both (`sbstub2.js` insert → 23505). `t_sql` asserts them.
+- **🍳 never ⚡/🔄 from half the data**: `mkLoad`'s `get()` returns `null` for every read error (42501 permission, 42703 column, PGRST204, network…) — only a table that truly does not exist **while `S.kcSql===false`** counts as empty (`sdTblGone`). `stock_receipts` unreadable → `MK_ORD.ok=false` too. `mkOrdersCalc(…,ok,dailyOk)` computes the 14-day average only from a complete delivery read. `t_make` [K9b], `t_fix3` [4], `_v4_probe_make`.
+- **Refill average in KITCHEN units**: `tdLineFactor(l)` (mod_today) = the `kc_links` factor of the line's branch name when it points at the line's `recipe_id`, else 1. `tdAvgSent` (☀️), `MK_ORD.daily` (🍳) and `blVoid`'s lines fallback all use it — a 0.5-factor line of 6 ถุง counts as 3 กก. `v_e2e3` [F], `t_fix3` [7]. `TD_LINKS` on ☀️ is kept from the last good read when `kc_links` cannot be read (like 🚚/🍳).
+- **🛒 mirrors 🚚**: `poListLoad` sets `PO_LIST_OK=false` when `kc_pos` **or** `kc_po_lines` cannot be read (last good list kept); `poCalc` then returns no groups (`listOk:false`), `poPaint` shows `po_list_noread` + `po_list_noread_h` + ⟳ (`po_reload`) only, `poSend` / the manual "✅ ส่งแล้ว" / `poSave` / `poNextNo` refuse. `poSave` returns `{id,po_no,text}` and retries ≤3× on 23505 (reloads the list, next number, re-renders the text). `t_buy` [9] s5 updated to this behaviour; `v_review3_r2_buy` [A][B], `t_fix3` [5].
+- **🧾 month taps**: `blLoad` is sequence-guarded (`BL_SEQ` + the month it was started for) and resolves `true` only when its result was applied; `RENDER.bills` paints on `true`. `v_review3_r2_bills` [A].
+- **`numIn(v)`** (shell): `"1,5"` / `"1,25"` (comma + 1–2 digits) = decimal comma → 1.5 / 1.25; `"1,500"` stays 1,500. `stepper` handlers, `stepBump`, 🚚 ส่ง (`sdSetSent`) and 🛒 packs (`poSetPacks`) use it; `num()` is unchanged. `t_fix3` [6].
+- Regression suite for this round: `t_fix3.mjs` (+ the verifiers' `v_review3_r2_*.mjs` now all green). Screenshots: `k2/shots_fx2/`.
+

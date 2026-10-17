@@ -121,7 +121,7 @@ Receiving: user enters packs × pack size (prefilled from item buy_unit/buy_qty,
 
 ## Engineering conventions
 - Source is split for parallel work: `k2/shell.html` (everything up to and including shared libs + i18n core + an `<!-- MODULES -->` marker + boot + PTR + closing tags) and `k2/mod_<name>.js` files;
-  `k2/build.mjs` inlines each module (in the order listed in `k2/modules.json`) at the marker inside one `<script>` and writes `/home/user/JJ-PnL/jjmk-kitchen-new.html`.
+  `k2/build.mjs` inlines each module (in the order listed in `k2/modules.json`) at the marker inside one `<script>` and writes `/home/user/JJ-PnL/jjmk-kitchen.html`.
 - Shared API (defined in shell): `S` state {user, prof, items, recipes, recipeItems, sups, cfg, lineGroups, tab, …}; `sb` client; `db(fn)` wrapper (busy dot + error toast + returns data, throws on error);
   `loadAll()`; `uid(p)`; `num fmt fmtQ rnd2 rnd4 esc t dispName dispDate bizTodayISO addDays thDate toast confirm2 openModal closeModal`; `unitFactor(item,u) unitList(item) convert(item,qty,from,to)`;
   `itemById recipeById supById bomOf(recipe)` ; `pushMoves(moves)` (inserts kc_moves + ck_add_qty per ref); `avgCostItem/avgCostRecipe` helpers; `lineSend(groupId,text)`; `I18N.add(obj)`, `CSS.add(str)`;

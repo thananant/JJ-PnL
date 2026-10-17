@@ -1,9 +1,10 @@
 /* ============================================================
    ☀️ วันนี้ — today (td*)
    วันที่ + การ์ดใหญ่แตะได้ (แต่ละใบพาไปแท็บงานนั้น):
-   🚚 ออเดอร์สาขาที่ยังไม่ส่ง = stock_receipts (ซัพ = cfg.ck_sup_names · order_date ≥ วันนี้−lookback · เฉพาะสาขาที่เห็น) หัก kc_deliveries สาขา+วันสั่งเดียวกัน (status≠void)
+   🚚 ออเดอร์สาขาที่ยังไม่ส่ง = stock_receipts (ซัพ = cfg.ck_sup_names · order_date ≥ วันนี้−lookback · เฉพาะสาขาที่เห็น) หักที่ส่งแล้วรายบรรทัด
+      — ตัวคิดเดียวกับ 🚚 ส่งสาขา/🍳 ทำของ (sdCalcGroups ใน mod_send.js): ส่งบางส่วน = ที่เหลือยังค้าง · ตัวเลข/ป้าย 🚚 ตรงกันทุกหน้า
    ⚡ ต้องทำด่วน = สินค้าที่สต๊อกสำเร็จรูปไม่พอออเดอร์ที่ยังไม่ส่ง (ชื่อสินค้าสาขา → เมนูผ่าน kc_links หรือชื่อตรงกัน)
-   🔄 ต้องทำเติม = สต๊อกสำเร็จรูปต่ำกว่าที่ควรมี (target_qty หรือ target_days × ยอดส่งเฉลี่ย/วัน 14 วันหลัง)
+   🔄 ต้องทำเติม = สต๊อกสำเร็จรูปต่ำกว่าที่ควรมี (target_qty หรือ target_days × ยอดส่งเฉลี่ย/วัน 14 วันหลัง — หน่วยครัว: บรรทัดบิลเป็นหน่วยสาขา × ตัวคูณที่ผูกใน kc_links `tdLineFactor`)
    ⚠️ วัตถุดิบต่ำกว่าขั้นต่ำ · 📋 นับล่าสุด · ยอดวันนี้ (รับของ ฿ · ทำของ รอบ · ส่งสาขา ฿)
    ทุกการ์ดอ่านแยกกันแบบ fail-soft — ตารางไหนอ่านไม่ได้ การ์ดนั้นบอก "อ่านข้อมูลไม่ได้" ใบอื่นยังทำงาน
    ============================================================ */
@@ -53,8 +54,10 @@ RENDER.today=function(el){
     '<div class="kpis tdk">'+tdKpi('recv',t('td_recv'),'hero','recv')+tdKpi('made',t('td_made'),'','make')+tdKpi('sent',t('td_sent'),'','bills')+'</div>';
   if(K)tdLoad();
 };
-function tdBig(key,ic,title,sub,cls,tab){return '<button type="button" class="bigact'+(cls?' '+cls:'')+'" id="tdC_'+key+'" onclick="show(\''+tab+'\')"><span class="bi">'+ic+'</span>'+
+function tdBig(key,ic,title,sub,cls,tab){return '<button type="button" class="bigact'+(cls?' '+cls:'')+'" id="tdC_'+key+'" onclick="tdGo(\''+key+'\',\''+tab+'\')"><span class="bi">'+ic+'</span>'+
   '<span class="btx"><b>'+esc(title)+'</b><small id="tdS_'+key+'">'+esc(sub)+'</small></span><span class="bgo">›</span></button>';}
+function tdGo(key,tab){ // การ์ด → แท็บงานพร้อมสถานะที่ถูก: ⚡ = หน้าทำของ ชิป ด่วน · 🔄 = ชิป เติม (ตัวเลขที่นั่นคิดจากออเดอร์ชุดเดียวกัน)
+  if((key==='urgent'||key==='refill')&&typeof mkSetPill==='function')mkSetPill(key);show(tab);}
 function tdKpi(key,title,cls,tab){return '<div class="kpi tap'+(cls?' '+cls:'')+'" id="tdK_'+key+'" onclick="show(\''+tab+'\')"><div class="t">'+esc(title)+'</div><div class="kpi-v" id="tdV_'+key+'">…</div><div class="s" id="tdX_'+key+'"></div></div>';}
 function tdSet(key,sub,cls){const b=document.getElementById('tdC_'+key);if(!b)return;b.className='bigact'+(cls?' '+cls:'');const s=document.getElementById('tdS_'+key);if(s)s.textContent=sub;}
 function tdSetKpi(key,v,sub){const a=document.getElementById('tdV_'+key),b=document.getElementById('tdX_'+key);if(a)a.textContent=v;if(b)b.textContent=sub||'';}
@@ -77,37 +80,33 @@ async function tdLoad(){
   if(dl.ok&&dl.rows.length)dll=await tdGet('kc_delivery_lines',q=>q.in('delivery_id',dl.rows.map(d=>d.id)));
   if(seq!==TD_SEQ||S.tab!=='today')return;
   const D={today,sr,dl,lk,ct,rc,pd,dll};TD_DATA=D;
+  if(D.lk.ok)TD_LINKS=D.lk.rows;   // ชื่อสินค้าสาขา ↔ เมนู (อ่านไม่ได้ = ใช้ของเดิม — เหมือน 🚚/🍳)
   tdPaintOrders(D);tdPaintRefill(D);tdPaintCount(D);tdPaintKpis(D);
 }
 /* ---------- ออเดอร์สาขา + ด่วน ---------- */
-function tdOpenOrders(sr,dl){ // → {groups:[{code,od,lines}], branches, orders, lines, need:{recipe_id:qty}, unlinked:[]}
-  const names=((S.cfg||CFG_DEF).ck_sup_names||[]).map(supKey);const byStk={};S.branches.forEach(b=>{if(b.stk)byStk[String(b.stk)]=b;});
-  const done=new Set();(dl||[]).forEach(d=>{if(d.status!=='void'&&d.branch&&d.order_date)done.add(d.branch+'|'+String(d.order_date).slice(0,10));});
-  const groups={};
-  (sr||[]).forEach(r=>{if(!names.includes(supKey(r.sup)))return;const b=byStk[String(r.branch_id)];if(!b||!(num(r.ordered)>0))return;
-    const od=String(r.order_date||'').slice(0,10),g=b.code+'|'+od;if(done.has(g))return;(groups[g]=groups[g]||{code:b.code,od,lines:[]}).lines.push(r);});
-  const G=Object.values(groups),need={},unlinked=[];
-  G.forEach(g=>g.lines.forEach(r=>{const L=tdLinkOf(r.name);if(!L){if(!unlinked.includes(r.name))unlinked.push(r.name);return;}need[L.recipe_id]=rnd4((need[L.recipe_id]||0)+num(r.ordered)*L.factor);}));
-  return {groups:G,branches:new Set(G.map(g=>g.code)).size,orders:G.length,lines:G.reduce((a,g)=>a+g.lines.length,0),need,unlinked};}
+function tdOpenOrders(sr,dl,dll){ // → {groups,branches,orders,lines,need:{recipe_id:qty},unlinked:[]} — ตัวคิดเดียวกับ 🚚 ส่งสาขา (sdCalcGroups)
+  const C=sdCalcGroups({sr,dl,dll},S.branches);
+  return {groups:C.groups,branches:new Set(C.groups.map(g=>g.code)).size,orders:C.groups.length,lines:C.lines,need:C.need,unlinked:C.unlinked};}
 let TD_LINKS=[];
 function tdLinkOf(stkName){ // ชื่อสินค้าสาขา → {recipe_id,factor} ผ่าน kc_links · ไม่มี = ชื่อตรงกับเมนู (หรือ stock_name)
   const k=supKey(stkName);if(!k)return null;
   const l=TD_LINKS.find(x=>supKey(x.stk_name)===k);if(l&&recipeById(l.recipe_id))return {recipe_id:l.recipe_id,factor:num(l.factor)||1};
   const r=activeRecipes().find(x=>supKey(x.name)===k||supKey(x.stock_name)===k);return r?{recipe_id:r.id,factor:1}:null;}
+function tdLineFactor(l){ // บรรทัดบิล (ชื่อสินค้าสาขา + เมนู) → ตัวคูณ หน่วยสาขา → หน่วยครัว ตาม kc_links · ผูกไว้คนละเมนู/ไม่รู้จัก = 1 (กติกาเดียวกับ blVoid)
+  const lk=tdLinkOf(l&&l.name);return (lk&&lk.recipe_id===(l&&l.recipe_id))?(num(lk.factor)||1):1;}
 function tdPaintOrders(D){
-  if(!D.sr.ok||!D.dl.ok){tdSet('orders',t('td_noread'),'dim');tdSet('urgent',t('td_noread'),'dim');return;}
-  TD_LINKS=D.lk.ok?D.lk.rows:[];
-  const o=tdOpenOrders(D.sr.rows,D.dl.rows);D.open=o;
+  if(!D.sr.ok||!D.dl.ok||!D.dll.ok){tdSet('orders',t('td_noread'),'dim');tdSet('urgent',t('td_noread'),'dim');return;}
+  const o=tdOpenOrders(D.sr.rows,D.dl.rows,D.dll.rows);D.open=o;
   tdSet('orders',o.orders?t('td_orders_s',{b:o.branches,o:o.orders,n:o.lines}):t('td_orders_ok'),o.orders?'hot':'ok');
   setBadge('send',o.orders);
   const short=Object.keys(o.need).filter(id=>{const r=recipeById(id);return r&&o.need[id]-Math.max(0,num(r.qty))>1e-9;});D.urgent=short;
   let sub=short.length?t('td_urgent_s',{n:short.length}):t('td_urgent_ok');if(o.unlinked.length)sub+=' · '+t('td_unlinked',{n:o.unlinked.length});
   tdSet('urgent',sub,short.length?'hot':'ok');}
 /* ---------- เติม ---------- */
-function tdAvgSent(D){ // ยอดส่งเฉลี่ย/วัน 14 วันหลัง ต่อเมนู (บิลที่ไม่ยกเลิก)
+function tdAvgSent(D){ // ยอดส่งเฉลี่ย/วัน 14 วันหลัง ต่อเมนู (บิลที่ไม่ยกเลิก) — เป็นหน่วยครัว: sent ของบรรทัดบิลเป็นหน่วยสาขา × ตัวคูณที่ผูก (6 ถุง ×0.5 = 3 กก.)
   const out={};if(!D.dl.ok||!D.dll.ok)return out;
   const okIds=new Set(D.dl.rows.filter(d=>d.status!=='void'&&String(d.d)>=addDays(D.today,-14)).map(d=>String(d.id)));
-  D.dll.rows.forEach(l=>{if(!okIds.has(String(l.delivery_id))||!l.recipe_id)return;out[l.recipe_id]=(out[l.recipe_id]||0)+num(l.sent);});
+  D.dll.rows.forEach(l=>{if(!okIds.has(String(l.delivery_id))||!l.recipe_id)return;out[l.recipe_id]=(out[l.recipe_id]||0)+num(l.sent)*tdLineFactor(l);});
   Object.keys(out).forEach(k=>out[k]=out[k]/14);return out;}
 function tdTargetOf(r,avg){if(r.target_qty!=null&&num(r.target_qty)>0)return num(r.target_qty);if(r.target_days!=null&&num(r.target_days)>0)return rnd4(num(r.target_days)*num(avg[r.id]||0));return null;}
 function tdPaintRefill(D){
@@ -124,4 +123,4 @@ function tdPaintCount(D){
 function tdPaintKpis(D){
   if(D.rc.ok){const tot=D.rc.rows.reduce((a,r)=>a+num(r.total),0);tdSetKpi('recv',money(tot),t('td_rcpts',{n:D.rc.rows.length}));}else tdSetKpi('recv','—',t('td_noread'));
   if(D.pd.ok){const lots=D.pd.rows.reduce((a,r)=>a+num(r.lots),0),menus=new Set(D.pd.rows.map(r=>r.recipe_id)).size;tdSetKpi('made',t('td_lots',{n:fmtQ(lots)}),t('td_menus',{n:menus}));}else tdSetKpi('made','—',t('td_noread'));
-  if(D.dl.ok){const rows=D.dl.rows.filter(d=>String(d.d).slice(0,10)===D.today&&d.status!=='void');tdSetKpi('sent',money(rows.reduce((a,r)=>a+num(r.total),0)),t('td_bills',{n:rows.length}));}else tdSetKpi('sent','—',t('td_noread'));}
+  if(D.dl.ok){const rows=D.dl.rows.filter(d=>String(d.d).slice(0,10)===D.today&&d.status!=='void'&&inBr(d.branch));tdSetKpi('sent',money(rows.reduce((a,r)=>a+num(r.total),0)),t('td_bills',{n:rows.length}));}else tdSetKpi('sent','—',t('td_noread'));}
