@@ -716,6 +716,13 @@ create index if not exists kc_deliveries_d_idx on kc_deliveries (d);
 create index if not exists kc_deliveries_branch_idx on kc_deliveries (branch, order_date);
 create index if not exists kc_expenses_ym_idx on kc_expenses (ym);
 create index if not exists kc_counts_d_idx on kc_counts (d);
+-- เลขบิลสาขา / เลขใบสั่งซื้อ ห้ามซ้ำ (สองเครื่องกดออกบิลพร้อมกัน → เครื่องหลังได้ 23505 แล้วแอพอ่านเลขใหม่เอง) · มีเลขซ้ำอยู่แล้ว = แจ้งเตือน ไม่สร้าง index (แก้เลขซ้ำก่อนแล้วรันใหม่)
+do $$ begin
+  create unique index if not exists kc_deliveries_bill_no_uq on kc_deliveries (bill_no) where bill_no is not null;
+exception when unique_violation then raise notice 'kc_deliveries: bill_no ซ้ำอยู่ — แก้เลขซ้ำก่อนแล้วรันใหม่ (ยังไม่สร้าง kc_deliveries_bill_no_uq)'; end $$;
+do $$ begin
+  create unique index if not exists kc_pos_po_no_uq on kc_pos (po_no) where po_no is not null;
+exception when unique_violation then raise notice 'kc_pos: po_no ซ้ำอยู่ — แก้เลขซ้ำก่อนแล้วรันใหม่ (ยังไม่สร้าง kc_pos_po_no_uq)'; end $$;
 
 -- ---------- 3) บวก/ลบยอดแบบ atomic (ชื่อ/พารามิเตอร์เดียวกับแอพเดิม) ----------
 -- รุ่นนี้ปัด 4 ตำแหน่ง (แอพใหม่เก็บยอดเป็นหน่วยหลัก 4 ตำแหน่ง — 4 กรัมของของที่นับเป็น กก. = 0.004 · รุ่นเดิมปัด 2 ตำแหน่งทำให้ยอดเล็ก ๆ หายไป)
@@ -777,7 +784,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-17 16:03';
+const APP_VER='KC 2.0 · 2026-10-17 16:59';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -882,6 +889,7 @@ const money=n=>{const x=Number(n)||0;return (x<0?'−฿':'฿')+fmtI(Math.abs(x
 const moneyU=n=>(n==null||isNaN(n))?'฿–':'฿'+(Math.abs(Number(n))>=1?fmt(n,2):fmtQ(n));   // ราคาต่อหน่วย: ≥1 บาท 2 ตำแหน่ง · ต่ำกว่า 1 บาท ≤4 ตำแหน่ง
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=v=>{const n=parseFloat(String(v??'').replace(/,/g,''));return isNaN(n)?0:n;};
+const numIn=v=>{const s=String(v??'').trim();const m=/^(-?\d+),(\d{1,2})$/.exec(s);return num(m?m[1]+'.'+m[2]:s);};   // ช่องกรอกตัวเลข: "1,5" (จุลภาค + 1–2 หลัก = ทศนิยมแบบคีย์บอร์ดบางเครื่อง) = 1.5 · "1,500" = 1,500 เหมือนเดิม — stepper/stepBump/ช่องส่ง/ช่องสั่งใช้ตัวนี้
 const rnd2=v=>Math.round((Number(v)||0)*100)/100;
 const rnd4=v=>Math.round((Number(v)||0)*1e4)/1e4;
 let uidN=0;const uid=p=>(p||'k')+Date.now().toString(36)+Math.random().toString(36).slice(2,6)+(uidN++).toString(36);
@@ -1365,12 +1373,12 @@ function dhead(txt,extra){return '<div class="dhead">'+txt+(extra?'<span class="
 function card(title,body,o){o=o||{};return '<div class="card'+(o.cls?' '+o.cls:'')+'"'+(o.id?' id="'+esc(o.id)+'"':'')+(o.onclick?' onclick="'+o.onclick+'"':'')+'>'+
   (title?'<h3>'+title+(o.sp?'<span class="sp">'+o.sp+'</span>':'')+'</h3>':'')+body+'</div>';}
 function stepper(id,val,o){ // − [input] ＋ · o:{step,min,max,unit,on (ชื่อฟังก์ชัน global หรือ fn(value,id)),big,ph}
-  o=o||{};const cls=o.big?'bq':'skstep';const call=typeof o.on==='function'?hreg(el=>o.on(num(el.value),id)):(o.on?o.on+'(num(this.value),'+esc(JSON.stringify(id))+')':'');
+  o=o||{};const cls=o.big?'bq':'skstep';const call=typeof o.on==='function'?hreg(el=>o.on(numIn(el.value),id)):(o.on?o.on+'(numIn(this.value),'+esc(JSON.stringify(id))+')':'');
   return '<div class="'+cls+'" data-step="'+esc(id)+'"><button type="button" onclick="stepBump(\''+esc(id)+'\',-1)">−</button>'+
     '<input id="'+esc(id)+'" type="text" inputmode="decimal" value="'+esc(val==null?'':val)+'" placeholder="'+esc(o.ph||'')+'" data-min="'+esc(o.min==null?0:o.min)+'" data-max="'+esc(o.max==null?'':o.max)+'" data-stepv="'+esc(o.step||1)+'"'+(call?' oninput="'+call+'" onchange="'+call+'"':'')+'>'+
     '<button type="button" class="plus" onclick="stepBump(\''+esc(id)+'\',1)">＋</button>'+(o.unit?'<span class="b" style="flex:none">'+esc(trUnit(o.unit))+'</span>':'')+'</div>';}
 function stepBump(id,dir){const inp=document.getElementById(id);if(!inp)return;const st=num(inp.dataset.stepv)||1,mn=inp.dataset.min===''?-Infinity:num(inp.dataset.min),mx=inp.dataset.max===''?Infinity:num(inp.dataset.max);
-  let v=rnd4(num(inp.value)+dir*st);v=Math.max(mn,Math.min(mx,v));inp.value=v;inp.classList.add('has');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));}
+  let v=rnd4(numIn(inp.value)+dir*st);v=Math.max(mn,Math.min(mx,v));inp.value=v;inp.classList.add('has');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));}
 function pinnedBar(html,view){ // แถบติดขอบล่าง (null = เอาออก) · view = element ของหน้า (ตั้งต้น = หน้าที่เปิดอยู่)
   view=view||document.getElementById('view-'+S.tab);if(!view)return;let bar=view.querySelector(':scope>.pinbar');
   if(html==null){if(bar)bar.remove();view.classList.remove('hasbar');syncPin();return;}
@@ -1395,7 +1403,7 @@ function recipeOptionsHtml(sel){return activeRecipes().map(r=>'<option value="'+
    🚚 ออเดอร์สาขาที่ยังไม่ส่ง = stock_receipts (ซัพ = cfg.ck_sup_names · order_date ≥ วันนี้−lookback · เฉพาะสาขาที่เห็น) หักที่ส่งแล้วรายบรรทัด
       — ตัวคิดเดียวกับ 🚚 ส่งสาขา/🍳 ทำของ (sdCalcGroups ใน mod_send.js): ส่งบางส่วน = ที่เหลือยังค้าง · ตัวเลข/ป้าย 🚚 ตรงกันทุกหน้า
    ⚡ ต้องทำด่วน = สินค้าที่สต๊อกสำเร็จรูปไม่พอออเดอร์ที่ยังไม่ส่ง (ชื่อสินค้าสาขา → เมนูผ่าน kc_links หรือชื่อตรงกัน)
-   🔄 ต้องทำเติม = สต๊อกสำเร็จรูปต่ำกว่าที่ควรมี (target_qty หรือ target_days × ยอดส่งเฉลี่ย/วัน 14 วันหลัง)
+   🔄 ต้องทำเติม = สต๊อกสำเร็จรูปต่ำกว่าที่ควรมี (target_qty หรือ target_days × ยอดส่งเฉลี่ย/วัน 14 วันหลัง — หน่วยครัว: บรรทัดบิลเป็นหน่วยสาขา × ตัวคูณที่ผูกใน kc_links `tdLineFactor`)
    ⚠️ วัตถุดิบต่ำกว่าขั้นต่ำ · 📋 นับล่าสุด · ยอดวันนี้ (รับของ ฿ · ทำของ รอบ · ส่งสาขา ฿)
    ทุกการ์ดอ่านแยกกันแบบ fail-soft — ตารางไหนอ่านไม่ได้ การ์ดนั้นบอก "อ่านข้อมูลไม่ได้" ใบอื่นยังทำงาน
    ============================================================ */
@@ -1471,6 +1479,7 @@ async function tdLoad(){
   if(dl.ok&&dl.rows.length)dll=await tdGet('kc_delivery_lines',q=>q.in('delivery_id',dl.rows.map(d=>d.id)));
   if(seq!==TD_SEQ||S.tab!=='today')return;
   const D={today,sr,dl,lk,ct,rc,pd,dll};TD_DATA=D;
+  if(D.lk.ok)TD_LINKS=D.lk.rows;   // ชื่อสินค้าสาขา ↔ เมนู (อ่านไม่ได้ = ใช้ของเดิม — เหมือน 🚚/🍳)
   tdPaintOrders(D);tdPaintRefill(D);tdPaintCount(D);tdPaintKpis(D);
 }
 /* ---------- ออเดอร์สาขา + ด่วน ---------- */
@@ -1482,9 +1491,10 @@ function tdLinkOf(stkName){ // ชื่อสินค้าสาขา → {r
   const k=supKey(stkName);if(!k)return null;
   const l=TD_LINKS.find(x=>supKey(x.stk_name)===k);if(l&&recipeById(l.recipe_id))return {recipe_id:l.recipe_id,factor:num(l.factor)||1};
   const r=activeRecipes().find(x=>supKey(x.name)===k||supKey(x.stock_name)===k);return r?{recipe_id:r.id,factor:1}:null;}
+function tdLineFactor(l){ // บรรทัดบิล (ชื่อสินค้าสาขา + เมนู) → ตัวคูณ หน่วยสาขา → หน่วยครัว ตาม kc_links · ผูกไว้คนละเมนู/ไม่รู้จัก = 1 (กติกาเดียวกับ blVoid)
+  const lk=tdLinkOf(l&&l.name);return (lk&&lk.recipe_id===(l&&l.recipe_id))?(num(lk.factor)||1):1;}
 function tdPaintOrders(D){
   if(!D.sr.ok||!D.dl.ok||!D.dll.ok){tdSet('orders',t('td_noread'),'dim');tdSet('urgent',t('td_noread'),'dim');return;}
-  TD_LINKS=D.lk.ok?D.lk.rows:[];
   const o=tdOpenOrders(D.sr.rows,D.dl.rows,D.dll.rows);D.open=o;
   tdSet('orders',o.orders?t('td_orders_s',{b:o.branches,o:o.orders,n:o.lines}):t('td_orders_ok'),o.orders?'hot':'ok');
   setBadge('send',o.orders);
@@ -1492,10 +1502,10 @@ function tdPaintOrders(D){
   let sub=short.length?t('td_urgent_s',{n:short.length}):t('td_urgent_ok');if(o.unlinked.length)sub+=' · '+t('td_unlinked',{n:o.unlinked.length});
   tdSet('urgent',sub,short.length?'hot':'ok');}
 /* ---------- เติม ---------- */
-function tdAvgSent(D){ // ยอดส่งเฉลี่ย/วัน 14 วันหลัง ต่อเมนู (บิลที่ไม่ยกเลิก)
+function tdAvgSent(D){ // ยอดส่งเฉลี่ย/วัน 14 วันหลัง ต่อเมนู (บิลที่ไม่ยกเลิก) — เป็นหน่วยครัว: sent ของบรรทัดบิลเป็นหน่วยสาขา × ตัวคูณที่ผูก (6 ถุง ×0.5 = 3 กก.)
   const out={};if(!D.dl.ok||!D.dll.ok)return out;
   const okIds=new Set(D.dl.rows.filter(d=>d.status!=='void'&&String(d.d)>=addDays(D.today,-14)).map(d=>String(d.id)));
-  D.dll.rows.forEach(l=>{if(!okIds.has(String(l.delivery_id))||!l.recipe_id)return;out[l.recipe_id]=(out[l.recipe_id]||0)+num(l.sent);});
+  D.dll.rows.forEach(l=>{if(!okIds.has(String(l.delivery_id))||!l.recipe_id)return;out[l.recipe_id]=(out[l.recipe_id]||0)+num(l.sent)*tdLineFactor(l);});
   Object.keys(out).forEach(k=>out[k]=out[k]/14);return out;}
 function tdTargetOf(r,avg){if(r.target_qty!=null&&num(r.target_qty)>0)return num(r.target_qty);if(r.target_days!=null&&num(r.target_days)>0)return rnd4(num(r.target_days)*num(avg[r.id]||0));return null;}
 function tdPaintRefill(D){
@@ -1918,7 +1928,8 @@ async function rcVoid(id){await once(async()=>{
    → บันทึก = kc_productions + kc_production_lines + kc_moves (produce_out วัตถุดิบ · waste เศษทิ้ง · produce_in สินค้า) + ck_add_qty
      + ต้นทุนสินค้าถัวเฉลี่ย (ck_recipes.avg_cost / unit_cost = ล็อตล่าสุด) — กติกาเจ้าของ: ราคาสินค้า = ต้นทุนจริงของล็อตที่ทำ
    ⚡ ด่วน อ่านออเดอร์สาขาจาก stock_receipts (sup = ครัวกลาง · ย้อนหลัง order_lookback_days) จับคู่เมนูด้วย kc_links/ชื่อ · หักที่ส่งแล้ว (kc_deliveries) · ขาด = สั่ง − สต๊อก
-   🔄 เติม = สต๊อก < target_qty หรือ target_days × ยอดส่งเฉลี่ย 14 วัน
+   🔄 เติม = สต๊อก < target_qty หรือ target_days × ยอดส่งเฉลี่ย 14 วัน (หน่วยครัว — บรรทัดบิลหน่วยสาขา × ตัวคูณที่ผูก `tdLineFactor`)
+   อ่านไม่ครบ (stock_receipts/kc_deliveries/kc_delivery_lines อ่านพลาด · ไม่มีสิทธิ์ · ไม่มีคอลัมน์) = MK_ORD.ok=false → แถบ mk_orders_na ไม่มี ⚡ (ยกเว้นยังไม่รัน SQL + ตารางไม่มีจริง = ว่าง — กติกา sdTblGone ของ 🚚)
    ร่างล็อตที่ทำค้างเก็บ localStorage (jjck_mk_draft · วันเดียวกัน ≤12 ชม.) · ‹ กลับ = เก็บตัวเลขไว้ · ทำวันนี้ → รายละเอียด + ยกเลิกวันเดียวกัน (ย้อนสต๊อก/ต้นทุน)
    ============================================================ */
 I18N.add({
@@ -2025,22 +2036,22 @@ async function mkLoad(force){
   if(!force&&MK_ORD.ok&&Date.now()-MK_ORD.at<60000)return;
   MK_LOADING=(async()=>{
     const td=bizTodayISO(),lb=num((S.cfg||CFG_DEF).order_lookback_days);
-    const get=async q=>{try{const r=await q;if(r&&r.error){if(MISSING_TBL(r.error))return [];throw r.error;}return r.data||[];}catch(e){return null;}};
+    const get=async q=>{try{const r=await q;if(r&&r.error){const x={ok:false,rows:[],err:r.error};sdTblGone(x);return x.ok?[]:null;}return r.data||[];}catch(e){return null;}};   // อ่านพลาด/ไม่มีสิทธิ์/ไม่มีคอลัมน์ = null (ห้ามถือว่าว่าง → ⚡ จากข้อมูลครึ่ง ๆ) · ตารางไม่มีจริงตอนยังไม่รัน SQL = ว่าง
     const [orders,links,dels,prods]=await Promise.all([
       get(sb.from('stock_receipts').select('id,branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
       get(sb.from('kc_links').select('stk_name,recipe_id,factor')),
       get(sb.from('kc_deliveries').select('id,d,branch,order_date,status').gte('d',addDays(td,-Math.max(14,lb+3))).neq('status','void')),
       get(sb.from('kc_productions').select('*').eq('d',td).order('created_at',{ascending:false}))]);
-    let dl=[],dlOk=true;if(dels&&dels.length){const r=await get(sb.from('kc_delivery_lines').select('delivery_id,recipe_id,stk_product_id,name,sent').in('delivery_id',dels.map(x=>x.id)));if(r==null)dlOk=false;else dl=r;}
-    MK_ORD=mkOrdersCalc(orders||[],links,dels||[],dl,td,!!orders&&dels!=null&&dlOk);MK_TODAY=prods||[];   // อ่านไม่ครบ (บิล/บรรทัดที่ส่งแล้ว) = ไม่คิด ⚡ จากข้อมูลครึ่ง ๆ
+    let dl=[],dlOk=dels!=null;if(dels&&dels.length){const r=await get(sb.from('kc_delivery_lines').select('delivery_id,recipe_id,stk_product_id,name,sent').in('delivery_id',dels.map(x=>x.id)));if(r==null)dlOk=false;else dl=r;}
+    MK_ORD=mkOrdersCalc(orders||[],links,dels||[],dl,td,orders!=null&&dlOk,dlOk);MK_TODAY=prods||[];   // อ่านไม่ครบ (ออเดอร์/บิล/บรรทัดที่ส่งแล้ว) = ไม่คิด ⚡ จากข้อมูลครึ่ง ๆ · บิลอ่านไม่ครบ = ไม่คิด 🔄 ด้วย
   })();
   try{await MK_LOADING;}finally{MK_LOADING=null;}
 }
-function mkOrdersCalc(orders,links,dels,dl,td,ok){ // ออเดอร์ค้างต่อเมนู = ตัวคิดเดียวกับ 🚚 ส่งสาขา/☀️ วันนี้ (sdCalcGroups) → ⚡ ขาด ของหน้านี้ = ขาด ของหน้าส่งสาขา เสมอ
+function mkOrdersCalc(orders,links,dels,dl,td,ok,dailyOk){ // ออเดอร์ค้างต่อเมนู = ตัวคิดเดียวกับ 🚚 ส่งสาขา/☀️ วันนี้ (sdCalcGroups) → ⚡ ขาด ของหน้านี้ = ขาด ของหน้าส่งสาขา เสมอ · dailyOk (ตั้งต้น = ok) = บิล 14 วันอ่านครบ จึงคิดยอดส่งเฉลี่ย
   if(Array.isArray(links))TD_LINKS=links;   // ชื่อสินค้าสาขา ↔ เมนู (อ่านไม่ได้ = ใช้ของเดิม)
   const C=ok?sdCalcGroups({sr:orders,dl:dels,dll:dl},S.branchesAll):{ordered:{},sent:{}};   // ทำของ = ทั้งครัว (ทุกสาขา) · หน้าส่งสาขา/วันนี้ ใช้ S.branches ตามสิทธิ์ · อ่านไม่ครบ = ไม่มีออเดอร์ให้คิด (ขึ้นแถบเตือน)
   const daily={},from14=addDays(td,-14),dById={};dels.forEach(x=>{dById[x.id]=x;});
-  dl.forEach(l=>{const dv=dById[l.delivery_id];if(!dv||!l.recipe_id)return;if(String(dv.d)>=from14)daily[l.recipe_id]=num(daily[l.recipe_id])+num(l.sent);});
+  if(dailyOk==null?ok:dailyOk)dl.forEach(l=>{const dv=dById[l.delivery_id];if(!dv||!l.recipe_id)return;if(String(dv.d)>=from14)daily[l.recipe_id]=num(daily[l.recipe_id])+num(l.sent)*tdLineFactor(l);});   // หน่วยครัว (= tdAvgSent ของ ☀️)
   Object.keys(daily).forEach(k=>{daily[k]=rnd4(daily[k]/14);});
   return {at:Date.now(),ok,ordered:C.ordered,sent:C.sent,daily};}
 function mkNeeds(){ // ต่อเมนู: open (สั่งค้าง) · short (ขาด) · target · below (ต้องเติม) · sugg (รอบที่แนะนำ)
@@ -2550,6 +2561,8 @@ async function ctDetail(id){
    ชื่อสินค้าสาขา → เมนู ใช้ tdLinkOf()/TD_LINKS ของหน้าวันนี้ (kc_links → ชื่อตรงกัน) · ยังไม่ผูก = เลือกเมนูแล้วบันทึก kc_links
    ส่ง (ตั้งต้น = น้อยสุดของ ค้างส่ง/ของที่เหลือหลังจัดให้ใบสั่งก่อนหน้า) แก้ในที่ · ขาด → ⚡ ทำของ (หน้าทำของ ชิป ด่วน)
    ✅ ส่งแล้ว ออกบิล = kc_deliveries + kc_delivery_lines (ต้นทุน/ราคา ณ ตอนส่ง) → kc_moves 'send' + ck_add_qty (ห้ามส่งเกินสต๊อกสด)
+     · ยอดสดอ่านไม่ได้ = ไม่ออกบิล (sd_live_fail) · หลังกดยืนยัน อ่านซ้ำทั้งยอดสด + ใบสั่ง/ที่ส่งแล้ว (อีกเครื่องอาจส่ง/ทำของ/สาขาแก้ยอดระหว่างหน้าต่างเปิด) ไม่ตรง = ไม่ออกบิล (sd_changed)
+     · เลขบิลอ่านใหม่หลังหน้าต่าง · ชน (23505 — unique index ใน SQL) = อ่านเลขใหม่แล้วลองอีก ≤3 ครั้ง
    → ข้อความบิล (ไทยเสมอ) เข้ากลุ่มไลน์ของสาขา (cfg.branch_line) · ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก + เปิดไลน์
    เขียนไม่ครบ = ถอนทั้งหมด (sdRollback) · ส่งบางส่วน = ที่เหลือยังขึ้น "ค้างส่ง" · setBadge('send', จำนวนใบสั่งที่ยังค้าง)
    ============================================================ */
@@ -2563,6 +2576,7 @@ th:{sd_sub:'ออเดอร์ที่สาขานับสต๊อก�
   sd_not_saved:'ออกบิลไม่สำเร็จ — ยังไม่ตัดสต๊อก ลองใหม่อีกครั้ง',sd_saved:'ออกบิล {no} แล้ว ✅',sd_line_sent:'ส่งบิลเข้ากลุ่มไลน์ {g} แล้ว ✅',sd_line_fail:'ส่งไลน์ไม่สำเร็จ — คัดลอกข้อความไปส่งเอง',
   sd_line_none:'สาขานี้ยังไม่ได้ตั้งกลุ่มไลน์ (⚙️ ตั้งค่า) — คัดลอกข้อความไปส่งเอง',sd_done_t:'ออกบิลแล้ว',sd_view_bill:'🧾 ดูบิล',
   sd_noread_h:'ยังไม่แสดงใบสั่ง — อ่านของที่ส่งไปแล้วไม่ครบ ถ้าแสดงอาจส่งซ้ำ',sd_no_price:'{n}: ยังไม่มีราคา — ส่งไม่ได้ (ทำของที่ 🍳 หรือใส่ต้นทุนใน 📖 เมนู)',
+  sd_live_fail:'อ่านยอดสดของสินค้าไม่ได้ — ยังไม่ออกบิล ลองใหม่อีกครั้ง',sd_changed:'ใบสั่งนี้เปลี่ยนไประหว่างยืนยัน (อีกเครื่องส่งแล้ว / สาขาแก้ยอด / ราคาเปลี่ยน) — ยังไม่ออกบิล ดูตัวเลขใหม่แล้วกดอีกครั้ง',
   sd_no_price_h:'ไม่มีราคา — ส่งไม่ได้ · ทำของก่อน (🍳) หรือใส่ต้นทุนใน 📖 เมนู',sd_line_nosave:'ส่งไลน์แล้ว แต่บันทึกสถานะไม่ได้ — บิลจะขึ้นว่ายังไม่ส่งไลน์ ไม่ต้องส่งซ้ำ'},
 en:{sd_sub:'Orders the branches placed after their stock count — enter what you deliver, then issue the bill',sd_none:'No orders waiting 👍',sd_none_h:'Branches order through the stock-count app (supplier = {s}), last {d} days',
   sd_noread:'Could not read branch orders — try reloading',sd_reload:'⟳ Reload orders',sd_ordered:'Ordered',sd_have:'In stock',sd_send:'Send',sd_short:'Short',sd_full:'Complete',sd_make:'⚡ Produce',
@@ -2573,6 +2587,7 @@ en:{sd_sub:'Orders the branches placed after their stock count — enter what yo
   sd_not_saved:'Bill not issued — stock untouched, please try again',sd_saved:'Bill {no} issued ✅',sd_line_sent:'Bill sent to LINE group {g} ✅',sd_line_fail:'LINE send failed — copy the text and send it yourself',
   sd_line_none:'This branch has no LINE group yet (⚙️ Settings) — copy the text and send it yourself',sd_done_t:'Bill issued',sd_view_bill:'🧾 View bill',
   sd_noread_h:'Orders are hidden — what was already delivered could not be read fully; showing them could send twice',sd_no_price:'{n}: no price yet — cannot send (produce it on 🍳 or set a cost on 📖 Menus)',
+  sd_live_fail:'Could not read live stock — bill not issued, please try again',sd_changed:'This order changed while confirming (another device delivered / the branch changed it / price changed) — bill not issued, check the new numbers and tap again',
   sd_no_price_h:'No price — cannot send · produce first (🍳) or set a cost on 📖 Menus',sd_line_nosave:'Sent to LINE, but the status could not be saved — the bill will show "LINE not sent"; do not resend'},
 lo:{sd_sub:'ອໍເດີທີ່ສາຂານັບສະຕັອກແລ້ວສັ່ງມາ — ໃສ່ຈຳນວນທີ່ສົ່ງ ແລ້ວກົດອອກບິນ',sd_none:'ບໍ່ມີອໍເດີຄ້າງສົ່ງ 👍',sd_none_h:'ສາຂາສັ່ງເຄື່ອງຜ່ານແອັບນັບສະຕັອກ (ຮ້ານຄ້າ = {s}) ຍ້ອນຫຼັງ {d} ມື້',
   sd_noread:'ອ່ານອໍເດີສາຂາບໍ່ໄດ້ — ລອງໂຫຼດໃໝ່',sd_reload:'⟳ ໂຫຼດອໍເດີໃໝ່',sd_ordered:'ສັ່ງມາ',sd_have:'ມີ',sd_send:'ສົ່ງ',sd_short:'ຂາດ',sd_full:'ຄົບ',sd_make:'⚡ ເຮັດເຄື່ອງ',
@@ -2583,6 +2598,7 @@ lo:{sd_sub:'ອໍເດີທີ່ສາຂານັບສະຕັອກແ�
   sd_not_saved:'ອອກບິນບໍ່ສຳເລັດ — ຍັງບໍ່ຕັດສະຕັອກ ລອງໃໝ່ອີກຄັ້ງ',sd_saved:'ອອກບິນ {no} ແລ້ວ ✅',sd_line_sent:'ສົ່ງບິນເຂົ້າກຸ່ມໄລນ໌ {g} ແລ້ວ ✅',sd_line_fail:'ສົ່ງໄລນ໌ບໍ່ສຳເລັດ — ຄັດລອກຂໍ້ຄວາມໄປສົ່ງເອງ',
   sd_line_none:'ສາຂານີ້ຍັງບໍ່ໄດ້ຕັ້ງກຸ່ມໄລນ໌ (⚙️ ຕັ້ງຄ່າ) — ຄັດລອກຂໍ້ຄວາມໄປສົ່ງເອງ',sd_done_t:'ອອກບິນແລ້ວ',sd_view_bill:'🧾 ເບິ່ງບິນ',
   sd_noread_h:'ຍັງບໍ່ສະແດງໃບສັ່ງ — ອ່ານເຄື່ອງທີ່ສົ່ງໄປແລ້ວບໍ່ຄົບ ຖ້າສະແດງອາດສົ່ງຊ້ຳ',sd_no_price:'{n}: ຍັງບໍ່ມີລາຄາ — ສົ່ງບໍ່ໄດ້ (ເຮັດເຄື່ອງທີ່ 🍳 ຫຼື ໃສ່ຕົ້ນທຶນໃນ 📖 ເມນູ)',
+  sd_live_fail:'ອ່ານຍອດສົດຂອງສິນຄ້າບໍ່ໄດ້ — ຍັງບໍ່ອອກບິນ ລອງໃໝ່ອີກຄັ້ງ',sd_changed:'ໃບສັ່ງນີ້ປ່ຽນໄປລະຫວ່າງຢືນຢັນ (ອີກເຄື່ອງສົ່ງແລ້ວ / ສາຂາແກ້ຍອດ / ລາຄາປ່ຽນ) — ຍັງບໍ່ອອກບິນ ເບິ່ງຕົວເລກໃໝ່ແລ້ວກົດອີກຄັ້ງ',
   sd_no_price_h:'ບໍ່ມີລາຄາ — ສົ່ງບໍ່ໄດ້ · ເຮັດເຄື່ອງກ່ອນ (🍳) ຫຼື ໃສ່ຕົ້ນທຶນໃນ 📖 ເມນູ',sd_line_nosave:'ສົ່ງໄລນ໌ແລ້ວ ແຕ່ບັນທຶກສະຖານະບໍ່ໄດ້ — ບິນຈະຂຶ້ນວ່າຍັງບໍ່ສົ່ງໄລນ໌ ບໍ່ຕ້ອງສົ່ງຊ້ຳ'},
 my:{sd_sub:'ဆိုင်ခွဲများ စာရင်းကောက်ပြီး မှာထားသော အော်ဒါ — ပို့မည့်အရေအတွက် ထည့်ပြီး ဘေလ်ထုတ်ပါ',sd_none:'ပို့ရန်ကျန် အော်ဒါ မရှိပါ 👍',sd_none_h:'ဆိုင်ခွဲများသည် စာရင်းကောက်အက်ပ်မှ မှာယူသည် (ဆိုင် = {s}) နောက် {d} ရက်',
   sd_noread:'ဆိုင်ခွဲအော်ဒါ ဖတ်မရပါ — ပြန်ဖွင့်ကြည့်ပါ',sd_reload:'⟳ အော်ဒါ ပြန်ဖွင့်',sd_ordered:'မှာထား',sd_have:'ရှိ',sd_send:'ပို့',sd_short:'လို',sd_full:'ပြည့်',sd_make:'⚡ ထုတ်လုပ်',
@@ -2593,6 +2609,7 @@ my:{sd_sub:'ဆိုင်ခွဲများ စာရင်းကောက�
   sd_not_saved:'ဘေလ်ထုတ်မရပါ — လက်ကျန် မနုတ်ရသေး ထပ်စမ်းပါ',sd_saved:'ဘေလ် {no} ထုတ်ပြီး ✅',sd_line_sent:'LINE အုပ်စု {g} သို့ ဘေလ်ပို့ပြီး ✅',sd_line_fail:'LINE ပို့မရပါ — စာသားကူးပြီး ကိုယ်တိုင်ပို့ပါ',
   sd_line_none:'ဤဆိုင်ခွဲအတွက် LINE အုပ်စု မသတ်မှတ်ရသေး (⚙️ ဆက်တင်) — စာသားကူးပြီး ကိုယ်တိုင်ပို့ပါ',sd_done_t:'ဘေလ်ထုတ်ပြီး',sd_view_bill:'🧾 ဘေလ်ကြည့်',
   sd_noread_h:'အော်ဒါများ ဖျောက်ထားသည် — ပို့ပြီးသားများကို အပြည့်ဖတ်မရ၍ ပြလျှင် နှစ်ကြိမ်ပို့မိနိုင်သည်',sd_no_price:'{n}: ဈေးမရှိသေး — မပို့နိုင်ပါ (🍳 တွင်ထုတ်လုပ်ပါ သို့မဟုတ် 📖 မီနူးတွင် ကုန်ကျစရိတ်ထည့်ပါ)',
+  sd_live_fail:'လက်ကျန်အသစ် ဖတ်မရပါ — ဘေလ်မထုတ်ရသေး ထပ်စမ်းပါ',sd_changed:'အတည်ပြုနေစဉ် ဤအော်ဒါ ပြောင်းသွားသည် (အခြားစက်မှ ပို့ပြီး / ဆိုင်ခွဲ ပြင်သည် / ဈေးပြောင်းသည်) — ဘေလ်မထုတ်ရသေး၊ အသစ်ကိုကြည့်ပြီး ထပ်နှိပ်ပါ',
   sd_no_price_h:'ဈေးမရှိ — မပို့နိုင်ပါ · အရင်ထုတ်လုပ်ပါ (🍳) သို့မဟုတ် 📖 မီနူးတွင် ကုန်ကျစရိတ်ထည့်ပါ',sd_line_nosave:'LINE ပို့ပြီးသော်လည်း အခြေအနေ သိမ်းမရပါ — ဘေလ်တွင် "LINE မပို့ရသေး" ဟုပြမည်၊ ထပ်မပို့ပါနှင့်'}
 });
 CSS.add(`
@@ -2635,25 +2652,29 @@ async function sdLoad(opt){ // opt.noRefresh = แค่นับใบสั่
   if(SD.loading){await SD.loading;if(quiet||!SD.quiet)return;}   // โหลดแบบเงียบค้างอยู่ → รอแล้วอ่านยอดสดต่อ
   SD.quiet=quiet;
   SD.loading=(async()=>{
-    const td=bizTodayISO(),cfg=S.cfg||CFG_DEF,from=addDays(td,-num(cfg.order_lookback_days));
-    const [sr,lk,dl]=await Promise.all([
-      tdGet('stock_receipts',q=>q.gte('order_date',from).gt('ordered',0).order('id')),
-      tdGet('kc_links'),
-      tdGet('kc_deliveries',q=>q.gte('order_date',from).neq('status','void'))]);
-    sdTblGone(dl);
-    let dll={ok:true,rows:[]};
-    if(dl.ok&&dl.rows.length)dll=await tdGet('kc_delivery_lines',q=>q.in('delivery_id',dl.rows.map(d=>d.id)));
-    sdTblGone(dll);
-    SD.ok=sr.ok&&dl.ok&&dll.ok;SD.err=SD.ok?null:String(((sr.err||dl.err||dll.err)||{}).message||'');
-    if(lk.ok)TD_LINKS=lk.rows;
+    const R=await sdRead();
+    SD.ok=R.ok;SD.err=R.err;
+    if(R.lk.ok)TD_LINKS=R.lk.rows;
     if(!SD.ok){SD.at=Date.now();return;}   // อ่านไม่ครบ (เช่น kc_delivery_lines) = ห้ามคิดจากข้อมูลครึ่ง ๆ — ใบที่ส่งไปแล้วจะกลับมาให้ส่งซ้ำ · คงผลรอบที่อ่านได้ล่าสุด (ป้าย 🚚) ไว้
-    SD.raw={sr:sr.rows,dl:dl.rows,dll:dll.rows};
-    const rids=[...new Set(sr.rows.map(r=>{const l=tdLinkOf(r.name);return l&&l.recipe_id;}).filter(Boolean))];
+    SD.raw=R.raw;
+    const rids=[...new Set(R.raw.sr.map(r=>{const l=tdLinkOf(r.name);return l&&l.recipe_id;}).filter(Boolean))];
     if(rids.length&&!quiet)await refreshRows('recipe',rids);   // "มี" = ยอดสด (อีกเครื่องอาจเพิ่งทำของ/ส่ง)
     SD.at=Date.now();sdCalc();
   })();
   try{await SD.loading;}finally{SD.loading=null;}
 }
+async function sdRead(){ // อ่านชุดข้อมูลออเดอร์ (ไม่แตะ SD) → {ok,err,raw:{sr,dl,dll},lk} · sdLoad ใช้ตอนโหลด · sdSend ใช้อ่านซ้ำหลังกดยืนยัน
+  const td=bizTodayISO(),cfg=S.cfg||CFG_DEF,from=addDays(td,-num(cfg.order_lookback_days));
+  const [sr,lk,dl]=await Promise.all([
+    tdGet('stock_receipts',q=>q.gte('order_date',from).gt('ordered',0).order('id')),
+    tdGet('kc_links'),
+    tdGet('kc_deliveries',q=>q.gte('order_date',from).neq('status','void'))]);
+  sdTblGone(dl);
+  let dll={ok:true,rows:[]};
+  if(dl.ok&&dl.rows.length)dll=await tdGet('kc_delivery_lines',q=>q.in('delivery_id',dl.rows.map(d=>d.id)));
+  sdTblGone(dll);
+  const ok=sr.ok&&dl.ok&&dll.ok;
+  return {ok,err:ok?null:String(((sr.err||dl.err||dll.err)||{}).message||''),raw:{sr:sr.rows,dl:dl.rows,dll:dll.rows},lk};}
 function sdTblGone(x){ // ยังไม่รัน SQL (S.kcSql=false) + ตารางไม่มีจริง = ยังไม่เคยส่งอะไร → ถือว่าว่าง (ออกบิลถูกกันด้วย sd_sql_block อยู่แล้ว) · permission denied/อ่านพลาด ≠ ตารางไม่มี
   if(x.ok||S.kcSql)return;const e=x.err||{},c=String(e.code||''),m=String(e.message||e||'');
   if(c==='42P01'||c==='PGRST205'||/does not exist|could not find the table/i.test(m)){x.ok=true;x.rows=[];x.gone=true;}}
@@ -2736,7 +2757,7 @@ function sdShortHtml(l){const sh=Math.max(0,rnd4(l.remaining-num(l.sent)));if(sh
   return '<span class="chip bad">'+esc(t('sd_short'))+' '+fmtQ(sh)+' '+esc(trUnit(l.unit))+'</span>'+(l.have<l.remaining-1e-9?'<button type="button" class="btn gh sm2 sd-mk" onclick="sdMake()">'+esc(t('sd_make'))+'</button>':'');}
 function sdSetSent(gi,li,v){ // แก้จำนวนส่งในที่ (ไม่วาดใหม่ — คีย์บอร์ดไม่หุบ) · เกินที่สั่ง = ตัดเหลือเท่าที่สั่ง
   const g=SD.groups[gi],l=g&&g.lines[li];if(!l||!l.link||l.noPrice)return;
-  let q=Math.max(0,rnd4(num(v)));
+  let q=Math.max(0,rnd4(numIn(v)));   // "1,5" = 1.5 (numIn)
   if(q>l.remaining+1e-9){q=l.remaining;toast(t('sd_max_order',{q:fmtQ(l.remaining),u:trUnit(l.unit)}),'warn');const inp=document.getElementById('sdS'+gi+'_'+li);if(inp)inp.value=q;}
   SD_EDIT[g.key+'|'+l.pid]=q;sdCalc();sdRefresh();}
 function sdRefresh(){ // ตัวเลข มี/ขาด/รวม ของทุกบรรทัดตามการจัดสรรใหม่ (ช่องที่กำลังพิมพ์ไม่แตะ)
@@ -2790,6 +2811,25 @@ async function sdRollback(id,step){ // บันทึกไม่ครบ = �
   if(step==='moves')await pushMovesUndo('kc_deliveries',id);
   if(step!=='head'){try{await sb.from('kc_delivery_lines').delete().eq('delivery_id',id);}catch(e){}}
   try{await sb.from('kc_deliveries').delete().eq('id',id);}catch(e){}}
+async function sdStockOk(L,rids){ // ยอดสดของเมนูที่จะส่ง: อ่านไม่ได้ = ไม่ออกบิล (ห้ามเช็คกับแคช) · ไม่พอ = บอกแล้วจัดสรรใหม่บนจอ
+  if(!(await refreshRows('recipe',rids))){toast(t('sd_live_fail'),true);return false;}
+  const need={};L.forEach(l=>{need[l.link.recipe_id]=rnd4(num(need[l.link.recipe_id])+num(l.sent)*sdFactor(l));});
+  for(const rid of rids){const r=recipeById(rid),have=Math.max(0,num(r&&r.qty));
+    if(need[rid]>have+1e-9){toast(t('sd_stock_short',{n:dispName(r),h:fmtQ(have),u:trUnit(r&&r.yield_unit),s:fmtQ(need[rid])}),true);sdCalc();sdRefresh();return false;}}
+  return true;}
+function sdRowsOf(g,id){ // บรรทัดบิล = ทุกบรรทัดของใบสั่ง — ส่ง 0 = ค้างส่ง (บิลบอกครบว่าสั่งอะไร ส่งอะไร) · ชื่อ = ชื่อสินค้าที่สาขาสั่ง (recipe_id = เมนูของครัว) · ยังไม่ผูก/ไม่มีราคา = ส่ง 0 ไม่มีราคา
+  const rows=g.lines.map((l,i)=>{
+    if(!l.link||sdPriceOf(l)==null)return {delivery_id:id,recipe_id:l.link?l.link.recipe_id:null,name:l.name,stk_product_id:l.pid||null,ordered:l.remaining,sent:0,unit:l.unit||'',unit_cost:null,unit_price:null,amount:0,sort:i+1};
+    const r=recipeById(l.link.recipe_id),up=num(sdPriceOf(l)),uc=num(sdCostOf(l));
+    return {delivery_id:id,recipe_id:r.id,name:l.name||r.name,stk_product_id:l.pid||null,ordered:l.remaining,sent:num(l.sent),unit:l.unit||r.yield_unit||'',unit_cost:uc,unit_price:up,amount:rnd2(num(l.sent)*up),sort:i+1};});
+  return {rows,subtotal:rnd2(rows.reduce((a,r)=>a+r.amount,0))};}
+const sdSig=g=>g?g.lines.map(l=>[l.pid,supKey(l.name),rnd4(l.remaining)].join('|')).sort().join(';'):'';   // ลายเซ็นใบสั่ง: สินค้า + ที่ยังค้างส่ง (เทียบก่อน/หลังหน้าต่างยืนยัน)
+async function sdInsertHead(head,g,d){ // เลขบิลชน (23505 — อีกเครื่องออกบิลสาขาเดียวกันพร้อมกัน · unique index ใน SQL) = อ่านเลขใหม่แล้วลองอีก ≤3 ครั้ง
+  let err=null;
+  for(let i=0;i<3;i++){let r=null;try{r=await sb.from('kc_deliveries').insert(head);}catch(e){r={error:e};}
+    if(r&&!r.error)return;err=(r&&r.error)||new Error('insert');
+    if(String(err.code||'')!=='23505')break;head.bill_no=await sdBillNo(g.code,d);}
+  throw err;}
 async function sdSend(gi){await once(async()=>{
   if(!SD.ok){toast(t('sd_noread'),true);return;}   // อ่านของที่ส่งไปแล้วไม่ครบ = ไม่ออกบิล (กันบิลซ้ำ/ตัดสต๊อกซ้ำ)
   const g=SD.groups[gi];if(!g||!canKitchen())return;
@@ -2797,23 +2837,25 @@ async function sdSend(gi){await once(async()=>{
   const bad=g.lines.find(l=>l.link&&num(l.sent)>0&&sdPriceOf(l)==null);if(bad){toast(t('sd_no_price',{n:bad.name}),true);sdCalc();sdRefresh();return;}
   const L=g.lines.filter(l=>l.link&&num(l.sent)>0);if(!L.length){toast(t('sd_nothing'),true);return;}
   const d=bizTodayISO(),rids=[...new Set(L.map(l=>l.link.recipe_id))];
-  await refreshRows('recipe',rids);   // ยอดสด — อีกเครื่องอาจเพิ่งส่ง/ทำของ
-  const need={};L.forEach(l=>{need[l.link.recipe_id]=rnd4(num(need[l.link.recipe_id])+num(l.sent)*sdFactor(l));});
-  for(const rid of rids){const r=recipeById(rid),have=Math.max(0,num(r&&r.qty));
-    if(need[rid]>have+1e-9){toast(t('sd_stock_short',{n:dispName(r),h:fmtQ(have),u:trUnit(r&&r.yield_unit),s:fmtQ(need[rid])}),true);sdCalc();sdRefresh();return;}}
+  if(!(await sdStockOk(L,rids)))return;   // ยอดสด — อีกเครื่องอาจเพิ่งส่ง/ทำของ (อ่านไม่ได้ = ไม่ออกบิล)
   let no;try{no=await sdBillNo(g.code,d);}catch(e){toast(t('sd_not_saved')+' · '+((e&&e.message)||e),true);return;}
   const id=uid('dl'),by=S.user&&S.user.name;
-  const rows=g.lines.map((l,i)=>{ // ทุกบรรทัดของใบสั่ง — ส่ง 0 = ค้างส่ง (บิลบอกครบว่าสั่งอะไร ส่งอะไร) · ชื่อ = ชื่อสินค้าที่สาขาสั่ง (recipe_id = เมนูของครัว) · ยังไม่ผูก/ไม่มีราคา = ส่ง 0 ไม่มีราคา
-    if(!l.link||sdPriceOf(l)==null)return {delivery_id:id,recipe_id:l.link?l.link.recipe_id:null,name:l.name,stk_product_id:l.pid||null,ordered:l.remaining,sent:0,unit:l.unit||'',unit_cost:null,unit_price:null,amount:0,sort:i+1};
-    const r=recipeById(l.link.recipe_id),up=num(sdPriceOf(l)),uc=num(sdCostOf(l));
-    return {delivery_id:id,recipe_id:r.id,name:l.name||r.name,stk_product_id:l.pid||null,ordered:l.remaining,sent:num(l.sent),unit:l.unit||r.yield_unit||'',unit_cost:uc,unit_price:up,amount:rnd2(num(l.sent)*up),sort:i+1};});
-  const subtotal=rnd2(rows.reduce((a,r)=>a+r.amount,0));
-  const head={id,bill_no:no,d,branch:g.code,branch_name:g.name,order_date:g.od,status:'sent',subtotal,overhead:0,total:subtotal,line_sent_at:null,line_group_id:null,paid_at:null,note:null,by_name:by};
+  let {rows,subtotal}=sdRowsOf(g,id);
   if(!(await confirm2(t('sd_confirm',{b:g.short||g.name,n:L.length,m:money(subtotal),no}))))return;
+  // หลังกดยืนยัน — ระหว่างหน้าต่างเปิด อีกเครื่องอาจส่ง/ทำของ/ออกบิล หรือสาขาแก้ยอด: อ่านซ้ำทั้งยอดสด + ใบสั่ง/ที่ส่งแล้ว + ราคา ไม่ตรงกับที่ยืนยัน = ไม่ออกบิล
+  if(!(await sdStockOk(L,rids)))return;
+  const R=await sdRead();if(!R.ok){toast(t('sd_noread'),true);return;}
+  const g2=sdCalcGroups(R.raw,S.branches).groups.find(x=>x.key===g.key),again=sdRowsOf(g,id);
+  if(sdSig(g2)!==sdSig(g)||again.subtotal!==subtotal||again.rows.some((r,i)=>r.amount!==rows[i].amount||r.sent!==rows[i].sent)){
+    SD.raw=R.raw;SD.at=Date.now();sdCalc();if(S.tab==='send')sdPaint();toast(t('sd_changed'),true);return;}
+  rows=again.rows;
+  try{no=await sdBillNo(g.code,d);}catch(e){toast(t('sd_not_saved')+' · '+((e&&e.message)||e),true);return;}   // เลขบิลอ่านใหม่หลังหน้าต่าง (อีกเครื่องอาจออกบิลไปแล้ว)
+  const head={id,bill_no:no,d,branch:g.code,branch_name:g.name,order_date:g.od,status:'sent',subtotal,overhead:0,total:subtotal,line_sent_at:null,line_group_id:null,paid_at:null,note:null,by_name:by};
   const mv={};L.forEach(l=>{const rid=l.link.recipe_id,q=num(l.sent)*sdFactor(l);const m=mv[rid]=mv[rid]||{q:0,c:0};m.q+=q;m.c+=q*num(recipeUnitCost(recipeById(rid)));});
   let step='head';
   try{
-    await db(()=>sb.from('kc_deliveries').insert(head));
+    setBusy(true);try{await sdInsertHead(head,g,d);}finally{setBusy(false);}
+    no=head.bill_no;
     step='lines';await db(()=>sb.from('kc_delivery_lines').insert(rows));
     step='moves';await pushMoves(Object.keys(mv).map(rid=>({d,kind:'send',ref_kind:'recipe',ref_id:rid,qty:-rnd4(mv[rid].q),cost:-rnd4(mv[rid].c),ref_table:'kc_deliveries',ref_id2:id,note:no+' · '+g.name})));
   }catch(e){await sdRollback(id,step);toast(t('sd_not_saved')+' · '+((e&&e.message)||e),true);return;}
@@ -2901,19 +2943,22 @@ RENDER.bills=function(el){
     (brs.length>1?pillBar([{k:'',lb:t('bl_all_br')}].concat(brs.map(b=>({k:b.code,lb:b.short||b.name}))),BL.br,'blSetBr',{scroll:1}):'')+'</div>'+
     '<div id="blKpi"></div><div id="blList"><div class="spin"></div></div><div id="blSum"></div>';
   if(BL.at)blPaint();
-  blLoad().then(()=>{if(S.tab==='bills')blPaint();});
+  blLoad().then(ok=>{if(ok&&S.tab==='bills')blPaint();});   // ok=false = มีคำขอใหม่กว่า (กดเปลี่ยนเดือนซ้ำ) — รอบนั้นวาดเอง
 };
 function blMonth(n){BL.ym=n<0?prevMonth(BL.ym):nextMonth(BL.ym);BL.rows=[];BL.at=0;rerender();}
 function blMonthNow(){BL.ym=ymNow();BL.rows=[];BL.at=0;rerender();}
 function blSetBr(k){BL.br=S.branches.some(b=>b.code===k)?k:'';document.querySelectorAll('#view-bills .pills .pill').forEach(p=>p.classList.toggle('on',p.dataset.k===BL.br));blPaint();}
-async function blLoad(){ // บิลของเดือน (เฉพาะสาขาที่เห็น) · อ่านไม่ได้ = ว่าง + แถบเตือน (ไม่ toast)
-  if(BL.loading)return BL.loading;
-  BL.loading=(async()=>{const ym=BL.ym,a=ym+'-01',b=ym+'-'+String(monthDays(ym)).padStart(2,'0');
+let BL_SEQ=0;
+async function blLoad(){ // บิลของเดือน (เฉพาะสาขาที่เห็น) · อ่านไม่ได้ = ว่าง + แถบเตือน (ไม่ toast) · กด ‹ › รัว ๆ = ใช้ผลของคำขอล่าสุดเท่านั้น (seq — เดิมคืน promise ของเดือนก่อนหน้า แล้ววาดบิลเดือนนั้นใต้หัวเดือนใหม่) → true = ใช้ผลนี้แล้ว
+  const seq=++BL_SEQ,ym=BL.ym,a=ym+'-01',b=ym+'-'+String(monthDays(ym)).padStart(2,'0');
+  const p=(async()=>{let rows=[],ok=true;
     try{const r=await sb.from('kc_deliveries').select('*').gte('d',a).lte('d',b).order('d',{ascending:false}).order('created_at',{ascending:false}).limit(1000);
-      if(!r||r.error)throw (r&&r.error)||new Error('read');BL.rows=(r.data||[]).filter(x=>inBr(x.branch));BL.ok=true;}
-    catch(e){BL.rows=[];BL.ok=false;}
-    BL.at=Date.now();})();
-  try{await BL.loading;}finally{BL.loading=null;}}
+      if(!r||r.error)throw (r&&r.error)||new Error('read');rows=(r.data||[]).filter(x=>inBr(x.branch));}
+    catch(e){ok=false;}
+    if(seq!==BL_SEQ||ym!==BL.ym)return false;   // มีคำขอใหม่กว่า/เดือนเปลี่ยนไปแล้ว → ทิ้งผลนี้
+    BL.rows=rows;BL.ok=ok;BL.at=Date.now();return true;})();
+  BL.loading=p;
+  try{return await p;}finally{if(BL.loading===p)BL.loading=null;}}
 function blStTxt(st){const k='bl_st_'+st;return I18N.th[k]?t(k):String(st||'');}
 function blBr(code){return (S.branchesAll||[]).find(b=>b.code===code)||null;}
 function blSums(rows){ // ต่อสาขา {code,name,n,total,paid,unpaid}
@@ -3006,7 +3051,7 @@ async function blVoid(id){await once(async()=>{ // ❌ ยกเลิกบิ�
       if(orig==null){toast(t('bl_moves_noread'),true);return;}
       const agg={};
       if(orig.length)orig.forEach(m=>{const a=agg[m.ref_id]=agg[m.ref_id]||{q:0,c:0};a.q+=-num(m.qty);a.c+=-num(m.cost);});
-      else lines.forEach(l=>{if(!l.recipe_id||!(num(l.sent)>0))return;const lk=tdLinkOf(l.name),f=(lk&&lk.recipe_id===l.recipe_id)?(num(lk.factor)||1):1;   // บิลเก่าไม่มี moves: หน่วยสาขา × ตัวคูณที่ผูก = หน่วยครัว
+      else lines.forEach(l=>{if(!l.recipe_id||!(num(l.sent)>0))return;const f=tdLineFactor(l);   // บิลเก่าไม่มี moves: หน่วยสาขา × ตัวคูณที่ผูก = หน่วยครัว (tdLineFactor — กติกาเดียวกับ tdAvgSent/MK_ORD.daily)
         const a=agg[l.recipe_id]=agg[l.recipe_id]||{q:0,c:0};a.q+=num(l.sent)*f;a.c+=num(l.sent)*num(l.unit_cost);});
       const ids=Object.keys(agg);await refreshRows('recipe',ids);
       await pushMoves(ids.map(rid=>({d:bizTodayISO(),kind:'send',ref_kind:'recipe',ref_id:rid,qty:rnd4(agg[rid].q),cost:rnd4(agg[rid].c),ref_table:'kc_deliveries',ref_id2:id,note:t('bl_void_note')+' '+(x.bill_no||'')})));}
@@ -3026,6 +3071,7 @@ async function blVoid(id){await once(async()=>{ // ❌ ยกเลิกบิ�
      · ส่งไม่สำเร็จ = ใบยังเป็น draft + กล่องคัดลอก (✅ ส่งเองแล้ว / 🗑 ยกเลิกใบนี้) · ไม่มีกลุ่ม = กล่องคัดลอก/เปิดไลน์ แล้วถาม "ส่งแล้วใช่ไหม?" → บันทึกเป็น sent
    รายการใบที่สั่งไปแล้ว (30 วัน) → รายละเอียด: 📥 รับของตามใบนี้ (rcFromPo ของโมดูลรับของ) · ส่งไลน์อีกครั้ง · คัดลอก · ยกเลิก
    สิทธิ์: canKitchen (ทุกคนที่ทำงานครัว)
+   ใบที่สั่งไปแล้ว/บรรทัดอ่านไม่ครบ (PO_LIST_OK=false) = ไม่แสดงคำแนะนำ แถบเตือน + ⟳ เท่านั้น (คิดจากข้อมูลครึ่ง ๆ = ของที่กำลังมาถูกสั่งซ้ำ) · เลขใบชน 23505 = อ่านรายการใหม่แล้วออกเลขถัดไป
    ============================================================ */
 I18N.add({
 th:{po_hint:'ระบบแนะนำจาก: วัตถุดิบที่ต่ำกว่าขั้นต่ำ + ของที่ต้องใช้ทำของ (⚡ ด่วน / 🔄 เติม) − ที่มี − ที่สั่งไว้แล้ว · แก้ตัวเลขได้เลย · 0 = ไม่สั่ง',
@@ -3044,7 +3090,8 @@ th:{po_hint:'ระบบแนะนำจาก: วัตถุดิบท�
   po_st_draft:'ยังไม่ส่ง',po_st_sent:'สั่งแล้ว รอรับ',po_st_received:'รับของแล้ว',po_st_void:'ยกเลิก',
   po_detail_t:'ใบสั่งของ',po_recv_btn:'📥 รับของตามใบนี้',po_resend:'💬 ส่งไลน์อีกครั้ง',po_send_now:'📤 ส่งไลน์',po_void_btn:'🗑 ยกเลิกใบนี้',
   po_void_q:'ยกเลิกใบสั่ง {n} ของ {s}? (ร้านจะไม่รู้ — ต้องแจ้งร้านเอง)',po_voided:'ยกเลิกใบสั่งแล้ว',po_by:'โดย',po_text_t:'ข้อความที่ส่ง',
-  po_order_err:'อ่านออเดอร์สาขาไม่ได้ — คำแนะนำนี้ยังไม่รวมของที่ต้องทำด่วน',po_due:'ขอรับของ'},
+  po_order_err:'อ่านออเดอร์สาขาไม่ได้ — คำแนะนำนี้ยังไม่รวมของที่ต้องทำด่วน',po_due:'ขอรับของ',
+  po_list_noread:'อ่านใบที่สั่งไปแล้วไม่ได้ — ยังไม่แสดงคำแนะนำ',po_list_noread_h:'ถ้าแสดง อาจสั่งของที่กำลังมาซ้ำอีกรอบ — กด ⟳ โหลดใหม่',po_reload:'⟳ โหลดใหม่'},
 en:{po_hint:'Suggested from: ingredients below minimum + what production needs (⚡ urgent / 🔄 refill) − in stock − already ordered · edit any number · 0 = skip',
   po_none:'Nothing to order right now 👍',po_nosup:'No supplier',po_nosup_h:'These ingredients have no supplier yet — set one on 🥬 Ingredients',po_group_no:'No LINE group',po_group_empty:'No lines — tap ＋ Add item',
   po_why_min:'below minimum (have {s} · min {m})',po_why_prod:'production needs {q} {u}',po_lots:'lots',po_have:'have {q}',po_incoming:'{q} already ordered, on the way',po_need:'order {q} {u}',
@@ -3061,7 +3108,8 @@ en:{po_hint:'Suggested from: ingredients below minimum + what production needs (
   po_st_draft:'Not sent',po_st_sent:'Ordered, waiting',po_st_received:'Received',po_st_void:'Cancelled',
   po_detail_t:'Order',po_recv_btn:'📥 Receive this order',po_resend:'💬 Send to LINE again',po_send_now:'📤 Send to LINE',po_void_btn:'🗑 Cancel this order',
   po_void_q:'Cancel order {n} to {s}? (the supplier is not told — tell them yourself)',po_voided:'Order cancelled',po_by:'by',po_text_t:'Message sent',
-  po_order_err:'Could not read branch orders — urgent production needs are not included yet',po_due:'Deliver by'},
+  po_order_err:'Could not read branch orders — urgent production needs are not included yet',po_due:'Deliver by',
+  po_list_noread:'Could not read the orders already sent — suggestions hidden',po_list_noread_h:'Showing them could order what is already on the way a second time — tap ⟳ to reload',po_reload:'⟳ Reload'},
 lo:{po_hint:'ແນະນຳຈາກ: ວັດຖຸດິບຕ່ຳກວ່າຂັ້ນຕ່ຳ + ທີ່ຕ້ອງໃຊ້ເຮັດເຄື່ອງ (⚡ ດ່ວນ / 🔄 ຕື່ມ) − ທີ່ມີ − ທີ່ສັ່ງໄວ້ແລ້ວ · ແກ້ຕົວເລກໄດ້ເລີຍ · 0 = ບໍ່ສັ່ງ',
   po_none:'ຕອນນີ້ບໍ່ມີຫຍັງຕ້ອງສັ່ງ 👍',po_nosup:'ຍັງບໍ່ມີຮ້ານ',po_nosup_h:'ວັດຖຸດິບເຫຼົ່ານີ້ຍັງບໍ່ໄດ້ຕັ້ງຮ້ານຄ້າ — ຕັ້ງໄດ້ທີ່ 🥬 ວັດຖຸດິບ',po_group_no:'ຍັງບໍ່ມີກຸ່ມໄລນ໌',po_group_empty:'ຍັງບໍ່ມີລາຍການ — ກົດ ＋ ເພີ່ມລາຍການ',
   po_why_min:'ຕ່ຳກວ່າຂັ້ນຕ່ຳ (ມີ {s} · ຂັ້ນຕ່ຳ {m})',po_why_prod:'ໃຊ້ເຮັດເຄື່ອງ {q} {u}',po_lots:'ຮອບ',po_have:'ມີ {q}',po_incoming:'ສັ່ງໄວ້ແລ້ວ {q} ກຳລັງມາ',po_need:'ຕ້ອງສັ່ງ {q} {u}',
@@ -3078,7 +3126,8 @@ lo:{po_hint:'ແນະນຳຈາກ: ວັດຖຸດິບຕ່ຳກວ�
   po_st_draft:'ຍັງບໍ່ສົ່ງ',po_st_sent:'ສັ່ງແລ້ວ ລໍຮັບ',po_st_received:'ຮັບເຄື່ອງແລ້ວ',po_st_void:'ຍົກເລີກ',
   po_detail_t:'ໃບສັ່ງເຄື່ອງ',po_recv_btn:'📥 ຮັບເຄື່ອງຕາມໃບນີ້',po_resend:'💬 ສົ່ງໄລນ໌ອີກຄັ້ງ',po_send_now:'📤 ສົ່ງໄລນ໌',po_void_btn:'🗑 ຍົກເລີກໃບນີ້',
   po_void_q:'ຍົກເລີກໃບສັ່ງ {n} ຂອງ {s}? (ຮ້ານຈະບໍ່ຮູ້ — ຕ້ອງແຈ້ງຮ້ານເອງ)',po_voided:'ຍົກເລີກໃບສັ່ງແລ້ວ',po_by:'ໂດຍ',po_text_t:'ຂໍ້ຄວາມທີ່ສົ່ງ',
-  po_order_err:'ອ່ານອໍເດີສາຂາບໍ່ໄດ້ — ຄຳແນະນຳນີ້ຍັງບໍ່ລວມເຄື່ອງທີ່ຕ້ອງເຮັດດ່ວນ',po_due:'ຂໍຮັບເຄື່ອງ'},
+  po_order_err:'ອ່ານອໍເດີສາຂາບໍ່ໄດ້ — ຄຳແນະນຳນີ້ຍັງບໍ່ລວມເຄື່ອງທີ່ຕ້ອງເຮັດດ່ວນ',po_due:'ຂໍຮັບເຄື່ອງ',
+  po_list_noread:'ອ່ານໃບທີ່ສັ່ງໄປແລ້ວບໍ່ໄດ້ — ຍັງບໍ່ສະແດງຄຳແນະນຳ',po_list_noread_h:'ຖ້າສະແດງ ອາດສັ່ງເຄື່ອງທີ່ກຳລັງມາຊ້ຳອີກຮອບ — ກົດ ⟳ ໂຫຼດໃໝ່',po_reload:'⟳ ໂຫຼດໃໝ່'},
 my:{po_hint:'အကြံပြုချက်: အနည်းဆုံးအောက် ကုန်ကြမ်း + ထုတ်လုပ်ရန် လိုအပ်သည် (⚡ အရေးပေါ် / 🔄 ဖြည့်) − လက်ကျန် − မှာပြီးသား · နံပါတ်ပြင်နိုင် · 0 = မမှာ',
   po_none:'ယခု မှာယူရန် မရှိပါ 👍',po_nosup:'ဆိုင်မရှိ',po_nosup_h:'ဤကုန်ကြမ်းများ ဆိုင်မသတ်မှတ်ရသေး — 🥬 ကုန်ကြမ်း တွင် သတ်မှတ်ပါ',po_group_no:'LINE အုပ်စု မရှိ',po_group_empty:'စာရင်းမရှိ — ＋ ထည့်ရန် နှိပ်ပါ',
   po_why_min:'အနည်းဆုံးအောက် (ရှိ {s} · အနည်းဆုံး {m})',po_why_prod:'ထုတ်လုပ်ရန် လို {q} {u}',po_lots:'အသုတ်',po_have:'ရှိ {q}',po_incoming:'မှာပြီး {q} ရောက်လာမည်',po_need:'မှာရန် {q} {u}',
@@ -3095,7 +3144,8 @@ my:{po_hint:'အကြံပြုချက်: အနည်းဆုံးအ�
   po_st_draft:'မပို့ရသေး',po_st_sent:'မှာပြီး စောင့်နေ',po_st_received:'လက်ခံပြီး',po_st_void:'ပယ်ဖျက်',
   po_detail_t:'မှာယူစာ',po_recv_btn:'📥 ဤစာအတိုင်း လက်ခံ',po_resend:'💬 LINE ထပ်ပို့',po_send_now:'📤 LINE ပို့',po_void_btn:'🗑 ဤစာကို ပယ်ဖျက်',
   po_void_q:'{s} သို့ မှာယူစာ {n} ကို ပယ်ဖျက်မလား? (ဆိုင်မသိပါ — ကိုယ်တိုင်ပြောပါ)',po_voided:'မှာယူစာ ပယ်ဖျက်ပြီး',po_by:'မှ',po_text_t:'ပို့သောစာ',
-  po_order_err:'ဆိုင်ခွဲအော်ဒါ ဖတ်မရပါ — အရေးပေါ် ထုတ်လုပ်ရန် လိုအပ်ချက် မပါဝင်သေး',po_due:'ရောက်စေချင်သည့်ရက်'}
+  po_order_err:'ဆိုင်ခွဲအော်ဒါ ဖတ်မရပါ — အရေးပေါ် ထုတ်လုပ်ရန် လိုအပ်ချက် မပါဝင်သေး',po_due:'ရောက်စေချင်သည့်ရက်',
+  po_list_noread:'ပို့ပြီးသော အော်ဒါများ ဖတ်မရပါ — အကြံပြုချက် ဖျောက်ထားသည်',po_list_noread_h:'ပြလျှင် လမ်းပေါ်ရောက်နေသော ပစ္စည်းကို ထပ်မှာမိနိုင်သည် — ⟳ နှိပ်၍ ပြန်ဖွင့်ပါ',po_reload:'⟳ ပြန်ဖွင့်'}
 });
 CSS.add(`
 .po-hint{margin-top:0}
@@ -3140,13 +3190,16 @@ async function poLoad(force){
   if(seq!==PO_SEQ||S.tab!=='buy')return;
   PO_SUG=poCalc();poPaint();poPaintList();
 }
-async function poListLoad(){ // ใบสั่ง 30 วันหลัง + บรรทัด (fail-soft)
+async function poListLoad(){ // ใบสั่ง 30 วันหลัง + บรรทัด — ใบหรือบรรทัดอ่านไม่ได้ = PO_LIST_OK=false คงชุดล่าสุดที่อ่านได้ไว้ (ห้ามคิดคำแนะนำจากข้อมูลครึ่ง ๆ — เหมือน 🚚 sdLoad) · ยังไม่รัน SQL + ตารางไม่มีจริง = ว่าง (sdTblGone)
   const td=bizTodayISO();
-  const get=async q=>{try{const r=await q;if(!r||r.error)return null;return r.data||[];}catch(e){return null;}};
+  const get=async q=>{try{const r=await q;if(!r||r.error){const x={ok:false,rows:[],err:r&&r.error};sdTblGone(x);return x.ok?[]:null;}return r.data||[];}catch(e){return null;}};
   const pos=await get(sb.from('kc_pos').select('*').gte('d',addDays(td,-30)).order('d',{ascending:false}).order('created_at',{ascending:false}).limit(60));
-  PO_LIST_OK=pos!=null;PO_LIST=pos||[];PO_LINES={};
-  if(PO_LIST.length){const ln=await get(sb.from('kc_po_lines').select('*').in('po_id',PO_LIST.map(p=>p.id)).order('sort').order('id'));
-    (ln||[]).forEach(l=>{(PO_LINES[l.po_id]=PO_LINES[l.po_id]||[]).push(l);});}
+  if(pos==null){PO_LIST_OK=false;return;}
+  const lines={};
+  if(pos.length){const ln=await get(sb.from('kc_po_lines').select('*').in('po_id',pos.map(p=>p.id)).order('sort').order('id'));
+    if(ln==null){PO_LIST_OK=false;return;}
+    ln.forEach(l=>{(lines[l.po_id]=lines[l.po_id]||[]).push(l);});}
+  PO_LIST=pos;PO_LINES=lines;PO_LIST_OK=true;
 }
 const PO_LINE_OK='jjck_po_lineok';   // {id ใบสั่ง: เวลา} ไลน์ถึงร้านแล้วแต่เขียนสถานะไม่ได้ — เครื่องนี้จำไว้ (ไม่แนะนำให้สั่งซ้ำ · ส่งซ้ำถามก่อน)
 function poLineOkMap(){const m=LS.get(PO_LINE_OK,{});return (m&&typeof m==='object'&&!Array.isArray(m))?m:{};}
@@ -3157,6 +3210,8 @@ function poIncoming(){ // ที่สั่งไว้แล้วกำลั
   const out={};PO_LIST.filter(poIsIncoming).forEach(p=>(PO_LINES[p.id]||[]).forEach(l=>{if(!l.item_id)return;out[l.item_id]=rnd4(num(out[l.item_id])+num(l.qty_base));}));return out;}
 /* ---------- คิดคำแนะนำ ---------- */
 function poCalc(){
+  const ordersOk=!!(typeof MK_ORD!=='undefined'&&MK_ORD.ok);
+  if(!PO_LIST_OK)return {groups:[],ordersOk,listOk:false};   // ใบที่สั่งไปแล้วอ่านไม่ครบ = ไม่มีคำแนะนำ (ของที่กำลังมาจะถูกสั่งซ้ำ)
   const needs=(typeof mkNeeds==='function')?mkNeeds():{};
   const prod={},why={};
   activeRecipes().forEach(r=>{const n=needs[r.id];if(!n||!(n.sugg>0))return;
@@ -3175,7 +3230,7 @@ function poCalc(){
   Object.keys(PO_OVR.add).forEach(key=>{if(!groups[key])grp(key,(S.sups.find(x=>supKey(x.name)===key)||{}).name||key);});
   const G=Object.values(groups).sort((a,b)=>((a.key==='')-(b.key===''))||a.name.localeCompare(b.name,'th'));
   G.forEach((g,i)=>{g.gi=i;});
-  return {groups:G,ordersOk:!!(typeof MK_ORD!=='undefined'&&MK_ORD.ok)};
+  return {groups:G,ordersOk,listOk:true};
 }
 function poEstOf(r){return r.c==null?null:rnd2(r.c*r.pq*r.packs);}
 function poGroupSum(g){const act=g.rows.filter(r=>r.packs>0);const est=act.some(r=>r.est==null)?null:rnd2(act.reduce((a,r)=>a+r.est,0));return {n:act.length,est};}
@@ -3183,6 +3238,8 @@ function poGroupSum(g){const act=g.rows.filter(r=>r.packs>0);const est=act.some(
 function poPaint(){
   const box=document.getElementById('poBody');if(!box||!PO_SUG)return;
   const err=document.getElementById('poOrdErr');if(err)err.innerHTML=PO_SUG.ordersOk?'':'<div class="badbox">⚠ '+esc(t('po_order_err'))+'</div>';
+  if(!PO_SUG.listOk){box.innerHTML='<div class="badbox">⚠ '+esc(t('po_list_noread'))+'<div class="xs" style="margin-top:4px">'+esc(t('po_list_noread_h'))+'</div></div>'+
+    '<button type="button" class="btn gh" onclick="poRefresh()">'+esc(t('po_reload'))+'</button>';return;}
   const G=PO_SUG.groups;
   let h=G.length?G.map(poGroupHtml).join(''):'<div class="card"><div class="empty">'+esc(t('po_none'))+'</div></div>';
   const others=S.sups.filter(s=>s.active!==false&&!G.some(g=>g.key===supKey(s.name)));
@@ -3214,7 +3271,8 @@ function poEstTxt(r){if(!(r.packs>0))return esc(t('po_skip'));
   return (r.ov?'<span class="mut">✎ </span>':'')+'= '+esc(fmtQ(rnd4(r.packs*r.pq)))+' '+esc(trUnit(r.it.unit))+' · '+(r.est==null?esc(t('po_est_none')):'≈ '+esc(money(r.est)));}
 function poSetPacks(gi,i,v){ // แก้ในที่ (ไม่วาดใหม่ — คีย์บอร์ดไม่หุบ)
   const g=PO_SUG&&PO_SUG.groups[gi],r=g&&g.rows[i];if(!r)return;
-  r.packs=Math.max(0,rnd4(num(v)));r.ov=true;r.est=poEstOf(r);PO_OVR.v[g.key+'|'+r.it.id]=r.packs;poOvrSave();
+  r.packs=Math.max(0,rnd4(numIn(v)));r.ov=true;r.est=poEstOf(r);   // numIn: "1,5" = 1.5
+  PO_OVR.v[g.key+'|'+r.it.id]=r.packs;poOvrSave();
   const e=document.getElementById('poE'+gi+'_'+i);if(e)e.innerHTML=poEstTxt(r);
   const row=document.getElementById('poR'+gi+'_'+i);if(row)row.classList.toggle('skip',!(r.packs>0));
   const sum=poGroupSum(g),s=document.getElementById('poSum'+gi);if(s)s.textContent=t('po_total_est',{n:sum.n,m:sum.est==null?t('po_est_none'):money(sum.est)});
@@ -3240,22 +3298,32 @@ function poText(g,rows,po_no){ // ข้อความใบสั่ง (ภ�
   rows.forEach(r=>{L.push('• '+r.it.name+' — '+fmtQ(r.packs)+' '+r.pu+(r.pu!==r.it.unit?' (= '+fmtQ(rnd4(r.packs*r.pq))+' '+r.it.unit+')':''));});
   L.push('','รวม '+rows.length+' รายการ');if(S.user&&S.user.name)L.push('👤 '+S.user.name);
   return L.join('\n');}
-function poNextNo(){const td=bizTodayISO(),pre='PO-'+td.slice(2).replace(/-/g,'')+'-';let n=PO_LIST.filter(p=>String(p.d).slice(0,10)===td).length+1;while(PO_LIST.some(p=>p.po_no===pre+n))n++;return pre+n;}
-async function poSave(g,rows,po_no,text,status){ // หัว → บรรทัด · บรรทัดพลาด = ลบหัวทิ้ง (ไม่มีใบครึ่ง ๆ)
+function poNextNo(){ // เลขใบถัดไปของวันนี้ · รายการอ่านไม่ได้ = ห้ามออกเลข (จะได้เลขซ้ำ)
+  if(!PO_LIST_OK)throw new Error('po list');const td=bizTodayISO(),pre='PO-'+td.slice(2).replace(/-/g,'')+'-';let n=PO_LIST.filter(p=>String(p.d).slice(0,10)===td).length+1;while(PO_LIST.some(p=>p.po_no===pre+n))n++;return pre+n;}
+async function poSave(g,rows,po_no,text,status){ // หัว → บรรทัด · บรรทัดพลาด = ลบหัวทิ้ง (ไม่มีใบครึ่ง ๆ) → {id,po_no,text} · เลขใบชน 23505 (อีกเครื่องสั่งพร้อมกัน) = อ่านรายการใหม่ ออกเลขถัดไป ลองอีก ≤3 ครั้ง
+  if(!PO_LIST_OK){toast(t('po_list_noread'),true);return null;}
   const id=uid('po'),d=bizTodayISO();
   const head={id,po_no,d,sup_id:g.sup?g.sup.id:null,sup_name:g.name,status,text,note:null,line_sent_at:null,by_name:(S.user&&S.user.name)||null};
   const lines=rows.map((r,i)=>({po_id:id,item_id:r.it.id,name:r.it.name,packs:rnd4(r.packs),pack_unit:r.pu,pack_qty:rnd4(r.pq),qty_base:rnd4(r.packs*r.pq),unit:r.it.unit||null,price_est:r.est==null?null:rnd2(r.est),sort:i}));
-  try{await db(()=>sb.from('kc_pos').insert(head));}catch(e){toast(t('po_not_saved'),true);return null;}
+  let ins=false;setBusy(true);
+  try{for(let i=0;i<3&&!ins;i++){let r=null;try{r=await sb.from('kc_pos').insert(head);}catch(e){r={error:e};}
+      if(r&&!r.error){ins=true;break;}
+      if(!r||!r.error||String(r.error.code||'')!=='23505')break;
+      await poListLoad();if(!PO_LIST_OK)break;
+      head.po_no=po_no=poNextNo();head.text=text=poText(g,rows,po_no);}}
+  finally{setBusy(false);}
+  if(!ins){toast(t(PO_LIST_OK?'po_not_saved':'po_list_noread'),true);return null;}
   try{await db(()=>sb.from('kc_po_lines').insert(lines));}
   catch(e){try{await sb.from('kc_po_lines').delete().eq('po_id',id);await sb.from('kc_pos').delete().eq('id',id);}catch(_){}toast(t('po_not_saved'),true);return null;}
-  return id;}
+  return {id,po_no,text};}
 async function poSend(gi){await once(async()=>{
+  if(!PO_LIST_OK){toast(t('po_list_noread'),true);return;}   // ใบที่สั่งไปแล้วอ่านไม่ครบ = ไม่สั่ง (สั่งซ้ำ/เลขซ้ำ)
   const g=PO_SUG&&PO_SUG.groups[gi];if(!g||!canKitchen())return;const rows=g.rows.filter(r=>r.packs>0);
   if(!rows.length){toast(t('po_nothing'),true);return;}
-  const po_no=poNextNo(),text=poText(g,rows,po_no);
-  if(!g.gid){poManualModal(g,rows,po_no,text);return;}
+  const po_no=poNextNo(),text0=poText(g,rows,po_no);
+  if(!g.gid){poManualModal(g,rows,po_no,text0);return;}
   if(!(await confirm2(t('po_send_q',{s:g.name,g:lgName(g.gid)}))))return;
-  const id=await poSave(g,rows,po_no,text,'draft');if(!id)return;
+  const sv=await poSave(g,rows,po_no,text0,'draft');if(!sv)return;const id=sv.id,text=sv.text;
   try{await lineSend(g.gid,text);}catch(e){await poListLoad();poFailModal(id,g,text,e);return;}
   let ok=false;for(let i=0;i<2&&!ok;i++){try{const r=await sb.from('kc_pos').update({status:'sent',line_sent_at:new Date().toISOString()}).eq('id',id);ok=!!(r&&!r.error);}catch(e){ok=false;}}   // พลาด = ลองอีกครั้ง
   if(ok)toast(t('po_sent_ok',{s:g.name}));else{poLineOkMark(id);toast(t('po_sent_but'),'warn');}
@@ -3265,7 +3333,7 @@ async function poAfterSent(key){ // ล้างที่แก้ของร�
   Object.keys(PO_OVR.v).forEach(k=>{if(k.startsWith(key+'|'))delete PO_OVR.v[k];});delete PO_OVR.add[key];poOvrSave();
   await poListLoad();if(S.tab!=='buy')return;PO_SUG=poCalc();poPaint();poPaintList();}
 function poManualModal(g,rows,po_no,text){ // ไม่มีกลุ่มไลน์: คัดลอก/เปิดไลน์เอง แล้วถามว่าส่งแล้วไหม
-  const ok=hreg(()=>once(async()=>{const id=await poSave(g,rows,po_no,text,'sent');if(!id)return;closeModal();toast(t('po_sent_ok',{s:g.name}));await poAfterSent(g.key);}));
+  const ok=hreg(()=>once(async()=>{if(!PO_LIST_OK){toast(t('po_list_noread'),true);return;}const sv=await poSave(g,rows,po_no,text,'sent');if(!sv)return;closeModal();toast(t('po_sent_ok',{s:g.name}));await poAfterSent(g.key);}));
   openModal('<h3>📋 '+esc(t('po_manual_t',{s:g.name}))+'</h3><div class="hintbox">'+esc(t('po_manual_h'))+'</div>'+lineTextBox(text)+
     '<div class="b" style="margin:16px 0 8px">'+esc(t('po_manual_q'))+'</div><div class="row"><button type="button" class="btn ok grow" id="poManualOk" onclick="'+ok+'">'+esc(t('po_mark_sent'))+'</button>'+
     '<button type="button" class="btn gh" id="poManualNo" onclick="closeModal()">'+esc(t('po_not_yet'))+'</button></div>');}
