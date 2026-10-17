@@ -275,7 +275,7 @@ async function mnTgFlush(id){ // เขียนแถวนี้ทีละ�
 async function mnTgSave(id,patch){ // เขียน ck_recipes เฉพาะช่องที่แก้ · ไม่มีคอลัมน์ max_qty (ยังไม่รัน SQL รุ่นล่าสุด) = เขียนใหม่โดยไม่มี + จำ S.kcMax=false + แถบบอก · เขียนพลาด = คืนค่าไว้รอเขียนรอบหน้า + ขอบแดง + toast
   const r=recipeById(id);if(!r||!canKitchen())return false;
   const row={};['target_qty','max_qty','target_days'].forEach(f=>{if(f in patch)row[f]=patch[f]==null?null:rnd4(num(patch[f]));});
-  if(S.kcMax===false)delete row.max_qty;
+  if(S.kcMax===false&&('max_qty' in row)){delete row.max_qty;const mi=document.getElementById('mnTgM_'+id);if(mi){mi.value='';mi.classList.remove('bad');}toast(t('mn_tg_sql'),'warn');}   // ค่าที่พิมพ์ก่อน probe ตอบว่าไม่มีคอลัมน์ = บอกให้รู้ ไม่ทิ้งเงียบ (ผู้ตรวจ V2)
   const seq=MN_TG.seq[id]=(MN_TG.seq[id]||0)+1;
   if(!Object.keys(row).length){mnTgMaxLock();return false;}
   let res=null,dropped=false;setBusy(true);

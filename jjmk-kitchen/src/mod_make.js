@@ -118,7 +118,7 @@ async function mkLoad(force){
     const [orders,links,dels,prods]=await Promise.all([
       get(sb.from('stock_receipts').select('branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
       get(sb.from('kc_links').select('stk_name,recipe_id,factor')),
-      get(sb.from('kc_deliveries').select('id,d,branch,order_date,status').gte('d',addDays(td,-Math.max(14,lb+3))).neq('status','void')),
+      get(sb.from('kc_deliveries').select('id,d,branch,order_date,status,note').gte('d',addDays(td,-Math.max(14,lb+3))).neq('status','void')),   // ต้องมี note — sdCalcGroups ใช้ sdIsManual(d) ข้ามบิล ➕ ส่งเพิ่ม (ผู้ตรวจ V2 เจอว่าไม่มี note → บิลส่งเพิ่มไปหักออเดอร์ของสาขา)
       get(sb.from('kc_productions').select('*').eq('d',td).order('created_at',{ascending:false}))]);
     let dl=[],dlOk=dels!=null;if(dels&&dels.length){const r=await get(sb.from('kc_delivery_lines').select('delivery_id,recipe_id,stk_product_id,name,sent').in('delivery_id',dels.map(x=>x.id)));if(r==null)dlOk=false;else dl=r;}
     MK_ORD=mkOrdersCalc(orders||[],links,dels||[],dl,td,orders!=null&&dlOk,dlOk);MK_TODAY=prods||[];   // อ่านไม่ครบ (ออเดอร์/บิล/บรรทัดที่ส่งแล้ว) = ไม่คิด ⚡ จากข้อมูลครึ่ง ๆ · บิลอ่านไม่ครบ = ไม่คิด 🔄 ด้วย

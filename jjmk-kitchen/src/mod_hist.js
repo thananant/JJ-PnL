@@ -64,7 +64,11 @@ RENDER.hist=function(el){
 function hsPillsHtml(){ // ชิปประเภท + ช่วงเวลา — กดแล้ววาดชิปใหม่ด้วย (pillBar ไม่เปลี่ยนสีให้เอง · เจ้าของเจอ 2026-10-17 ว่า "ปุ่มเหมือนใช้ไม่ได้")
   return pillBar(HS_TYPES.map(k=>({k,lb:t('hs_t_'+k)})),HS.type,'hsSetType',{scroll:1})+
     pillBar(HS_RANGES.map(k=>({k,lb:t('hs_r_'+k)})),HS.range,'hsSetRange',{scroll:1,cls:'hs-rpills'});}
-function hsPillsPaint(){const b=document.getElementById('hsPills');if(b)b.innerHTML=hsPillsHtml();}
+function hsPillsPaint(){ // สลับ .on ในที่ — วาดแถบใหม่ทำให้แถบที่เลื่อนไว้เด้งกลับซ้ายสุด ชิปที่เพิ่งกดหลุดจอบนโทรศัพท์ (ผู้ตรวจ V2 2026-10-17) · โครงไม่ครบ = วาดใหม่
+  const b=document.getElementById('hsPills');if(!b)return;const bars=b.querySelectorAll('.pills');
+  if(bars.length!==2){b.innerHTML=hsPillsHtml();return;}
+  [[bars[0],HS.type],[bars[1],HS.range]].forEach(([bar,cur])=>{bar.querySelectorAll('.pill[data-k]').forEach(p=>p.classList.toggle('on',p.dataset.k===cur));
+    const on=bar.querySelector('.pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}});}
 function hsSetType(k){if(!HS_TYPES.includes(k))k='all';HS.type=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsPaint();}
 function hsSetRange(k){if(!HS_RANGES.includes(k))k='7';HS.range=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsRangeBox();hsLoad();}
 function hsSaveF(){LS.set(HS_F,{type:HS.type,range:HS.range,from:HS.from,to:HS.to,q:HS.q});}
@@ -99,7 +103,7 @@ function hsPaint(){
   if(!rows.length){b.innerHTML=h+emptyBox(t('hs_empty'));return;}
   const td=bizTodayISO();let last='';
   rows.slice(0,HS_SHOW).forEach(e=>{if(e.d!==last){last=e.d;h+='<div class="hs-day">'+esc(dispDate(e.d))+(e.d===td?' · '+esc(t('today')):'')+'<span class="sp">'+rows.filter(x=>x.d===e.d).length+'</span></div>';}
-    h+='<div class="hs-ev k-'+esc(e.k)+(e.cls?' '+esc(e.cls):'')+'" onclick="hsOpen(\''+esc(e.k)+'\',\''+esc(String(e.id))+'\')"><div class="ic">'+e.ic+'</div><div class="tx"><div class="tt">'+esc(e.tt)+'</div><div class="sb">'+esc(e.sb)+(e.ts?' · '+esc(dispTime(e.ts)):'')+'</div></div>'+
+    h+='<div class="hs-ev k-'+esc(e.k)+(e.cls?' '+esc(e.cls):'')+'" data-k="'+esc(e.k)+'" data-id="'+esc(String(e.id))+'" onclick="hsOpen(this.dataset.k,this.dataset.id)"><div class="ic">'+e.ic+'</div><div class="tx"><div class="tt">'+esc(e.tt)+'</div><div class="sb">'+esc(e.sb)+(e.ts?' · '+esc(dispTime(e.ts)):'')+'</div></div>'+
       '<div class="amt">'+esc(e.amt||'')+(e.amt2?'<small>'+esc(e.amt2)+'</small>':'')+'</div></div>';});
   if(rows.length>HS_SHOW)h+='<button class="btn gh" style="width:100%" onclick="HS_SHOW+=60;hsPaint()">'+esc(t('hs_more'))+' ('+(rows.length-HS_SHOW)+')</button>';
   b.innerHTML=h;}

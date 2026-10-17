@@ -785,7 +785,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-17 19:03';
+const APP_VER='KC 2.0 · 2026-10-17 19:28';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -942,7 +942,7 @@ const supKey=n=>String(n||'').replace(/\s+/g,' ').trim().toLowerCase();   // ช
 const nameKey=supKey;
 function methodSteps(note){ // วิธีทำ (สูตรเดียวกับระบบเดิม): 1 บรรทัด = 1 ขั้น · '#' = หัวข้อ เลขขั้นเริ่ม 1 ใหม่ ("#1 …" = ขั้นธรรมดา · โคลอนท้ายหัวข้อตัดออก) · '*'/'※' = เคล็ดลับ · เลขหน้าบรรทัด "1." "5.1)" ตัดออก ระบบเรียงเอง
   const out=[];let n=0;String(note||'').split(/\r?\n/).forEach(l=>{l=l.trim();if(!l)return;
-    if(/^#+(?!\d)/.test(l)){const h=l.replace(/^#+\s*/,'').replace(/\s*[:：]$/,'');if(h)out.push({head:h});n=0;return;}
+    if(/^#+(?!\d)/.test(l)){const h=l.replace(/^#+\s*/,'').replace(/\s*[:：]$/,'');if(h){out.push({head:h});n=0;}return;}
     if(/^[*※]/.test(l)){const x=l.replace(/^[*※\s]+|[*\s]+$/g,'');if(x)out.push({tip:x});return;}
     const x=l.replace(/^\d+(?:\.\d+)*[.)](?!\d)\s*/,'');if(x)out.push({n:++n,text:x});});return out;}
 function methodHtml(note){const st=methodSteps(note);if(!st.length)return '';
@@ -1638,7 +1638,7 @@ const RC_DRAFT='jjck_rc_draft',RC_DRAFT_MS=12*3600*1000;
 function rcBlank(){return {d:bizTodayISO(),sup_id:'',sup_name:'',bill_no:'',note:'',po_id:null,po_no:'',lines:[]};}
 function rcLineBlank(){return {item_id:'',name:'',packs:'',pack_unit:'',pack_qty:'',unit:'',price_mode:'pack',price:'',newu:null};}
 function rcDraftLoad(){const d=LS.get(RC_DRAFT,null);if(!d||!d.data||d.d!==bizTodayISO()||Date.now()-num(d.t)>RC_DRAFT_MS){LS.del(RC_DRAFT);return null;}
-  const f=Object.assign(rcBlank(),d.data);f.lines=(Array.isArray(f.lines)?f.lines:[]).map(l=>Object.assign(rcLineBlank(),l));return f;}
+  const f=Object.assign(rcBlank(),d.data);f.bill_no='';f.lines=(Array.isArray(f.lines)?f.lines:[]).map(l=>Object.assign(rcLineBlank(),l));return f;}
 function rcDraft(){clearTimeout(RC_T);RC_T=setTimeout(()=>{if(!RC)return;const has=RC.lines.length||RC.bill_no||RC.note||RC.sup_id;
   if(has)LS.set(RC_DRAFT,{t:Date.now(),d:bizTodayISO(),data:RC});else LS.del(RC_DRAFT);},250);}
 function rcDraftClear(){clearTimeout(RC_T);LS.del(RC_DRAFT);}
@@ -1706,7 +1706,7 @@ function rcGridHtml(){const L=rcGridList(),inL={};RC.lines.forEach((l,i)=>{if(l.
       '<div class="iname">'+esc(dispName(it))+'</div><div class="isub">'+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+(itemCost(it)!=null?' · ฿'+rcP(itemCost(it))+'/'+esc(trUnit(it.unit)):'')+'</div></div>';}).join('')+
     '<div class="icard rctile tap rcnew" onclick="rcNewItem(null)"><div class="ithumb">➕</div><div class="iname">'+esc(t('rc_item_new'))+'</div><div class="isub">&nbsp;</div></div>'+
     (L.length?'':'<div class="empty" style="grid-column:1/-1">'+esc(t('empty'))+'</div>');}
-function rcGridPaint(){const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();const c=document.getElementById('rcChips');if(c)c.innerHTML=rcChipsHtml();}
+function rcGridPaint(){const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();const c=document.getElementById('rcChips');if(c){c.innerHTML=rcChipsHtml();const on=c.querySelector('.pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}}}   // ชิปที่เลือกต้องยังเห็นหลังวาดใหม่
 function rcSetCat(k){RC_CAT=k||'';rcGridPaint();}
 function rcGridSearch(v){RC_Q=String(v||'');const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();}   // กรองในที่ — คีย์บอร์ดไม่หุบ
 function rcTileTap(id){const it=itemById(id);if(!it)return;const i=RC.lines.findIndex(l=>l.item_id===id);if(i>=0){rcEdit(i);return;}
@@ -1732,7 +1732,7 @@ function rcCalc(l){ // → {it,packs,pack_qty,qty_base,price,price_total,price_b
 function rcUnitOpts(it,l){const list=[it.unit].concat(packsOf(it).map(p=>p.u));if(l.pack_unit&&!list.includes(l.pack_unit))list.push(l.pack_unit);
   return list.map(u=>'<option value="'+esc(u)+'"'+(u===l.pack_unit?' selected':'')+'>'+esc(trUnit(u))+(u!==it.unit&&unitFactor(it,u)!=null?' (= '+fmtQ(unitFactor(it,u))+' '+esc(trUnit(it.unit))+')':'')+'</option>').join('')+
     '<option value="__new">'+esc(t('rc_unit_new'))+'</option>';}
-function rcEdit(i){const l=RC.lines[i];if(!l)return;if(!itemById(l.item_id)){rcPickItem(i);return;}MODAL_BACK=null;openModal(rcEditorHtml(l,i));rcSum(i);}
+function rcEdit(i){const l=RC.lines[i];if(!l)return;if(!itemById(l.item_id)){rcPickItem(i);return;}openModal(rcEditorHtml(l,i));MODAL_BACK=()=>rcEditDone(i);rcSum(i);}   // ปิดทางไหนก็วาดแถว/ป้ายใหม่ (แตะพื้นมืดด้วย — ผู้ตรวจ V2)
 function rcEditorHtml(l,i){ // id rcL<i> = หน้าต่างของรายการนั้น (ช่อง rcP/rcU/rcQ/rcPr/rcS ตามเดิม)
   const it=itemById(l.item_id),base=it.unit||'',isBase=l.pack_unit===base;
   let h='<div class="rcline" id="rcL'+i+'"><div class="row rcl-top">'+thumbHtml(it,rcIcon(it))+'<div class="grow" style="min-width:0"><h3 style="margin:0 0 2px">'+esc(dispName(it))+'</h3><div class="rcl-stk">'+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(base))+
@@ -1793,7 +1793,7 @@ function rcSetItem(i,it){ // ตั้งสินค้าให้รายก
 function rcPickItem(i){
   const rows=activeItems();
   const list=q=>{q=supKey(q);return rows.filter(it=>!q||supKey(it.name).includes(q)||supKey(dispName(it)).includes(q)||supKey(it.sup).includes(q)||supKey(it.cat).includes(q))
-    .map(it=>'<div class="rowline tap" onclick="rcPickGo('+i+',\''+esc(it.id)+'\')">'+thumbHtml(it,'🥬')+'<div class="grow"><b>'+esc(dispName(it))+'</b><div class="xs mut">'+esc(trCat(it.cat))+(it.sup?' · '+esc(it.sup):'')+
+    .map(it=>'<div class="rowline tap" data-id="'+esc(it.id)+'" onclick="rcPickGo('+i+',this.dataset.id)">'+thumbHtml(it,'🥬')+'<div class="grow"><b>'+esc(dispName(it))+'</b><div class="xs mut">'+esc(trCat(it.cat))+(it.sup?' · '+esc(it.sup):'')+
       ' · '+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+'</div></div>'+(itemCost(it)!=null?'<span class="sm mut">฿'+rcP(itemCost(it))+'/'+esc(trUnit(it.unit))+'</span>':'')+'</div>').join('')||'<div class="empty">'+esc(t('empty'))+'</div>';};
   MODAL_BACK=null;openModal('<h3>🥬 '+esc(t('item'))+'</h3>'+searchBox('rcPickQ',v=>{const b=document.getElementById('rcPickList');if(b)b.innerHTML=list(v);})+
     '<button class="btn gh" style="width:100%;margin-bottom:8px" onclick="rcNewItem('+i+')">'+esc(t('rc_item_new'))+'</button><div class="rc-pick-list" id="rcPickList">'+list('')+'</div>');
@@ -1841,7 +1841,7 @@ async function rcPoPick(){
   if(!pos.length){toast(t('rc_po_none'));return;}
   let lines=[];try{lines=await db(()=>sb.from('kc_po_lines').select('po_id,item_id').in('po_id',pos.map(p=>p.id)));}catch(e){}
   openModal('<h3>📋 '+esc(t('rc_po_pick'))+'</h3><div class="rc-pick-list">'+pos.map(p=>{const n=lines.filter(l=>l.po_id===p.id).length;
-    return '<div class="rowline tap" onclick="rcFromPo(\''+esc(p.id)+'\')"><div class="grow"><b>'+esc(p.sup_name||'')+'</b> <span class="mut sm">'+esc(p.po_no||'')+'</span><div class="xs mut">'+esc(dispDate(p.d))+' · '+esc(t('rc_po_items',{n}))+'</div></div>'+stPill('sent',t('rc_po_tag'))+'</div>';}).join('')+'</div>');}
+    return '<div class="rowline tap" data-id="'+esc(p.id)+'" onclick="rcFromPo(this.dataset.id)"><div class="grow"><b>'+esc(p.sup_name||'')+'</b> <span class="mut sm">'+esc(p.po_no||'')+'</span><div class="xs mut">'+esc(dispDate(p.d))+' · '+esc(t('rc_po_items',{n}))+'</div></div>'+stPill('sent',t('rc_po_tag'))+'</div>';}).join('')+'</div>');}
 async function rcFromPo(poId){ // โมดูลสั่งของเรียกได้: show('recv'); rcFromPo(id)
   let po=null,lines=[];
   try{po=await db(()=>sb.from('kc_pos').select('*').eq('id',poId).maybeSingle());if(!po)return;lines=await db(()=>sb.from('kc_po_lines').select('*').eq('po_id',poId).order('sort').order('id'));}catch(e){return;}
@@ -1898,7 +1898,7 @@ async function rcSave(){await once(async()=>{
   if(zero&&!(await confirm2(t('rc_zero_price_q',{n:zero}))))return;
   await refreshRows('item',RC.lines.map(l=>l.item_id));   // ยอด/ต้นทุนสดก่อนคิดถัวเฉลี่ย (อีกเครื่องอาจเพิ่งรับ/ใช้ของตัวเดียวกัน)
   const rid=uid('rc'),d=RC.d||bizTodayISO();const rows=rcLineRows(rid);const total=rnd2(rows.reduce((a,r)=>a+r.price_total,0));
-  const head={id:rid,d,sup_id:RC.sup_id||null,sup_name:RC.sup_name||null,bill_no:RC.bill_no||null,total,note:RC.note||null,po_id:RC.po_id||null,by_name:S.user&&S.user.name};
+  const head={id:rid,d,sup_id:RC.sup_id||null,sup_name:RC.sup_name||null,bill_no:null,total,note:RC.note||null,po_id:RC.po_id||null,by_name:S.user&&S.user.name};   // ไม่มีช่องเลขบิลแล้ว (ร่างรุ่นเก่าที่ยังมี bill_no ก็ไม่เขียน)
   /* ต้นทุน: รวมบรรทัดของวัตถุดิบเดียวกันก่อน แล้วถัวเฉลี่ยครั้งเดียว (ใช้ยอดก่อนเคลื่อนไหว — จึงเขียนก่อน pushMoves · พลาด = ถอน) */
   const agg={};rows.forEach(r=>{const a=agg[r.item_id]=agg[r.item_id]||{q:0,v:0};a.q+=r.qty_base;a.v+=r.price_total;});
   const snap=rcSnap(Object.keys(agg));
@@ -1929,7 +1929,7 @@ async function rcPaintList(){
     '<div class="kpi"><div class="t">'+esc(t('rc_14d'))+'</div><div class="kpi-v">'+esc(money(rows.reduce((a,r)=>a+num(r.total),0)))+'</div><div class="s mut">'+esc(t('rc_n_bills',{n:rows.length}))+'</div></div></div>';
   let last='';rows.forEach(r=>{if(r.d!==last){last=r.d;h+='<div class="rc-dhead">'+esc(dispDate(r.d))+(r.d===td?' · '+esc(t('today')):'')+'</div>';}
     const ls=lines.filter(l=>l.receipt_id===r.id);
-    h+='<div class="card rc-rcpt" onclick="rcDetail(\''+esc(r.id)+'\')"><div class="row" style="flex-wrap:nowrap"><div class="grow"><b>'+esc(r.sup_name||t('none'))+'</b>'+(r.bill_no?' <span class="mut sm">#'+esc(r.bill_no)+'</span>':'')+
+    h+='<div class="card rc-rcpt" data-id="'+esc(r.id)+'" onclick="rcDetail(this.dataset.id)"><div class="row" style="flex-wrap:nowrap"><div class="grow"><b>'+esc(r.sup_name||t('none'))+'</b>'+(r.bill_no?' <span class="mut sm">#'+esc(r.bill_no)+'</span>':'')+
       '<div class="names">'+ls.length+' '+esc(t('rc_lines_n'))+(ls.length?' · '+esc(ls.slice(0,3).map(l=>l.name+' '+fmtQ(l.qty_base)+' '+trUnit(l.unit)).join(', '))+(ls.length>3?' …':''):'')+'</div>'+
       '<div class="xs mut">'+esc(t('rc_by'))+' '+esc(r.by_name||'')+' · '+esc(dispTime(r.created_at))+(r.po_id?' · 📋 '+esc(t('rc_po_tag')):'')+'</div></div><span class="amt">'+esc(money(r.total))+'</span></div></div>';});
   b.innerHTML=h;}
@@ -1945,7 +1945,7 @@ async function rcDetail(id){ // โมดูลประวัติเรีย
     lines.map(l=>'<tr><td><b>'+esc(l.name)+'</b><div class="xs mut">'+fmtQ(l.packs)+' '+esc(trUnit(l.pack_unit))+(l.pack_unit!==l.unit?' × '+fmtQ(l.pack_qty)+' '+esc(trUnit(l.unit)):'')+'</div></td>'+
       '<td class="n">'+fmtQ(l.qty_base)+' '+esc(trUnit(l.unit))+'</td><td class="n">'+esc(money(l.price_total))+'</td><td class="n">฿'+rcP(num(l.price_base))+'</td></tr>').join('')+
     '<tr class="tot"><td>'+esc(t('rc_sum'))+'</td><td class="n">'+lines.length+' '+esc(t('rc_lines_n'))+'</td><td class="n">'+esc(money(r.total))+'</td><td></td></tr></tbody></table></div>'+
-    '<div class="row" style="margin-top:12px">'+(canVoid?'<button class="btn gh" style="color:var(--bad)" onclick="rcVoid(\''+esc(r.id)+'\')">❌ '+esc(t('rc_void'))+'</button>':'<span class="xs mut">'+esc(t('rc_void_today'))+'</span>')+
+    '<div class="row" style="margin-top:12px">'+(canVoid?'<button class="btn gh" style="color:var(--bad)" data-id="'+esc(r.id)+'" onclick="rcVoid(this.dataset.id)">❌ '+esc(t('rc_void'))+'</button>':'<span class="xs mut">'+esc(t('rc_void_today'))+'</span>')+
     '<button class="btn" style="margin-left:auto" onclick="closeModal()">'+esc(t('close'))+'</button></div>');}
 async function rcLaterLines(r,itemIds){ // ใบรับของที่บันทึก "หลัง" ใบนี้ (ตามเวลาบันทึก) ของวัตถุดิบเดียวกัน → {item_id:[{prev_qty,qty,price,d}]} เรียงตามเวลา · 1 ใบ = 1 ก้อน (รวมบรรทัดของวัตถุดิบเดียวกันเหมือนตอนบันทึก)
   const out={};if(!r.created_at)return out;
@@ -2112,7 +2112,7 @@ async function mkLoad(force){
     const [orders,links,dels,prods]=await Promise.all([
       get(sb.from('stock_receipts').select('branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
       get(sb.from('kc_links').select('stk_name,recipe_id,factor')),
-      get(sb.from('kc_deliveries').select('id,d,branch,order_date,status').gte('d',addDays(td,-Math.max(14,lb+3))).neq('status','void')),
+      get(sb.from('kc_deliveries').select('id,d,branch,order_date,status,note').gte('d',addDays(td,-Math.max(14,lb+3))).neq('status','void')),   // ต้องมี note — sdCalcGroups ใช้ sdIsManual(d) ข้ามบิล ➕ ส่งเพิ่ม (ผู้ตรวจ V2 เจอว่าไม่มี note → บิลส่งเพิ่มไปหักออเดอร์ของสาขา)
       get(sb.from('kc_productions').select('*').eq('d',td).order('created_at',{ascending:false}))]);
     let dl=[],dlOk=dels!=null;if(dels&&dels.length){const r=await get(sb.from('kc_delivery_lines').select('delivery_id,recipe_id,stk_product_id,name,sent').in('delivery_id',dels.map(x=>x.id)));if(r==null)dlOk=false;else dl=r;}
     MK_ORD=mkOrdersCalc(orders||[],links,dels||[],dl,td,orders!=null&&dlOk,dlOk);MK_TODAY=prods||[];   // อ่านไม่ครบ (ออเดอร์/บิล/บรรทัดที่ส่งแล้ว) = ไม่คิด ⚡ จากข้อมูลครึ่ง ๆ · บิลอ่านไม่ครบ = ไม่คิด 🔄 ด้วย
@@ -3868,7 +3868,7 @@ async function mnTgFlush(id){ // เขียนแถวนี้ทีละ�
 async function mnTgSave(id,patch){ // เขียน ck_recipes เฉพาะช่องที่แก้ · ไม่มีคอลัมน์ max_qty (ยังไม่รัน SQL รุ่นล่าสุด) = เขียนใหม่โดยไม่มี + จำ S.kcMax=false + แถบบอก · เขียนพลาด = คืนค่าไว้รอเขียนรอบหน้า + ขอบแดง + toast
   const r=recipeById(id);if(!r||!canKitchen())return false;
   const row={};['target_qty','max_qty','target_days'].forEach(f=>{if(f in patch)row[f]=patch[f]==null?null:rnd4(num(patch[f]));});
-  if(S.kcMax===false)delete row.max_qty;
+  if(S.kcMax===false&&('max_qty' in row)){delete row.max_qty;const mi=document.getElementById('mnTgM_'+id);if(mi){mi.value='';mi.classList.remove('bad');}toast(t('mn_tg_sql'),'warn');}   // ค่าที่พิมพ์ก่อน probe ตอบว่าไม่มีคอลัมน์ = บอกให้รู้ ไม่ทิ้งเงียบ (ผู้ตรวจ V2)
   const seq=MN_TG.seq[id]=(MN_TG.seq[id]||0)+1;
   if(!Object.keys(row).length){mnTgMaxLock();return false;}
   let res=null,dropped=false;setBusy(true);
@@ -5105,7 +5105,11 @@ RENDER.hist=function(el){
 function hsPillsHtml(){ // ชิปประเภท + ช่วงเวลา — กดแล้ววาดชิปใหม่ด้วย (pillBar ไม่เปลี่ยนสีให้เอง · เจ้าของเจอ 2026-10-17 ว่า "ปุ่มเหมือนใช้ไม่ได้")
   return pillBar(HS_TYPES.map(k=>({k,lb:t('hs_t_'+k)})),HS.type,'hsSetType',{scroll:1})+
     pillBar(HS_RANGES.map(k=>({k,lb:t('hs_r_'+k)})),HS.range,'hsSetRange',{scroll:1,cls:'hs-rpills'});}
-function hsPillsPaint(){const b=document.getElementById('hsPills');if(b)b.innerHTML=hsPillsHtml();}
+function hsPillsPaint(){ // สลับ .on ในที่ — วาดแถบใหม่ทำให้แถบที่เลื่อนไว้เด้งกลับซ้ายสุด ชิปที่เพิ่งกดหลุดจอบนโทรศัพท์ (ผู้ตรวจ V2 2026-10-17) · โครงไม่ครบ = วาดใหม่
+  const b=document.getElementById('hsPills');if(!b)return;const bars=b.querySelectorAll('.pills');
+  if(bars.length!==2){b.innerHTML=hsPillsHtml();return;}
+  [[bars[0],HS.type],[bars[1],HS.range]].forEach(([bar,cur])=>{bar.querySelectorAll('.pill[data-k]').forEach(p=>p.classList.toggle('on',p.dataset.k===cur));
+    const on=bar.querySelector('.pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}});}
 function hsSetType(k){if(!HS_TYPES.includes(k))k='all';HS.type=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsPaint();}
 function hsSetRange(k){if(!HS_RANGES.includes(k))k='7';HS.range=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsRangeBox();hsLoad();}
 function hsSaveF(){LS.set(HS_F,{type:HS.type,range:HS.range,from:HS.from,to:HS.to,q:HS.q});}
@@ -5140,7 +5144,7 @@ function hsPaint(){
   if(!rows.length){b.innerHTML=h+emptyBox(t('hs_empty'));return;}
   const td=bizTodayISO();let last='';
   rows.slice(0,HS_SHOW).forEach(e=>{if(e.d!==last){last=e.d;h+='<div class="hs-day">'+esc(dispDate(e.d))+(e.d===td?' · '+esc(t('today')):'')+'<span class="sp">'+rows.filter(x=>x.d===e.d).length+'</span></div>';}
-    h+='<div class="hs-ev k-'+esc(e.k)+(e.cls?' '+esc(e.cls):'')+'" onclick="hsOpen(\''+esc(e.k)+'\',\''+esc(String(e.id))+'\')"><div class="ic">'+e.ic+'</div><div class="tx"><div class="tt">'+esc(e.tt)+'</div><div class="sb">'+esc(e.sb)+(e.ts?' · '+esc(dispTime(e.ts)):'')+'</div></div>'+
+    h+='<div class="hs-ev k-'+esc(e.k)+(e.cls?' '+esc(e.cls):'')+'" data-k="'+esc(e.k)+'" data-id="'+esc(String(e.id))+'" onclick="hsOpen(this.dataset.k,this.dataset.id)"><div class="ic">'+e.ic+'</div><div class="tx"><div class="tt">'+esc(e.tt)+'</div><div class="sb">'+esc(e.sb)+(e.ts?' · '+esc(dispTime(e.ts)):'')+'</div></div>'+
       '<div class="amt">'+esc(e.amt||'')+(e.amt2?'<small>'+esc(e.amt2)+'</small>':'')+'</div></div>';});
   if(rows.length>HS_SHOW)h+='<button class="btn gh" style="width:100%" onclick="HS_SHOW+=60;hsPaint()">'+esc(t('hs_more'))+' ('+(rows.length-HS_SHOW)+')</button>';
   b.innerHTML=h;}
