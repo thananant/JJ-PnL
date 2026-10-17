@@ -4,7 +4,8 @@
    🚚 ออเดอร์สาขาที่ยังไม่ส่ง = stock_receipts (ซัพ = cfg.ck_sup_names · order_date ≥ วันนี้−lookback · เฉพาะสาขาที่เห็น) หักที่ส่งแล้วรายบรรทัด
       — ตัวคิดเดียวกับ 🚚 ส่งสาขา/🍳 ทำของ (sdCalcGroups ใน mod_send.js): ส่งบางส่วน = ที่เหลือยังค้าง · ตัวเลข/ป้าย 🚚 ตรงกันทุกหน้า
    ⚡ ต้องทำด่วน = สินค้าที่สต๊อกสำเร็จรูปไม่พอออเดอร์ที่ยังไม่ส่ง (ชื่อสินค้าสาขา → เมนูผ่าน kc_links หรือชื่อตรงกัน)
-   🔄 ต้องทำเติม = สต๊อกสำเร็จรูปต่ำกว่าที่ควรมี (target_qty หรือ target_days × ยอดส่งเฉลี่ย/วัน 14 วันหลัง — หน่วยครัว: บรรทัดบิลเป็นหน่วยสาขา × ตัวคูณที่ผูกใน kc_links `tdLineFactor`)
+   🔄 ต้องทำเติม = สต๊อกสำเร็จรูปต่ำกว่า Safety (target_qty หรือ target_days × ยอดส่งเฉลี่ย/วัน 14 วันหลัง — หน่วยครัว: บรรทัดบิลเป็นหน่วยสาขา × ตัวคูณที่ผูกใน kc_links `tdLineFactor`)
+      · เติมถึง Max (ck_recipes.max_qty · ว่าง = Safety) — สูตรเดียวกับ 🍳 mkNeeds + 🎯 หน้าตั้ง Safety/Max = `mnTargetCalc` (mod_menus.js)
    ⚠️ วัตถุดิบต่ำกว่าขั้นต่ำ · 📋 นับล่าสุด · ยอดวันนี้ (รับของ ฿ · ทำของ รอบ · ส่งสาขา ฿)
    ทุกการ์ดอ่านแยกกันแบบ fail-soft — ตารางไหนอ่านไม่ได้ การ์ดนั้นบอก "อ่านข้อมูลไม่ได้" ใบอื่นยังทำงาน
    ============================================================ */
@@ -109,10 +110,10 @@ function tdAvgSent(D){ // ยอดส่งเฉลี่ย/วัน 14 ว�
   const okIds=new Set(D.dl.rows.filter(d=>d.status!=='void'&&String(d.d)>=addDays(D.today,-14)).map(d=>String(d.id)));
   D.dll.rows.forEach(l=>{if(!okIds.has(String(l.delivery_id))||!l.recipe_id)return;out[l.recipe_id]=(out[l.recipe_id]||0)+num(l.sent)*tdLineFactor(l);});
   Object.keys(out).forEach(k=>out[k]=out[k]/14);return out;}
-function tdTargetOf(r,avg){if(r.target_qty!=null&&num(r.target_qty)>0)return num(r.target_qty);if(r.target_days!=null&&num(r.target_days)>0)return rnd4(num(r.target_days)*num(avg[r.id]||0));return null;}
+function tdTargetOf(r,avg){const c=mnTargetCalc(r,num(r.qty),num(avg[r.id]||0));return c.safety>0?c.safety:null;}   // Safety (ขั้นต่ำที่ต้องมี) — สูตรเดียวกับ 🍳/🎯 (mnTargetCalc ใน mod_menus.js)
 function tdPaintRefill(D){
   if(!D.dl.ok){tdSet('refill',t('td_noread'),'dim');return;}
-  const avg=tdAvgSent(D);const low=activeRecipes().filter(r=>{const tg=tdTargetOf(r,avg);return tg!=null&&tg>0&&num(r.qty)<tg-1e-9;});D.refill=low.map(r=>r.id);
+  const avg=tdAvgSent(D);const low=activeRecipes().filter(r=>mnTargetCalc(r,num(r.qty),num(avg[r.id]||0)).below>0);D.refill=low.map(r=>r.id);   // สต๊อก < Safety → ต้องเติม (ถึง Max)
   tdSet('refill',low.length?t('td_refill_s',{n:low.length}):t('td_refill_ok'),low.length?'hot':'ok');}
 /* ---------- นับล่าสุด ---------- */
 function tdPaintCount(D){

@@ -88,6 +88,10 @@ Receiving: user enters packs × pack size (prefilled from item buy_unit/buy_qty,
   (per_unit × actual_qty or pct × cost_items) + recipe.extra_cost × lots; cost_total; cost_unit = cost_total/actual_qty. Stock: items −(used+waste) (moves produce_out/waste), product +actual_qty (produce_in).
   Product `avg_cost` = moving average with existing finished stock (if qty ≤ 0 → this lot's cost_unit). `unit_cost` column also set = cost_unit (latest lot) for display.
 - Delivery line unit_price = product.avg_cost × (1 + markup_pct/100) (markup default 0; per-recipe markup_pct overrides). amount = sent × unit_price. Bill total = Σ amount (overhead already inside cost).
+- **Safety / Max per product (owner 2026-10-17 "หน้าตั้ง safety/max ของสินค้า แต่ละตัว")** — one formula `mnTargetCalc(r, stock, dailyAvg)` (mod_menus.js) shared by 🍳 `mkNeeds`, ☀️ `tdPaintRefill` and the 🎯 page:
+  `safety` = `target_qty` (>0) else `target_days × dailyAvg` (14-day average sent, kitchen units) else 0 · `max` = `max_qty` (>0) else 0 · `upto` = max > 0 ? max(max, safety) : safety ·
+  `below` (ต้องทำเติม) = safety > 0 && stock < safety ? max(0, upto − stock) : 0. Open-order shortage (`short`) is unchanged; 🍳 suggests `ceil(max(short, below) / yield_qty)` lots.
+  Stock at/above Safety never triggers a refill even when below Max. `ck_recipes.max_qty numeric` (SQL `alter … add column if not exists`); without the column the app keeps `S.kcMax=false` and saves the other fields.
 - Accounting month view: revenue = Σ delivery totals (status ≠ void) by branch; purchases = Σ receipts; overhead = Σ expenses (ym); COGS = Σ delivery lines sent × unit_cost; gross profit = revenue − COGS;
   net = revenue − purchases − overhead (cash view) — show both clearly labelled; receivable per branch = unpaid bills; suggested overhead per unit = overhead(ym) ÷ units produced(ym) with a button to apply to settings.
 
@@ -110,8 +114,11 @@ Receiving: user enters packs × pack size (prefilled from item buy_unit/buy_qty,
 - **bills**: month + branch filters; list bills (no, date, branch, total, status, LINE sent?); open → lines, resend LINE, mark paid, void (reverses stock); month totals per branch (to pay at month end).
 - **buy**: suggestions per supplier: items with qty < min_qty or needed for ⚡/🔄 production plans (recipe × lots) − stock; packs rounded up; editable; PO text → LINE group of supplier (ck_sups.line_group_id) or copy/share;
   status sent; list POs; "รับของตามใบนี้" → recv prefilled.
-- **menus**: product cards (photo, name, yield/lot, unit, stock, cost/unit avg & last lot); form: name, cat, yield_qty/unit, markup, target_qty/days, photo upload (bucket `product-images` like old app), method textarea,
+- **menus**: product cards (photo, name, yield/lot, unit, stock, cost/unit avg & last lot); form: name, cat, yield_qty/unit, markup, target_qty (Safety) / max_qty (Max) / target_days, photo upload (bucket `product-images` like old app), method textarea,
   recipe lines: item picker + qty + unit select (base + convertible + packs) → shows base qty and cost at current avg prices; "ไม่ใช้แล้ว" toggle. Cost history per lot (from kc_productions).
+  **🎯 Safety / Max view** (button next to ➕ · `MN_VIEW='target'`, `localStorage.jjck_mnview`, ‹ back = cards): one row per active product — 44px photo, name, "ตอนนี้มี X", avg sent/day (14 d, same `MK_ORD.daily` as 🍳),
+  open branch orders, inputs Safety [target_qty] · Max [max_qty] · "หรือ N วัน" [target_days], live "ต้องทำเติม Y" (`mnTargetCalc`); auto-save per row 600 ms after the last keystroke (writes only the changed fields, serialized per row,
+  blank = null, negative/non-numeric = red border + not saved); search + the category chips. No `max_qty` column (latest SQL not run) → probe once → banner + Max locked, other fields still save.
 - **items**: list/cards with stock, avg cost, last price, min; form: name, cat, base unit, buy unit + size, extra packs, count unit, supplier, min qty, photo; "ไม่ใช้แล้ว".
 - **sups**: supplier cards; form: name, phone, credit days, order days, lead days, LINE group picker (from `line_groups` + "ใช้กลุ่มเดียวกับแอพนับสต๊อก" suggestion from `suppliers`), test send; items bought here.
 - **acc**: month picker; revenue by branch; purchases; expenses list (add/edit/delete; recurring copies forward); COGS/gross/net; receivables by branch; overhead per unit suggestion + settings (overhead mode/value, markup) with explanation.
