@@ -703,8 +703,8 @@ const AG=[
   src:['kpi_daily','kpi_daily_responses','kpi_staff_daily','kpi_staff'],mode:'อ่านอย่างเดียว',check:chkKpi},
  {id:'kitchen',app:'kitchen',ic:'🍳',g:['#43A05C','#1C5B31'],name:'เชฟครัวกลาง',title:'หัวหน้าครัว AI · JJ Kitchen',file:'jjmk-kitchen.html',short:'ครัวกลาง',
   room:[0,12,7,18],seat:[3.6,16.3],door:[[6,12.7],[6,11.3],[6,7.2]],stand:1,chef:1,doing:'ดูใบสั่งผลิตและวัตถุดิบในครัว',
-  can:['ใบสั่งผลิตที่ค้าง (ด่วน/เติม)','วัตถุดิบที่ต่ำกว่าขั้นต่ำ','บิลซัพที่เลย/ใกล้ครบกำหนดจ่าย'],
-  src:['ck_plans','ck_recipes','ck_items','ck_bills'],mode:'อ่านอย่างเดียว',check:chkKitchen},
+  can:['วัตถุดิบที่ต่ำกว่าขั้นต่ำ','สินค้าสำเร็จรูปต่ำกว่าเป้าสต๊อก','บิลสาขาที่ค้างจ่ายเกิน 30 วัน'],
+  src:['ck_items','ck_recipes','kc_deliveries'],mode:'อ่านอย่างเดียว',check:chkKitchen},
  {id:'stock',app:'stock',ic:'📦',g:['#E09B3A','#8A4D12'],name:'พี่สต๊อก',title:'คุมสต๊อก AI · นับสต๊อก',file:'jjmk-stockcheck.html',short:'นับสต๊อก',
   room:[7,12,12,18],seat:[9.6,15.6],door:[[9.5,12.7],[9.5,11.3],[9.5,7.2]],stand:1,doing:'เช็คว่าสาขาไหนยังไม่นับของ',
   can:['ตามสาขาที่ยังไม่นับสต๊อกวันนี้ (หลัง 11:00 = ด่วน)','บอกร้านที่ถึงวันสั่งของวันนี้'],
@@ -870,22 +870,25 @@ async function chkKpi(){
 }
 
 async function chkKitchen(){
+  /* ครัวกลางรุ่นใหม่ (v2 · 2026-10-16) เลิกเขียน ck_plans/ck_bills (แถวเก่าหยุดนิ่ง = เตือนค้างตลอดกาล) → ดูแทนด้วย
+     ① วัตถุดิบต่ำกว่าขั้นต่ำ (ck_items เหมือนเดิม) ② สินค้าสำเร็จรูปต่ำกว่าเป้า (ck_recipes.target_qty) ③ บิลสาขาที่ยังไม่จ่ายเกิน 30 วัน (kc_deliveries)
+     · ทุกตารางอ่านแบบ opt() — ยังไม่รัน jjmk_kitchen2.sql (ไม่มี kc_deliveries/target_qty) = ข้ามเรื่องนั้น ห้องไม่ล้ม */
   const out=[],T=bkk(0);
-  const [plans,recs,items,bills]=await Promise.all([
-    sel('ck_plans',`select=id,qty,kind,note,recipe_id,d&status=eq.plan&d=lte.${T}&limit=500`),
-    opt(sel('ck_recipes','select=id,name,yield_unit&deleted_at=is.null')),
+  const [recs,items,dues]=await Promise.all([
+    opt(sel('ck_recipes','select=id,name,qty,yield_unit,target_qty,active&deleted_at=is.null&target_qty=not.is.null&limit=500')),
     opt(sel('ck_items','select=name,qty,min_qty,unit,active&deleted_at=is.null&min_qty=not.is.null&limit=2000')),
-    opt(sel('ck_bills',`select=id,sup,bill_no,total,due_date&paid_at=is.null&due_date=lte.${addD(T,1)}&order=due_date.asc&limit=200`))]);
-  const rn=id=>{const r=(recs||[]).find(x=>x.id===id);return r?r.name:'(เมนู)'};
-  const kind=p=>p.kind||(/^⚡/.test(p.note||'')?'urgent':/^🔄/.test(p.note||'')?'refill':'');
-  const urg=plans.filter(p=>kind(p)==='urgent'),oth=plans.filter(p=>kind(p)!=='urgent');
-  if(urg.length)out.push(it('c_urg_'+urg.map(p=>p.id).sort().join(','),'crit',`ใบสั่งผลิตด่วนค้าง ${urg.length} รายการ`,list(urg.map(p=>`${rn(p.recipe_id)} ${fmt(p.qty)}`),5)));
-  if(oth.length)out.push(it('c_ref_'+oth.length+'_'+T,'warn',`ใบสั่งผลิตเติมสต๊อกค้าง ${oth.length} รายการ`,list(oth.map(p=>`${rn(p.recipe_id)} ${fmt(p.qty)}`),5)));
+    opt(sel('kc_deliveries',`select=id,bill_no,branch,branch_name,d,total&status=neq.void&paid_at=is.null&d=lte.${addD(T,-30)}&order=d.asc&limit=300`))]);
+  if(recs==null&&items==null)throw new Error('อ่านตาราง ck_recipes/ck_items ไม่ได้ — ยังไม่ได้ติดตั้งระบบครัวกลาง?');   // ตารางหลักอ่านไม่ได้ทั้งคู่ = ห้องขึ้น "อ่านข้อมูลไม่ได้" (ไม่แกล้งบอกว่าไม่มีงานค้าง)
   const low=(items||[]).filter(i=>i.active!==false&&(Number(i.qty)||0)<=(Number(i.min_qty)||0));
   if(low.length)out.push(it('c_low_'+low.length+'_'+T,'warn',`วัตถุดิบต่ำกว่าขั้นต่ำ ${low.length} รายการ`,list(low.map(i=>`${i.name} เหลือ ${+(+i.qty).toFixed(2)} ${i.unit||''}`),5)));
-  (bills||[]).forEach(b=>{const late=b.due_date<T;out.push(it('c_bill_'+b.id,late?'crit':'warn',
-    `${late?'บิลเลยกำหนดจ่าย':'บิลครบกำหนดจ่าย'} ${b.sup||'-'} ฿${fmt(b.total)}`,`${b.bill_no?'เลขที่ '+b.bill_no+' · ':''}ครบกำหนด ${thD(b.due_date)}${late?' (เลยมา '+diffD(b.due_date,T)+' วัน)':''}`))});
-  if(!out.length)out.push(it('c_ok','info','ครัวกลางไม่มีงานค้าง','ไม่มีใบสั่งผลิตค้าง · วัตถุดิบไม่ต่ำกว่าขั้นต่ำ · ไม่มีบิลครบกำหนด'));
+  const under=(recs||[]).filter(r=>r.active!==false&&r.target_qty!=null&&Number(r.qty)<Number(r.target_qty));
+  if(under.length)out.push(it('c_tgt_'+under.length+'_'+T,'warn',`สินค้าสำเร็จรูปต่ำกว่าเป้า ${under.length} เมนู`,list(under.map(r=>`${r.name} เหลือ ${+(+r.qty||0).toFixed(2)}/${+(+r.target_qty).toFixed(2)} ${r.yield_unit||''}`),5)));
+  const byBr={};   // บิลค้างจ่ายแยกสาขา (เรียง d.asc มาแล้ว = ใบแรกของสาขาคือใบเก่าสุด) · เห็นเฉพาะสาขา (_br ของแอพครัวกลาง) = ข้ามสาขาที่ไม่ได้สิทธิ์
+  (dues||[]).forEach(b=>{const code=String(b.branch||'').trim().toUpperCase();if(!brOK('kitchen',code))return;
+    const g=byBr[code]||(byBr[code]={code,name:b.branch_name||brName(code),n:0,sum:0,first:b});g.n++;g.sum+=Number(b.total)||0;if(String(b.d)<String(g.first.d))g.first=b});
+  Object.values(byBr).forEach(g=>out.push(it(`c_ar_${g.code}_${g.n}_${T}`,'warn',`${g.name} บิลครัวกลางค้างจ่ายเกิน 30 วัน ${g.n} ใบ ฿${fmt(g.sum)}`,
+    `เก่าสุด ${g.first.bill_no?'เลขที่ '+g.first.bill_no+' · ':''}${thD(g.first.d)} (ค้างมา ${diffD(String(g.first.d).slice(0,10),T)} วัน)`,{br:g.code})));
+  if(!out.length)out.push(it('c_ok','info','ครัวกลางไม่มีงานค้าง','วัตถุดิบไม่ต่ำกว่าขั้นต่ำ · สินค้าสำเร็จรูปไม่ต่ำกว่าเป้า · ไม่มีบิลสาขาค้างจ่ายเกิน 30 วัน'));
   return out;
 }
 
