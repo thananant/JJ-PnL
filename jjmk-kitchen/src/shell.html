@@ -231,11 +231,11 @@ table.t input,table.t select{min-height:40px;padding:6px 8px}
 .bigact:active{transform:scale(.98)}
 /* วิธีทำ */
 .tmsteps{border:2px solid var(--line);border-radius:16px;padding:4px 12px;margin-bottom:6px}
-.tmstep{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);font-size:16px;line-height:1.45}
+.tmstep{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);font-size:17px;line-height:1.45}
 .tmstep:last-child{border-bottom:0}
 .tmstep .n{flex:none;min-width:30px;height:30px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px}
-.tmstep.tip{color:var(--mut);font-size:14.5px}.tmstep.tip .n{background:none;color:inherit;font-size:18px}
-.tmhead{font-weight:800;font-size:15px;color:var(--red);padding:12px 0 6px;border-bottom:1px solid var(--line)}
+.tmstep.tip{color:var(--mut);font-size:15px}.tmstep.tip .n{background:none;color:inherit;font-size:18px}
+.tmhead{font-weight:800;font-size:16px;color:var(--red);padding:12px 0 6px;border-bottom:1px solid var(--line)}
 .tmhead:first-child{padding-top:8px}
 /* Modal · toast · confirm */
 #modalWrap,#cfmWrap{position:fixed;inset:0;background:rgba(30,24,20,.45);z-index:100;display:none;align-items:flex-end;justify-content:center;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
@@ -794,11 +794,11 @@ function copyFallback(tx,done){const ta=document.createElement('textarea');ta.va
   try{document.execCommand('copy');done();}catch(e){toast(t('copy_fail'),true);}ta.remove();}
 const supKey=n=>String(n||'').replace(/\s+/g,' ').trim().toLowerCase();   // ชื่อร้าน/ซัพแบบไม่สนตัวพิมพ์+ช่องว่าง
 const nameKey=supKey;
-function methodSteps(note){ // วิธีทำ: 1 บรรทัด = 1 ขั้น · '#' = หัวข้อ · '*' = เคล็ดลับ
+function methodSteps(note){ // วิธีทำ (สูตรเดียวกับระบบเดิม): 1 บรรทัด = 1 ขั้น · '#' = หัวข้อ เลขขั้นเริ่ม 1 ใหม่ ("#1 …" = ขั้นธรรมดา · โคลอนท้ายหัวข้อตัดออก) · '*'/'※' = เคล็ดลับ · เลขหน้าบรรทัด "1." "5.1)" ตัดออก ระบบเรียงเอง
   const out=[];let n=0;String(note||'').split(/\r?\n/).forEach(l=>{l=l.trim();if(!l)return;
-    if(/^#(?!\d)/.test(l)){out.push({head:l.replace(/^#+\s*/,'')});n=0;return;}
-    if(/^\*/.test(l)){out.push({tip:l.replace(/^\*+\s*/,'')});return;}
-    out.push({n:++n,text:l.replace(/^\d+[.)]\s*/,'')});});return out;}
+    if(/^#+(?!\d)/.test(l)){const h=l.replace(/^#+\s*/,'').replace(/\s*[:：]$/,'');if(h){out.push({head:h});n=0;}return;}
+    if(/^[*※]/.test(l)){const x=l.replace(/^[*※\s]+|[*\s]+$/g,'');if(x)out.push({tip:x});return;}
+    const x=l.replace(/^\d+(?:\.\d+)*[.)](?!\d)\s*/,'');if(x)out.push({n:++n,text:x});});return out;}
 function methodHtml(note){const st=methodSteps(note);if(!st.length)return '';
   return '<div class="tmsteps">'+st.map(s=>s.head?'<div class="tmhead">'+esc(s.head)+'</div>':s.tip?'<div class="tmstep tip"><span class="n">💡</span><span>'+esc(s.tip)+'</span></div>'
     :'<div class="tmstep"><span class="n">'+s.n+'</span><span>'+esc(s.text)+'</span></div>').join('')+'</div>';}
@@ -1030,7 +1030,7 @@ function pickImage(kind,id,after){ // kind 'item'|'recipe' → อัปโห�
     catch(e){toast(t('sv_err')+((e&&e.message)||e),true);return;}
     if(after)try{after(url)}catch(e){}};
   inp.click();}
-function thumbHtml(o,ic,cls){const url=o&&imgOk(o.image_url)?String(o.image_url):'';const inner=url?'<img src="'+esc(url)+'" loading="lazy">':(ic||'🍳');
+function thumbHtml(o,ic,cls){const url=o&&imgOk(o.image_url)?String(o.image_url):'';const inner=url?'<img src="'+esc(url)+'" loading="lazy" data-ic="'+esc(ic||'🍳')+'" onerror="this.parentNode.textContent=this.dataset.ic">':(ic||'🍳');   // รูปเสีย = กลับเป็นอิโมจิ (ผู้ตรวจ V1)
   return '<div class="'+(cls||'mthumb')+'" '+(url?'data-url="'+esc(url)+'" onclick="zoomImg(this.dataset.url);event.stopPropagation()"':'')+'>'+inner+'</div>';}   // ห้ามต่อค่าจากฐานข้อมูลลงใน JS string ของ onclick
 
 /* ============================================================
@@ -1208,7 +1208,12 @@ function show(v){
   el.innerHTML='<div class="spin"></div>';
   try{if(typeof RENDER[v]==='function')RENDER[v](el);else renderPlaceholder(el,v);}
   catch(e){el.innerHTML='<div class="card empty">⚠ '+esc((e&&e.message)||e)+'</div>';console.error(e);}
+  pillReveal(el);   // แถบชิปที่เพิ่งวาด scrollLeft = 0 — ชิปที่เลือกอยู่ต้องยังเห็นบนโทรศัพท์ (ผู้ตรวจ V2 2026-10-17 · เจ้าของว่า "ปุ่มพวกนี้เหมือนใช้ไม่ได้")
 }
+function pillReveal(root){ // เลื่อนแถบชิป (.pills ที่เลื่อนข้างได้) ให้เห็นชิป .on — ใช้หลังวาดแถบใหม่ทุกที่ (show() เรียกให้เองหลัง RENDER · โมดูลที่วาดชิปในที่เรียกเอง) · ไม่แตะการเลื่อนแนวตั้งของหน้า
+  const r=root&&root.nodeType?root:document;const bars=(r.matches&&r.matches('.pills'))?[r]:[...r.querySelectorAll('.pills')];
+  bars.forEach(c=>{try{const p=c.querySelector('.pill.on');if(!p||c.scrollWidth<=c.clientWidth+1)return;const cr=c.getBoundingClientRect(),pr=p.getBoundingClientRect();
+    if(pr.left>=cr.left-0.5&&pr.right<=cr.right+0.5)return;c.scrollLeft=Math.max(0,pr.left-cr.left+c.scrollLeft-(c.clientWidth-pr.width)/2);}catch(e){}});}
 function renderPlaceholder(el,v){ // หน้าที่ยังไม่มีโมดูล (รอบถัดไป) — การ์ดบอกเป็นมิตร ไม่ใช่ข้อผิดพลาด
   const p=NAV_IC[v]+' '+t('nav_'+v);el.innerHTML=dhead(p)+'<div class="card soon"><div class="bi">🚧</div><h2>'+esc(t('soon_title'))+'</h2><p>'+esc(t('soon_body',{p}))+'</p>'+
     (I18N.th['soon_'+v]?'<p class="sm mut">'+esc(t('soon_'+v))+'</p>':'')+'<button type="button" class="btn big" onclick="show(\'today\')">'+esc(t('soon_back'))+'</button></div>';}
@@ -1308,14 +1313,17 @@ async function boot(){
   bar.innerHTML='<div class="ptr-c">⟳</div><span class="ptr-t"></span>';
   document.body.appendChild(bar);
   const txt=bar.querySelector('.ptr-t');
-  let y0=0,d=0,on=false,busy=false;
+  let y0=0,x0=0,d=0,on=false,busy=false,axis=0;   // axis: 0 = ยังไม่รู้ทิศ · 1 = ดึงลง · -1 = ปัดข้าง (ปล่อยให้เบราว์เซอร์เลื่อนแถบ/ตารางเอง)
   const atTop=()=>{const e=document.scrollingElement||document.documentElement;
     return (window.pageYOffset||e.scrollTop||0)<=0;};
-  /* ดึงอยู่ในกล่องที่เลื่อนได้เอง (ตารางกว้าง/ลิสต์ในกล่อง) ไม่นับเป็นท่าดึงรีเฟรช */
+  /* ดึงอยู่ในกล่องที่เลื่อนได้เอง (ตารางกว้าง/ลิสต์ในกล่อง · แถบชิป/แถบแท็บที่เลื่อนข้างได้) ไม่นับเป็นท่าดึงรีเฟรช
+     — เดิมเช็คเฉพาะแนวตั้ง: ปัดแถบชิป 📜/แถบแท็บตอนหน้าอยู่บนสุดโดยนิ้วเอียงลงนิดเดียว = preventDefault ทุก touchmove แถบไม่เลื่อน
+     (ผู้ตรวจรอบ 2 2026-10-17 · เจ้าของว่า "ปุ่มพวกนี้เหมือนใช้ไม่ได้เลย") */
   const inScrollable=node=>{
     for(let n=(node&&node.nodeType===1)?node:null;n&&n!==document.body;n=n.parentElement){
-      const oy=getComputedStyle(n).overflowY;
-      if((oy==='auto'||oy==='scroll')&&n.scrollHeight>n.clientHeight&&n.scrollTop>0)return true;}
+      const cs=getComputedStyle(n),oy=cs.overflowY,ox=cs.overflowX;
+      if((oy==='auto'||oy==='scroll')&&n.scrollHeight>n.clientHeight&&n.scrollTop>0)return true;
+      if((ox==='auto'||ox==='scroll')&&n.scrollWidth>n.clientWidth+1)return true;}
     return false;};
   const blocked=()=>busy||document.getElementById('modalWrap').classList.contains('on')||
     document.getElementById('loginOv').classList.contains('on');
@@ -1326,13 +1334,15 @@ async function boot(){
   const set=px=>{bar.style.transform='translateY('+(px+SA*Math.max(0,Math.min(1,(px+60)/60)))+'px)';};
   document.addEventListener('touchstart',e=>{
     if(blocked()||e.touches.length!==1||!atTop()||inScrollable(e.target)){on=false;return;}
-    y0=e.touches[0].clientY;d=0;on=true;SA=saTop();
+    y0=e.touches[0].clientY;x0=e.touches[0].clientX;d=0;on=true;axis=0;SA=saTop();
     bar.classList.add('drag');bar.classList.remove('rdy');
     txt.textContent=t('ptr_pull');
   },{passive:true});
   document.addEventListener('touchmove',e=>{
     if(!on)return;
-    d=e.touches[0].clientY-y0;
+    const tc=e.touches[0];d=tc.clientY-y0;
+    if(!axis){const dx=Math.abs(tc.clientX-x0);axis=dx>Math.abs(d)?-1:1;}   // ทิศตัดสินจากการขยับครั้งแรก (เบราว์เซอร์ก็ตัดสินตอนนั้น)
+    if(axis<0){on=false;set(-60);return;}             // ปัดข้างมากกว่าลง = ไม่ใช่ท่าดึงรีเฟรช — ไม่ preventDefault ให้แถบชิป/ตารางเลื่อนตามปกติ
     if(d<=0){set(-60);return;}                        // เลื่อนขึ้น = ปล่อยให้หน้าเลื่อนตามปกติ
     if(!atTop()){on=false;set(-60);return;}
     if(e.cancelable)e.preventDefault();               // กำลังดึงลงจากบนสุด — กันหน้าเด้ง
