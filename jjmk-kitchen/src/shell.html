@@ -1313,14 +1313,17 @@ async function boot(){
   bar.innerHTML='<div class="ptr-c">⟳</div><span class="ptr-t"></span>';
   document.body.appendChild(bar);
   const txt=bar.querySelector('.ptr-t');
-  let y0=0,d=0,on=false,busy=false;
+  let y0=0,x0=0,d=0,on=false,busy=false,axis=0;   // axis: 0 = ยังไม่รู้ทิศ · 1 = ดึงลง · -1 = ปัดข้าง (ปล่อยให้เบราว์เซอร์เลื่อนแถบ/ตารางเอง)
   const atTop=()=>{const e=document.scrollingElement||document.documentElement;
     return (window.pageYOffset||e.scrollTop||0)<=0;};
-  /* ดึงอยู่ในกล่องที่เลื่อนได้เอง (ตารางกว้าง/ลิสต์ในกล่อง) ไม่นับเป็นท่าดึงรีเฟรช */
+  /* ดึงอยู่ในกล่องที่เลื่อนได้เอง (ตารางกว้าง/ลิสต์ในกล่อง · แถบชิป/แถบแท็บที่เลื่อนข้างได้) ไม่นับเป็นท่าดึงรีเฟรช
+     — เดิมเช็คเฉพาะแนวตั้ง: ปัดแถบชิป 📜/แถบแท็บตอนหน้าอยู่บนสุดโดยนิ้วเอียงลงนิดเดียว = preventDefault ทุก touchmove แถบไม่เลื่อน
+     (ผู้ตรวจรอบ 2 2026-10-17 · เจ้าของว่า "ปุ่มพวกนี้เหมือนใช้ไม่ได้เลย") */
   const inScrollable=node=>{
     for(let n=(node&&node.nodeType===1)?node:null;n&&n!==document.body;n=n.parentElement){
-      const oy=getComputedStyle(n).overflowY;
-      if((oy==='auto'||oy==='scroll')&&n.scrollHeight>n.clientHeight&&n.scrollTop>0)return true;}
+      const cs=getComputedStyle(n),oy=cs.overflowY,ox=cs.overflowX;
+      if((oy==='auto'||oy==='scroll')&&n.scrollHeight>n.clientHeight&&n.scrollTop>0)return true;
+      if((ox==='auto'||ox==='scroll')&&n.scrollWidth>n.clientWidth+1)return true;}
     return false;};
   const blocked=()=>busy||document.getElementById('modalWrap').classList.contains('on')||
     document.getElementById('loginOv').classList.contains('on');
@@ -1331,13 +1334,15 @@ async function boot(){
   const set=px=>{bar.style.transform='translateY('+(px+SA*Math.max(0,Math.min(1,(px+60)/60)))+'px)';};
   document.addEventListener('touchstart',e=>{
     if(blocked()||e.touches.length!==1||!atTop()||inScrollable(e.target)){on=false;return;}
-    y0=e.touches[0].clientY;d=0;on=true;SA=saTop();
+    y0=e.touches[0].clientY;x0=e.touches[0].clientX;d=0;on=true;axis=0;SA=saTop();
     bar.classList.add('drag');bar.classList.remove('rdy');
     txt.textContent=t('ptr_pull');
   },{passive:true});
   document.addEventListener('touchmove',e=>{
     if(!on)return;
-    d=e.touches[0].clientY-y0;
+    const tc=e.touches[0];d=tc.clientY-y0;
+    if(!axis){const dx=Math.abs(tc.clientX-x0);axis=dx>Math.abs(d)?-1:1;}   // ทิศตัดสินจากการขยับครั้งแรก (เบราว์เซอร์ก็ตัดสินตอนนั้น)
+    if(axis<0){on=false;set(-60);return;}             // ปัดข้างมากกว่าลง = ไม่ใช่ท่าดึงรีเฟรช — ไม่ preventDefault ให้แถบชิป/ตารางเลื่อนตามปกติ
     if(d<=0){set(-60);return;}                        // เลื่อนขึ้น = ปล่อยให้หน้าเลื่อนตามปกติ
     if(!atTop()){on=false;set(-60);return;}
     if(e.cancelable)e.preventDefault();               // กำลังดึงลงจากบนสุด — กันหน้าเด้ง

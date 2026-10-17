@@ -43,7 +43,8 @@ CSS.add(`
 .hs-ev.k-receive .ic{background:#EAF3FC}.hs-ev.k-produce .ic{background:#FBF6EA}.hs-ev.k-send .ic{background:var(--ok-t)}.hs-ev.k-count .ic{background:#F1ECF8}.hs-ev.k-adjust .ic{background:#EFEBE4}.hs-ev.k-void .ic{background:var(--bad-t)}
 .hs-ev .tx{flex:1;min-width:0}.hs-ev .tt{font-weight:700;overflow-wrap:anywhere;line-height:1.3}.hs-ev .sb{font-size:12.5px;color:var(--mut);overflow-wrap:anywhere}
 .hs-ev .amt{font-family:var(--fh);font-weight:700;white-space:nowrap;flex:none;text-align:right}.hs-ev .amt small{display:block;font-weight:500;color:var(--mut);font-size:11.5px}
-.hs-range{display:flex;gap:8px;align-items:center;margin:0 0 8px}.hs-range input{min-width:0;width:0;flex:1}
+.hs-range{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}.hs-rp{display:flex;flex:1 1 0;min-width:0;align-items:center;gap:8px}.hs-rp input{min-width:0;width:0;flex:1}
+@media(max-width:339px){.hs-rp{flex-basis:100%}}   /* Galaxy Fold ปก 280px: ช่องวันที่ 94px ตัดปี — ตั้งแต่/ถึง คู่ละแถว (ผู้ตรวจรอบ 2) */
 `);
 const HS_F='jjck_hs_f';
 let HS={type:'all',range:'7',from:'',to:'',q:''};
@@ -72,8 +73,8 @@ function hsSetType(k){if(!HS_TYPES.includes(k))k='all';HS.type=k;HS_SHOW=60;hsSa
 function hsSetRange(k){if(!HS_RANGES.includes(k))k='7';HS.range=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsRangeBox();hsLoad();}
 function hsSaveF(){LS.set(HS_F,{type:HS.type,range:HS.range,from:HS.from,to:HS.to,q:HS.q});}
 function hsRangeBox(){const b=document.getElementById('hsRangeBox');if(!b)return;if(HS.range!=='custom'){b.innerHTML='';return;}
-  const [a,z]=hsRange();b.innerHTML='<div class="hs-range"><span class="xs mut">'+esc(t('hs_from'))+'</span><input type="date" id="hsFrom" value="'+esc(a)+'" onchange="HS.from=this.value;hsSaveF();hsLoad()">'+
-    '<span class="xs mut">'+esc(t('hs_to'))+'</span><input type="date" id="hsTo" value="'+esc(z)+'" onchange="HS.to=this.value;hsSaveF();hsLoad()"></div>';}
+  const [a,z]=hsRange();b.innerHTML='<div class="hs-range"><label class="hs-rp"><span class="xs mut">'+esc(t('hs_from'))+'</span><input type="date" id="hsFrom" value="'+esc(a)+'" onchange="HS.from=this.value;hsSaveF();hsLoad()"></label>'+
+    '<label class="hs-rp"><span class="xs mut">'+esc(t('hs_to'))+'</span><input type="date" id="hsTo" value="'+esc(z)+'" onchange="HS.to=this.value;hsSaveF();hsLoad()"></label></div>';}
 let HS_SEQ=0;
 async function hsLoad(){
   const seq=++HS_SEQ;const b=document.getElementById('hsBody');if(!b)return;b.innerHTML='<div class="spin"></div>';

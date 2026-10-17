@@ -260,12 +260,12 @@ function rcSetItem(i,it){ // ตั้งสินค้าให้รายก
   const p=document.getElementById('rcP'+i);if(p){try{p.focus();p.select();}catch(e){}}}
 
 /* ---------- เลือกวัตถุดิบแบบรายการ (ค้นหาในที่) — ใช้ตอน "เปลี่ยน" ในหน้าต่าง / rcAddLine ---------- */
-function rcPickItem(i){
-  const rows=activeItems();
+function rcPickItem(i){ // เปิดทับหน้าต่างใส่ข้อมูล ("เปลี่ยน") = ปิดทางพื้นมืดกลับไปหน้าต่างเดิม (เดิม MODAL_BACK=null ปิดทุกชั้นโดยไม่วาดแถว/ป้าย ✓ ใหม่ — ผู้ตรวจรอบ 2) · แถวที่ยังไม่มีสินค้า = ปิดแล้ววาดฟอร์มใหม่
+  const rows=activeItems(),cur=RC.lines[i];
   const list=q=>{q=supKey(q);return rows.filter(it=>!q||supKey(it.name).includes(q)||supKey(dispName(it)).includes(q)||supKey(it.sup).includes(q)||supKey(it.cat).includes(q))
     .map(it=>'<div class="rowline tap" data-id="'+esc(it.id)+'" onclick="rcPickGo('+i+',this.dataset.id)">'+thumbHtml(it,'🥬')+'<div class="grow"><b>'+esc(dispName(it))+'</b><div class="xs mut">'+esc(trCat(it.cat))+(it.sup?' · '+esc(it.sup):'')+
       ' · '+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+'</div></div>'+(itemCost(it)!=null?'<span class="sm mut">฿'+rcP(itemCost(it))+'/'+esc(trUnit(it.unit))+'</span>':'')+'</div>').join('')||'<div class="empty">'+esc(t('empty'))+'</div>';};
-  MODAL_BACK=null;openModal('<h3>🥬 '+esc(t('item'))+'</h3>'+searchBox('rcPickQ',v=>{const b=document.getElementById('rcPickList');if(b)b.innerHTML=list(v);})+
+  MODAL_BACK=(cur&&itemById(cur.item_id))?()=>rcEdit(i):()=>rcEditDone(i);openModal('<h3>🥬 '+esc(t('item'))+'</h3>'+searchBox('rcPickQ',v=>{const b=document.getElementById('rcPickList');if(b)b.innerHTML=list(v);})+
     '<button class="btn gh" style="width:100%;margin-bottom:8px" onclick="rcNewItem('+i+')">'+esc(t('rc_item_new'))+'</button><div class="rc-pick-list" id="rcPickList">'+list('')+'</div>');
   setTimeout(()=>{const q=document.getElementById('rcPickQ');if(q&&!('ontouchstart' in window))q.focus();},50);}
 function rcPickGo(i,id){const it=itemById(id);MODAL_BACK=null;closeModal();rcSetItem(i,it);}

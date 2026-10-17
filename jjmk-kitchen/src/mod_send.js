@@ -235,7 +235,7 @@ function sdPaint(){
 }
 function sdCardHtml(g,gi){
   const td=bizTodayISO(),partial=g.lines.some(l=>l.already>0),linked=g.lines.filter(l=>l.link&&!l.noPrice).length,anyLink=g.lines.some(l=>l.link);
-  const mZero=!!g.manual&&linked>0&&!g.lines.some(l=>l.link&&!l.noPrice&&num(l.sent)>0);   // เรียกเพิ่มแต่ของถูกจัดให้ใบสั่งสาขาหมดแล้ว = บอกตรง ๆ แทนปุ่ม ✅ (ผู้ตรวจ V1)
+  const mZero=sdManualZero(g);
   let h='<div class="card sd-card'+(g.manual?' sd-manual':'')+'" id="sdG'+gi+'" data-key="'+esc(g.key)+'"><h3><span class="sd-dot" style="background:'+esc(sdBrColor(g.code,g.color))+'"></span>'+esc(g.short||g.name)+
     '<span class="sp">'+(g.manual?'<span class="chip warn sd-mchip">'+esc(t('sd_m_chip'))+'</span>':'')+'<span class="chip '+(g.od===td?'blue':'warn')+'">'+esc(g.od===td?t('today'):t('sd_order_d',{d:dispDate(g.od)}))+'</span>'+(partial?'<span class="chip warn">⏳ '+esc(t('sd_partial'))+'</span>':'')+'</span></h3>';
   h+=g.lines.map((l,li)=>sdLineHtml(gi,l,li,li===g.lines.length-1)).join('');
@@ -256,8 +256,9 @@ function sdLineHtml(gi,l,li,last){
     '<div class="sdl-send"><span class="sdl-lb">'+esc(t('sd_send'))+'</span>'+stepper('sdS'+id,l.sent,{step:1,min:0,max:l.remaining,unit:l.unit,on:(v)=>sdSetSent(gi,li,v)})+'</div>')+
     '<div class="sdl-short" id="sdSh'+id+'">'+sdShortHtml(l)+'</div>';
   return h+'</div>';}
-function sdShortHtml(l){const sh=Math.max(0,rnd4(l.remaining-num(l.sent)));if(sh<=1e-9)return '<span class="chip ok">✓ '+esc(t('sd_full'))+'</span>';
-  return '<span class="chip bad">'+esc(t('sd_short'))+' '+fmtQ(sh)+' '+esc(trUnit(l.unit))+'</span>'+(l.have<l.remaining-1e-9?'<button type="button" class="btn gh sm2 sd-mk" onclick="sdMake()">'+esc(t('sd_make'))+'</button>':'');}
+function sdShortHtml(l,noMk){const sh=Math.max(0,rnd4(l.remaining-num(l.sent)));if(sh<=1e-9)return '<span class="chip ok">✓ '+esc(t('sd_full'))+'</span>';   // noMk = การ์ด ✋ ที่ท้ายการ์ดมี ⚡ อยู่แล้ว (ไม่ขึ้นซ้ำ 2 ปุ่ม — ผู้ตรวจรอบ 2)
+  return '<span class="chip bad">'+esc(t('sd_short'))+' '+fmtQ(sh)+' '+esc(trUnit(l.unit))+'</span>'+(l.have<l.remaining-1e-9&&!noMk?'<button type="button" class="btn gh sm2 sd-mk" onclick="sdMake()">'+esc(t('sd_make'))+'</button>':'');}
+function sdManualZero(g){return !!g&&!!g.manual&&g.lines.some(l=>l.link&&!l.noPrice)&&!g.lines.some(l=>l.link&&!l.noPrice&&num(l.sent)>0);}   // เรียกเพิ่มแต่ของถูกจัดให้ใบสั่งสาขาหมดแล้ว = ท้ายการ์ดบอกตรง ๆ + ⚡ แทนปุ่ม ✅ (ผู้ตรวจ V1)
 function sdSetSent(gi,li,v){ // แก้จำนวนส่งในที่ (ไม่วาดใหม่ — คีย์บอร์ดไม่หุบ) · เกินที่สั่ง = ตัดเหลือเท่าที่สั่ง
   const g=SD.groups[gi],l=g&&g.lines[li];if(!l||!l.link||l.noPrice)return;
   let q=Math.max(0,rnd4(numIn(v)));   // "1,5" = 1.5 (numIn)
@@ -267,7 +268,7 @@ function sdRefresh(){ // ตัวเลข มี/ขาด/รวม ของ
   SD.groups.forEach((g,gi)=>{g.lines.forEach((l,li)=>{if(!l.link)return;const id=gi+'_'+li,want=g.manual?l.ordered:l.sent;   // ช่องของบรรทัดเรียกเพิ่ม = จำนวนที่ขอ (ร่าง) ไม่ใช่ที่ส่งได้
     const hv=document.getElementById('sdHv'+id);if(hv){hv.textContent=fmtQ(l.have);hv.className=l.have>=l.remaining?'green':'red';}
     const inp=document.getElementById('sdS'+id);if(inp&&document.activeElement!==inp&&num(inp.value)!==num(want))inp.value=want;
-    const sh=document.getElementById('sdSh'+id);if(sh)sh.innerHTML=sdShortHtml(l);});
+    const sh=document.getElementById('sdSh'+id);if(sh)sh.innerHTML=sdShortHtml(l,sdManualZero(g));});
     const tt=document.getElementById('sdTot'+gi);if(tt)tt.textContent=money(sdGroupTotal(g));});}
 function sdMake(){if(typeof mkSetPill==='function')mkSetPill('urgent');show('make');}
 
@@ -371,7 +372,7 @@ async function sdSend(gi){await once(async()=>{
   await sdLoad();if(S.tab==='send')sdPaint();
   sdDone(head,res,left);});}
 function sdManualAfterBill(g){ // ร่างเรียกเพิ่มหลังออกบิล: ส่งครบ = เอาออก · ส่งไม่ครบ (ของไม่พอ/ไม่มีราคา) = เหลือ ขอ − ส่ง ไว้ให้ส่งต่อ (ผู้ตรวจ V2: เดิมลบทั้งสาขาแล้วไม่มีที่ไหนจำว่ายังค้าง) → จำนวนบรรทัดที่ยังค้าง
-  let left=0;g.lines.forEach(l=>{const rid=l.link&&l.link.recipe_id;if(!rid)return;const rem=rnd4(num(l.ordered)-num(l.sent));if(rem>1e-9)left++;sdManualSet(g.code,rid,rem>1e-9?rem:0);});return left;}
+  let left=0;g.lines.forEach(l=>{const rid=l.link&&l.link.recipe_id;if(!rid)return;const rem=rnd4(num(l.ordered)-num(l.sent));if(rem>1e-9)left++;sdManualSet(g.code,rid,rem>1e-9?rem:0,num(l.sent));});return left;}   // ที่ส่งไปแล้วสะสมในร่าง → การ์ดขึ้น ⏳ ส่งไปแล้ว N (ผู้ตรวจรอบ 2)
 function sdDone(h,res,left){ // หน้าต่างผล: เลขบิล + สถานะไลน์ (ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก) · left = บรรทัดเรียกเพิ่มที่ยังค้างในการ์ด ✋
   let x='<h3>🧾 '+esc(t('sd_done_t'))+'</h3><div class="okbox">'+esc(t('sd_saved',{no:h.bill_no}))+'<br>'+esc(h.branch_name||'')+' · <b>'+esc(money(h.total))+'</b></div>';
   if(left>0)x+='<div class="hintbox" id="sdLeftNote">✋ '+esc(t('sd_m_left',{n:left}))+'</div>';
@@ -382,35 +383,35 @@ function sdDone(h,res,left){ // หน้าต่างผล: เลขบิ�
   openModal(x);}
 
 /* ---------- ➕ ส่งเพิ่ม — สาขาเรียกของเพิ่ม (ร่างในเครื่อง · ออกบิลทาง sdSend เดิม) ---------- */
-function sdManualLoad(){ // → {<สาขา>:[{recipe_id,qty}]} ของวันนี้ (วันอื่น/ค่าเสีย = ทิ้ง · ร่างของวันก่อนที่ยังมีรายการ = บอกครั้งเดียวว่าทิ้งแล้ว ไม่หายเงียบ ๆ — ผู้ตรวจ V2)
+function sdManualLoad(){ // → {<สาขา>:[{recipe_id,qty,sent?}]} ของวันนี้ (qty = ที่ยังขอ · sent = ส่งออกบิลไปแล้ววันนี้ มีเฉพาะเมื่อ >0) · วันอื่น/ค่าเสีย = ทิ้ง · ร่างของวันก่อนที่ยังมีรายการ = บอกครั้งเดียวว่าทิ้งแล้ว ไม่หายเงียบ ๆ (ผู้ตรวจ V2)
   const d=LS.get(SD_MANUAL,null);if(!d||d.d!==bizTodayISO()||!d.g||typeof d.g!=='object'||Array.isArray(d.g)){
     if(d){LS.del(SD_MANUAL);if(/^\d{4}-\d{2}-\d{2}$/.test(String(d.d||''))&&d.g&&typeof d.g==='object'&&!Array.isArray(d.g)&&Object.keys(d.g).length)toast(t('sd_m_dropped',{d:dispDate(d.d)}),'warn');}return {};}
-  const g={};Object.keys(d.g).forEach(c=>{const rows=(Array.isArray(d.g[c])?d.g[c]:[]).filter(x=>x&&typeof x==='object'&&x.recipe_id);if(rows.length)g[c]=rows.map(x=>({recipe_id:String(x.recipe_id),qty:rnd4(num(x.qty))}));});
+  const g={};Object.keys(d.g).forEach(c=>{const rows=(Array.isArray(d.g[c])?d.g[c]:[]).filter(x=>x&&typeof x==='object'&&x.recipe_id);if(rows.length)g[c]=rows.map(x=>{const o={recipe_id:String(x.recipe_id),qty:rnd4(num(x.qty))},s=rnd4(num(x.sent));if(s>0)o.sent=s;return o;});});
   return g;}
 function sdManualSave(g){if(!g||!Object.keys(g).length)LS.del(SD_MANUAL);else LS.set(SD_MANUAL,{d:bizTodayISO(),g});}
 function sdManualRows(code){return sdManualLoad()[code]||[];}
-function sdManualSet(code,rid,qty){ // qty>0 = ใส่/แก้ (คงลำดับเดิม) · ≤0 = เอาออก
-  const g=sdManualLoad(),rows=g[code]||[],i=rows.findIndex(x=>x.recipe_id===rid);
-  if(qty>0){if(i>=0)rows[i].qty=qty;else rows.push({recipe_id:rid,qty});}else if(i>=0)rows.splice(i,1);
+function sdManualSet(code,rid,qty,sentAdd){ // qty>0 = ใส่/แก้ (คงลำดับเดิม · คงยอดที่ส่งไปแล้ว) · ≤0 = เอาออก · sentAdd = บวกยอดที่เพิ่งออกบิล (sdManualAfterBill)
+  const g=sdManualLoad(),rows=g[code]||[],i=rows.findIndex(x=>x.recipe_id===rid),add=rnd4(num(sentAdd));
+  if(qty>0){if(i>=0){rows[i].qty=qty;if(add>0)rows[i].sent=rnd4(num(rows[i].sent)+add);}else{const o={recipe_id:rid,qty};if(add>0)o.sent=add;rows.push(o);}}else if(i>=0)rows.splice(i,1);
   if(rows.length)g[code]=rows;else delete g[code];sdManualSave(g);}
 function sdManualDel(code){const g=sdManualLoad();delete g[code];sdManualSave(g);}
 function sdManualGroups(){ // ร่าง → กลุ่มรูปแบบเดียวกับ sdCalcGroups (เฉพาะสาขาที่เห็น · เมนูที่หาย/ไม่ใช้แล้ว ข้าม) — ☀️ วันนี้/🍳 ทำของ ไม่เรียกตัวนี้ (ร่างอยู่แค่เครื่องนี้)
   const m=sdManualLoad(),td=bizTodayISO(),out=[];
   (S.branches||[]).forEach(b=>{const rows=m[b.code];if(!rows||!rows.length)return;const lines=[];
     rows.forEach(x=>{const r=recipeById(x.recipe_id),q=rnd4(num(x.qty));if(!r||r.active===false||!(q>0))return;
-      lines.push({rid:'manual|'+b.code+'|'+r.id,pid:'',cat:'',name:String(r.name||''),unit:String(r.yield_unit||''),ordered:q,already:0,remaining:q,link:{recipe_id:r.id,factor:1},have:0,sent:0});});
+      lines.push({rid:'manual|'+b.code+'|'+r.id,pid:'',cat:'',name:String(r.name||''),unit:String(r.yield_unit||''),ordered:q,already:rnd4(num(x.sent)),remaining:q,link:{recipe_id:r.id,factor:1},have:0,sent:0});});   // already = ส่งออกบิลไปแล้ววันนี้ (ช่อง "ขอเพิ่ม" ยังเป็นส่วนที่ยังขอ)
     if(!lines.length)return;
     out.push({key:'manual|'+b.code+'|'+td,code:b.code,name:b.name,short:b.short||b.name,color:b.color||'',od:td,lines,unlinked:0,manual:true});});
   return out;}
 function sdThumb(o){const url=o&&imgOk(o.image_url)?String(o.image_url):'';return '<div class="ithumb">'+(url?'<img src="'+esc(url)+'" loading="lazy" data-ic="🍳" onerror="this.parentNode.textContent=this.dataset.ic">':'🍳')+'</div>';}   // รูปเสีย = กลับเป็นอิโมจิ (ผู้ตรวจ V1)   // รูปในช่อง — ไม่ใส่ซูม (แตะรูป = เลือกเมนู)
-function sdManualLineHtml(gi,l,li,last){ // บรรทัดเรียกเพิ่ม: ชื่อเมนู + ✕ · มี X · ราคา · ช่อง "ขอเพิ่ม" = แก้ร่างในที่ · ขาด/⚡ เหมือนบรรทัดปกติ
+function sdManualLineHtml(gi,l,li,last){ // บรรทัดเรียกเพิ่ม: ชื่อเมนู (+ ⏳ ส่งไปแล้ว N ถ้าออกบิลไปบางส่วนแล้ว) + ✕ · มี X · ราคา · ช่อง "ขอเพิ่ม" = ส่วนที่ยังขอ แก้ร่างในที่ · ขาด/⚡ เหมือนบรรทัดปกติ
   const id=gi+'_'+li,u=trUnit(l.unit),r=recipeById(l.link.recipe_id),p=sdPriceOf(l);
-  let h='<div class="sdl'+(last?' last':'')+'" id="sdL'+id+'"><div class="sdl-top sdm"><b class="sdl-name">'+esc(r?dispName(r):l.name)+'</b>'+
+  let h='<div class="sdl'+(last?' last':'')+'" id="sdL'+id+'"><div class="sdl-top sdm"><b class="sdl-name">'+esc(r?dispName(r):l.name)+'</b>'+(l.already>0?'<span class="xs mut">⏳ '+esc(t('sd_partial_h',{q:fmtQ(l.already),u}))+'</span>':'')+
     '<button type="button" class="sdl-x" aria-label="x" onclick="sdManualLineDel('+gi+','+li+')">✕</button></div>';
   h+='<div class="sdl-stats"><span>'+esc(t('sd_have'))+' <b id="sdHv'+id+'" class="'+(l.have>=l.remaining?'green':'red')+'">'+fmtQ(l.have)+'</b> '+esc(u)+'</span>'+(p==null?'<span class="chip warn">'+esc(t('no_price'))+'</span>':'<span>'+esc(moneyU(p))+'/'+esc(u)+'</span>')+'</div>';
   h+=(l.noPrice?'<div class="sdl-send"><span class="chip bad">⛔ '+esc(t('sd_no_price_h'))+'</span><button type="button" class="btn gh sm2" onclick="show(\'menus\')">📖 '+esc(t('nav_menus'))+'</button></div>':
     '<div class="sdl-send"><span class="sdl-lb">'+esc(t('sd_m_asked'))+'</span>'+stepper('sdS'+id,l.ordered,{step:1,min:1,unit:l.unit,on:(v)=>sdManualQtyIn(gi,li,v)})+'</div>')+
-    '<div class="sdl-short" id="sdSh'+id+'">'+sdShortHtml(l)+'</div>';
+    '<div class="sdl-short" id="sdSh'+id+'">'+sdShortHtml(l,sdManualZero(SD.groups[gi]))+'</div>';
   return h+'</div>';}
 function sdManualQtyIn(gi,li,v){ // แก้จำนวนที่ขอในที่ (ไม่วาดใหม่ — คีย์บอร์ดไม่หุบ) · ว่าง/0 ระหว่างพิมพ์ = ยังไม่บันทึก
   const g=SD.groups[gi],l=g&&g.manual&&g.lines[li];if(!l)return;const q=rnd4(numIn(v));if(!(q>0))return;
