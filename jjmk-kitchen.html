@@ -644,6 +644,7 @@ alter table ck_items add column if not exists active boolean default true;
 alter table ck_recipes add column if not exists avg_cost numeric;        -- ต้นทุนถัวเฉลี่ย/หน่วยผลิต (จากล็อตจริง)
 alter table ck_recipes add column if not exists target_qty numeric;      -- สต๊อกสำเร็จรูปที่ควรมี (ตายตัว)
 alter table ck_recipes add column if not exists target_days numeric;     -- หรือ = กี่วันของยอดส่งเฉลี่ย
+alter table ck_recipes add column if not exists max_qty numeric;         -- 🎯 ทำเติมให้ถึง (Max) · ว่าง = เติมถึง target_qty (Safety = ขั้นต่ำที่ต้องมี) — 2026-10-17
 alter table ck_recipes add column if not exists markup_pct numeric;
 alter table ck_recipes add column if not exists note text;
 alter table ck_recipes add column if not exists active boolean default true;
@@ -784,7 +785,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-17 18:10';
+const APP_VER='KC 2.0 · 2026-10-17 18:49';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -1403,7 +1404,8 @@ function recipeOptionsHtml(sel){return activeRecipes().map(r=>'<option value="'+
    🚚 ออเดอร์สาขาที่ยังไม่ส่ง = stock_receipts (ซัพ = cfg.ck_sup_names · order_date ≥ วันนี้−lookback · เฉพาะสาขาที่เห็น) หักที่ส่งแล้วรายบรรทัด
       — ตัวคิดเดียวกับ 🚚 ส่งสาขา/🍳 ทำของ (sdCalcGroups ใน mod_send.js): ส่งบางส่วน = ที่เหลือยังค้าง · ตัวเลข/ป้าย 🚚 ตรงกันทุกหน้า
    ⚡ ต้องทำด่วน = สินค้าที่สต๊อกสำเร็จรูปไม่พอออเดอร์ที่ยังไม่ส่ง (ชื่อสินค้าสาขา → เมนูผ่าน kc_links หรือชื่อตรงกัน)
-   🔄 ต้องทำเติม = สต๊อกสำเร็จรูปต่ำกว่าที่ควรมี (target_qty หรือ target_days × ยอดส่งเฉลี่ย/วัน 14 วันหลัง — หน่วยครัว: บรรทัดบิลเป็นหน่วยสาขา × ตัวคูณที่ผูกใน kc_links `tdLineFactor`)
+   🔄 ต้องทำเติม = สต๊อกสำเร็จรูปต่ำกว่า Safety (target_qty หรือ target_days × ยอดส่งเฉลี่ย/วัน 14 วันหลัง — หน่วยครัว: บรรทัดบิลเป็นหน่วยสาขา × ตัวคูณที่ผูกใน kc_links `tdLineFactor`)
+      · เติมถึง Max (ck_recipes.max_qty · ว่าง = Safety) — สูตรเดียวกับ 🍳 mkNeeds + 🎯 หน้าตั้ง Safety/Max = `mnTargetCalc` (mod_menus.js)
    ⚠️ วัตถุดิบต่ำกว่าขั้นต่ำ · 📋 นับล่าสุด · ยอดวันนี้ (รับของ ฿ · ทำของ รอบ · ส่งสาขา ฿)
    ทุกการ์ดอ่านแยกกันแบบ fail-soft — ตารางไหนอ่านไม่ได้ การ์ดนั้นบอก "อ่านข้อมูลไม่ได้" ใบอื่นยังทำงาน
    ============================================================ */
@@ -1508,10 +1510,10 @@ function tdAvgSent(D){ // ยอดส่งเฉลี่ย/วัน 14 ว�
   const okIds=new Set(D.dl.rows.filter(d=>d.status!=='void'&&String(d.d)>=addDays(D.today,-14)).map(d=>String(d.id)));
   D.dll.rows.forEach(l=>{if(!okIds.has(String(l.delivery_id))||!l.recipe_id)return;out[l.recipe_id]=(out[l.recipe_id]||0)+num(l.sent)*tdLineFactor(l);});
   Object.keys(out).forEach(k=>out[k]=out[k]/14);return out;}
-function tdTargetOf(r,avg){if(r.target_qty!=null&&num(r.target_qty)>0)return num(r.target_qty);if(r.target_days!=null&&num(r.target_days)>0)return rnd4(num(r.target_days)*num(avg[r.id]||0));return null;}
+function tdTargetOf(r,avg){const c=mnTargetCalc(r,num(r.qty),num(avg[r.id]||0));return c.safety>0?c.safety:null;}   // Safety (ขั้นต่ำที่ต้องมี) — สูตรเดียวกับ 🍳/🎯 (mnTargetCalc ใน mod_menus.js)
 function tdPaintRefill(D){
   if(!D.dl.ok){tdSet('refill',t('td_noread'),'dim');return;}
-  const avg=tdAvgSent(D);const low=activeRecipes().filter(r=>{const tg=tdTargetOf(r,avg);return tg!=null&&tg>0&&num(r.qty)<tg-1e-9;});D.refill=low.map(r=>r.id);
+  const avg=tdAvgSent(D);const low=activeRecipes().filter(r=>mnTargetCalc(r,num(r.qty),num(avg[r.id]||0)).below>0);D.refill=low.map(r=>r.id);   // สต๊อก < Safety → ต้องเติม (ถึง Max)
   tdSet('refill',low.length?t('td_refill_s',{n:low.length}):t('td_refill_ok'),low.length?'hot':'ok');}
 /* ---------- นับล่าสุด ---------- */
 function tdPaintCount(D){
@@ -1850,7 +1852,7 @@ async function rcFromPo(poId){ // โมดูลสั่งของเรี�
     if(pl.price_est!=null&&num(pl.price_est)>0){l.price_mode='total';l.price=num(pl.price_est);}return l;}).filter(Boolean);
   RC_VIEW='form';rcDraft();if(modalOpen())closeModal();if(S.tab==='recv')rerender();else show('recv');}
 function rcPoClear(){RC.po_id=null;RC.po_no='';rcDraft();rcPaintForm();}
-function rcClearAsk(){confirm2(t('rc_clear_q'),{danger:true}).then(ok=>{if(!ok)return;RC=rcBlank();rcDraftClear();RC_CAT='';rcPaintForm();});}
+function rcClearAsk(){confirm2(t('rc_clear_q'),{danger:true}).then(ok=>{if(!ok)return;RC=rcBlank();rcDraftClear();RC_CAT='';RC_Q='';rcPaintForm();});}
 
 /* ---------- บันทึก ---------- */
 function rcValidate(){ // → ข้อความผิดพลาด หรือ null
@@ -1911,7 +1913,7 @@ async function rcSave(){await once(async()=>{
   await rcSavePacks(rows);
   if(RC.po_id){try{await db(()=>sb.from('kc_pos').update({status:'received'}).eq('id',RC.po_id));}catch(e){}}
   toast(prevOk?t('rc_saved',{n:rows.length,m:money(total)}):t('rc_prev_cols'),prevOk?false:'warn');   // ไม่มีช่อง prev_* = บันทึกได้ เตือน (เหลือง) ว่ายกเลิกแล้วต้นทุนไม่ย้อน
-  RC=rcBlank();rcDraftClear();RC_VIEW='list';rerender();rcDetail(rid);});}
+  RC=rcBlank();rcDraftClear();RC_CAT='';RC_Q='';RC_VIEW='list';rerender();rcDetail(rid);});}   // ฟอร์มใหม่ = ชิป/คำค้นของตารางรูปเริ่มใหม่ด้วย (ไม่งั้นคำค้นเก่าค้างกรองตารางรูปของใบถัดไป)
 
 /* ---------- รายการที่รับแล้ว (14 วัน) ---------- */
 async function rcPaintList(){
@@ -1997,13 +1999,14 @@ async function rcVoid(id){await once(async()=>{
    → บันทึก = kc_productions + kc_production_lines + kc_moves (produce_out วัตถุดิบ · waste เศษทิ้ง · produce_in สินค้า) + ck_add_qty
      + ต้นทุนสินค้าถัวเฉลี่ย (ck_recipes.avg_cost / unit_cost = ล็อตล่าสุด) — กติกาเจ้าของ: ราคาสินค้า = ต้นทุนจริงของล็อตที่ทำ
    ⚡ ด่วน อ่านออเดอร์สาขาจาก stock_receipts (sup = ครัวกลาง · ย้อนหลัง order_lookback_days) จับคู่เมนูด้วย kc_links/ชื่อ · หักที่ส่งแล้ว (kc_deliveries) · ขาด = สั่ง − สต๊อก
-   🔄 เติม = สต๊อก < target_qty หรือ target_days × ยอดส่งเฉลี่ย 14 วัน (หน่วยครัว — บรรทัดบิลหน่วยสาขา × ตัวคูณที่ผูก `tdLineFactor`)
+   🔄 เติม = สต๊อก < Safety (target_qty หรือ target_days × ยอดส่งเฉลี่ย 14 วัน — หน่วยครัว: บรรทัดบิลหน่วยสาขา × ตัวคูณที่ผูก `tdLineFactor`)
+      → ต้องเติม = ทำให้ถึง Max (ck_recipes.max_qty · ว่าง = ถึง Safety) − สต๊อก — สูตรเดียว `mnTargetCalc` (mod_menus.js) ใช้ร่วมกับ ☀️ วันนี้ + 🎯 หน้าตั้ง Safety/Max (เจ้าของสั่ง 2026-10-17)
    อ่านไม่ครบ (stock_receipts/kc_deliveries/kc_delivery_lines อ่านพลาด · ไม่มีสิทธิ์ · ไม่มีคอลัมน์) = MK_ORD.ok=false → แถบ mk_orders_na ไม่มี ⚡ (ยกเว้นยังไม่รัน SQL + ตารางไม่มีจริง = ว่าง — กติกา sdTblGone ของ 🚚)
    ร่างล็อตที่ทำค้างเก็บ localStorage (jjck_mk_draft · วันเดียวกัน ≤12 ชม.) · ‹ กลับ = เก็บตัวเลขไว้ · ทำวันนี้ → รายละเอียด + ยกเลิกวันเดียวกัน (ย้อนสต๊อก/ต้นทุน)
    ============================================================ */
 I18N.add({
 th:{mk_pill_urgent:'⚡ ด่วน',mk_pill_refill:'🔄 เติม',mk_pill_all:'ทั้งหมด',mk_none_urgent:'ไม่มีของที่ต้องทำด่วน 👍',mk_none_refill:'สต๊อกสำเร็จรูปครบตามที่ควรมี 👍',mk_none:'ยังไม่มีเมนู — ไปเพิ่มที่ 📖 เมนู/สูตร',
-  mk_ordered:'สาขาสั่ง {q}',mk_short:'ขาด {q} {u}',mk_target:'ควรมี {q}',mk_below:'ต้องเติม {q} {u}',mk_sugg:'แนะนำ {n} รอบ',mk_sugg_tgt:'ถึงที่ควรมี {q}',mk_lot_eq:'1 รอบ = {q} {u}',mk_tap:'แตะเพื่อทำ',
+  mk_ordered:'สาขาสั่ง {q}',mk_short:'ขาด {q} {u}',mk_target:'ควรมี {q}',mk_below:'ต้องเติม {q} {u}',mk_sugg:'แนะนำ {n} รอบ',mk_sugg_tgt:'ถึงที่ควรมี {q}',mk_upto:'เติมถึง {q}',mk_lot_eq:'1 รอบ = {q} {u}',mk_tap:'แตะเพื่อทำ',
   mk_today:'🍳 ทำวันนี้',mk_today_none:'วันนี้ยังไม่ได้ทำของ',mk_lots_n:'{n} รอบ',mk_got:'ได้ {q} {u}',mk_by:'โดย',
   mk_draft:'⏸ ทำค้างอยู่: {n} · {l} รอบ',mk_draft_go:'▶ ทำต่อ',mk_draft_drop:'ทิ้ง',mk_draft_q:'มีงานทำของค้างอยู่ ({n}) — ทิ้งแล้วเริ่มอันใหม่?',
   mk_lots:'จำนวนรอบ',mk_lots_hint:'พิมพ์ทศนิยมได้ เช่น 0.5 รอบ',mk_ing:'🥬 ส่วนผสม',mk_ing_sp:'แก้ตัวเลขได้ถ้าใช้ไม่ตรงสูตร',mk_plan:'ตามสูตร',mk_used:'ใช้จริง',mk_waste:'เศษ/ทิ้ง',mk_have:'มี {q}',mk_over:'⚠ ใช้เกินของที่มีในสต๊อก',
@@ -2019,7 +2022,7 @@ th:{mk_pill_urgent:'⚡ ด่วน',mk_pill_refill:'🔄 เติม',mk_pill
   mk_void_ok:'ยกเลิกแล้ว — คืนสต๊อกให้แล้ว ✅',mk_void_today:'ยกเลิกได้เฉพาะล็อตที่ทำวันนี้',mk_void_note:'ยกเลิกทำของ',mk_gone:'ล็อตนี้ถูกยกเลิกไปแล้ว',mk_prev_na:'คืนสต๊อกแล้ว แต่ต้นทุนเดิมของสินค้าไม่มีให้คืน (ยังไม่มีช่อง prev_*)',
   mk_prev_cols:'บันทึกแล้ว แต่ตารางยังไม่มีช่อง prev_* — ถ้ายกเลิกล็อตนี้ ต้นทุนเดิมจะไม่ถูกคืน',mk_not_saved:'บันทึกไม่สำเร็จ — ไม่มีอะไรถูกบันทึก ลองใหม่อีกครั้ง',mk_cost_fix:'สต๊อกสินค้าเปลี่ยนระหว่างบันทึก — คิดต้นทุนถัวเฉลี่ยใหม่ให้แล้ว',mk_orders_na:'อ่านออเดอร์สาขาไม่ได้ — ⚡ ด่วน อาจไม่ครบ',mk_back:'‹ กลับ',mk_menus:'📖 เมนู/สูตร',mk_unit_bad:'⚠ แปลง {u} → {b} ไม่ได้ — แก้หน่วยในสูตรที่ 📖 เมนู/สูตร',mk_unit_bad_q:'"{n}": แปลง {u} → {b} ไม่ได้ — แก้หน่วยในสูตรที่ 📖 เมนู/สูตร ก่อนบันทึก',mk_unit_bad_sum:'ส่วนผสมที่แปลงหน่วยไม่ได้: {list} — บันทึกไม่ได้จนกว่าจะแก้สูตร'},
 en:{mk_pill_urgent:'⚡ Urgent',mk_pill_refill:'🔄 Refill',mk_pill_all:'All',mk_none_urgent:'Nothing urgent to make 👍',mk_none_refill:'Finished stock is at target 👍',mk_none:'No menus yet — add them in 📖 Menus',
-  mk_ordered:'Branches ordered {q}',mk_short:'short {q} {u}',mk_target:'target {q}',mk_below:'refill {q} {u}',mk_sugg:'suggest {n} lots',mk_sugg_tgt:'to reach target {q}',mk_lot_eq:'1 lot = {q} {u}',mk_tap:'Tap to make',
+  mk_ordered:'Branches ordered {q}',mk_short:'short {q} {u}',mk_target:'target {q}',mk_below:'refill {q} {u}',mk_sugg:'suggest {n} lots',mk_sugg_tgt:'to reach target {q}',mk_upto:'refill up to {q}',mk_lot_eq:'1 lot = {q} {u}',mk_tap:'Tap to make',
   mk_today:'🍳 Made today',mk_today_none:'Nothing made today yet',mk_lots_n:'{n} lots',mk_got:'got {q} {u}',mk_by:'by',
   mk_draft:'⏸ In progress: {n} · {l} lots',mk_draft_go:'▶ Continue',mk_draft_drop:'Discard',mk_draft_q:'A lot is in progress ({n}) — discard it and start a new one?',
   mk_lots:'Lots',mk_lots_hint:'Decimals OK, e.g. 0.5 lot',mk_ing:'🥬 Ingredients',mk_ing_sp:'edit if different from the recipe',mk_plan:'Recipe',mk_used:'Used',mk_waste:'Waste',mk_have:'have {q}',mk_over:'⚠ More than in stock',
@@ -2035,7 +2038,7 @@ en:{mk_pill_urgent:'⚡ Urgent',mk_pill_refill:'🔄 Refill',mk_pill_all:'All',m
   mk_void_ok:'Voided — stock restored ✅',mk_void_today:'Only lots made today can be voided',mk_void_note:'Production voided',mk_gone:'This lot was already voided',mk_prev_na:'Stock restored, but the previous product cost could not be restored (no prev_* columns)',
   mk_prev_cols:'Saved, but the table has no prev_* columns — voiding this lot will not restore the previous cost',mk_not_saved:'NOT saved — please try again',mk_cost_fix:'Product stock changed while saving — moving average recomputed',mk_orders_na:'Could not read branch orders — ⚡ Urgent may be incomplete',mk_back:'‹ Back',mk_menus:'📖 Menus',mk_unit_bad:'⚠ cannot convert {u} → {b} — fix the unit in 📖 Menus',mk_unit_bad_q:'"{n}": cannot convert {u} → {b} — fix the recipe unit in 📖 Menus before saving',mk_unit_bad_sum:'Ingredients whose unit cannot convert: {list} — cannot save until the recipe is fixed'},
 lo:{mk_pill_urgent:'⚡ ດ່ວນ',mk_pill_refill:'🔄 ເຕີມ',mk_pill_all:'ທັງໝົດ',mk_none_urgent:'ບໍ່ມີເຄື່ອງທີ່ຕ້ອງເຮັດດ່ວນ 👍',mk_none_refill:'ສະຕັອກສຳເລັດຮູບຄົບຕາມທີ່ຄວນມີ 👍',mk_none:'ຍັງບໍ່ມີເມນູ — ໄປເພີ່ມທີ່ 📖 ເມນູ/ສູດ',
-  mk_ordered:'ສາຂາສັ່ງ {q}',mk_short:'ຂາດ {q} {u}',mk_target:'ຄວນມີ {q}',mk_below:'ຕ້ອງເຕີມ {q} {u}',mk_sugg:'ແນະນຳ {n} ຮອບ',mk_sugg_tgt:'ເຖິງທີ່ຄວນມີ {q}',mk_lot_eq:'1 ຮອບ = {q} {u}',mk_tap:'ແຕະເພື່ອເຮັດ',
+  mk_ordered:'ສາຂາສັ່ງ {q}',mk_short:'ຂາດ {q} {u}',mk_target:'ຄວນມີ {q}',mk_below:'ຕ້ອງເຕີມ {q} {u}',mk_sugg:'ແນະນຳ {n} ຮອບ',mk_sugg_tgt:'ເຖິງທີ່ຄວນມີ {q}',mk_upto:'ເຕີມເຖິງ {q}',mk_lot_eq:'1 ຮອບ = {q} {u}',mk_tap:'ແຕະເພື່ອເຮັດ',
   mk_today:'🍳 ເຮັດມື້ນີ້',mk_today_none:'ມື້ນີ້ຍັງບໍ່ໄດ້ເຮັດເຄື່ອງ',mk_lots_n:'{n} ຮອບ',mk_got:'ໄດ້ {q} {u}',mk_by:'ໂດຍ',
   mk_draft:'⏸ ເຮັດຄ້າງຢູ່: {n} · {l} ຮອບ',mk_draft_go:'▶ ເຮັດຕໍ່',mk_draft_drop:'ຖິ້ມ',mk_draft_q:'ມີວຽກເຮັດເຄື່ອງຄ້າງຢູ່ ({n}) — ຖິ້ມແລ້ວເລີ່ມອັນໃໝ່?',
   mk_lots:'ຈຳນວນຮອບ',mk_lots_hint:'ພິມທົດສະນິຍົມໄດ້ ເຊັ່ນ 0.5 ຮອບ',mk_ing:'🥬 ສ່ວນປະສົມ',mk_ing_sp:'ແກ້ຕົວເລກໄດ້ຖ້າໃຊ້ບໍ່ຕົງສູດ',mk_plan:'ຕາມສູດ',mk_used:'ໃຊ້ຈິງ',mk_waste:'ເສດ/ຖິ້ມ',mk_have:'ມີ {q}',mk_over:'⚠ ໃຊ້ເກີນເຄື່ອງທີ່ມີໃນສະຕັອກ',
@@ -2051,7 +2054,7 @@ lo:{mk_pill_urgent:'⚡ ດ່ວນ',mk_pill_refill:'🔄 ເຕີມ',mk_pill
   mk_void_ok:'ຍົກເລີກແລ້ວ — ຄືນສະຕັອກໃຫ້ແລ້ວ ✅',mk_void_today:'ຍົກເລີກໄດ້ສະເພາະລັອດທີ່ເຮັດມື້ນີ້',mk_void_note:'ຍົກເລີກເຮັດເຄື່ອງ',mk_gone:'ລັອດນີ້ຖືກຍົກເລີກໄປແລ້ວ',mk_prev_na:'ຄືນສະຕັອກແລ້ວ ແຕ່ຕົ້ນທຶນເດີມຂອງສິນຄ້າບໍ່ມີໃຫ້ຄືນ (ຍັງບໍ່ມີຊ່ອງ prev_*)',
   mk_prev_cols:'ບັນທຶກແລ້ວ ແຕ່ຕາຕະລາງຍັງບໍ່ມີຊ່ອງ prev_* — ຖ້າຍົກເລີກລັອດນີ້ ຕົ້ນທຶນເດີມຈະບໍ່ຖືກຄືນ',mk_not_saved:'ບໍ່ໄດ້ບັນທຶກ — ລອງໃໝ່ອີກຄັ້ງ',mk_cost_fix:'ສະຕັອກສິນຄ້າປ່ຽນລະຫວ່າງບັນທຶກ — ຄິດຕົ້ນທຶນສະເລ່ຍໃໝ່ແລ້ວ',mk_orders_na:'ອ່ານອໍເດີສາຂາບໍ່ໄດ້ — ⚡ ດ່ວນ ອາດບໍ່ຄົບ',mk_back:'‹ ກັບຄືນ',mk_menus:'📖 ເມນູ/ສູດ',mk_unit_bad:'⚠ ແປງ {u} → {b} ບໍ່ໄດ້ — ແກ້ຫົວໜ່ວຍໃນສູດທີ່ 📖 ເມນູ/ສູດ',mk_unit_bad_q:'"{n}": ແປງ {u} → {b} ບໍ່ໄດ້ — ແກ້ຫົວໜ່ວຍໃນສູດທີ່ 📖 ເມນູ/ສູດ ກ່ອນບັນທຶກ',mk_unit_bad_sum:'ສ່ວນປະສົມທີ່ແປງຫົວໜ່ວຍບໍ່ໄດ້: {list} — ບັນທຶກບໍ່ໄດ້ຈົນກວ່າຈະແກ້ສູດ'},
 my:{mk_pill_urgent:'⚡ အရေးပေါ်',mk_pill_refill:'🔄 ဖြည့်',mk_pill_all:'အားလုံး',mk_none_urgent:'အရေးပေါ်လုပ်ရန် မရှိပါ 👍',mk_none_refill:'ထုတ်ကုန်လက်ကျန် လုံလောက်သည် 👍',mk_none:'မီနူး မရှိသေးပါ — 📖 မီနူး/နည်း တွင် ထည့်ပါ',
-  mk_ordered:'ဆိုင်ခွဲ မှာ {q}',mk_short:'လို {q} {u}',mk_target:'ထားရမည် {q}',mk_below:'ဖြည့်ရန် {q} {u}',mk_sugg:'အကြံပြု {n} သုတ်',mk_sugg_tgt:'ထားရမည့် {q} အထိ',mk_lot_eq:'1 သုတ် = {q} {u}',mk_tap:'လုပ်ရန် နှိပ်ပါ',
+  mk_ordered:'ဆိုင်ခွဲ မှာ {q}',mk_short:'လို {q} {u}',mk_target:'ထားရမည် {q}',mk_below:'ဖြည့်ရန် {q} {u}',mk_sugg:'အကြံပြု {n} သုတ်',mk_sugg_tgt:'ထားရမည့် {q} အထိ',mk_upto:'{q} အထိ ဖြည့်',mk_lot_eq:'1 သုတ် = {q} {u}',mk_tap:'လုပ်ရန် နှိပ်ပါ',
   mk_today:'🍳 ယနေ့လုပ်ခဲ့',mk_today_none:'ယနေ့ မလုပ်ရသေးပါ',mk_lots_n:'{n} သုတ်',mk_got:'ရ {q} {u}',mk_by:'လုပ်သူ',
   mk_draft:'⏸ လုပ်လက်စ: {n} · {l} သုတ်',mk_draft_go:'▶ ဆက်လုပ်',mk_draft_drop:'ဖျက်',mk_draft_q:'လုပ်လက်စ ရှိနေသည် ({n}) — ဖျက်ပြီး အသစ်စမလား?',
   mk_lots:'သုတ်အရေအတွက်',mk_lots_hint:'ဒသမ ရိုက်နိုင် ဥပမာ 0.5 သုတ်',mk_ing:'🥬 ပါဝင်ပစ္စည်း',mk_ing_sp:'နည်းနှင့်မတူလျှင် ပြင်နိုင်',mk_plan:'နည်းအရ',mk_used:'အမှန်သုံး',mk_waste:'အပိုင်း/စွန့်',mk_have:'ရှိ {q}',mk_over:'⚠ လက်ကျန်ထက် ပိုသုံးနေသည်',
@@ -2123,12 +2126,12 @@ function mkOrdersCalc(orders,links,dels,dl,td,ok,dailyOk){ // ออเดอร
   if(dailyOk==null?ok:dailyOk)dl.forEach(l=>{const dv=dById[l.delivery_id];if(!dv||!l.recipe_id)return;if(String(dv.d)>=from14)daily[l.recipe_id]=num(daily[l.recipe_id])+num(l.sent)*tdLineFactor(l);});   // หน่วยครัว (= tdAvgSent ของ ☀️)
   Object.keys(daily).forEach(k=>{daily[k]=rnd4(daily[k]/14);});
   return {at:Date.now(),ok,ordered:C.ordered,sent:C.sent,daily};}
-function mkNeeds(){ // ต่อเมนู: open (สั่งค้าง) · short (ขาด) · target · below (ต้องเติม) · sugg (รอบที่แนะนำ)
+function mkNeeds(){ // ต่อเมนู: open (สั่งค้าง) · short (ขาด) · target (= Safety ขั้นต่ำที่ต้องมี) · upto (= Max ทำเติมให้ถึง · ไม่ตั้ง = Safety) · below (ต้องเติม) · sugg (รอบที่แนะนำ)
   const out={};activeRecipes().forEach(r=>{
     const open=Math.max(0,rnd4(num(MK_ORD.ordered[r.id])-num(MK_ORD.sent[r.id]))),stock=num(r.qty),short=Math.max(0,rnd4(open-stock));
-    const target=num(r.target_qty)>0?num(r.target_qty):(num(r.target_days)>0?rnd4(num(r.target_days)*num(MK_ORD.daily[r.id])):0);
-    const below=target>0?Math.max(0,rnd4(target-stock)):0,need=Math.max(short,below),yq=num(r.yield_qty)||1;
-    out[r.id]={open,stock,short,target,below,need,sugg:need>0?Math.ceil(need/yq-1e-9):0};});
+    const tc=mnTargetCalc(r,stock,num(MK_ORD.daily[r.id]));   // สูตรเดียวกับ ☀️ วันนี้ + 🎯 หน้าตั้ง Safety/Max: สต๊อก < Safety → เติมถึง Max (ว่าง = ถึง Safety)
+    const target=tc.safety,below=tc.below,need=Math.max(short,below),yq=num(r.yield_qty)||1;
+    out[r.id]={open,stock,short,target,upto:tc.upto,below,need,sugg:need>0?Math.ceil(need/yq-1e-9):0};});
   return out;}
 
 /* ---------- รายการ (เลือกสินค้า + ทำวันนี้) ---------- */
@@ -2158,12 +2161,12 @@ function mkCardHtml(r,n){
   const u=trUnit(r.yield_unit),c=recipeUnitCost(r),kind=n.short>0?'urgent':(n.below>0?'refill':'manual');
   let need='';
   if(n.short>0)need='<div class="mk-need">⚡ '+esc(t('mk_ordered',{q:fmtQ(n.open)}))+' · '+esc(t('mk_short',{q:fmtQ(n.short),u}))+'</div>';
-  else if(n.below>0)need='<div class="mk-need">🔄 '+esc(t('mk_target',{q:fmtQ(n.target)}))+' · '+esc(t('mk_below',{q:fmtQ(n.below),u}))+'</div>';
+  else if(n.below>0)need='<div class="mk-need">🔄 '+esc(t('mk_target',{q:fmtQ(n.target)}))+(n.upto>n.target+1e-9?' · '+esc(t('mk_upto',{q:fmtQ(n.upto)})):'')+' · '+esc(t('mk_below',{q:fmtQ(n.below),u}))+'</div>';   // ตั้ง Max ไว้ = บอกว่าเติมถึงเท่าไร (ตัวเลขต้องเติมจึงมากกว่า Safety − สต๊อก)
   else if(n.open>0)need='<div class="mk-need ok">✓ '+esc(t('mk_ordered',{q:fmtQ(n.open)}))+'</div>';
   return '<div class="icard tap" data-id="'+esc(r.id)+'" data-lots="'+(n.sugg||1)+'" data-kind="'+kind+'" onclick="mkOpen(this.dataset.id,num(this.dataset.lots),this.dataset.kind)">'+
     thumbHtml(r,(typeof mnIcon==='function')?mnIcon(r):'🍳','ithumb')+'<div class="iname">'+esc(dispName(r))+'</div>'+
     '<div class="isub">'+esc(t('mk_lot_eq',{q:fmtQ(r.yield_qty),u}))+(c!=null?' · '+esc(mkMoney(c))+'/'+esc(u):'')+'</div>'+
-    '<div class="row" style="justify-content:space-between"><span class="chip '+(num(r.qty)>0?'ok':'mid')+'">📦 '+fmtQ(r.qty)+' '+esc(u)+'</span>'+(n.sugg?'<span class="mk-sugg">'+esc(t('mk_sugg',{n:n.sugg}))+(n.short>0&&n.below>n.short+1e-9?' · '+esc(t('mk_sugg_tgt',{q:fmtQ(n.target)})):'')+'</span>':'')+'</div>'+need+'</div>';}
+    '<div class="row" style="justify-content:space-between"><span class="chip '+(num(r.qty)>0?'ok':'mid')+'">📦 '+fmtQ(r.qty)+' '+esc(u)+'</span>'+(n.sugg?'<span class="mk-sugg">'+esc(t('mk_sugg',{n:n.sugg}))+(n.short>0&&n.below>n.short+1e-9?' · '+esc(t('mk_sugg_tgt',{q:fmtQ(n.upto)})):'')+'</span>':'')+'</div>'+need+'</div>';}
 function mkPaintToday(){
   const box=document.getElementById('mkToday'),nb=document.getElementById('mkTodayN');if(!box)return;
   if(nb)nb.textContent=MK_TODAY.length?t('mk_lots_n',{n:MK_TODAY.length}):'';
@@ -3462,6 +3465,11 @@ async function poVoid(id){await once(async()=>{const p=PO_LIST.find(x=>x.id===id
    การ์ดสินค้า (รูป · ได้/รอบ · สต๊อก · ต้นทุนถัวเฉลี่ยจริง · ล็อตล่าสุด · ราคาขายสาขา) + ฟอร์ม (ชื่อ หมวด ได้กี่/รอบ+หน่วย
    บวกกำไร % · สต๊อกที่ควรมี · ค่าอื่นต่อรอบ · รูป · วิธีทำ (#/*) · ส่วนผสม: เลือกวัตถุดิบ + จำนวน + หน่วยที่แปลงได้ → หน่วยหลัก + ต้นทุน ณ ราคาปัจจุบัน)
    + 🗄️ ไม่ใช้แล้ว + 📈 ต้นทุนรายล็อต (kc_productions)
+   🎯 Safety / Max ของสินค้าแต่ละตัว (เจ้าของสั่ง 2026-10-17 "หน้าตั้ง safety/max ของสินค้า แต่ละตัว") = มุมมองในแท็บนี้ (MN_VIEW='target' · จำใน localStorage jjck_mnview · ‹ กลับ = การ์ดเมนู)
+     1 แถว/สินค้า: รูป · ตอนนี้มี · ส่งเฉลี่ย/วัน 14 วัน (MK_ORD ของ 🍳 — ชุดเดียวกัน) · ช่อง Safety [target_qty] · Max [max_qty] · หรือ N วัน [target_days] · "ต้องทำเติม" สด
+     บันทึกเองเมื่อแก้ (debounce 600 มิลลิวินาที · เขียนทีละแถวต่อกัน `mnTgFlush` กันผลเขียนเก่าทับใหม่ · ว่าง = null · ติดลบ/ไม่ใช่ตัวเลข = ไม่บันทึก + ขอบแดง)
+     สูตร `mnTargetCalc(r,stock,daily)` ที่เดียว ใช้ร่วมกับ 🍳 mkNeeds + ☀️ tdPaintRefill: Safety = target_qty หรือ target_days × ยอดส่งเฉลี่ย · สต๊อก < Safety → ต้องเติม = max(Max,Safety) − สต๊อก (Max ว่าง = Safety)
+     ยังไม่รัน SQL รุ่นล่าสุด (ไม่มีคอลัมน์ max_qty · 42703/PGRST204) = S.kcMax=false ตรวจครั้งเดียว (`mnTgProbe`) → เขียนใหม่โดยไม่มี max_qty + แถบ mn_tg_sql + ช่อง Max ปิด — ช่องอื่นบันทึกได้ปกติ
    กติกาเจ้าของ: สูตร/วิธีทำ/รูปคงเดิม · ราคาสินค้า = ต้นทุนจริงของล็อตที่ทำ (avg_cost/unit_cost มาจากหน้า 🍳 ทำของ) — หน้านี้ไม่กรอกราคาเอง
    ร่างฟอร์มเก็บ localStorage (jjck_mn_draft) — ลากหน้าลงรีเฟรชแล้วไม่หาย
    ============================================================ */
@@ -3539,7 +3547,41 @@ my:{mn_new:'မီနူးထည့်ရန်',mn_edit:'မီနူးပြ
   mn_need_yield:'တစ်သုတ်ရသည့် အရေအတွက် ထည့်ပါ (0 ထက်များ)',mn_need_qty:'ပါဝင်ပစ္စည်း "{n}" တွင် အရေအတွက် မထည့်ရသေး',mn_need_item:'ကုန်ကြမ်း မရွေးရသေးသော အတန်း ရှိသည်',
   mn_unit_lost:'SQL မလုပ်ရသေး — ပါဝင်ပစ္စည်းယူနစ်များကို မသိမ်းမီ အခြေခံယူနစ်သို့ ပြောင်းလိုက်သည်',mn_make:'🍳 ထုတ်လုပ်',mn_stock:'လက်ကျန်',mn_price_rule:'ထုတ်ကုန်ဈေး = လုပ်ခဲ့သော သုတ်၏ အမှန်ကုန်ကျစရိတ် + ဝှက်ထားစရိတ် (💰 စာရင်း တွင် သတ်မှတ်) — ဤနေရာတွင် ဈေးထည့်ရန် မလို',mn_lock:'🔒 ထုတ်ကုန်ယူနစ် ပြောင်း၍မရ — {why} (လက်ကျန်/စရိတ်/ဘေလ်များ ဤယူနစ်ဖြင့် သိမ်းထား)',mn_lock_stock:'လက်ကျန် {q} {u} ရှိနေသေး — အရင် 0 ထားပါ',mn_lock_hist:'ထုတ်လုပ်/ပို့ဆောင် မှတ်တမ်း ရှိသည်',mn_lock_link:'ဆိုင်ခွဲထုတ်ကုန်နှင့် ချိတ်ထားသည်',mn_lines_fail:'ပါဝင်ပစ္စည်း မသိမ်းရပါ — နည်းဟောင်း ရှိနေဆဲ၊ ထပ်စမ်းပါ',mn_lines_lost:'ပါဝင်ပစ္စည်း မသိမ်းရပါ — ကွန်ရက်ပြန်ရလျှင် 💾 ထပ်နှိပ်ပါ (ဖောင်တွင် ရှိနေဆဲ)'}
 });
+I18N.add({ // 🎯 Safety / Max ของสินค้าแต่ละตัว
+th:{mn_tg_btn:'🎯 Safety / Max',mn_tg_title:'ตั้ง Safety / Max ของสินค้า',mn_safety:'ขั้นต่ำที่ต้องมี (Safety)',mn_max:'ทำเติมให้ถึง (Max)',mn_max_hint:'ว่าง = เติมถึง Safety',
+  mn_tg_hint:'Safety = ขั้นต่ำที่ต้องมี — สต๊อกสำเร็จรูปต่ำกว่านี้จะขึ้นใน 🍳 ทำของ → 🔄 เติม · Max = ทำเติมให้ถึง (ว่าง = เติมถึง Safety) · แก้แล้วบันทึกให้เอง',
+  mn_tg_days:'หรือ N วัน',mn_tg_days_s:'ของยอดส่งเฉลี่ย/วัน',mn_tg_stock:'ตอนนี้มี {q} {u}',mn_tg_avg:'ส่งเฉลี่ย/วัน {q}',mn_tg_avg_na:'ส่งเฉลี่ย/วัน — (อ่านบิลไม่ได้)',mn_tg_open:'สาขาสั่งค้าง {q}',
+  mn_tg_need:'ต้องทำเติม {q} {u}',mn_tg_ok:'สต๊อกพอ ✓',mn_tg_none:'ยังไม่ตั้ง',mn_tg_bad:'ใส่ได้เฉพาะตัวเลข 0 ขึ้นไป — ยังไม่บันทึก',
+  mn_tg_sql:'ต้องรัน SQL รุ่นล่าสุด (jjmk_kitchen2.sql) — ช่อง Max ยังบันทึกไม่ได้ · ช่องอื่นบันทึกได้ปกติ (ดูหน้า ⚙️ ตั้งค่า)'},
+en:{mn_tg_btn:'🎯 Safety / Max',mn_tg_title:'Safety / Max per product',mn_safety:'Minimum to keep (Safety)',mn_max:'Refill up to (Max)',mn_max_hint:'blank = up to Safety',
+  mn_tg_hint:'Safety = minimum to keep — finished stock below it shows in 🍳 Produce → 🔄 Refill · Max = refill up to (blank = up to Safety) · saves as you type',
+  mn_tg_days:'or N days',mn_tg_days_s:'of average daily sending',mn_tg_stock:'Now {q} {u}',mn_tg_avg:'avg sent/day {q}',mn_tg_avg_na:'avg sent/day — (bills unreadable)',mn_tg_open:'branches waiting {q}',
+  mn_tg_need:'Refill {q} {u}',mn_tg_ok:'Stock OK ✓',mn_tg_none:'not set',mn_tg_bad:'Numbers ≥ 0 only — not saved',
+  mn_tg_sql:'Run the latest SQL (jjmk_kitchen2.sql) — the Max field cannot be saved yet · other fields save normally (see ⚙️ Settings)'},
+lo:{mn_tg_btn:'🎯 Safety / Max',mn_tg_title:'ຕັ້ງ Safety / Max ຂອງສິນຄ້າ',mn_safety:'ຂັ້ນຕ່ຳທີ່ຕ້ອງມີ (Safety)',mn_max:'ເຮັດເຕີມໃຫ້ເຖິງ (Max)',mn_max_hint:'ຫວ່າງ = ເຕີມເຖິງ Safety',
+  mn_tg_hint:'Safety = ຂັ້ນຕ່ຳທີ່ຕ້ອງມີ — ສະຕັອກສຳເລັດຮູບຕ່ຳກວ່ານີ້ຈະຂຶ້ນໃນ 🍳 ເຮັດເຄື່ອງ → 🔄 ເຕີມ · Max = ເຮັດເຕີມໃຫ້ເຖິງ (ຫວ່າງ = ເຕີມເຖິງ Safety) · ແກ້ແລ້ວບັນທຶກໃຫ້ເອງ',
+  mn_tg_days:'ຫຼື N ມື້',mn_tg_days_s:'ຂອງຍອດສົ່ງສະເລ່ຍ/ມື້',mn_tg_stock:'ຕອນນີ້ມີ {q} {u}',mn_tg_avg:'ສົ່ງສະເລ່ຍ/ມື້ {q}',mn_tg_avg_na:'ສົ່ງສະເລ່ຍ/ມື້ — (ອ່ານບິນບໍ່ໄດ້)',mn_tg_open:'ສາຂາສັ່ງຄ້າງ {q}',
+  mn_tg_need:'ຕ້ອງເຮັດເຕີມ {q} {u}',mn_tg_ok:'ສະຕັອກພໍ ✓',mn_tg_none:'ຍັງບໍ່ຕັ້ງ',mn_tg_bad:'ໃສ່ໄດ້ສະເພາະຕົວເລກ 0 ຂຶ້ນໄປ — ຍັງບໍ່ບັນທຶກ',
+  mn_tg_sql:'ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດ (jjmk_kitchen2.sql) — ຊ່ອງ Max ຍັງບັນທຶກບໍ່ໄດ້ · ຊ່ອງອື່ນບັນທຶກໄດ້ປົກກະຕິ (ເບິ່ງໜ້າ ⚙️ ຕັ້ງຄ່າ)'},
+my:{mn_tg_btn:'🎯 Safety / Max',mn_tg_title:'ထုတ်ကုန်တစ်ခုချင်း Safety / Max သတ်မှတ်',mn_safety:'အနည်းဆုံး ထားရမည့် (Safety)',mn_max:'ဖြည့်ရမည့် အထိ (Max)',mn_max_hint:'ဗလာ = Safety အထိ',
+  mn_tg_hint:'Safety = အနည်းဆုံး ထားရမည့် ပမာဏ — ထုတ်ကုန်လက်ကျန် ဤထက်နည်းလျှင် 🍳 ထုတ်လုပ် → 🔄 ဖြည့် တွင် ပေါ်မည် · Max = ဖြည့်ရမည့် အထိ (ဗလာ = Safety အထိ) · ပြင်ပြီး အလိုအလျောက် သိမ်းသည်',
+  mn_tg_days:'သို့မဟုတ် N ရက်',mn_tg_days_s:'ပျမ်းမျှ နေ့စဉ်ပို့မှု၏',mn_tg_stock:'ယခု {q} {u}',mn_tg_avg:'ပျမ်းမျှ ပို့/နေ့ {q}',mn_tg_avg_na:'ပျမ်းမျှ ပို့/နေ့ — (ဘေလ်ဖတ်မရ)',mn_tg_open:'ဆိုင်ခွဲ စောင့်နေ {q}',
+  mn_tg_need:'ဖြည့်ရန် {q} {u}',mn_tg_ok:'လက်ကျန် လုံလောက် ✓',mn_tg_none:'မသတ်မှတ်ရသေး',mn_tg_bad:'0 နှင့်အထက် ဂဏန်းသာ — မသိမ်းရသေး',
+  mn_tg_sql:'နောက်ဆုံး SQL (jjmk_kitchen2.sql) ကို လုပ်ပါ — Max အကွက် မသိမ်းနိုင်သေးပါ · အခြားအကွက်များ ပုံမှန်သိမ်းသည် (⚙️ ဆက်တင် ကြည့်ပါ)'}
+});
 CSS.add(`
+.mntg{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:10px 11px;margin-bottom:8px;box-shadow:var(--sh);transition:border-color .3s,box-shadow .3s}
+.mntg.saved{border-color:var(--ok);box-shadow:0 0 0 2px rgba(31,122,67,.16)}.mntg.err{border-color:var(--red)}
+#mnTgBack{white-space:nowrap}
+.mntg-h{display:flex;align-items:center;gap:10px;min-height:44px}.mntg-h .iname{font-weight:700;overflow-wrap:anywhere}
+.mntg-need{flex:none;text-align:right;font-size:13px;font-family:var(--fh);max-width:44%;overflow-wrap:anywhere}
+.mntg-tick{color:var(--ok);font-weight:800;opacity:0;transition:opacity .25s;margin-left:4px}.mntg.saved .mntg-tick{opacity:1}
+.mntg-f{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.mntg-f label{display:block;min-width:0}.mntg-f label>.xs{display:block;font-weight:700;color:var(--wine);margin-bottom:3px;line-height:1.25}
+.mntg-in{display:flex;align-items:center;gap:5px;min-width:0}.mntg-in input{flex:1;min-width:0;width:auto;text-align:right;padding:9px 8px}
+.mntg-in .xs{flex:none;max-width:42%;overflow-wrap:anywhere;line-height:1.2}
+.mntg-in input.bad{border-color:var(--red);background:var(--bad-t)}.mntg-in input:disabled{background:#F3EEE4;color:var(--mut)}
+@media(max-width:399px){.mntg-f{grid-template-columns:1fr 1fr}.mntg-f label.days{grid-column:1/-1}}
 .icard.mnoff{opacity:.62}.icard.mnoff .ithumb{filter:grayscale(1)}
 .mnform .mthumb.lg{width:72px;height:72px;font-size:32px;border-radius:14px}
 .mnline{border:1.5px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:8px;background:#fff}
@@ -3564,6 +3606,16 @@ const MN_DRAFT='jjck_mn_draft',MN_DRAFT_MS=12*3600*1000;
 const MN_IC={'น้ำจิ้ม':'🥣','ของหมัก':'🥩','น้ำซุป':'🍲','ของหวาน':'🍰','อื่นๆ':'🍳'};
 const mnIcon=r=>MN_IC[(r&&r.cat)||'']||'🍳';
 const mnMoney=c=>'฿'+fmtQ(c);
+let MN_VIEW=LS.get('jjck_mnview','')==='target'?'target':'';   // '' = การ์ดเมนู · 'target' = 🎯 หน้าตั้ง Safety/Max (รีเฟรชแล้วอยู่หน้าเดิม)
+let MN_TGQ='';                                                   // ค้นหาในหน้า 🎯
+const MN_TG={seq:{},tm:{},pend:{},bad:{},busy:{},again:{}};      // ต่อแถว: seq = ลำดับการเขียน · tm = debounce · pend = ช่องที่แก้แล้วรอเขียน · bad = ช่องที่ค่าใช้ไม่ได้ · busy/again = เขียนต่อกันทีละแถว
+function mnTargetCalc(r,stock,daily){ // สูตร Safety/Max ที่เดียว — 🍳 mkNeeds · ☀️ tdPaintRefill · 🎯 หน้านี้ ต้องตรงกัน (เจ้าของสั่ง 2026-10-17)
+  // Safety = ขั้นต่ำที่ต้องมี (target_qty · หรือ target_days × ยอดส่งเฉลี่ย/วัน) · Max = ทำเติมให้ถึง (max_qty · ว่าง/0 = Safety · ต่ำกว่า Safety = ใช้ Safety)
+  // สต๊อก < Safety → ต้องเติม = Max − สต๊อก · ไม่ต่ำกว่า = 0 (ส่วน open/short ของออเดอร์สาขาคิดแยกใน mkNeeds ตามเดิม)
+  const safety=num(r.target_qty)>0?num(r.target_qty):(num(r.target_days)>0?rnd4(num(r.target_days)*num(daily)):0);
+  const max=num(r.max_qty)>0?num(r.max_qty):0,upto=max>0?Math.max(max,safety):safety;
+  const below=safety>0&&num(stock)<safety-1e-9?Math.max(0,rnd4(upto-num(stock))):0;
+  return {safety,max,upto,below};}
 function mnCats(){const c=MENU_CATS.slice();S.recipes.forEach(r=>{const x=String(r.cat||'').trim();if(x&&!c.includes(x))c.push(x);});return c;}
 function mnOffN(){return S.recipes.filter(r=>r.active===false).length;}
 function mnRealCost(r){ // ต้นทุนจริง/หน่วย: ถัวเฉลี่ยล็อต → ล็อตล่าสุด → null
@@ -3571,6 +3623,7 @@ function mnRealCost(r){ // ต้นทุนจริง/หน่วย: ถ�
 
 /* ---------- รายการ ---------- */
 RENDER.menus=function(el){
+  if(MN_VIEW==='target')return mnTgRender(el);   // 🎯 หน้าตั้ง Safety/Max (มุมมองในแท็บเดียวกัน)
   const K=canKitchen(),act=activeRecipes(),nOff=mnOffN();
   if(MN_CAT==='__off'&&!nOff)MN_CAT='';
   const cats=mnCats().filter(c=>act.some(r=>(r.cat||'อื่นๆ')===c));
@@ -3579,7 +3632,8 @@ RENDER.menus=function(el){
   if(nOff)pills.push({k:'__off',lb:'🗄️ '+t('mn_off_chip'),n:nOff});
   let h=dhead('📖 '+t('nav_menus'),esc(t('mn_n',{n:act.length})))+sqlNeedBox();
   if(K)h+='<div class="row" style="margin-bottom:10px"><button class="btn" onclick="mnEdit()">➕ '+esc(t('mn_new'))+'</button>'+
-    '<button class="btn gh" onclick="show(\'make\')">'+esc(t('mn_make'))+'</button></div>';
+    '<button class="btn gh" onclick="show(\'make\')">'+esc(t('mn_make'))+'</button>'+
+    '<button class="btn gh" id="mnTgBtn" onclick="mnViewSet(\'target\')">'+esc(t('mn_tg_btn'))+'</button></div>';
   h+='<div class="note">💡 '+esc(t('mn_price_rule'))+'</div>';
   h+=pillBar(pills,MN_CAT,k=>mnSetCat(k),{scroll:1});   // closure — คีย์ภาษาไทยใน onclick string จะพังเครื่องหมายคำพูด
   if(MN_CAT==='__off')h+='<div class="hintbox">🗄️ '+esc(t('mn_off_view'))+'</div>';
@@ -3608,15 +3662,102 @@ function mnCardHtml(r,off,K){
     '<div class="isub">'+esc(t('mn_lot_eq',{q:fmtQ(r.yield_qty),u:trUnit(r.yield_unit)}))+' · '+esc(t('mn_lines_n',{n}))+'</div>'+
     '<div class="isub">'+cost+(sp!=null?' · '+esc(t('mn_sell'))+' <b>'+esc(mnMoney(sp))+'</b>':'')+'</div>'+
     '<div class="row" style="justify-content:space-between"><span class="chip '+(num(r.qty)>0?'ok':'mid')+'">📦 '+fmtQ(r.qty)+' '+esc(trUnit(r.yield_unit))+'</span>'+
-      (r.target_qty!=null&&num(r.target_qty)>0?'<span class="xs mut">🎯 '+fmtQ(r.target_qty)+'</span>':(r.target_days!=null&&num(r.target_days)>0?'<span class="xs mut">🎯 '+fmtQ(r.target_days)+'d</span>':''))+'</div>'+
+      (r.target_qty!=null&&num(r.target_qty)>0?'<span class="xs mut">🎯 '+fmtQ(r.target_qty)+mnMaxTxt(r)+'</span>':(r.target_days!=null&&num(r.target_days)>0?'<span class="xs mut">🎯 '+fmtQ(r.target_days)+'d'+mnMaxTxt(r)+'</span>':''))+'</div>'+
     (off&&K?'<button class="btn sm2 gh" data-id="'+esc(r.id)+'" onclick="event.stopPropagation();mnOff(this.dataset.id,true)">'+esc(t('mn_restore'))+'</button>':'')+'</div>';}
+
+/* ---------- 🎯 Safety / Max ของสินค้าแต่ละตัว ---------- */
+const mnMaxTxt=r=>num(r&&r.max_qty)>0?' → '+fmtQ(r.max_qty):'';   // ป้ายบนการ์ด: 🎯 Safety → Max
+function mnViewSet(v){MN_VIEW=v==='target'?'target':'';LS.set('jjck_mnview',MN_VIEW);MN_TGQ='';show('menus');}
+function mnTgColGone(e,col){const c=(e&&e.code)||'',m=String((e&&e.message)||'');return (c==='42703'||c==='PGRST204')&&m.includes(col);}   // ไม่มีคอลัมน์นั้น (select = 42703 · update = PGRST204)
+async function mnTgProbe(){ // ตรวจครั้งเดียวว่าฐานข้อมูลมีคอลัมน์ max_qty ไหม (ยังไม่รัน SQL รุ่นล่าสุด = ไม่มี) · อ่านไม่ได้ด้วยเหตุอื่น = ยังไม่รู้ ลองใหม่คราวหน้า
+  if(S.kcMax!==undefined)return;
+  try{const r=await sb.from('ck_recipes').select('id,max_qty').limit(1);if(!r)return;if(!r.error)S.kcMax=true;else if(mnTgColGone(r.error,'max_qty'))S.kcMax=false;}catch(e){}}
+function mnTgSqlHtml(){return S.kcMax===false?'<div class="badbox" id="mnTgSqlBox">⚠ '+esc(t('mn_tg_sql'))+'</div>':'';}
+function mnTgMaxLock(){const lock=S.kcMax===false||!canKitchen();document.querySelectorAll('#mnTgList input[data-f="max_qty"]').forEach(i=>{i.disabled=lock;});}
+function mnTgRender(el){
+  const act=activeRecipes(),cats=mnCats().filter(c=>act.some(r=>(r.cat||'อื่นๆ')===c));
+  if(MN_CAT==='__off'||(MN_CAT&&!cats.includes(MN_CAT)))MN_CAT='';
+  const pills=[{k:'',lb:t('all'),n:act.length}].concat(cats.map(c=>({k:c,lb:(MN_IC[c]||'🍳')+' '+trCat(c),n:act.filter(r=>(r.cat||'อื่นๆ')===c).length})));
+  el.innerHTML=dhead('🎯 '+t('mn_tg_title'),'<button class="btn gh sm2" id="mnTgBack" onclick="mnViewSet(\'\')">'+esc(t('back'))+'</button>')+sqlNeedBox()+
+    '<div id="mnTgSql">'+mnTgSqlHtml()+'</div><div class="hintbox">💡 '+esc(t('mn_tg_hint'))+'</div>'+
+    pillBar(pills,MN_CAT,k=>mnSetCat(k),{scroll:1})+searchBox('mnTgQ','mnTgSearch')+'<div id="mnTgList"></div>';   // closure — คีย์ภาษาไทยใน onclick string จะพังเครื่องหมายคำพูด
+  const q=document.getElementById('mnTgQ');if(q)q.value=MN_TGQ;mnTgPaintList();
+  mnTgProbe().then(()=>{if(S.tab!=='menus'||MN_VIEW!=='target')return;const b=document.getElementById('mnTgSql');if(b)b.innerHTML=mnTgSqlHtml();mnTgMaxLock();});
+  if(typeof mkLoad==='function')Promise.resolve(mkLoad()).then(()=>{if(S.tab==='menus'&&MN_VIEW==='target')mnTgInfoPaintAll();}).catch(()=>{});   // ยอดส่งเฉลี่ย 14 วัน + ออเดอร์ค้าง = ชุดเดียวกับ 🍳 (MK_ORD · แคช 60 วิ = คืน undefined) · วาดเฉพาะบรรทัดข้อมูล ไม่แตะช่องที่กำลังพิมพ์
+}
+function mnTgSearch(v){MN_TGQ=v||'';mnTgPaintList();}
+function mnTgPaintList(){
+  const box=document.getElementById('mnTgList');if(!box)return;const q=supKey(MN_TGQ);
+  const list=activeRecipes().filter(r=>(!MN_CAT||(r.cat||'อื่นๆ')===MN_CAT)&&(!q||supKey(r.name).includes(q)||supKey(dispName(r)).includes(q)));
+  if(!list.length){box.innerHTML='<div class="empty">'+esc(t(q?'mn_no_match':'mn_none'))+'</div>';return;}
+  box.innerHTML=list.map(mnTgRowHtml).join('');mnTgMaxLock();}
+function mnTgCur(r){return Object.assign({},r,MN_TG.pend[r.id]||{});}   // ค่าที่ใช้คิด = ที่บันทึกแล้ว + ที่แก้แล้วรอเขียน (เฉพาะค่าที่ใช้ได้)
+function mnTgOrd(){return (typeof MK_ORD!=='undefined'&&MK_ORD.ok)?MK_ORD:null;}
+function mnTgInfoHtml(r){
+  const o=mnTgOrd(),u=trUnit(r.yield_unit);let h=esc(t('mn_tg_stock',{q:fmtQ(r.qty),u}));
+  h+=' · '+esc(o?t('mn_tg_avg',{q:fmtQ(num(o.daily[r.id]))}):t('mn_tg_avg_na'));
+  if(o){const open=Math.max(0,rnd4(num(o.ordered[r.id])-num(o.sent[r.id])));if(open>0)h+=' · '+esc(t('mn_tg_open',{q:fmtQ(open)}));}
+  return h;}
+function mnTgNeedHtml(r){
+  const o=mnTgOrd(),x=mnTgCur(r),c=mnTargetCalc(x,num(r.qty),o?num(o.daily[r.id]):0);
+  const tick='<span class="mntg-tick">✓</span>';
+  if(!(num(x.target_qty)>0||num(x.target_days)>0))return '<span class="mut">'+esc(t('mn_tg_none'))+'</span>'+tick;   // ยังไม่ตั้งทั้ง Safety และ N วัน (ตั้ง N วันแต่ยังไม่เคยส่ง = Safety 0 = สต๊อกพอ)
+  if(c.below>0)return '<b class="red">'+esc(t('mn_tg_need',{q:fmtQ(c.below),u:trUnit(r.yield_unit)}))+'</b>'+tick;
+  return '<span class="green">'+esc(t('mn_tg_ok'))+'</span>'+tick;}
+function mnTgNeedPaint(id){const r=recipeById(id),n=document.getElementById('mnTgN_'+id);if(r&&n)n.innerHTML=mnTgNeedHtml(r);}
+function mnTgInfoPaintAll(){document.querySelectorAll('#mnTgList .mntg').forEach(el=>{const r=recipeById(el.dataset.id);if(!r)return;const i=document.getElementById('mnTgI_'+r.id);if(i)i.innerHTML=mnTgInfoHtml(r);mnTgNeedPaint(r.id);});}
+function mnTgRowHtml(r){
+  const K=canKitchen(),u=trUnit(r.yield_unit),dis=K?'':' disabled',v=x=>x==null?'':String(x);
+  const inp=(f,val,extra)=>'<input type="text" inputmode="decimal" id="mnTg'+(f==='target_qty'?'S':f==='max_qty'?'M':'D')+'_'+esc(r.id)+'" data-id="'+esc(r.id)+'" data-f="'+f+'" value="'+esc(v(val))+'" oninput="mnTgInput(this)"'+(extra||'')+dis+'>';
+  return '<div class="mntg" id="mnTgR_'+esc(r.id)+'" data-id="'+esc(r.id)+'">'+
+    '<div class="mntg-h">'+thumbHtml(r,mnIcon(r))+'<div class="grow"><div class="iname">'+esc(dispName(r))+'</div><div class="xs mut" id="mnTgI_'+esc(r.id)+'">'+mnTgInfoHtml(r)+'</div></div>'+
+      '<div class="mntg-need" id="mnTgN_'+esc(r.id)+'">'+mnTgNeedHtml(r)+'</div></div>'+
+    '<div class="mntg-f">'+
+      '<label><span class="xs">'+esc(t('mn_safety'))+'</span><div class="mntg-in">'+inp('target_qty',r.target_qty)+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
+      '<label><span class="xs">'+esc(t('mn_max'))+'</span><div class="mntg-in">'+inp('max_qty',r.max_qty,S.kcMax===false?' disabled':'')+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
+      '<label class="days"><span class="xs">'+esc(t('mn_tg_days'))+'</span><div class="mntg-in">'+inp('target_days',r.target_days)+'<span class="xs mut">'+esc(t('mn_tg_days_s'))+'</span></div></label>'+
+    '</div><div class="xs red mntg-bad" id="mnTgB_'+esc(r.id)+'" style="display:none;margin-top:4px">'+esc(t('mn_tg_bad'))+'</div></div>';}
+function mnTgParse(s){ // ค่าในช่อง → null (ว่าง) · ตัวเลข ≥ 0 (ปัด 4 ตำแหน่ง · "1,5" = 1.5 แบบ numIn) · NaN = ใช้ไม่ได้ (ติดลบ/ตัวอักษร)
+  s=String(s==null?'':s).trim();if(s==='')return null;
+  if(!/^[0-9][0-9,]*(\.[0-9]+)?$/.test(s)&&!/^[0-9]+,[0-9]{1,2}$/.test(s))return NaN;
+  const n=numIn(s);return (isFinite(n)&&n>=0)?rnd4(n):NaN;}
+function mnTgInput(el){
+  const id=el.dataset.id,f=el.dataset.f,r=recipeById(id);if(!r||!canKitchen()||!['target_qty','max_qty','target_days'].includes(f))return;
+  const n=mnTgParse(el.value),bad=MN_TG.bad[id]=MN_TG.bad[id]||{};
+  if(Number.isNaN(n)){el.classList.add('bad');bad[f]=1;}else{el.classList.remove('bad');delete bad[f];(MN_TG.pend[id]=MN_TG.pend[id]||{})[f]=n;}
+  const bb=document.getElementById('mnTgB_'+id);if(bb)bb.style.display=Object.keys(bad).length?'':'none';
+  mnTgNeedPaint(id);
+  clearTimeout(MN_TG.tm[id]);MN_TG.tm[id]=setTimeout(()=>mnTgFlush(id),600);}
+async function mnTgFlush(id){ // เขียนแถวนี้ทีละครั้งต่อกัน — มีการเขียนค้างอยู่ = รอให้เสร็จแล้วเขียนรอบถัดไป (ค่าใหม่ไม่ถูกค่าเก่าที่มาช้าทับ)
+  clearTimeout(MN_TG.tm[id]);
+  if(MN_TG.busy[id]){MN_TG.again[id]=1;return;}
+  const p=MN_TG.pend[id];if(!p||!Object.keys(p).length)return;delete MN_TG.pend[id];
+  MN_TG.busy[id]=1;try{await mnTgSave(id,p);}finally{delete MN_TG.busy[id];}
+  if(MN_TG.again[id]){delete MN_TG.again[id];mnTgFlush(id);}}
+async function mnTgSave(id,patch){ // เขียน ck_recipes เฉพาะช่องที่แก้ · ไม่มีคอลัมน์ max_qty (ยังไม่รัน SQL รุ่นล่าสุด) = เขียนใหม่โดยไม่มี + จำ S.kcMax=false + แถบบอก · เขียนพลาด = คืนค่าไว้รอเขียนรอบหน้า + ขอบแดง + toast
+  const r=recipeById(id);if(!r||!canKitchen())return false;
+  const row={};['target_qty','max_qty','target_days'].forEach(f=>{if(f in patch)row[f]=patch[f]==null?null:rnd4(num(patch[f]));});
+  if(S.kcMax===false)delete row.max_qty;
+  const seq=MN_TG.seq[id]=(MN_TG.seq[id]||0)+1;
+  if(!Object.keys(row).length){mnTgMaxLock();return false;}
+  let res=null,dropped=false;setBusy(true);
+  try{for(let i=0;i<3;i++){res=await sb.from('ck_recipes').update(row).eq('id',id);if(!res||!res.error)break;
+      if(('max_qty' in row)&&mnTgColGone(res.error,'max_qty')){delete row.max_qty;S.kcMax=false;dropped=true;if(!Object.keys(row).length){res={error:null};break;}continue;}
+      break;}}
+  catch(e){res={error:e};}finally{setBusy(false);}
+  const el=document.getElementById('mnTgR_'+id);
+  if(res&&res.error){MN_TG.pend[id]=Object.assign({},patch,MN_TG.pend[id]||{});toast(t('sv_err')+(res.error.message||res.error),true);if(el)el.classList.add('err');return false;}
+  Object.assign(r,row);
+  if(el){el.classList.remove('err');el.classList.remove('saved');void el.offsetWidth;el.classList.add('saved');clearTimeout(el._tgT);el._tgT=setTimeout(()=>el.classList.remove('saved'),1500);}
+  if(dropped){const b=document.getElementById('mnTgSql');if(b)b.innerHTML=mnTgSqlHtml();mnTgMaxLock();toast(t('mn_tg_sql'),'warn');}
+  mnTgNeedPaint(id);return seq===MN_TG.seq[id];}
 
 /* ---------- ฟอร์ม ---------- */
 function mnDraftFrom(r){
   if(r)return {id:r.id,name:r.name||'',cat:r.cat||'อื่นๆ',yield_qty:r.yield_qty==null?'':r.yield_qty,yield_unit:r.yield_unit||'ถุง',markup_pct:r.markup_pct==null?'':r.markup_pct,
-    target_qty:r.target_qty==null?'':r.target_qty,target_days:r.target_days==null?'':r.target_days,extra_cost:r.extra_cost==null?'':r.extra_cost,note:r.note||'',image_url:r.image_url||null,active:r.active!==false,
+    target_qty:r.target_qty==null?'':r.target_qty,max_qty:r.max_qty==null?'':r.max_qty,target_days:r.target_days==null?'':r.target_days,extra_cost:r.extra_cost==null?'':r.extra_cost,note:r.note||'',image_url:r.image_url||null,active:r.active!==false,
     lines:(S.boms[r.id]||[]).filter(l=>itemById(l.item_id)).map(l=>({item_id:l.item_id,qty:l.qty==null?'':l.qty,unit:l.unit||itemById(l.item_id).unit||''})),cat_new:'',restored:false};
-  return {id:null,name:'',cat:(MN_CAT&&MN_CAT!=='__off')?MN_CAT:'อื่นๆ',yield_qty:'',yield_unit:'ถุง',markup_pct:'',target_qty:'',target_days:'',extra_cost:'',note:'',image_url:null,active:true,lines:[],cat_new:'',restored:false};}
+  return {id:null,name:'',cat:(MN_CAT&&MN_CAT!=='__off')?MN_CAT:'อื่นๆ',yield_qty:'',yield_unit:'ถุง',markup_pct:'',target_qty:'',max_qty:'',target_days:'',extra_cost:'',note:'',image_url:null,active:true,lines:[],cat_new:'',restored:false};}
 function mnDraftRead(id){const d=LS.get(MN_DRAFT,null);if(!d||typeof d!=='object'||!(Date.now()-num(d._t)<MN_DRAFT_MS))return null;
   return String(d.id||'')===String(id||'')?d:null;}
 function mnDraftSave(){if(!MN_D)return;clearTimeout(mnDraftSave._t);mnDraftSave._t=setTimeout(()=>{if(MN_D)LS.set(MN_DRAFT,Object.assign({},MN_D,{_t:Date.now()}));},150);}
@@ -3665,9 +3806,11 @@ function mnPaintForm(){
     '<div class="fld"><label>'+esc(t('mn_method'))+'</label><div id="mnMethod">'+mnMethodHtml()+'</div></div>'+
     '<div class="grid2">'+fld(t('mn_extra'),'<input id="mnExtra" type="text" inputmode="decimal" value="'+esc(d.extra_cost)+'" oninput="MN_D.extra_cost=this.value;mnDraftSave();mnPaintCost()">')+
       fld(t('mn_markup'),'<input id="mnMk" type="text" inputmode="decimal" placeholder="'+esc(t('mn_markup_def',{p:fmtQ((S.cfg||{}).markup_pct||0)}))+'" value="'+esc(d.markup_pct)+'" oninput="MN_D.markup_pct=this.value;mnDraftSave();mnPaintCost()">')+'</div>'+
-    '<div class="fld"><label>🎯 '+esc(t('mn_target'))+'</label><div class="grid2">'+
-      '<div><input id="mnTq" type="text" inputmode="decimal" placeholder="'+esc(t('mn_target_qty'))+'" value="'+esc(d.target_qty)+'" oninput="MN_D.target_qty=this.value;mnDraftSave()"><div class="xs mut">'+esc(t('mn_target_qty'))+' ('+esc(trUnit(d.yield_unit))+')</div></div>'+
-      '<div><input id="mnTd" type="text" inputmode="decimal" placeholder="'+esc(t('mn_target_days'))+'" value="'+esc(d.target_days)+'" oninput="MN_D.target_days=this.value;mnDraftSave()"><div class="xs mut">'+esc(t('mn_target_days'))+'</div></div></div>'+
+    '<div class="fld"><label>🎯 '+esc(t('mn_target'))+'</label><div class="grid2">'+   // Safety / Max — ชื่อช่องเดียวกับหน้า 🎯 (id mnTq/mnTm/mnTd)
+      '<div><input id="mnTq" type="text" inputmode="decimal" placeholder="'+esc(t('mn_safety'))+'" value="'+esc(d.target_qty)+'" oninput="MN_D.target_qty=this.value;mnDraftSave()"><div class="xs mut">'+esc(t('mn_safety'))+' ('+esc(trUnit(d.yield_unit))+')</div></div>'+
+      '<div><input id="mnTm" type="text" inputmode="decimal" placeholder="'+esc(t('mn_max'))+'" value="'+esc(d.max_qty==null?'':d.max_qty)+'" oninput="MN_D.max_qty=this.value;mnDraftSave()"'+(S.kcMax===false?' disabled':'')+'><div class="xs mut">'+esc(t('mn_max'))+' · '+esc(t('mn_max_hint'))+'</div></div></div>'+
+      '<div style="margin-top:6px"><input id="mnTd" type="text" inputmode="decimal" placeholder="'+esc(t('mn_target_days'))+'" value="'+esc(d.target_days)+'" oninput="MN_D.target_days=this.value;mnDraftSave()"><div class="xs mut">'+esc(t('mn_target_days'))+'</div></div>'+
+      (S.kcMax===false?'<div class="xs amber" style="margin-top:4px">⚠ '+esc(t('mn_tg_sql'))+'</div>':'')+
       '<div class="xs mut">'+esc(t('mn_target_hint'))+'</div></div>'+
     mnRealHtml(r)+
     '<div class="mnacts">'+(d.id?'<button class="btn gh" onclick="mnOff(\''+esc(d.id)+'\','+(d.active?'false':'true')+')">'+esc(d.active?t('mn_off_btn'):t('mn_restore'))+'</button>'+
@@ -3759,7 +3902,7 @@ async function mnWrite(build,row){ // ยังไม่รัน SQL บาง�
   setBusy(true);
   try{for(let i=0;i<8;i++){const r=await build(row);if(!r||!r.error)return r&&r.data;
       const m=/'([a-z_]+)' column/i.exec(String(r.error.message||''));
-      if(r.error.code==='PGRST204'&&m&&(m[1] in row)){delete row[m[1]];S.kcSql=false;continue;}
+      if(r.error.code==='PGRST204'&&m&&(m[1] in row)){delete row[m[1]];if(m[1]==='max_qty')S.kcMax=false;else S.kcSql=false;continue;}   // max_qty = SQL รุ่นล่าสุดยังไม่รัน (คอลัมน์อื่นครบ) — แถบเฉพาะของ 🎯 ไม่ใช่ sql_need ทั้งแอป
       const d=document.getElementById('syncDot');if(d)d.className='err';toast(t('sv_err')+(r.error.message||r.error),true);throw r.error;}}
   finally{setBusy(false);}
   return null;}
@@ -3799,6 +3942,7 @@ async function mnSave(){await once(async()=>{
   let cat=d.cat==='__new'?String(d.cat_new||'').trim():String(d.cat||'').trim();if(!cat)cat='อื่นๆ';
   const nz=v=>String(v==null?'':v).trim()===''?null:rnd4(num(v));
   const row={name:d.name,cat,yield_qty:rnd4(num(d.yield_qty)),yield_unit:d.yield_unit||'ถุง',extra_cost:rnd4(num(d.extra_cost)),markup_pct:nz(d.markup_pct),target_qty:nz(d.target_qty),target_days:nz(d.target_days),note:String(d.note||'')};
+  if(S.kcMax!==false)row.max_qty=nz(d.max_qty);   // 🎯 Max — รู้แล้วว่าไม่มีคอลัมน์ (ยังไม่รัน SQL รุ่นล่าสุด) = ไม่ส่ง (mnWrite จะตัดให้ถ้าเพิ่งเจอ)
   let r=d.id?recipeById(d.id):null,renamed=false;
   try{
     if(r){renamed=r.name!==d.name;if(renamed)row.i18n=null;
@@ -3809,7 +3953,8 @@ async function mnSave(){await once(async()=>{
     var unitLost=await mnWriteLines(r.id,d.lines);
   }catch(e){return;}
   S.recipes.sort((a,b)=>(num(a.sort)-num(b.sort))||String(a.name||'').localeCompare(String(b.name||''),'th'));
-  MN_D=null;mnDraftClear();MODAL_BACK=null;closeModal();toast(unitLost?t('mn_unit_lost'):t('sv_ok'),!!unitLost);
+  const maxLost=S.kcMax===false&&String(d.max_qty==null?'':d.max_qty).trim()!=='';   // กรอก Max ไว้แต่ฐานข้อมูลไม่มีคอลัมน์ = บอกตรง ๆ (ช่องอื่นบันทึกแล้ว)
+  MN_D=null;mnDraftClear();MODAL_BACK=null;closeModal();toast(unitLost?t('mn_unit_lost'):maxLost?t('mn_tg_sql'):t('sv_ok'),unitLost?true:(maxLost?'warn':false));
   if(renamed)mnAutoI18n(r);
   if(S.tab==='menus')show('menus');else if(S.tab==='make')rerender();
 });}
