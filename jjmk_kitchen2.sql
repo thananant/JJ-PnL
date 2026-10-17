@@ -15,6 +15,7 @@ alter table ck_items add column if not exists active boolean default true;
 alter table ck_recipes add column if not exists avg_cost numeric;        -- ต้นทุนถัวเฉลี่ย/หน่วยผลิต (จากล็อตจริง)
 alter table ck_recipes add column if not exists target_qty numeric;      -- สต๊อกสำเร็จรูปที่ควรมี (ตายตัว)
 alter table ck_recipes add column if not exists target_days numeric;     -- หรือ = กี่วันของยอดส่งเฉลี่ย
+alter table ck_recipes add column if not exists max_qty numeric;         -- 🎯 ทำเติมให้ถึง (Max) · ว่าง = เติมถึง target_qty (Safety = ขั้นต่ำที่ต้องมี) — 2026-10-17
 alter table ck_recipes add column if not exists markup_pct numeric;
 alter table ck_recipes add column if not exists note text;
 alter table ck_recipes add column if not exists active boolean default true;
