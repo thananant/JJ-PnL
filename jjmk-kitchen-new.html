@@ -776,7 +776,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-16 22:09';
+const APP_VER='KC 2.0 · 2026-10-17 13:32';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -2550,6 +2550,702 @@ async function ctDetail(id){
     '<button class="btn gh big" style="margin-top:10px" onclick="closeModal()">'+esc(t('close'))+'</button>');}
 /* ===================== /module: count ===================== */
 
+/* ===================== module: send (mod_send.js) ===================== */
+/* ============================================================
+   🚚 ส่งสาขา — send (sd*)
+   ออเดอร์สาขา = stock_receipts ที่แอพนับสต๊อกเขียนตอนสาขากดสั่ง (sup = cfg.ck_sup_names · order_date ≥ วันนี้ − lookback)
+   จัดกลุ่ม สาขา+วันสั่ง (เฉพาะสาขาที่เห็น = JJBR ∩ _br) · หักจำนวนที่ส่งไปแล้ว (kc_deliveries status≠void + lines ต่อสินค้า) → เหลือ = ค้างส่ง
+   ชื่อสินค้าสาขา → เมนู ใช้ tdLinkOf()/TD_LINKS ของหน้าวันนี้ (kc_links → ชื่อตรงกัน) · ยังไม่ผูก = เลือกเมนูแล้วบันทึก kc_links
+   ส่ง (ตั้งต้น = น้อยสุดของ ค้างส่ง/ของที่เหลือหลังจัดให้ใบสั่งก่อนหน้า) แก้ในที่ · ขาด → ⚡ ทำของ (หน้าทำของ ชิป ด่วน)
+   ✅ ส่งแล้ว ออกบิล = kc_deliveries + kc_delivery_lines (ต้นทุน/ราคา ณ ตอนส่ง) → kc_moves 'send' + ck_add_qty (ห้ามส่งเกินสต๊อกสด)
+   → ข้อความบิล (ไทยเสมอ) เข้ากลุ่มไลน์ของสาขา (cfg.branch_line) · ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก + เปิดไลน์
+   เขียนไม่ครบ = ถอนทั้งหมด (sdRollback) · ส่งบางส่วน = ที่เหลือยังขึ้น "ค้างส่ง" · setBadge('send', จำนวนใบสั่งที่ยังค้าง)
+   ============================================================ */
+I18N.add({
+th:{sd_sub:'ออเดอร์ที่สาขานับสต๊อกแล้วสั่งมา — ใส่จำนวนที่ส่ง แล้วกดออกบิล',sd_none:'ไม่มีออเดอร์ค้างส่ง 👍',sd_none_h:'สาขาสั่งของผ่านแอพนับสต๊อก (ร้านค้า = {s}) ย้อนหลัง {d} วัน',
+  sd_noread:'อ่านออเดอร์สาขาไม่ได้ — ลองโหลดใหม่',sd_reload:'⟳ โหลดออเดอร์ใหม่',sd_ordered:'สั่งมา',sd_have:'มี',sd_send:'ส่ง',sd_short:'ขาด',sd_full:'ครบ',sd_make:'⚡ ทำของ',
+  sd_unlinked:'ยังไม่ผูกเมนู',sd_unlinked_h:'แตะเลือกเมนูที่ตรงกับ "{n}" — ระบบจะจำไว้ให้ครั้งต่อไป',sd_link_t:'ผูกชื่อสินค้าสาขากับเมนู',sd_link_factor:'1 {u} ของสาขา = กี่หน่วยของเมนู (ปกติ 1)',
+  sd_link_saved:'ผูกเมนูแล้ว ✅',sd_link_bad:'ตัวคูณต้องมากกว่า 0',sd_link_first:'ผูกเมนูก่อนจึงส่งได้',sd_partial:'ค้างส่ง',sd_partial_h:'ส่งไปแล้ว {q} {u}',sd_lines_n:'{n} รายการ',sd_order_d:'สั่งเมื่อ {d}',
+  sd_go:'✅ ส่งแล้ว ออกบิล',sd_confirm:'ส่งให้สาขา {b} {n} รายการ รวม {m}\nออกบิลเลขที่ {no} และตัดสต๊อกของที่ผลิตแล้ว?',sd_nothing:'ยังไม่ได้ใส่จำนวนที่ส่ง',
+  sd_stock_short:'{n}: ในสต๊อกมี {h} {u} ส่ง {s} ไม่ได้ — ลดจำนวนหรือทำของก่อน',sd_max_order:'ส่งได้ไม่เกินที่สั่งมา ({q} {u})',sd_sql_block:'ยังไม่ได้รัน SQL — ออกบิลไม่ได้',
+  sd_not_saved:'ออกบิลไม่สำเร็จ — ยังไม่ตัดสต๊อก ลองใหม่อีกครั้ง',sd_saved:'ออกบิล {no} แล้ว ✅',sd_line_sent:'ส่งบิลเข้ากลุ่มไลน์ {g} แล้ว ✅',sd_line_fail:'ส่งไลน์ไม่สำเร็จ — คัดลอกข้อความไปส่งเอง',
+  sd_line_none:'สาขานี้ยังไม่ได้ตั้งกลุ่มไลน์ (⚙️ ตั้งค่า) — คัดลอกข้อความไปส่งเอง',sd_done_t:'ออกบิลแล้ว',sd_view_bill:'🧾 ดูบิล'},
+en:{sd_sub:'Orders the branches placed after their stock count — enter what you deliver, then issue the bill',sd_none:'No orders waiting 👍',sd_none_h:'Branches order through the stock-count app (supplier = {s}), last {d} days',
+  sd_noread:'Could not read branch orders — try reloading',sd_reload:'⟳ Reload orders',sd_ordered:'Ordered',sd_have:'In stock',sd_send:'Send',sd_short:'Short',sd_full:'Complete',sd_make:'⚡ Produce',
+  sd_unlinked:'Not linked to a product',sd_unlinked_h:'Tap the product that matches "{n}" — remembered for next time',sd_link_t:'Link branch item to a product',sd_link_factor:'1 branch {u} = how many product units (usually 1)',
+  sd_link_saved:'Linked ✅',sd_link_bad:'Factor must be above 0',sd_link_first:'Link the product first to deliver it',sd_partial:'Remainder',sd_partial_h:'already sent {q} {u}',sd_lines_n:'{n} lines',sd_order_d:'ordered {d}',
+  sd_go:'✅ Delivered — issue bill',sd_confirm:'Deliver {n} lines to {b}, total {m}\nIssue bill {no} and deduct finished stock?',sd_nothing:'Enter the quantities to send first',
+  sd_stock_short:'{n}: only {h} {u} in stock, cannot send {s} — lower the quantity or produce first',sd_max_order:'Cannot send more than ordered ({q} {u})',sd_sql_block:'SQL not run yet — cannot issue bills',
+  sd_not_saved:'Bill not issued — stock untouched, please try again',sd_saved:'Bill {no} issued ✅',sd_line_sent:'Bill sent to LINE group {g} ✅',sd_line_fail:'LINE send failed — copy the text and send it yourself',
+  sd_line_none:'This branch has no LINE group yet (⚙️ Settings) — copy the text and send it yourself',sd_done_t:'Bill issued',sd_view_bill:'🧾 View bill'},
+lo:{sd_sub:'ອໍເດີທີ່ສາຂານັບສະຕັອກແລ້ວສັ່ງມາ — ໃສ່ຈຳນວນທີ່ສົ່ງ ແລ້ວກົດອອກບິນ',sd_none:'ບໍ່ມີອໍເດີຄ້າງສົ່ງ 👍',sd_none_h:'ສາຂາສັ່ງເຄື່ອງຜ່ານແອັບນັບສະຕັອກ (ຮ້ານຄ້າ = {s}) ຍ້ອນຫຼັງ {d} ມື້',
+  sd_noread:'ອ່ານອໍເດີສາຂາບໍ່ໄດ້ — ລອງໂຫຼດໃໝ່',sd_reload:'⟳ ໂຫຼດອໍເດີໃໝ່',sd_ordered:'ສັ່ງມາ',sd_have:'ມີ',sd_send:'ສົ່ງ',sd_short:'ຂາດ',sd_full:'ຄົບ',sd_make:'⚡ ເຮັດເຄື່ອງ',
+  sd_unlinked:'ຍັງບໍ່ຜູກເມນູ',sd_unlinked_h:'ແຕະເລືອກເມນູທີ່ກົງກັບ "{n}" — ລະບົບຈະຈື່ໄວ້ໃຫ້ຄັ້ງຕໍ່ໄປ',sd_link_t:'ຜູກຊື່ສິນຄ້າສາຂາກັບເມນູ',sd_link_factor:'1 {u} ຂອງສາຂາ = ຈັກໜ່ວຍຂອງເມນູ (ປົກກະຕິ 1)',
+  sd_link_saved:'ຜູກເມນູແລ້ວ ✅',sd_link_bad:'ຕົວຄູນຕ້ອງຫຼາຍກວ່າ 0',sd_link_first:'ຜູກເມນູກ່ອນ ຈຶ່ງສົ່ງໄດ້',sd_partial:'ຄ້າງສົ່ງ',sd_partial_h:'ສົ່ງໄປແລ້ວ {q} {u}',sd_lines_n:'{n} ລາຍການ',sd_order_d:'ສັ່ງເມື່ອ {d}',
+  sd_go:'✅ ສົ່ງແລ້ວ ອອກບິນ',sd_confirm:'ສົ່ງໃຫ້ສາຂາ {b} {n} ລາຍການ ລວມ {m}\nອອກບິນເລກທີ {no} ແລະຕັດສະຕັອກເຄື່ອງທີ່ຜະລິດແລ້ວ?',sd_nothing:'ຍັງບໍ່ໄດ້ໃສ່ຈຳນວນທີ່ສົ່ງ',
+  sd_stock_short:'{n}: ໃນສະຕັອກມີ {h} {u} ສົ່ງ {s} ບໍ່ໄດ້ — ຫຼຸດຈຳນວນ ຫຼື ເຮັດເຄື່ອງກ່ອນ',sd_max_order:'ສົ່ງໄດ້ບໍ່ເກີນທີ່ສັ່ງມາ ({q} {u})',sd_sql_block:'ຍັງບໍ່ໄດ້ແລ່ນ SQL — ອອກບິນບໍ່ໄດ້',
+  sd_not_saved:'ອອກບິນບໍ່ສຳເລັດ — ຍັງບໍ່ຕັດສະຕັອກ ລອງໃໝ່ອີກຄັ້ງ',sd_saved:'ອອກບິນ {no} ແລ້ວ ✅',sd_line_sent:'ສົ່ງບິນເຂົ້າກຸ່ມໄລນ໌ {g} ແລ້ວ ✅',sd_line_fail:'ສົ່ງໄລນ໌ບໍ່ສຳເລັດ — ຄັດລອກຂໍ້ຄວາມໄປສົ່ງເອງ',
+  sd_line_none:'ສາຂານີ້ຍັງບໍ່ໄດ້ຕັ້ງກຸ່ມໄລນ໌ (⚙️ ຕັ້ງຄ່າ) — ຄັດລອກຂໍ້ຄວາມໄປສົ່ງເອງ',sd_done_t:'ອອກບິນແລ້ວ',sd_view_bill:'🧾 ເບິ່ງບິນ'},
+my:{sd_sub:'ဆိုင်ခွဲများ စာရင်းကောက်ပြီး မှာထားသော အော်ဒါ — ပို့မည့်အရေအတွက် ထည့်ပြီး ဘေလ်ထုတ်ပါ',sd_none:'ပို့ရန်ကျန် အော်ဒါ မရှိပါ 👍',sd_none_h:'ဆိုင်ခွဲများသည် စာရင်းကောက်အက်ပ်မှ မှာယူသည် (ဆိုင် = {s}) နောက် {d} ရက်',
+  sd_noread:'ဆိုင်ခွဲအော်ဒါ ဖတ်မရပါ — ပြန်ဖွင့်ကြည့်ပါ',sd_reload:'⟳ အော်ဒါ ပြန်ဖွင့်',sd_ordered:'မှာထား',sd_have:'ရှိ',sd_send:'ပို့',sd_short:'လို',sd_full:'ပြည့်',sd_make:'⚡ ထုတ်လုပ်',
+  sd_unlinked:'မီနူးနှင့် မချိတ်ရသေး',sd_unlinked_h:'"{n}" နှင့် ကိုက်ညီသော မီနူးကို နှိပ်ပါ — နောက်တစ်ကြိမ်အတွက် မှတ်ထားမည်',sd_link_t:'ဆိုင်ခွဲထုတ်ကုန်အမည်ကို မီနူးနှင့် ချိတ်ရန်',sd_link_factor:'ဆိုင်ခွဲ 1 {u} = မီနူးယူနစ် ဘယ်လောက် (ပုံမှန် 1)',
+  sd_link_saved:'မီနူး ချိတ်ပြီး ✅',sd_link_bad:'မြှောက်ဖော်ကိန်း 0 ထက် ကြီးရမည်',sd_link_first:'မီနူးချိတ်ပြီးမှ ပို့နိုင်သည်',sd_partial:'ပို့ရန်ကျန်',sd_partial_h:'ပို့ပြီး {q} {u}',sd_lines_n:'{n} ကြောင်း',sd_order_d:'မှာသည့်ရက် {d}',
+  sd_go:'✅ ပို့ပြီး ဘေလ်ထုတ်',sd_confirm:'ဆိုင်ခွဲ {b} သို့ {n} ကြောင်း စုစုပေါင်း {m} ပို့မည်\nဘေလ်နံပါတ် {no} ထုတ်ပြီး ထုတ်ကုန်လက်ကျန် နုတ်မလား?',sd_nothing:'ပို့မည့်အရေအတွက် မထည့်ရသေးပါ',
+  sd_stock_short:'{n}: လက်ကျန် {h} {u} သာရှိ၍ {s} မပို့နိုင်ပါ — အရေအတွက်လျှော့ပါ သို့မဟုတ် အရင်ထုတ်လုပ်ပါ',sd_max_order:'မှာထားသည်ထက် မပို့နိုင်ပါ ({q} {u})',sd_sql_block:'SQL မလုပ်ရသေး — ဘေလ်မထုတ်နိုင်ပါ',
+  sd_not_saved:'ဘေလ်ထုတ်မရပါ — လက်ကျန် မနုတ်ရသေး ထပ်စမ်းပါ',sd_saved:'ဘေလ် {no} ထုတ်ပြီး ✅',sd_line_sent:'LINE အုပ်စု {g} သို့ ဘေလ်ပို့ပြီး ✅',sd_line_fail:'LINE ပို့မရပါ — စာသားကူးပြီး ကိုယ်တိုင်ပို့ပါ',
+  sd_line_none:'ဤဆိုင်ခွဲအတွက် LINE အုပ်စု မသတ်မှတ်ရသေး (⚙️ ဆက်တင်) — စာသားကူးပြီး ကိုယ်တိုင်ပို့ပါ',sd_done_t:'ဘေလ်ထုတ်ပြီး',sd_view_bill:'🧾 ဘေလ်ကြည့်'}
+});
+CSS.add(`
+.sd-sub{font-size:13px;color:var(--mut);margin:-4px 0 10px}
+.sd-card h3 .sp{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sd-dot{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block;border:1px solid rgba(0,0,0,.08)}
+.sdl{padding:10px 0;border-bottom:1px solid var(--line)}.sdl.last{border-bottom:0}
+.sdl-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}.sdl-name{font-size:16px;font-family:var(--fh)}
+.sdl-stats{display:flex;gap:12px;flex-wrap:wrap;font-size:13.5px;color:var(--mut);margin:4px 0 2px;align-items:center}.sdl-stats b{color:var(--ink)}.sdl-stats b.red{color:var(--bad)}.sdl-stats b.green{color:var(--ok)}
+.sdl-send{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.sdl-send .skstep{flex:1;min-width:170px;margin-top:4px}.sdl-lb{font-weight:700;font-family:var(--fh);min-width:28px}
+.sdl-short{margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:22px}
+.sd-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.sd-tot{display:flex;flex-direction:column;flex:none}.sd-tot b{font-size:20px;font-family:var(--fh)}
+.sd-go{flex:1;min-width:180px}
+.sd-pick{max-height:52vh;overflow-y:auto}
+`);
+let SD={at:0,ok:true,err:null,groups:[],raw:null,loading:null};
+const SD_EDIT={};      // 'สาขา|วันสั่ง|สินค้า' → จำนวนที่ผู้ใช้แก้เอง (คงไว้ตอนคิดใหม่/วาดใหม่)
+let SD_PICK=null;      // บรรทัดที่กำลังผูกเมนู {name,unit}
+const SD_SHOP='ครัวกลาง จริงใจหมูกระทะ';   // หัวข้อความไลน์ (ไทยเสมอ)
+
+RENDER.send=function(el){
+  el.innerHTML=dhead('🚚 '+t('nav_send'),'<button type="button" class="btn gh sm2" onclick="sdReload()">'+esc(t('sd_reload'))+'</button>')+sqlNeedBox()+
+    '<div class="sd-sub">'+esc(t('sd_sub'))+'</div>'+(brScoped()?'<div class="note">'+esc(t('br_scope',{b:brScopeTxt()||'—'}))+'</div>':'')+'<div id="sdBody"><div class="spin"></div></div>';
+  if(SD.at){sdCalc();sdPaint();}
+  sdLoad().then(()=>{if(S.tab==='send')sdPaint();});
+};
+function sdReload(){sdLoad().then(()=>{if(S.tab==='send')sdPaint();});}
+
+/* ---------- อ่าน (fail-soft · ใช้ tdGet ของหน้าวันนี้) ---------- */
+async function sdLoad(){
+  if(SD.loading)return SD.loading;
+  SD.loading=(async()=>{
+    const td=bizTodayISO(),cfg=S.cfg||CFG_DEF,from=addDays(td,-num(cfg.order_lookback_days));
+    const [sr,lk,dl]=await Promise.all([
+      tdGet('stock_receipts',q=>q.gte('order_date',from).gt('ordered',0).order('id')),
+      tdGet('kc_links'),
+      tdGet('kc_deliveries',q=>q.gte('order_date',from).neq('status','void'))]);
+    let dll={ok:true,rows:[]};
+    if(dl.ok&&dl.rows.length)dll=await tdGet('kc_delivery_lines',q=>q.in('delivery_id',dl.rows.map(d=>d.id)));
+    SD.ok=sr.ok&&dl.ok&&dll.ok;SD.err=SD.ok?null:String(((sr.err||dl.err||dll.err)||{}).message||'');
+    if(lk.ok)TD_LINKS=lk.rows;
+    SD.raw={sr:sr.rows,dl:dl.rows,dll:dll.rows};
+    const rids=[...new Set(sr.rows.map(r=>{const l=tdLinkOf(r.name);return l&&l.recipe_id;}).filter(Boolean))];
+    if(rids.length)await refreshRows('recipe',rids);   // "มี" = ยอดสด (อีกเครื่องอาจเพิ่งทำของ/ส่ง)
+    SD.at=Date.now();sdCalc();
+  })();
+  try{await SD.loading;}finally{SD.loading=null;}
+}
+function sdCalc(){ // raw → SD.groups [{key,code,name,short,color,od,lines:[{rid,pid,name,unit,ordered,already,remaining,link,have,sent}],unlinked}]
+  const R=SD.raw||{sr:[],dl:[],dll:[]},names=((S.cfg||CFG_DEF).ck_sup_names||[]).map(supKey);
+  const byStk={};S.branches.forEach(b=>{if(b.stk)byStk[String(b.stk)]=b;});
+  const dById={};R.dl.forEach(d=>{if(d.status!=='void')dById[String(d.id)]=d;});
+  const byId={},byName={};   // ส่งไปแล้ว ต่อ สาขา|วันสั่ง|ไอดีสินค้าสาขา · บรรทัดเก่าไม่มีไอดี = ต่อชื่อ
+  R.dll.forEach(l=>{const d=dById[String(l.delivery_id)];if(!d)return;const k0=d.branch+'|'+String(d.order_date||'').slice(0,10),q=num(l.sent);
+    if(l.stk_product_id)byId[k0+'|'+l.stk_product_id]=num(byId[k0+'|'+l.stk_product_id])+q;else byName[k0+'|'+supKey(l.name)]=num(byName[k0+'|'+supKey(l.name)])+q;});
+  const groups={};
+  R.sr.forEach(r=>{if(!names.includes(supKey(r.sup)))return;const b=byStk[String(r.branch_id)];if(!b||!(num(r.ordered)>0))return;
+    const od=String(r.order_date||'').slice(0,10),k0=b.code+'|'+od,link=tdLinkOf(r.name),rec=link&&recipeById(link.recipe_id);
+    let already=num(byId[k0+'|'+r.product_id])+num(byName[k0+'|'+supKey(r.name)]);
+    if(rec&&supKey(rec.name)!==supKey(r.name))already+=num(byName[k0+'|'+supKey(rec.name)]);
+    already=rnd4(already);const remaining=rnd4(num(r.ordered)-already);if(remaining<=1e-9)return;
+    const g=groups[k0]=groups[k0]||{key:k0,code:b.code,name:b.name,short:b.short||b.name,color:b.color||'',od,lines:[],unlinked:0};
+    g.lines.push({rid:r.id,pid:r.product_id==null?'':String(r.product_id),name:String(r.name||''),unit:String(r.unit||''),ordered:num(r.ordered),already,remaining,link,have:0,sent:0});});
+  const ord={};S.branches.forEach((b,i)=>{ord[b.code]=i;});
+  const G=Object.values(groups).sort((a,b)=>a.od<b.od?-1:a.od>b.od?1:(num(ord[a.code])-num(ord[b.code])));
+  const left={};   // จัดสรรของที่มีตามลำดับ: ใบสั่งเก่าก่อน · ใบหลังได้ที่เหลือ
+  G.forEach(g=>{g.lines.sort((a,b)=>num(a.rid)-num(b.rid)||String(a.name).localeCompare(String(b.name),'th'));
+    g.lines.forEach(l=>{if(!l.link){g.unlinked++;return;}
+      const rid=l.link.recipe_id,r=recipeById(rid),f=num(l.link.factor)||1;
+      if(!(rid in left))left[rid]=Math.max(0,num(r&&r.qty));
+      l.have=rnd4(left[rid]/f);
+      const ek=g.key+'|'+l.pid,ed=SD_EDIT[ek];
+      l.sent=ed!=null?Math.min(l.remaining,Math.max(0,num(ed))):Math.min(l.remaining,l.have);
+      left[rid]=Math.max(0,rnd4(left[rid]-l.sent*f));});});
+  SD.groups=G;setBadge('send',G.length);
+}
+const sdFactor=l=>num(l.link&&l.link.factor)||1;
+function sdBrColor(code,c){c=String(c||(typeof JJBR!=='undefined'&&typeof JJBR.color==='function'?JJBR.color(code):'')||'');return /^#[0-9a-fA-F]{3,8}$/.test(c)?c:'#6B0F12';}   // สีสาขาจากทะเบียนกลาง (ไม่มี = ไวน์)
+function sdPriceOf(l){const r=l.link&&recipeById(l.link.recipe_id);const p=sellPrice(r);return p==null?null:rnd4(p*sdFactor(l));}   // ราคาขาย/หน่วยของสาขา
+function sdCostOf(l){const r=l.link&&recipeById(l.link.recipe_id);const c=recipeUnitCost(r);return c==null?null:rnd4(c*sdFactor(l));}
+function sdGroupTotal(g){return rnd2(g.lines.reduce((a,l)=>a+(l.link?rnd2(num(l.sent)*num(sdPriceOf(l))):0),0));}
+
+/* ---------- วาด ---------- */
+function sdPaint(){
+  const b=document.getElementById('sdBody');if(!b)return;
+  if(!SD.ok&&!SD.groups.length){b.innerHTML='<div class="badbox">⚠ '+esc(t('sd_noread'))+(SD.err?' · '+esc(SD.err):'')+'</div>';return;}
+  if(!SD.groups.length){const cfg=S.cfg||CFG_DEF;b.innerHTML='<div class="card"><div class="empty">'+esc(t('sd_none'))+'<div class="xs mut" style="margin-top:6px">'+esc(t('sd_none_h',{s:cfg.ck_sup_names.join(', '),d:cfg.order_lookback_days}))+'</div></div></div>';return;}
+  b.innerHTML=(SD.ok?'':'<div class="badbox">⚠ '+esc(t('sd_noread'))+'</div>')+SD.groups.map((g,gi)=>sdCardHtml(g,gi)).join('');
+}
+function sdCardHtml(g,gi){
+  const td=bizTodayISO(),partial=g.lines.some(l=>l.already>0),linked=g.lines.filter(l=>l.link).length;
+  let h='<div class="card sd-card" id="sdG'+gi+'" data-key="'+esc(g.key)+'"><h3><span class="sd-dot" style="background:'+esc(sdBrColor(g.code,g.color))+'"></span>'+esc(g.name)+
+    '<span class="sp"><span class="chip '+(g.od===td?'blue':'warn')+'">'+esc(g.od===td?t('today'):t('sd_order_d',{d:dispDate(g.od)}))+'</span>'+(partial?'<span class="chip warn">⏳ '+esc(t('sd_partial'))+'</span>':'')+'</span></h3>';
+  h+=g.lines.map((l,li)=>sdLineHtml(gi,l,li,li===g.lines.length-1)).join('');
+  h+='<div class="sd-foot"><div class="sd-tot"><span class="mut sm">'+esc(t('sd_lines_n',{n:g.lines.length}))+'</span><b id="sdTot'+gi+'">'+esc(money(sdGroupTotal(g)))+'</b></div>'+
+    (linked?'<button type="button" class="btn big sd-go" id="sdGo'+gi+'" onclick="sdSend('+gi+')">'+esc(t('sd_go'))+'</button>':'<span class="chip warn">🔗 '+esc(t('sd_link_first'))+'</span>')+'</div></div>';
+  return h;}
+function sdLineHtml(gi,l,li,last){
+  const id=gi+'_'+li,u=trUnit(l.unit);
+  let h='<div class="sdl'+(last?' last':'')+'" id="sdL'+id+'"><div class="sdl-top"><b class="sdl-name">'+esc(l.name)+'</b>'+(l.already>0?'<span class="xs mut">⏳ '+esc(t('sd_partial_h',{q:fmtQ(l.already),u}))+'</span>':'')+'</div>';
+  if(!l.link){h+='<div class="sdl-stats"><span>'+esc(t('sd_ordered'))+' <b>'+fmtQ(l.remaining)+' '+esc(u)+'</b></span></div>'+
+    '<button type="button" class="btn gh sm2 sd-link" onclick="sdLinkPick('+gi+','+li+')">🔗 '+esc(t('sd_unlinked'))+' ›</button>';return h+'</div>';}
+  const p=sdPriceOf(l);
+  h+='<div class="sdl-stats"><span>'+esc(t('sd_ordered'))+' <b>'+fmtQ(l.remaining)+' '+esc(u)+'</b></span><span>'+esc(t('sd_have'))+' <b id="sdHv'+id+'" class="'+(l.have>=l.remaining?'green':'red')+'">'+fmtQ(l.have)+'</b></span>'+
+    (p==null?'<span class="chip warn">'+esc(t('no_price'))+'</span>':'<span>'+esc(moneyU(p))+'/'+esc(u)+'</span>')+'</div>'+
+    '<div class="sdl-send"><span class="sdl-lb">'+esc(t('sd_send'))+'</span>'+stepper('sdS'+id,l.sent,{step:1,min:0,max:l.remaining,unit:l.unit,on:(v)=>sdSetSent(gi,li,v)})+'</div>'+
+    '<div class="sdl-short" id="sdSh'+id+'">'+sdShortHtml(l)+'</div>';
+  return h+'</div>';}
+function sdShortHtml(l){const sh=Math.max(0,rnd4(l.remaining-num(l.sent)));if(sh<=1e-9)return '<span class="chip ok">✓ '+esc(t('sd_full'))+'</span>';
+  return '<span class="chip bad">'+esc(t('sd_short'))+' '+fmtQ(sh)+' '+esc(trUnit(l.unit))+'</span>'+(l.have<l.remaining-1e-9?'<button type="button" class="btn gh sm2 sd-mk" onclick="sdMake()">'+esc(t('sd_make'))+'</button>':'');}
+function sdSetSent(gi,li,v){ // แก้จำนวนส่งในที่ (ไม่วาดใหม่ — คีย์บอร์ดไม่หุบ) · เกินที่สั่ง = ตัดเหลือเท่าที่สั่ง
+  const g=SD.groups[gi],l=g&&g.lines[li];if(!l||!l.link)return;
+  let q=Math.max(0,rnd4(num(v)));
+  if(q>l.remaining+1e-9){q=l.remaining;toast(t('sd_max_order',{q:fmtQ(l.remaining),u:trUnit(l.unit)}),'warn');const inp=document.getElementById('sdS'+gi+'_'+li);if(inp)inp.value=q;}
+  SD_EDIT[g.key+'|'+l.pid]=q;sdCalc();sdRefresh();}
+function sdRefresh(){ // ตัวเลข มี/ขาด/รวม ของทุกบรรทัดตามการจัดสรรใหม่ (ช่องที่กำลังพิมพ์ไม่แตะ)
+  SD.groups.forEach((g,gi)=>{g.lines.forEach((l,li)=>{if(!l.link)return;const id=gi+'_'+li;
+    const hv=document.getElementById('sdHv'+id);if(hv){hv.textContent=fmtQ(l.have);hv.className=l.have>=l.remaining?'green':'red';}
+    const inp=document.getElementById('sdS'+id);if(inp&&document.activeElement!==inp&&num(inp.value)!==num(l.sent))inp.value=l.sent;
+    const sh=document.getElementById('sdSh'+id);if(sh)sh.innerHTML=sdShortHtml(l);});
+    const tt=document.getElementById('sdTot'+gi);if(tt)tt.textContent=money(sdGroupTotal(g));});}
+function sdMake(){if(typeof mkSetPill==='function')mkSetPill('urgent');show('make');}
+
+/* ---------- ผูกชื่อสินค้าสาขา ↔ เมนู (kc_links) ---------- */
+function sdLinkPick(gi,li){
+  const g=SD.groups[gi],l=g&&g.lines[li];if(!l)return;const rows=activeRecipes();
+  const list=q=>{q=supKey(q);return rows.filter(r=>!q||supKey(r.name).includes(q)||supKey(dispName(r)).includes(q)||supKey(r.stock_name).includes(q))
+    .map(r=>'<div class="rowline tap" data-id="'+esc(r.id)+'" onclick="sdLinkGo(this.dataset.id)">'+thumbHtml(r,'🍳')+'<div class="grow"><b>'+esc(dispName(r))+'</b><div class="xs mut">'+esc(trCat(r.cat))+' · '+esc(t('stock'))+' '+fmtQ(r.qty)+' '+esc(trUnit(r.yield_unit))+'</div></div></div>').join('')||'<div class="empty">'+esc(t('empty'))+'</div>';};
+  SD_PICK={name:l.name,unit:l.unit};
+  openModal('<h3>🔗 '+esc(t('sd_link_t'))+'</h3><div class="hintbox">'+esc(t('sd_unlinked_h',{n:l.name}))+'</div>'+
+    fld(t('sd_link_factor',{u:trUnit(l.unit)}),'<input id="sdLkF" inputmode="decimal" value="1">')+searchBox('sdLkQ',v=>{const b=document.getElementById('sdLkList');if(b)b.innerHTML=list(v);})+
+    '<div class="sd-pick" id="sdLkList">'+list('')+'</div><div class="row" style="margin-top:10px"><button type="button" class="btn gh" style="margin-left:auto" onclick="closeModal()">'+esc(t('cancel'))+'</button></div>');
+  setTimeout(()=>{const q=document.getElementById('sdLkQ');if(q&&!('ontouchstart' in window))q.focus();},50);}
+async function sdLinkGo(rid){await once(async()=>{
+  const p=SD_PICK,r=recipeById(rid);if(!p||!r)return;
+  const f=num((document.getElementById('sdLkF')||{}).value||1);if(!(f>0)){toast(t('sd_link_bad'),true);return;}
+  const row={stk_name:p.name,recipe_id:r.id,factor:rnd4(f),by_name:S.user&&S.user.name};
+  try{await db(()=>sb.from('kc_links').upsert(row,{onConflict:'stk_name'}));}catch(e){return;}
+  TD_LINKS=(TD_LINKS||[]).filter(x=>supKey(x.stk_name)!==supKey(p.name)).concat([row]);SD_PICK=null;
+  closeModal();toast(t('sd_link_saved'));sdCalc();if(S.tab==='send')sdPaint();});}
+
+/* ---------- ออกบิล ---------- */
+async function sdBillNo(code,d){ // <prefix><สาขา>-<ปปดดวว>-<ลำดับของวันนั้น> · อ่านเลขไม่ได้ = ไม่ออกบิล (กันเลขซ้ำ)
+  const pre=String((S.cfg||CFG_DEF).bill_prefix||''),stamp=d.slice(2,4)+d.slice(5,7)+d.slice(8,10);
+  const r=await sb.from('kc_deliveries').select('bill_no').eq('branch',code).eq('d',d);if(!r||r.error)throw (r&&r.error)||new Error('bill_no');
+  let n=0;(r.data||[]).forEach(x=>{const m=/-(\d+)$/.exec(String(x.bill_no||''));if(m)n=Math.max(n,parseInt(m[1],10));});
+  return pre+code+'-'+stamp+'-'+(n+1);}
+function sdBillText(h,lines){ // ข้อความไลน์ (ไทยเสมอ) — หัวร้าน · สาขา · วันที่ · รายการ "ชื่อ จำนวน หน่วย × ราคา = เป็นเงิน" · รวม · เลขบิล · ค้างส่ง
+  const L=lines.filter(l=>num(l.sent)>0);
+  const rows=L.map(l=>String(l.name||'')+' '+fmtQ(l.sent)+' '+String(l.unit||'')+' × '+moneyU(l.unit_price)+' = '+money(l.amount));
+  const back=lines.filter(l=>num(l.ordered)-num(l.sent)>1e-9).map(l=>String(l.name||'')+' '+fmtQ(rnd4(num(l.ordered)-num(l.sent)))+' '+String(l.unit||''));
+  return ['🧾 '+SD_SHOP,'บิลส่งของ '+(h.bill_no||''),'สาขา: '+(h.branch_name||branchName(h.branch)||h.branch||''),
+    'วันที่: '+thDate(h.d)+(h.order_date&&String(h.order_date).slice(0,10)!==String(h.d).slice(0,10)?' (สั่ง '+thDate(h.order_date)+')':''),'──────────']
+    .concat(rows,['──────────','รวม '+L.length+' รายการ = '+money(h.total)]).concat(back.length?['ค้างส่ง: '+back.join(', ')]:[]).concat(h.by_name?['ส่งโดย '+h.by_name]:[]).join('\n');}
+async function sdLineGo(h,lines){ // → {state:'sent'|'fail'|'none',text,gid,err} · ส่งได้ = จด line_sent_at
+  const text=sdBillText(h,lines),gid=((S.cfg||CFG_DEF).branch_line||{})[h.branch]||null;
+  if(!gid)return {state:'none',text};
+  try{await lineSend(gid,text);}catch(e){return {state:'fail',text,gid,err:(e&&e.message)||String(e)};}
+  const at=new Date().toISOString();try{await sb.from('kc_deliveries').update({line_sent_at:at,line_group_id:gid}).eq('id',h.id);}catch(e){}
+  h.line_sent_at=at;h.line_group_id=gid;return {state:'sent',text,gid};}
+async function sdRollback(id,step){ // บันทึกไม่ครบ = ถอนทุกอย่างที่เขียนไปแล้ว (best effort · ไม่ throw)
+  if(step==='moves')await pushMovesUndo('kc_deliveries',id);
+  if(step!=='head'){try{await sb.from('kc_delivery_lines').delete().eq('delivery_id',id);}catch(e){}}
+  try{await sb.from('kc_deliveries').delete().eq('id',id);}catch(e){}}
+async function sdSend(gi){await once(async()=>{
+  const g=SD.groups[gi];if(!g||!canKitchen())return;
+  if(!S.kcSql){toast(t('sd_sql_block'),true);return;}
+  const L=g.lines.filter(l=>l.link&&num(l.sent)>0);if(!L.length){toast(t('sd_nothing'),true);return;}
+  const d=bizTodayISO(),rids=[...new Set(L.map(l=>l.link.recipe_id))];
+  await refreshRows('recipe',rids);   // ยอดสด — อีกเครื่องอาจเพิ่งส่ง/ทำของ
+  const need={};L.forEach(l=>{need[l.link.recipe_id]=rnd4(num(need[l.link.recipe_id])+num(l.sent)*sdFactor(l));});
+  for(const rid of rids){const r=recipeById(rid),have=Math.max(0,num(r&&r.qty));
+    if(need[rid]>have+1e-9){toast(t('sd_stock_short',{n:dispName(r),h:fmtQ(have),u:trUnit(r&&r.yield_unit),s:fmtQ(need[rid])}),true);sdCalc();sdRefresh();return;}}
+  let no;try{no=await sdBillNo(g.code,d);}catch(e){toast(t('sd_not_saved')+' · '+((e&&e.message)||e),true);return;}
+  const id=uid('dl'),by=S.user&&S.user.name;
+  const rows=g.lines.map((l,i)=>{ // ทุกบรรทัดของใบสั่ง — ส่ง 0 = ค้างส่ง (บิลบอกครบว่าสั่งอะไร ส่งอะไร) · ยังไม่ผูกเมนู = ชื่อสาขา ไม่มีราคา
+    if(!l.link)return {delivery_id:id,recipe_id:null,name:l.name,stk_product_id:l.pid||null,ordered:l.remaining,sent:0,unit:l.unit||'',unit_cost:null,unit_price:null,amount:0,sort:i+1};
+    const r=recipeById(l.link.recipe_id),up=num(sdPriceOf(l)),uc=num(sdCostOf(l));
+    return {delivery_id:id,recipe_id:r.id,name:r.name,stk_product_id:l.pid||null,ordered:l.remaining,sent:num(l.sent),unit:l.unit||r.yield_unit||'',unit_cost:uc,unit_price:up,amount:rnd2(num(l.sent)*up),sort:i+1};});
+  const subtotal=rnd2(rows.reduce((a,r)=>a+r.amount,0));
+  const head={id,bill_no:no,d,branch:g.code,branch_name:g.name,order_date:g.od,status:'sent',subtotal,overhead:0,total:subtotal,line_sent_at:null,line_group_id:null,paid_at:null,note:null,by_name:by};
+  if(!(await confirm2(t('sd_confirm',{b:g.name,n:L.length,m:money(subtotal),no}))))return;
+  const mv={};L.forEach(l=>{const rid=l.link.recipe_id,q=num(l.sent)*sdFactor(l);const m=mv[rid]=mv[rid]||{q:0,c:0};m.q+=q;m.c+=q*num(recipeUnitCost(recipeById(rid)));});
+  let step='head';
+  try{
+    await db(()=>sb.from('kc_deliveries').insert(head));
+    step='lines';await db(()=>sb.from('kc_delivery_lines').insert(rows));
+    step='moves';await pushMoves(Object.keys(mv).map(rid=>({d,kind:'send',ref_kind:'recipe',ref_id:rid,qty:-rnd4(mv[rid].q),cost:-rnd4(mv[rid].c),ref_table:'kc_deliveries',ref_id2:id,note:no+' · '+g.name})));
+  }catch(e){await sdRollback(id,step);toast(t('sd_not_saved')+' · '+((e&&e.message)||e),true);return;}
+  Object.keys(SD_EDIT).forEach(k=>{if(k.indexOf(g.key+'|')===0)delete SD_EDIT[k];});
+  const res=await sdLineGo(head,rows);
+  toast(t('sd_saved',{no}));
+  await sdLoad();if(S.tab==='send')sdPaint();
+  sdDone(head,res);});}
+function sdDone(h,res){ // หน้าต่างผล: เลขบิล + สถานะไลน์ (ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก)
+  let x='<h3>🧾 '+esc(t('sd_done_t'))+'</h3><div class="okbox">✅ '+esc(t('sd_saved',{no:h.bill_no}))+'<br>'+esc(h.branch_name||'')+' · <b>'+esc(money(h.total))+'</b></div>';
+  if(res.state==='sent')x+='<div class="okbox">💬 '+esc(t('sd_line_sent',{g:lgName(res.gid)}))+'</div>';
+  else x+='<div class="'+(res.state==='fail'?'badbox':'hintbox')+'">'+esc(res.state==='fail'?t('sd_line_fail')+(res.err?' ('+res.err+')':''):t('sd_line_none'))+'</div>'+lineTextBox(res.text,res.gid);
+  x+='<div class="row" style="margin-top:12px"><button type="button" class="btn gh" data-id="'+esc(h.id)+'" onclick="closeModal();if(typeof blDetail===\'function\')blDetail(this.dataset.id)">'+esc(t('sd_view_bill'))+'</button>'+
+    '<button type="button" class="btn" style="margin-left:auto" onclick="closeModal()">'+esc(t('close'))+'</button></div>';
+  openModal(x);}
+/* ===================== /module: send ===================== */
+
+/* ===================== module: bills (mod_bills.js) ===================== */
+/* ============================================================
+   🧾 บิลสาขา — bills (bl*)
+   บิลส่งของ (kc_deliveries) ของเดือนที่เลือก · ตัวกรองเดือน + สาขา (เฉพาะสาขาที่เห็น inBr) · แถว = เลขบิล วันที่ สาขา ยอด สถานะ ไลน์ ✓
+   แตะ = รายละเอียด (บรรทัด · ส่งไลน์ซ้ำ · ✅ จ่ายแล้ว / ↩️ ยังไม่จ่าย / ❌ ยกเลิกบิล — เฉพาะหัวหน้า isAdminish)
+   ยกเลิก = คืนสต๊อกด้วย kc_moves 'send' +จำนวน (กลับด้านของที่เคยตัดจริง) แล้ว status='void' → ออเดอร์กลับมาค้างส่งในหน้า 🚚
+   ท้ายหน้า = ยอดต่อสาขาของเดือน (รวม · จ่ายแล้ว · ค้างจ่าย) = ยอดที่แต่ละสาขาต้องจ่ายสิ้นเดือน (บิลยกเลิกไม่นับ)
+   ข้อความไลน์/ส่งซ้ำใช้ sdBillText / sdLineGo ของหน้าส่งสาขา
+   ============================================================ */
+I18N.add({
+th:{bl_sub:'บิลส่งของแต่ละสาขา — ยอดที่สาขาต้องจ่ายสิ้นเดือน',bl_this_month:'เดือนนี้',bl_all_br:'ทุกสาขา',bl_none:'เดือนนี้ยังไม่มีบิล',bl_noread:'อ่านบิลไม่ได้',
+  bl_line_sent:'ส่งไลน์แล้ว',bl_line_no:'ยังไม่ส่งไลน์',bl_st_sent:'รอจ่าย',bl_st_paid:'✅ จ่ายแล้ว',bl_st_void:'ยกเลิก',bl_sum_t:'ยอดที่สาขาต้องจ่าย · {m}',bl_bills_n:'{n} บิล',bl_col_n:'บิล',
+  bl_k_total:'รวมเดือนนี้',bl_paid:'จ่ายแล้ว',bl_unpaid:'ค้างจ่าย',bl_detail:'บิลส่งของ',bl_ordered:'สั่งมา',bl_sent:'ส่ง',bl_amount:'เป็นเงิน',bl_lines_n:'{n} รายการ',
+  bl_resend:'💬 ส่งไลน์ซ้ำ',bl_mark_paid:'✅ จ่ายแล้ว',bl_unpaid_btn:'↩️ ยังไม่จ่าย',bl_void:'❌ ยกเลิกบิล',bl_back:'‹ กลับไปบิล',
+  bl_paid_q:'สาขา {b} จ่ายบิล {no} ({m}) แล้วใช่ไหม?',bl_paid_ok:'ติ๊กจ่ายแล้ว ✅',bl_unpaid_ok:'กลับเป็นรอจ่ายแล้ว',
+  bl_void_q:'ยกเลิกบิล {no} ของสาขา {b}?\nของ {n} รายการจะกลับเข้าสต๊อก และออเดอร์กลับมาค้างส่ง',bl_void_ok:'ยกเลิกบิลแล้ว — ของกลับเข้าสต๊อก',bl_void_note:'ยกเลิกบิล',bl_void_done:'บิลนี้ยกเลิกแล้ว',
+  bl_gone:'ไม่พบบิลนี้',bl_paid_at:'จ่ายเมื่อ {d}',bl_line_at:'ส่งไลน์ {d} {t}',bl_by:'ออกโดย',bl_order_d:'ออเดอร์วันที่ {d}',bl_admin_only:'ติ๊กจ่าย/ยกเลิกบิลได้เฉพาะหัวหน้า'},
+en:{bl_sub:'Delivery bills per branch — what each branch pays at month end',bl_this_month:'This month',bl_all_br:'All branches',bl_none:'No bills in this month',bl_noread:'Could not read bills',
+  bl_line_sent:'LINE sent',bl_line_no:'LINE not sent',bl_st_sent:'Unpaid',bl_st_paid:'✅ Paid',bl_st_void:'Voided',bl_sum_t:'What each branch pays · {m}',bl_bills_n:'{n} bills',bl_col_n:'Bills',
+  bl_k_total:'Month total',bl_paid:'Paid',bl_unpaid:'Unpaid',bl_detail:'Delivery bill',bl_ordered:'Ordered',bl_sent:'Sent',bl_amount:'Amount',bl_lines_n:'{n} lines',
+  bl_resend:'💬 Resend to LINE',bl_mark_paid:'✅ Mark paid',bl_unpaid_btn:'↩️ Not paid yet',bl_void:'❌ Void bill',bl_back:'‹ Back to bill',
+  bl_paid_q:'Did {b} pay bill {no} ({m})?',bl_paid_ok:'Marked as paid ✅',bl_unpaid_ok:'Back to unpaid',
+  bl_void_q:'Void bill {no} of {b}?\n{n} lines go back into stock and the order shows as waiting again',bl_void_ok:'Bill voided — stock restored',bl_void_note:'Bill voided',bl_void_done:'This bill is already voided',
+  bl_gone:'Bill not found',bl_paid_at:'paid {d}',bl_line_at:'LINE {d} {t}',bl_by:'by',bl_order_d:'order of {d}',bl_admin_only:'Only managers can mark paid or void'},
+lo:{bl_sub:'ບິນສົ່ງເຄື່ອງແຕ່ລະສາຂາ — ຍອດທີ່ສາຂາຕ້ອງຈ່າຍທ້າຍເດືອນ',bl_this_month:'ເດືອນນີ້',bl_all_br:'ທຸກສາຂາ',bl_none:'ເດືອນນີ້ຍັງບໍ່ມີບິນ',bl_noread:'ອ່ານບິນບໍ່ໄດ້',
+  bl_line_sent:'ສົ່ງໄລນ໌ແລ້ວ',bl_line_no:'ຍັງບໍ່ສົ່ງໄລນ໌',bl_st_sent:'ລໍຈ່າຍ',bl_st_paid:'✅ ຈ່າຍແລ້ວ',bl_st_void:'ຍົກເລີກ',bl_sum_t:'ຍອດທີ່ສາຂາຕ້ອງຈ່າຍ · {m}',bl_bills_n:'{n} ບິນ',bl_col_n:'ບິນ',
+  bl_k_total:'ລວມເດືອນນີ້',bl_paid:'ຈ່າຍແລ້ວ',bl_unpaid:'ຄ້າງຈ່າຍ',bl_detail:'ບິນສົ່ງເຄື່ອງ',bl_ordered:'ສັ່ງມາ',bl_sent:'ສົ່ງ',bl_amount:'ເປັນເງິນ',bl_lines_n:'{n} ລາຍການ',
+  bl_resend:'💬 ສົ່ງໄລນ໌ຊ້ຳ',bl_mark_paid:'✅ ຈ່າຍແລ້ວ',bl_unpaid_btn:'↩️ ຍັງບໍ່ຈ່າຍ',bl_void:'❌ ຍົກເລີກບິນ',bl_back:'‹ ກັບໄປບິນ',
+  bl_paid_q:'ສາຂາ {b} ຈ່າຍບິນ {no} ({m}) ແລ້ວແມ່ນບໍ?',bl_paid_ok:'ຕິກຈ່າຍແລ້ວ ✅',bl_unpaid_ok:'ກັບເປັນລໍຈ່າຍແລ້ວ',
+  bl_void_q:'ຍົກເລີກບິນ {no} ຂອງສາຂາ {b}?\nເຄື່ອງ {n} ລາຍການຈະກັບເຂົ້າສະຕັອກ ແລະອໍເດີກັບມາຄ້າງສົ່ງ',bl_void_ok:'ຍົກເລີກບິນແລ້ວ — ເຄື່ອງກັບເຂົ້າສະຕັອກ',bl_void_note:'ຍົກເລີກບິນ',bl_void_done:'ບິນນີ້ຍົກເລີກແລ້ວ',
+  bl_gone:'ບໍ່ພົບບິນນີ້',bl_paid_at:'ຈ່າຍເມື່ອ {d}',bl_line_at:'ສົ່ງໄລນ໌ {d} {t}',bl_by:'ອອກໂດຍ',bl_order_d:'ອໍເດີວັນທີ {d}',bl_admin_only:'ຕິກຈ່າຍ/ຍົກເລີກບິນໄດ້ສະເພາະຫົວໜ້າ'},
+my:{bl_sub:'ဆိုင်ခွဲတစ်ခုချင်း ပို့ဆောင်ဘေလ် — လကုန်တွင် ဆိုင်ခွဲပေးရမည့်ငွေ',bl_this_month:'ဤလ',bl_all_br:'ဆိုင်ခွဲအားလုံး',bl_none:'ဤလတွင် ဘေလ်မရှိသေးပါ',bl_noread:'ဘေလ် ဖတ်မရပါ',
+  bl_line_sent:'LINE ပို့ပြီး',bl_line_no:'LINE မပို့ရသေး',bl_st_sent:'မပေးရသေး',bl_st_paid:'✅ ပေးပြီး',bl_st_void:'ပယ်ဖျက်',bl_sum_t:'ဆိုင်ခွဲပေးရမည့်ငွေ · {m}',bl_bills_n:'ဘေလ် {n}',bl_col_n:'ဘေလ်',
+  bl_k_total:'လစုစုပေါင်း',bl_paid:'ပေးပြီး',bl_unpaid:'ကျန်ငွေ',bl_detail:'ပို့ဆောင်ဘေလ်',bl_ordered:'မှာထား',bl_sent:'ပို့',bl_amount:'ငွေ',bl_lines_n:'{n} ကြောင်း',
+  bl_resend:'💬 LINE ပြန်ပို့',bl_mark_paid:'✅ ပေးပြီးဟု မှတ်',bl_unpaid_btn:'↩️ မပေးရသေး',bl_void:'❌ ဘေလ်ပယ်ဖျက်',bl_back:'‹ ဘေလ်သို့ ပြန်',
+  bl_paid_q:'{b} သည် ဘေလ် {no} ({m}) ပေးပြီးပြီလား?',bl_paid_ok:'ပေးပြီးဟု မှတ်ပြီး ✅',bl_unpaid_ok:'မပေးရသေးသို့ ပြန်ပြောင်းပြီး',
+  bl_void_q:'{b} ၏ ဘေလ် {no} ကို ပယ်ဖျက်မလား?\n{n} ကြောင်း လက်ကျန်သို့ ပြန်ဝင်ပြီး အော်ဒါ ပြန်ပေါ်မည်',bl_void_ok:'ဘေလ်ပယ်ဖျက်ပြီး — လက်ကျန် ပြန်ထည့်ပြီး',bl_void_note:'ဘေလ်ပယ်ဖျက်',bl_void_done:'ဤဘေလ် ပယ်ဖျက်ပြီးသား',
+  bl_gone:'ဘေလ် မတွေ့ပါ',bl_paid_at:'ပေးသည့်ရက် {d}',bl_line_at:'LINE {d} {t}',bl_by:'ထုတ်သူ',bl_order_d:'{d} အော်ဒါ',bl_admin_only:'မန်နေဂျာသာ ပေးပြီး/ပယ်ဖျက် လုပ်နိုင်သည်'}
+});
+CSS.add(`
+.bl-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.bl-month{display:flex;align-items:center;gap:6px}.bl-month b{font-family:var(--fh);font-size:16px;min-width:96px;text-align:center}
+.bl-row{cursor:pointer;flex-wrap:nowrap}.bl-row .amt{font-family:var(--fh);font-weight:700;font-size:16px;white-space:nowrap;text-align:right}
+.bl-row .bno{font-family:var(--fh);font-weight:700}.bl-row .xs{overflow-wrap:anywhere}
+.bl-row.void .bno,.bl-row.void .amt{text-decoration:line-through;color:var(--mut)}
+.bl-dot{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block;margin-right:4px;vertical-align:middle}
+.bl-zero td{color:var(--mut)}.bl-zero td b{color:var(--mut);font-weight:600}
+.bl-sum td:first-child{font-weight:700}.bl-sum tr.cur td{background:var(--gold-t)}
+`);
+let BL={ym:ymNow(),br:'',rows:[],ok:true,at:0,loading:null};
+
+RENDER.bills=function(el){
+  const brs=S.branches;
+  el.innerHTML=dhead('🧾 '+t('nav_bills'))+sqlNeedBox()+'<div class="sd-sub">'+esc(t('bl_sub'))+'</div>'+(brScoped()?'<div class="note">'+esc(t('br_scope',{b:brScopeTxt()||'—'}))+'</div>':'')+
+    '<div class="bl-filters"><div class="bl-month"><button type="button" class="btn gh sm2" onclick="blMonth(-1)" aria-label="prev">‹</button><b id="blYm">'+esc(dispMonth(BL.ym))+'</b><button type="button" class="btn gh sm2" onclick="blMonth(1)" aria-label="next">›</button>'+
+    (BL.ym!==ymNow()?'<button type="button" class="btn gh sm2" onclick="blMonthNow()">'+esc(t('bl_this_month'))+'</button>':'')+'</div>'+
+    (brs.length>1?pillBar([{k:'',lb:t('bl_all_br')}].concat(brs.map(b=>({k:b.code,lb:b.short||b.name}))),BL.br,'blSetBr',{scroll:1}):'')+'</div>'+
+    '<div id="blKpi"></div><div id="blList"><div class="spin"></div></div><div id="blSum"></div>';
+  if(BL.at)blPaint();
+  blLoad().then(()=>{if(S.tab==='bills')blPaint();});
+};
+function blMonth(n){BL.ym=n<0?prevMonth(BL.ym):nextMonth(BL.ym);BL.rows=[];BL.at=0;rerender();}
+function blMonthNow(){BL.ym=ymNow();BL.rows=[];BL.at=0;rerender();}
+function blSetBr(k){BL.br=S.branches.some(b=>b.code===k)?k:'';document.querySelectorAll('#view-bills .pills .pill').forEach(p=>p.classList.toggle('on',p.dataset.k===BL.br));blPaint();}
+async function blLoad(){ // บิลของเดือน (เฉพาะสาขาที่เห็น) · อ่านไม่ได้ = ว่าง + แถบเตือน (ไม่ toast)
+  if(BL.loading)return BL.loading;
+  BL.loading=(async()=>{const ym=BL.ym,a=ym+'-01',b=ym+'-'+String(monthDays(ym)).padStart(2,'0');
+    try{const r=await sb.from('kc_deliveries').select('*').gte('d',a).lte('d',b).order('d',{ascending:false}).order('created_at',{ascending:false}).limit(1000);
+      if(!r||r.error)throw (r&&r.error)||new Error('read');BL.rows=(r.data||[]).filter(x=>inBr(x.branch));BL.ok=true;}
+    catch(e){BL.rows=[];BL.ok=false;}
+    BL.at=Date.now();})();
+  try{await BL.loading;}finally{BL.loading=null;}}
+function blStTxt(st){const k='bl_st_'+st;return I18N.th[k]?t(k):String(st||'');}
+function blBr(code){return (S.branchesAll||[]).find(b=>b.code===code)||null;}
+function blSums(rows){ // ต่อสาขา {code,name,n,total,paid,unpaid}
+  const m={};rows.forEach(x=>{const c=x.branch||'?';const o=m[c]=m[c]||{code:c,name:x.branch_name||branchName(c)||c,n:0,total:0,paid:0,unpaid:0};
+    if(x.status==='void')return;o.n++;const v=num(x.total);o.total=rnd2(o.total+v);if(x.status==='paid')o.paid=rnd2(o.paid+v);else o.unpaid=rnd2(o.unpaid+v);});
+  const ord={};S.branches.forEach((b,i)=>{ord[b.code]=i;});
+  return Object.values(m).sort((a,b)=>num(ord[a.code]??99)-num(ord[b.code]??99));}
+function blPaint(){
+  const L=document.getElementById('blList'),K=document.getElementById('blKpi'),Su=document.getElementById('blSum');if(!L)return;
+  const rows=BL.rows.filter(x=>!BL.br||x.branch===BL.br),td=bizTodayISO();
+  const live=rows.filter(x=>x.status!=='void'),tot=rnd2(live.reduce((a,x)=>a+num(x.total),0)),paid=rnd2(live.filter(x=>x.status==='paid').reduce((a,x)=>a+num(x.total),0));
+  if(K)K.innerHTML='<div class="kpis"><div class="kpi hero"><div class="t">'+esc(t('bl_k_total'))+'</div><div class="kpi-v">'+esc(money(tot))+'</div><div class="s">'+esc(t('bl_bills_n',{n:live.length}))+'</div></div>'+
+    '<div class="kpi"><div class="t">'+esc(t('bl_paid'))+'</div><div class="kpi-v green">'+esc(money(paid))+'</div></div><div class="kpi"><div class="t">'+esc(t('bl_unpaid'))+'</div><div class="kpi-v '+(tot-paid>0?'red':'')+'">'+esc(money(rnd2(tot-paid)))+'</div></div></div>';
+  if(!BL.ok){L.innerHTML='<div class="badbox">⚠ '+esc(t('bl_noread'))+'</div>';if(Su)Su.innerHTML='';return;}
+  if(!rows.length){L.innerHTML=emptyBox(t('bl_none'));}
+  else{let h='',last='';rows.forEach(x=>{if(x.d!==last){last=x.d;h+='<div class="dhead" style="font-size:14px;margin:10px 0 4px">'+esc(dispDate(x.d))+(x.d===td?' · '+esc(t('today')):'')+'</div>';}
+      const b=blBr(x.branch),st=x.status||'sent';
+      h+='<div class="rowline tap bl-row'+(st==='void'?' void':'')+'" data-id="'+esc(x.id)+'" onclick="blDetail(this.dataset.id)"><div class="grow"><div><span class="bno">'+esc(x.bill_no||'—')+'</span> '+
+        '<span class="bl-dot" style="background:'+esc(sdBrColor(x.branch,b&&b.color))+'"></span>'+esc(x.branch_name||branchName(x.branch)||x.branch||'')+'</div>'+
+        '<div class="xs mut">'+stPill(st,blStTxt(st))+' '+(x.line_sent_at?'<span class="chip ok">💬 ✓</span>':'<span class="chip mid">💬 —</span>')+' '+esc(t('bl_by'))+' '+esc(x.by_name||'')+' '+esc(dispTime(x.created_at))+'</div></div>'+
+        '<span class="amt">'+esc(money(x.total))+'</span></div>';});
+    L.innerHTML='<div class="card" style="padding-top:4px">'+h+'</div>';}
+  if(Su){const sums=blSums(BL.rows);
+    Su.innerHTML=sums.length?card('💰 '+esc(t('bl_sum_t',{m:dispMonth(BL.ym)})),'<div class="twrap"><table class="t bl-sum"><thead><tr><th>'+esc(t('branch'))+'</th><th class="n">'+esc(t('bl_col_n'))+'</th><th class="n">'+esc(t('total'))+'</th><th class="n">'+esc(t('bl_paid'))+'</th><th class="n">'+esc(t('bl_unpaid'))+'</th></tr></thead><tbody>'+
+      sums.map(s=>'<tr class="tap'+(BL.br&&BL.br===s.code?' cur':'')+'" data-k="'+esc(s.code)+'" onclick="blSetBr(this.dataset.k)"><td>'+esc(s.name)+'</td><td class="n">'+s.n+'</td><td class="n">'+esc(money(s.total))+'</td><td class="n green">'+esc(money(s.paid))+'</td><td class="n '+(s.unpaid>0?'red':'')+'">'+esc(money(s.unpaid))+'</td></tr>').join('')+
+      '<tr class="tot"><td>'+esc(t('total'))+'</td><td class="n">'+sums.reduce((a,s)=>a+s.n,0)+'</td><td class="n">'+esc(money(sums.reduce((a,s)=>a+s.total,0)))+'</td><td class="n">'+esc(money(sums.reduce((a,s)=>a+s.paid,0)))+'</td><td class="n">'+esc(money(sums.reduce((a,s)=>a+s.unpaid,0)))+'</td></tr></tbody></table></div>'):'';}
+}
+
+/* ---------- รายละเอียดบิล (หน้าประวัติ/ส่งสาขาเรียกได้: blDetail(id)) ---------- */
+async function blRead(id){let x=null,lines=[];
+  try{x=await db(()=>sb.from('kc_deliveries').select('*').eq('id',id).maybeSingle());if(x)lines=await db(()=>sb.from('kc_delivery_lines').select('*').eq('delivery_id',id).order('sort').order('id'));}catch(e){return null;}
+  if(!x){toast(t('bl_gone'));return null;}return {x,lines};}
+async function blDetail(id){
+  const R=await blRead(id);if(!R)return;const {x,lines}=R;
+  const adm=isAdminish(),st=x.status||'sent',K=canKitchen();
+  let btns='';
+  if(st!=='void'&&K)btns+='<button type="button" class="btn gh" data-id="'+esc(x.id)+'" onclick="blResend(this.dataset.id)">'+esc(t('bl_resend'))+'</button>';
+  if(adm&&st==='sent')btns+='<button type="button" class="btn ok" data-id="'+esc(x.id)+'" onclick="blPaid(this.dataset.id)">'+esc(t('bl_mark_paid'))+'</button>';
+  if(adm&&st==='paid')btns+='<button type="button" class="btn gh" data-id="'+esc(x.id)+'" onclick="blUnpaid(this.dataset.id)">'+esc(t('bl_unpaid_btn'))+'</button>';
+  if(adm&&st!=='void')btns+='<button type="button" class="btn gh" style="color:var(--bad)" data-id="'+esc(x.id)+'" onclick="blVoid(this.dataset.id)">'+esc(t('bl_void'))+'</button>';
+  if(!adm&&st!=='void')btns+='<span class="xs mut">'+esc(t('bl_admin_only'))+'</span>';
+  openModal('<h3>🧾 '+esc(t('bl_detail'))+'</h3>'+
+    '<div class="row" style="margin-bottom:4px"><b style="font-size:17px;font-family:var(--fh)">'+esc(x.bill_no||'—')+'</b>'+stPill(st,blStTxt(st))+(x.line_sent_at?'<span class="chip ok">💬 '+esc(t('bl_line_sent'))+'</span>':'<span class="chip mid">💬 '+esc(t('bl_line_no'))+'</span>')+'</div>'+
+    '<div class="row" style="margin-bottom:8px"><b style="font-size:16px">'+esc(x.branch_name||branchName(x.branch)||x.branch||'')+'</b><span class="amt b" style="margin-left:auto;font-family:var(--fh);font-size:18px">'+esc(money(x.total))+'</span></div>'+
+    '<div class="xs mut" style="margin-bottom:8px">'+esc(dispDate(x.d))+(x.order_date&&String(x.order_date).slice(0,10)!==String(x.d).slice(0,10)?' · '+esc(t('bl_order_d',{d:dispDate(x.order_date)})):'')+' · '+esc(t('bl_by'))+' '+esc(x.by_name||'')+' '+esc(dispTime(x.created_at))+
+      (x.paid_at?' · '+esc(t('bl_paid_at',{d:dispDate(x.paid_at)})):'')+(x.line_sent_at?' · '+esc(t('bl_line_at',{d:dispDate(String(x.line_sent_at).slice(0,10)),t:dispTime(x.line_sent_at)}))+(x.line_group_id?' → '+esc(lgName(x.line_group_id)):''):'')+'</div>'+
+    (x.note?'<div class="note">'+esc(x.note)+'</div>':'')+
+    '<div class="twrap"><table class="t"><thead><tr><th>'+esc(t('product'))+'</th><th class="n">'+esc(t('bl_ordered'))+'</th><th class="n">'+esc(t('bl_sent'))+'</th><th class="n">'+esc(t('price'))+'</th><th class="n">'+esc(t('bl_amount'))+'</th></tr></thead><tbody>'+
+    lines.map(l=>{const z=!(num(l.sent)>0);return '<tr'+(z?' class="bl-zero"':'')+'><td><b>'+esc(l.name||'')+'</b> <span class="xs mut">'+esc(trUnit(l.unit))+'</span>'+(z?' <span class="chip warn">⏳ '+esc(t('sd_partial'))+'</span>':'')+'</td><td class="n">'+fmtQ(l.ordered)+'</td><td class="n">'+fmtQ(l.sent)+'</td><td class="n">'+(z?'—':esc(moneyU(l.unit_price)))+'</td><td class="n">'+(z?'—':esc(money(l.amount)))+'</td></tr>';}).join('')+
+    '<tr class="tot"><td colspan="4">'+esc(t('total'))+' · '+esc(t('bl_lines_n',{n:lines.filter(l=>num(l.sent)>0).length}))+'</td><td class="n">'+esc(money(x.total))+'</td></tr></tbody></table></div>'+
+    '<div class="row" style="margin-top:12px">'+btns+'<button type="button" class="btn" style="margin-left:auto" onclick="closeModal()">'+esc(t('close'))+'</button></div>');}
+async function blAfter(id){if(S.tab==='bills'){await blLoad();blPaint();}if(S.tab==='send'&&typeof sdReload==='function')sdReload();if(id)blDetail(id);}
+async function blResend(id){await once(async()=>{ // ส่งไลน์ซ้ำ (ข้อความเดิมจากบิล) · ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก
+  const R=await blRead(id);if(!R)return;const {x,lines}=R;if(x.status==='void'){toast(t('bl_void_done'),true);return;}
+  const res=await sdLineGo(x,lines);
+  if(res.state==='sent'){toast(t('sd_line_sent',{g:lgName(res.gid)}));blAfter(id);return;}
+  openModal('<h3>💬 '+esc(t('bl_resend'))+'</h3><div class="'+(res.state==='fail'?'badbox':'hintbox')+'">'+esc(res.state==='fail'?t('sd_line_fail')+(res.err?' ('+res.err+')':''):t('sd_line_none'))+'</div>'+lineTextBox(res.text,res.gid)+
+    '<div class="row" style="margin-top:12px"><button type="button" class="btn gh" data-id="'+esc(id)+'" onclick="blDetail(this.dataset.id)">'+esc(t('bl_back'))+'</button><button type="button" class="btn" style="margin-left:auto" onclick="closeModal()">'+esc(t('close'))+'</button></div>');});}
+async function blPaid(id){await once(async()=>{ // ✅ จ่ายแล้ว (หัวหน้า)
+  if(!isAdminish())return;const R=await blRead(id);if(!R)return;const {x}=R;if(x.status!=='sent'){blDetail(id);return;}
+  if(!(await confirm2(t('bl_paid_q',{b:x.branch_name||branchName(x.branch)||x.branch,no:x.bill_no||'',m:money(x.total)}))))return;
+  try{await db(()=>sb.from('kc_deliveries').update({status:'paid',paid_at:bizTodayISO()}).eq('id',id).eq('status','sent'));}catch(e){return;}
+  toast(t('bl_paid_ok'));blAfter(id);});}
+async function blUnpaid(id){await once(async()=>{ // ↩️ ยังไม่จ่าย (หัวหน้า · กดผิด)
+  if(!isAdminish())return;const R=await blRead(id);if(!R)return;if(R.x.status!=='paid'){blDetail(id);return;}
+  try{await db(()=>sb.from('kc_deliveries').update({status:'sent',paid_at:null}).eq('id',id).eq('status','paid'));}catch(e){return;}
+  toast(t('bl_unpaid_ok'));blAfter(id);});}
+async function blVoidDone(id){ // เคยคืนสต๊อกของบิลนี้แล้ว (รอบก่อนคืนได้แต่เปลี่ยนสถานะไม่สำเร็จ) = ไม่คืนซ้ำ
+  try{const r=await sb.from('kc_moves').select('id').eq('ref_table','kc_deliveries').eq('ref_id2',String(id)).eq('kind','send').gt('qty',0).limit(1);return !!(r&&!r.error&&r.data&&r.data.length);}catch(e){return false;}}
+async function blVoid(id){await once(async()=>{ // ❌ ยกเลิกบิล: คืนสต๊อก = กลับด้านของที่เคยตัดจริง (kc_moves send ของบิลนี้) · ไม่มี = จากบรรทัด · แล้ว status void
+  if(!isAdminish())return;const R=await blRead(id);if(!R)return;const {x,lines}=R;
+  if(x.status==='void'){toast(t('bl_void_done'),true);return;}
+  if(!(await confirm2(t('bl_void_q',{no:x.bill_no||'',b:x.branch_name||branchName(x.branch)||x.branch,n:lines.length}),{danger:true})))return;
+  try{
+    const done=await blVoidDone(id);
+    if(!done){
+      let orig=[];try{const r=await sb.from('kc_moves').select('ref_id,qty,cost').eq('ref_table','kc_deliveries').eq('ref_id2',String(id)).eq('kind','send').lt('qty',0);if(r&&!r.error)orig=r.data||[];}catch(e){}
+      const agg={};
+      if(orig.length)orig.forEach(m=>{const a=agg[m.ref_id]=agg[m.ref_id]||{q:0,c:0};a.q+=-num(m.qty);a.c+=-num(m.cost);});
+      else lines.forEach(l=>{if(!l.recipe_id)return;const a=agg[l.recipe_id]=agg[l.recipe_id]||{q:0,c:0};a.q+=num(l.sent);a.c+=num(l.sent)*num(l.unit_cost);});
+      const ids=Object.keys(agg);await refreshRows('recipe',ids);
+      await pushMoves(ids.map(rid=>({d:bizTodayISO(),kind:'send',ref_kind:'recipe',ref_id:rid,qty:rnd4(agg[rid].q),cost:rnd4(agg[rid].c),ref_table:'kc_deliveries',ref_id2:id,note:t('bl_void_note')+' '+(x.bill_no||'')})));}
+    await db(()=>sb.from('kc_deliveries').update({status:'void',paid_at:null}).eq('id',id));
+  }catch(e){return;}
+  toast(t('bl_void_ok'));blAfter(id);});}
+/* ===================== /module: bills ===================== */
+
+/* ===================== module: buy (mod_buy.js) ===================== */
+/* ============================================================
+   🛒 สั่งของ — buy (po*)
+   คำแนะนำแยกตามร้านค้า (ck_sups จับคู่ด้วยชื่อร้านของวัตถุดิบ it.sup):
+     ต้องมี = มากกว่าระหว่าง "ขั้นต่ำ" (min_qty) กับ "ที่ต้องใช้ทำของ" (สูตร × รอบที่ 🍳 แนะนำ — ⚡ ด่วนจากออเดอร์สาขา / 🔄 เติมให้ถึงที่ควรมี · ใช้ mkLoad/mkNeeds ของโมดูลทำของ ไม่คิดซ้ำ)
+     ต้องสั่ง = ต้องมี − ที่มีในสต๊อก − ที่สั่งไว้แล้วกำลังมา (kc_pos status sent)  → ปัดขึ้นเป็นจำนวนบรรจุ (หน่วยซื้อ buy_unit/buy_qty หรือบรรจุแรกใน packs)
+     แก้ตัวเลขในที่ได้ (0 = ไม่สั่ง · จำไว้ต่อวันใน localStorage jjck_po_ovr) · ＋ เพิ่มรายการของร้านเอง · ร้านอื่นที่ไม่มีคำแนะนำกดเพิ่มได้
+   ส่ง = ข้อความใบสั่ง (ไทยเสมอ — ร้านอ่าน) → มีกลุ่มไลน์: บันทึก kc_pos (draft) + kc_po_lines → lineSend → status sent + line_sent_at
+     · ส่งไม่สำเร็จ = ใบยังเป็น draft + กล่องคัดลอก (✅ ส่งเองแล้ว / 🗑 ยกเลิกใบนี้) · ไม่มีกลุ่ม = กล่องคัดลอก/เปิดไลน์ แล้วถาม "ส่งแล้วใช่ไหม?" → บันทึกเป็น sent
+   รายการใบที่สั่งไปแล้ว (30 วัน) → รายละเอียด: 📥 รับของตามใบนี้ (rcFromPo ของโมดูลรับของ) · ส่งไลน์อีกครั้ง · คัดลอก · ยกเลิก
+   สิทธิ์: canKitchen (ทุกคนที่ทำงานครัว)
+   ============================================================ */
+I18N.add({
+th:{po_hint:'ระบบแนะนำจาก: วัตถุดิบที่ต่ำกว่าขั้นต่ำ + ของที่ต้องใช้ทำของ (⚡ ด่วน / 🔄 เติม) − ที่มี − ที่สั่งไว้แล้ว · แก้ตัวเลขได้เลย · 0 = ไม่สั่ง',
+  po_none:'ตอนนี้ไม่มีอะไรต้องสั่ง 👍',po_nosup:'ยังไม่มีร้าน',po_nosup_h:'วัตถุดิบพวกนี้ยังไม่ได้ตั้งร้านค้า — ตั้งได้ที่ 🥬 วัตถุดิบ',po_group_no:'ยังไม่มีกลุ่มไลน์',po_group_empty:'ยังไม่มีรายการ — กด ＋ เพิ่มรายการ',
+  po_why_min:'ต่ำกว่าขั้นต่ำ (มี {s} · ขั้นต่ำ {m})',po_why_prod:'ใช้ทำของ {q} {u}',po_lots:'รอบ',po_have:'มี {q}',po_incoming:'สั่งไว้แล้ว {q} กำลังมา',po_need:'ต้องสั่ง {q} {u}',
+  po_est_none:'ไม่มีราคา',po_est_col:'ประมาณ',po_lines_n:'{n} รายการ',po_total_est:'รวม {n} รายการ · ประมาณ {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'ไม่สั่ง',
+  po_send:'📤 ส่งไลน์',po_send_copy:'📋 คัดลอก/ส่งเอง',po_add_item:'＋ เพิ่มรายการ',po_other_sups:'สั่งร้านอื่น:',po_reset:'↺ ค่าแนะนำ',
+  po_pick_t:'เลือกวัตถุดิบของ {s}',po_pick_none:'ร้านนี้ยังไม่มีวัตถุดิบ — ตั้งร้านค้าให้วัตถุดิบที่ 🥬 วัตถุดิบ',po_pick_all_in:'วัตถุดิบของร้านนี้อยู่ในรายการครบแล้ว',
+  po_nothing:'ยังไม่มีรายการที่จะสั่ง (ทุกรายการเป็น 0)',po_send_q:'ส่งใบสั่งให้ {s} เข้ากลุ่มไลน์ "{g}" ใช่ไหม?',po_sent_ok:'ส่งใบสั่งให้ {s} แล้ว ✅',
+  po_manual_t:'ส่งใบสั่งให้ {s} เอง',po_manual_h:'ร้านนี้ยังไม่มีกลุ่มไลน์ — คัดลอกข้อความไปส่งเอง แล้วกด "ส่งแล้ว" เพื่อบันทึกใบสั่ง (ตั้งกลุ่มไลน์ได้ที่ 🏷️ ร้านค้า)',
+  po_manual_q:'ส่งให้ร้านแล้วใช่ไหม?',po_mark_sent:'✅ ส่งแล้ว',po_not_yet:'ยังไม่ส่ง',
+  po_fail_t:'ส่งไลน์ไม่สำเร็จ',po_fail_h:'บันทึกใบสั่งไว้แล้ว แต่ส่งเข้ากลุ่มไม่ได้ — คัดลอกไปส่งเองแล้วกด "ส่งแล้ว" หรือยกเลิกใบนี้แล้วลองใหม่',po_fail_drop:'🗑 ยกเลิกใบนี้',
+  po_not_saved:'บันทึกใบสั่งไม่สำเร็จ — ยังไม่ได้ส่ง ลองใหม่อีกครั้ง',po_sent_but:'ส่งไลน์แล้ว แต่บันทึกสถานะไม่สำเร็จ — ใบนี้ยังขึ้นว่า "ยังไม่ส่ง"',
+  po_list_t:'📋 ใบที่สั่งไปแล้ว',po_list_none:'ยังไม่เคยสั่งของ',po_noread:'อ่านข้อมูลไม่ได้',
+  po_st_draft:'ยังไม่ส่ง',po_st_sent:'สั่งแล้ว รอรับ',po_st_received:'รับของแล้ว',po_st_void:'ยกเลิก',
+  po_detail_t:'ใบสั่งของ',po_recv_btn:'📥 รับของตามใบนี้',po_resend:'💬 ส่งไลน์อีกครั้ง',po_send_now:'📤 ส่งไลน์',po_void_btn:'🗑 ยกเลิกใบนี้',
+  po_void_q:'ยกเลิกใบสั่ง {n} ของ {s}? (ร้านจะไม่รู้ — ต้องแจ้งร้านเอง)',po_voided:'ยกเลิกใบสั่งแล้ว',po_by:'โดย',po_text_t:'ข้อความที่ส่ง',
+  po_order_err:'อ่านออเดอร์สาขาไม่ได้ — คำแนะนำนี้ยังไม่รวมของที่ต้องทำด่วน',po_due:'ขอรับของ'},
+en:{po_hint:'Suggested from: ingredients below minimum + what production needs (⚡ urgent / 🔄 refill) − in stock − already ordered · edit any number · 0 = skip',
+  po_none:'Nothing to order right now 👍',po_nosup:'No supplier',po_nosup_h:'These ingredients have no supplier yet — set one on 🥬 Ingredients',po_group_no:'No LINE group',po_group_empty:'No lines — tap ＋ Add item',
+  po_why_min:'below minimum (have {s} · min {m})',po_why_prod:'production needs {q} {u}',po_lots:'lots',po_have:'have {q}',po_incoming:'{q} already ordered, on the way',po_need:'order {q} {u}',
+  po_est_none:'no price',po_est_col:'Est.',po_lines_n:'{n} lines',po_total_est:'{n} lines · est. {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'skip',
+  po_send:'📤 Send to LINE',po_send_copy:'📋 Copy / send yourself',po_add_item:'＋ Add item',po_other_sups:'Other suppliers:',po_reset:'↺ Suggested',
+  po_pick_t:'Pick an ingredient from {s}',po_pick_none:'This supplier has no ingredients yet — set the supplier on 🥬 Ingredients',po_pick_all_in:'All of this supplier\'s ingredients are already listed',
+  po_nothing:'Nothing to order (every line is 0)',po_send_q:'Send the order to {s} in LINE group "{g}"?',po_sent_ok:'Order sent to {s} ✅',
+  po_manual_t:'Send the order to {s} yourself',po_manual_h:'This supplier has no LINE group — copy the text and send it yourself, then tap "Sent" to record the order (set the group on 🏷️ Suppliers)',
+  po_manual_q:'Did you send it to the supplier?',po_mark_sent:'✅ Sent',po_not_yet:'Not yet',
+  po_fail_t:'LINE send failed',po_fail_h:'The order was saved but could not be sent to the group — copy and send it yourself then tap "Sent", or cancel this order and retry',po_fail_drop:'🗑 Cancel this order',
+  po_not_saved:'Could not save the order — nothing was sent, please try again',po_sent_but:'Sent to LINE, but the status could not be saved — this order still shows "Not sent"',
+  po_list_t:'📋 Orders placed',po_list_none:'No orders yet',po_noread:'Could not read',
+  po_st_draft:'Not sent',po_st_sent:'Ordered, waiting',po_st_received:'Received',po_st_void:'Cancelled',
+  po_detail_t:'Order',po_recv_btn:'📥 Receive this order',po_resend:'💬 Send to LINE again',po_send_now:'📤 Send to LINE',po_void_btn:'🗑 Cancel this order',
+  po_void_q:'Cancel order {n} to {s}? (the supplier is not told — tell them yourself)',po_voided:'Order cancelled',po_by:'by',po_text_t:'Message sent',
+  po_order_err:'Could not read branch orders — urgent production needs are not included yet',po_due:'Deliver by'},
+lo:{po_hint:'ແນະນຳຈາກ: ວັດຖຸດິບຕ່ຳກວ່າຂັ້ນຕ່ຳ + ທີ່ຕ້ອງໃຊ້ເຮັດເຄື່ອງ (⚡ ດ່ວນ / 🔄 ຕື່ມ) − ທີ່ມີ − ທີ່ສັ່ງໄວ້ແລ້ວ · ແກ້ຕົວເລກໄດ້ເລີຍ · 0 = ບໍ່ສັ່ງ',
+  po_none:'ຕອນນີ້ບໍ່ມີຫຍັງຕ້ອງສັ່ງ 👍',po_nosup:'ຍັງບໍ່ມີຮ້ານ',po_nosup_h:'ວັດຖຸດິບເຫຼົ່ານີ້ຍັງບໍ່ໄດ້ຕັ້ງຮ້ານຄ້າ — ຕັ້ງໄດ້ທີ່ 🥬 ວັດຖຸດິບ',po_group_no:'ຍັງບໍ່ມີກຸ່ມໄລນ໌',po_group_empty:'ຍັງບໍ່ມີລາຍການ — ກົດ ＋ ເພີ່ມລາຍການ',
+  po_why_min:'ຕ່ຳກວ່າຂັ້ນຕ່ຳ (ມີ {s} · ຂັ້ນຕ່ຳ {m})',po_why_prod:'ໃຊ້ເຮັດເຄື່ອງ {q} {u}',po_lots:'ຮອບ',po_have:'ມີ {q}',po_incoming:'ສັ່ງໄວ້ແລ້ວ {q} ກຳລັງມາ',po_need:'ຕ້ອງສັ່ງ {q} {u}',
+  po_est_none:'ບໍ່ມີລາຄາ',po_est_col:'ປະມານ',po_lines_n:'{n} ລາຍການ',po_total_est:'ລວມ {n} ລາຍການ · ປະມານ {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'ບໍ່ສັ່ງ',
+  po_send:'📤 ສົ່ງໄລນ໌',po_send_copy:'📋 ຄັດລອກ/ສົ່ງເອງ',po_add_item:'＋ ເພີ່ມລາຍການ',po_other_sups:'ສັ່ງຮ້ານອື່ນ:',po_reset:'↺ ຄ່າແນະນຳ',
+  po_pick_t:'ເລືອກວັດຖຸດິບຂອງ {s}',po_pick_none:'ຮ້ານນີ້ຍັງບໍ່ມີວັດຖຸດິບ — ຕັ້ງຮ້ານຄ້າໃຫ້ວັດຖຸດິບທີ່ 🥬 ວັດຖຸດິບ',po_pick_all_in:'ວັດຖຸດິບຂອງຮ້ານນີ້ຢູ່ໃນລາຍການຄົບແລ້ວ',
+  po_nothing:'ຍັງບໍ່ມີລາຍການທີ່ຈະສັ່ງ (ທຸກລາຍການເປັນ 0)',po_send_q:'ສົ່ງໃບສັ່ງໃຫ້ {s} ເຂົ້າກຸ່ມໄລນ໌ "{g}" ແມ່ນບໍ?',po_sent_ok:'ສົ່ງໃບສັ່ງໃຫ້ {s} ແລ້ວ ✅',
+  po_manual_t:'ສົ່ງໃບສັ່ງໃຫ້ {s} ເອງ',po_manual_h:'ຮ້ານນີ້ຍັງບໍ່ມີກຸ່ມໄລນ໌ — ຄັດລອກຂໍ້ຄວາມໄປສົ່ງເອງ ແລ້ວກົດ "ສົ່ງແລ້ວ" ເພື່ອບັນທຶກໃບສັ່ງ (ຕັ້ງກຸ່ມໄລນ໌ໄດ້ທີ່ 🏷️ ຮ້ານຄ້າ)',
+  po_manual_q:'ສົ່ງໃຫ້ຮ້ານແລ້ວແມ່ນບໍ?',po_mark_sent:'✅ ສົ່ງແລ້ວ',po_not_yet:'ຍັງບໍ່ສົ່ງ',
+  po_fail_t:'ສົ່ງໄລນ໌ບໍ່ສຳເລັດ',po_fail_h:'ບັນທຶກໃບສັ່ງໄວ້ແລ້ວ ແຕ່ສົ່ງເຂົ້າກຸ່ມບໍ່ໄດ້ — ຄັດລອກໄປສົ່ງເອງແລ້ວກົດ "ສົ່ງແລ້ວ" ຫຼືຍົກເລີກໃບນີ້ແລ້ວລອງໃໝ່',po_fail_drop:'🗑 ຍົກເລີກໃບນີ້',
+  po_not_saved:'ບັນທຶກໃບສັ່ງບໍ່ສຳເລັດ — ຍັງບໍ່ໄດ້ສົ່ງ ລອງໃໝ່ອີກຄັ້ງ',po_sent_but:'ສົ່ງໄລນ໌ແລ້ວ ແຕ່ບັນທຶກສະຖານະບໍ່ສຳເລັດ — ໃບນີ້ຍັງຂຶ້ນວ່າ "ຍັງບໍ່ສົ່ງ"',
+  po_list_t:'📋 ໃບທີ່ສັ່ງໄປແລ້ວ',po_list_none:'ຍັງບໍ່ເຄີຍສັ່ງເຄື່ອງ',po_noread:'ອ່ານຂໍ້ມູນບໍ່ໄດ້',
+  po_st_draft:'ຍັງບໍ່ສົ່ງ',po_st_sent:'ສັ່ງແລ້ວ ລໍຮັບ',po_st_received:'ຮັບເຄື່ອງແລ້ວ',po_st_void:'ຍົກເລີກ',
+  po_detail_t:'ໃບສັ່ງເຄື່ອງ',po_recv_btn:'📥 ຮັບເຄື່ອງຕາມໃບນີ້',po_resend:'💬 ສົ່ງໄລນ໌ອີກຄັ້ງ',po_send_now:'📤 ສົ່ງໄລນ໌',po_void_btn:'🗑 ຍົກເລີກໃບນີ້',
+  po_void_q:'ຍົກເລີກໃບສັ່ງ {n} ຂອງ {s}? (ຮ້ານຈະບໍ່ຮູ້ — ຕ້ອງແຈ້ງຮ້ານເອງ)',po_voided:'ຍົກເລີກໃບສັ່ງແລ້ວ',po_by:'ໂດຍ',po_text_t:'ຂໍ້ຄວາມທີ່ສົ່ງ',
+  po_order_err:'ອ່ານອໍເດີສາຂາບໍ່ໄດ້ — ຄຳແນະນຳນີ້ຍັງບໍ່ລວມເຄື່ອງທີ່ຕ້ອງເຮັດດ່ວນ',po_due:'ຂໍຮັບເຄື່ອງ'},
+my:{po_hint:'အကြံပြုချက်: အနည်းဆုံးအောက် ကုန်ကြမ်း + ထုတ်လုပ်ရန် လိုအပ်သည် (⚡ အရေးပေါ် / 🔄 ဖြည့်) − လက်ကျန် − မှာပြီးသား · နံပါတ်ပြင်နိုင် · 0 = မမှာ',
+  po_none:'ယခု မှာယူရန် မရှိပါ 👍',po_nosup:'ဆိုင်မရှိ',po_nosup_h:'ဤကုန်ကြမ်းများ ဆိုင်မသတ်မှတ်ရသေး — 🥬 ကုန်ကြမ်း တွင် သတ်မှတ်ပါ',po_group_no:'LINE အုပ်စု မရှိ',po_group_empty:'စာရင်းမရှိ — ＋ ထည့်ရန် နှိပ်ပါ',
+  po_why_min:'အနည်းဆုံးအောက် (ရှိ {s} · အနည်းဆုံး {m})',po_why_prod:'ထုတ်လုပ်ရန် လို {q} {u}',po_lots:'အသုတ်',po_have:'ရှိ {q}',po_incoming:'မှာပြီး {q} ရောက်လာမည်',po_need:'မှာရန် {q} {u}',
+  po_est_none:'ဈေးမရှိ',po_est_col:'ခန့်မှန်း',po_lines_n:'{n} ကြောင်း',po_total_est:'စုစုပေါင်း {n} ကြောင်း · ခန့်မှန်း {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'မမှာ',
+  po_send:'📤 LINE ပို့',po_send_copy:'📋 ကူး/ကိုယ်တိုင်ပို့',po_add_item:'＋ ထည့်ရန်',po_other_sups:'အခြားဆိုင်:',po_reset:'↺ အကြံပြုချက်',
+  po_pick_t:'{s} ၏ ကုန်ကြမ်း ရွေးပါ',po_pick_none:'ဤဆိုင်တွင် ကုန်ကြမ်းမရှိသေး — 🥬 ကုန်ကြမ်း တွင် ဆိုင်သတ်မှတ်ပါ',po_pick_all_in:'ဤဆိုင်၏ ကုန်ကြမ်းအားလုံး စာရင်းတွင် ရှိပြီး',
+  po_nothing:'မှာရန် မရှိပါ (အားလုံး 0)',po_send_q:'{s} သို့ မှာယူစာကို LINE အုပ်စု "{g}" တွင် ပို့မလား?',po_sent_ok:'{s} သို့ မှာယူစာ ပို့ပြီး ✅',
+  po_manual_t:'{s} သို့ ကိုယ်တိုင်ပို့ရန်',po_manual_h:'ဤဆိုင်တွင် LINE အုပ်စုမရှိ — စာသားကူးပြီး ကိုယ်တိုင်ပို့ပါ၊ ပြီးလျှင် "ပို့ပြီး" နှိပ်၍ မှတ်တမ်းတင်ပါ (🏷️ ဆိုင်များ တွင် အုပ်စုသတ်မှတ်နိုင်)',
+  po_manual_q:'ဆိုင်သို့ ပို့ပြီးပြီလား?',po_mark_sent:'✅ ပို့ပြီး',po_not_yet:'မပို့ရသေး',
+  po_fail_t:'LINE ပို့မရပါ',po_fail_h:'မှာယူစာ သိမ်းပြီးသော်လည်း အုပ်စုသို့ ပို့မရပါ — ကူးပြီး ကိုယ်တိုင်ပို့ကာ "ပို့ပြီး" နှိပ်ပါ သို့မဟုတ် ဤစာကို ပယ်ဖျက်ပြီး ထပ်စမ်းပါ',po_fail_drop:'🗑 ဤစာကို ပယ်ဖျက်',
+  po_not_saved:'မှာယူစာ သိမ်းမရပါ — မပို့ရသေးပါ ထပ်စမ်းပါ',po_sent_but:'LINE ပို့ပြီးသော်လည်း အခြေအနေ သိမ်းမရပါ — ဤစာ "မပို့ရသေး" ဟု ပြနေမည်',
+  po_list_t:'📋 မှာယူပြီးသော စာများ',po_list_none:'မမှာယူရသေးပါ',po_noread:'ဖတ်မရပါ',
+  po_st_draft:'မပို့ရသေး',po_st_sent:'မှာပြီး စောင့်နေ',po_st_received:'လက်ခံပြီး',po_st_void:'ပယ်ဖျက်',
+  po_detail_t:'မှာယူစာ',po_recv_btn:'📥 ဤစာအတိုင်း လက်ခံ',po_resend:'💬 LINE ထပ်ပို့',po_send_now:'📤 LINE ပို့',po_void_btn:'🗑 ဤစာကို ပယ်ဖျက်',
+  po_void_q:'{s} သို့ မှာယူစာ {n} ကို ပယ်ဖျက်မလား? (ဆိုင်မသိပါ — ကိုယ်တိုင်ပြောပါ)',po_voided:'မှာယူစာ ပယ်ဖျက်ပြီး',po_by:'မှ',po_text_t:'ပို့သောစာ',
+  po_order_err:'ဆိုင်ခွဲအော်ဒါ ဖတ်မရပါ — အရေးပေါ် ထုတ်လုပ်ရန် လိုအပ်ချက် မပါဝင်သေး',po_due:'ရောက်စေချင်သည့်ရက်'}
+});
+CSS.add(`
+.po-hint{margin-top:0}
+.po-card .po-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.po-card .po-row:last-of-type{border-bottom:0}
+.po-row .grow{flex:1;min-width:150px}.po-row b{font-size:14.5px}
+.po-row.skip .grow,.po-row.skip .mthumb{opacity:.5}
+.po-qty{flex:none;width:100%;max-width:260px}.po-qty .skstep{margin-top:0}
+@media(min-width:640px){.po-qty{width:auto;min-width:230px}}
+.po-foot{display:flex;flex-direction:column;gap:10px;padding-top:12px;margin-top:4px;border-top:1.5px solid var(--line)}
+.po-foot .po-acts{display:flex;gap:8px;flex-wrap:wrap}.po-foot .po-acts .btn{flex:1;white-space:nowrap}
+@media(min-width:640px){.po-foot{flex-direction:row;align-items:center;flex-wrap:wrap}.po-foot .grow{flex:1;min-width:160px}.po-foot .po-acts{flex:none}.po-foot .po-acts .btn{flex:none}}
+.po-others{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px}
+.po-btns{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.po-txt{margin-top:12px}.po-txt summary{cursor:pointer;font-weight:600;color:var(--mut);font-size:13px;min-height:44px;display:flex;align-items:center}
+.po-txt pre{white-space:pre-wrap;font:inherit;font-size:13.5px;background:#FBF6EA;border-radius:12px;padding:10px 12px;margin:6px 0 0;overflow-wrap:anywhere}
+.po-pick{max-height:52dvh;overflow-y:auto}
+`);
+let PO_SUG=null;                     // ผลคิดรอบล่าสุด {groups:[{key,name,sup,gid,rows:[...]}],ordersOk}
+let PO_LIST=[],PO_LINES={},PO_LIST_OK=true;   // ใบที่สั่งไปแล้ว 30 วัน (รายการ + ที่กำลังมา)
+let PO_OVR={d:'',v:{},add:{}};       // ตัวเลขที่แก้เอง (ต่อวัน) · add = {supKey:[item_id]} รายการที่เพิ่มเอง/ร้านที่เปิดเอง
+const PO_OVR_K='jjck_po_ovr';
+let PO_SEQ=0;
+function poOvrLoad(){const o=LS.get(PO_OVR_K,null),d=bizTodayISO();
+  PO_OVR=(o&&o.d===d&&o.v&&typeof o.v==='object')?{d,v:o.v,add:(o.add&&typeof o.add==='object')?o.add:{}}:{d,v:{},add:{}};}
+function poOvrSave(){LS.set(PO_OVR_K,PO_OVR);}
+function poPack(it){const p=packsOf(it)[0];return p?{u:p.u,q:p.q}:{u:(it&&it.unit)||'',q:1};}   // หน่วยที่สั่ง = หน่วยซื้อ (หรือบรรจุแรก) · ไม่มี = หน่วยหลัก
+function poStLb(st){return ['draft','sent','received','void'].includes(st)?t('po_st_'+st):String(st||'');}
+
+RENDER.buy=function(el){
+  pinnedBar(null,el);poOvrLoad();
+  el.innerHTML=dhead('🛒 '+t('nav_buy'),'<button type="button" class="btn gh sm2" onclick="poRefresh()">⟳ '+esc(t('refresh_tip'))+'</button>')+sqlNeedBox()+
+    '<div class="hintbox po-hint">'+esc(t('po_hint'))+'</div><div id="poOrdErr"></div><div id="poBody"><div class="spin"></div></div>'+
+    '<div class="card" style="margin-top:14px"><h3>'+esc(t('po_list_t'))+'<span class="sp" id="poListN"></span></h3><div id="poList"><div class="spin"></div></div></div>';
+  poLoad();
+};
+function poRefresh(){poLoad(true);}
+async function poLoad(force){
+  const seq=++PO_SEQ;
+  if(typeof mkLoad==='function'){try{await mkLoad(force);}catch(e){}}   // ออเดอร์สาขา + ที่ควรมี — ตัวช่วยของ 🍳 ทำของ (ไม่คิดซ้ำ)
+  await poListLoad();
+  if(seq!==PO_SEQ||S.tab!=='buy')return;
+  PO_SUG=poCalc();poPaint();poPaintList();
+}
+async function poListLoad(){ // ใบสั่ง 30 วันหลัง + บรรทัด (fail-soft)
+  const td=bizTodayISO();
+  const get=async q=>{try{const r=await q;if(!r||r.error)return null;return r.data||[];}catch(e){return null;}};
+  const pos=await get(sb.from('kc_pos').select('*').gte('d',addDays(td,-30)).order('d',{ascending:false}).order('created_at',{ascending:false}).limit(60));
+  PO_LIST_OK=pos!=null;PO_LIST=pos||[];PO_LINES={};
+  if(PO_LIST.length){const ln=await get(sb.from('kc_po_lines').select('*').in('po_id',PO_LIST.map(p=>p.id)).order('sort').order('id'));
+    (ln||[]).forEach(l=>{(PO_LINES[l.po_id]=PO_LINES[l.po_id]||[]).push(l);});}
+}
+function poIncoming(){ // ที่สั่งไว้แล้วกำลังมา (ใบ status sent) ต่อวัตถุดิบ เป็นหน่วยหลัก
+  const out={};PO_LIST.filter(p=>p.status==='sent').forEach(p=>(PO_LINES[p.id]||[]).forEach(l=>{if(!l.item_id)return;out[l.item_id]=rnd4(num(out[l.item_id])+num(l.qty_base));}));return out;}
+/* ---------- คิดคำแนะนำ ---------- */
+function poCalc(){
+  const needs=(typeof mkNeeds==='function')?mkNeeds():{};
+  const prod={},why={};
+  activeRecipes().forEach(r=>{const n=needs[r.id];if(!n||!(n.sugg>0))return;
+    bomOf(r).forEach(l=>{if(l.qty_base==null)return;const id=l.item.id;prod[id]=rnd4(num(prod[id])+l.qty_base*n.sugg);(why[id]=why[id]||[]).push({r,lots:n.sugg});});});
+  const inc=poIncoming(),groups={};
+  const grp=(key,supName)=>{if(groups[key])return groups[key];const s=S.sups.find(x=>supKey(x.name)===key)||null;
+    return groups[key]={key,name:s?s.name:(String(supName||'').trim()||t('po_nosup')),sup:s,gid:(s&&s.line_group_id)||null,rows:[]};};
+  activeItems().forEach(it=>{
+    const stock=Math.max(0,num(it.qty)),mn=Math.max(0,num(it.min_qty)),pr=num(prod[it.id]),want=Math.max(mn,pr),incoming=num(inc[it.id]);
+    const need=rnd4(want-stock-incoming),key=supKey(it.sup),manual=(PO_OVR.add[key]||[]).includes(it.id);
+    if(need<=0&&!manual)return;
+    const pk=poPack(it),sug=need>0?Math.ceil(need/pk.q-1e-9):0,ov=PO_OVR.v[key+'|'+it.id];
+    const packs=(ov==null||ov==='')?(need>0?sug:1):Math.max(0,num(ov)),c=itemCost(it);
+    grp(key,it.sup).rows.push({it,stock,mn,pr,want,incoming,need,pu:pk.u,pq:pk.q,sug,packs,ov:!(ov==null||ov===''),why:why[it.id]||[],lowMin:mn>0&&stock+incoming<mn,c,est:c==null?null:rnd2(c*pk.q*packs),manual:need<=0&&manual});
+  });
+  Object.keys(PO_OVR.add).forEach(key=>{if(!groups[key])grp(key,(S.sups.find(x=>supKey(x.name)===key)||{}).name||key);});
+  const G=Object.values(groups).sort((a,b)=>((a.key==='')-(b.key===''))||a.name.localeCompare(b.name,'th'));
+  G.forEach((g,i)=>{g.gi=i;});
+  return {groups:G,ordersOk:!!(typeof MK_ORD!=='undefined'&&MK_ORD.ok)};
+}
+function poEstOf(r){return r.c==null?null:rnd2(r.c*r.pq*r.packs);}
+function poGroupSum(g){const act=g.rows.filter(r=>r.packs>0);const est=act.some(r=>r.est==null)?null:rnd2(act.reduce((a,r)=>a+r.est,0));return {n:act.length,est};}
+/* ---------- วาด ---------- */
+function poPaint(){
+  const box=document.getElementById('poBody');if(!box||!PO_SUG)return;
+  const err=document.getElementById('poOrdErr');if(err)err.innerHTML=PO_SUG.ordersOk?'':'<div class="badbox">⚠ '+esc(t('po_order_err'))+'</div>';
+  const G=PO_SUG.groups;
+  let h=G.length?G.map(poGroupHtml).join(''):'<div class="card"><div class="empty">'+esc(t('po_none'))+'</div></div>';
+  const others=S.sups.filter(s=>s.active!==false&&!G.some(g=>g.key===supKey(s.name)));
+  if(others.length)h+='<div class="po-others"><span class="sm mut">'+esc(t('po_other_sups'))+'</span>'+others.map(s=>'<button type="button" class="pill" data-k="'+esc(supKey(s.name))+'" onclick="poAddGroup(this.dataset.k)">🏷️ '+esc(s.name)+'</button>').join('')+'</div>';
+  box.innerHTML=h;
+}
+function poGroupHtml(g){
+  const gi=g.gi,sum=poGroupSum(g),hasOv=g.rows.some(r=>r.ov);
+  const chip=g.gid?'<span class="chip ok">💬 '+esc(lgName(g.gid))+'</span>':'<span class="chip warn">⚠ '+esc(t('po_group_no'))+'</span>';
+  return '<div class="card po-card" id="poG'+gi+'" data-gi="'+gi+'"><h3>🏷️ '+esc(g.name)+'<span class="sp">'+chip+'</span></h3>'+
+    (g.key===''?'<div class="xs mut" style="margin:-6px 0 8px">'+esc(t('po_nosup_h'))+'</div>':'')+
+    (g.rows.length?g.rows.map((r,i)=>poRowHtml(gi,r,i)).join(''):'<div class="empty" style="padding:12px">'+esc(t('po_group_empty'))+'</div>')+
+    '<div class="po-foot"><span class="grow b" id="poSum'+gi+'">'+esc(t('po_total_est',{n:sum.n,m:sum.est==null?t('po_est_none'):money(sum.est)}))+'</span><div class="po-acts">'+
+      (hasOv?'<button type="button" class="btn gh sm2" id="poReset'+gi+'" onclick="poReset('+gi+')">'+esc(t('po_reset'))+'</button>':'')+
+      '<button type="button" class="btn gh sm2" id="poAdd'+gi+'" onclick="poPickItem('+gi+')">'+esc(t('po_add_item'))+'</button>'+
+      '<button type="button" class="btn sm2" id="poSend'+gi+'" onclick="poSend('+gi+')">'+esc(g.gid?t('po_send'):t('po_send_copy'))+'</button></div></div></div>';
+}
+function poRowHtml(gi,r,i){
+  const it=r.it,u=trUnit(it.unit),why=[];
+  if(r.lowMin)why.push(t('po_why_min',{s:fmtQ(r.stock)+' '+u,m:fmtQ(r.mn)+' '+u}));else why.push(t('po_have',{q:fmtQ(r.stock)+' '+u}));
+  if(r.pr>0)why.push(t('po_why_prod',{q:fmtQ(r.pr),u})+' ('+r.why.map(w=>dispName(w.r)+' '+fmtQ(w.lots)+' '+t('po_lots')).join(', ')+')');
+  if(r.incoming>0)why.push(t('po_incoming',{q:fmtQ(r.incoming)+' '+u}));
+  if(r.pq!==1||r.pu!==it.unit)why.push(t('po_pack_eq',{u:trUnit(r.pu),q:fmtQ(r.pq),b:u}));
+  return '<div class="po-row'+(r.packs>0?'':' skip')+'" id="poR'+gi+'_'+i+'">'+thumbHtml(it,'🥬')+'<div class="grow"><b>'+esc(dispName(it))+'</b>'+
+    (r.need>0?' <span class="chip bad">'+esc(t('po_need',{q:fmtQ(r.need),u}))+'</span>':'')+'<div class="xs mut">'+esc(why.join(' · '))+'</div></div>'+
+    '<div class="po-qty">'+stepper('poP'+gi+'_'+i,r.packs,{step:1,min:0,unit:r.pu,on:v=>poSetPacks(gi,i,v)})+'<div class="xs right" id="poE'+gi+'_'+i+'">'+poEstTxt(r)+'</div></div></div>';
+}
+function poEstTxt(r){if(!(r.packs>0))return esc(t('po_skip'));
+  return (r.ov?'<span class="mut">✎ </span>':'')+'= '+esc(fmtQ(rnd4(r.packs*r.pq)))+' '+esc(trUnit(r.it.unit))+' · '+(r.est==null?esc(t('po_est_none')):'≈ '+esc(money(r.est)));}
+function poSetPacks(gi,i,v){ // แก้ในที่ (ไม่วาดใหม่ — คีย์บอร์ดไม่หุบ)
+  const g=PO_SUG&&PO_SUG.groups[gi],r=g&&g.rows[i];if(!r)return;
+  r.packs=Math.max(0,rnd4(num(v)));r.ov=true;r.est=poEstOf(r);PO_OVR.v[g.key+'|'+r.it.id]=r.packs;poOvrSave();
+  const e=document.getElementById('poE'+gi+'_'+i);if(e)e.innerHTML=poEstTxt(r);
+  const row=document.getElementById('poR'+gi+'_'+i);if(row)row.classList.toggle('skip',!(r.packs>0));
+  const sum=poGroupSum(g),s=document.getElementById('poSum'+gi);if(s)s.textContent=t('po_total_est',{n:sum.n,m:sum.est==null?t('po_est_none'):money(sum.est)});
+}
+function poReset(gi){const g=PO_SUG&&PO_SUG.groups[gi];if(!g)return;Object.keys(PO_OVR.v).forEach(k=>{if(k.startsWith(g.key+'|'))delete PO_OVR.v[k];});poOvrSave();PO_SUG=poCalc();poPaint();}
+function poAddGroup(key){PO_OVR.add[key]=PO_OVR.add[key]||[];poOvrSave();PO_SUG=poCalc();poPaint();const g=PO_SUG.groups.find(x=>x.key===key);if(g)poPickItem(g.gi);}
+function poPickItem(gi){ // ＋ เพิ่มรายการ: วัตถุดิบของร้านนี้ที่ยังไม่อยู่ในการ์ด
+  const g=PO_SUG&&PO_SUG.groups[gi];if(!g)return;
+  const all=activeItems().filter(it=>supKey(it.sup)===g.key),left=all.filter(it=>!g.rows.some(r=>r.it.id===it.id));
+  const rows=left.map(it=>'<div class="rowline tap po-pk" data-id="'+esc(it.id)+'" data-q="'+esc(supKey(dispName(it)+' '+it.name))+'" onclick="poPickGo('+gi+',this.dataset.id)">'+thumbHtml(it,'🥬')+
+    '<div class="grow"><b>'+esc(dispName(it))+'</b><div class="xs mut">'+esc(t('stock'))+' '+esc(fmtQ(it.qty))+' '+esc(trUnit(it.unit))+' · '+esc(trUnit(poPack(it).u))+'</div></div><span class="mut">›</span></div>').join('');
+  openModal('<h3>'+esc(t('po_pick_t',{s:g.name}))+'</h3>'+(left.length>6?searchBox('poPickQ',q=>{const k=supKey(q);document.querySelectorAll('#poPickList .po-pk').forEach(el=>{el.style.display=!k||el.dataset.q.includes(k)?'':'none';});}):'')+
+    '<div class="po-pick" id="poPickList">'+(rows||'<div class="empty">'+esc(all.length?t('po_pick_all_in'):t('po_pick_none'))+'</div>')+'</div>');
+}
+function poPickGo(gi,id){const g=PO_SUG&&PO_SUG.groups[gi],it=itemById(id);if(!g||!it)return;
+  (PO_OVR.add[g.key]=PO_OVR.add[g.key]||[]).push(id);if(PO_OVR.v[g.key+'|'+id]==null)PO_OVR.v[g.key+'|'+id]=1;poOvrSave();closeModal();PO_SUG=poCalc();poPaint();}
+/* ---------- ข้อความ + ส่ง ---------- */
+function poText(g,rows,po_no){ // ข้อความใบสั่ง (ภาษาไทยเสมอ — ร้านค้าอ่าน)
+  const td=bizTodayISO(),lead=g.sup&&num(g.sup.lead_days)>0?num(g.sup.lead_days):null;
+  const L=['🛒 จริงใจหมูกระทะ','🏭 ครัวกลาง','🏷️ '+g.name+(po_no?' · '+po_no:''),'📅 สั่งวันที่ '+thDate(td)];
+  if(lead!=null)L.push('🚚 ขอรับของ '+thDate(addDays(td,lead)));
+  L.push('');
+  rows.forEach(r=>{L.push('• '+r.it.name+' — '+fmtQ(r.packs)+' '+r.pu+(r.pu!==r.it.unit?' (= '+fmtQ(rnd4(r.packs*r.pq))+' '+r.it.unit+')':''));});
+  L.push('','รวม '+rows.length+' รายการ');if(S.user&&S.user.name)L.push('👤 '+S.user.name);
+  return L.join('\n');}
+function poNextNo(){const td=bizTodayISO(),pre='PO-'+td.slice(2).replace(/-/g,'')+'-';let n=PO_LIST.filter(p=>String(p.d).slice(0,10)===td).length+1;while(PO_LIST.some(p=>p.po_no===pre+n))n++;return pre+n;}
+async function poSave(g,rows,po_no,text,status){ // หัว → บรรทัด · บรรทัดพลาด = ลบหัวทิ้ง (ไม่มีใบครึ่ง ๆ)
+  const id=uid('po'),d=bizTodayISO();
+  const head={id,po_no,d,sup_id:g.sup?g.sup.id:null,sup_name:g.name,status,text,note:null,line_sent_at:null,by_name:(S.user&&S.user.name)||null};
+  const lines=rows.map((r,i)=>({po_id:id,item_id:r.it.id,name:r.it.name,packs:rnd4(r.packs),pack_unit:r.pu,pack_qty:rnd4(r.pq),qty_base:rnd4(r.packs*r.pq),unit:r.it.unit||null,price_est:r.est==null?null:rnd2(r.est),sort:i}));
+  try{await db(()=>sb.from('kc_pos').insert(head));}catch(e){toast(t('po_not_saved'),true);return null;}
+  try{await db(()=>sb.from('kc_po_lines').insert(lines));}
+  catch(e){try{await sb.from('kc_po_lines').delete().eq('po_id',id);await sb.from('kc_pos').delete().eq('id',id);}catch(_){}toast(t('po_not_saved'),true);return null;}
+  return id;}
+async function poSend(gi){await once(async()=>{
+  const g=PO_SUG&&PO_SUG.groups[gi];if(!g||!canKitchen())return;const rows=g.rows.filter(r=>r.packs>0);
+  if(!rows.length){toast(t('po_nothing'),true);return;}
+  const po_no=poNextNo(),text=poText(g,rows,po_no);
+  if(!g.gid){poManualModal(g,rows,po_no,text);return;}
+  if(!(await confirm2(t('po_send_q',{s:g.name,g:lgName(g.gid)}))))return;
+  const id=await poSave(g,rows,po_no,text,'draft');if(!id)return;
+  try{await lineSend(g.gid,text);}catch(e){await poListLoad();poFailModal(id,g,text,e);return;}
+  try{await db(()=>sb.from('kc_pos').update({status:'sent',line_sent_at:new Date().toISOString()}).eq('id',id));toast(t('po_sent_ok',{s:g.name}));}
+  catch(e){toast(t('po_sent_but'),'warn');}
+  await poAfterSent(g.key);
+});}
+async function poAfterSent(key){ // ล้างที่แก้ของร้านนี้ → โหลดใบ/กำลังมาใหม่ → คิดใหม่
+  Object.keys(PO_OVR.v).forEach(k=>{if(k.startsWith(key+'|'))delete PO_OVR.v[k];});delete PO_OVR.add[key];poOvrSave();
+  await poListLoad();if(S.tab!=='buy')return;PO_SUG=poCalc();poPaint();poPaintList();}
+function poManualModal(g,rows,po_no,text){ // ไม่มีกลุ่มไลน์: คัดลอก/เปิดไลน์เอง แล้วถามว่าส่งแล้วไหม
+  const ok=hreg(()=>once(async()=>{const id=await poSave(g,rows,po_no,text,'sent');if(!id)return;closeModal();toast(t('po_sent_ok',{s:g.name}));await poAfterSent(g.key);}));
+  openModal('<h3>📋 '+esc(t('po_manual_t',{s:g.name}))+'</h3><div class="hintbox">'+esc(t('po_manual_h'))+'</div>'+lineTextBox(text)+
+    '<div class="b" style="margin:16px 0 8px">'+esc(t('po_manual_q'))+'</div><div class="row"><button type="button" class="btn ok grow" id="poManualOk" onclick="'+ok+'">'+esc(t('po_mark_sent'))+'</button>'+
+    '<button type="button" class="btn gh" id="poManualNo" onclick="closeModal()">'+esc(t('po_not_yet'))+'</button></div>');}
+function poFailModal(id,g,text,e){ // บันทึกแล้ว (draft) แต่ไลน์ส่งไม่ได้
+  openModal('<h3>⚠ '+esc(t('po_fail_t'))+'</h3><div class="badbox">'+esc(t('po_fail_h'))+'<div class="xs" style="margin-top:4px">'+esc((e&&e.message)||e||'')+'</div></div>'+lineTextBox(text)+
+    '<div class="row" style="margin-top:14px"><button type="button" class="btn ok grow" id="poFailOk" onclick="'+hreg(()=>poMarkSent(id,g.key))+'">'+esc(t('po_mark_sent'))+'</button>'+
+    '<button type="button" class="btn gh" id="poFailDrop" onclick="'+hreg(()=>poDrop(id,g.key))+'">'+esc(t('po_fail_drop'))+'</button></div>');}
+async function poMarkSent(id,key){await once(async()=>{try{await db(()=>sb.from('kc_pos').update({status:'sent'}).eq('id',id));}catch(e){return;}closeModal();toast(t('sv_ok'));await poAfterSent(key);});}
+async function poDrop(id,key){await once(async()=>{try{await db(()=>sb.from('kc_po_lines').delete().eq('po_id',id));await db(()=>sb.from('kc_pos').delete().eq('id',id));}catch(e){return;}
+  closeModal();await poAfterSent(key);});}
+/* ---------- ใบที่สั่งไปแล้ว ---------- */
+function poPaintList(){
+  const box=document.getElementById('poList'),n=document.getElementById('poListN');if(!box)return;
+  if(!PO_LIST_OK){box.innerHTML='<div class="empty">'+esc(t('po_noread'))+'</div>';return;}
+  if(n)n.textContent=PO_LIST.length?t('po_lines_n',{n:PO_LIST.length}):'';
+  if(!PO_LIST.length){box.innerHTML='<div class="empty">'+esc(t('po_list_none'))+'</div>';return;}
+  box.innerHTML=PO_LIST.map(p=>{const ln=PO_LINES[p.id]||[];
+    return '<div class="rowline tap po-li" data-id="'+esc(p.id)+'" onclick="poDetail(this.dataset.id)"><div class="grow"><b>'+esc(p.sup_name||'')+'</b> <span class="mut sm">'+esc(p.po_no||'')+'</span>'+
+      '<div class="xs mut">'+esc(dispDate(p.d))+' · '+esc(t('po_lines_n',{n:ln.length}))+(p.by_name?' · '+esc(p.by_name):'')+'</div></div>'+stPill(p.status,poStLb(p.status))+'</div>';}).join('');
+}
+async function poDetail(id){ // โมดูลอื่นเรียกได้
+  let p=PO_LIST.find(x=>x.id===id),ln=PO_LINES[id];
+  if(!p){try{p=await db(()=>sb.from('kc_pos').select('*').eq('id',id).maybeSingle());if(!p)return;ln=await db(()=>sb.from('kc_po_lines').select('*').eq('po_id',id).order('sort').order('id'));}catch(e){return;}}
+  ln=ln||[];const s=supById(p.sup_id)||supByName(p.sup_name),gid=(s&&s.line_group_id)||null,est=ln.reduce((a,l)=>a+num(l.price_est),0),anyEst=ln.some(l=>l.price_est!=null);
+  const rows=ln.map(l=>'<tr><td>'+esc(l.name||'')+'</td><td class="n">'+esc(fmtQ(l.packs))+' '+esc(trUnit(l.pack_unit||''))+
+    ((l.pack_unit||'')!==(l.unit||'')?'<div class="xs mut">= '+esc(fmtQ(l.qty_base))+' '+esc(trUnit(l.unit||''))+'</div>':'')+'</td><td class="n">'+(l.price_est!=null?esc(money(l.price_est)):'–')+'</td></tr>').join('');
+  const btns=[];
+  if(p.status==='sent'&&typeof rcFromPo==='function')btns.push('<button type="button" class="btn ok big" id="poRecvBtn" onclick="'+hreg(()=>{closeModal();rcFromPo(id);})+'">'+esc(t('po_recv_btn'))+'</button>');
+  if(gid&&(p.status==='sent'||p.status==='draft'))btns.push('<button type="button" class="btn gh" id="poResendBtn" onclick="'+hreg(()=>poResend(id,gid))+'">'+esc(p.status==='draft'?t('po_send_now'):t('po_resend'))+'</button>');
+  btns.push('<button type="button" class="btn gh" data-t="'+esc(p.text||'')+'" onclick="copyText(this.dataset.t)">📋 '+esc(t('copy'))+'</button>');
+  if(p.status==='sent'||p.status==='draft')btns.push('<button type="button" class="btn gh" id="poVoidBtn" onclick="'+hreg(()=>poVoid(id))+'">'+esc(t('po_void_btn'))+'</button>');
+  openModal('<h3>🛒 '+esc(t('po_detail_t'))+' '+esc(p.po_no||'')+' '+stPill(p.status,poStLb(p.status))+'</h3>'+
+    '<div class="rowline"><div class="grow"><b>'+esc(p.sup_name||'')+'</b><div class="xs mut">'+esc(dispDate(p.d))+' · '+esc(t('po_by'))+' '+esc(p.by_name||'')+' '+esc(dispTime(p.created_at))+(p.line_sent_at?' · 💬 '+esc(dispTime(p.line_sent_at)):'')+'</div></div></div>'+
+    '<div class="twrap"><table class="t"><thead><tr><th>'+esc(t('item'))+'</th><th class="n">'+esc(t('qty'))+'</th><th class="n">'+esc(t('po_est_col'))+'</th></tr></thead><tbody>'+rows+
+    '<tr class="tot"><td>'+esc(t('total'))+'</td><td class="n">'+esc(t('po_lines_n',{n:ln.length}))+'</td><td class="n">'+(anyEst?esc(money(est)):'–')+'</td></tr></tbody></table></div>'+
+    (p.text?'<details class="po-txt"><summary>'+esc(t('po_text_t'))+'</summary><pre>'+esc(p.text)+'</pre></details>':'')+
+    '<div class="po-btns">'+btns.join('')+'</div>');
+}
+async function poResend(id,gid){await once(async()=>{const p=PO_LIST.find(x=>x.id===id);if(!p||!gid)return;
+  try{await lineSend(gid,p.text||'');}catch(e){toast(t('line_fail')+': '+((e&&e.message)||e),true);return;}
+  try{await db(()=>sb.from('kc_pos').update({status:'sent',line_sent_at:new Date().toISOString()}).eq('id',id));}catch(e){}
+  toast(t('line_ok'));closeModal();await poListLoad();if(S.tab==='buy'){PO_SUG=poCalc();poPaint();poPaintList();}});}
+async function poVoid(id){await once(async()=>{const p=PO_LIST.find(x=>x.id===id);if(!p)return;
+  if(!(await confirm2(t('po_void_q',{n:p.po_no||'',s:p.sup_name||''}),{danger:true})))return;
+  try{if(p.status==='draft'){await db(()=>sb.from('kc_po_lines').delete().eq('po_id',id));await db(()=>sb.from('kc_pos').delete().eq('id',id));}
+    else await db(()=>sb.from('kc_pos').update({status:'void'}).eq('id',id));}catch(e){return;}
+  toast(t('po_voided'));closeModal();await poListLoad();if(S.tab==='buy'){PO_SUG=poCalc();poPaint();poPaintList();}});}
+/* ===================== /module: buy ===================== */
+
 /* ===================== module: menus (mod_menus.js) ===================== */
 /* ============================================================
    📖 เมนู/สูตร — menus (mn*)
@@ -3561,6 +4257,282 @@ async function spDel(id){ // ลบถาวร — เฉพาะหัวห�
     await db(()=>sb.from('ck_sups').delete().eq('id',id));S.sups=S.sups.filter(x=>x.id!==id);
     SP=null;MODAL_BACK=null;closeModal();toast(t('done'));if(S.tab==='sups')show('sups');});}
 /* ===================== /module: sups ===================== */
+
+/* ===================== module: acc (mod_acc.js) ===================== */
+/* ============================================================
+   💰 บัญชี — acc (ac*)  · เฉพาะหัวหน้า/ผู้ดูแล (PAGE_PERM acc = admin → show() กันให้แล้ว · โค้ดเช็ค isAdminish ซ้ำ)
+   เลือกเดือน (AC_YM · จำใน localStorage jjck_ac_ym) →
+     รายรับจากสาขา = Σ kc_deliveries.total (status ≠ void · เฉพาะสาขาที่เห็น inBr) แยกสาขา
+     ต้นทุนของที่ส่ง (COGS) = Σ kc_delivery_lines sent × unit_cost (ต้นทุนจริงต่อหน่วยตอนส่ง) · กำไรขั้นต้น = รายรับ − COGS
+     ซื้อของ = Σ kc_receipts.total · ค่าใช้จ่ายแฝง = Σ kc_expenses (ym) · เงินคงเหลือ (มุมมองเงินสด) = รายรับ − ซื้อของ − ค่าใช้จ่ายแฝง
+     ยอดสาขายังไม่จ่าย = kc_deliveries status 'sent' ทุกเดือน แยกสาขา
+     ค่าใช้จ่ายแฝง: เพิ่ม/แก้/ลบ (kc_expenses) · รายการประจำ (recurring) คัดลอกจากเดือนก่อนปุ่มเดียว (ข้ามชื่อที่มีแล้ว)
+     ต้นทุนแฝงต่อหน่วยที่แนะนำ = ค่าใช้จ่ายแฝง(เดือน) ÷ หน่วยที่ทำได้ (Σ kc_productions.actual_qty) → ปุ่มเขียน cfg overhead_mode='per_unit' + overhead_value (cfgSave) — ล็อตใหม่ใช้ · ล็อตเก่าไม่เปลี่ยน
+     บวกราคาขายสาขา (markup_pct) + คำอธิบาย/ตัวอย่าง · ⬇ CSV ของเดือน
+   ทุกตารางอ่านแบบ fail-soft (อ่านไม่ได้ = ส่วนนั้นบอก "อ่านข้อมูลไม่ได้" ส่วนอื่นยังทำงาน)
+   ============================================================ */
+I18N.add({
+th:{ac_this_month:'เดือนนี้',ac_noread:'อ่านข้อมูลไม่ได้',ac_scope:'🔒 เห็นเฉพาะสาขา {b} — ตัวเลขรวมเฉพาะสาขาที่ดูแล',
+  ac_rev:'รายรับจากสาขา',ac_bills_n:'{n} บิล',ac_cogs:'ต้นทุนของที่ส่ง',ac_cogs_s:'ต้นทุนจริง/หน่วย × ที่ส่ง',ac_gross:'กำไรขั้นต้น',ac_gross_s:'รายรับ − ต้นทุนของที่ส่ง',
+  ac_purch:'ซื้อของเข้าครัว',ac_rcpts_n:'{n} ใบรับของ',ac_exp:'ค่าใช้จ่ายแฝง',ac_items_n:'{n} รายการ',ac_net:'เงินคงเหลือ',ac_net_s:'รายรับ − ซื้อของ − ค่าใช้จ่ายแฝง',
+  ac_explain:'กำไรขั้นต้น = รายรับ − ต้นทุนของที่ส่งให้สาขา (ต้นทุนจริงต่อหน่วยตอนส่ง ซึ่งรวมต้นทุนแฝงที่ตั้งไว้แล้ว) · เงินคงเหลือ = รายรับ − เงินที่จ่ายซื้อของ − ค่าใช้จ่ายแฝงของเดือน (มุมมองเงินสด: ของที่ซื้อแล้วยังอยู่ในสต๊อกไม่ได้หักออก)',
+  ac_rev_t:'🚚 รายรับแยกสาขา',ac_col_bills:'บิล',ac_col_amt:'ยอด',ac_col_cost:'ต้นทุน',ac_col_gross:'กำไร',ac_rev_none:'เดือนนี้ยังไม่มีบิลส่งสาขา',ac_bills_go:'🧾 ดูบิล',
+  ac_recv_t:'💸 ยอดที่สาขายังไม่จ่าย',ac_recv_h:'บิลทุกเดือนที่ยังไม่ติ๊ก "จ่ายแล้ว" — ติ๊กได้ที่ 🧾 บิลสาขา',ac_recv_none:'ไม่มีบิลค้างจ่าย 👍',ac_recv_old:'เก่าสุด {d}',
+  ac_exp_t:'🧾 ค่าใช้จ่ายแฝง',ac_exp_h:'ค่าแรง ค่าไฟ ค่าแก๊ส ค่าเช่า … ของครัวกลางในเดือนนี้ — ใช้คิดต้นทุนแฝงต่อหน่วย',ac_exp_add:'＋ เพิ่มค่าใช้จ่าย',ac_exp_none:'เดือนนี้ยังไม่มีค่าใช้จ่าย',
+  ac_exp_copy:'📋 คัดลอกรายการประจำจากเดือนก่อน ({n})',ac_exp_copy_q:'คัดลอกรายการประจำ {n} รายการจาก {m} มาเดือนนี้?',ac_exp_copied:'คัดลอกมา {n} รายการแล้ว ✅',
+  ac_recur:'ประจำทุกเดือน',ac_recur_h:'ติ๊กไว้ = เดือนหน้ากดคัดลอกมาได้ปุ่มเดียว',ac_exp_f_t:'ค่าใช้จ่ายแฝง',ac_exp_name:'รายการ',ac_exp_ph:'เช่น ค่าแรงครัว · ค่าไฟ',ac_exp_cat:'หมวด',ac_exp_amt:'จำนวนเงิน (บาท)',ac_exp_d:'วันที่',
+  ac_exp_need:'ใส่ชื่อรายการและจำนวนเงิน',ac_exp_del_q:'ลบ "{n}" {m}?',
+  ac_oh_t:'🧮 ต้นทุนแฝงต่อหน่วย',ac_oh_units:'ทำของเดือนนี้ {q} หน่วย ({n} รอบ · นับรวมทุกเมนู)',ac_oh_calc:'ค่าใช้จ่ายแฝง {m} ÷ {q} หน่วย = {x} /หน่วย',
+  ac_oh_now:'ตอนนี้ตั้งไว้: {v}',ac_oh_now_unit:'{v} บาท/หน่วย',ac_oh_now_pct:'{v}% ของค่าวัตถุดิบ',ac_oh_use:'✅ ใช้ {x} /หน่วย',
+  ac_oh_h:'กดแล้วล็อตที่ทำหลังจากนี้จะบวกค่านี้ในต้นทุนทุกหน่วย — ล็อตที่ทำไปแล้วไม่เปลี่ยน · ตั้งเองได้ที่ ⚙️ ตั้งค่า',
+  ac_oh_none:'เดือนนี้ยังไม่ได้ทำของ จึงคิดต่อหน่วยไม่ได้',ac_oh_noexp:'เดือนนี้ยังไม่มีค่าใช้จ่ายแฝง — ใส่ก่อนแล้วค่อยคิดต่อหน่วย',ac_oh_applied:'ตั้งต้นทุนแฝง {x} /หน่วยแล้ว ✅ ล็อตใหม่จะใช้ค่านี้',ac_oh_same:'ตั้งไว้เท่านี้อยู่แล้ว',
+  ac_mk_t:'🏷️ บวกราคาขายสาขา',ac_mk_h:'ราคาที่คิดสาขา = ต้นทุน/หน่วย (รวมต้นทุนแฝง) × (1 + %) · 0 = คิดเท่าต้นทุน · เมนูที่ตั้ง % เองใน 📖 เมนู/สูตร ใช้ค่าของเมนูนั้น',
+  ac_mk_ex:'ตัวอย่าง: {r} ต้นทุน {c}/{u} → คิดสาขา {p}/{u}',ac_mk_lbl:'บวก (%)',ac_mk_save:'💾 บันทึก %',ac_mk_saved:'บันทึก {v}% แล้ว ✅ บิลที่ออกหลังจากนี้ใช้ค่านี้',
+  ac_csv:'⬇ CSV',ac_csv_none:'เดือนนี้ยังไม่มีข้อมูล',ac_by:'โดย',ac_total:'รวม'},
+en:{ac_this_month:'This month',ac_noread:'Could not read',ac_scope:'🔒 Only branches {b} — totals cover only those branches',
+  ac_rev:'Revenue from branches',ac_bills_n:'{n} bills',ac_cogs:'Cost of goods sent',ac_cogs_s:'actual cost/unit × sent',ac_gross:'Gross profit',ac_gross_s:'revenue − cost of goods sent',
+  ac_purch:'Purchases',ac_rcpts_n:'{n} receipts',ac_exp:'Overheads',ac_items_n:'{n} items',ac_net:'Cash left',ac_net_s:'revenue − purchases − overheads',
+  ac_explain:'Gross profit = revenue − cost of the goods sent to branches (actual cost per unit at the time of sending, which already includes the overhead setting) · Cash left = revenue − money paid for purchases − this month\'s overheads (cash view: purchases still in stock are not deducted)',
+  ac_rev_t:'🚚 Revenue by branch',ac_col_bills:'Bills',ac_col_amt:'Amount',ac_col_cost:'Cost',ac_col_gross:'Profit',ac_rev_none:'No branch bills this month',ac_bills_go:'🧾 Bills',
+  ac_recv_t:'💸 Unpaid by branches',ac_recv_h:'Bills of any month not yet marked "paid" — mark them on 🧾 Branch bills',ac_recv_none:'No unpaid bills 👍',ac_recv_old:'oldest {d}',
+  ac_exp_t:'🧾 Overheads',ac_exp_h:'Wages, power, gas, rent … of the central kitchen this month — used for the overhead per unit',ac_exp_add:'＋ Add expense',ac_exp_none:'No expenses this month yet',
+  ac_exp_copy:'📋 Copy recurring items from last month ({n})',ac_exp_copy_q:'Copy {n} recurring items from {m} into this month?',ac_exp_copied:'Copied {n} items ✅',
+  ac_recur:'Every month',ac_recur_h:'Ticked = next month copies it with one tap',ac_exp_f_t:'Overhead expense',ac_exp_name:'Item',ac_exp_ph:'e.g. kitchen wages · electricity',ac_exp_cat:'Category',ac_exp_amt:'Amount (THB)',ac_exp_d:'Date',
+  ac_exp_need:'Enter a name and an amount',ac_exp_del_q:'Delete "{n}" {m}?',
+  ac_oh_t:'🧮 Overhead per unit',ac_oh_units:'Produced this month: {q} units ({n} lots · all products together)',ac_oh_calc:'Overheads {m} ÷ {q} units = {x} per unit',
+  ac_oh_now:'Current setting: {v}',ac_oh_now_unit:'{v} THB per unit',ac_oh_now_pct:'{v}% of ingredient cost',ac_oh_use:'✅ Use {x} per unit',
+  ac_oh_h:'Lots produced from now on add this to the cost of every unit — lots already made do not change · you can also set it on ⚙️ Settings',
+  ac_oh_none:'Nothing produced this month yet, so a per-unit figure cannot be computed',ac_oh_noexp:'No overheads this month yet — add them first',ac_oh_applied:'Overhead set to {x} per unit ✅ new lots will use it',ac_oh_same:'Already set to this value',
+  ac_mk_t:'🏷️ Branch price markup',ac_mk_h:'Branch price = cost/unit (incl. overhead) × (1 + %) · 0 = at cost · a product with its own % on 📖 Menus uses that instead',
+  ac_mk_ex:'Example: {r} cost {c}/{u} → branch price {p}/{u}',ac_mk_lbl:'Markup (%)',ac_mk_save:'💾 Save %',ac_mk_saved:'Saved {v}% ✅ bills issued from now on use it',
+  ac_csv:'⬇ CSV',ac_csv_none:'No data this month',ac_by:'by',ac_total:'Total'},
+lo:{ac_this_month:'ເດືອນນີ້',ac_noread:'ອ່ານຂໍ້ມູນບໍ່ໄດ້',ac_scope:'🔒 ເຫັນສະເພາະສາຂາ {b} — ຕົວເລກລວມສະເພາະສາຂາທີ່ດູແລ',
+  ac_rev:'ລາຍຮັບຈາກສາຂາ',ac_bills_n:'{n} ບິນ',ac_cogs:'ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງ',ac_cogs_s:'ຕົ້ນທຶນຈິງ/ຫົວໜ່ວຍ × ທີ່ສົ່ງ',ac_gross:'ກຳໄລຂັ້ນຕົ້ນ',ac_gross_s:'ລາຍຮັບ − ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງ',
+  ac_purch:'ຊື້ເຄື່ອງເຂົ້າຄົວ',ac_rcpts_n:'{n} ໃບຮັບເຄື່ອງ',ac_exp:'ຄ່າໃຊ້ຈ່າຍແຝງ',ac_items_n:'{n} ລາຍການ',ac_net:'ເງິນຄົງເຫຼືອ',ac_net_s:'ລາຍຮັບ − ຊື້ເຄື່ອງ − ຄ່າໃຊ້ຈ່າຍແຝງ',
+  ac_explain:'ກຳໄລຂັ້ນຕົ້ນ = ລາຍຮັບ − ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງໃຫ້ສາຂາ (ຕົ້ນທຶນຈິງຕໍ່ຫົວໜ່ວຍຕອນສົ່ງ ເຊິ່ງລວມຕົ້ນທຶນແຝງທີ່ຕັ້ງໄວ້ແລ້ວ) · ເງິນຄົງເຫຼືອ = ລາຍຮັບ − ເງິນທີ່ຈ່າຍຊື້ເຄື່ອງ − ຄ່າໃຊ້ຈ່າຍແຝງຂອງເດືອນ (ມຸມມອງເງິນສົດ: ເຄື່ອງທີ່ຊື້ແລ້ວຍັງຢູ່ໃນສະຕັອກບໍ່ໄດ້ຫັກອອກ)',
+  ac_rev_t:'🚚 ລາຍຮັບແຍກສາຂາ',ac_col_bills:'ບິນ',ac_col_amt:'ຍອດ',ac_col_cost:'ຕົ້ນທຶນ',ac_col_gross:'ກຳໄລ',ac_rev_none:'ເດືອນນີ້ຍັງບໍ່ມີບິນສົ່ງສາຂາ',ac_bills_go:'🧾 ເບິ່ງບິນ',
+  ac_recv_t:'💸 ຍອດທີ່ສາຂາຍັງບໍ່ຈ່າຍ',ac_recv_h:'ບິນທຸກເດືອນທີ່ຍັງບໍ່ຕິກ "ຈ່າຍແລ້ວ" — ຕິກໄດ້ທີ່ 🧾 ບິນສາຂາ',ac_recv_none:'ບໍ່ມີບິນຄ້າງຈ່າຍ 👍',ac_recv_old:'ເກົ່າສຸດ {d}',
+  ac_exp_t:'🧾 ຄ່າໃຊ້ຈ່າຍແຝງ',ac_exp_h:'ຄ່າແຮງ ຄ່າໄຟ ຄ່າແກັສ ຄ່າເຊົ່າ … ຂອງຄົວກາງໃນເດືອນນີ້ — ໃຊ້ຄິດຕົ້ນທຶນແຝງຕໍ່ຫົວໜ່ວຍ',ac_exp_add:'＋ ເພີ່ມຄ່າໃຊ້ຈ່າຍ',ac_exp_none:'ເດືອນນີ້ຍັງບໍ່ມີຄ່າໃຊ້ຈ່າຍ',
+  ac_exp_copy:'📋 ຄັດລອກລາຍການປະຈຳຈາກເດືອນກ່ອນ ({n})',ac_exp_copy_q:'ຄັດລອກລາຍການປະຈຳ {n} ລາຍການຈາກ {m} ມາເດືອນນີ້?',ac_exp_copied:'ຄັດລອກມາ {n} ລາຍການແລ້ວ ✅',
+  ac_recur:'ປະຈຳທຸກເດືອນ',ac_recur_h:'ຕິກໄວ້ = ເດືອນໜ້າກົດຄັດລອກມາໄດ້ປຸ່ມດຽວ',ac_exp_f_t:'ຄ່າໃຊ້ຈ່າຍແຝງ',ac_exp_name:'ລາຍການ',ac_exp_ph:'ເຊັ່ນ ຄ່າແຮງຄົວ · ຄ່າໄຟ',ac_exp_cat:'ໝວດ',ac_exp_amt:'ຈຳນວນເງິນ (ບາດ)',ac_exp_d:'ວັນທີ',
+  ac_exp_need:'ໃສ່ຊື່ລາຍການ ແລະ ຈຳນວນເງິນ',ac_exp_del_q:'ລຶບ "{n}" {m}?',
+  ac_oh_t:'🧮 ຕົ້ນທຶນແຝງຕໍ່ຫົວໜ່ວຍ',ac_oh_units:'ເຮັດເຄື່ອງເດືອນນີ້ {q} ຫົວໜ່ວຍ ({n} ຮອບ · ນັບລວມທຸກເມນູ)',ac_oh_calc:'ຄ່າໃຊ້ຈ່າຍແຝງ {m} ÷ {q} ຫົວໜ່ວຍ = {x} /ຫົວໜ່ວຍ',
+  ac_oh_now:'ຕອນນີ້ຕັ້ງໄວ້: {v}',ac_oh_now_unit:'{v} ບາດ/ຫົວໜ່ວຍ',ac_oh_now_pct:'{v}% ຂອງຄ່າວັດຖຸດິບ',ac_oh_use:'✅ ໃຊ້ {x} /ຫົວໜ່ວຍ',
+  ac_oh_h:'ກົດແລ້ວລັອດທີ່ເຮັດຫຼັງຈາກນີ້ຈະບວກຄ່ານີ້ໃນຕົ້ນທຶນທຸກຫົວໜ່ວຍ — ລັອດທີ່ເຮັດໄປແລ້ວບໍ່ປ່ຽນ · ຕັ້ງເອງໄດ້ທີ່ ⚙️ ຕັ້ງຄ່າ',
+  ac_oh_none:'ເດືອນນີ້ຍັງບໍ່ໄດ້ເຮັດເຄື່ອງ ຈຶ່ງຄິດຕໍ່ຫົວໜ່ວຍບໍ່ໄດ້',ac_oh_noexp:'ເດືອນນີ້ຍັງບໍ່ມີຄ່າໃຊ້ຈ່າຍແຝງ — ໃສ່ກ່ອນແລ້ວຄ່ອຍຄິດ',ac_oh_applied:'ຕັ້ງຕົ້ນທຶນແຝງ {x} /ຫົວໜ່ວຍແລ້ວ ✅ ລັອດໃໝ່ຈະໃຊ້ຄ່ານີ້',ac_oh_same:'ຕັ້ງໄວ້ເທົ່ານີ້ຢູ່ແລ້ວ',
+  ac_mk_t:'🏷️ ບວກລາຄາຂາຍສາຂາ',ac_mk_h:'ລາຄາທີ່ຄິດສາຂາ = ຕົ້ນທຶນ/ຫົວໜ່ວຍ (ລວມຕົ້ນທຶນແຝງ) × (1 + %) · 0 = ຄິດເທົ່າຕົ້ນທຶນ · ເມນູທີ່ຕັ້ງ % ເອງໃນ 📖 ເມນູ/ສູດ ໃຊ້ຄ່າຂອງເມນູນັ້ນ',
+  ac_mk_ex:'ຕົວຢ່າງ: {r} ຕົ້ນທຶນ {c}/{u} → ຄິດສາຂາ {p}/{u}',ac_mk_lbl:'ບວກ (%)',ac_mk_save:'💾 ບັນທຶກ %',ac_mk_saved:'ບັນທຶກ {v}% ແລ້ວ ✅ ບິນທີ່ອອກຫຼັງຈາກນີ້ໃຊ້ຄ່ານີ້',
+  ac_csv:'⬇ CSV',ac_csv_none:'ເດືອນນີ້ຍັງບໍ່ມີຂໍ້ມູນ',ac_by:'ໂດຍ',ac_total:'ລວມ'},
+my:{ac_this_month:'ယခုလ',ac_noread:'ဖတ်မရပါ',ac_scope:'🔒 ဆိုင်ခွဲ {b} သာ — စုစုပေါင်းသည် ထိုဆိုင်ခွဲများသာ',
+  ac_rev:'ဆိုင်ခွဲမှ ဝင်ငွေ',ac_bills_n:'ဘေလ် {n}',ac_cogs:'ပို့သောကုန် ကုန်ကျစရိတ်',ac_cogs_s:'အမှန်ကုန်ကျစရိတ်/ယူနစ် × ပို့သည်',ac_gross:'အကြမ်းအမြတ်',ac_gross_s:'ဝင်ငွေ − ပို့သောကုန် ကုန်ကျစရိတ်',
+  ac_purch:'ဝယ်ယူမှု',ac_rcpts_n:'လက်ခံစာ {n}',ac_exp:'ဝှက်ကုန်ကျစရိတ်',ac_items_n:'{n} ခု',ac_net:'ကျန်ငွေ',ac_net_s:'ဝင်ငွေ − ဝယ်ယူမှု − ဝှက်ကုန်ကျစရိတ်',
+  ac_explain:'အကြမ်းအမြတ် = ဝင်ငွေ − ဆိုင်ခွဲသို့ ပို့သောကုန် ကုန်ကျစရိတ် (ပို့ချိန် အမှန်ကုန်ကျစရိတ်/ယူနစ်၊ သတ်မှတ်ထားသော ဝှက်ကုန်ကျစရိတ် ပါဝင်ပြီး) · ကျန်ငွေ = ဝင်ငွေ − ဝယ်ယူရန်ပေးချေငွေ − ဤလ ဝှက်ကုန်ကျစရိတ် (ငွေသားအမြင်: လက်ကျန်ထဲရှိ ဝယ်ထားသောကုန် မနုတ်ပါ)',
+  ac_rev_t:'🚚 ဆိုင်ခွဲအလိုက် ဝင်ငွေ',ac_col_bills:'ဘေလ်',ac_col_amt:'ပမာဏ',ac_col_cost:'ကုန်ကျစရိတ်',ac_col_gross:'အမြတ်',ac_rev_none:'ဤလ ဆိုင်ခွဲဘေလ် မရှိသေး',ac_bills_go:'🧾 ဘေလ်များ',
+  ac_recv_t:'💸 ဆိုင်ခွဲ မပေးရသေးသော ငွေ',ac_recv_h:'"ပေးပြီး" ဟု မအမှတ်အသားရသေးသော မည်သည့်လ ဘေလ်မဆို — 🧾 ဆိုင်ခွဲဘေလ် တွင် အမှတ်အသားပြုပါ',ac_recv_none:'မပေးရသေးသော ဘေလ် မရှိ 👍',ac_recv_old:'အဟောင်းဆုံး {d}',
+  ac_exp_t:'🧾 ဝှက်ကုန်ကျစရိတ်',ac_exp_h:'ဤလ ဗဟိုမီးဖိုချောင်၏ လုပ်အားခ၊ မီး၊ ဂက်စ်၊ ငှားရမ်းခ … — ယူနစ်တစ်ခုလျှင် ဝှက်ကုန်ကျစရိတ် တွက်ရန် သုံးသည်',ac_exp_add:'＋ ကုန်ကျစရိတ် ထည့်',ac_exp_none:'ဤလ ကုန်ကျစရိတ် မရှိသေး',
+  ac_exp_copy:'📋 ယခင်လမှ လစဉ်စာရင်း ကူးယူ ({n})',ac_exp_copy_q:'{m} မှ လစဉ်စာရင်း {n} ခုကို ဤလသို့ ကူးမလား?',ac_exp_copied:'{n} ခု ကူးပြီး ✅',
+  ac_recur:'လစဉ်',ac_recur_h:'အမှန်ခြစ်ထားလျှင် နောက်လတွင် တစ်ချက်နှိပ်၍ ကူးနိုင်',ac_exp_f_t:'ဝှက်ကုန်ကျစရိတ်',ac_exp_name:'အမည်',ac_exp_ph:'ဥပမာ မီးဖိုချောင်လုပ်အားခ · မီးခ',ac_exp_cat:'အမျိုးအစား',ac_exp_amt:'ပမာဏ (ဘတ်)',ac_exp_d:'ရက်စွဲ',
+  ac_exp_need:'အမည်နှင့် ပမာဏ ထည့်ပါ',ac_exp_del_q:'"{n}" {m} ကို ဖျက်မလား?',
+  ac_oh_t:'🧮 ယူနစ်တစ်ခုလျှင် ဝှက်ကုန်ကျစရိတ်',ac_oh_units:'ဤလ ထုတ်လုပ်မှု {q} ယူနစ် ({n} အသုတ် · ထုတ်ကုန်အားလုံးပေါင်း)',ac_oh_calc:'ဝှက်ကုန်ကျစရိတ် {m} ÷ {q} ယူနစ် = {x} /ယူနစ်',
+  ac_oh_now:'လက်ရှိ သတ်မှတ်ချက်: {v}',ac_oh_now_unit:'{v} ဘတ်/ယူနစ်',ac_oh_now_pct:'ကုန်ကြမ်းစရိတ်၏ {v}%',ac_oh_use:'✅ {x} /ယူနစ် သုံးမည်',
+  ac_oh_h:'နှိပ်ပြီးနောက် ထုတ်လုပ်သော အသုတ်များတွင် ယူနစ်တိုင်း ဤတန်ဖိုး ထည့်တွက်မည် — ထုတ်ပြီးသား အသုတ်များ မပြောင်းပါ · ⚙️ ဆက်တင် တွင်လည်း သတ်မှတ်နိုင်',
+  ac_oh_none:'ဤလ မထုတ်လုပ်ရသေး၍ ယူနစ်တစ်ခုလျှင် တွက်မရပါ',ac_oh_noexp:'ဤလ ဝှက်ကုန်ကျစရိတ် မရှိသေး — အရင်ထည့်ပါ',ac_oh_applied:'ဝှက်ကုန်ကျစရိတ် {x} /ယူနစ် သတ်မှတ်ပြီး ✅ အသုတ်သစ်များ သုံးမည်',ac_oh_same:'ဤတန်ဖိုး သတ်မှတ်ပြီးသား',
+  ac_mk_t:'🏷️ ဆိုင်ခွဲဈေး ထပ်ပေါင်း',ac_mk_h:'ဆိုင်ခွဲဈေး = ကုန်ကျစရိတ်/ယူနစ် (ဝှက်ကုန်ကျစရိတ်ပါ) × (1 + %) · 0 = ကုန်ကျစရိတ်အတိုင်း · 📖 မီနူး တွင် ကိုယ်ပိုင် % ရှိသော ထုတ်ကုန်သည် ၎င်းကို သုံးမည်',
+  ac_mk_ex:'ဥပမာ: {r} ကုန်ကျစရိတ် {c}/{u} → ဆိုင်ခွဲဈေး {p}/{u}',ac_mk_lbl:'ထပ်ပေါင်း (%)',ac_mk_save:'💾 % သိမ်း',ac_mk_saved:'{v}% သိမ်းပြီး ✅ ယခုမှစ၍ ထုတ်သော ဘေလ်များ သုံးမည်',
+  ac_csv:'⬇ CSV',ac_csv_none:'ဤလ အချက်အလက် မရှိသေး',ac_by:'မှ',ac_total:'စုစုပေါင်း'}
+});
+CSS.add(`
+.ac-mon{display:flex;gap:8px;align-items:center;margin:0 0 12px;flex-wrap:wrap}
+.ac-mon b{font-family:var(--fh);font-size:17px;min-width:128px;text-align:center;flex:1}
+@media(min-width:640px){.ac-mon b{flex:none}}
+.ac-mon .btn{min-width:48px}
+.kpis.ack .kpi.hero{grid-column:1/-1}
+@media(min-width:760px){.kpis.ack{grid-template-columns:repeat(3,1fr)}.kpis.ack .kpi.hero{grid-column:auto}}
+.ac-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ac-row:last-of-type{border-bottom:0}.ac-row .grow{flex:1;min-width:140px}
+.ac-row .amt{font-family:var(--fh);font-weight:700;font-size:15px;white-space:nowrap}
+.ac-big{font-family:var(--fh);font-weight:700;font-size:18px;margin:6px 0;overflow-wrap:anywhere}
+.ac-chk{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;flex-wrap:wrap}
+.ac-chk input{width:22px;height:22px;min-height:0;flex:none;margin:0}
+.ac-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.ac-mk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.ac-mk input{flex:1;min-width:72px;max-width:140px}.ac-mk .btn{flex:none}
+`);
+let AC_YM=(function(){const v=LS.get('jjck_ac_ym','');return /^\d{4}-\d{2}$/.test(String(v))?String(v):ymNow();})();
+let AC=null,AC_SEQ=0;
+RENDER.acc=function(el){
+  if(!isAdminish()){el.innerHTML='<div class="card"><div class="empty">🔒 '+esc(t('admin_only'))+'</div></div>';return;}
+  pinnedBar(null,el);
+  el.innerHTML=dhead('💰 '+t('nav_acc'),'<button type="button" class="btn gh sm2" id="acCsvBtn" onclick="acCsv()">'+esc(t('ac_csv'))+'</button>')+sqlNeedBox()+
+    '<div class="ac-mon"><button type="button" class="btn gh sm2" id="acPrev" onclick="acMonth(-1)">‹</button><b id="acYm">'+esc(dispMonth(AC_YM))+'</b><button type="button" class="btn gh sm2" id="acNext" onclick="acMonth(1)">›</button>'+
+    (AC_YM!==ymNow()?'<button type="button" class="btn gh sm2" id="acNow" onclick="acMonth(0)">'+esc(t('ac_this_month'))+'</button>':'')+'</div>'+
+    (brScoped()?'<div class="hintbox">'+esc(t('ac_scope',{b:brScopeTxt()}))+'</div>':'')+'<div id="acBody"><div class="spin"></div></div>';
+  acLoad();
+};
+function acMonth(d){AC_YM=d===0?ymNow():(d<0?prevMonth(AC_YM):nextMonth(AC_YM));LS.set('jjck_ac_ym',AC_YM);rerender();}
+async function acGet(tb,fn){try{let q=sb.from(tb).select('*');q=fn?fn(q):q;const r=await q;if(!r||r.error)return {ok:false,rows:[]};return {ok:true,rows:r.data||[]};}catch(e){return {ok:false,rows:[]};}}
+async function acLoad(){
+  const seq=++AC_SEQ,ym=AC_YM,from=ym+'-01',to=ym+'-'+String(monthDays(ym)).padStart(2,'0');
+  const [dl,rc,ex,pd,un,pv]=await Promise.all([
+    acGet('kc_deliveries',q=>q.gte('d',from).lte('d',to)),
+    acGet('kc_receipts',q=>q.gte('d',from).lte('d',to)),
+    acGet('kc_expenses',q=>q.eq('ym',ym).order('d').order('created_at')),
+    acGet('kc_productions',q=>q.gte('d',from).lte('d',to)),
+    acGet('kc_deliveries',q=>q.eq('status','sent')),
+    acGet('kc_expenses',q=>q.eq('ym',prevMonth(ym)).eq('recurring',true))]);
+  let dll={ok:true,rows:[]};const okDl=dl.rows.filter(d=>d.status!=='void'&&inBr(d.branch));
+  if(dl.ok&&okDl.length)dll=await acGet('kc_delivery_lines',q=>q.in('delivery_id',okDl.map(d=>d.id)));
+  if(seq!==AC_SEQ||S.tab!=='acc')return;
+  AC={ym,from,to,dl,dll,rc,ex,pd,un,pv};acPaint();
+}
+function acBrIdx(code){const i=(S.branchesAll||[]).findIndex(b=>b.code===code);return i<0?999:i;}
+function acCalc(A){ // ตัวเลขทั้งหมดของเดือน (ใช้ทั้งหน้า + CSV + เทส)
+  const dls=A.dl.rows.filter(d=>d.status!=='void'&&inBr(d.branch)),ids=new Set(dls.map(d=>String(d.id))),byId={};dls.forEach(d=>{byId[String(d.id)]=d;});
+  const rev={};dls.forEach(d=>{const k=d.branch||'?';const r=rev[k]||(rev[k]={code:k,name:d.branch_name||branchName(k),n:0,total:0,cogs:0});r.n++;r.total+=num(d.total);});
+  let cogs=0;A.dll.rows.forEach(l=>{if(!ids.has(String(l.delivery_id)))return;const c=num(l.sent)*num(l.unit_cost);cogs+=c;const d=byId[String(l.delivery_id)];if(d&&rev[d.branch||'?'])rev[d.branch||'?'].cogs+=c;});
+  const revRows=Object.values(rev).map(r=>Object.assign(r,{total:rnd2(r.total),cogs:rnd2(r.cogs),gross:rnd2(r.total-r.cogs)})).sort((a,b)=>acBrIdx(a.code)-acBrIdx(b.code)||a.name.localeCompare(b.name,'th'));
+  const revTotal=rnd2(revRows.reduce((a,r)=>a+r.total,0)),purch=rnd2(A.rc.rows.reduce((a,r)=>a+num(r.total),0)),exp=rnd2(A.ex.rows.reduce((a,r)=>a+num(r.amount),0));
+  const units=rnd4(A.pd.rows.reduce((a,p)=>a+num(p.actual_qty!=null?p.actual_qty:p.plan_qty),0)),lots=A.pd.rows.length;
+  const un={};A.un.rows.filter(d=>d.status==='sent'&&inBr(d.branch)).forEach(d=>{const k=d.branch||'?';const u=un[k]||(un[k]={code:k,name:d.branch_name||branchName(k),n:0,total:0,oldest:null});u.n++;u.total+=num(d.total);const dd=String(d.d).slice(0,10);if(!u.oldest||dd<u.oldest)u.oldest=dd;});
+  const unRows=Object.values(un).map(u=>Object.assign(u,{total:rnd2(u.total)})).sort((a,b)=>acBrIdx(a.code)-acBrIdx(b.code)||a.name.localeCompare(b.name,'th'));
+  return {rev:revRows,revTotal,bills:dls.length,cogs:rnd2(cogs),gross:rnd2(revTotal-cogs),purch,rcpts:A.rc.rows.length,exp,expN:A.ex.rows.length,net:rnd2(revTotal-purch-exp),
+    units,lots,ohSug:(units>0&&exp>0)?rnd2(exp/units):null,unpaid:unRows,unpaidTotal:rnd2(unRows.reduce((a,u)=>a+u.total,0))};
+}
+/* ---------- วาด ---------- */
+function acPaint(){
+  const box=document.getElementById('acBody');if(!box||!AC)return;const A=AC,X=acCalc(A);AC.X=X;
+  const nr=t('ac_noread');
+  const kpi=(id,title,v,sub,cls)=>'<div class="kpi'+(cls?' '+cls:'')+'" id="acK_'+id+'"><div class="t">'+esc(title)+'</div><div class="kpi-v">'+esc(v)+'</div><div class="s mut">'+esc(sub)+'</div></div>';
+  const kpis='<div class="kpis ack">'+
+    kpi('rev',t('ac_rev'),A.dl.ok?money(X.revTotal):'—',A.dl.ok?t('ac_bills_n',{n:X.bills}):nr,'hero')+
+    kpi('cogs',t('ac_cogs'),A.dl.ok&&A.dll.ok?money(X.cogs):'—',A.dl.ok&&A.dll.ok?t('ac_cogs_s'):nr)+
+    kpi('gross',t('ac_gross'),A.dl.ok&&A.dll.ok?money(X.gross):'—',t('ac_gross_s'),X.gross<0?'bad':'')+
+    kpi('purch',t('ac_purch'),A.rc.ok?money(X.purch):'—',A.rc.ok?t('ac_rcpts_n',{n:X.rcpts}):nr)+
+    kpi('exp',t('ac_exp'),A.ex.ok?money(X.exp):'—',A.ex.ok?t('ac_items_n',{n:X.expN}):nr)+
+    kpi('net',t('ac_net'),A.dl.ok&&A.rc.ok&&A.ex.ok?money(X.net):'—',t('ac_net_s'),X.net<0?'bad':'')+'</div>'+
+    '<div class="note">'+esc(t('ac_explain'))+'</div>';
+  box.innerHTML=kpis+acRevCard(A,X)+acUnpaidCard(A,X)+acExpCard(A,X)+acOhCard(A,X)+acMkCard();
+}
+function acRevCard(A,X){
+  let body;
+  if(!A.dl.ok)body='<div class="empty">'+esc(t('ac_noread'))+'</div>';
+  else if(!X.rev.length)body='<div class="empty">'+esc(t('ac_rev_none'))+'</div>';
+  else body='<div class="twrap"><table class="t" id="acRevT"><thead><tr><th>'+esc(t('branch'))+'</th><th class="n">'+esc(t('ac_col_bills'))+'</th><th class="n">'+esc(t('ac_col_amt'))+'</th><th class="n">'+esc(t('ac_col_cost'))+'</th><th class="n">'+esc(t('ac_col_gross'))+'</th></tr></thead><tbody>'+
+    X.rev.map(r=>'<tr data-br="'+esc(r.code)+'"><td><b>'+esc(r.name)+'</b></td><td class="n">'+esc(fmtI(r.n))+'</td><td class="n">'+esc(money(r.total))+'</td><td class="n">'+esc(money(r.cogs))+'</td><td class="n'+(r.gross<0?' red':'')+'">'+esc(money(r.gross))+'</td></tr>').join('')+
+    '<tr class="tot"><td>'+esc(t('ac_total'))+'</td><td class="n">'+esc(fmtI(X.bills))+'</td><td class="n">'+esc(money(X.revTotal))+'</td><td class="n">'+esc(money(X.cogs))+'</td><td class="n">'+esc(money(X.gross))+'</td></tr></tbody></table></div>';
+  return card(esc(t('ac_rev_t')),body,{sp:'<button type="button" class="btn gh sm2" onclick="show(\'bills\')">'+esc(t('ac_bills_go'))+'</button>'});
+}
+function acUnpaidCard(A,X){
+  let body='<div class="xs mut" style="margin-bottom:6px">'+esc(t('ac_recv_h'))+'</div>';
+  if(!A.un.ok)body+='<div class="empty">'+esc(t('ac_noread'))+'</div>';
+  else if(!X.unpaid.length)body+='<div class="okbox">'+esc(t('ac_recv_none'))+'</div>';
+  else body+=X.unpaid.map(u=>'<div class="ac-row" data-br="'+esc(u.code)+'"><div class="grow"><b>'+esc(u.name)+'</b><div class="xs mut">'+esc(t('ac_bills_n',{n:u.n}))+(u.oldest?' · '+esc(t('ac_recv_old',{d:dispDate(u.oldest)})):'')+'</div></div><span class="amt">'+esc(money(u.total))+'</span></div>').join('')+
+    '<div class="ac-row"><div class="grow b">'+esc(t('ac_total'))+'</div><span class="amt" id="acUnTot">'+esc(money(X.unpaidTotal))+'</span></div>';
+  return card(esc(t('ac_recv_t')),body,{id:'acUnpaid'});
+}
+function acExpCard(A,X){
+  let body='<div class="xs mut" style="margin-bottom:6px">'+esc(t('ac_exp_h'))+'</div>';
+  if(!A.ex.ok)body+='<div class="empty">'+esc(t('ac_noread'))+'</div>';
+  else{
+    body+=(A.ex.rows.length?A.ex.rows.map(e=>'<div class="ac-row ac-ex" data-id="'+esc(e.id)+'"><div class="grow"><b>'+esc(e.name||'')+'</b>'+(e.recurring?' <span class="chip blue">🔁 '+esc(t('ac_recur'))+'</span>':'')+
+        '<div class="xs mut">'+esc(dispDate(e.d))+' · '+esc(trCat(e.cat))+(e.note?' · '+esc(e.note):'')+(e.by_name?' · '+esc(e.by_name):'')+'</div></div><span class="amt">'+esc(money(e.amount))+'</span>'+
+        '<button type="button" class="btn gh sm2" data-id="'+esc(e.id)+'" onclick="acExpEdit(this.dataset.id)" aria-label="'+esc(t('edit'))+'">✏️</button></div>').join('')+
+      '<div class="ac-row"><div class="grow b">'+esc(t('ac_total'))+'</div><span class="amt" id="acExpTot">'+esc(money(X.exp))+'</span></div>':'<div class="empty">'+esc(t('ac_exp_none'))+'</div>');
+    const have=new Set(A.ex.rows.map(e=>nameKey(e.name))),cp=A.pv.ok?A.pv.rows.filter(e=>!have.has(nameKey(e.name))):[];
+    body+='<div class="ac-foot"><button type="button" class="btn sm2" id="acExpAdd" onclick="acExpEdit()">'+esc(t('ac_exp_add'))+'</button>'+
+      (cp.length?'<button type="button" class="btn gh sm2" id="acExpCopy" onclick="acCopyRecur()">'+esc(t('ac_exp_copy',{n:cp.length}))+'</button>':'')+'</div>';
+  }
+  return card(esc(t('ac_exp_t')),body,{id:'acExpCard',sp:A.ex.ok?'<span>'+esc(money(X.exp))+'</span>':''});
+}
+function acOhCard(A,X){
+  const c=S.cfg||CFG_DEF,nowTxt=c.overhead_mode==='pct'?t('ac_oh_now_pct',{v:fmtQ(c.overhead_value)}):t('ac_oh_now_unit',{v:fmtQ(c.overhead_value)});
+  let body='<div class="sm">'+esc(A.pd.ok?t('ac_oh_units',{q:fmtQ(X.units),n:X.lots}):t('ac_noread'))+'</div>';
+  if(X.ohSug!=null)body+='<div class="ac-big" id="acOhSug">'+esc(t('ac_oh_calc',{m:money(X.exp),q:fmtQ(X.units),x:moneyU(X.ohSug)}))+'</div>';
+  else if(A.pd.ok&&A.ex.ok)body+='<div class="mut sm" style="margin:6px 0">'+esc(X.units>0?t('ac_oh_noexp'):t('ac_oh_none'))+'</div>';
+  body+='<div class="xs mut" id="acOhNow">'+esc(t('ac_oh_now',{v:nowTxt}))+'</div>';
+  if(X.ohSug!=null)body+='<div style="margin-top:10px"><button type="button" class="btn ok" id="acOhBtn" onclick="acOhApply()">'+esc(t('ac_oh_use',{x:moneyU(X.ohSug)}))+'</button></div>';
+  body+='<div class="hintbox" style="margin-bottom:0">'+esc(t('ac_oh_h'))+'</div>';
+  return card(esc(t('ac_oh_t')),body,{id:'acOhCard'});
+}
+function acMkCard(){
+  const c=S.cfg||CFG_DEF,r=activeRecipes().find(x=>recipeUnitCost(x)!=null);
+  let ex='';if(r){const uc=recipeUnitCost(r),mk=r.markup_pct!=null?num(r.markup_pct):num(c.markup_pct);ex='<div class="sm" id="acMkEx">'+esc(t('ac_mk_ex',{r:dispName(r),c:moneyU(uc),u:trUnit(r.yield_unit),p:moneyU(rnd4(uc*(1+mk/100)))}))+'</div>';}
+  const body='<div class="xs mut">'+esc(t('ac_mk_h'))+'</div><div class="ac-mk"><label class="b" for="acMk" style="flex:none">'+esc(t('ac_mk_lbl'))+'</label><input id="acMk" type="text" inputmode="decimal" value="'+esc(c.markup_pct)+'"><span class="b">%</span>'+
+    '<button type="button" class="btn sm2" id="acMkSave" onclick="acMkSave()">'+esc(t('ac_mk_save'))+'</button></div>'+ex;
+  return card(esc(t('ac_mk_t')),body,{id:'acMkCard'});
+}
+/* ---------- ค่าใช้จ่ายแฝง ---------- */
+function acExpEdit(id){
+  if(!isAdminish())return;
+  const e=id?(AC&&AC.ex.rows.find(x=>String(x.id)===String(id)))||null:null;
+  const d0=e?String(e.d).slice(0,10):(AC_YM===ymNow()?bizTodayISO():AC_YM+'-01');
+  const cats=EXP_CATS.slice();if(e&&e.cat&&!cats.includes(e.cat))cats.push(e.cat);
+  openModal('<h3>'+(e?'✏️':'＋')+' '+esc(t('ac_exp_f_t'))+'</h3>'+
+    fld(t('ac_exp_name'),'<input id="acEn" value="'+esc(e?e.name:'')+'" placeholder="'+esc(t('ac_exp_ph'))+'">')+
+    '<div class="grid2">'+fld(t('ac_exp_amt'),'<input id="acEa" type="text" inputmode="decimal" value="'+esc(e?e.amount:'')+'">')+fld(t('ac_exp_d'),'<input id="acEd" type="date" value="'+esc(d0)+'">')+'</div>'+
+    fld(t('ac_exp_cat'),'<select id="acEc">'+selOpts(cats,e?e.cat:cats[0],trCat)+'</select>')+fld(t('note'),'<input id="acEnote" value="'+esc(e?(e.note||''):'')+'">')+
+    '<label class="ac-chk"><input type="checkbox" id="acEr"'+(e&&e.recurring?' checked':'')+'><span class="b">'+esc(t('ac_recur'))+'</span><span class="xs mut">'+esc(t('ac_recur_h'))+'</span></label>'+
+    '<div class="row" style="margin-top:14px">'+(e?'<button type="button" class="btn gh" id="acExpDel" onclick="'+hreg(()=>acExpDel(e.id))+'">🗑 '+esc(t('delete'))+'</button>':'')+
+    '<button type="button" class="btn grow" id="acExpSave" onclick="'+hreg(()=>acExpSave(e?e.id:null))+'">💾 '+esc(t('save'))+'</button></div>');
+  setTimeout(()=>{const n=document.getElementById('acEn');if(n&&!e)n.focus();},60);
+}
+async function acExpSave(id){await once(async()=>{
+  if(!isAdminish())return;
+  const g=x=>{const el=document.getElementById(x);return el?el.value:'';};
+  const name=String(g('acEn')).trim(),amount=rnd2(num(g('acEa'))),d=/^\d{4}-\d{2}-\d{2}$/.test(g('acEd'))?g('acEd'):bizTodayISO();
+  if(!name||!(amount>0)){toast(t('ac_exp_need'),true);return;}
+  const row={d,ym:ymOf(d),cat:g('acEc')||null,name,amount,recurring:!!(document.getElementById('acEr')&&document.getElementById('acEr').checked),note:String(g('acEnote')).trim()||null};
+  try{if(id)await db(()=>sb.from('kc_expenses').update(row).eq('id',id));
+    else await db(()=>sb.from('kc_expenses').insert(Object.assign({id:uid('ex'),by_name:(S.user&&S.user.name)||null},row)));}
+  catch(e){return;}
+  closeModal();toast(t('sv_ok'));await acLoad();
+});}
+async function acExpDel(id){await once(async()=>{
+  if(!isAdminish())return;const e=AC&&AC.ex.rows.find(x=>String(x.id)===String(id));if(!e)return;
+  if(!(await confirm2(t('ac_exp_del_q',{n:e.name||'',m:money(e.amount)}),{danger:true,ok:t('delete')})))return;
+  try{await db(()=>sb.from('kc_expenses').delete().eq('id',id));}catch(err){return;}
+  closeModal();toast(t('sv_ok'));await acLoad();
+});}
+async function acCopyRecur(){await once(async()=>{ // รายการประจำของเดือนก่อน (recurring) ที่ยังไม่มีชื่อเดียวกันในเดือนนี้
+  if(!isAdminish()||!AC)return;
+  const have=new Set(AC.ex.rows.map(e=>nameKey(e.name))),cp=(AC.pv.ok?AC.pv.rows:[]).filter(e=>!have.has(nameKey(e.name)));
+  if(!cp.length)return;
+  if(!(await confirm2(t('ac_exp_copy_q',{n:cp.length,m:dispMonth(prevMonth(AC_YM))}))))return;
+  const rows=cp.map(e=>({id:uid('ex'),d:AC_YM+'-01',ym:AC_YM,cat:e.cat||null,name:e.name,amount:rnd2(num(e.amount)),recurring:true,note:e.note||null,by_name:(S.user&&S.user.name)||null}));
+  try{await db(()=>sb.from('kc_expenses').insert(rows));}catch(err){return;}
+  toast(t('ac_exp_copied',{n:rows.length}));await acLoad();
+});}
+/* ---------- ต้นทุนแฝง / บวกราคา ---------- */
+async function acOhApply(){await once(async()=>{
+  if(!isAdminish()||!AC)return;const X=acCalc(AC);if(X.ohSug==null)return;
+  const c=S.cfg||CFG_DEF;if(c.overhead_mode==='per_unit'&&rnd2(num(c.overhead_value))===X.ohSug){toast(t('ac_oh_same'));return;}
+  try{await cfgSave({overhead_mode:'per_unit',overhead_value:X.ohSug});}catch(e){return;}
+  toast(t('ac_oh_applied',{x:moneyU(X.ohSug)}));acPaint();
+});}
+async function acMkSave(){await once(async()=>{
+  if(!isAdminish())return;const el=document.getElementById('acMk');if(!el)return;const v=Math.max(0,rnd2(num(el.value)));
+  try{await cfgSave({markup_pct:v});}catch(e){return;}
+  toast(t('ac_mk_saved',{v:fmtQ(v)}));acPaint();
+});}
+/* ---------- CSV ---------- */
+function acCsvText(){ // ข้อความ CSV ของเดือน (UTF-8 BOM ใส่ตอนดาวน์โหลด) — เทสเรียกได้
+  if(!AC)return '';const A=AC,X=acCalc(A),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',L=[];
+  L.push([q(t('nav_acc')),q(dispMonth(A.ym))].join(','));
+  L.push([q(t('ac_rev')),X.revTotal].join(','));L.push([q(t('ac_cogs')),X.cogs].join(','));L.push([q(t('ac_gross')),X.gross].join(','));
+  L.push([q(t('ac_purch')),X.purch].join(','));L.push([q(t('ac_exp')),X.exp].join(','));L.push([q(t('ac_net')),X.net].join(','));L.push('');
+  L.push([q(t('ac_rev_t')),q(t('ac_col_bills')),q(t('ac_col_amt')),q(t('ac_col_cost')),q(t('ac_col_gross'))].join(','));
+  X.rev.forEach(r=>L.push([q(r.code+' '+r.name),r.n,r.total,r.cogs,r.gross].join(',')));L.push('');
+  L.push([q(t('nav_bills')),q(t('date')),q(t('branch')),q(t('status')),q(t('total'))].join(','));
+  A.dl.rows.filter(d=>inBr(d.branch)).forEach(d=>L.push([q(d.bill_no),q(String(d.d).slice(0,10)),q(d.branch),q(d.status),num(d.total)].join(',')));L.push('');
+  L.push([q(t('nav_recv')),q(t('date')),q(t('sup')),q(t('total'))].join(','));
+  A.rc.rows.forEach(r=>L.push([q(r.bill_no),q(String(r.d).slice(0,10)),q(r.sup_name),num(r.total)].join(',')));L.push('');
+  L.push([q(t('ac_exp_t')),q(t('date')),q(t('ac_exp_cat')),q(t('ac_exp_amt')),q(t('ac_recur'))].join(','));
+  A.ex.rows.forEach(e=>L.push([q(e.name),q(String(e.d).slice(0,10)),q(e.cat),num(e.amount),e.recurring?1:0].join(',')));
+  return L.join('\n');}
+function acCsv(){const tx=acCsvText();if(!tx){toast(t('ac_csv_none'));return;}
+  try{const blob=new Blob(['﻿'+tx],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kitchen_'+AC_YM+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},800);}
+  catch(e){copyText(tx);}}
+/* ===================== /module: acc ===================== */
 
 /* ===================== module: hist (mod_hist.js) ===================== */
 /* ============================================================
