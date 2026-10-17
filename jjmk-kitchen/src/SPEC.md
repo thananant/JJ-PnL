@@ -107,6 +107,12 @@ Receiving: user enters packs × pack size (prefilled from item buy_unit/buy_qty,
   สั่งมา · มี · ส่ง (editable, default min(ordered, stock)) · ขาด. Button "✅ ส่งแล้ว ออกบิล" → kc_deliveries + lines (unit_cost/unit_price snapshot), moves `send`, stock −; then LINE text
   (shop header, branch, date, lines qty×unit × price = amount, total, bill no) sent via Edge Function `line-order` `{to, text}` (SB_URL+'/functions/v1/line-order', headers apikey+Bearer SB_ANON) to cfg.branch_line[branch];
   no group → show text + copy button + line.me/R/share. Partial send keeps the remainder visible as "ค้างส่ง".
+  - **➕ ส่งเพิ่ม — สาขาเรียกของเพิ่ม** (owner 2026-10-17 *"ต้องมีปุ่ม เพิ่ม ด้วยเผื่อ สาขาเรียกของเพิ่มแล้วต้องใส่รายละเอียดเอง"*): button in the 🚚 header (next to ⟳) and in the empty box.
+    Dialog ① pick the branch (big buttons in the branch colour; `S.branches` = `_br` scope; one branch → skipped) ② tap product pictures (`.igrid` tiles like 📥 receive: picture without zoom, name, stock, price/unit; search filters in place)
+    → quantity dialog (stepper in `yield_unit`, default 1; re-tap = edit / remove) → ✓ เสร็จ. The request becomes a card **after** the stock-count orders: chip ✋ สาขาเรียกเพิ่ม, in-place quantity = what the branch asked
+    (send = min(asked, stock left after the earlier orders) — short stock sends what is there and the bill shows ค้างส่ง), ✕ per line, 🗑 for the group. Draft `localStorage.jjck_sd_manual {d:today, g:{code:[{recipe_id,qty}]}}`, today only, survives refresh.
+    ✅ bills through the same `sdSend` path (live stock before/after the dialog, bill number, rollback); header `order_date` = today, `note` = `สาขาเรียกของเพิ่ม` (Thai always, the marker), lines `stk_product_id` null; LINE text gets a `✋ สาขาเรียกของเพิ่ม` line.
+    Such bills are **not** subtracted from the stock-count orders (`sdCalcGroups` skips deliveries whose note is the marker), so ☀️ today / 🍳 make (pure `sdCalcGroups`) never see the draft and the 🚚 badge counts stock-count orders only. 🧾 detail/void/history work like any bill.
 - **bills**: month + branch filters; list bills (no, date, branch, total, status, LINE sent?); open → lines, resend LINE, mark paid, void (reverses stock); month totals per branch (to pay at month end).
 - **buy**: suggestions per supplier: items with qty < min_qty or needed for ⚡/🔄 production plans (recipe × lots) − stock; packs rounded up; editable; PO text → LINE group of supplier (ck_sups.line_group_id) or copy/share;
   status sent; list POs; "รับของตามใบนี้" → recv prefilled.
