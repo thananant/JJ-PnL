@@ -784,7 +784,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-17 17:01';
+const APP_VER='KC 2.0 · 2026-10-17 17:20';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -2038,7 +2038,7 @@ async function mkLoad(force){
     const td=bizTodayISO(),lb=num((S.cfg||CFG_DEF).order_lookback_days);
     const get=async q=>{try{const r=await q;if(r&&r.error){const x={ok:false,rows:[],err:r.error};sdTblGone(x);return x.ok?[]:null;}return r.data||[];}catch(e){return null;}};   // อ่านพลาด/ไม่มีสิทธิ์/ไม่มีคอลัมน์ = null (ห้ามถือว่าว่าง → ⚡ จากข้อมูลครึ่ง ๆ) · ตารางไม่มีจริงตอนยังไม่รัน SQL = ว่าง
     const [orders,links,dels,prods]=await Promise.all([
-      get(sb.from('stock_receipts').select('id,branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
+      get(sb.from('stock_receipts').select('branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
       get(sb.from('kc_links').select('stk_name,recipe_id,factor')),
       get(sb.from('kc_deliveries').select('id,d,branch,order_date,status').gte('d',addDays(td,-Math.max(14,lb+3))).neq('status','void')),
       get(sb.from('kc_productions').select('*').eq('d',td).order('created_at',{ascending:false}))]);
@@ -2365,7 +2365,9 @@ CSS.add(`
 .ctsech .sp{margin-left:auto;font-weight:500;color:var(--mut);font-size:12px}
 .ctsec .igrid{margin-bottom:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}   /* = .grid ของแอพนับสต๊อก: มือถือการ์ดละแถว ช่องตัวเลขไม่ถูกบีบ */
 @media(max-width:640px){.ctsec .igrid{grid-template-columns:1fr}}
-.skcard .ithumb{height:64px}
+.skcard .skhead{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.skcard .skhead .ithumb{width:56px;height:56px;flex:none;border-radius:12px;font-size:24px}   /* รูปสี่เหลี่ยมข้างชื่อแบบแอพนับสต๊อก — แถบกว้าง 64px ทำให้รูปถูกตัด/ขนาดเพี้ยน (เจ้าของเจอ 2026-10-17) */
+.skcard .skttl{min-width:0;flex:1}
 .skcard .iname{min-height:auto}
 .skcard .isub b{font-family:var(--fh);font-size:14.5px;color:var(--ink)}
 .skstep .ctu{flex:none;font-size:13px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2434,10 +2436,10 @@ function ctGridHtml(){const kind=CT_KIND,L=ctList(kind),cats=ctCats(kind).filter
 function ctCard(kind,o){
   const k=kind+'|'+o.id,e=CT[k],counted=ctCounted(e),U=ctUnit(kind,o),base=ctBase(kind,o);
   return '<div class="icard skcard'+(counted?' cnt':'')+'" data-k="'+esc(k)+'" data-n="'+esc(supKey(dispName(o)+' '+o.name+' '+ctCatOf(o)))+'">'+
-    thumbHtml(o,ctIcon(kind,o),'ithumb')+
+    '<div class="skhead">'+thumbHtml(o,ctIcon(kind,o),'ithumb')+'<div class="skttl">'+
     '<div class="iname">'+esc(dispName(o))+'</div>'+
     '<div class="isub">'+esc(t('ct_sys'))+' <b>'+fmtQ(rnd2(num(o.qty)/U.f))+'</b> '+esc(trUnit(U.u))+
-      (U.u!==base?'<br><span class="xs">'+esc(t('ct_unit_eq',{u:trUnit(U.u),q:fmtQ(U.f),b:trUnit(base)}))+'</span>':'')+'</div>'+
+      (U.u!==base?'<br><span class="xs">'+esc(t('ct_unit_eq',{u:trUnit(U.u),q:fmtQ(U.f),b:trUnit(base)}))+'</span>':'')+'</div></div></div>'+
     '<div class="skstep"><button type="button" aria-label="-" onclick="ctBump(this,-1)">−</button>'+
     '<input type="text" inputmode="decimal" placeholder="0" class="'+(counted?'has':'')+'" value="'+esc(counted?e.v:'')+'" oninput="ctInput(this)" onchange="ctInput(this)">'+
     '<button type="button" class="plus" aria-label="+" onclick="ctBump(this,1)">＋</button><span class="b ctu">'+esc(trUnit(U.u))+'</span></div>'+
@@ -2666,7 +2668,7 @@ async function sdLoad(opt){ // opt.noRefresh = แค่นับใบสั่
 async function sdRead(){ // อ่านชุดข้อมูลออเดอร์ (ไม่แตะ SD) → {ok,err,raw:{sr,dl,dll},lk} · sdLoad ใช้ตอนโหลด · sdSend ใช้อ่านซ้ำหลังกดยืนยัน
   const td=bizTodayISO(),cfg=S.cfg||CFG_DEF,from=addDays(td,-num(cfg.order_lookback_days));
   const [sr,lk,dl]=await Promise.all([
-    tdGet('stock_receipts',q=>q.gte('order_date',from).gt('ordered',0).order('id')),
+    tdGet('stock_receipts',q=>q.gte('order_date',from).gt('ordered',0).order('order_date').order('product_id')),   // ตารางจริงไม่มีคอลัมน์ id (คีย์ = สาขา+สินค้า+วันสั่ง)
     tdGet('kc_links'),
     tdGet('kc_deliveries',q=>q.gte('order_date',from).neq('status','void'))]);
   sdTblGone(dl);
@@ -2700,10 +2702,10 @@ function sdCalcGroups(R,branches){ // ฟังก์ชันล้วน — �
     if(remaining<=1e-9)return;
     const g=groups[k0]=groups[k0]||{key:k0,code:b.code,name:b.name,short:b.short||b.name,color:b.color||'',od,lines:[],unlinked:0};
     if(!link){g.unlinked++;if(!unlinked.includes(r.name))unlinked.push(r.name);}
-    g.lines.push({rid:r.id,pid:r.product_id==null?'':String(r.product_id),name:String(r.name||''),unit:String(r.unit||''),ordered:num(r.ordered),already,remaining,link,have:0,sent:0});});
+    g.lines.push({rid:String(r.branch_id)+'|'+String(r.order_date)+'|'+String(r.product_id==null?'':r.product_id),pid:r.product_id==null?'':String(r.product_id),cat:String(r.cat_label||''),name:String(r.name||''),unit:String(r.unit||''),ordered:num(r.ordered),already,remaining,link,have:0,sent:0});});
   const ord={};(branches||[]).forEach((b,i)=>{ord[b.code]=i;});
   const G=Object.values(groups).sort((a,b)=>a.od<b.od?-1:a.od>b.od?1:(num(ord[a.code])-num(ord[b.code])));
-  G.forEach(g=>g.lines.sort((a,b)=>num(a.rid)-num(b.rid)||String(a.name).localeCompare(String(b.name),'th')));
+  G.forEach(g=>g.lines.sort((a,b)=>String(a.cat).localeCompare(String(b.cat),'th')||String(a.name).localeCompare(String(b.name),'th')||String(a.pid).localeCompare(String(b.pid))));   // เรียงแบบใบสั่งของสาขา: หมวด → ชื่อ (ตารางจริงไม่มี id ให้เรียงตามลำดับที่สั่ง)
   return {groups:G,ordered,sent,need,unlinked,lines:G.reduce((a,g)=>a+g.lines.length,0)};}
 function sdCalc(){ // SD.raw → SD.groups (sdCalcGroups) + จัดสรรของที่มีตามลำดับ: ใบสั่งเก่าก่อน · ใบหลังได้ที่เหลือ · ป้าย 🚚 = จำนวนใบสั่งที่ยังค้าง
   if(!SD.raw)return;   // ยังไม่เคยอ่านครบ = ไม่มีอะไรให้คิด (ป้าย 🚚 คงเดิม)

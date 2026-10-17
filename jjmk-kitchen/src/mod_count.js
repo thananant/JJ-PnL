@@ -48,7 +48,9 @@ CSS.add(`
 .ctsech .sp{margin-left:auto;font-weight:500;color:var(--mut);font-size:12px}
 .ctsec .igrid{margin-bottom:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}   /* = .grid ของแอพนับสต๊อก: มือถือการ์ดละแถว ช่องตัวเลขไม่ถูกบีบ */
 @media(max-width:640px){.ctsec .igrid{grid-template-columns:1fr}}
-.skcard .ithumb{height:64px}
+.skcard .skhead{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.skcard .skhead .ithumb{width:56px;height:56px;flex:none;border-radius:12px;font-size:24px}   /* รูปสี่เหลี่ยมข้างชื่อแบบแอพนับสต๊อก — แถบกว้าง 64px ทำให้รูปถูกตัด/ขนาดเพี้ยน (เจ้าของเจอ 2026-10-17) */
+.skcard .skttl{min-width:0;flex:1}
 .skcard .iname{min-height:auto}
 .skcard .isub b{font-family:var(--fh);font-size:14.5px;color:var(--ink)}
 .skstep .ctu{flex:none;font-size:13px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -117,10 +119,10 @@ function ctGridHtml(){const kind=CT_KIND,L=ctList(kind),cats=ctCats(kind).filter
 function ctCard(kind,o){
   const k=kind+'|'+o.id,e=CT[k],counted=ctCounted(e),U=ctUnit(kind,o),base=ctBase(kind,o);
   return '<div class="icard skcard'+(counted?' cnt':'')+'" data-k="'+esc(k)+'" data-n="'+esc(supKey(dispName(o)+' '+o.name+' '+ctCatOf(o)))+'">'+
-    thumbHtml(o,ctIcon(kind,o),'ithumb')+
+    '<div class="skhead">'+thumbHtml(o,ctIcon(kind,o),'ithumb')+'<div class="skttl">'+
     '<div class="iname">'+esc(dispName(o))+'</div>'+
     '<div class="isub">'+esc(t('ct_sys'))+' <b>'+fmtQ(rnd2(num(o.qty)/U.f))+'</b> '+esc(trUnit(U.u))+
-      (U.u!==base?'<br><span class="xs">'+esc(t('ct_unit_eq',{u:trUnit(U.u),q:fmtQ(U.f),b:trUnit(base)}))+'</span>':'')+'</div>'+
+      (U.u!==base?'<br><span class="xs">'+esc(t('ct_unit_eq',{u:trUnit(U.u),q:fmtQ(U.f),b:trUnit(base)}))+'</span>':'')+'</div></div></div>'+
     '<div class="skstep"><button type="button" aria-label="-" onclick="ctBump(this,-1)">−</button>'+
     '<input type="text" inputmode="decimal" placeholder="0" class="'+(counted?'has':'')+'" value="'+esc(counted?e.v:'')+'" oninput="ctInput(this)" onchange="ctInput(this)">'+
     '<button type="button" class="plus" aria-label="+" onclick="ctBump(this,1)">＋</button><span class="b ctu">'+esc(trUnit(U.u))+'</span></div>'+

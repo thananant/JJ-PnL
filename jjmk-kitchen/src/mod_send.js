@@ -110,7 +110,7 @@ async function sdLoad(opt){ // opt.noRefresh = แค่นับใบสั่
 async function sdRead(){ // อ่านชุดข้อมูลออเดอร์ (ไม่แตะ SD) → {ok,err,raw:{sr,dl,dll},lk} · sdLoad ใช้ตอนโหลด · sdSend ใช้อ่านซ้ำหลังกดยืนยัน
   const td=bizTodayISO(),cfg=S.cfg||CFG_DEF,from=addDays(td,-num(cfg.order_lookback_days));
   const [sr,lk,dl]=await Promise.all([
-    tdGet('stock_receipts',q=>q.gte('order_date',from).gt('ordered',0).order('id')),
+    tdGet('stock_receipts',q=>q.gte('order_date',from).gt('ordered',0).order('order_date').order('product_id')),   // ตารางจริงไม่มีคอลัมน์ id (คีย์ = สาขา+สินค้า+วันสั่ง)
     tdGet('kc_links'),
     tdGet('kc_deliveries',q=>q.gte('order_date',from).neq('status','void'))]);
   sdTblGone(dl);
@@ -144,10 +144,10 @@ function sdCalcGroups(R,branches){ // ฟังก์ชันล้วน — �
     if(remaining<=1e-9)return;
     const g=groups[k0]=groups[k0]||{key:k0,code:b.code,name:b.name,short:b.short||b.name,color:b.color||'',od,lines:[],unlinked:0};
     if(!link){g.unlinked++;if(!unlinked.includes(r.name))unlinked.push(r.name);}
-    g.lines.push({rid:r.id,pid:r.product_id==null?'':String(r.product_id),name:String(r.name||''),unit:String(r.unit||''),ordered:num(r.ordered),already,remaining,link,have:0,sent:0});});
+    g.lines.push({rid:String(r.branch_id)+'|'+String(r.order_date)+'|'+String(r.product_id==null?'':r.product_id),pid:r.product_id==null?'':String(r.product_id),cat:String(r.cat_label||''),name:String(r.name||''),unit:String(r.unit||''),ordered:num(r.ordered),already,remaining,link,have:0,sent:0});});
   const ord={};(branches||[]).forEach((b,i)=>{ord[b.code]=i;});
   const G=Object.values(groups).sort((a,b)=>a.od<b.od?-1:a.od>b.od?1:(num(ord[a.code])-num(ord[b.code])));
-  G.forEach(g=>g.lines.sort((a,b)=>num(a.rid)-num(b.rid)||String(a.name).localeCompare(String(b.name),'th')));
+  G.forEach(g=>g.lines.sort((a,b)=>String(a.cat).localeCompare(String(b.cat),'th')||String(a.name).localeCompare(String(b.name),'th')||String(a.pid).localeCompare(String(b.pid))));   // เรียงแบบใบสั่งของสาขา: หมวด → ชื่อ (ตารางจริงไม่มี id ให้เรียงตามลำดับที่สั่ง)
   return {groups:G,ordered,sent,need,unlinked,lines:G.reduce((a,g)=>a+g.lines.length,0)};}
 function sdCalc(){ // SD.raw → SD.groups (sdCalcGroups) + จัดสรรของที่มีตามลำดับ: ใบสั่งเก่าก่อน · ใบหลังได้ที่เหลือ · ป้าย 🚚 = จำนวนใบสั่งที่ยังค้าง
   if(!SD.raw)return;   // ยังไม่เคยอ่านครบ = ไม่มีอะไรให้คิด (ป้าย 🚚 คงเดิม)

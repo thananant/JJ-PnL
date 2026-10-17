@@ -115,7 +115,7 @@ async function mkLoad(force){
     const td=bizTodayISO(),lb=num((S.cfg||CFG_DEF).order_lookback_days);
     const get=async q=>{try{const r=await q;if(r&&r.error){const x={ok:false,rows:[],err:r.error};sdTblGone(x);return x.ok?[]:null;}return r.data||[];}catch(e){return null;}};   // อ่านพลาด/ไม่มีสิทธิ์/ไม่มีคอลัมน์ = null (ห้ามถือว่าว่าง → ⚡ จากข้อมูลครึ่ง ๆ) · ตารางไม่มีจริงตอนยังไม่รัน SQL = ว่าง
     const [orders,links,dels,prods]=await Promise.all([
-      get(sb.from('stock_receipts').select('id,branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
+      get(sb.from('stock_receipts').select('branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
       get(sb.from('kc_links').select('stk_name,recipe_id,factor')),
       get(sb.from('kc_deliveries').select('id,d,branch,order_date,status').gte('d',addDays(td,-Math.max(14,lb+3))).neq('status','void')),
       get(sb.from('kc_productions').select('*').eq('d',td).order('created_at',{ascending:false}))]);

@@ -49,7 +49,7 @@ count cards with − [input] ＋ and a pinned bottom save bar. Reuse the CSS fro
 - `ck_sups`: id, name, phone, lead_days, credit_days, line_group_id, order_days smallint[], note, active.
 - `ck_settings` (key text pk, value jsonb) — reuse for: `kc_cfg` (see Settings), nothing else from the old app is read.
 - Read-only external: `pnl_users`, `pnl_branches` (via JJBR block), `line_groups` (group_id,name), stock-count app's `products` (id, branch_id, name, unit, sup),
-  `stock_receipts` (branch_id, branch_name, product_id, name, unit, sup, order_date, ordered) = branch orders, `branches` (id, name), `suppliers` (name, line_group_id — read only).
+  `stock_receipts` (branch_id, branch_name, product_id, name, cat_label, unit, sup, order_date, ordered — **no `id` column**; unique branch_id+product_id+order_date; never select/order by `id`) = branch orders, `branches` (id, name), `suppliers` (name, line_group_id — read only).
 - RPC `ck_add_qty(p_kind text, p_id text, p_delta numeric)` already exists (kind 'item' → ck_items.qty, 'recipe' → ck_recipes.qty); keep using it for atomic stock updates.
 - Old transactional tables (`ck_moves ck_productions ck_prod_items ck_plans ck_pos ck_po_items ck_orders ck_order_items ck_bills ck_br_needs ck_expenses ck_price_log`) are NOT read or written.
 
