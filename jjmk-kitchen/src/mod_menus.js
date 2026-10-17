@@ -363,7 +363,9 @@ function mnMethodHtml(){ // วิธีทำ: โชว์เป็นขั�
   return methodHtml(note)+'<button type="button" class="btn gh sm2" onclick="mnMethodEdit()">✏️ '+esc(t('mn_method_edit'))+'</button>';}
 function mnMethodPaint(){const b=document.getElementById('mnMethod');if(b)b.innerHTML=mnMethodHtml();}
 function mnMethodInput(v){if(!MN_D)return;MN_D.note=v;mnDraftSave();const p=document.getElementById('mnMethodPrev');if(p)p.innerHTML=methodHtml(v);
-  const b=document.querySelector('#mnMethod button[onclick="mnMethodDone()"]');if(b&&!String(v||'').trim())b.remove();}
+  const box=document.getElementById('mnMethod');if(!box)return;const has=!!String(v||'').trim();let b=box.querySelector('button[onclick="mnMethodDone()"]');   // ปุ่ม ✓ มีเฉพาะตอนมีข้อความ (ว่าง = เอาออก · พิมพ์ใหม่ = ใส่กลับ — ผู้ตรวจ B1 เจอว่าหายถาวร)
+  if(!has){if(b)b.remove();return;}
+  if(!b){b=document.createElement('button');b.type='button';b.className='btn gh sm2';b.setAttribute('onclick','mnMethodDone()');b.textContent='✓ '+t('mn_method_ok');box.appendChild(b);}}
 function mnMethodEdit(){MN_EDITM=true;mnMethodPaint();const ta=document.getElementById('mnNote');if(ta&&!('ontouchstart' in window))ta.focus();}
 function mnMethodDone(){MN_EDITM=false;mnMethodPaint();}
 function mnThumbHtml(){const d=MN_D,url=imgOk(d.image_url)?String(d.image_url):'';return '<div class="mthumb lg" '+(url?'data-url="'+esc(url)+'" onclick="zoomImg(this.dataset.url)"':'')+'>'+(url?'<img src="'+esc(url)+'">':mnIcon({cat:d.cat==='__new'?'':d.cat}))+'</div>';}
