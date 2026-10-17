@@ -1208,7 +1208,12 @@ function show(v){
   el.innerHTML='<div class="spin"></div>';
   try{if(typeof RENDER[v]==='function')RENDER[v](el);else renderPlaceholder(el,v);}
   catch(e){el.innerHTML='<div class="card empty">⚠ '+esc((e&&e.message)||e)+'</div>';console.error(e);}
+  pillReveal(el);   // แถบชิปที่เพิ่งวาด scrollLeft = 0 — ชิปที่เลือกอยู่ต้องยังเห็นบนโทรศัพท์ (ผู้ตรวจ V2 2026-10-17 · เจ้าของว่า "ปุ่มพวกนี้เหมือนใช้ไม่ได้")
 }
+function pillReveal(root){ // เลื่อนแถบชิป (.pills ที่เลื่อนข้างได้) ให้เห็นชิป .on — ใช้หลังวาดแถบใหม่ทุกที่ (show() เรียกให้เองหลัง RENDER · โมดูลที่วาดชิปในที่เรียกเอง) · ไม่แตะการเลื่อนแนวตั้งของหน้า
+  const r=root&&root.nodeType?root:document;const bars=(r.matches&&r.matches('.pills'))?[r]:[...r.querySelectorAll('.pills')];
+  bars.forEach(c=>{try{const p=c.querySelector('.pill.on');if(!p||c.scrollWidth<=c.clientWidth+1)return;const cr=c.getBoundingClientRect(),pr=p.getBoundingClientRect();
+    if(pr.left>=cr.left-0.5&&pr.right<=cr.right+0.5)return;c.scrollLeft=Math.max(0,pr.left-cr.left+c.scrollLeft-(c.clientWidth-pr.width)/2);}catch(e){}});}
 function renderPlaceholder(el,v){ // หน้าที่ยังไม่มีโมดูล (รอบถัดไป) — การ์ดบอกเป็นมิตร ไม่ใช่ข้อผิดพลาด
   const p=NAV_IC[v]+' '+t('nav_'+v);el.innerHTML=dhead(p)+'<div class="card soon"><div class="bi">🚧</div><h2>'+esc(t('soon_title'))+'</h2><p>'+esc(t('soon_body',{p}))+'</p>'+
     (I18N.th['soon_'+v]?'<p class="sm mut">'+esc(t('soon_'+v))+'</p>':'')+'<button type="button" class="btn big" onclick="show(\'today\')">'+esc(t('soon_back'))+'</button></div>';}

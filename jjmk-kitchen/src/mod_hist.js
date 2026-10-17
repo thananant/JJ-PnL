@@ -67,8 +67,7 @@ function hsPillsHtml(){ // ชิปประเภท + ช่วงเวล�
 function hsPillsPaint(){ // สลับ .on ในที่ — วาดแถบใหม่ทำให้แถบที่เลื่อนไว้เด้งกลับซ้ายสุด ชิปที่เพิ่งกดหลุดจอบนโทรศัพท์ (ผู้ตรวจ V2 2026-10-17) · โครงไม่ครบ = วาดใหม่
   const b=document.getElementById('hsPills');if(!b)return;const bars=b.querySelectorAll('.pills');
   if(bars.length!==2){b.innerHTML=hsPillsHtml();return;}
-  [[bars[0],HS.type],[bars[1],HS.range]].forEach(([bar,cur])=>{bar.querySelectorAll('.pill[data-k]').forEach(p=>p.classList.toggle('on',p.dataset.k===cur));
-    const on=bar.querySelector('.pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}});}
+  [[bars[0],HS.type],[bars[1],HS.range]].forEach(([bar,cur])=>{bar.querySelectorAll('.pill[data-k]').forEach(p=>p.classList.toggle('on',p.dataset.k===cur));pillReveal(bar);});}
 function hsSetType(k){if(!HS_TYPES.includes(k))k='all';HS.type=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsPaint();}
 function hsSetRange(k){if(!HS_RANGES.includes(k))k='7';HS.range=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsRangeBox();hsLoad();}
 function hsSaveF(){LS.set(HS_F,{type:HS.type,range:HS.range,from:HS.from,to:HS.to,q:HS.q});}

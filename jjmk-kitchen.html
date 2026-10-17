@@ -785,7 +785,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-17 19:31';
+const APP_VER='KC 2.0 · 2026-10-17 20:04';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -1354,7 +1354,12 @@ function show(v){
   el.innerHTML='<div class="spin"></div>';
   try{if(typeof RENDER[v]==='function')RENDER[v](el);else renderPlaceholder(el,v);}
   catch(e){el.innerHTML='<div class="card empty">⚠ '+esc((e&&e.message)||e)+'</div>';console.error(e);}
+  pillReveal(el);   // แถบชิปที่เพิ่งวาด scrollLeft = 0 — ชิปที่เลือกอยู่ต้องยังเห็นบนโทรศัพท์ (ผู้ตรวจ V2 2026-10-17 · เจ้าของว่า "ปุ่มพวกนี้เหมือนใช้ไม่ได้")
 }
+function pillReveal(root){ // เลื่อนแถบชิป (.pills ที่เลื่อนข้างได้) ให้เห็นชิป .on — ใช้หลังวาดแถบใหม่ทุกที่ (show() เรียกให้เองหลัง RENDER · โมดูลที่วาดชิปในที่เรียกเอง) · ไม่แตะการเลื่อนแนวตั้งของหน้า
+  const r=root&&root.nodeType?root:document;const bars=(r.matches&&r.matches('.pills'))?[r]:[...r.querySelectorAll('.pills')];
+  bars.forEach(c=>{try{const p=c.querySelector('.pill.on');if(!p||c.scrollWidth<=c.clientWidth+1)return;const cr=c.getBoundingClientRect(),pr=p.getBoundingClientRect();
+    if(pr.left>=cr.left-0.5&&pr.right<=cr.right+0.5)return;c.scrollLeft=Math.max(0,pr.left-cr.left+c.scrollLeft-(c.clientWidth-pr.width)/2);}catch(e){}});}
 function renderPlaceholder(el,v){ // หน้าที่ยังไม่มีโมดูล (รอบถัดไป) — การ์ดบอกเป็นมิตร ไม่ใช่ข้อผิดพลาด
   const p=NAV_IC[v]+' '+t('nav_'+v);el.innerHTML=dhead(p)+'<div class="card soon"><div class="bi">🚧</div><h2>'+esc(t('soon_title'))+'</h2><p>'+esc(t('soon_body',{p}))+'</p>'+
     (I18N.th['soon_'+v]?'<p class="sm mut">'+esc(t('soon_'+v))+'</p>':'')+'<button type="button" class="btn big" onclick="show(\'today\')">'+esc(t('soon_back'))+'</button></div>';}
@@ -1540,7 +1545,7 @@ function tdPaintKpis(D){
    ร่างฟอร์มอยู่ localStorage jjck_rc_draft (วันเดียวกัน ≤12 ชม.) — ลากหน้าลงรีเฟรชแล้วตัวเลขไม่หาย
    ============================================================ */
 I18N.add({
-th:{rc_new:'รับของใหม่',rc_recent:'ที่รับแล้ว',rc_bill_no:'เลขบิล/ใบส่งของ',rc_sup_pick:'— เลือกร้านค้า —',rc_sup_new:'＋ ร้านใหม่',rc_sup_name:'ชื่อร้านค้า',rc_sup_phone:'เบอร์โทร',
+th:{rc_new:'รับของใหม่',rc_recent:'ที่รับแล้ว',rc_sup_pick:'— เลือกร้านค้า —',rc_sup_new:'＋ ร้านใหม่',rc_sup_name:'ชื่อร้านค้า',rc_sup_phone:'เบอร์โทร',
   rc_from_po:'รับตามที่สั่งไว้',rc_po_none:'ยังไม่มีรายการที่สั่งไว้รอรับ',rc_po_pick:'เลือกใบที่สั่งไว้',rc_po_tag:'สั่งไว้',rc_po_items:'{n} รายการ',
   rc_add_line:'เพิ่มรายการ',rc_clear:'ล้างฟอร์ม',rc_clear_q:'ทิ้งรายการที่กรอกไว้ทั้งหมด?',rc_pick_item:'แตะเพื่อเลือกวัตถุดิบ',rc_item_new:'＋ วัตถุดิบใหม่',
   rc_packs:'จำนวน (กี่ห่อ/ถุง/ชุด)',rc_pack_unit:'หน่วยที่รับ',rc_pack_size:'ขนาดบรรจุ',rc_unit_new:'＋ หน่วยใหม่…',rc_unit_name:'ชื่อหน่วย',rc_unit_eq:'1 {u} = ? {b}',rc_unit_save:'ใช้หน่วยนี้',
@@ -1552,7 +1557,7 @@ th:{rc_new:'รับของใหม่',rc_recent:'ที่รับแล�
   rc_item_name:'ชื่อวัตถุดิบ',rc_item_unit:'หน่วยหลัก (ที่ใช้ในสูตร)',rc_item_cat:'หมวด',rc_item_pack:'หน่วยที่ซื้อ',rc_item_pack_q:'1 หน่วยที่ซื้อ = กี่หน่วยหลัก',rc_item_sup:'ร้านประจำ',rc_item_dup:'มีวัตถุดิบชื่อนี้อยู่แล้ว',
   rc_pack_new_saved:'จำหน่วย {u} ของ {i} ไว้แล้ว (1 {u} = {q} {b})',rc_prev_na:'ไม่มีต้นทุนก่อนรับที่จดไว้ — คงต้นทุนปัจจุบัน',rc_prev_cols:'หมายเหตุ: ตารางยังไม่มีช่องเก็บต้นทุนก่อนรับ (prev_avg) — ยกเลิกแล้วต้นทุนจะไม่ย้อนกลับ',
   rc_n_bills:'{n} ใบ',rc_14d:'14 วันล่าสุด',rc_not_saved:'บันทึกไม่สำเร็จ — ไม่มีอะไรถูกบันทึก ลองใหม่อีกครั้ง',rc_cost_fix:'ยอดในระบบเปลี่ยนระหว่างบันทึก — คิดต้นทุนถัวเฉลี่ยใหม่ให้แล้ว',rc_lines_hint:'ใส่ทีละรายการ: กี่ห่อ · ห่อละเท่าไร · จ่ายเท่าไร — ระบบคิดต้นทุนต่อหน่วยให้เอง'},
-en:{rc_new:'New receipt',rc_recent:'Received',rc_bill_no:'Bill / delivery note no.',rc_sup_pick:'— choose supplier —',rc_sup_new:'＋ New supplier',rc_sup_name:'Supplier name',rc_sup_phone:'Phone',
+en:{rc_new:'New receipt',rc_recent:'Received',rc_sup_pick:'— choose supplier —',rc_sup_new:'＋ New supplier',rc_sup_name:'Supplier name',rc_sup_phone:'Phone',
   rc_from_po:'Receive an order',rc_po_none:'No sent orders waiting to be received',rc_po_pick:'Choose the order',rc_po_tag:'Order',rc_po_items:'{n} lines',
   rc_add_line:'Add line',rc_clear:'Clear form',rc_clear_q:'Discard everything entered?',rc_pick_item:'Tap to choose an ingredient',rc_item_new:'＋ New ingredient',
   rc_packs:'Quantity (packs / bags / sets)',rc_pack_unit:'Received as',rc_pack_size:'Pack size',rc_unit_new:'＋ New unit…',rc_unit_name:'Unit name',rc_unit_eq:'1 {u} = ? {b}',rc_unit_save:'Use this unit',
@@ -1564,7 +1569,7 @@ en:{rc_new:'New receipt',rc_recent:'Received',rc_bill_no:'Bill / delivery note n
   rc_item_name:'Ingredient name',rc_item_unit:'Base unit (used in recipes)',rc_item_cat:'Category',rc_item_pack:'Buying unit',rc_item_pack_q:'1 buying unit = how many base units',rc_item_sup:'Usual supplier',rc_item_dup:'An ingredient with this name already exists',
   rc_pack_new_saved:'Saved unit {u} for {i} (1 {u} = {q} {b})',rc_prev_na:'No pre-receipt cost stored — current cost kept',rc_prev_cols:'Note: the table has no prev_avg column yet — voiding will not restore costs',
   rc_n_bills:'{n} receipts',rc_14d:'Last 14 days',rc_not_saved:'NOT saved — please try again',rc_cost_fix:'Stock changed while saving — moving average recomputed',rc_lines_hint:'One line per item: how many packs · pack size · what you paid — unit cost is computed for you'},
-lo:{rc_new:'ຮັບເຄື່ອງໃໝ່',rc_recent:'ຮັບແລ້ວ',rc_bill_no:'ເລກບິນ/ໃບສົ່ງເຄື່ອງ',rc_sup_pick:'— ເລືອກຮ້ານຄ້າ —',rc_sup_new:'＋ ຮ້ານໃໝ່',rc_sup_name:'ຊື່ຮ້ານຄ້າ',rc_sup_phone:'ເບີໂທ',
+lo:{rc_new:'ຮັບເຄື່ອງໃໝ່',rc_recent:'ຮັບແລ້ວ',rc_sup_pick:'— ເລືອກຮ້ານຄ້າ —',rc_sup_new:'＋ ຮ້ານໃໝ່',rc_sup_name:'ຊື່ຮ້ານຄ້າ',rc_sup_phone:'ເບີໂທ',
   rc_from_po:'ຮັບຕາມທີ່ສັ່ງໄວ້',rc_po_none:'ຍັງບໍ່ມີລາຍການທີ່ສັ່ງໄວ້ລໍຮັບ',rc_po_pick:'ເລືອກໃບທີ່ສັ່ງໄວ້',rc_po_tag:'ສັ່ງໄວ້',rc_po_items:'{n} ລາຍການ',
   rc_add_line:'ເພີ່ມລາຍການ',rc_clear:'ລ້າງຟອມ',rc_clear_q:'ຖິ້ມລາຍການທີ່ໃສ່ໄວ້ທັງໝົດ?',rc_pick_item:'ແຕະເພື່ອເລືອກວັດຖຸດິບ',rc_item_new:'＋ ວັດຖຸດິບໃໝ່',
   rc_packs:'ຈຳນວນ (ຈັກຫໍ່/ຖົງ/ຊຸດ)',rc_pack_unit:'ຫົວໜ່ວຍທີ່ຮັບ',rc_pack_size:'ຂະໜາດບັນຈຸ',rc_unit_new:'＋ ຫົວໜ່ວຍໃໝ່…',rc_unit_name:'ຊື່ຫົວໜ່ວຍ',rc_unit_eq:'1 {u} = ? {b}',rc_unit_save:'ໃຊ້ຫົວໜ່ວຍນີ້',
@@ -1576,7 +1581,7 @@ lo:{rc_new:'ຮັບເຄື່ອງໃໝ່',rc_recent:'ຮັບແລ້�
   rc_item_name:'ຊື່ວັດຖຸດິບ',rc_item_unit:'ຫົວໜ່ວຍຫຼັກ (ທີ່ໃຊ້ໃນສູດ)',rc_item_cat:'ໝວດ',rc_item_pack:'ຫົວໜ່ວຍທີ່ຊື້',rc_item_pack_q:'1 ຫົວໜ່ວຍທີ່ຊື້ = ຈັກຫົວໜ່ວຍຫຼັກ',rc_item_sup:'ຮ້ານປະຈຳ',rc_item_dup:'ມີວັດຖຸດິບຊື່ນີ້ຢູ່ແລ້ວ',
   rc_pack_new_saved:'ຈື່ຫົວໜ່ວຍ {u} ຂອງ {i} ໄວ້ແລ້ວ (1 {u} = {q} {b})',rc_prev_na:'ບໍ່ມີຕົ້ນທຶນກ່ອນຮັບທີ່ຈົດໄວ້ — ຄົງຕົ້ນທຶນປັດຈຸບັນ',rc_prev_cols:'ໝາຍເຫດ: ຕາຕະລາງຍັງບໍ່ມີຊ່ອງເກັບຕົ້ນທຶນກ່ອນຮັບ (prev_avg) — ຍົກເລີກແລ້ວຕົ້ນທຶນຈະບໍ່ຍ້ອນກັບ',
   rc_n_bills:'{n} ໃບ',rc_14d:'14 ມື້ຫຼ້າສຸດ',rc_not_saved:'ບໍ່ໄດ້ບັນທຶກ — ລອງໃໝ່ອີກຄັ້ງ',rc_cost_fix:'ຍອດໃນລະບົບປ່ຽນລະຫວ່າງບັນທຶກ — ຄິດຕົ້ນທຶນສະເລ່ຍໃໝ່ແລ້ວ',rc_lines_hint:'ໃສ່ທີລະລາຍການ: ຈັກຫໍ່ · ຫໍ່ລະເທົ່າໃດ · ຈ່າຍເທົ່າໃດ — ລະບົບຄິດຕົ້ນທຶນຕໍ່ຫົວໜ່ວຍໃຫ້ເອງ'},
-my:{rc_new:'လက်ခံမှုအသစ်',rc_recent:'လက်ခံပြီး',rc_bill_no:'ဘေလ်/ပို့လွှာ နံပါတ်',rc_sup_pick:'— ဆိုင်ရွေးပါ —',rc_sup_new:'＋ ဆိုင်အသစ်',rc_sup_name:'ဆိုင်အမည်',rc_sup_phone:'ဖုန်း',
+my:{rc_new:'လက်ခံမှုအသစ်',rc_recent:'လက်ခံပြီး',rc_sup_pick:'— ဆိုင်ရွေးပါ —',rc_sup_new:'＋ ဆိုင်အသစ်',rc_sup_name:'ဆိုင်အမည်',rc_sup_phone:'ဖုန်း',
   rc_from_po:'မှာထားသည်ကို လက်ခံ',rc_po_none:'လက်ခံရန် စောင့်နေသော မှာယူမှု မရှိပါ',rc_po_pick:'မှာယူမှုကို ရွေးပါ',rc_po_tag:'မှာထား',rc_po_items:'{n} ကြောင်း',
   rc_add_line:'ကြောင်းထည့်ရန်',rc_clear:'ဖောင်ရှင်းရန်',rc_clear_q:'ထည့်ထားသမျှ ဖျက်မလား?',rc_pick_item:'ကုန်ကြမ်းရွေးရန် နှိပ်ပါ',rc_item_new:'＋ ကုန်ကြမ်းအသစ်',
   rc_packs:'အရေအတွက် (ထုပ်/အိတ်/စုံ)',rc_pack_unit:'လက်ခံယူနစ်',rc_pack_size:'ထုပ်အရွယ်',rc_unit_new:'＋ ယူနစ်အသစ်…',rc_unit_name:'ယူနစ်အမည်',rc_unit_eq:'1 {u} = ? {b}',rc_unit_save:'ဤယူနစ်သုံးရန်',
@@ -1632,15 +1637,15 @@ CSS.add(`
 .rc-dhead{font-family:var(--fh);font-weight:700;color:var(--wine);font-size:13.5px;margin:10px 2px 6px}
 .rc-po-chip{display:inline-flex;align-items:center;gap:6px;margin-top:4px}
 `);
-let RC=null;                 // ฟอร์มรับของที่กำลังกรอก {d,sup_id,sup_name,bill_no,note,po_id,po_no,lines[]}
+let RC=null;                 // ฟอร์มรับของที่กำลังกรอก {d,sup_id,sup_name,note,po_id,po_no,lines[]} (ไม่มี bill_no)
 let RC_VIEW='form';          // 'form' | 'list'
 let RC_T=null;               // timer บันทึกร่าง
 const RC_DRAFT='jjck_rc_draft',RC_DRAFT_MS=12*3600*1000;
-function rcBlank(){return {d:bizTodayISO(),sup_id:'',sup_name:'',bill_no:'',note:'',po_id:null,po_no:'',lines:[]};}
+function rcBlank(){return {d:bizTodayISO(),sup_id:'',sup_name:'',note:'',po_id:null,po_no:'',lines:[]};}   // ไม่มี bill_no แล้ว (ฟอร์มไม่มีช่องเลขบิล · kc_receipts.bill_no = null เสมอ)
 function rcLineBlank(){return {item_id:'',name:'',packs:'',pack_unit:'',pack_qty:'',unit:'',price_mode:'pack',price:'',newu:null};}
 function rcDraftLoad(){const d=LS.get(RC_DRAFT,null);if(!d||!d.data||d.d!==bizTodayISO()||Date.now()-num(d.t)>RC_DRAFT_MS){LS.del(RC_DRAFT);return null;}
-  const f=Object.assign(rcBlank(),d.data);f.bill_no='';f.lines=(Array.isArray(f.lines)?f.lines:[]).map(l=>Object.assign(rcLineBlank(),l));return f;}
-function rcDraft(){clearTimeout(RC_T);RC_T=setTimeout(()=>{if(!RC)return;const has=RC.lines.length||RC.bill_no||RC.note||RC.sup_id;
+  const f=Object.assign(rcBlank(),d.data);delete f.bill_no;f.lines=(Array.isArray(f.lines)?f.lines:[]).map(l=>Object.assign(rcLineBlank(),l));return f;}   // ร่างรุ่นเก่าที่ยังมี bill_no = ทิ้งช่องนั้น
+function rcDraft(){clearTimeout(RC_T);RC_T=setTimeout(()=>{if(!RC)return;const has=RC.lines.length||RC.note||RC.sup_id;
   if(has)LS.set(RC_DRAFT,{t:Date.now(),d:bizTodayISO(),data:RC});else LS.del(RC_DRAFT);},250);}
 function rcDraftClear(){clearTimeout(RC_T);LS.del(RC_DRAFT);}
 
@@ -1663,6 +1668,7 @@ function rcPaintForm(){ // หัว (ร้าน·วันที่·หม�
     '<div class="rc-sec">🖼️ '+esc(t('rc_tap_pic'))+'</div><div id="rcChips">'+rcChipsHtml()+'</div>'+searchBox('rcGridQ','rcGridSearch')+
     '<div class="igrid rcgrid" id="rcGrid">'+rcGridHtml()+'</div>';
   const q=document.getElementById('rcGridQ');if(q&&RC_Q)q.value=RC_Q;
+  pillReveal(b);   // วาดใหม่ทั้งฟอร์ม (กด ✓ ในหน้าต่าง) แล้วแถบชิปเด้งซ้ายสุด — ชิปที่เลือกต้องยังเห็น (ผู้ตรวจ V2)
   rcBar();
 }
 function rcSupOpts(){const act=S.sups.filter(s=>s.active!==false||s.id===RC.sup_id);
@@ -1707,7 +1713,7 @@ function rcGridHtml(){const L=rcGridList(),inL={};RC.lines.forEach((l,i)=>{if(l.
       '<div class="iname">'+esc(dispName(it))+'</div><div class="isub">'+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+(itemCost(it)!=null?' · ฿'+rcP(itemCost(it))+'/'+esc(trUnit(it.unit)):'')+'</div></div>';}).join('')+
     '<div class="icard rctile tap rcnew" onclick="rcNewItem(null)"><div class="ithumb">➕</div><div class="iname">'+esc(t('rc_item_new'))+'</div><div class="isub">&nbsp;</div></div>'+
     (L.length?'':'<div class="empty" style="grid-column:1/-1">'+esc(t('empty'))+'</div>');}
-function rcGridPaint(){const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();const c=document.getElementById('rcChips');if(c){c.innerHTML=rcChipsHtml();const on=c.querySelector('.pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}}}   // ชิปที่เลือกต้องยังเห็นหลังวาดใหม่
+function rcGridPaint(){const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();const c=document.getElementById('rcChips');if(c){c.innerHTML=rcChipsHtml();pillReveal(c);}}   // ชิปที่เลือกต้องยังเห็นหลังวาดใหม่ (pillReveal กลางของ shell)
 function rcSetCat(k){RC_CAT=k||'';rcGridPaint();}
 function rcGridSearch(v){RC_Q=String(v||'');const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();}   // กรองในที่ — คีย์บอร์ดไม่หุบ
 function rcTileTap(id){const it=itemById(id);if(!it)return;const i=RC.lines.findIndex(l=>l.item_id===id);if(i>=0){rcEdit(i);return;}
@@ -2645,7 +2651,7 @@ async function ctDetail(id){
      → กลุ่ม "✋ สาขาเรียกเพิ่ม" เป็นการ์ดใน SD.groups ต่อท้ายออเดอร์ปกติ (g.manual=true · key 'manual|<สาขา>|<วันนี้>' · บรรทัด rid 'manual|<สาขา>|<recipe_id>' pid '' link factor 1)
      · ร่าง localStorage jjck_sd_manual {d:วันนี้,g:{<สาขา>:[{recipe_id,qty}]}} เฉพาะวันเดียวกัน (รีเฟรชแล้วอยู่) · แก้จำนวนในที่ = แก้ร่าง (ส่ง = น้อยสุดของ จำนวน/ของที่เหลือ — ไม่พอ = ส่งเท่าที่มี ขาดขึ้นในบิล)
      · ✅ ส่งแล้ว ออกบิล ใช้ sdSend เส้นทางเดิมทุกขั้น (ยอดสดก่อน/หลังหน้าต่าง · เลขบิล · ถอนทั้งหมดถ้าพลาด) — head.order_date = วันนี้ · head.note = SD_MANUAL_NOTE (ไทยเสมอ) · บรรทัด stk_product_id null
-       · ตรวจซ้ำหลังหน้าต่างเทียบกับร่างปัจจุบัน (ไม่ใช่ sdCalcGroups) · สำเร็จ = ลบกลุ่มออกจากร่าง · ข้อความไลน์มีบรรทัด "✋ สาขาเรียกของเพิ่ม" · 🧾 บิล/ยกเลิกบิล/ประวัติ เหมือนบิลปกติ
+       · ตรวจซ้ำหลังหน้าต่างเทียบกับร่างปัจจุบัน (ไม่ใช่ sdCalcGroups) · สำเร็จ = เหลือในร่างเฉพาะส่วนที่ส่งไม่ครบ (sdManualAfterBill — ขอ − ส่ง · ส่งครบ = เอาออก · ตรงกับบรรทัด "ค้างส่ง" ในบิลไลน์ · ผู้ตรวจ V2) · ข้อความไลน์มีบรรทัด "✋ สาขาเรียกของเพิ่ม" · 🧾 บิล/ยกเลิกบิล/ประวัติ เหมือนบิลปกติ
      · บิลที่ note = SD_MANUAL_NOTE ไม่ถูกหักออกจากออเดอร์ของแอพนับสต๊อก (sdCalcGroups ข้าม — ของเพิ่มไม่ใช่ของที่สั่งไว้) · ☀️ วันนี้/🍳 ทำของ ใช้ sdCalcGroups (ฟังก์ชันล้วน) จึงไม่เห็นร่างเรียกเพิ่ม ป้าย 🚚 นับเฉพาะออเดอร์ปกติ (ตัวเลขตรงกับหน้าวันนี้)
    ============================================================ */
 I18N.add({
@@ -2745,6 +2751,12 @@ th:{sd_m_nothing:'ของไม่พอส่ง — จัดให้ใบ
 en:{sd_m_nothing:'Not enough stock to send — branch orders are served first · make more first, or lower the requested amount',sd_m_nothing_s:'⛔ Not enough stock (branch orders first)'},
 lo:{sd_m_nothing:'ເຄື່ອງບໍ່ພໍສົ່ງ — ຈັດໃຫ້ໃບສັ່ງສາຂາກ່ອນແລ້ວ · ⚡ ເຮັດເຄື່ອງກ່ອນ ຫຼືຫຼຸດຈຳນວນທີ່ຂໍ',sd_m_nothing_s:'⛔ ເຄື່ອງບໍ່ພໍສົ່ງ (ຈັດໃຫ້ໃບສັ່ງສາຂາກ່ອນ)'},
 my:{sd_m_nothing:'ပို့ရန် လက်ကျန်မလုံလောက်ပါ — ဆိုင်ခွဲအော်ဒါများကို ဦးစွာထုတ်ပေးပြီးပါပြီ · ⚡ အရင်ထုတ်လုပ်ပါ သို့မဟုတ် တောင်းဆိုအရေအတွက် လျှော့ပါ',sd_m_nothing_s:'⛔ လက်ကျန်မလုံလောက် (ဆိုင်ခွဲအော်ဒါ ဦးစွာ)'}
+});
+I18N.add({ // ➕ ส่งเพิ่ม ส่งได้ไม่ครบ = ส่วนที่ขาดยังอยู่ในการ์ด ✋ (ตรงกับบรรทัด "ค้างส่ง" ในบิลไลน์ — ผู้ตรวจ V2 2026-10-17) · ร่างของวันก่อนถูกทิ้ง = บอกครั้งเดียว
+th:{sd_m_left:'ยังค้างส่ง {n} รายการ — อยู่ในการ์ด ✋ สาขาเรียกเพิ่ม ทำของเสร็จแล้วกดส่งอีกครั้ง (วันนี้เท่านั้น)',sd_m_dropped:'รายการเรียกเพิ่มของวัน {d} ที่ยังไม่ได้ออกบิล ถูกทิ้งแล้ว (เก็บไว้วันเดียว) — ถ้ายังต้องส่งให้กด ➕ ส่งเพิ่ม ใหม่'},
+en:{sd_m_left:'{n} line(s) still owed — kept on the ✋ extra-request card, send again once made (today only)',sd_m_dropped:'The unbilled extra request from {d} was dropped (kept one day only) — tap ➕ Extra delivery again if it is still needed'},
+lo:{sd_m_left:'ຍັງຄ້າງສົ່ງ {n} ລາຍການ — ຢູ່ໃນກາດ ✋ ສາຂາເອີ້ນເພີ່ມ ເຮັດເຄື່ອງແລ້ວກົດສົ່ງອີກຄັ້ງ (ມື້ນີ້ເທົ່ານັ້ນ)',sd_m_dropped:'ລາຍການເອີ້ນເພີ່ມຂອງວັນ {d} ທີ່ຍັງບໍ່ໄດ້ອອກບິນ ຖືກຖິ້ມແລ້ວ (ເກັບໄວ້ມື້ດຽວ) — ຖ້າຍັງຕ້ອງສົ່ງໃຫ້ກົດ ➕ ສົ່ງເພີ່ມ ໃໝ່'},
+my:{sd_m_left:'{n} ကြောင်း ပို့ရန်ကျန်သေးသည် — ✋ ထပ်တောင်းကတ်တွင် ရှိနေသည် ထုတ်လုပ်ပြီးလျှင် ထပ်ပို့ပါ (ယနေ့သာ)',sd_m_dropped:'{d} ၏ ဘေလ်မထုတ်ရသေးသော ထပ်တောင်းမှုကို ဖယ်ရှားပြီး (တစ်ရက်သာသိမ်းသည်) — လိုသေးလျှင် ➕ ထပ်ပို့ ကို ပြန်နှိပ်ပါ'}
 });
 let SD={at:0,ok:true,err:null,groups:[],raw:null,loading:null,quiet:false};
 document.addEventListener('kc:booted',()=>{ // บูตบนแท็บอื่น = ป้าย 🚚 ต้องขึ้นเหมือนกัน (☀️ วันนี้/🚚 ส่งสาขา โหลดเองอยู่แล้ว)
@@ -2988,14 +3000,18 @@ async function sdSend(gi){await once(async()=>{
     step='lines';await db(()=>sb.from('kc_delivery_lines').insert(rows));
     step='moves';await pushMoves(Object.keys(mv).map(rid=>({d,kind:'send',ref_kind:'recipe',ref_id:rid,qty:-rnd4(mv[rid].q),cost:-rnd4(mv[rid].c),ref_table:'kc_deliveries',ref_id2:id,note:no+' · '+g.name})));
   }catch(e){await sdRollback(id,step);toast(t('sd_not_saved')+' · '+((e&&e.message)||e),true);return;}
-  if(g.manual)sdManualDel(g.code);else Object.keys(SD_EDIT).forEach(k=>{if(k.indexOf(g.key+'|')===0)delete SD_EDIT[k];});   // เรียกเพิ่ม: ออกบิลแล้ว = เอากลุ่มออกจากร่าง
+  let left=0;
+  if(g.manual)left=sdManualAfterBill(g);else Object.keys(SD_EDIT).forEach(k=>{if(k.indexOf(g.key+'|')===0)delete SD_EDIT[k];});   // เรียกเพิ่ม: ออกบิลแล้ว = เหลือในร่างเฉพาะส่วนที่ยังส่งไม่ครบ (บิลไลน์บอก "ค้างส่ง" ตรงกับการ์ด ✋)
   if(typeof MK_ORD!=='undefined')MK_ORD.at=0;   // 🍳 ทำของ คิดออเดอร์ใหม่รอบหน้า (ไม่ใช้ที่จำไว้ 60 วิ)
   const res=await sdLineGo(head,rows);
   if(res.saveFail)toast(t('sd_line_nosave'),'warn');else toast(t('sd_saved',{no}));
   await sdLoad();if(S.tab==='send')sdPaint();
-  sdDone(head,res);});}
-function sdDone(h,res){ // หน้าต่างผล: เลขบิล + สถานะไลน์ (ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก)
+  sdDone(head,res,left);});}
+function sdManualAfterBill(g){ // ร่างเรียกเพิ่มหลังออกบิล: ส่งครบ = เอาออก · ส่งไม่ครบ (ของไม่พอ/ไม่มีราคา) = เหลือ ขอ − ส่ง ไว้ให้ส่งต่อ (ผู้ตรวจ V2: เดิมลบทั้งสาขาแล้วไม่มีที่ไหนจำว่ายังค้าง) → จำนวนบรรทัดที่ยังค้าง
+  let left=0;g.lines.forEach(l=>{const rid=l.link&&l.link.recipe_id;if(!rid)return;const rem=rnd4(num(l.ordered)-num(l.sent));if(rem>1e-9)left++;sdManualSet(g.code,rid,rem>1e-9?rem:0);});return left;}
+function sdDone(h,res,left){ // หน้าต่างผล: เลขบิล + สถานะไลน์ (ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก) · left = บรรทัดเรียกเพิ่มที่ยังค้างในการ์ด ✋
   let x='<h3>🧾 '+esc(t('sd_done_t'))+'</h3><div class="okbox">'+esc(t('sd_saved',{no:h.bill_no}))+'<br>'+esc(h.branch_name||'')+' · <b>'+esc(money(h.total))+'</b></div>';
+  if(left>0)x+='<div class="hintbox" id="sdLeftNote">✋ '+esc(t('sd_m_left',{n:left}))+'</div>';
   if(res.state==='sent')x+='<div class="okbox">💬 '+esc(t('sd_line_sent',{g:lgName(res.gid)}))+'</div>'+(res.saveFail?'<div class="badbox">⚠ '+esc(t('sd_line_nosave'))+'</div>':'');
   else x+='<div class="'+(res.state==='fail'?'badbox':'hintbox')+'">'+esc(res.state==='fail'?t('sd_line_fail')+(res.err?' ('+res.err+')':''):t('sd_line_none'))+'</div>'+lineTextBox(res.text,res.gid);
   x+='<div class="row" style="margin-top:12px"><button type="button" class="btn gh" data-id="'+esc(h.id)+'" onclick="closeModal();if(typeof blDetail===\'function\')blDetail(this.dataset.id)">'+esc(t('sd_view_bill'))+'</button>'+
@@ -3003,8 +3019,9 @@ function sdDone(h,res){ // หน้าต่างผล: เลขบิล + 
   openModal(x);}
 
 /* ---------- ➕ ส่งเพิ่ม — สาขาเรียกของเพิ่ม (ร่างในเครื่อง · ออกบิลทาง sdSend เดิม) ---------- */
-function sdManualLoad(){ // → {<สาขา>:[{recipe_id,qty}]} ของวันนี้ (วันอื่น/ค่าเสีย = ทิ้ง)
-  const d=LS.get(SD_MANUAL,null);if(!d||d.d!==bizTodayISO()||!d.g||typeof d.g!=='object'||Array.isArray(d.g)){if(d)LS.del(SD_MANUAL);return {};}
+function sdManualLoad(){ // → {<สาขา>:[{recipe_id,qty}]} ของวันนี้ (วันอื่น/ค่าเสีย = ทิ้ง · ร่างของวันก่อนที่ยังมีรายการ = บอกครั้งเดียวว่าทิ้งแล้ว ไม่หายเงียบ ๆ — ผู้ตรวจ V2)
+  const d=LS.get(SD_MANUAL,null);if(!d||d.d!==bizTodayISO()||!d.g||typeof d.g!=='object'||Array.isArray(d.g)){
+    if(d){LS.del(SD_MANUAL);if(/^\d{4}-\d{2}-\d{2}$/.test(String(d.d||''))&&d.g&&typeof d.g==='object'&&!Array.isArray(d.g)&&Object.keys(d.g).length)toast(t('sd_m_dropped',{d:dispDate(d.d)}),'warn');}return {};}
   const g={};Object.keys(d.g).forEach(c=>{const rows=(Array.isArray(d.g[c])?d.g[c]:[]).filter(x=>x&&typeof x==='object'&&x.recipe_id);if(rows.length)g[c]=rows.map(x=>({recipe_id:String(x.recipe_id),qty:rnd4(num(x.qty))}));});
   return g;}
 function sdManualSave(g){if(!g||!Object.keys(g).length)LS.del(SD_MANUAL);else LS.set(SD_MANUAL,{d:bizTodayISO(),g});}
@@ -3134,6 +3151,12 @@ my:{bl_sub:'ဆိုင်ခွဲတစ်ခုချင်း ပို့�
   bl_br_deny:'အခြားဆိုင်ခွဲ၏ ဘေလ် — ဤအကောင့်တွင် ခွင့်မရှိပါ',bl_line_local:'💬 LINE ပို့ပြီး (အခြေအနေ မသိမ်းနိုင်)',bl_resend_q:'ဘေလ် {no} ကို {t} တွင် LINE အုပ်စုသို့ ပို့ပြီးသား (အခြေအနေ မသိမ်းနိုင်) — ထပ်ပို့လျှင် အုပ်စုတွင် ဘေလ်နှစ်ထပ်ရမည်။ ပို့မလား?',
   bl_moves_noread:'ဤဘေလ်၏ လက်ကျန်မှတ်တမ်း ဖတ်မရပါ — မပယ်ဖျက်ရသေး ထပ်စမ်းပါ',bl_kitchen_name:'🍳 {n}'}
 });
+I18N.add({ // ยกเลิกบิล ➕ ส่งเพิ่ม: ไม่มีออเดอร์ให้ "กลับมาค้างส่ง" (ร่างถูกใช้ไปตอนออกบิล) — บอกตรง ๆ (ผู้ตรวจ V2 2026-10-17)
+th:{bl_void_q_manual:'ยกเลิกบิล {no} ของสาขา {b}?\nของ {n} รายการจะกลับเข้าสต๊อก — บิลนี้เป็นของเรียกเพิ่ม รายการจะไม่กลับมาที่ 🚚 ถ้าต้องส่งอีกให้กด ➕ ส่งเพิ่ม ใหม่'},
+en:{bl_void_q_manual:'Void bill {no} of {b}?\n{n} lines go back into stock — this was an extra request, it will not reappear on 🚚; tap ➕ Extra delivery again if it is still needed'},
+lo:{bl_void_q_manual:'ຍົກເລີກບິນ {no} ຂອງສາຂາ {b}?\nເຄື່ອງ {n} ລາຍການຈະກັບເຂົ້າສະຕັອກ — ບິນນີ້ເປັນຂອງເອີ້ນເພີ່ມ ລາຍການຈະບໍ່ກັບມາທີ່ 🚚 ຖ້າຕ້ອງສົ່ງອີກໃຫ້ກົດ ➕ ສົ່ງເພີ່ມ ໃໝ່'},
+my:{bl_void_q_manual:'{b} ၏ ဘေလ် {no} ကို ပယ်ဖျက်မလား?\n{n} ကြောင်း လက်ကျန်သို့ ပြန်ဝင်မည် — ဤဘေလ်သည် ထပ်တောင်းမှုဖြစ်၍ 🚚 တွင် ပြန်မပေါ်ပါ၊ လိုသေးလျှင် ➕ ထပ်ပို့ ကို ပြန်နှိပ်ပါ'}
+});
 CSS.add(`
 .bl-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .bl-month{display:flex;align-items:center;gap:6px}.bl-month b{font-family:var(--fh);font-size:16px;min-width:96px;text-align:center}
@@ -3256,7 +3279,7 @@ async function blVoidDone(id){ // เคยคืนสต๊อกของบ�
 async function blVoid(id){await once(async()=>{ // ❌ ยกเลิกบิล: คืนสต๊อก = กลับด้านของที่เคยตัดจริง (kc_moves send ของบิลนี้) · ไม่มี = จากบรรทัด · แล้ว status void
   if(!isAdminish())return;const R=await blRead(id);if(!R)return;const {x,lines}=R;if(!blScopeOk(x))return;
   if(x.status==='void'){toast(t('bl_void_done'),true);return;}
-  if(!(await confirm2(t('bl_void_q',{no:x.bill_no||'',b:x.branch_name||branchName(x.branch)||x.branch,n:lines.length}),{danger:true})))return;
+  if(!(await confirm2(t((typeof sdIsManual==='function'&&sdIsManual(x))?'bl_void_q_manual':'bl_void_q',{no:x.bill_no||'',b:x.branch_name||branchName(x.branch)||x.branch,n:lines.length}),{danger:true})))return;   // บิลเรียกเพิ่ม = ไม่สัญญาว่าออเดอร์จะกลับมาค้างส่ง
   try{
     const done=await blVoidDone(id);if(done==null){toast(t('bl_moves_noread'),true);return;}   // kc_moves คือของจริงที่เคยตัด — อ่านไม่ได้ = ไม่ยกเลิก (คืนผิดจำนวน/คืนซ้ำ)
     if(!done){
@@ -3748,7 +3771,8 @@ const mnIcon=r=>MN_IC[(r&&r.cat)||'']||'🍳';
 const mnMoney=c=>'฿'+fmtQ(c);
 let MN_VIEW=LS.get('jjck_mnview','')==='target'?'target':'';   // '' = การ์ดเมนู · 'target' = 🎯 หน้าตั้ง Safety/Max (รีเฟรชแล้วอยู่หน้าเดิม)
 let MN_TGQ='';                                                   // ค้นหาในหน้า 🎯
-const MN_TG={seq:{},tm:{},pend:{},bad:{},busy:{},again:{}};      // ต่อแถว: seq = ลำดับการเขียน · tm = debounce · pend = ช่องที่แก้แล้วรอเขียน · bad = ช่องที่ค่าใช้ไม่ได้ · busy/again = เขียนต่อกันทีละแถว
+const MN_TG={seq:{},tm:{},pend:{},fly:{},bad:{},raw:{},err:{},busy:{},again:{}};   // ต่อแถว: seq = ลำดับการเขียน · tm = debounce · pend = ช่องที่แก้แล้วรอเขียน · fly = ชุดที่กำลังเขียนอยู่ · bad/raw = ช่องที่ค่าใช้ไม่ได้ + ข้อความที่พิมพ์ · err = เขียนพลาดค้าง · busy/again = เขียนต่อกันทีละแถว
+// ช่องบนจอวาดจาก mnTgCur(r) = แคช + fly + pend เสมอ (วาดแถวใหม่ตอนแตะชิป/ค้นหา/สลับแท็บ แล้วค่าที่พิมพ์ไว้ไม่หาย · เขียนพลาด = ค่านั้นยังอยู่บนจอ + แถวแดง ไม่ถูกเขียนเงียบ ๆ ทีหลัง — ผู้ตรวจ V2 2026-10-17)
 function mnTargetCalc(r,stock,daily){ // สูตร Safety/Max ที่เดียว — 🍳 mkNeeds · ☀️ tdPaintRefill · 🎯 หน้านี้ ต้องตรงกัน (เจ้าของสั่ง 2026-10-17)
   // Safety = ขั้นต่ำที่ต้องมี (target_qty · หรือ target_days × ยอดส่งเฉลี่ย/วัน) · Max = ทำเติมให้ถึง (max_qty · ว่าง/0 = Safety · ต่ำกว่า Safety = ใช้ Safety)
   // สต๊อก < Safety → ต้องเติม = Max − สต๊อก · ไม่ต่ำกว่า = 0 (ส่วน open/short ของออเดอร์สาขาคิดแยกใน mkNeeds ตามเดิม)
@@ -3780,7 +3804,10 @@ RENDER.menus=function(el){
   h+=searchBox('mnQ','mnSearch')+'<div id="mnGrid" class="igrid"></div>';
   el.innerHTML=h;const q=document.getElementById('mnQ');if(q)q.value=MN_Q;mnPaintGrid();
 };
-function mnSetCat(k){MN_CAT=k||'';LS.set('jjck_mncat',MN_CAT);show('menus');const on=document.querySelector('#view-menus .pills .pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}}   // วาดหน้าใหม่แล้วแถบชิปเด้งซ้ายสุด — เลื่อนชิปที่เลือกกลับเข้าจอ (ผู้ตรวจ V1)
+function mnSetCat(k){MN_CAT=k||'';LS.set('jjck_mncat',MN_CAT);   // การ์ดเมนู: วาดหน้าใหม่ (show() เลื่อนชิปที่เลือกกลับเข้าจอให้ — pillReveal) · หน้า 🎯: สลับชิปในที่ + วาดเฉพาะรายการ ไม่ทำลายช่องที่กำลังพิมพ์ (ผู้ตรวจ V2)
+  const v=document.getElementById('view-menus');
+  if(MN_VIEW==='target'&&v&&document.getElementById('mnTgList')){v.querySelectorAll('.pills .pill[data-k]').forEach(p=>p.classList.toggle('on',p.dataset.k===MN_CAT));pillReveal(v);mnTgPaintList();return;}
+  show('menus');}
 function mnSearch(v){MN_Q=v||'';mnPaintGrid();}
 function mnPaintGrid(){
   const box=document.getElementById('mnGrid');if(!box)return;
@@ -3828,10 +3855,11 @@ function mnTgRender(el){
 function mnTgSearch(v){MN_TGQ=v||'';mnTgPaintList();}
 function mnTgPaintList(){
   const box=document.getElementById('mnTgList');if(!box)return;const q=supKey(MN_TGQ);
+  Object.keys(MN_TG.pend).forEach(id=>mnTgFlush(id));   // วาดแถวใหม่ = เขียนค่าที่ค้างทันที (ไม่รอ debounce) · ช่องยังวาดจาก mnTgCur (fly+pend) จึงไม่เด้งกลับค่าเก่า
   const list=activeRecipes().filter(r=>(!MN_CAT||(r.cat||'อื่นๆ')===MN_CAT)&&(!q||supKey(r.name).includes(q)||supKey(dispName(r)).includes(q)));
   if(!list.length){box.innerHTML='<div class="empty">'+esc(t(q?'mn_no_match':'mn_none'))+'</div>';return;}
   box.innerHTML=list.map(mnTgRowHtml).join('');mnTgMaxLock();}
-function mnTgCur(r){return Object.assign({},r,MN_TG.pend[r.id]||{});}   // ค่าที่ใช้คิด = ที่บันทึกแล้ว + ที่แก้แล้วรอเขียน (เฉพาะค่าที่ใช้ได้)
+function mnTgCur(r){return Object.assign({},r,MN_TG.fly[r.id]||{},MN_TG.pend[r.id]||{});}   // ค่าที่ใช้คิด/วาด = ที่บันทึกแล้ว + ที่กำลังเขียน + ที่แก้แล้วรอเขียน (เฉพาะค่าที่ใช้ได้)
 function mnTgOrd(){return (typeof MK_ORD!=='undefined'&&MK_ORD.ok)?MK_ORD:null;}
 function mnTgInfoHtml(r){
   const o=mnTgOrd(),u=trUnit(r.yield_unit);let h=esc(t('mn_tg_stock',{q:fmtQ(r.qty),u}));
@@ -3846,25 +3874,25 @@ function mnTgNeedHtml(r){
   return '<span class="green">'+esc(t('mn_tg_ok'))+'</span>'+tick;}
 function mnTgNeedPaint(id){const r=recipeById(id),n=document.getElementById('mnTgN_'+id);if(r&&n)n.innerHTML=mnTgNeedHtml(r);}
 function mnTgInfoPaintAll(){document.querySelectorAll('#mnTgList .mntg').forEach(el=>{const r=recipeById(el.dataset.id);if(!r)return;const i=document.getElementById('mnTgI_'+r.id);if(i)i.innerHTML=mnTgInfoHtml(r);mnTgNeedPaint(r.id);});}
-function mnTgRowHtml(r){
-  const K=canKitchen(),u=trUnit(r.yield_unit),dis=K?'':' disabled',v=x=>x==null?'':String(x);
-  const inp=(f,val,extra)=>'<input type="text" inputmode="decimal" id="mnTg'+(f==='target_qty'?'S':f==='max_qty'?'M':'D')+'_'+esc(r.id)+'" data-id="'+esc(r.id)+'" data-f="'+f+'" value="'+esc(v(val))+'" oninput="mnTgInput(this)"'+(extra||'')+dis+'>';
-  return '<div class="mntg" id="mnTgR_'+esc(r.id)+'" data-id="'+esc(r.id)+'">'+
+function mnTgRowHtml(r){ // ช่องวาดจาก mnTgCur(r) (แคช + กำลังเขียน + รอเขียน) · ช่องที่ค่าใช้ไม่ได้ = ข้อความที่พิมพ์ + ขอบแดง · เขียนพลาดค้าง = แถวแดง (วาดใหม่กี่ครั้งก็ยังเห็นสิ่งที่จะถูกเขียน)
+  const K=canKitchen(),u=trUnit(r.yield_unit),dis=K?'':' disabled',v=x=>x==null?'':String(x),x=mnTgCur(r),bad=MN_TG.bad[r.id]||{},raw=MN_TG.raw[r.id]||{};
+  const inp=(f,extra)=>'<input type="text" inputmode="decimal" class="'+(bad[f]?'bad':'')+'" id="mnTg'+(f==='target_qty'?'S':f==='max_qty'?'M':'D')+'_'+esc(r.id)+'" data-id="'+esc(r.id)+'" data-f="'+f+'" value="'+esc(bad[f]?v(raw[f]):v(x[f]))+'" oninput="mnTgInput(this)"'+(extra||'')+dis+'>';
+  return '<div class="mntg'+(MN_TG.err[r.id]?' err':'')+'" id="mnTgR_'+esc(r.id)+'" data-id="'+esc(r.id)+'">'+
     '<div class="mntg-h">'+thumbHtml(r,mnIcon(r))+'<div class="grow"><div class="iname">'+esc(dispName(r))+'</div><div class="xs mut" id="mnTgI_'+esc(r.id)+'">'+mnTgInfoHtml(r)+'</div></div>'+
       '<div class="mntg-need" id="mnTgN_'+esc(r.id)+'">'+mnTgNeedHtml(r)+'</div></div>'+
     '<div class="mntg-f">'+
-      '<label><span class="xs">'+esc(t('mn_safety'))+'</span><div class="mntg-in">'+inp('target_qty',r.target_qty)+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
-      '<label><span class="xs">'+esc(t('mn_max'))+'</span><div class="mntg-in">'+inp('max_qty',r.max_qty,S.kcMax===false?' disabled':'')+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
-      '<label class="days"><span class="xs">'+esc(t('mn_tg_days'))+'</span><div class="mntg-in">'+inp('target_days',r.target_days)+'<span class="xs mut">'+esc(t('mn_tg_days_s'))+'</span></div></label>'+
-    '</div><div class="xs red mntg-bad" id="mnTgB_'+esc(r.id)+'" style="display:none;margin-top:4px">'+esc(t('mn_tg_bad'))+'</div></div>';}
+      '<label><span class="xs">'+esc(t('mn_safety'))+'</span><div class="mntg-in">'+inp('target_qty')+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
+      '<label><span class="xs">'+esc(t('mn_max'))+'</span><div class="mntg-in">'+inp('max_qty',S.kcMax===false?' disabled':'')+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
+      '<label class="days"><span class="xs">'+esc(t('mn_tg_days'))+'</span><div class="mntg-in">'+inp('target_days')+'<span class="xs mut">'+esc(t('mn_tg_days_s'))+'</span></div></label>'+
+    '</div><div class="xs red mntg-bad" id="mnTgB_'+esc(r.id)+'" style="'+(Object.keys(bad).length?'':'display:none;')+'margin-top:4px">'+esc(t('mn_tg_bad'))+'</div></div>';}
 function mnTgParse(s){ // ค่าในช่อง → null (ว่าง) · ตัวเลข ≥ 0 (ปัด 4 ตำแหน่ง · "1,5" = 1.5 แบบ numIn) · NaN = ใช้ไม่ได้ (ติดลบ/ตัวอักษร)
   s=String(s==null?'':s).trim();if(s==='')return null;
   if(!/^[0-9][0-9,]*(\.[0-9]+)?$/.test(s)&&!/^[0-9]+,[0-9]{1,2}$/.test(s))return NaN;
   const n=numIn(s);return (isFinite(n)&&n>=0)?rnd4(n):NaN;}
 function mnTgInput(el){
   const id=el.dataset.id,f=el.dataset.f,r=recipeById(id);if(!r||!canKitchen()||!['target_qty','max_qty','target_days'].includes(f))return;
-  const n=mnTgParse(el.value),bad=MN_TG.bad[id]=MN_TG.bad[id]||{};
-  if(Number.isNaN(n)){el.classList.add('bad');bad[f]=1;}else{el.classList.remove('bad');delete bad[f];(MN_TG.pend[id]=MN_TG.pend[id]||{})[f]=n;}
+  const n=mnTgParse(el.value),bad=MN_TG.bad[id]=MN_TG.bad[id]||{},raw=MN_TG.raw[id]=MN_TG.raw[id]||{};
+  if(Number.isNaN(n)){el.classList.add('bad');bad[f]=1;raw[f]=el.value;}else{el.classList.remove('bad');delete bad[f];delete raw[f];(MN_TG.pend[id]=MN_TG.pend[id]||{})[f]=n;}
   const bb=document.getElementById('mnTgB_'+id);if(bb)bb.style.display=Object.keys(bad).length?'':'none';
   mnTgNeedPaint(id);
   clearTimeout(MN_TG.tm[id]);MN_TG.tm[id]=setTimeout(()=>mnTgFlush(id),600);}
@@ -3872,7 +3900,7 @@ async function mnTgFlush(id){ // เขียนแถวนี้ทีละ�
   clearTimeout(MN_TG.tm[id]);
   if(MN_TG.busy[id]){MN_TG.again[id]=1;return;}
   const p=MN_TG.pend[id];if(!p||!Object.keys(p).length)return;delete MN_TG.pend[id];
-  MN_TG.busy[id]=1;try{await mnTgSave(id,p);}finally{delete MN_TG.busy[id];}
+  MN_TG.busy[id]=1;MN_TG.fly[id]=p;try{await mnTgSave(id,p);}finally{delete MN_TG.busy[id];delete MN_TG.fly[id];}
   if(MN_TG.again[id]){delete MN_TG.again[id];mnTgFlush(id);}}
 async function mnTgSave(id,patch){ // เขียน ck_recipes เฉพาะช่องที่แก้ · ไม่มีคอลัมน์ max_qty (ยังไม่รัน SQL รุ่นล่าสุด) = เขียนใหม่โดยไม่มี + จำ S.kcMax=false + แถบบอก · เขียนพลาด = คืนค่าไว้รอเขียนรอบหน้า + ขอบแดง + toast
   const r=recipeById(id);if(!r||!canKitchen())return false;
@@ -3886,8 +3914,10 @@ async function mnTgSave(id,patch){ // เขียน ck_recipes เฉพาะ
       break;}}
   catch(e){res={error:e};}finally{setBusy(false);}
   const el=document.getElementById('mnTgR_'+id);
-  if(res&&res.error){MN_TG.pend[id]=Object.assign({},patch,MN_TG.pend[id]||{});toast(t('sv_err')+(res.error.message||res.error),true);if(el)el.classList.add('err');return false;}
-  Object.assign(r,row);
+  if(res&&res.error){MN_TG.pend[id]=Object.assign({},patch,MN_TG.pend[id]||{});MN_TG.err[id]=1;toast(t('sv_err')+(res.error.message||res.error),true);if(el)el.classList.add('err');return false;}   // ค่าที่เขียนไม่สำเร็จยังอยู่บนจอ (วาดจาก pend) + แถวแดง — รอบหน้าเขียนตามที่เห็น
+  Object.assign(r,row);delete MN_TG.err[id];
+  Object.keys(row).forEach(f=>{const i=document.getElementById('mnTg'+(f==='target_qty'?'S':f==='max_qty'?'M':'D')+'_'+id);   // ช่องที่ถูกวาดใหม่ระหว่างรอเขียน (แตะชิป/ค้นหา) = ให้ตรงกับที่บันทึก · กำลังพิมพ์อยู่/มีค่าใหม่รอเขียน = ไม่แตะ
+    if(i&&document.activeElement!==i&&!(MN_TG.pend[id]&&(f in MN_TG.pend[id]))&&!(MN_TG.bad[id]&&MN_TG.bad[id][f]))i.value=row[f]==null?'':String(row[f]);});
   if(el){el.classList.remove('err');el.classList.remove('saved');void el.offsetWidth;el.classList.add('saved');clearTimeout(el._tgT);el._tgT=setTimeout(()=>el.classList.remove('saved'),1500);}
   if(dropped){const b=document.getElementById('mnTgSql');if(b)b.innerHTML=mnTgSqlHtml();mnTgMaxLock();toast(t('mn_tg_sql'),'warn');}
   mnTgNeedPaint(id);return seq===MN_TG.seq[id];}
@@ -5117,8 +5147,7 @@ function hsPillsHtml(){ // ชิปประเภท + ช่วงเวล�
 function hsPillsPaint(){ // สลับ .on ในที่ — วาดแถบใหม่ทำให้แถบที่เลื่อนไว้เด้งกลับซ้ายสุด ชิปที่เพิ่งกดหลุดจอบนโทรศัพท์ (ผู้ตรวจ V2 2026-10-17) · โครงไม่ครบ = วาดใหม่
   const b=document.getElementById('hsPills');if(!b)return;const bars=b.querySelectorAll('.pills');
   if(bars.length!==2){b.innerHTML=hsPillsHtml();return;}
-  [[bars[0],HS.type],[bars[1],HS.range]].forEach(([bar,cur])=>{bar.querySelectorAll('.pill[data-k]').forEach(p=>p.classList.toggle('on',p.dataset.k===cur));
-    const on=bar.querySelector('.pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}});}
+  [[bars[0],HS.type],[bars[1],HS.range]].forEach(([bar,cur])=>{bar.querySelectorAll('.pill[data-k]').forEach(p=>p.classList.toggle('on',p.dataset.k===cur));pillReveal(bar);});}
 function hsSetType(k){if(!HS_TYPES.includes(k))k='all';HS.type=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsPaint();}
 function hsSetRange(k){if(!HS_RANGES.includes(k))k='7';HS.range=k;HS_SHOW=60;hsSaveF();hsPillsPaint();hsRangeBox();hsLoad();}
 function hsSaveF(){LS.set(HS_F,{type:HS.type,range:HS.range,from:HS.from,to:HS.to,q:HS.q});}

@@ -147,7 +147,8 @@ const mnIcon=r=>MN_IC[(r&&r.cat)||'']||'🍳';
 const mnMoney=c=>'฿'+fmtQ(c);
 let MN_VIEW=LS.get('jjck_mnview','')==='target'?'target':'';   // '' = การ์ดเมนู · 'target' = 🎯 หน้าตั้ง Safety/Max (รีเฟรชแล้วอยู่หน้าเดิม)
 let MN_TGQ='';                                                   // ค้นหาในหน้า 🎯
-const MN_TG={seq:{},tm:{},pend:{},bad:{},busy:{},again:{}};      // ต่อแถว: seq = ลำดับการเขียน · tm = debounce · pend = ช่องที่แก้แล้วรอเขียน · bad = ช่องที่ค่าใช้ไม่ได้ · busy/again = เขียนต่อกันทีละแถว
+const MN_TG={seq:{},tm:{},pend:{},fly:{},bad:{},raw:{},err:{},busy:{},again:{}};   // ต่อแถว: seq = ลำดับการเขียน · tm = debounce · pend = ช่องที่แก้แล้วรอเขียน · fly = ชุดที่กำลังเขียนอยู่ · bad/raw = ช่องที่ค่าใช้ไม่ได้ + ข้อความที่พิมพ์ · err = เขียนพลาดค้าง · busy/again = เขียนต่อกันทีละแถว
+// ช่องบนจอวาดจาก mnTgCur(r) = แคช + fly + pend เสมอ (วาดแถวใหม่ตอนแตะชิป/ค้นหา/สลับแท็บ แล้วค่าที่พิมพ์ไว้ไม่หาย · เขียนพลาด = ค่านั้นยังอยู่บนจอ + แถวแดง ไม่ถูกเขียนเงียบ ๆ ทีหลัง — ผู้ตรวจ V2 2026-10-17)
 function mnTargetCalc(r,stock,daily){ // สูตร Safety/Max ที่เดียว — 🍳 mkNeeds · ☀️ tdPaintRefill · 🎯 หน้านี้ ต้องตรงกัน (เจ้าของสั่ง 2026-10-17)
   // Safety = ขั้นต่ำที่ต้องมี (target_qty · หรือ target_days × ยอดส่งเฉลี่ย/วัน) · Max = ทำเติมให้ถึง (max_qty · ว่าง/0 = Safety · ต่ำกว่า Safety = ใช้ Safety)
   // สต๊อก < Safety → ต้องเติม = Max − สต๊อก · ไม่ต่ำกว่า = 0 (ส่วน open/short ของออเดอร์สาขาคิดแยกใน mkNeeds ตามเดิม)
@@ -179,7 +180,10 @@ RENDER.menus=function(el){
   h+=searchBox('mnQ','mnSearch')+'<div id="mnGrid" class="igrid"></div>';
   el.innerHTML=h;const q=document.getElementById('mnQ');if(q)q.value=MN_Q;mnPaintGrid();
 };
-function mnSetCat(k){MN_CAT=k||'';LS.set('jjck_mncat',MN_CAT);show('menus');const on=document.querySelector('#view-menus .pills .pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}}   // วาดหน้าใหม่แล้วแถบชิปเด้งซ้ายสุด — เลื่อนชิปที่เลือกกลับเข้าจอ (ผู้ตรวจ V1)
+function mnSetCat(k){MN_CAT=k||'';LS.set('jjck_mncat',MN_CAT);   // การ์ดเมนู: วาดหน้าใหม่ (show() เลื่อนชิปที่เลือกกลับเข้าจอให้ — pillReveal) · หน้า 🎯: สลับชิปในที่ + วาดเฉพาะรายการ ไม่ทำลายช่องที่กำลังพิมพ์ (ผู้ตรวจ V2)
+  const v=document.getElementById('view-menus');
+  if(MN_VIEW==='target'&&v&&document.getElementById('mnTgList')){v.querySelectorAll('.pills .pill[data-k]').forEach(p=>p.classList.toggle('on',p.dataset.k===MN_CAT));pillReveal(v);mnTgPaintList();return;}
+  show('menus');}
 function mnSearch(v){MN_Q=v||'';mnPaintGrid();}
 function mnPaintGrid(){
   const box=document.getElementById('mnGrid');if(!box)return;
@@ -227,10 +231,11 @@ function mnTgRender(el){
 function mnTgSearch(v){MN_TGQ=v||'';mnTgPaintList();}
 function mnTgPaintList(){
   const box=document.getElementById('mnTgList');if(!box)return;const q=supKey(MN_TGQ);
+  Object.keys(MN_TG.pend).forEach(id=>mnTgFlush(id));   // วาดแถวใหม่ = เขียนค่าที่ค้างทันที (ไม่รอ debounce) · ช่องยังวาดจาก mnTgCur (fly+pend) จึงไม่เด้งกลับค่าเก่า
   const list=activeRecipes().filter(r=>(!MN_CAT||(r.cat||'อื่นๆ')===MN_CAT)&&(!q||supKey(r.name).includes(q)||supKey(dispName(r)).includes(q)));
   if(!list.length){box.innerHTML='<div class="empty">'+esc(t(q?'mn_no_match':'mn_none'))+'</div>';return;}
   box.innerHTML=list.map(mnTgRowHtml).join('');mnTgMaxLock();}
-function mnTgCur(r){return Object.assign({},r,MN_TG.pend[r.id]||{});}   // ค่าที่ใช้คิด = ที่บันทึกแล้ว + ที่แก้แล้วรอเขียน (เฉพาะค่าที่ใช้ได้)
+function mnTgCur(r){return Object.assign({},r,MN_TG.fly[r.id]||{},MN_TG.pend[r.id]||{});}   // ค่าที่ใช้คิด/วาด = ที่บันทึกแล้ว + ที่กำลังเขียน + ที่แก้แล้วรอเขียน (เฉพาะค่าที่ใช้ได้)
 function mnTgOrd(){return (typeof MK_ORD!=='undefined'&&MK_ORD.ok)?MK_ORD:null;}
 function mnTgInfoHtml(r){
   const o=mnTgOrd(),u=trUnit(r.yield_unit);let h=esc(t('mn_tg_stock',{q:fmtQ(r.qty),u}));
@@ -245,25 +250,25 @@ function mnTgNeedHtml(r){
   return '<span class="green">'+esc(t('mn_tg_ok'))+'</span>'+tick;}
 function mnTgNeedPaint(id){const r=recipeById(id),n=document.getElementById('mnTgN_'+id);if(r&&n)n.innerHTML=mnTgNeedHtml(r);}
 function mnTgInfoPaintAll(){document.querySelectorAll('#mnTgList .mntg').forEach(el=>{const r=recipeById(el.dataset.id);if(!r)return;const i=document.getElementById('mnTgI_'+r.id);if(i)i.innerHTML=mnTgInfoHtml(r);mnTgNeedPaint(r.id);});}
-function mnTgRowHtml(r){
-  const K=canKitchen(),u=trUnit(r.yield_unit),dis=K?'':' disabled',v=x=>x==null?'':String(x);
-  const inp=(f,val,extra)=>'<input type="text" inputmode="decimal" id="mnTg'+(f==='target_qty'?'S':f==='max_qty'?'M':'D')+'_'+esc(r.id)+'" data-id="'+esc(r.id)+'" data-f="'+f+'" value="'+esc(v(val))+'" oninput="mnTgInput(this)"'+(extra||'')+dis+'>';
-  return '<div class="mntg" id="mnTgR_'+esc(r.id)+'" data-id="'+esc(r.id)+'">'+
+function mnTgRowHtml(r){ // ช่องวาดจาก mnTgCur(r) (แคช + กำลังเขียน + รอเขียน) · ช่องที่ค่าใช้ไม่ได้ = ข้อความที่พิมพ์ + ขอบแดง · เขียนพลาดค้าง = แถวแดง (วาดใหม่กี่ครั้งก็ยังเห็นสิ่งที่จะถูกเขียน)
+  const K=canKitchen(),u=trUnit(r.yield_unit),dis=K?'':' disabled',v=x=>x==null?'':String(x),x=mnTgCur(r),bad=MN_TG.bad[r.id]||{},raw=MN_TG.raw[r.id]||{};
+  const inp=(f,extra)=>'<input type="text" inputmode="decimal" class="'+(bad[f]?'bad':'')+'" id="mnTg'+(f==='target_qty'?'S':f==='max_qty'?'M':'D')+'_'+esc(r.id)+'" data-id="'+esc(r.id)+'" data-f="'+f+'" value="'+esc(bad[f]?v(raw[f]):v(x[f]))+'" oninput="mnTgInput(this)"'+(extra||'')+dis+'>';
+  return '<div class="mntg'+(MN_TG.err[r.id]?' err':'')+'" id="mnTgR_'+esc(r.id)+'" data-id="'+esc(r.id)+'">'+
     '<div class="mntg-h">'+thumbHtml(r,mnIcon(r))+'<div class="grow"><div class="iname">'+esc(dispName(r))+'</div><div class="xs mut" id="mnTgI_'+esc(r.id)+'">'+mnTgInfoHtml(r)+'</div></div>'+
       '<div class="mntg-need" id="mnTgN_'+esc(r.id)+'">'+mnTgNeedHtml(r)+'</div></div>'+
     '<div class="mntg-f">'+
-      '<label><span class="xs">'+esc(t('mn_safety'))+'</span><div class="mntg-in">'+inp('target_qty',r.target_qty)+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
-      '<label><span class="xs">'+esc(t('mn_max'))+'</span><div class="mntg-in">'+inp('max_qty',r.max_qty,S.kcMax===false?' disabled':'')+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
-      '<label class="days"><span class="xs">'+esc(t('mn_tg_days'))+'</span><div class="mntg-in">'+inp('target_days',r.target_days)+'<span class="xs mut">'+esc(t('mn_tg_days_s'))+'</span></div></label>'+
-    '</div><div class="xs red mntg-bad" id="mnTgB_'+esc(r.id)+'" style="display:none;margin-top:4px">'+esc(t('mn_tg_bad'))+'</div></div>';}
+      '<label><span class="xs">'+esc(t('mn_safety'))+'</span><div class="mntg-in">'+inp('target_qty')+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
+      '<label><span class="xs">'+esc(t('mn_max'))+'</span><div class="mntg-in">'+inp('max_qty',S.kcMax===false?' disabled':'')+'<span class="xs mut">'+esc(u)+'</span></div></label>'+
+      '<label class="days"><span class="xs">'+esc(t('mn_tg_days'))+'</span><div class="mntg-in">'+inp('target_days')+'<span class="xs mut">'+esc(t('mn_tg_days_s'))+'</span></div></label>'+
+    '</div><div class="xs red mntg-bad" id="mnTgB_'+esc(r.id)+'" style="'+(Object.keys(bad).length?'':'display:none;')+'margin-top:4px">'+esc(t('mn_tg_bad'))+'</div></div>';}
 function mnTgParse(s){ // ค่าในช่อง → null (ว่าง) · ตัวเลข ≥ 0 (ปัด 4 ตำแหน่ง · "1,5" = 1.5 แบบ numIn) · NaN = ใช้ไม่ได้ (ติดลบ/ตัวอักษร)
   s=String(s==null?'':s).trim();if(s==='')return null;
   if(!/^[0-9][0-9,]*(\.[0-9]+)?$/.test(s)&&!/^[0-9]+,[0-9]{1,2}$/.test(s))return NaN;
   const n=numIn(s);return (isFinite(n)&&n>=0)?rnd4(n):NaN;}
 function mnTgInput(el){
   const id=el.dataset.id,f=el.dataset.f,r=recipeById(id);if(!r||!canKitchen()||!['target_qty','max_qty','target_days'].includes(f))return;
-  const n=mnTgParse(el.value),bad=MN_TG.bad[id]=MN_TG.bad[id]||{};
-  if(Number.isNaN(n)){el.classList.add('bad');bad[f]=1;}else{el.classList.remove('bad');delete bad[f];(MN_TG.pend[id]=MN_TG.pend[id]||{})[f]=n;}
+  const n=mnTgParse(el.value),bad=MN_TG.bad[id]=MN_TG.bad[id]||{},raw=MN_TG.raw[id]=MN_TG.raw[id]||{};
+  if(Number.isNaN(n)){el.classList.add('bad');bad[f]=1;raw[f]=el.value;}else{el.classList.remove('bad');delete bad[f];delete raw[f];(MN_TG.pend[id]=MN_TG.pend[id]||{})[f]=n;}
   const bb=document.getElementById('mnTgB_'+id);if(bb)bb.style.display=Object.keys(bad).length?'':'none';
   mnTgNeedPaint(id);
   clearTimeout(MN_TG.tm[id]);MN_TG.tm[id]=setTimeout(()=>mnTgFlush(id),600);}
@@ -271,7 +276,7 @@ async function mnTgFlush(id){ // เขียนแถวนี้ทีละ�
   clearTimeout(MN_TG.tm[id]);
   if(MN_TG.busy[id]){MN_TG.again[id]=1;return;}
   const p=MN_TG.pend[id];if(!p||!Object.keys(p).length)return;delete MN_TG.pend[id];
-  MN_TG.busy[id]=1;try{await mnTgSave(id,p);}finally{delete MN_TG.busy[id];}
+  MN_TG.busy[id]=1;MN_TG.fly[id]=p;try{await mnTgSave(id,p);}finally{delete MN_TG.busy[id];delete MN_TG.fly[id];}
   if(MN_TG.again[id]){delete MN_TG.again[id];mnTgFlush(id);}}
 async function mnTgSave(id,patch){ // เขียน ck_recipes เฉพาะช่องที่แก้ · ไม่มีคอลัมน์ max_qty (ยังไม่รัน SQL รุ่นล่าสุด) = เขียนใหม่โดยไม่มี + จำ S.kcMax=false + แถบบอก · เขียนพลาด = คืนค่าไว้รอเขียนรอบหน้า + ขอบแดง + toast
   const r=recipeById(id);if(!r||!canKitchen())return false;
@@ -285,8 +290,10 @@ async function mnTgSave(id,patch){ // เขียน ck_recipes เฉพาะ
       break;}}
   catch(e){res={error:e};}finally{setBusy(false);}
   const el=document.getElementById('mnTgR_'+id);
-  if(res&&res.error){MN_TG.pend[id]=Object.assign({},patch,MN_TG.pend[id]||{});toast(t('sv_err')+(res.error.message||res.error),true);if(el)el.classList.add('err');return false;}
-  Object.assign(r,row);
+  if(res&&res.error){MN_TG.pend[id]=Object.assign({},patch,MN_TG.pend[id]||{});MN_TG.err[id]=1;toast(t('sv_err')+(res.error.message||res.error),true);if(el)el.classList.add('err');return false;}   // ค่าที่เขียนไม่สำเร็จยังอยู่บนจอ (วาดจาก pend) + แถวแดง — รอบหน้าเขียนตามที่เห็น
+  Object.assign(r,row);delete MN_TG.err[id];
+  Object.keys(row).forEach(f=>{const i=document.getElementById('mnTg'+(f==='target_qty'?'S':f==='max_qty'?'M':'D')+'_'+id);   // ช่องที่ถูกวาดใหม่ระหว่างรอเขียน (แตะชิป/ค้นหา) = ให้ตรงกับที่บันทึก · กำลังพิมพ์อยู่/มีค่าใหม่รอเขียน = ไม่แตะ
+    if(i&&document.activeElement!==i&&!(MN_TG.pend[id]&&(f in MN_TG.pend[id]))&&!(MN_TG.bad[id]&&MN_TG.bad[id][f]))i.value=row[f]==null?'':String(row[f]);});
   if(el){el.classList.remove('err');el.classList.remove('saved');void el.offsetWidth;el.classList.add('saved');clearTimeout(el._tgT);el._tgT=setTimeout(()=>el.classList.remove('saved'),1500);}
   if(dropped){const b=document.getElementById('mnTgSql');if(b)b.innerHTML=mnTgSqlHtml();mnTgMaxLock();toast(t('mn_tg_sql'),'warn');}
   mnTgNeedPaint(id);return seq===MN_TG.seq[id];}

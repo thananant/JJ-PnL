@@ -44,6 +44,12 @@ my:{bl_sub:'ဆိုင်ခွဲတစ်ခုချင်း ပို့�
   bl_br_deny:'အခြားဆိုင်ခွဲ၏ ဘေလ် — ဤအကောင့်တွင် ခွင့်မရှိပါ',bl_line_local:'💬 LINE ပို့ပြီး (အခြေအနေ မသိမ်းနိုင်)',bl_resend_q:'ဘေလ် {no} ကို {t} တွင် LINE အုပ်စုသို့ ပို့ပြီးသား (အခြေအနေ မသိမ်းနိုင်) — ထပ်ပို့လျှင် အုပ်စုတွင် ဘေလ်နှစ်ထပ်ရမည်။ ပို့မလား?',
   bl_moves_noread:'ဤဘေလ်၏ လက်ကျန်မှတ်တမ်း ဖတ်မရပါ — မပယ်ဖျက်ရသေး ထပ်စမ်းပါ',bl_kitchen_name:'🍳 {n}'}
 });
+I18N.add({ // ยกเลิกบิล ➕ ส่งเพิ่ม: ไม่มีออเดอร์ให้ "กลับมาค้างส่ง" (ร่างถูกใช้ไปตอนออกบิล) — บอกตรง ๆ (ผู้ตรวจ V2 2026-10-17)
+th:{bl_void_q_manual:'ยกเลิกบิล {no} ของสาขา {b}?\nของ {n} รายการจะกลับเข้าสต๊อก — บิลนี้เป็นของเรียกเพิ่ม รายการจะไม่กลับมาที่ 🚚 ถ้าต้องส่งอีกให้กด ➕ ส่งเพิ่ม ใหม่'},
+en:{bl_void_q_manual:'Void bill {no} of {b}?\n{n} lines go back into stock — this was an extra request, it will not reappear on 🚚; tap ➕ Extra delivery again if it is still needed'},
+lo:{bl_void_q_manual:'ຍົກເລີກບິນ {no} ຂອງສາຂາ {b}?\nເຄື່ອງ {n} ລາຍການຈະກັບເຂົ້າສະຕັອກ — ບິນນີ້ເປັນຂອງເອີ້ນເພີ່ມ ລາຍການຈະບໍ່ກັບມາທີ່ 🚚 ຖ້າຕ້ອງສົ່ງອີກໃຫ້ກົດ ➕ ສົ່ງເພີ່ມ ໃໝ່'},
+my:{bl_void_q_manual:'{b} ၏ ဘေလ် {no} ကို ပယ်ဖျက်မလား?\n{n} ကြောင်း လက်ကျန်သို့ ပြန်ဝင်မည် — ဤဘေလ်သည် ထပ်တောင်းမှုဖြစ်၍ 🚚 တွင် ပြန်မပေါ်ပါ၊ လိုသေးလျှင် ➕ ထပ်ပို့ ကို ပြန်နှိပ်ပါ'}
+});
 CSS.add(`
 .bl-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .bl-month{display:flex;align-items:center;gap:6px}.bl-month b{font-family:var(--fh);font-size:16px;min-width:96px;text-align:center}
@@ -166,7 +172,7 @@ async function blVoidDone(id){ // เคยคืนสต๊อกของบ�
 async function blVoid(id){await once(async()=>{ // ❌ ยกเลิกบิล: คืนสต๊อก = กลับด้านของที่เคยตัดจริง (kc_moves send ของบิลนี้) · ไม่มี = จากบรรทัด · แล้ว status void
   if(!isAdminish())return;const R=await blRead(id);if(!R)return;const {x,lines}=R;if(!blScopeOk(x))return;
   if(x.status==='void'){toast(t('bl_void_done'),true);return;}
-  if(!(await confirm2(t('bl_void_q',{no:x.bill_no||'',b:x.branch_name||branchName(x.branch)||x.branch,n:lines.length}),{danger:true})))return;
+  if(!(await confirm2(t((typeof sdIsManual==='function'&&sdIsManual(x))?'bl_void_q_manual':'bl_void_q',{no:x.bill_no||'',b:x.branch_name||branchName(x.branch)||x.branch,n:lines.length}),{danger:true})))return;   // บิลเรียกเพิ่ม = ไม่สัญญาว่าออเดอร์จะกลับมาค้างส่ง
   try{
     const done=await blVoidDone(id);if(done==null){toast(t('bl_moves_noread'),true);return;}   // kc_moves คือของจริงที่เคยตัด — อ่านไม่ได้ = ไม่ยกเลิก (คืนผิดจำนวน/คืนซ้ำ)
     if(!done){

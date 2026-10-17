@@ -8,7 +8,7 @@
    ร่างฟอร์มอยู่ localStorage jjck_rc_draft (วันเดียวกัน ≤12 ชม.) — ลากหน้าลงรีเฟรชแล้วตัวเลขไม่หาย
    ============================================================ */
 I18N.add({
-th:{rc_new:'รับของใหม่',rc_recent:'ที่รับแล้ว',rc_bill_no:'เลขบิล/ใบส่งของ',rc_sup_pick:'— เลือกร้านค้า —',rc_sup_new:'＋ ร้านใหม่',rc_sup_name:'ชื่อร้านค้า',rc_sup_phone:'เบอร์โทร',
+th:{rc_new:'รับของใหม่',rc_recent:'ที่รับแล้ว',rc_sup_pick:'— เลือกร้านค้า —',rc_sup_new:'＋ ร้านใหม่',rc_sup_name:'ชื่อร้านค้า',rc_sup_phone:'เบอร์โทร',
   rc_from_po:'รับตามที่สั่งไว้',rc_po_none:'ยังไม่มีรายการที่สั่งไว้รอรับ',rc_po_pick:'เลือกใบที่สั่งไว้',rc_po_tag:'สั่งไว้',rc_po_items:'{n} รายการ',
   rc_add_line:'เพิ่มรายการ',rc_clear:'ล้างฟอร์ม',rc_clear_q:'ทิ้งรายการที่กรอกไว้ทั้งหมด?',rc_pick_item:'แตะเพื่อเลือกวัตถุดิบ',rc_item_new:'＋ วัตถุดิบใหม่',
   rc_packs:'จำนวน (กี่ห่อ/ถุง/ชุด)',rc_pack_unit:'หน่วยที่รับ',rc_pack_size:'ขนาดบรรจุ',rc_unit_new:'＋ หน่วยใหม่…',rc_unit_name:'ชื่อหน่วย',rc_unit_eq:'1 {u} = ? {b}',rc_unit_save:'ใช้หน่วยนี้',
@@ -20,7 +20,7 @@ th:{rc_new:'รับของใหม่',rc_recent:'ที่รับแล�
   rc_item_name:'ชื่อวัตถุดิบ',rc_item_unit:'หน่วยหลัก (ที่ใช้ในสูตร)',rc_item_cat:'หมวด',rc_item_pack:'หน่วยที่ซื้อ',rc_item_pack_q:'1 หน่วยที่ซื้อ = กี่หน่วยหลัก',rc_item_sup:'ร้านประจำ',rc_item_dup:'มีวัตถุดิบชื่อนี้อยู่แล้ว',
   rc_pack_new_saved:'จำหน่วย {u} ของ {i} ไว้แล้ว (1 {u} = {q} {b})',rc_prev_na:'ไม่มีต้นทุนก่อนรับที่จดไว้ — คงต้นทุนปัจจุบัน',rc_prev_cols:'หมายเหตุ: ตารางยังไม่มีช่องเก็บต้นทุนก่อนรับ (prev_avg) — ยกเลิกแล้วต้นทุนจะไม่ย้อนกลับ',
   rc_n_bills:'{n} ใบ',rc_14d:'14 วันล่าสุด',rc_not_saved:'บันทึกไม่สำเร็จ — ไม่มีอะไรถูกบันทึก ลองใหม่อีกครั้ง',rc_cost_fix:'ยอดในระบบเปลี่ยนระหว่างบันทึก — คิดต้นทุนถัวเฉลี่ยใหม่ให้แล้ว',rc_lines_hint:'ใส่ทีละรายการ: กี่ห่อ · ห่อละเท่าไร · จ่ายเท่าไร — ระบบคิดต้นทุนต่อหน่วยให้เอง'},
-en:{rc_new:'New receipt',rc_recent:'Received',rc_bill_no:'Bill / delivery note no.',rc_sup_pick:'— choose supplier —',rc_sup_new:'＋ New supplier',rc_sup_name:'Supplier name',rc_sup_phone:'Phone',
+en:{rc_new:'New receipt',rc_recent:'Received',rc_sup_pick:'— choose supplier —',rc_sup_new:'＋ New supplier',rc_sup_name:'Supplier name',rc_sup_phone:'Phone',
   rc_from_po:'Receive an order',rc_po_none:'No sent orders waiting to be received',rc_po_pick:'Choose the order',rc_po_tag:'Order',rc_po_items:'{n} lines',
   rc_add_line:'Add line',rc_clear:'Clear form',rc_clear_q:'Discard everything entered?',rc_pick_item:'Tap to choose an ingredient',rc_item_new:'＋ New ingredient',
   rc_packs:'Quantity (packs / bags / sets)',rc_pack_unit:'Received as',rc_pack_size:'Pack size',rc_unit_new:'＋ New unit…',rc_unit_name:'Unit name',rc_unit_eq:'1 {u} = ? {b}',rc_unit_save:'Use this unit',
@@ -32,7 +32,7 @@ en:{rc_new:'New receipt',rc_recent:'Received',rc_bill_no:'Bill / delivery note n
   rc_item_name:'Ingredient name',rc_item_unit:'Base unit (used in recipes)',rc_item_cat:'Category',rc_item_pack:'Buying unit',rc_item_pack_q:'1 buying unit = how many base units',rc_item_sup:'Usual supplier',rc_item_dup:'An ingredient with this name already exists',
   rc_pack_new_saved:'Saved unit {u} for {i} (1 {u} = {q} {b})',rc_prev_na:'No pre-receipt cost stored — current cost kept',rc_prev_cols:'Note: the table has no prev_avg column yet — voiding will not restore costs',
   rc_n_bills:'{n} receipts',rc_14d:'Last 14 days',rc_not_saved:'NOT saved — please try again',rc_cost_fix:'Stock changed while saving — moving average recomputed',rc_lines_hint:'One line per item: how many packs · pack size · what you paid — unit cost is computed for you'},
-lo:{rc_new:'ຮັບເຄື່ອງໃໝ່',rc_recent:'ຮັບແລ້ວ',rc_bill_no:'ເລກບິນ/ໃບສົ່ງເຄື່ອງ',rc_sup_pick:'— ເລືອກຮ້ານຄ້າ —',rc_sup_new:'＋ ຮ້ານໃໝ່',rc_sup_name:'ຊື່ຮ້ານຄ້າ',rc_sup_phone:'ເບີໂທ',
+lo:{rc_new:'ຮັບເຄື່ອງໃໝ່',rc_recent:'ຮັບແລ້ວ',rc_sup_pick:'— ເລືອກຮ້ານຄ້າ —',rc_sup_new:'＋ ຮ້ານໃໝ່',rc_sup_name:'ຊື່ຮ້ານຄ້າ',rc_sup_phone:'ເບີໂທ',
   rc_from_po:'ຮັບຕາມທີ່ສັ່ງໄວ້',rc_po_none:'ຍັງບໍ່ມີລາຍການທີ່ສັ່ງໄວ້ລໍຮັບ',rc_po_pick:'ເລືອກໃບທີ່ສັ່ງໄວ້',rc_po_tag:'ສັ່ງໄວ້',rc_po_items:'{n} ລາຍການ',
   rc_add_line:'ເພີ່ມລາຍການ',rc_clear:'ລ້າງຟອມ',rc_clear_q:'ຖິ້ມລາຍການທີ່ໃສ່ໄວ້ທັງໝົດ?',rc_pick_item:'ແຕະເພື່ອເລືອກວັດຖຸດິບ',rc_item_new:'＋ ວັດຖຸດິບໃໝ່',
   rc_packs:'ຈຳນວນ (ຈັກຫໍ່/ຖົງ/ຊຸດ)',rc_pack_unit:'ຫົວໜ່ວຍທີ່ຮັບ',rc_pack_size:'ຂະໜາດບັນຈຸ',rc_unit_new:'＋ ຫົວໜ່ວຍໃໝ່…',rc_unit_name:'ຊື່ຫົວໜ່ວຍ',rc_unit_eq:'1 {u} = ? {b}',rc_unit_save:'ໃຊ້ຫົວໜ່ວຍນີ້',
@@ -44,7 +44,7 @@ lo:{rc_new:'ຮັບເຄື່ອງໃໝ່',rc_recent:'ຮັບແລ້�
   rc_item_name:'ຊື່ວັດຖຸດິບ',rc_item_unit:'ຫົວໜ່ວຍຫຼັກ (ທີ່ໃຊ້ໃນສູດ)',rc_item_cat:'ໝວດ',rc_item_pack:'ຫົວໜ່ວຍທີ່ຊື້',rc_item_pack_q:'1 ຫົວໜ່ວຍທີ່ຊື້ = ຈັກຫົວໜ່ວຍຫຼັກ',rc_item_sup:'ຮ້ານປະຈຳ',rc_item_dup:'ມີວັດຖຸດິບຊື່ນີ້ຢູ່ແລ້ວ',
   rc_pack_new_saved:'ຈື່ຫົວໜ່ວຍ {u} ຂອງ {i} ໄວ້ແລ້ວ (1 {u} = {q} {b})',rc_prev_na:'ບໍ່ມີຕົ້ນທຶນກ່ອນຮັບທີ່ຈົດໄວ້ — ຄົງຕົ້ນທຶນປັດຈຸບັນ',rc_prev_cols:'ໝາຍເຫດ: ຕາຕະລາງຍັງບໍ່ມີຊ່ອງເກັບຕົ້ນທຶນກ່ອນຮັບ (prev_avg) — ຍົກເລີກແລ້ວຕົ້ນທຶນຈະບໍ່ຍ້ອນກັບ',
   rc_n_bills:'{n} ໃບ',rc_14d:'14 ມື້ຫຼ້າສຸດ',rc_not_saved:'ບໍ່ໄດ້ບັນທຶກ — ລອງໃໝ່ອີກຄັ້ງ',rc_cost_fix:'ຍອດໃນລະບົບປ່ຽນລະຫວ່າງບັນທຶກ — ຄິດຕົ້ນທຶນສະເລ່ຍໃໝ່ແລ້ວ',rc_lines_hint:'ໃສ່ທີລະລາຍການ: ຈັກຫໍ່ · ຫໍ່ລະເທົ່າໃດ · ຈ່າຍເທົ່າໃດ — ລະບົບຄິດຕົ້ນທຶນຕໍ່ຫົວໜ່ວຍໃຫ້ເອງ'},
-my:{rc_new:'လက်ခံမှုအသစ်',rc_recent:'လက်ခံပြီး',rc_bill_no:'ဘေလ်/ပို့လွှာ နံပါတ်',rc_sup_pick:'— ဆိုင်ရွေးပါ —',rc_sup_new:'＋ ဆိုင်အသစ်',rc_sup_name:'ဆိုင်အမည်',rc_sup_phone:'ဖုန်း',
+my:{rc_new:'လက်ခံမှုအသစ်',rc_recent:'လက်ခံပြီး',rc_sup_pick:'— ဆိုင်ရွေးပါ —',rc_sup_new:'＋ ဆိုင်အသစ်',rc_sup_name:'ဆိုင်အမည်',rc_sup_phone:'ဖုန်း',
   rc_from_po:'မှာထားသည်ကို လက်ခံ',rc_po_none:'လက်ခံရန် စောင့်နေသော မှာယူမှု မရှိပါ',rc_po_pick:'မှာယူမှုကို ရွေးပါ',rc_po_tag:'မှာထား',rc_po_items:'{n} ကြောင်း',
   rc_add_line:'ကြောင်းထည့်ရန်',rc_clear:'ဖောင်ရှင်းရန်',rc_clear_q:'ထည့်ထားသမျှ ဖျက်မလား?',rc_pick_item:'ကုန်ကြမ်းရွေးရန် နှိပ်ပါ',rc_item_new:'＋ ကုန်ကြမ်းအသစ်',
   rc_packs:'အရေအတွက် (ထုပ်/အိတ်/စုံ)',rc_pack_unit:'လက်ခံယူနစ်',rc_pack_size:'ထုပ်အရွယ်',rc_unit_new:'＋ ယူနစ်အသစ်…',rc_unit_name:'ယူနစ်အမည်',rc_unit_eq:'1 {u} = ? {b}',rc_unit_save:'ဤယူနစ်သုံးရန်',
@@ -100,15 +100,15 @@ CSS.add(`
 .rc-dhead{font-family:var(--fh);font-weight:700;color:var(--wine);font-size:13.5px;margin:10px 2px 6px}
 .rc-po-chip{display:inline-flex;align-items:center;gap:6px;margin-top:4px}
 `);
-let RC=null;                 // ฟอร์มรับของที่กำลังกรอก {d,sup_id,sup_name,bill_no,note,po_id,po_no,lines[]}
+let RC=null;                 // ฟอร์มรับของที่กำลังกรอก {d,sup_id,sup_name,note,po_id,po_no,lines[]} (ไม่มี bill_no)
 let RC_VIEW='form';          // 'form' | 'list'
 let RC_T=null;               // timer บันทึกร่าง
 const RC_DRAFT='jjck_rc_draft',RC_DRAFT_MS=12*3600*1000;
-function rcBlank(){return {d:bizTodayISO(),sup_id:'',sup_name:'',bill_no:'',note:'',po_id:null,po_no:'',lines:[]};}
+function rcBlank(){return {d:bizTodayISO(),sup_id:'',sup_name:'',note:'',po_id:null,po_no:'',lines:[]};}   // ไม่มี bill_no แล้ว (ฟอร์มไม่มีช่องเลขบิล · kc_receipts.bill_no = null เสมอ)
 function rcLineBlank(){return {item_id:'',name:'',packs:'',pack_unit:'',pack_qty:'',unit:'',price_mode:'pack',price:'',newu:null};}
 function rcDraftLoad(){const d=LS.get(RC_DRAFT,null);if(!d||!d.data||d.d!==bizTodayISO()||Date.now()-num(d.t)>RC_DRAFT_MS){LS.del(RC_DRAFT);return null;}
-  const f=Object.assign(rcBlank(),d.data);f.bill_no='';f.lines=(Array.isArray(f.lines)?f.lines:[]).map(l=>Object.assign(rcLineBlank(),l));return f;}
-function rcDraft(){clearTimeout(RC_T);RC_T=setTimeout(()=>{if(!RC)return;const has=RC.lines.length||RC.bill_no||RC.note||RC.sup_id;
+  const f=Object.assign(rcBlank(),d.data);delete f.bill_no;f.lines=(Array.isArray(f.lines)?f.lines:[]).map(l=>Object.assign(rcLineBlank(),l));return f;}   // ร่างรุ่นเก่าที่ยังมี bill_no = ทิ้งช่องนั้น
+function rcDraft(){clearTimeout(RC_T);RC_T=setTimeout(()=>{if(!RC)return;const has=RC.lines.length||RC.note||RC.sup_id;
   if(has)LS.set(RC_DRAFT,{t:Date.now(),d:bizTodayISO(),data:RC});else LS.del(RC_DRAFT);},250);}
 function rcDraftClear(){clearTimeout(RC_T);LS.del(RC_DRAFT);}
 
@@ -131,6 +131,7 @@ function rcPaintForm(){ // หัว (ร้าน·วันที่·หม�
     '<div class="rc-sec">🖼️ '+esc(t('rc_tap_pic'))+'</div><div id="rcChips">'+rcChipsHtml()+'</div>'+searchBox('rcGridQ','rcGridSearch')+
     '<div class="igrid rcgrid" id="rcGrid">'+rcGridHtml()+'</div>';
   const q=document.getElementById('rcGridQ');if(q&&RC_Q)q.value=RC_Q;
+  pillReveal(b);   // วาดใหม่ทั้งฟอร์ม (กด ✓ ในหน้าต่าง) แล้วแถบชิปเด้งซ้ายสุด — ชิปที่เลือกต้องยังเห็น (ผู้ตรวจ V2)
   rcBar();
 }
 function rcSupOpts(){const act=S.sups.filter(s=>s.active!==false||s.id===RC.sup_id);
@@ -175,7 +176,7 @@ function rcGridHtml(){const L=rcGridList(),inL={};RC.lines.forEach((l,i)=>{if(l.
       '<div class="iname">'+esc(dispName(it))+'</div><div class="isub">'+esc(t('rc_stock'))+' '+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+(itemCost(it)!=null?' · ฿'+rcP(itemCost(it))+'/'+esc(trUnit(it.unit)):'')+'</div></div>';}).join('')+
     '<div class="icard rctile tap rcnew" onclick="rcNewItem(null)"><div class="ithumb">➕</div><div class="iname">'+esc(t('rc_item_new'))+'</div><div class="isub">&nbsp;</div></div>'+
     (L.length?'':'<div class="empty" style="grid-column:1/-1">'+esc(t('empty'))+'</div>');}
-function rcGridPaint(){const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();const c=document.getElementById('rcChips');if(c){c.innerHTML=rcChipsHtml();const on=c.querySelector('.pill.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'nearest',block:'nearest'});}catch(e){}}}   // ชิปที่เลือกต้องยังเห็นหลังวาดใหม่
+function rcGridPaint(){const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();const c=document.getElementById('rcChips');if(c){c.innerHTML=rcChipsHtml();pillReveal(c);}}   // ชิปที่เลือกต้องยังเห็นหลังวาดใหม่ (pillReveal กลางของ shell)
 function rcSetCat(k){RC_CAT=k||'';rcGridPaint();}
 function rcGridSearch(v){RC_Q=String(v||'');const g=document.getElementById('rcGrid');if(g)g.innerHTML=rcGridHtml();}   // กรองในที่ — คีย์บอร์ดไม่หุบ
 function rcTileTap(id){const it=itemById(id);if(!it)return;const i=RC.lines.findIndex(l=>l.item_id===id);if(i>=0){rcEdit(i);return;}

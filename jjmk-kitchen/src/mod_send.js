@@ -14,7 +14,7 @@
      → กลุ่ม "✋ สาขาเรียกเพิ่ม" เป็นการ์ดใน SD.groups ต่อท้ายออเดอร์ปกติ (g.manual=true · key 'manual|<สาขา>|<วันนี้>' · บรรทัด rid 'manual|<สาขา>|<recipe_id>' pid '' link factor 1)
      · ร่าง localStorage jjck_sd_manual {d:วันนี้,g:{<สาขา>:[{recipe_id,qty}]}} เฉพาะวันเดียวกัน (รีเฟรชแล้วอยู่) · แก้จำนวนในที่ = แก้ร่าง (ส่ง = น้อยสุดของ จำนวน/ของที่เหลือ — ไม่พอ = ส่งเท่าที่มี ขาดขึ้นในบิล)
      · ✅ ส่งแล้ว ออกบิล ใช้ sdSend เส้นทางเดิมทุกขั้น (ยอดสดก่อน/หลังหน้าต่าง · เลขบิล · ถอนทั้งหมดถ้าพลาด) — head.order_date = วันนี้ · head.note = SD_MANUAL_NOTE (ไทยเสมอ) · บรรทัด stk_product_id null
-       · ตรวจซ้ำหลังหน้าต่างเทียบกับร่างปัจจุบัน (ไม่ใช่ sdCalcGroups) · สำเร็จ = ลบกลุ่มออกจากร่าง · ข้อความไลน์มีบรรทัด "✋ สาขาเรียกของเพิ่ม" · 🧾 บิล/ยกเลิกบิล/ประวัติ เหมือนบิลปกติ
+       · ตรวจซ้ำหลังหน้าต่างเทียบกับร่างปัจจุบัน (ไม่ใช่ sdCalcGroups) · สำเร็จ = เหลือในร่างเฉพาะส่วนที่ส่งไม่ครบ (sdManualAfterBill — ขอ − ส่ง · ส่งครบ = เอาออก · ตรงกับบรรทัด "ค้างส่ง" ในบิลไลน์ · ผู้ตรวจ V2) · ข้อความไลน์มีบรรทัด "✋ สาขาเรียกของเพิ่ม" · 🧾 บิล/ยกเลิกบิล/ประวัติ เหมือนบิลปกติ
      · บิลที่ note = SD_MANUAL_NOTE ไม่ถูกหักออกจากออเดอร์ของแอพนับสต๊อก (sdCalcGroups ข้าม — ของเพิ่มไม่ใช่ของที่สั่งไว้) · ☀️ วันนี้/🍳 ทำของ ใช้ sdCalcGroups (ฟังก์ชันล้วน) จึงไม่เห็นร่างเรียกเพิ่ม ป้าย 🚚 นับเฉพาะออเดอร์ปกติ (ตัวเลขตรงกับหน้าวันนี้)
    ============================================================ */
 I18N.add({
@@ -114,6 +114,12 @@ th:{sd_m_nothing:'ของไม่พอส่ง — จัดให้ใบ
 en:{sd_m_nothing:'Not enough stock to send — branch orders are served first · make more first, or lower the requested amount',sd_m_nothing_s:'⛔ Not enough stock (branch orders first)'},
 lo:{sd_m_nothing:'ເຄື່ອງບໍ່ພໍສົ່ງ — ຈັດໃຫ້ໃບສັ່ງສາຂາກ່ອນແລ້ວ · ⚡ ເຮັດເຄື່ອງກ່ອນ ຫຼືຫຼຸດຈຳນວນທີ່ຂໍ',sd_m_nothing_s:'⛔ ເຄື່ອງບໍ່ພໍສົ່ງ (ຈັດໃຫ້ໃບສັ່ງສາຂາກ່ອນ)'},
 my:{sd_m_nothing:'ပို့ရန် လက်ကျန်မလုံလောက်ပါ — ဆိုင်ခွဲအော်ဒါများကို ဦးစွာထုတ်ပေးပြီးပါပြီ · ⚡ အရင်ထုတ်လုပ်ပါ သို့မဟုတ် တောင်းဆိုအရေအတွက် လျှော့ပါ',sd_m_nothing_s:'⛔ လက်ကျန်မလုံလောက် (ဆိုင်ခွဲအော်ဒါ ဦးစွာ)'}
+});
+I18N.add({ // ➕ ส่งเพิ่ม ส่งได้ไม่ครบ = ส่วนที่ขาดยังอยู่ในการ์ด ✋ (ตรงกับบรรทัด "ค้างส่ง" ในบิลไลน์ — ผู้ตรวจ V2 2026-10-17) · ร่างของวันก่อนถูกทิ้ง = บอกครั้งเดียว
+th:{sd_m_left:'ยังค้างส่ง {n} รายการ — อยู่ในการ์ด ✋ สาขาเรียกเพิ่ม ทำของเสร็จแล้วกดส่งอีกครั้ง (วันนี้เท่านั้น)',sd_m_dropped:'รายการเรียกเพิ่มของวัน {d} ที่ยังไม่ได้ออกบิล ถูกทิ้งแล้ว (เก็บไว้วันเดียว) — ถ้ายังต้องส่งให้กด ➕ ส่งเพิ่ม ใหม่'},
+en:{sd_m_left:'{n} line(s) still owed — kept on the ✋ extra-request card, send again once made (today only)',sd_m_dropped:'The unbilled extra request from {d} was dropped (kept one day only) — tap ➕ Extra delivery again if it is still needed'},
+lo:{sd_m_left:'ຍັງຄ້າງສົ່ງ {n} ລາຍການ — ຢູ່ໃນກາດ ✋ ສາຂາເອີ້ນເພີ່ມ ເຮັດເຄື່ອງແລ້ວກົດສົ່ງອີກຄັ້ງ (ມື້ນີ້ເທົ່ານັ້ນ)',sd_m_dropped:'ລາຍການເອີ້ນເພີ່ມຂອງວັນ {d} ທີ່ຍັງບໍ່ໄດ້ອອກບິນ ຖືກຖິ້ມແລ້ວ (ເກັບໄວ້ມື້ດຽວ) — ຖ້າຍັງຕ້ອງສົ່ງໃຫ້ກົດ ➕ ສົ່ງເພີ່ມ ໃໝ່'},
+my:{sd_m_left:'{n} ကြောင်း ပို့ရန်ကျန်သေးသည် — ✋ ထပ်တောင်းကတ်တွင် ရှိနေသည် ထုတ်လုပ်ပြီးလျှင် ထပ်ပို့ပါ (ယနေ့သာ)',sd_m_dropped:'{d} ၏ ဘေလ်မထုတ်ရသေးသော ထပ်တောင်းမှုကို ဖယ်ရှားပြီး (တစ်ရက်သာသိမ်းသည်) — လိုသေးလျှင် ➕ ထပ်ပို့ ကို ပြန်နှိပ်ပါ'}
 });
 let SD={at:0,ok:true,err:null,groups:[],raw:null,loading:null,quiet:false};
 document.addEventListener('kc:booted',()=>{ // บูตบนแท็บอื่น = ป้าย 🚚 ต้องขึ้นเหมือนกัน (☀️ วันนี้/🚚 ส่งสาขา โหลดเองอยู่แล้ว)
@@ -357,14 +363,18 @@ async function sdSend(gi){await once(async()=>{
     step='lines';await db(()=>sb.from('kc_delivery_lines').insert(rows));
     step='moves';await pushMoves(Object.keys(mv).map(rid=>({d,kind:'send',ref_kind:'recipe',ref_id:rid,qty:-rnd4(mv[rid].q),cost:-rnd4(mv[rid].c),ref_table:'kc_deliveries',ref_id2:id,note:no+' · '+g.name})));
   }catch(e){await sdRollback(id,step);toast(t('sd_not_saved')+' · '+((e&&e.message)||e),true);return;}
-  if(g.manual)sdManualDel(g.code);else Object.keys(SD_EDIT).forEach(k=>{if(k.indexOf(g.key+'|')===0)delete SD_EDIT[k];});   // เรียกเพิ่ม: ออกบิลแล้ว = เอากลุ่มออกจากร่าง
+  let left=0;
+  if(g.manual)left=sdManualAfterBill(g);else Object.keys(SD_EDIT).forEach(k=>{if(k.indexOf(g.key+'|')===0)delete SD_EDIT[k];});   // เรียกเพิ่ม: ออกบิลแล้ว = เหลือในร่างเฉพาะส่วนที่ยังส่งไม่ครบ (บิลไลน์บอก "ค้างส่ง" ตรงกับการ์ด ✋)
   if(typeof MK_ORD!=='undefined')MK_ORD.at=0;   // 🍳 ทำของ คิดออเดอร์ใหม่รอบหน้า (ไม่ใช้ที่จำไว้ 60 วิ)
   const res=await sdLineGo(head,rows);
   if(res.saveFail)toast(t('sd_line_nosave'),'warn');else toast(t('sd_saved',{no}));
   await sdLoad();if(S.tab==='send')sdPaint();
-  sdDone(head,res);});}
-function sdDone(h,res){ // หน้าต่างผล: เลขบิล + สถานะไลน์ (ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก)
+  sdDone(head,res,left);});}
+function sdManualAfterBill(g){ // ร่างเรียกเพิ่มหลังออกบิล: ส่งครบ = เอาออก · ส่งไม่ครบ (ของไม่พอ/ไม่มีราคา) = เหลือ ขอ − ส่ง ไว้ให้ส่งต่อ (ผู้ตรวจ V2: เดิมลบทั้งสาขาแล้วไม่มีที่ไหนจำว่ายังค้าง) → จำนวนบรรทัดที่ยังค้าง
+  let left=0;g.lines.forEach(l=>{const rid=l.link&&l.link.recipe_id;if(!rid)return;const rem=rnd4(num(l.ordered)-num(l.sent));if(rem>1e-9)left++;sdManualSet(g.code,rid,rem>1e-9?rem:0);});return left;}
+function sdDone(h,res,left){ // หน้าต่างผล: เลขบิล + สถานะไลน์ (ไม่มีกลุ่ม/ส่งไม่ได้ = กล่องคัดลอก) · left = บรรทัดเรียกเพิ่มที่ยังค้างในการ์ด ✋
   let x='<h3>🧾 '+esc(t('sd_done_t'))+'</h3><div class="okbox">'+esc(t('sd_saved',{no:h.bill_no}))+'<br>'+esc(h.branch_name||'')+' · <b>'+esc(money(h.total))+'</b></div>';
+  if(left>0)x+='<div class="hintbox" id="sdLeftNote">✋ '+esc(t('sd_m_left',{n:left}))+'</div>';
   if(res.state==='sent')x+='<div class="okbox">💬 '+esc(t('sd_line_sent',{g:lgName(res.gid)}))+'</div>'+(res.saveFail?'<div class="badbox">⚠ '+esc(t('sd_line_nosave'))+'</div>':'');
   else x+='<div class="'+(res.state==='fail'?'badbox':'hintbox')+'">'+esc(res.state==='fail'?t('sd_line_fail')+(res.err?' ('+res.err+')':''):t('sd_line_none'))+'</div>'+lineTextBox(res.text,res.gid);
   x+='<div class="row" style="margin-top:12px"><button type="button" class="btn gh" data-id="'+esc(h.id)+'" onclick="closeModal();if(typeof blDetail===\'function\')blDetail(this.dataset.id)">'+esc(t('sd_view_bill'))+'</button>'+
@@ -372,8 +382,9 @@ function sdDone(h,res){ // หน้าต่างผล: เลขบิล + 
   openModal(x);}
 
 /* ---------- ➕ ส่งเพิ่ม — สาขาเรียกของเพิ่ม (ร่างในเครื่อง · ออกบิลทาง sdSend เดิม) ---------- */
-function sdManualLoad(){ // → {<สาขา>:[{recipe_id,qty}]} ของวันนี้ (วันอื่น/ค่าเสีย = ทิ้ง)
-  const d=LS.get(SD_MANUAL,null);if(!d||d.d!==bizTodayISO()||!d.g||typeof d.g!=='object'||Array.isArray(d.g)){if(d)LS.del(SD_MANUAL);return {};}
+function sdManualLoad(){ // → {<สาขา>:[{recipe_id,qty}]} ของวันนี้ (วันอื่น/ค่าเสีย = ทิ้ง · ร่างของวันก่อนที่ยังมีรายการ = บอกครั้งเดียวว่าทิ้งแล้ว ไม่หายเงียบ ๆ — ผู้ตรวจ V2)
+  const d=LS.get(SD_MANUAL,null);if(!d||d.d!==bizTodayISO()||!d.g||typeof d.g!=='object'||Array.isArray(d.g)){
+    if(d){LS.del(SD_MANUAL);if(/^\d{4}-\d{2}-\d{2}$/.test(String(d.d||''))&&d.g&&typeof d.g==='object'&&!Array.isArray(d.g)&&Object.keys(d.g).length)toast(t('sd_m_dropped',{d:dispDate(d.d)}),'warn');}return {};}
   const g={};Object.keys(d.g).forEach(c=>{const rows=(Array.isArray(d.g[c])?d.g[c]:[]).filter(x=>x&&typeof x==='object'&&x.recipe_id);if(rows.length)g[c]=rows.map(x=>({recipe_id:String(x.recipe_id),qty:rnd4(num(x.qty))}));});
   return g;}
 function sdManualSave(g){if(!g||!Object.keys(g).length)LS.del(SD_MANUAL);else LS.set(SD_MANUAL,{d:bizTodayISO(),g});}
