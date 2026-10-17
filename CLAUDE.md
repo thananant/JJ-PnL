@@ -1119,7 +1119,7 @@
 - **แก้สูตร → `node tests/unit/run.mjs`** — เทสดึงฟังก์ชันจริงจาก HTML (`tests/unit/lib.mjs` `load()`): ใบกำกับ (รวม**แอป↔`inv_nas_sync.py` ตรงกันทุกหลัก**) · **`orderPlan` นับสต๊อก = `brRow` ครัวกลาง 4,000 สถานการณ์** · สิทธิ์หน้าแรก · KPI · เงินเดือน
   · **เทสใหม่เขียนลง `tests/unit/<ระบบ>.test.mjs` ใน repo — ไม่ใช่ `/tmp`** (ของใน `/tmp` หายเมื่อปิด session)
 - **แก้หน้าจอ → `node tests/mobile/mobile-check.mjs`** (`--all` = 15 รุ่นตามกติกาหน้าจอมือถือ · `--app=` · `--shots`) — Playwright + safe-area จริง + Supabase จำลอง (ล็อกอินผู้ใช้ทดสอบเข้าหน้าหลักให้)
-  · ผลรอบแรก 2026-10-17: ช่องกรอก/เลือกเล็กกว่า 16px บนโทรศัพท์ (iPhone ซูมเอง) ที่ P&L (เดือน) · เงินเดือน (วันที่) · Social (ช่วงเวลา) · ซ่อมบำรุง (สาขา) · นับสต๊อก (วันที่/ชื่อผู้นับ) — ยังไม่ได้แก้
+  · ผลรอบแรก 2026-10-17: ช่องกรอก/เลือกเล็กกว่า 16px บนโทรศัพท์ (iPhone ซูมเอง) ที่ P&L (เดือน) · เงินเดือน (วันที่) · Social (ช่วงเวลา) · ซ่อมบำรุง (สาขา) · นับสต๊อก (วันที่/ชื่อผู้นับ) — **แก้แล้ว 2026-10-17** (`<style>` ท้าย `<head>` ของแต่ละแอป: `@media (max-width:700px){#id{font-size:16px!important}}` · ผ่านครบ 15 รุ่น)
 - วิธีใช้ละเอียดอยู่ใน skill ของ repo: `.claude/skills/jj-precheck` · `jj-mobile-check` · `jj-tests` · session บนคลาวด์ติดตั้งของให้เอง (`.claude/hooks/session-start.sh`)
 
 ## กติกาการส่งงาน — ใช้กับ **ทุกระบบ** ใน repo นี้ (P&L · Owner · KPI · Payroll · นับสต๊อก · ซ่อมบำรุง · Kitchen · Social · Invoice · Calendar · Access)
