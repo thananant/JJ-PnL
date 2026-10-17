@@ -1,6 +1,6 @@
 /* ============================================================
    🚚 ส่งสาขา — send (sd*)
-   ออเดอร์สาขา = stock_receipts ที่แอพนับสต๊อกเขียนตอนสาขากดสั่ง (sup = cfg.ck_sup_names · order_date ≥ วันนี้ − lookback)
+   ออเดอร์สาขา = stock_receipts ที่แอพนับสต๊อกเขียนตอนสาขากดสั่ง (sup = cfg.ck_sup_names **หรือ** ชื่อสินค้าตรงเมนูครัวกลาง `sdIsKitchenRow` · order_date ≥ วันนี้ − lookback)
    จัดกลุ่ม สาขา+วันสั่ง (เฉพาะสาขาที่เห็น = JJBR ∩ _br) · หักจำนวนที่ส่งไปแล้ว (kc_deliveries status≠void + lines ต่อสินค้า) → เหลือ = ค้างส่ง
    ชื่อสินค้าสาขา → เมนู ใช้ tdLinkOf()/TD_LINKS ของหน้าวันนี้ (kc_links → ชื่อตรงกัน) · ยังไม่ผูก = เลือกเมนูแล้วบันทึก kc_links
    ส่ง (ตั้งต้น = น้อยสุดของ ค้างส่ง/ของที่เหลือหลังจัดให้ใบสั่งก่อนหน้า) แก้ในที่ · ขาด → ⚡ ทำของ (หน้าทำของ ชิป ด่วน)
@@ -18,7 +18,7 @@
      · บิลที่ note = SD_MANUAL_NOTE ไม่ถูกหักออกจากออเดอร์ของแอพนับสต๊อก (sdCalcGroups ข้าม — ของเพิ่มไม่ใช่ของที่สั่งไว้) · ☀️ วันนี้/🍳 ทำของ ใช้ sdCalcGroups (ฟังก์ชันล้วน) จึงไม่เห็นร่างเรียกเพิ่ม ป้าย 🚚 นับเฉพาะออเดอร์ปกติ (ตัวเลขตรงกับหน้าวันนี้)
    ============================================================ */
 I18N.add({
-th:{sd_sub:'ออเดอร์ที่สาขานับสต๊อกแล้วสั่งมา — ใส่จำนวนที่ส่ง แล้วกดออกบิล',sd_none:'ไม่มีออเดอร์ค้างส่ง 👍',sd_none_h:'สาขาสั่งของผ่านแอพนับสต๊อก (ร้านค้า = {s}) ย้อนหลัง {d} วัน',
+th:{sd_why_zero:'ช่วง {d} วันนี้ แอพนับสต๊อกยังไม่ได้บันทึกออเดอร์จากสาขาเลย — สาขาต้องกด 📤 ส่งไลน์ผ่านบอทในแอพนับสต๊อก ถึงจะถูกบันทึก (เปิดแชร์เอง/คัดลอกข้อความ/โหมดทดสอบ ไม่บันทึก)',sd_why_other:'มีออเดอร์ {n} รายการที่ไม่ใช่ของครัวกลาง (ซัพ: {s}) — ชื่อสินค้าไม่ตรงกับเมนูครัวกลาง: {p} · ถ้าเป็นของครัวกลางจริง ตั้งชื่อเมนูให้ตรง หรือผูกชื่อที่ 📖 เมนู',sd_sub:'ออเดอร์ที่สาขานับสต๊อกแล้วสั่งมา — ใส่จำนวนที่ส่ง แล้วกดออกบิล',sd_none:'ไม่มีออเดอร์ค้างส่ง 👍',sd_none_h:'สาขาสั่งของผ่านแอพนับสต๊อก (ร้านค้า = {s}) ย้อนหลัง {d} วัน',
   sd_noread:'อ่านออเดอร์สาขาไม่ได้ — ลองโหลดใหม่',sd_reload:'⟳ โหลดออเดอร์ใหม่',sd_ordered:'สั่งมา',sd_have:'มี',sd_send:'ส่ง',sd_short:'ขาด',sd_full:'ครบ',sd_make:'⚡ ทำของ',
   sd_unlinked:'ยังไม่ผูกเมนู',sd_unlinked_h:'แตะเลือกเมนูที่ตรงกับ "{n}" — ระบบจะจำไว้ให้ครั้งต่อไป',sd_link_t:'ผูกชื่อสินค้าสาขากับเมนู',sd_link_factor:'1 {u} ของสาขา = กี่หน่วยของเมนู (ปกติ 1)',
   sd_link_saved:'ผูกเมนูแล้ว ✅',sd_link_bad:'ตัวคูณต้องมากกว่า 0',sd_link_first:'ผูกเมนูก่อนจึงส่งได้',sd_partial:'ค้างส่ง',sd_partial_h:'ส่งไปแล้ว {q} {u}',sd_lines_n:'{n} รายการ',sd_order_d:'สั่งเมื่อ {d}',
@@ -29,7 +29,7 @@ th:{sd_sub:'ออเดอร์ที่สาขานับสต๊อก�
   sd_noread_h:'ยังไม่แสดงใบสั่ง — อ่านของที่ส่งไปแล้วไม่ครบ ถ้าแสดงอาจส่งซ้ำ',sd_no_price:'{n}: ยังไม่มีราคา — ส่งไม่ได้ (ทำของที่ 🍳 หรือใส่ต้นทุนใน 📖 เมนู)',
   sd_live_fail:'อ่านยอดสดของสินค้าไม่ได้ — ยังไม่ออกบิล ลองใหม่อีกครั้ง',sd_changed:'ใบสั่งนี้เปลี่ยนไประหว่างยืนยัน (อีกเครื่องส่งแล้ว / สาขาแก้ยอด / ราคาเปลี่ยน) — ยังไม่ออกบิล ดูตัวเลขใหม่แล้วกดอีกครั้ง',
   sd_no_price_h:'ไม่มีราคา — ส่งไม่ได้ · ทำของก่อน (🍳) หรือใส่ต้นทุนใน 📖 เมนู',sd_line_nosave:'ส่งไลน์แล้ว แต่บันทึกสถานะไม่ได้ — บิลจะขึ้นว่ายังไม่ส่งไลน์ ไม่ต้องส่งซ้ำ'},
-en:{sd_sub:'Orders the branches placed after their stock count — enter what you deliver, then issue the bill',sd_none:'No orders waiting 👍',sd_none_h:'Branches order through the stock-count app (supplier = {s}), last {d} days',
+en:{sd_why_zero:'No branch orders were recorded by the stock-count app in the last {d} days — the branch must tap 📤 Send LINE via the bot in the stock-count app (manual share / copy / test mode are not recorded)',sd_why_other:'{n} order line(s) are not for the kitchen (supplier: {s}) — product names do not match any kitchen menu: {p} · if they are kitchen items, name the menu the same or link it on 📖 Menus',sd_sub:'Orders the branches placed after their stock count — enter what you deliver, then issue the bill',sd_none:'No orders waiting 👍',sd_none_h:'Branches order through the stock-count app (supplier = {s}), last {d} days',
   sd_noread:'Could not read branch orders — try reloading',sd_reload:'⟳ Reload orders',sd_ordered:'Ordered',sd_have:'In stock',sd_send:'Send',sd_short:'Short',sd_full:'Complete',sd_make:'⚡ Produce',
   sd_unlinked:'Not linked to a product',sd_unlinked_h:'Tap the product that matches "{n}" — remembered for next time',sd_link_t:'Link branch item to a product',sd_link_factor:'1 branch {u} = how many product units (usually 1)',
   sd_link_saved:'Linked ✅',sd_link_bad:'Factor must be above 0',sd_link_first:'Link the product first to deliver it',sd_partial:'Remainder',sd_partial_h:'already sent {q} {u}',sd_lines_n:'{n} lines',sd_order_d:'ordered {d}',
@@ -40,7 +40,7 @@ en:{sd_sub:'Orders the branches placed after their stock count — enter what yo
   sd_noread_h:'Orders are hidden — what was already delivered could not be read fully; showing them could send twice',sd_no_price:'{n}: no price yet — cannot send (produce it on 🍳 or set a cost on 📖 Menus)',
   sd_live_fail:'Could not read live stock — bill not issued, please try again',sd_changed:'This order changed while confirming (another device delivered / the branch changed it / price changed) — bill not issued, check the new numbers and tap again',
   sd_no_price_h:'No price — cannot send · produce first (🍳) or set a cost on 📖 Menus',sd_line_nosave:'Sent to LINE, but the status could not be saved — the bill will show "LINE not sent"; do not resend'},
-lo:{sd_sub:'ອໍເດີທີ່ສາຂານັບສະຕັອກແລ້ວສັ່ງມາ — ໃສ່ຈຳນວນທີ່ສົ່ງ ແລ້ວກົດອອກບິນ',sd_none:'ບໍ່ມີອໍເດີຄ້າງສົ່ງ 👍',sd_none_h:'ສາຂາສັ່ງເຄື່ອງຜ່ານແອັບນັບສະຕັອກ (ຮ້ານຄ້າ = {s}) ຍ້ອນຫຼັງ {d} ມື້',
+lo:{sd_why_zero:'ໃນ {d} ມື້ນີ້ ແອັບນັບສະຕັອກຍັງບໍ່ໄດ້ບັນທຶກອໍເດີຈາກສາຂາເລີຍ — ສາຂາຕ້ອງກົດ 📤 ສົ່ງໄລນ໌ຜ່ານບອດໃນແອັບນັບສະຕັອກ ຈຶ່ງຈະຖືກບັນທຶກ (ແຊຣ໌ເອງ/ກັອບປີ້/ໂໝດທົດສອບ ບໍ່ບັນທຶກ)',sd_why_other:'ມີອໍເດີ {n} ລາຍການທີ່ບໍ່ແມ່ນຂອງຄົວກາງ (ຊັບ: {s}) — ຊື່ສິນຄ້າບໍ່ກົງກັບເມນູຄົວກາງ: {p} · ຖ້າເປັນຂອງຄົວກາງແທ້ ຕັ້ງຊື່ເມນູໃຫ້ກົງ ຫຼືຜູກຊື່ທີ່ 📖 ເມນູ',sd_sub:'ອໍເດີທີ່ສາຂານັບສະຕັອກແລ້ວສັ່ງມາ — ໃສ່ຈຳນວນທີ່ສົ່ງ ແລ້ວກົດອອກບິນ',sd_none:'ບໍ່ມີອໍເດີຄ້າງສົ່ງ 👍',sd_none_h:'ສາຂາສັ່ງເຄື່ອງຜ່ານແອັບນັບສະຕັອກ (ຮ້ານຄ້າ = {s}) ຍ້ອນຫຼັງ {d} ມື້',
   sd_noread:'ອ່ານອໍເດີສາຂາບໍ່ໄດ້ — ລອງໂຫຼດໃໝ່',sd_reload:'⟳ ໂຫຼດອໍເດີໃໝ່',sd_ordered:'ສັ່ງມາ',sd_have:'ມີ',sd_send:'ສົ່ງ',sd_short:'ຂາດ',sd_full:'ຄົບ',sd_make:'⚡ ເຮັດເຄື່ອງ',
   sd_unlinked:'ຍັງບໍ່ຜູກເມນູ',sd_unlinked_h:'ແຕະເລືອກເມນູທີ່ກົງກັບ "{n}" — ລະບົບຈະຈື່ໄວ້ໃຫ້ຄັ້ງຕໍ່ໄປ',sd_link_t:'ຜູກຊື່ສິນຄ້າສາຂາກັບເມນູ',sd_link_factor:'1 {u} ຂອງສາຂາ = ຈັກໜ່ວຍຂອງເມນູ (ປົກກະຕິ 1)',
   sd_link_saved:'ຜູກເມນູແລ້ວ ✅',sd_link_bad:'ຕົວຄູນຕ້ອງຫຼາຍກວ່າ 0',sd_link_first:'ຜູກເມນູກ່ອນ ຈຶ່ງສົ່ງໄດ້',sd_partial:'ຄ້າງສົ່ງ',sd_partial_h:'ສົ່ງໄປແລ້ວ {q} {u}',sd_lines_n:'{n} ລາຍການ',sd_order_d:'ສັ່ງເມື່ອ {d}',
@@ -51,7 +51,7 @@ lo:{sd_sub:'ອໍເດີທີ່ສາຂານັບສະຕັອກແ�
   sd_noread_h:'ຍັງບໍ່ສະແດງໃບສັ່ງ — ອ່ານເຄື່ອງທີ່ສົ່ງໄປແລ້ວບໍ່ຄົບ ຖ້າສະແດງອາດສົ່ງຊ້ຳ',sd_no_price:'{n}: ຍັງບໍ່ມີລາຄາ — ສົ່ງບໍ່ໄດ້ (ເຮັດເຄື່ອງທີ່ 🍳 ຫຼື ໃສ່ຕົ້ນທຶນໃນ 📖 ເມນູ)',
   sd_live_fail:'ອ່ານຍອດສົດຂອງສິນຄ້າບໍ່ໄດ້ — ຍັງບໍ່ອອກບິນ ລອງໃໝ່ອີກຄັ້ງ',sd_changed:'ໃບສັ່ງນີ້ປ່ຽນໄປລະຫວ່າງຢືນຢັນ (ອີກເຄື່ອງສົ່ງແລ້ວ / ສາຂາແກ້ຍອດ / ລາຄາປ່ຽນ) — ຍັງບໍ່ອອກບິນ ເບິ່ງຕົວເລກໃໝ່ແລ້ວກົດອີກຄັ້ງ',
   sd_no_price_h:'ບໍ່ມີລາຄາ — ສົ່ງບໍ່ໄດ້ · ເຮັດເຄື່ອງກ່ອນ (🍳) ຫຼື ໃສ່ຕົ້ນທຶນໃນ 📖 ເມນູ',sd_line_nosave:'ສົ່ງໄລນ໌ແລ້ວ ແຕ່ບັນທຶກສະຖານະບໍ່ໄດ້ — ບິນຈະຂຶ້ນວ່າຍັງບໍ່ສົ່ງໄລນ໌ ບໍ່ຕ້ອງສົ່ງຊ້ຳ'},
-my:{sd_sub:'ဆိုင်ခွဲများ စာရင်းကောက်ပြီး မှာထားသော အော်ဒါ — ပို့မည့်အရေအတွက် ထည့်ပြီး ဘေလ်ထုတ်ပါ',sd_none:'ပို့ရန်ကျန် အော်ဒါ မရှိပါ 👍',sd_none_h:'ဆိုင်ခွဲများသည် စာရင်းကောက်အက်ပ်မှ မှာယူသည် (ဆိုင် = {s}) နောက် {d} ရက်',
+my:{sd_why_zero:'ပြီးခဲ့သော {d} ရက်အတွင်း ဆိုင်ခွဲအော်ဒါ မမှတ်တမ်းတင်ရသေးပါ — ဆိုင်ခွဲသည် စာရင်းကောက်အက်ပ်တွင် 📤 LINE ပို့ (bot) ကို နှိပ်မှသာ မှတ်တမ်းတင်ပါသည် (ကိုယ်တိုင်မျှဝေ/ကူးယူ/စမ်းသပ်မုဒ် မမှတ်တမ်းတင်ပါ)',sd_why_other:'မီးဖိုချောင်ပစ္စည်း မဟုတ်သော အော်ဒါ {n} ကြောင်း (ပေးသွင်းသူ: {s}) — ပစ္စည်းအမည်သည် မီးဖိုချောင်မီနူးနှင့် မကိုက်ညီပါ: {p} · မီးဖိုချောင်ပစ္စည်းဖြစ်ပါက မီနူးအမည်ကို တူအောင်ပေးပါ သို့မဟုတ် 📖 မီနူးတွင် ချိတ်ဆက်ပါ',sd_sub:'ဆိုင်ခွဲများ စာရင်းကောက်ပြီး မှာထားသော အော်ဒါ — ပို့မည့်အရေအတွက် ထည့်ပြီး ဘေလ်ထုတ်ပါ',sd_none:'ပို့ရန်ကျန် အော်ဒါ မရှိပါ 👍',sd_none_h:'ဆိုင်ခွဲများသည် စာရင်းကောက်အက်ပ်မှ မှာယူသည် (ဆိုင် = {s}) နောက် {d} ရက်',
   sd_noread:'ဆိုင်ခွဲအော်ဒါ ဖတ်မရပါ — ပြန်ဖွင့်ကြည့်ပါ',sd_reload:'⟳ အော်ဒါ ပြန်ဖွင့်',sd_ordered:'မှာထား',sd_have:'ရှိ',sd_send:'ပို့',sd_short:'လို',sd_full:'ပြည့်',sd_make:'⚡ ထုတ်လုပ်',
   sd_unlinked:'မီနူးနှင့် မချိတ်ရသေး',sd_unlinked_h:'"{n}" နှင့် ကိုက်ညီသော မီနူးကို နှိပ်ပါ — နောက်တစ်ကြိမ်အတွက် မှတ်ထားမည်',sd_link_t:'ဆိုင်ခွဲထုတ်ကုန်အမည်ကို မီနူးနှင့် ချိတ်ရန်',sd_link_factor:'ဆိုင်ခွဲ 1 {u} = မီနူးယူနစ် ဘယ်လောက် (ပုံမှန် 1)',
   sd_link_saved:'မီနူး ချိတ်ပြီး ✅',sd_link_bad:'မြှောက်ဖော်ကိန်း 0 ထက် ကြီးရမည်',sd_link_first:'မီနူးချိတ်ပြီးမှ ပို့နိုင်သည်',sd_partial:'ပို့ရန်ကျန်',sd_partial_h:'ပို့ပြီး {q} {u}',sd_lines_n:'{n} ကြောင်း',sd_order_d:'မှာသည့်ရက် {d}',
@@ -84,6 +84,7 @@ my:{sd_m_btn:'➕ ထပ်ပို့',sd_m_title:'ထပ်ပို့ — �
 CSS.add(`
 .sd-sub{font-size:13px;color:var(--mut);margin:-4px 0 10px}
 .sd-hd{display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.sd-why{margin:10px auto 0;max-width:520px;padding:8px 10px;border-radius:10px;background:#fff6e5;border:1px solid #f0c98a;color:#5a3a00;font-size:13px;line-height:1.45;text-align:left}.sd-why.warn{background:#ffe9e9;border-color:#f3a6a6;color:#7a1010}
 .sd-empty-add{margin-top:12px;display:flex;flex-direction:column;gap:8px;align-items:center}.sd-empty-add .btn{min-width:200px}
 .sd-mbrs{display:flex;flex-direction:column;gap:8px;margin:6px 0 12px}
 .sd-mbr{justify-content:flex-start;gap:12px;border-width:2px;font-size:17px;text-align:left}.sd-mbr .sd-dot{width:16px;height:16px}
@@ -177,6 +178,10 @@ async function sdRead(){ // อ่านชุดข้อมูลออเด�
 function sdTblGone(x){ // ยังไม่รัน SQL (S.kcSql=false) + ตารางไม่มีจริง = ยังไม่เคยส่งอะไร → ถือว่าว่าง (ออกบิลถูกกันด้วย sd_sql_block อยู่แล้ว) · permission denied/อ่านพลาด ≠ ตารางไม่มี
   if(x.ok||S.kcSql)return;const e=x.err||{},c=String(e.code||''),m=String(e.message||e||'');
   if(c==='42P01'||c==='PGRST205'||/does not exist|could not find the table/i.test(m)){x.ok=true;x.rows=[];x.gone=true;}}
+function sdIsKitchenRow(r,names){ // แถว stock_receipts เป็นออเดอร์ครัวกลางไหม — ซัพตรง ck_sup_names **หรือ** ชื่อสินค้าตรงกับเมนูครัวกลาง (kc_links / ชื่อเมนู / stock_name)
+  // เจ้าของ 2026-10-17: "จริงๆ ก็จะมีเฉพาะเมนูในระบบครัวกลางนี่และ ชื่อเหมือนกัน" → ไม่ต้องให้สาขาติ๊ก/ตั้งชื่อซัพให้ตรง · ชื่อตรงเมนู = ของครัวกลางเสมอ
+  names=names||((S.cfg||CFG_DEF).ck_sup_names||[]).map(supKey);
+  return names.includes(supKey(r.sup))||!!tdLinkOf(r.name);}
 function sdCalcGroups(R,branches){ // ฟังก์ชันล้วน — ☀️ วันนี้ · 🍳 ทำของ · 🚚 ส่งสาขา ใช้ตัวคิดเดียวกัน ตัวเลขจึงตรงกันทุกหน้า
   // {sr,dl,dll} + สาขาที่นับ → {groups:[{key,code,name,short,color,od,lines:[{rid,pid,name,unit,ordered,already,remaining,link,have:0,sent:0}],unlinked}] (เฉพาะที่ยังค้างส่ง · วันสั่งเก่าก่อน),
   //  ordered:{rid:Σสั่ง×f} · sent:{rid:Σส่งแล้ว×f (ไม่เกินที่สั่ง)} · need:{rid:Σค้างส่ง×f} (= ordered−sent) · unlinked:[ชื่อสินค้าสาขาที่ยังไม่ผูก] · lines:จำนวนบรรทัดค้าง
@@ -188,7 +193,7 @@ function sdCalcGroups(R,branches){ // ฟังก์ชันล้วน — �
   (R.dll||[]).forEach(l=>{const d=dById[String(l.delivery_id)];if(!d)return;const k0=d.branch+'|'+String(d.order_date||'').slice(0,10),q=num(l.sent);
     if(l.stk_product_id)byId[k0+'|'+l.stk_product_id]=num(byId[k0+'|'+l.stk_product_id])+q;else byName[k0+'|'+supKey(l.name)]=num(byName[k0+'|'+supKey(l.name)])+q;});
   const groups={},ordered={},sent={},need={},unlinked=[];
-  (R.sr||[]).forEach(r=>{if(!names.includes(supKey(r.sup)))return;const b=byStk[String(r.branch_id)];if(!b||!(num(r.ordered)>0))return;
+  (R.sr||[]).forEach(r=>{if(!sdIsKitchenRow(r,names))return;const b=byStk[String(r.branch_id)];if(!b||!(num(r.ordered)>0))return;
     const od=String(r.order_date||'').slice(0,10),k0=b.code+'|'+od,link=tdLinkOf(r.name),rec=link&&recipeById(link.recipe_id);
     let already=num(byId[k0+'|'+r.product_id])+num(byName[k0+'|'+supKey(r.name)]);
     if(rec&&supKey(rec.name)!==supKey(r.name))already+=num(byName[k0+'|'+supKey(rec.name)]);
@@ -225,11 +230,19 @@ function sdCostOf(l){const r=l.link&&recipeById(l.link.recipe_id);const c=recipe
 function sdGroupTotal(g){return rnd2(g.lines.reduce((a,l)=>a+(l.link?rnd2(num(l.sent)*num(sdPriceOf(l))):0),0));}
 
 /* ---------- วาด ---------- */
+function sdWhyEmpty(){ // ไม่มีการ์ด = บอกสาเหตุจากข้อมูลที่อ่านมา (เจ้าของ 2026-10-17: "ของที่จะส่งพรุ่งนี้ยังไม่เห็นมีเลย" — เดิมหายเงียบ)
+  const sr=(SD.raw&&SD.raw.sr)||[],cfg=S.cfg||CFG_DEF,byStk={};(S.branches||[]).forEach(b=>{if(b.stk)byStk[String(b.stk)]=b;});
+  const rows=sr.filter(r=>num(r.ordered)>0&&byStk[String(r.branch_id)]);
+  if(!rows.length)return '<div class="sd-why warn">'+esc(t('sd_why_zero',{d:cfg.order_lookback_days}))+'</div>';
+  const other=rows.filter(r=>!sdIsKitchenRow(r));
+  if(!other.length)return '';   // มีออเดอร์แต่ส่งครบแล้ว = "ไม่มีออเดอร์ค้าง" ตามปกติ
+  const sups=[...new Set(other.map(r=>String(r.sup||'—').trim()))].slice(0,5),nm=[...new Set(other.map(r=>String(r.name||'').trim()).filter(Boolean))].slice(0,6);
+  return '<div class="sd-why">'+esc(t('sd_why_other',{n:other.length,s:sups.join(', '),p:nm.join(' · ')+(other.length>nm.length?' …':'')}))+'</div>';}
 function sdPaint(){
   const b=document.getElementById('sdBody');if(!b)return;
   if(!SD.ok){b.innerHTML='<div class="badbox">⚠ '+esc(t('sd_noread'))+(SD.err?' · '+esc(SD.err):'')+'<div class="xs" style="margin-top:4px">'+esc(t('sd_noread_h'))+'</div></div>'+
     '<button type="button" class="btn gh" onclick="sdReload()">'+esc(t('sd_reload'))+'</button>';return;}
-  if(!SD.groups.length){const cfg=S.cfg||CFG_DEF;b.innerHTML='<div class="card"><div class="empty">'+esc(t('sd_none'))+'<div class="xs mut" style="margin-top:6px">'+esc(t('sd_none_h',{s:cfg.ck_sup_names.join(', '),d:cfg.order_lookback_days}))+'</div>'+
+  if(!SD.groups.length){const cfg=S.cfg||CFG_DEF;b.innerHTML='<div class="card"><div class="empty">'+esc(t('sd_none'))+'<div class="xs mut" style="margin-top:6px">'+esc(t('sd_none_h',{s:cfg.ck_sup_names.join(', '),d:cfg.order_lookback_days}))+'</div>'+sdWhyEmpty()+
     (canKitchen()?'<div class="sd-empty-add"><button type="button" class="btn sd-madd" onclick="sdManualOpen()">'+esc(t('sd_m_btn'))+'</button><div class="xs mut">'+esc(t('sd_m_empty_h'))+'</div></div>':'')+'</div></div>';return;}
   b.innerHTML=SD.groups.map((g,gi)=>sdCardHtml(g,gi)).join('');
 }
