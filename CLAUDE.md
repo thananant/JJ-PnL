@@ -1089,6 +1089,16 @@
 - มือถือเปิด PDF ด้วย `window.open(blob)` มักได้หน้าขาว → ให้ดาวน์โหลดไฟล์แทน (ตัวแปร `IS_TOUCH`)
 - ตรวจทุกแท็บว่า `scrollWidth <= innerWidth` (หน้าต้องไม่เลื่อนแนวนอน) ก่อนส่งงาน
 
+## 🧪 ตัวตรวจกลาง + เทสใน repo (เจ้าของสั่ง 2026-10-17 — ทำ skill A1–A3)
+
+- **ก่อน commit ทุกครั้ง: `node tests/precheck.mjs`** (ก่อนเปิด PR ใช้ `--remote`) — ตรวจทุกอย่างที่ CLAUDE.md บอกว่า "ต้องเหมือนกัน/ห้ามหาย": JJ Login 14 ไฟล์ · JJ Gate · JJBR · SPD · ล็อกอินนับสต๊อก · ไม่มี `.sql` · no-cache · syntax ทุก `<script>` · `RQ_MIN`/`RESET_MIN` · Social brain=webhook · `SCRIPT_VER` NAS · ครัวกลาง v2 ตรงกับ src · โค้ด Edge Function ที่ฝัง = branch `sql`/Social
+  (แทนคำสั่ง `for f in … grep -c` ด้านล่าง — ยังใช้ได้แต่ตรวจน้อยกว่า) · **ห้าม commit ถ้ามี ✗**
+- **แก้สูตร → `node tests/unit/run.mjs`** — เทสดึงฟังก์ชันจริงจาก HTML (`tests/unit/lib.mjs` `load()`): ใบกำกับ (รวม**แอป↔`inv_nas_sync.py` ตรงกันทุกหลัก**) · **`orderPlan` นับสต๊อก = `brRow` ครัวกลาง 4,000 สถานการณ์** · สิทธิ์หน้าแรก · KPI · เงินเดือน
+  · **เทสใหม่เขียนลง `tests/unit/<ระบบ>.test.mjs` ใน repo — ไม่ใช่ `/tmp`** (ของใน `/tmp` หายเมื่อปิด session)
+- **แก้หน้าจอ → `node tests/mobile/mobile-check.mjs`** (`--all` = 15 รุ่นตามกติกาหน้าจอมือถือ · `--app=` · `--shots`) — Playwright + safe-area จริง + Supabase จำลอง (ล็อกอินผู้ใช้ทดสอบเข้าหน้าหลักให้)
+  · ผลรอบแรก 2026-10-17: ช่องกรอก/เลือกเล็กกว่า 16px บนโทรศัพท์ (iPhone ซูมเอง) ที่ P&L (เดือน) · เงินเดือน (วันที่) · Social (ช่วงเวลา) · ซ่อมบำรุง (สาขา) · นับสต๊อก (วันที่/ชื่อผู้นับ) — ยังไม่ได้แก้
+- วิธีใช้ละเอียดอยู่ใน skill ของ repo: `.claude/skills/jj-precheck` · `jj-mobile-check` · `jj-tests` · session บนคลาวด์ติดตั้งของให้เอง (`.claude/hooks/session-start.sh`)
+
 ## กติกาการส่งงาน — ใช้กับ **ทุกระบบ** ใน repo นี้ (P&L · Owner · KPI · Payroll · นับสต๊อก · ซ่อมบำรุง · Kitchen · Social · Invoice · Calendar · Access)
 
 - ไฟล์ที่ต้องรัน/วางบน **Supabase** (SQL, โค้ด Edge Functions) → **แปะเนื้อหาลงในแชทเป็นบล็อกโค้ดเลย** (เจ้าของสั่ง 2026-09-17 หลังลองมาแล้ว 2 แบบ):
