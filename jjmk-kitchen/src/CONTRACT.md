@@ -184,3 +184,19 @@ For your own tab's device sweep: `import { sweep } from './t_devices.mjs'; await
 - **`numIn(v)`** (shell): `"1,5"` / `"1,25"` (comma + 1–2 digits) = decimal comma → 1.5 / 1.25; `"1,500"` stays 1,500. `stepper` handlers, `stepBump`, 🚚 ส่ง (`sdSetSent`) and 🛒 packs (`poSetPacks`) use it; `num()` is unchanged. `t_fix3` [6].
 - Regression suite for this round: `t_fix3.mjs` (+ the verifiers' `v_review3_r2_*.mjs` now all green). Screenshots: `k2/shots_fx2/`.
 
+## 12. 🎯 Safety / Max per product (2026-10-17, B2 — owner: "หน้าตั้ง safety/max ของสินค้า แต่ละตัว")
+- **One formula, three callers**: `mnTargetCalc(r, stock, dailyAvg)` (mod_menus.js, pure) → `{safety, max, upto, below}` — `safety` = `target_qty` > 0 else `target_days × dailyAvg` else 0;
+  `upto` = `max_qty` > 0 ? max(max_qty, safety) : safety; `below` = safety > 0 && stock < safety ? max(0, upto − stock) : 0. `mkNeeds()` (🍳, adds `upto` to its output and uses it in the ⚡ "ถึงที่ควรมี" chip),
+  `tdTargetOf`/`tdPaintRefill` (☀️) and the 🎯 page all call it. **Never re-derive the refill number in a module.** `MK_ORD.daily` is the shared 14-day average; the 🎯 page calls `mkLoad()` (cached 60 s, may return `undefined` → wrap in `Promise.resolve`).
+- **Column** `ck_recipes.max_qty numeric` (SQL `alter … add column if not exists`, embedded `#kcSql`). Rows read with `select('*')` simply lack the key on an old schema.
+  `S.kcMax`: `undefined` = unknown · `true` = column exists · `false` = latest SQL not run. `mnTgProbe()` sets it once (`select('id,max_qty').limit(1)` → 42703); any write that hits the column (`mnTgColGone(err,'max_qty')`: 42703 or PGRST204 naming it)
+  drops `max_qty`, sets `S.kcMax=false`, retries and shows `mn_tg_sql` (page banner `#mnTgSqlBox` + amber note in the form + 'warn' toast). `mnWrite` (form path) maps a missing `max_qty` to `S.kcMax=false`, not `S.kcSql=false`.
+  `mnSave` only sends `max_qty` while `S.kcMax !== false`. Every other field saves normally — never pretend Max was saved.
+- **View** (`mnTgRender`, `MN_VIEW='target'`, `LS jjck_mnview`, `mnViewSet('')` = back to cards; `RENDER.menus` branches on it): rows `#mnTgR_<id>` with inputs `#mnTgS_/#mnTgM_/#mnTgD_<id>` (`data-id` + `data-f` = target_qty/max_qty/target_days, `oninput="mnTgInput(this)"`),
+  info `#mnTgI_<id>` (stock · avg/day or `mn_tg_avg_na` when `MK_ORD.ok` is false · open orders), need `#mnTgN_<id>` (live, from saved row + `MN_TG.pend`). `mnTgParse` accepts `^[0-9][0-9,]*(\.[0-9]+)?$` or `^[0-9]+,[0-9]{1,2}$` (numIn), else NaN → `.bad` + `#mnTgB_<id>`.
+  `mnTgInput` → `MN_TG.pend[id][f]` + 600 ms debounce → `mnTgFlush(id)` (serialized per row via `MN_TG.busy/again`) → `mnTgSave(id, patch)` (update only the changed fields, `Object.assign` the cache, `.saved` 1.5 s, `MN_TG.seq[id]`++).
+  A failed write puts the patch back into `pend` (red row + `sv_err`). Re-rendering after `mkLoad` touches only `#mnTgI_/#mnTgN_` (`mnTgInfoPaintAll`), never the inputs. Category chips reuse `MN_CAT`/`mnSetCat` (no 🗄️ chip here); search `MN_TGQ` is per visit.
+- **Form**: `#mnTm` (Max) between `#mnTq` and `#mnTd`; draft field `max_qty`; card chip `🎯 <safety> → <max>` (`mnMaxTxt`). Labels: `mn_safety` "ขั้นต่ำที่ต้องมี (Safety)" · `mn_max` "ทำเติมให้ถึง (Max)" (4 languages, `mn_tg_*`, `mk_upto`).
+- Tests: `t_target.mjs` (178 — view/prefill/avg, exact rows, blank→null, invalid, decimal comma, debounce, serialized writes, reload/back, no-column probe + write path + form path, formula incl. 🍳 suggestion 10/3 lots and ☀️ count, form Max, staff rights, 4 languages, 320/390/280/landscape, 15-device sweep).
+  Run with `K2_BUILT=<built file> node t_target.mjs` (it does not build). `t_make`/`t_master` unchanged and green.
+
