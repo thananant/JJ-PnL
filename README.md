@@ -12,10 +12,10 @@
   **🗓 ตารางบำรุงรักษา** (งานประจำ+ปฏิทิน · พนักงานบันทึกงาน+รูปถ่าย) และ
   **📦 นับอุปกรณ์** (2026-09-21: นับรายเดือนต่อสาขา เทียบงวดก่อน → ของหาย/อัตราเสียหาย% ·
   คาดการณ์เดือนหน้า · ของชำรุดต้องแนบรูป 1–10 รูป · ตาราง `maint_assets`/`maint_counts`)
-- `jjmk-kitchen.html` — ระบบครัวกลาง (JJ Kitchen)
-  · **ล็อกอินด้วยบัญชีกลาง `pnl_users` แล้ว (2026-09-24 — เลิกใช้ Supabase Auth + `app_users`)**
-  · ⚠️ ต้องรัน `jjmk_kitchen_central.sql` (branch `sql`) ครั้งเดียว ไม่งั้นบันทึกข้อมูลไม่ได้
-  · เปิดจากศูนย์รวมแอพ = เข้าได้เลย · เปิดลิงก์ตรง = ใส่รหัสใหม่ · รีเฟรช/ลากหน้าลงยังอยู่หน้าเดิม
+- `jjmk-kitchen.html` — ระบบครัวกลาง v2 (JJ Kitchen · รื้อสร้างใหม่ทั้งระบบ 2026-10-17 เก็บ CI เดิม)
+  · ไฟล์ต้นฉบับอยู่ `jjmk-kitchen/src/` (`shell.html` + `mod_<แท็บ>.js`) → `node jjmk-kitchen/src/build.mjs` สร้างไฟล์เดียว — **แก้ที่ src แล้ว build ห้ามแก้ไฟล์ที่ build แล้วตรง ๆ**
+  · ล็อกอินด้วยบัญชีกลาง `pnl_users` · เปิดจากศูนย์รวมแอพ = เข้าได้เลย · เปิดลิงก์ตรง = ใส่รหัสใหม่ · รีเฟรช/ลากหน้าลงยังอยู่หน้าเดิม
+  · ⚠️ ต้องรัน `jjmk_kitchen2.sql` (branch `sql`) ครั้งเดียว (รันซ้ำได้ · ไม่ลบข้อมูลเดิม) — ตารางงานใหม่ `kc_*` · ราคาสินค้าส่งสาขา = ต้นทุนจริงของล็อตที่ผลิต + ค่าแฝง
 - `jjmk-social.html` — ระบบฟังเสียงลูกค้า + แชทบอท (JJ Social)
 - `jjmk-kpi.html` — 📊 ระบบวัดความพึงพอใจลูกค้า (JJ KPI): ลูกค้ากดหน้าร้านผ่านแท็บเล็ต
   (`?kiosk=JJRD` / `?kiosk=JJLP` · สาขาใหม่ `?kiosk=<รหัสสาขา>`) · ไม่มี param = แดชบอร์ดเจ้าของ · ย้ายมาจาก repo `thananant/JJ-KPI` (2026-09-06)
@@ -94,6 +94,7 @@
 - `jjmk-access.sql` — ระบบสิทธิ์กลาง (JJ Access): คอลัมน์ `pnl_users.apps` + ตาราง `pnl_access_log`
 - `jjmk-signup.sql` — ระบบสมัครพนักงาน: `pnl_users.status` + ตาราง `pnl_profiles` + `pnl_pending_count()` · คู่กับ Edge Function `signup-notify` (แจ้ง LINE)
 - `jjmk_kitchen_central.sql` — ย้ายครัวกลางมาใช้บัญชีกลาง: เปิดสิทธิ์เขียน `ck_*` + `ck_add_qty` + bucket `product-images` ให้ role `anon`
+- `jjmk_kitchen2.sql` — ครัวกลาง v2 (2026-10-17): คอลัมน์ใหม่ใน `ck_items/ck_recipes/ck_sups` + ตารางงาน `kc_*` (รับของ/ทำของ/นับ/บิลสาขา/ใบสั่งซื้อ/ค่าแฝง) + `ck_add_qty` ปัด 4 ตำแหน่ง + RLS anon
 - `jjmk-calendar.sql` — ติดตั้งตารางปฏิทินองค์กร (JJ Calendar, ตาราง prefix `cal_`)
   · คู่กับ Edge Function `cal-feed` (ฟีด ICS สำหรับ subscribe ลงมือถือ — deploy ผ่าน Dashboard, ปิด Verify JWT)
 - `jjmk-payroll/*.sql` — migration ทั้งหมดของระบบเงินเดือน (15 ไฟล์ รันซ้ำได้ · Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`)

@@ -5,12 +5,13 @@
    → บันทึก = kc_productions + kc_production_lines + kc_moves (produce_out วัตถุดิบ · waste เศษทิ้ง · produce_in สินค้า) + ck_add_qty
      + ต้นทุนสินค้าถัวเฉลี่ย (ck_recipes.avg_cost / unit_cost = ล็อตล่าสุด) — กติกาเจ้าของ: ราคาสินค้า = ต้นทุนจริงของล็อตที่ทำ
    ⚡ ด่วน อ่านออเดอร์สาขาจาก stock_receipts (sup = ครัวกลาง · ย้อนหลัง order_lookback_days) จับคู่เมนูด้วย kc_links/ชื่อ · หักที่ส่งแล้ว (kc_deliveries) · ขาด = สั่ง − สต๊อก
-   🔄 เติม = สต๊อก < target_qty หรือ target_days × ยอดส่งเฉลี่ย 14 วัน
+   🔄 เติม = สต๊อก < target_qty หรือ target_days × ยอดส่งเฉลี่ย 14 วัน (หน่วยครัว — บรรทัดบิลหน่วยสาขา × ตัวคูณที่ผูก `tdLineFactor`)
+   อ่านไม่ครบ (stock_receipts/kc_deliveries/kc_delivery_lines อ่านพลาด · ไม่มีสิทธิ์ · ไม่มีคอลัมน์) = MK_ORD.ok=false → แถบ mk_orders_na ไม่มี ⚡ (ยกเว้นยังไม่รัน SQL + ตารางไม่มีจริง = ว่าง — กติกา sdTblGone ของ 🚚)
    ร่างล็อตที่ทำค้างเก็บ localStorage (jjck_mk_draft · วันเดียวกัน ≤12 ชม.) · ‹ กลับ = เก็บตัวเลขไว้ · ทำวันนี้ → รายละเอียด + ยกเลิกวันเดียวกัน (ย้อนสต๊อก/ต้นทุน)
    ============================================================ */
 I18N.add({
 th:{mk_pill_urgent:'⚡ ด่วน',mk_pill_refill:'🔄 เติม',mk_pill_all:'ทั้งหมด',mk_none_urgent:'ไม่มีของที่ต้องทำด่วน 👍',mk_none_refill:'สต๊อกสำเร็จรูปครบตามที่ควรมี 👍',mk_none:'ยังไม่มีเมนู — ไปเพิ่มที่ 📖 เมนู/สูตร',
-  mk_ordered:'สาขาสั่ง {q}',mk_short:'ขาด {q} {u}',mk_target:'ควรมี {q}',mk_below:'ต้องเติม {q} {u}',mk_sugg:'แนะนำ {n} รอบ',mk_lot_eq:'1 รอบ = {q} {u}',mk_tap:'แตะเพื่อทำ',
+  mk_ordered:'สาขาสั่ง {q}',mk_short:'ขาด {q} {u}',mk_target:'ควรมี {q}',mk_below:'ต้องเติม {q} {u}',mk_sugg:'แนะนำ {n} รอบ',mk_sugg_tgt:'ถึงที่ควรมี {q}',mk_lot_eq:'1 รอบ = {q} {u}',mk_tap:'แตะเพื่อทำ',
   mk_today:'🍳 ทำวันนี้',mk_today_none:'วันนี้ยังไม่ได้ทำของ',mk_lots_n:'{n} รอบ',mk_got:'ได้ {q} {u}',mk_by:'โดย',
   mk_draft:'⏸ ทำค้างอยู่: {n} · {l} รอบ',mk_draft_go:'▶ ทำต่อ',mk_draft_drop:'ทิ้ง',mk_draft_q:'มีงานทำของค้างอยู่ ({n}) — ทิ้งแล้วเริ่มอันใหม่?',
   mk_lots:'จำนวนรอบ',mk_lots_hint:'พิมพ์ทศนิยมได้ เช่น 0.5 รอบ',mk_ing:'🥬 ส่วนผสม',mk_ing_sp:'แก้ตัวเลขได้ถ้าใช้ไม่ตรงสูตร',mk_plan:'ตามสูตร',mk_used:'ใช้จริง',mk_waste:'เศษ/ทิ้ง',mk_have:'มี {q}',mk_over:'⚠ ใช้เกินของที่มีในสต๊อก',
@@ -26,7 +27,7 @@ th:{mk_pill_urgent:'⚡ ด่วน',mk_pill_refill:'🔄 เติม',mk_pill
   mk_void_ok:'ยกเลิกแล้ว — คืนสต๊อกให้แล้ว ✅',mk_void_today:'ยกเลิกได้เฉพาะล็อตที่ทำวันนี้',mk_void_note:'ยกเลิกทำของ',mk_gone:'ล็อตนี้ถูกยกเลิกไปแล้ว',mk_prev_na:'คืนสต๊อกแล้ว แต่ต้นทุนเดิมของสินค้าไม่มีให้คืน (ยังไม่มีช่อง prev_*)',
   mk_prev_cols:'บันทึกแล้ว แต่ตารางยังไม่มีช่อง prev_* — ถ้ายกเลิกล็อตนี้ ต้นทุนเดิมจะไม่ถูกคืน',mk_not_saved:'บันทึกไม่สำเร็จ — ไม่มีอะไรถูกบันทึก ลองใหม่อีกครั้ง',mk_cost_fix:'สต๊อกสินค้าเปลี่ยนระหว่างบันทึก — คิดต้นทุนถัวเฉลี่ยใหม่ให้แล้ว',mk_orders_na:'อ่านออเดอร์สาขาไม่ได้ — ⚡ ด่วน อาจไม่ครบ',mk_back:'‹ กลับ',mk_menus:'📖 เมนู/สูตร',mk_unit_bad:'⚠ แปลง {u} → {b} ไม่ได้ — แก้หน่วยในสูตรที่ 📖 เมนู/สูตร',mk_unit_bad_q:'"{n}": แปลง {u} → {b} ไม่ได้ — แก้หน่วยในสูตรที่ 📖 เมนู/สูตร ก่อนบันทึก',mk_unit_bad_sum:'ส่วนผสมที่แปลงหน่วยไม่ได้: {list} — บันทึกไม่ได้จนกว่าจะแก้สูตร'},
 en:{mk_pill_urgent:'⚡ Urgent',mk_pill_refill:'🔄 Refill',mk_pill_all:'All',mk_none_urgent:'Nothing urgent to make 👍',mk_none_refill:'Finished stock is at target 👍',mk_none:'No menus yet — add them in 📖 Menus',
-  mk_ordered:'Branches ordered {q}',mk_short:'short {q} {u}',mk_target:'target {q}',mk_below:'refill {q} {u}',mk_sugg:'suggest {n} lots',mk_lot_eq:'1 lot = {q} {u}',mk_tap:'Tap to make',
+  mk_ordered:'Branches ordered {q}',mk_short:'short {q} {u}',mk_target:'target {q}',mk_below:'refill {q} {u}',mk_sugg:'suggest {n} lots',mk_sugg_tgt:'to reach target {q}',mk_lot_eq:'1 lot = {q} {u}',mk_tap:'Tap to make',
   mk_today:'🍳 Made today',mk_today_none:'Nothing made today yet',mk_lots_n:'{n} lots',mk_got:'got {q} {u}',mk_by:'by',
   mk_draft:'⏸ In progress: {n} · {l} lots',mk_draft_go:'▶ Continue',mk_draft_drop:'Discard',mk_draft_q:'A lot is in progress ({n}) — discard it and start a new one?',
   mk_lots:'Lots',mk_lots_hint:'Decimals OK, e.g. 0.5 lot',mk_ing:'🥬 Ingredients',mk_ing_sp:'edit if different from the recipe',mk_plan:'Recipe',mk_used:'Used',mk_waste:'Waste',mk_have:'have {q}',mk_over:'⚠ More than in stock',
@@ -42,7 +43,7 @@ en:{mk_pill_urgent:'⚡ Urgent',mk_pill_refill:'🔄 Refill',mk_pill_all:'All',m
   mk_void_ok:'Voided — stock restored ✅',mk_void_today:'Only lots made today can be voided',mk_void_note:'Production voided',mk_gone:'This lot was already voided',mk_prev_na:'Stock restored, but the previous product cost could not be restored (no prev_* columns)',
   mk_prev_cols:'Saved, but the table has no prev_* columns — voiding this lot will not restore the previous cost',mk_not_saved:'NOT saved — please try again',mk_cost_fix:'Product stock changed while saving — moving average recomputed',mk_orders_na:'Could not read branch orders — ⚡ Urgent may be incomplete',mk_back:'‹ Back',mk_menus:'📖 Menus',mk_unit_bad:'⚠ cannot convert {u} → {b} — fix the unit in 📖 Menus',mk_unit_bad_q:'"{n}": cannot convert {u} → {b} — fix the recipe unit in 📖 Menus before saving',mk_unit_bad_sum:'Ingredients whose unit cannot convert: {list} — cannot save until the recipe is fixed'},
 lo:{mk_pill_urgent:'⚡ ດ່ວນ',mk_pill_refill:'🔄 ເຕີມ',mk_pill_all:'ທັງໝົດ',mk_none_urgent:'ບໍ່ມີເຄື່ອງທີ່ຕ້ອງເຮັດດ່ວນ 👍',mk_none_refill:'ສະຕັອກສຳເລັດຮູບຄົບຕາມທີ່ຄວນມີ 👍',mk_none:'ຍັງບໍ່ມີເມນູ — ໄປເພີ່ມທີ່ 📖 ເມນູ/ສູດ',
-  mk_ordered:'ສາຂາສັ່ງ {q}',mk_short:'ຂາດ {q} {u}',mk_target:'ຄວນມີ {q}',mk_below:'ຕ້ອງເຕີມ {q} {u}',mk_sugg:'ແນະນຳ {n} ຮອບ',mk_lot_eq:'1 ຮອບ = {q} {u}',mk_tap:'ແຕະເພື່ອເຮັດ',
+  mk_ordered:'ສາຂາສັ່ງ {q}',mk_short:'ຂາດ {q} {u}',mk_target:'ຄວນມີ {q}',mk_below:'ຕ້ອງເຕີມ {q} {u}',mk_sugg:'ແນະນຳ {n} ຮອບ',mk_sugg_tgt:'ເຖິງທີ່ຄວນມີ {q}',mk_lot_eq:'1 ຮອບ = {q} {u}',mk_tap:'ແຕະເພື່ອເຮັດ',
   mk_today:'🍳 ເຮັດມື້ນີ້',mk_today_none:'ມື້ນີ້ຍັງບໍ່ໄດ້ເຮັດເຄື່ອງ',mk_lots_n:'{n} ຮອບ',mk_got:'ໄດ້ {q} {u}',mk_by:'ໂດຍ',
   mk_draft:'⏸ ເຮັດຄ້າງຢູ່: {n} · {l} ຮອບ',mk_draft_go:'▶ ເຮັດຕໍ່',mk_draft_drop:'ຖິ້ມ',mk_draft_q:'ມີວຽກເຮັດເຄື່ອງຄ້າງຢູ່ ({n}) — ຖິ້ມແລ້ວເລີ່ມອັນໃໝ່?',
   mk_lots:'ຈຳນວນຮອບ',mk_lots_hint:'ພິມທົດສະນິຍົມໄດ້ ເຊັ່ນ 0.5 ຮອບ',mk_ing:'🥬 ສ່ວນປະສົມ',mk_ing_sp:'ແກ້ຕົວເລກໄດ້ຖ້າໃຊ້ບໍ່ຕົງສູດ',mk_plan:'ຕາມສູດ',mk_used:'ໃຊ້ຈິງ',mk_waste:'ເສດ/ຖິ້ມ',mk_have:'ມີ {q}',mk_over:'⚠ ໃຊ້ເກີນເຄື່ອງທີ່ມີໃນສະຕັອກ',
@@ -58,7 +59,7 @@ lo:{mk_pill_urgent:'⚡ ດ່ວນ',mk_pill_refill:'🔄 ເຕີມ',mk_pill
   mk_void_ok:'ຍົກເລີກແລ້ວ — ຄືນສະຕັອກໃຫ້ແລ້ວ ✅',mk_void_today:'ຍົກເລີກໄດ້ສະເພາະລັອດທີ່ເຮັດມື້ນີ້',mk_void_note:'ຍົກເລີກເຮັດເຄື່ອງ',mk_gone:'ລັອດນີ້ຖືກຍົກເລີກໄປແລ້ວ',mk_prev_na:'ຄືນສະຕັອກແລ້ວ ແຕ່ຕົ້ນທຶນເດີມຂອງສິນຄ້າບໍ່ມີໃຫ້ຄືນ (ຍັງບໍ່ມີຊ່ອງ prev_*)',
   mk_prev_cols:'ບັນທຶກແລ້ວ ແຕ່ຕາຕະລາງຍັງບໍ່ມີຊ່ອງ prev_* — ຖ້າຍົກເລີກລັອດນີ້ ຕົ້ນທຶນເດີມຈະບໍ່ຖືກຄືນ',mk_not_saved:'ບໍ່ໄດ້ບັນທຶກ — ລອງໃໝ່ອີກຄັ້ງ',mk_cost_fix:'ສະຕັອກສິນຄ້າປ່ຽນລະຫວ່າງບັນທຶກ — ຄິດຕົ້ນທຶນສະເລ່ຍໃໝ່ແລ້ວ',mk_orders_na:'ອ່ານອໍເດີສາຂາບໍ່ໄດ້ — ⚡ ດ່ວນ ອາດບໍ່ຄົບ',mk_back:'‹ ກັບຄືນ',mk_menus:'📖 ເມນູ/ສູດ',mk_unit_bad:'⚠ ແປງ {u} → {b} ບໍ່ໄດ້ — ແກ້ຫົວໜ່ວຍໃນສູດທີ່ 📖 ເມນູ/ສູດ',mk_unit_bad_q:'"{n}": ແປງ {u} → {b} ບໍ່ໄດ້ — ແກ້ຫົວໜ່ວຍໃນສູດທີ່ 📖 ເມນູ/ສູດ ກ່ອນບັນທຶກ',mk_unit_bad_sum:'ສ່ວນປະສົມທີ່ແປງຫົວໜ່ວຍບໍ່ໄດ້: {list} — ບັນທຶກບໍ່ໄດ້ຈົນກວ່າຈະແກ້ສູດ'},
 my:{mk_pill_urgent:'⚡ အရေးပေါ်',mk_pill_refill:'🔄 ဖြည့်',mk_pill_all:'အားလုံး',mk_none_urgent:'အရေးပေါ်လုပ်ရန် မရှိပါ 👍',mk_none_refill:'ထုတ်ကုန်လက်ကျန် လုံလောက်သည် 👍',mk_none:'မီနူး မရှိသေးပါ — 📖 မီနူး/နည်း တွင် ထည့်ပါ',
-  mk_ordered:'ဆိုင်ခွဲ မှာ {q}',mk_short:'လို {q} {u}',mk_target:'ထားရမည် {q}',mk_below:'ဖြည့်ရန် {q} {u}',mk_sugg:'အကြံပြု {n} သုတ်',mk_lot_eq:'1 သုတ် = {q} {u}',mk_tap:'လုပ်ရန် နှိပ်ပါ',
+  mk_ordered:'ဆိုင်ခွဲ မှာ {q}',mk_short:'လို {q} {u}',mk_target:'ထားရမည် {q}',mk_below:'ဖြည့်ရန် {q} {u}',mk_sugg:'အကြံပြု {n} သုတ်',mk_sugg_tgt:'ထားရမည့် {q} အထိ',mk_lot_eq:'1 သုတ် = {q} {u}',mk_tap:'လုပ်ရန် နှိပ်ပါ',
   mk_today:'🍳 ယနေ့လုပ်ခဲ့',mk_today_none:'ယနေ့ မလုပ်ရသေးပါ',mk_lots_n:'{n} သုတ်',mk_got:'ရ {q} {u}',mk_by:'လုပ်သူ',
   mk_draft:'⏸ လုပ်လက်စ: {n} · {l} သုတ်',mk_draft_go:'▶ ဆက်လုပ်',mk_draft_drop:'ဖျက်',mk_draft_q:'လုပ်လက်စ ရှိနေသည် ({n}) — ဖျက်ပြီး အသစ်စမလား?',
   mk_lots:'သုတ်အရေအတွက်',mk_lots_hint:'ဒသမ ရိုက်နိုင် ဥပမာ 0.5 သုတ်',mk_ing:'🥬 ပါဝင်ပစ္စည်း',mk_ing_sp:'နည်းနှင့်မတူလျှင် ပြင်နိုင်',mk_plan:'နည်းအရ',mk_used:'အမှန်သုံး',mk_waste:'အပိုင်း/စွန့်',mk_have:'ရှိ {q}',mk_over:'⚠ လက်ကျန်ထက် ပိုသုံးနေသည်',
@@ -112,30 +113,24 @@ async function mkLoad(force){
   if(!force&&MK_ORD.ok&&Date.now()-MK_ORD.at<60000)return;
   MK_LOADING=(async()=>{
     const td=bizTodayISO(),lb=num((S.cfg||CFG_DEF).order_lookback_days);
-    const get=async q=>{try{const r=await q;if(r&&r.error){if(MISSING_TBL(r.error))return [];throw r.error;}return r.data||[];}catch(e){return null;}};
+    const get=async q=>{try{const r=await q;if(r&&r.error){const x={ok:false,rows:[],err:r.error};sdTblGone(x);return x.ok?[]:null;}return r.data||[];}catch(e){return null;}};   // อ่านพลาด/ไม่มีสิทธิ์/ไม่มีคอลัมน์ = null (ห้ามถือว่าว่าง → ⚡ จากข้อมูลครึ่ง ๆ) · ตารางไม่มีจริงตอนยังไม่รัน SQL = ว่าง
     const [orders,links,dels,prods]=await Promise.all([
-      get(sb.from('stock_receipts').select('branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
+      get(sb.from('stock_receipts').select('id,branch_id,branch_name,product_id,name,unit,sup,order_date,ordered').gte('order_date',addDays(td,-lb)).gt('ordered',0)),
       get(sb.from('kc_links').select('stk_name,recipe_id,factor')),
       get(sb.from('kc_deliveries').select('id,d,branch,order_date,status').gte('d',addDays(td,-Math.max(14,lb+3))).neq('status','void')),
       get(sb.from('kc_productions').select('*').eq('d',td).order('created_at',{ascending:false}))]);
-    let dl=[];if(dels&&dels.length){dl=(await get(sb.from('kc_delivery_lines').select('delivery_id,recipe_id,sent').in('delivery_id',dels.map(x=>x.id))))||[];}
-    MK_ORD=mkOrdersCalc(orders||[],links||[],dels||[],dl,td,!!orders);MK_TODAY=prods||[];
+    let dl=[],dlOk=dels!=null;if(dels&&dels.length){const r=await get(sb.from('kc_delivery_lines').select('delivery_id,recipe_id,stk_product_id,name,sent').in('delivery_id',dels.map(x=>x.id)));if(r==null)dlOk=false;else dl=r;}
+    MK_ORD=mkOrdersCalc(orders||[],links,dels||[],dl,td,orders!=null&&dlOk,dlOk);MK_TODAY=prods||[];   // อ่านไม่ครบ (ออเดอร์/บิล/บรรทัดที่ส่งแล้ว) = ไม่คิด ⚡ จากข้อมูลครึ่ง ๆ · บิลอ่านไม่ครบ = ไม่คิด 🔄 ด้วย
   })();
   try{await MK_LOADING;}finally{MK_LOADING=null;}
 }
-function mkOrdersCalc(orders,links,dels,dl,td,ok){
-  const sups=new Set(((S.cfg||CFG_DEF).ck_sup_names||[]).map(supKey)),byName={},byStk={},lk={};
-  activeRecipes().forEach(r=>{byName[supKey(r.name)]=r;});(S.branchesAll||[]).forEach(b=>{if(b.stk)byStk[String(b.stk)]=b.code;});
-  links.forEach(l=>{lk[supKey(l.stk_name)]=l;});
-  const ordered={},groups={};
-  orders.forEach(o=>{if(!sups.has(supKey(o.sup)))return;const l=lk[supKey(o.name)];const r=l?recipeById(l.recipe_id):byName[supKey(o.name)];if(!r||r.active===false)return;
-    const f=l?(num(l.factor)||1):1;ordered[r.id]=rnd4(num(ordered[r.id])+num(o.ordered)*f);groups[(byStk[String(o.branch_id)]||String(o.branch_id))+'|'+String(o.order_date).slice(0,10)]=1;});
-  const sent={},daily={},from14=addDays(td,-14),dById={};dels.forEach(x=>{dById[x.id]=x;});
-  dl.forEach(l=>{const dv=dById[l.delivery_id];if(!dv)return;
-    if(groups[dv.branch+'|'+String(dv.order_date||'').slice(0,10)])sent[l.recipe_id]=rnd4(num(sent[l.recipe_id])+num(l.sent));
-    if(String(dv.d)>=from14)daily[l.recipe_id]=num(daily[l.recipe_id])+num(l.sent);});
+function mkOrdersCalc(orders,links,dels,dl,td,ok,dailyOk){ // ออเดอร์ค้างต่อเมนู = ตัวคิดเดียวกับ 🚚 ส่งสาขา/☀️ วันนี้ (sdCalcGroups) → ⚡ ขาด ของหน้านี้ = ขาด ของหน้าส่งสาขา เสมอ · dailyOk (ตั้งต้น = ok) = บิล 14 วันอ่านครบ จึงคิดยอดส่งเฉลี่ย
+  if(Array.isArray(links))TD_LINKS=links;   // ชื่อสินค้าสาขา ↔ เมนู (อ่านไม่ได้ = ใช้ของเดิม)
+  const C=ok?sdCalcGroups({sr:orders,dl:dels,dll:dl},S.branchesAll):{ordered:{},sent:{}};   // ทำของ = ทั้งครัว (ทุกสาขา) · หน้าส่งสาขา/วันนี้ ใช้ S.branches ตามสิทธิ์ · อ่านไม่ครบ = ไม่มีออเดอร์ให้คิด (ขึ้นแถบเตือน)
+  const daily={},from14=addDays(td,-14),dById={};dels.forEach(x=>{dById[x.id]=x;});
+  if(dailyOk==null?ok:dailyOk)dl.forEach(l=>{const dv=dById[l.delivery_id];if(!dv||!l.recipe_id)return;if(String(dv.d)>=from14)daily[l.recipe_id]=num(daily[l.recipe_id])+num(l.sent)*tdLineFactor(l);});   // หน่วยครัว (= tdAvgSent ของ ☀️)
   Object.keys(daily).forEach(k=>{daily[k]=rnd4(daily[k]/14);});
-  return {at:Date.now(),ok,ordered,sent,daily};}
+  return {at:Date.now(),ok,ordered:C.ordered,sent:C.sent,daily};}
 function mkNeeds(){ // ต่อเมนู: open (สั่งค้าง) · short (ขาด) · target · below (ต้องเติม) · sugg (รอบที่แนะนำ)
   const out={};activeRecipes().forEach(r=>{
     const open=Math.max(0,rnd4(num(MK_ORD.ordered[r.id])-num(MK_ORD.sent[r.id]))),stock=num(r.qty),short=Math.max(0,rnd4(open-stock));
@@ -176,7 +171,7 @@ function mkCardHtml(r,n){
   return '<div class="icard tap" data-id="'+esc(r.id)+'" data-lots="'+(n.sugg||1)+'" data-kind="'+kind+'" onclick="mkOpen(this.dataset.id,num(this.dataset.lots),this.dataset.kind)">'+
     thumbHtml(r,(typeof mnIcon==='function')?mnIcon(r):'🍳','ithumb')+'<div class="iname">'+esc(dispName(r))+'</div>'+
     '<div class="isub">'+esc(t('mk_lot_eq',{q:fmtQ(r.yield_qty),u}))+(c!=null?' · '+esc(mkMoney(c))+'/'+esc(u):'')+'</div>'+
-    '<div class="row" style="justify-content:space-between"><span class="chip '+(num(r.qty)>0?'ok':'mid')+'">📦 '+fmtQ(r.qty)+' '+esc(u)+'</span>'+(n.sugg?'<span class="mk-sugg">'+esc(t('mk_sugg',{n:n.sugg}))+'</span>':'')+'</div>'+need+'</div>';}
+    '<div class="row" style="justify-content:space-between"><span class="chip '+(num(r.qty)>0?'ok':'mid')+'">📦 '+fmtQ(r.qty)+' '+esc(u)+'</span>'+(n.sugg?'<span class="mk-sugg">'+esc(t('mk_sugg',{n:n.sugg}))+(n.short>0&&n.below>n.short+1e-9?' · '+esc(t('mk_sugg_tgt',{q:fmtQ(n.target)})):'')+'</span>':'')+'</div>'+need+'</div>';}
 function mkPaintToday(){
   const box=document.getElementById('mkToday'),nb=document.getElementById('mkTodayN');if(!box)return;
   if(nb)nb.textContent=MK_TODAY.length?t('mk_lots_n',{n:MK_TODAY.length}):'';

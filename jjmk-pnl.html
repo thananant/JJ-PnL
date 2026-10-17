@@ -2499,23 +2499,58 @@ RENDER.ck = async (el)=>{
   const pmm=prevMonth(S.m), PF=pmm+'-01', PT=dstr(pmm,monthDays(pmm));
   const brQ = S.br!=='ALL' ? '&branch=eq.'+S.br : brIn();
   let ords=[],pords=[],recipes=[],openOrds=[],items=[];
-  try{
-    [ords,pords,recipes,openOrds]=await Promise.all([
+  /* ครัวกลางรุ่นใหม่ (v2 · 2026-10-16) เขียนบิลสาขาลง kc_deliveries/kc_delivery_lines แทน ck_orders/ck_order_items (ตารางเดิมหยุดนิ่ง — เดือนเก่ายังอ่านได้)
+     → อ่านทั้ง 2 ชุดแล้วแปลงเป็นรูปเดียวกัน (order {id,d,branch,branch_name,total,bill_no,paid_at,v2} · line {order_id,recipe_id,name,unit,qty,amount})
+     · ตาราง kc_* ยังไม่มี (ยังไม่รัน jjmk_kitchen2.sql)/อ่านไม่ได้ = ถือว่าว่าง ข้อมูลเดิมยังโชว์ · ชุดเดิมอ่านไม่ได้ก็ยังโชว์ชุดใหม่ · พังทั้ง 2 ชุดค่อยขึ้นการ์ดผิดพลาด */
+  let legErr=null,v2Err=null,dues=[];
+  const v2ords=[],v2pords=[],v2items=[];
+  const loadLegacy=async()=>{
+    [ords,pords,openOrds]=await Promise.all([
       selAllQ('ck_orders',`select=*&status=in.(sent,done)&d=gte.${F}&d=lte.${T}${brQ}&order=d,id`),
       selAllQ('ck_orders',`select=id,total&status=in.(sent,done)&d=gte.${PF}&d=lte.${PT}${brQ}&order=id`),
-      selAllQ('ck_recipes',`select=id,name,cat,yield_unit,unit_cost,image_url,qty&deleted_at=is.null&order=sort,name`),
       selAllQ('ck_orders',`select=*&status=in.(new,prep)${brQ}&order=d,id`)
     ]);
     const ids=ords.map(o=>o.id);
     for(let i=0;i<ids.length;i+=80){
       items.push(...await selAllQ('ck_order_items',`select=*&order_id=in.(${ids.slice(i,i+80).join(',')})&order=id`));
     }
-  }catch(e){
-    el.innerHTML='<div class="card"><div class="empty">🍳 อ่านข้อมูลครัวกลางไม่ได้ — '+esc(e.message)+
-      '<br>ถ้ายังไม่ได้ติดตั้งระบบครัวกลาง ให้รัน <b>jjmk_kitchen_setup.sql</b> ใน Supabase SQL Editor ครั้งเดียว แล้วเปิดหน้านี้ใหม่ครับ</div>'+
+  };
+  const loadV2=async()=>{
+    const [dels,pdels,due]=await Promise.all([
+      selAllQ('kc_deliveries',`select=id,bill_no,d,branch,branch_name,total,paid_at&status=neq.void&d=gte.${F}&d=lte.${T}${brQ}&order=d,id`),
+      selAllQ('kc_deliveries',`select=id,total&status=neq.void&d=gte.${PF}&d=lte.${PT}${brQ}&order=id`),
+      selAllQ('kc_deliveries',`select=id,total&status=neq.void&paid_at=is.null${brQ}&order=d,id`)   // บิลที่สาขายังไม่จ่าย — ทุกเดือน ไม่ใช่แค่เดือนที่ดู
+    ]);
+    dels.forEach(x=>v2ords.push({id:x.id,d:x.d,branch:x.branch,branch_name:x.branch_name,total:x.total,bill_no:x.bill_no,paid_at:x.paid_at,v2:true}));
+    pdels.forEach(x=>v2pords.push({id:x.id,total:x.total}));
+    dues=due;
+    const ids=dels.map(o=>o.id);
+    for(let i=0;i<ids.length;i+=80){
+      (await selAllQ('kc_delivery_lines',`select=id,delivery_id,recipe_id,name,unit,sent,amount&delivery_id=in.(${ids.slice(i,i+80).map(encodeURIComponent).join(',')})&order=delivery_id,sort,id`))
+        .forEach(l=>v2items.push({order_id:l.delivery_id,recipe_id:l.recipe_id,name:l.name,unit:l.unit,qty:l.sent,amount:l.amount}));
+    }
+  };
+  const loadRecipes=async()=>{
+    try{ recipes=await selAllQ('ck_recipes',`select=id,name,cat,yield_unit,unit_cost,image_url,qty,avg_cost,active&deleted_at=is.null&order=sort,name`); }
+    catch(e){ recipes=await selAllQ('ck_recipes',`select=id,name,cat,yield_unit,unit_cost,image_url,qty&deleted_at=is.null&order=sort,name`); } // ยังไม่รัน jjmk_kitchen2.sql (ไม่มีช่อง avg_cost) = อ่านแบบเดิม
+  };
+  await Promise.all([loadLegacy().catch(e=>{legErr=e;}),loadV2().catch(e=>{v2Err=e;}),loadRecipes().catch(()=>{recipes=[];})]);
+  if(legErr&&v2Err){
+    el.innerHTML='<div class="card"><div class="empty">🍳 อ่านข้อมูลครัวกลางไม่ได้ — '+esc(v2Err.message)+
+      '<br>ถ้ายังไม่ได้ติดตั้งระบบครัวกลาง ให้รัน <b>jjmk_kitchen2.sql</b> (ครัวกลางรุ่นใหม่ · branch sql) ใน Supabase SQL Editor ครั้งเดียว แล้วเปิดหน้านี้ใหม่ครับ</div>'+
       '<div style="text-align:center"><a class="btn dk sm2" style="text-decoration:none" href="jjmk-kitchen.html" target="_blank">🍳 เปิดระบบครัวกลาง</a></div></div>';
     return;
   }
+  // รวมชุดเดิม + ชุดใหม่ (กันซ้ำด้วย id) เรียงวันที่แล้ว id
+  const idCmp=(a,b)=>(typeof a==='number'&&typeof b==='number')?a-b:String(a).localeCompare(String(b));
+  const uniq=a=>{const s={};return a.filter(o=>{const k=String(o.id);if(s[k])return false;s[k]=1;return true;});};
+  ords=uniq(ords.concat(v2ords)).sort((a,b)=>String(a.d||'').localeCompare(String(b.d||''))||idCmp(a.id,b.id));
+  pords=uniq(pords.concat(v2pords));
+  items=items.concat(v2items);
+  const recAct=recipes.filter(r=>r.active!==false);                 // เมนูที่ตั้ง 🗄️ ไม่ใช้แล้ว ไม่โชว์ (รายการเต็มยังใช้หาชื่อ/รูปของที่เคยส่ง)
+  const hasAvg=recAct.some(r=>r.avg_cost!=null);                    // รุ่นใหม่: ต้นทุนถัวเฉลี่ยจากล็อตที่ผลิตจริง (avg_cost) · ไม่มี = unit_cost เดิม
+  const costOf=r=>r.avg_cost!=null?r.avg_cost:r.unit_cost;
+  const dueAmt=dues.reduce((s,o)=>s+num(o.total),0);
   const oMap={};ords.forEach(o=>oMap[o.id]=o);
   const val=ords.reduce((s,o)=>s+num(o.total),0);
   const pval=pords.reduce((s,o)=>s+num(o.total),0);
@@ -2536,13 +2571,16 @@ RENDER.ck = async (el)=>{
 
   let h='<div class="card"><h3>🍳 ครัวกลาง — ต้นทุนของที่ส่งให้สาขา<span class="sp">'+monthLabel(S.m)+' · '+(S.br==='ALL'?'ทุกสาขา':esc(BRNAME[S.br]||S.br))+'</span></h3>'+
     '<div class="sm mut">ดึงสดจากระบบครัวกลาง (JJ Kitchen) — เป็นต้นทุนโอนภายใน ไม่ถูกนับซ้ำเป็นรายจ่ายในกำไร/ขาดทุน</div>'+
+    (v2Err?'<div class="sm" style="color:var(--bad);margin-top:6px">⚠ อ่านบิลสาขาของครัวกลางรุ่นใหม่ (kc_deliveries) ไม่ได้ — '+esc(v2Err.message)+
+      '<br>ถ้ายังไม่ได้รัน <b>jjmk_kitchen2.sql</b> (branch sql) ใน Supabase SQL Editor ให้รันครั้งเดียว · ตอนนี้แสดงเฉพาะข้อมูลของระบบเดิม</div>':'')+
     '<a class="btn dk sm2" style="margin-top:10px;text-decoration:none" href="jjmk-kitchen.html" target="_blank">🍳 เปิดระบบครัวกลาง →</a></div>';
   const dpc=pval>0?((val-pval)/pval*100):null;
   h+='<div class="kpis">'+
     '<div class="kpi hero"><div class="t">รับจากครัวกลางเดือนนี้</div><div class="kpi-v">฿'+fmt(val,2)+'</div><div class="s">'+ords.length+' ครั้ง</div></div>'+
     '<div class="kpi"><div class="t">เดือนก่อน ('+monthLabel(pmm)+')</div><div class="kpi-v">฿'+fmt(pval,2)+'</div><div class="s '+(dpc==null?'mut':(dpc>0?'drn':'drp'))+'">'+(dpc==null?'–':(dpc>0?'▲ +':'▼ ')+fmt(Math.abs(dpc),1)+'%')+'</div></div>'+
-    '<div class="kpi"><div class="t">ออเดอร์ค้างส่ง</div><div class="kpi-v">'+openOrds.length+'</div><div class="s mut">รายการ</div></div>'+
-    '<div class="kpi"><div class="t">เมนูครัวกลาง</div><div class="kpi-v">'+recipes.length+'</div><div class="s mut">เมนู</div></div></div>';
+    '<div class="kpi"><div class="t">บิลครัวกลางค้างจ่าย</div><div class="kpi-v">'+(v2Err?'–':dues.length)+'</div><div class="s '+(dues.length?'drn':'mut')+'">'+
+      (v2Err?'อ่านไม่ได้':'฿'+fmt(dueAmt,2)+' · ทุกเดือน')+(openOrds.length?'<span class="xs mut"> · ค้างส่ง (ระบบเดิม) '+openOrds.length+' รายการ</span>':'')+'</div></div>'+
+    '<div class="kpi"><div class="t">เมนูครัวกลาง</div><div class="kpi-v">'+recAct.length+'</div><div class="s mut">เมนู</div></div></div>';
   // ตามเมนู
   h+='<div class="card"><h3>🍲 รับตามเมนู <span class="sp">จำนวน · ต้นทุน/หน่วยเฉลี่ย · มูลค่า</span></h3>';
   const mks=Object.keys(byMenu).sort((a,b)=>byMenu[b].amt-byMenu[a].amt);
@@ -2563,23 +2601,24 @@ RENDER.ck = async (el)=>{
       h+='<tr><td>'+esc(v.name)+'</td><td class="n">'+v.n+'</td><td class="n">'+fmt(v.amt,2)+'</td></tr>';});
     h+='</table></div></div>';
   }
-  // รายวัน
+  // รายวัน (บิลรุ่นใหม่โชว์เลขบิล + จ่ายแล้ว/ค้างจ่าย)
   if(ords.length){
     h+='<div class="card"><h3>📅 รายวัน</h3><div class="twrap"><table><tr><th>วันที่</th>'+(S.br==='ALL'?'<th>สาขา</th>':'')+'<th class="right">รายการ</th><th class="right">มูลค่า ฿</th></tr>';
-    ords.forEach(o=>{const n=items.filter(l=>l.order_id===o.id).length;
-      h+='<tr><td>'+thDate(o.d)+'</td>'+(S.br==='ALL'?'<td>'+esc(o.branch_name||BRNAME[o.branch]||o.branch||'')+'</td>':'')+
+    ords.forEach(o=>{const n=items.filter(l=>String(l.order_id)===String(o.id)).length;
+      h+='<tr><td>'+thDate(o.d)+(o.v2?(o.bill_no?' <span class="xs mut">'+esc(o.bill_no)+'</span>':'')+' <span class="chip '+(o.paid_at?'ok':'bad')+'">'+(o.paid_at?'✓ จ่ายแล้ว':'ค้างจ่าย')+'</span>':'')+'</td>'+
+        (S.br==='ALL'?'<td>'+esc(o.branch_name||BRNAME[o.branch]||o.branch||'')+'</td>':'')+
         '<td class="n">'+n+'</td><td class="n">'+fmt(o.total,2)+'</td></tr>';});
     h+='</table></div></div>';
   }
-  // ต้นทุนต่อหน่วยปัจจุบันของทุกเมนู
-  h+='<div class="card"><h3>💰 ต้นทุนต่อหน่วยปัจจุบัน (จากการผลิตล่าสุด)</h3>';
-  if(!recipes.length) h+='<div class="empty">ยังไม่มีเมนูในระบบครัวกลาง</div>';
+  // ต้นทุนต่อหน่วยปัจจุบันของทุกเมนู (รุ่นใหม่ = avg_cost ถัวเฉลี่ยจากล็อตจริง · ไม่มี = unit_cost จากการผลิตล่าสุดแบบเดิม)
+  h+='<div class="card"><h3>💰 ต้นทุนต่อหน่วยปัจจุบัน ('+(hasAvg?'ถัวเฉลี่ยจากล็อตที่ผลิตจริง':'จากการผลิตล่าสุด')+')</h3>';
+  if(!recAct.length) h+='<div class="empty">ยังไม่มีเมนูในระบบครัวกลาง</div>';
   else{
-    h+='<div class="twrap"><table><tr><th>เมนู</th><th>หมวด</th><th class="right">คงเหลือที่ครัว</th><th class="right">ต้นทุน/หน่วย</th></tr>';
-    recipes.forEach(r=>{
+    h+='<div class="twrap"><table><tr><th>เมนู</th><th>หมวด</th><th class="right">คงเหลือที่ครัว</th><th class="right">'+(hasAvg?'ต้นทุน/หน่วย (ล็อตจริงถัวเฉลี่ย)':'ต้นทุน/หน่วย')+'</th></tr>';
+    recAct.forEach(r=>{const c=costOf(r);
       h+='<tr><td>'+ckThumb(r)+esc(r.name)+'</td><td class="sm mut">'+esc(r.cat||'')+'</td>'+
         '<td class="n">'+fmtI(r.qty)+' '+esc(r.yield_unit||'')+'</td>'+
-        '<td class="n">'+(r.unit_cost!=null?'<b>฿'+fmt(r.unit_cost,2)+'</b> / '+esc(r.yield_unit||''):'<span class="chip mid">ยังไม่เคยผลิต</span>')+'</td></tr>';});
+        '<td class="n">'+(c!=null?'<b>฿'+fmt(c,2)+'</b> / '+esc(r.yield_unit||''):'<span class="chip mid">ยังไม่เคยผลิต</span>')+'</td></tr>';});
     h+='</table></div>';
   }
   h+='</div>';

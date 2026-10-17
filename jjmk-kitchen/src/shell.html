@@ -81,7 +81,7 @@ header{position:sticky;top:0;z-index:40;background:linear-gradient(180deg,var(--
   .sbadge{margin-left:auto;background:#fff;color:var(--red);border-radius:99px;font-size:11px;line-height:1;padding:3px 7px;font-weight:800}
   .sb-foot{margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
   #sbUser{color:#F2DCDC;font-size:12.5px;padding:4px 8px 8px;word-break:break-word}
-  #sbUser a{color:#F3C74F;font-weight:700;cursor:pointer;margin-left:6px}
+  #sbUser a{color:#F3C74F;font-weight:700;cursor:pointer;display:inline-block;padding:10px 4px;margin:-10px 0 -10px 2px;min-height:44px;line-height:24px;box-sizing:border-box}   /* ที่แตะ 44px (iPad) ตำแหน่งตัวหนังสือเท่าเดิม (ยังอยู่บรรทัดเดียวกับชื่อ) */
   header .brand{display:none}
   .tabbar{display:none}
   .hrow{padding:13px 36px 11px;max-width:1220px;margin:0 auto}
@@ -109,7 +109,7 @@ main{width:100%;margin:0 auto;padding:14px max(clamp(14px,1.6vw,28px),env(safe-a
 .mut{color:var(--mut)}.sm{font-size:12.5px}.xs{font-size:11.5px}.b{font-weight:700}.right{text-align:right}.center{text-align:center}
 .red{color:var(--red)}.green{color:var(--ok)}.amber{color:var(--gold)}
 .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.grow{flex:1;min-width:0}
-.btn{background:var(--red);color:#fff;font-weight:600;padding:10px 16px;border-radius:11px;box-shadow:0 2px 8px rgba(198,33,39,.3);display:inline-flex;align-items:center;gap:6px;justify-content:center;min-height:44px}
+.btn{background:var(--red);color:#fff;font-weight:600;font-family:var(--fh);padding:10px 16px;border-radius:11px;box-shadow:0 2px 8px rgba(198,33,39,.3);display:inline-flex;align-items:center;gap:6px;justify-content:center;min-height:44px}
 .btn:active{transform:scale(.97)}
 .btn.gh{background:#fff;color:var(--wine);border:1.5px solid var(--line);box-shadow:none}
 .btn.dk{background:var(--ink);box-shadow:none;color:#fff}
@@ -250,8 +250,9 @@ table.t input,table.t select{min-height:40px;padding:6px 8px}
 .cfm{background:#fff;border-radius:18px;padding:20px 18px;width:100%;max-width:380px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
 .cfm .msg{font-size:16px;line-height:1.5;white-space:pre-wrap;margin-bottom:16px}
 .cfm .btns{display:flex;gap:8px}.cfm .btns .btn{flex:1}
-#toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;font-weight:600;z-index:200;transition:.25s;opacity:0;white-space:nowrap;box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+#toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;font-weight:600;z-index:200;transition:.25s;opacity:0;white-space:nowrap;box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:92vw;overflow:hidden;text-overflow:ellipsis;pointer-events:none}   /* pointer-events:none = ไม่กินปุ่มใต้ toast (เหมือนแอพนับสต๊อก) */
 #toast.on{transform:translateX(-50%);opacity:1}#toast.err{background:var(--bad)}#toast.warn{background:var(--amber)}
+#toast.err,#toast.warn{white-space:normal;text-align:center;line-height:1.35;border-radius:18px}   /* ข้อความเหตุผลยาว = พับบรรทัด ไม่ตัดด้วย … */
 body.haspin #toast{bottom:calc(88px + env(safe-area-inset-bottom))}   /* มีแถบติดล่าง = ยกขึ้นไม่ให้บังปุ่มบันทึก/ยอดรวม */
 .imgzoom{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px}
 .imgzoom img{max-width:96vw;max-height:88vh;border-radius:14px}
@@ -743,6 +744,7 @@ const money=n=>{const x=Number(n)||0;return (x<0?'−฿':'฿')+fmtI(Math.abs(x
 const moneyU=n=>(n==null||isNaN(n))?'฿–':'฿'+(Math.abs(Number(n))>=1?fmt(n,2):fmtQ(n));   // ราคาต่อหน่วย: ≥1 บาท 2 ตำแหน่ง · ต่ำกว่า 1 บาท ≤4 ตำแหน่ง
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=v=>{const n=parseFloat(String(v??'').replace(/,/g,''));return isNaN(n)?0:n;};
+const numIn=v=>{const s=String(v??'').trim();const m=/^(-?\d+),(\d{1,2})$/.exec(s);return num(m?m[1]+'.'+m[2]:s);};   // ช่องกรอกตัวเลข: "1,5" (จุลภาค + 1–2 หลัก = ทศนิยมแบบคีย์บอร์ดบางเครื่อง) = 1.5 · "1,500" = 1,500 เหมือนเดิม — stepper/stepBump/ช่องส่ง/ช่องสั่งใช้ตัวนี้
 const rnd2=v=>Math.round((Number(v)||0)*100)/100;
 const rnd4=v=>Math.round((Number(v)||0)*1e4)/1e4;
 let uidN=0;const uid=p=>(p||'k')+Date.now().toString(36)+Math.random().toString(36).slice(2,6)+(uidN++).toString(36);
@@ -1002,7 +1004,7 @@ const lgName=gid=>{const g=(S.lineGroups||[]).find(x=>String(x.group_id)===Strin
 function lgOptions(sel){return '<option value="">—</option>'+(S.lineGroups||[]).map(g=>'<option value="'+esc(g.group_id)+'"'+(g.group_id===sel?' selected':'')+'>'+esc(g.name||g.group_id)+'</option>').join('')
   +(sel&&!(S.lineGroups||[]).some(g=>g.group_id===sel)?'<option value="'+esc(sel)+'" selected>'+esc(sel)+'</option>':'');}
 function lineTextBox(text,gid){ // กล่องข้อความ + ปุ่มคัดลอก/เปิดไลน์ (ใช้เมื่อไม่มีกลุ่ม หรือส่งไม่สำเร็จ)
-  const id='ltx'+uid();return '<textarea id="'+id+'" readonly style="font-size:14px;min-height:140px">'+esc(text)+'</textarea>'+
+  const id='ltx'+uid();return '<textarea id="'+id+'" readonly style="font-size:16px;min-height:140px">'+esc(text)+'</textarea>'+
     '<div class="row" style="margin-top:8px"><button class="btn gh" onclick="copyText(document.getElementById(\''+id+'\').value)">📋 '+esc(t('copy'))+'</button>'+
     '<button class="btn gh" onclick="lineShare(document.getElementById(\''+id+'\').value)">💬 '+esc(t('share_line'))+'</button></div>';}
 
@@ -1226,12 +1228,12 @@ function dhead(txt,extra){return '<div class="dhead">'+txt+(extra?'<span class="
 function card(title,body,o){o=o||{};return '<div class="card'+(o.cls?' '+o.cls:'')+'"'+(o.id?' id="'+esc(o.id)+'"':'')+(o.onclick?' onclick="'+o.onclick+'"':'')+'>'+
   (title?'<h3>'+title+(o.sp?'<span class="sp">'+o.sp+'</span>':'')+'</h3>':'')+body+'</div>';}
 function stepper(id,val,o){ // − [input] ＋ · o:{step,min,max,unit,on (ชื่อฟังก์ชัน global หรือ fn(value,id)),big,ph}
-  o=o||{};const cls=o.big?'bq':'skstep';const call=typeof o.on==='function'?hreg(el=>o.on(num(el.value),id)):(o.on?o.on+'(num(this.value),'+esc(JSON.stringify(id))+')':'');
+  o=o||{};const cls=o.big?'bq':'skstep';const call=typeof o.on==='function'?hreg(el=>o.on(numIn(el.value),id)):(o.on?o.on+'(numIn(this.value),'+esc(JSON.stringify(id))+')':'');
   return '<div class="'+cls+'" data-step="'+esc(id)+'"><button type="button" onclick="stepBump(\''+esc(id)+'\',-1)">−</button>'+
     '<input id="'+esc(id)+'" type="text" inputmode="decimal" value="'+esc(val==null?'':val)+'" placeholder="'+esc(o.ph||'')+'" data-min="'+esc(o.min==null?0:o.min)+'" data-max="'+esc(o.max==null?'':o.max)+'" data-stepv="'+esc(o.step||1)+'"'+(call?' oninput="'+call+'" onchange="'+call+'"':'')+'>'+
     '<button type="button" class="plus" onclick="stepBump(\''+esc(id)+'\',1)">＋</button>'+(o.unit?'<span class="b" style="flex:none">'+esc(trUnit(o.unit))+'</span>':'')+'</div>';}
 function stepBump(id,dir){const inp=document.getElementById(id);if(!inp)return;const st=num(inp.dataset.stepv)||1,mn=inp.dataset.min===''?-Infinity:num(inp.dataset.min),mx=inp.dataset.max===''?Infinity:num(inp.dataset.max);
-  let v=rnd4(num(inp.value)+dir*st);v=Math.max(mn,Math.min(mx,v));inp.value=v;inp.classList.add('has');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));}
+  let v=rnd4(numIn(inp.value)+dir*st);v=Math.max(mn,Math.min(mx,v));inp.value=v;inp.classList.add('has');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));}
 function pinnedBar(html,view){ // แถบติดขอบล่าง (null = เอาออก) · view = element ของหน้า (ตั้งต้น = หน้าที่เปิดอยู่)
   view=view||document.getElementById('view-'+S.tab);if(!view)return;let bar=view.querySelector(':scope>.pinbar');
   if(html==null){if(bar)bar.remove();view.classList.remove('hasbar');syncPin();return;}
@@ -1265,6 +1267,7 @@ async function enterApp(prof){
   applyChrome();
   const savedTab=LS.get('jjck_tab','today');
   show(VIEWS.includes(savedTab)?savedTab:'today');S.booted=true;
+  document.dispatchEvent(new CustomEvent('kc:booted'));   // โมดูลที่ต้องทำงานตั้งแต่บูตไม่ว่าเปิดแท็บไหน (ป้าย 🚚 ของส่งสาขา) ฟังอีเวนต์นี้
 }
 async function boot(){
   document.body.setAttribute('data-lang',LANG);document.documentElement.lang=LANG;

@@ -1,9 +1,10 @@
-// สูตร "ต้องสั่ง/ต้องส่ง" — แอพนับสต๊อก (orderPlan) กับครัวกลาง (brRow) ต้องได้ตัวเลขเดียวกันทุกกรณี
-// CLAUDE.md: "สูตรพอร์ตมาจาก orderPlan() แบบบรรทัดต่อบรรทัด — แก้สูตรสั่งของในแอพนับสต๊อกเมื่อไร ต้องแก้ฟังก์ชัน br* ในครัวกลางให้ตรงกันด้วย"
-// เทสนี้รันโค้ดจริงของทั้ง 2 ไฟล์กับสถานการณ์สุ่มหลายพันแบบ (ซัพวันตายตัว/สั่งล่วงหน้า/ทุกวัน/ทุก N วัน/ไม่มีข้อมูลซัพ + ของกำลังมา + วันขายดี)
+// สูตร "ต้องสั่ง" ของแอพนับสต๊อก (orderPlan) — รันโค้ดจริงจาก jjmk-stockcheck.html กับสถานการณ์สุ่มหลายพันแบบ + กรณีที่รู้คำตอบ
+// ⚠️ 2026-10-17 ครัวกลาง v2 ไม่พอร์ตสูตรนี้แล้ว (brRow/SPD/STK_BR ถูกถอดออก) — ครัวกลางอ่านออเดอร์ที่แอพนับเขียนลง stock_receipts
+//    ตอนสาขากดส่งไลน์ แล้วคิด "ส่งมา/มี/ส่ง/ขาด" เอง (sdCalcGroups ใน jjmk-kitchen/src/mod_send.js) จึงไม่มีสูตรซ้ำ 2 ที่ให้เทียบอีก
+//    เทสของครัวกลาง v2 อยู่ใน scratchpad ของ session ที่สร้าง (Playwright + Supabase จำลอง · ดู CLAUDE.md หัวข้อ ครัวกลาง v2)
 import { load, suite } from './lib.mjs';
 
-// วันขายดีจำลอง (ใช้ตัวเดียวกันทั้ง 2 แอป — บล็อก SPD จริงเหมือนกันทุกไบต์ ตรวจแล้วใน precheck)
+// วันขายดีจำลอง (แทนบล็อก SPD จริง — ให้ผลซ้ำได้)
 const SPD_STUB = `function spdHit(bid,ds){ var h=0; for(var i=0;i<ds.length;i++) h=(h*31+ds.charCodeAt(i))%9973; return (window_SPD_ON && (h+bid)%11===0)?{g:2}:null; } var window_SPD_ON=true;`;
 
 const stk = load('jjmk-stockcheck.html', {
@@ -14,11 +15,6 @@ const stk = load('jjmk-stockcheck.html', {
     function uSame(){ return true; } function cmpItem(){ return 0; } function covRange(){ return ''; }`,
   vars: ['num', 'DOW_EN', 'supKey', 'counted', 'dowKey', 'supAhead'],
   fns: ['addDays', 'nextDow', 'dayGrp', 'rateOn', 'supSched', 'supModeOf', 'supCyc', 'ivState', 'deliveryDate', 'nextDeliveryAfter', 'sumRate', 'inTransit', 'orderPlan'],
-});
-const kit = load('jjmk-kitchen.html', {
-  prelude: SPD_STUB + `var S={br:{sups:[]}};`,
-  vars: ['num', 'BR_DOW', 'brDowKey', 'brSupKey', 'brAhead', 'brCyc'],
-  fns: ['brAddDays', 'brNextDow', 'brDayGrp', 'brRateOn', 'brSup', 'brMode', 'brDelivery', 'brIvState', 'brPlanDelivery', 'brNextAfter', 'brSumRate', 'brInTransit', 'brRow'],
 });
 
 // สุ่มแบบกำหนดเมล็ด (ผลซ้ำได้ทุกครั้ง)
@@ -63,43 +59,42 @@ function scenario(i) {
   return { cd, sup, items, recv, ords, spd: rnd() < 0.5 };
 }
 
-const t = suite('นับสต๊อก orderPlan ↔ ครัวกลาง brRow (สถานการณ์สุ่ม)');
+// สถานการณ์สุ่ม: สูตรต้องไม่พัง · ยอดสั่ง/วันครอบคลุมต้องสมเหตุสมผล · ผลซ้ำได้ (deterministic)
+const t = suite('นับสต๊อก orderPlan (สถานการณ์สุ่ม + กรณีที่รู้คำตอบ)');
 const N = 4000;
-let bad = 0, nonZero = 0;
+let bad = 0, nonZero = 0, withDl = 0;
 for (let i = 0; i < N && bad < 5; i++) {
   const sc = scenario(i);
-  // ฝั่งแอพนับสต๊อก
-  stk.S.all = sc.items.map(x => ({ ...x }));
-  stk.S.sups = sc.sup ? [sc.sup] : [];
-  stk.S.recv = sc.recv;
-  stk.S.lastOrd = sc.ords.length ? { [stk.supKey(sc.items[0].sup)]: sc.ords } : {};
-  stk.CD = sc.cd; stk.window_SPD_ON = sc.spd; kit.window_SPD_ON = sc.spd;
-  const plan = stk.orderPlan();
-  // ฝั่งครัวกลาง: ยอดนับ = cnt · ใบสั่งล่าสุดของซัพ (ก่อนวันขาย) = last  — เหมือนที่ brLoadBranch เตรียมให้
-  kit.S.br.sups = stk.S.sups;
-  const prior = sc.ords.filter(d => d < sc.cd).sort();
-  const last = prior.length ? { [kit.brSupKey(sc.items[0].sup)]: prior[prior.length - 1] } : {};
+  const run = () => {
+    stk.S.all = sc.items.map(x => ({ ...x }));
+    stk.S.sups = sc.sup ? [sc.sup] : [];
+    stk.S.recv = sc.recv;
+    stk.S.lastOrd = sc.ords.length ? { [stk.supKey(sc.items[0].sup)]: sc.ords } : {};
+    stk.CD = sc.cd; stk.window_SPD_ON = sc.spd;
+    return stk.orderPlan();
+  };
+  let plan, plan2;
+  try { plan = run(); plan2 = run(); } catch (e) { bad++; t.ok(false, `orderPlan พังที่สถานการณ์ ${i}: ${e.message} · ${JSON.stringify(sc.sup)}`); continue; }
+  if (JSON.stringify(plan) !== JSON.stringify(plan2)) { bad++; t.ok(false, `orderPlan ให้ผลไม่ซ้ำกันที่สถานการณ์ ${i}`); continue; }
   for (const it of sc.items) {
     const row = plan.flatMap(g => g.rows).find(r => r.it.id === it.id);
-    const cnt = it.qty === null && !it.out ? {} : it.qty === '' && !it.out ? {} : { [it.id]: { qty: it.qty, out: it.out } };
-    const k = kit.brRow(it, cnt, sc.cd, sc.recv, last);
-    const a = { have: row.have, need: row.need, order: row.sug, left: row.left, onWay: row.onWay, d: row.cov.days ? row.cov.days : 0 };
-    const b = { have: k.have, need: k.need, order: k.order, left: k.left, onWay: k.onWay, d: k.cov.days ? k.cov.days : 0 };
-    if (a.order > 0) nonZero++;
-    if (JSON.stringify(a) !== JSON.stringify(b)) {
-      bad++;
-      t.ok(false, `ต่างกันที่สถานการณ์ ${i} (วันขาย ${sc.cd} · ซัพ ${JSON.stringify(sc.sup)} · ของ ${JSON.stringify(it)}):\n      นับสต๊อก ${JSON.stringify(a)}\n      ครัวกลาง ${JSON.stringify(b)}`);
-    }
+    if (!row) { bad++; t.ok(false, `สถานการณ์ ${i}: ของ ${it.id} หายจากแผน`); break; }
+    const g = plan.find(x => x.rows.includes(row));
+    const sug = row.sug == null ? null : Number(row.sug);
+    if (sug != null && !(sug >= 0 && Number.isFinite(sug))) { bad++; t.ok(false, `สถานการณ์ ${i}: ยอดสั่งผิดรูป ${row.sug}`); break; }
+    if (sug > 0) nonZero++;
+    if (g && g.dl && g.dl.d) { withDl++; if (g.dl.d < sc.cd) { bad++; t.ok(false, `สถานการณ์ ${i}: วันส่ง ${g.dl.d} ก่อนวันขาย ${sc.cd}`); break; } }
+    if (sug != null && sug > 0 && !(g && g.dl && g.dl.d)) { bad++; t.ok(false, `สถานการณ์ ${i}: มียอดสั่ง ${sug} ทั้งที่ไม่มีวันส่ง`); break; }
   }
 }
-t.ok(!bad, `${N} สถานการณ์ได้ตัวเลขเดียวกัน (มียอดต้องสั่ง > 0 อยู่ ${nonZero} บรรทัด)`);
+t.ok(!bad, `${N} สถานการณ์ไม่พัง ผลซ้ำได้ และยอดสั่ง/วันส่งสมเหตุสมผล (มียอดต้องสั่ง > 0 อยู่ ${nonZero} บรรทัด · มีวันส่ง ${withDl} บรรทัด)`);
 t.ok(nonZero > N / 10, 'สถานการณ์สุ่มครอบคลุมกรณีที่ต้องสั่งจริง (ไม่ใช่ 0 หมด)');
 
 // กรณีที่รู้คำตอบแน่นอน (ตามกติกาเจ้าของ)
 {
   const it = { id: 'x', name: 'หมู', sup: 'ซัพ ก', branch_id: 1, rate_wk: 2, rate_fri: 5, rate_we: 10, qty: 3, out: false };
   const run = (sup, cd, lastOrd = []) => { stk.S.all = [{ ...it }]; stk.S.sups = sup ? [sup] : []; stk.S.recv = {}; stk.S.lastOrd = { 'ซัพ ก': lastOrd }; stk.CD = cd; stk.window_SPD_ON = false; return stk.orderPlan()[0]; };
-  // พฤ 2026-10-15 นับตอนปิดร้าน · ซัพสั่งได้ทุกวัน ส่งพรุ่งนี้ (ศ) → ชุดนี้ครอบคลุม 1 วัน (ศ=5) · ระหว่างรอใช้ 0 วัน → ต้องสั่ง 5−3 = 2
+  // พฤ 2026-10-15 นับตอนปิดร้าน · ซัพสั่งได้ทุกวัน ส่งพรุ่งนี้ (ศ) → ชุดนี้ครอบคลุม 1 วัน (ศ=5) → ต้องสั่ง 5 − 3 = 2
   let p = run({ name: 'ซัพ ก', order_mode: 'any', lead_days: 1 }, '2026-10-15');
   t.eq([p.dl.d, p.rows[0].sug], ['2026-10-16', 2], 'สั่งได้ทุกวัน ส่งพรุ่งนี้: ต้องสั่ง = ใช้วันศุกร์ 5 − มี 3');
   // สั่งทุก 7 วัน เคยสั่ง 2026-10-10 → ยังไม่ครบรอบ (ครบ 17) = ไม่มียอด
