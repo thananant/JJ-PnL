@@ -320,7 +320,7 @@ async function rcFromPo(poId){ // โมดูลสั่งของเรี�
     if(pl.price_est!=null&&num(pl.price_est)>0){l.price_mode='total';l.price=num(pl.price_est);}return l;}).filter(Boolean);
   RC_VIEW='form';rcDraft();if(modalOpen())closeModal();if(S.tab==='recv')rerender();else show('recv');}
 function rcPoClear(){RC.po_id=null;RC.po_no='';rcDraft();rcPaintForm();}
-function rcClearAsk(){confirm2(t('rc_clear_q'),{danger:true}).then(ok=>{if(!ok)return;RC=rcBlank();rcDraftClear();RC_CAT='';rcPaintForm();});}
+function rcClearAsk(){confirm2(t('rc_clear_q'),{danger:true}).then(ok=>{if(!ok)return;RC=rcBlank();rcDraftClear();RC_CAT='';RC_Q='';rcPaintForm();});}
 
 /* ---------- บันทึก ---------- */
 function rcValidate(){ // → ข้อความผิดพลาด หรือ null
@@ -381,7 +381,7 @@ async function rcSave(){await once(async()=>{
   await rcSavePacks(rows);
   if(RC.po_id){try{await db(()=>sb.from('kc_pos').update({status:'received'}).eq('id',RC.po_id));}catch(e){}}
   toast(prevOk?t('rc_saved',{n:rows.length,m:money(total)}):t('rc_prev_cols'),prevOk?false:'warn');   // ไม่มีช่อง prev_* = บันทึกได้ เตือน (เหลือง) ว่ายกเลิกแล้วต้นทุนไม่ย้อน
-  RC=rcBlank();rcDraftClear();RC_VIEW='list';rerender();rcDetail(rid);});}
+  RC=rcBlank();rcDraftClear();RC_CAT='';RC_Q='';RC_VIEW='list';rerender();rcDetail(rid);});}   // ฟอร์มใหม่ = ชิป/คำค้นของตารางรูปเริ่มใหม่ด้วย (ไม่งั้นคำค้นเก่าค้างกรองตารางรูปของใบถัดไป)
 
 /* ---------- รายการที่รับแล้ว (14 วัน) ---------- */
 async function rcPaintList(){
