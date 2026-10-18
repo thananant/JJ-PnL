@@ -791,7 +791,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-19 01:19';
+const APP_VER='KC 2.0 · 2026-10-19 01:43';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -998,7 +998,7 @@ const S={user:null,prof:null,tab:'today',loaded:false,booted:false,kcSql:true,
 const CFG_DEF={ck_sup_names:['ครัวกลาง'],branch_line:{},overhead_mode:'per_unit',overhead_value:0,markup_pct:0,bill_prefix:'',refill_days:3,units:[],order_lookback_days:1};   // เจ้าของ 2026-10-18: ออเดอร์ที่ผ่านไปแล้วไม่ต้องขึ้น — 1 = เมื่อวาน (ส่งวันนี้) + วันนี้ (ส่งพรุ่งนี้)
 function cfgClean(v){v=(v&&typeof v==='object')?v:{};const c=Object.assign({},CFG_DEF,v);
   c.ck_sup_names=(Array.isArray(c.ck_sup_names)?c.ck_sup_names:[]).map(x=>String(x||'').trim()).filter(Boolean);if(!c.ck_sup_names.length)c.ck_sup_names=['ครัวกลาง'];
-  c.branch_line=(c.branch_line&&typeof c.branch_line==='object')?c.branch_line:{};
+  c.branch_line=Object.assign({},(c.branch_line&&typeof c.branch_line==='object')?c.branch_line:{});   // สำเนาเสมอ — หน้า ⚙️ แก้ร่างแล้วต้องไม่ไปเปลี่ยน S.cfg/CFG_DEF (เคยทำให้จอดูเหมือนบันทึกแล้ว · 2026-10-19)
   c.overhead_mode=c.overhead_mode==='pct'?'pct':'per_unit';c.overhead_value=Math.max(0,num(c.overhead_value));c.markup_pct=num(c.markup_pct);
   c.bill_prefix=String(c.bill_prefix||'').trim().slice(0,8);c.refill_days=Math.max(1,Math.min(60,num(c.refill_days)||3));
   c.units=(Array.isArray(c.units)?c.units:[]).map(x=>String(x||'').trim()).filter(Boolean);c.order_lookback_days=c.order_lookback_days===0||c.order_lookback_days==='0'?0:1;   // เพดาน 1 วัน (ค่าเก่า 3 ที่บันทึกไว้ = 1)
@@ -1047,8 +1047,9 @@ async function loadAll(){
   }finally{setBusy(false);}
 }
 async function reloadAll(){try{await loadAll();}catch(e){toast(t('load_err')+((e&&e.message)||e),true);return;}applyChrome();show(S.tab);toast('⟳ '+t('done'));}
-async function cfgSave(patch){ // อ่านใหม่ → รวม → เขียน (กันเครื่องอื่นแก้พร้อมกัน)
+async function cfgSave(patch){ // อ่านใหม่ → รวม → เขียน (กันเครื่องอื่นแก้พร้อมกัน) · patch เป็นฟังก์ชันได้ (รับค่าล่าสุดใน DB → คืน patch)
   const cur=await db(()=>sb.from('ck_settings').select('value').eq('key','kc_cfg').maybeSingle());
+  if(typeof patch==='function')patch=patch(cfgClean((cur&&cur.value)||{}));
   const v=cfgClean(Object.assign({},(cur&&cur.value)||{},patch||{}));
   await db(()=>sb.from('ck_settings').upsert({key:'kc_cfg',value:v},{onConflict:'key'}));S.cfg=v;return v;}
 function itemById(id){return S.items.find(x=>x.id===id)||null;}
@@ -5854,7 +5855,7 @@ function hsMoveModal(m){
    ทุกค่าอยู่ใน ck_settings.kc_cfg — แก้ในที่ แล้วกด 💾 ที่แถบล่าง (cfgSave อ่าน-รวม-เขียน)
    ============================================================ */
 I18N.add({
-th:{st_line_t:'กลุ่มไลน์สาขา (ส่งบิลส่งของ)',st_line_h:'เลือกกลุ่มไลน์ของแต่ละสาขา — กด "✅ ส่งแล้ว ออกบิล" แล้วบิลจะเข้ากลุ่มนั้นเอง · บอทตัวเดียวกับระบบนับสต๊อก',st_line_none:'ยังไม่เลือก (จะได้ข้อความให้คัดลอกส่งเอง)',
+th:{st_line_saved:'บันทึกกลุ่มไลน์ {b} แล้ว ✅ ({g})',st_line_cleared:'เอากลุ่มไลน์ {b} ออกแล้ว',st_line_auto:'เลือกแล้วบันทึกทันที ไม่ต้องกด 💾',st_line_t:'กลุ่มไลน์สาขา (ส่งบิลส่งของ)',st_line_h:'เลือกกลุ่มไลน์ของแต่ละสาขา — กด "✅ ส่งแล้ว ออกบิล" แล้วบิลจะเข้ากลุ่มนั้นเอง · บอทตัวเดียวกับระบบนับสต๊อก',st_line_none:'ยังไม่เลือก (จะได้ข้อความให้คัดลอกส่งเอง)',
   st_test:'🔔 ทดสอบส่ง',st_test_txt:'🔔 ทดสอบส่งจากระบบครัวกลาง (JJ ครัวกลาง)\nสาขา: {b}\nเห็นข้อความนี้ = ตั้งกลุ่มไลน์สาขาถูกต้อง ✅',st_test_ok:'ส่งข้อความทดสอบเข้ากลุ่ม {g} แล้ว',st_no_groups:'ยังไม่มีกลุ่มไลน์ — ดึงกลุ่มได้ที่หน้า 🏷️ ร้านค้า',
   st_sup_t:'ชื่อครัวกลางในแอพนับสต๊อก',st_sup_h:'(ไม่บังคับ — สินค้าที่ชื่อตรงกับเมนูครัวกลางถูกนับเป็นออเดอร์ครัวกลางอยู่แล้ว) สาขาสั่งของจากครัวกลางผ่านแอพนับสต๊อก โดยตั้งซัพของสินค้าเป็นชื่อพวกนี้ — ระบบจะดึงออเดอร์ที่ซัพตรงกับชื่อในรายการ (ไม่สนตัวพิมพ์/ช่องว่าง)',
   st_sup_add:'＋ เพิ่มชื่อ',st_sup_ph:'เช่น ครัวกลาง',st_sup_dup:'มีชื่อนี้แล้ว',st_sup_last:'ต้องมีอย่างน้อย 1 ชื่อ',
@@ -5867,7 +5868,7 @@ th:{st_line_t:'กลุ่มไลน์สาขา (ส่งบิลส่
   st_lang_t:'ภาษา / Language',st_sql_t:'ติดตั้งฐานข้อมูล (SQL)',st_sql_ok:'✅ ตาราง kc_* พร้อมใช้แล้ว — รัน SQL ซ้ำได้ ไม่เสียหาย (ไว้ใช้ตอนอัปเดตรุ่น)',st_sql_no:'⚠ ยังไม่ได้รัน SQL — บันทึกรับของ/ทำของ/ส่งของไม่ได้จนกว่าจะรัน',
   st_sql_1:'กด 📋 คัดลอก SQL ข้างล่าง',st_sql_2:'เปิด Supabase → SQL Editor → วาง → Run',st_sql_3:'กลับมากด ⟳ โหลดใหม่ที่หัวแอป',st_sql_copy:'📋 คัดลอก SQL',st_sql_open:'เปิด SQL Editor',
   st_about_t:'เกี่ยวกับแอป',st_ver:'รุ่น',st_user:'ผู้ใช้',st_data:'ข้อมูล',st_data_v:'วัตถุดิบ {i} · เมนู {r} · ร้านค้า {s} · กลุ่มไลน์ {g}',st_dirty:'มีการแก้ไข — ยังไม่บันทึก',st_clean:'บันทึกแล้วทั้งหมด',st_saved:'บันทึกการตั้งค่าแล้ว ✅',st_save:'💾 บันทึกการตั้งค่า'},
-en:{st_line_t:'Branch LINE groups (delivery bills)',st_line_h:'Pick each branch\'s LINE group — after "✅ Sent, make bill" the bill goes there · same bot as the stock-count app',st_line_none:'Not set (you will get text to copy and send yourself)',
+en:{st_line_saved:'LINE group for {b} saved ✅ ({g})',st_line_cleared:'LINE group for {b} removed',st_line_auto:'Saved as soon as you pick — no need to tap 💾',st_line_t:'Branch LINE groups (delivery bills)',st_line_h:'Pick each branch\'s LINE group — after "✅ Sent, make bill" the bill goes there · same bot as the stock-count app',st_line_none:'Not set (you will get text to copy and send yourself)',
   st_test:'🔔 Send a test',st_test_txt:'🔔 ทดสอบส่งจากระบบครัวกลาง (JJ ครัวกลาง)\nสาขา: {b}\nเห็นข้อความนี้ = ตั้งกลุ่มไลน์สาขาถูกต้อง ✅',st_test_ok:'Test message sent to {g}',st_no_groups:'No LINE groups yet — refresh them on the 🏷️ Suppliers page',
   st_sup_t:'Kitchen\'s supplier name in the stock-count app',st_sup_h:'(optional — products whose name matches a kitchen menu already count as kitchen orders) Branches order from the kitchen through the stock-count app by setting a product\'s supplier to one of these names — orders whose supplier matches (case/space-insensitive) are picked up',
   st_sup_add:'＋ Add name',st_sup_ph:'e.g. ครัวกลาง',st_sup_dup:'Already listed',st_sup_last:'Keep at least one name',
@@ -5880,7 +5881,7 @@ en:{st_line_t:'Branch LINE groups (delivery bills)',st_line_h:'Pick each branch\
   st_lang_t:'Language',st_sql_t:'Database install (SQL)',st_sql_ok:'✅ kc_* tables are ready — re-running the SQL is safe (use it after an app update)',st_sql_no:'⚠ SQL not run yet — receiving/producing/delivering cannot be saved until it is',
   st_sql_1:'Tap 📋 Copy SQL below',st_sql_2:'Open Supabase → SQL Editor → paste → Run',st_sql_3:'Come back and tap ⟳ in the app header',st_sql_copy:'📋 Copy SQL',st_sql_open:'Open SQL Editor',
   st_about_t:'About',st_ver:'Version',st_user:'User',st_data:'Data',st_data_v:'{i} ingredients · {r} menus · {s} suppliers · {g} LINE groups',st_dirty:'Unsaved changes',st_clean:'All saved',st_saved:'Settings saved ✅',st_save:'💾 Save settings'},
-lo:{st_line_t:'ກຸ່ມໄລນ໌ສາຂາ (ສົ່ງບິນສົ່ງເຄື່ອງ)',st_line_h:'ເລືອກກຸ່ມໄລນ໌ຂອງແຕ່ລະສາຂາ — ກົດ "✅ ສົ່ງແລ້ວ ອອກບິນ" ແລ້ວບິນຈະເຂົ້າກຸ່ມນັ້ນເອງ · ບອດໂຕດຽວກັບລະບົບນັບສະຕັອກ',st_line_none:'ຍັງບໍ່ເລືອກ (ຈະໄດ້ຂໍ້ຄວາມໃຫ້ຄັດລອກສົ່ງເອງ)',
+lo:{st_line_saved:'ບັນທຶກກຸ່ມໄລນ໌ {b} ແລ້ວ ✅ ({g})',st_line_cleared:'ເອົາກຸ່ມໄລນ໌ {b} ອອກແລ້ວ',st_line_auto:'ເລືອກແລ້ວບັນທຶກທັນທີ ບໍ່ຕ້ອງກົດ 💾',st_line_t:'ກຸ່ມໄລນ໌ສາຂາ (ສົ່ງບິນສົ່ງເຄື່ອງ)',st_line_h:'ເລືອກກຸ່ມໄລນ໌ຂອງແຕ່ລະສາຂາ — ກົດ "✅ ສົ່ງແລ້ວ ອອກບິນ" ແລ້ວບິນຈະເຂົ້າກຸ່ມນັ້ນເອງ · ບອດໂຕດຽວກັບລະບົບນັບສະຕັອກ',st_line_none:'ຍັງບໍ່ເລືອກ (ຈະໄດ້ຂໍ້ຄວາມໃຫ້ຄັດລອກສົ່ງເອງ)',
   st_test:'🔔 ທົດສອບສົ່ງ',st_test_txt:'🔔 ทดสอบส่งจากระบบครัวกลาง (JJ ครัวกลาง)\nสาขา: {b}\nเห็นข้อความนี้ = ตั้งกลุ่มไลน์สาขาถูกต้อง ✅',st_test_ok:'ສົ່ງຂໍ້ຄວາມທົດສອບເຂົ້າກຸ່ມ {g} ແລ້ວ',st_no_groups:'ຍັງບໍ່ມີກຸ່ມໄລນ໌ — ດຶງກຸ່ມໄດ້ທີ່ໜ້າ 🏷️ ຮ້ານຄ້າ',
   st_sup_t:'ຊື່ຄົວກາງໃນແອັບນັບສະຕັອກ',st_sup_h:'(ບໍ່ບັງຄັບ — ສິນຄ້າທີ່ຊື່ກົງກັບເມນູຄົວກາງຖືກນັບເປັນອໍເດີຄົວກາງຢູ່ແລ້ວ) ສາຂາສັ່ງເຄື່ອງຈາກຄົວກາງຜ່ານແອັບນັບສະຕັອກ ໂດຍຕັ້ງຊັບຂອງສິນຄ້າເປັນຊື່ເຫຼົ່ານີ້ — ລະບົບຈະດຶງອໍເດີທີ່ຊັບກົງກັບຊື່ໃນລາຍການ (ບໍ່ສົນຕົວພິມ/ຊ່ອງວ່າງ)',
   st_sup_add:'＋ ເພີ່ມຊື່',st_sup_ph:'ເຊັ່ນ ครัวกลาง',st_sup_dup:'ມີຊື່ນີ້ແລ້ວ',st_sup_last:'ຕ້ອງມີຢ່າງໜ້ອຍ 1 ຊື່',
@@ -5893,7 +5894,7 @@ lo:{st_line_t:'ກຸ່ມໄລນ໌ສາຂາ (ສົ່ງບິນສົ
   st_lang_t:'ພາສາ / Language',st_sql_t:'ຕິດຕັ້ງຖານຂໍ້ມູນ (SQL)',st_sql_ok:'✅ ຕາຕະລາງ kc_* ພ້ອມໃຊ້ແລ້ວ — ແລ່ນ SQL ຊ້ຳໄດ້ ບໍ່ເສຍຫາຍ (ໄວ້ໃຊ້ຕອນອັບເດດລຸ້ນ)',st_sql_no:'⚠ ຍັງບໍ່ໄດ້ແລ່ນ SQL — ບັນທຶກຮັບເຄື່ອງ/ເຮັດເຄື່ອງ/ສົ່ງເຄື່ອງບໍ່ໄດ້ຈົນກວ່າຈະແລ່ນ',
   st_sql_1:'ກົດ 📋 ຄັດລອກ SQL ຂ້າງລຸ່ມ',st_sql_2:'ເປີດ Supabase → SQL Editor → ວາງ → Run',st_sql_3:'ກັບມາກົດ ⟳ ໂຫຼດໃໝ່ທີ່ຫົວແອັບ',st_sql_copy:'📋 ຄັດລອກ SQL',st_sql_open:'ເປີດ SQL Editor',
   st_about_t:'ກ່ຽວກັບແອັບ',st_ver:'ລຸ້ນ',st_user:'ຜູ້ໃຊ້',st_data:'ຂໍ້ມູນ',st_data_v:'ວັດຖຸດິບ {i} · ເມນູ {r} · ຮ້ານຄ້າ {s} · ກຸ່ມໄລນ໌ {g}',st_dirty:'ມີການແກ້ໄຂ — ຍັງບໍ່ບັນທຶກ',st_clean:'ບັນທຶກແລ້ວທັງໝົດ',st_saved:'ບັນທຶກການຕັ້ງຄ່າແລ້ວ ✅',st_save:'💾 ບັນທຶກການຕັ້ງຄ່າ'},
-my:{st_line_t:'ဆိုင်ခွဲ LINE အုပ်စုများ (ပို့ဆောင်ဘေလ်)',st_line_h:'ဆိုင်ခွဲတစ်ခုချင်း၏ LINE အုပ်စုကို ရွေးပါ — "✅ ပို့ပြီး ဘေလ်ထုတ်" နှိပ်လျှင် ဘေလ်သည် ထိုအုပ်စုသို့ ရောက်မည် · စတော့ရေတွက်စနစ်နှင့် ဘော့တစ်ကောင်တည်း',st_line_none:'မရွေးရသေး (ကိုယ်တိုင်ကူးပို့ရန် စာသားရမည်)',
+my:{st_line_saved:'{b} ၏ LINE အုပ်စု သိမ်းပြီး ✅ ({g})',st_line_cleared:'{b} ၏ LINE အုပ်စု ဖယ်ပြီး',st_line_auto:'ရွေးလိုက်သည်နှင့် သိမ်းသည် — 💾 နှိပ်ရန်မလို',st_line_t:'ဆိုင်ခွဲ LINE အုပ်စုများ (ပို့ဆောင်ဘေလ်)',st_line_h:'ဆိုင်ခွဲတစ်ခုချင်း၏ LINE အုပ်စုကို ရွေးပါ — "✅ ပို့ပြီး ဘေလ်ထုတ်" နှိပ်လျှင် ဘေလ်သည် ထိုအုပ်စုသို့ ရောက်မည် · စတော့ရေတွက်စနစ်နှင့် ဘော့တစ်ကောင်တည်း',st_line_none:'မရွေးရသေး (ကိုယ်တိုင်ကူးပို့ရန် စာသားရမည်)',
   st_test:'🔔 စမ်းပို့ရန်',st_test_txt:'🔔 ทดสอบส่งจากระบบครัวกลาง (JJ ครัวกลาง)\nสาขา: {b}\nเห็นข้อความนี้ = ตั้งกลุ่มไลน์สาขาถูกต้อง ✅',st_test_ok:'{g} သို့ စမ်းသပ်စာ ပို့ပြီး',st_no_groups:'LINE အုပ်စု မရှိသေးပါ — 🏷️ ဆိုင်များ စာမျက်နှာတွင် ပြန်ဆွဲယူပါ',
   st_sup_t:'စတော့ရေတွက်စနစ်ရှိ မီးဖိုချောင် ဆိုင်အမည်',st_sup_h:'(မလိုအပ်ပါ — မီးဖိုချောင်မီနူးနှင့် အမည်တူသော ပစ္စည်းများကို မီးဖိုချောင်အော်ဒါအဖြစ် သတ်မှတ်ပြီးဖြစ်သည်) ဆိုင်ခွဲများသည် စတော့ရေတွက်စနစ်တွင် ထုတ်ကုန်၏ ဆိုင်ကို ဤအမည်များထဲမှ တစ်ခုအဖြစ် သတ်မှတ်ပြီး မီးဖိုချောင်မှ မှာယူသည် — ဆိုင်အမည်ကိုက်ညီသော အော်ဒါများကို ဆွဲယူမည် (စာလုံးအကြီးအသေး/နေရာလွတ် မသက်ရောက်)',
   st_sup_add:'＋ အမည်ထည့်',st_sup_ph:'ဥပမာ ครัวกลาง',st_sup_dup:'ရှိပြီးသား',st_sup_last:'အနည်းဆုံး အမည်တစ်ခု ထားရမည်',
@@ -5935,7 +5936,7 @@ RENDER.set=function(el){
   const sqlCard=card('🗄️ '+esc(t('st_sql_t')),stSqlHtml());
   let h=dhead('⚙️ '+t('nav_set'),esc(APP_VER));
   if(!S.kcSql)h+=sqlNeedBox()+sqlCard;
-  h+=card('💬 '+esc(t('st_line_t')),'<div class="sm mut" style="margin-bottom:8px">'+esc(t('st_line_h'))+'</div>'+stBrHtml());
+  h+=card('💬 '+esc(t('st_line_t')),'<div class="sm mut" style="margin-bottom:8px">'+esc(t('st_line_h'))+' · <b>'+esc(t('st_line_auto'))+'</b></div>'+stBrHtml());
   h+=card('🏪 '+esc(t('st_sup_t')),'<div class="sm mut" style="margin-bottom:8px">'+esc(t('st_sup_h'))+'</div><div class="stchips" id="stSupChips">'+stSupChips()+'</div>'+
     '<div class="stadd"><input id="stSupNew" placeholder="'+esc(t('st_sup_ph'))+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();stSupAdd()}"><button class="btn gh" onclick="stSupAdd()">'+esc(t('st_sup_add'))+'</button></div>');
   h+=card('🧾 '+esc(t('st_bill_t')),'<div class="md2">'+fld(t('st_prefix'),'<input id="stPrefix" value="'+esc(ST_W.bill_prefix)+'" maxlength="8" oninput="ST_W.bill_prefix=this.value.trim().slice(0,8);stDirty();stPrefixHint()"><div class="xs mut" id="stPrefixH">'+esc(stPrefixHintTxt())+'</div>')+
@@ -5960,7 +5961,14 @@ function stBrHtml(){const gl=S.lineGroups||[];const rows=(S.branchesAll||[]);
     '<select data-br="'+esc(b.code)+'" onchange="stBrSet(this.dataset.br,this.value)"><option value="">'+esc(t('st_line_none'))+'</option>'+gl.map(g=>'<option value="'+esc(g.group_id)+'"'+(String(ST_W.branch_line[b.code]||'')===String(g.group_id)?' selected':'')+'>'+esc(lgName(g.group_id))+'</option>').join('')+
     (ST_W.branch_line[b.code]&&!gl.some(g=>String(g.group_id)===String(ST_W.branch_line[b.code]))?'<option value="'+esc(ST_W.branch_line[b.code])+'" selected>'+esc(lgName(ST_W.branch_line[b.code]))+'</option>':'')+'</select>'+
     '<button type="button" class="btn gh sm2" data-br="'+esc(b.code)+'" onclick="stBrTest(this.dataset.br)">'+esc(t('st_test'))+'</button></div>').join('')+(gl.length?'':'<div class="hintbox">'+esc(t('st_no_groups'))+'</div>');}
-function stBrSet(code,v){if(!ST_W)return;v=String(v||'').trim();if(v)ST_W.branch_line[code]=v;else delete ST_W.branch_line[code];stDirty();}
+async function stBrSet(code,v){ // เลือกกลุ่มแล้วบันทึกทันที (เจ้าของ 2026-10-19 "เลือกไว้แล้ว ออกจากระบบก็หาย" — เดิมต้องกด 💾 อีกที) · รวมกับค่าล่าสุดใน DB เฉพาะสาขานี้
+  if(!ST_W||!isAdminish())return;v=String(v||'').trim();
+  const sel=document.querySelector('select[data-br="'+code+'"]'),prev=String(ST_W.branch_line[code]||'');let ran=false;
+  await once(async()=>{ran=true;
+    try{const c=await cfgSave(cur=>{const bl=Object.assign({},cur.branch_line);if(v)bl[code]=v;else delete bl[code];return {branch_line:bl};});
+      ST_W.branch_line=Object.assign({},c.branch_line);toast(t(v?'st_line_saved':'st_line_cleared',{b:branchName(code),g:v?lgName(v):''}));}
+    catch(e){if(sel)sel.value=prev;}});   // db() แจ้งข้อผิดพลาดเองแล้ว — คืนค่าเดิมบนจอ ไม่ให้ดูเหมือนบันทึกได้
+  if(!ran&&sel)sel.value=prev;}
 async function stBrTest(code){const sel=document.querySelector('select[data-br="'+code+'"]'),gid=String((sel&&sel.value)||'');
   if(!gid){toast(t('line_no_group'),true);return;}
   await once(async()=>{try{await lineSend(gid,t('st_test_txt',{b:branchName(code)})+'\n'+thDate(bizTodayISO())+' '+dispTime(new Date().toISOString()));toast(t('st_test_ok',{g:lgName(gid)}));}
@@ -5996,9 +6004,9 @@ function stSqlHtml(){return '<div class="'+(S.kcSql?'okbox':'badbox')+'">'+esc(t
   '<textarea id="stSql" readonly spellcheck="false">'+esc(stSqlText())+'</textarea>';}
 async function stSave(){await once(async()=>{
   if(!isAdminish()||!ST_W)return;
-  const w=ST_W,patch={branch_line:Object.assign({},w.branch_line),ck_sup_names:w.ck_sup_names.slice(),bill_prefix:String(w.bill_prefix||'').trim().slice(0,8),
+  const w=ST_W,patch={ck_sup_names:w.ck_sup_names.slice(),bill_prefix:String(w.bill_prefix||'').trim().slice(0,8),
     order_lookback_days:Math.round(num(w.order_lookback_days))===0?0:1,refill_days:Math.max(1,Math.min(60,Math.round(num(w.refill_days))||3)),
-    overhead_mode:w.overhead_mode==='pct'?'pct':'per_unit',overhead_value:Math.max(0,num(w.overhead_value)),markup_pct:num(w.markup_pct)};   // units จัดการที่แท็บ 📏 หน่วย — ไม่เขียนทับจากหน้านี้ (cfgSave รวมค่าเดิมให้)
+    overhead_mode:w.overhead_mode==='pct'?'pct':'per_unit',overhead_value:Math.max(0,num(w.overhead_value)),markup_pct:num(w.markup_pct)};   // branch_line บันทึกทันทีตอนเลือก (stBrSet) · units จัดการที่แท็บ 📏 หน่วย — ไม่เขียนทับจากหน้านี้ (cfgSave รวมค่าเดิมให้)
   await cfgSave(patch);toast(t('st_saved'));if(S.tab==='set')show('set');});}
 /* ===================== /module: set ===================== */
 
