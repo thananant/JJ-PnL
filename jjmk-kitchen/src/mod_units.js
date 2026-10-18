@@ -9,7 +9,7 @@
    · 📏 รายชื่อหน่วย: ตัวแปลงมาตรฐาน (แก้ไม่ได้) · หน่วยทั้งหมดพร้อมจำนวนที่ใช้ · หน่วยเพิ่มเติม (cfg.units — ย้ายมาจาก ⚙️ ตั้งค่า) เพิ่ม/ลบ (หัวหน้า · ลบได้เฉพาะที่ไม่มีใครใช้)
    ============================================================ */
 I18N.add({
-th:{nav_units:'หน่วย',un_sub:'จัดการหน่วยทั้งหมดในที่เดียว — ระบบบอกว่าส่วนไหนใช้หน่วยเดียวกันได้ ส่วนไหนเป็นหน่วยเฉพาะหน้า',
+th:{un_g7:'📌 ตัวอย่าง: ซื้อเป็น กก. · ใช้ในสูตรเป็นกรัม · นับเป็นถุง → หน่วยหลัก = กรัม (เล็กสุดที่ใช้) · หน่วยซื้อ = กก. (ระบบรู้เองว่า 1 กก. = 1,000 กรัม) · บรรจุอื่น = ถุง ใส่ว่า 1 ถุง = กี่กรัม · หน่วยนับ = ถุง',un_d_all:'ทุกแผนก',un_d_main:'🍳 ครัวกลาง',un_d_dessert:'🍮 ของหวาน',un_d_both:'ใช้ทั้ง 2 แผนก',nav_units:'หน่วย',un_sub:'จัดการหน่วยทั้งหมดในที่เดียว — ระบบบอกว่าส่วนไหนใช้หน่วยเดียวกันได้ ส่วนไหนเป็นหน่วยเฉพาะหน้า',
   un_guide_t:'💡 หน่วยไหนใช้ร่วมกัน · หน่วยไหนเฉพาะหน้า',
   un_g1:'🥬 หน่วยหลักของวัตถุดิบ — ใช้ร่วมทุกหน้า (สต๊อก · สูตร · ต้นทุน) · ตั้งครั้งเดียว · เปลี่ยนไม่ได้เมื่อมีสต๊อก/อยู่ในสูตร',
   un_g2:'🛒 หน่วยซื้อ — ใช้ร่วมกัน 📥 รับของ + 🛒 สั่งของ (เช่น ถุง = 1,000 กรัม)',
@@ -29,7 +29,7 @@ th:{nav_units:'หน่วย',un_sub:'จัดการหน่วยทั�
   un_custom_h:'หน่วยที่ไม่มีในรายการ — ใช้ได้เมื่อวัตถุดิบตั้งขนาดบรรจุให้แล้ว',un_add:'＋ เพิ่มหน่วย',un_ph:'เช่น กระปุก',un_dup:'มีหน่วยนี้แล้ว',
   un_del_used:'ยังมี {n} รายการใช้หน่วยนี้ — ลบไม่ได้',un_del_q:'ลบหน่วย "{u}"?',un_added:'เพิ่มหน่วยแล้ว',un_deleted:'ลบหน่วยแล้ว',un_boss:'เพิ่ม/ลบหน่วยได้เฉพาะหัวหน้า',
   un_applied:'ตั้งหน่วยนับเป็น {u} แล้ว',st_units_moved:'ย้ายไปจัดการที่แท็บ 📏 หน่วย แล้ว',st_units_go:'ไปหน้า 📏 หน่วย'},
-en:{nav_units:'Units',un_sub:'Manage every unit in one place — the app shows which units can be shared and which belong to one page only',
+en:{un_g7:'📌 Example: bought in kg · used in g · counted in bags → base unit = g (the smallest you use) · buying unit = kg (the app knows 1 kg = 1,000 g) · other pack = bag, enter 1 bag = ? g · count unit = bag',un_d_all:'All sections',un_d_main:'🍳 Central kitchen',un_d_dessert:'🍮 Desserts',un_d_both:'Used by both sections',nav_units:'Units',un_sub:'Manage every unit in one place — the app shows which units can be shared and which belong to one page only',
   un_guide_t:'💡 Shared units · page-only units',
   un_g1:'🥬 Ingredient base unit — shared by every page (stock · recipes · cost) · set once · locked while there is stock / it is in a recipe',
   un_g2:'🛒 Buying unit — shared by 📥 Receive + 🛒 Order (e.g. bag = 1,000 g)',
@@ -49,7 +49,7 @@ en:{nav_units:'Units',un_sub:'Manage every unit in one place — the app shows w
   un_custom_h:'Units missing from the list — usable once the ingredient has a pack size',un_add:'＋ Add unit',un_ph:'e.g. jar',un_dup:'That unit already exists',
   un_del_used:'{n} items still use this unit — cannot delete',un_del_q:'Delete unit "{u}"?',un_added:'Unit added',un_deleted:'Unit deleted',un_boss:'Only a manager can add/delete units',
   un_applied:'Count unit set to {u}',st_units_moved:'Moved to the 📏 Units tab',st_units_go:'Go to 📏 Units'},
-lo:{nav_units:'ຫົວໜ່ວຍ',un_sub:'ຈັດການຫົວໜ່ວຍທັງໝົດໃນບ່ອນດຽວ — ລະບົບບອກວ່າສ່ວນໃດໃຊ້ຫົວໜ່ວຍດຽວກັນໄດ້ ສ່ວນໃດເປັນຫົວໜ່ວຍສະເພາະໜ້າ',
+lo:{un_g7:'📌 ຕົວຢ່າງ: ຊື້ເປັນ ກິໂລ · ໃຊ້ໃນສູດເປັນກຣາມ · ນັບເປັນຖົງ → ຫົວໜ່ວຍຫຼັກ = ກຣາມ · ຫົວໜ່ວຍຊື້ = ກິໂລ (ລະບົບຮູ້ເອງວ່າ 1 ກິໂລ = 1,000 ກຣາມ) · ບັນຈຸອື່ນ = ຖົງ ໃສ່ວ່າ 1 ຖົງ = ຈັກກຣາມ · ຫົວໜ່ວຍນັບ = ຖົງ',un_d_all:'ທຸກພະແນກ',un_d_main:'🍳 ຄົວກາງ',un_d_dessert:'🍮 ຂອງຫວານ',un_d_both:'ໃຊ້ທັງ 2 ພະແນກ',nav_units:'ຫົວໜ່ວຍ',un_sub:'ຈັດການຫົວໜ່ວຍທັງໝົດໃນບ່ອນດຽວ — ລະບົບບອກວ່າສ່ວນໃດໃຊ້ຫົວໜ່ວຍດຽວກັນໄດ້ ສ່ວນໃດເປັນຫົວໜ່ວຍສະເພາະໜ້າ',
   un_guide_t:'💡 ຫົວໜ່ວຍໃຊ້ຮ່ວມ · ຫົວໜ່ວຍສະເພາະໜ້າ',
   un_g1:'🥬 ຫົວໜ່ວຍຫຼັກຂອງວັດຖຸດິບ — ໃຊ້ຮ່ວມທຸກໜ້າ (ສະຕັອກ · ສູດ · ຕົ້ນທຶນ) · ຕັ້ງເທື່ອດຽວ · ປ່ຽນບໍ່ໄດ້ເມື່ອມີສະຕັອກ/ຢູ່ໃນສູດ',
   un_g2:'🛒 ຫົວໜ່ວຍຊື້ — ໃຊ້ຮ່ວມ 📥 ຮັບເຄື່ອງ + 🛒 ສັ່ງເຄື່ອງ (ເຊັ່ນ ຖົງ = 1,000 ກຣາມ)',
@@ -69,7 +69,7 @@ lo:{nav_units:'ຫົວໜ່ວຍ',un_sub:'ຈັດການຫົວໜ່�
   un_custom_h:'ຫົວໜ່ວຍທີ່ບໍ່ມີໃນລາຍການ — ໃຊ້ໄດ້ເມື່ອວັດຖຸດິບຕັ້ງຂະໜາດບັນຈຸແລ້ວ',un_add:'＋ ເພີ່ມຫົວໜ່ວຍ',un_ph:'ເຊັ່ນ ກະປຸກ',un_dup:'ມີຫົວໜ່ວຍນີ້ແລ້ວ',
   un_del_used:'ຍັງມີ {n} ລາຍການໃຊ້ຫົວໜ່ວຍນີ້ — ລຶບບໍ່ໄດ້',un_del_q:'ລຶບຫົວໜ່ວຍ "{u}"?',un_added:'ເພີ່ມຫົວໜ່ວຍແລ້ວ',un_deleted:'ລຶບຫົວໜ່ວຍແລ້ວ',un_boss:'ເພີ່ມ/ລຶບຫົວໜ່ວຍໄດ້ສະເພາະຫົວໜ້າ',
   un_applied:'ຕັ້ງຫົວໜ່ວຍນັບເປັນ {u} ແລ້ວ',st_units_moved:'ຍ້າຍໄປຈັດການທີ່ແທັບ 📏 ຫົວໜ່ວຍ ແລ້ວ',st_units_go:'ໄປໜ້າ 📏 ຫົວໜ່ວຍ'},
-my:{nav_units:'ယူနစ်',un_sub:'ယူနစ်အားလုံးကို တစ်နေရာတည်းတွင် စီမံ — ဘယ်အပိုင်းက ယူနစ်တူသုံးနိုင်ပြီး ဘယ်အပိုင်းက စာမျက်နှာသီးသန့်လဲ ပြပေးသည်',
+my:{un_g7:'📌 ဥပမာ: ကီလိုဖြင့်ဝယ် · နည်းတွင် ဂရမ်ဖြင့်သုံး · အိတ်ဖြင့်ရေတွက် → အဓိကယူနစ် = ဂရမ် · ဝယ်ယူနစ် = ကီလို (1 ကီလို = 1,000 ဂရမ် အလိုအလျောက်သိ) · အခြားထုပ် = အိတ်၊ 1 အိတ် = ဂရမ် ဘယ်လောက် ထည့် · ရေတွက်ယူနစ် = အိတ်',un_d_all:'ဌာနအားလုံး',un_d_main:'🍳 ဗဟိုမီးဖိုချောင်',un_d_dessert:'🍮 အချိုပွဲ',un_d_both:'ဌာန ၂ ခုလုံး သုံး',nav_units:'ယူနစ်',un_sub:'ယူနစ်အားလုံးကို တစ်နေရာတည်းတွင် စီမံ — ဘယ်အပိုင်းက ယူနစ်တူသုံးနိုင်ပြီး ဘယ်အပိုင်းက စာမျက်နှာသီးသန့်လဲ ပြပေးသည်',
   un_guide_t:'💡 မျှသုံးယူနစ် · စာမျက်နှာသီးသန့်ယူနစ်',
   un_g1:'🥬 ကုန်ကြမ်း အဓိကယူနစ် — စာမျက်နှာအားလုံး မျှသုံး (စတော့ · နည်း · ကုန်ကျ) · တစ်ကြိမ်သတ်မှတ် · စတော့ရှိ/နည်းထဲပါလျှင် မပြောင်းနိုင်',
   un_g2:'🛒 ဝယ်ယူနစ် — 📥 လက်ခံ + 🛒 မှာယူ မျှသုံး (ဥပမာ အိတ် = 1,000 ဂရမ်)',
@@ -109,6 +109,7 @@ CSS.add(`
 .un-adv.ok{color:#1e7a3c}.un-adv.tip{color:#8a5a00}.un-adv.bad{color:#b3261e}
 .un-adv .btn{margin-left:6px;vertical-align:middle}
 .un-sum{font-weight:700;margin:6px 0}
+.un-both{background:#F4EEFB;border-color:#d9c8ef}
 .un-std{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 .un-std div{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;font-size:14px}
 .un-all{display:flex;flex-wrap:wrap;gap:6px}
@@ -118,9 +119,21 @@ CSS.add(`
 .un-add{display:flex;gap:8px;margin-top:10px}
 .un-add input{flex:1;min-width:0}
 `);
-let UN_TAB='items',UN_BAD=false,UN_BR=null,UN_BR_OK=true,UN_BR_AT=0;
-try{const v=LS.get('jjck_un');if(v){if(['items','prods','list'].includes(v.tab))UN_TAB=v.tab;UN_BAD=!!v.bad;}}catch(e){}
-function unSaveUi(){try{LS.set('jjck_un',{tab:UN_TAB,bad:UN_BAD});}catch(e){}}
+let UN_TAB='items',UN_BAD=false,UN_DEPT='',UN_BR=null,UN_BR_OK=true,UN_BR_AT=0;
+try{const v=LS.get('jjck_un');if(v){if(['items','prods','list'].includes(v.tab))UN_TAB=v.tab;UN_BAD=!!v.bad;if(['main','dessert'].includes(v.dept))UN_DEPT=v.dept;}}catch(e){}
+function unSaveUi(){try{LS.set('jjck_un',{tab:UN_TAB,bad:UN_BAD,dept:UN_DEPT});}catch(e){}}
+/* แผนก (เจ้าของ 2026-10-18 "หน่วยต้องแยกเป็นแต่ละแผนกด้วย") — สินค้า: กลุ่มเมนู "ของหวาน" = ของหวาน · วัตถุดิบ: ck_items.dept (main/dessert/both · ตั้งไว้ตั้งแต่ระบบเดิม)
+   ไม่มี = ดูจากสูตรที่ใช้ (กติกาเดียวกับ itemDeptAuto ของระบบเดิม): ใช้แต่ในเมนูของหวาน = ของหวาน · ใช้ทั้งสองแบบ = both · ไม่อยู่ในสูตรไหน = ครัวกลาง */
+const unRecDept=r=>String((r&&r.cat)||'').trim()==='ของหวาน'?'dessert':'main';
+function unItemDept(it){const d=String(it.dept||'');if(['main','dessert','both'].includes(d))return d;
+  const set={};(S.recipeItems||[]).forEach(l=>{if(l.item_id!==it.id)return;const r=recipeById(l.recipe_id);if(r&&r.active!==false)set[unRecDept(r)]=1;});
+  return set.main&&set.dessert?'both':set.dessert?'dessert':'main';}
+const unInDept=d=>!UN_DEPT||d===UN_DEPT||d==='both';
+function unSetDept(k){UN_DEPT=k;unSaveUi();unPaint();}
+function unDeptBar(list){ // list = [{d}] · ไม่มีของหวานเลย = ไม่โชว์แถบ
+  if(!list.some(x=>x.d==='dessert'||x.d==='both'))return '';
+  const n=k=>list.filter(x=>!k||x.d===k||x.d==='both').length;
+  return '<div id="unDept">'+pillBar([{k:'',lb:t('un_d_all'),n:list.length},{k:'main',lb:t('un_d_main'),n:n('main')},{k:'dessert',lb:t('un_d_dessert'),n:n('dessert')}],UN_DEPT,'unSetDept',{scroll:true})+'</div>';}
 const unContainer=u=>!!u&&!isMassVol(u);
 
 /* ---------- คำแนะนำต่อวัตถุดิบ → {lv:'ok'|'tip'|'bad', msgs:[{lv,txt,apply?}] } ---------- */
@@ -164,7 +177,7 @@ RENDER.units=function(el){
   const tabs=[{k:'items',lb:t('un_t_items')},{k:'prods',lb:t('un_t_prods')},{k:'list',lb:t('un_t_list')}];
   el.innerHTML=dhead('📏 '+t('nav_units'))+'<div class="un-sub">'+esc(t('un_sub'))+'</div>'+
     '<details class="un-guide"'+(LS.get('jjck_un_g')===0?'':' open')+' ontoggle="try{LS.set(\'jjck_un_g\',this.open?1:0)}catch(e){}"><summary>'+esc(t('un_guide_t'))+'</summary><ul>'+
-      ['un_g1','un_g2','un_g3','un_g4','un_g5','un_g6'].map(k=>'<li>'+esc(t(k))+'</li>').join('')+'</ul></details>'+
+      ['un_g1','un_g2','un_g3','un_g4','un_g5','un_g6','un_g7'].map(k=>'<li>'+esc(t(k))+'</li>').join('')+'</ul></details>'+
     '<div id="unTabs">'+pillBar(tabs,UN_TAB,'unSetTab',{scroll:true})+'</div><div id="unBody"></div>';
   unPaint();
   if(UN_TAB==='prods')unLoadBranch().then(()=>{if(S.tab==='units'&&UN_TAB==='prods')unPaint();});
@@ -179,13 +192,14 @@ function unAdvHtml(m){return '<div class="un-adv '+m.lv+'">'+(m.lv==='ok'?'✓ '
   (m.apply&&canKitchen()?'<button type="button" class="btn sm2 gh" data-u="'+esc(m.apply)+'" onclick="event.stopPropagation();unApply(this)">'+esc(t('un_apply'))+'</button>':'')+
   (m.link&&canKitchen()&&m.lv==='bad'?'<button type="button" class="btn sm2 gh" data-n="'+esc(m.link.name)+'" data-u="'+esc(m.link.unit)+'" onclick="event.stopPropagation();unLinkFix(this)">'+esc(t('un_fix'))+'</button>':'')+'</div>';}
 function unItemsHtml(){
-  const all=activeItems().map(it=>({it,a:unItemAdvice(it)})),n={ok:0,tip:0,bad:0};all.forEach(x=>n[x.a.lv]++);
+  const every=activeItems().map(it=>({it,d:unItemDept(it)})),bar=unDeptBar(every);
+  const all=every.filter(x=>unInDept(x.d)).map(x=>({it:x.it,d:x.d,a:unItemAdvice(x.it)})),n={ok:0,tip:0,bad:0};all.forEach(x=>n[x.a.lv]++);
   const rank={bad:0,tip:1,ok:2};
   const L=all.filter(x=>!UN_BAD||x.a.lv!=='ok').sort((a,b)=>(rank[a.a.lv]-rank[b.a.lv])||String(dispName(a.it)).localeCompare(String(dispName(b.it)),'th'));
-  let h=unBadToggle()+'<div class="un-sum">'+esc(t('un_sum',{a:n.ok,b:n.tip,c:n.bad,n:all.length}))+'</div>';
+  let h=bar+unBadToggle()+'<div class="un-sum">'+esc(t('un_sum',{a:n.ok,b:n.tip,c:n.bad,n:all.length}))+'</div>';
   if(!all.length)return h+emptyBox(t('un_none'));
   if(!L.length)return h+'<div class="okbox">'+esc(t('un_allok'))+'</div>';
-  return h+L.map(({it,a})=>{const base=it.unit||'',bu=it.buy_unit&&it.buy_unit!==base?it.buy_unit:'',cu=countUnitOf(it);
+  return h+L.map(({it,a,d})=>{const base=it.unit||'',bu=it.buy_unit&&it.buy_unit!==base?it.buy_unit:'',cu=countUnitOf(it);
     const packs=packsOf(it).filter(p=>p.u!==bu);
     return '<div class="un-row'+(a.lv==='bad'?' warn':a.lv==='tip'?' tip':'')+'" id="unI_'+esc(it.id)+'"><div class="un-hd" data-id="'+esc(it.id)+'" onclick="unItemEdit(this.dataset.id)">'+thumbHtml(it,'🥬')+
       '<div class="grow"><b>'+esc(dispName(it))+'</b><div class="un-us">'+
@@ -193,11 +207,13 @@ function unItemsHtml(){
       (bu?'<span class="un-u"><i>'+esc(t('un_buy'))+'</i>'+esc(trUnit(bu))+(unitFactor(it,bu)!=null?' = '+fmtQ(unitFactor(it,bu))+' '+esc(trUnit(base)):' = ?')+'</span>':'')+
       '<span class="un-u"><i>'+esc(t('un_count'))+'</i>'+esc(trUnit(cu))+'</span>'+
       (packs.length?'<span class="un-u"><i>'+esc(t('un_packs'))+'</i>'+packs.map(p=>esc(trUnit(p.u))+' = '+fmtQ(p.q)+' '+esc(trUnit(base))).join(' · ')+'</span>':'')+
+      (d==='both'?'<span class="un-u un-both">🍳🍮 '+esc(t('un_d_both'))+'</span>':(!UN_DEPT&&d==='dessert')?'<span class="un-u un-both">'+esc(t('un_d_dessert'))+'</span>':'')+
       '</div></div><span class="mut">›</span></div>'+a.msgs.map(unAdvHtml).join('')+'</div>';}).join('');}
 function unProdsHtml(){
-  const all=activeRecipes().map(r=>({r,a:unProdAdvice(r)})),bad=all.filter(x=>x.a.lv==='bad').length;
+  const every=activeRecipes().map(r=>({r,d:unRecDept(r)})),bar=unDeptBar(every);
+  const all=every.filter(x=>unInDept(x.d)).map(x=>({r:x.r,a:unProdAdvice(x.r)})),bad=all.filter(x=>x.a.lv==='bad').length;
   const L=all.filter(x=>!UN_BAD||x.a.lv!=='ok').sort((a,b)=>((a.a.lv==='bad'?0:1)-(b.a.lv==='bad'?0:1))||String(dispName(a.r)).localeCompare(String(dispName(b.r)),'th'));
-  let h=unBadToggle()+(UN_BR?'':'<div class="spin"></div>')+(UN_BR&&!UN_BR_OK?'<div class="note">'+esc(t('un_noprod'))+'</div>':'')+
+  let h=bar+unBadToggle()+(UN_BR?'':'<div class="spin"></div>')+(UN_BR&&!UN_BR_OK?'<div class="note">'+esc(t('un_noprod'))+'</div>':'')+
     '<div class="un-sum">'+esc(t('un_sum',{a:all.length-bad,b:0,c:bad,n:all.length}))+'</div>';
   if(!all.length)return h+emptyBox(t('un_none'));
   if(!L.length)return h+'<div class="okbox">'+esc(t('un_allok'))+'</div>';

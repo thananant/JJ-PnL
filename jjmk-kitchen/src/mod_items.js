@@ -164,6 +164,11 @@ function itRecipeUnits(id){ // หน่วย (ที่ไม่ใช่ห�
 function itPackUsed(id,tmp){ // ขนาดบรรจุ/หน่วยซื้อที่กำลังจะบันทึก ทำให้หน่วยในสูตรแปลงไม่ได้ → {u,list} (ตรวจอิสระ 2026-10-16: ลบ ขวด แล้ว 🍳 คิดส่วนผสมเป็น 0 เงียบ ๆ)
   if(!id)return null;const bad=itRecipeUnits(id).filter(x=>unitFactor(tmp,x.u)==null);
   return bad.length?{u:bad[0].u,list:bad.map(x=>x.names.join(', ')).join(' · ')}:null;}
+function itStdFill(i){ // เลือกหน่วยที่ตัวแปลงมาตรฐานรู้ขนาดอยู่แล้ว (กก.→กรัม = 1,000) = เติมขนาดให้เอง (เจ้าของถาม 2026-10-18 ซื้อ กก. ใช้ กรัม นับ ถุง)
+  const d=IT_D;if(!d)return;const base=d.unit||'',u=i<0?d.buy_unit:(d.packs[i]||{}).u;if(!u)return;
+  const f=unitConv(null,u,base);if(f==null)return;
+  if(i<0)d.buy_qty=f;else d.packs[i].q=f;
+  const a=document.getElementById('itPacks');if(a)a.innerHTML=itPacksHtml();}
 function itStdBad(u,q,base){ // หน่วยที่ตัวแปลงมาตรฐานรู้จักอยู่แล้ว (กรัม/ขีด/กก./มล./ลิตร/โหล/ชิ้น) ตั้งขนาดต่างจากมาตรฐาน = ตัวเลขขัดกัน → ข้อความผิดพลาด หรือ ''
   const f=unitConv(null,u,base);if(f==null||Math.abs(f-num(q))<1e-9*Math.max(1,f))return '';
   return t('it_pack_std',{u:trUnit(u),q:fmtQ(f),b:trUnit(base)});}
@@ -209,11 +214,11 @@ function itPacksHtml(){
   const d=IT_D,base=d.unit||'',others=allUnits().filter(u=>u!==base);
   const row=(lbU,lbQ,u,q,onU,onQ,del)=>'<div class="itpack"><span class="b">1</span><select onchange="'+onU+'">'+(lbU?'<option value="">—</option>':'')+unitOptions(others,u)+'</select>'+
     '<span class="b">=</span><input type="text" inputmode="decimal" placeholder="?" value="'+esc(q)+'" oninput="'+onQ+'"><span class="b">'+esc(trUnit(base))+'</span>'+(del?'<button type="button" class="x" onclick="'+del+'">✕</button>':'<span></span>')+'</div>';
-  let h='<div class="fld"><label>🛒 '+esc(t('it_buy'))+'</label>'+row(true,null,d.buy_unit,d.buy_qty,'IT_D.buy_unit=this.value;itDraftSave();itCuPaint()','IT_D.buy_qty=this.value;itDraftSave();itCuPaint()',null)+
+  let h='<div class="fld"><label>🛒 '+esc(t('it_buy'))+'</label>'+row(true,null,d.buy_unit,d.buy_qty,'IT_D.buy_unit=this.value;itStdFill(-1);itDraftSave();itCuPaint()','IT_D.buy_qty=this.value;itDraftSave();itCuPaint()',null)+
     '<div class="xs mut">'+esc(t('it_buy_hint'))+'</div></div>';
   const used=d.id?itRecipeUnits(d.id):[];
   h+='<div class="fld"><label>📏 '+esc(t('it_packs'))+'</label><div class="xs mut" style="margin-bottom:6px">'+esc(t('it_pack_hint'))+'</div>'+
-    (d.packs||[]).map((p,i)=>row(true,null,p.u,p.q,'IT_D.packs['+i+'].u=this.value;itDraftSave();itCuPaint()','IT_D.packs['+i+'].q=this.value;itDraftSave();itCuPaint()','itPackDel('+i+')')).join('')+
+    (d.packs||[]).map((p,i)=>row(true,null,p.u,p.q,'IT_D.packs['+i+'].u=this.value;itStdFill('+i+');itDraftSave();itCuPaint()','IT_D.packs['+i+'].q=this.value;itDraftSave();itCuPaint()','itPackDel('+i+')')).join('')+
     '<button type="button" class="btn gh sm2" onclick="itPackAdd()">'+esc(t('it_pack_add'))+'</button>'+
     (used.length?'<div class="xs amber" style="margin-top:6px">'+esc(t('it_pack_inuse',{list:used.map(x=>trUnit(x.u)+' ('+x.names.join(', ')+')').join(' · ')}))+'</div>':'')+'</div>';
   return h;}
