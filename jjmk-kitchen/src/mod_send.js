@@ -100,10 +100,16 @@ CSS.add(`
 .sd-drop{flex:none}
 .sd-card h3 .sp{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}
 .sd-dot{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block;border:1px solid rgba(0,0,0,.08)}
-.sdl{padding:10px 0;border-bottom:1px solid var(--line)}.sdl.last{border-bottom:0}
+.sdl{padding:10px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;align-items:start}.sdl.last{border-bottom:0}
+.sdl-pic .ithumb{width:76px;height:76px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:34px;overflow:hidden;background:#F3EBDB;margin:0}.sdl-pic .ithumb img{width:100%;height:100%;object-fit:cover;display:block}
+.sdl-main{min-width:0}
+@media (max-width:360px){.sdl{grid-template-columns:56px minmax(0,1fr);gap:8px}.sdl-pic .ithumb{width:56px;height:56px;font-size:26px}}
+@media (max-width:320px){.sdl{grid-template-columns:44px minmax(0,1fr);gap:6px}.sdl-pic .ithumb{width:44px;height:44px;font-size:20px;border-radius:10px}}
 .sdl-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}.sdl-name{font-size:16px;font-family:var(--fh)}
 .sdl-stats{display:flex;gap:12px;flex-wrap:wrap;font-size:13.5px;color:var(--mut);margin:4px 0 2px;align-items:center}.sdl-stats b{color:var(--ink)}.sdl-stats b.red{color:var(--bad)}.sdl-stats b.green{color:var(--ok)}
-.sdl-send{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.sdl-send .skstep{flex:1;min-width:170px;max-width:420px;margin-top:4px}.sdl-lb{font-weight:700;font-family:var(--fh);min-width:28px}
+.sdl-send{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.sdl-send .skstep{flex:1;min-width:170px;max-width:420px;margin-top:4px}
+.sdl-main .sdl-send .skstep{min-width:min(100%,222px)}.sdl-main .skstep>span.b{flex:0 1 auto;min-width:0;max-width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:340px){.sdl-main .sdl-send .skstep{min-width:min(100%,160px)}.sdl-main .skstep>span.b{display:none}}.sdl-main .sdl-name{overflow-wrap:anywhere;min-width:0}   /* คอลัมน์รูป 76px — หน่วย/ชื่อยาวห้ามดันจอกว้าง */.sdl-lb{font-weight:700;font-family:var(--fh);min-width:28px}
 .sdl-short{margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:22px}
 .sd-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.sd-tot{display:flex;flex-direction:column;flex:none}.sd-tot b{font-size:20px;font-family:var(--fh)}
 .sd-go{flex:1;min-width:180px}
@@ -261,16 +267,17 @@ function sdCardHtml(g,gi){
 function sdLineHtml(gi,l,li,last){
   const id=gi+'_'+li,u=trUnit(l.unit),g=SD.groups[gi];
   if(g&&g.manual)return sdManualLineHtml(gi,l,li,last);
-  let h='<div class="sdl'+(last?' last':'')+'" id="sdL'+id+'"><div class="sdl-top"><b class="sdl-name">'+esc(l.name)+'</b>'+(l.already>0?'<span class="xs mut">⏳ '+esc(t('sd_partial_h',{q:fmtQ(l.already),u}))+'</span>':'')+'</div>';
+  const rec=l.link&&recipeById(l.link.recipe_id);
+  let h='<div class="sdl'+(last?' last':'')+'" id="sdL'+id+'"><div class="sdl-pic">'+(rec?sdThumb(rec):'<div class="ithumb">🔗</div>')+'</div><div class="sdl-main"><div class="sdl-top"><b class="sdl-name">'+esc(l.name)+'</b>'+(l.already>0?'<span class="xs mut">⏳ '+esc(t('sd_partial_h',{q:fmtQ(l.already),u}))+'</span>':'')+'</div>';
   if(!l.link){h+='<div class="sdl-stats"><span>'+esc(t('sd_ordered'))+' <b>'+fmtQ(l.remaining)+' '+esc(u)+'</b></span></div>'+
-    '<button type="button" class="btn gh sm2 sd-link" onclick="sdLinkPick('+gi+','+li+')">🔗 '+esc(t('sd_unlinked'))+' ›</button>';return h+'</div>';}
+    '<button type="button" class="btn gh sm2 sd-link" onclick="sdLinkPick('+gi+','+li+')">🔗 '+esc(t('sd_unlinked'))+' ›</button>';return h+'</div></div>';}
   const p=sdPriceOf(l);
   h+='<div class="sdl-stats"><span>'+esc(t('sd_ordered'))+' <b>'+fmtQ(l.remaining)+' '+esc(u)+'</b></span><span>'+esc(t('sd_have'))+' <b id="sdHv'+id+'" class="'+(l.have>=l.remaining?'green':'red')+'">'+fmtQ(l.have)+'</b></span>'+
     (p==null?'<span class="chip warn">'+esc(t('no_price'))+'</span>':'<span>'+esc(moneyU(p))+'/'+esc(u)+'</span>')+'</div>'+
     (l.noPrice?'<div class="sdl-send"><span class="chip bad">⛔ '+esc(t('sd_no_price_h'))+'</span><button type="button" class="btn gh sm2" onclick="show(\'menus\')">📖 '+esc(t('nav_menus'))+'</button></div>':
     '<div class="sdl-send"><span class="sdl-lb">'+esc(t('sd_send'))+'</span>'+stepper('sdS'+id,l.sent,{step:1,min:0,max:l.remaining,unit:l.unit,on:(v)=>sdSetSent(gi,li,v)})+'</div>')+
     '<div class="sdl-short" id="sdSh'+id+'">'+sdShortHtml(l)+'</div>';
-  return h+'</div>';}
+  return h+'</div></div>';}
 function sdShortHtml(l,noMk){const sh=Math.max(0,rnd4(l.remaining-num(l.sent)));if(sh<=1e-9)return '<span class="chip ok">✓ '+esc(t('sd_full'))+'</span>';   // noMk = การ์ด ✋ ที่ท้ายการ์ดมี ⚡ อยู่แล้ว (ไม่ขึ้นซ้ำ 2 ปุ่ม — ผู้ตรวจรอบ 2)
   return '<span class="chip bad">'+esc(t('sd_short'))+' '+fmtQ(sh)+' '+esc(trUnit(l.unit))+'</span>'+(l.have<l.remaining-1e-9&&!noMk?'<button type="button" class="btn gh sm2 sd-mk" onclick="sdMake()">'+esc(t('sd_make'))+'</button>':'');}
 function sdManualZero(g){return !!g&&!!g.manual&&g.lines.some(l=>l.link&&!l.noPrice)&&!g.lines.some(l=>l.link&&!l.noPrice&&num(l.sent)>0);}   // เรียกเพิ่มแต่ของถูกจัดให้ใบสั่งสาขาหมดแล้ว = ท้ายการ์ดบอกตรง ๆ + ⚡ แทนปุ่ม ✅ (ผู้ตรวจ V1)
@@ -456,13 +463,13 @@ function sdManualGroups(){ // ร่าง → กลุ่มรูปแบบ
 function sdThumb(o){const url=o&&imgOk(o.image_url)?String(o.image_url):'';return '<div class="ithumb">'+(url?'<img src="'+esc(url)+'" loading="lazy" data-ic="🍳" onerror="this.parentNode.textContent=this.dataset.ic">':'🍳')+'</div>';}   // รูปเสีย = กลับเป็นอิโมจิ (ผู้ตรวจ V1)   // รูปในช่อง — ไม่ใส่ซูม (แตะรูป = เลือกเมนู)
 function sdManualLineHtml(gi,l,li,last){ // บรรทัดเรียกเพิ่ม: ชื่อเมนู (+ ⏳ ส่งไปแล้ว N ถ้าออกบิลไปบางส่วนแล้ว) + ✕ · มี X · ราคา · ช่อง "ขอเพิ่ม" = ส่วนที่ยังขอ แก้ร่างในที่ · ขาด/⚡ เหมือนบรรทัดปกติ
   const id=gi+'_'+li,u=trUnit(l.unit),r=recipeById(l.link.recipe_id),p=sdPriceOf(l);
-  let h='<div class="sdl'+(last?' last':'')+'" id="sdL'+id+'"><div class="sdl-top sdm"><b class="sdl-name">'+esc(r?dispName(r):l.name)+'</b>'+(l.already>0?'<span class="xs mut">⏳ '+esc(t('sd_partial_h',{q:fmtQ(l.already),u}))+'</span>':'')+
+  let h='<div class="sdl'+(last?' last':'')+'" id="sdL'+id+'"><div class="sdl-pic">'+sdThumb(r)+'</div><div class="sdl-main"><div class="sdl-top sdm"><b class="sdl-name">'+esc(r?dispName(r):l.name)+'</b>'+(l.already>0?'<span class="xs mut">⏳ '+esc(t('sd_partial_h',{q:fmtQ(l.already),u}))+'</span>':'')+
     '<button type="button" class="sdl-x" aria-label="x" onclick="sdManualLineDel('+gi+','+li+')">✕</button></div>';
   h+='<div class="sdl-stats"><span>'+esc(t('sd_have'))+' <b id="sdHv'+id+'" class="'+(l.have>=l.remaining?'green':'red')+'">'+fmtQ(l.have)+'</b> '+esc(u)+'</span>'+(p==null?'<span class="chip warn">'+esc(t('no_price'))+'</span>':'<span>'+esc(moneyU(p))+'/'+esc(u)+'</span>')+'</div>';
   h+=(l.noPrice?'<div class="sdl-send"><span class="chip bad">⛔ '+esc(t('sd_no_price_h'))+'</span><button type="button" class="btn gh sm2" onclick="show(\'menus\')">📖 '+esc(t('nav_menus'))+'</button></div>':
     '<div class="sdl-send"><span class="sdl-lb">'+esc(t('sd_m_asked'))+'</span>'+stepper('sdS'+id,l.ordered,{step:1,min:1,unit:l.unit,on:(v)=>sdManualQtyIn(gi,li,v)})+'</div>')+
     '<div class="sdl-short" id="sdSh'+id+'">'+sdShortHtml(l,sdManualZero(SD.groups[gi]))+'</div>';
-  return h+'</div>';}
+  return h+'</div></div>';}
 function sdManualQtyIn(gi,li,v){ // แก้จำนวนที่ขอในที่ (ไม่วาดใหม่ — คีย์บอร์ดไม่หุบ) · ว่าง/0 ระหว่างพิมพ์ = ยังไม่บันทึก
   const g=SD.groups[gi],l=g&&g.manual&&g.lines[li];if(!l)return;const q=rnd4(numIn(v));if(!(q>0))return;
   sdManualSet(g.code,l.link.recipe_id,q);sdCalc();sdRefresh();}
