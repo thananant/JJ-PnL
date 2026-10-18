@@ -181,7 +181,8 @@ function sdTblGone(x){ // ยังไม่รัน SQL (S.kcSql=false) + ต�
 function sdIsKitchenRow(r,names){ // แถว stock_receipts เป็นออเดอร์ครัวกลางไหม — ซัพตรง ck_sup_names **หรือ** ชื่อสินค้าตรงกับเมนูครัวกลาง (kc_links / ชื่อเมนู / stock_name)
   // เจ้าของ 2026-10-17: "จริงๆ ก็จะมีเฉพาะเมนูในระบบครัวกลางนี่และ ชื่อเหมือนกัน" → ไม่ต้องให้สาขาติ๊ก/ตั้งชื่อซัพให้ตรง · ชื่อตรงเมนู = ของครัวกลางเสมอ
   names=names||((S.cfg||CFG_DEF).ck_sup_names||[]).map(supKey);
-  return names.includes(supKey(r.sup))||!!tdLinkOf(r.name);}
+  const sk=supKey(r.sup);
+  return (!!sk&&names.some(n=>n&&sk.includes(n)))||!!tdLinkOf(r.name);}   // ซัพ "มีคำ" ชื่อครัวกลาง = ทั้งใบสั่ง (เจ้าของ 2026-10-18: แอพนับใช้ชื่อซัพ "จริงใจครัวกลาง" — เทียบตรงตัวแล้วตกหายเกินครึ่งใบ)
 function sdCalcGroups(R,branches){ // ฟังก์ชันล้วน — ☀️ วันนี้ · 🍳 ทำของ · 🚚 ส่งสาขา ใช้ตัวคิดเดียวกัน ตัวเลขจึงตรงกันทุกหน้า
   // {sr,dl,dll} + สาขาที่นับ → {groups:[{key,code,name,short,color,od,lines:[{rid,pid,name,unit,ordered,already,remaining,link,have:0,sent:0}],unlinked}] (เฉพาะที่ยังค้างส่ง · วันสั่งเก่าก่อน),
   //  ordered:{rid:Σสั่ง×f} · sent:{rid:Σส่งแล้ว×f (ไม่เกินที่สั่ง)} · need:{rid:Σค้างส่ง×f} (= ordered−sent) · unlinked:[ชื่อสินค้าสาขาที่ยังไม่ผูก] · lines:จำนวนบรรทัดค้าง
