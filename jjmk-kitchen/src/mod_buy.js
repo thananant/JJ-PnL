@@ -1,6 +1,7 @@
 /* ============================================================
    🛒 สั่งของ — buy (po*)
    คำแนะนำแยกตามร้านค้า (ck_sups จับคู่ด้วยชื่อร้านของวัตถุดิบ it.sup):
+     Max (max_qty · 2026-10-19): ถึงจุดสั่งแล้ว → ต้องมี = Max (ปัดขึ้นเป็นบรรจุเต็ม) · ไม่ตั้งขั้นต่ำ = ต่ำกว่า Max ก็สั่ง
      ต้องมี = มากกว่าระหว่าง "ขั้นต่ำ" (min_qty) กับ "ที่ต้องใช้ทำของ" (สูตร × รอบที่ 🍳 แนะนำ — ⚡ ด่วนจากออเดอร์สาขา / 🔄 เติมให้ถึงที่ควรมี · ใช้ mkLoad/mkNeeds ของโมดูลทำของ ไม่คิดซ้ำ)
      ต้องสั่ง = ต้องมี − ที่มีในสต๊อก − ที่สั่งไว้แล้วกำลังมา (kc_pos status sent)  → ปัดขึ้นเป็นจำนวนบรรจุ (หน่วยซื้อ buy_unit/buy_qty หรือบรรจุแรกใน packs)
      แก้ตัวเลขในที่ได้ (0 = ไม่สั่ง · จำไว้ต่อวันใน localStorage jjck_po_ovr) · ＋ เพิ่มรายการของร้านเอง · ร้านอื่นที่ไม่มีคำแนะนำกดเพิ่มได้
@@ -13,7 +14,7 @@
 I18N.add({
 th:{po_hint:'ระบบแนะนำจาก: วัตถุดิบที่ต่ำกว่าขั้นต่ำ + ของที่ต้องใช้ทำของ (⚡ ด่วน / 🔄 เติม) − ที่มี − ที่สั่งไว้แล้ว · แก้ตัวเลขได้เลย · 0 = ไม่สั่ง',
   po_none:'ตอนนี้ไม่มีอะไรต้องสั่ง 👍',po_nosup:'ยังไม่มีร้าน',po_nosup_h:'วัตถุดิบพวกนี้ยังไม่ได้ตั้งร้านค้า — ตั้งได้ที่ 🥬 วัตถุดิบ',po_group_no:'ยังไม่มีกลุ่มไลน์',po_group_empty:'ยังไม่มีรายการ — กด ＋ เพิ่มรายการ',
-  po_why_min:'ต่ำกว่าขั้นต่ำ (มี {s} · ขั้นต่ำ {m})',po_why_prod:'ใช้ทำของ {q} {u}',po_lots:'รอบ',po_have:'มี {q}',po_incoming:'สั่งไว้แล้ว {q} กำลังมา',po_need:'ต้องสั่ง {q} {u}',
+  po_why_max:'เติมให้ถึง Max {m}',po_why_min:'ต่ำกว่าขั้นต่ำ (มี {s} · ขั้นต่ำ {m})',po_why_prod:'ใช้ทำของ {q} {u}',po_lots:'รอบ',po_have:'มี {q}',po_incoming:'สั่งไว้แล้ว {q} กำลังมา',po_need:'ต้องสั่ง {q} {u}',
   po_est_none:'ไม่มีราคา',po_est_col:'ประมาณ',po_lines_n:'{n} รายการ',po_total_est:'รวม {n} รายการ · ประมาณ {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'ไม่สั่ง',
   po_send:'📤 ส่งไลน์',po_send_copy:'📋 คัดลอก/ส่งเอง',po_add_item:'＋ เพิ่มรายการ',po_other_sups:'สั่งร้านอื่น:',po_reset:'↺ ค่าแนะนำ',
   po_pick_t:'เลือกวัตถุดิบของ {s}',po_pick_none:'ร้านนี้ยังไม่มีวัตถุดิบ — ตั้งร้านค้าให้วัตถุดิบที่ 🥬 วัตถุดิบ',po_pick_all_in:'วัตถุดิบของร้านนี้อยู่ในรายการครบแล้ว',
@@ -31,7 +32,7 @@ th:{po_hint:'ระบบแนะนำจาก: วัตถุดิบท�
   po_list_noread:'อ่านใบที่สั่งไปแล้วไม่ได้ — ยังไม่แสดงคำแนะนำ',po_list_noread_h:'ถ้าแสดง อาจสั่งของที่กำลังมาซ้ำอีกรอบ — กด ⟳ โหลดใหม่',po_reload:'⟳ โหลดใหม่'},
 en:{po_hint:'Suggested from: ingredients below minimum + what production needs (⚡ urgent / 🔄 refill) − in stock − already ordered · edit any number · 0 = skip',
   po_none:'Nothing to order right now 👍',po_nosup:'No supplier',po_nosup_h:'These ingredients have no supplier yet — set one on 🥬 Ingredients',po_group_no:'No LINE group',po_group_empty:'No lines — tap ＋ Add item',
-  po_why_min:'below minimum (have {s} · min {m})',po_why_prod:'production needs {q} {u}',po_lots:'lots',po_have:'have {q}',po_incoming:'{q} already ordered, on the way',po_need:'order {q} {u}',
+  po_why_max:'top up to Max {m}',po_why_min:'below minimum (have {s} · min {m})',po_why_prod:'production needs {q} {u}',po_lots:'lots',po_have:'have {q}',po_incoming:'{q} already ordered, on the way',po_need:'order {q} {u}',
   po_est_none:'no price',po_est_col:'Est.',po_lines_n:'{n} lines',po_total_est:'{n} lines · est. {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'skip',
   po_send:'📤 Send to LINE',po_send_copy:'📋 Copy / send yourself',po_add_item:'＋ Add item',po_other_sups:'Other suppliers:',po_reset:'↺ Suggested',
   po_pick_t:'Pick an ingredient from {s}',po_pick_none:'This supplier has no ingredients yet — set the supplier on 🥬 Ingredients',po_pick_all_in:'All of this supplier\'s ingredients are already listed',
@@ -49,7 +50,7 @@ en:{po_hint:'Suggested from: ingredients below minimum + what production needs (
   po_list_noread:'Could not read the orders already sent — suggestions hidden',po_list_noread_h:'Showing them could order what is already on the way a second time — tap ⟳ to reload',po_reload:'⟳ Reload'},
 lo:{po_hint:'ແນະນຳຈາກ: ວັດຖຸດິບຕ່ຳກວ່າຂັ້ນຕ່ຳ + ທີ່ຕ້ອງໃຊ້ເຮັດເຄື່ອງ (⚡ ດ່ວນ / 🔄 ຕື່ມ) − ທີ່ມີ − ທີ່ສັ່ງໄວ້ແລ້ວ · ແກ້ຕົວເລກໄດ້ເລີຍ · 0 = ບໍ່ສັ່ງ',
   po_none:'ຕອນນີ້ບໍ່ມີຫຍັງຕ້ອງສັ່ງ 👍',po_nosup:'ຍັງບໍ່ມີຮ້ານ',po_nosup_h:'ວັດຖຸດິບເຫຼົ່ານີ້ຍັງບໍ່ໄດ້ຕັ້ງຮ້ານຄ້າ — ຕັ້ງໄດ້ທີ່ 🥬 ວັດຖຸດິບ',po_group_no:'ຍັງບໍ່ມີກຸ່ມໄລນ໌',po_group_empty:'ຍັງບໍ່ມີລາຍການ — ກົດ ＋ ເພີ່ມລາຍການ',
-  po_why_min:'ຕ່ຳກວ່າຂັ້ນຕ່ຳ (ມີ {s} · ຂັ້ນຕ່ຳ {m})',po_why_prod:'ໃຊ້ເຮັດເຄື່ອງ {q} {u}',po_lots:'ຮອບ',po_have:'ມີ {q}',po_incoming:'ສັ່ງໄວ້ແລ້ວ {q} ກຳລັງມາ',po_need:'ຕ້ອງສັ່ງ {q} {u}',
+  po_why_max:'ເຕີມໃຫ້ຮອດ Max {m}',po_why_min:'ຕ່ຳກວ່າຂັ້ນຕ່ຳ (ມີ {s} · ຂັ້ນຕ່ຳ {m})',po_why_prod:'ໃຊ້ເຮັດເຄື່ອງ {q} {u}',po_lots:'ຮອບ',po_have:'ມີ {q}',po_incoming:'ສັ່ງໄວ້ແລ້ວ {q} ກຳລັງມາ',po_need:'ຕ້ອງສັ່ງ {q} {u}',
   po_est_none:'ບໍ່ມີລາຄາ',po_est_col:'ປະມານ',po_lines_n:'{n} ລາຍການ',po_total_est:'ລວມ {n} ລາຍການ · ປະມານ {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'ບໍ່ສັ່ງ',
   po_send:'📤 ສົ່ງໄລນ໌',po_send_copy:'📋 ຄັດລອກ/ສົ່ງເອງ',po_add_item:'＋ ເພີ່ມລາຍການ',po_other_sups:'ສັ່ງຮ້ານອື່ນ:',po_reset:'↺ ຄ່າແນະນຳ',
   po_pick_t:'ເລືອກວັດຖຸດິບຂອງ {s}',po_pick_none:'ຮ້ານນີ້ຍັງບໍ່ມີວັດຖຸດິບ — ຕັ້ງຮ້ານຄ້າໃຫ້ວັດຖຸດິບທີ່ 🥬 ວັດຖຸດິບ',po_pick_all_in:'ວັດຖຸດິບຂອງຮ້ານນີ້ຢູ່ໃນລາຍການຄົບແລ້ວ',
@@ -67,7 +68,7 @@ lo:{po_hint:'ແນະນຳຈາກ: ວັດຖຸດິບຕ່ຳກວ�
   po_list_noread:'ອ່ານໃບທີ່ສັ່ງໄປແລ້ວບໍ່ໄດ້ — ຍັງບໍ່ສະແດງຄຳແນະນຳ',po_list_noread_h:'ຖ້າສະແດງ ອາດສັ່ງເຄື່ອງທີ່ກຳລັງມາຊ້ຳອີກຮອບ — ກົດ ⟳ ໂຫຼດໃໝ່',po_reload:'⟳ ໂຫຼດໃໝ່'},
 my:{po_hint:'အကြံပြုချက်: အနည်းဆုံးအောက် ကုန်ကြမ်း + ထုတ်လုပ်ရန် လိုအပ်သည် (⚡ အရေးပေါ် / 🔄 ဖြည့်) − လက်ကျန် − မှာပြီးသား · နံပါတ်ပြင်နိုင် · 0 = မမှာ',
   po_none:'ယခု မှာယူရန် မရှိပါ 👍',po_nosup:'ဆိုင်မရှိ',po_nosup_h:'ဤကုန်ကြမ်းများ ဆိုင်မသတ်မှတ်ရသေး — 🥬 ကုန်ကြမ်း တွင် သတ်မှတ်ပါ',po_group_no:'LINE အုပ်စု မရှိ',po_group_empty:'စာရင်းမရှိ — ＋ ထည့်ရန် နှိပ်ပါ',
-  po_why_min:'အနည်းဆုံးအောက် (ရှိ {s} · အနည်းဆုံး {m})',po_why_prod:'ထုတ်လုပ်ရန် လို {q} {u}',po_lots:'အသုတ်',po_have:'ရှိ {q}',po_incoming:'မှာပြီး {q} ရောက်လာမည်',po_need:'မှာရန် {q} {u}',
+  po_why_max:'Max {m} အထိ ဖြည့်',po_why_min:'အနည်းဆုံးအောက် (ရှိ {s} · အနည်းဆုံး {m})',po_why_prod:'ထုတ်လုပ်ရန် လို {q} {u}',po_lots:'အသုတ်',po_have:'ရှိ {q}',po_incoming:'မှာပြီး {q} ရောက်လာမည်',po_need:'မှာရန် {q} {u}',
   po_est_none:'ဈေးမရှိ',po_est_col:'ခန့်မှန်း',po_lines_n:'{n} ကြောင်း',po_total_est:'စုစုပေါင်း {n} ကြောင်း · ခန့်မှန်း {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'မမှာ',
   po_send:'📤 LINE ပို့',po_send_copy:'📋 ကူး/ကိုယ်တိုင်ပို့',po_add_item:'＋ ထည့်ရန်',po_other_sups:'အခြားဆိုင်:',po_reset:'↺ အကြံပြုချက်',
   po_pick_t:'{s} ၏ ကုန်ကြမ်း ရွေးပါ',po_pick_none:'ဤဆိုင်တွင် ကုန်ကြမ်းမရှိသေး — 🥬 ကုန်ကြမ်း တွင် ဆိုင်သတ်မှတ်ပါ',po_pick_all_in:'ဤဆိုင်၏ ကုန်ကြမ်းအားလုံး စာရင်းတွင် ရှိပြီး',
@@ -157,12 +158,13 @@ function poCalc(){
   const grp=(key,supName)=>{if(groups[key])return groups[key];const s=S.sups.find(x=>supKey(x.name)===key)||null;
     return groups[key]={key,name:s?s.name:(String(supName||'').trim()||t('po_nosup')),sup:s,gid:(s&&s.line_group_id)||null,rows:[]};};
   activeItems().forEach(it=>{
-    const stock=Math.max(0,num(it.qty)),mn=Math.max(0,num(it.min_qty)),pr=num(prod[it.id]),want=Math.max(mn,pr),incoming=num(inc[it.id]);
+    const stock=Math.max(0,num(it.qty)),mn=Math.max(0,num(it.min_qty)),mx=Math.max(0,num(it.max_qty)),pr=num(prod[it.id]),incoming=num(inc[it.id]);
+    const trig=Math.max(mn>0?mn:mx,pr),topUp=mx>0&&stock+incoming<trig-1e-9&&mx>=trig-1e-9,want=topUp?mx:trig;   // ถึงจุดสั่ง (ต่ำกว่าขั้นต่ำ · ไม่ตั้งขั้นต่ำ = ต่ำกว่า Max · หรือไม่พอทำของ) → เติมให้ถึง Max · ปัดขึ้นเป็นบรรจุเต็มเสมอ (เจ้าของ 2026-10-19 "เหลือดีกว่าขาด")
     const need=rnd4(want-stock-incoming),key=supKey(it.sup),manual=(PO_OVR.add[key]||[]).includes(it.id);
     if(need<=0&&!manual)return;
     const pk=poPack(it),sug=need>0?Math.ceil(need/pk.q-1e-9):0,ov=PO_OVR.v[key+'|'+it.id];
     const packs=(ov==null||ov==='')?(need>0?sug:1):Math.max(0,num(ov)),c=itemCost(it);
-    grp(key,it.sup).rows.push({it,stock,mn,pr,want,incoming,need,pu:pk.u,pq:pk.q,sug,packs,ov:!(ov==null||ov===''),why:why[it.id]||[],lowMin:mn>0&&stock+incoming<mn,c,est:c==null?null:rnd2(c*pk.q*packs),manual:need<=0&&manual});
+    grp(key,it.sup).rows.push({it,stock,mn,mx,topUp,pr,want,incoming,need,pu:pk.u,pq:pk.q,sug,packs,ov:!(ov==null||ov===''),why:why[it.id]||[],lowMin:mn>0&&stock+incoming<mn,c,est:c==null?null:rnd2(c*pk.q*packs),manual:need<=0&&manual});
   });
   Object.keys(PO_OVR.add).forEach(key=>{if(!groups[key])grp(key,(S.sups.find(x=>supKey(x.name)===key)||{}).name||key);});
   const G=Object.values(groups).sort((a,b)=>((a.key==='')-(b.key===''))||a.name.localeCompare(b.name,'th'));
@@ -198,6 +200,7 @@ function poRowHtml(gi,r,i){
   const it=r.it,u=trUnit(it.unit),why=[];
   if(r.lowMin)why.push(t('po_why_min',{s:fmtQ(r.stock)+' '+u,m:fmtQ(r.mn)+' '+u}));else why.push(t('po_have',{q:fmtQ(r.stock)+' '+u}));
   if(r.pr>0)why.push(t('po_why_prod',{q:fmtQ(r.pr),u})+' ('+r.why.map(w=>dispName(w.r)+' '+fmtQ(w.lots)+' '+t('po_lots')).join(', ')+')');
+  if(r.topUp)why.push(t('po_why_max',{m:qtyTxt(it,r.mx)}));
   if(r.incoming>0)why.push(t('po_incoming',{q:fmtQ(r.incoming)+' '+u}));
   if(r.pq!==1||r.pu!==it.unit)why.push(t('po_pack_eq',{u:trUnit(r.pu),q:fmtQ(r.pq),b:u}));
   return '<div class="po-row'+(r.packs>0?'':' skip')+'" id="poR'+gi+'_'+i+'">'+thumbHtml(it,'🥬')+'<div class="grow"><b>'+esc(dispName(it))+'</b>'+

@@ -646,6 +646,7 @@ alter table ck_items add column if not exists packs jsonb;               -- [{"u
 alter table ck_items add column if not exists count_unit text;
 alter table ck_items add column if not exists dept text;
 alter table ck_items add column if not exists min_qty numeric;
+alter table ck_items add column if not exists max_qty numeric;           -- 🛒 สั่งเติมให้ถึง (Max · หน่วยหลัก) · ต่ำกว่า min_qty → สั่งถึงค่านี้ ปัดขึ้นเป็นหน่วยซื้อเต็ม (2026-10-19)
 alter table ck_items add column if not exists active boolean default true;
 alter table ck_recipes add column if not exists avg_cost numeric;        -- ต้นทุนถัวเฉลี่ย/หน่วยผลิต (จากล็อตจริง)
 alter table ck_recipes add column if not exists target_qty numeric;      -- สต๊อกสำเร็จรูปที่ควรมี (ตายตัว)
@@ -791,7 +792,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-19 01:43';
+const APP_VER='KC 2.0 · 2026-10-19 02:08';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -988,6 +989,10 @@ function countUnitOf(it){ // หน่วยนับ: ตั้งเอง →
   if(['กรัม','กก.','ขีด','มล.','ลิตร'].includes(base)){const ps=packsOf(it).filter(p=>!['กรัม','กก.','ขีด','มล.','ลิตร'].includes(p.u)).sort((a,b)=>a.q-b.q);
     if(ps.length)return ps[0].u;if(base==='กรัม')return 'กก.';if(base==='มล.')return 'ลิตร';}
   return base;}
+function limUnits(it){ // หน่วยให้เลือกตอนใส่ขั้นต่ำ/Max ของวัตถุดิบ: หน่วยนับ → หน่วยซื้อ → บรรจุอื่น → หน่วยหลัก (เก็บใน DB เป็นหน่วยหลักเสมอ)
+  const out=[];[countUnitOf(it),it.buy_unit].concat(packsOf(it).map(p=>p.u),[it.unit]).forEach(u=>{if(u&&!out.includes(u)&&unitFactor(it,u)!=null)out.push(u);});return out;}
+function qtyIn(it,q,u){const f=unitFactor(it,u);return f>0?rnd4(num(q)/f):null;}   // หน่วยหลัก → u (แปลงไม่ได้ = null)
+function qtyTxt(it,q){const u=countUnitOf(it),v=u!==it.unit?qtyIn(it,q,u):null;return v!=null?fmtQ(v)+' '+trUnit(u):fmtQ(q)+' '+trUnit(it.unit||'');}   // แสดงเป็นหน่วยนับ
 function isMassVol(u){return ['กรัม','กก.','ขีด','มล.','ลิตร'].includes(u);}
 
 /* ============================================================
@@ -3374,6 +3379,7 @@ async function blVoid(id){await once(async()=>{ // ❌ ยกเลิกบิ�
 /* ============================================================
    🛒 สั่งของ — buy (po*)
    คำแนะนำแยกตามร้านค้า (ck_sups จับคู่ด้วยชื่อร้านของวัตถุดิบ it.sup):
+     Max (max_qty · 2026-10-19): ถึงจุดสั่งแล้ว → ต้องมี = Max (ปัดขึ้นเป็นบรรจุเต็ม) · ไม่ตั้งขั้นต่ำ = ต่ำกว่า Max ก็สั่ง
      ต้องมี = มากกว่าระหว่าง "ขั้นต่ำ" (min_qty) กับ "ที่ต้องใช้ทำของ" (สูตร × รอบที่ 🍳 แนะนำ — ⚡ ด่วนจากออเดอร์สาขา / 🔄 เติมให้ถึงที่ควรมี · ใช้ mkLoad/mkNeeds ของโมดูลทำของ ไม่คิดซ้ำ)
      ต้องสั่ง = ต้องมี − ที่มีในสต๊อก − ที่สั่งไว้แล้วกำลังมา (kc_pos status sent)  → ปัดขึ้นเป็นจำนวนบรรจุ (หน่วยซื้อ buy_unit/buy_qty หรือบรรจุแรกใน packs)
      แก้ตัวเลขในที่ได้ (0 = ไม่สั่ง · จำไว้ต่อวันใน localStorage jjck_po_ovr) · ＋ เพิ่มรายการของร้านเอง · ร้านอื่นที่ไม่มีคำแนะนำกดเพิ่มได้
@@ -3386,7 +3392,7 @@ async function blVoid(id){await once(async()=>{ // ❌ ยกเลิกบิ�
 I18N.add({
 th:{po_hint:'ระบบแนะนำจาก: วัตถุดิบที่ต่ำกว่าขั้นต่ำ + ของที่ต้องใช้ทำของ (⚡ ด่วน / 🔄 เติม) − ที่มี − ที่สั่งไว้แล้ว · แก้ตัวเลขได้เลย · 0 = ไม่สั่ง',
   po_none:'ตอนนี้ไม่มีอะไรต้องสั่ง 👍',po_nosup:'ยังไม่มีร้าน',po_nosup_h:'วัตถุดิบพวกนี้ยังไม่ได้ตั้งร้านค้า — ตั้งได้ที่ 🥬 วัตถุดิบ',po_group_no:'ยังไม่มีกลุ่มไลน์',po_group_empty:'ยังไม่มีรายการ — กด ＋ เพิ่มรายการ',
-  po_why_min:'ต่ำกว่าขั้นต่ำ (มี {s} · ขั้นต่ำ {m})',po_why_prod:'ใช้ทำของ {q} {u}',po_lots:'รอบ',po_have:'มี {q}',po_incoming:'สั่งไว้แล้ว {q} กำลังมา',po_need:'ต้องสั่ง {q} {u}',
+  po_why_max:'เติมให้ถึง Max {m}',po_why_min:'ต่ำกว่าขั้นต่ำ (มี {s} · ขั้นต่ำ {m})',po_why_prod:'ใช้ทำของ {q} {u}',po_lots:'รอบ',po_have:'มี {q}',po_incoming:'สั่งไว้แล้ว {q} กำลังมา',po_need:'ต้องสั่ง {q} {u}',
   po_est_none:'ไม่มีราคา',po_est_col:'ประมาณ',po_lines_n:'{n} รายการ',po_total_est:'รวม {n} รายการ · ประมาณ {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'ไม่สั่ง',
   po_send:'📤 ส่งไลน์',po_send_copy:'📋 คัดลอก/ส่งเอง',po_add_item:'＋ เพิ่มรายการ',po_other_sups:'สั่งร้านอื่น:',po_reset:'↺ ค่าแนะนำ',
   po_pick_t:'เลือกวัตถุดิบของ {s}',po_pick_none:'ร้านนี้ยังไม่มีวัตถุดิบ — ตั้งร้านค้าให้วัตถุดิบที่ 🥬 วัตถุดิบ',po_pick_all_in:'วัตถุดิบของร้านนี้อยู่ในรายการครบแล้ว',
@@ -3404,7 +3410,7 @@ th:{po_hint:'ระบบแนะนำจาก: วัตถุดิบท�
   po_list_noread:'อ่านใบที่สั่งไปแล้วไม่ได้ — ยังไม่แสดงคำแนะนำ',po_list_noread_h:'ถ้าแสดง อาจสั่งของที่กำลังมาซ้ำอีกรอบ — กด ⟳ โหลดใหม่',po_reload:'⟳ โหลดใหม่'},
 en:{po_hint:'Suggested from: ingredients below minimum + what production needs (⚡ urgent / 🔄 refill) − in stock − already ordered · edit any number · 0 = skip',
   po_none:'Nothing to order right now 👍',po_nosup:'No supplier',po_nosup_h:'These ingredients have no supplier yet — set one on 🥬 Ingredients',po_group_no:'No LINE group',po_group_empty:'No lines — tap ＋ Add item',
-  po_why_min:'below minimum (have {s} · min {m})',po_why_prod:'production needs {q} {u}',po_lots:'lots',po_have:'have {q}',po_incoming:'{q} already ordered, on the way',po_need:'order {q} {u}',
+  po_why_max:'top up to Max {m}',po_why_min:'below minimum (have {s} · min {m})',po_why_prod:'production needs {q} {u}',po_lots:'lots',po_have:'have {q}',po_incoming:'{q} already ordered, on the way',po_need:'order {q} {u}',
   po_est_none:'no price',po_est_col:'Est.',po_lines_n:'{n} lines',po_total_est:'{n} lines · est. {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'skip',
   po_send:'📤 Send to LINE',po_send_copy:'📋 Copy / send yourself',po_add_item:'＋ Add item',po_other_sups:'Other suppliers:',po_reset:'↺ Suggested',
   po_pick_t:'Pick an ingredient from {s}',po_pick_none:'This supplier has no ingredients yet — set the supplier on 🥬 Ingredients',po_pick_all_in:'All of this supplier\'s ingredients are already listed',
@@ -3422,7 +3428,7 @@ en:{po_hint:'Suggested from: ingredients below minimum + what production needs (
   po_list_noread:'Could not read the orders already sent — suggestions hidden',po_list_noread_h:'Showing them could order what is already on the way a second time — tap ⟳ to reload',po_reload:'⟳ Reload'},
 lo:{po_hint:'ແນະນຳຈາກ: ວັດຖຸດິບຕ່ຳກວ່າຂັ້ນຕ່ຳ + ທີ່ຕ້ອງໃຊ້ເຮັດເຄື່ອງ (⚡ ດ່ວນ / 🔄 ຕື່ມ) − ທີ່ມີ − ທີ່ສັ່ງໄວ້ແລ້ວ · ແກ້ຕົວເລກໄດ້ເລີຍ · 0 = ບໍ່ສັ່ງ',
   po_none:'ຕອນນີ້ບໍ່ມີຫຍັງຕ້ອງສັ່ງ 👍',po_nosup:'ຍັງບໍ່ມີຮ້ານ',po_nosup_h:'ວັດຖຸດິບເຫຼົ່ານີ້ຍັງບໍ່ໄດ້ຕັ້ງຮ້ານຄ້າ — ຕັ້ງໄດ້ທີ່ 🥬 ວັດຖຸດິບ',po_group_no:'ຍັງບໍ່ມີກຸ່ມໄລນ໌',po_group_empty:'ຍັງບໍ່ມີລາຍການ — ກົດ ＋ ເພີ່ມລາຍການ',
-  po_why_min:'ຕ່ຳກວ່າຂັ້ນຕ່ຳ (ມີ {s} · ຂັ້ນຕ່ຳ {m})',po_why_prod:'ໃຊ້ເຮັດເຄື່ອງ {q} {u}',po_lots:'ຮອບ',po_have:'ມີ {q}',po_incoming:'ສັ່ງໄວ້ແລ້ວ {q} ກຳລັງມາ',po_need:'ຕ້ອງສັ່ງ {q} {u}',
+  po_why_max:'ເຕີມໃຫ້ຮອດ Max {m}',po_why_min:'ຕ່ຳກວ່າຂັ້ນຕ່ຳ (ມີ {s} · ຂັ້ນຕ່ຳ {m})',po_why_prod:'ໃຊ້ເຮັດເຄື່ອງ {q} {u}',po_lots:'ຮອບ',po_have:'ມີ {q}',po_incoming:'ສັ່ງໄວ້ແລ້ວ {q} ກຳລັງມາ',po_need:'ຕ້ອງສັ່ງ {q} {u}',
   po_est_none:'ບໍ່ມີລາຄາ',po_est_col:'ປະມານ',po_lines_n:'{n} ລາຍການ',po_total_est:'ລວມ {n} ລາຍການ · ປະມານ {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'ບໍ່ສັ່ງ',
   po_send:'📤 ສົ່ງໄລນ໌',po_send_copy:'📋 ຄັດລອກ/ສົ່ງເອງ',po_add_item:'＋ ເພີ່ມລາຍການ',po_other_sups:'ສັ່ງຮ້ານອື່ນ:',po_reset:'↺ ຄ່າແນະນຳ',
   po_pick_t:'ເລືອກວັດຖຸດິບຂອງ {s}',po_pick_none:'ຮ້ານນີ້ຍັງບໍ່ມີວັດຖຸດິບ — ຕັ້ງຮ້ານຄ້າໃຫ້ວັດຖຸດິບທີ່ 🥬 ວັດຖຸດິບ',po_pick_all_in:'ວັດຖຸດິບຂອງຮ້ານນີ້ຢູ່ໃນລາຍການຄົບແລ້ວ',
@@ -3440,7 +3446,7 @@ lo:{po_hint:'ແນະນຳຈາກ: ວັດຖຸດິບຕ່ຳກວ�
   po_list_noread:'ອ່ານໃບທີ່ສັ່ງໄປແລ້ວບໍ່ໄດ້ — ຍັງບໍ່ສະແດງຄຳແນະນຳ',po_list_noread_h:'ຖ້າສະແດງ ອາດສັ່ງເຄື່ອງທີ່ກຳລັງມາຊ້ຳອີກຮອບ — ກົດ ⟳ ໂຫຼດໃໝ່',po_reload:'⟳ ໂຫຼດໃໝ່'},
 my:{po_hint:'အကြံပြုချက်: အနည်းဆုံးအောက် ကုန်ကြမ်း + ထုတ်လုပ်ရန် လိုအပ်သည် (⚡ အရေးပေါ် / 🔄 ဖြည့်) − လက်ကျန် − မှာပြီးသား · နံပါတ်ပြင်နိုင် · 0 = မမှာ',
   po_none:'ယခု မှာယူရန် မရှိပါ 👍',po_nosup:'ဆိုင်မရှိ',po_nosup_h:'ဤကုန်ကြမ်းများ ဆိုင်မသတ်မှတ်ရသေး — 🥬 ကုန်ကြမ်း တွင် သတ်မှတ်ပါ',po_group_no:'LINE အုပ်စု မရှိ',po_group_empty:'စာရင်းမရှိ — ＋ ထည့်ရန် နှိပ်ပါ',
-  po_why_min:'အနည်းဆုံးအောက် (ရှိ {s} · အနည်းဆုံး {m})',po_why_prod:'ထုတ်လုပ်ရန် လို {q} {u}',po_lots:'အသုတ်',po_have:'ရှိ {q}',po_incoming:'မှာပြီး {q} ရောက်လာမည်',po_need:'မှာရန် {q} {u}',
+  po_why_max:'Max {m} အထိ ဖြည့်',po_why_min:'အနည်းဆုံးအောက် (ရှိ {s} · အနည်းဆုံး {m})',po_why_prod:'ထုတ်လုပ်ရန် လို {q} {u}',po_lots:'အသုတ်',po_have:'ရှိ {q}',po_incoming:'မှာပြီး {q} ရောက်လာမည်',po_need:'မှာရန် {q} {u}',
   po_est_none:'ဈေးမရှိ',po_est_col:'ခန့်မှန်း',po_lines_n:'{n} ကြောင်း',po_total_est:'စုစုပေါင်း {n} ကြောင်း · ခန့်မှန်း {m}',po_pack_eq:'1 {u} = {q} {b}',po_skip:'မမှာ',
   po_send:'📤 LINE ပို့',po_send_copy:'📋 ကူး/ကိုယ်တိုင်ပို့',po_add_item:'＋ ထည့်ရန်',po_other_sups:'အခြားဆိုင်:',po_reset:'↺ အကြံပြုချက်',
   po_pick_t:'{s} ၏ ကုန်ကြမ်း ရွေးပါ',po_pick_none:'ဤဆိုင်တွင် ကုန်ကြမ်းမရှိသေး — 🥬 ကုန်ကြမ်း တွင် ဆိုင်သတ်မှတ်ပါ',po_pick_all_in:'ဤဆိုင်၏ ကုန်ကြမ်းအားလုံး စာရင်းတွင် ရှိပြီး',
@@ -3530,12 +3536,13 @@ function poCalc(){
   const grp=(key,supName)=>{if(groups[key])return groups[key];const s=S.sups.find(x=>supKey(x.name)===key)||null;
     return groups[key]={key,name:s?s.name:(String(supName||'').trim()||t('po_nosup')),sup:s,gid:(s&&s.line_group_id)||null,rows:[]};};
   activeItems().forEach(it=>{
-    const stock=Math.max(0,num(it.qty)),mn=Math.max(0,num(it.min_qty)),pr=num(prod[it.id]),want=Math.max(mn,pr),incoming=num(inc[it.id]);
+    const stock=Math.max(0,num(it.qty)),mn=Math.max(0,num(it.min_qty)),mx=Math.max(0,num(it.max_qty)),pr=num(prod[it.id]),incoming=num(inc[it.id]);
+    const trig=Math.max(mn>0?mn:mx,pr),topUp=mx>0&&stock+incoming<trig-1e-9&&mx>=trig-1e-9,want=topUp?mx:trig;   // ถึงจุดสั่ง (ต่ำกว่าขั้นต่ำ · ไม่ตั้งขั้นต่ำ = ต่ำกว่า Max · หรือไม่พอทำของ) → เติมให้ถึง Max · ปัดขึ้นเป็นบรรจุเต็มเสมอ (เจ้าของ 2026-10-19 "เหลือดีกว่าขาด")
     const need=rnd4(want-stock-incoming),key=supKey(it.sup),manual=(PO_OVR.add[key]||[]).includes(it.id);
     if(need<=0&&!manual)return;
     const pk=poPack(it),sug=need>0?Math.ceil(need/pk.q-1e-9):0,ov=PO_OVR.v[key+'|'+it.id];
     const packs=(ov==null||ov==='')?(need>0?sug:1):Math.max(0,num(ov)),c=itemCost(it);
-    grp(key,it.sup).rows.push({it,stock,mn,pr,want,incoming,need,pu:pk.u,pq:pk.q,sug,packs,ov:!(ov==null||ov===''),why:why[it.id]||[],lowMin:mn>0&&stock+incoming<mn,c,est:c==null?null:rnd2(c*pk.q*packs),manual:need<=0&&manual});
+    grp(key,it.sup).rows.push({it,stock,mn,mx,topUp,pr,want,incoming,need,pu:pk.u,pq:pk.q,sug,packs,ov:!(ov==null||ov===''),why:why[it.id]||[],lowMin:mn>0&&stock+incoming<mn,c,est:c==null?null:rnd2(c*pk.q*packs),manual:need<=0&&manual});
   });
   Object.keys(PO_OVR.add).forEach(key=>{if(!groups[key])grp(key,(S.sups.find(x=>supKey(x.name)===key)||{}).name||key);});
   const G=Object.values(groups).sort((a,b)=>((a.key==='')-(b.key===''))||a.name.localeCompare(b.name,'th'));
@@ -3571,6 +3578,7 @@ function poRowHtml(gi,r,i){
   const it=r.it,u=trUnit(it.unit),why=[];
   if(r.lowMin)why.push(t('po_why_min',{s:fmtQ(r.stock)+' '+u,m:fmtQ(r.mn)+' '+u}));else why.push(t('po_have',{q:fmtQ(r.stock)+' '+u}));
   if(r.pr>0)why.push(t('po_why_prod',{q:fmtQ(r.pr),u})+' ('+r.why.map(w=>dispName(w.r)+' '+fmtQ(w.lots)+' '+t('po_lots')).join(', ')+')');
+  if(r.topUp)why.push(t('po_why_max',{m:qtyTxt(it,r.mx)}));
   if(r.incoming>0)why.push(t('po_incoming',{q:fmtQ(r.incoming)+' '+u}));
   if(r.pq!==1||r.pu!==it.unit)why.push(t('po_pack_eq',{u:trUnit(r.pu),q:fmtQ(r.pq),b:u}));
   return '<div class="po-row'+(r.packs>0?'':' skip')+'" id="poR'+gi+'_'+i+'">'+thumbHtml(it,'🥬')+'<div class="grow"><b>'+esc(dispName(it))+'</b>'+
@@ -4443,7 +4451,7 @@ th:{it_new:'เพิ่มวัตถุดิบ',it_edit:'แก้วัต
   it_buy:'หน่วยที่ซื้อ',it_buy_hint:'เวลารับของ ระบบจะเติมขนาดนี้ให้ก่อน แก้ได้',it_buy_eq:'1 {u} =',it_packs:'ขนาดบรรจุอื่น ๆ',it_pack_hint:'ใช้ตอนรับของ เช่น 1 ถุง = 1,000 กรัม · 1 ชุด = 10 กก.',
   it_pack_add:'＋ เพิ่มขนาดบรรจุ',it_pack_bad:'ขนาดบรรจุต้องเลือกหน่วย ใส่ขนาดมากกว่า 0 และไม่ซ้ำกับหน่วยหลัก/หน่วยที่ซื้อ',it_buy_bad:'ขนาดของหน่วยที่ซื้อต้องมากกว่า 0',
   it_cu:'หน่วยที่ใช้นับสต๊อก',it_cu_auto:'อัตโนมัติ ({u})',it_cu_hint:'เช่น น้ำปลา นับเป็นขวด · ระบบแปลงเป็นหน่วยหลักให้เอง',
-  it_sup:'ร้านค้าที่ซื้อ',it_sup_none:'— ยังไม่ระบุร้าน —',it_sup_new:'＋ ร้านใหม่',it_sup_new_ph:'ชื่อร้านใหม่',it_min:'ขั้นต่ำที่ควรมี',it_min_s:'ขั้นต่ำ',it_lead:'รอของกี่วัน',
+  it_sup:'ร้านค้าที่ซื้อ',it_sup_none:'— ยังไม่ระบุร้าน —',it_sup_new:'＋ ร้านใหม่',it_sup_new_ph:'ชื่อร้านใหม่',it_max:'สั่งเติมให้ถึง (Max)',it_lim_t:'ขั้นต่ำ (Safety) / Max',it_lim_u:'หน่วย',it_lim_h:'ของเหลือต่ำกว่าขั้นต่ำ → หน้า 🛒 สั่งของ แนะนำให้สั่งเติมจนถึง Max (ปัดขึ้นเป็นหน่วยซื้อเต็ม เหลือดีกว่าขาด) · ไม่ใส่ Max = เติมแค่ถึงขั้นต่ำ · ไม่ใส่ขั้นต่ำ = ต่ำกว่า Max ก็สั่ง',it_lim_bad:'เลือกหน่วยของขั้นต่ำ/Max ใหม่ — หน่วยนี้แปลงเป็นหน่วยหลักไม่ได้',it_lim_order:'Max ต้องไม่น้อยกว่าขั้นต่ำ',it_max_sql:'บันทึกแล้ว แต่ Max ยังไม่ถูกบันทึก — ต้องรัน SQL รุ่นล่าสุดก่อน (⚙️ ตั้งค่า → 🗄️)',it_min:'ขั้นต่ำ (Safety)',it_min_s:'ขั้นต่ำ',it_lead:'รอของกี่วัน',
   it_cost_t:'ต้นทุน (จากการรับของจริง)',it_cost_avg:'ถัวเฉลี่ย',it_last:'รับล่าสุด',it_cost_legacy:'ราคาเดิม (ก่อนมีระบบรับของ)',it_cost_none:'ยังไม่เคยรับของ — ต้นทุนจะมาเองเมื่อรับของครั้งแรก',
   it_hist:'📉 ราคาที่เคยรับ',it_hist_t:'ราคาที่เคยรับจริง',it_hist_none:'ยังไม่มีประวัติการรับของ',it_hist_pack:'บรรจุ',
   it_dup:'มีวัตถุดิบชื่อนี้อยู่แล้ว',it_del:'🗑 ลบถาวร',it_del_q:'ลบ "{n}" ถาวร?\nใช้เฉพาะรายการที่เพิ่มผิด — ถ้าเลิกใช้ให้กด "ไม่ใช้แล้ว" แทน',
@@ -4456,7 +4464,7 @@ en:{it_new:'Add ingredient',it_edit:'Edit ingredient',it_n:'{n} items',it_none:'
   it_buy:'Buying unit',it_buy_hint:'Prefilled when receiving — can be changed',it_buy_eq:'1 {u} =',it_packs:'Other pack sizes',it_pack_hint:'Used when receiving, e.g. 1 bag = 1,000 g · 1 set = 10 kg',
   it_pack_add:'＋ Add pack size',it_pack_bad:'Pack sizes need a unit and a size above 0, and must differ from the base/buying unit',it_buy_bad:'Buying unit size must be above 0',
   it_cu:'Counting unit',it_cu_auto:'Automatic ({u})',it_cu_hint:'e.g. fish sauce counted in bottles · converted to the base unit automatically',
-  it_sup:'Supplier',it_sup_none:'— no supplier —',it_sup_new:'＋ New supplier',it_sup_new_ph:'New supplier name',it_min:'Minimum to keep',it_min_s:'min',it_lead:'Lead time (days)',
+  it_sup:'Supplier',it_sup_none:'— no supplier —',it_sup_new:'＋ New supplier',it_sup_new_ph:'New supplier name',it_max:'Top up to (Max)',it_lim_t:'Minimum (Safety) / Max',it_lim_u:'Unit',it_lim_h:'Below the minimum → 🛒 Ordering suggests topping up to Max (rounded up to whole buying packs — better extra than short) · no Max = only up to the minimum · no minimum = order whenever below Max',it_lim_bad:'Pick the minimum/Max unit again — it cannot be converted to the base unit',it_lim_order:'Max cannot be less than the minimum',it_max_sql:'Saved, but Max was not — run the latest SQL first (⚙️ Settings → 🗄️)',it_min:'Minimum (Safety)',it_min_s:'min',it_lead:'Lead time (days)',
   it_cost_t:'Cost (from actual receipts)',it_cost_avg:'Average',it_last:'Last received',it_cost_legacy:'Old price (before receiving existed)',it_cost_none:'Never received yet — cost appears after the first receipt',
   it_hist:'📉 Received prices',it_hist_t:'Actual received prices',it_hist_none:'No receipts yet',it_hist_pack:'Pack',
   it_dup:'An ingredient with this name already exists',it_del:'🗑 Delete',it_del_q:'Delete "{n}" permanently?\nOnly for mistakes — if it is no longer used, tap "No longer used" instead',
@@ -4469,7 +4477,7 @@ lo:{it_new:'ເພີ່ມວັດຖຸດິບ',it_edit:'ແກ້ວັດ
   it_buy:'ຫົວໜ່ວຍທີ່ຊື້',it_buy_hint:'ເວລາຮັບເຄື່ອງ ລະບົບຈະຕື່ມຂະໜາດນີ້ໃຫ້ກ່ອນ ແກ້ໄດ້',it_buy_eq:'1 {u} =',it_packs:'ຂະໜາດບັນຈຸອື່ນໆ',it_pack_hint:'ໃຊ້ຕອນຮັບເຄື່ອງ ເຊັ່ນ 1 ຖົງ = 1,000 ກຣາມ · 1 ຊຸດ = 10 ກກ.',
   it_pack_add:'＋ ເພີ່ມຂະໜາດບັນຈຸ',it_pack_bad:'ຂະໜາດບັນຈຸຕ້ອງເລືອກຫົວໜ່ວຍ ໃສ່ຂະໜາດຫຼາຍກວ່າ 0 ແລະ ບໍ່ຊ້ຳກັບຫົວໜ່ວຍຫຼັກ/ຫົວໜ່ວຍທີ່ຊື້',it_buy_bad:'ຂະໜາດຂອງຫົວໜ່ວຍທີ່ຊື້ຕ້ອງຫຼາຍກວ່າ 0',
   it_cu:'ຫົວໜ່ວຍທີ່ໃຊ້ນັບສະຕັອກ',it_cu_auto:'ອັດຕະໂນມັດ ({u})',it_cu_hint:'ເຊັ່ນ ນ້ຳປາ ນັບເປັນແກ້ວ · ລະບົບແປງເປັນຫົວໜ່ວຍຫຼັກໃຫ້ເອງ',
-  it_sup:'ຮ້ານຄ້າທີ່ຊື້',it_sup_none:'— ຍັງບໍ່ລະບຸຮ້ານ —',it_sup_new:'＋ ຮ້ານໃໝ່',it_sup_new_ph:'ຊື່ຮ້ານໃໝ່',it_min:'ຂັ້ນຕ່ຳທີ່ຄວນມີ',it_min_s:'ຂັ້ນຕ່ຳ',it_lead:'ລໍຖ້າເຄື່ອງຈັກມື້',
+  it_sup:'ຮ້ານຄ້າທີ່ຊື້',it_sup_none:'— ຍັງບໍ່ລະບຸຮ້ານ —',it_sup_new:'＋ ຮ້ານໃໝ່',it_sup_new_ph:'ຊື່ຮ້ານໃໝ່',it_max:'ສັ່ງເຕີມໃຫ້ຮອດ (Max)',it_lim_t:'ຂັ້ນຕ່ຳ (Safety) / Max',it_lim_u:'ຫົວໜ່ວຍ',it_lim_h:'ເຫຼືອຕ່ຳກວ່າຂັ້ນຕ່ຳ → ໜ້າ 🛒 ສັ່ງເຄື່ອງ ແນະນຳໃຫ້ສັ່ງເຕີມຈົນຮອດ Max (ປັດຂຶ້ນເປັນຫົວໜ່ວຍຊື້ເຕັມ ເຫຼືອດີກວ່າຂາດ) · ບໍ່ໃສ່ Max = ເຕີມແຄ່ຮອດຂັ້ນຕ່ຳ · ບໍ່ໃສ່ຂັ້ນຕ່ຳ = ຕ່ຳກວ່າ Max ກໍສັ່ງ',it_lim_bad:'ເລືອກຫົວໜ່ວຍຂອງຂັ້ນຕ່ຳ/Max ໃໝ່ — ແປງເປັນຫົວໜ່ວຍຫຼັກບໍ່ໄດ້',it_lim_order:'Max ຕ້ອງບໍ່ໜ້ອຍກວ່າຂັ້ນຕ່ຳ',it_max_sql:'ບັນທຶກແລ້ວ ແຕ່ Max ຍັງບໍ່ຖືກບັນທຶກ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດກ່ອນ (⚙️ ຕັ້ງຄ່າ → 🗄️)',it_min:'ຂັ້ນຕ່ຳ (Safety)',it_min_s:'ຂັ້ນຕ່ຳ',it_lead:'ລໍຖ້າເຄື່ອງຈັກມື້',
   it_cost_t:'ຕົ້ນທຶນ (ຈາກການຮັບເຄື່ອງຈິງ)',it_cost_avg:'ສະເລ່ຍ',it_last:'ຮັບລ່າສຸດ',it_cost_legacy:'ລາຄາເກົ່າ (ກ່ອນມີລະບົບຮັບເຄື່ອງ)',it_cost_none:'ຍັງບໍ່ເຄີຍຮັບເຄື່ອງ — ຕົ້ນທຶນຈະມາເອງເມື່ອຮັບເຄື່ອງຄັ້ງທຳອິດ',
   it_hist:'📉 ລາຄາທີ່ເຄີຍຮັບ',it_hist_t:'ລາຄາທີ່ເຄີຍຮັບຈິງ',it_hist_none:'ຍັງບໍ່ມີປະຫວັດການຮັບເຄື່ອງ',it_hist_pack:'ບັນຈຸ',
   it_dup:'ມີວັດຖຸດິບຊື່ນີ້ຢູ່ແລ້ວ',it_del:'🗑 ລຶບຖາວອນ',it_del_q:'ລຶບ "{n}" ຖາວອນ?\nໃຊ້ສະເພາະລາຍການທີ່ເພີ່ມຜິດ — ຖ້າເລີກໃຊ້ໃຫ້ກົດ "ບໍ່ໃຊ້ແລ້ວ" ແທນ',
@@ -4482,13 +4490,16 @@ my:{it_new:'ကုန်ကြမ်းထည့်ရန်',it_edit:'ကုန
   it_buy:'ဝယ်သည့်ယူနစ်',it_buy_hint:'လက်ခံချိန်တွင် ဤအရွယ်ကို ကြိုဖြည့်ပေးမည် — ပြင်နိုင်သည်',it_buy_eq:'1 {u} =',it_packs:'အခြားထုပ်ပိုးအရွယ်များ',it_pack_hint:'လက်ခံချိန်တွင် သုံးသည် ဥပမာ 1 အိတ် = 1,000 ဂရမ် · 1 အစုံ = 10 ကီလို',
   it_pack_add:'＋ ထုပ်ပိုးအရွယ်ထည့်ရန်',it_pack_bad:'ယူနစ်ရွေးပြီး 0 ထက်ကြီးသော အရွယ်ထည့်ပါ၊ အခြေခံ/ဝယ်သည့်ယူနစ်နှင့် မတူရပါ',it_buy_bad:'ဝယ်သည့်ယူနစ်အရွယ်သည် 0 ထက်ကြီးရမည်',
   it_cu:'စတော့ရေတွက်ယူနစ်',it_cu_auto:'အလိုအလျောက် ({u})',it_cu_hint:'ဥပမာ ငံပြာရည်ကို ပုလင်းဖြင့်ရေတွက် · အခြေခံယူနစ်သို့ အလိုအလျောက် ပြောင်းပေးမည်',
-  it_sup:'ဝယ်သည့်ဆိုင်',it_sup_none:'— ဆိုင် မသတ်မှတ်ရသေး —',it_sup_new:'＋ ဆိုင်အသစ်',it_sup_new_ph:'ဆိုင်အသစ် အမည်',it_min:'အနည်းဆုံး ထားရမည့်ပမာဏ',it_min_s:'အနည်းဆုံး',it_lead:'ပစ္စည်းရောက်ရန် ရက်',
+  it_sup:'ဝယ်သည့်ဆိုင်',it_sup_none:'— ဆိုင် မသတ်မှတ်ရသေး —',it_sup_new:'＋ ဆိုင်အသစ်',it_sup_new_ph:'ဆိုင်အသစ် အမည်',it_max:'Max အထိ ဖြည့်',it_lim_t:'အနည်းဆုံး (Safety) / Max',it_lim_u:'ယူနစ်',it_lim_h:'အနည်းဆုံးအောက် ရောက်လျှင် → 🛒 မှာယူ စာမျက်နှာက Max အထိ ဖြည့်ရန် အကြံပြုသည် (ဝယ်ယူနစ် အပြည့်သို့ အပေါ်ဝိုင်း — ပိုတာက လိုတာထက် ကောင်း) · Max မထည့် = အနည်းဆုံးအထိသာ · အနည်းဆုံး မထည့် = Max အောက်ဆိုလျှင် မှာ',it_lim_bad:'အနည်းဆုံး/Max ယူနစ်ကို ပြန်ရွေးပါ — အခြေခံယူနစ်သို့ မပြောင်းနိုင်',it_lim_order:'Max သည် အနည်းဆုံးထက် မနည်းရ',it_max_sql:'သိမ်းပြီး၊ သို့သော် Max မသိမ်းရသေး — နောက်ဆုံး SQL ကို အရင် run ပါ (⚙️ ဆက်တင် → 🗄️)',it_min:'အနည်းဆုံး (Safety)',it_min_s:'အနည်းဆုံး',it_lead:'ပစ္စည်းရောက်ရန် ရက်',
   it_cost_t:'ကုန်ကျစရိတ် (အမှန်လက်ခံမှုမှ)',it_cost_avg:'ပျမ်းမျှ',it_last:'နောက်ဆုံးလက်ခံ',it_cost_legacy:'ဈေးဟောင်း (လက်ခံစနစ် မရှိမီ)',it_cost_none:'မလက်ခံရသေးပါ — ပထမဆုံးလက်ခံပြီးမှ ကုန်ကျစရိတ် ပေါ်မည်',
   it_hist:'📉 လက်ခံခဲ့သော ဈေးများ',it_hist_t:'အမှန်လက်ခံခဲ့သော ဈေးများ',it_hist_none:'လက်ခံမှတ်တမ်း မရှိသေးပါ',it_hist_pack:'ထုပ်ပိုး',
   it_dup:'ဤအမည်ဖြင့် ကုန်ကြမ်း ရှိပြီးသား',it_del:'🗑 အပြီးဖျက်',it_del_q:'"{n}" ကို အပြီးဖျက်မလား?\nမှားထည့်သည့်အရာအတွက်သာ — မသုံးတော့လျှင် "မသုံးတော့" ကို နှိပ်ပါ',
   it_draft:'📝 မသိမ်းရသေးသော မူကြမ်း ပြန်ရပြီ',it_draft_drop:'မူကြမ်းဖျက်',it_photo:'📷 ဓာတ်ပုံထည့် / ပြောင်း',it_stock:'လက်ကျန်',it_per:'တစ်',it_pack_used:'🔒 ယူနစ် {u} ကို ဖယ်၍မရ — နည်းများတွင် သုံးနေဆဲ: {list} (📖 မီနူး/နည်း တွင် အရင်ပြင်ပါ)',it_pack_inuse:'🔒 နည်းများသုံးသော ယူနစ်: {list}',it_pack_std:'1 {u} = {q} {b} ဖြစ်ပြီးသား (စံပြောင်းလဲမှု) — မထည့်ပါနှင့် သို့မဟုတ် ကိုက်ညီအောင်ထားပါ'}
 });
 CSS.add(`
+.itlim{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) minmax(0,1.1fr);gap:6px;align-items:end}.itlim label{display:flex;flex-direction:column;gap:2px;min-width:0}
+.itlim input,.itlim select{width:100%;min-width:0}.itlim-to{padding-bottom:12px}
+@media(max-width:340px){.itlim{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.itlim label:last-child{grid-column:1/-1}}
 .icard.itoff{opacity:.62}.icard.itoff .ithumb{filter:grayscale(1)}
 .itform .mthumb.lg{width:72px;height:72px;font-size:32px;border-radius:14px}
 .itpack{display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr) auto auto;gap:6px;align-items:center;margin-bottom:6px}
@@ -4509,6 +4520,7 @@ const IT_IC={'เนื้อสัตว์':'🥩','ผัก':'🥬','ขอ�
 const itIcon=it=>IT_IC[(it&&it.cat)||'']||'🥬';
 const itLow=it=>it.min_qty!=null&&num(it.qty)<num(it.min_qty);
 const itMoney=c=>'฿'+fmtQ(c);
+function itLimTxt(it){const a=[];if(it.min_qty!=null)a.push(t('it_min_s')+' '+qtyTxt(it,it.min_qty));if(num(it.max_qty)>0)a.push('Max '+qtyTxt(it,it.max_qty));return a.join(' · ');}   // แสดงเป็นหน่วยนับ
 function itCats(){const c=ITEM_CATS.slice();S.items.forEach(i=>{const x=String(i.cat||'').trim();if(x&&!c.includes(x))c.push(x);});return c;}
 function itOffN(){return S.items.filter(i=>i.active===false).length;}
 function itUsedIn(id){return activeRecipes().filter(r=>(S.boms[r.id]||[]).some(l=>l.item_id===id));}
@@ -4547,7 +4559,7 @@ function itCardHtml(it,off,K){
     '<div class="isub">'+(c!=null?'💰 '+esc(itMoney(c))+'/'+esc(trUnit(it.unit)):'<span class="amber">'+esc(t('no_price'))+'</span>')+
       (it.last_price!=null&&num(it.last_price)>0?' · '+esc(t('it_last'))+' '+esc(itMoney(it.last_price)):'')+'</div>'+
     '<div class="row" style="justify-content:space-between"><span class="chip '+(low?'bad':'ok')+'">'+(low?'⚠ ':'')+fmtQ(it.qty)+' '+esc(trUnit(it.unit))+'</span>'+
-      (it.min_qty!=null?'<span class="xs mut">'+esc(t('it_min_s'))+' '+fmtQ(it.min_qty)+'</span>':'')+'</div>'+
+      (it.min_qty!=null||num(it.max_qty)>0?'<span class="xs mut">'+esc(itLimTxt(it))+'</span>':'')+'</div>'+
     (it.sup?'<div class="xs mut">🏷️ '+esc(it.sup)+'</div>':'')+
     (off&&K?'<button class="btn sm2 gh" data-id="'+esc(it.id)+'" onclick="event.stopPropagation();itOff(this.dataset.id,true)">'+esc(t('it_restore'))+'</button>':'')+'</div>';}
 
@@ -4555,8 +4567,9 @@ function itCardHtml(it,off,K){
 function itDraftFrom(it){
   if(it)return {id:it.id,name:it.name||'',cat:it.cat||'อื่นๆ',unit:it.unit||'กก.',buy_unit:it.buy_unit||'',buy_qty:it.buy_qty==null?'':it.buy_qty,
     packs:(Array.isArray(it.packs)?it.packs:[]).filter(p=>p&&p.u).map(p=>({u:String(p.u),q:p.q==null?'':p.q})),count_unit:it.count_unit||'',sup:it.sup||'',
-    min_qty:it.min_qty==null?'':it.min_qty,lead_days:it.lead_days==null?'':it.lead_days,image_url:it.image_url||null,active:it.active!==false,cat_new:'',sup_new:'',restored:false};
-  return {id:null,name:'',cat:(IT_CAT&&IT_CAT!=='__off')?IT_CAT:'อื่นๆ',unit:'กก.',buy_unit:'',buy_qty:'',packs:[],count_unit:'',sup:'',min_qty:'',lead_days:'',image_url:null,active:true,cat_new:'',sup_new:'',restored:false};}
+    lim_u:limUnits(it)[0]||it.unit,min_in:itLimIn(it,it.min_qty),max_in:itLimIn(it,it.max_qty),lead_days:it.lead_days==null?'':it.lead_days,image_url:it.image_url||null,active:it.active!==false,cat_new:'',sup_new:'',restored:false};
+  return {id:null,name:'',cat:(IT_CAT&&IT_CAT!=='__off')?IT_CAT:'อื่นๆ',unit:'กก.',buy_unit:'',buy_qty:'',packs:[],count_unit:'',sup:'',lim_u:'',min_in:'',max_in:'',lead_days:'',image_url:null,active:true,cat_new:'',sup_new:'',restored:false};}
+function itLimIn(it,q){if(q==null||q==='')return '';const u=limUnits(it)[0]||it.unit,v=qtyIn(it,q,u);return v==null?num(q):v;}   // หน่วยหลัก → หน่วยแรกของ limUnits (หน่วยนับ)
 function itDraftRead(id){const d=LS.get(IT_DRAFT,null);if(!d||typeof d!=='object'||!(Date.now()-num(d._t)<IT_DRAFT_MS))return null;
   return String(d.id||'')===String(id||'')?d:null;}
 function itDraftSave(){if(!IT_D)return;clearTimeout(itDraftSave._t);itDraftSave._t=setTimeout(()=>{if(IT_D)LS.set(IT_DRAFT,Object.assign({},IT_D,{_t:Date.now()}));},150);}
@@ -4618,10 +4631,10 @@ function itPaintForm(){
         '<option value="__new"'+(d.sup==='__new'?' selected':'')+'>'+esc(t('it_sup_new'))+'</option></select>'+
         '<input id="itSupNew" placeholder="'+esc(t('it_sup_new_ph'))+'" value="'+esc(d.sup_new)+'" style="margin-top:6px;display:'+(d.sup==='__new'?'':'none')+'" oninput="IT_D.sup_new=this.value;itDraftSave()">')+'</div>'+
     '<div class="grid2">'+fld(t('it_unit'),'<div id="itUnitFld">'+itUnitHtml()+'</div>')+
-      fld(t('it_min'),'<div class="row" style="flex-wrap:nowrap"><input id="itMin" type="text" inputmode="decimal" value="'+esc(d.min_qty)+'" oninput="IT_D.min_qty=this.value;itDraftSave()"><span class="b" id="itMinU" style="flex:none">'+esc(trUnit(d.unit))+'</span></div>')+'</div>'+
+      fld(t('it_lead'),'<input id="itLead" type="text" inputmode="numeric" value="'+esc(d.lead_days)+'" oninput="IT_D.lead_days=this.value;itDraftSave()">')+'</div>'+
     '<div id="itPacks">'+itPacksHtml()+'</div>'+
     '<div id="itCU">'+itCuHtml()+'</div>'+
-    fld(t('it_lead'),'<input id="itLead" type="text" inputmode="numeric" value="'+esc(d.lead_days)+'" oninput="IT_D.lead_days=this.value;itDraftSave()">')+
+    '<div id="itLim">'+itLimHtml()+'</div>'+
     itCostHtml(it)+
     '<div class="itacts">'+(d.id?'<button class="btn gh" onclick="itOff(\''+esc(d.id)+'\','+(d.active?'false':'true')+')">'+esc(d.active?t('it_off_btn'):t('it_restore'))+'</button>'+
       (isAdminish()?'<button class="btn gh" onclick="itDel(\''+esc(d.id)+'\')">'+esc(t('it_del'))+'</button>':''):'')+
@@ -4637,8 +4650,8 @@ function itUnitChange(v){const d=IT_D;if(!d)return;
   const f=unitConv(null,d.unit,v);   // ขนาดบรรจุเขียนเป็นหน่วยหลัก — เปลี่ยนหน่วยหลักแล้วแปลงตามถ้าแปลงได้ (กรัม↔กก.)
   if(f!=null){(d.packs||[]).forEach(p=>{if(num(p.q)>0)p.q=rnd4(num(p.q)*f);});if(num(d.buy_qty)>0)d.buy_qty=rnd4(num(d.buy_qty)*f);}
   d.unit=v;itDraftSave();itUnitsPaint();}
-function itUnitsPaint(){const d=IT_D;if(!d)return;const a=document.getElementById('itPacks'),b=document.getElementById('itCU'),u=document.getElementById('itMinU');
-  if(a)a.innerHTML=itPacksHtml();if(b)b.innerHTML=itCuHtml();if(u)u.textContent=trUnit(d.unit);}
+function itUnitsPaint(){const d=IT_D;if(!d)return;const a=document.getElementById('itPacks'),b=document.getElementById('itCU');
+  if(a)a.innerHTML=itPacksHtml();if(b)b.innerHTML=itCuHtml();itLimPaint();}
 function itPacksHtml(){
   const d=IT_D,base=d.unit||'',others=allUnits().filter(u=>u!==base);
   const row=(lbU,lbQ,u,q,onU,onQ,del)=>'<div class="itpack"><span class="b">1</span><select onchange="'+onU+'">'+(lbU?'<option value="">—</option>':'')+unitOptions(others,u)+'</select>'+
@@ -4656,7 +4669,28 @@ function itPackDel(i){const d=IT_D;if(!d)return;(d.packs||[]).splice(i,1);itDraf
 function itCuHtml(){const d=IT_D,tmp=itTmp();const list=unitList(tmp);
   return fld('📋 '+t('it_cu'),'<select id="itCuSel" onchange="IT_D.count_unit=this.value;itDraftSave()"><option value="">'+esc(t('it_cu_auto',{u:trUnit(countUnitOf(tmp))}))+'</option>'+
     list.map(u=>'<option value="'+esc(u)+'"'+(u===d.count_unit?' selected':'')+'>'+esc(trUnit(u))+'</option>').join('')+'</select><div class="xs mut">'+esc(t('it_cu_hint'))+'</div>');}
-function itCuPaint(){const b=document.getElementById('itCU');if(b&&IT_D)b.innerHTML=itCuHtml();}
+function itCuPaint(){const b=document.getElementById('itCU');if(b&&IT_D)b.innerHTML=itCuHtml();itLimPaint();}
+/* 🎯 ขั้นต่ำ (Safety) + Max — ใส่เป็นหน่วยไหนก็ได้ของวัตถุดิบ (ถุง/ลัง/กรัม) · เก็บ min_qty/max_qty เป็นหน่วยหลัก (เจ้าของ 2026-10-19)
+   🛒 สั่งของ: ต่ำกว่าขั้นต่ำ → สั่งเติมให้ถึง Max ปัดขึ้นเป็นหน่วยซื้อเต็ม (เหลือดีกว่าขาด) */
+function itLimUnits(){const L=limUnits(itTmp());if(IT_D&&!L.includes(IT_D.lim_u))IT_D.lim_u=L[0]||IT_D.unit;return L;}
+function itLimHtml(){const d=IT_D;if(!d)return '';const L=itLimUnits();
+  const inp=(id,f)=>'<input id="'+id+'" type="text" inputmode="decimal" value="'+esc(d[f])+'" oninput="IT_D.'+f+'=this.value;itDraftSave();itLimEq()">';
+  return '<div class="fld"><label>🎯 '+esc(t('it_lim_t'))+'</label><div class="xs mut" style="margin-bottom:6px">'+esc(t('it_lim_h'))+'</div>'+
+    '<div class="itlim"><label><span class="xs">'+esc(t('it_min'))+'</span>'+inp('itMin','min_in')+'</label><span class="b itlim-to">→</span>'+
+    '<label><span class="xs">'+esc(t('it_max'))+'</span>'+inp('itMax','max_in')+'</label>'+
+    '<label><span class="xs">'+esc(t('it_lim_u'))+'</span><select id="itLimU" onchange="itLimU(this.value)">'+unitOptions(L,d.lim_u)+'</select></label></div>'+
+    '<div class="xs mut" id="itLimEq">'+esc(itLimEqTxt())+'</div></div>';}
+function itLimPaint(){const b=document.getElementById('itLim');if(b&&IT_D)b.innerHTML=itLimHtml();}
+function itLimEqTxt(){ // "= 24,000 กรัม → 60,000 กรัม · 2 ลัง → 5 ลัง"
+  const d=IT_D,tmp=itTmp(),f=unitFactor(tmp,d.lim_u);if(f==null)return '';
+  const has=v=>String(v==null?'':v).trim()!=='',mn=has(d.min_in)?num(d.min_in)*f:null,mx=has(d.max_in)?num(d.max_in)*f:null;if(mn==null&&mx==null)return '';
+  const one=(u,q)=>{const v=qtyIn(tmp,q,u);return v==null?'–':fmtQ(v);},pair=u=>(mn!=null?one(u,mn):'–')+(mx!=null?' → '+one(u,mx):'')+' '+trUnit(u);
+  const out=[];if(d.lim_u!==tmp.unit)out.push(pair(tmp.unit));if(tmp.buy_unit&&tmp.buy_unit!==d.lim_u&&tmp.buy_unit!==tmp.unit)out.push(pair(tmp.buy_unit));
+  return out.length?'= '+out.join(' · '):'';}
+function itLimEq(){const e=document.getElementById('itLimEq');if(e)e.textContent=itLimEqTxt();}
+function itLimU(u){const d=IT_D;if(!d)return;const tmp=itTmp(),fo=unitFactor(tmp,d.lim_u),fn=unitFactor(tmp,u);   // เปลี่ยนหน่วย = แปลงตัวเลขที่ใส่ไว้ตาม (24 ถุง → 2 ลัง)
+  if(fo>0&&fn>0)['min_in','max_in'].forEach(k=>{if(String(d[k]==null?'':d[k]).trim()!=='')d[k]=rnd4(num(d[k])*fo/fn);});
+  d.lim_u=u;itDraftSave();itLimPaint();}
 function itCostHtml(it){
   if(!it)return '';const c=itemCost(it);
   let h='<div class="itcost"><div class="sm mut">💰 '+esc(t('it_cost_t'))+'</div>';
@@ -4675,10 +4709,10 @@ function itPacksClean(d){ // null = มีแถวผิด
     seen[u]=1;out.push({u,q:rnd4(q)});}
   return out;}
 async function itWrite(build,row){ // ยังไม่รัน SQL บางคอลัมน์ = ตัดช่องนั้นแล้วบันทึกช่องอื่น (PGRST204)
-  row=Object.assign({},row);setBusy(true);
+  row=Object.assign({},row);setBusy(true);itWrite.dropped=[];
   try{for(let i=0;i<8;i++){const r=await build(row);if(!r||!r.error)return r&&r.data;
       const m=/'([a-z_]+)' column/i.exec(String(r.error.message||''));
-      if(r.error.code==='PGRST204'&&m&&(m[1] in row)){delete row[m[1]];S.kcSql=false;continue;}
+      if(r.error.code==='PGRST204'&&m&&(m[1] in row)){delete row[m[1]];itWrite.dropped.push(m[1]);S.kcSql=false;continue;}
       const d=document.getElementById('syncDot');if(d)d.className='err';toast(t('sv_err')+(r.error.message||r.error),true);throw r.error;}}
   finally{setBusy(false);}
   return null;}
@@ -4695,19 +4729,24 @@ async function itSave(){await once(async()=>{
   {const it0=d.id?itemById(d.id):null,lock=itLockWhy(d);if(it0&&lock&&d.unit!==it0.unit){toast(t('it_lock',{why:lock}),true);return;}}   // กันทางอ้อม (select ถูกปิดอยู่แล้ว)
   {const used=itPackUsed(d.id,{unit:d.unit||'กก.',buy_unit:(bu&&bu!==d.unit)?bu:null,buy_qty:(bu&&bu!==d.unit)?bq:null,packs});   // เอาขนาดบรรจุที่สูตรยังใช้ออก = สูตรแปลงหน่วยไม่ได้ → ห้าม (แก้สูตรก่อน)
     if(used){toast(t('it_pack_used',{u:trUnit(used.u),list:used.list}),true);return;}}
+  let mnQ=null,mxQ=null;{const has=v=>String(v==null?'':v).trim()!=='',lt={unit:d.unit||'กก.',buy_unit:(bu&&bu!==d.unit)?bu:null,buy_qty:(bu&&bu!==d.unit)?bq:null,packs};
+    if(has(d.min_in)||has(d.max_in)){const f=unitFactor(lt,d.lim_u);if(f==null){toast(t('it_lim_bad'),true);return;}
+      if(has(d.min_in))mnQ=rnd4(Math.max(0,num(d.min_in))*f);if(has(d.max_in)&&num(d.max_in)>0)mxQ=rnd4(num(d.max_in)*f);
+      if(mnQ!=null&&mxQ!=null&&mxQ<mnQ-1e-9){toast(t('it_lim_order'),true);return;}}}   // Max ต้องไม่น้อยกว่าขั้นต่ำ
   let sup=d.sup==='__new'?String(d.sup_new||'').trim():String(d.sup||'').trim();
   if(sup){const s=(typeof spEnsure==='function')?await spEnsure(sup):null;if(s)sup=s.name;}
   const row={name:d.name,cat,unit:d.unit||'กก.',buy_unit:(bu&&bu!==d.unit)?bu:null,buy_qty:(bu&&bu!==d.unit)?rnd4(bq):null,packs,sup,
-    min_qty:String(d.min_qty).trim()===''?null:rnd4(num(d.min_qty)),lead_days:String(d.lead_days).trim()===''?null:Math.max(0,Math.round(num(d.lead_days)))};
+    min_qty:mnQ,lead_days:String(d.lead_days).trim()===''?null:Math.max(0,Math.round(num(d.lead_days)))};
   const tmp=Object.assign({},row);const cu=String(d.count_unit||'').trim();row.count_unit=(cu&&unitFactor(tmp,cu)!=null)?cu:null;
   let it=d.id?itemById(d.id):null,renamed=false;
+  if(mxQ!=null||(it&&it.max_qty!=null))row.max_qty=mxQ;   // ไม่ได้ใช้ Max = ไม่ส่งคอลัมน์ (ยังไม่รัน SQL รุ่นล่าสุดก็บันทึกช่องอื่นได้ปกติ)
   if(it){renamed=it.name!==d.name;if(renamed)row.i18n=null;
     await itWrite(x=>sb.from('ck_items').update(x).eq('id',it.id),row);Object.assign(it,row);if(renamed)it.i18n=null;}
   else{row.id=uid('it');row.qty=0;row.active=true;row.image_url=d.image_url||null;
     row.sort=S.items.reduce((m,x)=>Math.max(m,num(x.sort)),0)+1;
     await itWrite(x=>sb.from('ck_items').insert(x),row);if(!('active' in row))row.active=true;it=row;S.items.push(it);renamed=true;}
   S.items.sort((a,b)=>(num(a.sort)-num(b.sort))||String(a.name||'').localeCompare(String(b.name||''),'th'));
-  const back=d._back;IT_D=null;itDraftClear();MODAL_BACK=null;closeModal();toast(t('sv_ok'));
+  const back=d._back;IT_D=null;itDraftClear();MODAL_BACK=null;closeModal();toast((itWrite.dropped||[]).includes('max_qty')?t('it_max_sql'):t('sv_ok'),(itWrite.dropped||[]).includes('max_qty')?'warn':false);
   if(renamed)itAutoI18n(it);
   if(typeof back==='function')try{back(it);}catch(e){}
   else if(S.tab==='items')show('items');else if(S.tab==='sups'&&typeof spPaintList==='function')spPaintList();
@@ -4772,7 +4811,7 @@ async function itAutoI18n(it){ // เติมคำแปลที่ยัง�
    · 📏 รายชื่อหน่วย: ตัวแปลงมาตรฐาน (แก้ไม่ได้) · หน่วยทั้งหมดพร้อมจำนวนที่ใช้ · หน่วยเพิ่มเติม (cfg.units — ย้ายมาจาก ⚙️ ตั้งค่า) เพิ่ม/ลบ (หัวหน้า · ลบได้เฉพาะที่ไม่มีใครใช้)
    ============================================================ */
 I18N.add({
-th:{un_use:'ใช้ (สต๊อก/สูตร)',un_buy_as:'ซื้อเป็น',un_count_as:'นับเป็น',un_same_use:'เหมือนหน่วยใช้',un_lock:'มีสต๊อก/อยู่ในสูตร — เปลี่ยนไม่ได้',un_dirty:'ยังไม่บันทึก',un_apply_all:'ใช้คำแนะนำทั้งหมด ({n})',un_applied_n:'ใส่คำแนะนำแล้ว {n} รายการ — กด 💾 บันทึก',un_pending:'แก้ไว้ {n} รายการ',un_save_n:'บันทึก {n} รายการ',un_discard:'ยกเลิกที่แก้',un_discard_q:'ทิ้งที่แก้ไว้ทั้งหมด?',un_saved:'บันทึกแล้ว {n} รายการ ✅',un_saved_bad:'บันทึกแล้ว {n} · ยังบันทึกไม่ได้ {b} รายการ (ดูที่ขึ้น ⚠)',un_e_buyq:'ใส่ขนาด 1 {u} = ?',un_e_cq:'ใส่ขนาด 1 {u} = ?',un_e_recipe:'สูตรใช้ {u} อยู่ — หน่วยแบบนี้จะแปลงไม่ได้',un_e_base:'เปลี่ยนหน่วยใช้ไม่ได้ — มีประวัติ/สต๊อกแล้ว',un_br_h:'แก้ "1 หน่วยของสาขา = เท่าไรของครัว" ในการ์ดได้เลย แล้วกด 💾 ทีเดียว',un_g7:'📌 ตัวอย่าง: ซื้อเป็น กก. · ใช้ในสูตรเป็นกรัม · นับเป็นถุง → หน่วยหลัก = กรัม (เล็กสุดที่ใช้) · หน่วยซื้อ = กก. (ระบบรู้เองว่า 1 กก. = 1,000 กรัม) · บรรจุอื่น = ถุง ใส่ว่า 1 ถุง = กี่กรัม · หน่วยนับ = ถุง',un_d_all:'ทุกแผนก',un_d_main:'🍳 ครัวกลาง',un_d_dessert:'🍮 ของหวาน',un_d_both:'ใช้ทั้ง 2 แผนก',nav_units:'หน่วย',un_sub:'จัดการหน่วยทั้งหมดในที่เดียว — ระบบบอกว่าส่วนไหนใช้หน่วยเดียวกันได้ ส่วนไหนเป็นหน่วยเฉพาะหน้า',
+th:{un_use:'ใช้ (สต๊อก/สูตร)',un_buy_as:'ซื้อเป็น',un_lim:'ขั้นต่ำ → Max',un_count_as:'นับเป็น',un_same_use:'เหมือนหน่วยใช้',un_lock:'มีสต๊อก/อยู่ในสูตร — เปลี่ยนไม่ได้',un_dirty:'ยังไม่บันทึก',un_apply_all:'ใช้คำแนะนำทั้งหมด ({n})',un_applied_n:'ใส่คำแนะนำแล้ว {n} รายการ — กด 💾 บันทึก',un_pending:'แก้ไว้ {n} รายการ',un_save_n:'บันทึก {n} รายการ',un_discard:'ยกเลิกที่แก้',un_discard_q:'ทิ้งที่แก้ไว้ทั้งหมด?',un_saved:'บันทึกแล้ว {n} รายการ ✅',un_saved_bad:'บันทึกแล้ว {n} · ยังบันทึกไม่ได้ {b} รายการ (ดูที่ขึ้น ⚠)',un_e_buyq:'ใส่ขนาด 1 {u} = ?',un_e_cq:'ใส่ขนาด 1 {u} = ?',un_e_recipe:'สูตรใช้ {u} อยู่ — หน่วยแบบนี้จะแปลงไม่ได้',un_e_base:'เปลี่ยนหน่วยใช้ไม่ได้ — มีประวัติ/สต๊อกแล้ว',un_br_h:'แก้ "1 หน่วยของสาขา = เท่าไรของครัว" ในการ์ดได้เลย แล้วกด 💾 ทีเดียว',un_g7:'📌 ตัวอย่าง: ซื้อเป็น กก. · ใช้ในสูตรเป็นกรัม · นับเป็นถุง → หน่วยหลัก = กรัม (เล็กสุดที่ใช้) · หน่วยซื้อ = กก. (ระบบรู้เองว่า 1 กก. = 1,000 กรัม) · บรรจุอื่น = ถุง ใส่ว่า 1 ถุง = กี่กรัม · หน่วยนับ = ถุง',un_d_all:'ทุกแผนก',un_d_main:'🍳 ครัวกลาง',un_d_dessert:'🍮 ของหวาน',un_d_both:'ใช้ทั้ง 2 แผนก',nav_units:'หน่วย',un_sub:'จัดการหน่วยทั้งหมดในที่เดียว — ระบบบอกว่าส่วนไหนใช้หน่วยเดียวกันได้ ส่วนไหนเป็นหน่วยเฉพาะหน้า',
   un_guide_t:'💡 หน่วยไหนใช้ร่วมกัน · หน่วยไหนเฉพาะหน้า',
   un_g1:'🥬 หน่วยหลักของวัตถุดิบ — ใช้ร่วมทุกหน้า (สต๊อก · สูตร · ต้นทุน) · ตั้งครั้งเดียว · เปลี่ยนไม่ได้เมื่อมีสต๊อก/อยู่ในสูตร',
   un_g2:'🛒 หน่วยซื้อ — ใช้ร่วมกัน 📥 รับของ + 🛒 สั่งของ (เช่น ถุง = 1,000 กรัม)',
@@ -4792,7 +4831,7 @@ th:{un_use:'ใช้ (สต๊อก/สูตร)',un_buy_as:'ซื้อเ
   un_custom_h:'หน่วยที่ไม่มีในรายการ — ใช้ได้เมื่อวัตถุดิบตั้งขนาดบรรจุให้แล้ว',un_add:'＋ เพิ่มหน่วย',un_ph:'เช่น กระปุก',un_dup:'มีหน่วยนี้แล้ว',
   un_del_used:'ยังมี {n} รายการใช้หน่วยนี้ — ลบไม่ได้',un_del_q:'ลบหน่วย "{u}"?',un_added:'เพิ่มหน่วยแล้ว',un_deleted:'ลบหน่วยแล้ว',un_boss:'เพิ่ม/ลบหน่วยได้เฉพาะหัวหน้า',
   un_applied:'ตั้งหน่วยนับเป็น {u} แล้ว',st_units_moved:'ย้ายไปจัดการที่แท็บ 📏 หน่วย แล้ว',st_units_go:'ไปหน้า 📏 หน่วย'},
-en:{un_use:'Use (stock/recipes)',un_buy_as:'Buy as',un_count_as:'Count as',un_same_use:'Same as use unit',un_lock:'Has stock / in a recipe — locked',un_dirty:'Not saved',un_apply_all:'Use all suggestions ({n})',un_applied_n:'{n} suggestions filled in — tap 💾 Save',un_pending:'{n} changed',un_save_n:'Save {n}',un_discard:'Discard changes',un_discard_q:'Discard all changes?',un_saved:'Saved {n} ✅',un_saved_bad:'Saved {n} · {b} could not be saved (see ⚠)',un_e_buyq:'Enter the size: 1 {u} = ?',un_e_cq:'Enter the size: 1 {u} = ?',un_e_recipe:'A recipe uses {u} — it would no longer convert',un_e_base:'Use unit is locked — it has history/stock',un_br_h:'Edit "1 branch unit = how much of the kitchen product" right in the card, then tap 💾 once',un_g7:'📌 Example: bought in kg · used in g · counted in bags → base unit = g (the smallest you use) · buying unit = kg (the app knows 1 kg = 1,000 g) · other pack = bag, enter 1 bag = ? g · count unit = bag',un_d_all:'All sections',un_d_main:'🍳 Central kitchen',un_d_dessert:'🍮 Desserts',un_d_both:'Used by both sections',nav_units:'Units',un_sub:'Manage every unit in one place — the app shows which units can be shared and which belong to one page only',
+en:{un_use:'Use (stock/recipes)',un_buy_as:'Buy as',un_lim:'Min → Max',un_count_as:'Count as',un_same_use:'Same as use unit',un_lock:'Has stock / in a recipe — locked',un_dirty:'Not saved',un_apply_all:'Use all suggestions ({n})',un_applied_n:'{n} suggestions filled in — tap 💾 Save',un_pending:'{n} changed',un_save_n:'Save {n}',un_discard:'Discard changes',un_discard_q:'Discard all changes?',un_saved:'Saved {n} ✅',un_saved_bad:'Saved {n} · {b} could not be saved (see ⚠)',un_e_buyq:'Enter the size: 1 {u} = ?',un_e_cq:'Enter the size: 1 {u} = ?',un_e_recipe:'A recipe uses {u} — it would no longer convert',un_e_base:'Use unit is locked — it has history/stock',un_br_h:'Edit "1 branch unit = how much of the kitchen product" right in the card, then tap 💾 once',un_g7:'📌 Example: bought in kg · used in g · counted in bags → base unit = g (the smallest you use) · buying unit = kg (the app knows 1 kg = 1,000 g) · other pack = bag, enter 1 bag = ? g · count unit = bag',un_d_all:'All sections',un_d_main:'🍳 Central kitchen',un_d_dessert:'🍮 Desserts',un_d_both:'Used by both sections',nav_units:'Units',un_sub:'Manage every unit in one place — the app shows which units can be shared and which belong to one page only',
   un_guide_t:'💡 Shared units · page-only units',
   un_g1:'🥬 Ingredient base unit — shared by every page (stock · recipes · cost) · set once · locked while there is stock / it is in a recipe',
   un_g2:'🛒 Buying unit — shared by 📥 Receive + 🛒 Order (e.g. bag = 1,000 g)',
@@ -4812,7 +4851,7 @@ en:{un_use:'Use (stock/recipes)',un_buy_as:'Buy as',un_count_as:'Count as',un_sa
   un_custom_h:'Units missing from the list — usable once the ingredient has a pack size',un_add:'＋ Add unit',un_ph:'e.g. jar',un_dup:'That unit already exists',
   un_del_used:'{n} items still use this unit — cannot delete',un_del_q:'Delete unit "{u}"?',un_added:'Unit added',un_deleted:'Unit deleted',un_boss:'Only a manager can add/delete units',
   un_applied:'Count unit set to {u}',st_units_moved:'Moved to the 📏 Units tab',st_units_go:'Go to 📏 Units'},
-lo:{un_use:'ໃຊ້ (ສະຕັອກ/ສູດ)',un_buy_as:'ຊື້ເປັນ',un_count_as:'ນັບເປັນ',un_same_use:'ຄືຫົວໜ່ວຍໃຊ້',un_lock:'ມີສະຕັອກ/ຢູ່ໃນສູດ — ປ່ຽນບໍ່ໄດ້',un_dirty:'ຍັງບໍ່ບັນທຶກ',un_apply_all:'ໃຊ້ຄຳແນະນຳທັງໝົດ ({n})',un_applied_n:'ໃສ່ຄຳແນະນຳແລ້ວ {n} ລາຍການ — ກົດ 💾 ບັນທຶກ',un_pending:'ແກ້ໄວ້ {n} ລາຍການ',un_save_n:'ບັນທຶກ {n} ລາຍການ',un_discard:'ຍົກເລີກທີ່ແກ້',un_discard_q:'ຖິ້ມທີ່ແກ້ໄວ້ທັງໝົດ?',un_saved:'ບັນທຶກແລ້ວ {n} ລາຍການ ✅',un_saved_bad:'ບັນທຶກແລ້ວ {n} · ຍັງບັນທຶກບໍ່ໄດ້ {b} ລາຍການ (ເບິ່ງທີ່ຂຶ້ນ ⚠)',un_e_buyq:'ໃສ່ຂະໜາດ 1 {u} = ?',un_e_cq:'ໃສ່ຂະໜາດ 1 {u} = ?',un_e_recipe:'ສູດໃຊ້ {u} ຢູ່ — ຈະແປງບໍ່ໄດ້',un_e_base:'ປ່ຽນຫົວໜ່ວຍໃຊ້ບໍ່ໄດ້ — ມີປະຫວັດ/ສະຕັອກແລ້ວ',un_br_h:'ແກ້ "1 ຫົວໜ່ວຍຂອງສາຂາ = ເທົ່າໃດຂອງຄົວ" ໃນບັດໄດ້ເລີຍ ແລ້ວກົດ 💾 ເທື່ອດຽວ',un_g7:'📌 ຕົວຢ່າງ: ຊື້ເປັນ ກິໂລ · ໃຊ້ໃນສູດເປັນກຣາມ · ນັບເປັນຖົງ → ຫົວໜ່ວຍຫຼັກ = ກຣາມ · ຫົວໜ່ວຍຊື້ = ກິໂລ (ລະບົບຮູ້ເອງວ່າ 1 ກິໂລ = 1,000 ກຣາມ) · ບັນຈຸອື່ນ = ຖົງ ໃສ່ວ່າ 1 ຖົງ = ຈັກກຣາມ · ຫົວໜ່ວຍນັບ = ຖົງ',un_d_all:'ທຸກພະແນກ',un_d_main:'🍳 ຄົວກາງ',un_d_dessert:'🍮 ຂອງຫວານ',un_d_both:'ໃຊ້ທັງ 2 ພະແນກ',nav_units:'ຫົວໜ່ວຍ',un_sub:'ຈັດການຫົວໜ່ວຍທັງໝົດໃນບ່ອນດຽວ — ລະບົບບອກວ່າສ່ວນໃດໃຊ້ຫົວໜ່ວຍດຽວກັນໄດ້ ສ່ວນໃດເປັນຫົວໜ່ວຍສະເພາະໜ້າ',
+lo:{un_use:'ໃຊ້ (ສະຕັອກ/ສູດ)',un_buy_as:'ຊື້ເປັນ',un_lim:'ຂັ້ນຕ່ຳ → Max',un_count_as:'ນັບເປັນ',un_same_use:'ຄືຫົວໜ່ວຍໃຊ້',un_lock:'ມີສະຕັອກ/ຢູ່ໃນສູດ — ປ່ຽນບໍ່ໄດ້',un_dirty:'ຍັງບໍ່ບັນທຶກ',un_apply_all:'ໃຊ້ຄຳແນະນຳທັງໝົດ ({n})',un_applied_n:'ໃສ່ຄຳແນະນຳແລ້ວ {n} ລາຍການ — ກົດ 💾 ບັນທຶກ',un_pending:'ແກ້ໄວ້ {n} ລາຍການ',un_save_n:'ບັນທຶກ {n} ລາຍການ',un_discard:'ຍົກເລີກທີ່ແກ້',un_discard_q:'ຖິ້ມທີ່ແກ້ໄວ້ທັງໝົດ?',un_saved:'ບັນທຶກແລ້ວ {n} ລາຍການ ✅',un_saved_bad:'ບັນທຶກແລ້ວ {n} · ຍັງບັນທຶກບໍ່ໄດ້ {b} ລາຍການ (ເບິ່ງທີ່ຂຶ້ນ ⚠)',un_e_buyq:'ໃສ່ຂະໜາດ 1 {u} = ?',un_e_cq:'ໃສ່ຂະໜາດ 1 {u} = ?',un_e_recipe:'ສູດໃຊ້ {u} ຢູ່ — ຈະແປງບໍ່ໄດ້',un_e_base:'ປ່ຽນຫົວໜ່ວຍໃຊ້ບໍ່ໄດ້ — ມີປະຫວັດ/ສະຕັອກແລ້ວ',un_br_h:'ແກ້ "1 ຫົວໜ່ວຍຂອງສາຂາ = ເທົ່າໃດຂອງຄົວ" ໃນບັດໄດ້ເລີຍ ແລ້ວກົດ 💾 ເທື່ອດຽວ',un_g7:'📌 ຕົວຢ່າງ: ຊື້ເປັນ ກິໂລ · ໃຊ້ໃນສູດເປັນກຣາມ · ນັບເປັນຖົງ → ຫົວໜ່ວຍຫຼັກ = ກຣາມ · ຫົວໜ່ວຍຊື້ = ກິໂລ (ລະບົບຮູ້ເອງວ່າ 1 ກິໂລ = 1,000 ກຣາມ) · ບັນຈຸອື່ນ = ຖົງ ໃສ່ວ່າ 1 ຖົງ = ຈັກກຣາມ · ຫົວໜ່ວຍນັບ = ຖົງ',un_d_all:'ທຸກພະແນກ',un_d_main:'🍳 ຄົວກາງ',un_d_dessert:'🍮 ຂອງຫວານ',un_d_both:'ໃຊ້ທັງ 2 ພະແນກ',nav_units:'ຫົວໜ່ວຍ',un_sub:'ຈັດການຫົວໜ່ວຍທັງໝົດໃນບ່ອນດຽວ — ລະບົບບອກວ່າສ່ວນໃດໃຊ້ຫົວໜ່ວຍດຽວກັນໄດ້ ສ່ວນໃດເປັນຫົວໜ່ວຍສະເພາະໜ້າ',
   un_guide_t:'💡 ຫົວໜ່ວຍໃຊ້ຮ່ວມ · ຫົວໜ່ວຍສະເພາະໜ້າ',
   un_g1:'🥬 ຫົວໜ່ວຍຫຼັກຂອງວັດຖຸດິບ — ໃຊ້ຮ່ວມທຸກໜ້າ (ສະຕັອກ · ສູດ · ຕົ້ນທຶນ) · ຕັ້ງເທື່ອດຽວ · ປ່ຽນບໍ່ໄດ້ເມື່ອມີສະຕັອກ/ຢູ່ໃນສູດ',
   un_g2:'🛒 ຫົວໜ່ວຍຊື້ — ໃຊ້ຮ່ວມ 📥 ຮັບເຄື່ອງ + 🛒 ສັ່ງເຄື່ອງ (ເຊັ່ນ ຖົງ = 1,000 ກຣາມ)',
@@ -4832,7 +4871,7 @@ lo:{un_use:'ໃຊ້ (ສະຕັອກ/ສູດ)',un_buy_as:'ຊື້ເປ
   un_custom_h:'ຫົວໜ່ວຍທີ່ບໍ່ມີໃນລາຍການ — ໃຊ້ໄດ້ເມື່ອວັດຖຸດິບຕັ້ງຂະໜາດບັນຈຸແລ້ວ',un_add:'＋ ເພີ່ມຫົວໜ່ວຍ',un_ph:'ເຊັ່ນ ກະປຸກ',un_dup:'ມີຫົວໜ່ວຍນີ້ແລ້ວ',
   un_del_used:'ຍັງມີ {n} ລາຍການໃຊ້ຫົວໜ່ວຍນີ້ — ລຶບບໍ່ໄດ້',un_del_q:'ລຶບຫົວໜ່ວຍ "{u}"?',un_added:'ເພີ່ມຫົວໜ່ວຍແລ້ວ',un_deleted:'ລຶບຫົວໜ່ວຍແລ້ວ',un_boss:'ເພີ່ມ/ລຶບຫົວໜ່ວຍໄດ້ສະເພາະຫົວໜ້າ',
   un_applied:'ຕັ້ງຫົວໜ່ວຍນັບເປັນ {u} ແລ້ວ',st_units_moved:'ຍ້າຍໄປຈັດການທີ່ແທັບ 📏 ຫົວໜ່ວຍ ແລ້ວ',st_units_go:'ໄປໜ້າ 📏 ຫົວໜ່ວຍ'},
-my:{un_use:'သုံး (စတော့/နည်း)',un_buy_as:'ဝယ်ပုံ',un_count_as:'ရေတွက်ပုံ',un_same_use:'သုံးယူနစ်နှင့်တူ',un_lock:'စတော့ရှိ/နည်းထဲပါ — မပြောင်းနိုင်',un_dirty:'မသိမ်းရသေး',un_apply_all:'အကြံပြုချက်အားလုံးသုံး ({n})',un_applied_n:'အကြံပြုချက် {n} ခု ထည့်ပြီး — 💾 သိမ်း နှိပ်ပါ',un_pending:'ပြင်ထား {n} ခု',un_save_n:'{n} ခု သိမ်း',un_discard:'ပြင်ထားတာ ပယ်',un_discard_q:'ပြင်ထားတာ အားလုံး ပယ်မလား?',un_saved:'{n} ခု သိမ်းပြီး ✅',un_saved_bad:'{n} ခု သိမ်းပြီး · {b} ခု မသိမ်းနိုင် (⚠ ကြည့်ပါ)',un_e_buyq:'အရွယ် ထည့်ပါ 1 {u} = ?',un_e_cq:'အရွယ် ထည့်ပါ 1 {u} = ?',un_e_recipe:'နည်းက {u} ကိုသုံးနေ — မပြောင်းနိုင်တော့',un_e_base:'သုံးယူနစ် မပြောင်းနိုင် — မှတ်တမ်း/စတော့ရှိ',un_br_h:'"ဆိုင်ခွဲ 1 ယူနစ် = မီးဖိုချောင် ဘယ်လောက်" ကို ကတ်ထဲတွင် တိုက်ရိုက်ပြင်ပြီး 💾 တစ်ကြိမ်နှိပ်ပါ',un_g7:'📌 ဥပမာ: ကီလိုဖြင့်ဝယ် · နည်းတွင် ဂရမ်ဖြင့်သုံး · အိတ်ဖြင့်ရေတွက် → အဓိကယူနစ် = ဂရမ် · ဝယ်ယူနစ် = ကီလို (1 ကီလို = 1,000 ဂရမ် အလိုအလျောက်သိ) · အခြားထုပ် = အိတ်၊ 1 အိတ် = ဂရမ် ဘယ်လောက် ထည့် · ရေတွက်ယူနစ် = အိတ်',un_d_all:'ဌာနအားလုံး',un_d_main:'🍳 ဗဟိုမီးဖိုချောင်',un_d_dessert:'🍮 အချိုပွဲ',un_d_both:'ဌာန ၂ ခုလုံး သုံး',nav_units:'ယူနစ်',un_sub:'ယူနစ်အားလုံးကို တစ်နေရာတည်းတွင် စီမံ — ဘယ်အပိုင်းက ယူနစ်တူသုံးနိုင်ပြီး ဘယ်အပိုင်းက စာမျက်နှာသီးသန့်လဲ ပြပေးသည်',
+my:{un_use:'သုံး (စတော့/နည်း)',un_buy_as:'ဝယ်ပုံ',un_lim:'အနည်းဆုံး → Max',un_count_as:'ရေတွက်ပုံ',un_same_use:'သုံးယူနစ်နှင့်တူ',un_lock:'စတော့ရှိ/နည်းထဲပါ — မပြောင်းနိုင်',un_dirty:'မသိမ်းရသေး',un_apply_all:'အကြံပြုချက်အားလုံးသုံး ({n})',un_applied_n:'အကြံပြုချက် {n} ခု ထည့်ပြီး — 💾 သိမ်း နှိပ်ပါ',un_pending:'ပြင်ထား {n} ခု',un_save_n:'{n} ခု သိမ်း',un_discard:'ပြင်ထားတာ ပယ်',un_discard_q:'ပြင်ထားတာ အားလုံး ပယ်မလား?',un_saved:'{n} ခု သိမ်းပြီး ✅',un_saved_bad:'{n} ခု သိမ်းပြီး · {b} ခု မသိမ်းနိုင် (⚠ ကြည့်ပါ)',un_e_buyq:'အရွယ် ထည့်ပါ 1 {u} = ?',un_e_cq:'အရွယ် ထည့်ပါ 1 {u} = ?',un_e_recipe:'နည်းက {u} ကိုသုံးနေ — မပြောင်းနိုင်တော့',un_e_base:'သုံးယူနစ် မပြောင်းနိုင် — မှတ်တမ်း/စတော့ရှိ',un_br_h:'"ဆိုင်ခွဲ 1 ယူနစ် = မီးဖိုချောင် ဘယ်လောက်" ကို ကတ်ထဲတွင် တိုက်ရိုက်ပြင်ပြီး 💾 တစ်ကြိမ်နှိပ်ပါ',un_g7:'📌 ဥပမာ: ကီလိုဖြင့်ဝယ် · နည်းတွင် ဂရမ်ဖြင့်သုံး · အိတ်ဖြင့်ရေတွက် → အဓိကယူနစ် = ဂရမ် · ဝယ်ယူနစ် = ကီလို (1 ကီလို = 1,000 ဂရမ် အလိုအလျောက်သိ) · အခြားထုပ် = အိတ်၊ 1 အိတ် = ဂရမ် ဘယ်လောက် ထည့် · ရေတွက်ယူနစ် = အိတ်',un_d_all:'ဌာနအားလုံး',un_d_main:'🍳 ဗဟိုမီးဖိုချောင်',un_d_dessert:'🍮 အချိုပွဲ',un_d_both:'ဌာန ၂ ခုလုံး သုံး',nav_units:'ယူနစ်',un_sub:'ယူနစ်အားလုံးကို တစ်နေရာတည်းတွင် စီမံ — ဘယ်အပိုင်းက ယူနစ်တူသုံးနိုင်ပြီး ဘယ်အပိုင်းက စာမျက်နှာသီးသန့်လဲ ပြပေးသည်',
   un_guide_t:'💡 မျှသုံးယူနစ် · စာမျက်နှာသီးသန့်ယူနစ်',
   un_g1:'🥬 ကုန်ကြမ်း အဓိကယူနစ် — စာမျက်နှာအားလုံး မျှသုံး (စတော့ · နည်း · ကုန်ကျ) · တစ်ကြိမ်သတ်မှတ် · စတော့ရှိ/နည်းထဲပါလျှင် မပြောင်းနိုင်',
   un_g2:'🛒 ဝယ်ယူနစ် — 📥 လက်ခံ + 🛒 မှာယူ မျှသုံး (ဥပမာ အိတ် = 1,000 ဂရမ်)',
@@ -4877,6 +4916,7 @@ CSS.add(`
 .un-f{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
 .un-f select{width:auto;min-width:92px;max-width:150px;flex:0 1 auto;min-height:44px}
 .un-sz{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.un-lim{flex-wrap:nowrap}.un-lim .un-q{width:68px;flex:0 1 68px;min-width:0}.un-lim select{min-width:0;flex:1 1 auto}
 .un-q{width:76px;min-height:44px;text-align:center;font-weight:700}
 .un-q[readonly]{background:#F3EBDB;color:var(--mut)}
 .un-eq{font-size:13.5px;white-space:nowrap}
@@ -4977,7 +5017,15 @@ function unAdvHtml(m,id){return '<div class="un-adv '+m.lv+'">'+(m.lv==='ok'?'�
 
 /* ---------- วัตถุดิบ: ค่าที่กำลังแก้ (ร่าง) รวมกับค่าจริง ---------- */
 function unOrig(it){const base=it.unit||'',bu=it.buy_unit&&it.buy_unit!==base?it.buy_unit:'';const cu=countUnitOf(it);
-  const cp=packsOf(it).find(p=>p.u===cu&&p.u!==bu);return {unit:base,buy_unit:bu,buy_qty:bu?num(it.buy_qty):'',count_unit:cu,cq:cp?cp.q:''};}
+  const cp=packsOf(it).find(p=>p.u===cu&&p.u!==bu),su=limUnits(it)[0]||base;
+  return {unit:base,buy_unit:bu,buy_qty:bu?num(it.buy_qty):'',count_unit:cu,cq:cp?cp.q:'',su,smin:itLimIn(it,it.min_qty),smax:itLimIn(it,it.max_qty)};}
+const UN_LIMK=['su','smin','smax'];   // 🎯 ขั้นต่ำ/Max ในการ์ด (ใส่เป็นหน่วย su · เก็บ min_qty/max_qty เป็นหน่วยหลัก · เจ้าของ 2026-10-19)
+function unLim(it,c,m){ // → {mn,mx,err} หน่วยหลัก
+  const has=v=>String(v==null?'':v).trim()!=='';if(!has(c.smin)&&!has(c.smax))return {mn:null,mx:null,err:''};
+  const f=unitFactor(m,c.su);if(f==null)return {mn:null,mx:null,err:t('it_lim_bad')};
+  const mn=has(c.smin)?rnd4(Math.max(0,num(c.smin))*f):null,mx=has(c.smax)&&num(c.smax)>0?rnd4(num(c.smax)*f):null;
+  return {mn,mx,err:mn!=null&&mx!=null&&mx<mn-1e-9?t('it_lim_order'):''};}
+const unSameQ=(a,b)=>(a==null?null:rnd4(num(a)))===(b==null?null:rnd4(num(b)));
 function unCur(it){return Object.assign(unOrig(it),UN_ED[it.id]||{});}
 function unNeedQ(m,u){ // หน่วยนี้ต้องใส่ขนาดเองไหม (ไม่ใช่หน่วยใช้ · ไม่ใช่หน่วยซื้อ · ตัวแปลงมาตรฐานไม่รู้)
   return !!u&&u!==m.unit&&u!==m.buy_unit&&unitConv(null,u,m.unit)==null;}
@@ -4989,13 +5037,16 @@ function unMerged(it,c){ // วัตถุดิบหน้าตาหลั�
   const cu=c.count_unit||base;
   if(unNeedQ({unit:base,buy_unit:bu},cu)){const q=num(c.cq);packs=packs.filter(p=>p.u!==cu);if(q>0)packs.push({u:cu,q:rnd4(q)});}
   return Object.assign({},it,{unit:base,buy_unit:bu,buy_qty:bq,packs,count_unit:cu&&cu!==base?cu:null});}
-function unDirty(it){const e=UN_ED[it.id];if(!e)return false;const o=unOrig(it);return Object.keys(e).some(k=>String(e[k]==null?'':e[k])!==String(o[k]==null?'':o[k]));}
+function unDirty(it){const e=UN_ED[it.id];if(!e)return false;const o=unOrig(it);
+  if(Object.keys(e).some(k=>!UN_LIMK.includes(k)&&String(e[k]==null?'':e[k])!==String(o[k]==null?'':o[k])))return true;
+  if(!UN_LIMK.some(k=>k in e))return false;const c=unCur(it),L=unLim(it,c,unMerged(it,c));   // เปลี่ยนแค่หน่วยที่แสดง (24 ถุง = 2 ลัง) ไม่นับว่าแก้
+  return !!L.err||!unSameQ(L.mn,it.min_qty)||!unSameQ(L.mx,num(it.max_qty)>0?it.max_qty:null);}
 function unBaseLock(it){return Math.abs(num(it.qty))>1e-9||(S.recipeItems||[]).some(x=>x.item_id===it.id);}
 function unItemErr(it,m,c){ // ข้อผิดพลาดที่ห้ามบันทึก
   if(m.buy_unit&&!(num(m.buy_qty)>0))return t('un_e_buyq',{u:trUnit(m.buy_unit)});
   if(unNeedQ(m,c.count_unit)&&!(num(c.cq)>0))return t('un_e_cq',{u:trUnit(c.count_unit)});
   const bad=itPackUsed(it.id,m);if(bad)return t('un_e_recipe',{u:trUnit(bad.u)});
-  return '';}
+  return unLim(it,c,m).err;}
 function unSel(id,field,opts,cur,dis,blank){return '<select data-id="'+esc(id)+'" data-f="'+field+'" onchange="unEdSel(this)"'+(dis?' disabled':'')+'>'+
   (blank?'<option value="">'+esc(blank)+'</option>':'')+unitOptions(opts,cur)+'</select>';}
 function unQin(id,field,v,ro){return '<input type="text" inputmode="decimal" class="un-q" data-id="'+esc(id)+'" data-f="'+field+'" value="'+esc(v==null?'':String(v))+'"'+(ro?' readonly':'')+' oninput="unEdIn(this)" onchange="unEdRepaint(this.dataset.id)">';}
@@ -5015,6 +5066,8 @@ function unCardHtml(it){
       '<label>'+esc(t('un_count_as'))+'</label><div class="un-f">'+unSel(it.id,'count_unit',all,c.count_unit||base,!K)+
         (unNeedQ({unit:base,buy_unit:c.buy_unit},c.count_unit)?'<span class="un-sz"><span class="un-eq">1 '+esc(trUnit(c.count_unit))+' =</span>'+unQin(it.id,'cq',c.cq,!K)+'<span class="un-eq">'+esc(trUnit(base))+'</span></span>':
          (cf!=null&&c.count_unit!==base?'<span class="un-eq mut">= '+fmtQ(cf)+' '+esc(trUnit(base))+'</span>':''))+'</div>'+
+      '<label>🎯 '+esc(t('un_lim'))+'</label><div class="un-f un-lim">'+unQin(it.id,'smin',c.smin,!K)+'<span class="un-eq">→</span>'+unQin(it.id,'smax',c.smax,!K)+
+        unSel(it.id,'su',limUnits(m),limUnits(m).includes(c.su)?c.su:(limUnits(m)[0]||base),!K)+'</div>'+
     '</div>';
   if(err)h+='<div class="un-adv bad">⚠ '+esc(err)+'</div>';
   h+=a.msgs.map(x=>unAdvHtml(x,it.id)).join('');
@@ -5037,6 +5090,8 @@ function unEdSel(el){const id=el.dataset.id,f=el.dataset.f,it=itemById(id);if(!i
   if(f==='buy_unit'){const s=unitConv(null,el.value,c.unit);e.buy_qty=s!=null?s:'';
     if(c.buy_unit&&c.count_unit===c.buy_unit&&el.value!==c.buy_unit&&num(c.buy_qty)>0){e.count_unit=c.buy_unit;e.cq=c.buy_qty;}}   // นับเป็นหน่วยซื้อเดิม → จำขนาดเดิมไว้ (ถุงเดิม 500 กรัม)
   if(f==='count_unit'){const ex=packsOf(it).find(p=>p.u===el.value);e.cq=ex?ex.q:'';}
+  if(f==='su'){const m=unMerged(it,c),fo=unitFactor(m,c.su),fn=unitFactor(m,el.value);   // เปลี่ยนหน่วย = แปลงตัวเลขตาม (24 ถุง → 2 ลัง)
+    ['smin','smax'].forEach(k=>{if(fo>0&&fn>0&&String(c[k]==null?'':c[k]).trim()!=='')e[k]=rnd4(num(c[k])*fo/fn);});}
   delete UN_ERR[id];unDraftSave();unEdRepaint(id);}
 function unEdIn(el){const e=unEdGet(el.dataset.id);e[el.dataset.f]=el.value;unDraftSave();}
 function unEdRepaint(id){const it=itemById(id),old=document.getElementById('unI_'+id);if(!it||!old||!old.isConnected)return;
@@ -5082,19 +5137,21 @@ function unPin(){if(S.tab!=='units')return;const c=unChanges();
     '<button type="button" class="btn" id="unSaveAll" onclick="unSaveAll()">💾 '+esc(t('un_save_n',{n:c.n}))+'</button></span>');}
 async function unDiscard(){if(!(await confirm2(t('un_discard_q'))))return;UN_ED={};UN_LK={};UN_ERR={};unDraftSave();unPaint();}
 async function unSaveAll(){await once(async()=>{
-  if(!canKitchen())return;const c=unChanges();if(!c.n)return;UN_ERR={};let ok=0,bad=0;
+  if(!canKitchen())return;const c=unChanges();if(!c.n)return;UN_ERR={};let ok=0,bad=0,maxGone=false;
   for(const it of c.items){const cur=unCur(it),m=unMerged(it,cur),e=unItemErr(it,m,cur);if(e){UN_ERR[it.id]=e;bad++;continue;}
     if(m.unit!==it.unit){let hist=true;try{const r=await sb.from('kc_moves').select('id').eq('ref_kind','item').eq('ref_id',it.id).limit(1);hist=!!(r&&(r.error||(r.data||[]).length));}catch(x){}
       if(hist||unBaseLock(it)){UN_ERR[it.id]=t('un_e_base');bad++;continue;}}
     const row={unit:m.unit,buy_unit:m.buy_unit,buy_qty:m.buy_unit?rnd4(num(m.buy_qty)):null,packs:m.packs,count_unit:(m.count_unit&&unitFactor(m,m.count_unit)!=null)?m.count_unit:null};
-    try{await db(()=>sb.from('ck_items').update(row).eq('id',it.id));}catch(x){UN_ERR[it.id]=String((x&&x.message)||x);bad++;continue;}
+    if(UN_LIMK.some(k=>k in (UN_ED[it.id]||{}))){const L=unLim(it,cur,m);row.min_qty=L.mn;if(L.mx!=null||it.max_qty!=null)row.max_qty=L.mx;}
+    try{await itWrite(x=>sb.from('ck_items').update(x).eq('id',it.id),row);}catch(x){UN_ERR[it.id]=String((x&&x.message)||x);bad++;continue;}
+    if((itWrite.dropped||[]).includes('max_qty')){delete row.max_qty;maxGone=true;}
     Object.assign(it,row);delete UN_ED[it.id];ok++;}
   for(const name of c.links){const e=UN_LK[name],f=numIn(e&&e.f);if(!(f>0)){bad++;continue;}
     const row={stk_name:name,recipe_id:e.rid,factor:rnd4(f),by_name:S.user&&S.user.name};
     try{await db(()=>sb.from('kc_links').upsert(row,{onConflict:'stk_name'}));}catch(x){bad++;continue;}
     TD_LINKS=(TD_LINKS||[]).filter(x=>supKey(x.stk_name)!==supKey(name)).concat([row]);delete UN_LK[name];ok++;}
   if(ok)UN_BR=null;unDraftSave();
-  toast(bad?t('un_saved_bad',{n:ok,b:bad}):t('un_saved',{n:ok}),bad?true:false);
+  toast(bad?t('un_saved_bad',{n:ok,b:bad}):maxGone?t('it_max_sql'):t('un_saved',{n:ok}),bad?true:maxGone?'warn':false);
   if(UN_TAB==='prods')await unLoadBranch(true);unPaint();});}
 function unUsage(u){let n=0;
   S.items.forEach(it=>{if(it.active===false)return;if(it.unit===u||it.buy_unit===u||it.count_unit===u||(Array.isArray(it.packs)&&it.packs.some(p=>p&&p.u===u)))n++;});

@@ -842,6 +842,10 @@ function countUnitOf(it){ // หน่วยนับ: ตั้งเอง →
   if(['กรัม','กก.','ขีด','มล.','ลิตร'].includes(base)){const ps=packsOf(it).filter(p=>!['กรัม','กก.','ขีด','มล.','ลิตร'].includes(p.u)).sort((a,b)=>a.q-b.q);
     if(ps.length)return ps[0].u;if(base==='กรัม')return 'กก.';if(base==='มล.')return 'ลิตร';}
   return base;}
+function limUnits(it){ // หน่วยให้เลือกตอนใส่ขั้นต่ำ/Max ของวัตถุดิบ: หน่วยนับ → หน่วยซื้อ → บรรจุอื่น → หน่วยหลัก (เก็บใน DB เป็นหน่วยหลักเสมอ)
+  const out=[];[countUnitOf(it),it.buy_unit].concat(packsOf(it).map(p=>p.u),[it.unit]).forEach(u=>{if(u&&!out.includes(u)&&unitFactor(it,u)!=null)out.push(u);});return out;}
+function qtyIn(it,q,u){const f=unitFactor(it,u);return f>0?rnd4(num(q)/f):null;}   // หน่วยหลัก → u (แปลงไม่ได้ = null)
+function qtyTxt(it,q){const u=countUnitOf(it),v=u!==it.unit?qtyIn(it,q,u):null;return v!=null?fmtQ(v)+' '+trUnit(u):fmtQ(q)+' '+trUnit(it.unit||'');}   // แสดงเป็นหน่วยนับ
 function isMassVol(u){return ['กรัม','กก.','ขีด','มล.','ลิตร'].includes(u);}
 
 /* ============================================================
