@@ -843,13 +843,13 @@ function isMassVol(u){return ['กรัม','กก.','ขีด','มล.','�
    ============================================================ */
 const S={user:null,prof:null,tab:'today',loaded:false,booted:false,kcSql:true,
   items:[],recipes:[],recipeItems:[],boms:{},sups:[],cfg:null,lineGroups:[],branches:[],branchesAll:[],lineEp:null};
-const CFG_DEF={ck_sup_names:['ครัวกลาง'],branch_line:{},overhead_mode:'per_unit',overhead_value:0,markup_pct:0,bill_prefix:'',refill_days:3,units:[],order_lookback_days:3};
+const CFG_DEF={ck_sup_names:['ครัวกลาง'],branch_line:{},overhead_mode:'per_unit',overhead_value:0,markup_pct:0,bill_prefix:'',refill_days:3,units:[],order_lookback_days:1};   // เจ้าของ 2026-10-18: ออเดอร์ที่ผ่านไปแล้วไม่ต้องขึ้น — 1 = เมื่อวาน (ส่งวันนี้) + วันนี้ (ส่งพรุ่งนี้)
 function cfgClean(v){v=(v&&typeof v==='object')?v:{};const c=Object.assign({},CFG_DEF,v);
   c.ck_sup_names=(Array.isArray(c.ck_sup_names)?c.ck_sup_names:[]).map(x=>String(x||'').trim()).filter(Boolean);if(!c.ck_sup_names.length)c.ck_sup_names=['ครัวกลาง'];
   c.branch_line=(c.branch_line&&typeof c.branch_line==='object')?c.branch_line:{};
   c.overhead_mode=c.overhead_mode==='pct'?'pct':'per_unit';c.overhead_value=Math.max(0,num(c.overhead_value));c.markup_pct=num(c.markup_pct);
   c.bill_prefix=String(c.bill_prefix||'').trim().slice(0,8);c.refill_days=Math.max(1,Math.min(60,num(c.refill_days)||3));
-  c.units=(Array.isArray(c.units)?c.units:[]).map(x=>String(x||'').trim()).filter(Boolean);c.order_lookback_days=Math.max(0,Math.min(30,num(c.order_lookback_days)||3));
+  c.units=(Array.isArray(c.units)?c.units:[]).map(x=>String(x||'').trim()).filter(Boolean);c.order_lookback_days=c.order_lookback_days===0||c.order_lookback_days==='0'?0:1;   // เพดาน 1 วัน (ค่าเก่า 3 ที่บันทึกไว้ = 1)
   return c;}
 const MISSING_TBL=e=>{const c=(e&&e.code)||'',m=String((e&&e.message)||e||'');
   return c==='42P01'||c==='PGRST205'||c==='PGRST204'||c==='42501'||c==='42703'||/does not exist|not find the|permission denied/i.test(m);};

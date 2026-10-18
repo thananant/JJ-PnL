@@ -9,7 +9,7 @@ th:{st_line_t:'กลุ่มไลน์สาขา (ส่งบิลส่
   st_test:'🔔 ทดสอบส่ง',st_test_txt:'🔔 ทดสอบส่งจากระบบครัวกลาง (JJ ครัวกลาง)\nสาขา: {b}\nเห็นข้อความนี้ = ตั้งกลุ่มไลน์สาขาถูกต้อง ✅',st_test_ok:'ส่งข้อความทดสอบเข้ากลุ่ม {g} แล้ว',st_no_groups:'ยังไม่มีกลุ่มไลน์ — ดึงกลุ่มได้ที่หน้า 🏷️ ร้านค้า',
   st_sup_t:'ชื่อครัวกลางในแอพนับสต๊อก',st_sup_h:'(ไม่บังคับ — สินค้าที่ชื่อตรงกับเมนูครัวกลางถูกนับเป็นออเดอร์ครัวกลางอยู่แล้ว) สาขาสั่งของจากครัวกลางผ่านแอพนับสต๊อก โดยตั้งซัพของสินค้าเป็นชื่อพวกนี้ — ระบบจะดึงออเดอร์ที่ซัพตรงกับชื่อในรายการ (ไม่สนตัวพิมพ์/ช่องว่าง)',
   st_sup_add:'＋ เพิ่มชื่อ',st_sup_ph:'เช่น ครัวกลาง',st_sup_dup:'มีชื่อนี้แล้ว',st_sup_last:'ต้องมีอย่างน้อย 1 ชื่อ',
-  st_bill_t:'บิลสาขา & รอบงาน',st_prefix:'ตัวหน้าเลขบิล',st_prefix_h:'เลขบิล = {p}<สาขา>-<ปปดดวว>-<ลำดับ> เช่น {ex}',st_lookback:'ดูออเดอร์สาขาย้อนหลัง (วัน)',st_lookback_h:'ออเดอร์เก่ากว่านี้ไม่ขึ้นในหน้าส่งสาขา (0 = เฉพาะวันนี้)',
+  st_bill_t:'บิลสาขา & รอบงาน',st_prefix:'ตัวหน้าเลขบิล',st_prefix_h:'เลขบิล = {p}<สาขา>-<ปปดดวว>-<ลำดับ> เช่น {ex}',st_lookback:'ดูออเดอร์สาขาย้อนหลัง (วัน)',st_lookback_h:'1 = ออเดอร์เมื่อวาน (ส่งวันนี้) + วันนี้ (ส่งพรุ่งนี้) · 0 = เฉพาะวันนี้ · ออเดอร์ที่เก่ากว่านี้ถือว่าผ่านไปแล้ว ไม่ขึ้น',
   st_refill:'เติมสต๊อกสำเร็จรูปให้พอกี่วัน',st_refill_h:'ใช้คิด "ต้องทำเติม" เมื่อเมนูไม่ได้ตั้งเป้าเอง = ยอดส่งเฉลี่ยต่อวัน × จำนวนวันนี้',
   st_cost_t:'ต้นทุนแฝง + ราคาขายสาขา',st_cost_h:'ราคาสินค้า = ต้นทุนวัตถุดิบจริงของล็อตที่ทำ + ต้นทุนแฝง (ค่าแรง ไฟ แก๊ส ฯลฯ) · ราคาขายสาขา = ต้นทุน/หน่วย × (1 + % บวก) · ตั้งเมนูเป็น % เฉพาะเมนูได้ที่หน้า 📖 เมนู',
   st_oh_mode:'คิดต้นทุนแฝงแบบ',st_oh_unit:'บาทต่อหน่วยที่ผลิต',st_oh_pct:'% ของต้นทุนวัตถุดิบ',st_oh_val:'ค่าต้นทุนแฝง',st_oh_sug:'💡 หน้า 💰 บัญชี คำนวณค่าแนะนำจากค่าใช้จ่ายจริงของเดือน ÷ จำนวนที่ผลิต แล้วกดใช้ได้เลย',
@@ -22,7 +22,7 @@ en:{st_line_t:'Branch LINE groups (delivery bills)',st_line_h:'Pick each branch\
   st_test:'🔔 Send a test',st_test_txt:'🔔 ทดสอบส่งจากระบบครัวกลาง (JJ ครัวกลาง)\nสาขา: {b}\nเห็นข้อความนี้ = ตั้งกลุ่มไลน์สาขาถูกต้อง ✅',st_test_ok:'Test message sent to {g}',st_no_groups:'No LINE groups yet — refresh them on the 🏷️ Suppliers page',
   st_sup_t:'Kitchen\'s supplier name in the stock-count app',st_sup_h:'(optional — products whose name matches a kitchen menu already count as kitchen orders) Branches order from the kitchen through the stock-count app by setting a product\'s supplier to one of these names — orders whose supplier matches (case/space-insensitive) are picked up',
   st_sup_add:'＋ Add name',st_sup_ph:'e.g. ครัวกลาง',st_sup_dup:'Already listed',st_sup_last:'Keep at least one name',
-  st_bill_t:'Branch bills & cycles',st_prefix:'Bill number prefix',st_prefix_h:'Bill no. = {p}<BRANCH>-<YYMMDD>-<n>, e.g. {ex}',st_lookback:'Show branch orders from the last (days)',st_lookback_h:'Older orders do not show on the Deliver page (0 = today only)',
+  st_bill_t:'Branch bills & cycles',st_prefix:'Bill number prefix',st_prefix_h:'Bill no. = {p}<BRANCH>-<YYMMDD>-<n>, e.g. {ex}',st_lookback:'Show branch orders from the last (days)',st_lookback_h:'1 = yesterday\'s orders (deliver today) + today\'s (deliver tomorrow) · 0 = today only · older orders are past and are not shown',
   st_refill:'Refill finished stock to cover (days)',st_refill_h:'Used for "needs refill" when a menu has no target of its own = average sent per day × these days',
   st_cost_t:'Overhead + branch price',st_cost_h:'Product cost = actual ingredient cost of the lot + overhead (labour, power, gas …) · Branch price = cost/unit × (1 + markup %) · a per-menu % can be set on 📖 Menus',
   st_oh_mode:'Overhead calculated as',st_oh_unit:'Baht per unit produced',st_oh_pct:'% of ingredient cost',st_oh_val:'Overhead value',st_oh_sug:'💡 The 💰 Accounts page suggests a value from the month\'s real expenses ÷ units produced, with a button to apply it',
@@ -35,7 +35,7 @@ lo:{st_line_t:'ກຸ່ມໄລນ໌ສາຂາ (ສົ່ງບິນສົ
   st_test:'🔔 ທົດສອບສົ່ງ',st_test_txt:'🔔 ทดสอบส่งจากระบบครัวกลาง (JJ ครัวกลาง)\nสาขา: {b}\nเห็นข้อความนี้ = ตั้งกลุ่มไลน์สาขาถูกต้อง ✅',st_test_ok:'ສົ່ງຂໍ້ຄວາມທົດສອບເຂົ້າກຸ່ມ {g} ແລ້ວ',st_no_groups:'ຍັງບໍ່ມີກຸ່ມໄລນ໌ — ດຶງກຸ່ມໄດ້ທີ່ໜ້າ 🏷️ ຮ້ານຄ້າ',
   st_sup_t:'ຊື່ຄົວກາງໃນແອັບນັບສະຕັອກ',st_sup_h:'(ບໍ່ບັງຄັບ — ສິນຄ້າທີ່ຊື່ກົງກັບເມນູຄົວກາງຖືກນັບເປັນອໍເດີຄົວກາງຢູ່ແລ້ວ) ສາຂາສັ່ງເຄື່ອງຈາກຄົວກາງຜ່ານແອັບນັບສະຕັອກ ໂດຍຕັ້ງຊັບຂອງສິນຄ້າເປັນຊື່ເຫຼົ່ານີ້ — ລະບົບຈະດຶງອໍເດີທີ່ຊັບກົງກັບຊື່ໃນລາຍການ (ບໍ່ສົນຕົວພິມ/ຊ່ອງວ່າງ)',
   st_sup_add:'＋ ເພີ່ມຊື່',st_sup_ph:'ເຊັ່ນ ครัวกลาง',st_sup_dup:'ມີຊື່ນີ້ແລ້ວ',st_sup_last:'ຕ້ອງມີຢ່າງໜ້ອຍ 1 ຊື່',
-  st_bill_t:'ບິນສາຂາ & ຮອບວຽກ',st_prefix:'ຕົວໜ້າເລກບິນ',st_prefix_h:'ເລກບິນ = {p}<ສາຂາ>-<ປປດດວວ>-<ລຳດັບ> ເຊັ່ນ {ex}',st_lookback:'ເບິ່ງອໍເດີສາຂາຍ້ອນຫຼັງ (ມື້)',st_lookback_h:'ອໍເດີເກົ່າກວ່ານີ້ບໍ່ຂຶ້ນໃນໜ້າສົ່ງສາຂາ (0 = ສະເພາະມື້ນີ້)',
+  st_bill_t:'ບິນສາຂາ & ຮອບວຽກ',st_prefix:'ຕົວໜ້າເລກບິນ',st_prefix_h:'ເລກບິນ = {p}<ສາຂາ>-<ປປດດວວ>-<ລຳດັບ> ເຊັ່ນ {ex}',st_lookback:'ເບິ່ງອໍເດີສາຂາຍ້ອນຫຼັງ (ມື້)',st_lookback_h:'1 = ອໍເດີມື້ວານ (ສົ່ງມື້ນີ້) + ມື້ນີ້ (ສົ່ງມື້ອື່ນ) · 0 = ສະເພາະມື້ນີ້ · ອໍເດີເກົ່າກວ່ານີ້ຖືວ່າຜ່ານໄປແລ້ວ ບໍ່ຂຶ້ນ',
   st_refill:'ເຕີມສະຕັອກສຳເລັດຮູບໃຫ້ພໍຈັກມື້',st_refill_h:'ໃຊ້ຄິດ "ຕ້ອງເຮັດເຕີມ" ເມື່ອເມນູບໍ່ໄດ້ຕັ້ງເປົ້າເອງ = ຍອດສົ່ງສະເລ່ຍຕໍ່ມື້ × ຈຳນວນມື້ນີ້',
   st_cost_t:'ຕົ້ນທຶນແຝງ + ລາຄາຂາຍສາຂາ',st_cost_h:'ລາຄາສິນຄ້າ = ຕົ້ນທຶນວັດຖຸດິບຈິງຂອງລັອດທີ່ເຮັດ + ຕົ້ນທຶນແຝງ (ຄ່າແຮງ ໄຟ ແກັສ ຯລຯ) · ລາຄາຂາຍສາຂາ = ຕົ້ນທຶນ/ຫົວໜ່ວຍ × (1 + % ບວກ) · ຕັ້ງ % ສະເພາະເມນູໄດ້ທີ່ໜ້າ 📖 ເມນູ',
   st_oh_mode:'ຄິດຕົ້ນທຶນແຝງແບບ',st_oh_unit:'ບາດຕໍ່ຫົວໜ່ວຍທີ່ຜະລິດ',st_oh_pct:'% ຂອງຕົ້ນທຶນວັດຖຸດິບ',st_oh_val:'ຄ່າຕົ້ນທຶນແຝງ',st_oh_sug:'💡 ໜ້າ 💰 ບັນຊີ ຄິດຄ່າແນະນຳຈາກຄ່າໃຊ້ຈ່າຍຈິງຂອງເດືອນ ÷ ຈຳນວນທີ່ຜະລິດ ແລ້ວກົດໃຊ້ໄດ້ເລີຍ',
@@ -48,7 +48,7 @@ my:{st_line_t:'ဆိုင်ခွဲ LINE အုပ်စုများ (ပ
   st_test:'🔔 စမ်းပို့ရန်',st_test_txt:'🔔 ทดสอบส่งจากระบบครัวกลาง (JJ ครัวกลาง)\nสาขา: {b}\nเห็นข้อความนี้ = ตั้งกลุ่มไลน์สาขาถูกต้อง ✅',st_test_ok:'{g} သို့ စမ်းသပ်စာ ပို့ပြီး',st_no_groups:'LINE အုပ်စု မရှိသေးပါ — 🏷️ ဆိုင်များ စာမျက်နှာတွင် ပြန်ဆွဲယူပါ',
   st_sup_t:'စတော့ရေတွက်စနစ်ရှိ မီးဖိုချောင် ဆိုင်အမည်',st_sup_h:'(မလိုအပ်ပါ — မီးဖိုချောင်မီနူးနှင့် အမည်တူသော ပစ္စည်းများကို မီးဖိုချောင်အော်ဒါအဖြစ် သတ်မှတ်ပြီးဖြစ်သည်) ဆိုင်ခွဲများသည် စတော့ရေတွက်စနစ်တွင် ထုတ်ကုန်၏ ဆိုင်ကို ဤအမည်များထဲမှ တစ်ခုအဖြစ် သတ်မှတ်ပြီး မီးဖိုချောင်မှ မှာယူသည် — ဆိုင်အမည်ကိုက်ညီသော အော်ဒါများကို ဆွဲယူမည် (စာလုံးအကြီးအသေး/နေရာလွတ် မသက်ရောက်)',
   st_sup_add:'＋ အမည်ထည့်',st_sup_ph:'ဥပမာ ครัวกลาง',st_sup_dup:'ရှိပြီးသား',st_sup_last:'အနည်းဆုံး အမည်တစ်ခု ထားရမည်',
-  st_bill_t:'ဆိုင်ခွဲဘေလ် & သံသရာ',st_prefix:'ဘေလ်နံပါတ် ရှေ့ဆွဲ',st_prefix_h:'ဘေလ်နံပါတ် = {p}<ဆိုင်ခွဲ>-<YYMMDD>-<n> ဥပမာ {ex}',st_lookback:'ဆိုင်ခွဲအော်ဒါ နောက်ကြည့်ရက် (ရက်)',st_lookback_h:'ဤထက်ဟောင်းသော အော်ဒါများ ပို့ဆောင်စာမျက်နှာတွင် မပေါ် (0 = ယနေ့သာ)',
+  st_bill_t:'ဆိုင်ခွဲဘေလ် & သံသရာ',st_prefix:'ဘေလ်နံပါတ် ရှေ့ဆွဲ',st_prefix_h:'ဘေလ်နံပါတ် = {p}<ဆိုင်ခွဲ>-<YYMMDD>-<n> ဥပမာ {ex}',st_lookback:'ဆိုင်ခွဲအော်ဒါ နောက်ကြည့်ရက် (ရက်)',st_lookback_h:'1 = မနေ့က အော်ဒါ (ယနေ့ပို့) + ယနေ့ (မနက်ဖြန်ပို့) · 0 = ယနေ့သာ · ဤထက်ဟောင်းသော အော်ဒါများ ကုန်ဆုံးပြီး မပေါ်ပါ',
   st_refill:'ထုတ်ကုန်စတော့ ဖြည့်ရန် (ရက်)',st_refill_h:'မီနူးတွင် ကိုယ်ပိုင်ပစ်မှတ် မရှိလျှင် "ဖြည့်ရန်လို" ကို တွက်ရန် = တစ်နေ့ပျမ်းမျှပို့မှု × ဤရက်',
   st_cost_t:'ဝှက်ကုန်ကျစရိတ် + ဆိုင်ခွဲဈေး',st_cost_h:'ထုတ်ကုန်ဈေး = ထုတ်လုပ်သောအသုတ်၏ အမှန်ကုန်ကြမ်းကုန်ကျစရိတ် + ဝှက်ကုန်ကျစရိတ် (လုပ်အားခ၊ မီး၊ ဂက်စ် …) · ဆိုင်ခွဲဈေး = ကုန်ကျစရိတ်/ယူနစ် × (1 + markup %) · မီနူးတစ်ခုချင်း % ကို 📖 မီနူး တွင် သတ်မှတ်နိုင်',
   st_oh_mode:'ဝှက်ကုန်ကျစရိတ် တွက်နည်း',st_oh_unit:'ထုတ်လုပ်သည့် ယူနစ်တစ်ခုလျှင် ဘတ်',st_oh_pct:'ကုန်ကြမ်းကုန်ကျစရိတ်၏ %',st_oh_val:'ဝှက်ကုန်ကျစရိတ် တန်ဖိုး',st_oh_sug:'💡 💰 စာရင်း စာမျက်နှာက လ၏ အမှန်ကုန်ကျစရိတ် ÷ ထုတ်လုပ်မှုမှ အကြံပြုတန်ဖိုး တွက်ပေးပြီး နှိပ်၍ သုံးနိုင်',
@@ -149,6 +149,6 @@ function stSqlHtml(){return '<div class="'+(S.kcSql?'okbox':'badbox')+'">'+esc(t
 async function stSave(){await once(async()=>{
   if(!isAdminish()||!ST_W)return;
   const w=ST_W,patch={branch_line:Object.assign({},w.branch_line),ck_sup_names:w.ck_sup_names.slice(),bill_prefix:String(w.bill_prefix||'').trim().slice(0,8),
-    order_lookback_days:Math.max(0,Math.min(30,Math.round(num(w.order_lookback_days)))),refill_days:Math.max(1,Math.min(60,Math.round(num(w.refill_days))||3)),
+    order_lookback_days:Math.round(num(w.order_lookback_days))===0?0:1,refill_days:Math.max(1,Math.min(60,Math.round(num(w.refill_days))||3)),
     overhead_mode:w.overhead_mode==='pct'?'pct':'per_unit',overhead_value:Math.max(0,num(w.overhead_value)),markup_pct:num(w.markup_pct),units:w.units.slice()};
   await cfgSave(patch);toast(t('st_saved'));if(S.tab==='set')show('set');});}
