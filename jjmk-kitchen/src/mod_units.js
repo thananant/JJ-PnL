@@ -9,7 +9,7 @@
    · 📏 รายชื่อหน่วย: ตัวแปลงมาตรฐาน (แก้ไม่ได้) · หน่วยทั้งหมดพร้อมจำนวนที่ใช้ · หน่วยเพิ่มเติม (cfg.units — ย้ายมาจาก ⚙️ ตั้งค่า) เพิ่ม/ลบ (หัวหน้า · ลบได้เฉพาะที่ไม่มีใครใช้)
    ============================================================ */
 I18N.add({
-th:{un_use:'ใช้ (สต๊อก/สูตร)',un_buy_as:'ซื้อเป็น',un_count_as:'นับเป็น',un_same_use:'เหมือนหน่วยใช้',un_lock:'มีสต๊อก/อยู่ในสูตร — เปลี่ยนไม่ได้',un_dirty:'ยังไม่บันทึก',un_apply_all:'ใช้คำแนะนำทั้งหมด ({n})',un_applied_n:'ใส่คำแนะนำแล้ว {n} รายการ — กด 💾 บันทึก',un_pending:'แก้ไว้ {n} รายการ',un_save_n:'บันทึก {n} รายการ',un_discard:'ยกเลิกที่แก้',un_discard_q:'ทิ้งที่แก้ไว้ทั้งหมด?',un_saved:'บันทึกแล้ว {n} รายการ ✅',un_saved_bad:'บันทึกแล้ว {n} · ยังบันทึกไม่ได้ {b} รายการ (ดูที่ขึ้น ⚠)',un_e_buyq:'ใส่ขนาด 1 {u} = ?',un_e_cq:'ใส่ขนาด 1 {u} = ?',un_e_recipe:'สูตรใช้ {u} อยู่ — หน่วยแบบนี้จะแปลงไม่ได้',un_e_base:'เปลี่ยนหน่วยใช้ไม่ได้ — มีประวัติ/สต๊อกแล้ว',un_br_h:'แก้ "1 หน่วยของสาขา = เท่าไรของครัว" ในการ์ดได้เลย แล้วกด 💾 ทีเดียว',un_g7:'📌 ตัวอย่าง: ซื้อเป็น กก. · ใช้ในสูตรเป็นกรัม · นับเป็นถุง → หน่วยหลัก = กรัม (เล็กสุดที่ใช้) · หน่วยซื้อ = กก. (ระบบรู้เองว่า 1 กก. = 1,000 กรัม) · บรรจุอื่น = ถุง ใส่ว่า 1 ถุง = กี่กรัม · หน่วยนับ = ถุง',un_d_all:'ทุกแผนก',un_d_main:'🍳 ครัวกลาง',un_d_dessert:'🍮 ของหวาน',un_d_both:'ใช้ทั้ง 2 แผนก',nav_units:'หน่วย',un_sub:'จัดการหน่วยทั้งหมดในที่เดียว — ระบบบอกว่าส่วนไหนใช้หน่วยเดียวกันได้ ส่วนไหนเป็นหน่วยเฉพาะหน้า',
+th:{un_use:'ใช้ (สต๊อก/สูตร)',un_buy_as:'ซื้อเป็น',un_lim:'ขั้นต่ำ → Max',un_count_as:'นับเป็น',un_same_use:'เหมือนหน่วยใช้',un_lock:'มีสต๊อก/อยู่ในสูตร — เปลี่ยนไม่ได้',un_dirty:'ยังไม่บันทึก',un_apply_all:'ใช้คำแนะนำทั้งหมด ({n})',un_applied_n:'ใส่คำแนะนำแล้ว {n} รายการ — กด 💾 บันทึก',un_pending:'แก้ไว้ {n} รายการ',un_save_n:'บันทึก {n} รายการ',un_discard:'ยกเลิกที่แก้',un_discard_q:'ทิ้งที่แก้ไว้ทั้งหมด?',un_saved:'บันทึกแล้ว {n} รายการ ✅',un_saved_bad:'บันทึกแล้ว {n} · ยังบันทึกไม่ได้ {b} รายการ (ดูที่ขึ้น ⚠)',un_e_buyq:'ใส่ขนาด 1 {u} = ?',un_e_cq:'ใส่ขนาด 1 {u} = ?',un_e_recipe:'สูตรใช้ {u} อยู่ — หน่วยแบบนี้จะแปลงไม่ได้',un_e_base:'เปลี่ยนหน่วยใช้ไม่ได้ — มีประวัติ/สต๊อกแล้ว',un_br_h:'แก้ "1 หน่วยของสาขา = เท่าไรของครัว" ในการ์ดได้เลย แล้วกด 💾 ทีเดียว',un_g7:'📌 ตัวอย่าง: ซื้อเป็น กก. · ใช้ในสูตรเป็นกรัม · นับเป็นถุง → หน่วยหลัก = กรัม (เล็กสุดที่ใช้) · หน่วยซื้อ = กก. (ระบบรู้เองว่า 1 กก. = 1,000 กรัม) · บรรจุอื่น = ถุง ใส่ว่า 1 ถุง = กี่กรัม · หน่วยนับ = ถุง',un_d_all:'ทุกแผนก',un_d_main:'🍳 ครัวกลาง',un_d_dessert:'🍮 ของหวาน',un_d_both:'ใช้ทั้ง 2 แผนก',nav_units:'หน่วย',un_sub:'จัดการหน่วยทั้งหมดในที่เดียว — ระบบบอกว่าส่วนไหนใช้หน่วยเดียวกันได้ ส่วนไหนเป็นหน่วยเฉพาะหน้า',
   un_guide_t:'💡 หน่วยไหนใช้ร่วมกัน · หน่วยไหนเฉพาะหน้า',
   un_g1:'🥬 หน่วยหลักของวัตถุดิบ — ใช้ร่วมทุกหน้า (สต๊อก · สูตร · ต้นทุน) · ตั้งครั้งเดียว · เปลี่ยนไม่ได้เมื่อมีสต๊อก/อยู่ในสูตร',
   un_g2:'🛒 หน่วยซื้อ — ใช้ร่วมกัน 📥 รับของ + 🛒 สั่งของ (เช่น ถุง = 1,000 กรัม)',
@@ -29,7 +29,7 @@ th:{un_use:'ใช้ (สต๊อก/สูตร)',un_buy_as:'ซื้อเ
   un_custom_h:'หน่วยที่ไม่มีในรายการ — ใช้ได้เมื่อวัตถุดิบตั้งขนาดบรรจุให้แล้ว',un_add:'＋ เพิ่มหน่วย',un_ph:'เช่น กระปุก',un_dup:'มีหน่วยนี้แล้ว',
   un_del_used:'ยังมี {n} รายการใช้หน่วยนี้ — ลบไม่ได้',un_del_q:'ลบหน่วย "{u}"?',un_added:'เพิ่มหน่วยแล้ว',un_deleted:'ลบหน่วยแล้ว',un_boss:'เพิ่ม/ลบหน่วยได้เฉพาะหัวหน้า',
   un_applied:'ตั้งหน่วยนับเป็น {u} แล้ว',st_units_moved:'ย้ายไปจัดการที่แท็บ 📏 หน่วย แล้ว',st_units_go:'ไปหน้า 📏 หน่วย'},
-en:{un_use:'Use (stock/recipes)',un_buy_as:'Buy as',un_count_as:'Count as',un_same_use:'Same as use unit',un_lock:'Has stock / in a recipe — locked',un_dirty:'Not saved',un_apply_all:'Use all suggestions ({n})',un_applied_n:'{n} suggestions filled in — tap 💾 Save',un_pending:'{n} changed',un_save_n:'Save {n}',un_discard:'Discard changes',un_discard_q:'Discard all changes?',un_saved:'Saved {n} ✅',un_saved_bad:'Saved {n} · {b} could not be saved (see ⚠)',un_e_buyq:'Enter the size: 1 {u} = ?',un_e_cq:'Enter the size: 1 {u} = ?',un_e_recipe:'A recipe uses {u} — it would no longer convert',un_e_base:'Use unit is locked — it has history/stock',un_br_h:'Edit "1 branch unit = how much of the kitchen product" right in the card, then tap 💾 once',un_g7:'📌 Example: bought in kg · used in g · counted in bags → base unit = g (the smallest you use) · buying unit = kg (the app knows 1 kg = 1,000 g) · other pack = bag, enter 1 bag = ? g · count unit = bag',un_d_all:'All sections',un_d_main:'🍳 Central kitchen',un_d_dessert:'🍮 Desserts',un_d_both:'Used by both sections',nav_units:'Units',un_sub:'Manage every unit in one place — the app shows which units can be shared and which belong to one page only',
+en:{un_use:'Use (stock/recipes)',un_buy_as:'Buy as',un_lim:'Min → Max',un_count_as:'Count as',un_same_use:'Same as use unit',un_lock:'Has stock / in a recipe — locked',un_dirty:'Not saved',un_apply_all:'Use all suggestions ({n})',un_applied_n:'{n} suggestions filled in — tap 💾 Save',un_pending:'{n} changed',un_save_n:'Save {n}',un_discard:'Discard changes',un_discard_q:'Discard all changes?',un_saved:'Saved {n} ✅',un_saved_bad:'Saved {n} · {b} could not be saved (see ⚠)',un_e_buyq:'Enter the size: 1 {u} = ?',un_e_cq:'Enter the size: 1 {u} = ?',un_e_recipe:'A recipe uses {u} — it would no longer convert',un_e_base:'Use unit is locked — it has history/stock',un_br_h:'Edit "1 branch unit = how much of the kitchen product" right in the card, then tap 💾 once',un_g7:'📌 Example: bought in kg · used in g · counted in bags → base unit = g (the smallest you use) · buying unit = kg (the app knows 1 kg = 1,000 g) · other pack = bag, enter 1 bag = ? g · count unit = bag',un_d_all:'All sections',un_d_main:'🍳 Central kitchen',un_d_dessert:'🍮 Desserts',un_d_both:'Used by both sections',nav_units:'Units',un_sub:'Manage every unit in one place — the app shows which units can be shared and which belong to one page only',
   un_guide_t:'💡 Shared units · page-only units',
   un_g1:'🥬 Ingredient base unit — shared by every page (stock · recipes · cost) · set once · locked while there is stock / it is in a recipe',
   un_g2:'🛒 Buying unit — shared by 📥 Receive + 🛒 Order (e.g. bag = 1,000 g)',
@@ -49,7 +49,7 @@ en:{un_use:'Use (stock/recipes)',un_buy_as:'Buy as',un_count_as:'Count as',un_sa
   un_custom_h:'Units missing from the list — usable once the ingredient has a pack size',un_add:'＋ Add unit',un_ph:'e.g. jar',un_dup:'That unit already exists',
   un_del_used:'{n} items still use this unit — cannot delete',un_del_q:'Delete unit "{u}"?',un_added:'Unit added',un_deleted:'Unit deleted',un_boss:'Only a manager can add/delete units',
   un_applied:'Count unit set to {u}',st_units_moved:'Moved to the 📏 Units tab',st_units_go:'Go to 📏 Units'},
-lo:{un_use:'ໃຊ້ (ສະຕັອກ/ສູດ)',un_buy_as:'ຊື້ເປັນ',un_count_as:'ນັບເປັນ',un_same_use:'ຄືຫົວໜ່ວຍໃຊ້',un_lock:'ມີສະຕັອກ/ຢູ່ໃນສູດ — ປ່ຽນບໍ່ໄດ້',un_dirty:'ຍັງບໍ່ບັນທຶກ',un_apply_all:'ໃຊ້ຄຳແນະນຳທັງໝົດ ({n})',un_applied_n:'ໃສ່ຄຳແນະນຳແລ້ວ {n} ລາຍການ — ກົດ 💾 ບັນທຶກ',un_pending:'ແກ້ໄວ້ {n} ລາຍການ',un_save_n:'ບັນທຶກ {n} ລາຍການ',un_discard:'ຍົກເລີກທີ່ແກ້',un_discard_q:'ຖິ້ມທີ່ແກ້ໄວ້ທັງໝົດ?',un_saved:'ບັນທຶກແລ້ວ {n} ລາຍການ ✅',un_saved_bad:'ບັນທຶກແລ້ວ {n} · ຍັງບັນທຶກບໍ່ໄດ້ {b} ລາຍການ (ເບິ່ງທີ່ຂຶ້ນ ⚠)',un_e_buyq:'ໃສ່ຂະໜາດ 1 {u} = ?',un_e_cq:'ໃສ່ຂະໜາດ 1 {u} = ?',un_e_recipe:'ສູດໃຊ້ {u} ຢູ່ — ຈະແປງບໍ່ໄດ້',un_e_base:'ປ່ຽນຫົວໜ່ວຍໃຊ້ບໍ່ໄດ້ — ມີປະຫວັດ/ສະຕັອກແລ້ວ',un_br_h:'ແກ້ "1 ຫົວໜ່ວຍຂອງສາຂາ = ເທົ່າໃດຂອງຄົວ" ໃນບັດໄດ້ເລີຍ ແລ້ວກົດ 💾 ເທື່ອດຽວ',un_g7:'📌 ຕົວຢ່າງ: ຊື້ເປັນ ກິໂລ · ໃຊ້ໃນສູດເປັນກຣາມ · ນັບເປັນຖົງ → ຫົວໜ່ວຍຫຼັກ = ກຣາມ · ຫົວໜ່ວຍຊື້ = ກິໂລ (ລະບົບຮູ້ເອງວ່າ 1 ກິໂລ = 1,000 ກຣາມ) · ບັນຈຸອື່ນ = ຖົງ ໃສ່ວ່າ 1 ຖົງ = ຈັກກຣາມ · ຫົວໜ່ວຍນັບ = ຖົງ',un_d_all:'ທຸກພະແນກ',un_d_main:'🍳 ຄົວກາງ',un_d_dessert:'🍮 ຂອງຫວານ',un_d_both:'ໃຊ້ທັງ 2 ພະແນກ',nav_units:'ຫົວໜ່ວຍ',un_sub:'ຈັດການຫົວໜ່ວຍທັງໝົດໃນບ່ອນດຽວ — ລະບົບບອກວ່າສ່ວນໃດໃຊ້ຫົວໜ່ວຍດຽວກັນໄດ້ ສ່ວນໃດເປັນຫົວໜ່ວຍສະເພາະໜ້າ',
+lo:{un_use:'ໃຊ້ (ສະຕັອກ/ສູດ)',un_buy_as:'ຊື້ເປັນ',un_lim:'ຂັ້ນຕ່ຳ → Max',un_count_as:'ນັບເປັນ',un_same_use:'ຄືຫົວໜ່ວຍໃຊ້',un_lock:'ມີສະຕັອກ/ຢູ່ໃນສູດ — ປ່ຽນບໍ່ໄດ້',un_dirty:'ຍັງບໍ່ບັນທຶກ',un_apply_all:'ໃຊ້ຄຳແນະນຳທັງໝົດ ({n})',un_applied_n:'ໃສ່ຄຳແນະນຳແລ້ວ {n} ລາຍການ — ກົດ 💾 ບັນທຶກ',un_pending:'ແກ້ໄວ້ {n} ລາຍການ',un_save_n:'ບັນທຶກ {n} ລາຍການ',un_discard:'ຍົກເລີກທີ່ແກ້',un_discard_q:'ຖິ້ມທີ່ແກ້ໄວ້ທັງໝົດ?',un_saved:'ບັນທຶກແລ້ວ {n} ລາຍການ ✅',un_saved_bad:'ບັນທຶກແລ້ວ {n} · ຍັງບັນທຶກບໍ່ໄດ້ {b} ລາຍການ (ເບິ່ງທີ່ຂຶ້ນ ⚠)',un_e_buyq:'ໃສ່ຂະໜາດ 1 {u} = ?',un_e_cq:'ໃສ່ຂະໜາດ 1 {u} = ?',un_e_recipe:'ສູດໃຊ້ {u} ຢູ່ — ຈະແປງບໍ່ໄດ້',un_e_base:'ປ່ຽນຫົວໜ່ວຍໃຊ້ບໍ່ໄດ້ — ມີປະຫວັດ/ສະຕັອກແລ້ວ',un_br_h:'ແກ້ "1 ຫົວໜ່ວຍຂອງສາຂາ = ເທົ່າໃດຂອງຄົວ" ໃນບັດໄດ້ເລີຍ ແລ້ວກົດ 💾 ເທື່ອດຽວ',un_g7:'📌 ຕົວຢ່າງ: ຊື້ເປັນ ກິໂລ · ໃຊ້ໃນສູດເປັນກຣາມ · ນັບເປັນຖົງ → ຫົວໜ່ວຍຫຼັກ = ກຣາມ · ຫົວໜ່ວຍຊື້ = ກິໂລ (ລະບົບຮູ້ເອງວ່າ 1 ກິໂລ = 1,000 ກຣາມ) · ບັນຈຸອື່ນ = ຖົງ ໃສ່ວ່າ 1 ຖົງ = ຈັກກຣາມ · ຫົວໜ່ວຍນັບ = ຖົງ',un_d_all:'ທຸກພະແນກ',un_d_main:'🍳 ຄົວກາງ',un_d_dessert:'🍮 ຂອງຫວານ',un_d_both:'ໃຊ້ທັງ 2 ພະແນກ',nav_units:'ຫົວໜ່ວຍ',un_sub:'ຈັດການຫົວໜ່ວຍທັງໝົດໃນບ່ອນດຽວ — ລະບົບບອກວ່າສ່ວນໃດໃຊ້ຫົວໜ່ວຍດຽວກັນໄດ້ ສ່ວນໃດເປັນຫົວໜ່ວຍສະເພາະໜ້າ',
   un_guide_t:'💡 ຫົວໜ່ວຍໃຊ້ຮ່ວມ · ຫົວໜ່ວຍສະເພາະໜ້າ',
   un_g1:'🥬 ຫົວໜ່ວຍຫຼັກຂອງວັດຖຸດິບ — ໃຊ້ຮ່ວມທຸກໜ້າ (ສະຕັອກ · ສູດ · ຕົ້ນທຶນ) · ຕັ້ງເທື່ອດຽວ · ປ່ຽນບໍ່ໄດ້ເມື່ອມີສະຕັອກ/ຢູ່ໃນສູດ',
   un_g2:'🛒 ຫົວໜ່ວຍຊື້ — ໃຊ້ຮ່ວມ 📥 ຮັບເຄື່ອງ + 🛒 ສັ່ງເຄື່ອງ (ເຊັ່ນ ຖົງ = 1,000 ກຣາມ)',
@@ -69,7 +69,7 @@ lo:{un_use:'ໃຊ້ (ສະຕັອກ/ສູດ)',un_buy_as:'ຊື້ເປ
   un_custom_h:'ຫົວໜ່ວຍທີ່ບໍ່ມີໃນລາຍການ — ໃຊ້ໄດ້ເມື່ອວັດຖຸດິບຕັ້ງຂະໜາດບັນຈຸແລ້ວ',un_add:'＋ ເພີ່ມຫົວໜ່ວຍ',un_ph:'ເຊັ່ນ ກະປຸກ',un_dup:'ມີຫົວໜ່ວຍນີ້ແລ້ວ',
   un_del_used:'ຍັງມີ {n} ລາຍການໃຊ້ຫົວໜ່ວຍນີ້ — ລຶບບໍ່ໄດ້',un_del_q:'ລຶບຫົວໜ່ວຍ "{u}"?',un_added:'ເພີ່ມຫົວໜ່ວຍແລ້ວ',un_deleted:'ລຶບຫົວໜ່ວຍແລ້ວ',un_boss:'ເພີ່ມ/ລຶບຫົວໜ່ວຍໄດ້ສະເພາະຫົວໜ້າ',
   un_applied:'ຕັ້ງຫົວໜ່ວຍນັບເປັນ {u} ແລ້ວ',st_units_moved:'ຍ້າຍໄປຈັດການທີ່ແທັບ 📏 ຫົວໜ່ວຍ ແລ້ວ',st_units_go:'ໄປໜ້າ 📏 ຫົວໜ່ວຍ'},
-my:{un_use:'သုံး (စတော့/နည်း)',un_buy_as:'ဝယ်ပုံ',un_count_as:'ရေတွက်ပုံ',un_same_use:'သုံးယူနစ်နှင့်တူ',un_lock:'စတော့ရှိ/နည်းထဲပါ — မပြောင်းနိုင်',un_dirty:'မသိမ်းရသေး',un_apply_all:'အကြံပြုချက်အားလုံးသုံး ({n})',un_applied_n:'အကြံပြုချက် {n} ခု ထည့်ပြီး — 💾 သိမ်း နှိပ်ပါ',un_pending:'ပြင်ထား {n} ခု',un_save_n:'{n} ခု သိမ်း',un_discard:'ပြင်ထားတာ ပယ်',un_discard_q:'ပြင်ထားတာ အားလုံး ပယ်မလား?',un_saved:'{n} ခု သိမ်းပြီး ✅',un_saved_bad:'{n} ခု သိမ်းပြီး · {b} ခု မသိမ်းနိုင် (⚠ ကြည့်ပါ)',un_e_buyq:'အရွယ် ထည့်ပါ 1 {u} = ?',un_e_cq:'အရွယ် ထည့်ပါ 1 {u} = ?',un_e_recipe:'နည်းက {u} ကိုသုံးနေ — မပြောင်းနိုင်တော့',un_e_base:'သုံးယူနစ် မပြောင်းနိုင် — မှတ်တမ်း/စတော့ရှိ',un_br_h:'"ဆိုင်ခွဲ 1 ယူနစ် = မီးဖိုချောင် ဘယ်လောက်" ကို ကတ်ထဲတွင် တိုက်ရိုက်ပြင်ပြီး 💾 တစ်ကြိမ်နှိပ်ပါ',un_g7:'📌 ဥပမာ: ကီလိုဖြင့်ဝယ် · နည်းတွင် ဂရမ်ဖြင့်သုံး · အိတ်ဖြင့်ရေတွက် → အဓိကယူနစ် = ဂရမ် · ဝယ်ယူနစ် = ကီလို (1 ကီလို = 1,000 ဂရမ် အလိုအလျောက်သိ) · အခြားထုပ် = အိတ်၊ 1 အိတ် = ဂရမ် ဘယ်လောက် ထည့် · ရေတွက်ယူနစ် = အိတ်',un_d_all:'ဌာနအားလုံး',un_d_main:'🍳 ဗဟိုမီးဖိုချောင်',un_d_dessert:'🍮 အချိုပွဲ',un_d_both:'ဌာန ၂ ခုလုံး သုံး',nav_units:'ယူနစ်',un_sub:'ယူနစ်အားလုံးကို တစ်နေရာတည်းတွင် စီမံ — ဘယ်အပိုင်းက ယူနစ်တူသုံးနိုင်ပြီး ဘယ်အပိုင်းက စာမျက်နှာသီးသန့်လဲ ပြပေးသည်',
+my:{un_use:'သုံး (စတော့/နည်း)',un_buy_as:'ဝယ်ပုံ',un_lim:'အနည်းဆုံး → Max',un_count_as:'ရေတွက်ပုံ',un_same_use:'သုံးယူနစ်နှင့်တူ',un_lock:'စတော့ရှိ/နည်းထဲပါ — မပြောင်းနိုင်',un_dirty:'မသိမ်းရသေး',un_apply_all:'အကြံပြုချက်အားလုံးသုံး ({n})',un_applied_n:'အကြံပြုချက် {n} ခု ထည့်ပြီး — 💾 သိမ်း နှိပ်ပါ',un_pending:'ပြင်ထား {n} ခု',un_save_n:'{n} ခု သိမ်း',un_discard:'ပြင်ထားတာ ပယ်',un_discard_q:'ပြင်ထားတာ အားလုံး ပယ်မလား?',un_saved:'{n} ခု သိမ်းပြီး ✅',un_saved_bad:'{n} ခု သိမ်းပြီး · {b} ခု မသိမ်းနိုင် (⚠ ကြည့်ပါ)',un_e_buyq:'အရွယ် ထည့်ပါ 1 {u} = ?',un_e_cq:'အရွယ် ထည့်ပါ 1 {u} = ?',un_e_recipe:'နည်းက {u} ကိုသုံးနေ — မပြောင်းနိုင်တော့',un_e_base:'သုံးယူနစ် မပြောင်းနိုင် — မှတ်တမ်း/စတော့ရှိ',un_br_h:'"ဆိုင်ခွဲ 1 ယူနစ် = မီးဖိုချောင် ဘယ်လောက်" ကို ကတ်ထဲတွင် တိုက်ရိုက်ပြင်ပြီး 💾 တစ်ကြိမ်နှိပ်ပါ',un_g7:'📌 ဥပမာ: ကီလိုဖြင့်ဝယ် · နည်းတွင် ဂရမ်ဖြင့်သုံး · အိတ်ဖြင့်ရေတွက် → အဓိကယူနစ် = ဂရမ် · ဝယ်ယူနစ် = ကီလို (1 ကီလို = 1,000 ဂရမ် အလိုအလျောက်သိ) · အခြားထုပ် = အိတ်၊ 1 အိတ် = ဂရမ် ဘယ်လောက် ထည့် · ရေတွက်ယူနစ် = အိတ်',un_d_all:'ဌာနအားလုံး',un_d_main:'🍳 ဗဟိုမီးဖိုချောင်',un_d_dessert:'🍮 အချိုပွဲ',un_d_both:'ဌာန ၂ ခုလုံး သုံး',nav_units:'ယူနစ်',un_sub:'ယူနစ်အားလုံးကို တစ်နေရာတည်းတွင် စီမံ — ဘယ်အပိုင်းက ယူနစ်တူသုံးနိုင်ပြီး ဘယ်အပိုင်းက စာမျက်နှာသီးသန့်လဲ ပြပေးသည်',
   un_guide_t:'💡 မျှသုံးယူနစ် · စာမျက်နှာသီးသန့်ယူနစ်',
   un_g1:'🥬 ကုန်ကြမ်း အဓိကယူနစ် — စာမျက်နှာအားလုံး မျှသုံး (စတော့ · နည်း · ကုန်ကျ) · တစ်ကြိမ်သတ်မှတ် · စတော့ရှိ/နည်းထဲပါလျှင် မပြောင်းနိုင်',
   un_g2:'🛒 ဝယ်ယူနစ် — 📥 လက်ခံ + 🛒 မှာယူ မျှသုံး (ဥပမာ အိတ် = 1,000 ဂရမ်)',
@@ -114,6 +114,7 @@ CSS.add(`
 .un-f{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
 .un-f select{width:auto;min-width:92px;max-width:150px;flex:0 1 auto;min-height:44px}
 .un-sz{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.un-lim{flex-wrap:nowrap}.un-lim .un-q{width:68px;flex:0 1 68px;min-width:0}.un-lim select{min-width:0;flex:1 1 auto}
 .un-q{width:76px;min-height:44px;text-align:center;font-weight:700}
 .un-q[readonly]{background:#F3EBDB;color:var(--mut)}
 .un-eq{font-size:13.5px;white-space:nowrap}
@@ -214,7 +215,15 @@ function unAdvHtml(m,id){return '<div class="un-adv '+m.lv+'">'+(m.lv==='ok'?'�
 
 /* ---------- วัตถุดิบ: ค่าที่กำลังแก้ (ร่าง) รวมกับค่าจริง ---------- */
 function unOrig(it){const base=it.unit||'',bu=it.buy_unit&&it.buy_unit!==base?it.buy_unit:'';const cu=countUnitOf(it);
-  const cp=packsOf(it).find(p=>p.u===cu&&p.u!==bu);return {unit:base,buy_unit:bu,buy_qty:bu?num(it.buy_qty):'',count_unit:cu,cq:cp?cp.q:''};}
+  const cp=packsOf(it).find(p=>p.u===cu&&p.u!==bu),su=limUnits(it)[0]||base;
+  return {unit:base,buy_unit:bu,buy_qty:bu?num(it.buy_qty):'',count_unit:cu,cq:cp?cp.q:'',su,smin:itLimIn(it,it.min_qty),smax:itLimIn(it,it.max_qty)};}
+const UN_LIMK=['su','smin','smax'];   // 🎯 ขั้นต่ำ/Max ในการ์ด (ใส่เป็นหน่วย su · เก็บ min_qty/max_qty เป็นหน่วยหลัก · เจ้าของ 2026-10-19)
+function unLim(it,c,m){ // → {mn,mx,err} หน่วยหลัก
+  const has=v=>String(v==null?'':v).trim()!=='';if(!has(c.smin)&&!has(c.smax))return {mn:null,mx:null,err:''};
+  const f=unitFactor(m,c.su);if(f==null)return {mn:null,mx:null,err:t('it_lim_bad')};
+  const mn=has(c.smin)?rnd4(Math.max(0,num(c.smin))*f):null,mx=has(c.smax)&&num(c.smax)>0?rnd4(num(c.smax)*f):null;
+  return {mn,mx,err:mn!=null&&mx!=null&&mx<mn-1e-9?t('it_lim_order'):''};}
+const unSameQ=(a,b)=>(a==null?null:rnd4(num(a)))===(b==null?null:rnd4(num(b)));
 function unCur(it){return Object.assign(unOrig(it),UN_ED[it.id]||{});}
 function unNeedQ(m,u){ // หน่วยนี้ต้องใส่ขนาดเองไหม (ไม่ใช่หน่วยใช้ · ไม่ใช่หน่วยซื้อ · ตัวแปลงมาตรฐานไม่รู้)
   return !!u&&u!==m.unit&&u!==m.buy_unit&&unitConv(null,u,m.unit)==null;}
@@ -226,13 +235,16 @@ function unMerged(it,c){ // วัตถุดิบหน้าตาหลั�
   const cu=c.count_unit||base;
   if(unNeedQ({unit:base,buy_unit:bu},cu)){const q=num(c.cq);packs=packs.filter(p=>p.u!==cu);if(q>0)packs.push({u:cu,q:rnd4(q)});}
   return Object.assign({},it,{unit:base,buy_unit:bu,buy_qty:bq,packs,count_unit:cu&&cu!==base?cu:null});}
-function unDirty(it){const e=UN_ED[it.id];if(!e)return false;const o=unOrig(it);return Object.keys(e).some(k=>String(e[k]==null?'':e[k])!==String(o[k]==null?'':o[k]));}
+function unDirty(it){const e=UN_ED[it.id];if(!e)return false;const o=unOrig(it);
+  if(Object.keys(e).some(k=>!UN_LIMK.includes(k)&&String(e[k]==null?'':e[k])!==String(o[k]==null?'':o[k])))return true;
+  if(!UN_LIMK.some(k=>k in e))return false;const c=unCur(it),L=unLim(it,c,unMerged(it,c));   // เปลี่ยนแค่หน่วยที่แสดง (24 ถุง = 2 ลัง) ไม่นับว่าแก้
+  return !!L.err||!unSameQ(L.mn,it.min_qty)||!unSameQ(L.mx,num(it.max_qty)>0?it.max_qty:null);}
 function unBaseLock(it){return Math.abs(num(it.qty))>1e-9||(S.recipeItems||[]).some(x=>x.item_id===it.id);}
 function unItemErr(it,m,c){ // ข้อผิดพลาดที่ห้ามบันทึก
   if(m.buy_unit&&!(num(m.buy_qty)>0))return t('un_e_buyq',{u:trUnit(m.buy_unit)});
   if(unNeedQ(m,c.count_unit)&&!(num(c.cq)>0))return t('un_e_cq',{u:trUnit(c.count_unit)});
   const bad=itPackUsed(it.id,m);if(bad)return t('un_e_recipe',{u:trUnit(bad.u)});
-  return '';}
+  return unLim(it,c,m).err;}
 function unSel(id,field,opts,cur,dis,blank){return '<select data-id="'+esc(id)+'" data-f="'+field+'" onchange="unEdSel(this)"'+(dis?' disabled':'')+'>'+
   (blank?'<option value="">'+esc(blank)+'</option>':'')+unitOptions(opts,cur)+'</select>';}
 function unQin(id,field,v,ro){return '<input type="text" inputmode="decimal" class="un-q" data-id="'+esc(id)+'" data-f="'+field+'" value="'+esc(v==null?'':String(v))+'"'+(ro?' readonly':'')+' oninput="unEdIn(this)" onchange="unEdRepaint(this.dataset.id)">';}
@@ -252,6 +264,8 @@ function unCardHtml(it){
       '<label>'+esc(t('un_count_as'))+'</label><div class="un-f">'+unSel(it.id,'count_unit',all,c.count_unit||base,!K)+
         (unNeedQ({unit:base,buy_unit:c.buy_unit},c.count_unit)?'<span class="un-sz"><span class="un-eq">1 '+esc(trUnit(c.count_unit))+' =</span>'+unQin(it.id,'cq',c.cq,!K)+'<span class="un-eq">'+esc(trUnit(base))+'</span></span>':
          (cf!=null&&c.count_unit!==base?'<span class="un-eq mut">= '+fmtQ(cf)+' '+esc(trUnit(base))+'</span>':''))+'</div>'+
+      '<label>🎯 '+esc(t('un_lim'))+'</label><div class="un-f un-lim">'+unQin(it.id,'smin',c.smin,!K)+'<span class="un-eq">→</span>'+unQin(it.id,'smax',c.smax,!K)+
+        unSel(it.id,'su',limUnits(m),limUnits(m).includes(c.su)?c.su:(limUnits(m)[0]||base),!K)+'</div>'+
     '</div>';
   if(err)h+='<div class="un-adv bad">⚠ '+esc(err)+'</div>';
   h+=a.msgs.map(x=>unAdvHtml(x,it.id)).join('');
@@ -274,6 +288,8 @@ function unEdSel(el){const id=el.dataset.id,f=el.dataset.f,it=itemById(id);if(!i
   if(f==='buy_unit'){const s=unitConv(null,el.value,c.unit);e.buy_qty=s!=null?s:'';
     if(c.buy_unit&&c.count_unit===c.buy_unit&&el.value!==c.buy_unit&&num(c.buy_qty)>0){e.count_unit=c.buy_unit;e.cq=c.buy_qty;}}   // นับเป็นหน่วยซื้อเดิม → จำขนาดเดิมไว้ (ถุงเดิม 500 กรัม)
   if(f==='count_unit'){const ex=packsOf(it).find(p=>p.u===el.value);e.cq=ex?ex.q:'';}
+  if(f==='su'){const m=unMerged(it,c),fo=unitFactor(m,c.su),fn=unitFactor(m,el.value);   // เปลี่ยนหน่วย = แปลงตัวเลขตาม (24 ถุง → 2 ลัง)
+    ['smin','smax'].forEach(k=>{if(fo>0&&fn>0&&String(c[k]==null?'':c[k]).trim()!=='')e[k]=rnd4(num(c[k])*fo/fn);});}
   delete UN_ERR[id];unDraftSave();unEdRepaint(id);}
 function unEdIn(el){const e=unEdGet(el.dataset.id);e[el.dataset.f]=el.value;unDraftSave();}
 function unEdRepaint(id){const it=itemById(id),old=document.getElementById('unI_'+id);if(!it||!old||!old.isConnected)return;
@@ -319,19 +335,21 @@ function unPin(){if(S.tab!=='units')return;const c=unChanges();
     '<button type="button" class="btn" id="unSaveAll" onclick="unSaveAll()">💾 '+esc(t('un_save_n',{n:c.n}))+'</button></span>');}
 async function unDiscard(){if(!(await confirm2(t('un_discard_q'))))return;UN_ED={};UN_LK={};UN_ERR={};unDraftSave();unPaint();}
 async function unSaveAll(){await once(async()=>{
-  if(!canKitchen())return;const c=unChanges();if(!c.n)return;UN_ERR={};let ok=0,bad=0;
+  if(!canKitchen())return;const c=unChanges();if(!c.n)return;UN_ERR={};let ok=0,bad=0,maxGone=false;
   for(const it of c.items){const cur=unCur(it),m=unMerged(it,cur),e=unItemErr(it,m,cur);if(e){UN_ERR[it.id]=e;bad++;continue;}
     if(m.unit!==it.unit){let hist=true;try{const r=await sb.from('kc_moves').select('id').eq('ref_kind','item').eq('ref_id',it.id).limit(1);hist=!!(r&&(r.error||(r.data||[]).length));}catch(x){}
       if(hist||unBaseLock(it)){UN_ERR[it.id]=t('un_e_base');bad++;continue;}}
     const row={unit:m.unit,buy_unit:m.buy_unit,buy_qty:m.buy_unit?rnd4(num(m.buy_qty)):null,packs:m.packs,count_unit:(m.count_unit&&unitFactor(m,m.count_unit)!=null)?m.count_unit:null};
-    try{await db(()=>sb.from('ck_items').update(row).eq('id',it.id));}catch(x){UN_ERR[it.id]=String((x&&x.message)||x);bad++;continue;}
+    if(UN_LIMK.some(k=>k in (UN_ED[it.id]||{}))){const L=unLim(it,cur,m);row.min_qty=L.mn;if(L.mx!=null||it.max_qty!=null)row.max_qty=L.mx;}
+    try{await itWrite(x=>sb.from('ck_items').update(x).eq('id',it.id),row);}catch(x){UN_ERR[it.id]=String((x&&x.message)||x);bad++;continue;}
+    if((itWrite.dropped||[]).includes('max_qty')){delete row.max_qty;maxGone=true;}
     Object.assign(it,row);delete UN_ED[it.id];ok++;}
   for(const name of c.links){const e=UN_LK[name],f=numIn(e&&e.f);if(!(f>0)){bad++;continue;}
     const row={stk_name:name,recipe_id:e.rid,factor:rnd4(f),by_name:S.user&&S.user.name};
     try{await db(()=>sb.from('kc_links').upsert(row,{onConflict:'stk_name'}));}catch(x){bad++;continue;}
     TD_LINKS=(TD_LINKS||[]).filter(x=>supKey(x.stk_name)!==supKey(name)).concat([row]);delete UN_LK[name];ok++;}
   if(ok)UN_BR=null;unDraftSave();
-  toast(bad?t('un_saved_bad',{n:ok,b:bad}):t('un_saved',{n:ok}),bad?true:false);
+  toast(bad?t('un_saved_bad',{n:ok,b:bad}):maxGone?t('it_max_sql'):t('un_saved',{n:ok}),bad?true:maxGone?'warn':false);
   if(UN_TAB==='prods')await unLoadBranch(true);unPaint();});}
 function unUsage(u){let n=0;
   S.items.forEach(it=>{if(it.active===false)return;if(it.unit===u||it.buy_unit===u||it.count_unit===u||(Array.isArray(it.packs)&&it.packs.some(p=>p&&p.u===u)))n++;});
