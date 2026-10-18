@@ -504,6 +504,7 @@ async function mnSave(){await once(async()=>{
   S.recipes.sort((a,b)=>(num(a.sort)-num(b.sort))||String(a.name||'').localeCompare(String(b.name||''),'th'));
   const maxLost=S.kcMax===false&&String(d.max_qty==null?'':d.max_qty).trim()!=='';   // กรอก Max ไว้แต่ฐานข้อมูลไม่มีคอลัมน์ = บอกตรง ๆ (ช่องอื่นบันทึกแล้ว)
   MN_D=null;mnDraftClear();MODAL_BACK=null;closeModal();toast(unitLost?t('mn_unit_lost'):maxLost?t('mn_tg_sql'):t('sv_ok'),unitLost?true:(maxLost?'warn':false));
+  if(S.tab==='units'&&typeof unBack==='function')unBack();   // เปิดจากแท็บ 📏 หน่วย
   if(renamed)mnAutoI18n(r);
   if(S.tab==='menus')show('menus');else if(S.tab==='make')rerender();
 });}

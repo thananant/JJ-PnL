@@ -97,8 +97,7 @@ RENDER.set=function(el){
     '<div class="md2">'+fld(t('st_oh_val'),'<div class="row" style="flex-wrap:nowrap"><input id="stOh" type="text" inputmode="decimal" value="'+esc(ST_W.overhead_value)+'" oninput="ST_W.overhead_value=this.value;stDirty();stExample()"><span class="b" id="stOhU" style="flex:none">'+esc(ST_W.overhead_mode==='pct'?'%':t('baht'))+'</span></div><div class="xs mut">'+esc(t('st_oh_sug'))+'</div>')+
     fld(t('st_markup'),'<div class="row" style="flex-wrap:nowrap"><input id="stMk" type="text" inputmode="decimal" value="'+esc(ST_W.markup_pct)+'" oninput="ST_W.markup_pct=this.value;stDirty();stExample()"><span class="b" style="flex:none">%</span></div><div class="xs mut">'+esc(t('st_markup_h'))+'</div>')+'</div>'+
     '<div id="stEx">'+stExampleHtml()+'</div>');
-  h+=card('📏 '+esc(t('st_units_t')),'<div class="sm mut" style="margin-bottom:8px">'+esc(t('st_units_h'))+'</div><div class="stchips" id="stUnitChips">'+stUnitChips()+'</div>'+
-    '<div class="stadd"><input id="stUnitNew" placeholder="'+esc(t('st_unit_ph'))+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();stUnitAdd()}"><button class="btn gh" onclick="stUnitAdd()">'+esc(t('st_unit_add'))+'</button></div>');
+  h+=card('📏 '+esc(t('st_units_t')),'<div class="sm mut" style="margin-bottom:8px">'+esc(t('st_units_moved'))+'</div><button type="button" class="btn gh" onclick="show(\'units\')">'+esc(t('st_units_go'))+'</button>');   // ย้ายไปแท็บ 📏 หน่วย (2026-10-18)
   h+=card('🌐 '+esc(t('st_lang_t')),'<div class="langrow">'+['th','en','lo','my'].map(l=>'<button type="button" class="'+(l===LANG?'on':'')+'" onclick="setLang(\''+l+'\')"><span class="fl">'+({th:'🇹🇭',en:'🇬🇧',lo:'🇱🇦',my:'🇲🇲'}[l])+'</span>'+esc(I18N[l].lang_name)+'</button>').join('')+'</div>');
   if(S.kcSql)h+=sqlCard;
   h+=card('ℹ️ '+esc(t('st_about_t')),'<div class="stkv"><span class="mut">'+esc(t('st_ver'))+'</span><b>'+esc(APP_VER)+'</b><span class="mut">'+esc(t('st_user'))+'</span><b>'+esc(S.user?S.user.name:'')+' · '+esc(S.prof?S.prof.role:'')+'</b>'+
@@ -150,5 +149,5 @@ async function stSave(){await once(async()=>{
   if(!isAdminish()||!ST_W)return;
   const w=ST_W,patch={branch_line:Object.assign({},w.branch_line),ck_sup_names:w.ck_sup_names.slice(),bill_prefix:String(w.bill_prefix||'').trim().slice(0,8),
     order_lookback_days:Math.round(num(w.order_lookback_days))===0?0:1,refill_days:Math.max(1,Math.min(60,Math.round(num(w.refill_days))||3)),
-    overhead_mode:w.overhead_mode==='pct'?'pct':'per_unit',overhead_value:Math.max(0,num(w.overhead_value)),markup_pct:num(w.markup_pct),units:w.units.slice()};
+    overhead_mode:w.overhead_mode==='pct'?'pct':'per_unit',overhead_value:Math.max(0,num(w.overhead_value)),markup_pct:num(w.markup_pct)};   // units จัดการที่แท็บ 📏 หน่วย — ไม่เขียนทับจากหน้านี้ (cfgSave รวมค่าเดิมให้)
   await cfgSave(patch);toast(t('st_saved'));if(S.tab==='set')show('set');});}

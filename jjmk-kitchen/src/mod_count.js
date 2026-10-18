@@ -51,6 +51,15 @@ CSS.add(`
 .skcard .skhead{display:flex;gap:10px;align-items:flex-start;min-width:0}
 .skcard .skhead .ithumb{width:56px;height:56px;flex:none;border-radius:12px;font-size:24px}   /* รูปสี่เหลี่ยมข้างชื่อแบบแอพนับสต๊อก — แถบกว้าง 64px ทำให้รูปถูกตัด/ขนาดเพี้ยน (เจ้าของเจอ 2026-10-17) */
 .skcard .skttl{min-width:0;flex:1}
+.skcard .skgrid{display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px;align-items:stretch}
+.skcard .skpic .ithumb{width:112px;height:100%;min-height:112px;max-height:150px;border-radius:12px;font-size:44px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0}
+.skcard .skpic .ithumb img{width:100%;height:100%;object-fit:cover;display:block}
+.skcard .skright{min-width:0;display:flex;flex-direction:column}
+.skcard .skright .skstep{margin-top:8px;gap:5px}
+.skcard .skright .skstep button{width:40px;height:44px;font-size:20px}
+.skcard .skright .skstep input{min-width:44px;font-size:17px}
+.skcard .skright .skfoot{margin-top:auto;padding-top:6px}
+@media(max-width:360px){.skcard .skgrid{grid-template-columns:84px minmax(0,1fr);gap:8px}.skcard .skpic .ithumb{width:84px;min-height:84px;font-size:34px}.skcard .skright .skstep .ctu{display:none}}
 .skcard .iname{min-height:auto}
 .skcard .isub b{font-family:var(--fh);font-size:14.5px;color:var(--ink)}
 .skstep .ctu{flex:none;font-size:13px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -119,15 +128,15 @@ function ctGridHtml(){const kind=CT_KIND,L=ctList(kind),cats=ctCats(kind).filter
 function ctCard(kind,o){
   const k=kind+'|'+o.id,e=CT[k],counted=ctCounted(e),U=ctUnit(kind,o),base=ctBase(kind,o);
   return '<div class="icard skcard'+(counted?' cnt':'')+'" data-k="'+esc(k)+'" data-n="'+esc(supKey(dispName(o)+' '+o.name+' '+ctCatOf(o)))+'">'+
-    '<div class="skhead">'+thumbHtml(o,ctIcon(kind,o),'ithumb')+'<div class="skttl">'+
+    '<div class="skgrid"><div class="skpic">'+thumbHtml(o,ctIcon(kind,o),'ithumb')+'</div><div class="skright"><div class="skttl">'+
     '<div class="iname">'+esc(dispName(o))+'</div>'+
     '<div class="isub">'+esc(t('ct_sys'))+' <b>'+fmtQ(rnd2(num(o.qty)/U.f))+'</b> '+esc(trUnit(U.u))+
-      (U.u!==base?'<br><span class="xs">'+esc(t('ct_unit_eq',{u:trUnit(U.u),q:fmtQ(U.f),b:trUnit(base)}))+'</span>':'')+'</div></div></div>'+
+      (U.u!==base?'<br><span class="xs">'+esc(t('ct_unit_eq',{u:trUnit(U.u),q:fmtQ(U.f),b:trUnit(base)}))+'</span>':'')+'</div></div>'+
     '<div class="skstep"><button type="button" aria-label="-" onclick="ctBump(this,-1)">−</button>'+
     '<input type="text" inputmode="decimal" placeholder="0" class="'+(counted?'has':'')+'" value="'+esc(counted?e.v:'')+'" oninput="ctInput(this)" onchange="ctInput(this)">'+
     '<button type="button" class="plus" aria-label="+" onclick="ctBump(this,1)">＋</button><span class="b ctu">'+esc(trUnit(U.u))+'</span></div>'+
     '<div class="skfoot"><span class="b cteq" style="color:var(--gold)">'+ctEqTxt(e,o,kind)+'</span>'+
-    '<button type="button" class="outb'+(counted&&num(e.v)===0?' on':'')+'" onclick="ctZero(this)">'+esc(t('ct_out'))+'</button></div></div>';}
+    '<button type="button" class="outb'+(counted&&num(e.v)===0?' on':'')+'" onclick="ctZero(this)">'+esc(t('ct_out'))+'</button></div></div></div></div>';}   // รูปซ้ายใหญ่ · ชื่อ/ยอดในระบบขวาบน · จำนวนลงมา · หมดล่างสุด (เจ้าของ 2026-10-18)
 function ctEqTxt(e,o,kind){const U=ctUnit(kind,o),base=ctBase(kind,o);return (ctCounted(e)&&U.u!==base)?'= '+fmtQ(ctTotal(e,o,kind))+' '+esc(trUnit(base)):'';}
 function ctCardOf(el){return el&&el.closest?el.closest('.skcard'):null;}
 function ctInput(el){ // พิมพ์แล้วแก้ในที่ — การ์ดนี้ + ตัวนับ + ชิป + แถบล่าง (ไม่วาดหน้าใหม่ คีย์บอร์ดไม่หุบ)
