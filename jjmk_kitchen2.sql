@@ -11,6 +11,7 @@ alter table ck_items add column if not exists packs jsonb;               -- [{"u
 alter table ck_items add column if not exists count_unit text;
 alter table ck_items add column if not exists dept text;
 alter table ck_items add column if not exists min_qty numeric;
+alter table ck_items add column if not exists max_qty numeric;           -- 🛒 สั่งเติมให้ถึง (Max · หน่วยหลัก) · ต่ำกว่า min_qty → สั่งถึงค่านี้ ปัดขึ้นเป็นหน่วยซื้อเต็ม (2026-10-19)
 alter table ck_items add column if not exists active boolean default true;
 alter table ck_recipes add column if not exists avg_cost numeric;        -- ต้นทุนถัวเฉลี่ย/หน่วยผลิต (จากล็อตจริง)
 alter table ck_recipes add column if not exists target_qty numeric;      -- สต๊อกสำเร็จรูปที่ควรมี (ตายตัว)
