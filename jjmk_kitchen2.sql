@@ -60,6 +60,9 @@ create table if not exists kc_counts (                        -- นับสต
 create table if not exists kc_count_lines (
   id bigserial primary key, count_id text not null references kc_counts(id) on delete cascade,
   ref_id text, name text, sys_qty numeric, counted_qty numeric, delta numeric, unit text, count_unit text, count_qty numeric);
+alter table kc_count_lines add column if not exists scrap_qty numeric;   -- ✂️ เศษตัดแต่ง (หน่วยหลัก · 2026-10-19)
+alter table kc_count_lines add column if not exists used_qty numeric;    -- ใช้ไปตั้งแต่นับครั้งก่อน (คิด yield = 1 − เศษ/ใช้ไป)
+alter table kc_count_lines add column if not exists scrap_cost numeric;  -- มูลค่าเศษตามต้นทุน
 create table if not exists kc_deliveries (                    -- บิลส่งสาขา
   id text primary key, bill_no text, d date not null, branch text, branch_name text, order_date date, status text default 'sent',
   subtotal numeric default 0, overhead numeric default 0, total numeric default 0, line_sent_at timestamptz, line_group_id text, paid_at date, note text,
