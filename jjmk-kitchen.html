@@ -695,6 +695,9 @@ create table if not exists kc_counts (                        -- นับสต
 create table if not exists kc_count_lines (
   id bigserial primary key, count_id text not null references kc_counts(id) on delete cascade,
   ref_id text, name text, sys_qty numeric, counted_qty numeric, delta numeric, unit text, count_unit text, count_qty numeric);
+alter table kc_count_lines add column if not exists scrap_qty numeric;   -- ✂️ เศษตัดแต่ง (หน่วยหลัก · 2026-10-19)
+alter table kc_count_lines add column if not exists used_qty numeric;    -- ใช้ไปตั้งแต่นับครั้งก่อน (คิด yield = 1 − เศษ/ใช้ไป)
+alter table kc_count_lines add column if not exists scrap_cost numeric;  -- มูลค่าเศษตามต้นทุน
 create table if not exists kc_deliveries (                    -- บิลส่งสาขา
   id text primary key, bill_no text, d date not null, branch text, branch_name text, order_date date, status text default 'sent',
   subtotal numeric default 0, overhead numeric default 0, total numeric default 0, line_sent_at timestamptz, line_group_id text, paid_at date, note text,
@@ -792,7 +795,7 @@ end $$;
 const SB_URL='https://aikyxvluaiubdidqxwnd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpa3l4dmx1YWl1YmRpZHF4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjc1MjQsImV4cCI6MjA5ODIwMzUyNH0.YSZ-dWsdVisRd3diGA_Cos6U2YQYQZPJzSXYuGp7FfM';
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
-const APP_VER='KC 2.0 · 2026-10-19 16:41';
+const APP_VER='KC 2.0 · 2026-10-20 01:11';
 const LS={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -2415,6 +2418,10 @@ async function mkVoid(id){await once(async()=>{
    หน่วยนับ: วัตถุดิบ = countUnitOf (ตั้งเอง → บรรจุเล็กสุด → หน่วยหลัก) · สินค้า = หน่วยผลิต (yield_unit) · สต๊อกในฐานข้อมูลยังเป็นหน่วยหลักเสมอ
    บันทึก = สรุปเฉพาะที่ต่าง → kc_counts (1 แถว/ส่วน) + kc_count_lines (ทุกรายการที่นับ) + kc_moves 'adjust' + ck_add_qty (ผ่าน pushMoves)
    ctDetail(id) = หน้าต่างผลนับ (โมดูลประวัติเรียก)
+   ✂️ เศษตัดแต่ง (เจ้าของ 2026-10-19): วัตถุดิบทุกตัวมีปุ่ม ✂️ เศษ → ช่องใส่เศษ (เลือกหน่วย · เก็บร่างแยก CT_S) · ตัวที่เคยมีเศษเปิดช่องให้เอง
+     บันทึก: ยอดที่หายแยกเป็น kc_moves 'waste' (−เศษ × ต้นทุน · note เศษตัดแต่ง) + 'adjust' ส่วนที่เหลือ → สต๊อกสุดท้าย = ที่นับได้เหมือนเดิม
+     yield = 1 − เศษ ÷ ใช้ไป · ใช้ไป = นับครั้งก่อน + รับเข้า (kc_moves ref_table kc_receipts) ตั้งแต่นับครั้งก่อน − นับครั้งนี้ · ไม่มีนับครั้งก่อน = ไม่คิด yield
+     kc_count_lines.scrap_qty/used_qty/scrap_cost (ยังไม่รัน SQL = ตัดช่องแล้วบันทึกต่อ + เตือน) · 💰 บัญชี การ์ดของเสียของเดือน · 🥬 ฟอร์มวัตถุดิบ yield ย้อนหลัง
    ============================================================ */
 I18N.add({
 th:{ct_items:'วัตถุดิบ',ct_recipes:'สินค้าที่ผลิตแล้ว',ct_sys:'ในระบบ',ct_out:'หมด',ct_counted:'นับแล้ว {a}/{b}',ct_save:'💾 บันทึก',
@@ -2422,7 +2429,7 @@ th:{ct_items:'วัตถุดิบ',ct_recipes:'สินค้าที่�
   ct_draft:'กู้ตัวเลขที่นับค้างไว้ {n} รายการ',ct_cancel_q:'ทิ้งตัวเลขที่นับไว้ทั้งหมด?',ct_no_match:'ไม่พบรายการที่ค้นหา',ct_none:'ยังไม่มีรายการให้นับ',
   ct_unit_eq:'1 {u} = {q} {b}',ct_sum_t:'สรุปผลนับ',ct_sum_n:'นับแล้ว {n}',ct_sum_ok:'ตรง {n}',ct_sum_diff:'ต่าง {n}',
   ct_sum_none:'นับแล้วตรงกับระบบทุกรายการ ✅',ct_sum_hint:'ระบบจะปรับยอดให้เท่ากับที่นับได้ และบันทึกลงประวัติ',
-  ct_col_sys:'ในระบบ',ct_col_cnt:'นับได้',ct_col_diff:'ต่าง',ct_apply:'✅ ปรับยอดตามที่นับ ({n})',ct_apply0:'✅ บันทึกว่านับแล้ว',ct_note_ph:'หมายเหตุ (ไม่บังคับ)',
+  ct_scrap_btn:'✂️ เศษ',ct_scrap_lb:'✂️ เศษจากการตัดแต่ง (ชั่งที่ทิ้ง)',ct_scrap_lone:'ใส่เศษแล้ว แต่ยังไม่ได้นับของที่เหลือ: {list}',ct_scrap_t:'✂️ เศษตัดแต่ง + Yield',ct_scrap_h:'เศษถูกบันทึกเป็นของเสีย (มีมูลค่าตามต้นทุน) · Yield = ส่วนที่ใช้ได้ ÷ ที่ใช้ไปทั้งหมดตั้งแต่นับครั้งก่อน',ct_col_scrap:'เศษ',ct_col_used:'ใช้ไป',ct_col_yield:'Yield',ct_col_val:'มูลค่า',ct_yield_na:'ยังคิดไม่ได้ (ต้องมีนับครั้งก่อน)',ct_yield_over:'เศษมากกว่าที่ใช้ไป — ตรวจตัวเลข',ct_scrap_note:'เศษตัดแต่ง (นับสต๊อก)',ct_scrap_sql:'บันทึกผลนับแล้ว แต่ยังเก็บข้อมูลเศษ/yield ไม่ได้ — ต้องรัน SQL รุ่นล่าสุด (⚙️ ตั้งค่า → 🗄️)',ct_col_sys:'ในระบบ',ct_col_cnt:'นับได้',ct_col_diff:'ต่าง',ct_apply:'✅ ปรับยอดตามที่นับ ({n})',ct_apply0:'✅ บันทึกว่านับแล้ว',ct_note_ph:'หมายเหตุ (ไม่บังคับ)',
   ct_sql_block:'ยังไม่ได้รัน SQL jjmk_kitchen2.sql — บันทึกผลนับไม่ได้',ct_saved:'บันทึกผลนับแล้ว ✅',ct_move_note:'นับสต๊อก',
   ct_not_saved:'บันทึกไม่สำเร็จ — ไม่มีอะไรถูกบันทึก ลองใหม่อีกครั้ง',ct_detail_t:'ผลนับ',ct_by:'โดย',ct_noread:'อ่านผลนับไม่ได้',ct_lines_n:'{n} รายการ',ct_section:'ส่วน'},
 en:{ct_items:'Ingredients',ct_recipes:'Finished products',ct_sys:'System',ct_out:'Out',ct_counted:'Counted {a}/{b}',ct_save:'💾 Save',
@@ -2430,7 +2437,7 @@ en:{ct_items:'Ingredients',ct_recipes:'Finished products',ct_sys:'System',ct_out
   ct_draft:'Restored {n} unsaved counts',ct_cancel_q:'Discard everything counted so far?',ct_no_match:'No item matches',ct_none:'Nothing to count yet',
   ct_unit_eq:'1 {u} = {q} {b}',ct_sum_t:'Count summary',ct_sum_n:'Counted {n}',ct_sum_ok:'Match {n}',ct_sum_diff:'Differ {n}',
   ct_sum_none:'Everything matches the system ✅',ct_sum_hint:'Stock will be adjusted to what you counted and saved to history',
-  ct_col_sys:'System',ct_col_cnt:'Counted',ct_col_diff:'Diff',ct_apply:'✅ Adjust stock ({n})',ct_apply0:'✅ Save as counted',ct_note_ph:'Note (optional)',
+  ct_scrap_btn:'✂️ Trim',ct_scrap_lb:'✂️ Trimmings (weigh what was thrown away)',ct_scrap_lone:'Trimmings entered but the remaining stock is not counted: {list}',ct_scrap_t:'✂️ Trimmings + Yield',ct_scrap_h:'Trimmings are saved as waste (valued at cost) · Yield = usable ÷ everything used since the last count',ct_col_scrap:'Trim',ct_col_used:'Used',ct_col_yield:'Yield',ct_col_val:'Value',ct_yield_na:'Not yet (needs a previous count)',ct_yield_over:'Trimmings exceed what was used — check the numbers',ct_scrap_note:'เศษตัดแต่ง (นับสต๊อก)',ct_scrap_sql:'Count saved, but trimmings/yield could not be stored — run the latest SQL (⚙️ Settings → 🗄️)',ct_col_sys:'System',ct_col_cnt:'Counted',ct_col_diff:'Diff',ct_apply:'✅ Adjust stock ({n})',ct_apply0:'✅ Save as counted',ct_note_ph:'Note (optional)',
   ct_sql_block:'jjmk_kitchen2.sql has not been run — cannot save the count',ct_saved:'Count saved ✅',ct_move_note:'นับสต๊อก',
   ct_not_saved:'NOT saved — please try again',ct_detail_t:'Count result',ct_by:'by',ct_noread:'Could not read the count',ct_lines_n:'{n} lines',ct_section:'Section'},
 lo:{ct_items:'ວັດຖຸດິບ',ct_recipes:'ສິນຄ້າທີ່ຜະລິດແລ້ວ',ct_sys:'ໃນລະບົບ',ct_out:'ໝົດ',ct_counted:'ນັບແລ້ວ {a}/{b}',ct_save:'💾 ບັນທຶກ',
@@ -2438,7 +2445,7 @@ lo:{ct_items:'ວັດຖຸດິບ',ct_recipes:'ສິນຄ້າທີ່�
   ct_draft:'ກູ້ຕົວເລກທີ່ນັບຄ້າງໄວ້ {n} ລາຍການ',ct_cancel_q:'ຖິ້ມຕົວເລກທີ່ນັບໄວ້ທັງໝົດ?',ct_no_match:'ບໍ່ພົບລາຍການທີ່ຄົ້ນຫາ',ct_none:'ຍັງບໍ່ມີລາຍການໃຫ້ນັບ',
   ct_unit_eq:'1 {u} = {q} {b}',ct_sum_t:'ສະຫຼຸບຜົນນັບ',ct_sum_n:'ນັບແລ້ວ {n}',ct_sum_ok:'ຕົງ {n}',ct_sum_diff:'ຕ່າງ {n}',
   ct_sum_none:'ນັບແລ້ວຕົງກັບລະບົບທຸກລາຍການ ✅',ct_sum_hint:'ລະບົບຈະປັບຍອດໃຫ້ເທົ່າກັບທີ່ນັບໄດ້ ແລະ ບັນທຶກລົງປະຫວັດ',
-  ct_col_sys:'ໃນລະບົບ',ct_col_cnt:'ນັບໄດ້',ct_col_diff:'ຕ່າງ',ct_apply:'✅ ປັບຍອດຕາມທີ່ນັບ ({n})',ct_apply0:'✅ ບັນທຶກວ່ານັບແລ້ວ',ct_note_ph:'ໝາຍເຫດ (ບໍ່ບັງຄັບ)',
+  ct_scrap_btn:'✂️ ເສດ',ct_scrap_lb:'✂️ ເສດຈາກການຕັດແຕ່ງ (ຊັ່ງທີ່ຖິ້ມ)',ct_scrap_lone:'ໃສ່ເສດແລ້ວ ແຕ່ຍັງບໍ່ໄດ້ນັບຂອງທີ່ເຫຼືອ: {list}',ct_scrap_t:'✂️ ເສດຕັດແຕ່ງ + Yield',ct_scrap_h:'ເສດຖືກບັນທຶກເປັນຂອງເສຍ (ມີມູນຄ່າຕາມຕົ້ນທຶນ) · Yield = ສ່ວນທີ່ໃຊ້ໄດ້ ÷ ທີ່ໃຊ້ໄປທັງໝົດນັບແຕ່ນັບຄັ້ງກ່ອນ',ct_col_scrap:'ເສດ',ct_col_used:'ໃຊ້ໄປ',ct_col_yield:'Yield',ct_col_val:'ມູນຄ່າ',ct_yield_na:'ຍັງຄິດບໍ່ໄດ້ (ຕ້ອງມີນັບຄັ້ງກ່ອນ)',ct_yield_over:'ເສດຫຼາຍກວ່າທີ່ໃຊ້ໄປ — ກວດຕົວເລກ',ct_scrap_note:'เศษตัดแต่ง (นับสต๊อก)',ct_scrap_sql:'ບັນທຶກຜົນນັບແລ້ວ ແຕ່ຍັງເກັບຂໍ້ມູນເສດ/yield ບໍ່ໄດ້ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດ (⚙️ ຕັ້ງຄ່າ → 🗄️)',ct_col_sys:'ໃນລະບົບ',ct_col_cnt:'ນັບໄດ້',ct_col_diff:'ຕ່າງ',ct_apply:'✅ ປັບຍອດຕາມທີ່ນັບ ({n})',ct_apply0:'✅ ບັນທຶກວ່ານັບແລ້ວ',ct_note_ph:'ໝາຍເຫດ (ບໍ່ບັງຄັບ)',
   ct_sql_block:'ຍັງບໍ່ໄດ້ແລ່ນ SQL jjmk_kitchen2.sql — ບັນທຶກຜົນນັບບໍ່ໄດ້',ct_saved:'ບັນທຶກຜົນນັບແລ້ວ ✅',ct_move_note:'นับสต๊อก',
   ct_not_saved:'ບໍ່ໄດ້ບັນທຶກ — ລອງໃໝ່ອີກຄັ້ງ',ct_detail_t:'ຜົນນັບ',ct_by:'ໂດຍ',ct_noread:'ອ່ານຜົນນັບບໍ່ໄດ້',ct_lines_n:'{n} ລາຍການ',ct_section:'ສ່ວນ'},
 my:{ct_items:'ကုန်ကြမ်း',ct_recipes:'ထုတ်ကုန်',ct_sys:'စနစ်တွင်',ct_out:'ကုန်',ct_counted:'ရေတွက်ပြီး {a}/{b}',ct_save:'💾 သိမ်း',
@@ -2446,7 +2453,7 @@ my:{ct_items:'ကုန်ကြမ်း',ct_recipes:'ထုတ်ကုန်'
   ct_draft:'မသိမ်းရသေးသော ရေတွက်မှု {n} ခု ပြန်ရပြီ',ct_cancel_q:'ရေတွက်ထားသမျှ အားလုံးကို ဖျက်မလား?',ct_no_match:'ရှာသည့်အရာ မတွေ့ပါ',ct_none:'ရေတွက်ရန် မရှိသေးပါ',
   ct_unit_eq:'1 {u} = {q} {b}',ct_sum_t:'ရေတွက်မှု အနှစ်ချုပ်',ct_sum_n:'ရေတွက်ပြီး {n}',ct_sum_ok:'ကိုက်ညီ {n}',ct_sum_diff:'ကွာခြား {n}',
   ct_sum_none:'အားလုံး စနစ်နှင့် ကိုက်ညီသည် ✅',ct_sum_hint:'ရေတွက်ရသည့်အတိုင်း လက်ကျန်ကို ပြင်ပြီး မှတ်တမ်းတွင် သိမ်းမည်',
-  ct_col_sys:'စနစ်',ct_col_cnt:'ရေတွက်ရ',ct_col_diff:'ကွာခြား',ct_apply:'✅ ရေတွက်သည့်အတိုင်း ပြင်ရန် ({n})',ct_apply0:'✅ ရေတွက်ပြီးဟု သိမ်းရန်',ct_note_ph:'မှတ်ချက် (မဖြစ်မနေမဟုတ်)',
+  ct_scrap_btn:'✂️ အပိုင်းအစ',ct_scrap_lb:'✂️ ညှိဖြတ်ပြီး အပိုင်းအစ (လွှင့်ပစ်သည်ကို ချိန်ပါ)',ct_scrap_lone:'အပိုင်းအစ ထည့်ပြီး ကျန်ပစ္စည်း မရေတွက်ရသေး: {list}',ct_scrap_t:'✂️ အပိုင်းအစ + Yield',ct_scrap_h:'အပိုင်းအစကို အလေအလွင့်အဖြစ် သိမ်းသည် (ကုန်ကျစရိတ်ဖြင့် တန်ဖိုး) · Yield = သုံးနိုင်သည် ÷ ယခင်ရေတွက်ပြီးနောက် သုံးခဲ့သမျှ',ct_col_scrap:'အပိုင်းအစ',ct_col_used:'သုံးခဲ့',ct_col_yield:'Yield',ct_col_val:'တန်ဖိုး',ct_yield_na:'မတွက်နိုင်သေး (ယခင်ရေတွက်မှု လို)',ct_yield_over:'အပိုင်းအစ သုံးခဲ့သည်ထက် များ — ဂဏန်းစစ်ပါ',ct_scrap_note:'เศษตัดแต่ง (นับสต๊อก)',ct_scrap_sql:'ရေတွက်မှု သိမ်းပြီး၊ အပိုင်းအစ/yield မသိမ်းနိုင်သေး — နောက်ဆုံး SQL run ပါ (⚙️ ဆက်တင် → 🗄️)',ct_col_sys:'စနစ်',ct_col_cnt:'ရေတွက်ရ',ct_col_diff:'ကွာခြား',ct_apply:'✅ ရေတွက်သည့်အတိုင်း ပြင်ရန် ({n})',ct_apply0:'✅ ရေတွက်ပြီးဟု သိမ်းရန်',ct_note_ph:'မှတ်ချက် (မဖြစ်မနေမဟုတ်)',
   ct_sql_block:'jjmk_kitchen2.sql မလုပ်ရသေးပါ — ရေတွက်မှုကို သိမ်း၍မရပါ',ct_saved:'ရေတွက်မှု သိမ်းပြီး ✅',ct_move_note:'นับสต๊อก',
   ct_not_saved:'မသိမ်းရသေးပါ — ထပ်စမ်းပါ',ct_detail_t:'ရေတွက်မှု ရလဒ်',ct_by:'မှ',ct_noread:'ရေတွက်မှုကို ဖတ်မရပါ',ct_lines_n:'{n} ကြောင်း',ct_section:'အပိုင်း'}
 });
@@ -2473,6 +2480,15 @@ CSS.add(`
 .skcard .isub b{font-family:var(--fh);font-size:14.5px;color:var(--ink)}
 .skstep .ctu{flex:none;font-size:13px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .skcard .skfoot .outb{min-height:44px;padding:8px 14px}   /* ปุ่มแตะ ≥44px บนมือถือ */
+.skcard .skfoot .scb{margin-left:auto;border:1.5px solid var(--line);background:#fff;border-radius:10px;min-height:44px;padding:8px 10px;font-size:13px;color:var(--mut);flex:none}
+.skcard .skfoot .scb~.outb{margin-left:0}.skcard .skfoot .scb.on{background:#FFF6E0;border-color:#E9C46A;color:#8A5A00;font-weight:700}
+.ctscrap{display:none;margin-top:6px;padding:6px 8px;border-radius:10px;background:#FFF9EC;border:1px dashed #E9C46A}.skcard.so .ctscrap{display:block}
+.ctscrap .lb{font-size:12.5px;font-weight:700;color:#8A5A00;margin-bottom:4px}
+.ctscrap .scrow{display:grid;grid-template-columns:40px minmax(40px,1fr) 40px minmax(0,auto);gap:5px;align-items:center}
+.ctscrap .scrow button{width:40px;height:44px;min-height:44px;border-radius:10px;border:1.5px solid var(--line);background:#fff;color:var(--mut);font-size:20px;font-weight:700;padding:0}
+.ctscrap .scrow input{width:100%;min-width:0;height:44px;min-height:44px;font-size:16px;font-weight:700;text-align:center;padding:0 4px}
+.ctscrap .scrow select{min-width:0;max-width:96px;min-height:44px;padding:0 6px}
+.ctyield td.n.y{font-weight:800}.ctyield td.n.y.bad{color:var(--bad)}.ctyield td.n.y.ok{color:var(--ok)}
 .pinbar .ctacts{margin-left:auto;display:flex;gap:8px}.pinbar .ctacts .btn{margin-left:0}
 .ctsum tr.ctk td{background:#FBF6EA;font-weight:700;font-family:var(--fh);color:var(--wine)}
 .ctsum td .xs{display:block;color:var(--mut)}
@@ -2480,6 +2496,9 @@ CSS.add(`
 @media(max-width:339px){.ctsum td,.ctsum th{padding:6px 4px;font-size:12.5px}.ctsum td .xs{display:none}}   /* จอพับ 280px: ให้คอลัมน์ "ต่าง" อยู่ในจอ */
 `);
 let CT={};                                            // {'kind|id':{kind,id,v:'ที่พิมพ์',u:'หน่วยนับตอนพิมพ์'}}
+let CT_S={};                                          // ✂️ เศษตัดแต่ง {'item|id':{v,u}} (แยกจาก CT — ลบตัวเลขนับแล้วเศษไม่หาย)
+let CT_SO={};                                         // การ์ดที่เปิดช่องเศษอยู่ (หน้าจอเท่านั้น)
+let CT_SEEN=null;                                     // Set ของวัตถุดิบที่เคยมีเศษ (kc_count_lines.scrap_qty>0) — เปิดช่องให้เอง
 let CT_KIND=(LS.get('jjck_ct_kind','')==='recipe')?'recipe':'item';
 let CT_CAT=String(LS.get('jjck_ct_cat','')||'');
 let CT_Q='';
@@ -2495,16 +2514,18 @@ function ctCounted(e){if(!e)return false;const s=String(e.v==null?'':e.v).replac
 function ctTotal(e,o,kind){const f=(kind==='item'&&e.u)?(unitFactor(o,e.u)||ctUnit(kind,o).f):ctUnit(kind,o).f;return rnd4(num(e.v)*f);}   // → หน่วยหลัก
 function ctCats(kind){const L=ctList(kind),c=(kind==='item'?ITEM_CATS:MENU_CATS).slice();L.forEach(o=>{const x=ctCatOf(o);if(!c.includes(x))c.push(x);});return c.filter(x=>L.some(o=>ctCatOf(o)===x));}
 function ctCntOf(L,kind){return L.filter(o=>ctCounted(CT[kind+'|'+o.id])).length;}
-function ctAny(){return Object.values(CT).some(ctCounted);}
+function ctAny(){return Object.values(CT).some(ctCounted)||Object.keys(CT_S).some(ctScrapHas);}
 
 /* ---------- ร่าง ---------- */
 function ctDraftGet(){const d=LS.get(CT_DRAFT,null);if(!d||!d.e||d.d!==bizTodayISO()||Date.now()-num(d.t)>CT_DRAFT_MS){if(d)LS.del(CT_DRAFT);return null;}return d;}
-function ctDraftSave(){const e={};Object.values(CT).forEach(x=>{if(ctCounted(x))e[x.kind+'|'+x.id]={v:String(x.v),u:x.u||''};});
-  if(Object.keys(e).length)LS.set(CT_DRAFT,{t:Date.now(),d:bizTodayISO(),e});else LS.del(CT_DRAFT);}
+function ctDraftSave(){const e={},sc={};Object.values(CT).forEach(x=>{if(ctCounted(x))e[x.kind+'|'+x.id]={v:String(x.v),u:x.u||''};});
+  Object.keys(CT_S).forEach(k=>{if(ctScrapHas(k))sc[k]={v:String(CT_S[k].v),u:CT_S[k].u||''};});
+  if(Object.keys(e).length||Object.keys(sc).length)LS.set(CT_DRAFT,{t:Date.now(),d:bizTodayISO(),e,s:sc});else LS.del(CT_DRAFT);}
 function ctDraftClear(){LS.del(CT_DRAFT);}
 function ctDraftRestore(){const d=ctDraftGet();if(!d)return 0;let n=0;
   Object.entries(d.e).forEach(([k,x])=>{const p=k.indexOf('|'),kind=k.slice(0,p),id=k.slice(p+1);if(!ctObj(kind,id))return;
     CT[k]={kind,id,v:String(x&&x.v!=null?x.v:''),u:(x&&x.u)||''};if(ctCounted(CT[k]))n++;else delete CT[k];});
+  Object.entries(d.s||{}).forEach(([k,x])=>{const id=k.slice(k.indexOf('|')+1);if(!itemById(id)||!x)return;CT_S[k]={v:String(x.v==null?'':x.v),u:String(x.u||'')};if(ctScrapHas(k)){CT_SO[k]=1;n++;}else delete CT_S[k];});
   if(n)toast('📝 '+t('ct_draft',{n}));return n;}
 function ctNormUnits(){ // หน่วยนับของสินค้าเปลี่ยนหลังพิมพ์ไปแล้ว → แปลงตัวเลขที่พิมพ์ไว้เป็นหน่วยใหม่
   Object.values(CT).forEach(e=>{if(e.kind!=='item'||!ctCounted(e)||!e.u)return;const o=itemById(e.id);if(!o)return;
@@ -2513,6 +2534,7 @@ function ctNormUnits(){ // หน่วยนับของสินค้า�
 /* ---------- หน้า ---------- */
 RENDER.count=function(el){
   if(!ctAny())ctDraftRestore();
+  ctSeenLoad();
   ctNormUnits();
   const kind=CT_KIND,cats=ctCats(kind);
   if(CT_CAT&&!cats.includes(CT_CAT))CT_CAT='';
@@ -2536,7 +2558,7 @@ function ctGridHtml(){const kind=CT_KIND,L=ctList(kind),cats=ctCats(kind).filter
     return '<div class="ctsec" data-c="'+esc(c)+'"><div class="ctsech">'+(CT_IC[c]||'🧺')+' '+esc(trCat(c))+'<span class="sp">'+M.length+'</span></div><div class="igrid">'+M.map(o=>ctCard(kind,o)).join('')+'</div></div>';}).join('');}
 function ctCard(kind,o){
   const k=kind+'|'+o.id,e=CT[k],counted=ctCounted(e),U=ctUnit(kind,o),base=ctBase(kind,o);
-  return '<div class="icard skcard'+(counted?' cnt':'')+'" data-k="'+esc(k)+'" data-n="'+esc(supKey(dispName(o)+' '+o.name+' '+ctCatOf(o)))+'">'+
+  return '<div class="icard skcard'+(counted?' cnt':'')+(kind==='item'&&ctScrapOpen(o)?' so':'')+'" data-k="'+esc(k)+'" data-n="'+esc(supKey(dispName(o)+' '+o.name+' '+ctCatOf(o)))+'">'+
     '<div class="skgrid"><div class="skpic">'+thumbHtml(o,ctIcon(kind,o),'ithumb')+'</div><div class="skright"><div class="skttl">'+
     '<div class="iname">'+esc(dispName(o))+'</div>'+
     '<div class="isub">'+esc(t('ct_sys'))+' <b>'+fmtQ(rnd2(num(o.qty)/U.f))+'</b> '+esc(trUnit(U.u))+
@@ -2544,7 +2566,9 @@ function ctCard(kind,o){
     '<div class="skstep"><button type="button" aria-label="-" onclick="ctBump(this,-1)">−</button>'+
     '<input type="text" inputmode="decimal" placeholder="0" class="'+(counted?'has':'')+'" value="'+esc(counted?e.v:'')+'" oninput="ctInput(this)" onchange="ctInput(this)">'+
     '<button type="button" class="plus" aria-label="+" onclick="ctBump(this,1)">＋</button><span class="b ctu">'+esc(trUnit(U.u))+'</span></div>'+
+    (kind==='item'?ctScrapHtml(o):'')+
     '<div class="skfoot"><span class="b cteq" style="color:var(--gold)">'+ctEqTxt(e,o,kind)+'</span>'+
+    (kind==='item'?'<button type="button" class="scb'+(ctScrapHas(k)?' on':'')+'" onclick="ctScrapTog(this)">'+esc(t('ct_scrap_btn'))+'</button>':'')+
     '<button type="button" class="outb'+(counted&&num(e.v)===0?' on':'')+'" onclick="ctZero(this)">'+esc(t('ct_out'))+'</button></div></div></div></div>';}   // รูปซ้ายใหญ่ · ชื่อ/ยอดในระบบขวาบน · จำนวนลงมา · หมดล่างสุด (เจ้าของ 2026-10-18)
 function ctEqTxt(e,o,kind){const U=ctUnit(kind,o),base=ctBase(kind,o);return (ctCounted(e)&&U.u!==base)?'= '+fmtQ(ctTotal(e,o,kind))+' '+esc(trUnit(base)):'';}
 function ctCardOf(el){return el&&el.closest?el.closest('.skcard'):null;}
@@ -2581,13 +2605,14 @@ function ctFilter(v){CT_Q=String(v==null?'':v);const q=supKey(CT_Q);let any=0;
     s.querySelectorAll('.skcard').forEach(c=>{const ok=!q||String(c.dataset.n||'').indexOf(q)>=0;c.style.display=ok?'':'none';if(ok)n++;});
     s.style.display=n?'':'none';any+=n;});
   const e=document.getElementById('ctNone');if(e)e.style.display=any?'none':'';}
-async function ctCancel(){if(ctAny()){const ok=await confirm2(t('ct_cancel_q'),{danger:true});if(!ok)return;}CT={};ctDraftClear();ctPaint();}
+async function ctCancel(){if(ctAny()){const ok=await confirm2(t('ct_cancel_q'),{danger:true});if(!ok)return;}CT={};CT_S={};CT_SO={};ctDraftClear();ctPaint();}
 
 /* ---------- สรุป + ปรับยอด ---------- */
 function ctRows(){ // ทุกรายการที่นับ → {kind,id,o,name,disp,u,f,base,count_qty,sys,cnt,delta}
   const out=[];Object.values(CT).forEach(e=>{if(!ctCounted(e))return;const o=ctObj(e.kind,e.id);if(!o)return;
     const U=ctUnit(e.kind,o),base=ctBase(e.kind,o),cnt=ctTotal(e,o,e.kind),sys=num(o.qty);let delta=rnd4(cnt-sys);if(Math.abs(delta)<1e-9)delta=0;
-    out.push({kind:e.kind,id:e.id,o,name:o.name,disp:dispName(o),u:U.u,f:U.f,base,count_qty:num(e.v),sys,cnt,delta});});
+    const sc=e.kind==='item'?ctScrapBase(e.kind+'|'+e.id,o):0;
+    out.push({kind:e.kind,id:e.id,o,name:o.name,disp:dispName(o),u:U.u,f:U.f,base,count_qty:num(e.v),sys,cnt,delta,scrap:sc,su:sc?CT_S[e.kind+'|'+e.id].u:''});});
   const ord=r=>r.kind==='item'?0:1;out.sort((a,b)=>ord(a)-ord(b)||a.disp.localeCompare(b.disp,'th'));return out;}
 function ctSumTable(rows){ // ตารางเฉพาะที่ต่าง (หน่วยนับ + แปลงเป็นหน่วยหลักถ้าไม่ใช่หน่วยเดียวกัน)
   let h='<div class="twrap"><table class="t ctsum"><thead><tr><th>'+esc(t('name'))+'</th><th class="n">'+esc(t('ct_col_sys'))+'</th><th class="n">'+esc(t('ct_col_cnt'))+'</th><th class="n">'+esc(t('ct_col_diff'))+'</th></tr></thead><tbody>';
@@ -2603,14 +2628,18 @@ async function ctRefreshLive(){ // ยอดในระบบสดของท
   document.querySelectorAll('#view-count .skcard').forEach(card=>{const k=card.dataset.k||'',p=k.indexOf('|'),o=ctObj(k.slice(0,p),k.slice(p+1));if(!o)return;
     const U=ctUnit(k.slice(0,p),o),b=card.querySelector('.isub b');if(b)b.textContent=fmtQ(rnd2(num(o.qty)/U.f));});}
 async function ctSummary(){
+  const lone=Object.keys(CT_S).filter(k=>ctScrapHas(k)&&!ctCounted(CT[k])).map(k=>{const o=itemById(k.slice(k.indexOf('|')+1));return o?dispName(o):'';}).filter(Boolean);
+  if(lone.length){toast(t('ct_scrap_lone',{list:lone.join(', ')}),true);return;}   // เศษต้องมาคู่กับยอดคงเหลือที่นับ (คิด yield/ปรับยอดได้)
   if(!ctRows().length){toast(t('ct_none'),true);return;}
   await ctRefreshLive();const rows=ctRows();if(!rows.length)return;
+  await ctYieldLoad(rows.filter(r=>r.scrap>0));
   const diffs=rows.filter(r=>r.delta!==0);
   let h='<h3>📋 '+esc(t('ct_sum_t'))+'</h3>'+
     '<div class="row" style="margin-bottom:10px"><span class="chip mid">'+esc(t('ct_sum_n',{n:rows.length}))+'</span><span class="chip ok">'+esc(t('ct_sum_ok',{n:rows.length-diffs.length}))+'</span>'+
     '<span class="chip '+(diffs.length?'warn':'mid')+'">'+esc(t('ct_sum_diff',{n:diffs.length}))+'</span></div>';
   if(!diffs.length)h+='<div class="okbox">'+esc(t('ct_sum_none'))+'</div>';
   else h+='<div class="hintbox">'+esc(t('ct_sum_hint'))+'</div>'+ctSumTable(diffs);
+  h+=ctScrapSumHtml(rows.filter(r=>r.scrap>0));
   h+=sqlNeedBox()+fld(t('note'),'<input id="ctNote" maxlength="200" placeholder="'+esc(t('ct_note_ph'))+'">')+
     '<div class="row" style="margin-top:10px"><button class="btn gh" style="flex:1" onclick="closeModal()">'+esc(t('back'))+'</button>'+
     '<button class="btn ok" style="flex:1" id="ctApplyBtn" onclick="ctApply()">'+esc(diffs.length?t('ct_apply',{n:diffs.length}):t('ct_apply0'))+'</button></div>';
@@ -2626,19 +2655,82 @@ async function ctApply(){await once(async()=>{
       const cid=uid('ct');let step='head';
       try{
         await db(()=>sb.from('kc_counts').insert({id:cid,d:today,kind,n:R.length,diff:R.filter(r=>r.delta!==0).length,note,by_name:by}));
-        step='lines';await db(()=>sb.from('kc_count_lines').insert(R.map(r=>({count_id:cid,ref_id:r.id,name:r.name,sys_qty:rnd4(r.sys),counted_qty:rnd4(r.cnt),delta:rnd4(r.delta),unit:r.base,count_unit:r.u,count_qty:rnd4(r.count_qty)}))));
-        step='moves';const mv=R.filter(r=>r.delta!==0).map(r=>{const c=kind==='item'?itemCost(r.o):recipeUnitCost(r.o);
-          return {d:today,kind:'adjust',ref_kind:kind,ref_id:r.id,name:r.name,qty:r.delta,cost:c==null?null:rnd4(r.delta*c),ref_table:'kc_counts',ref_id2:cid,note:I18N.th.ct_move_note};});
+        step='lines';await ctLinesInsert(R.map(r=>{const o={count_id:cid,ref_id:r.id,name:r.name,sys_qty:rnd4(r.sys),counted_qty:rnd4(r.cnt),delta:rnd4(r.delta),unit:r.base,count_unit:r.u,count_qty:rnd4(r.count_qty)};
+          if(r.scrap>0){const y=ctYieldOf(r),c=itemCost(r.o);o.scrap_qty=rnd4(r.scrap);o.used_qty=y.used==null?null:rnd4(y.used);o.scrap_cost=c==null?null:rnd2(r.scrap*c);}return o;}));
+        step='moves';const mv=[];R.forEach(r=>{const c=kind==='item'?itemCost(r.o):recipeUnitCost(r.o),cc=q=>c==null?null:rnd4(q*c);
+          if(r.scrap>0)mv.push({d:today,kind:'waste',ref_kind:kind,ref_id:r.id,name:r.name,qty:-r.scrap,cost:cc(-r.scrap),ref_table:'kc_counts',ref_id2:cid,note:I18N.th.ct_scrap_note});   // เศษตัดแต่ง = ของเสียมีมูลค่า
+          const rest=rnd4(r.delta+(r.scrap||0));if(Math.abs(rest)>1e-9)mv.push({d:today,kind:'adjust',ref_kind:kind,ref_id:r.id,name:r.name,qty:rest,cost:cc(rest),ref_table:'kc_counts',ref_id2:cid,note:I18N.th.ct_move_note});});   // รวม = delta → สต๊อก = ที่นับได้
         if(mv.length)await pushMoves(mv);
       }catch(e){ // บันทึกไม่ครบ = ถอนหัว/บรรทัด/สต๊อกของส่วนนี้ทิ้ง ไม่เหลือผลนับค้างทั้งที่สต๊อกไม่ขยับ (กดซ้ำได้ ไม่ซ้ำ)
         if(step==='moves')await pushMovesUndo('kc_counts',cid);
         if(step!=='head'){try{await sb.from('kc_count_lines').delete().eq('count_id',cid);}catch(_){}}
         try{await sb.from('kc_counts').delete().eq('id',cid);}catch(_){}
         toast(t('ct_not_saved')+' · '+((e&&e.message)||e),true);throw e;}
-      R.forEach(r=>{delete CT[kind+'|'+r.id];});ctDraftSave();}   // ส่วนที่บันทึกแล้วหลุดจากร่าง — ส่วนถัดไปพลาดก็ไม่เขียนซ้ำ
+      R.forEach(r=>{delete CT[kind+'|'+r.id];delete CT_S[kind+'|'+r.id];if(r.scrap>0&&CT_SEEN)CT_SEEN.add(r.id);});ctDraftSave();}   // ส่วนที่บันทึกแล้วหลุดจากร่าง — ส่วนถัดไปพลาดก็ไม่เขียนซ้ำ
   }catch(e){if(btn)btn.disabled=false;return;}
-  CT={};ctDraftClear();closeModal();toast(t('ct_saved'));if(S.tab==='count')ctPaint();
+  CT={};CT_S={};CT_SO={};ctDraftClear();closeModal();toast(CT_NOCOL?t('ct_scrap_sql'):t('ct_saved'),CT_NOCOL?'warn':false);if(S.tab==='count')ctPaint();
 });}
+
+/* ---------- ✂️ เศษตัดแต่ง ---------- */
+let CT_YB={},CT_NOCOL=false;   // CT_YB = ฐานคิด yield ต่อวัตถุดิบ {prev,inflow} (null = ไม่มีนับครั้งก่อน/อ่านไม่ได้) · CT_NOCOL = ยังไม่รัน SQL ช่องเศษ
+function ctScrapHas(k){const x=CT_S[k];if(!x)return false;const v=String(x.v==null?'':x.v).replace(/,/g,'').trim();return v!==''&&isFinite(Number(v))&&Number(v)>0;}
+function ctScrapUnits(o){const out=[],base=o.unit||'';const add=u=>{if(u&&!out.includes(u)&&unitFactor(o,u)!=null)out.push(u);};
+  if(unitConv(o,'กก.',base)!=null){add('กก.');add('กรัม');}else if(unitConv(o,'ลิตร',base)!=null){add('ลิตร');add('มล.');}
+  add(base);add(countUnitOf(o));return out;}
+function ctScrapBase(k,o){if(!ctScrapHas(k))return 0;const x=CT_S[k],f=unitFactor(o,x.u||ctScrapUnits(o)[0]);return f==null?0:rnd4(num(x.v)*f);}
+function ctScrapHtml(o){const k='item|'+o.id,x=CT_S[k]||{},L=ctScrapUnits(o),u=L.includes(x.u)?x.u:L[0];
+  return '<div class="ctscrap"><div class="lb">'+esc(t('ct_scrap_lb'))+'</div><div class="scrow">'+
+    '<button type="button" aria-label="-" onclick="ctScrapBump(this,-1)">−</button><input type="text" inputmode="decimal" placeholder="0" value="'+esc(x.v==null?'':x.v)+'" oninput="ctScrapIn(this)" onchange="ctScrapIn(this)">'+
+    '<button type="button" aria-label="+" onclick="ctScrapBump(this,1)">＋</button><select onchange="ctScrapIn(this)">'+unitOptions(L,u)+'</select></div></div>';}
+function ctScrapOpen(o){const k='item|'+o.id;return !!(CT_SO[k]||ctScrapHas(k)||(CT_SEEN&&CT_SEEN.has(o.id)));}
+function ctScrapTog(btn){const card=ctCardOf(btn);if(!card)return;const k=card.dataset.k,on=!card.classList.contains('so');card.classList.toggle('so',on);if(on)CT_SO[k]=1;else delete CT_SO[k];
+  if(on){const i=card.querySelector('.ctscrap input');if(i)try{i.focus();}catch(e){}}}
+function ctScrapIn(el){const card=ctCardOf(el);if(!card)return;const k=card.dataset.k,box=card.querySelector('.ctscrap');if(!box)return;
+  const v=box.querySelector('input').value,u=box.querySelector('select').value;CT_S[k]={v:String(v==null?'':v),u};
+  if(!ctScrapHas(k)&&String(v).trim()==='')delete CT_S[k];CT_SO[k]=1;
+  const b=card.querySelector('.scb');if(b)b.classList.toggle('on',ctScrapHas(k));ctDraftSave();ctMeta();}
+function ctScrapBump(btn,d){const card=ctCardOf(btn),inp=card&&card.querySelector('.ctscrap input');if(!inp)return;let v=rnd4(num(inp.value)+d);if(v<0)v=0;inp.value=String(v);ctScrapIn(inp);}
+async function ctSeenLoad(){ // วัตถุดิบที่เคยมีเศษ → เปิดช่องเศษให้เอง (fail-soft · โหลดครั้งเดียว)
+  if(CT_SEEN)return ctSeenPaint();CT_SEEN=new Set();
+  try{const r=await sb.from('kc_count_lines').select('ref_id,scrap_qty').gt('scrap_qty',0).order('id',{ascending:false}).limit(1000);
+    if(r&&!r.error&&r.data)r.data.forEach(x=>{if(x.ref_id)CT_SEEN.add(String(x.ref_id));});}catch(e){}
+  ctSeenPaint();}
+function ctSeenPaint(){document.querySelectorAll('#view-count .skcard[data-k^="item|"]').forEach(c=>{const o=itemById(c.dataset.k.slice(5));if(o&&ctScrapOpen(o))c.classList.add('so');});}
+async function ctYieldLoad(rows){ // ฐานคิด yield: นับครั้งก่อนล่าสุด + รับเข้าตั้งแต่นั้น (อ่านไม่ได้ = ไม่คิด yield แต่ยังบันทึกเศษได้)
+  CT_YB={};const ids=rows.map(r=>r.id);if(!ids.length)return;
+  try{const L=await sb.from('kc_count_lines').select('id,count_id,ref_id,counted_qty').in('ref_id',ids).order('id',{ascending:false}).limit(2000);
+    if(!L||L.error)return;const last={};(L.data||[]).forEach(x=>{if(!last[x.ref_id])last[x.ref_id]=x;});
+    const cids=[...new Set(Object.values(last).map(x=>x.count_id))];if(!cids.length)return;
+    const C=await sb.from('kc_counts').select('id,created_at').in('id',cids);if(!C||C.error)return;const at={};(C.data||[]).forEach(c=>{at[c.id]=c.created_at;});
+    const from=Object.values(last).map(x=>at[x.count_id]).filter(Boolean).sort()[0];if(!from)return;
+    const M=await sb.from('kc_moves').select('ref_id,qty,created_at').eq('ref_kind','item').eq('ref_table','kc_receipts').in('ref_id',ids).gt('created_at',from).limit(5000);if(!M||M.error)return;
+    ids.forEach(id=>{const p=last[id],t0=p&&at[p.count_id];if(!t0)return;let inflow=0;(M.data||[]).forEach(m=>{if(m.ref_id===id&&String(m.created_at)>String(t0))inflow+=num(m.qty);});
+      CT_YB[id]={prev:num(p.counted_qty),inflow:rnd4(inflow)};});
+  }catch(e){}}
+function ctYieldOf(r){ // → {used,yld} · used = นับครั้งก่อน + รับเข้า − นับครั้งนี้ · yield = 1 − เศษ/used
+  const b=CT_YB[r.id];if(!b)return {used:null,yld:null};const used=rnd4(b.prev+b.inflow-r.cnt);
+  if(!(used>0))return {used:null,yld:null};return {used,yld:r.scrap<=used+1e-9?rnd4(1-r.scrap/used):null,over:r.scrap>used+1e-9};}
+const ctPct=y=>y==null?'–':fmtQ(rnd2(y*100))+'%';
+function ctScrapSumHtml(rows){if(!rows.length)return '';
+  let h='<div class="b" style="margin:12px 0 4px">'+esc(t('ct_scrap_t'))+'</div><div class="xs mut" style="margin-bottom:6px">'+esc(t('ct_scrap_h'))+'</div>'+
+    '<div class="twrap"><table class="t ctsum ctyield"><thead><tr><th>'+esc(t('name'))+'</th><th class="n">'+esc(t('ct_col_scrap'))+'</th><th class="n">'+esc(t('ct_col_used'))+'</th><th class="n">'+esc(t('ct_col_yield'))+'</th><th class="n">'+esc(t('ct_col_val'))+'</th></tr></thead><tbody>';
+  let tot=0;rows.forEach(r=>{const y=ctYieldOf(r),c=itemCost(r.o),val=c==null?null:rnd2(r.scrap*c);if(val!=null)tot+=val;const su=r.su||r.base,sf=unitFactor(r.o,su)||1;
+    h+='<tr data-id="'+esc(r.id)+'"><td>'+esc(r.disp)+'</td><td class="n">'+fmtQ(rnd4(r.scrap/sf))+'<span class="xs">'+esc(trUnit(su))+'</span></td>'+
+      '<td class="n">'+(y.used==null?'–':fmtQ(rnd2(y.used/r.f))+'<span class="xs">'+esc(trUnit(r.u))+'</span>')+'</td>'+
+      '<td class="n y'+(y.yld==null?'':y.yld<0.7?' bad':' ok')+'">'+ctPct(y.yld)+(y.used==null?'<span class="xs">'+esc(t('ct_yield_na'))+'</span>':y.over?'<span class="xs">'+esc(t('ct_yield_over'))+'</span>':'')+'</td>'+
+      '<td class="n">'+(val==null?'–':esc(money(val)))+'</td></tr>';});
+  return h+'<tr class="tot"><td colspan="4">'+esc(t('ac_total'))+'</td><td class="n">'+esc(money(rnd2(tot)))+'</td></tr></tbody></table></div>';}
+function ctScrapDetailHtml(lines){const L=(lines||[]).filter(l=>num(l.scrap_qty)>0);if(!L.length)return '';
+  return '<div class="b" style="margin:12px 0 4px">'+esc(t('ct_scrap_t'))+'</div><div class="twrap"><table class="t ctsum ctyield"><thead><tr><th>'+esc(t('name'))+'</th><th class="n">'+esc(t('ct_col_scrap'))+'</th><th class="n">'+esc(t('ct_col_used'))+'</th><th class="n">'+esc(t('ct_col_yield'))+'</th><th class="n">'+esc(t('ct_col_val'))+'</th></tr></thead><tbody>'+
+    L.map(l=>{const y=num(l.used_qty)>0?rnd4(1-num(l.scrap_qty)/num(l.used_qty)):null;
+      return '<tr><td>'+esc(l.name||'')+'</td><td class="n">'+fmtQ(l.scrap_qty)+'<span class="xs">'+esc(trUnit(l.unit||''))+'</span></td><td class="n">'+(l.used_qty==null?'–':fmtQ(l.used_qty))+'</td><td class="n y">'+ctPct(y)+'</td><td class="n">'+(l.scrap_cost==null?'–':esc(money(l.scrap_cost)))+'</td></tr>';}).join('')+'</tbody></table></div>';}
+async function ctLinesInsert(rows){ // ยังไม่รัน SQL รุ่นที่มีช่องเศษ (PGRST204) = ตัดช่องเศษออกแล้วบันทึกต่อ (ปรับยอด/ของเสียยังถูกต้อง)
+  CT_NOCOL=false;const cols=['scrap_qty','used_qty','scrap_cost'];
+  for(let i=0;i<4;i++){const r=await sb.from('kc_count_lines').insert(rows);if(!r||!r.error)return;
+    const m=/'([a-z_]+)' column/i.exec(String(r.error.message||''));
+    if(r.error.code==='PGRST204'&&m&&cols.includes(m[1])){CT_NOCOL=true;rows=rows.map(x=>{const o=Object.assign({},x);cols.forEach(c=>delete o[c]);return o;});continue;}
+    return await db(()=>Promise.resolve(r));}   // ให้ db() แจ้ง/throw ตามปกติ
+}
 
 /* ---------- หน้าต่างผลนับ (โมดูลประวัติเรียก) ---------- */
 async function ctDetail(id){
@@ -2653,6 +2745,7 @@ async function ctDetail(id){
     '<div class="row" style="margin-bottom:10px"><span class="chip mid">'+esc(t('ct_lines_n',{n:fmtI(c.n)}))+'</span><span class="chip '+(num(c.diff)?'warn':'ok')+'">'+esc(t('ct_sum_diff',{n:fmtI(c.diff)}))+'</span></div>'+
     (c.note?'<div class="note">'+esc(c.note)+'</div>':'')+
     (diffs.length?ctSumTable(diffs):'<div class="okbox">'+esc(t('ct_sum_none'))+'</div>')+
+    ctScrapDetailHtml(lines)+
     '<button class="btn gh big" style="margin-top:10px" onclick="closeModal()">'+esc(t('close'))+'</button>');}
 /* ===================== /module: count ===================== */
 
@@ -4453,7 +4546,7 @@ th:{it_new:'เพิ่มวัตถุดิบ',it_edit:'แก้วัต
   it_buy:'หน่วยที่ซื้อ',it_buy_hint:'เวลารับของ ระบบจะเติมขนาดนี้ให้ก่อน แก้ได้',it_buy_eq:'1 {u} =',it_packs:'ขนาดบรรจุอื่น ๆ',it_pack_hint:'ใช้ตอนรับของ เช่น 1 ถุง = 1,000 กรัม · 1 ชุด = 10 กก.',
   it_pack_add:'＋ เพิ่มขนาดบรรจุ',it_pack_bad:'ขนาดบรรจุต้องเลือกหน่วย ใส่ขนาดมากกว่า 0 และไม่ซ้ำกับหน่วยหลัก/หน่วยที่ซื้อ',it_buy_bad:'ขนาดของหน่วยที่ซื้อต้องมากกว่า 0',
   it_cu:'หน่วยที่ใช้นับสต๊อก',it_cu_auto:'อัตโนมัติ ({u})',it_cu_hint:'เช่น น้ำปลา นับเป็นขวด · ระบบแปลงเป็นหน่วยหลักให้เอง',
-  it_sup:'ร้านค้าที่ซื้อ',it_sup_none:'— ยังไม่ระบุร้าน —',it_sup_new:'＋ ร้านใหม่',it_sup_new_ph:'ชื่อร้านใหม่',it_max_need:'ช่อง Max ยังใช้ไม่ได้ — ต้องรัน SQL รุ่นล่าสุดก่อน (⚙️ ตั้งค่า → 🗄️ คัดลอก SQL → วางใน Supabase) แล้วกด ⟳',it_max:'สั่งเติมให้ถึง (Max)',it_lim_t:'ขั้นต่ำ (Safety) / Max',it_lim_u:'หน่วย',it_lim_h:'ของเหลือต่ำกว่าขั้นต่ำ → หน้า 🛒 สั่งของ แนะนำให้สั่งเติมจนถึง Max (ปัดขึ้นเป็นหน่วยซื้อเต็ม เหลือดีกว่าขาด) · ไม่ใส่ Max = เติมแค่ถึงขั้นต่ำ · ไม่ใส่ขั้นต่ำ = ต่ำกว่า Max ก็สั่ง',it_lim_bad:'เลือกหน่วยของขั้นต่ำ/Max ใหม่ — หน่วยนี้แปลงเป็นหน่วยหลักไม่ได้',it_lim_order:'Max ต้องไม่น้อยกว่าขั้นต่ำ',it_max_sql:'บันทึกแล้ว แต่ Max ยังไม่ถูกบันทึก — ต้องรัน SQL รุ่นล่าสุดก่อน (⚙️ ตั้งค่า → 🗄️)',it_min:'ขั้นต่ำ (Safety)',it_min_s:'ขั้นต่ำ',it_lead:'รอของกี่วัน',
+  it_sup:'ร้านค้าที่ซื้อ',it_sup_none:'— ยังไม่ระบุร้าน —',it_sup_new:'＋ ร้านใหม่',it_sup_new_ph:'ชื่อร้านใหม่',it_yield_t:'Yield จากเศษตัดแต่ง (นับสต๊อก)',it_yield_avg:'เฉลี่ย {n} ครั้ง',it_yield_scrap:'เศษ',it_yield_used:'ใช้ไป',it_max_need:'ช่อง Max ยังใช้ไม่ได้ — ต้องรัน SQL รุ่นล่าสุดก่อน (⚙️ ตั้งค่า → 🗄️ คัดลอก SQL → วางใน Supabase) แล้วกด ⟳',it_max:'สั่งเติมให้ถึง (Max)',it_lim_t:'ขั้นต่ำ (Safety) / Max',it_lim_u:'หน่วย',it_lim_h:'ของเหลือต่ำกว่าขั้นต่ำ → หน้า 🛒 สั่งของ แนะนำให้สั่งเติมจนถึง Max (ปัดขึ้นเป็นหน่วยซื้อเต็ม เหลือดีกว่าขาด) · ไม่ใส่ Max = เติมแค่ถึงขั้นต่ำ · ไม่ใส่ขั้นต่ำ = ต่ำกว่า Max ก็สั่ง',it_lim_bad:'เลือกหน่วยของขั้นต่ำ/Max ใหม่ — หน่วยนี้แปลงเป็นหน่วยหลักไม่ได้',it_lim_order:'Max ต้องไม่น้อยกว่าขั้นต่ำ',it_max_sql:'บันทึกแล้ว แต่ Max ยังไม่ถูกบันทึก — ต้องรัน SQL รุ่นล่าสุดก่อน (⚙️ ตั้งค่า → 🗄️)',it_min:'ขั้นต่ำ (Safety)',it_min_s:'ขั้นต่ำ',it_lead:'รอของกี่วัน',
   it_cost_t:'ต้นทุน (จากการรับของจริง)',it_cost_avg:'ถัวเฉลี่ย',it_last:'รับล่าสุด',it_cost_legacy:'ราคาเดิม (ก่อนมีระบบรับของ)',it_cost_none:'ยังไม่เคยรับของ — ต้นทุนจะมาเองเมื่อรับของครั้งแรก',
   it_hist:'📉 ราคาที่เคยรับ',it_hist_t:'ราคาที่เคยรับจริง',it_hist_none:'ยังไม่มีประวัติการรับของ',it_hist_pack:'บรรจุ',
   it_dup:'มีวัตถุดิบชื่อนี้อยู่แล้ว',it_del:'🗑 ลบถาวร',it_del_q:'ลบ "{n}" ถาวร?\nใช้เฉพาะรายการที่เพิ่มผิด — ถ้าเลิกใช้ให้กด "ไม่ใช้แล้ว" แทน',
@@ -4466,7 +4559,7 @@ en:{it_new:'Add ingredient',it_edit:'Edit ingredient',it_n:'{n} items',it_none:'
   it_buy:'Buying unit',it_buy_hint:'Prefilled when receiving — can be changed',it_buy_eq:'1 {u} =',it_packs:'Other pack sizes',it_pack_hint:'Used when receiving, e.g. 1 bag = 1,000 g · 1 set = 10 kg',
   it_pack_add:'＋ Add pack size',it_pack_bad:'Pack sizes need a unit and a size above 0, and must differ from the base/buying unit',it_buy_bad:'Buying unit size must be above 0',
   it_cu:'Counting unit',it_cu_auto:'Automatic ({u})',it_cu_hint:'e.g. fish sauce counted in bottles · converted to the base unit automatically',
-  it_sup:'Supplier',it_sup_none:'— no supplier —',it_sup_new:'＋ New supplier',it_sup_new_ph:'New supplier name',it_max_need:'Max is not available yet — run the latest SQL first (⚙️ Settings → 🗄️ copy SQL → paste in Supabase), then tap ⟳',it_max:'Top up to (Max)',it_lim_t:'Minimum (Safety) / Max',it_lim_u:'Unit',it_lim_h:'Below the minimum → 🛒 Ordering suggests topping up to Max (rounded up to whole buying packs — better extra than short) · no Max = only up to the minimum · no minimum = order whenever below Max',it_lim_bad:'Pick the minimum/Max unit again — it cannot be converted to the base unit',it_lim_order:'Max cannot be less than the minimum',it_max_sql:'Saved, but Max was not — run the latest SQL first (⚙️ Settings → 🗄️)',it_min:'Minimum (Safety)',it_min_s:'min',it_lead:'Lead time (days)',
+  it_sup:'Supplier',it_sup_none:'— no supplier —',it_sup_new:'＋ New supplier',it_sup_new_ph:'New supplier name',it_yield_t:'Yield from trimmings (stock counts)',it_yield_avg:'Average of {n}',it_yield_scrap:'trim',it_yield_used:'used',it_max_need:'Max is not available yet — run the latest SQL first (⚙️ Settings → 🗄️ copy SQL → paste in Supabase), then tap ⟳',it_max:'Top up to (Max)',it_lim_t:'Minimum (Safety) / Max',it_lim_u:'Unit',it_lim_h:'Below the minimum → 🛒 Ordering suggests topping up to Max (rounded up to whole buying packs — better extra than short) · no Max = only up to the minimum · no minimum = order whenever below Max',it_lim_bad:'Pick the minimum/Max unit again — it cannot be converted to the base unit',it_lim_order:'Max cannot be less than the minimum',it_max_sql:'Saved, but Max was not — run the latest SQL first (⚙️ Settings → 🗄️)',it_min:'Minimum (Safety)',it_min_s:'min',it_lead:'Lead time (days)',
   it_cost_t:'Cost (from actual receipts)',it_cost_avg:'Average',it_last:'Last received',it_cost_legacy:'Old price (before receiving existed)',it_cost_none:'Never received yet — cost appears after the first receipt',
   it_hist:'📉 Received prices',it_hist_t:'Actual received prices',it_hist_none:'No receipts yet',it_hist_pack:'Pack',
   it_dup:'An ingredient with this name already exists',it_del:'🗑 Delete',it_del_q:'Delete "{n}" permanently?\nOnly for mistakes — if it is no longer used, tap "No longer used" instead',
@@ -4479,7 +4572,7 @@ lo:{it_new:'ເພີ່ມວັດຖຸດິບ',it_edit:'ແກ້ວັດ
   it_buy:'ຫົວໜ່ວຍທີ່ຊື້',it_buy_hint:'ເວລາຮັບເຄື່ອງ ລະບົບຈະຕື່ມຂະໜາດນີ້ໃຫ້ກ່ອນ ແກ້ໄດ້',it_buy_eq:'1 {u} =',it_packs:'ຂະໜາດບັນຈຸອື່ນໆ',it_pack_hint:'ໃຊ້ຕອນຮັບເຄື່ອງ ເຊັ່ນ 1 ຖົງ = 1,000 ກຣາມ · 1 ຊຸດ = 10 ກກ.',
   it_pack_add:'＋ ເພີ່ມຂະໜາດບັນຈຸ',it_pack_bad:'ຂະໜາດບັນຈຸຕ້ອງເລືອກຫົວໜ່ວຍ ໃສ່ຂະໜາດຫຼາຍກວ່າ 0 ແລະ ບໍ່ຊ້ຳກັບຫົວໜ່ວຍຫຼັກ/ຫົວໜ່ວຍທີ່ຊື້',it_buy_bad:'ຂະໜາດຂອງຫົວໜ່ວຍທີ່ຊື້ຕ້ອງຫຼາຍກວ່າ 0',
   it_cu:'ຫົວໜ່ວຍທີ່ໃຊ້ນັບສະຕັອກ',it_cu_auto:'ອັດຕະໂນມັດ ({u})',it_cu_hint:'ເຊັ່ນ ນ້ຳປາ ນັບເປັນແກ້ວ · ລະບົບແປງເປັນຫົວໜ່ວຍຫຼັກໃຫ້ເອງ',
-  it_sup:'ຮ້ານຄ້າທີ່ຊື້',it_sup_none:'— ຍັງບໍ່ລະບຸຮ້ານ —',it_sup_new:'＋ ຮ້ານໃໝ່',it_sup_new_ph:'ຊື່ຮ້ານໃໝ່',it_max_need:'ຊ່ອງ Max ຍັງໃຊ້ບໍ່ໄດ້ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດກ່ອນ (⚙️ ຕັ້ງຄ່າ → 🗄️) ແລ້ວກົດ ⟳',it_max:'ສັ່ງເຕີມໃຫ້ຮອດ (Max)',it_lim_t:'ຂັ້ນຕ່ຳ (Safety) / Max',it_lim_u:'ຫົວໜ່ວຍ',it_lim_h:'ເຫຼືອຕ່ຳກວ່າຂັ້ນຕ່ຳ → ໜ້າ 🛒 ສັ່ງເຄື່ອງ ແນະນຳໃຫ້ສັ່ງເຕີມຈົນຮອດ Max (ປັດຂຶ້ນເປັນຫົວໜ່ວຍຊື້ເຕັມ ເຫຼືອດີກວ່າຂາດ) · ບໍ່ໃສ່ Max = ເຕີມແຄ່ຮອດຂັ້ນຕ່ຳ · ບໍ່ໃສ່ຂັ້ນຕ່ຳ = ຕ່ຳກວ່າ Max ກໍສັ່ງ',it_lim_bad:'ເລືອກຫົວໜ່ວຍຂອງຂັ້ນຕ່ຳ/Max ໃໝ່ — ແປງເປັນຫົວໜ່ວຍຫຼັກບໍ່ໄດ້',it_lim_order:'Max ຕ້ອງບໍ່ໜ້ອຍກວ່າຂັ້ນຕ່ຳ',it_max_sql:'ບັນທຶກແລ້ວ ແຕ່ Max ຍັງບໍ່ຖືກບັນທຶກ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດກ່ອນ (⚙️ ຕັ້ງຄ່າ → 🗄️)',it_min:'ຂັ້ນຕ່ຳ (Safety)',it_min_s:'ຂັ້ນຕ່ຳ',it_lead:'ລໍຖ້າເຄື່ອງຈັກມື້',
+  it_sup:'ຮ້ານຄ້າທີ່ຊື້',it_sup_none:'— ຍັງບໍ່ລະບຸຮ້ານ —',it_sup_new:'＋ ຮ້ານໃໝ່',it_sup_new_ph:'ຊື່ຮ້ານໃໝ່',it_yield_t:'Yield ຈາກເສດຕັດແຕ່ງ (ນັບສະຕັອກ)',it_yield_avg:'ສະເລ່ຍ {n} ຄັ້ງ',it_yield_scrap:'ເສດ',it_yield_used:'ໃຊ້ໄປ',it_max_need:'ຊ່ອງ Max ຍັງໃຊ້ບໍ່ໄດ້ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດກ່ອນ (⚙️ ຕັ້ງຄ່າ → 🗄️) ແລ້ວກົດ ⟳',it_max:'ສັ່ງເຕີມໃຫ້ຮອດ (Max)',it_lim_t:'ຂັ້ນຕ່ຳ (Safety) / Max',it_lim_u:'ຫົວໜ່ວຍ',it_lim_h:'ເຫຼືອຕ່ຳກວ່າຂັ້ນຕ່ຳ → ໜ້າ 🛒 ສັ່ງເຄື່ອງ ແນະນຳໃຫ້ສັ່ງເຕີມຈົນຮອດ Max (ປັດຂຶ້ນເປັນຫົວໜ່ວຍຊື້ເຕັມ ເຫຼືອດີກວ່າຂາດ) · ບໍ່ໃສ່ Max = ເຕີມແຄ່ຮອດຂັ້ນຕ່ຳ · ບໍ່ໃສ່ຂັ້ນຕ່ຳ = ຕ່ຳກວ່າ Max ກໍສັ່ງ',it_lim_bad:'ເລືອກຫົວໜ່ວຍຂອງຂັ້ນຕ່ຳ/Max ໃໝ່ — ແປງເປັນຫົວໜ່ວຍຫຼັກບໍ່ໄດ້',it_lim_order:'Max ຕ້ອງບໍ່ໜ້ອຍກວ່າຂັ້ນຕ່ຳ',it_max_sql:'ບັນທຶກແລ້ວ ແຕ່ Max ຍັງບໍ່ຖືກບັນທຶກ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດກ່ອນ (⚙️ ຕັ້ງຄ່າ → 🗄️)',it_min:'ຂັ້ນຕ່ຳ (Safety)',it_min_s:'ຂັ້ນຕ່ຳ',it_lead:'ລໍຖ້າເຄື່ອງຈັກມື້',
   it_cost_t:'ຕົ້ນທຶນ (ຈາກການຮັບເຄື່ອງຈິງ)',it_cost_avg:'ສະເລ່ຍ',it_last:'ຮັບລ່າສຸດ',it_cost_legacy:'ລາຄາເກົ່າ (ກ່ອນມີລະບົບຮັບເຄື່ອງ)',it_cost_none:'ຍັງບໍ່ເຄີຍຮັບເຄື່ອງ — ຕົ້ນທຶນຈະມາເອງເມື່ອຮັບເຄື່ອງຄັ້ງທຳອິດ',
   it_hist:'📉 ລາຄາທີ່ເຄີຍຮັບ',it_hist_t:'ລາຄາທີ່ເຄີຍຮັບຈິງ',it_hist_none:'ຍັງບໍ່ມີປະຫວັດການຮັບເຄື່ອງ',it_hist_pack:'ບັນຈຸ',
   it_dup:'ມີວັດຖຸດິບຊື່ນີ້ຢູ່ແລ້ວ',it_del:'🗑 ລຶບຖາວອນ',it_del_q:'ລຶບ "{n}" ຖາວອນ?\nໃຊ້ສະເພາະລາຍການທີ່ເພີ່ມຜິດ — ຖ້າເລີກໃຊ້ໃຫ້ກົດ "ບໍ່ໃຊ້ແລ້ວ" ແທນ',
@@ -4492,7 +4585,7 @@ my:{it_new:'ကုန်ကြမ်းထည့်ရန်',it_edit:'ကုန
   it_buy:'ဝယ်သည့်ယူနစ်',it_buy_hint:'လက်ခံချိန်တွင် ဤအရွယ်ကို ကြိုဖြည့်ပေးမည် — ပြင်နိုင်သည်',it_buy_eq:'1 {u} =',it_packs:'အခြားထုပ်ပိုးအရွယ်များ',it_pack_hint:'လက်ခံချိန်တွင် သုံးသည် ဥပမာ 1 အိတ် = 1,000 ဂရမ် · 1 အစုံ = 10 ကီလို',
   it_pack_add:'＋ ထုပ်ပိုးအရွယ်ထည့်ရန်',it_pack_bad:'ယူနစ်ရွေးပြီး 0 ထက်ကြီးသော အရွယ်ထည့်ပါ၊ အခြေခံ/ဝယ်သည့်ယူနစ်နှင့် မတူရပါ',it_buy_bad:'ဝယ်သည့်ယူနစ်အရွယ်သည် 0 ထက်ကြီးရမည်',
   it_cu:'စတော့ရေတွက်ယူနစ်',it_cu_auto:'အလိုအလျောက် ({u})',it_cu_hint:'ဥပမာ ငံပြာရည်ကို ပုလင်းဖြင့်ရေတွက် · အခြေခံယူနစ်သို့ အလိုအလျောက် ပြောင်းပေးမည်',
-  it_sup:'ဝယ်သည့်ဆိုင်',it_sup_none:'— ဆိုင် မသတ်မှတ်ရသေး —',it_sup_new:'＋ ဆိုင်အသစ်',it_sup_new_ph:'ဆိုင်အသစ် အမည်',it_max_need:'Max ကို မသုံးနိုင်သေး — နောက်ဆုံး SQL ကို အရင် run ပါ (⚙️ ဆက်တင် → 🗄️) ပြီးမှ ⟳ နှိပ်ပါ',it_max:'Max အထိ ဖြည့်',it_lim_t:'အနည်းဆုံး (Safety) / Max',it_lim_u:'ယူနစ်',it_lim_h:'အနည်းဆုံးအောက် ရောက်လျှင် → 🛒 မှာယူ စာမျက်နှာက Max အထိ ဖြည့်ရန် အကြံပြုသည် (ဝယ်ယူနစ် အပြည့်သို့ အပေါ်ဝိုင်း — ပိုတာက လိုတာထက် ကောင်း) · Max မထည့် = အနည်းဆုံးအထိသာ · အနည်းဆုံး မထည့် = Max အောက်ဆိုလျှင် မှာ',it_lim_bad:'အနည်းဆုံး/Max ယူနစ်ကို ပြန်ရွေးပါ — အခြေခံယူနစ်သို့ မပြောင်းနိုင်',it_lim_order:'Max သည် အနည်းဆုံးထက် မနည်းရ',it_max_sql:'သိမ်းပြီး၊ သို့သော် Max မသိမ်းရသေး — နောက်ဆုံး SQL ကို အရင် run ပါ (⚙️ ဆက်တင် → 🗄️)',it_min:'အနည်းဆုံး (Safety)',it_min_s:'အနည်းဆုံး',it_lead:'ပစ္စည်းရောက်ရန် ရက်',
+  it_sup:'ဝယ်သည့်ဆိုင်',it_sup_none:'— ဆိုင် မသတ်မှတ်ရသေး —',it_sup_new:'＋ ဆိုင်အသစ်',it_sup_new_ph:'ဆိုင်အသစ် အမည်',it_yield_t:'ညှိဖြတ် အပိုင်းအစမှ Yield',it_yield_avg:'{n} ကြိမ် ပျမ်းမျှ',it_yield_scrap:'အပိုင်းအစ',it_yield_used:'သုံးခဲ့',it_max_need:'Max ကို မသုံးနိုင်သေး — နောက်ဆုံး SQL ကို အရင် run ပါ (⚙️ ဆက်တင် → 🗄️) ပြီးမှ ⟳ နှိပ်ပါ',it_max:'Max အထိ ဖြည့်',it_lim_t:'အနည်းဆုံး (Safety) / Max',it_lim_u:'ယူနစ်',it_lim_h:'အနည်းဆုံးအောက် ရောက်လျှင် → 🛒 မှာယူ စာမျက်နှာက Max အထိ ဖြည့်ရန် အကြံပြုသည် (ဝယ်ယူနစ် အပြည့်သို့ အပေါ်ဝိုင်း — ပိုတာက လိုတာထက် ကောင်း) · Max မထည့် = အနည်းဆုံးအထိသာ · အနည်းဆုံး မထည့် = Max အောက်ဆိုလျှင် မှာ',it_lim_bad:'အနည်းဆုံး/Max ယူနစ်ကို ပြန်ရွေးပါ — အခြေခံယူနစ်သို့ မပြောင်းနိုင်',it_lim_order:'Max သည် အနည်းဆုံးထက် မနည်းရ',it_max_sql:'သိမ်းပြီး၊ သို့သော် Max မသိမ်းရသေး — နောက်ဆုံး SQL ကို အရင် run ပါ (⚙️ ဆက်တင် → 🗄️)',it_min:'အနည်းဆုံး (Safety)',it_min_s:'အနည်းဆုံး',it_lead:'ပစ္စည်းရောက်ရန် ရက်',
   it_cost_t:'ကုန်ကျစရိတ် (အမှန်လက်ခံမှုမှ)',it_cost_avg:'ပျမ်းမျှ',it_last:'နောက်ဆုံးလက်ခံ',it_cost_legacy:'ဈေးဟောင်း (လက်ခံစနစ် မရှိမီ)',it_cost_none:'မလက်ခံရသေးပါ — ပထမဆုံးလက်ခံပြီးမှ ကုန်ကျစရိတ် ပေါ်မည်',
   it_hist:'📉 လက်ခံခဲ့သော ဈေးများ',it_hist_t:'အမှန်လက်ခံခဲ့သော ဈေးများ',it_hist_none:'လက်ခံမှတ်တမ်း မရှိသေးပါ',it_hist_pack:'ထုပ်ပိုး',
   it_dup:'ဤအမည်ဖြင့် ကုန်ကြမ်း ရှိပြီးသား',it_del:'🗑 အပြီးဖျက်',it_del_q:'"{n}" ကို အပြီးဖျက်မလား?\nမှားထည့်သည့်အရာအတွက်သာ — မသုံးတော့လျှင် "မသုံးတော့" ကို နှိပ်ပါ',
@@ -4637,12 +4730,24 @@ function itPaintForm(){
     '<div id="itPacks">'+itPacksHtml()+'</div>'+
     '<div id="itCU">'+itCuHtml()+'</div>'+
     '<div id="itLim">'+itLimHtml()+'</div>'+
-    itCostHtml(it)+
+    itCostHtml(it)+(it?'<div id="itYield"></div>':'')+
     '<div class="itacts">'+(d.id?'<button class="btn gh" onclick="itOff(\''+esc(d.id)+'\','+(d.active?'false':'true')+')">'+esc(d.active?t('it_off_btn'):t('it_restore'))+'</button>'+
       (isAdminish()?'<button class="btn gh" onclick="itDel(\''+esc(d.id)+'\')">'+esc(t('it_del'))+'</button>':''):'')+
       '<button class="btn big" onclick="itSave()">💾 '+esc(t('save'))+'</button></div></div>';
-  MODAL_BACK=null;openModal(h);
+  MODAL_BACK=null;openModal(h);if(it)itYieldLoad(it.id);
 }
+async function itYieldLoad(id){ // ✂️ yield ย้อนหลังจากเศษตัดแต่งตอนนับสต๊อก (kc_count_lines.scrap_qty/used_qty · fail-soft = ไม่แสดง)
+  let L=[],at={};
+  try{const r=await sb.from('kc_count_lines').select('count_id,scrap_qty,used_qty,scrap_cost,unit').eq('ref_id',id).gt('scrap_qty',0).order('id',{ascending:false}).limit(12);
+    if(!r||r.error||!r.data||!r.data.length)return;L=r.data;
+    const c=await sb.from('kc_counts').select('id,d').in('id',[...new Set(L.map(x=>x.count_id))]);if(c&&!c.error&&c.data)c.data.forEach(x=>{at[x.id]=x.d;});}catch(e){return;}
+  const box=document.getElementById('itYield');if(!box||!IT_D||IT_D.id!==id)return;const it=itemById(id);if(!it)return;
+  const U=L.filter(x=>num(x.used_qty)>0),sS=U.reduce((a,x)=>a+num(x.scrap_qty),0),sU=U.reduce((a,x)=>a+num(x.used_qty),0),avg=sU>0?rnd4(1-sS/sU):null;
+  const pct=y=>y==null?'–':fmtQ(rnd2(y*100))+'%';
+  box.innerHTML='<div class="itcost"><div class="sm mut">✂️ '+esc(t('it_yield_t'))+'</div>'+
+    '<div>'+esc(t('it_yield_avg',{n:U.length}))+' <b id="itYieldAvg">'+pct(avg)+'</b></div>'+
+    L.slice(0,6).map(x=>'<div class="xs mut">'+esc(dispDate(at[x.count_id]||''))+' · '+esc(t('it_yield_scrap'))+' '+esc(qtyTxt(it,x.scrap_qty))+(num(x.used_qty)>0?' · '+esc(t('it_yield_used'))+' '+esc(qtyTxt(it,x.used_qty))+' · <b>'+pct(rnd4(1-num(x.scrap_qty)/num(x.used_qty)))+'</b>':'')+
+      (x.scrap_cost!=null?' · '+esc(money(x.scrap_cost)):'')+'</div>').join('')+'</div>';}
 function itThumbHtml(){const d=IT_D,url=imgOk(d.image_url)?String(d.image_url):'';return '<div class="mthumb lg" '+(url?'data-url="'+esc(url)+'" onclick="zoomImg(this.dataset.url)"':'')+'>'+(url?'<img src="'+esc(url)+'">':itIcon({cat:d.cat==='__new'?'':d.cat}))+'</div>';}
 function itPhoto(){const d=IT_D;if(!d)return;pickImage('item',d.id,url=>{if(!IT_D||!url)return;IT_D.image_url=url;itDraftSave();const b=document.getElementById('itThumb');if(b)b.innerHTML=itThumbHtml();if(S.tab==='items')itPaintGrid();});}
 function itCatChange(v){const d=IT_D;if(!d)return;d.cat=v;const n=document.getElementById('itCatNew');if(n){n.style.display=v==='__new'?'':'none';if(v==='__new')n.focus();}itDraftSave();}
@@ -5495,7 +5600,7 @@ async function spDel(id){ // ลบถาวร — เฉพาะหัวห�
    ทุกตารางอ่านแบบ fail-soft (อ่านไม่ได้ = ส่วนนั้นบอก "อ่านข้อมูลไม่ได้" ส่วนอื่นยังทำงาน)
    ============================================================ */
 I18N.add({
-th:{ac_this_month:'เดือนนี้',ac_noread:'อ่านข้อมูลไม่ได้',ac_scope:'🔒 เห็นเฉพาะสาขา {b} — ตัวเลขรวมเฉพาะสาขาที่ดูแล',
+th:{ac_this_month:'เดือนนี้',ac_ws_t:'✂️ ของเสีย / เศษของเดือนนี้',ac_ws_h:'มูลค่าตามต้นทุน — รวมอยู่ใน "ซื้อของ" แล้ว (ไม่หักซ้ำ) ดูไว้เพื่อลดของเสีย',ac_ws_none:'เดือนนี้ไม่มีของเสียที่บันทึกไว้ 👍',ac_ws_trim:'เศษตัดแต่ง (จากนับสต๊อก)',ac_ws_make:'เศษ/ทิ้ง ตอนทำของ',ac_ws_other:'อื่น ๆ',ac_ws_top:'มากที่สุด',ac_noread:'อ่านข้อมูลไม่ได้',ac_scope:'🔒 เห็นเฉพาะสาขา {b} — ตัวเลขรวมเฉพาะสาขาที่ดูแล',
   ac_rev:'รายรับจากสาขา',ac_bills_n:'{n} บิล',ac_cogs:'ต้นทุนของที่ส่ง',ac_cogs_s:'ต้นทุนจริง/หน่วย × ที่ส่ง',ac_gross:'กำไรขั้นต้น',ac_gross_s:'รายรับ − ต้นทุนของที่ส่ง',
   ac_purch:'ซื้อของเข้าครัว',ac_rcpts_n:'{n} ใบรับของ',ac_exp:'ค่าใช้จ่ายแฝง',ac_items_n:'{n} รายการ',ac_net:'เงินคงเหลือ',ac_net_s:'รายรับ − ซื้อของ − ค่าใช้จ่ายแฝง',
   ac_explain:'กำไรขั้นต้น = รายรับ − ต้นทุนของที่ส่งให้สาขา (ต้นทุนจริงต่อหน่วยตอนส่ง ซึ่งรวมต้นทุนแฝงที่ตั้งไว้แล้ว) · เงินคงเหลือ = รายรับ − เงินที่จ่ายซื้อของ − ค่าใช้จ่ายแฝงของเดือน (มุมมองเงินสด: ของที่ซื้อแล้วยังอยู่ในสต๊อกไม่ได้หักออก)',
@@ -5512,7 +5617,7 @@ th:{ac_this_month:'เดือนนี้',ac_noread:'อ่านข้อม
   ac_mk_t:'🏷️ บวกราคาขายสาขา',ac_mk_h:'ราคาที่คิดสาขา = ต้นทุน/หน่วย (รวมต้นทุนแฝง) × (1 + %) · 0 = คิดเท่าต้นทุน · เมนูที่ตั้ง % เองใน 📖 เมนู/สูตร ใช้ค่าของเมนูนั้น',
   ac_mk_ex:'ตัวอย่าง: {r} ต้นทุน {c}/{u} → คิดสาขา {p}/{u}',ac_mk_lbl:'บวก (%)',ac_mk_save:'💾 บันทึก %',ac_mk_saved:'บันทึก {v}% แล้ว ✅ บิลที่ออกหลังจากนี้ใช้ค่านี้',ac_mk_bad:'ใส่ % เป็นตัวเลข 0–1000 (เช่น 10 หรือ 12.5) — ยังไม่บันทึก',
   ac_csv:'⬇ CSV',ac_csv_none:'เดือนนี้ยังไม่มีข้อมูล',ac_by:'โดย',ac_total:'รวม'},
-en:{ac_this_month:'This month',ac_noread:'Could not read',ac_scope:'🔒 Only branches {b} — totals cover only those branches',
+en:{ac_this_month:'This month',ac_ws_t:'✂️ Waste / trimmings this month',ac_ws_h:'Valued at cost — already inside "Purchases" (not deducted again); track it to cut waste',ac_ws_none:'No waste recorded this month 👍',ac_ws_trim:'Trimmings (from stock counts)',ac_ws_make:'Waste while producing',ac_ws_other:'Other',ac_ws_top:'Largest',ac_noread:'Could not read',ac_scope:'🔒 Only branches {b} — totals cover only those branches',
   ac_rev:'Revenue from branches',ac_bills_n:'{n} bills',ac_cogs:'Cost of goods sent',ac_cogs_s:'actual cost/unit × sent',ac_gross:'Gross profit',ac_gross_s:'revenue − cost of goods sent',
   ac_purch:'Purchases',ac_rcpts_n:'{n} receipts',ac_exp:'Overheads',ac_items_n:'{n} items',ac_net:'Cash left',ac_net_s:'revenue − purchases − overheads',
   ac_explain:'Gross profit = revenue − cost of the goods sent to branches (actual cost per unit at the time of sending, which already includes the overhead setting) · Cash left = revenue − money paid for purchases − this month\'s overheads (cash view: purchases still in stock are not deducted)',
@@ -5529,7 +5634,7 @@ en:{ac_this_month:'This month',ac_noread:'Could not read',ac_scope:'🔒 Only br
   ac_mk_t:'🏷️ Branch price markup',ac_mk_h:'Branch price = cost/unit (incl. overhead) × (1 + %) · 0 = at cost · a product with its own % on 📖 Menus uses that instead',
   ac_mk_ex:'Example: {r} cost {c}/{u} → branch price {p}/{u}',ac_mk_lbl:'Markup (%)',ac_mk_save:'💾 Save %',ac_mk_saved:'Saved {v}% ✅ bills issued from now on use it',ac_mk_bad:'Enter the % as a number 0–1000 (e.g. 10 or 12.5) — not saved',
   ac_csv:'⬇ CSV',ac_csv_none:'No data this month',ac_by:'by',ac_total:'Total'},
-lo:{ac_this_month:'ເດືອນນີ້',ac_noread:'ອ່ານຂໍ້ມູນບໍ່ໄດ້',ac_scope:'🔒 ເຫັນສະເພາະສາຂາ {b} — ຕົວເລກລວມສະເພາະສາຂາທີ່ດູແລ',
+lo:{ac_this_month:'ເດືອນນີ້',ac_ws_t:'✂️ ຂອງເສຍ / ເສດເດືອນນີ້',ac_ws_h:'ມູນຄ່າຕາມຕົ້ນທຶນ — ລວມຢູ່ໃນ "ຊື້ເຄື່ອງ" ແລ້ວ (ບໍ່ຫັກຊ້ຳ)',ac_ws_none:'ເດືອນນີ້ບໍ່ມີຂອງເສຍ 👍',ac_ws_trim:'ເສດຕັດແຕ່ງ (ຈາກນັບສະຕັອກ)',ac_ws_make:'ເສດ/ຖິ້ມ ຕອນເຮັດເຄື່ອງ',ac_ws_other:'ອື່ນໆ',ac_ws_top:'ຫຼາຍທີ່ສຸດ',ac_noread:'ອ່ານຂໍ້ມູນບໍ່ໄດ້',ac_scope:'🔒 ເຫັນສະເພາະສາຂາ {b} — ຕົວເລກລວມສະເພາະສາຂາທີ່ດູແລ',
   ac_rev:'ລາຍຮັບຈາກສາຂາ',ac_bills_n:'{n} ບິນ',ac_cogs:'ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງ',ac_cogs_s:'ຕົ້ນທຶນຈິງ/ຫົວໜ່ວຍ × ທີ່ສົ່ງ',ac_gross:'ກຳໄລຂັ້ນຕົ້ນ',ac_gross_s:'ລາຍຮັບ − ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງ',
   ac_purch:'ຊື້ເຄື່ອງເຂົ້າຄົວ',ac_rcpts_n:'{n} ໃບຮັບເຄື່ອງ',ac_exp:'ຄ່າໃຊ້ຈ່າຍແຝງ',ac_items_n:'{n} ລາຍການ',ac_net:'ເງິນຄົງເຫຼືອ',ac_net_s:'ລາຍຮັບ − ຊື້ເຄື່ອງ − ຄ່າໃຊ້ຈ່າຍແຝງ',
   ac_explain:'ກຳໄລຂັ້ນຕົ້ນ = ລາຍຮັບ − ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງໃຫ້ສາຂາ (ຕົ້ນທຶນຈິງຕໍ່ຫົວໜ່ວຍຕອນສົ່ງ ເຊິ່ງລວມຕົ້ນທຶນແຝງທີ່ຕັ້ງໄວ້ແລ້ວ) · ເງິນຄົງເຫຼືອ = ລາຍຮັບ − ເງິນທີ່ຈ່າຍຊື້ເຄື່ອງ − ຄ່າໃຊ້ຈ່າຍແຝງຂອງເດືອນ (ມຸມມອງເງິນສົດ: ເຄື່ອງທີ່ຊື້ແລ້ວຍັງຢູ່ໃນສະຕັອກບໍ່ໄດ້ຫັກອອກ)',
@@ -5546,7 +5651,7 @@ lo:{ac_this_month:'ເດືອນນີ້',ac_noread:'ອ່ານຂໍ້ມ
   ac_mk_t:'🏷️ ບວກລາຄາຂາຍສາຂາ',ac_mk_h:'ລາຄາທີ່ຄິດສາຂາ = ຕົ້ນທຶນ/ຫົວໜ່ວຍ (ລວມຕົ້ນທຶນແຝງ) × (1 + %) · 0 = ຄິດເທົ່າຕົ້ນທຶນ · ເມນູທີ່ຕັ້ງ % ເອງໃນ 📖 ເມນູ/ສູດ ໃຊ້ຄ່າຂອງເມນູນັ້ນ',
   ac_mk_ex:'ຕົວຢ່າງ: {r} ຕົ້ນທຶນ {c}/{u} → ຄິດສາຂາ {p}/{u}',ac_mk_lbl:'ບວກ (%)',ac_mk_save:'💾 ບັນທຶກ %',ac_mk_saved:'ບັນທຶກ {v}% ແລ້ວ ✅ ບິນທີ່ອອກຫຼັງຈາກນີ້ໃຊ້ຄ່ານີ້',ac_mk_bad:'ໃສ່ % ເປັນຕົວເລກ 0–1000 (ເຊັ່ນ 10 ຫຼື 12.5) — ຍັງບໍ່ບັນທຶກ',
   ac_csv:'⬇ CSV',ac_csv_none:'ເດືອນນີ້ຍັງບໍ່ມີຂໍ້ມູນ',ac_by:'ໂດຍ',ac_total:'ລວມ'},
-my:{ac_this_month:'ယခုလ',ac_noread:'ဖတ်မရပါ',ac_scope:'🔒 ဆိုင်ခွဲ {b} သာ — စုစုပေါင်းသည် ထိုဆိုင်ခွဲများသာ',
+my:{ac_this_month:'ယခုလ',ac_ws_t:'✂️ ဤလ အလေအလွင့် / အပိုင်းအစ',ac_ws_h:'ကုန်ကျစရိတ်ဖြင့် တန်ဖိုး — "ဝယ်ယူမှု" ထဲတွင် ပါပြီး (ထပ်မနုတ်)',ac_ws_none:'ဤလ အလေအလွင့် မရှိ 👍',ac_ws_trim:'ညှိဖြတ် အပိုင်းအစ (ရေတွက်မှုမှ)',ac_ws_make:'ထုတ်လုပ်စဉ် အလေအလွင့်',ac_ws_other:'အခြား',ac_ws_top:'အများဆုံး',ac_noread:'ဖတ်မရပါ',ac_scope:'🔒 ဆိုင်ခွဲ {b} သာ — စုစုပေါင်းသည် ထိုဆိုင်ခွဲများသာ',
   ac_rev:'ဆိုင်ခွဲမှ ဝင်ငွေ',ac_bills_n:'ဘေလ် {n}',ac_cogs:'ပို့သောကုန် ကုန်ကျစရိတ်',ac_cogs_s:'အမှန်ကုန်ကျစရိတ်/ယူနစ် × ပို့သည်',ac_gross:'အကြမ်းအမြတ်',ac_gross_s:'ဝင်ငွေ − ပို့သောကုန် ကုန်ကျစရိတ်',
   ac_purch:'ဝယ်ယူမှု',ac_rcpts_n:'လက်ခံစာ {n}',ac_exp:'ဝှက်ကုန်ကျစရိတ်',ac_items_n:'{n} ခု',ac_net:'ကျန်ငွေ',ac_net_s:'ဝင်ငွေ − ဝယ်ယူမှု − ဝှက်ကုန်ကျစရိတ်',
   ac_explain:'အကြမ်းအမြတ် = ဝင်ငွေ − ဆိုင်ခွဲသို့ ပို့သောကုန် ကုန်ကျစရိတ် (ပို့ချိန် အမှန်ကုန်ကျစရိတ်/ယူနစ်၊ သတ်မှတ်ထားသော ဝှက်ကုန်ကျစရိတ် ပါဝင်ပြီး) · ကျန်ငွေ = ဝင်ငွေ − ဝယ်ယူရန်ပေးချေငွေ − ဤလ ဝှက်ကုန်ကျစရိတ် (ငွေသားအမြင်: လက်ကျန်ထဲရှိ ဝယ်ထားသောကုန် မနုတ်ပါ)',
@@ -5597,17 +5702,18 @@ function acMonth(d){AC_YM=d===0?ymNow():(d<0?prevMonth(AC_YM):nextMonth(AC_YM));
 async function acGet(tb,fn){try{let q=sb.from(tb).select('*');q=fn?fn(q):q;const r=await q;if(!r||r.error)return {ok:false,rows:[]};return {ok:true,rows:r.data||[]};}catch(e){return {ok:false,rows:[]};}}
 async function acLoad(){
   const seq=++AC_SEQ,ym=AC_YM,from=ym+'-01',to=ym+'-'+String(monthDays(ym)).padStart(2,'0');
-  const [dl,rc,ex,pd,un,pv]=await Promise.all([
+  const [dl,rc,ex,pd,un,pv,ws]=await Promise.all([
     acGet('kc_deliveries',q=>q.gte('d',from).lte('d',to)),
     acGet('kc_receipts',q=>q.gte('d',from).lte('d',to)),
     acGet('kc_expenses',q=>q.eq('ym',ym).order('d').order('created_at')),
     acGet('kc_productions',q=>q.gte('d',from).lte('d',to)),
     acGet('kc_deliveries',q=>q.eq('status','sent')),
-    acGet('kc_expenses',q=>q.eq('ym',prevMonth(ym)).eq('recurring',true))]);
+    acGet('kc_expenses',q=>q.eq('ym',prevMonth(ym)).eq('recurring',true)),
+    acGet('kc_moves',q=>q.eq('kind','waste').gte('d',from).lte('d',to))]);
   let dll={ok:true,rows:[]};const okDl=dl.rows.filter(d=>d.status!=='void'&&inBr(d.branch));
   if(dl.ok&&okDl.length)dll=await acGet('kc_delivery_lines',q=>q.in('delivery_id',okDl.map(d=>d.id)));
   if(seq!==AC_SEQ||S.tab!=='acc')return;
-  AC={ym,from,to,dl,dll,rc,ex,pd,un,pv};acPaint();
+  AC={ym,from,to,dl,dll,rc,ex,pd,un,pv,ws};acPaint();
 }
 function acBrIdx(code){const i=(S.branchesAll||[]).findIndex(b=>b.code===code);return i<0?999:i;}
 function acCalc(A){ // ตัวเลขทั้งหมดของเดือน (ใช้ทั้งหน้า + CSV + เทส)
@@ -5635,7 +5741,7 @@ function acPaint(){
     kpi('exp',t('ac_exp'),A.ex.ok?money(X.exp):'—',A.ex.ok?t('ac_items_n',{n:X.expN}):nr)+
     kpi('net',t('ac_net'),A.dl.ok&&A.rc.ok&&A.ex.ok?money(X.net):'—',t('ac_net_s'),X.net<0?'bad':'')+'</div>'+
     '<div class="note">'+esc(t('ac_explain'))+'</div>';
-  box.innerHTML=kpis+acRevCard(A,X)+acUnpaidCard(A,X)+acExpCard(A,X)+acOhCard(A,X)+acMkCard();
+  box.innerHTML=kpis+acRevCard(A,X)+acUnpaidCard(A,X)+acExpCard(A,X)+acWasteCard(A)+acOhCard(A,X)+acMkCard();
 }
 function acRevCard(A,X){
   let body;
@@ -5668,6 +5774,25 @@ function acExpCard(A,X){
   }
   return card(esc(t('ac_exp_t')),body,{id:'acExpCard',sp:A.ex.ok?'<span>'+esc(money(X.exp))+'</span>':''});
 }
+function acWasteCalc(A){ // ✂️ ของเสียของเดือน = kc_moves kind 'waste' (เศษตัดแต่งจากนับสต๊อก · เศษ/ทิ้งตอนทำของ) · มูลค่าตามต้นทุน (ไม่หักซ้ำ — รวมอยู่ในซื้อของแล้ว)
+  const W=(A.ws&&A.ws.rows)||[],src={trim:0,make:0,other:0},by={};let tot=0;
+  W.forEach(m=>{const v=Math.abs(num(m.cost));tot+=v;const k=m.ref_table==='kc_counts'?'trim':m.ref_table==='kc_productions'?'make':'other';src[k]+=v;
+    const b=by[m.ref_id]||(by[m.ref_id]={id:m.ref_id,name:m.name||'',kind:m.ref_kind,qty:0,val:0});b.qty+=Math.abs(num(m.qty));b.val+=v;});
+  const top=Object.values(by).sort((a,b)=>b.val-a.val).slice(0,8);
+  return {tot:rnd2(tot),trim:rnd2(src.trim),make:rnd2(src.make),other:rnd2(src.other),top,n:W.length};}
+function acWasteCard(A){
+  if(!A.ws)return '';let body='<div class="xs mut" style="margin-bottom:6px">'+esc(t('ac_ws_h'))+'</div>';
+  if(!A.ws.ok)body+='<div class="empty">'+esc(t('ac_noread'))+'</div>';
+  else{const W=acWasteCalc(A);
+    if(!W.n)body+='<div class="okbox">'+esc(t('ac_ws_none'))+'</div>';
+    else{body+='<div class="ac-row"><div class="grow">✂️ '+esc(t('ac_ws_trim'))+'</div><span class="amt" id="acWsTrim">'+esc(money(W.trim))+'</span></div>'+
+        '<div class="ac-row"><div class="grow">🍳 '+esc(t('ac_ws_make'))+'</div><span class="amt" id="acWsMake">'+esc(money(W.make))+'</span></div>'+
+        (W.other?'<div class="ac-row"><div class="grow">'+esc(t('ac_ws_other'))+'</div><span class="amt">'+esc(money(W.other))+'</span></div>':'')+
+        '<div class="ac-row"><div class="grow b">'+esc(t('ac_total'))+'</div><span class="amt" id="acWsTot">'+esc(money(W.tot))+'</span></div>'+
+        '<div class="xs mut" style="margin:8px 0 4px">'+esc(t('ac_ws_top'))+'</div>'+
+        W.top.map(x=>{const o=x.kind==='recipe'?recipeById(x.id):itemById(x.id),u=o?(x.kind==='recipe'?o.yield_unit:o.unit):'';
+          return '<div class="ac-row" data-id="'+esc(x.id)+'"><div class="grow">'+esc(o?dispName(o):x.name)+' <span class="xs mut">'+fmtQ(rnd4(x.qty))+' '+esc(trUnit(u||''))+'</span></div><span class="amt">'+esc(money(rnd2(x.val)))+'</span></div>';}).join('');}}
+  return card(esc(t('ac_ws_t')),body,{id:'acWaste'});}
 function acOhCard(A,X){
   const c=S.cfg||CFG_DEF,nowTxt=c.overhead_mode==='pct'?t('ac_oh_now_pct',{v:fmtQ(c.overhead_value)}):t('ac_oh_now_unit',{v:fmtQ(c.overhead_value)});
   let body='<div class="sm">'+esc(A.pd.ok?t('ac_oh_units',{q:fmtQ(X.units),n:X.lots}):t('ac_noread'))+'</div>';
