@@ -898,7 +898,8 @@ async function loadAll(){
       sb.from('kc_moves').select('id').limit(1).then(r=>!(r&&r.error&&MISSING_TBL(r.error))).catch(()=>false)
     ]);
     await jbr;
-    S.items=it;S.recipes=rc;S.recipeItems=bm;S.sups=sp;S.cfg=cfgClean(cfg);S.lineGroups=lg;S.kcSql=!!kc;
+    S.items=it;S.itMax=it.length?it.some(x=>x&&('max_qty' in x)):null;   // ck_items มีคอลัมน์ max_qty ไหม (select * · ยังไม่รัน SQL = false → ช่อง Max ปิด + บอกให้รัน SQL · 2026-10-19)
+    S.recipes=rc;S.recipeItems=bm;S.sups=sp;S.cfg=cfgClean(cfg);S.lineGroups=lg;S.kcSql=!!kc;
     S.boms={};bm.forEach(l=>{(S.boms[l.recipe_id]=S.boms[l.recipe_id]||[]).push(l);});
     const p=S.prof;if(p&&p.brRaw!=null){p.brScope=brScopeOf(p.brRaw);p.branch_ids=p.brScope||[];}   // สาขาใหม่ในทะเบียน → สิทธิ์ _br รู้จักแล้ว
     brListBuild();S.loaded=true;

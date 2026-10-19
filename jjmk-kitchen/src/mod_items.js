@@ -14,7 +14,7 @@ th:{it_new:'เพิ่มวัตถุดิบ',it_edit:'แก้วัต
   it_buy:'หน่วยที่ซื้อ',it_buy_hint:'เวลารับของ ระบบจะเติมขนาดนี้ให้ก่อน แก้ได้',it_buy_eq:'1 {u} =',it_packs:'ขนาดบรรจุอื่น ๆ',it_pack_hint:'ใช้ตอนรับของ เช่น 1 ถุง = 1,000 กรัม · 1 ชุด = 10 กก.',
   it_pack_add:'＋ เพิ่มขนาดบรรจุ',it_pack_bad:'ขนาดบรรจุต้องเลือกหน่วย ใส่ขนาดมากกว่า 0 และไม่ซ้ำกับหน่วยหลัก/หน่วยที่ซื้อ',it_buy_bad:'ขนาดของหน่วยที่ซื้อต้องมากกว่า 0',
   it_cu:'หน่วยที่ใช้นับสต๊อก',it_cu_auto:'อัตโนมัติ ({u})',it_cu_hint:'เช่น น้ำปลา นับเป็นขวด · ระบบแปลงเป็นหน่วยหลักให้เอง',
-  it_sup:'ร้านค้าที่ซื้อ',it_sup_none:'— ยังไม่ระบุร้าน —',it_sup_new:'＋ ร้านใหม่',it_sup_new_ph:'ชื่อร้านใหม่',it_max:'สั่งเติมให้ถึง (Max)',it_lim_t:'ขั้นต่ำ (Safety) / Max',it_lim_u:'หน่วย',it_lim_h:'ของเหลือต่ำกว่าขั้นต่ำ → หน้า 🛒 สั่งของ แนะนำให้สั่งเติมจนถึง Max (ปัดขึ้นเป็นหน่วยซื้อเต็ม เหลือดีกว่าขาด) · ไม่ใส่ Max = เติมแค่ถึงขั้นต่ำ · ไม่ใส่ขั้นต่ำ = ต่ำกว่า Max ก็สั่ง',it_lim_bad:'เลือกหน่วยของขั้นต่ำ/Max ใหม่ — หน่วยนี้แปลงเป็นหน่วยหลักไม่ได้',it_lim_order:'Max ต้องไม่น้อยกว่าขั้นต่ำ',it_max_sql:'บันทึกแล้ว แต่ Max ยังไม่ถูกบันทึก — ต้องรัน SQL รุ่นล่าสุดก่อน (⚙️ ตั้งค่า → 🗄️)',it_min:'ขั้นต่ำ (Safety)',it_min_s:'ขั้นต่ำ',it_lead:'รอของกี่วัน',
+  it_sup:'ร้านค้าที่ซื้อ',it_sup_none:'— ยังไม่ระบุร้าน —',it_sup_new:'＋ ร้านใหม่',it_sup_new_ph:'ชื่อร้านใหม่',it_max_need:'ช่อง Max ยังใช้ไม่ได้ — ต้องรัน SQL รุ่นล่าสุดก่อน (⚙️ ตั้งค่า → 🗄️ คัดลอก SQL → วางใน Supabase) แล้วกด ⟳',it_max:'สั่งเติมให้ถึง (Max)',it_lim_t:'ขั้นต่ำ (Safety) / Max',it_lim_u:'หน่วย',it_lim_h:'ของเหลือต่ำกว่าขั้นต่ำ → หน้า 🛒 สั่งของ แนะนำให้สั่งเติมจนถึง Max (ปัดขึ้นเป็นหน่วยซื้อเต็ม เหลือดีกว่าขาด) · ไม่ใส่ Max = เติมแค่ถึงขั้นต่ำ · ไม่ใส่ขั้นต่ำ = ต่ำกว่า Max ก็สั่ง',it_lim_bad:'เลือกหน่วยของขั้นต่ำ/Max ใหม่ — หน่วยนี้แปลงเป็นหน่วยหลักไม่ได้',it_lim_order:'Max ต้องไม่น้อยกว่าขั้นต่ำ',it_max_sql:'บันทึกแล้ว แต่ Max ยังไม่ถูกบันทึก — ต้องรัน SQL รุ่นล่าสุดก่อน (⚙️ ตั้งค่า → 🗄️)',it_min:'ขั้นต่ำ (Safety)',it_min_s:'ขั้นต่ำ',it_lead:'รอของกี่วัน',
   it_cost_t:'ต้นทุน (จากการรับของจริง)',it_cost_avg:'ถัวเฉลี่ย',it_last:'รับล่าสุด',it_cost_legacy:'ราคาเดิม (ก่อนมีระบบรับของ)',it_cost_none:'ยังไม่เคยรับของ — ต้นทุนจะมาเองเมื่อรับของครั้งแรก',
   it_hist:'📉 ราคาที่เคยรับ',it_hist_t:'ราคาที่เคยรับจริง',it_hist_none:'ยังไม่มีประวัติการรับของ',it_hist_pack:'บรรจุ',
   it_dup:'มีวัตถุดิบชื่อนี้อยู่แล้ว',it_del:'🗑 ลบถาวร',it_del_q:'ลบ "{n}" ถาวร?\nใช้เฉพาะรายการที่เพิ่มผิด — ถ้าเลิกใช้ให้กด "ไม่ใช้แล้ว" แทน',
@@ -27,7 +27,7 @@ en:{it_new:'Add ingredient',it_edit:'Edit ingredient',it_n:'{n} items',it_none:'
   it_buy:'Buying unit',it_buy_hint:'Prefilled when receiving — can be changed',it_buy_eq:'1 {u} =',it_packs:'Other pack sizes',it_pack_hint:'Used when receiving, e.g. 1 bag = 1,000 g · 1 set = 10 kg',
   it_pack_add:'＋ Add pack size',it_pack_bad:'Pack sizes need a unit and a size above 0, and must differ from the base/buying unit',it_buy_bad:'Buying unit size must be above 0',
   it_cu:'Counting unit',it_cu_auto:'Automatic ({u})',it_cu_hint:'e.g. fish sauce counted in bottles · converted to the base unit automatically',
-  it_sup:'Supplier',it_sup_none:'— no supplier —',it_sup_new:'＋ New supplier',it_sup_new_ph:'New supplier name',it_max:'Top up to (Max)',it_lim_t:'Minimum (Safety) / Max',it_lim_u:'Unit',it_lim_h:'Below the minimum → 🛒 Ordering suggests topping up to Max (rounded up to whole buying packs — better extra than short) · no Max = only up to the minimum · no minimum = order whenever below Max',it_lim_bad:'Pick the minimum/Max unit again — it cannot be converted to the base unit',it_lim_order:'Max cannot be less than the minimum',it_max_sql:'Saved, but Max was not — run the latest SQL first (⚙️ Settings → 🗄️)',it_min:'Minimum (Safety)',it_min_s:'min',it_lead:'Lead time (days)',
+  it_sup:'Supplier',it_sup_none:'— no supplier —',it_sup_new:'＋ New supplier',it_sup_new_ph:'New supplier name',it_max_need:'Max is not available yet — run the latest SQL first (⚙️ Settings → 🗄️ copy SQL → paste in Supabase), then tap ⟳',it_max:'Top up to (Max)',it_lim_t:'Minimum (Safety) / Max',it_lim_u:'Unit',it_lim_h:'Below the minimum → 🛒 Ordering suggests topping up to Max (rounded up to whole buying packs — better extra than short) · no Max = only up to the minimum · no minimum = order whenever below Max',it_lim_bad:'Pick the minimum/Max unit again — it cannot be converted to the base unit',it_lim_order:'Max cannot be less than the minimum',it_max_sql:'Saved, but Max was not — run the latest SQL first (⚙️ Settings → 🗄️)',it_min:'Minimum (Safety)',it_min_s:'min',it_lead:'Lead time (days)',
   it_cost_t:'Cost (from actual receipts)',it_cost_avg:'Average',it_last:'Last received',it_cost_legacy:'Old price (before receiving existed)',it_cost_none:'Never received yet — cost appears after the first receipt',
   it_hist:'📉 Received prices',it_hist_t:'Actual received prices',it_hist_none:'No receipts yet',it_hist_pack:'Pack',
   it_dup:'An ingredient with this name already exists',it_del:'🗑 Delete',it_del_q:'Delete "{n}" permanently?\nOnly for mistakes — if it is no longer used, tap "No longer used" instead',
@@ -40,7 +40,7 @@ lo:{it_new:'ເພີ່ມວັດຖຸດິບ',it_edit:'ແກ້ວັດ
   it_buy:'ຫົວໜ່ວຍທີ່ຊື້',it_buy_hint:'ເວລາຮັບເຄື່ອງ ລະບົບຈະຕື່ມຂະໜາດນີ້ໃຫ້ກ່ອນ ແກ້ໄດ້',it_buy_eq:'1 {u} =',it_packs:'ຂະໜາດບັນຈຸອື່ນໆ',it_pack_hint:'ໃຊ້ຕອນຮັບເຄື່ອງ ເຊັ່ນ 1 ຖົງ = 1,000 ກຣາມ · 1 ຊຸດ = 10 ກກ.',
   it_pack_add:'＋ ເພີ່ມຂະໜາດບັນຈຸ',it_pack_bad:'ຂະໜາດບັນຈຸຕ້ອງເລືອກຫົວໜ່ວຍ ໃສ່ຂະໜາດຫຼາຍກວ່າ 0 ແລະ ບໍ່ຊ້ຳກັບຫົວໜ່ວຍຫຼັກ/ຫົວໜ່ວຍທີ່ຊື້',it_buy_bad:'ຂະໜາດຂອງຫົວໜ່ວຍທີ່ຊື້ຕ້ອງຫຼາຍກວ່າ 0',
   it_cu:'ຫົວໜ່ວຍທີ່ໃຊ້ນັບສະຕັອກ',it_cu_auto:'ອັດຕະໂນມັດ ({u})',it_cu_hint:'ເຊັ່ນ ນ້ຳປາ ນັບເປັນແກ້ວ · ລະບົບແປງເປັນຫົວໜ່ວຍຫຼັກໃຫ້ເອງ',
-  it_sup:'ຮ້ານຄ້າທີ່ຊື້',it_sup_none:'— ຍັງບໍ່ລະບຸຮ້ານ —',it_sup_new:'＋ ຮ້ານໃໝ່',it_sup_new_ph:'ຊື່ຮ້ານໃໝ່',it_max:'ສັ່ງເຕີມໃຫ້ຮອດ (Max)',it_lim_t:'ຂັ້ນຕ່ຳ (Safety) / Max',it_lim_u:'ຫົວໜ່ວຍ',it_lim_h:'ເຫຼືອຕ່ຳກວ່າຂັ້ນຕ່ຳ → ໜ້າ 🛒 ສັ່ງເຄື່ອງ ແນະນຳໃຫ້ສັ່ງເຕີມຈົນຮອດ Max (ປັດຂຶ້ນເປັນຫົວໜ່ວຍຊື້ເຕັມ ເຫຼືອດີກວ່າຂາດ) · ບໍ່ໃສ່ Max = ເຕີມແຄ່ຮອດຂັ້ນຕ່ຳ · ບໍ່ໃສ່ຂັ້ນຕ່ຳ = ຕ່ຳກວ່າ Max ກໍສັ່ງ',it_lim_bad:'ເລືອກຫົວໜ່ວຍຂອງຂັ້ນຕ່ຳ/Max ໃໝ່ — ແປງເປັນຫົວໜ່ວຍຫຼັກບໍ່ໄດ້',it_lim_order:'Max ຕ້ອງບໍ່ໜ້ອຍກວ່າຂັ້ນຕ່ຳ',it_max_sql:'ບັນທຶກແລ້ວ ແຕ່ Max ຍັງບໍ່ຖືກບັນທຶກ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດກ່ອນ (⚙️ ຕັ້ງຄ່າ → 🗄️)',it_min:'ຂັ້ນຕ່ຳ (Safety)',it_min_s:'ຂັ້ນຕ່ຳ',it_lead:'ລໍຖ້າເຄື່ອງຈັກມື້',
+  it_sup:'ຮ້ານຄ້າທີ່ຊື້',it_sup_none:'— ຍັງບໍ່ລະບຸຮ້ານ —',it_sup_new:'＋ ຮ້ານໃໝ່',it_sup_new_ph:'ຊື່ຮ້ານໃໝ່',it_max_need:'ຊ່ອງ Max ຍັງໃຊ້ບໍ່ໄດ້ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດກ່ອນ (⚙️ ຕັ້ງຄ່າ → 🗄️) ແລ້ວກົດ ⟳',it_max:'ສັ່ງເຕີມໃຫ້ຮອດ (Max)',it_lim_t:'ຂັ້ນຕ່ຳ (Safety) / Max',it_lim_u:'ຫົວໜ່ວຍ',it_lim_h:'ເຫຼືອຕ່ຳກວ່າຂັ້ນຕ່ຳ → ໜ້າ 🛒 ສັ່ງເຄື່ອງ ແນະນຳໃຫ້ສັ່ງເຕີມຈົນຮອດ Max (ປັດຂຶ້ນເປັນຫົວໜ່ວຍຊື້ເຕັມ ເຫຼືອດີກວ່າຂາດ) · ບໍ່ໃສ່ Max = ເຕີມແຄ່ຮອດຂັ້ນຕ່ຳ · ບໍ່ໃສ່ຂັ້ນຕ່ຳ = ຕ່ຳກວ່າ Max ກໍສັ່ງ',it_lim_bad:'ເລືອກຫົວໜ່ວຍຂອງຂັ້ນຕ່ຳ/Max ໃໝ່ — ແປງເປັນຫົວໜ່ວຍຫຼັກບໍ່ໄດ້',it_lim_order:'Max ຕ້ອງບໍ່ໜ້ອຍກວ່າຂັ້ນຕ່ຳ',it_max_sql:'ບັນທຶກແລ້ວ ແຕ່ Max ຍັງບໍ່ຖືກບັນທຶກ — ຕ້ອງແລ່ນ SQL ລຸ້ນລ່າສຸດກ່ອນ (⚙️ ຕັ້ງຄ່າ → 🗄️)',it_min:'ຂັ້ນຕ່ຳ (Safety)',it_min_s:'ຂັ້ນຕ່ຳ',it_lead:'ລໍຖ້າເຄື່ອງຈັກມື້',
   it_cost_t:'ຕົ້ນທຶນ (ຈາກການຮັບເຄື່ອງຈິງ)',it_cost_avg:'ສະເລ່ຍ',it_last:'ຮັບລ່າສຸດ',it_cost_legacy:'ລາຄາເກົ່າ (ກ່ອນມີລະບົບຮັບເຄື່ອງ)',it_cost_none:'ຍັງບໍ່ເຄີຍຮັບເຄື່ອງ — ຕົ້ນທຶນຈະມາເອງເມື່ອຮັບເຄື່ອງຄັ້ງທຳອິດ',
   it_hist:'📉 ລາຄາທີ່ເຄີຍຮັບ',it_hist_t:'ລາຄາທີ່ເຄີຍຮັບຈິງ',it_hist_none:'ຍັງບໍ່ມີປະຫວັດການຮັບເຄື່ອງ',it_hist_pack:'ບັນຈຸ',
   it_dup:'ມີວັດຖຸດິບຊື່ນີ້ຢູ່ແລ້ວ',it_del:'🗑 ລຶບຖາວອນ',it_del_q:'ລຶບ "{n}" ຖາວອນ?\nໃຊ້ສະເພາະລາຍການທີ່ເພີ່ມຜິດ — ຖ້າເລີກໃຊ້ໃຫ້ກົດ "ບໍ່ໃຊ້ແລ້ວ" ແທນ',
@@ -53,7 +53,7 @@ my:{it_new:'ကုန်ကြမ်းထည့်ရန်',it_edit:'ကုန
   it_buy:'ဝယ်သည့်ယူနစ်',it_buy_hint:'လက်ခံချိန်တွင် ဤအရွယ်ကို ကြိုဖြည့်ပေးမည် — ပြင်နိုင်သည်',it_buy_eq:'1 {u} =',it_packs:'အခြားထုပ်ပိုးအရွယ်များ',it_pack_hint:'လက်ခံချိန်တွင် သုံးသည် ဥပမာ 1 အိတ် = 1,000 ဂရမ် · 1 အစုံ = 10 ကီလို',
   it_pack_add:'＋ ထုပ်ပိုးအရွယ်ထည့်ရန်',it_pack_bad:'ယူနစ်ရွေးပြီး 0 ထက်ကြီးသော အရွယ်ထည့်ပါ၊ အခြေခံ/ဝယ်သည့်ယူနစ်နှင့် မတူရပါ',it_buy_bad:'ဝယ်သည့်ယူနစ်အရွယ်သည် 0 ထက်ကြီးရမည်',
   it_cu:'စတော့ရေတွက်ယူနစ်',it_cu_auto:'အလိုအလျောက် ({u})',it_cu_hint:'ဥပမာ ငံပြာရည်ကို ပုလင်းဖြင့်ရေတွက် · အခြေခံယူနစ်သို့ အလိုအလျောက် ပြောင်းပေးမည်',
-  it_sup:'ဝယ်သည့်ဆိုင်',it_sup_none:'— ဆိုင် မသတ်မှတ်ရသေး —',it_sup_new:'＋ ဆိုင်အသစ်',it_sup_new_ph:'ဆိုင်အသစ် အမည်',it_max:'Max အထိ ဖြည့်',it_lim_t:'အနည်းဆုံး (Safety) / Max',it_lim_u:'ယူနစ်',it_lim_h:'အနည်းဆုံးအောက် ရောက်လျှင် → 🛒 မှာယူ စာမျက်နှာက Max အထိ ဖြည့်ရန် အကြံပြုသည် (ဝယ်ယူနစ် အပြည့်သို့ အပေါ်ဝိုင်း — ပိုတာက လိုတာထက် ကောင်း) · Max မထည့် = အနည်းဆုံးအထိသာ · အနည်းဆုံး မထည့် = Max အောက်ဆိုလျှင် မှာ',it_lim_bad:'အနည်းဆုံး/Max ယူနစ်ကို ပြန်ရွေးပါ — အခြေခံယူနစ်သို့ မပြောင်းနိုင်',it_lim_order:'Max သည် အနည်းဆုံးထက် မနည်းရ',it_max_sql:'သိမ်းပြီး၊ သို့သော် Max မသိမ်းရသေး — နောက်ဆုံး SQL ကို အရင် run ပါ (⚙️ ဆက်တင် → 🗄️)',it_min:'အနည်းဆုံး (Safety)',it_min_s:'အနည်းဆုံး',it_lead:'ပစ္စည်းရောက်ရန် ရက်',
+  it_sup:'ဝယ်သည့်ဆိုင်',it_sup_none:'— ဆိုင် မသတ်မှတ်ရသေး —',it_sup_new:'＋ ဆိုင်အသစ်',it_sup_new_ph:'ဆိုင်အသစ် အမည်',it_max_need:'Max ကို မသုံးနိုင်သေး — နောက်ဆုံး SQL ကို အရင် run ပါ (⚙️ ဆက်တင် → 🗄️) ပြီးမှ ⟳ နှိပ်ပါ',it_max:'Max အထိ ဖြည့်',it_lim_t:'အနည်းဆုံး (Safety) / Max',it_lim_u:'ယူနစ်',it_lim_h:'အနည်းဆုံးအောက် ရောက်လျှင် → 🛒 မှာယူ စာမျက်နှာက Max အထိ ဖြည့်ရန် အကြံပြုသည် (ဝယ်ယူနစ် အပြည့်သို့ အပေါ်ဝိုင်း — ပိုတာက လိုတာထက် ကောင်း) · Max မထည့် = အနည်းဆုံးအထိသာ · အနည်းဆုံး မထည့် = Max အောက်ဆိုလျှင် မှာ',it_lim_bad:'အနည်းဆုံး/Max ယူနစ်ကို ပြန်ရွေးပါ — အခြေခံယူနစ်သို့ မပြောင်းနိုင်',it_lim_order:'Max သည် အနည်းဆုံးထက် မနည်းရ',it_max_sql:'သိမ်းပြီး၊ သို့သော် Max မသိမ်းရသေး — နောက်ဆုံး SQL ကို အရင် run ပါ (⚙️ ဆက်တင် → 🗄️)',it_min:'အနည်းဆုံး (Safety)',it_min_s:'အနည်းဆုံး',it_lead:'ပစ္စည်းရောက်ရန် ရက်',
   it_cost_t:'ကုန်ကျစရိတ် (အမှန်လက်ခံမှုမှ)',it_cost_avg:'ပျမ်းမျှ',it_last:'နောက်ဆုံးလက်ခံ',it_cost_legacy:'ဈေးဟောင်း (လက်ခံစနစ် မရှိမီ)',it_cost_none:'မလက်ခံရသေးပါ — ပထမဆုံးလက်ခံပြီးမှ ကုန်ကျစရိတ် ပေါ်မည်',
   it_hist:'📉 လက်ခံခဲ့သော ဈေးများ',it_hist_t:'အမှန်လက်ခံခဲ့သော ဈေးများ',it_hist_none:'လက်ခံမှတ်တမ်း မရှိသေးပါ',it_hist_pack:'ထုပ်ပိုး',
   it_dup:'ဤအမည်ဖြင့် ကုန်ကြမ်း ရှိပြီးသား',it_del:'🗑 အပြီးဖျက်',it_del_q:'"{n}" ကို အပြီးဖျက်မလား?\nမှားထည့်သည့်အရာအတွက်သာ — မသုံးတော့လျှင် "မသုံးတော့" ကို နှိပ်ပါ',
@@ -240,9 +240,9 @@ function itLimHtml(){const d=IT_D;if(!d)return '';const L=itLimUnits();
   const inp=(id,f)=>'<input id="'+id+'" type="text" inputmode="decimal" value="'+esc(d[f])+'" oninput="IT_D.'+f+'=this.value;itDraftSave();itLimEq()">';
   return '<div class="fld"><label>🎯 '+esc(t('it_lim_t'))+'</label><div class="xs mut" style="margin-bottom:6px">'+esc(t('it_lim_h'))+'</div>'+
     '<div class="itlim"><label><span class="xs">'+esc(t('it_min'))+'</span>'+inp('itMin','min_in')+'</label><span class="b itlim-to">→</span>'+
-    '<label><span class="xs">'+esc(t('it_max'))+'</span>'+inp('itMax','max_in')+'</label>'+
+    '<label><span class="xs">'+esc(t('it_max'))+'</span>'+inp('itMax','max_in').replace('<input','<input'+(S.itMax===false?' disabled':''))+'</label>'+
     '<label><span class="xs">'+esc(t('it_lim_u'))+'</span><select id="itLimU" onchange="itLimU(this.value)">'+unitOptions(L,d.lim_u)+'</select></label></div>'+
-    '<div class="xs mut" id="itLimEq">'+esc(itLimEqTxt())+'</div></div>';}
+    '<div class="xs mut" id="itLimEq">'+esc(itLimEqTxt())+'</div>'+(S.itMax===false?'<div class="hintbox" style="margin-top:6px">⚠ '+esc(t('it_max_need'))+'</div>':'')+'</div>';}
 function itLimPaint(){const b=document.getElementById('itLim');if(b&&IT_D)b.innerHTML=itLimHtml();}
 function itLimEqTxt(){ // "= 24,000 กรัม → 60,000 กรัม · 2 ลัง → 5 ลัง"
   const d=IT_D,tmp=itTmp(),f=unitFactor(tmp,d.lim_u);if(f==null)return '';
@@ -275,7 +275,7 @@ async function itWrite(build,row){ // ยังไม่รัน SQL บาง�
   row=Object.assign({},row);setBusy(true);itWrite.dropped=[];
   try{for(let i=0;i<8;i++){const r=await build(row);if(!r||!r.error)return r&&r.data;
       const m=/'([a-z_]+)' column/i.exec(String(r.error.message||''));
-      if(r.error.code==='PGRST204'&&m&&(m[1] in row)){delete row[m[1]];itWrite.dropped.push(m[1]);S.kcSql=false;continue;}
+      if(r.error.code==='PGRST204'&&m&&(m[1] in row)){delete row[m[1]];itWrite.dropped.push(m[1]);if(m[1]==='max_qty')S.itMax=false;S.kcSql=false;continue;}
       const d=document.getElementById('syncDot');if(d)d.className='err';toast(t('sv_err')+(r.error.message||r.error),true);throw r.error;}}
   finally{setBusy(false);}
   return null;}
@@ -294,7 +294,7 @@ async function itSave(){await once(async()=>{
     if(used){toast(t('it_pack_used',{u:trUnit(used.u),list:used.list}),true);return;}}
   let mnQ=null,mxQ=null;{const has=v=>String(v==null?'':v).trim()!=='',lt={unit:d.unit||'กก.',buy_unit:(bu&&bu!==d.unit)?bu:null,buy_qty:(bu&&bu!==d.unit)?bq:null,packs};
     if(has(d.min_in)||has(d.max_in)){const f=unitFactor(lt,d.lim_u);if(f==null){toast(t('it_lim_bad'),true);return;}
-      if(has(d.min_in))mnQ=rnd4(Math.max(0,num(d.min_in))*f);if(has(d.max_in)&&num(d.max_in)>0)mxQ=rnd4(num(d.max_in)*f);
+      if(has(d.min_in))mnQ=rnd4(Math.max(0,num(d.min_in))*f);if(S.itMax!==false&&has(d.max_in)&&num(d.max_in)>0)mxQ=rnd4(num(d.max_in)*f);
       if(mnQ!=null&&mxQ!=null&&mxQ<mnQ-1e-9){toast(t('it_lim_order'),true);return;}}}   // Max ต้องไม่น้อยกว่าขั้นต่ำ
   let sup=d.sup==='__new'?String(d.sup_new||'').trim():String(d.sup||'').trim();
   if(sup){const s=(typeof spEnsure==='function')?await spEnsure(sup):null;if(s)sup=s.name;}
@@ -302,7 +302,7 @@ async function itSave(){await once(async()=>{
     min_qty:mnQ,lead_days:String(d.lead_days).trim()===''?null:Math.max(0,Math.round(num(d.lead_days)))};
   const tmp=Object.assign({},row);const cu=String(d.count_unit||'').trim();row.count_unit=(cu&&unitFactor(tmp,cu)!=null)?cu:null;
   let it=d.id?itemById(d.id):null,renamed=false;
-  if(mxQ!=null||(it&&it.max_qty!=null))row.max_qty=mxQ;   // ไม่ได้ใช้ Max = ไม่ส่งคอลัมน์ (ยังไม่รัน SQL รุ่นล่าสุดก็บันทึกช่องอื่นได้ปกติ)
+  if(S.itMax!==false&&(mxQ!=null||(it&&it.max_qty!=null)))row.max_qty=mxQ;   // ไม่ได้ใช้ Max = ไม่ส่งคอลัมน์ (ยังไม่รัน SQL รุ่นล่าสุดก็บันทึกช่องอื่นได้ปกติ)
   if(it){renamed=it.name!==d.name;if(renamed)row.i18n=null;
     await itWrite(x=>sb.from('ck_items').update(x).eq('id',it.id),row);Object.assign(it,row);if(renamed)it.i18n=null;}
   else{row.id=uid('it');row.qty=0;row.active=true;row.image_url=d.image_url||null;

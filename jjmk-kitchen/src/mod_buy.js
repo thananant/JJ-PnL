@@ -91,8 +91,9 @@ CSS.add(`
 .po-card .po-row:last-of-type{border-bottom:0}
 .po-row .grow{flex:1;min-width:150px}.po-row b{font-size:14.5px}
 .po-row.skip .grow,.po-row.skip .mthumb{opacity:.5}
-.po-qty{flex:none;width:100%;max-width:260px}.po-qty .skstep{margin-top:0}
-@media(min-width:640px){.po-qty{width:auto;min-width:230px}}
+.po-qty{flex:none;width:100%;max-width:272px;margin-left:auto}.po-qty .skstep{margin-top:0;display:grid;grid-template-columns:44px minmax(52px,1fr) 44px 96px;gap:6px}   /* ทุกแถวกว้างเท่ากัน — ปุ่ม/ช่อง/หน่วยตรงกันทุกบรรทัด (เจ้าของ 2026-10-19 "อยากให้เรียงเท่ากัน") */
+.po-qty .skstep input{width:100%}.po-qty .skstep>span.b{white-space:normal;line-height:1.2;font-size:13.5px;overflow-wrap:anywhere;min-width:0}
+@media(max-width:340px){.po-qty .skstep{grid-template-columns:44px minmax(44px,1fr) 44px 72px}}
 .po-foot{display:flex;flex-direction:column;gap:10px;padding-top:12px;margin-top:4px;border-top:1.5px solid var(--line)}
 .po-foot .po-acts{display:flex;gap:8px;flex-wrap:wrap}.po-foot .po-acts .btn{flex:1;white-space:nowrap}
 @media(min-width:640px){.po-foot{flex-direction:row;align-items:center;flex-wrap:wrap}.po-foot .grow{flex:1;min-width:160px}.po-foot .po-acts{flex:none}.po-foot .po-acts .btn{flex:none}}
