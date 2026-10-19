@@ -221,7 +221,7 @@ const UN_LIMK=['su','smin','smax'];   // 🎯 ขั้นต่ำ/Max ใน�
 function unLim(it,c,m){ // → {mn,mx,err} หน่วยหลัก
   const has=v=>String(v==null?'':v).trim()!=='';if(!has(c.smin)&&!has(c.smax))return {mn:null,mx:null,err:''};
   const f=unitFactor(m,c.su);if(f==null)return {mn:null,mx:null,err:t('it_lim_bad')};
-  const mn=has(c.smin)?rnd4(Math.max(0,num(c.smin))*f):null,mx=has(c.smax)&&num(c.smax)>0?rnd4(num(c.smax)*f):null;
+  const mn=has(c.smin)?rnd4(Math.max(0,num(c.smin))*f):null,mx=S.itMax!==false&&has(c.smax)&&num(c.smax)>0?rnd4(num(c.smax)*f):null;
   return {mn,mx,err:mn!=null&&mx!=null&&mx<mn-1e-9?t('it_lim_order'):''};}
 const unSameQ=(a,b)=>(a==null?null:rnd4(num(a)))===(b==null?null:rnd4(num(b)));
 function unCur(it){return Object.assign(unOrig(it),UN_ED[it.id]||{});}
@@ -264,7 +264,7 @@ function unCardHtml(it){
       '<label>'+esc(t('un_count_as'))+'</label><div class="un-f">'+unSel(it.id,'count_unit',all,c.count_unit||base,!K)+
         (unNeedQ({unit:base,buy_unit:c.buy_unit},c.count_unit)?'<span class="un-sz"><span class="un-eq">1 '+esc(trUnit(c.count_unit))+' =</span>'+unQin(it.id,'cq',c.cq,!K)+'<span class="un-eq">'+esc(trUnit(base))+'</span></span>':
          (cf!=null&&c.count_unit!==base?'<span class="un-eq mut">= '+fmtQ(cf)+' '+esc(trUnit(base))+'</span>':''))+'</div>'+
-      '<label>🎯 '+esc(t('un_lim'))+'</label><div class="un-f un-lim">'+unQin(it.id,'smin',c.smin,!K)+'<span class="un-eq">→</span>'+unQin(it.id,'smax',c.smax,!K)+
+      '<label>🎯 '+esc(t('un_lim'))+'</label><div class="un-f un-lim">'+unQin(it.id,'smin',c.smin,!K)+'<span class="un-eq">→</span>'+unQin(it.id,'smax',c.smax,!K||S.itMax===false)+
         unSel(it.id,'su',limUnits(m),limUnits(m).includes(c.su)?c.su:(limUnits(m)[0]||base),!K)+'</div>'+
     '</div>';
   if(err)h+='<div class="un-adv bad">⚠ '+esc(err)+'</div>';
@@ -279,7 +279,7 @@ function unItemsHtml(){
   const every=activeItems().map(it=>({it,d:unItemDept(it)})),bar=unDeptBar(every);
   const all=every.filter(x=>unInDept(x.d)).map(x=>({a:unItemAdvice(unMerged(x.it)),it:x.it})),n={ok:0,tip:0,bad:0};all.forEach(x=>n[x.a.lv]++);
   const tips=all.filter(x=>x.a.msgs.some(m=>m.apply)).length;
-  return bar+searchBox('unQ',v=>unSetQ(v))+'<div class="row un-tools">'+unBadToggle()+
+  return bar+(S.itMax===false?'<div class="hintbox">⚠ '+esc(t('it_max_need'))+'</div>':'')+searchBox('unQ',v=>unSetQ(v))+'<div class="row un-tools">'+unBadToggle()+
       (tips&&canKitchen()?'<button type="button" class="btn gh sm2" onclick="unApplyAll()">💡 '+esc(t('un_apply_all',{n:tips}))+'</button>':'')+'</div>'+
     '<div class="un-sum">'+esc(t('un_sum',{a:n.ok,b:n.tip,c:n.bad,n:all.length}))+'</div><div id="unList">'+unItemCards()+'</div>';}
 function unEdGet(id){return UN_ED[id]=UN_ED[id]||{};}
@@ -340,7 +340,7 @@ async function unSaveAll(){await once(async()=>{
     if(m.unit!==it.unit){let hist=true;try{const r=await sb.from('kc_moves').select('id').eq('ref_kind','item').eq('ref_id',it.id).limit(1);hist=!!(r&&(r.error||(r.data||[]).length));}catch(x){}
       if(hist||unBaseLock(it)){UN_ERR[it.id]=t('un_e_base');bad++;continue;}}
     const row={unit:m.unit,buy_unit:m.buy_unit,buy_qty:m.buy_unit?rnd4(num(m.buy_qty)):null,packs:m.packs,count_unit:(m.count_unit&&unitFactor(m,m.count_unit)!=null)?m.count_unit:null};
-    if(UN_LIMK.some(k=>k in (UN_ED[it.id]||{}))){const L=unLim(it,cur,m);row.min_qty=L.mn;if(L.mx!=null||it.max_qty!=null)row.max_qty=L.mx;}
+    if(UN_LIMK.some(k=>k in (UN_ED[it.id]||{}))){const L=unLim(it,cur,m);row.min_qty=L.mn;if(S.itMax!==false&&(L.mx!=null||it.max_qty!=null))row.max_qty=L.mx;}
     try{await itWrite(x=>sb.from('ck_items').update(x).eq('id',it.id),row);}catch(x){UN_ERR[it.id]=String((x&&x.message)||x);bad++;continue;}
     if((itWrite.dropped||[]).includes('max_qty')){delete row.max_qty;maxGone=true;}
     Object.assign(it,row);delete UN_ED[it.id];ok++;}
