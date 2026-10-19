@@ -11,7 +11,7 @@
    ทุกตารางอ่านแบบ fail-soft (อ่านไม่ได้ = ส่วนนั้นบอก "อ่านข้อมูลไม่ได้" ส่วนอื่นยังทำงาน)
    ============================================================ */
 I18N.add({
-th:{ac_this_month:'เดือนนี้',ac_noread:'อ่านข้อมูลไม่ได้',ac_scope:'🔒 เห็นเฉพาะสาขา {b} — ตัวเลขรวมเฉพาะสาขาที่ดูแล',
+th:{ac_this_month:'เดือนนี้',ac_ws_t:'✂️ ของเสีย / เศษของเดือนนี้',ac_ws_h:'มูลค่าตามต้นทุน — รวมอยู่ใน "ซื้อของ" แล้ว (ไม่หักซ้ำ) ดูไว้เพื่อลดของเสีย',ac_ws_none:'เดือนนี้ไม่มีของเสียที่บันทึกไว้ 👍',ac_ws_trim:'เศษตัดแต่ง (จากนับสต๊อก)',ac_ws_make:'เศษ/ทิ้ง ตอนทำของ',ac_ws_other:'อื่น ๆ',ac_ws_top:'มากที่สุด',ac_noread:'อ่านข้อมูลไม่ได้',ac_scope:'🔒 เห็นเฉพาะสาขา {b} — ตัวเลขรวมเฉพาะสาขาที่ดูแล',
   ac_rev:'รายรับจากสาขา',ac_bills_n:'{n} บิล',ac_cogs:'ต้นทุนของที่ส่ง',ac_cogs_s:'ต้นทุนจริง/หน่วย × ที่ส่ง',ac_gross:'กำไรขั้นต้น',ac_gross_s:'รายรับ − ต้นทุนของที่ส่ง',
   ac_purch:'ซื้อของเข้าครัว',ac_rcpts_n:'{n} ใบรับของ',ac_exp:'ค่าใช้จ่ายแฝง',ac_items_n:'{n} รายการ',ac_net:'เงินคงเหลือ',ac_net_s:'รายรับ − ซื้อของ − ค่าใช้จ่ายแฝง',
   ac_explain:'กำไรขั้นต้น = รายรับ − ต้นทุนของที่ส่งให้สาขา (ต้นทุนจริงต่อหน่วยตอนส่ง ซึ่งรวมต้นทุนแฝงที่ตั้งไว้แล้ว) · เงินคงเหลือ = รายรับ − เงินที่จ่ายซื้อของ − ค่าใช้จ่ายแฝงของเดือน (มุมมองเงินสด: ของที่ซื้อแล้วยังอยู่ในสต๊อกไม่ได้หักออก)',
@@ -28,7 +28,7 @@ th:{ac_this_month:'เดือนนี้',ac_noread:'อ่านข้อม
   ac_mk_t:'🏷️ บวกราคาขายสาขา',ac_mk_h:'ราคาที่คิดสาขา = ต้นทุน/หน่วย (รวมต้นทุนแฝง) × (1 + %) · 0 = คิดเท่าต้นทุน · เมนูที่ตั้ง % เองใน 📖 เมนู/สูตร ใช้ค่าของเมนูนั้น',
   ac_mk_ex:'ตัวอย่าง: {r} ต้นทุน {c}/{u} → คิดสาขา {p}/{u}',ac_mk_lbl:'บวก (%)',ac_mk_save:'💾 บันทึก %',ac_mk_saved:'บันทึก {v}% แล้ว ✅ บิลที่ออกหลังจากนี้ใช้ค่านี้',ac_mk_bad:'ใส่ % เป็นตัวเลข 0–1000 (เช่น 10 หรือ 12.5) — ยังไม่บันทึก',
   ac_csv:'⬇ CSV',ac_csv_none:'เดือนนี้ยังไม่มีข้อมูล',ac_by:'โดย',ac_total:'รวม'},
-en:{ac_this_month:'This month',ac_noread:'Could not read',ac_scope:'🔒 Only branches {b} — totals cover only those branches',
+en:{ac_this_month:'This month',ac_ws_t:'✂️ Waste / trimmings this month',ac_ws_h:'Valued at cost — already inside "Purchases" (not deducted again); track it to cut waste',ac_ws_none:'No waste recorded this month 👍',ac_ws_trim:'Trimmings (from stock counts)',ac_ws_make:'Waste while producing',ac_ws_other:'Other',ac_ws_top:'Largest',ac_noread:'Could not read',ac_scope:'🔒 Only branches {b} — totals cover only those branches',
   ac_rev:'Revenue from branches',ac_bills_n:'{n} bills',ac_cogs:'Cost of goods sent',ac_cogs_s:'actual cost/unit × sent',ac_gross:'Gross profit',ac_gross_s:'revenue − cost of goods sent',
   ac_purch:'Purchases',ac_rcpts_n:'{n} receipts',ac_exp:'Overheads',ac_items_n:'{n} items',ac_net:'Cash left',ac_net_s:'revenue − purchases − overheads',
   ac_explain:'Gross profit = revenue − cost of the goods sent to branches (actual cost per unit at the time of sending, which already includes the overhead setting) · Cash left = revenue − money paid for purchases − this month\'s overheads (cash view: purchases still in stock are not deducted)',
@@ -45,7 +45,7 @@ en:{ac_this_month:'This month',ac_noread:'Could not read',ac_scope:'🔒 Only br
   ac_mk_t:'🏷️ Branch price markup',ac_mk_h:'Branch price = cost/unit (incl. overhead) × (1 + %) · 0 = at cost · a product with its own % on 📖 Menus uses that instead',
   ac_mk_ex:'Example: {r} cost {c}/{u} → branch price {p}/{u}',ac_mk_lbl:'Markup (%)',ac_mk_save:'💾 Save %',ac_mk_saved:'Saved {v}% ✅ bills issued from now on use it',ac_mk_bad:'Enter the % as a number 0–1000 (e.g. 10 or 12.5) — not saved',
   ac_csv:'⬇ CSV',ac_csv_none:'No data this month',ac_by:'by',ac_total:'Total'},
-lo:{ac_this_month:'ເດືອນນີ້',ac_noread:'ອ່ານຂໍ້ມູນບໍ່ໄດ້',ac_scope:'🔒 ເຫັນສະເພາະສາຂາ {b} — ຕົວເລກລວມສະເພາະສາຂາທີ່ດູແລ',
+lo:{ac_this_month:'ເດືອນນີ້',ac_ws_t:'✂️ ຂອງເສຍ / ເສດເດືອນນີ້',ac_ws_h:'ມູນຄ່າຕາມຕົ້ນທຶນ — ລວມຢູ່ໃນ "ຊື້ເຄື່ອງ" ແລ້ວ (ບໍ່ຫັກຊ້ຳ)',ac_ws_none:'ເດືອນນີ້ບໍ່ມີຂອງເສຍ 👍',ac_ws_trim:'ເສດຕັດແຕ່ງ (ຈາກນັບສະຕັອກ)',ac_ws_make:'ເສດ/ຖິ້ມ ຕອນເຮັດເຄື່ອງ',ac_ws_other:'ອື່ນໆ',ac_ws_top:'ຫຼາຍທີ່ສຸດ',ac_noread:'ອ່ານຂໍ້ມູນບໍ່ໄດ້',ac_scope:'🔒 ເຫັນສະເພາະສາຂາ {b} — ຕົວເລກລວມສະເພາະສາຂາທີ່ດູແລ',
   ac_rev:'ລາຍຮັບຈາກສາຂາ',ac_bills_n:'{n} ບິນ',ac_cogs:'ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງ',ac_cogs_s:'ຕົ້ນທຶນຈິງ/ຫົວໜ່ວຍ × ທີ່ສົ່ງ',ac_gross:'ກຳໄລຂັ້ນຕົ້ນ',ac_gross_s:'ລາຍຮັບ − ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງ',
   ac_purch:'ຊື້ເຄື່ອງເຂົ້າຄົວ',ac_rcpts_n:'{n} ໃບຮັບເຄື່ອງ',ac_exp:'ຄ່າໃຊ້ຈ່າຍແຝງ',ac_items_n:'{n} ລາຍການ',ac_net:'ເງິນຄົງເຫຼືອ',ac_net_s:'ລາຍຮັບ − ຊື້ເຄື່ອງ − ຄ່າໃຊ້ຈ່າຍແຝງ',
   ac_explain:'ກຳໄລຂັ້ນຕົ້ນ = ລາຍຮັບ − ຕົ້ນທຶນເຄື່ອງທີ່ສົ່ງໃຫ້ສາຂາ (ຕົ້ນທຶນຈິງຕໍ່ຫົວໜ່ວຍຕອນສົ່ງ ເຊິ່ງລວມຕົ້ນທຶນແຝງທີ່ຕັ້ງໄວ້ແລ້ວ) · ເງິນຄົງເຫຼືອ = ລາຍຮັບ − ເງິນທີ່ຈ່າຍຊື້ເຄື່ອງ − ຄ່າໃຊ້ຈ່າຍແຝງຂອງເດືອນ (ມຸມມອງເງິນສົດ: ເຄື່ອງທີ່ຊື້ແລ້ວຍັງຢູ່ໃນສະຕັອກບໍ່ໄດ້ຫັກອອກ)',
@@ -62,7 +62,7 @@ lo:{ac_this_month:'ເດືອນນີ້',ac_noread:'ອ່ານຂໍ້ມ
   ac_mk_t:'🏷️ ບວກລາຄາຂາຍສາຂາ',ac_mk_h:'ລາຄາທີ່ຄິດສາຂາ = ຕົ້ນທຶນ/ຫົວໜ່ວຍ (ລວມຕົ້ນທຶນແຝງ) × (1 + %) · 0 = ຄິດເທົ່າຕົ້ນທຶນ · ເມນູທີ່ຕັ້ງ % ເອງໃນ 📖 ເມນູ/ສູດ ໃຊ້ຄ່າຂອງເມນູນັ້ນ',
   ac_mk_ex:'ຕົວຢ່າງ: {r} ຕົ້ນທຶນ {c}/{u} → ຄິດສາຂາ {p}/{u}',ac_mk_lbl:'ບວກ (%)',ac_mk_save:'💾 ບັນທຶກ %',ac_mk_saved:'ບັນທຶກ {v}% ແລ້ວ ✅ ບິນທີ່ອອກຫຼັງຈາກນີ້ໃຊ້ຄ່ານີ້',ac_mk_bad:'ໃສ່ % ເປັນຕົວເລກ 0–1000 (ເຊັ່ນ 10 ຫຼື 12.5) — ຍັງບໍ່ບັນທຶກ',
   ac_csv:'⬇ CSV',ac_csv_none:'ເດືອນນີ້ຍັງບໍ່ມີຂໍ້ມູນ',ac_by:'ໂດຍ',ac_total:'ລວມ'},
-my:{ac_this_month:'ယခုလ',ac_noread:'ဖတ်မရပါ',ac_scope:'🔒 ဆိုင်ခွဲ {b} သာ — စုစုပေါင်းသည် ထိုဆိုင်ခွဲများသာ',
+my:{ac_this_month:'ယခုလ',ac_ws_t:'✂️ ဤလ အလေအလွင့် / အပိုင်းအစ',ac_ws_h:'ကုန်ကျစရိတ်ဖြင့် တန်ဖိုး — "ဝယ်ယူမှု" ထဲတွင် ပါပြီး (ထပ်မနုတ်)',ac_ws_none:'ဤလ အလေအလွင့် မရှိ 👍',ac_ws_trim:'ညှိဖြတ် အပိုင်းအစ (ရေတွက်မှုမှ)',ac_ws_make:'ထုတ်လုပ်စဉ် အလေအလွင့်',ac_ws_other:'အခြား',ac_ws_top:'အများဆုံး',ac_noread:'ဖတ်မရပါ',ac_scope:'🔒 ဆိုင်ခွဲ {b} သာ — စုစုပေါင်းသည် ထိုဆိုင်ခွဲများသာ',
   ac_rev:'ဆိုင်ခွဲမှ ဝင်ငွေ',ac_bills_n:'ဘေလ် {n}',ac_cogs:'ပို့သောကုန် ကုန်ကျစရိတ်',ac_cogs_s:'အမှန်ကုန်ကျစရိတ်/ယူနစ် × ပို့သည်',ac_gross:'အကြမ်းအမြတ်',ac_gross_s:'ဝင်ငွေ − ပို့သောကုန် ကုန်ကျစရိတ်',
   ac_purch:'ဝယ်ယူမှု',ac_rcpts_n:'လက်ခံစာ {n}',ac_exp:'ဝှက်ကုန်ကျစရိတ်',ac_items_n:'{n} ခု',ac_net:'ကျန်ငွေ',ac_net_s:'ဝင်ငွေ − ဝယ်ယူမှု − ဝှက်ကုန်ကျစရိတ်',
   ac_explain:'အကြမ်းအမြတ် = ဝင်ငွေ − ဆိုင်ခွဲသို့ ပို့သောကုန် ကုန်ကျစရိတ် (ပို့ချိန် အမှန်ကုန်ကျစရိတ်/ယူနစ်၊ သတ်မှတ်ထားသော ဝှက်ကုန်ကျစရိတ် ပါဝင်ပြီး) · ကျန်ငွေ = ဝင်ငွေ − ဝယ်ယူရန်ပေးချေငွေ − ဤလ ဝှက်ကုန်ကျစရိတ် (ငွေသားအမြင်: လက်ကျန်ထဲရှိ ဝယ်ထားသောကုန် မနုတ်ပါ)',
@@ -113,17 +113,18 @@ function acMonth(d){AC_YM=d===0?ymNow():(d<0?prevMonth(AC_YM):nextMonth(AC_YM));
 async function acGet(tb,fn){try{let q=sb.from(tb).select('*');q=fn?fn(q):q;const r=await q;if(!r||r.error)return {ok:false,rows:[]};return {ok:true,rows:r.data||[]};}catch(e){return {ok:false,rows:[]};}}
 async function acLoad(){
   const seq=++AC_SEQ,ym=AC_YM,from=ym+'-01',to=ym+'-'+String(monthDays(ym)).padStart(2,'0');
-  const [dl,rc,ex,pd,un,pv]=await Promise.all([
+  const [dl,rc,ex,pd,un,pv,ws]=await Promise.all([
     acGet('kc_deliveries',q=>q.gte('d',from).lte('d',to)),
     acGet('kc_receipts',q=>q.gte('d',from).lte('d',to)),
     acGet('kc_expenses',q=>q.eq('ym',ym).order('d').order('created_at')),
     acGet('kc_productions',q=>q.gte('d',from).lte('d',to)),
     acGet('kc_deliveries',q=>q.eq('status','sent')),
-    acGet('kc_expenses',q=>q.eq('ym',prevMonth(ym)).eq('recurring',true))]);
+    acGet('kc_expenses',q=>q.eq('ym',prevMonth(ym)).eq('recurring',true)),
+    acGet('kc_moves',q=>q.eq('kind','waste').gte('d',from).lte('d',to))]);
   let dll={ok:true,rows:[]};const okDl=dl.rows.filter(d=>d.status!=='void'&&inBr(d.branch));
   if(dl.ok&&okDl.length)dll=await acGet('kc_delivery_lines',q=>q.in('delivery_id',okDl.map(d=>d.id)));
   if(seq!==AC_SEQ||S.tab!=='acc')return;
-  AC={ym,from,to,dl,dll,rc,ex,pd,un,pv};acPaint();
+  AC={ym,from,to,dl,dll,rc,ex,pd,un,pv,ws};acPaint();
 }
 function acBrIdx(code){const i=(S.branchesAll||[]).findIndex(b=>b.code===code);return i<0?999:i;}
 function acCalc(A){ // ตัวเลขทั้งหมดของเดือน (ใช้ทั้งหน้า + CSV + เทส)
@@ -151,7 +152,7 @@ function acPaint(){
     kpi('exp',t('ac_exp'),A.ex.ok?money(X.exp):'—',A.ex.ok?t('ac_items_n',{n:X.expN}):nr)+
     kpi('net',t('ac_net'),A.dl.ok&&A.rc.ok&&A.ex.ok?money(X.net):'—',t('ac_net_s'),X.net<0?'bad':'')+'</div>'+
     '<div class="note">'+esc(t('ac_explain'))+'</div>';
-  box.innerHTML=kpis+acRevCard(A,X)+acUnpaidCard(A,X)+acExpCard(A,X)+acOhCard(A,X)+acMkCard();
+  box.innerHTML=kpis+acRevCard(A,X)+acUnpaidCard(A,X)+acExpCard(A,X)+acWasteCard(A)+acOhCard(A,X)+acMkCard();
 }
 function acRevCard(A,X){
   let body;
@@ -184,6 +185,25 @@ function acExpCard(A,X){
   }
   return card(esc(t('ac_exp_t')),body,{id:'acExpCard',sp:A.ex.ok?'<span>'+esc(money(X.exp))+'</span>':''});
 }
+function acWasteCalc(A){ // ✂️ ของเสียของเดือน = kc_moves kind 'waste' (เศษตัดแต่งจากนับสต๊อก · เศษ/ทิ้งตอนทำของ) · มูลค่าตามต้นทุน (ไม่หักซ้ำ — รวมอยู่ในซื้อของแล้ว)
+  const W=(A.ws&&A.ws.rows)||[],src={trim:0,make:0,other:0},by={};let tot=0;
+  W.forEach(m=>{const v=Math.abs(num(m.cost));tot+=v;const k=m.ref_table==='kc_counts'?'trim':m.ref_table==='kc_productions'?'make':'other';src[k]+=v;
+    const b=by[m.ref_id]||(by[m.ref_id]={id:m.ref_id,name:m.name||'',kind:m.ref_kind,qty:0,val:0});b.qty+=Math.abs(num(m.qty));b.val+=v;});
+  const top=Object.values(by).sort((a,b)=>b.val-a.val).slice(0,8);
+  return {tot:rnd2(tot),trim:rnd2(src.trim),make:rnd2(src.make),other:rnd2(src.other),top,n:W.length};}
+function acWasteCard(A){
+  if(!A.ws)return '';let body='<div class="xs mut" style="margin-bottom:6px">'+esc(t('ac_ws_h'))+'</div>';
+  if(!A.ws.ok)body+='<div class="empty">'+esc(t('ac_noread'))+'</div>';
+  else{const W=acWasteCalc(A);
+    if(!W.n)body+='<div class="okbox">'+esc(t('ac_ws_none'))+'</div>';
+    else{body+='<div class="ac-row"><div class="grow">✂️ '+esc(t('ac_ws_trim'))+'</div><span class="amt" id="acWsTrim">'+esc(money(W.trim))+'</span></div>'+
+        '<div class="ac-row"><div class="grow">🍳 '+esc(t('ac_ws_make'))+'</div><span class="amt" id="acWsMake">'+esc(money(W.make))+'</span></div>'+
+        (W.other?'<div class="ac-row"><div class="grow">'+esc(t('ac_ws_other'))+'</div><span class="amt">'+esc(money(W.other))+'</span></div>':'')+
+        '<div class="ac-row"><div class="grow b">'+esc(t('ac_total'))+'</div><span class="amt" id="acWsTot">'+esc(money(W.tot))+'</span></div>'+
+        '<div class="xs mut" style="margin:8px 0 4px">'+esc(t('ac_ws_top'))+'</div>'+
+        W.top.map(x=>{const o=x.kind==='recipe'?recipeById(x.id):itemById(x.id),u=o?(x.kind==='recipe'?o.yield_unit:o.unit):'';
+          return '<div class="ac-row" data-id="'+esc(x.id)+'"><div class="grow">'+esc(o?dispName(o):x.name)+' <span class="xs mut">'+fmtQ(rnd4(x.qty))+' '+esc(trUnit(u||''))+'</span></div><span class="amt">'+esc(money(rnd2(x.val)))+'</span></div>';}).join('');}}
+  return card(esc(t('ac_ws_t')),body,{id:'acWaste'});}
 function acOhCard(A,X){
   const c=S.cfg||CFG_DEF,nowTxt=c.overhead_mode==='pct'?t('ac_oh_now_pct',{v:fmtQ(c.overhead_value)}):t('ac_oh_now_unit',{v:fmtQ(c.overhead_value)});
   let body='<div class="sm">'+esc(A.pd.ok?t('ac_oh_units',{q:fmtQ(X.units),n:X.lots}):t('ac_noread'))+'</div>';
