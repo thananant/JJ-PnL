@@ -16,8 +16,8 @@ t.eq(A.permOf(u({ payroll: { emp: 'v', org: '' } }), 'payroll', 'org'), '', 'ต
 t.eq(A.permOf(u({ payroll: { emp: 'v' } }), 'payroll', 'emp'), 'v', 'หน้าอื่นเหมือนเดิม');
 t.eq(A.permOf(u({ pnl: { dash: 'v' } }), 'pnl', 'detail'), '', 'แอปอื่นไม่ได้รับผล');
 t.eq(A.countScreens(u({ payroll: { emp: 'v', detail: 'v' } }), 'payroll'), 3, 'นับหน้าที่เห็น = พนักงาน + ข้อมูลพนักงาน + แผนผัง');
-t.eq(A.countScreens({ role: 'owner' }, 'payroll'), 15, 'เจ้าของ = 15 หน้า');
-t.ok(/^3\/15 หน้า/.test(A.appsLine({ payroll: { emp: 'v', detail: 'v' } }, 'payroll')), 'สรุปในประวัติ "3/15 หน้า"');
+t.eq(A.countScreens({ role: 'owner' }, 'payroll'), 16, 'เจ้าของ = 16 หน้า (รวม 🐷 เงินสำรองเลี้ยงชีพ)');
+t.ok(/^3\/16 หน้า/.test(A.appsLine({ payroll: { emp: 'v', detail: 'v' } }, 'payroll')), 'สรุปในประวัติ "3/16 หน้า"');
 
 // syncDraft อ่านติ๊กจากกล่องจริง — จำลองกล่องด้วยรายการช่องติ๊ก
 function box(checked) {   // checked = {หน้าจอ: 'vae'}
