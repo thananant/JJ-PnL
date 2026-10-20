@@ -12,7 +12,7 @@ description: เปิดทุกแอปของ JJ-PnL บนโทรศ�
 
 ```bash
 node tests/mobile/mobile-check.mjs                    # 5 รุ่นหลัก (SE 1 · 16 Pro · Android 412 · Fold ปก · แนวนอน) ~2 นาที
-node tests/mobile/mobile-check.mjs --app=kitchen      # เฉพาะแอปที่แก้ (id: hub pnl owner admin payroll calendar invoice social maint kpi kiosk stock kitchen kitchen2 order office menu privacy)
+node tests/mobile/mobile-check.mjs --app=kitchen      # เฉพาะแอปที่แก้ (id: hub pnl owner admin payroll payroll-org calendar invoice social maint kpi kiosk stock kitchen kitchen2 order office menu privacy)
 node tests/mobile/mobile-check.mjs --all              # ครบ 15 รุ่น ~8 นาที (ก่อนส่งงานที่แก้หน้าจอหลายแอป)
 node tests/mobile/mobile-check.mjs --dev=se1,land --shots   # เก็บภาพหน้าจอที่ tests/mobile/out/shots/ (เปิดดูด้วย Read)
 ```
@@ -35,4 +35,6 @@ node tests/mobile/mobile-check.mjs --dev=se1,land --shots   # เก็บภา
 
 - ของเดิมที่เจ้าของรู้แล้วและยังไม่ให้แก้ → ใส่ใน `KNOWN` (ลดเป็น ⚠ พร้อมเหตุผล) อย่าลบการตรวจทิ้ง
 - แอปใหม่ → เพิ่มใน `APPS` (`login:1` ถ้าใช้บัญชีกลาง · `pass` ถ้าใช้ PIN)
+- หน้าที่ต้องมีข้อมูลถึงจะเห็นของจริง → `fx` = ข้อมูลจำลองรายแอป `{ตาราง: แถว[]}` (ทำตาม `.range()/.limit()`) เช่น `payroll-org` = `jjmk-payroll.html#org` + `fixtures-payroll-org.mjs` (~130 คน)
+- ปุ่ม "ติดจอล่าง" นับเฉพาะ fixed หรือ sticky ที่ตั้ง `bottom` — sticky ที่ตั้งแค่ `top` (ยังไม่ติด) เลื่อนตามเนื้อหา ไม่นับ
 - วัดการเลื่อนข้างจาก `scrollWidth - ความกว้างจอที่ตั้ง` (ไม่ใช่ `innerWidth` — Chromium ขยายตามเนื้อหาตอน `isMobile`)

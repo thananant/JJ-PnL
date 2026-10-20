@@ -814,7 +814,7 @@ const APPS={
   owner:{n:'JJ Owner',ic:'👑',f:'jjmk-owner.html',d:'สรุปผู้บริหาร (ปกติเปิดให้เฉพาะ admin)',s:{
     overview:'ภาพรวมทั้งปี',pl:'งบกำไรขาดทุน',manual:'ใส่ยอดขาย/กำไรเอง',inst:'ผ่อนชำระ'}},
   payroll:{n:'JJ Payroll',ic:'💰',f:'jjmk-payroll.html',d:'เงินเดือนพนักงาน',s:{
-    today:'วันนี้',emp:'พนักงาน',payroll:'คำนวณเงินเดือน',detail:'รายละเอียด',shift:'กะ/ตารางงาน',
+    today:'วันนี้',emp:'พนักงาน',payroll:'คำนวณเงินเดือน',detail:'รายละเอียด',org:'แผนผังพนักงาน',shift:'กะ/ตารางงาน',
     cal:'ปฏิทินสแกน',holi:'วันหยุด',adv:'เบิกล่วงหน้า',loan:'เงินกู้',dep:'เงินประกัน',
     sso:'ประกันสังคม',mou:'MOU',audit:'ประวัติทำรายการ',settings:'ตั้งค่า'}},
   stock:{n:'นับสต๊อก',ic:'📦',f:'jjmk-stockcheck.html',d:'เช็คสต็อกคงเหลือรายสาขา',s:{
@@ -871,6 +871,16 @@ function unitKeys(keep){
   return ks;
 }
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
+/* หน้าจอใหม่ที่ "ยังไม่เคยตั้งสิทธิ์" = เห็นตามหน้าอื่น (ไม่ต้องไล่ติ๊กทุกคนใหม่) — ต้องตรงกับแอปนั้น
+   payroll.org 🧑‍🤝‍🧑 แผนผังพนักงาน (2026-10-20): ไม่มีคีย์ org = เห็นถ้าดูหน้า emp หรือ detail ได้ (applyUser ใน jjmk-payroll.html)
+   เอาติ๊กออก = เขียน org:'' ไว้ชัด ๆ (syncDraft) ไม่งั้นแอปจะถือว่ายังไม่เคยตั้ง แล้วกลับมาเห็นเอง */
+const PERM_FOLLOW={payroll:{org:['emp','detail']}};
+function scrFlags(a,app,sc){   // สิทธิ์ของหน้าจอเดียวจาก apps[app] (รวมค่าตามหน้าอื่นของ PERM_FOLLOW)
+  if(!a)return '';
+  const fw=PERM_FOLLOW[app]&&PERM_FOLLOW[app][sc];
+  if(fw&&typeof a[sc]!=='string')return fw.some(x=>String(a[x]||'').includes('v'))?'v':'';
+  return a[sc]||'';
+}
 /* จำกัด "เห็นเฉพาะสาขา" รายแอพ (เจ้าของสั่ง 2026-09-29 · ขยายทุกแอพ 2026-10-02) — เก็บเป็น apps.<แอพ>._br = 'JJLP,JJRD'
    ไม่ติ๊กเลย/ติ๊กครบทุกสาขาของแอพนั้น = ไม่จำกัด · ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ
    แอพที่อยู่ใน BR_SCOPED = ตัวแอพกรองข้อมูลตาม _br แล้ว · br = สาขาที่มีข้อมูลในแอพนั้นจริง (ใบกำกับภาษี/KPI/สต๊อก มีแค่หน้าร้าน)
@@ -995,7 +1005,7 @@ function permOf(u,app,screen){ // คืนสตริงแฟล็ก เช
   if(!u)return '';
   if(isBoss(u))return 'vaed';   // ผู้ดูแลระบบ + เจ้าของ = ทุกสิทธิ์
   const a=(u.apps||{})[app]; if(!a)return '';
-  return a[screen]||'';
+  return scrFlags(a,app,screen);
 }
 function appOn(u,app){ // เข้าแอพนี้ได้ไหม (มีอย่างน้อย 1 หน้าจอที่เห็นได้)
   if(!u)return false;
@@ -1007,7 +1017,7 @@ function countScreens(u,app){
   if(!u)return 0;
   if(isBoss(u))return Object.keys(APPS[app].s).length;
   const a=(u.apps||{})[app]||{};
-  return Object.keys(APPS[app].s).filter(k=>String(a[k]||'').includes('v')).length;
+  return Object.keys(APPS[app].s).filter(k=>scrFlags(a,app,k).includes('v')).length;
 }
 
 /* ============ Render หลัก ============ */
@@ -1826,6 +1836,7 @@ function syncDraft(k){
     if(fl)out[sc]=fl;
     const rd=box.querySelector('input[type=radio][data-s="'+sc+'"]'); if(rd)rd.checked=(fl==='');
   });
+  if(Object.keys(out).length&&PERM_FOLLOW[k])Object.keys(PERM_FOLLOW[k]).forEach(sc=>{ if(!(sc in out))out[sc]=''; });   // ซ่อนไว้ชัด ๆ
   if(BR_SCOPED[k] && Object.keys(out).length){
     const br=[...box.querySelectorAll('input[data-br]')].filter(c=>c.checked).map(c=>c.dataset.br);
     const BS=BR_SCOPED[k].br;   // ติ๊กครบทุกสาขาของแอพ "พอดี" = ไม่เก็บ _br (เห็นทุกสาขา รวมสาขาที่เปิดใหม่) · มีรหัสนอกรายการติ๊กอยู่ด้วย = เก็บไว้ (ห้ามกลายเป็นเห็นทุกสาขา)
@@ -2050,7 +2061,7 @@ function stableJ(v){   // JSON ที่เรียงคีย์ — เท�
 const sameVal=(a,b)=>stableJ(a)===stableJ(b);
 function appsLine(apps,k){   // สรุปสิทธิ์ของแอพเดียว เช่น "5/12 หน้า · 🏪 ลาดพร้าว"
   const a=(apps&&apps[k])||null, tot=Object.keys(APPS[k].s).length;
-  const n=a?Object.keys(APPS[k].s).filter(sc=>String(a[sc]||'').includes('v')).length:0;
+  const n=a?Object.keys(APPS[k].s).filter(sc=>scrFlags(a,k,sc).includes('v')).length:0;
   if(!n)return 'ปิด';
   const br=a._br?String(a._br).split(',').map(brLbl).join('/'):'';
   return n+'/'+tot+' หน้า'+(br?' · 🏪 '+br:'');
