@@ -11,6 +11,7 @@ import http from 'http';
 import crypto from 'crypto';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
+import { payrollOrgFixture } from './fixtures-payroll-org.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -50,6 +51,7 @@ const APPS = [
   { id: 'owner', file: 'jjmk-owner.html', login: 1 },
   { id: 'admin', file: 'jjmk-admin.html', login: 1 },
   { id: 'payroll', file: 'jjmk-payroll.html', login: 1 },
+  { id: 'payroll-org', file: 'jjmk-payroll.html#org', login: 1, fx: payrollOrgFixture },   // 🧑‍🤝‍🧑 แผนผังพนักงาน + ข้อมูลจำลองที่สมจริง (~130 คน)
   { id: 'calendar', file: 'jjmk-calendar.html', login: 1 },
   { id: 'invoice', file: 'jjmk-invoice.html', login: 1 },
   { id: 'social', file: 'jjmk-social.html', login: 1 },
@@ -73,13 +75,18 @@ const KNOWN = [
 const U = 'jjtest', P = 'jjtest-pass';
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const TEST_USER = { id: 1, username: U, pass_hash: sha(U + '|' + P + '|JJPNL'), name: 'ผู้ทดสอบ', display_name: 'ผู้ทดสอบ', role: 'admin', unit: 'ALL', active: true, status: 'active', apps: {} };
-function fakeSupabase(route) {
+// fx = ข้อมูลจำลองรายแอป {ตาราง: แถว[]} (เช่นแผนผังพนักงานต้องมีพนักงาน/กะ/เวลาสแกนถึงจะเห็นหน้าจริง)
+function fakeSupabase(route, fx) {
   const r = route.request(), u = new URL(r.url()), accept = r.headers()['accept'] || '';
   const tbl = (u.pathname.match(/\/rest\/v1\/([^/?]+)/) || [])[1] || '';
   const one = /vnd\.pgrst\.object/.test(accept);
   let body = [];
   if (tbl === 'pnl_users') body = [TEST_USER];
   if (tbl === 'branches') body = [{ id: 1, name: 'สาขารัชดา', code: 'JJRD' }, { id: 2, name: 'สาขาลาดพร้าว', code: 'JJLP' }];   // ซ่อมบำรุงต้องมีสาขาก่อนเข้าได้
+  if (fx && Array.isArray(fx[tbl])) {   // ข้อมูลจำลองรายแอป: ทำตาม .range()/.limit() (แอปโหลดเวลาสแกนทีละ 1,000 แถว)
+    const off = +u.searchParams.get('offset') || 0, lim = u.searchParams.get('limit');
+    body = fx[tbl].slice(off, lim != null ? off + +lim : undefined);
+  }
   if (/\/rest\/v1\/rpc\//.test(u.pathname)) body = /count/.test(u.pathname) ? 0 : [];
   if (/\/auth\/v1\//.test(u.pathname)) body = {};
   if (/\/storage\/v1\//.test(u.pathname)) body = [];
@@ -87,7 +94,7 @@ function fakeSupabase(route) {
   if (one) body = Array.isArray(body) ? (body[0] || null) : body;
   if (one && body == null) return route.fulfill({ status: 406, contentType: 'application/json', body: '{"code":"PGRST116"}' });
   return route.fulfill({ status: r.method() === 'HEAD' ? 200 : 200, contentType: 'application/json',
-    headers: { 'content-range': '*/' + (Array.isArray(body) ? body.length : 0), 'access-control-allow-origin': '*' },
+    headers: { 'content-range': '*/' + (Array.isArray(body) ? body.length : 0), 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-range' },
     body: r.method() === 'HEAD' ? '' : JSON.stringify(body) });
 }
 // ไลบรารีจาก CDN: session ทดสอบออกเน็ตไป CDN ไม่ได้ → ใช้สำเนาจาก npm (tests/node_modules) รุ่นเดียวกับที่แอปเรียก
@@ -151,17 +158,19 @@ function probe({ t, b, l, r, W, H }) {
     // ติดจอจริง = มีบรรพบุรุษเป็น fixed/sticky และระหว่างทางไม่มีกล่องที่เลื่อนได้ (เนื้อหาในหน้าต่างที่เลื่อนได้ ผู้ใช้เลื่อนขึ้นมากดได้)
     const scrollsY = e => { const o = getComputedStyle(e).overflowY; return (o === 'auto' || o === 'scroll') && e.scrollHeight > e.clientHeight + 1; };
     const scrollsX = e => { const o = getComputedStyle(e).overflowX; return (o === 'auto' || o === 'scroll') && e.scrollWidth > e.clientWidth + 1; };
-    let pinned = false, inHScroll = false;
+    let pinned = false, pinBot = false, inHScroll = false;
     for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
       if (e !== el && scrollsX(e)) inHScroll = true;
       if (e !== el && scrollsY(e)) break;
-      const p = getComputedStyle(e).position; if (p === 'fixed' || p === 'sticky') { pinned = !scrollsY(e); break; }
+      const cs = getComputedStyle(e), p = cs.position;
+      // sticky ที่ตั้งแค่ top (เช่นแถวปุ่มกะของแผนผังพนักงาน) ติดได้แค่ขอบบน — ตอนยังไม่ติดมันเลื่อนตามเนื้อหา ไม่ใช่ปุ่มที่ค้างล่างจอ
+      if (p === 'fixed' || p === 'sticky') { pinned = !scrollsY(e); pinBot = pinned && (p === 'fixed' || cs.bottom !== 'auto'); break; }
     }
     rects.push([el, rc, pinned]);
     // เลื่อนหน้าลงแล้ว ของธรรมดาเลื่อนผ่านใต้แถบสถานะได้ตามปกติ — นับเฉพาะของที่ติดจอ (fixed/sticky)
     if (t > 0 && rc.top < t - 1 && rc.bottom > 1 && (window.scrollY < 1 || pinned)) res.top.push(lab(el) + ' y=' + Math.round(rc.top));
     if (b > 0 && rc.bottom > H - b + 1 && rc.top < H - 1) {
-      if (pinned) res.bottom.push(lab(el) + ' ล่าง=' + Math.round(H - rc.bottom));
+      if (pinBot) res.bottom.push(lab(el) + ' ล่าง=' + Math.round(H - rc.bottom));
     }
     // แถบที่เลื่อนข้างได้ (แท็บ/ชิป) ปุ่มปลายแถบเลยขอบจอได้ตามปกติ — ไม่นับ
     if (!inHScroll && ((l > 0 && rc.left < l - 1 && rc.right > 1) || (r > 0 && rc.right > W - r + 1 && rc.left < W - 1))) res.side.push(lab(el));
@@ -196,7 +205,8 @@ async function runOne(browser, d, app) {
   const ctx = await browser.newContext({ viewport: { width: d.w, height: d.h }, deviceScaleFactor: 2, isMobile: !d.tablet || true, hasTouch: true, locale: 'th-TH', timezoneId: 'Asia/Bangkok' });
   // Playwright เช็ค route ที่ลงทะเบียนทีหลังก่อน → ตัวกันออกเน็ตต้องลงก่อนสุด
   await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, r => r.abort());   // ห้ามออกเน็ตจริง (Google/LINE/Apify …)
-  await ctx.route(/\.supabase\.co\//, fakeSupabase);
+  const fx = app.fx ? app.fx() : null;
+  await ctx.route(/\.supabase\.co\//, r => fakeSupabase(r, fx));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
   await ctx.route(/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|unpkg\.com)/, cdn);
   const page = await ctx.newPage();
@@ -252,7 +262,7 @@ async function runOne(browser, d, app) {
 // ---------- รัน ----------
 const devSel = arg('dev') ? arg('dev').split(',') : null, appSel = arg('app') ? arg('app').split(',') : null;
 const devs = DEVICES.filter(d => devSel ? devSel.includes(d.id) : (ALL || d.core));
-const apps = APPS.filter(a => (appSel ? appSel.includes(a.id) : true) && fs.existsSync(path.join(ROOT, a.file.split('?')[0])));
+const apps = APPS.filter(a => (appSel ? appSel.includes(a.id) : true) && fs.existsSync(path.join(ROOT, a.file.split(/[?#]/)[0])));
 const browser = await chromium.launch({ executablePath: fs.existsSync('/opt/pw-browsers/chromium') ? undefined : undefined });
 const jobs = []; for (const a of apps) for (const d of devs) jobs.push([a, d]);
 const results = new Map();
