@@ -35,12 +35,15 @@ export function payrollOrgFixture(nowMs = Date.now()) {
   const emps = [], punches = [];
   let id = 0, ni = 0;
   /* แผนเข้างานจริง: main = กะหลักที่ทำจริง · alt = กะอื่นบางวัน · lock = กะที่ตั้งไว้ในข้อมูลพนักงาน · scan:false = ไม่มีสแกน 14 วัน */
+  /* รูปพนักงานจำลอง (ทุกคนที่ 3) — SVG ในไฟล์ ไม่ต้องโหลดจากเน็ต */
+  const face = n => 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="'
+    + ['#5b8def', '#e8590c', '#2f9e44', '#ae3ec9', '#f08c00', '#1098ad'][n % 6] + '"/><circle cx="20" cy="16" r="8" fill="#fff"/><rect x="8" y="27" width="24" height="13" rx="6" fill="#fff"/></svg>');
   function add(br, pos, o = {}) {
     id++;
     const nick = o.nick || NICK[ni++ % NICK.length] + (ni > NICK.length ? String(Math.floor(ni / NICK.length) + 1) : '');
     const code = String(4100000000 + id * 7919);
     emps.push({ id, code, nick, full_name: o.full || FULL[id % FULL.length], dept: pos ? deptOf(pos) : (o.dept || ''), branch: br, position: pos,
-      photo_url: o.photo || null, wage_type: o.mode === 'hourly' ? 'hourly' : 'daily', rate: o.mode === 'hourly' ? 60 : 450, work_mode: o.mode || 'shift',
+      photo_url: o.photo || (id % 3 ? null : face(id)), wage_type: o.mode === 'hourly' ? 'hourly' : 'daily', rate: o.mode === 'hourly' ? 60 : 450, work_mode: o.mode || 'shift',
       shift_id: o.lock || null, target_hours: o.target || 10, active: o.active !== false, off_weekdays: '', off_count: 0 });
     if (o.scan === false) return;
     const sn = o.sn || { JJLP: 'SN_LP', JJRD: 'SN_RD', JJBN: 'SN_BN', JJCK: 'SN_LP', OFFICE: 'SN_LP' }[br] || 'SN_LP';
