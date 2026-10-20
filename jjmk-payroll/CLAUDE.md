@@ -1,43 +1,20 @@
 # JJ-Payroll — ระบบเงินเดือน จริงใจหมูกระทะ
 
-คู่มือบริบทสำหรับ Claude Code — อ่านไฟล์นี้ก่อนแก้อะไรทุกครั้ง
+อ่านไฟล์นี้ก่อนแก้ทุกครั้ง · เก็บเฉพาะกติกาที่ยังใช้ · **หัวข้อ "กฎเงินเดือน" · `holidays` · "ระบบพิมพ์" คัดลอกตรงตัวจากฉบับเดิม (ห้ามย่อโดยไม่ตั้งทีมตรวจ — แตะเงิน)** ·
+ประวัติ/เหตุผล/ผลตรวจ/รายละเอียดฟีเจอร์ทั้งหมด: `jjmk-payroll/docs/claude-detail.md` (ฉบับเต็มก่อนย่อ 2026-10-20) · สรุประบบ `docs/JJ-Payroll-Summary.md`
 
-> **ย้ายบ้านแล้ว (2026-09-06)**: โค้ดทั้งหมดย้ายจาก repo `thananant/JJ-Payroll` มาอยู่ใน repo `thananant/JJ-PnL` — ตัวแอปคือ **`jjmk-payroll.html` ที่ root** เหมือนแอปอื่น (2026-09-07 เจ้าของสั่งเปลี่ยนจาก `payroll/index.html`) · ไฟล์ประกอบ (worker/tools/docs/logo) อยู่โฟลเดอร์ `jjmk-payroll/` · ไฟล์ SQL อยู่ที่ **branch `sql` โฟลเดอร์ `jjmk-payroll/`** (กติกา JJ-PnL: ห้ามมี `.sql` บน main) · ฐานข้อมูล Supabase / Cloudflare Worker / เครื่องสแกน ใช้ของเดิมทั้งหมด ไม่ต้องย้าย
+## ภาพรวม
 
-## ภาพรวมระบบ
-
-- **แอปหลัก**: `jjmk-payroll.html` ที่ root ของ repo ไฟล์เดียวจบ (HTML + CSS + JS inline ~380KB) — deploy บน **GitHub Pages** ของ repo `JJ-PnL`: `https://thananant.github.io/JJ-PnL/jjmk-payroll.html` (เข้าจากหน้าศูนย์รวมแอพกดไอคอน 💰 ได้ · URL เดิม `thananant.github.io/JJ-Payroll` ยังใช้ได้จนกว่าเจ้าของจะปิด repo เก่า — ถ้าปิดต้องแจ้งผู้จัดการเปลี่ยน bookmark/ไอคอนหน้าจอ)
-- **ฐานข้อมูล**: Supabase โปรเจกต์ `aikyxvluaiubdidqxwnd`
-  - URL: `https://aikyxvluaiubdidqxwnd.supabase.co`
-  - Publishable key (ฝังใน frontend ได้): `sb_publishable_Bn6BMtcjasoPT3RZ_ekyOg_SLWWp-nm`
-- **Cloudflare Worker**: `steep-hill-7d52.thananantpatt.workers.dev` (โค้ดคือ `worker.js`)
-  - รับข้อมูลเครื่องสแกนหน้า ZKTeco (`/iclock/*`) + Hikvision (`/hik`)
-  - ส่งรายงาน LINE: Cron `1 4,8,11 * * *` (รายกะ 11:01/15:01/18:01 ไทย) + `0 14 * * *` (สรุป 21:00 ไทย)
-  - ทดสอบมือ: `GET /report/daily?send=1`
-  - **แจ้งวันเกิดเข้ากลุ่มไลน์ไม่ได้อยู่ใน Worker** — ฐานข้อมูลส่งเองผ่าน `line-order` (ดูหัวข้อ 🎂 ด้านล่าง) · ไม่ต้อง deploy Worker ใหม่
-  - **เพิ่มเครื่องสแกนหน้าเครื่องใหม่ = ทำตาม `docs/add-scanner.md`** (เจ้าของขอ 2026-10-19 · ฉบับแก้ 2026-10-20 เทียบโค้ด origin/main + เส้นทาง "สาขา 3" + รุ่นที่ควรซื้อ · ตรวจอิสระแล้ว):
-    รหัสในเครื่องต้องตรง `employees.code` ทุกตัวอักษร (ไม่ตรง = Worker สร้างพนักงานซ้ำ / เวลาไปลงคนอื่น) ·
-    ลงหน้า+ลองสแกน**ก่อน**ชี้เครื่องมาที่ Worker (ชี้แล้วทุกสแกนคิดเงินจริง) · ผูกสาขาด้วยการ์ด **📟 เครื่องสแกน → สาขา** (⚙️ ตั้งค่า · SQL เป็นทางสำรอง · `BRANCH_MAP` แอปไม่อ่าน) ·
-    สาขาใหม่: เปิดใน JJ Access 🏪 ก่อนเพิ่มพนักงาน · แอปอ่านทะเบียนสาขาตอนโหลดหน้าเท่านั้น (ปุ่ม 🔄 ไม่อ่าน) · Worker ใน Cloudflare ต้องเป็นรุ่นที่อ่าน `pnl_branches` ·
-    Worker ไม่ซิงก์ใบหน้า/รายชื่อระหว่างเครื่อง · Hikvision ต้อง HTTPS + JSON และ SN อาจเป็น MAC/IP · ยังไม่มีบันทึกว่าเครื่องที่ใช้อยู่เป็นยี่ห้อ/รุ่นอะไร (จดไว้เมื่อรู้) ·
-    **ปรับคู่มือนี้ทุกครั้งที่แก้ `worker.js` ส่วนรับเครื่องสแกน / การ์ด 📟 / ทะเบียนสาขา**
-  - Secrets อยู่ใน CF dashboard: SUPABASE_URL, SUPABASE_KEY, LINE_TOKEN, LINE_GROUP_ID
-- **ผู้ใช้**: เจ้าของร้าน + ผู้จัดการ เปิดจากคอมและ iPhone — ทุกฟีเจอร์ต้องรองรับมือถือ
-- **ล็อกอิน (2026-09-10)**: ต้องล็อกอินก่อนใช้แอป ด้วย**บัญชีเดียวกับแอป P&L/JJ Social** (ตาราง `pnl_users` · สูตร `pwHash = sha256hex(user+'|'+pass+'|JJPNL')` แชร์กัน 3 แอป — **ห้ามเปลี่ยน**) · session เก็บ localStorage `jjpay_sess` · เพิ่ม/ปิดบัญชีทำที่หน้า "ผู้ใช้" ในแอป P&L · แอปนี้อ่าน `pnl_users` อย่างเดียว ไม่เขียน
-- **สิทธิ์รายหน้าจอ + รายสาขา (เจ้าของสั่ง 2026-09-29)**: ตั้งที่ 🔑 JJ Access → ⚙️ สิทธิ์ → กล่อง JJ Payroll · เก็บใน `pnl_users.apps.payroll` = `{<หน้าจอ>:'vaed', _br:'JJRD,JJCK'}`
-  - หน้าจอ = `data-page` ของเมนู (today emp detail org payroll cal adv loan dep sso mou shift holi audit settings) · ไม่มี `v` = ซ่อนเมนู + `go()` เด้งไปหน้าแรกที่มีสิทธิ์
-  - **`org` (🧑‍🤝‍🧑 แผนผังพนักงาน · 2026-10-20) ไม่มีคีย์ = เห็นถ้าดู `emp` หรือ `detail` ได้** (ไม่ต้องไล่ติ๊กทุกคนใหม่) · ตั้งไว้ = ใช้ค่านั้น · JJ Access เอาติ๊กออกแล้วเขียน `org:''` ไว้ชัด ๆ (`PERM_FOLLOW`/`scrFlags` ใน jjmk-admin) — **สองไฟล์ต้องตรงกัน**
-  - **กันบันทึกที่จุดเดียว**: ตัวครอบ `db.from` เช็ค `permDenied(op)` จากหน้าที่เปิดอยู่ (`curPage()`) — insert=a · update=e · upsert=a|e · delete=d · ไม่ผ่านคืน error "ไม่มีสิทธิ์…" โดยไม่ยิงถึงฐานข้อมูล (`deniedQuery` ต่อ .select()/.single() ได้) → **เขียนฟีเจอร์ใหม่ไม่ต้องเช็คสิทธิ์เอง**
-  - **`_br` = เห็นเฉพาะพนักงานสาขาเหล่านี้** (ไม่ตั้ง/ติ๊กครบ = ทุกสาขา): `scopeEmployees()` กรอง `employees` หลังโหลด · recomputeAll ข้ามเวลาสแกนคนนอกสาขา · realtime กรองตาม · ตัวเลือกสาขาทุก dropdown ซ่อนสาขาอื่น · การ์ดสาขาในหน้าวันนี้/ปฏิทินใช้ `myBranches()`
-  - พนักงานที่ยังไม่ระบุสาขา (Worker สร้างให้อัตโนมัติ) → `homeBranch()` เดาจากเครื่องสแกนที่ใช้ล่าสุด ผู้จัดการสาขาจะเห็นพนักงานใหม่ของตัวเอง
-  - admin/owner = ทุกอย่าง · `apps` ว่างทั้งก้อน = ไม่จำกัด (กันล็อกคน) · ตั้งแอปอื่นแต่ไม่เปิด payroll = หน้า "ยังไม่ได้รับสิทธิ์"
-  - อ่านสิทธิ์ใหม่จาก `pnl_users` ทุกครั้งที่เปิดแอป (`refreshMe`) — admin แก้สิทธิ์แล้วมีผลเมื่อรีเฟรช · บัญชีถูกปิด = เด้งออก
-  - เทส `jjmk-payroll/test/perm.js`
-- **ประวัติการทำรายการ (audit — 2026-09-10)**: ตาราง `payroll_audit` + หน้า 🕘 `#audit` · ดักที่ **wrapper ของ `db.from()` จุดเดียว** — ทุก insert/update/upsert/delete ที่สำเร็จถูกจดอัตโนมัติ (ใคร/ทำอะไร/ตารางไหน/รายละเอียด≤800ตัว/หน้าไหน/เมื่อไหร่) → โค้ดบันทึกใหม่ในอนาคต**ไม่ต้องทำอะไรเพิ่ม** · `AUDIT_SKIP` กันจดตัวเองและ pnl_users · flag `auditReady` — ยังไม่รัน `jj_audit.sql` แอปทำงานปกติแค่ไม่จด · login/logout ก็ถูกจด · หน้า audit โยงชื่อพนักงานจาก employee_id/emp_code ใน detail ให้อ่านง่าย
-  - **แก้ 2026-09-29 (เจ้าของถาม "ทำไมไม่มีประวัติอะไรเลย")**: ① ล็อกอินไม่เคยถูกจด — `doLogin` เรียก `auditWrite` ก่อน `loadAll` ตั้ง `auditReady` จึงหายทุกครั้ง
-    → ตอนนี้ตั้ง `auditPendingLogin` แล้ว `auditOpen()` จดหลังโหลดเสร็จ ② เข้าจากหน้าศูนย์รวมแอพไม่เคยถูกจด → จด `open` "🚪 เปิดแอป" ครั้งเดียวต่อแท็บ
-    (`sessionStorage.jjpay_opened`) ③ insert ล้มเดิมเงียบ → `auditFail()` เก็บ `auditLastErr` + toast ครั้งเดียว + แถบแดงในหน้าประวัติ
-    · ตารางว่างหลังเพิ่งรัน SQL = ปกติ (จดตั้งแต่ติดตั้ง ไม่มีย้อนหลัง) · ปุ่ม 📋 คัดลอก SQL อยู่ในการ์ด "ยังไม่ได้ติดตั้ง" (`#sqlAudit`) · เทส `test/audit.js`
+- แอป = `jjmk-payroll.html` ที่ root (HTML+CSS+JS ไฟล์เดียว · GitHub Pages) · ไฟล์ประกอบ/เทส/เครื่องมือ อยู่ `jjmk-payroll/` · SQL อยู่ branch `sql` โฟลเดอร์ `jjmk-payroll/` · ผู้ใช้ = เจ้าของ+ผู้จัดการ บนคอมและ iPhone (ทุกฟีเจอร์ต้องใช้บนมือถือได้)
+- Supabase `aikyxvluaiubdidqxwnd` (publishable key ฝังในแอปได้) · Cloudflare Worker `steep-hill-7d52.thananantpatt.workers.dev` = `worker.js` (รับเครื่องสแกน ZKTeco `/iclock/*` + Hikvision `/hik` · รายงาน LINE cron `1 4,8,11 * * *` + `0 14 * * *` · **deploy ที่ CF dashboard เอง**) · secrets ใน CF: SUPABASE_URL/KEY, LINE_TOKEN, LINE_GROUP_ID
+- **เพิ่มเครื่องสแกน = `docs/add-scanner.md`** (รหัสในเครื่องต้องตรง `employees.code` · ลงหน้าก่อนชี้มา Worker · ผูกสาขาด้วยการ์ด 📟 · **แก้ worker.js ส่วนรับเครื่อง/การ์ด 📟/ทะเบียนสาขา ต้องปรับคู่มือนี้**)
+- ล็อกอิน `pnl_users` (`pwHash = sha256hex(user+'|'+pass+'|JJPNL')` **ห้ามเปลี่ยน**) · อ่าน `pnl_users` อย่างเดียว · session `jjpay_sess`
+- **สิทธิ์** `pnl_users.apps.payroll` = `{<หน้าจอ>:'vaed', _br:'…'}` · หน้าจอ = `data-page` (today emp detail org payroll cal adv loan dep sso mou shift holi audit settings) · ไม่มี `v` = ซ่อน + `go()` เด้งไปหน้าแรกที่มีสิทธิ์
+  · **`org` ไม่มีคีย์ = ตามหน้า `emp`/`detail`** · JJ Access เอาติ๊กออกเขียน `org:''` (`PERM_FOLLOW`/`scrFlags` ใน jjmk-admin) — **สองไฟล์ต้องตรงกัน**
+  · **กันบันทึกที่จุดเดียว**: ตัวครอบ `db.from` เช็ค `permDenied(op)` ตามหน้าที่เปิด (insert=a · update=e · upsert=a|e · delete=d) → ฟีเจอร์ใหม่ไม่ต้องเช็คสิทธิ์เอง
+  · `_br` = เห็นเฉพาะพนักงานสาขาเหล่านั้น (`scopeEmployees()` · recomputeAll/realtime/dropdown กรองตาม · การ์ดสาขาใช้ `myBranches()`) **fail closed** · ไม่ระบุสาขา → `homeBranch()` เดาจากเครื่องล่าสุด
+  · admin/owner ทุกอย่าง · `apps` ว่างทั้งก้อน = ไม่จำกัด · อ่านสิทธิ์ใหม่ทุกครั้งที่เปิดแอป (`refreshMe`) · เทส `test/perm.js`
+- **ประวัติ `payroll_audit`**: ดักที่ wrapper `db.from()` จุดเดียว — ทุก insert/update/upsert/delete ที่สำเร็จถูกจดเอง (โค้ดใหม่ไม่ต้องทำอะไร) · `AUDIT_SKIP` · flag `auditReady` · login จดหลัง `loadAll` (`auditPendingLogin`) · insert ล้ม = `auditFail()`
 
 ## ธุรกิจ / กฎเงินเดือน (สำคัญมาก — อย่าเปลี่ยนโดยไม่ถาม)
 
@@ -89,31 +66,12 @@
 - **ประวัติเงินเดือนย้อนหลัง**: แสดงตั้งแต่ `PAY_HIST_START = '2026-07'` เท่านั้น
 - **แคชเวลาตอกบัตร (IndexedDB `jjmk-cache`/kv/'punches', `PCACHE_VER`)**: เปิดครั้งแรกโหลดเต็ม (fetchPunchRange นับ count แล้วยิงขนานทีละ 10 หน้า order by id) · ครั้งต่อไปใช้แคช + โหลดสดตั้งแต่ `liveFromDate()` = วันที่เก่าสุดของ {วันเปิดงวดปัจจุบัน · วันเปิดงวดก่อนหน้าถ้ายังไม่ถึงวันจ่ายของงวดนั้น (ช่วงปิดงวด 26→5) · วันสุดท้ายที่เครื่องนี้เคยโหลด} — **แก้บั๊ก 2026-09-29**: เดิมโหลดสดแค่งวดปัจจุบัน เครื่องที่เปิดครั้งสุดท้าย 24/9 แล้วมาเปิดหลัง 26/9 ทำให้ 25/9 หายจากงวด ก.ย. เงียบ ๆ · มุมล่างซ้ายมีบรรทัด "สแกนล่าสุด" (`updLastScan`) ขึ้นแดงถ้าไม่มีสแกนใหม่เกิน 24 ชม. = เครื่องสแกน/Worker อาจหยุดส่ง · recomputeAll เรียก savePunchCacheSoon (debounce 3s) · ปุ่ม 🔄 = refreshAll ล้างแคชโหลดใหม่หมด · **ห้ามลืม: แก้เวลาย้อนหลังเกินงวดปัจจุบันจากเครื่องอื่น ต้องกด 🔄 ถึงจะเห็น**
 
-## Supabase — ตารางทั้งหมด
+## Supabase — ตาราง (รายละเอียดคอลัมน์ดู `docs/claude-detail.md`)
 
-- `employees` — ข้อมูลพนักงาน: nick, full_name, code (รหัสเครื่องสแกน), branch, dept, position, wage_type(daily/monthly/hourly/hours), rate, mode, photo, active, off_* (วันหยุด), deposit_target/deposit_monthly/deposit_opening/deposit_on, **birth_date, phone, bank_name, bank_account, bank_account_name, start_date, end_date**
-  · **ข้อมูลพนักงานเพิ่ม (เจ้าของสั่ง 2026-10-05 · SQL `jj_employee_hr.sql` · flag `hrReady` = มีคอลัมน์ `nationality`)**: gender · nationality (`NAT_TH`: TH/LA/MM/SHAN/NONE) ·
-    address · emergency_name/relation/phone · passport_exp/work_permit_exp/pink_card_exp · doc_notify_in/out · doc_guardian · sso_hospital · face_scan ·
-    worker_group (`GROUP_TH`: ''=ทั่วไป/mou/illegal_nopass/illegal_minor/no_permit) · doc_status (`DOCST_TH`: mou/passport/illegal/notify_in/notify_out) · doc_start/doc_done · doc_agency (`AGENCIES` = Aisoon)
-    · ยังไม่รัน SQL = `toDbEmp` ไม่ส่งช่องพวกนี้ + ช่องในฟอร์มแท็บข้อมูลส่วนตัวบอกให้รัน SQL (ไม่ให้กรอก) + แท็บมีปุ่ม 📋 คัดลอก SQL (`#sqlEmpHr` ต้องตรงกับไฟล์บน branch sql — เทส `test/hr.js` เทียบให้)
-    · **เตือนเอกสารหมดอายุ ≤ 90 วัน (`DOC_WARN_DAYS`) ทั้ง 3 ใบ** (`docAlerts` — เฉพาะคนที่ยังทำงาน): แถบแดงบนหน้ารวม + บรรทัด 📄 บนการ์ด + แท็บภาพรวม + ป้ายแดงบนแท็บข้อมูลส่วนตัว
-      · ตัวกรอง "📄 เอกสารหมด/ใกล้หมด" + ตัวเลือกกลุ่ม (`detailGroup`: ทั่วไป/MOU/คนเถื่อน 2 แบบ/ไม่มีใบอนุญาต/🧾 กำลังทำเอกสาร)
-    · `hrHintsOf()` แนะนำกลุ่ม (อายุ < 18 / พม่าไม่มี Passport) + หนังสือผู้ปกครอง + เอกสารใกล้หมด (กล่อง `#dtHrHints` บนแท็บ อัปเดตตามที่กรอก) — **ไม่ตั้งกลุ่มให้เอง** เจ้าของเลือกเอง
-    · แท็บข้อมูลส่วนตัว (`dtInfo`) จัดหัวข้อตามที่เจ้าของให้มา: รายละเอียด · เอกสาร · ประกันสังคม · การจ่ายเงินเดือน · สแกนหน้า·กลุ่ม · การทำเอกสาร · การทำงาน
-  · **ข้อมูลส่วนตัวแก้ที่แท็บ "ข้อมูลส่วนตัว" เท่านั้น — ฟอร์ม ✎ ไม่มีช่องพวกนี้แล้ว (เจ้าของสั่ง 2026-10-05:
-    "อะไรที่เกี่ยวข้องกับข้อมูลส่วนตัว อยากให้แก้ไขในหน้าข้อมูลส่วนตัวเลยไม่ต้องใส่ในรูปแรกแล้ว")**
-    · ข้อมูลส่วนตัว = วันเกิด · เบอร์ · บัญชีธนาคาร/K BIZ · ประกันสังคม (ทำ/เลข/รพ.) · เพศ · สัญชาติ · ที่อยู่ · ผู้ติดต่อฉุกเฉิน · เอกสาร · สแกนหน้า · กลุ่ม · การทำเอกสาร
-      (ทะเบียนช่องคือ `PI_F` = ชื่อในแอป → คอลัมน์ + flag ที่ต้องมี · หัวข้อคือ `PI_SECS`) · ฟอร์ม ✎ (= **⚙️ ข้อมูลการทำงาน**) เหลือ ชื่อ · รหัส · วันเริ่ม/ออก · รูป · ค่าแรง · สาขา/แผนก/ตำแหน่ง · กะ · วันหยุด
-    · **ฟอร์ม ✎ ตอนแก้ไขต้องลบ `EMP_PERSONAL_COLS` ออกจาก payload** (`toDbEmp` ส่งทั้งแถว) ไม่งั้นทับของที่แก้ในแท็บ · เพิ่มพนักงานใหม่ = ส่งค่าว่างตามเดิม แล้ว `openDetailInfo(id,'all')` พาไปกรอกต่อ
-    · แก้ทีละหัวข้อ (✎ ข้างหัวข้อ → `piStart(key)`) หรือ "✎ แก้ไขทั้งหมด" (`piStart('all')` + แถบบันทึกติดล่าง) · `saveInfo()` = update **เฉพาะคอลัมน์ที่เปลี่ยนจริง** (เทียบกับ `dtEditOrig` ตอนเปิดแก้)
-    · สิทธิ์ = แก้ไข (`e`) ของหน้า **ข้อมูลพนักงาน (`detail`)** · ไม่มีสิทธิ์ = ดูอย่างเดียว (ไม่มีปุ่ม ✎) · ช่องที่ยังไม่รัน SQL ของมัน = ขึ้นชื่อไฟล์ SQL แทนช่องกรอก · ทุกช่องในหัวข้อยังไม่รัน = ไม่มีปุ่ม ✎
-    · กำลังกรอก: `renderDetail()` (ข้อมูลสด/รีเฟรชข้อมูล) **ไม่วาดทับฟอร์ม** — วาดใหม่เฉพาะ `renderDetail(true)` ซึ่งเก็บค่าที่กรอกลง `dtDraft` ก่อน ·
-      ร่างอยู่ใน `sessionStorage.jjpay_pidraft` (ลากหน้าลงแล้วกลับมาที่ฟอร์มเดิมพร้อมค่าที่กรอก) · เปลี่ยนแท็บ/คน/กลับหน้ารวมระหว่างแก้ = ถามก่อนทิ้ง
-    · เทส `test/hr.js` กลุ่ม [ฟอร์ม ✎ …] [แก้ข้อมูลส่วนตัวในแท็บ] [เพิ่มพนักงานใหม่ …] [ลากหน้าลง/รีเฟรชระหว่างกรอก]
-    · ⚠️ ช่องพวกนี้อ่านได้ด้วย anon key เหมือนข้อมูลพนักงานอื่น — **ไม่เก็บเลข Passport/รูปเอกสาร** (เจ้าของขอแค่วันหมดอายุ)
-- `punches` — เวลาสแกน: emp_code, punch_date, punch_time, source('manual' = แก้มือ), unique(emp_code,punch_date,punch_time)
-- `adjustments` — เพิ่ม/หักเงินรายงวด: employee_id, kind(add/deduct), reason, amount, period
-- `advances` — เบิกกลางเดือน: employee_id, amount, adv_date, period
+- `employees` (ข้อมูลพนักงาน + ข้อมูลส่วนตัว/HR · flag `empInfoReady`/`workDateReady`/`kbizReady`/`ssoReady`/`hrReady` — ยังไม่รัน SQL = `toDbEmp` ไม่ส่งช่องนั้น)
+  · **ข้อมูลส่วนตัวแก้ที่แท็บ "ข้อมูลส่วนตัว" เท่านั้น** (`PI_F`/`PI_SECS` · `saveInfo()` update เฉพาะช่องที่เปลี่ยน · ร่าง `sessionStorage.jjpay_pidraft`) · **ฟอร์ม ✎ ตอนแก้ไขต้องลบ `EMP_PERSONAL_COLS` ออกจาก payload** ไม่งั้นทับ
+  · `renderDetail()` ไม่วาดทับฟอร์มที่กำลังกรอก · **ไม่เก็บเลข Passport/รูปเอกสาร** (anon อ่านได้) · เอกสารหมดอายุเตือน ≤90 วัน (`docAlerts`)
+- `punches` unique(emp_code,punch_date,punch_time) · `adjustments` · `advances` · `payroll_settings` (แถวเดียว) · `deposit_entries` · `mou_loans`/`mou_entries` · `doc_borrows` · `fine_entries` · `loans`/`loan_entries` · `sso_entries` · `tips` · `devices` · `shifts` · `org_positions` · `payroll_audit`
 - `holidays` — วันหยุดพิเศษ: day, name, multiplier, **scope**, **cal_id** · **ไม่ซ้ำตาม (day, scope)** — วันเดียวกันมีได้ทั้งแถวออฟฟิศ แถวหน้าร้าน และแถวทุกคน
   - **ใช้กับใคร (`scope` — เจ้าของสั่ง 2026-09-30)**: `all` ทุกคน (กฎเดิม · แถวเดิมทั้งหมด) · `store` หน้าร้านอย่างเดียว (พนักงานสาขา OFFICE ทำงานปกติ)
     · `office` ออฟฟิศอย่างเดียว (หน้าร้านทำงานปกติ **ไม่ได้ ×N · ไม่ใช่วันห้ามหยุด**) · **ออฟฟิศ = `branch==='OFFICE'`** (เจ้าของเลือก ไม่ใช่ holidayPay)
@@ -130,100 +88,27 @@
       · แถวตั้งเองที่ค่าเท่ากันพอดี = "🔗 ผูกกับปฏิทิน" · snapshot รุ่นใหม่ `{v:2,kind,days,name,mult}` · รายการที่ยืนยันก่อนแยกปฏิทินขึ้นการ์ด "🔄 ย้ายเข้าปฏิทินแยก — กดยืนยันอีกครั้ง"
     · หน้า 🎌 แสดงแถวที่มาจากปฏิทินด้วยป้าย 📅 · แก้ไขอ้างแถวด้วยคีย์ `holiKey` · เทส `test/holi.js` ส่วน A (กฎเดิม) · B (การ์ด/ยืนยัน/ย้ายรุ่นเก่า/พรีวิว) · C (scope/หลายแถวต่อวัน)
     · แดชบอร์ดรายวันขึ้นชิป 🎌 เฉพาะสาขาที่วันนั้นใช้ · Worker รายงาน LINE (`worker.js`) ยังโชว์ชื่อวันหยุดแถวแรกของวัน (แค่ป้าย ไม่เกี่ยวเงิน)
-- `payroll_settings` — แถวเดียว: cutoff, cut_day, pay_day, late_rate, single_fine, grace, default_wage, month_div, no_off_bonus, hourly_*, must_work_days('5,6,0'), must_work_fine, **dep_start, ot_rate**
-- `deposit_entries` — override เงินประกันรายงวด: unique(employee_id, period)
-- `mou_loans` — unique ต่อคน: amount, monthly, final_max, start_period, opening, doc_passport, doc_pink, doc_complete, note, returned_at
-- `mou_entries` — override หัก MOU รายงวด: unique(employee_id, period)
-- `doc_borrows` — สมุดยืมเอกสาร: doc, borrow_date, return_date, note
-- `fine_entries` — แก้ยอดรายการหักอัตโนมัติรายงวด: employee_id, period, kind(miss/late/single/must), amount, unique(employee_id, period, kind)
-- `loans` — พนักงานยืมเงิน unique ต่อคน: amount, monthly, deduct_on(mid/payroll), start_period, opening, loan_date, note · `loan_entries` — override ผ่อนรายงวด unique(employee_id, period)
-- `sso_entries` — ประกันสังคม override รายงวด: unique(employee_id, period) · employees เพิ่ม sso_on, sso_id · payroll_settings เพิ่ม sso_rate/sso_min/sso_max/sso_account
-- `tips` — ทิปรวมต่อสาขาต่องวด: period, branch, amount, member_ids (csv เลือกคนเอง · ว่าง = อัตโนมัติ), unique(period, branch)
-- `payroll_audit` — ประวัติการทำรายการ: username, display_name, action(insert/update/upsert/delete/login/open/logout/line), tbl, detail, page, at · (`pnl_users` เป็นของแอป P&L — payroll อ่านตอนล็อกอินเท่านั้น)
-- `payroll_line_log` — ประวัติการส่งไลน์ของฐานข้อมูล + ตัวกันส่งซ้ำ (🎂 วันเกิด): kind(bday_month/bday_day), period_key('YYYY-MM'/'YYYY-MM-DD'), group_id, tries, ok(null=ยังไม่รู้ผล/true/false), req_id, detail, sent_at · unique(kind, period_key)
-  · **ข้อยกเว้น: anon อ่านได้อย่างเดียว** (เขียนได้แค่ `payroll_line_tick` — กันคนลบ/ปลอมประวัติให้ส่งซ้ำ) · `payroll_settings.bday_line` jsonb = ค่าตั้งของการ์ด 🎂
-- ทุกตาราง RLS เปิดแบบ allow-all + อยู่ใน publication `supabase_realtime` (ยกเว้น `payroll_line_log` ข้างบน)
-- **ระบบ JJ KPI อ่านตาราง `employees` + `punches`** (อ่านอย่างเดียว 2 RPC: `kpi_sync_staff` ใช้ employees
-  id, branch, nick, full_name, position, active · `kpi_on_duty` ใช้ punches emp_code, punch_date, punch_time เทียบ employees.code
-  นับสแกนวันทำการ ตัด 06:00) เพื่อโชว์เฉพาะพนักงานที่กำลังเข้างานให้ลูกค้ากดชมที่ kiosk —
-  เปลี่ยนโครง/ชื่อคอลัมน์เหล่านี้ หรือวิธีบันทึก punch_date/punch_time ต้องแก้ `jjmk-kpi.sql` ด้วย (ดู `kpi/CLAUDE.md`)
+- `payroll_line_log` (🎂) **anon อ่านได้อย่างเดียว** (เขียนได้แค่ `payroll_line_tick`) · ตารางอื่นทุกตัว RLS allow-all + อยู่ใน `supabase_realtime`
+- **JJ KPI อ่าน `employees` (id, branch, nick, full_name, position, active) + `punches` (emp_code, punch_date, punch_time · ตัด 06:00)** — เปลี่ยนโครง/วิธีบันทึกต้องแก้ `jjmk-kpi.sql` ด้วย
 
-## โครงหน้า (hash routing: #today #emp #detail #org #payroll #cal #adv #loan #dep #sso #mou #shifts #holi #settings)
+## หน้าจอ (hash routing `#today #emp #detail #org #payroll #cal #adv #loan #dep #sso #mou #shift #holi #audit #settings`)
 
-เมนูแบ่ง 5 กลุ่ม (เจ้าของสั่ง 2026-09-29 · หัวกลุ่ม `.nav-grp` ใน `<nav>` — ทุกเมนูในกลุ่มไม่มีสิทธิ์ = `applyPermUI` ซ่อนหัวกลุ่ม):
-  **ข้อมูลเข้างาน** วันนี้ · ปฏิทินเข้างาน │ **ข้อมูลพนักงาน** พนักงาน · ข้อมูลพนักงาน(รายคน+ประวัติเงินเดือน) · 🧑‍🤝‍🧑 แผนผังพนักงาน (#org) │
-  **เงิน** สรุปเงินเดือน · เบิกเงินกลางเดือน · ยืมเงิน · เงินประกัน │ **MOU** เอกสาร MOU(+สมุดยืมเอกสาร) · ประกันสังคม │
-  **ตั้งค่า** ตั้งค่า · กะการทำงาน · วันหยุดพิเศษ(ปุ่ม＋เพิ่มปี) · ประวัติการทำรายการ
-  (เจ้าของไม่ได้ระบุ "สรุปเงินเดือน" ไว้ในกลุ่มไหน — ใส่ไว้บนสุดของกลุ่มเงิน) · มือถือ ≤860px เมนูเป็นแถวเลื่อนแนวนอน หัวกลุ่มเป็นป้ายคั่น
-- **หน้าข้อมูลพนักงาน = แบบ A (เจ้าของเลือก 2026-09-29 จากตัวอย่าง 3 แบบ)**: เปิดมาเห็น**การ์ดพนักงานทุกคน**จัดตามสาขา
-  (รูป · ชื่อ · แผนก/ตำแหน่ง · สถานะวันนี้ `dtToday()` · วันทำงาน/สาย · ยอดคาดว่าได้รับ) · ตัวกรองเดิม + "⚠️ ยังไม่มีตำแหน่ง" · ค่าเริ่มต้น = ทำงานอยู่
-  → กดการ์ด = หน้ารายคน **5 แท็บ** (`DT_TABS`): ภาพรวม (ตัวเลข+คำเตือน+ยอดสะสม `dtBalances`) · เวลาทำงาน (ตาราง+OT+แก้เวลา) ·
-  เงินเดือน (รายการเงิน+เพิ่ม/หัก+ประวัติย้อนหลัง) · เบิก·ยืม·ประกัน (`dtDebt`) · ข้อมูลส่วนตัว (`dtInfo`)
-  · จำคน+แท็บใน `sessionStorage.jjpay_detail` (รีเฟรชอยู่หน้าเดิม) · เมนู/ปุ่ม ← = `detailList()` กลับหน้ารวม · `openDetail(id)` จากหน้าอื่นเปิดที่แท็บภาพรวม
-  · ตัวเลขทั้งหมดมาจาก `calcPay` ตัวเดิม (ไม่ได้แก้สูตร) · เทส `test/detail.js`
-- **เมนู "พนักงาน" vs "ข้อมูลพนักงาน"**: พนักงาน = ตารางจัดการรายชื่อ (เพิ่ม/นำเข้า .xlsx/ลบ/ดูข้อมูลไม่ครบ) · ข้อมูลพนักงาน = ดูทุกอย่างของแต่ละคน (เวลา/เงิน/หนี้/ข้อมูลส่วนตัว)
-- หน้า cal/today/mou/dep/loan/sso/audit/org เป็น full-width (`main:has(#page-X.active){max-width:none}` + ใน go())
-- ปุ่มในรายชื่อพนักงาน (แยกตามที่แก้ 2026-10-05): **✎ แดง** = ขาดตำแหน่ง (`missingWork`) · **👁 แดง** = ขาดวันเกิด/เบอร์/ธนาคาร/เลขบัญชี (`missingPersonal` — กดแล้วไปแท็บข้อมูลส่วนตัว) ·
-  **👁 ฟ้า** = รับเงินสด (ครบแล้ว) · `missingInfo` = รวมทั้งสอง (ใช้นับ "ข้อมูลไม่ครบ" + คำเตือนแท็บภาพรวม) · ป้ายบนแท็บข้อมูลส่วนตัว = `missingPersonal` + `docAlerts` (ไม่นับตำแหน่ง)
-- **ไม่มีตำแหน่ง = ช่องชื่อกระพริบแดง** (เจ้าของสั่ง 2026-09-29 · `noPos(e)` = `position` ว่าง/มีแต่ช่องว่าง) — หน้าวันนี้ (แถวคนเข้างาน · รายชื่อยังไม่มา · วันหยุดประจำ · มาจากสาขาอื่น)
-  + หน้าพนักงาน (เฉพาะคนที่ยังทำงานอยู่) · ช่องตำแหน่งขึ้นป้าย "⚠️ ไม่มีตำแหน่ง" กดแล้ว `fixPos()` **ไปหน้าพนักงานก่อนค่อยเปิดฟอร์ม**
-  (ตัวกันบันทึกเช็คสิทธิ์ตามหน้าที่เปิดอยู่ ถ้าเปิดฟอร์มค้างที่หน้าวันนี้จะไปเช็คสิทธิ์ของหน้าวันนี้แทน) · ไม่มีสิทธิ์แก้หน้าพนักงาน = ป้ายโชว์อย่างเดียว · เทส `test/nopos.js`
+- เมนู 5 กลุ่ม (`.nav-grp` · ไม่มีสิทธิ์ทุกเมนูในกลุ่ม = ซ่อนหัวกลุ่ม): ข้อมูลเข้างาน · ข้อมูลพนักงาน (พนักงาน · 🪪 ข้อมูลพนักงาน · 🧑‍🤝‍🧑 แผนผังพนักงาน) · เงิน · MOU · ตั้งค่า · มือถือ ≤860px เมนูเลื่อนแนวนอน
+- 🪪 ข้อมูลพนักงาน = การ์ดทุกคนตามสาขา → หน้ารายคน 5 แท็บ (`DT_TABS` · จำใน `sessionStorage.jjpay_detail`) · ตัวเลขมาจาก `calcPay` ตัวเดิม · เทส `test/detail.js`
+- หน้า full-width: `main:has(#page-X.active){max-width:none}` + ใน `go()` · **ไม่มีตำแหน่ง = ชื่อกระพริบแดง** (`noPos`) · `fixPos()` ไปหน้าพนักงานก่อนเปิดฟอร์ม (ตัวกันบันทึกเช็คสิทธิ์ตามหน้าที่เปิด)
 
-## 🎂 แจ้งวันเกิดพนักงานเข้ากลุ่มไลน์ (เจ้าของสั่ง 2026-10-15)
+## 🎂 แจ้งวันเกิดเข้ากลุ่มไลน์ (`jj_birthday_line.sql` · รายละเอียดใน docs)
 
-เจ้าของ: *"อยากให้เตือนเวลาเดือนนั้นมีวันเกิดใครบ้าง กี่คน วันไหน เข้าในกลุ่ม daily report ในไลน์"*
+- ฐานข้อมูลส่งเอง (`pg_cron` → `payroll_line_tick()` → `line-order`) ไม่ใช่แอป/Worker · ข้อความสร้างที่ SQL ที่เดียว (`payroll_bday_month_text`/`_day_text`) **ห้ามเขียนสูตรซ้ำในแอป** · `#sqlBday` ต้องตรงไฟล์บน branch `sql` (เทส `test/bday.js`)
+- **realtime ของ `payroll_line_log` อยู่ช่องแยก `jjmk-bday` ห้ามย้ายไป `jjmk-live`** · `payroll_line_tick`/`_due` revoke จาก public, anon, authenticated · ชื่อสาขาใน `payroll_br_th` ต้องตรง `BR`
+- การ์ดตั้งค่าอ่านค่าล่าสุดก่อนวาด/บันทึก (`bdayFresh`) เทียบด้วย `bdayCanon` (**ห้ามเทียบ JSON.stringify ตรง ๆ**) · ไอดีกลุ่ม `^[CRU][0-9a-f]{32}$` ส่งทาง `data-gid` (**ห้ามต่อสตริงใน onclick**) · สิทธิ์ `settings:e` · บัญชี `_br` ไม่เห็นการ์ด
 
-- **ต้องรัน `jj_birthday_line.sql` (branch `sql` โฟลเดอร์ `jjmk-payroll/`) ครั้งเดียว** — ยังไม่รัน = การ์ดในหน้า ⚙️ ตั้งค่าบอกให้รัน + ปุ่ม 📋 คัดลอก SQL (`#sqlBday` ต้องตรงกับไฟล์บน branch `sql` ทุกตัวอักษร — เทส `test/bday.js` เทียบให้)
-- **ฐานข้อมูลส่งเอง ไม่ใช่แอป/Worker** — `pg_cron` งาน `payroll-bday-line` ทุก 10 นาที → `payroll_line_tick()` → `net.http_post` ไป Edge Function **`line-order`** `{to,text}`
-  (บอทตัวเดียวกับรายงานเข้างาน/นับสต๊อก/ครัวกลาง — LINE channel เดียวกัน webhook ชี้ line-order อยู่แล้ว) · แพตเทิร์นเดียวกับ `jjmk_kpi_line.sql` ของ KPI
-- **ส่งอะไร**: ① **วันที่ 1 ทุกเดือน** (ตั้งต้น 09:00 ไทย) รายชื่อคนเกิดเดือนนั้น เรียงตามวัน (📅 วันที่ + วันในสัปดาห์ → • ชื่อเล่น · สาขา) + รวมกี่คน แยกนับตามสาขา
-  + ท้ายข้อความ "📝 ยังไม่ได้กรอกวันเกิด N คน" (ถ้ามี) · ② **เช้าวันเกิด** (เปิดเองได้ · **ตั้งต้นปิด**) เฉพาะวันที่มีคนเกิด
-  · นับเฉพาะ `employees.active` ที่มี `birth_date` · เกิด 29 ก.พ. ปีปกติ = ฉลอง 28 ก.พ. (ต่อท้าย "(เกิด 29 ก.พ.)") · ปี พ.ศ.
-  · **ชื่อ = ชื่อเล่น** (แบบรายงานเข้างาน) · ชื่อจริงต่อท้ายในวงเล็บ**เฉพาะเมื่อชื่อเล่นซ้ำกันในข้อความเดียวกัน** · ไม่มีชื่อเล่น = ชื่อจริง → รหัส · **ไม่ใส่อายุ/ปีเกิด**
-  · ข้อความสร้างที่ SQL ที่เดียว (`payroll_bday_month_text(date)` / `payroll_bday_day_text(date)` — anon เรียกได้ ไว้ดูตัวอย่าง) — **ห้ามเขียนสูตรซ้ำในแอป** · ชื่อสาขาใน `payroll_br_th` ต้องตรงกับ `BR` ในแอป
-  · ยาวสุด 60 บรรทัด / ~4,300 ตัวอักษร แล้ว "…และอีก N คน" (ไลน์รับ 5,000)
-- **ตั้งค่า** = การ์ด **🎂 แจ้งวันเกิดพนักงานเข้ากลุ่มไลน์** ท้ายหน้า ⚙️ ตั้งค่า (`renderBday`/`saveBday`/`bdayPreview`/`bdaySend`) → `payroll_settings.bday_line`
-  `{group, month, month_at, day, day_at, since}` · เลือกกลุ่มจาก `line_groups` (ของระบบนับสต๊อก — **อ่านอย่างเดียว** · ส่วนใหญ่เป็นกลุ่มซัพพลายเออร์ การ์ดเตือนไว้)
-  หรือ ✏️ ใส่ไอดีเอง (`^[CRU][0-9a-f]{32}$` · ค่าเดียวกับ `LINE_GROUP_ID` ของ Worker) · ชื่อกลุ่มที่เข้าเค้า daily/report/รายงาน/สรุป = แนะนำ 💡 (**ไม่เลือกให้เอง**)
-  · 👁 ดูตัวอย่าง (เดือนนี้/เดือนหน้า/เช้านี้) · 📤 ส่งเดี๋ยวนี้ = แอปยิง `line-order` เอง (ถามยืนยันก่อน · จด `payroll_audit` action `line` "📤 ส่งไลน์") · ผลการส่งล่าสุด 6 รายการจาก `payroll_line_log`
-  · สิทธิ์ = **แก้ไขหน้าตั้งค่า (`settings:e`)** · ไม่มีสิทธิ์ = ดูอย่างเดียว · **บัญชีเห็นเฉพาะบางสาขา (`_br`) ไม่เห็นการ์ดเลย** (ค่ากลาง + ตัวอย่างมีชื่อทุกสาขา)
-  · `since` = เวลาที่บันทึกครั้งแรก — ตั้งหลังเวลาส่งของวันที่ 1 = เดือนนี้ไม่ย้อนส่ง (toast บอกให้กด 📤 เอง) · เวลาส่งช้าสุด **23:30** (ทั้งแอปและ SQL ตัดเอง)
-  · **อ่านค่าล่าสุดจากฐานข้อมูลทุกครั้งที่วาดการ์ด และก่อนบันทึก** (`bdayFresh`) — อีกเครื่องแก้หลังวาด = ไม่บันทึกทับ โหลดค่าล่าสุดให้ (`bdayDrawn`)
-    · เทียบด้วย `bdayCanon` (ฟิลด์ที่รู้จักเรียงตายตัว) — **ห้ามเทียบ JSON.stringify ตรง ๆ** (jsonb เรียงคีย์คนละแบบ = ขึ้น "มีคนแก้" ผิด ๆ)
-  · ไอดีกลุ่มจาก `line_groups` ที่รูปแบบไม่ถูก = ไม่ใช้ · ปุ่มส่งไอดีทาง `data-gid` — **ห้ามต่อข้อมูลจากตารางเป็นสตริง JS ใน onclick** (ตรวจอิสระเจอ XSS)
-- **realtime ของ `payroll_line_log` อยู่ช่องแยก `jjmk-bday`** (`bdayRealtime` — เปิดเมื่อรู้ว่ารัน SQL แล้ว · ครั้งเดียว) — **ห้ามย้ายไปไว้ใน `jjmk-live`**:
-  ตารางที่ยังไม่อยู่ใน publication ทำให้ Supabase Realtime ปัด**ทั้งช่อง**ตก = sync สดของเวลาสแกน/พนักงานหยุดทั้งแอปแบบเงียบ ๆ (ตรวจอิสระเจอ 2026-10-15 · แบบเดียวกับ `jjcal-days` ของปฏิทิน)
-- **กันส่งซ้ำ/ส่งหาย** (`payroll_line_due` + `payroll_line_tick`): จองแถวก่อนยิงเสมอ · สำเร็จ = HTTP 2xx **และ** line-order ไม่ได้ตอบ `{"ok":false}` · ยังไม่รู้ผล = ไม่ส่งซ้ำ
-  · ไม่สำเร็จ/ต่อไม่ติด/หมดเวลา = ลองใหม่รวม 3 ครั้ง (รายเดือนเว้น 30 แล้ว 60 นาที · เช้าวันเกิดเว้น 10 นาที · เหตุผลครั้งก่อนเก็บไว้จนผลใหม่มา)
-  · รายเดือนส่ง/ลองได้ถึงวันที่ 4 (ย้อนหลัง 3 วัน) · เช้าวันเกิดส่งได้เฉพาะวันนั้น · ป้าย "เลยช่วงส่งแล้ว" ในการ์ดต้องตรงกับช่วงนี้ (`bdayLogLabel`)
-  · วันที่ 1 ที่มีคนเกิด: รายชื่อทั้งเดือนออกก่อน "วันนี้วันเกิด" ตามในรอบถัดไป (ส่งรอบเดียวกัน pg_net ยิงพร้อมกัน ลำดับในไลน์สลับได้)
-  · ส่งไม่ออกทั้งก้อน (เช่น ยังไม่เปิด pg_net) = จดเหตุผลแถวนั้น ไม่ล้มทั้งงาน · ค่าตั้งเพี้ยน (เขียนได้ด้วยคีย์สาธารณะ) = ใช้ค่าตั้งต้น ไม่ล้ม (`payroll_try_*`)
-  · `payroll_line_tick`/`payroll_line_due` **revoke จาก public, anon, authenticated** (Supabase ให้ EXECUTE กับ anon ตรง ๆ — revoke แค่ public ไม่พอ) · `payroll_line_tick(p_now)` ใส่เวลาเองได้ไว้ทดสอบ (cron เรียกแบบไม่ใส่)
-  · กด 📤 ส่งเดี๋ยวนี้ ไม่จดลง `payroll_line_log` → กดส่งก่อนเวลาวันที่ 1 แล้วฐานข้อมูลยังส่งตามรอบอีกครั้ง (ตั้งใจ — ปุ่มไว้ทดลอง/ส่งตามหลัง)
-- ทดสอบ: SQL รันกับ PostgreSQL 16 จริง (pg_cron/pg_net ปลอม · 81 ข้อ: ข้อความ · 29 ก.พ. · ชื่อเล่นซ้ำ · เวลา/since/ย้อนหลัง · ส่งซ้ำ/ลองใหม่/เว้นระยะ · ลำดับข้อความ ·
-  สิทธิ์ anon · รันซ้ำ/อัปเกรด) อยู่ `/tmp` ของ session · ฝั่งแอป `test/bday.js` (56 ข้อ) ·
-  ตรวจอิสระ 2 รอบ (รอบแรก 33 ข้อ ยืนยันจริง 3 · รอบตรวจการแก้ ยืนยัน 3 แก้ครบ · อีก 1 ข้อเป็นของเดิม: บันทึกพร้อมกันระดับเสี้ยววินาทียังทับกันได้)
+## 🧑‍🤝‍🧑 แผนผังพนักงาน (`#org` · แบบ B ต้นไม้ · รายละเอียดใน docs)
 
-## 🧑‍🤝‍🧑 แผนผังพนักงาน (#org · เจ้าของสั่ง 2026-10-20 · เลือก "แบบ B = ต้นไม้เหมือนรูปตัวอย่าง")
-
-คำขอเจ้าของ: "หน้า menu ใหม่ หน้าแผนผังพนักงาน โดยจะแยกเป็นสาขา และลงมาเป็น ผจก รองผจก แยกเป็นกะเช้า กลาง เย็น แยกออกเป็นตำแหน่งต่างๆ โดยจะบอกว่า แต่ละตำแหน่งมีใครบ้าง"
-- หน้าตา/การโต้ตอบ = mockup ที่เจ้าของเลือก (วงกลม+เส้นโยง · คอมเห็นทุกกะเรียงกัน · มือถือแถวปุ่มกะค้างจอ แตะแล้วเลื่อนไปกะนั้น · ปุ่มลอย ↑ สาขา·ค้นหา · ค้นหา · สวิตช์ "อยู่ตอนนี้" · ป๊อปอัปรายละเอียด) · CSS คลาส `oa-*` ใต้ `.oa-root` ใน `<style>` หลัก · ปรับตามความกว้างด้วย `@container` (ไม่ใช่ @media)
-- **กติกา 1 (เจ้าของ "ตามนี้")** ดูจาก**ชื่อตำแหน่ง** `ocRole()`: ขึ้นต้น "รอง"/"ผู้ช่วย" (หรือ assistant) = รองผจก. (**เช็คก่อน**) · มี "ผู้จัดการ"/"หัวหน้า" (หรือ manager) = ผจก. · อื่น ๆ = พนักงาน
-  · ผจก. อันดับสูงสุดของสาขา (ผู้จัดการ > หัวหน้า…) อยู่บนสุด · ผจก. อันดับรองที่มีกะ (เช่น หัวหน้าครัว) เป็นหัวกิ่งกะนั้นคู่กับรองผจก. ตาม mockup · รองผจก. ที่ยังไม่รู้กะ = การ์ดข้าง ผจก.
-- **กติกา 2 (เจ้าของ "ใช้ว่า พนักงานคนนั้นๆ เข้างานกะไหน จะได้เป็นผังที่มีการอัปเดทตลอดเวลา")** `ocScanShifts()`:
-  กะ = กะที่**เข้างานจริงล่าสุด** ไล่วันทำงานย้อนหลัง **14 วันของร้าน** (รวมวันนี้ · ตัดวันตี 6 แบบ recomputeAll/bizToday) · จับกะด้วย `detectShift` จากเวลาสแกนดิบ**เสมอ** —
-  **ห้ามใช้ `emp.shiftId` / `rec.shiftName` ของ recomputeAll** (คนล็อกกะได้ชื่อกะที่ล็อก) · ไม่แตะ recomputeAll/สูตรเงินเดือน · `punches` อาจมีของเก่าต่อท้าย → กรองทั้งก้อน ห้าม break ตามวันที่
-  · ไม่มีสแกน 14 วันแต่ตั้งกะไว้ = ใช้กะที่ตั้ง + **วงเส้นประ** + "ยังไม่มีสแกน 14 วัน · ใช้กะที่ตั้งไว้" · ไม่มีทั้งคู่ = คอลัมน์ "ยังไม่รู้กะ"
-  · `mode` hourly = คอลัมน์พาร์ทไทม์ · hours = นับชั่วโมง (ผจก. นับชั่วโมงอยู่หัวสาขา) · **รองผจก. ใช้กะจากสแกนก่อนเสมอ** (ไม่มีสแกน/ไม่ได้ตั้งกะค่อยไปตาม mode)
-  · คอลัมน์ `ocColKey()`: ชื่อกะขึ้นต้น "กะเช้า" (รวม "กะเช้า (ล้างจาน)") = เช้า · "กะกลาง" = กลาง · "กะเย็น" = เย็น · ชื่ออื่น = คอลัมน์ของตัวเองตามลำดับ shiftDefs · ต่อด้วย พาร์ทไทม์ นับชั่วโมง ยังไม่รู้กะ
-  · ป๊อปอัปบอก "เข้ากะล่าสุด <วัน>" + นับ 14 วัน (เช่น "เย็น 9 · เช้า 2") · หน้าวันนี้จัดกะคนละแบบ (bucketOf ตามเวลาสแกนเข้า) — อาจไม่ตรงทุกคน (ตั้งใจ)
-- สาขา = `employees.branch` เรียงตาม `myBranches()` (ALL_BR รวมสาขาใหม่จาก brSync) + รหัสอื่นที่เจอ + "ไม่ระบุสาขา" ท้ายสุด · เฉพาะ active · `_br` ใช้ `employees` ที่กรองแล้ว (fail closed)
-- **ไม่โชว์ข้อมูลส่วนตัว** (เงินเดือน/เบอร์/วันเกิด/บัญชี) — `ocBuild()` ส่งเฉพาะชื่อ/ตำแหน่ง/สาขา/รหัสสแกน/รูป/กะ · ปุ่ม 🪪 ดูข้อมูลพนักงาน (`openDetail`) เมื่อ `canSee('detail')` · ไม่มีตำแหน่ง + แก้หน้าพนักงานได้ = ปุ่ม ✎ เติมตำแหน่ง (`fixPos`)
-  · escape ทุกข้อความ (`OrgChart.esc`) · ปุ่มส่ง id ผ่าน `data-id/data-detail/data-fixpos/data-go` (ไม่มี onclick ต่อสตริง) · รูปใช้ `<img>` ใน `.oa-av` (โหลดไม่ได้ = ลบรูปเห็นตัวอักษร) ไม่ใช้ `avatar()`
-- ฟังก์ชันหลัก: `ocRole` · `ocColKey` · `ocScanShifts(today)` · `ocBuild(today)` (ข้อมูลจริง → ข้อมูลผัง) · `renderOrgChart()` · `OrgChart.update(box, data)` (วางโครงครั้งเดียว แล้ววาดใหม่โดย**เก็บ** สาขา/กะ/คำค้น/สวิตช์/ป๊อปอัปไว้) · `ocTick`/`ocStartTicker`
-- อัปเดตเอง: `renderAll()` วาดผังถ้าเปิดอยู่ (สแกนใหม่ทาง realtime · แก้เวลา · แก้พนักงาน/กะ) · ข้ามวันของร้าน `ocTick` ทุก 1 นาที + `visibilitychange`/`pageshow` · `JJBR.onChange` (สาขาใหม่) · **ไม่ได้เพิ่มตารางใน `jjmk-live`**
-- จำ: hash `#org` (รีเฟรช/ลากลงอยู่หน้าเดิม) · localStorage `jjpay_org` = `{b:สาขา, s:{สาขา:กะที่เลือก(มือถือ)}, d:วันของร้าน}` — กะจำเฉพาะวันเดียวกัน (วันใหม่ = กะที่มีคนเข้างานมากสุดตอนนี้) · ห่อ try/catch + เช็คว่าสาขายังเห็นได้
-- เทส `test/org.js` (jsdom รันโค้ดจริง) + `tests/unit/payroll-org-access.test.mjs` (ฝั่ง JJ Access) · หน้าจอ: `node tests/mobile/mobile-check.mjs --app=payroll-org` (ข้อมูลจำลอง ~130 คน `tests/mobile/fixtures-payroll-org.mjs`)
+- **กติกา 1** `ocRole()`: ขึ้นต้น รอง/ผู้ช่วย/assistant = รองผจก. (เช็คก่อน) · มี ผู้จัดการ/หัวหน้า/manager = ผจก.
+- **กติกา 2** `ocScanShifts()`: กะ = กะที่เข้างานจริงล่าสุดใน 14 วันของร้าน จับด้วย `detectShift` จากเวลาสแกนดิบ **ห้ามใช้ `emp.shiftId`/`rec.shiftName`** · ไม่มีสแกน = กะที่ตั้ง (วงเส้นประ) · ไม่มีทั้งคู่ = ยังไม่รู้กะ · hourly = พาร์ทไทม์ · hours = นับชั่วโมง · คอลัมน์ `ocColKey()` (กะเช้า*/กะกลาง/กะเย็น/ชื่ออื่น)
+- **ห้ามโชว์ข้อมูลส่วนตัว** (`ocBuild()` ส่งเฉพาะชื่อ/ตำแหน่ง/สาขา/รหัส/รูป/กะ) · escape ทุกข้อความ · ปุ่มใช้ `data-*` · อัปเดตผ่าน `renderAll()` + `ocTick` (ข้ามวัน) · **ไม่เพิ่มตารางใน `jjmk-live`** · CSS `oa-*` ใต้ `.oa-root` ใช้ `@container`
+- เทส `test/org.js` + `tests/unit/payroll-org-access.test.mjs` + `mobile-check --app=payroll-org`
 
 ## ระบบพิมพ์ (จูนกับเครื่อง Canon MF645C ขอบตาย 6mm แล้ว — อย่าแก้ตัวเลขโดยไม่ถาม)
 
@@ -238,48 +123,13 @@
 - สลิปครึ่งหน้า ตารางเข้างาน 3 คอลัมน์ / เต็มหน้า 2 คอลัมน์ (`nCol = compact ? 3 : 2`)
 - ปุ่ม 🖨️ พิมพ์สลิปทั้งหมด / 🏦 บัญชีรับเกิน 1 คน: auto `window.print()` หลัง 400-500ms
 
-## กติกาการแก้โค้ด (สำคัญ)
+## กติกาการแก้โค้ด
 
-> **รีเฟรชแล้วต้องอยู่หน้าเดิม (กติกา 2026-09-18 ใช้ทั้ง repo)**: ลากลง/กดรีเฟรชแล้วห้ามเด้งกลับหน้าแรก — แอปนี้ใช้ hash routing (`#today`, `#emp`, …) อยู่แล้วจึงกลับมาหน้าเดิมเองโดยอัตโนมัติ **อย่าเปลี่ยนไปใช้วิธีที่ทิ้ง hash**
+- รีเฟรชอยู่หน้าเดิมด้วย hash routing **อย่าเปลี่ยนไปใช้วิธีที่ทิ้ง hash**
+- แก้ JS: `python3 jjmk-payroll/tools/split.py` → แก้ `jjmk-payroll/app.js` → `python3 jjmk-payroll/tools/build.py` (ตรวจ syntax) · **ลบ `app.js` ก่อน commit** · split/build จับเฉพาะ `<script>` ก้อนท้ายสุด (แอปหลัก) · ไม่ได้แก้อะไร = split→build ต้องได้ไฟล์เดิมทุกไบต์
+- SQL ตรวจด้วย `pglast` · เจ้าของต้อง Ctrl+A ก่อน Run → ทุก statement ยืนเองได้ · SQL อยู่ branch `sql` โฟลเดอร์ `jjmk-payroll/` · ส่งเจ้าของ = แปะในแชท (ห้าม `SendUserFile`)
+- ตัวเลขจาก Supabase ห่อ `Number(x)||0` · iOS input ≥16px · ห้าม `<select size=N>` (ใช้ `.emp-pick`) · การ์ด grid `minmax(min(420px,100%),1fr)` · media query มือถือต้องเป็น `@media screen and (...)`
+- ตารางใหม่: RLS allow-all + เข้า `supabase_realtime` + listener ใน `startRealtime` + flag `xxReady` กัน error ก่อนรัน SQL (ตารางที่ anon ห้ามเขียน/ยังไม่อยู่ใน publication = ช่องแยก ห้ามใส่ `jjmk-live`)
+- **เทส** `cd jjmk-payroll/test && npm install && npm test` ต้อง ALL PASSED ก่อนส่งงานที่แตะการคิดเงิน/งวด · แก้กฎเงินเดือนเพิ่มเคสในเทส · UI/คำตอบเป็นไทย
+- งานค้าง (รหัส 17 คน · วันเกิดรอแก้ 4 คน ฯลฯ): ดู `docs/claude-detail.md` หัวข้อ "งานค้าง"
 
-
-1. **แก้เสร็จต้องตรวจ**: แยก `<script>` ออกมา `node --check` เสมอ (มี `tools/check.sh` ให้)
-2. SQL ทุกไฟล์ตรวจด้วย `pglast` (`pip install pglast`) — Supabase SQL Editor ผู้ใช้ต้อง **Ctrl+A ก่อน Run** (editor รันเฉพาะส่วนที่ไฮไลต์) → เขียน SQL ให้แต่ละ statement ยืนเองได้ หรือยัด VALUES ใน CTE เป็นคำสั่งเดียว · **ไฟล์ SQL ของ payroll เก็บที่ branch `sql` โฟลเดอร์ `jjmk-payroll/` เท่านั้น** (กติกา JJ-PnL: ห้ามเพิ่ม `.sql` ลง main หรือ branch งาน) · **วิธีส่งไฟล์ SQL ให้เจ้าของ (กติกา 2026-09-17 ใช้ทั้ง repo)**: **แปะเนื้อหา SQL ลงในแชทเป็นบล็อกโค้ด** ให้กดคัดลอกไปวางใน SQL Editor ได้ทันที · ❌ **ห้ามส่งเป็นการ์ดไฟล์ (`SendUserFile`)** — กดแล้วเด้งหน้าต่างเซฟลงเครื่อง เจ้าของไม่ต้องการโหลด · เขียนไฟล์ลง `sql/` ไว้ด้วยแล้วบอก path ท้ายข้อความเผื่ออยากเปิดดูในแผงขวา · ยังต้อง push เก็บที่ branch `sql` โฟลเดอร์ `jjmk-payroll/` ตามกติกาเดิมเสมอ
-3. ตัวเลขจาก Supabase ห่อ `Number(x)||0` เสมอ
-4. iOS: input font ≥16px กันซูม · ห้ามใช้ `<select size=N>` (แสดงเพี้ยน) ใช้ลิสต์ `.emp-pick` แตะเลือก · การ์ด grid ใช้ `minmax(min(420px,100%),1fr)`
-5. เพิ่มตารางใหม่ต้องมี: RLS policy allow-all + ADD TABLE เข้า supabase_realtime + listener ใน startRealtime + flag `xxReady` กัน error ก่อนรัน SQL
-6. ผู้ใช้สื่อสารภาษาไทย — UI/comment/คำตอบเป็นไทย · ส่งไฟล์สมบูรณ์พร้อม deploy ไม่ใช่แค่ diff
-7. Deploy = merge เข้า `main` ของ repo JJ-PnL → GitHub Pages อัปเดต `jjmk-payroll.html` เอง → Ctrl+Shift+R (cache ~5-10 นาที)
-8. **เจ้าของสั่งไว้ (2026-08-04): แก้เสร็จ+ตรวจผ่านแล้ว ให้เปิด PR และ merge เข้า main อัตโนมัติเลย ไม่ต้องถามยืนยัน** (ยกเว้นงานที่เสี่ยงลบ/แก้ข้อมูลจริงใน Supabase — อันนั้นถามก่อน)
-
-## งานค้าง (ทำต่อได้เลย)
-
-0. **รอเจ้าของรัน `jj_audit.sql` ใน Supabase** (ส่งไฟล์ในแชทแล้ว 2026-09-10) — ก่อนรัน แอปใช้ได้ปกติแต่ยังไม่จดประวัติ
-1. **เติมรหัส 17 คนใน `jjmk-payroll/jj_info_fix.sql` (branch `sql`) ส่วน 4** (นำเข้าข้อมูลจาก Excel เสร็จ 128/145 คน):
-   ลิลลี่ แถว23 (น่าจะ = KESONE SINAPHA code 4119126353 JJLP) · ลิลลี่ แถว85 (NAN LIN LIN KHAING = อีกคนที่ JJRD) · น้ำฝน แถว42,59 · เล็ก แถว50 · เมา แถว57 · พะแสง แถว60 · หนุ่ม แถว69 · ฟ้า แถว84 · วี แถว93 · ต้น แถว95 · Savana แถว99 · หอม แถว100 · น้อย แถว102 (NANG PUT ซ้ำ 3) · โซ แถว114 · แตงโม แถว140 · วิน แถว144
-   → รัน "ส่วน 1" ของไฟล์เพื่อดูผู้สมัคร+รหัส แล้วเติมใน "ส่วน 4"
-2. **วันเกิดรอแก้ต้นทาง 4 คน** (ตอนนี้เว้น NULL ไว้): โน๊ต 3537777921 (ไฟล์เขียน 1452) · เอ 3341077509 (1461) · จอม 4235352505 (2026) · เลย์ 2147833848 (2026)
-3. เช็ควันเกิดปี 2010-2011 หลายคน (อายุ 14-15) ว่าถูกจริงไหม: เจน, น้ำเพชร, ขวัญ, ดา, ฟู, ต้น
-4. ~~worker.js สร้างพนักงานใหม่รายวัน 400~~ → **แก้แล้ว 2026-08-12 เป็นรายเดือน 12,000 + จดวันเริ่มงาน — รอเจ้าของ deploy worker.js ใหม่ใน CF dashboard**
-
-## โครงไฟล์ (ใน repo JJ-PnL)
-
-```
-jjmk-payroll.html              <- แอปทั้งหมด ที่ root ของ repo (source of truth)
-jjmk-payroll/worker.js         <- Cloudflare Worker (deploy ผ่าน CF dashboard ไม่ใช่ GitHub)
-jjmk-payroll/logo.png          <- โลโก้ร้าน (แอปอ้างเป็น `jjmk-payroll/logo.png` — อย่าย้าย/เปลี่ยนชื่อ)
-jjmk-payroll/tools/split.py    <- แยก JS ออกจาก jjmk-payroll.html -> jjmk-payroll/app.js (ไว้แก้สะดวก)
-jjmk-payroll/tools/build.py    <- ประกอบ app.js กลับเข้า jjmk-payroll.html + ตรวจ syntax
-jjmk-payroll/tools/check.sh    <- node --check เร็วๆ กับ script ใน jjmk-payroll.html
-jjmk-payroll/docs/             <- สรุประบบ + คู่มือ PDF + สไลด์นำเสนอ
-jjmk-payroll/CLAUDE.md         <- ไฟล์นี้
-jjmk-payroll/MOVE-CHECKLIST.md <- เช็กลิสต์ตอนย้าย repo (บัญชี/secret ภายนอกอยู่ที่ไหนบ้าง)
-
-branch `sql` → jjmk-payroll/*.sql  <- migration ทุกไฟล์ที่เคยรันใน Supabase (รันซ้ำได้)
-```
-
-tools ทั้งสามตัวหา `jjmk-payroll.html` จาก path ของตัวเอง — รันจากที่ไหนก็ได้ เช่น `python3 jjmk-payroll/tools/split.py`
-
-**เทส (`jjmk-payroll/test/`)** — `cd jjmk-payroll/test && npm install && npm test` ต้อง ALL PASSED ก่อนส่งงานที่แตะการคิดเงิน/งวด · รันกับโค้ดจริงใน `jjmk-payroll.html` (jsdom + Supabase ปลอม): `live.js` = ช่วงโหลดสดของแคชเวลาสแกน · `office.js` = รอบจ่ายออฟฟิศ + calcPay · แก้กฎเงินเดือนเพิ่มเมื่อไหร่ ให้เพิ่มเคสในนี้ด้วย
-
-⚠️ ไฟล์มี `<script>` หลายก้อนแล้ว (ด่าน JJ Gate · ปุ่มล็อกอินกลาง JJLogin · mount · แอปหลัก) — split/build จับเฉพาะ**ก้อนท้ายสุดก่อน `</body>`** (แอปหลัก) และ check.sh ตรวจทุกก้อน · เคยพังเพราะ regex greedy ดึงข้ามก้อน (แก้ 2026-09-29) · **แก้เสร็จต้อง build แล้วเช็คว่า split→build ได้ไฟล์เดิมทุกไบต์ถ้าไม่ได้แก้อะไร**
