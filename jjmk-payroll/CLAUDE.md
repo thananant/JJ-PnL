@@ -9,7 +9,7 @@
 - Supabase `aikyxvluaiubdidqxwnd` (publishable key ฝังในแอปได้) · Cloudflare Worker `steep-hill-7d52.thananantpatt.workers.dev` = `worker.js` (รับเครื่องสแกน ZKTeco `/iclock/*` + Hikvision `/hik` · รายงาน LINE cron `1 4,8,11 * * *` + `0 14 * * *` · **deploy ที่ CF dashboard เอง**) · secrets ใน CF: SUPABASE_URL/KEY, LINE_TOKEN, LINE_GROUP_ID
 - **เพิ่มเครื่องสแกน = `docs/add-scanner.md`** (รหัสในเครื่องต้องตรง `employees.code` · ลงหน้าก่อนชี้มา Worker · ผูกสาขาด้วยการ์ด 📟 · **แก้ worker.js ส่วนรับเครื่อง/การ์ด 📟/ทะเบียนสาขา ต้องปรับคู่มือนี้**)
 - ล็อกอิน `pnl_users` (`pwHash = sha256hex(user+'|'+pass+'|JJPNL')` **ห้ามเปลี่ยน**) · อ่าน `pnl_users` อย่างเดียว · session `jjpay_sess`
-- **สิทธิ์** `pnl_users.apps.payroll` = `{<หน้าจอ>:'vaed', _br:'…'}` · หน้าจอ = `data-page` (today emp detail org payroll cal adv loan dep sso mou shift holi audit settings) · ไม่มี `v` = ซ่อน + `go()` เด้งไปหน้าแรกที่มีสิทธิ์
+- **สิทธิ์** `pnl_users.apps.payroll` = `{<หน้าจอ>:'vaed', _br:'…'}` · หน้าจอ = `data-page` (today emp detail org payroll cal adv loan dep pvd sso mou shift holi audit settings — 16 หน้า) · ไม่มี `v` = ซ่อน + `go()` เด้งไปหน้าแรกที่มีสิทธิ์ · **`pvd` ไม่มี PERM_FOLLOW** (บัญชีที่ตั้งสิทธิ์รายหน้าแล้วต้องติ๊กเอง — ข้อมูลเงิน fail closed)
   · **`org` ไม่มีคีย์ = ตามหน้า `emp`/`detail`** · JJ Access เอาติ๊กออกเขียน `org:''` (`PERM_FOLLOW`/`scrFlags` ใน jjmk-admin) — **สองไฟล์ต้องตรงกัน**
   · **กันบันทึกที่จุดเดียว**: ตัวครอบ `db.from` เช็ค `permDenied(op)` ตามหน้าที่เปิด (insert=a · update=e · upsert=a|e · delete=d) → ฟีเจอร์ใหม่ไม่ต้องเช็คสิทธิ์เอง
   · `_br` = เห็นเฉพาะพนักงานสาขาเหล่านั้น (`scopeEmployees()` · recomputeAll/realtime/dropdown กรองตาม · การ์ดสาขาใช้ `myBranches()`) **fail closed** · ไม่ระบุสาขา → `homeBranch()` เดาจากเครื่องล่าสุด
@@ -43,6 +43,14 @@
 - **เบิกกลางเดือน**: มีเพดานต่อคน เกินได้แต่ toast เตือน + confirm · **Manager (แผนก/ตำแหน่ง manager|ผู้จัดการ) เพดาน 5,000** คนอื่นตาม adv_max (3,000) · **เงินยืมโหมด mid กันยอดผ่อนงวดนี้ออกจากสิทธิ์เบิก** (advQuota: loanHold — เช่น เพดาน 5,000 ผ่อน 2,000 → เบิกได้ 3,000)
 - **ประกันสังคม (สปส.)**: หน้า #sso · ติ๊กรายคน `employees.sso_on` + เลขบัตร `sso_id` (13 หลัก) flag `ssoReady` · เงินสมทบ = ฐานค่าจ้าง clamp [sso_min 1,650, sso_max 15,000] × sso_rate 5% ปัดเศษ ≥50 สต. ขึ้น (ssoCalc — ฐานใช้ p.base ของงวด, base 0 = ไม่หัก) · นายจ้างสมทบเท่ากัน · override รายงวด `sso_entries` (0 = งดหัก, editSso) · ปุ่ม 📤 exportSso = Excel แนว สปส. 1-10 (หัวไฟล์ใช้ sso_account จากตั้งค่า) · ตั้งค่า sso_rate/sso_min/sso_max/sso_account ในหน้าตั้งค่า
 - **เงินประกัน**: เป้า 5,000 หักเดือนละ 500 · **เริ่มหักจริงงวด 2026-08 (ส.ค. 2569)** ผ่าน `payroll_settings.dep_start` — ห้ามคิดย้อนหลัง · override รายงวดในตาราง `deposit_entries` · ครบแล้วหยุดเอง
+  - **กติกาใหม่ (เจ้าของสั่ง 2026-10-20)**: ตั้งแต่งวด `DEP_V2_START='2026-10'` 3,000/300 (SQL: เป้า > 3,000 → 3,000 · หัก > 300 → 300 · ข้อตกลงพิเศษ เป้า 0/ต่ำกว่า · หัก 0/ต่ำกว่า คงเดิม) หักต่อจากยอดสะสม ปรับรายคนได้ (หน้า 🛡️) · งวดก่อนคิดด้วย `deposit_*_v1` (`depRule` · แอปอ่านอย่างเดียว) · สะสมเกินเป้า = 💸 คืนในงวด 2026-10 (แถว `refund` ติดลบ → รายรับ "คืนเงินประกันส่วนเกิน") · ยังไม่รัน `jj_deposit_v2.sql` = เท่าเดิมทุกบาท
+  - **✎ ในงวดไม่มีวันทำงาน**: งวด < 2026-10 (และทุกงวดก่อนรัน v2) นับแบบแอปเดิม = เฉพาะตอนดูงวดนั้น ไม่เข้ายอดสะสมงวดถัดไป (`soloV1` · พรีวิว 🔒/💸 เตือน) · ≥ 2026-10 หลังรัน v2 นับเสมอ
+  - **ห้าม**: ล็อกอัตโนมัติงวด < 2026-10 ที่ยังไม่เคย 🔒 (`depLockDue` `auto` — อาจล็อกค่าที่ผิดไว้ถาวร) · upsert ทับแถว 🔒 `lock` / 💸 `refund` · แก้/ยกเลิก 💸 ของงวดที่เลยกำหนดโอน · เลื่อน `dep_start` ย้อนไปงวดที่จ่ายแล้ว (`depStartBack`) · เรียก `depPeriods()`/`allPeriods()` ในลูปต่อคน · ลบพนักงานที่มี 🔒/💸/สำรองฯ
+  - **ต้อง**: งวดที่จ่ายแล้ว 🔒 ปิดยอด (ปุ่ม · `depLockBefore` ก่อนแก้ค่า · `kbizAutoLock` — สองตัวหลังเฉพาะงวด ≥ 2026-10 · งวดก่อนนั้นเจ้าของ 🔒 เอง: ยอดผิด = แก้ก่อนค่อย 🔒) · `punchSinceDate` ย้อนเฉพาะงวดที่ 🔒 ล็อกได้จริง (มีวันทำงาน/แถว ✎) · ออกตัวเลขเงินผ่าน `withFresh()`→`moneyFresh()` (อ่าน `deposit_entries` + ค่าเงินประกันใน `employees` + `pvd_*` ใหม่ · ล้ม = หยุด) · โหลดสมุดไม่ครบ = `moneyBlocked()` · v2 รันแล้ว = `depV2Col` (มีคอลัมน์ `_v1`) · รายละเอียด: `docs/claude-detail.md` "เงินประกัน v2"
+- **🐷 เงินสำรองเลี้ยงชีพ (`#pvd` · เจ้าของสั่ง 2026-10-20 · สมัครใจรายคน · เงินออมที่ร้านเก็บให้ ไม่ใช่กองทุนจดทะเบียน)**: `pvd_members` (พนักงาน fixed|pct · ร้าน none|match|fixed|pct) · `pvd_entries` (NULL = อัตโนมัติ · 0 = งด · `lock`) · `pvd_payouts` (ถอนรายครั้ง slip|cash|transfer) · FK RESTRICT · flag `pvdReady`/`pvdLoadErr`
+  - สูตร `pvdCalc`: อัตโนมัติหัก**เฉพาะงวดที่มีวันทำงาน (สแกน) ทั้งคงที่และ %** · % = `rHalfUp(p.base × % / 100)` · หักได้ไม่เกินสุทธิ · ร้านสมทบไม่เข้า net · `via=slip` เข้ารายรับ · คงเหลือ = ยกมา + หัก + ร้าน − ถอน (เงื่อนไขส่วนร้าน = หมายเหตุ ไม่เดา) · ม.76 เตือนเท่านั้น
+  - **ห้าม**: หักย้อนงวดที่จ่ายแล้ว (ล็อก 0/0 ก่อน — `pvdAfter`) · สลิป/ยอดสะสม/ประวัติ/🔒 ใช้ชุดงวดต่างกัน · ไล่รายชื่อจาก `pvdMembers` ตรง ๆ (ไล่จาก `employees`) · ใส่ `jjmk-live` (ช่อง `jjmk-pvd`)
+  - สิทธิ์ `pvd` (ไม่มี PERM_FOLLOW) · แถว 🔒 สำรองฯ เขียนด้วยสิทธิ์ 🐷 เสมอ (`asPvd`) · แก้สมาชิกไม่แตะแถวเงินประกัน (`dep:false`) · ลบสมาชิก = ลบแถว 🔒 0/0 ด้วย · SQL `jj_provident.sql` · เทส `test/provident.js`
 - **พนักงานยืมเงิน (เงินยืมทั่วไป)**: หน้า #loan ตาราง `loans` (unique ต่อคน) + `loan_entries` (override รายงวด) flag `loanReady` · เลือกผ่อน/งวด + จุดหัก `deduct_on`: **mid** = หักจากยอดโอนตอนเบิกกลางเดือน (loanCalc คืน dedMid=min(ผ่อน,ยอดเบิก) — ไฟล์โอน K BIZ โอนสุทธิ = เบิก−ผ่อน · ส่วนที่เบิกไม่พอ dedPay ไปหักในสลิปให้เอง) / **payroll** = หักในสลิปทั้งงวด (dedPay) · calcPay ใช้ p.eloan · ✎ แก้รายงวดเหมือน MOU (editLoan)
 - **เงินยืม MOU**: ปกติ 15,000 หักเดือนละ 2,000 พอเหลือ ≤ 3,000 หักหมดงวดสุดท้าย (= 2,000×6 + 3,000) · บริษัทเก็บ Passport+บัตรชมพู คืนเมื่อหักครบเท่านั้น · มีสมุดยืม-คืนเอกสาร (doc_borrows)
 - **รายการหักสำเร็จรูป** (ADJ_PRESETS): แต่งตัวผิดระเบียบ 50 · ไม่ใส่เสื้อพนักงาน 200 · เล่นโทรศัพท์ 100 · ไม่เก็บโทรศัพท์ 100 · อื่นๆ บังคับใส่เหตุผล
@@ -71,7 +79,9 @@
 - `employees` (ข้อมูลพนักงาน + ข้อมูลส่วนตัว/HR · flag `empInfoReady`/`workDateReady`/`kbizReady`/`ssoReady`/`hrReady` — ยังไม่รัน SQL = `toDbEmp` ไม่ส่งช่องนั้น)
   · **ข้อมูลส่วนตัวแก้ที่แท็บ "ข้อมูลส่วนตัว" เท่านั้น** (`PI_F`/`PI_SECS` · `saveInfo()` update เฉพาะช่องที่เปลี่ยน · ร่าง `sessionStorage.jjpay_pidraft`) · **ฟอร์ม ✎ ตอนแก้ไขต้องลบ `EMP_PERSONAL_COLS` ออกจาก payload** ไม่งั้นทับ
   · `renderDetail()` ไม่วาดทับฟอร์มที่กำลังกรอก · **ไม่เก็บเลข Passport/รูปเอกสาร** (anon อ่านได้) · เอกสารหมดอายุเตือน ≤90 วัน (`docAlerts`)
-- `punches` unique(emp_code,punch_date,punch_time) · `adjustments` · `advances` · `payroll_settings` (แถวเดียว) · `deposit_entries` · `mou_loans`/`mou_entries` · `doc_borrows` · `fine_entries` · `loans`/`loan_entries` · `sso_entries` · `tips` · `devices` · `shifts` · `org_positions` · `payroll_audit`
+- `punches` unique(emp_code,punch_date,punch_time) · `adjustments` · `advances` · `payroll_settings` (แถวเดียว) · `deposit_entries` (note `''` ✎ / `lock` 🔒 / `refund` 💸 amount ติดลบ · FK CASCADE) · `mou_loans`/`mou_entries` · `doc_borrows` · `fine_entries` · `loans`/`loan_entries` · `sso_entries` · `tips` · `devices` · `shifts` · `org_positions` · `payroll_audit` · `pvd_members`/`pvd_entries`/`pvd_payouts` (ช่องแยก `jjmk-pvd`)
+- `employees.deposit_target_v1 / deposit_monthly_v1` (jj_deposit_v2.sql) = เป้า/หักเดิมของงวดก่อน 2026-10 · **แอปอ่านอย่างเดียว** · NULL = คนใหม่หลังเปลี่ยนกติกา · ตรวจ `jj_deposit_check.sql` (อ่านอย่างเดียว)
+- `pvd_*` (jj_provident.sql): **GRANT ให้ anon, authenticated ในไฟล์** (ตารางใหม่ไม่ได้สิทธิ์อัตโนมัติ) · CHECK รูปแบบงวด
 - `holidays` — วันหยุดพิเศษ: day, name, multiplier, **scope**, **cal_id** · **ไม่ซ้ำตาม (day, scope)** — วันเดียวกันมีได้ทั้งแถวออฟฟิศ แถวหน้าร้าน และแถวทุกคน
   - **ใช้กับใคร (`scope` — เจ้าของสั่ง 2026-09-30)**: `all` ทุกคน (กฎเดิม · แถวเดิมทั้งหมด) · `store` หน้าร้านอย่างเดียว (พนักงานสาขา OFFICE ทำงานปกติ)
     · `office` ออฟฟิศอย่างเดียว (หน้าร้านทำงานปกติ **ไม่ได้ ×N · ไม่ใช่วันห้ามหยุด**) · **ออฟฟิศ = `branch==='OFFICE'`** (เจ้าของเลือก ไม่ใช่ holidayPay)
@@ -91,7 +101,7 @@
 - `payroll_line_log` (🎂) **anon อ่านได้อย่างเดียว** (เขียนได้แค่ `payroll_line_tick`) · ตารางอื่นทุกตัว RLS allow-all + อยู่ใน `supabase_realtime`
 - **JJ KPI อ่าน `employees` (id, branch, nick, full_name, position, active) + `punches` (emp_code, punch_date, punch_time · ตัด 06:00)** — เปลี่ยนโครง/วิธีบันทึกต้องแก้ `jjmk-kpi.sql` ด้วย
 
-## หน้าจอ (hash routing `#today #emp #detail #org #payroll #cal #adv #loan #dep #sso #mou #shift #holi #audit #settings`)
+## หน้าจอ (hash routing `#today #emp #detail #org #payroll #cal #adv #loan #dep #pvd #sso #mou #shift #holi #audit #settings`)
 
 - เมนู 5 กลุ่ม (`.nav-grp` · ไม่มีสิทธิ์ทุกเมนูในกลุ่ม = ซ่อนหัวกลุ่ม): ข้อมูลเข้างาน · ข้อมูลพนักงาน (พนักงาน · 🪪 ข้อมูลพนักงาน · 🧑‍🤝‍🧑 แผนผังพนักงาน) · เงิน · MOU · ตั้งค่า · มือถือ ≤860px เมนูเลื่อนแนวนอน
 - 🪪 ข้อมูลพนักงาน = การ์ดทุกคนตามสาขา → หน้ารายคน 5 แท็บ (`DT_TABS` · จำใน `sessionStorage.jjpay_detail`) · ตัวเลขมาจาก `calcPay` ตัวเดิม · เทส `test/detail.js`
@@ -112,6 +122,7 @@
 - **กติกา 2** `ocScanShifts()`: กะ = กะที่เข้างานจริงล่าสุดใน 14 วันของร้าน จับด้วย `detectShift` จากเวลาสแกนดิบ **ห้ามใช้ `emp.shiftId`/`rec.shiftName`** · ไม่มีสแกน = กะที่ตั้ง (ป้าย "กะที่ตั้งไว้") · ไม่มีทั้งคู่ = ยังไม่รู้กะ · hourly = พาร์ทไทม์ · hours = นับชั่วโมง · คอลัมน์ `ocColKey()`
 - **ห้ามโชว์ข้อมูลส่วนตัว** · escape ทุกข้อความ · อัปเดตผ่าน `renderAll()` + `ocTick` (ข้ามวัน) · **ไม่เพิ่มตารางใน `jjmk-live`** · CSS `og-*` ใต้ `.og-root`
 - เทส `test/org.js` + `tests/unit/payroll-org-access.test.mjs` + `mobile-check --app=payroll-org`
+- 🛡️/🐷 มือถือ: ตาราง #dep #pvd + หน้าต่างพรีวิว 🔒/💸/ถอน เป็นการ์ดต่อคนที่ ≤560px (`table.mcard` + `td[data-l]`) · `mobile-check --app=payroll-dep,payroll-pvd` (ข้อมูลจำลอง `fixtures-payroll-money.mjs` + เปิดหน้าต่างระหว่างตรวจ)
 
 ## ระบบพิมพ์ (จูนกับเครื่อง Canon MF645C ขอบตาย 6mm แล้ว — อย่าแก้ตัวเลขโดยไม่ถาม)
 

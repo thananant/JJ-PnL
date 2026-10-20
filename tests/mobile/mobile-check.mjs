@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { payrollOrgFixture } from './fixtures-payroll-org.mjs';
+import { payrollMoneyFixture } from './fixtures-payroll-money.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -52,6 +53,14 @@ const APPS = [
   { id: 'admin', file: 'jjmk-admin.html', login: 1 },
   { id: 'payroll', file: 'jjmk-payroll.html', login: 1 },
   { id: 'payroll-org', file: 'jjmk-payroll.html#org', login: 1, fx: payrollOrgFixture },   // 🧑‍🤝‍🧑 แผนผังพนักงาน + ข้อมูลจำลองที่สมจริง (~130 คน)
+  // 🛡️ เงินประกัน / 🐷 เงินสำรองเลี้ยงชีพ (2026-10-20) — ข้อมูลจำลอง + เปิดหน้าต่างพรีวิว 🔒 / 💸 / เพิ่มสมาชิก / ถอน ระหว่างตรวจ (steps)
+  { id: 'payroll-dep', file: 'jjmk-payroll.html#dep', login: 1, fx: payrollMoneyFixture, steps: [
+    { label: 'หน้าต่าง 🔒 ปิดยอดงวดก่อน', js: "(async()=>{ const s=document.getElementById('depPeriodSel'); s.value=s.options[Math.min(1,s.options.length-1)].value; await depLockOpen(); })()", close: 'depLockBg' },
+    { label: 'หน้าต่าง 💸 คืนส่วนเกิน', js: "(async()=>{ const s=document.getElementById('depPeriodSel'); s.value=s.options[0].value; renderDeposit(); await depRefundOpen(); })()", close: 'depRefBg' } ] },
+  { id: 'payroll-pvd', file: 'jjmk-payroll.html#pvd', login: 1, fx: payrollMoneyFixture, steps: [
+    { label: 'หน้าต่าง ＋ เพิ่มสมาชิก', js: "openPvdForm()", close: 'pvdBg' },
+    { label: 'หน้าต่าง 💸 ถอน/จ่ายคืน', js: "openPvdOut()", close: 'pvdOutBg' },
+    { label: 'หน้าต่าง 🔒 ปิดยอดเงินสำรองฯ', js: "(async()=>{ const s=document.getElementById('pvdPeriodSel'); s.value=s.options[Math.min(1,s.options.length-1)].value; await pvdLockOpen(); })()", close: 'depLockBg' } ] },
   { id: 'calendar', file: 'jjmk-calendar.html', login: 1 },
   { id: 'invoice', file: 'jjmk-invoice.html', login: 1 },
   { id: 'social', file: 'jjmk-social.html', login: 1 },
@@ -140,11 +149,41 @@ function probe({ t, b, l, r, W, H }) {
     const s = (el.getAttribute('aria-label') || el.title || el.innerText || el.value || el.placeholder || el.id || el.className || el.tagName) + '';
     return (el.tagName.toLowerCase() + ' "' + s.replace(/\s+/g, ' ').trim().slice(0, 28) + '"');
   };
+  // ฉากหลังหน้าต่าง (modal backdrop) = fixed คลุมเกือบทั้งจอ + ชื่อคลาส/ไอดีบอกว่าเป็นหน้าต่าง (modal/backdrop/overlay/…Bg) + มีปุ่ม/ช่องกรอกอยู่ข้างใน
+  // ใช้จำกัดข้อยกเว้น 2 ข้อด้านล่างให้เฉพาะหน้าต่าง — ปุ่ม/กล่องเลื่อนธรรมดาของแอปอื่นยังถูกตรวจเต็มเหมือนเดิม
+  const bdMemo = new Map();
+  const isBackdrop = el => {
+    if (!el || el.nodeType !== 1) return false;
+    if (bdMemo.has(el)) return bdMemo.get(el);
+    let v = false;
+    const cs = getComputedStyle(el);
+    if (cs.position === 'fixed') {
+      const r = el.getBoundingClientRect();
+      const name = (typeof el.className === 'string' ? el.className : '') + ' ' + (el.id || '');
+      v = r.width >= W * 0.9 && r.height >= H * 0.9 && /modal|backdrop|overlay|bg\b/i.test(name) && !!el.querySelector('button,input,select,textarea,a[href]');
+    }
+    bdMemo.set(el, v);
+    return v;
+  };
+  const inBackdrop = el => { for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) if (isBackdrop(a)) return true; return false; };
   const vis = el => {
     const cs = getComputedStyle(el);
     if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0 || cs.pointerEvents === 'none') return null;
-    const rc = el.getBoundingClientRect();
+    let rc = el.getBoundingClientRect();
     if (rc.width < 2 || rc.height < 2 || rc.bottom <= 0 || rc.top >= H || rc.right <= 0 || rc.left >= W) return null;
+    // เนื้อหาในหน้าต่าง (อยู่ใต้ฉากหลังหน้าต่าง) ส่วนที่ถูกกล่องเลื่อน/ตัดขอบ (overflow) ซ่อนไว้ มองไม่เห็นและกดไม่ได้ — วัดเฉพาะส่วนที่โผล่จริง
+    // (เช่นเนื้อหาในหน้าต่างที่เลื่อนขึ้นไปเกินขอบบนของหน้าต่าง — หน้าต่างเริ่มใต้แถบสถานะอยู่แล้ว) · นอกหน้าต่าง = วัดเต็มกล่องแบบเดิม
+    if (inBackdrop(el)) {
+      let ct = rc.top, cb = rc.bottom, cl = rc.left, cr = rc.right;
+      for (let a = el.parentElement; a && a !== document.documentElement && a !== document.body; a = a.parentElement) {
+        const ac = getComputedStyle(a);
+        if (ac.overflowX === 'visible' && ac.overflowY === 'visible') continue;
+        const ar = a.getBoundingClientRect();
+        ct = Math.max(ct, ar.top); cb = Math.min(cb, ar.bottom); cl = Math.max(cl, ar.left); cr = Math.min(cr, ar.right);
+      }
+      if (cb - ct < 2 || cr - cl < 2) return null;
+      if (ct !== rc.top || cb !== rc.bottom || cl !== rc.left || cr !== rc.right) rc = { top:ct, bottom:cb, left:cl, right:cr, width:cr - cl, height:cb - ct };
+    }
     // บังด้วยของอื่น (เช่น หน้าล็อกอินคลุมทั้งจอ) = ไม่นับ
     const cx = Math.min(W - 1, Math.max(0, rc.left + rc.width / 2)), cy = Math.min(H - 1, Math.max(0, rc.top + rc.height / 2));
     const hit = document.elementFromPoint(cx, cy);
@@ -155,6 +194,7 @@ function probe({ t, b, l, r, W, H }) {
   const rects = [];
   for (const el of clickable) {
     const rc = vis(el); if (!rc) continue;
+    if (isBackdrop(el)) continue;   // ฉากหลังหน้าต่าง (เช่น .modal-bg ที่คลิกนอกหน้าต่างเพื่อปิด) ไม่ใช่ปุ่ม — ของเต็มจออื่นยังตรวจ
     // ติดจอจริง = มีบรรพบุรุษเป็น fixed/sticky และระหว่างทางไม่มีกล่องที่เลื่อนได้ (เนื้อหาในหน้าต่างที่เลื่อนได้ ผู้ใช้เลื่อนขึ้นมากดได้)
     const scrollsY = e => { const o = getComputedStyle(e).overflowY; return (o === 'auto' || o === 'scroll') && e.scrollHeight > e.clientHeight + 1; };
     const scrollsX = e => { const o = getComputedStyle(e).overflowX; return (o === 'auto' || o === 'scroll') && e.scrollWidth > e.clientWidth + 1; };
@@ -243,6 +283,20 @@ async function runOne(browser, d, app) {
           issues.push(...await checkPage(page, d, 'หน้าหลักหลังล็อกอิน'));
           await page.evaluate(() => window.scrollTo(0, 600)); await page.waitForTimeout(300);
           issues.push(...await checkPage(page, d, 'หลังเลื่อนลง'));
+          // steps = เปิดหน้าต่าง/สถานะเพิ่มระหว่างตรวจ (เช่นพรีวิว 🔒/💸) แล้วตรวจกติกาเดียวกัน · ไม่เปิด = เตือน
+          for (const st of app.steps || []) {
+            await page.evaluate(() => window.scrollTo(0, 0));
+            try { await page.evaluate(js => Promise.resolve(eval(js)), st.js); } catch (e) { issues.push({ s: '⚠', m: st.label + ': เปิดไม่ได้ — ' + String(e.message).split('\n')[0] }); continue; }
+            await page.waitForTimeout(700);
+            const shown = st.close ? await page.evaluate(id => !!document.getElementById(id) && document.getElementById(id).classList.contains('show'), st.close) : true;
+            if (!shown) { issues.push({ s: '⚠', m: st.label + ': หน้าต่างไม่เปิด' }); continue; }
+            issues.push(...await checkPage(page, d, st.label));
+            if (SHOTS) { fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true }); await page.screenshot({ path: path.join(OUT, 'shots', `${app.id}-${d.id}-${(app.steps.indexOf(st) + 1)}.png`) }); }
+            await page.evaluate(id => { const m = document.getElementById(id); if (m) m.scrollTop = m.scrollHeight; }, st.close);
+            await page.waitForTimeout(200);
+            issues.push(...await checkPage(page, d, st.label + ' (เลื่อนลงสุด)'));
+            if (st.close) await page.evaluate(id => closeModal(id), st.close);
+          }
         }
       }
     }
