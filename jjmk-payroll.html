@@ -1190,9 +1190,12 @@ window.JJGate=(function(){
       <option value="">ทุกสาขา</option><option value="JJLP">ลาดพร้าว</option>
       <option value="JJRD">รัชดา</option><option value="JJCK">ครัวกลาง</option><option value="OFFICE">ออฟฟิศ</option>
     </select>
-    <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">เริ่มหักตั้งแต่งวด:
-      <select id="depStartSel" onchange="depStartChange(this)" style="width:auto;min-width:180px;max-width:100%"></select>
-    </label>
+    <div style="display:flex;flex-direction:column;gap:3px;min-width:0;max-width:100%">
+      <label style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px">เริ่มหักตั้งแต่งวด:
+        <select id="depStartSel" onchange="depStartChange(this)" style="width:auto;min-width:180px;max-width:100%"></select>
+      </label>
+      <span class="muted" id="depStartNote" style="font-size:12px;line-height:1.4;max-width:340px">= งวดแรกที่เริ่มเก็บเงินประกันจริง · <b>ไม่ต้องเปลี่ยนเมื่อกติกาเปลี่ยน</b> — กติกา 3,000/300 เริ่ม ต.ค. 69 เอง · ห้ามเลื่อนข้ามงวดที่หักไปแล้วแต่ยังไม่ 🔒</span>
+    </div>
     <select id="depStatus" onchange="renderDeposit()" style="width:auto;min-width:140px">
       <option value="">ทุกสถานะ</option><option value="pending">ยังไม่ครบ</option><option value="done">ครบแล้ว</option><option value="over">เกินเป้า (ยังไม่คืน/คืนแล้ว)</option>
     </select>
@@ -5080,10 +5083,18 @@ async function editDeposit(empId, period){
                                     : '💸 งวดนี้คืนส่วนเกิน '+THB(d.refund)+' บาท — แก้ที่หน้า 🛡️ เงินประกัน (เจ้าของ/แอดมิน)');
     const ov = d.override, raw = depRaw(ov);
     if(d.src === 'lock'){
+      // งวดก่อน "เริ่มหักตั้งแต่งวด" (เลื่อนข้ามได้เพราะ 🔒 แล้ว — depStartFwd) = แถว 🔒 คือสิ่งเดียวที่ทำให้ยอดนี้ยังนับ
+      // ปลดแล้วเป็น 0 ถาวร (🔒 ใหม่ไม่ได้ — depLockOpen · เลื่อน dep_start กลับไม่ได้ — depStartBack) → แก้ยอดได้ ปลดไม่ได้
+      const pre = !!settings.depStart && period < settings.depStart;
       const v = prompt('🔒 '+e.nick+' · '+periodLabel(period)+' ปิดยอดแล้ว (หัก '+THB(d.ded)+' · สะสมก่อนงวด '+THB(d.before)+' / เป้า '+THB(d.target)+')'+
         (d.cap ? '\n'+depCapTxt(d) : '')+
-        '\nแก้ให้ตรงยอดที่หักจริงในสลิป/ไฟล์ K BIZ วันจ่ายเท่านั้น\n\nใส่จำนวนบาท · เว้นว่างแล้วตกลง = ปลดล็อก กลับไปคิดอัตโนมัติ', String(d.ded));
+        '\nแก้ให้ตรงยอดที่หักจริงในสลิป/ไฟล์ K BIZ วันจ่ายเท่านั้น\n\n'+
+        (pre ? 'ใส่จำนวนบาท · งวดนี้อยู่ก่อน "เริ่มหักตั้งแต่งวด" ('+periodLabel(settings.depStart)+') — ปลดล็อกไม่ได้' : 'ใส่จำนวนบาท · เว้นว่างแล้วตกลง = ปลดล็อก กลับไปคิดอัตโนมัติ'), String(d.ded));
       if(v === null) return;
+      if(pre && String(v).trim() === '')
+        return alert('❌ ปลดล็อก '+periodLabel(period)+' ของ '+e.nick+' ไม่ได้ — งวดนี้อยู่ก่อน "เริ่มหักตั้งแต่งวด" ('+periodLabel(settings.depStart)+')\n'+
+          'ยอดนี้ยังนับเพราะ 🔒 อย่างเดียว: ปลดแล้วยอดเป็น 0 ถาวร (ยอดสะสมงวดหลังลดลง) · ปิดยอดใหม่ไม่ได้ · เลื่อน "เริ่มหักตั้งแต่งวด" กลับก็ไม่ได้\n'+
+          'ยอดผิด = ✎ ใส่ยอดที่หักจริงในสลิป (ไม่ได้หัก = 0)');
       // แก้/ปลด 🔒 = ยอดสะสม → เงินประกันงวดหลังที่จ่ายแล้ว + สำรองฯ เปลี่ยนตาม → 🔒 งวดพวกนั้นก่อน (ผลตรวจรอบ 4 · งวดนี้เองไม่แตะ)
       if(!(String(v).trim() !== '' && Math.max(0, Math.floor(Number(v)||0)) === d.ded) &&
          !(await depPaidGuard(e, depPdFrom(period), 'แก้ยอด 🔒 เงินประกัน '+periodLabel(period)+' ของ '+e.nick, { depSkip: x => x.p <= period }))) return;
@@ -5265,11 +5276,13 @@ function fillDepPeriodSel(){
   if(stSel){
     const all = [...new Set([...ps, ...(settings.depStart ? [settings.depStart] : [])])].sort().reverse();
     const old = settings.depStart || '', back = p => depStartBack(old, p);   // ย้อนไปงวดที่จ่ายแล้ว = ห้าม (เลือกไม่ได้)
+    // เลื่อนไปข้างหน้าข้ามงวดที่จ่ายแล้ว (มีคนถูกหัก) ที่ยังไม่ 🔒 = ห้าม (depStartFwd ตัวเดียวกับ depStartChange) — งวดแรกที่ติด → ทุกงวดหลังจากนั้นติดหมด
+    const fw = isBoss(AUTH) ? depStartFwd(old, DEP_FWD_ALL, true)[0] || null : null, fwd = p => !!fw && p > fw.p;
     stSel.innerHTML = `<option value=""${back('')?' disabled':''}>ทุกงวด (คิดย้อนหลัง)</option>` +
-      all.map(p=>`<option value="${p}" ${p===old?'selected':''}${back(p)?' disabled':''}>${periodLabel(p)}${back(p)?' (จ่ายแล้ว)':''}</option>`).join('');
+      all.map(p=>`<option value="${p}" ${p===old?'selected':''}${back(p)||fwd(p)?' disabled':''}>${periodLabel(p)}${back(p)?' (จ่ายแล้ว)':fwd(p)?' (ข้าม '+shortP(fw.p)+' ที่ยังไม่ 🔒)':''}</option>`).join('');
     stSel.value = settings.depStart || '';
     stSel.disabled = !isBoss(AUTH);
-    stSel.title = isBoss(AUTH) ? 'เปลี่ยนแล้วระบบปิดยอดงวดที่จ่ายแล้ว (ตั้งแต่ '+shortP(DEP_V2_START)+') ของทุกคนก่อน · งวดก่อนนั้นที่ยังไม่ 🔒 ต้องตรวจแล้ว 🔒 เองก่อน' : 'เปลี่ยนได้เฉพาะเจ้าของ/แอดมิน';
+    stSel.title = isBoss(AUTH) ? 'งวดแรกที่เริ่มเก็บจริง · เลื่อนข้ามงวดที่จ่ายแล้วที่มีคนถูกหักได้เมื่อ 🔒 ปิดยอดงวดนั้นครบแล้วเท่านั้น · ย้อนไปงวดที่จ่ายแล้วไม่ได้' : 'เปลี่ยนได้เฉพาะเจ้าของ/แอดมิน';
   }
   return sel.value;
 }
@@ -5355,7 +5368,7 @@ function renderDepositIn(){
         ? `${d.src==='lock' ? `<span class="chip chip-blue" title="ปิดยอดแล้ว — ยอดนี้ไม่เปลี่ยนตามค่าตั้ง/สแกน">🔒 ${THB(d.ded)}</span>${capChip}`
              : d.src==='xfer' ? `<span class="chip chip-green" title="${DEP_XFER_LABEL} — ไม่อยู่ในสลิป/ยอดสุทธิ">🏦 โอนคืน ${THB(d.xfer)}${d.xferDate?' · '+dayLabel(d.xferDate):''}</span>`
              : `<span class="chip chip-green" title="${DEP_REFUND_LABEL}">💸 คืน ${THB(d.refund)}</span>`}
-           ${boss && canEd ? `<button class="btn btn-light btn-sm" data-emp="${e.id}" data-p="${period}" onclick="depEditBtn(this)" title="แก้/ปลดล็อก (เจ้าของ/แอดมิน)">✎</button>` : ''}`
+           ${boss && canEd ? `<button class="btn btn-light btn-sm" data-emp="${e.id}" data-p="${period}" onclick="depEditBtn(this)" title="${pre && d.src==='lock' ? 'แก้ยอด (เจ้าของ/แอดมิน) · งวดก่อน &quot;เริ่มหักตั้งแต่งวด&quot; ปลดล็อกไม่ได้' : 'แก้/ปลดล็อก (เจ้าของ/แอดมิน)'}">✎</button>` : ''}`
         : `<input type="number" value="${d.src==='manual' ? depManualAmt(d) : d.ded}" min="0" step="100" data-emp="${e.id}" data-p="${period}"
             style="width:74px;text-align:right;font-weight:700${d.src==='manual'?';border-color:var(--ember)':''}"
             title="${d.src==='manual'?'แก้เองงวดนี้ — ลบค่าแล้ว Enter = กลับอัตโนมัติ':'หักอัตโนมัติ — พิมพ์เพื่อแก้เฉพาะงวดนี้'}"
@@ -5388,8 +5401,56 @@ const depPaidAny = p => [{ branch:'OFFICE' }, { branch:'' }].some(x => periodRan
 /* เลื่อน "เริ่มหักตั้งแต่งวด" ย้อนไปงวดที่จ่ายแล้ว (หรือ "ทุกงวด") = งวดที่จ่ายไปแล้วกลายเป็นหักอัตโนมัติย้อนหลัง (ยอดสะสม/ยอดคืนเปลี่ยน) → ห้าม
    งวดที่ยังไม่จ่าย = ย้อนได้ (งวดหลังจากนั้นก็ยังไม่จ่ายเหมือนกัน) */
 const depStartBack = (old, v) => !!old && (v === '' ? true : v < old && depPaidAny(v));
-/* "เริ่มหักตั้งแต่งวด" มีผลกับทุกคน — เฉพาะเจ้าของ/แอดมิน (เห็นทุกสาขา) · ล็อกงวดที่จ่ายแล้วของทุกคนก่อน (เดิมเลื่อนแล้วงวดก่อนหน้าหายทุกคน)
-   งวด < DEP_V2_START ที่ยังไม่ 🔒 ไม่ล็อกให้ (depLockBefore เตือนพร้อมลำดับ: ยอดถูก = ยกเลิก ไป 🔒 ก่อน) */
+/* เลื่อน "เริ่มหักตั้งแต่งวด" ไปข้างหน้า (งวดเดิม → งวดหลัง · หรือ "ทุกงวด" → งวดใดก็ได้) = งวด [old, v) เลิกนับ
+   เหตุการณ์จริง 2026-10-19: ส.ค. → ต.ค. ทั้งที่สลิป ส.ค./ก.ย. หัก 500 ไปแล้ว → ประวัติ/ยอดสะสมหายทุกคน (แก้ข้อมูลด้วย SQL)
+   → งวดที่ถึงวันจ่ายแล้ว (periodRangeE ตามรอบของแต่ละคน) ที่มีคนถูกหัก > 0 แต่ยังไม่ 🔒 (ไม่มีแถว DEP_FIXED) = ห้ามข้าม
+     นับ "วันจ่าย" ด้วย (ต่างจาก pdPaid ที่ออฟฟิศนับวันถัดไป): ออฟฟิศสร้างไฟล์ K BIZ/โอนวันสุดท้ายของงวด — เลื่อนวันนั้น = ยอดหักในไฟล์หาย (🔒 ได้วันถัดไป)
+   แถว 🔒/💸/🏦 นับเสมอแม้อยู่ก่อน dep_start (depositCalcIn fixed) → 🔒 ครบแล้วเลื่อนได้ · ยังไม่จ่าย/ไม่มีใครถูกหัก = เลื่อนได้ (ผ่าน depLockBefore เดิม)
+   งวด ≥ DEP_V2_START ที่จ่ายแล้วก็ต้อง 🔒 เองก่อน (ด่านนี้มาก่อน depLockBefore — ไม่ปิดยอดให้ระหว่างเลื่อน)
+   old ว่าง ("ทุกงวด" = คิดย้อนหลังทุกงวด) → งวดใดก็เป็นการเลื่อนไปข้างหน้า · ยอดงวดเก่าเป็นยอดที่ระบบคิด อาจไม่เคยหักจริง (alert บอกให้ตรวจสลิปก่อน 🔒)
+   คืน [{ p, n }] = งวดที่ห้ามข้าม (เก่า → ใหม่ · n = จำนวนคน) · ไม่ใช่การเลื่อนไปข้างหน้า (v ว่าง/ย้อน — depStartBack ดูแล) = []
+   first = หยุดที่งวดแรกที่เจอ (ตัวเลือก: ทุกงวดหลังจากนั้นห้ามเหมือนกัน) · depPeriodsAsc() ครั้งเดียว ครอบ depScope (ห้ามคิดชุดงวดในลูปต่อคน) */
+const DEP_FWD_ALL = '9999-12';   // v ของตัวเลือก = "เลื่อนไปไกลสุด" (หางวดแรกที่ติด)
+function depStartFwd(old, v, first){
+  if(!v || (old && v <= old)) return [];
+  return depScope(() => {
+    const today = bizToday(), out = [];
+    const fixed = new Set(depositEntries.filter(r => DEP_FIXED(r.note)).map(r => r.empId + '|' + r.period));   // 🔒/💸/🏦 (ไม่ไล่ depRowOf ทุกคน·งวด)
+    for(const p of depPeriodsAsc()){
+      if(p >= v) break;
+      if(old && p < old) continue;
+      let n = 0;
+      for(const e of employees){
+        if(periodRangeE(e, p).pay > today || fixed.has(e.id + '|' + p)) continue;
+        if(depositCalc(e, p).ded > 0){ n++; if(first) break; }
+      }
+      if(n){ out.push({ p, n }); if(first) break; }
+    }
+    return out;
+  });
+}
+/* บล็อก + อธิบาย (คืน true = ห้าม · คืนค่าเดิมในช่องแล้ว) — เรียกก่อนถาม และอีกครั้งหลัง depLockBefore (อ่านสมุดใหม่แล้ว) */
+function depStartFwdStop(old, v, sel){
+  const hit = depStartFwd(old, v);
+  if(!hit.length) return false;
+  sel.value = old;
+  const hits = hit.map(x => shortP(x.p) + ' (' + x.n + ' คน)').join(' · ');
+  // old ว่าง = ยอดงวดเก่าเป็นยอดที่ระบบคิดย้อนหลัง (อาจไม่เคยหักจริง) — ไม่เรียกว่า "หักไปจริง" · ให้ตรวจกับสลิปก่อน 🔒 (ไม่ได้หัก = 🔒 0)
+  alert('❌ ห้ามเลื่อน "เริ่มหักตั้งแต่งวด" ' + (old ? periodLabel(old) : 'ทุกงวด') + ' → ' + periodLabel(v) + '\n' +
+    (old ? 'ข้ามงวดที่จ่ายเงินเดือนแล้วและหักเงินประกันไปจริง แต่ยังไม่ 🔒 ปิดยอด: ' + hits + '\n' +
+           '→ เลื่อนแล้วยอดที่หักจริงจะหายจากประวัติ/ยอดสะสม (งวดที่จ่ายแล้วห้ามเปลี่ยน · ห้ามคิดย้อนหลัง)\n\n'
+         : 'ยังไม่ได้ตั้งช่องนี้ — งวดที่จ่ายแล้วมียอดเงินประกันที่ระบบคิดย้อนหลัง แต่ยังไม่ 🔒 ปิดยอด: ' + hits + '\n' +
+           '→ ยอดเหล่านี้อาจไม่ได้หักจริง — ตรวจกับสลิปจริงก่อน แล้ว 🔒 ด้วยยอดที่หักจริง (ไม่ได้หัก = แก้ "ยอดที่จะล็อก" เป็น 0)\n\n') +
+    'ช่องนี้ = งวดแรกที่เริ่มเก็บเงินประกันจริง ไม่ต้องเปลี่ยนเมื่อกติกาเปลี่ยน (กติกา ' + THB(DEP_DEF.target) + '/' + THB(DEP_DEF.monthly) + ' เริ่ม' + periodLabel(DEP_V2_START) + ' เองแล้ว)\n' +
+    'ทุกกรณี: 🔒 ปิดยอดงวดข้างบนให้ครบทุกคนก่อน (เลือกงวด → 🔒 ปิดยอดงวดนี้ · เทียบสลิป/Excel วันจ่าย · ออฟฟิศ 🔒 ได้วันถัดจากวันจ่าย) แล้วค่อย\n' +
+    '• จะหยุดเก็บ = ปิดหักรายคน (สวิตช์ "หัก") หรือตั้งเป้าหมาย 0 ที่หน้า 🛡️ — ปิดหัก/เป้า 0 มีผลย้อนกับงวดที่ยังไม่ 🔒 ด้วย (ยอดที่หักจริงของคนนั้นหาย)\n' +
+    '• จะเลื่อนจริง = เลื่อนช่องนี้');
+  return true;
+}
+/* "เริ่มหักตั้งแต่งวด" มีผลกับทุกคน — เฉพาะเจ้าของ/แอดมิน (เห็นทุกสาขา)
+   ห้าม: ย้อนไปงวดที่จ่ายแล้ว (ทุกกรณี · depStartBack) · ไปข้างหน้าข้ามงวดที่ถึงวันจ่ายแล้วที่มีคนถูกหักแต่ยังไม่ 🔒 (depStartFwd · 2026-10-19)
+   → งวดที่ข้ามต้อง 🔒 เองที่หน้า 🛡️ ก่อน ทุกงวด (รวม ≥ DEP_V2_START — depStartFwd มาก่อน depLockBefore จึงไม่ใช่ทางปิดยอดงวดที่ข้ามแล้ว)
+   depLockBefore ที่เหลือ = ปิดยอดงวดที่จ่ายแล้วอื่นของทุกคน (≥ DEP_V2_START) + เตือน K BIZ + ถามยืนยัน · แล้วเช็คซ้ำด้วยข้อมูลที่อ่านใหม่ */
 async function depStartChange(sel){
   const v = sel.value, old = settings.depStart || '';
   if(v === old) return;
@@ -5399,10 +5460,14 @@ async function depStartChange(sel){
     return alert('❌ ห้ามเลื่อน "เริ่มหักตั้งแต่งวด" ย้อนไป' + (v ? periodLabel(v) : 'ทุกงวด') + ' — งวดนั้นจ่ายเงินเดือนไปแล้ว ระบบจะกลายเป็นหักย้อนหลัง (ยอดสะสม/ยอดคืนเปลี่ยน · ห้ามคิดย้อนหลัง)\n' +
       'ถ้ามีเงินประกันที่หักจริงก่อน ' + periodLabel(old) + ' ให้ใส่ในช่อง "เก็บมาก่อน" รายคน');
   }
+  if(depStartFwdStop(old, v, sel)) return;
   const n = employees.filter(e=>e.depOn !== false && depRule(e, v||'0000-00').target > 0).length;
   const L = await depLockBefore(employees, 'เปลี่ยน "เริ่มหักตั้งแต่งวด" ' + (old ? periodLabel(old) : 'ทุกงวด') + ' → ' + (v ? periodLabel(v) : 'ทุกงวด (คิดย้อนหลัง)') +
     '\nมีผลกับทุกคน (' + n + ' คนที่มีเป้า) — งวดที่ยังไม่ปิดยอดจะคิดใหม่ทั้งหมด', { what: 'เปลี่ยน "เริ่มหักตั้งแต่งวด"' });
   if(!L.ok){ sel.value = old; return; }
+  // depLockBefore อ่านสมุดใหม่แล้ว — เช็คซ้ำด้วยข้อมูลสด (อีกเครื่องเพิ่ง ✎ ปลด 🔒 ระหว่างถาม · ในเครื่องค้าง) · เปลี่ยนจากเครื่องอื่นระหว่างนั้น = ไม่บันทึก
+  if((settings.depStart || '') !== old){ sel.value = settings.depStart || ''; return toast('⚠️ "เริ่มหักตั้งแต่งวด" เพิ่งถูกเปลี่ยนจากเครื่องอื่น — ยังไม่ได้บันทึก ตรวจแล้วลองใหม่'); }
+  if(depStartFwdStop(old, v, sel)) return;
   await saveSetting('dep_start', v);
 }
 

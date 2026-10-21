@@ -224,13 +224,12 @@ const V1LOCK = (A, ids) => { const rows = V1ROWS(A.E, ids); A.T.deposit_entries 
     ok(['2026-09','2026-10'].every(p=>T.deposit_entries.some(r=>r.employee_id===2 && r.period===p && r.note==='lock')) && !T.deposit_entries.some(r=>r.employee_id===2 && r.period==='2026-08'),
        'วันที่ 6 พ.ย. แก้เก็บมาก่อน → ต.ค. ถูกล็อกก่อนแก้ · ส.ค. (ก่อน ต.ค. 69) ไม่ล็อกอัตโนมัติ');
     ok(E(`depositCalc(s2,'2026-10').ded`)===300 && E(`depositCalc(s2,'2026-10').collected`)===2300, 'ยอดที่ล็อกไว้ไม่เปลี่ยนตามเก็บมาก่อนที่แก้ (ต.ค. 300) · สะสม 1,000+500(ส.ค. คิดสด)+500+300 = 2,300');
-    // เปลี่ยน "เริ่มหักตั้งแต่งวด" → ก.ย.: ออฟ1 ส.ค. (ก่อน ต.ค. 69) ยังไม่ 🔒 → confirm เตือน · ยกเลิก → 🔒 ส.ค. ด้วยปุ่มก่อน → เลื่อน → ส.ค. ยังนับ 500
+    // เปลี่ยน "เริ่มหักตั้งแต่งวด" → ก.ย.: ร้าน2/ออฟ1 ส.ค. (จ่ายแล้ว · หัก 500) ยังไม่ 🔒 → ห้าม (2026-10-19: เดิมแค่ confirm เตือน กดตกลงแล้ว ส.ค. หาย) → 🔒 ส.ค. ด้วยปุ่มก่อน → เลื่อน → ส.ค. ยังนับ 500
     E(`var __stSel = () => Object.assign(document.createElement('select'),{innerHTML:'<option value="2026-09">x</option>',value:'2026-09'});`);
-    io.confirms.length = 0; io.confirmAns = m => !/เริ่มหักตั้งแต่งวด/.test(m);
+    io.confirms.length = 0; io.alerts.length = 0; const nS = A.db.log.length;
     await E(`depStartChange(__stSel())`);
-    ok(E(`settings.depStart`)==='2026-08' && /งวดก่อน ต\.ค\. 69 ที่ยังไม่ 🔒 ระบบไม่ปิดยอดให้/.test(io.confirms.join()) && /2 คน \(ส\.ค\. 69\)/.test(io.confirms.join()),
-       'เลื่อนงวดเริ่ม: confirm เตือน "งวดก่อน ต.ค. 69 ที่ยังไม่ 🔒 … 2 คน (ส.ค. 69)" · ยกเลิก = ไม่เปลี่ยน');
-    io.confirmAns = null;
+    ok(E(`settings.depStart`)==='2026-08' && !io.confirms.length && A.db.log.length===nS && /ห้ามเลื่อน "เริ่มหักตั้งแต่งวด" งวด ส\.ค\. 2569 → งวด ก\.ย\. 2569/.test(io.alerts.join()) && /ส\.ค\. 69 \(2 คน\)/.test(io.alerts.join()),
+       'เลื่อนงวดเริ่ม ส.ค. → ก.ย. ทั้งที่ ส.ค. จ่ายแล้วยังไม่ 🔒 → บล็อก "ส.ค. 69 (2 คน)" ก่อนถาม · ไม่เขียนอะไร · ไม่เปลี่ยน');
     E(`renderDeposit()`); A.d.getElementById('depPeriodSel').value='2026-08'; await E(`depLockOpen()`); await E(`depLockSave()`);
     // ออฟฟิศ ต.ค. จ่าย 31 ต.ค. → 6 พ.ย. ล็อกได้
     await E(`depStartChange(__stSel())`);
@@ -3097,6 +3096,142 @@ const V1LOCK = (A, ids) => { const rows = V1ROWS(A.E, ids); A.T.deposit_entries 
     const r = await A.E(`(async()=>{ const r = await db.from('deposit_entries').insert({ employee_id:2, period:'2026-10', amount:0, note:'lock' }).select(); return r.error ? r.error.message : 'ok'; })()`);
     const m = await M.E(`(async()=>{ const r = await db.from('deposit_entries').insert({ employee_id:3, period:'2026-10', amount:0, note:'lock' }).select(); return r.error ? r.error.message : 'ok'; })()`);
     ok(r==='ok' && m!=='ok', `เจ้าของเขียนได้ (${r}) · ผจก. เขียนไม่ได้ (${m})`);
+  }
+
+  // ============ 44) เหตุการณ์จริง 2026-10-19 11:32: บัญชี "เน" เลื่อน "เริ่มหักตั้งแต่งวด" ส.ค. → ต.ค. หลังสลิป ส.ค./ก.ย. หัก 500 ไปแล้ว ============
+  //   เดิมกันแค่ "ย้อน" (depStartBack) → ไปข้างหน้าได้ → ส.ค./ก.ย. ไม่นับทุกคน ("ลิด ส่งมาหลายเดือน ยังขึ้นเดือนเดียว") · ตอนนี้ depStartFwd กัน (ตัวเลือก + depStartChange)
+  { console.log('[44 เลื่อน "เริ่มหักตั้งแต่งวด" ไปข้างหน้าข้ามงวดที่จ่ายแล้ว (เหตุการณ์ 2026-10-19: ส.ค. → ต.ค.) — บาทจริง]');
+    const mk42 = async (now, to, who) => {
+      const A = boot({ now }); await wait(300);
+      A.E(SEED); A.E(`AUTH={username:'เน',role:'owner'}; applyUser(AUTH); payLockAuto=false;
+        var lid=emp({id:1,code:'L1',nick:'ลิด',deposit_target_v1:5000,deposit_monthly_v1:500});
+        var off=emp({id:2,code:'O1',nick:'ออฟ',branch:'OFFICE',dept:'ออฟฟิศ',deposit_target_v1:5000,deposit_monthly_v1:500});
+        var nw=emp({id:3,code:'N1',nick:'ใหม่'});
+        var stop=emp({id:4,code:'P1',nick:'ปิดหัก',deposit_on:false,deposit_target_v1:5000,deposit_monthly_v1:500});
+        var zero=emp({id:5,code:'Z1',nick:'ศูนย์',deposit_target:0,deposit_target_v1:0,deposit_monthly_v1:0});
+        var __all={lid,off,nw,stop,zero}; employees=${JSON.stringify(who || ['lid','off','nw'])}.map(k=>__all[k]);
+        shifts={L1:mk('2026-06-26','${to}'),O1:mk('2026-07-26','${to}'),N1:'${to}'>='2026-09-26'?mk('2026-09-26','${to}'):[],P1:mk('2026-07-26','${to}'),Z1:mk('2026-07-26','${to}')};
+        for(const c in shifts) if(!employees.some(e=>e.code===c)) delete shifts[c];
+        depositEntries=[]; var __sh42 = shifts; go('dep'); renderDeposit();
+        var __sel42 = v => Object.assign(document.createElement('select'),{innerHTML:'<option value="'+(settings.depStart||'')+'">a</option><option value="'+v+'">b</option>',value:v});`);
+      return A;
+    };
+    const snap = A => A.E(`JSON.stringify(depScope(() => employees.map(e => e.nick + ' ' + ['2026-08','2026-09','2026-10'].map(p => { const d = depositCalc(e, p); return d.ded + '>' + d.collected; }).join(' '))))`);
+    const opt = (A, v) => JSON.parse(A.E(`JSON.stringify((o=>o?{d:o.disabled,t:o.textContent}:null)([...document.getElementById('depStartSel').options].find(o=>o.value==='${v}')))`));
+    const change = async (A, v) => { A.io.alerts.length = 0; A.io.confirms.length = 0; A.db.log.length = 0; A.E(`var __s42 = __sel42('${v}')`); await A.E(`depStartChange(__s42)`);
+      A.E(`shifts = __sh42`);   // saveSetting → recomputeAll สร้าง shifts ใหม่จาก punches (เทสนี้ตั้ง shifts ตรง ๆ) → คืนชุดเดิมก่อนเทียบยอด
+      return A.io.alerts.join('\n'); };
+
+    // ① ส.ค./ก.ย. จ่ายแล้ว (5 ก.ย. / 5 ต.ค. · ออฟฟิศ 30 ก.ย.) ยังไม่ 🔒 → ห้ามเลื่อนไป ต.ค.
+    const A = await mk42('2026-10-19T11:32:00+07:00', '2026-10-18'); const { E } = A;
+    const s0 = snap(A);
+    ok(/ลิด 500>500 500>1000 300>1300/.test(s0) && /ออฟ 500>500 500>1000 300>1300/.test(s0) && /ใหม่ 0>0 0>0 300>300/.test(s0), 'ก่อนเลื่อน: ลิด/ออฟ ส.ค. 500 · ก.ย. 500 (สะสม 1,000) · ต.ค. 300 → 1,300 · ใหม่ (เริ่ม ต.ค.) 300 — ' + s0);
+    ok(/งวดแรกที่เริ่มเก็บเงินประกันจริง/.test(A.d.getElementById('depStartNote').textContent) && /ไม่ต้องเปลี่ยนเมื่อกติกาเปลี่ยน/.test(A.d.getElementById('depStartNote').textContent) && /3,000\/300 เริ่ม ต\.ค\. 69/.test(A.d.getElementById('depStartNote').textContent),
+       'ข้อความใต้ช่อง "เริ่มหักตั้งแต่งวด": งวดแรกที่เริ่มเก็บจริง · ไม่ต้องเปลี่ยนเมื่อกติกาเปลี่ยน (3,000/300 เริ่ม ต.ค. 69 เอง)');
+    const o9 = opt(A, '2026-09'), o10 = opt(A, '2026-10'), o8 = opt(A, '2026-08');
+    ok(o8 && !o8.d && o9 && o9.d && o10 && o10.d && /ข้าม ส\.ค\. 69 ที่ยังไม่ 🔒/.test(o10.t) && /ข้าม ส\.ค\. 69 ที่ยังไม่ 🔒/.test(o9.t),
+       'ตัวเลือก: ส.ค. (ปัจจุบัน) เลือกได้ · ก.ย./ต.ค. เลือกไม่ได้ "(ข้าม ส.ค. 69 ที่ยังไม่ 🔒)" — ' + o10.t);
+    let al = await change(A, '2026-10');
+    ok(E(`settings.depStart`)==='2026-08' && E(`__s42.value`)==='2026-08' && !A.db.log.length && !A.io.confirms.length,
+       'เลือก ต.ค. (เครื่องรุ่นเก่า/ค่าที่ส่งมา) → บล็อกก่อนถาม · depStart ยัง ส.ค. · ช่องกลับเป็น ส.ค. · ไม่เขียนอะไร');
+    ok(/ห้ามเลื่อน "เริ่มหักตั้งแต่งวด" งวด ส\.ค\. 2569 → งวด ต\.ค\. 2569/.test(al) && /ส\.ค\. 69 \(2 คน\) · ก\.ย\. 69 \(2 คน\)/.test(al) && /ยอดที่หักจริงจะหายจากประวัติ\/ยอดสะสม/.test(al),
+       'alert: งวดไหน · กี่คน (ส.ค. 69 (2 คน) · ก.ย. 69 (2 คน)) · "ยอดที่หักจริงจะหายจากประวัติ/ยอดสะสม"');
+    // ผลตรวจ: เดิมบรรทัด "หยุดเก็บ = ปิดหักรายคน" ไม่บอกให้ 🔒 ก่อน — ปิดหัก (deposit_on=false) ตอน ส.ค./ก.ย. ยังไม่ 🔒 = ยอดที่หักจริงของคนนั้นหายแบบเหตุการณ์เดียวกัน
+    ok(/ทุกกรณี: 🔒 ปิดยอดงวดข้างบนให้ครบทุกคนก่อน[^]*แล้วค่อย\n• จะหยุดเก็บ = ปิดหักรายคน \(สวิตช์ "หัก"\) หรือตั้งเป้าหมาย 0 ที่หน้า 🛡️ — ปิดหัก\/เป้า 0 มีผลย้อนกับงวดที่ยังไม่ 🔒 ด้วย[^]*\n• จะเลื่อนจริง = เลื่อนช่องนี้$/.test(al) &&
+       /ไม่ต้องเปลี่ยนเมื่อกติกาเปลี่ยน \(กติกา 3,000\/300 เริ่มงวด ต\.ค\. 2569 เองแล้ว\)/.test(al),
+       'alert บอกทางที่ถูก: ทุกกรณี 🔒 ก่อน แล้วค่อย หยุดเก็บ (ปิดหัก/เป้า 0 — มีผลย้อนกับงวดที่ยังไม่ 🔒) หรือเลื่อนจริง · กติกา 3,000/300 เริ่ม ต.ค. เองแล้ว');
+    ok(snap(A)===s0 && E(`depositCalc(lid,'2026-10').before`)===1000, 'บล็อกแล้วยอดสะสมไม่เปลี่ยน (ลิด สะสมก่อน ต.ค. 1,000 · ไม่ใช่ 0)');
+    al = await change(A, '2026-09');
+    ok(E(`settings.depStart`)==='2026-08' && /ส\.ค\. 69 \(2 คน\)/.test(al) && !/ก\.ย\. 69 \(/.test(al), 'เลื่อนไป ก.ย. → ห้ามเหมือนกัน (ข้ามแค่ ส.ค. 69 (2 คน))');
+    ok(E(`depStartFwd('2026-08','2026-08').length`)===0 && E(`depStartFwd('2026-08','').length`)===0 && E(`depStartFwd('2026-08','2026-07').length`)===0,
+       'depStartFwd: ไม่เปลี่ยน / "ทุกงวด" / ย้อน = ไม่ใช่การเลื่อนไปข้างหน้า (depStartBack ดูแล)');
+    ok(E(`(()=>{ settings.depStart=''; const r = depStartFwd('', '2026-10').map(x=>x.p+':'+x.n).join(); settings.depStart='2026-08'; return r; })()`)==='2026-07:1,2026-08:2,2026-09:2',
+       '"ทุกงวด" → ต.ค. = ไปข้างหน้า: ข้าม ก.ค. (ลิด) · ส.ค./ก.ย. (2 คน)');
+    //    ยังไม่ได้ตั้งช่องนี้ (dep_start ว่าง = คิดย้อนหลังทุกงวด) → ยอดงวดเก่าเป็นยอดที่ระบบคิด อาจไม่เคยหักจริง — alert ไม่เรียกว่า "หักไปจริง" · ให้ตรวจสลิปก่อน 🔒 (ไม่ได้หัก = 🔒 0)
+    E(`settings.depStart=''`); al = await change(A, '2026-08');
+    ok(E(`settings.depStart`)==='' && !A.db.log.length && /ห้ามเลื่อน "เริ่มหักตั้งแต่งวด" ทุกงวด → งวด ส\.ค\. 2569/.test(al) && /ยังไม่ได้ตั้งช่องนี้/.test(al) && /ยอดเงินประกันที่ระบบคิดย้อนหลัง แต่ยังไม่ 🔒 ปิดยอด: ก\.ค\. 69 \(1 คน\)/.test(al) &&
+       /อาจไม่ได้หักจริง — ตรวจกับสลิปจริงก่อน/.test(al) && /ไม่ได้หัก = แก้ "ยอดที่จะล็อก" เป็น 0/.test(al) && !/หักเงินประกันไปจริง/.test(al) && /ทุกกรณี: 🔒/.test(al),
+       'dep_start ว่าง → ตั้ง ส.ค.: ห้าม (ก.ค. 69 (1 คน)) · ข้อความ "ยอดที่ระบบคิดย้อนหลัง … อาจไม่ได้หักจริง — ตรวจกับสลิปจริงก่อน" ไม่ใช่ "หักไปจริง"');
+    E(`settings.depStart='2026-08'`);
+
+    // ② 🔒 ส.ค./ก.ย. ครบ (เจ้าของกดด้วยยอดที่ระบบคิด) → เลือก ต.ค. ได้ · ยอดเท่าเดิม
+    ok(V1LOCK(A)===4, '🔒 ส.ค./ก.ย. ลิด + ออฟ (4 แถว · 500 ทุกแถว) — ใหม่ไม่มีวันทำงานก่อน ต.ค. ไม่ต้องล็อก');
+    E(`renderDeposit()`);
+    ok(!opt(A, '2026-09').d && !opt(A, '2026-10').d && !/ข้าม/.test(opt(A, '2026-10').t), 'หลัง 🔒 ครบ: ตัวเลือก ก.ย./ต.ค. เลือกได้');
+    //    อีกเครื่องเพิ่งปลด 🔒 ส.ค. ของลิด (เครื่องนี้ยังเห็น 🔒) → ตัวกันชั้นแรกผ่าน · depLockBefore อ่านสมุดใหม่ → เช็คซ้ำ = ห้าม
+    A.T.deposit_entries = A.T.deposit_entries.filter(r => !(r.employee_id===1 && r.period==='2026-08'));
+    al = await change(A, '2026-10');
+    ok(E(`settings.depStart`)==='2026-08' && /ส\.ค\. 69 \(1 คน\)/.test(al) && !A.db.log.length && E(`depositCalc(lid,'2026-09').collected`)===1000,
+       'อีกเครื่องปลด 🔒 ส.ค. ของลิดระหว่างนั้น → อ่านใหม่แล้วเช็คซ้ำ = ห้าม "ส.ค. 69 (1 คน)" · ไม่บันทึก · สะสมลิด ก.ย. ยัง 1,000');
+    A.T.deposit_entries.push({ id:99001, employee_id:1, period:'2026-08', amount:500, note:'lock' }); await E(`depRefresh()`);
+    //    อีกเครื่องเปลี่ยน "เริ่มหักตั้งแต่งวด" ระหว่างหน้าต่างยืนยัน (realtime อัปเดต settings ในเครื่อง) → ไม่บันทึกทับ · toast ให้ตรวจแล้วลองใหม่
+    A.io.confirmAns = m => { if(/เปลี่ยน "เริ่มหักตั้งแต่งวด" งวด ส\.ค\. 2569 → งวด ต\.ค\. 2569/.test(m)) E(`settings.depStart='2026-09'`); return true; };
+    al = await change(A, '2026-10'); A.io.confirmAns = null;
+    ok(E(`settings.depStart`)==='2026-09' && !al && A.io.confirms.length >= 1 && !A.db.log.some(l=>l.table==='payroll_settings') && /เพิ่งถูกเปลี่ยนจากเครื่องอื่น/.test(A.d.getElementById('toast').textContent),
+       'อีกเครื่องเปลี่ยน dep_start (→ ก.ย.) ระหว่างถามยืนยัน → ไม่ saveSetting ทับ · toast "เพิ่งถูกเปลี่ยนจากเครื่องอื่น"');
+    E(`settings.depStart='2026-08'; renderDeposit();`);
+    //    ไม่ใช่เจ้าของ (สิทธิ์หน้า 🛡️ ครบ) = ห้ามเหมือนเดิม
+    E(`AUTH={username:'m',role:'staff',apps:{payroll:{dep:'vaed'}}}; applyUser(AUTH); go('dep'); renderDeposit();`);
+    ok(E(`document.getElementById('depStartSel').disabled`)===true, 'ไม่ใช่เจ้าของ: ช่อง "เริ่มหักตั้งแต่งวด" เลือกไม่ได้');
+    al = await change(A, '2026-10');
+    ok(E(`settings.depStart`)==='2026-08' && !al && !A.db.log.length && /ได้เฉพาะเจ้าของ\/แอดมิน/.test(A.d.getElementById('toast').textContent),
+       'ไม่ใช่เจ้าของ (🔒 ครบแล้ว) เลือก ต.ค. → "ได้เฉพาะเจ้าของ/แอดมิน" · ไม่เปลี่ยน');
+    E(`AUTH={username:'เน',role:'owner'}; applyUser(AUTH); go('dep'); renderDeposit();`);
+    al = await change(A, '2026-10');
+    ok(E(`settings.depStart`)==='2026-10' && !al && A.db.log.some(l=>l.table==='payroll_settings' && l.op==='update' && l.payload.dep_start==='2026-10'),
+       'เจ้าของ หลัง 🔒 ส.ค./ก.ย. ครบ → เลื่อนเป็น ต.ค. ได้ (บันทึก dep_start)');
+    ok(snap(A)===s0, 'หลังเลื่อน: ยอดเท่าเดิมทุกบาท (ลิด/ออฟ 500 · 500 · 300 → 1,300 · ใหม่ 300) — ' + snap(A));
+    //    ผลตรวจ: 🔒 → เลื่อน → ปลด 🔒 ส.ค. = ทางอ้อมตัวกัน (ปลดแล้ว 0 ถาวร · 🔒 ใหม่ไม่ได้ depLockOpen · เลื่อนกลับไม่ได้ depStartBack) → ห้ามปลด · แก้ยอดยังได้
+    E(`document.getElementById('depPeriodSel').value='2026-08'; renderDeposit();`);
+    ok(/ปลดล็อกไม่ได้/.test(E(`(b=>b?b.title:'')(document.querySelector('#depTable button[data-emp="1"][data-p="2026-08"]'))`)),
+       'ปุ่ม ✎ บนชิป 🔒 งวดก่อน "เริ่มหักตั้งแต่งวด": title "แก้ยอด … ปลดล็อกไม่ได้"');
+    A.io.alerts.length = 0; A.io.prompts.length = 0; A.io.confirms.length = 0; A.db.log.length = 0; A.io.promptAns = [''];
+    await E(`editDeposit(1,'2026-08')`); E(`shifts = __sh42`);
+    al = A.io.alerts.join('\n');
+    ok(/ปลดล็อกไม่ได้/.test(A.io.prompts[0]||'') && !/เว้นว่างแล้วตกลง = ปลดล็อก/.test(A.io.prompts[0]||'') && /ปลดล็อก งวด ส\.ค\. 2569 ของ ลิด ไม่ได้/.test(al) && /ปลดแล้วยอดเป็น 0 ถาวร/.test(al) &&
+       !A.io.confirms.length && !A.db.log.length && snap(A)===s0 && E(`depositCalc(lid,'2026-09').collected`)===1000,
+       'เลื่อนแล้ว ✎ ปลด 🔒 ส.ค. ของลิด (เว้นว่าง) → ห้าม "ปลดแล้วยอดเป็น 0 ถาวร" · ไม่เขียน · ยอดสะสมไม่เปลี่ยน (ก.ย. 1,000)');
+    A.io.promptAns = ['450']; await E(`editDeposit(1,'2026-08')`); E(`shifts = __sh42`);
+    const s450 = snap(A);
+    A.io.promptAns = ['500']; await E(`editDeposit(1,'2026-08')`); E(`shifts = __sh42`);
+    ok(/ลิด 450>450 500>950 300>1250/.test(s450) && snap(A)===s0 && A.T.deposit_entries.some(r=>r.employee_id===1 && r.period==='2026-08' && r.note==='lock' && r.amount===500),
+       'งวดก่อน "เริ่มหักตั้งแต่งวด" ✎ แก้ยอด 🔒 ยังได้ (450 → สะสม 950/1,250) แล้วแก้กลับ 500 = เท่าเดิม');
+    //    ทำตาม alert: 🔒 ครบแล้วค่อยปิดหักรายคน → ส.ค./ก.ย. ที่ 🔒 ยังนับ (ปิดหักมีผลเฉพาะงวดที่ยังไม่ 🔒)
+    await E(`updDepField(1,'deposit_on',false)`); E(`shifts = __sh42`);
+    ok(/ลิด 500>500 500>1000 0>1000/.test(snap(A)) && /ออฟ 500>500 500>1000 300>1300/.test(snap(A)), '🔒 ครบแล้วปิดหักลิด → ส.ค./ก.ย. ยังนับ 500/500 (สะสม 1,000) · ต.ค. ไม่หัก · ออฟไม่เปลี่ยน — ' + snap(A));
+    ok(!A.errs.length, 'ไม่มี JS error (' + A.errs.slice(0,2).join(' | ') + ')');
+
+    // ③ งวดที่ข้ามยังไม่จ่าย (20 ส.ค. · ส.ค. จ่าย 5 ก.ย.) → เลื่อนได้เหมือนเดิม
+    const B = await mk42('2026-08-20T10:00:00+07:00', '2026-08-19');
+    ok(B.E(`depositCalc(lid,'2026-08').ded`)===500 && B.E(`depStartFwd('2026-08','2026-09').length`)===0, '20 ส.ค.: ส.ค. ยังไม่ถึงวันจ่าย (ลิดหัก 500 ในสลิปที่ยังไม่ออก) → ไม่ติด');
+    al = await change(B, '2026-09');
+    ok(B.E(`settings.depStart`)==='2026-09' && !al && B.E(`depositCalc(lid,'2026-08').ded`)===0, 'เลื่อน ส.ค. → ก.ย. ก่อนวันจ่าย ส.ค. = ได้ (ส.ค. ไม่หัก — ยังไม่ได้จ่ายจริง)');
+
+    // ④ ไม่มีใครถูกหักในงวดที่ข้าม (คนใหม่เริ่ม ต.ค. · ปิดหัก · เป้า 0) → เลื่อนได้
+    const C = await mk42('2026-10-19T11:32:00+07:00', '2026-10-18', ['nw', 'stop', 'zero']);
+    ok(C.E(`depositCalc(stop,'2026-08').ded + depositCalc(zero,'2026-09').ded`)===0 && !opt(C, '2026-10').d, 'ส.ค./ก.ย. จ่ายแล้วแต่ไม่มีใครถูกหัก (ปิดหัก/เป้า 0/เริ่ม ต.ค.) → ตัวเลือก ต.ค. เลือกได้');
+    al = await change(C, '2026-10');
+    ok(C.E(`settings.depStart`)==='2026-10' && !al && C.E(`depositCalc(nw,'2026-10').ded`)===300, 'เลื่อน ส.ค. → ต.ค. = ได้ · ใหม่ ต.ค. ยังหัก 300');
+    ok(!B.errs.length && !C.errs.length, 'ไม่มี JS error (' + B.errs.concat(C.errs).slice(0,2).join(' | ') + ')');
+
+    // ⑤ "จ่ายแล้ว" ตามรอบของแต่ละคน (periodRangeE · ไม่ใช่ปฏิทินหน้าร้าน/สาขาไหนก็ได้) — dep_start = ต.ค. · ออฟฟิศ ต.ค. 1–31 จ่าย 31 ต.ค. · หน้าร้าน ต.ค. จ่าย 5 พ.ย.
+    const D = await mk42('2026-11-02T10:00:00+07:00', '2026-11-01', ['lid', 'off']);
+    D.E(`settings.depStart='2026-10'`);
+    ok(D.E(`depositCalc(lid,'2026-10').ded`)===300 && D.E(`depositCalc(off,'2026-10').ded`)===300, '2 พ.ย. (dep_start ต.ค.): ลิด/ออฟ ต.ค. หัก 300 · ยังไม่ 🔒 (ออฟฟิศไม่ล็อกเองวันจ่าย)');
+    al = await change(D, '2026-11');
+    ok(D.E(`settings.depStart`)==='2026-10' && /ต\.ค\. 69 \(1 คน\)/.test(al) && !D.db.log.length,
+       'เลื่อน ต.ค. → พ.ย.: ห้าม "ต.ค. 69 (1 คน)" = ออฟฟิศ (จ่าย 31 ต.ค. แล้ว) · หน้าร้านยังไม่ถึงวันจ่าย 5 พ.ย. ไม่นับ — ' + (al.split('\n')[1]||''));
+    //    วันจ่ายของออฟฟิศ (31 ต.ค. 20:00 · ไฟล์ K BIZ/โอนวันนี้) = นับว่าจ่ายแล้ว (pdPaid นับวันถัดไป — ผลตรวจ) · วันก่อนหน้า = ยังไม่จ่าย
+    const F = await mk42('2026-10-31T20:00:00+07:00', '2026-10-31', ['lid', 'off']);
+    F.E(`settings.depStart='2026-10'`);
+    ok(F.E(`JSON.stringify(depStartFwd('2026-10','2026-11'))`)==='[{"p":"2026-10","n":1}]' && F.E(`pdPaid(off,'2026-10',bizToday())`)===false,
+       'วันจ่ายออฟฟิศ 31 ต.ค.: depStartFwd ต.ค. → พ.ย. = ติด ต.ค. (1 คน) แม้ pdPaid ยังเป็น false');
+    al = await change(F, '2026-11');
+    ok(F.E(`settings.depStart`)==='2026-10' && /ต\.ค\. 69 \(1 คน\)/.test(al) && /ออฟฟิศ 🔒 ได้วันถัดจากวันจ่าย/.test(al), 'เลื่อนวันจ่ายออฟฟิศ = ห้าม · บอก "ออฟฟิศ 🔒 ได้วันถัดจากวันจ่าย"');
+    const G = await mk42('2026-10-30T20:00:00+07:00', '2026-10-30', ['lid', 'off']);
+    G.E(`settings.depStart='2026-10'`);
+    ok(G.E(`depStartFwd('2026-10','2026-11').length`)===0, '30 ต.ค. (ก่อนวันจ่ายออฟฟิศ) → ไม่ติด');
+    ok(!D.errs.length && !F.errs.length && !G.errs.length, 'ไม่มี JS error (' + D.errs.concat(F.errs, G.errs).slice(0,2).join(' | ') + ')');
   }
   }catch(e){ console.log('CRASH', e.stack); fail++; }
   console.log(fail ? fail+' FAILED' : 'ALL PASSED'); process.exit(fail ? 1 : 0);
