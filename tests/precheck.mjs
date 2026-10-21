@@ -27,9 +27,9 @@ const warn = m => { nWarn++; out.push('  ⚠ ' + m); };
 // ---------- รายชื่อไฟล์ (ตาม CLAUDE.md) ----------
 const LOGIN_FILES = ['index.html', 'jjmk-pnl.html', 'jjmk-owner.html', 'jjmk-admin.html', 'jjmk-payroll.html',
   'jjmk-calendar.html', 'jjmk-invoice.html', 'jjmk-social.html', 'jjmk-maint.html', 'jjmk-kpi.html',
-  'jjmk-stockcheck.html', 'jjmk-kitchen.html', 'jjmk-order.html', 'jjmk-office.html'];
+  'jjmk-stockcheck.html', 'jjmk-kitchen.html', 'jjmk-order.html', 'jjmk-office.html', 'jjmk-allergy.html'];
 const GATE_FILES = ['index.html', 'jjmk-pnl.html', 'jjmk-owner.html', 'jjmk-admin.html', 'jjmk-payroll.html',
-  'jjmk-calendar.html', 'jjmk-invoice.html', 'jjmk-office.html'];
+  'jjmk-calendar.html', 'jjmk-invoice.html', 'jjmk-office.html', 'jjmk-allergy.html'];
 const JJBR_FILES = [...LOGIN_FILES, 'jjmk-menu.html'];
 const SPD_FILES = ['jjmk-kitchen.html', 'jjmk-stockcheck.html'];
 // แอปที่ต้องมีลากหน้าลง = รีเฟรช · ไม่ต้องมี: เมนู QR หน้าลูกค้า (ไม่ใช่แอปพนักงาน) · QR สั่งอาหาร = รอเจ้าของตัดสิน (CLAUDE.md)
@@ -70,7 +70,7 @@ function diffHint(a, b) {
 }
 
 // ===================================================================
-sec('1. JJ Login — ต้องมีครบ 14 ไฟล์ และเหมือนกันทุกไฟล์ (ต่างแค่ var APP=)');
+sec('1. JJ Login — ต้องมีครบ 15 ไฟล์ และเหมือนกันทุกไฟล์ (ต่างแค่ var APP=)');
 {
   const blocks = {};
   for (const f of [...LOGIN_FILES, ...EXTRA]) {
@@ -95,7 +95,7 @@ sec('1. JJ Login — ต้องมีครบ 14 ไฟล์ และเห
   else pass(`ทะเบียนแอป A ครบทุกไอคอนในหน้าแรก (${apps.length} แอป)`);
 }
 
-sec('2. JJ Gate — 8 ไฟล์ เหมือนกันทุกไฟล์ (ต่างแค่ var APP=)');
+sec('2. JJ Gate — 9 ไฟล์ เหมือนกันทุกไฟล์ (ต่างแค่ var APP=)');
 {
   const blocks = {};
   for (const f of GATE_FILES) {
@@ -111,7 +111,7 @@ sec('2. JJ Gate — 8 ไฟล์ เหมือนกันทุกไฟล
   }
 }
 
-sec('3. ทะเบียนสาขากลาง (JJBR) — 15 ไฟล์ เหมือนกันทุกไบต์');
+sec('3. ทะเบียนสาขากลาง (JJBR) — 16 ไฟล์ เหมือนกันทุกไบต์');
 {
   const blocks = {};
   for (const f of [...JJBR_FILES, ...EXTRA]) blocks[f] = cut(rd(f), '<!-- JJBR-BEGIN', '<!-- JJBR-END -->');

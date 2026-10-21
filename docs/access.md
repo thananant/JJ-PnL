@@ -6,7 +6,7 @@
 
 - **พนักงานล็อกอินที่หน้าแรก (`index.html`) ที่เดียว** แล้วเห็นเฉพาะแอปที่ตัวเองได้รับสิทธิ์ (อ่านจาก `pnl_users.apps` ที่ admin ตั้งในหน้า JJ Access)
 - ล็อกอินสำเร็จ → หน้าแรก**แจกใบผ่านให้ทุกแอปที่ใช้บัญชี `pnl_users`** ผ่าน localStorage (ฟังก์ชัน `spreadSession`) จึงเข้าแอปต่อได้เลยไม่ต้องกรอกซ้ำ:
-  `jjpnl_auth` (P&L · Owner · Access) · `jjpay_sess` (Payroll) · `jjsocial_sess` · `jjcal_sess` · `jjmk_inv_sess` · `jjoffice_sess`
+  `jjpnl_auth` (P&L · Owner · Access) · `jjpay_sess` (Payroll) · `jjsocial_sess` · `jjcal_sess` · `jjmk_inv_sess` · `jjoffice_sess` · `jjalg_sess` (JJ Allergy)
   — **เพิ่มแอปใหม่ที่ใช้ `pnl_users` ต้องเพิ่มคีย์ใน `spreadSession` และ `clearSession` ด้วย** ไม่งั้นต้องล็อกอินซ้ำ
 - **"ติ๊กแอปไหนให้ ก็เห็นแอปนั้น"** — ไอคอนบนหน้าแรกตรงกับที่ตั้งใน JJ Access เป๊ะ ไม่มีข้อยกเว้น (เจ้าของสั่ง 2026-09-21 — เดิมมีรายการ `ALWAYS` ให้ KPI/นับสต๊อก/ครัวกลาง/ซ่อมบำรุงแสดงเสมอ **เอาออกแล้ว** เพราะทำให้เห็นแอปเกินสิทธิ์ที่ให้)
 - **ทุกแอปใช้บัญชีกลาง `pnl_users` ชุดเดียวกันหมดแล้ว (2026-09-24)** — นับสต๊อก (`sc_users`) และครัวกลาง (Supabase Auth + `app_users`) เป็น 2 ตัวสุดท้ายที่ย้ายมา · ติ๊กที่ JJ Access จึงคุมทั้ง "เห็นไอคอนไหม" และ "เข้าแอปนั้นได้ไหม"
@@ -166,10 +166,10 @@
 พร้อม **ไอคอนประจำแอพ** (ชุดเดียวกับหน้าศูนย์รวมแอพเป๊ะ) + โลโก้ร้านเป็นตราเล็กมุมขวาล่าง
 เพื่อเตือนว่ากำลังเข้าแอพไหน (เจ้าของสั่ง: "อยากให้มีไอคอนของแต่ละระบบ เตือนเวลา login ด้วย")
 
-- โค้ดคือบล็อก `window.JJLogin` (+ CSS ในตัว) ฝังก่อน `</head>` ของ **14 ไฟล์**:
+- โค้ดคือบล็อก `window.JJLogin` (+ CSS ในตัว) ฝังก่อน `</head>` ของ **15 ไฟล์**:
   `index.html` · `jjmk-pnl.html` · `jjmk-owner.html` · `jjmk-admin.html` · `jjmk-payroll.html` ·
   `jjmk-calendar.html` · `jjmk-invoice.html` · `jjmk-social.html` · `jjmk-maint.html` ·
-  `jjmk-kpi.html` · `jjmk-stockcheck.html` · `jjmk-kitchen.html` · `jjmk-order.html` · `jjmk-office.html`
+  `jjmk-kpi.html` · `jjmk-stockcheck.html` · `jjmk-kitchen.html` · `jjmk-order.html` · `jjmk-office.html` · `jjmk-allergy.html`
   — **บล็อกเหมือนกันทุกไฟล์ ต่างแค่ `var APP=` บรรทัดแรก · แก้ที่ไหนต้องแก้ให้ครบทุกไฟล์**
   (วิธีที่ใช้จริง: แก้ไฟล์ต้นฉบับแล้ว sync ทับทุกไฟล์ด้วยสคริปต์ อย่าไล่แก้มือทีละไฟล์)
 - ทะเบียนแอพอยู่ในตัวแปร `A` ของบล็อก (อิโมจิ + ชื่อ + คำอธิบาย + สีไล่เฉด) — **ต้องตรงกับไอคอนใน `index.html`**
@@ -194,9 +194,9 @@
 **กติกา: เข้าจากหน้าศูนย์รวมแอพ = ใช้ได้เลยตามสิทธิ์ · เข้าด้วย URL ตรง = ต้องใส่รหัสผ่านใหม่ทุกครั้ง**
 (กันกรณีลิงก์ถูกส่งต่อ แล้วเครื่องนั้นมี session ค้างอยู่ → เดิมเปิดเข้าได้เลย)
 
-- โค้ดด่านคือบล็อก `window.JJGate` (+ `<style>` คู่กัน) ฝังไว้ก่อน `</head>` ของ **8 ไฟล์**:
+- โค้ดด่านคือบล็อก `window.JJGate` (+ `<style>` คู่กัน) ฝังไว้ก่อน `</head>` ของ **9 ไฟล์**:
   `index.html` · `jjmk-pnl.html` · `jjmk-owner.html` · `jjmk-admin.html` · `jjmk-payroll.html` ·
-  `jjmk-calendar.html` · `jjmk-invoice.html` · `jjmk-office.html`
+  `jjmk-calendar.html` · `jjmk-invoice.html` · `jjmk-office.html` · `jjmk-allergy.html`
   — **บล็อกเหมือนกันทุกไฟล์ ต่างแค่ `var APP=` บรรทัดแรก · แก้ที่ไหนต้องแก้ให้ครบทุกไฟล์**
 - **JJ Social + ซ่อมบำรุง ไม่ได้ฝังบล็อกนี้** — สองแอพนั้นมีระบบของตัวเองที่ทำเรื่องเดียวกัน
   (ใบผ่าน `jjsso_ticket` + session ประจำแท็บใน `sessionStorage`) ทำงานร่วมกันได้ ไม่ต้องรวมเป็นอันเดียว:

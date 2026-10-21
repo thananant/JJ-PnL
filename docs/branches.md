@@ -10,7 +10,7 @@
   `kind` store/office/kitchen · `short` · `stk_id` (= `branches.id` ของนับสต๊อก · สาขาใหม่ = รหัสสาขา) · `color` · `active` · `opened_on` · `tax_branch` (5 หลัก = สาขาที่ … บนใบกำกับ · ว่าง = สำนักงานใหญ่) · `addr`
   · `branches.code` (นับสต๊อก/ซ่อมบำรุง) · `pnl_users.unit` / `cal_special_days.order_branches` รับรหัสใหม่ได้แล้ว (regex แทนรายชื่อตายตัว)
   · ยังไม่รัน SQL = ทุกแอปทำงานเหมือนเดิม แท็บ 🏪 ขึ้นแถบให้รัน · JJCK/OFFICE ไม่ใช่แถวในทะเบียน (หน่วยงานคงที่) · P&L เรียกออฟฟิศว่า JJOF (`JJBR.canon`)
-- **บล็อก `JJBR`** (`<!-- JJBR-BEGIN … JJBR-END -->` ก่อน `</head>` ของ 15 ไฟล์: index · admin · pnl · owner · payroll · calendar · invoice · social · maint · kpi · stockcheck · kitchen · order · office · menu)
+- **บล็อก `JJBR`** (`<!-- JJBR-BEGIN … JJBR-END -->` ก่อน `</head>` ของ 16 ไฟล์: index · admin · pnl · owner · payroll · calendar · invoice · social · maint · kpi · stockcheck · kitchen · order · office · allergy · menu)
   **เหมือนกันทุกไบต์ — แก้ที่ไฟล์ต้นแบบแล้ว sync ทุกไฟล์ด้วยสคริปต์ ห้ามแก้มือทีละไฟล์** · อ่านทะเบียน (แคช `localStorage.jjbr_cache` 90 วัน → ไม่มี = JJRD/JJLP) ·
   `JJBR.load(url,key)` ไม่ throw · หมดเวลา 8 วิ · ลองใหม่เฉพาะ HTTP 4xx (หมดเวลา/เน็ตหลุดไม่ลองซ้ำ) · API: `stores()` `unitCodes()` `get/name/short/stk/byStk/color/isStore/canon/pnl/extra/codeOk/onChange`
 - **กติกาทุกแอป (ห้ามเปลี่ยน)**: สาขาเดิม (JJRD/JJLP/JJCK/OFFICE/JJOF) ชื่อ/สี/ลำดับ/สูตรเหมือนเดิมทุกตัวอักษร — แอปเติมเฉพาะสาขาที่ยังไม่รู้จัก (`JJBR.extra`) แบบแก้ค่าคงที่เดิมในที่ ·
