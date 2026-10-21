@@ -73,6 +73,7 @@ const APPS = [
   { id: 'kitchen2', file: 'jjmk-kitchen-new.html', login: 1, optional: 1 },
   { id: 'order', file: 'jjmk-order.html', login: 1, pass: '1234' },   // แอปนี้ใช้ PIN พนักงาน (ค่าตั้งต้น 1234) ไม่ใช่บัญชีกลาง
   { id: 'office', file: 'jjmk-office.html', login: 1 },
+  { id: 'allergy', file: 'jjmk-allergy.html', login: 1 },
   { id: 'menu', file: 'jjmk-menu.html?b=JJRD&t=1' },
   { id: 'privacy', file: 'privacy.html' },
 ];

@@ -59,7 +59,7 @@
 
 ## 🏪 ทะเบียนสาขากลาง + ปุ่มเปิดสาขาใหม่ทุกระบบ (2026-10-15) — **อ่าน `docs/branches.md` ก่อนแก้**
 
-- ทะเบียน = `pnl_branches` (+ ช่องจาก `jjmk-branches.sql`) · บล็อก `JJBR` (`<!-- JJBR-BEGIN … JJBR-END -->`) ใน 15 ไฟล์ **เหมือนกันทุกไบต์ — แก้ที่ต้นแบบแล้ว sync ด้วยสคริปต์ ห้ามแก้มือ**
+- ทะเบียน = `pnl_branches` (+ ช่องจาก `jjmk-branches.sql`) · บล็อก `JJBR` (`<!-- JJBR-BEGIN … JJBR-END -->`) ใน 16 ไฟล์ **เหมือนกันทุกไบต์ — แก้ที่ต้นแบบแล้ว sync ด้วยสคริปต์ ห้ามแก้มือ**
 - กติกาทุกแอป: สาขาเดิม (JJRD/JJLP/JJCK/OFFICE/JJOF) ชื่อ/สี/ลำดับ/สูตรเหมือนเดิม แอปเติมเฉพาะสาขาใหม่ (`JJBR.extra`) · ทะเบียนอ่านไม่ได้ = พฤติกรรมเดิม · `_br` fail closed · ห้ามรอทะเบียนจนล็อกอินช้า
 - ปุ่มเดียว = JJ Access แท็บ 🏪 → RPC `jj_branch_open` (ยกเลิก `jj_branch_undo` เฉพาะยังไม่มีข้อมูลจริง)
 
@@ -67,7 +67,7 @@
 
 - ล็อกอินที่ `index.html` ที่เดียว → `spreadSession`/`clearSession` แจกใบผ่านทุกคีย์ (**เพิ่มแอปใหม่ต้องเพิ่มคีย์**) · "ติ๊กแอปไหนให้ ก็เห็นแอปนั้น" ไม่มีข้อยกเว้น · `apps` ว่าง/เช็คสิทธิ์ไม่ได้ = เห็นทุกแอป · ไม่ล็อกอิน = หน้าล็อกอินเต็มจอ (ไม่มีปุ่ม "ดูแอพทั้งหมด" · `index.html` ล้าง `jjhub_skip` **ห้ามเอาออก**)
 - ทุกแอปใช้ `pnl_users` ชุดเดียว (`pwHash` salt `JJPNL`) · `isBoss(u)` = admin หรือ owner **ห้ามเช็ค `role==='admin'` ตรง ๆ** · `userReady(u)` = `active!==false && (status==null||status==='active')` **ห้ามตัด** · ครัวกลาง/ซ่อมบำรุงต้องรัน SQL เปิดสิทธิ์ anon (`jjmk_kitchen_central.sql`/`jjmk_maint_access.sql`)
-- **JJ Login** = บล็อก `window.JJLogin` ใน 14 ไฟล์ · **JJ Gate** = บล็อก `window.JJGate` ใน 8 ไฟล์ — เหมือนกันทุกไฟล์ต่างแค่ `var APP=` · **sync ด้วยสคริปต์ ห้ามแก้มือ** · เปิด URL ตรง = ใส่รหัสใหม่เสมอ · ล็อกอินสำเร็จต้อง `JJGate.grant()` · เช็คบัญชีกับ DB ไม่ได้ = ไม่ปล่อยเข้า · kiosk ของ KPI ไม่ต้องล็อกอิน
+- **JJ Login** = บล็อก `window.JJLogin` ใน 15 ไฟล์ · **JJ Gate** = บล็อก `window.JJGate` ใน 9 ไฟล์ — เหมือนกันทุกไฟล์ต่างแค่ `var APP=` · **sync ด้วยสคริปต์ ห้ามแก้มือ** · เปิด URL ตรง = ใส่รหัสใหม่เสมอ · ล็อกอินสำเร็จต้อง `JJGate.grant()` · เช็คบัญชีกับ DB ไม่ได้ = ไม่ปล่อยเข้า · kiosk ของ KPI ไม่ต้องล็อกอิน
 - ⚠️ **JJ Login เคยหายจากการเขียนทับไฟล์ 5 ครั้ง** → `git fetch`+rebase บน `origin/main` ก่อน commit และรัน `node tests/precheck.mjs` ทุกครั้ง (กู้: `git diff 2266081^ 2266081 -- <ไฟล์> | git apply --3way`)
 - เห็นเฉพาะสาขา: `pnl_users.apps.<แอป>._br` (`BR_SCOPED` ใน jjmk-admin) · admin/owner ทุกสาขาเสมอ · fail closed · โค้ดที่ไล่ `apps.<แอป>` ข้ามคีย์ขึ้นต้น `_`
 - สมัครพนักงาน (`jjmk-signup.sql` · อายุคิดจาก `birth_date`) · ลืมรหัส 6 หลักเข้ากลุ่ม LINE ผ่าน Edge Function `signup-notify` (secret `LINE_TOKEN` · ไอดีกลุ่ม `pnl_settings.line_group_id` · **ห้ามเก็บ token ใน `pnl_settings`** · `RQ_MIN`=`RESET_MIN` · เขียนคำขอแบบ CAS ห้ามอ่าน→ทับ · ห้ามแปลงชื่อผู้ใช้เป็นตัวเล็ก · โค้ด .ts วางใน Edge Functions เท่านั้น ชี้ไปปุ่ม 📋 ในแอป) · ลาออก = `active=false` ไม่ลบ (ใบสมัครห้ามมีปุ่มรับกลับ) · ย้อนสิทธิ์ (`jjmk-access-undo.sql` · โค้ดแก้ `pnl_users` ต้องส่ง snap)
