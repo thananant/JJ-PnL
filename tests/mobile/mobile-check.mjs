@@ -57,7 +57,11 @@ const APPS = [
   // 🛡️ เงินประกัน / 🐷 เงินสำรองเลี้ยงชีพ (2026-10-20) — ข้อมูลจำลอง + เปิดหน้าต่างพรีวิว 🔒 / 💸 / เพิ่มสมาชิก / ถอน ระหว่างตรวจ (steps)
   { id: 'payroll-dep', file: 'jjmk-payroll.html#dep', login: 1, fx: payrollMoneyFixture, steps: [
     { label: 'หน้าต่าง 🔒 ปิดยอดงวดก่อน', js: "(async()=>{ const s=document.getElementById('depPeriodSel'); s.value=s.options[Math.min(1,s.options.length-1)].value; await depLockOpen(); })()", close: 'depLockBg' },
-    { label: 'หน้าต่าง 💸 คืนส่วนเกิน', js: "(async()=>{ const s=document.getElementById('depPeriodSel'); s.value=s.options[0].value; renderDeposit(); await depRefundOpen(); })()", close: 'depRefBg' } ] },
+    { label: 'หน้าต่าง 💸 คืนส่วนเกิน', js: "(async()=>{ const s=document.getElementById('depPeriodSel'); s.value=s.options[0].value; renderDeposit(); await depRefundOpen(); })()", close: 'depRefBg' },
+    // รอบ 10: 📚 ประวัติเงินเดือน (การ์ดที่ ≤560px) · 🛡️ ประวัติเงินประกันรายคน · 🕘 ค้น "ประกัน"
+    { label: '🪪 แท็บเงินเดือน (📚 ประวัติเงินเดือน)', js: "(()=>{ if(!document.querySelector('#detailContent')) throw new Error('no detail'); detailEmpId = employees[0].id; detailTab = 'money'; go('detail'); renderDetail(true); if(!/ประวัติเงินเดือนย้อนหลัง/.test(document.getElementById('detailContent').textContent)) throw new Error('ไม่มีตาราง 📚'); })()" },
+    { label: '🪪 แท็บ เบิก·ยืม·ประกัน (🛡️ ประวัติเงินประกัน)', js: "(()=>{ detailTab = 'debt'; renderDetail(true); if(!/ประวัติเงินประกัน/.test(document.getElementById('detailContent').textContent)) throw new Error('ไม่มีการ์ด 🛡️'); })()" },
+    { label: '🕘 ค้น "ประกัน"', js: "(async()=>{ go('audit'); document.getElementById('audQ').value='ประกัน'; await renderAudit(); })()" } ] },
   { id: 'payroll-pvd', file: 'jjmk-payroll.html#pvd', login: 1, fx: payrollMoneyFixture, steps: [
     { label: 'หน้าต่าง ＋ เพิ่มสมาชิก', js: "openPvdForm()", close: 'pvdBg' },
     { label: 'หน้าต่าง 💸 ถอน/จ่ายคืน', js: "openPvdOut()", close: 'pvdOutBg' },

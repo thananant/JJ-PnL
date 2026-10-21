@@ -13,11 +13,13 @@ export function payrollMoneyFixture(nowMs = Date.now()) {
   const biz = new Date(wall); if (biz.getUTCHours() < 6) biz.setUTCDate(biz.getUTCDate() - 1); biz.setUTCHours(0, 0, 0, 0);
   const cur = periodOf(biz), prev = addP(cur, -1), prev2 = addP(cur, -2);
   const NAMES = [['แพร', 'สมใจ ใจดี', 'JJLP'], ['ต้น', 'AUNG KYAW', 'JJLP'], ['ฝน', 'นภา แก้วตา', 'JJLP'], ['บี', 'KHAM SENG', 'JJLP'], ['มายด์', 'วิภาวรรณ ศรีสุข', 'JJLP'],
-    ['จูน', 'MYINT OO', 'JJRD'], ['ไอซ์', 'ธนพล ทองดี', 'JJRD'], ['กิ๊ฟ', 'NANG HLA', 'JJRD'], ['ปอนด์', 'กมลวรรณ มีสุข', 'OFFICE'], ['ออม', 'SOMPHONE KEO', 'JJRD']];
-  const OPEN = [5000, 2500, 0, 1800, 0, 4000, 0, 1200, 0, 0];
+    ['จูน', 'MYINT OO', 'JJRD'], ['ไอซ์', 'ธนพล ทองดี', 'JJRD'], ['กิ๊ฟ', 'NANG HLA', 'JJRD'], ['ปอนด์', 'กมลวรรณ มีสุข', 'OFFICE'], ['ออม', 'SOMPHONE KEO', 'JJRD'],
+    ['โอ๋', 'PHONE SAI', 'JJLP']];
+  // ออม/โอ๋ = พ้นสภาพ สะสมเกินเป้า (🏦 โอนคืนนอกสลิป — ออมยังไม่โอน · โอ๋บันทึกโอนแล้ว) · ฝน/มายด์ เบิกเกินค่าแรงงวดนี้ (เงินประกันไม่ได้หัก/หักได้บางส่วน)
+  const OPEN = [5000, 2500, 0, 1800, 0, 4000, 0, 1200, 0, 4200, 3800];
   const emps = NAMES.map(([nick, full, branch], i) => ({
     id: i + 1, code: String(5100000000 + i * 7919), nick, full_name: full, branch, dept: branch === 'OFFICE' ? 'ออฟฟิศ' : 'หน้าร้าน', position: branch === 'OFFICE' ? 'บัญชี' : 'เสิร์ฟ',
-    wage_type: i % 3 === 2 ? 'daily' : 'monthly', rate: i % 3 === 2 ? 450 : 12000 + i * 500, work_mode: 'shift', shift_id: 1, target_hours: 10, active: i !== 9,
+    wage_type: i % 3 === 2 ? 'daily' : 'monthly', rate: i % 3 === 2 ? 450 : 12000 + i * 500, work_mode: 'shift', shift_id: 1, target_hours: 10, active: i < 9,
     off_weekdays: '', off_count: 0, holiday_pay: branch !== 'OFFICE', must_work_exempt: true,
     deposit_target: i === 4 ? 4000 : 3000, deposit_monthly: i === 4 ? 500 : 300, deposit_opening: OPEN[i], deposit_on: i !== 6,
     deposit_target_v1: 5000, deposit_monthly_v1: 500, bank_name: 'กสิกรไทย', bank_account: String(1000000000 + i * 1111111).slice(0, 10),
@@ -38,7 +40,11 @@ export function payrollMoneyFixture(nowMs = Date.now()) {
     { employee_id: 4, period: prev2, amount: 500, note: 'lock' },
     { employee_id: 3, period: prev, amount: 200, note: '' },
     { employee_id: 6, period: cur, amount: -2000, note: 'refund' },
+    { employee_id: 11, period: cur, amount: -800, note: 'xfer:' + ymd(biz) },
   ].map(r => ({ id: ++id, created_at: '', ...r }));
+  // เบิกกลางเดือนเกินค่าแรง → สุทธิก่อนหักเงินประกันติดลบ (ฝน) / เหลือ ~150 (มายด์ หักได้บางส่วน) — ใช้กับงวด ≥ 2026-10 เท่านั้น
+  const adv = cur >= '2026-10' ? [{ id: 1, employee_id: 3, period: cur, amount: 30000, taken_date: ymd(biz), note: '' },
+    { id: 2, employee_id: 5, period: cur, amount: 13850, taken_date: ymd(biz), note: '' }] : [];
   const pvdM = [
     { id: 1, employee_id: 1, emp_mode: 'pct', emp_value: 5, er_mode: 'match', er_value: 50, start_period: prev2, stop_period: '', opening_emp: 1000, opening_er: 500, join_date: null, consent: true, note: 'ส่วนร้านสมทบได้คืนเมื่อทำงานครบ 1 ปี (ยังไม่สรุป)' },
     { id: 2, employee_id: 3, emp_mode: 'fixed', emp_value: 500, er_mode: 'fixed', er_value: 200, start_period: prev, stop_period: '', opening_emp: 0, opening_er: 0, join_date: null, consent: false, note: '' },
@@ -49,7 +55,7 @@ export function payrollMoneyFixture(nowMs = Date.now()) {
   const pvdP = [{ id: 1, employee_id: 9, pay_date: ymd(biz), period: cur, amount: 1500, via: 'cash', note: 'ลาออก — ถอนบางส่วน' }];
   return {
     shifts: [{ id: 1, name: 'กะเช้า', start_time: '09:00', end_time: '18:00', in_grace: 5, out_grace: 0, sort_order: 1, dept_only: '' }],
-    employees: emps, punches, deposit_entries: dep, pvd_members: pvdM, pvd_entries: pvdE, pvd_payouts: pvdP,
+    employees: emps, punches, deposit_entries: dep, pvd_members: pvdM, pvd_entries: pvdE, pvd_payouts: pvdP, advances: adv,
     payroll_settings: [{ id: 1, cutoff_hour: 6, default_wage: 400, min_fine: 0, late_fine: 0, cut_day: 25, pay_day: 5, adv_day: 15, dep_start: prev2, month_divisor: 30 }],
     devices: [{ sn: 'SN_LP', branch: 'JJLP', name: 'ลาดพร้าว' }],
   };
