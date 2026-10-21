@@ -1120,7 +1120,7 @@ const V1LOCK = (A, ids) => { const rows = V1ROWS(A.E, ids); A.T.deposit_entries 
     io.promptAns = ['4300'];
     await E(`editDeposit(2,'2026-12')`);
     ok(T.deposit_entries.find(r=>r.employee_id===2 && r.period==='2026-12').amount===-4200, '✎ แถว 🏦 เพิ่มยอดเกินยอดเดิม (4,300) → ปฏิเสธ');
-    ok(/เงินประกัน v2\.1/.test(E(`DEP_VER_ASK`)), 'ข้อความเตือนรุ่นเครื่อง (🏦/🔒 จำเหตุผล) อ้างรุ่น "เงินประกัน v2.1"');
+    ok(/เงินประกัน v2\.[12]\b/.test(E(`DEP_VER_ASK`)), 'ข้อความเตือนรุ่นเครื่อง (🏦/🔒 จำเหตุผล) อ้างรุ่น "เงินประกัน v2.1" ขึ้นไป (v2.2 = 💵 เบิกคืน)');
   }
   // ============ 34) ผลตรวจรอบ 3: ล็อกก่อนแก้งวดที่จ่ายแล้ว = สิทธิ์ 🛡️/🐷 ครบ · ทิป/วันหยุด/สแกน/เงินยืม/MOU ล็อกก่อน · K BIZ ล็อกคนพ้นสภาพ ============
   { const A = boot({ now:'2026-11-06T12:00:00+07:00' }); const { E, io, T } = A; await wait(300);
@@ -3232,6 +3232,282 @@ const V1LOCK = (A, ids) => { const rows = V1ROWS(A.E, ids); A.T.deposit_entries 
     G.E(`settings.depStart='2026-10'`);
     ok(G.E(`depStartFwd('2026-10','2026-11').length`)===0, '30 ต.ค. (ก่อนวันจ่ายออฟฟิศ) → ไม่ติด');
     ok(!D.errs.length && !F.errs.length && !G.errs.length, 'ไม่มี JS error (' + D.errs.concat(F.errs, G.errs).slice(0,2).join(' | ') + ')');
+  }
+  // ============ 45) 💵 เบิกเงินประกันคืน (เจ้าของแจ้ง 2026-10-21: "น้อยเบิกเงินประกันไป 5000 ตอนนี้ต้องเป็น 0 และเริ่มหักใหม่เดือนนี้ ทำไมขึ้นว่ามีอยู่ 1000") ============
+  {
+    const D44 = (X, id, p) => JSON.parse(X.E(`JSON.stringify((d=>({ded:d.ded,before:d.before,collected:d.collected,po:d.po,over:d.over,remain:d.remain}))(depositCalc(employees.find(e=>e.id===${id}),'${p}')))`));
+    const seed44 = T => { R8.seed(T); T.deposit_payouts = T.deposit_payouts || [];
+      T.employees = [R8.EMP({ id:1, code:'N1', nick:'น้อย' }), R8.EMP({ id:2, code:'B1', nick:'บี', deposit_opening:3500 }), R8.EMP({ id:3, code:'G1', nick:'กอ', active:false, end_date:'2026-10-10' })];
+      T.punches = R8.withId(['N1','B1'].flatMap(c => R8.punRows(c, '2026-07-26', '2026-12-25')));
+      T.deposit_entries = [1,2].flatMap(id => R8.lockOf.map((p, i) => ({ id:id*10+i, employee_id:id, period:p, amount:500, note:'lock' }))); };
+    const btnOf = (X, id) => X.d.querySelector('#depTable button[onclick="depPoOpen(this)"][data-emp="' + id + '"]');
+    const openPo = async (X, id) => { await X.E(`depPoOpen(document.querySelector('#depTable button[onclick="depPoOpen(this)"][data-emp="${id}"]'))`); await wait(20); };
+    const db = makeDB(), T = db.T; seed44(T);
+    console.log('[45a 💵 น้อย: ส.ค./ก.ย. หัก 500 (🔒) → 21 ต.ค. เบิกคืน 1,000 (เงินสด) → สะสมหลัง ต.ค. 300 · หัก ต.ค. ยัง 300 · พ.ย. หักต่อ · สลิปไม่เปลี่ยน]');
+    const A = await R8.dev('2026-10-21T10:00:00+07:00', db); A.E(`payLockAuto=false`); await A.E(`loadAll()`);
+    const oct0 = D44(A, 1, '2026-10'), pay0 = R8.pay(A, 1, '2026-10'), nov0 = D44(A, 1, '2026-11');
+    ok(A.E('depPoReady') === true && oct0.before === 1000 && oct0.ded === 300 && oct0.collected === 1300 && nov0.ded === 300 && nov0.collected === 1600,
+       'ก่อนเบิก: ต.ค. สะสมก่อนงวด 1,000 (ส.ค./ก.ย. 500+500) · หัก 300 → 1,300 · พ.ย. 1,600 (' + JSON.stringify([oct0, nov0]) + ')');
+    A.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    ok(!!btnOf(A, 1) && !btnOf(A, 3) && /💵 เบิกคืน/.test(A.d.getElementById('depInfo').textContent), 'ตาราง 🛡️ ต.ค.: น้อยมีปุ่ม 💵 เบิกคืน · กอ (พ้นสภาพ) ไม่มี · หัวหน้าอธิบาย 💵');
+    await openPo(A, 1);
+    const info = A.d.getElementById('depPoInfo').textContent;
+    ok(A.d.getElementById('depPoBg').classList.contains('show') && /เบิกได้ไม่เกิน 1,000 บาท/.test(info) && /ยอดที่เก็บก่อนเข้าระบบ \(ก่อน ส\.ค\. 69\) ไม่อยู่ในแอป/.test(info) && /ไม่เข้าสลิป/.test(info),
+       'หน้าต่าง 💵: เบิกได้ไม่เกิน 1,000 · บอกชัดว่ายอดก่อนเข้าระบบ (ก่อน ส.ค. 69) ไม่อยู่ในแอป · นอกสลิป');
+    ok(A.d.getElementById('depPoAll').textContent === 'เบิกทั้งหมด (1,000)', 'ปุ่ม "เบิกทั้งหมด (1,000)"');
+    A.E(`document.getElementById('depPoAmt').value='1001'; depPoHint();`);
+    ok(/เกินยอดที่เบิกได้ 1,000 บาท/.test(A.d.getElementById('depPoHint').textContent), 'ใส่ 1,001 → ⛔ เกินยอดที่เบิกได้ 1,000');
+    await A.E(`depPoSave()`); await wait(20);
+    ok(T.deposit_payouts.length === 0, 'กดบันทึก 1,001 → ไม่เขียน');
+    A.E(`depPoFill(); document.getElementById('depPoVia').value='cash'; document.getElementById('depPoNote').value='เบิก 5,000 (รวมยอดก่อนเข้าระบบ)';`);
+    ok(A.E(`document.getElementById('depPoAmt').value`) === '1000' && /สะสมหลังงวด ต\.ค\. 2569 = 1,000 \+ หักงวดนี้ 300 − เบิก 1,000 = 300/.test(A.d.getElementById('depPoHint').textContent),
+       'เบิกทั้งหมด = 1,000 · พรีวิว "1,000 + หักงวดนี้ 300 − เบิก 1,000 = 300" (' + A.d.getElementById('depPoHint').textContent.slice(0, 120) + ')');
+    A.io.confirms.length = 0;
+    await A.E(`depPoSave()`); await wait(30);
+    const r1 = T.deposit_payouts[0] || {};
+    ok(T.deposit_payouts.length === 1 && r1.employee_id === 1 && r1.period === '2026-10' && r1.amount === 1000 && r1.via === 'cash' && r1.pay_date === '2026-10-21' && /นอกสลิป/.test(A.io.confirms[0] || '') && /ทุกเครื่องต้องเป็นรุ่น "2026-10-21 · เงินประกัน v2\.2"/.test(A.io.confirms[0] || ''),
+       'บันทึก 1 แถว deposit_payouts {น้อย · 2026-10 · 1,000 · cash · 21 ต.ค.} · ยืนยันบอก "นอกสลิป" + ทุกเครื่องต้องเป็นรุ่น v2.2 (' + JSON.stringify(r1) + ')');
+    const oct1 = D44(A, 1, '2026-10'), nov1 = D44(A, 1, '2026-11'), dec1 = D44(A, 1, '2026-12');
+    ok(oct1.ded === 300 && oct1.before === 1000 && oct1.po === 1000 && oct1.collected === 300, 'ต.ค.: หักยังเป็น 300 · สะสมหลัง ต.ค. = 300 (' + JSON.stringify(oct1) + ')');
+    ok(nov1.before === 300 && nov1.ded === 300 && nov1.collected === 600 && dec1.collected === 900, 'พ.ย. หักต่อ 300 → 600 · ธ.ค. 900 (หักต่อจนครบเป้า)');
+    ok(JSON.stringify(R8.pay(A, 1, '2026-10')) === JSON.stringify(pay0), 'สลิป ต.ค. (สุทธิ/หักเงินประกัน) เท่าเดิมทุกบาท — เบิกคืนนอกสลิป ' + JSON.stringify(pay0));
+    ok(JSON.stringify(D44(A, 1, '2026-09')) === JSON.stringify(D44(A, 1, '2026-09')) && D44(A, 1, '2026-09').collected === 1000, 'ก.ย. (ก่อนงวดที่เบิก) สะสม 1,000 เท่าเดิม');
+    const au = (T.payroll_audit || []).filter(x => x.tbl === 'deposit_payouts');
+    ok(au.length === 1 && /"amount":1000/.test(au[0].detail) && /"employee_id":1/.test(au[0].detail), 'ประวัติ 🕘 (payroll_audit) จดการบันทึก deposit_payouts');
+    A.E(`renderDeposit()`);
+    const cell = (btnOf(A, 1) || { closest:()=>null }).closest('td');
+    ok(!A.d.getElementById('depPoBg').classList.contains('show') && cell && /💵 เบิกคืน 1,000 · 21 ต\.ค\. · 💵 เงินสด/.test(cell.textContent) && /300/.test(cell.textContent),
+       'ตาราง 🛡️: ช่องสะสมของน้อย = 300 + ชิป "💵 เบิกคืน 1,000 · 21 ต.ค. · 💵 เงินสด"');
+    ok(/1,000 ฿💵 เบิกคืนนอกสลิปงวดนี้/.test(A.d.getElementById('depStats').textContent.replace(/\s+/g, '')) || /💵 เบิกคืนนอกสลิปงวดนี้/.test(A.d.getElementById('depStats').textContent), 'สถิติ 🛡️ มี "💵 เบิกคืนนอกสลิปงวดนี้"');
+    // เบิกซ้ำเกิน: ยอดที่เบิกได้เหลือ 0
+    await openPo(A, 1);
+    A.E(`document.getElementById('depPoAmt').value='1'; depPoHint();`);
+    ok(/เกินยอดที่เบิกได้ 0 บาท/.test(A.d.getElementById('depPoHint').textContent), 'เบิกซ้ำอีก 1 บาท → ⛔ เกินยอดที่เบิกได้ 0');
+    await A.E(`depPoSave()`); await wait(20);
+    ok(T.deposit_payouts.length === 1, '…ไม่เขียนแถวที่ 2');
+    // แก้ 1,000 → 800 แล้วกลับ 1,000
+    A.E(`depPoEditBtn({ dataset:{ id:'${r1.id}' } }); document.getElementById('depPoAmt').value='800'; depPoHint();`);
+    ok(A.d.getElementById('depPoFormHead').textContent === '✎ แก้รายการเบิกคืน' && /1,000 \+ หักงวดนี้ 300 − เบิก 800 = 500/.test(A.d.getElementById('depPoHint').textContent), '✎ แก้ → พรีวิวไม่นับรายการเดิม (1,000 + 300 − 800 = 500)');
+    await A.E(`depPoSave()`); await wait(30);
+    ok(T.deposit_payouts.length === 1 && T.deposit_payouts[0].amount === 800 && D44(A, 1, '2026-10').collected === 500 && D44(A, 1, '2026-10').ded === 300, 'แก้เป็น 800 → แถวเดิม 800 · สะสมหลัง ต.ค. 500 · หัก ต.ค. 300');
+    await openPo(A, 1);
+    A.E(`depPoEditBtn({ dataset:{ id:'${r1.id}' } }); document.getElementById('depPoAmt').value='1000';`);
+    await A.E(`depPoSave()`); await wait(30);
+    ok(T.deposit_payouts[0].amount === 1000 && D44(A, 1, '2026-10').collected === 300, 'แก้กลับ 1,000 → สะสม 300');
+    // ประวัติรายคน
+    const h = txt(A.E, `dtDepHistory(employees.find(e=>e.id===1), '2026-11')`);
+    ok(/เบิกคืน/.test(h) && /-1,000/.test(h) && /21 ต\.ค\. · 💵 เงินสด/.test(h), 'การ์ด 🛡️ ประวัติเงินประกันรายคน: คอลัมน์ "เบิกคืน" -1,000 (21 ต.ค. · เงินสด)');
+    const bx = txt(A.E, `dtBalances(employees.find(e=>e.id===1), calcPay(employees.find(e=>e.id===1), '2026-10'), '2026-10')`);
+    ok(/💵 เบิกคืน 1,000 \(นอกสลิป\)/.test(bx) && /300 \/ 3,000/.test(bx), 'กล่อง 🛡️ หน้ารายคน ต.ค.: สะสม 300 / 3,000 · "💵 เบิกคืน 1,000 (นอกสลิป)"');
+    const hB = txt(A.E, `dtDepHistory(employees.find(e=>e.id===2), '2026-11')`);
+    ok(!/เบิกคืน/.test(hB), 'คนที่ไม่เคยเบิก → การ์ดแบบเดิม (ไม่มีคอลัมน์ "เบิกคืน")');
+    // ห้ามเบิก: งวดก่อน ต.ค. · พ้นสภาพ · ลบพนักงานที่มีประวัติเบิก
+    ok(/บันทึกได้ตั้งแต่งวด ต\.ค\. 2569/.test(A.E(`depPoBlock(employees.find(e=>e.id===1), '2026-09')`)) && /พ้นสภาพ/.test(A.E(`depPoBlock(employees.find(e=>e.id===3), '2026-10')`)),
+       'บันทึกไม่ได้: งวดก่อน ต.ค. 69 · คนพ้นสภาพ (ใช้ 💸/🏦 คืนเกินส่วนเกิน)');
+    A.io.alerts.length = 0; await A.E(`delEmp(1)`); await wait(20);
+    ok(/เบิกเงินประกันคืน/.test(A.io.alerts.join(' ')) && T.employees.some(e => e.id === 1), 'ลบน้อย → บล็อก (มีประวัติ 💵 เบิกคืน)');
+
+    console.log('[45b 💵 + 💸: บี สะสมก่อน ต.ค. 4,500 / เป้า 3,000 → เบิก 1,000 → 💸 เสนอคืนส่วนเกินแค่ 500 · ยกเลิกเบิก → 1,500]');
+    await openPo(A, 2);
+    ok(/ไม่อยู่ในแอป \(ยกเว้น "เก็บมาก่อน" 3,500 ที่รวมในยอดสะสมแล้ว\)/.test(A.d.getElementById('depPoInfo').textContent), 'บี (เก็บมาก่อน 3,500): หน้าต่างบอกว่ายอด "เก็บมาก่อน" รวมในยอดสะสมแล้ว');
+    A.E(`document.getElementById('depPoAmt').value='1000'; document.getElementById('depPoVia').value='transfer';`);
+    await A.E(`depPoSave()`); await wait(30);
+    const rB = T.deposit_payouts.find(x => x.employee_id === 2) || {};
+    ok(rB.amount === 1000 && rB.via === 'transfer' && D44(A, 2, '2026-10').collected === 3500 && D44(A, 2, '2026-10').over === 500, 'บี เบิก 1,000 (โอน) → สะสมหลัง ต.ค. 3,500 · เกินเป้า 500');
+    A.E(`document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    await A.E(`depRefundOpen()`); await wait(20);
+    const itB = JSON.parse(A.E(`JSON.stringify((depRefState.items.find(x=>x.e.id===2)||{}).amount)`) || 'null');
+    ok(itB === 500 && /เบิกคืนนอกสลิปงวดนี้แล้ว 1,000/.test(A.d.getElementById('depRefBody').textContent), '💸 คืนส่วนเกิน ต.ค. เสนอบี 500 (= 4,500 − เบิก 1,000 − เป้า 3,000 · เดิม 1,500) + เตือนว่าเบิกแล้ว');
+    A.E(`closeModal('depRefBg')`);
+    await openPo(A, 2);
+    A.io.confirms.length = 0;
+    await A.E(`depPoDelBtn({ dataset:{ id:'${rB.id}' } })`); await wait(30);
+    ok(!T.deposit_payouts.some(x => x.employee_id === 2) && D44(A, 2, '2026-10').over === 1500 && /ยกเลิก = ยังไม่ได้จ่ายเงินจริง/.test(A.io.confirms[0] || ''), '🗑 ยกเลิกเบิกของบี (ถามก่อน) → ลบแถว · เกินเป้ากลับเป็น 1,500');
+    A.E(`closeModal('depPoBg')`);
+
+    console.log('[45c สิทธิ์: dep:ve บันทึกได้ (ตัวกันสิทธิ์กลางเช็ค e) · dep:v ไม่มีปุ่ม/บันทึกไม่ได้]');
+    const M = await R8.dev('2026-10-21T10:30:00+07:00', db, { username:'m', role:'staff', apps:{ payroll:{ dep:'ve' } } }); M.E(`payLockAuto=false`); await M.E(`loadAll()`);
+    M.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    await openPo(M, 2);
+    M.E(`document.getElementById('depPoAmt').value='200';`);
+    await M.E(`depPoSave()`); await wait(30);
+    const rM = T.deposit_payouts.find(x => x.employee_id === 2);
+    ok(!!btnOf(M, 2) && rM && rM.amount === 200, 'บัญชี dep:ve (ไม่มี a/d) → มีปุ่ม · บันทึกเบิก 200 ได้');
+    M.E(`depPoEditBtn({ dataset:{ id:'${rM && rM.id}' } })`);
+    await M.E(`depPoDelBtn({ dataset:{ id:'${rM && rM.id}' } })`); await wait(30);
+    ok(!T.deposit_payouts.some(x => x.employee_id === 2), 'บัญชี dep:ve ยกเลิกรายการได้ (สิทธิ์ "แก้")');
+    const V = await R8.dev('2026-10-21T10:30:00+07:00', db, { username:'v', role:'staff', apps:{ payroll:{ dep:'v' } } }); V.E(`payLockAuto=false`); await V.E(`loadAll()`);
+    V.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    const vIns = await V.E(`(async()=>{ const r = await asPerm('dep','e', () => db.from('deposit_payouts').insert({ employee_id:2, period:'2026-10', amount:1, pay_date:'2026-10-21', via:'cash', note:'' }).select()); return r.error ? 'denied' : 'ok'; })()`);
+    ok(!btnOf(V, 1) && !btnOf(V, 2) && vIns === 'denied' && T.deposit_payouts.length === 1, 'บัญชี dep:v → ไม่มีปุ่ม 💵 · เขียนตรง ๆ ก็ถูกตัวกันสิทธิ์กลางปฏิเสธ');
+
+    console.log('[45d realtime ช่องแยก jjmk-depo (ไม่อยู่ใน jjmk-live) · moneyFresh อ่าน deposit_payouts ด้วย]');
+    ok(db.chans['jjmk-depo'] && typeof db.chans['jjmk-depo'].deposit_payouts === 'function' && !(db.chans['jjmk-live'] || {}).deposit_payouts, 'ช่อง jjmk-depo ฟัง deposit_payouts · jjmk-live ไม่มี');
+    T.deposit_payouts.push({ id:777001, employee_id:2, period:'2026-10', amount:300, pay_date:'2026-10-21', via:'cash', note:'อีกเครื่อง', created_at:'' });
+    db.chans['jjmk-depo'].deposit_payouts({}); await wait(1000);   // ช่องจำลองเก็บตัวฟังของเครื่องที่เปิดล่าสุด (V)
+    ok(D44(V, 2, '2026-10').po === 300, 'อีกเครื่องบันทึก → realtime อ่านใหม่ (บี เบิก 300 ในเครื่องที่เปิดอยู่)');
+    T.deposit_payouts = T.deposit_payouts.filter(x => x.id !== 777001);
+    ok(await A.E(`moneyFresh(true)`) === true && D44(A, 2, '2026-10').po === 0, 'moneyFresh อ่าน deposit_payouts ใหม่ (ลบจากอีกเครื่อง → เครื่องนี้เห็น)');
+
+    console.log('[45e 6 พ.ย. (จ่าย ต.ค. แล้ว): 🔒 อัตโนมัติ ต.ค. = 300 · แก้/ยกเลิก/บันทึกเบิกงวด ต.ค. = บล็อก · พ.ย. หักต่อ 300 · ปุ่ม 💵 ย้ายไปงวด พ.ย.]');
+    const B = await R8.dev('2026-11-06T09:00:00+07:00', db); await B.E(`loadAll()`); await wait(400);
+    const lk = R8.row(B, 1, '2026-10');
+    ok(lk && lk.note === 'lock' && lk.amount === 300, '🔒 อัตโนมัติวันจ่าย: น้อย ต.ค. = 300 (ยอดหักไม่เปลี่ยนเพราะเบิก · ' + JSON.stringify(lk) + ')');
+    ok(D44(B, 1, '2026-10').collected === 300 && D44(B, 1, '2026-11').ded === 300 && D44(B, 1, '2026-11').collected === 600, 'หลัง 🔒: สะสมหลัง ต.ค. 300 · พ.ย. หัก 300 → 600');
+    ok(/ถึงวันจ่าย/.test(B.E(`depPoBlock(employees.find(e=>e.id===1), '2026-10')`)) && /ถึงวันจ่าย/.test(B.E(`depPoEditBlock(employees.find(e=>e.id===1), '2026-10')`)), 'งวด ต.ค. (จ่ายแล้ว) บันทึก/แก้ไม่ได้');
+    B.io.toasts = []; const nPo = T.deposit_payouts.length;
+    await B.E(`depPoDelBtn({ dataset:{ id:'${r1.id}' } })`); await wait(30);
+    ok(T.deposit_payouts.length === nPo && T.deposit_payouts.some(x => x.id === r1.id), 'กดยกเลิกเบิกงวด ต.ค. หลังวันจ่าย → ไม่ลบ');
+    B.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    const octCell = B.d.querySelector('#depTable td[data-l="สะสมแล้ว / เป้า"]');
+    ok(!btnOf(B, 1) && octCell && /💵 เบิกคืน 1,000/.test(octCell.textContent), 'ตาราง 🛡️ ต.ค.: มีชิปเบิกคืน · ไม่มีปุ่ม (จ่ายแล้ว)');
+    B.E(`document.getElementById('depPeriodSel').value='2026-11'; renderDeposit();`);
+    ok(!!btnOf(B, 1), 'ตาราง 🛡️ พ.ย. (งวดปัจจุบัน): มีปุ่ม 💵 (สะสมก่อนงวด 300)');
+    ok(!A.errs.length && !B.errs.length && !M.errs.length && !V.errs.length, 'ไม่มี JS error (' + A.errs.concat(B.errs, M.errs, V.errs).slice(0, 2).join(' | ') + ')');
+  }
+  { console.log('[45f ยังไม่รัน jj_deposit_payouts.sql (ตารางไม่มี) = เหมือน main ทุกอย่าง · อ่านไม่ได้ด้วยเหตุอื่น = บล็อก (depLoadErr)]');
+    const mk44 = () => { const db = makeDB(), T = db.T; R8.seed(T);
+      T.employees = [R8.EMP({ id:1, code:'N1', nick:'น้อย' })];
+      T.punches = R8.withId(R8.punRows('N1', '2026-07-26', '2026-11-25'));
+      T.deposit_entries = R8.lockOf.map((p, i) => ({ id:10+i, employee_id:1, period:p, amount:500, note:'lock' })); return db; };
+    const db0 = mk44(); db0.fail.deposit_payouts = { code:'PGRST205', message:'Could not find the table public.deposit_payouts' };
+    const Z = await R8.dev('2026-10-21T10:00:00+07:00', db0); Z.E(`payLockAuto=false`); await Z.E(`loadAll()`);
+    const dz = JSON.parse(Z.E(`JSON.stringify(depositCalc(employees[0], '2026-10'))`));
+    Z.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    ok(Z.E('depPoReady') === false && Z.E('depReady') === true && Z.E('depLoadErr') === '' && dz.collected === 1300 && dz.ded === 300 && dz.po === 0 && !Z.d.querySelector('#depTable button[onclick="depPoOpen(this)"]') && !/💵/.test(Z.d.getElementById('page-dep').textContent) && !db0.chans['jjmk-depo'],
+       'ยังไม่รัน SQL: depPoReady=false · ไม่มีปุ่ม/ข้อความ 💵 · ไม่เปิดช่อง jjmk-depo · ต.ค. หัก 300 สะสม 1,300 (เท่าเดิม) · ไม่บล็อก');
+    ok(Z.E(`moneyBlocked()`) === false && await Z.E(`moneyFresh(true)`) === true, '…ออกสลิป/K BIZ ได้ตามปกติ (moneyFresh ผ่าน)');
+    const db1 = mk44(); db1.fail.deposit_payouts = { message:'timeout' };
+    const X = await R8.dev('2026-10-21T10:00:00+07:00', db1); X.E(`payLockAuto=false`); await X.E(`loadAll()`);
+    ok(/deposit_payouts|timeout/.test(X.E('depLoadErr')) && X.E(`moneyBlocked()`) === true, 'deposit_payouts อ่านไม่ได้ (timeout) → depLoadErr · moneyBlocked บล็อกสลิป/Excel/K BIZ');
+    const db2 = mk44(); db2.fail.deposit_payouts = { code:'42501', message:'permission denied' };
+    const Y = await R8.dev('2026-10-21T10:00:00+07:00', db2); Y.E(`payLockAuto=false`); await Y.E(`loadAll()`);
+    ok(/ไม่มีสิทธิ์อ่าน deposit_payouts/.test(Y.E('depLoadErr')) && Y.E(`moneyBlocked()`) === true, 'ยังไม่รัน GRANT (42501) → "ไม่มีสิทธิ์อ่าน deposit_payouts — รัน GRANT" + บล็อก');
+    ok(!Z.errs.length && !X.errs.length && !Y.errs.length, 'ไม่มี JS error');
+  }
+  // ============ 45g–45i) ผลตรวจ 💵 รอบ 1: เบิกได้เฉพาะเงินที่หักจริงแล้ว (ช่วง 26 → 5 · เพดานงวดหลัง) · สองเครื่อง 💸/🏦 กับ 💵 · ข้อความ/จอ
+  { const D45 = (X, id, p) => JSON.parse(X.E(`JSON.stringify((d=>({ded:d.ded,before:d.before,collected:d.collected,po:d.po,over:d.over,refund:d.refund}))(depositCalc(employees.find(e=>e.id===${id}),'${p}')))`));
+    const btnOf = (X, id) => X.d.querySelector('#depTable button[onclick="depPoOpen(this)"][data-emp="' + id + '"]');
+    const cellOf = (X, id) => { const b = [...X.d.querySelectorAll('#depTable tbody tr')].find(tr => tr.querySelector('[data-emp="' + id + '"]')); return b ? b.querySelector('td[data-l="สะสมแล้ว / เป้า"]').textContent : ''; };
+    const E1 = id => `employees.find(e=>e.id===${id})`;
+    const db = makeDB(), T = db.T; R8.seed(T); T.deposit_payouts = [];
+    // น้อย: ส.ค./ก.ย. 🔒 500+500 · ซี: เก็บมาก่อน 1,900 + 500+500 → ต.ค. ✎ 500 → สะสมก่อน พ.ย. 3,400 · พ.ย. 💸 คืน 400 · โอ (ออฟฟิศ)
+    T.employees = [R8.EMP({ id:1, code:'N1', nick:'น้อย' }), R8.EMP({ id:5, code:'C1', nick:'ซี', deposit_opening:1900 }), R8.EMP({ id:4, code:'O1', nick:'โอ', branch:'OFFICE', dept:'ออฟฟิศ' })];
+    T.punches = R8.withId(['N1','C1','O1'].flatMap(c => R8.punRows(c, '2026-07-26', '2026-11-01')));
+    T.deposit_entries = [1,5,4].flatMap(id => R8.lockOf.map((p, i) => ({ id:id*10+i, employee_id:id, period:p, amount:500, note:'lock' })))
+      .concat([{ id:901, employee_id:5, period:'2026-10', amount:500, note:'' }, { id:902, employee_id:5, period:'2026-11', amount:-400, note:'refund' }]);
+
+    console.log('[45g ออฟฟิศวันจ่าย (31 ต.ค.): บันทึกไม่ได้ทั้ง ต.ค./พ.ย. → ช่องสะสมบอก "บันทึกได้พรุ่งนี้" แทนปุ่มที่หายเฉย ๆ · 1 พ.ย. บันทึกงวด พ.ย. ได้]');
+    const O = await R8.dev('2026-10-31T20:00:00+07:00', db); O.E(`payLockAuto=false`); await O.E(`loadAll()`);
+    ok(/ถึงวันจ่าย/.test(O.E(`depPoBlock(${E1(4)}, '2026-10')`)) && /ยังไม่เริ่ม/.test(O.E(`depPoBlock(${E1(4)}, '2026-11')`)) &&
+       /วันนี้วันจ่ายเงินเดือน — บันทึกได้พรุ่งนี้ \(งวด พ\.ย\. 2569\)/.test(O.E(`depPoWhere(${E1(4)}, '2026-11')`)), 'โอ (ออฟฟิศ) 31 ต.ค.: ต.ค. ถึงวันจ่าย · พ.ย. ยังไม่เริ่ม → "บันทึกได้พรุ่งนี้ (งวด พ.ย. 2569)"');
+    O.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-11'; renderDeposit();`);
+    ok(!btnOf(O, 4) && /💵 เบิกคืน: วันนี้วันจ่ายเงินเดือน/.test(cellOf(O, 4)) && !btnOf(O, 1) && /💵 เบิกคืน → บันทึกที่งวด ต\.ค\. 2569/.test(cellOf(O, 1)),
+       'ตาราง 🛡️ พ.ย. (31 ต.ค.): ไม่มีปุ่ม 💵 แต่บอกเหตุ — โอ "บันทึกได้พรุ่งนี้" · น้อย (หน้าร้าน) "บันทึกที่งวด ต.ค." (' + cellOf(O, 4).slice(-60) + ')');
+    const O2 = await R8.dev('2026-11-01T10:00:00+07:00', db); O2.E(`payLockAuto=false`); await O2.E(`loadAll()`);
+    ok(O2.E(`depPoBlock(${E1(4)}, '2026-11')`) === '' && O2.E(`depPoMax(${E1(4)}, '2026-11').max`) === 1300, '1 พ.ย.: โอ บันทึกงวด พ.ย. ได้ (ต.ค. ออฟฟิศจ่ายแล้ว 31 ต.ค.) · เบิกได้ 1,300 (ส.ค./ก.ย. 500 + ต.ค. 300 ที่จ่ายแล้ว)');
+
+    console.log('[45h ช่วง 26 → 5 (2 พ.ย. · ต.ค. ยังไม่ถึงวันจ่าย): น้อยบันทึก 💵 ได้แค่งวด ต.ค. ≤ 1,000 (เดิม พ.ย. "เบิกทั้งหมด 1,300" รวมยอดหัก ต.ค. ที่ยังไม่ได้หัก → สะสมติดลบ) · เพดานงวดหลังไม่นับยอดหักที่ยังไม่ถึงวันจ่าย]');
+    const A = await R8.dev('2026-11-02T10:00:00+07:00', db); A.E(`payLockAuto=false`); await A.E(`loadAll()`);
+    ok(/^งวด ต\.ค\. 2569 ยังไม่ถึงวันจ่าย \(5 พ\.ย\.\) — บันทึกเบิกคืนที่งวด ต\.ค\. 2569/.test(A.E(`depPoBlock(${E1(1)}, '2026-11')`)) && A.E(`depPoBlock(${E1(1)}, '2026-10')`) === '' && A.E(`depPoMax(${E1(1)}, '2026-10').max`) === 1000,
+       'น้อย: งวด พ.ย. บล็อก "ต.ค. ยังไม่ถึงวันจ่าย — บันทึกที่งวด ต.ค." · งวด ต.ค. เบิกได้ 1,000 (= ส.ค.+ก.ย. ที่หักจริง)');
+    A.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-11'; renderDeposit();`);
+    ok(!btnOf(A, 1) && /💵 เบิกคืน → บันทึกที่งวด ต\.ค\. 2569/.test(cellOf(A, 1)), 'ตาราง 🛡️ พ.ย.: น้อยไม่มีปุ่ม 💵 · บอก "บันทึกที่งวด ต.ค. 2569"');
+    A.E(`depPoSt = { empId:1, period:'2026-11', editId:null }; document.getElementById('depPoAmt').value='1300'; document.getElementById('depPoDate').value='2026-11-02';`);
+    await A.E(`depPoSave()`); await wait(20);
+    ok(T.deposit_payouts.length === 0 && /ยังไม่ถึงวันจ่าย/.test(A.E(`document.getElementById('toast').textContent`)), 'บันทึกงวด พ.ย. ตรง ๆ (1,300) → ไม่เขียน "ยังไม่ถึงวันจ่าย"');
+    A.E(`depPoSt = null; document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    await A.E(`depPoOpen(document.querySelector('#depTable button[onclick="depPoOpen(this)"][data-emp="1"]'))`); await wait(20);
+    ok(A.d.getElementById('depPoAll').textContent === 'เบิกทั้งหมด (1,000)' && A.d.getElementById('depPoNew').style.display === 'none', 'งวด ต.ค.: "เบิกทั้งหมด (1,000)" · ปุ่ม "＋ รายการใหม่แทน" ซ่อนจริง (display none — .hidden แพ้ CSS .btn)');
+    A.E(`depPoFill()`); await A.E(`depPoSave()`); await wait(30);
+    const n1 = T.deposit_payouts.find(x => x.employee_id === 1) || {};
+    ok(n1.period === '2026-10' && n1.amount === 1000 && D45(A, 1, '2026-10').collected === 300 && D45(A, 1, '2026-11').before === 300 && D45(A, 1, '2026-11').ded === 300,
+       'เบิก ต.ค. 1,000 → สะสมหลัง ต.ค. 300 (หัก ต.ค. 300 รอหัก 5 พ.ย.) · พ.ย. หักต่อ 300');
+    await A.E(`depPoOpen(document.querySelector('#depTable button[onclick="depPoOpen(this)"][data-emp="1"]'))`); await wait(20);
+    A.E(`depPoEditBtn({ dataset:{ id:'${n1.id}' } })`);
+    ok(A.d.getElementById('depPoNew').style.display === '' && A.d.getElementById('depPoFormHead').textContent === '✎ แก้รายการเบิกคืน', '✎ แก้ → ปุ่ม "＋ รายการใหม่แทน" โผล่');
+    A.E(`closeModal('depPoBg'); depPoSt = null;`);
+    // ต.ค. หักไม่ได้ภายหลัง (✎ 0 / สุทธิไม่พอ) → สะสมหลัง ต.ค. = 0 ไม่ติดลบ (เบิกเฉพาะเงินที่หักจริงแล้ว)
+    A.io.alerts.length = 0;
+    await A.E(`setDepOverride(1, '2026-10', '0')`); await wait(30);
+    ok(D45(A, 1, '2026-10').ded === 0 && D45(A, 1, '2026-10').collected === 0 && A.E(`depPoOverdrawn(${E1(1)}, '2026-10')`) === false && !/เกินยอดสะสมที่หักจริง/.test(A.io.alerts.join(' ')),
+       '✎ งดหัก ต.ค. หลังเบิก → สะสมหลัง ต.ค. 0 (ไม่ติดลบ · ไม่เตือน)');
+    await A.E(`setDepOverride(1, '2026-10', '')`); await wait(30);
+    ok(D45(A, 1, '2026-10').ded === 300, '…กลับเป็นหักอัตโนมัติ 300');
+    // เพดานงวดหลัง: ซี ต.ค. สะสมก่อนงวด 2,900 · พ.ย. มี 💸 คืน 400 (สะสมก่อน พ.ย. 3,400 รวม ✎ ต.ค. 500 ที่ยังไม่ได้หัก)
+    // → เบิก ต.ค. ได้ 2,500 (= 3,400 − 400 − ยอดหัก ต.ค. 500 ที่ยังไม่ถึงวันจ่าย) · เดิม 2,900 (ถ้า ต.ค. หักไม่ได้ สะสมหลัง พ.ย. ติดลบ 400)
+    ok(A.E(`depFloorAfter(${E1(5)}, '2026-10', true)`) === 2500 && A.E(`depPoMax(${E1(5)}, '2026-10').max`) === 2500 && D45(A, 5, '2026-11').refund === 400,
+       'ซี: เพดานงวดหลัง (พ.ย. มี 💸 400) = 2,500 — ไม่นับยอดหัก ต.ค. 500 ที่ยังไม่ถึงวันจ่าย · เบิกได้ 2,500 (เดิม 2,900)');
+    ok(A.E(`depFloorAfter(${E1(5)}, '2026-10', false)`) === Infinity, '💸/🏦 ของคนที่ไม่เคยเบิก 💵 = Infinity (เพดานแบบเดิมทุกบาท)');
+    // ประวัติรายคน: บอกช่วงยอดก่อนเข้าระบบทุกคน (เดิมเฉพาะคนที่มีรายการ 💵 และไม่บอกงวด)
+    const hC = txt(A.E, `dtDepHistory(${E1(5)}, '2026-11')`), hN = txt(A.E, `dtDepHistory(${E1(1)}, '2026-11')`);
+    ok(/ยอดที่เก็บก่อนเข้าระบบ \(ก่อนงวด ส\.ค\. 2569\)ไม่อยู่ในแอป — ยกเว้น "เก็บมาก่อน"/.test(hC) && !/เบิกคืน =/.test(hC) && /💵 เบิกคืน = .*ยอดที่เก็บก่อนเข้าระบบ \(ก่อนงวด ส\.ค\. 2569\)ไม่อยู่ในแอป/.test(hN),
+       'การ์ด 🛡️ ประวัติ: ทุกคนเห็น "ยอดที่เก็บก่อนเข้าระบบ (ก่อนงวด ส.ค. 2569) ไม่อยู่ในแอป" (ซี: ยกเว้นเก็บมาก่อน) · น้อยมีคำอธิบาย 💵 ด้วย');
+    // 6 พ.ย. (ต.ค. จ่ายแล้ว): บันทึกงวด พ.ย. ได้ ≤ สะสมก่อน พ.ย. 300 (ยอดหัก พ.ย. ที่ยังไม่ได้หักไม่นับ)
+    const B = await R8.dev('2026-11-06T09:00:00+07:00', db); B.E(`payLockAuto=false`); await B.E(`loadAll()`);
+    ok(B.E(`depPoBlock(${E1(1)}, '2026-11')`) === '' && B.E(`depPoMax(${E1(1)}, '2026-11').max`) === 300, '6 พ.ย.: น้อยบันทึกงวด พ.ย. ได้ · เบิกได้ 300 (= สะสมหลัง ต.ค. · ยอดหัก พ.ย. ไม่นับ)');
+    ok(!O.errs.length && !O2.errs.length && !A.errs.length && !B.errs.length, 'ไม่มี JS error (' + O.errs.concat(O2.errs, A.errs, B.errs).slice(0, 2).join(' | ') + ')');
+  }
+  { console.log('[45i สองเครื่อง: 💸 คืนส่วนเกิน (A · อ่าน deposit_payouts ช้า) กับ 💵 เบิกทั้งหมด (B) คนเดียวกันงวดเดียวกัน → A ถอยแถว 💸 ที่เพิ่งเขียน (เดิมอยู่ทั้งคู่ = จ่าย 6,000 จากที่เก็บ 4,500)]');
+    const mk = () => { const db = makeDB(), T = db.T; R8.seed(T); T.deposit_payouts = [];
+      T.employees = [R8.EMP({ id:2, code:'B1', nick:'บี', deposit_opening:3500 })];
+      T.punches = R8.withId(R8.punRows('B1', '2026-07-26', '2026-10-21'));
+      T.deposit_entries = R8.lockOf.map((p, i) => ({ id:20+i, employee_id:2, period:p, amount:500, note:'lock' })); return db; };
+    const db = mk(), T = db.T;
+    let slow = false, sent = 0;
+    db.latency = (t, op) => { if(slow && t === 'deposit_payouts' && op === 'select'){ sent++; return 1500; } return 0; };
+    const A = await R8.dev('2026-10-21T10:00:00+07:00', db); A.E(`payLockAuto=false`); await A.E(`loadAll()`);
+    const B = await R8.dev('2026-10-21T10:00:00+07:00', db); B.E(`payLockAuto=false`); await B.E(`loadAll()`);
+    for(const X of [A, B]) X.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    await A.E(`depRefundOpen()`); await wait(30);
+    A.E(`depRefState.items.forEach(x=>x.on=true)`);
+    await B.E(`depPoOpen(document.querySelector('#depTable button[onclick="depPoOpen(this)"][data-emp="2"]'))`); await wait(30);
+    B.E(`depPoFill()`);
+    slow = true; const pa = A.E(`depRefundSave()`);
+    for(let i = 0; i < 200 && !sent; i++) await wait(5);
+    slow = false;
+    await B.E(`depPoSave()`); await wait(50);
+    await pa; await wait(300);
+    const oct = T.deposit_entries.filter(r => r.period === '2026-10');
+    ok(sent > 0 && T.deposit_payouts.length === 1 && T.deposit_payouts[0].amount === 4500 && !oct.length && /มีการ 💵 เบิกคืนจากเครื่องอื่นพร้อมกัน/.test(A.io.alerts.join(' ')),
+       'B เบิก 4,500 ก่อน A เขียน 💸 → A อ่านใหม่หลังเขียนแล้วลบแถว 💸 ของตัวเอง + แจ้ง (' + JSON.stringify(oct) + ' · ' + A.io.alerts.join(' ').slice(0, 90) + ')');
+    await A.E(`depRefresh()`);
+    ok(JSON.parse(A.E(`JSON.stringify(depositCalc(employees[0], '2026-10').collected)`)) === 0 && R8.pay(A, 2, '2026-10').dep === 0, 'สะสมหลัง ต.ค. 0 (ไม่ติดลบ) · สลิป ต.ค. ไม่มียอดคืน');
+
+    console.log('[45i ✎ เพิ่มยอด 💸 (A · อ่าน deposit_payouts ช้า) ระหว่างที่ B บันทึก 💵 → A ถอยกลับยอดเดิม]');
+    const db2 = mk(), T2 = db2.T;
+    T2.deposit_entries.push({ id:29, employee_id:2, period:'2026-10', amount:-500, note:'refund' });
+    let slow2 = false, sent2 = 0;
+    db2.latency = (t, op) => { if(slow2 && t === 'deposit_payouts' && op === 'select'){ sent2++; return 1500; } return 0; };
+    const C = await R8.dev('2026-10-21T10:00:00+07:00', db2); C.E(`payLockAuto=false`); await C.E(`loadAll()`);
+    const F = await R8.dev('2026-10-21T10:00:00+07:00', db2); F.E(`payLockAuto=false`); await F.E(`loadAll()`);
+    for(const X of [C, F]) X.E(`go('dep'); document.getElementById('depPeriodSel').value='2026-10'; renderDeposit();`);
+    await F.E(`depPoOpen(document.querySelector('#depTable button[onclick="depPoOpen(this)"][data-emp="2"]'))`); await wait(30);
+    F.E(`depPoFill()`);
+    const fAmt = F.E(`document.getElementById('depPoAmt').value`);
+    C.io.promptAns = ['1500']; slow2 = true;
+    const pc = C.E(`editDeposit(2, '2026-10')`);
+    for(let i = 0; i < 400 && !sent2; i++) await wait(5);
+    slow2 = false;
+    await F.E(`depPoSave()`); await wait(50);
+    await pc; await wait(300);
+    const r29 = T2.deposit_entries.find(r => r.id === 29) || {};
+    ok(fAmt === '4000' && sent2 > 0 && T2.deposit_payouts.length === 1 && T2.deposit_payouts[0].amount === 4000 && r29.amount === -500 && /คืนยอดเดิม 500 บาทแล้ว/.test(C.io.alerts.join(' ')),
+       'F เบิก 4,000 (= 4,500 − คืน 500) ระหว่าง C แก้ 💸 500 → 1,500 → C ถอยกลับ 500 + แจ้ง (แถว ' + JSON.stringify(r29) + ' · ' + C.io.alerts.join(' ').slice(0, 80) + ')');
+    await C.E(`depRefresh()`);
+    ok(JSON.parse(C.E(`JSON.stringify(depositCalc(employees[0], '2026-10').collected)`)) === 0, 'สะสมหลัง ต.ค. 0 (คืน 500 + เบิก 4,000 = สะสม 4,500)');
+
+    console.log('[45i สลิป/หน้ารายคน: งวดที่มีทั้ง 💸 คืนในสลิปและ 💵 เบิกคืน → "สะสม 4,500 → 2,000 / เป้า 3,000 · หลังเบิกคืนนอกสลิป 1,000"]');
+    const db3 = mk(), T3 = db3.T;
+    T3.deposit_entries.push({ id:29, employee_id:2, period:'2026-10', amount:-1500, note:'refund' });
+    T3.deposit_payouts = [{ id:1, employee_id:2, period:'2026-10', amount:1000, pay_date:'2026-10-21', via:'cash', note:'', created_at:'' }];
+    const G = await R8.dev('2026-10-21T10:00:00+07:00', db3); G.E(`payLockAuto=false`); await G.E(`loadAll()`);
+    const sl = txt(G.E, `buildSlip(employees[0], '2026-10')`);
+    ok(/คืนเงินประกันส่วนเกิน \(สะสม 4,500 → 2,000 \/ เป้า 3,000 · หลังเบิกคืนนอกสลิป 1,000\)/.test(sl) && R8.pay(G, 2, '2026-10').net === 13500,
+       'สลิป: "คืนเงินประกันส่วนเกิน (สะสม 4,500 → 2,000 / เป้า 3,000 · หลังเบิกคืนนอกสลิป 1,000)" · สุทธิ 13,500 (คืน 1,500 ในสลิป · เบิกนอกสลิป)');
+    G.E(`detailEmpId = employees[0].id; detailTab = 'money'; go('detail'); const s = document.getElementById('detailPeriodSel'); if(![...s.options].some(o => o.value === '2026-10')) s.add(new Option('x', '2026-10')); s.value = '2026-10'; renderDetail(true);`);
+    ok(/สะสม 4,500 → 2,000 \/ เป้า 3,000 · หลังเบิกคืนนอกสลิป 1,000/.test(G.d.getElementById('detailContent').textContent), 'หน้า 🪪 รายคน บรรทัด 💸: บอกยอดเบิกคืนนอกสลิปด้วย');
+    ok(!A.errs.length && !B.errs.length && !C.errs.length && !F.errs.length && !G.errs.length, 'ไม่มี JS error (' + A.errs.concat(B.errs, C.errs, F.errs, G.errs).slice(0, 2).join(' | ') + ')');
   }
   }catch(e){ console.log('CRASH', e.stack); fail++; }
   console.log(fail ? fail+' FAILED' : 'ALL PASSED'); process.exit(fail ? 1 : 0);

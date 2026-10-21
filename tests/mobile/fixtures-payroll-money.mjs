@@ -1,5 +1,5 @@
 // ข้อมูลจำลองสำหรับตรวจหน้า 🛡️ เงินประกัน (#dep) และ 🐷 เงินสำรองเลี้ยงชีพ (#pvd) ของแอปเงินเดือน บนมือถือ
-// ชื่อสมมติทั้งหมด · พนักงาน 10 คน 2 สาขา (+ออฟฟิศ) · สแกน 70 วันล่าสุด · deposit_entries มีแถว ✎ / 🔒 / 💸 · pvd_* มีสมาชิก/แก้รายงวด/ปิดยอด/ถอน
+// ชื่อสมมติทั้งหมด · พนักงาน 10 คน 2 สาขา (+ออฟฟิศ) · สแกน 70 วันล่าสุด · deposit_entries มีแถว ✎ / 🔒 / 💸 · deposit_payouts 💵 · pvd_* มีสมาชิก/แก้รายงวด/ปิดยอด/ถอน
 // ใช้กับ tests/mobile/mobile-check.mjs (แอป id payroll-dep / payroll-pvd) และสคริปต์ถ่ายภาพ — เวลาสแกนอิงเวลาไทยตอนรัน
 const BKK = 7 * 3600e3;
 const pad = n => String(n).padStart(2, '0');
@@ -53,9 +53,11 @@ export function payrollMoneyFixture(nowMs = Date.now()) {
   ];
   const pvdE = [{ id: 1, employee_id: 1, period: prev2, emp_amount: 600, er_amount: 300, note: 'lock' }, { id: 2, employee_id: 3, period: cur, emp_amount: 300, er_amount: null, note: '' }];
   const pvdP = [{ id: 1, employee_id: 9, pay_date: ymd(biz), period: cur, amount: 1500, via: 'cash', note: 'ลาออก — ถอนบางส่วน' }];
+  // 💵 เบิกเงินประกันคืนนอกสลิป (deposit_payouts · 2026-10-21) — บี ยังทำงานอยู่ เบิกคืนบางส่วนงวดนี้
+  const depPo = [{ id: 1, employee_id: 4, period: cur, amount: 500, pay_date: ymd(biz), via: 'cash', note: 'ขอเบิกคืนบางส่วน', created_at: '' }];
   return {
     shifts: [{ id: 1, name: 'กะเช้า', start_time: '09:00', end_time: '18:00', in_grace: 5, out_grace: 0, sort_order: 1, dept_only: '' }],
-    employees: emps, punches, deposit_entries: dep, pvd_members: pvdM, pvd_entries: pvdE, pvd_payouts: pvdP, advances: adv,
+    employees: emps, punches, deposit_entries: dep, deposit_payouts: depPo, pvd_members: pvdM, pvd_entries: pvdE, pvd_payouts: pvdP, advances: adv,
     payroll_settings: [{ id: 1, cutoff_hour: 6, default_wage: 400, min_fine: 0, late_fine: 0, cut_day: 25, pay_day: 5, adv_day: 15, dep_start: prev2, month_divisor: 30 }],
     devices: [{ sn: 'SN_LP', branch: 'JJLP', name: 'ลาดพร้าว' }],
   };
