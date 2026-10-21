@@ -92,3 +92,26 @@ end $$;
 
 -- เสร็จแล้ว: เปิด https://thananant.github.io/JJ-PnL/ แล้วกดปุ่ม "🙋 สมัครพนักงานใหม่" ใต้ปุ่มเข้าสู่ระบบ
 -- ใบสมัครจะไปโผล่ที่ JJ Access -> แท็บ "รออนุมัติ"
+
+-- ===== JJ-GRANTS: สิทธิ์ Data API ของตารางในไฟล์นี้ (2026-10-21) =====
+-- ตั้งแต่ 2026-10-30 Supabase ไม่เปิดสิทธิ์ให้ตารางใหม่เองแล้ว — ไม่มีบล็อกนี้ แอป (คีย์สาธารณะ) จะเจอ permission denied
+-- สิทธิ์เท่ากับที่แอปใช้อยู่จริงก่อนหน้านี้ · ตาราง/วิวที่ไม่มีจะข้าม · รันซ้ำได้ · RLS ยังคุมแถวเหมือนเดิม
+do $jjg$
+declare t text; s text; tb text[] := array['pnl_profiles']::text[]; tr text[] := array[]::text[]; vw text[] := array[]::text[];
+begin
+  foreach t in array tb || tr loop
+    if to_regclass('public.'||quote_ident(t)) is null then continue; end if;
+    execute format('grant select, insert, update%s on table public.%I to anon, authenticated',
+                   case when t = any(tr) then '' else ', delete' end, t);
+    execute format('grant all on table public.%I to service_role', t);
+    for s in select c.relname from pg_class c join pg_depend d on d.objid = c.oid and d.deptype in ('a','i')
+             where c.relkind = 'S' and d.refobjid = ('public.'||quote_ident(t))::regclass loop
+      execute format('grant usage, select on sequence public.%I to anon, authenticated, service_role', s);
+    end loop;
+  end loop;
+  foreach t in array vw loop
+    if to_regclass('public.'||quote_ident(t)) is null then continue; end if;
+    execute format('grant select on public.%I to anon, authenticated', t);
+    execute format('grant all on public.%I to service_role', t);
+  end loop;
+end $jjg$;
