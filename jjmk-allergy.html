@@ -791,22 +791,38 @@ async function delItem(){
 
 /* ---------- 📥 นำเข้าชื่อจากเมนู QR + สินค้าครัวกลาง (อ่านอย่างเดียว · ไม่แตะตารางระบบอื่น) ---------- */
 let IMP=[];
+/* อ่านทีละ 1000 แถว (Supabase ตัดที่ 1000 ต่อครั้ง) */
+async function selAll(t,q){let out=[];for(let o=0;o<50000;o+=1000){const r=await sel(t,q+'&limit=1000&offset='+o);out=out.concat(r||[]);if(!r||r.length<1000)break}return out}
+/* หมวดของแอปนับสต๊อก → ประเภทในแอปนี้ (เดาให้ก่อน แก้ได้ในฟอร์ม) */
+function kindGuess(cat){const c=String(cat||'');
+  return /เครื่องดื่ม|น้ำดื่ม|น้ำอัดลม|เบียร์|โซดา|น้ำแข็ง/.test(c)?'drink':/น้ำจิ้ม|ซอส|เครื่องปรุง/.test(c)?'sauce':/หวาน|ไอติม|ไอศกรีม|ขนม/.test(c)?'dessert'
+    :/หมู|เนื้อ|ไก่|ทะเล|กุ้ง|ปลา|ของสด|เนื้อสัตว์/.test(c)?'meat':/ผัก|เส้น|ลูกชิ้น|อาหาร/.test(c)?'menu':'product'}
+const IMP_SRC=[['sc','📦 สินค้าในร้าน (นับสต๊อก)'],['ck','🍳 สินค้าครัวกลาง'],['qr','🍽️ เมนู QR']];
 async function openImport(){
   if(!can('items','a'))return;
   openSheet('<h3>📥 นำเข้าจากเมนู<button class="ed" onclick="closeSheet()">✕</button></h3><div class="spin"></div>');
-  const [qr,ck]=await Promise.all([sel('qr_menu_items','select=*&limit=2000').catch(()=>null),sel('ck_recipes','select=*&limit=2000').catch(()=>null)]);
+  /* อ่านอย่างเดียว · ห้ามเขียนตารางระบบอื่น · สินค้าในร้าน = products ทุกสาขา (ชื่อเดียวกันรวมเป็นรายการเดียว) */
+  const [sc,ck,qr]=await Promise.all([
+    selAll('products','select=id,name,cat_label,branch_id&deleted_at=is.null&order=name').catch(()=>selAll('products','select=*').catch(()=>null)),
+    sel('ck_recipes','select=*&limit=2000').catch(()=>null),
+    sel('qr_menu_items','select=*&limit=2000').catch(()=>null)]);
   const have=new Set(S.items.map(x=>x.src).filter(Boolean)),names=new Set(S.items.map(x=>algNorm(x.name)));
   IMP=[];
-  (qr||[]).forEach(r=>{const n=String(r.name||r.name_th||'').trim();if(n)IMP.push({src:'qr:'+r.id,name:n,kind:'menu',cat:r.cat||r.category||r.cat_name||null,from:'🍽️ เมนู QR'})});
-  (ck||[]).forEach(r=>{const n=String(r.name||r.name_th||'').trim();if(n&&r.active!==false&&!r.deleted_at)IMP.push({src:'ck:'+r.id,name:n,kind:'product',cat:r.dept||r.cat||null,from:'🍳 ครัวกลาง'})});
+  (sc||[]).forEach(r=>{const n=String(r.name||'').trim();if(n&&!r.deleted_at)IMP.push({g:'sc',src:'sc:'+n,name:n,kind:kindGuess(r.cat_label),cat:r.cat_label||null})});
+  (ck||[]).forEach(r=>{const n=String(r.name||r.name_th||'').trim();if(n&&r.active!==false&&!r.deleted_at)IMP.push({g:'ck',src:'ck:'+r.id,name:n,kind:'product',cat:r.dept||r.cat||null})});
+  (qr||[]).forEach(r=>{const n=String(r.name||r.name_th||'').trim();if(n)IMP.push({g:'qr',src:'qr:'+r.id,name:n,kind:'menu',cat:r.cat||r.category||r.cat_name||null})});
   const seen=new Set();IMP=IMP.filter(x=>{const k=algNorm(x.name);if(have.has(x.src)||names.has(k)||seen.has(k))return false;seen.add(k);return true});
-  const src=[qr?'':'เมนู QR (อ่านไม่ได้)',ck?'':'สินค้าครัวกลาง (อ่านไม่ได้)'].filter(Boolean).join(' · ');
+  const bad=[sc?'':'สินค้าในร้าน (นับสต๊อก)',ck?'':'สินค้าครัวกลาง'].filter(Boolean).join(' · ');   // เมนู QR ไม่มี = ปกติ (ร้านยังไม่เปิดใช้) ไม่ต้องเตือน
+  const grp=IMP_SRC.map(([g,lbl])=>{const xs=IMP.map((x,i)=>[x,i]).filter(([x])=>x.g===g);if(!xs.length)return '';
+    return `<label class="imp" style="margin-top:8px"><input type="checkbox" checked data-grp="${g}"><b>${lbl} (${xs.length})</b></label>`
+      +xs.map(([x,i])=>`<label class="imp"><input type="checkbox" data-imp="${i}" data-g="${g}" checked><span>${esc(x.name)} <small style="color:var(--mut)">${kindName(x.kind)}${x.cat?' · '+esc(x.cat):''}</small></span></label>`).join('')}).join('');
   $('sheet').innerHTML=`<h3>📥 นำเข้าจากเมนู<button class="ed" onclick="closeSheet()">✕</button></h3>
-    <div class="note">ดึงเฉพาะชื่อที่ยังไม่มีในระบบ · นำเข้าแล้วขึ้นเป็น ❔ ยังไม่ยืนยัน — ต้องเข้าไปใส่สิ่งที่แพ้ + ติ๊กยืนยันทีละรายการ${src?'<br>⚠️ '+esc(src):''}</div>
-    ${IMP.length?`<label class="imp"><input type="checkbox" id="impAll" checked onchange="document.querySelectorAll('[data-imp]').forEach(c=>c.checked=this.checked)"><b>เลือกทั้งหมด (${IMP.length})</b></label>
-      ${IMP.map((x,i)=>`<label class="imp"><input type="checkbox" data-imp="${i}" checked><span>${esc(x.name)} <small style="color:var(--mut)">${x.from}${x.cat?' · '+esc(x.cat):''}</small></span></label>`).join('')}
+    <div class="note">ดึงเฉพาะชื่อที่ยังไม่มีในระบบ (ชื่อซ้ำกันหลายสาขารวมเป็นรายการเดียว) · นำเข้าแล้วขึ้นเป็น ❔ ยังไม่ยืนยัน — ต้องเข้าไปใส่สิ่งที่แพ้ + ติ๊กยืนยันทีละรายการ${bad?'<br>⚠️ อ่านไม่ได้: '+esc(bad):''}</div>
+    ${IMP.length?`<label class="imp"><input type="checkbox" id="impAll" checked><b>เลือกทั้งหมด (${IMP.length})</b></label>${grp}
       <div class="foot"><button class="btn o" onclick="closeSheet()">ยกเลิก</button><button class="btn g" id="impGo" onclick="doImport()">📥 นำเข้า</button></div>`
-      :'<div class="msg"><b>ไม่มีชื่อใหม่ให้นำเข้า</b>ทุกเมนูมีในระบบแล้ว</div>'}`;
+      :'<div class="msg"><b>ไม่มีชื่อใหม่ให้นำเข้า</b>ทุกรายการมีในระบบแล้ว</div>'}`;
+  const all=$('impAll');if(all)all.onchange=()=>document.querySelectorAll('[data-imp],[data-grp]').forEach(c=>c.checked=all.checked);
+  document.querySelectorAll('[data-grp]').forEach(g=>g.onchange=()=>document.querySelectorAll('[data-g="'+g.dataset.grp+'"]').forEach(c=>c.checked=g.checked));
 }
 async function doImport(){
   const pick=[...document.querySelectorAll('[data-imp]')].filter(c=>c.checked).map(c=>IMP[+c.dataset.imp]);
