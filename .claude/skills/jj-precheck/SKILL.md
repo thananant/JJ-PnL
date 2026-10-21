@@ -39,6 +39,12 @@ node tests/precheck.mjs --remote   # ก่อนเปิด PR
 | 9 git | ไม่มี `.sql` · ไม่มี `.env`/Excel/CSV/คีย์ลับ (repo public) · ไม่ตามหลัง `origin/main` | SQL ไป branch `sql` · rebase |
 | 10 (`--remote`) | `#fnSignupNotify` = `sql:signup-notify.ts` · `#feedCode` = `sql:cal-feed.ts` · `#fnBrain`/`#fnWebhook` = branch Social | ฝังใหม่ + เลื่อน `VERSION` |
 
+## SQL ที่สร้างตาราง/วิวใหม่ (หมวด 11 · Supabase เลิกเปิดสิทธิ์ให้เอง 2026-10-30)
+
+ทุกไฟล์ SQL ที่มี `create table` / `create view` ใน `public` ต้องปิดท้ายด้วยบล็อก **`-- ===== JJ-GRANTS`** (ก๊อปจากไฟล์ใดก็ได้บน branch `sql` เช่น `jjmk_kitchen2.sql` แล้วแก้รายชื่อใน `tb`/`tr`/`vw`)
+หรือ `grant ... on <ตาราง> to anon, authenticated` เขียนเอง — ไม่งั้นแอปเจอ `permission denied` · ตารางที่ anon ต้องอ่านอย่างเดียว ให้ `grant select` + `revoke insert, update, delete` แทน (แบบ `social_posts`)
+ตรวจ `sql/` ในเครื่องทุกครั้ง · `--remote` ตรวจทุกไฟล์บน branch `sql`
+
 ## เพิ่มกติกาใหม่
 
 กติกาใหม่ใน CLAUDE.md ที่เป็นแบบ "ต้องเหมือนกัน/ห้ามหาย" → เพิ่มลง `tests/precheck.mjs` ในหมวดที่ใกล้ที่สุด (ใช้ `cut()` ตัดบล็อก + `same()` เทียบหลายไฟล์)

@@ -13,6 +13,7 @@
 ## กติกา repo + ตรวจก่อนส่ง
 
 - **ห้ามมี `.sql` บน main/branch งาน** — อยู่ branch `sql` เท่านั้น (payroll ใน `jjmk-payroll/` · KPI `jjmk-kpi.sql`) · SQL ให้เจ้าของรัน → **แปะในแชทเป็นบล็อกโค้ด ห้าม `SendUserFile`** · เขียนลง `sql/` (gitignored) + push branch `sql` ด้วยทุกครั้ง
+- **SQL ที่สร้างตาราง/วิวใหม่ต้องมี `grant` ให้ anon/authenticated/service_role เอง** (Supabase เลิกเปิดให้อัตโนมัติ 2026-10-30) — ใช้บล็อก `JJ-GRANTS` ท้ายไฟล์ · precheck ตรวจให้
 - โค้ด Edge Function/Apps Script/Worker → ปุ่ม 📋 ในแอปหรือแปะในแชท **ไม่ปนกับ SQL** · `.ts` วางที่ Edge Functions เท่านั้น
 - **ห้ามเขียนไฟล์โค้ดที่มีแบ็กสแลชด้วย bash heredoc** (ใช้ python/Write แล้ว `od -c`) · ไฟล์ข้อมูลลูกค้า/สูตรลับ **ห้าม commit** (repo public)
 - ก่อน commit: `git fetch` + rebase `origin/main` (JJ Login เคยหายจากการเขียนทับ 5 ครั้ง · กู้ `git diff 2266081^ 2266081 -- <ไฟล์> | git apply --3way`) + **`node tests/precheck.mjs` ห้ามมี ✗** (ก่อน PR `--remote`)
