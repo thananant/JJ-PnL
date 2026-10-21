@@ -2404,6 +2404,30 @@ END $$;
     </div>
   </div>
 </div>
+<!-- 💵 เบิกเงินประกันคืน (พนักงานที่ยังทำงานอยู่ · จ่ายนอกสลิป · deposit_payouts — 2026-10-21) -->
+<div class="modal-bg" id="depPoBg" onclick="if(event.target===this)closeModal('depPoBg')">
+  <div class="modal dep-modal" style="max-width:640px">
+    <button class="close" onclick="closeModal('depPoBg')">✕</button>
+    <h2 class="font-display" id="depPoTitle">💵 เบิกเงินประกันคืน</h2>
+    <div class="muted" id="depPoInfo" style="margin-bottom:10px"></div>
+    <div id="depPoList"></div>
+    <div class="section-title" style="margin:12px 0 6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span id="depPoFormHead">＋ บันทึกเบิกคืนรายการใหม่</span>
+      <button class="btn btn-light btn-sm" id="depPoNew" onclick="depPoNewBtn()" style="display:none">＋ รายการใหม่แทน</button></div>
+    <div class="grid g2">
+      <div style="grid-column:1/-1"><label>จำนวน (บาท) *</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="number" id="depPoAmt" min="1" step="1" inputmode="numeric" oninput="depPoHint()" style="flex:1 1 140px;min-width:0">
+          <button class="btn btn-light" id="depPoAll" onclick="depPoFill()">เบิกทั้งหมด</button></div></div>
+      <div><label>วันที่จ่ายเงิน</label><input type="date" id="depPoDate" onchange="depPoHint()"></div>
+      <div><label>วิธีจ่าย (นอกสลิป)</label><select id="depPoVia"><option value="cash">💵 เงินสด</option><option value="transfer">🏦 โอน</option></select></div>
+      <div style="grid-column:1/-1"><label>หมายเหตุ</label><input id="depPoNote" maxlength="300" placeholder="เช่น ขอเบิกคืนรวมยอดก่อนเข้าระบบ — ไม่ใส่ก็ได้"></div>
+      <div style="grid-column:1/-1" class="muted" id="depPoHint"></div>
+    </div>
+    <div class="dep-modal-act" style="justify-content:flex-end">
+      <button class="btn btn-light" onclick="closeModal('depPoBg')">ปิด</button>
+      <button class="btn btn-ember" id="depPoGo" onclick="depPoSave()">💵 บันทึกเบิกคืน</button>
+    </div>
+  </div>
+</div>
 <!-- 🐷 เพิ่มสมาชิกเงินสำรองเลี้ยงชีพ -->
 <div class="modal-bg" id="pvdBg" onclick="if(event.target===this)closeModal('pvdBg')">
   <div class="modal dep-modal" style="max-width:600px">
@@ -2697,11 +2721,15 @@ async function refreshMe(){
 }
 function permDenied(op){
   const pg = permAs || curPage();
-  const f = op === 'insert' ? 'a' : op === 'delete' ? 'd' : 'e';
+  const f = permFlagAs || (op === 'insert' ? 'a' : op === 'delete' ? 'd' : 'e');
   if(!PERM || !pg) return false;
-  if(op === 'upsert') return !(canDo(pg,'a') || canDo(pg,'e'));
+  if(op === 'upsert' && !permFlagAs) return !(canDo(pg,'a') || canDo(pg,'e'));
   return !canDo(pg, f);
 }
+/* ชั่วคราว: เช็คสิทธิ์ตัวอักษรเดียวแทนตามชนิดคำสั่ง — 💵 เบิกเงินประกันคืน บันทึก/แก้/ยกเลิก = สิทธิ์ "แก้" หน้า 🛡️ (dep:e) ตามกติกาเจ้าของ
+   fn ต้องเรียก db.from(…).insert/update/delete แบบไม่ await ข้างใน (แบบ asPage) */
+let permFlagAs = '';
+const asPerm = (pg, f, fn) => { const o = permAs, of = permFlagAs; permAs = pg; permFlagAs = f; try{ return fn(); } finally { permAs = o; permFlagAs = of; } };
 /* ตัวแทนคำสั่งเขียนที่ถูกปฏิเสธ: เรียกต่อ .select()/.single()/.eq() ได้เหมือนของจริง แล้วคืน error */
 function deniedQuery(op){
   const res = { data:null, error:{ message:'ไม่มีสิทธิ์' + ({insert:'เพิ่ม',update:'แก้ไข',upsert:'บันทึก',delete:'ลบ'}[op]||'แก้ไข') + 'ในหน้านี้ — ติดต่อผู้ดูแลระบบ' } };
@@ -2747,7 +2775,7 @@ function auditDetailOf(op, args, q){
 }
 /* ตารางสมุดบัญชีเงิน: คำสั่งที่ขอแถวคืน (.select()) จดแถวที่ถูกเขียนจริง (id · คน · งวด · ยอด) — ไล่ประวัติรายคนได้แม้ลบด้วย id
    ไม่มีแถวถูกเขียน (ignoreDuplicates ข้าม / เงื่อนไข .eq('note',…) ไม่ตรง) = ไม่จด (เดิมจดการล็อก/แก้ที่ไม่ได้เกิดจริง) */
-const AUDIT_MONEY = new Set(['deposit_entries','pvd_members','pvd_entries','pvd_payouts']);
+const AUDIT_MONEY = new Set(['deposit_entries','deposit_payouts','pvd_members','pvd_entries','pvd_payouts']);
 const AUDIT_KEYS = ['id','employee_id','period','amount','emp_amount','er_amount','note','via','pay_date','emp_mode','emp_value','er_mode','er_value','start_period','stop_period','opening_emp','opening_er'];
 const auditRowsOf = rows => JSON.stringify(rows.map(r => { const o = {}; for(const k of AUDIT_KEYS) if(r && k in r) o[k] = r[k]; return o; }));
 /* การเขียนของเครื่องนี้ต่อตาราง (รอบ 8): n = กำลังเขียนอยู่ · s = นับทุกครั้งที่เริ่ม/จบ — คำตอบของการอ่านทั้งตารางที่ยิงก่อน/ระหว่างที่เครื่องนี้เขียน
@@ -2800,13 +2828,17 @@ let depositEntries = [];   // เงินประกัน: แถวราย
 let depReady = false;      // true เมื่อรัน jj_deposit.sql แล้ว
 let depLoadErr = '';       // โหลด deposit_entries ไม่ครบ/ล้ม (ไม่ใช่ "ยังไม่มีตาราง") = ห้ามออกสลิป/Excel/K BIZ/🔒/💸 จนโหลดสำเร็จ
 let depReqSeq = 0, depRtTimer = null;   // realtime: เลขลำดับคำขอ (ทิ้งคำตอบเก่า) + หน่วงรวมเหตุการณ์
+/* 💵 เบิกเงินประกันคืนระหว่างที่ยังทำงานอยู่ (เจ้าของแจ้ง 2026-10-21: น้อยเบิกไป 5,000 — แอปยังขึ้นสะสม 1,000) · ตาราง deposit_payouts (jj_deposit_payouts.sql) รายครั้ง
+   นอกสลิปเท่านั้น (เงินสด/โอน — ไม่เข้าสลิป/สุทธิ/K BIZ) · ยอดเบิกของงวด p ลดยอดสะสม "หลังหัก" ของงวด p → งวดถัดไปหักต่อจนครบเป้า (สูตรหักเดิม)
+   อ่านพร้อม deposit_entries ทุกจุด (depFetch) · ยังไม่รัน SQL = depPoReady false (ไม่มีปุ่ม · ตัวเลขเท่าเดิมทุกบาท) · อ่านไม่ได้ด้วยเหตุอื่น = depLoadErr (บล็อกการออกตัวเลขเงิน) */
+let depPayouts = [], depPoReady = false, depPoCh = null, depPoDown = false;
 let loadSeq = 0;           // รุ่นการโหลด (loadAll เพิ่มทุกครั้ง) — งานเบื้องหลังที่เริ่มก่อนกด 🔄 เห็นเลขเปลี่ยน = เลิกเงียบ ๆ (🔒 อัตโนมัติวันจ่าย · รอบ 7)
 /* ---- เงินประกัน กติกาใหม่ (เจ้าของสั่ง 2026-10-20: "ลดจาก 5000 เหลือ 3000 · หัก 300 รวมกับยอดเก่าที่หักมาแล้ว จนครบ 3000 · ปรับอัตราได้") ----
    งวด < DEP_V2_START คิดด้วยค่าเดิมของคนนั้น (employees.deposit_*_v1 — SQL jj_deposit_v2.sql คัดลอกไว้ · แอปอ่านอย่างเดียว ไม่เคยเขียน)
    ยังไม่รัน SQL (_v1 = null) = ทุกงวดใช้ค่าปัจจุบัน = ตัวเลขเท่าเดิมทุกบาท */
 const DEP_DEF = { target:3000, monthly:300 };          // ค่าเริ่มต้นคนใหม่ (เดิม 5,000/500)
 const DEP_V2_START = '2026-10';                         // งวดแรกของกติกาใหม่ (หน้าร้าน 26 ก.ย.–25 ต.ค. · ออฟฟิศ 1–31 ต.ค.)
-const APP_VER = '2026-10-20 · เงินประกัน v2.1';         // ป้ายรุ่นท้ายเมนู + หัวหน้า 🛡️ — เช็คว่าทุกเครื่องได้โค้ดใหม่แล้วก่อนรัน jj_deposit_v2.sql
+const APP_VER = '2026-10-21 · เงินประกัน v2.2';         // ป้ายรุ่นท้ายเมนู + หัวหน้า 🛡️ — เช็คว่าทุกเครื่องได้โค้ดใหม่แล้วก่อนรัน jj_deposit_v2.sql · v2.2 = 💵 เบิกคืน (deposit_payouts)
                                                         // v2.1 = 🏦 โอนคืนนอกสลิป + หักไม่เกินสุทธิ — เครื่องรุ่นเก่าอ่านแถว 'xfer:…' เป็น ✎ ติดลบ (= คืนในสลิป) → ให้ทุกเครื่องลากหน้าลงก่อนบันทึกโอนคืน
 const DEP_REFUND_LABEL = 'คืนเงินประกันส่วนเกิน';       // ชื่อบรรทัดในสลิป (เจ้าของสั่งให้ใส่รายละเอียดนี้)
 const DEP_XFER_LABEL = 'โอนคืนเงินประกันส่วนเกิน (นอกสลิป)';   // คนพ้นสภาพ (เจ้าของสั่ง 2026-10-20: "โอนคืน") — ไม่เข้ารายรับ/ยอดสุทธิ
@@ -2823,6 +2855,8 @@ const depCapTxt = d => !d || !d.cap ? ''
   : 'หักได้ '+THB(d.ded)+' จาก '+THB(d.want)+' — สุทธิไม่พอ'+(d.net != null ? ' (เหลือ '+THB2(depNet2(d.net))+')' : '');
 const depManualAmt = d => d && d.override ? Math.max(0, Math.floor(Number(d.override.amount)||0)) : (d ? d.ded : 0);   // ยอด ✎ ที่ตั้งไว้จริง (d.ded = หลังตัดที่สุทธิ)
 const depXferTxt = d => d && d.xfer ? '🏦 โอนคืนนอกสลิป '+THB(d.xfer)+(d.xferDate ? ' ('+dayLabel(d.xferDate)+')' : '') : '';
+/* "สะสม ก่อน → หลัง" ของงวดที่มี 💵 เบิกคืนนอกสลิปด้วย — บอกยอดเบิก ไม่งั้นบวกลบไม่ลงตัว (ผลตรวจ 💵 รอบ 1 · สลิป/หน้ารายคน/📚) */
+const depPoSuf = d => d && d.po ? ' · หลังเบิกคืนนอกสลิป '+THB(d.po) : '';
 const depCapChip = d => d.cap === 'neg' ? 'ไม่หัก · '+depNetWord(d.net) : 'ไม่พอ';   // ชิปสั้น (สรุปเงินเดือน · 📚 ประวัติ) — คำเดียวกับสลิป
 /* 💸/🏦 ที่บันทึกไว้ในงวดหลังแล้ว (d.laterRef) — งวดนี้ไม่นับเป็น "เกินเป้า ยังไม่คืน" และห้ามเสนอคืนซ้ำ */
 const depLaterTxt = d => d && d.laterRef ? (d.laterRef.note === 'xfer' ? '🏦 โอนคืน ' : '💸 คืน ')+THB(d.laterRef.amount)+' แล้วใน'+periodLabel(d.laterRef.period) : '';
@@ -2941,6 +2975,8 @@ const fromDbDep = r => { const raw = r.note||'', [k, a, b, c] = raw.split(':');
   return { id:r.id, empId:r.employee_id, period:r.period, amount:+r.amount, raw, note: k==='lock' || k==='xfer' ? k : raw,
            why: k==='lock' && (a==='neg' || a==='short') ? a : '', want: k==='lock' && b != null && b !== '' ? (Number(b)||0) : null,
            net: k==='lock' && c != null && c !== '' && isFinite(+c) ? +c : null, xferDate: k==='xfer' && /^\d{4}-\d{2}-\d{2}$/.test(a||'') ? a : '' }; };
+const fromDbDepPo = r => ({ id:r.id, empId:r.employee_id, period:r.period, amount:Number(r.amount)||0, payDate:r.pay_date||'',
+  via:r.via === 'transfer' ? 'transfer' : 'cash', note:r.note||'' });
 const fromDbFine = r => ({ id:r.id, empId:r.employee_id, period:r.period, kind:r.kind, amount:+r.amount, note:r.note||'' });
 const fromDbMou = r => ({ id:r.id, empId:r.employee_id, amount:+r.amount, monthly:+r.monthly,
   finalMax:+r.final_max, startPeriod:r.start_period||'', opening:+(r.opening||0),
@@ -3088,7 +3124,7 @@ async function loadAll(opts){
     }catch(_){ hScope = false; hCal = false; }
     /* เงินประกัน/สำรองฯ = สมุดบัญชี — โหลดครบทุกแถว (แบ่งหน้า + เทียบจำนวน) · ยังไม่มีตาราง = แบบเดิม · ล้มด้วยเหตุอื่น = depLoadErr/pvdLoadErr (บล็อกการออกตัวเลขเงิน) */
     let dep = null, depE = null, pv = null, pvE = null;
-    try{ dep = (await fetchAllRows('deposit_entries')).map(fromDbDep); }catch(e){ depE = e || {}; }
+    try{ dep = await depFetch(); }catch(e){ depE = e || {}; }   // deposit_entries + 💵 deposit_payouts
     try{ pv = await pvdFetch(); }catch(e){ pvE = e || {}; }
     if(!live()) return null;
     await calLoad();   // 🎌 วันพิเศษจากปฏิทิน (ไม่ใช่เงินจนกว่าจะกด ✅) — ยังไม่รัน jjmk-calendar-days.sql = ไม่มีการ์ด แอปทำงานปกติ
@@ -3099,8 +3135,8 @@ async function loadAll(opts){
     holidays = {}; (hd.data||[]).forEach(h => holiPut(holiRowOf(h)));
     holiScopeReady = hScope; holiCalReady = hCal;
     if(!og.err) orgPos = og.data;   // ยังไม่รัน phase14 ก็ใช้งานส่วนอื่นได้
-    if(dep){ depositEntries = dep; depReady = true; depLoadErr = ''; }
-    else if(isNoTable(depE)){ depReady = false; depLoadErr = ''; }
+    if(dep){ depPut(dep); depReady = true; depLoadErr = ''; }
+    else if(isNoTable(depE)){ depReady = false; depLoadErr = ''; depPayouts = []; depPoReady = false; }
     else { depLoadErr = 'โหลดเงินประกันไม่ครบ: ' + errTxt(depE); console.error(depE); }
     if(pv){ pvdMembers = pv.m; pvdEntries = pv.e; pvdPayouts = pv.p; pvdReady = true; pvdLoadErr = ''; }   // 🐷 ยังไม่รัน jj_provident.sql = pvdReady false (แอปทำงานแบบเดิม)
     else if(isNoTable(pvE)){ pvdReady = false; pvdLoadErr = ''; }
@@ -3155,6 +3191,7 @@ async function loadAll(opts){
     if(!(await loadPunches(emFresh, { quiet, live }))) return null;
     employees = reuseRows(employees, emFresh); scopeEmployees();   // ตัดสาขาทันทีหลังได้สแกน (buildLastSn) — ไม่มี await คั่น
     pvdRealtime();   // ช่องแยก jjmk-pvd — เรียกซ้ำได้ (รัน SQL ตอนแอปเปิดอยู่แล้วกด 🔄 ช่องก็เปิดได้)
+    depPoRealtime();   // 💵 ช่องแยก jjmk-depo (ห้ามใส่ jjmk-live) — เรียกซ้ำได้
     seenSet = null; // ให้ realtime สร้างชุดกันซ้ำใหม่จากข้อมูลล่าสุด
     recomputeAll();
     const paint = () => { renderShifts(); renderAll(); if(curPage() === 'settings') renderBday(); };
@@ -4057,10 +4094,12 @@ function advQuota(emp, period){
 function depositCalc(emp, period, workSet, netPre){ return depScope(() => depositCalcIn(emp, period, workSet, netPre)); }
 function depositCalcIn(emp, period, workSet, netPre){
   const rows = depReady ? depositEntries.filter(x=>x.empId===emp.id) : [];
+  // 💵 เบิกเงินประกันคืน (deposit_payouts · นอกสลิป): ลดยอดสะสม "หลังหัก" ของงวดนั้น — ยอดหักของงวดนั้น/งวดก่อนไม่เปลี่ยน · งวดถัดไปหักต่อจากยอดที่เหลือ
+  const pos = depReady && depPoReady ? depPayouts.filter(x=>x.empId===emp.id) : [];
   const work = workSet || empPeriodSet(emp);
-  const pds = [...new Set([...work, ...rows.map(r=>r.period), ...(period?[period]:[])])].sort();
+  const pds = [...new Set([...work, ...rows.map(r=>r.period), ...pos.map(x=>x.period), ...(period?[period]:[])])].sort();
   const open = Number(emp.depOpen)||0;
-  let collected = open, ded = 0, refund = 0, xfer = 0, override = null, before = open, want = 0, cap = '', net = null;
+  let collected = open, ded = 0, refund = 0, xfer = 0, override = null, before = open, want = 0, cap = '', net = null, po = 0;
   const v2 = depV2On(), oldOv = pd => pd < DEP_V2_START || !v2;   // ✎ งวดนี้นับแบบแอปเดิม
   for(const pd of pds){
     if(period && pd > period) break;
@@ -4082,14 +4121,17 @@ function depositCalcIn(emp, period, workSet, netPre){
       if(ov && ov.note === 'xfer' && use) xfer = Math.max(0, -amt); else refund = Math.max(0, -amt);
     }
     collected += amt;
+    if(pos.length){ const out = pos.reduce((a, x) => x.period === pd ? a + (Number(x.amount)||0) : a, 0); if(pd === period) po = out; collected -= out; }
   }
   const R = depRule(emp, period || '9999-12');
   // 💸/🏦 ที่บันทึกไว้ในงวดหลังแล้ว (26 → 5 เปิดอยู่ 2 งวด: บันทึกในงวดใหม่แล้วกลับมาดูงวดก่อน) — before ของงวดนี้ยังไม่เห็นแถวนั้น
   // → over = 0 (ชิป/ปุ่ม 💸/depOverAsk) + หน้าต่าง 💸 block (ผลตรวจรอบ 2: เคยเสนอโอนซ้ำ 2,000)
   const lr = period ? rows.filter(r=>r.period > period && (r.note === 'refund' || r.note === 'xfer') && (Number(r.amount)||0) < 0)
                           .sort((a,b)=>a.period < b.period ? -1 : 1)[0] || null : null;
+  const lp = !!period && pos.some(x => x.period > period);   // 💵 เบิกในงวดหลังแล้ว = ส่วนเกินงวดนี้ถูกใช้ไปแล้ว → over 0 แบบ lr (ผลตรวจ 💵 รอบ 1 · หน้าต่าง 💸 ใช้ depFloorAfter)
   return { target:R.target, monthly:R.monthly, ded, refund, xfer, before, collected, override,
            laterRef: lr ? { period:lr.period, note:lr.note, amount:-(Number(lr.amount)||0) } : null,
+           po,                                                         // 💵 เบิกคืนนอกสลิปในงวดนี้ (รวม) — collected = หลังหัก/คืน แล้วหักยอดนี้ · before ไม่รวม
            src: !override ? 'auto' : (override.note || 'manual'),      // auto | manual | lock | refund | xfer
            want, cap, net,                                             // cap '' | 'neg' (ไม่ได้หัก) | 'short' (หักได้บางส่วน) · want = ยอดปกติ · net = สุทธิก่อนหักเงินประกัน
            xferDate: override && override.note === 'xfer' ? (override.xferDate || '') : '',
@@ -4099,7 +4141,7 @@ function depositCalcIn(emp, period, workSet, netPre){
            soloV1: !!override && !DEP_FIXED(override.note) && !!period && oldOv(period) && !work.has(period),
            // over = "เกินเป้า ยังไม่คืน" — เฉพาะเป้า > 0 (เงื่อนไขเดียวกับ 💸 depRefundOpen) และงวด ≥ DEP_V2_START (ก่อนนั้นไม่มีการคืน — ไม่ขึ้นชิป/ไม่ถาม)
            remain: Math.max(0, R.target - collected),
-           over: R.target > 0 && (!period || period >= DEP_V2_START) && !lr ? Math.max(0, collected - R.target) : 0,   // มี 💸/🏦 ในงวดหลัง = 0
+           over: R.target > 0 && (!period || period >= DEP_V2_START) && !lr && !lp ? Math.max(0, collected - R.target) : 0,   // มี 💸/🏦/💵 ในงวดหลัง = 0
            done: !R.target || collected >= R.target };
 }
 /* รัน jj_deposit_v2.sql แล้วไหม = ดูจาก "มีคอลัมน์ deposit_target_v1" (depV2Col · คอลัมน์กับ UPDATE อยู่ทรานแซกชันเดียวกัน)
@@ -4138,6 +4180,28 @@ const DEP_ORPH_FIX = '→ เช็คก่อนว่าสร้างไฟ
 /* ยอด 💸/🏦 ที่บันทึกในงวดหลังงวดนี้ (รวม) — ยอดที่ยังคืนได้ในงวดนี้ = สะสมก่อนงวด − เป้า − ยอดนี้ (ผลตรวจรอบ 4) */
 const depLaterSum = (empId, period) => depositEntries.filter(r => r.empId === empId && r.period > period && (r.note === 'refund' || r.note === 'xfer') && (Number(r.amount)||0) < 0)
   .reduce((a, r) => a - (Number(r.amount)||0), 0);
+/* 💵 รายการเบิกเงินประกันคืนของคนนี้ (ยังไม่รัน SQL = ว่าง) */
+const depPoOf = empId => depPoReady ? depPayouts.filter(x => x.empId === empId) : [];
+/* ยอดต่ำสุดของ "สะสมหลังงวด" ในงวดหลังงวด p ที่มีการลดยอด (💵 เบิก · 💸/🏦 คืน) — ยอดที่ลดเพิ่มในงวด p ลดทุกงวดหลังด้วย ห้ามทำให้ติดลบ
+   any = นับแม้ไม่มีการเบิก (💵 เบิก/แก้) · 💸/🏦 ส่ง false = คนที่ไม่เคยเบิก 💵 ได้ Infinity (ยอดคืนแบบเดิมทุกบาท)
+   นับเฉพาะเงินที่หักจริงแล้ว (ผลตรวจ 💵 รอบ 1): ไม่นับยอดหักของงวด q เอง และของงวด p…ก่อน q ที่ยังไม่ถึงวันจ่าย (ยังไม่ได้หัก — สุทธิไม่พอ/✎/ปิดหัก ทำให้เป็น 0 ได้)
+   = before − คืน − โอน − เบิก ของงวด q − ยอดหักที่ยังไม่ถึงวันจ่าย (งวดที่มีแถวคืน ยอดหัก = 0 → 💸/🏦 ได้ค่าเดิม) */
+function depFloorAfter(e, p, any){
+  const po = depPoOf(e.id);
+  if(!any && !po.length) return Infinity;
+  const ps = new Set([...po.filter(x => x.period > p).map(x => x.period),
+    ...depositEntries.filter(r => r.empId === e.id && r.period > p && (Number(r.amount)||0) < 0).map(r => r.period)]);
+  const today = bizToday(), pend = new Map();
+  const pendOf = x => { if(!pend.has(x)) pend.set(x, periodRangeE(e, x).pay <= today ? 0 : depositCalc(e, x).ded); return pend.get(x); };
+  let m = Infinity;
+  for(const q of ps){
+    const d = depositCalc(e, q);
+    let v = d.before - d.refund - d.xfer - d.po;
+    for(let x = p, i = 0; x < q && i < 36; x = nextPeriod(x), i++) v -= pendOf(x);
+    m = Math.min(m, v);
+  }
+  return m;
+}
 /* 🏦 ที่บันทึกในงวดที่ยังไม่ถึงวันจ่าย แต่คนนั้นมีวันทำงานงวดนั้นแล้ว (กลับมาทำงาน/สแกนส่งย้อนหลัง/นำเข้าไฟล์) — ผลตรวจรอบ 4
    เครื่องนี้ไม่คืนในสลิป (ถูก) แต่เครื่องรุ่นก่อน v2.1 อ่าน xfer:… เป็น ✎ ติดลบ = คืนในสลิป/ไฟล์ K BIZ ซ้ำ → เตือน (แถบหน้า 🛡️ + ผล K BIZ) */
 function depXferWork(emps, period){
@@ -4420,7 +4484,7 @@ function depV2Ask(period){
   return confirm(DEP_V2_MSG + '\n\nรัน SQL ใน Supabase ก่อน (แนะนำ) — ทำต่อเลยไหม?');
 }
 let moneyResyncT = null, rtDown = false;
-const moneySig = () => JSON.stringify([depositEntries, pvdMembers, pvdEntries, pvdPayouts, depLoadErr, pvdLoadErr]);
+const moneySig = () => JSON.stringify([depositEntries, depPayouts, pvdMembers, pvdEntries, pvdPayouts, depLoadErr, pvdLoadErr]);
 /* กลับมาเปิดจอ/realtime ต่อใหม่ → อ่านสมุดเงินประกัน/สำรองฯ ใหม่เบื้องหลัง (ระหว่างจอดับ realtime อาจหลุดเหตุการณ์) */
 function moneyResync(){
   if(!(depReady || pvdReady)) return;
@@ -4429,7 +4493,7 @@ function moneyResync(){
     const before = moneySig();
     if(depReady){
       const seq = ++depReqSeq;
-      try{ const rows = await fetchAllRows('deposit_entries'); if(seq === depReqSeq){ depositEntries = rows.map(fromDbDep); depLoadErr = ''; } }
+      try{ const r = await depFetch(); if(seq === depReqSeq){ depPut(r); depLoadErr = ''; } }
       catch(e){ if(seq === depReqSeq && !isNoTable(e)) depLoadErr = 'โหลดเงินประกันไม่ครบ: ' + errTxt(e); }
     }
     if(pvdReady){
@@ -4444,19 +4508,49 @@ function moneyResync(){
     if(empCh || moneySig() !== before){ rtQueue++; scheduleRtRefresh(); }
   }, 400);
 }
-/* อ่าน deposit_entries ใหม่จากฐานข้อมูล (แบ่งหน้า + เทียบจำนวน) — ก่อนเปิดพรีวิว/บันทึก 🔒 💸 (ไม่เชื่อข้อมูลในเครื่อง) */
+/* สมุดเงินประกัน = deposit_entries + 💵 deposit_payouts — อ่านพร้อมกันทุกจุด (loadAll · depRefresh/moneyFresh · realtime · moneyResync · 🔒 อัตโนมัติ)
+   deposit_payouts ยังไม่มี (ยังไม่รัน jj_deposit_payouts.sql) = po null (แบบเดิม) · อ่านไม่ได้ด้วยเหตุอื่น = throw → ผู้เรียกตั้ง depLoadErr (บล็อกแบบ moneyLoadErr) */
+async function depFetch(){
+  const [rows, po] = await Promise.all([fetchAllRows('deposit_entries'),
+    fetchAllRows('deposit_payouts').catch(e => { if(isNoTable(e)) return null; throw e; })]);
+  return { rows: rows.map(fromDbDep), po: po ? po.map(fromDbDepPo) : null };
+}
+function depPut(r){ depositEntries = r.rows; depPayouts = r.po || []; depPoReady = !!r.po; }
+/* อ่าน deposit_entries (+ deposit_payouts) ใหม่จากฐานข้อมูล (แบ่งหน้า + เทียบจำนวน) — ก่อนเปิดพรีวิว/บันทึก 🔒 💸 💵 (ไม่เชื่อข้อมูลในเครื่อง) */
 async function depRefresh(quiet){
   ++depReqSeq;   // คำตอบ realtime ที่ยิงไปก่อนแต่มาถึงทีหลัง (ข้อมูลเก่ากว่า) ต้องไม่ทับข้อมูลสดชุดนี้ — realtime รับผลเฉพาะ seq === depReqSeq
   try{
-    const rows = await fetchAllRows('deposit_entries');
-    depositEntries = rows.map(fromDbDep); depReady = true; depLoadErr = '';   // ผลของเราใช้เสมอ (ผู้เรียกจะใช้ข้อมูลชุดนี้ต่อทันที)
+    const r = await depFetch();
+    depPut(r); depReady = true; depLoadErr = '';   // ผลของเราใช้เสมอ (ผู้เรียกจะใช้ข้อมูลชุดนี้ต่อทันที)
     return true;
   }catch(e){
     if(quiet) return false;   // เบื้องหลัง (🔒 อัตโนมัติวันจ่าย): อ่านไม่ได้ = ไม่ล็อก · ไม่เด้งข้อความ/ไม่เปลี่ยนสถานะ (ออกตัวเลขเงินครั้งหน้า moneyFresh อ่านใหม่แบบ fail closed)
-    if(isNoTable(e)){ depReady = false; depLoadErr = ''; toast('❌ ต้องรัน jj_deposit.sql ใน Supabase ก่อน'); return false; }
+    if(isNoTable(e)){ depReady = false; depLoadErr = ''; depPayouts = []; depPoReady = false; toast('❌ ต้องรัน jj_deposit.sql ใน Supabase ก่อน'); return false; }
     depLoadErr = 'โหลดเงินประกันไม่ครบ: ' + errTxt(e);
     toast('❌ ' + depLoadErr); renderDeposit(); return false;
   }
+}
+/* realtime ของสมุดเงินประกัน (deposit_entries ใน jjmk-live · 💵 deposit_payouts ช่องแยก jjmk-depo)
+   ล็อกทั้งงวด = หลายร้อยเหตุการณ์ → หน่วง 800ms แล้วโหลดครั้งเดียว (แบ่งหน้า · ทั้งสองตาราง) · คำตอบที่เก่ากว่าคำขอล่าสุดทิ้ง */
+function depRtKick(){
+  clearTimeout(depRtTimer);
+  depRtTimer = setTimeout(async ()=>{
+    const seq = ++depReqSeq;
+    try{ const r = await depFetch();
+         if(seq !== depReqSeq) return;
+         depPut(r); depReady = true; depLoadErr = ''; }
+    catch(e){ if(seq !== depReqSeq) return; if(!isNoTable(e)) depLoadErr = 'โหลดเงินประกันไม่ครบ: ' + errTxt(e); }
+    rtQueue++; scheduleRtRefresh();
+  }, 800);
+}
+/* 💵 ช่องแยก jjmk-depo (ห้ามใส่ jjmk-live — ก่อนรัน SQL ตารางยังไม่อยู่ใน publication = sync สแกนหยุดทั้งแอป) · เรียกซ้ำได้ (ท้าย loadAll)
+   หลุดแล้วต่อใหม่ = moneyResync (เหตุการณ์ระหว่างหลุดหาย · แบบ jjmk-adj) */
+function depPoRealtime(){
+  if(depPoCh || !depPoReady) return;
+  try{
+    depPoCh = db.channel('jjmk-depo').on('postgres_changes', { event:'*', schema:'public', table:'deposit_payouts' }, depRtKick)
+      .subscribe(st => { if(st === 'SUBSCRIBED'){ if(depPoDown){ depPoDown = false; moneyResync(); } } else if(st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') depPoDown = true; });
+  }catch(e){ console.error('deposit_payouts realtime', e); }
 }
 /* งวดที่ "ควรปิดยอด" ของคนนี้: ≥ depStart · จ่ายแล้ว (วันจ่าย ≤ วันนี้) · ยังไม่มีแถว 🔒/💸 · มีวันทำงาน หรือมีแถว ✎
    ข้ามคนที่ (เป้างวดนั้น = 0 และสะสมก่อนงวด = 0 และไม่มีแถว) — ไม่มีอะไรต้องกัน · ยอด = ที่ระบบคิดตอนนี้ (ก่อนแก้)
@@ -4745,7 +4839,7 @@ async function payDayLockIn(why, o, seq){
   const rd = due.dd.length ? await depLockWrite(due.dd, 'dep', true) : none;
   const rp = due.pv.length ? await pvdLockWrite(due.pv, true) : none;
   // เครื่องอื่นปิดยอดก่อน (ignoreDuplicates ข้าม / ✎ เปลี่ยน) = ไม่ใช่ error — อ่านใหม่เงียบ ๆ ให้เห็นแถวของเครื่องนั้น
-  if(rd.skip){ try{ const s = ++depReqSeq; const rows = await fetchAllRows('deposit_entries'); if(s === depReqSeq) depositEntries = rows.map(fromDbDep); }catch(_){} }
+  if(rd.skip){ try{ const s = ++depReqSeq; const r = await depFetch(); if(s === depReqSeq) depPut(r); }catch(_){} }
   if(rp.skip){ try{ const s = ++pvdReqSeq; const r = await pvdFetch(); if(s === pvdReqSeq){ pvdMembers = r.m; pvdEntries = r.e; pvdPayouts = r.p; pvdMemo = {}; } }catch(_){} }
   const err = rd.error || rp.error, nFail = (rd.fail || 0) + (rp.fail || 0);
   if(err) console.warn('payDayLock write', err);
@@ -5016,6 +5110,7 @@ async function updDepField(empId, field, val){
   renderDeposit(); renderPayroll(); renderDetail();
   toast('บันทึกแล้ว · มีผลตั้งแต่ ' + periodLabel(depEffFrom(e, field)) + (L.n ? ' · 🔒 ปิดยอดงวดก่อนหน้า ' + L.n + ' แถว' : '') +
         (L.v1 ? ' · งวดก่อน ' + shortP(DEP_V2_START) + ' ยังไม่ 🔒 — ตรวจยอดแล้วกด 🔒 ที่หน้า 🛡️' : ''));
+  depPoNegWarn(e);
 }
 function depFieldChg(el){
   const f = el.dataset.f, v = f === 'deposit_on' ? el.checked : el.value;
@@ -5063,6 +5158,7 @@ async function setDepOverride(empId, period, val){
     toast(amount? 'หักงวดนี้ '+THB(amount)+' บาท'+(dn && dn.cap ? ' · '+depCapTxt(dn) : '') : 'งดหักงวดนี้');
   }
   renderDeposit(); renderPayroll(); renderDetail();
+  if(eG) depPoNegWarn(eG);
 }
 function depOvChg(el){ setDepOverride(+el.dataset.emp, el.dataset.p, el.value); }
 function depEditBtn(el){ editDeposit(+el.dataset.emp, el.dataset.p); }
@@ -5122,7 +5218,8 @@ async function editDeposit(empId, period){
           'แก้/ยกเลิกไม่ได้: ประวัติจะไม่ตรงเงินที่โอนจริง และระบบจะเสนอคืนซ้ำ\nถ้าโอนไม่สำเร็จจริง ให้คืนในงวดถัดไปหรือจ่ายนอกสลิป แล้วจดหมายเหตุไว้');
       // ยอดเดิมผ่านเสมอ — แถวที่บันทึกตอนติ๊ก "คืนเกินส่วนเกิน" (ถึงยอดสะสม) เกิน สะสม − เป้า ได้ · แก้แค่วันที่โอนต้องทำได้ (ผลตรวจรอบ 2)
       // คืน/โอนในงวดหลังแล้ว (26 → 5 เปิดอยู่ 2 งวด) = หักออกจากยอดที่คืนได้ (ผลตรวจรอบ 4: เดิมแก้ ต.ค. ขึ้นจนเต็มส่วนเกินได้ทั้งที่ พ.ย. คืนไปแล้ว = คืนเกิน)
-      const maxOf = dd => Math.max(0, dd.before - dd.target - depLaterSum(empId, period), cur);
+      // 💵 เบิกคืนงวดนี้ = ส่วนเกินคิดหลังเบิก · เบิกในงวดหลัง = เพิ่มยอดคืนได้ไม่เกินยอดต่ำสุดของสะสมงวดนั้น (ไม่เคยเบิก = แบบเดิม)
+      const maxOf = dd => Math.max(0, Math.min(dd.before - dd.po - dd.target - depLaterSum(empId, period), cur + depFloorAfter(e, period)), cur);
       const later = depLaterSum(empId, period), max = maxOf(d);
       const v = prompt((xf ? '🏦 '+DEP_XFER_LABEL+' — '+e.nick+' โอนแล้ว '+THB(cur)+' บาท'+(d.xferDate ? ' (วันที่ '+dayLabel(d.xferDate)+')' : '')
                            : '💸 '+DEP_REFUND_LABEL+'งวดนี้ — '+e.nick+' คืน '+THB(cur)+' บาท')+
@@ -5169,10 +5266,19 @@ async function editDeposit(empId, period){
         const r = await db.from('deposit_entries').update({ amount:-amt, note }).eq('employee_id', empId).eq('period', period).eq('note', raw).select();
         if(r.error) return dbErr(r.error, 'แก้ยอดคืน');
         if(!(r.data||[]).length) return reload('⚠️ มีคนเปลี่ยนงวดนี้ก่อน — โหลดใหม่แล้ว');
-        swap(r.data[0]); toast((xf ? '🏦 แก้ยอดโอนคืนเป็น ' : '💸 แก้ยอดคืนเป็น ')+THB(amt)+' บาท');
+        swap(r.data[0]);
+        // เพิ่มยอดคืน + อีกเครื่องบันทึก 💵 เบิกคืนพร้อมกัน (เช็คก่อนเขียนผ่านทั้งคู่) → อ่านใหม่หลังเขียน: คืน+เบิกเกินยอดสะสม = ถอยกลับยอดเดิม (ผลตรวจ 💵 รอบ 1)
+        if(amt > cur && depPoReady && await depRefresh() && depPoOf(empId).length && depPoOverdrawn(e, period)){
+          const r2 = await db.from('deposit_entries').update({ amount:-cur, note:raw }).eq('employee_id', empId).eq('period', period).eq('note', note).eq('amount', -amt).select();
+          await depRefresh(); renderDeposit(); renderPayroll(); renderDetail();
+          return alert('⚠️ มีการ 💵 เบิกคืนจากเครื่องอื่นพร้อมกัน ยอดคืน+เบิกเกินยอดสะสม — ' + (r2.error || !(r2.data||[]).length
+            ? 'ถอยกลับยอดเดิมไม่สำเร็จ ตรวจที่ตาราง 🛡️ แล้ว ✎ แก้เอง' : 'คืนยอดเดิม ' + THB(cur) + ' บาทแล้ว ตรวจยอดแล้วลองใหม่'));
+        }
+        toast((xf ? '🏦 แก้ยอดโอนคืนเป็น ' : '💸 แก้ยอดคืนเป็น ')+THB(amt)+' บาท');
       }
     }
     renderDeposit(); renderPayroll(); renderDetail();
+    depPoNegWarn(e);
     return;
   }
   const v = prompt('🛡️ หักเงินประกันงวดนี้ — '+e.nick+
@@ -5303,7 +5409,8 @@ function renderDepositIn(){
        · หักได้ไม่เกินสุทธิก่อนหักเงินประกัน (สุทธิติดลบ = ไม่หักงวดนั้น · ไม่พอ = หักเท่าที่เหลือ — ประวัติบอกเหตุผล)
        · งวดที่จ่ายแล้วต้อง <b>🔒 ปิดยอด</b> (ประวัติจะไม่เปลี่ยน/ไม่หาย) — ตั้งแต่${periodLabel(DEP_V2_START).replace('งวด','')} <b>พนักงานหน้าร้านที่ปิดยอดงวดก่อนนั้นครบแล้ว</b> ระบบปิดยอดให้เองในวันจ่าย (ตอนเปิดแอปด้วยบัญชีที่มีสิทธิ์หน้า 🛡️/🐷) ·
          <b>ออฟฟิศ</b> กด 🔒 เองหลังสิ้นเดือน หรือยืนยันตอนสร้างไฟล์ K BIZ งวดถัดไป (ยังไม่ปิด = บัญชีสาขา/ไม่มีสิทธิ์ 🛡️ แก้กะ/ตั้งค่าเงินไม่ได้) ·
-         <b>งวดก่อนนั้นตรวจแล้วกด 🔒 เอง</b> (ยอดผิด = แก้ค่าที่ผิดก่อน แล้วค่อย 🔒) · "เก็บมาก่อน" = เงินที่เก็บก่อนเริ่มใช้ระบบเท่านั้น`
+         <b>งวดก่อนนั้นตรวจแล้วกด 🔒 เอง</b> (ยอดผิด = แก้ค่าที่ผิดก่อน แล้วค่อย 🔒) · "เก็บมาก่อน" = เงินที่เก็บก่อนเริ่มใช้ระบบเท่านั้น
+       ${depPoReady ? `· <b>💵 เบิกคืน</b> = พนักงานที่ยังทำงานอยู่ขอเบิกเงินประกันคืนก่อนครบเป้า (จ่ายเงินสด/โอนนอกสลิป แล้วกด 💵 ที่ช่องสะสมของคนนั้น ในงวดปัจจุบัน — ช่วง 26 → 5 หน้าร้านบันทึกที่งวดก่อนจนถึงวันจ่ายงวดนั้น · ออฟฟิศวันสิ้นเดือน (วันจ่าย) บันทึกได้วันถัดไป) — ยอดสะสมลด แล้วงวดถัดไปหักต่อจนครบเป้า · ยอดที่เก็บก่อนเข้าระบบ${settings.depStart ? ' (ก่อน' + periodLabel(settings.depStart) + ')' : ''}ไม่อยู่ในแอป` : ''}`
     : '<b style="color:var(--red)">⚠️ ยังไม่ได้รัน jj_deposit.sql ใน Supabase SQL Editor — รันก่อน ถึงจะบันทึกข้อมูลเงินประกันได้</b>';
   const warn = document.getElementById('depWarn');
   const lockBtn = document.getElementById('depLockBtn'), refBtn = document.getElementById('depRefBtn');
@@ -5325,7 +5432,7 @@ function renderDepositIn(){
   if(lockBtn){ lockBtn.disabled = !depReady || pre; lockBtn.title = pre ? 'งวดก่อน "เริ่มหักตั้งแต่งวด" ปิดยอดไม่ได้ (ห้ามคิดย้อนหลัง)' : 'ปิดยอดงวดที่จ่ายแล้ว ตามตัวกรองสาขา/ค้นหาที่แสดงอยู่'; }
   // ปุ่ม 💸 นับจากทุกคนในสาขา (เงื่อนไขเดียวกับ depRefundOpen) ไม่ใช่แถวที่กรองสถานะ/ค้นหาแล้ว — ผลตรวจรอบ 4: กรอง "ทำงานอยู่" แล้วปุ่มหายทั้งที่มีคนพ้นสภาพรอ 🏦
   const brAll = employees.filter(e=>!bf||e.branch===bf).map(e=>({ e, d: depositCalc(e, period) }));
-  const overN = brAll.filter(x=>x.d.target > 0 && x.d.before > x.d.target && !depRowOf(x.e.id, period) && !x.d.laterRef).length;   // คืน/โอนในงวดหลังแล้ว = ไม่นับ
+  const overN = brAll.filter(x=>x.d.target > 0 && x.d.before - x.d.po > x.d.target && !depRowOf(x.e.id, period) && !x.d.laterRef && depFloorAfter(x.e, period) > 0).length;   // คืน/โอนในงวดหลังแล้ว = ไม่นับ · 💵 เบิกคืนงวดนี้ = หักออก
   const xferN = brAll.filter(x=>x.d.src === 'xfer').length;   // บันทึกโอนคืนแล้วงวดนี้ — ยังเปิดหน้าต่าง 💸 ดูรายการได้
   if(refBtn) refBtn.hidden = !(boss && depReady && v2 && period >= DEP_V2_START && (overN > 0 || xferN > 0));
 
@@ -5337,6 +5444,7 @@ function renderDepositIn(){
   const sumRemain = rows.reduce((a,x)=>a+x.d.remain,0);
   const sumHave = rows.reduce((a,x)=>a+x.d.collected,0);
   const overLeft = rows.filter(x=>x.d.over > 0 && !x.d.refund && !x.d.xfer);   // คืน/โอนบางส่วนแล้วงวดนี้ = ไม่นับ "ยังไม่คืน"
+  const sumPo = rows.reduce((a,x)=>a+x.d.po,0);   // 💵 เบิกคืนนอกสลิปงวดนี้
   document.getElementById('depStats').innerHTML = `
     <div class="stat"><div class="v" style="color:var(--green)">${nDone}</div><div class="l">ครบแล้ว</div></div>
     <div class="stat"><div class="v" style="color:${rows.length-nDone?'var(--amber)':'inherit'}">${rows.length-nDone}</div><div class="l">ยังไม่ครบ</div></div>
@@ -5345,10 +5453,12 @@ function renderDepositIn(){
     <div class="stat"><div class="v">${THB(sumHave)} ฿</div><div class="l">สะสมรวม (ถึงงวดนี้)</div></div>
     <div class="stat"><div class="v">${THB(sumRemain)} ฿</div><div class="l">ค้างเก็บรวม</div></div>
     ${sumXfer?`<div class="stat"><div class="v">${THB(sumXfer)} ฿</div><div class="l">🏦 โอนคืนนอกสลิปงวดนี้</div></div>`:''}
+    ${sumPo?`<div class="stat"><div class="v">${THB(sumPo)} ฿</div><div class="l">💵 เบิกคืนนอกสลิปงวดนี้</div></div>`:''}
     ${nCap?`<div class="stat"><div class="v" style="color:var(--red)">${nCap}</div><div class="l">หักไม่ได้/ไม่เต็ม (สุทธิไม่พอ)</div></div>`:''}
     ${overLeft.length?`<div class="stat"><div class="v" style="color:var(--amber)">${overLeft.length}</div><div class="l">เกินเป้า ยังไม่คืน</div></div>`:''}`;
 
   const canEd = depReady && !depLoadErr;
+  const poCan = canEd && depPoReady && depPoCan();
   tbl.className = 'mcard';
   tbl.innerHTML = `<thead><tr>
       <th>พนักงาน</th><th>หัก</th>
@@ -5391,8 +5501,8 @@ function renderDepositIn(){
       <td data-l="สะสมก่อนงวดนี้" class="num">${THB(d.before)}</td>
       <td data-l="หักงวดนี้" class="num">${dedCell}</td>
       <td data-l="สะสมแล้ว / เป้า" class="num"><span><b>${THB(d.collected)}</b> <span class="muted">/ ${THB(d.target)}</span>
-        <br><span style="font-size:12px;color:${d.over?'var(--amber)':d.remain?'var(--red)':'var(--green)'}">${d.over?'เกิน '+THB(d.over):d.remain?'คงเหลือ '+THB(d.remain):'ครบ'}</span></span></td>
-      <td data-l="สถานะ" class="dep-st" style="white-space:normal;min-width:116px">${status}</td>
+        <br><span style="font-size:12px;color:${d.over?'var(--amber)':d.remain?'var(--red)':'var(--green)'}">${d.over?'เกิน '+THB(d.over):d.remain?'คงเหลือ '+THB(d.remain):'ครบ'}</span></span>${depPoCell(e, period, d, poCan)}</td>
+      <td data-l="สถานะ" class="dep-st" style="white-space:normal;min-width:116px">${d.collected < 0 ? `<span class="chip chip-red" style="white-space:normal" title="ยอดหักงวดที่เบิก/คืนไปแล้วถูกแก้ลดภายหลัง (✎/🔒/ปิดหัก/สุทธิไม่พอ)">⚠️ สะสมติดลบ ${THB(d.collected)} — เบิก/คืนเกินยอดที่หักจริง ตรวจ 💵/💸</span><br>` : ''}${status}</td>
     </tr>`;}).join('')
     : '<tr><td colspan="9"><div class="empty">ไม่พบพนักงานตามเงื่อนไข</div></td></tr>') + '</tbody>';
 }
@@ -5644,8 +5754,11 @@ async function depRefundOpen(){
     const nw1 = nw.filter(r=>r.period < DEP_V2_START);
     if(nw1.length && !(depRule(e, period).target > 0 && depositCalc(e, period).before > depRule(e, period).target)) nwOther.push(e.nick + ' ' + nwTxt(e, nw1));
     const d = depositCalc(e, period);
-    if(!(d.target > 0) || !(d.before > d.target)) continue;
-    const over = d.before - d.target;
+    // 💵 เบิกคืนงวดนี้ = ยอดสะสมลดแล้ว (ส่วนเกินคิดหลังเบิก) · เบิกในงวดหลัง = ห้ามคืนจนสะสมงวดนั้นติดลบ (ไม่เคยเบิก = Infinity แบบเดิม)
+    const flo = depFloorAfter(e, period);
+    if(!(d.target > 0) || !(d.before - d.po > d.target)) continue;
+    const over = Math.min(d.before - d.po - d.target, flo);
+    if(!(over > 0)) continue;
     // พ้นสภาพ = โอนคืนนอกสลิป · ทำงานอยู่ = คืนในสลิป (ค่าตั้งต้น · กติกาเจ้าของ) หรือติ๊ก "🏦 โอนไปแล้วนอกสลิป" เอง (ผลตรวจรอบ 5:
     //   โอนไปแล้วตอนพ้นสภาพแล้วกลับมาทำงานก่อนบันทึก/ยกเลิก 🏦 ไปแล้ว = เดิมบันทึก 🏦 ไม่ได้ และหน้าต่างนี้ติ๊กคืนในสลิปให้เอง = จ่ายซ้ำ)
     const act = !!e.active, xf = !act;
@@ -5660,7 +5773,9 @@ async function depRefundOpen(){
     // สุทธิก่อนคืน (งวดนี้ไม่มีแถว → หักอัตโนมัติ 0 เพราะเกินเป้าแล้ว) — หลังบวกยอดคืนยังติดลบ = K BIZ ไม่โอน/ไม่ยกไปงวดหน้า → ยอดคืนถูกกลืน
     // 🏦 โอนนอกสลิป ไม่ผ่านยอดสุทธิ → ไม่ต้องเช็ค
     const dmin = [e.endDate, periodRangeE(e, prevPeriod(period)).from].filter(Boolean).sort()[0] || '';   // ช่องวันที่โอน: ไม่ย้อนเกินวันเปิดงวดก่อน/วันสิ้นสุดงาน (ไม่บังคับ — กันพิมพ์ปีผิด)
-    const it = { e, d, over, amount: over, prior, hist, block:'', warn, xf, act, row, date: today, dmin, netNow: act ? calcPay(e, period).net : 0, quit:false };
+    const it = { e, d, over, qmax: Math.min(d.before - d.po, flo), amount: over, prior, hist, block:'', warn, xf, act, row, date: today, dmin, netNow: act ? calcPay(e, period).net : 0, quit:false,
+                 poSig: JSON.stringify(depPoOf(e.id).filter(y => y.period >= period).map(y => [y.id, y.period, y.amount])) };
+    if(d.po) warn.push('💵 เบิกคืนนอกสลิปงวดนี้แล้ว ' + THB(d.po) + ' (ส่วนเกินคิดหลังเบิก)');
     it.block = depRefBlock(it, period);
     if(!xf) depRefNegUpd(it);
     it.on = !xf && !it.block && !it.warn.length;              // 🏦 ต้องติ๊ก "โอนแล้ว" เองหลังโอนจริง
@@ -5770,7 +5885,7 @@ async function depRefundSave(){
   const on = st.items.filter(x=>x.on && !x.block);
   if(!on.length) return;
   for(const x of on){
-    const max = x.quit ? x.d.before : x.over;
+    const max = x.quit ? x.qmax : x.over;   // 💵 เบิกคืนงวดนี้/งวดหลัง หักออกแล้ว (ไม่เคยเบิก = สะสมก่อนงวด แบบเดิม)
     if(!(x.amount > 0) || x.amount > max) return toast('❌ ยอดคืนของ '+x.e.nick+' ต้องมากกว่า 0 และไม่เกิน '+THB(max)+' บาท'+(x.quit?'':' (สะสมก่อนงวด − เป้า · ลาออก/เลิกเก็บ ติ๊ก "คืนเกินส่วนเกิน")'));
     if(x.xf && !depRefDateOk(x.date)) return toast('❌ ใส่วันที่โอนคืนของ '+x.e.nick+' (ไม่เกินวันนี้)');
   }
@@ -5801,6 +5916,7 @@ async function depRefundSave(){
       const pOld = x.prior.filter(y=>{ const r2 = depRowOf(x.e.id, y.p); return !(r2 && DEP_FIXED(r2.note)); });
       if(changed || depositCalc(eNow, st.period).before !== x.d.before || sig(depLockDue(eNow, { before: st.period })) !== sig(pOld)){ skipped.push(x.e.nick+' (ยอดงวดก่อนเปลี่ยน — เปิดพรีวิวใหม่)'); continue; }
       if(depositCalc(eNow, st.period).laterRef){ skipped.push(x.e.nick+' (คืน/โอนแล้วในงวดหลัง — ห้ามคืนซ้ำ)'); continue; }
+      if(JSON.stringify(depPoOf(x.e.id).filter(y => y.period >= st.period).map(y => [y.id, y.period, y.amount])) !== x.poSig){ skipped.push(x.e.nick+' (มีการบันทึก 💵 เบิกคืน — เปิดพรีวิวใหม่)'); continue; }
       // เปิดหน้าต่างค้างจนเลยวันก่อนวันจ่าย / มีวันทำงานทีหลัง — เช็คเงื่อนไขเดียวกับตอนเปิดอีกครั้ง (ผลตรวจรอบ 6)
       const blk = depRefBlock({ ...x, e: eNow, d: depositCalc(eNow, st.period), row: null }, st.period);
       if(blk){ skipped.push(x.e.nick+' ('+blk+')'); continue; }
@@ -5826,12 +5942,13 @@ async function depRefundSave(){
     if(done.length && await depRefresh()){
       for(const x of done.slice()){
         const d2 = depositCalc(x.e, st.period), row = depRowOf(x.e.id, st.period);
-        if(!row || !(d2.laterRef || d2.before !== x.d.before)) continue;
+        // + 💵 เบิกคืนจากเครื่องอื่นพร้อมกัน (poSig เช็คแค่ก่อนเขียน) — คืน+เบิกเกินยอดสะสม = ถอยแถวนี้ (ผลตรวจ 💵 รอบ 1)
+        if(!row || !(d2.laterRef || d2.before !== x.d.before || (depPoOf(x.e.id).length && depPoOverdrawn(x.e, st.period)))) continue;
         const r = await db.from('deposit_entries').delete().eq('id', row.id).eq('employee_id', x.e.id).eq('period', st.period).eq('note', depRaw(row)).select();
         done.splice(done.indexOf(x), 1);
         if(r.error || !(r.data||[]).length){ skipped.push(x.e.nick+' (⚠️ มีการคืน/โอนจากเครื่องอื่นพร้อมกัน — ยกเลิกแถวที่เพิ่งบันทึกไม่สำเร็จ ตรวจที่ตาราง 🛡️ แล้ว ✎ ยกเลิกเอง)'); continue; }
         depositEntries = depositEntries.filter(y=>y.id!==row.id);
-        skipped.push(x.e.nick+' (มีการคืน/โอนจากเครื่องอื่นพร้อมกัน'+(d2.laterRef ? 'ใน'+periodLabel(d2.laterRef.period) : 'ในงวดก่อน')+' — ยกเลิกแถวที่เพิ่งบันทึกแล้ว ห้ามคืนซ้ำ)');
+        skipped.push(x.e.nick+(d2.laterRef || d2.before !== x.d.before ? ' (มีการคืน/โอนจากเครื่องอื่นพร้อมกัน'+(d2.laterRef ? 'ใน'+periodLabel(d2.laterRef.period) : 'ในงวดก่อน') : ' (มีการ 💵 เบิกคืนจากเครื่องอื่นพร้อมกัน คืน+เบิกเกินยอดสะสม')+' — ยกเลิกแถวที่เพิ่งบันทึกแล้ว ห้ามคืนซ้ำ)');
       }
     }
     // ลาออก/เลิกเก็บ: ปิดหักด้วย (งวดก่อนหน้าล็อกแล้ว · งวดนี้เป็นแถว 💸/🏦 แล้ว)
@@ -5844,6 +5961,255 @@ async function depRefundSave(){
   renderDeposit(); renderPayroll(); renderDetail();
   if(skipped.length) alert('💸 คืนแล้ว '+done.length+' คน รวม '+THB(done.reduce((a,x)=>a+x.amount,0))+' บาท\n\n⚠️ ข้าม '+skipped.length+' คน:\n• '+skipped.join('\n• '));
   else toast('💸 คืนส่วนเกินแล้ว '+done.length+' คน รวม '+THB(done.reduce((a,x)=>a+x.amount,0))+' บาท');
+}
+
+/* ================= 💵 เบิกเงินประกันคืน (เจ้าของแจ้ง 2026-10-21: "น้อยเบิกเงินประกันไป 5000 ตอนนี้ต้องเป็น 0 และเริ่มหักใหม่เดือนนี้") =================
+   พนักงานที่ยังทำงานอยู่ขอเบิกเงินประกันคืนก่อนครบเป้า → จ่ายนอกสลิป (เงินสด/โอน) แล้วบันทึกที่นี่ = แถว deposit_payouts (ไม่เข้าสลิป/สุทธิ/K BIZ)
+   ยอดเบิกของงวด p ลดยอดสะสม "หลังหัก" ของงวด p (depositCalc) → งวดถัดไปหักต่อตามสูตรเดิมจนครบเป้า · ยอดหักของงวด p และงวดก่อนไม่เปลี่ยน
+   บันทึก/แก้/ยกเลิก = เจ้าของ/แอดมิน หรือสิทธิ์ dep:e (asPerm) · เฉพาะงวดที่ยังไม่ถึงวันจ่าย (ห้ามเปลี่ยนยอดสะสมของงวดที่จ่ายแล้วย้อนหลัง)
+   เบิกได้ไม่เกิน สะสมก่อนงวด − คืน/เบิกที่บันทึกแล้วงวดนี้ (และไม่ทำให้สะสมงวดหลังที่มีการเบิก/คืนติดลบ) · ยอดที่เก็บก่อนเข้าระบบ (ก่อน depStart) ไม่อยู่ในแอป */
+let depPoSt = null, depPoBusy = false;
+const DEP_PO_VIA = { cash:'💵 เงินสด', transfer:'🏦 โอน' };
+const DEP_PO_SQL = '❌ ต้องรัน jj_deposit_payouts.sql ใน Supabase ก่อน';
+const depPoCan = () => isBoss(AUTH) || canDo('dep','e');
+const depPoTxt = x => '💵 เบิกคืน ' + THB(x.amount) + (x.payDate ? ' · ' + dayLabel(x.payDate) : '') + ' · ' + (DEP_PO_VIA[x.via] || x.via);
+/* แก้/ยกเลิกได้ถึงวันก่อนวันจ่ายของงวดนั้น */
+function depPoEditBlock(e, p){
+  if(!depPoReady) return 'ยังไม่ได้รัน jj_deposit_payouts.sql';
+  const r = periodRangeE(e, p);
+  if(r.pay <= bizToday()) return 'ถึงวันจ่าย' + periodLabel(p) + ' แล้ว (วันจ่าย ' + dayLabel(r.pay) + ') — ยอดสะสมงวดที่จ่ายแล้วห้ามเปลี่ยนย้อนหลัง';
+  return '';
+}
+/* บันทึกใหม่: งวดปัจจุบันที่ยังไม่ถึงวันจ่าย · ≥ DEP_V2_START / depStart · ยังทำงานอยู่ · ยังไม่ 🔒 */
+function depPoBlock(e, p){
+  if(!depPoReady) return 'ยังไม่ได้รัน jj_deposit_payouts.sql';
+  if(!p || p < DEP_V2_START) return 'บันทึกได้ตั้งแต่' + periodLabel(DEP_V2_START);
+  if(settings.depStart && p < settings.depStart) return 'งวดก่อน "เริ่มหักตั้งแต่งวด"';
+  const eb = depPoEditBlock(e, p); if(eb) return eb + ' — เลือกงวดปัจจุบัน';
+  if(periodRangeE(e, p).from > bizToday()) return periodLabel(p) + ' ยังไม่เริ่ม';
+  // ช่วง 26 → 5 (เปิดอยู่ 2 งวด): สะสมก่อนงวดใหม่ยังรวมยอดหักงวดก่อนที่ยังไม่ได้หักจริง (เปลี่ยนได้ — สุทธิไม่พอ/✎/ปิดหัก)
+  // → บันทึกที่งวดก่อนจนถึงวันจ่ายงวดนั้น (ผลตรวจ 💵 รอบ 1: เดิมเบิกยอดที่ยังเก็บไม่ได้ออกไปได้ → สะสมติดลบ)
+  const pp = prevPeriod(p), rp = periodRangeE(e, pp);
+  if(rp.pay > bizToday() && !(settings.depStart && pp < settings.depStart))
+    return periodLabel(pp) + ' ยังไม่ถึงวันจ่าย (' + dayLabel(rp.pay) + ') — บันทึกเบิกคืนที่' + periodLabel(pp) + ' (สะสมก่อน' + periodLabel(p) + ' ยังรวมยอดหักที่ยังไม่ได้หักจริง)';
+  if(!e.active) return 'พ้นสภาพแล้ว — คืนทั้งหมดใช้ 💸 คืนส่วนเกิน ติ๊ก "คืนเกินส่วนเกิน (ลาออก)"';
+  const row = depRowOf(e.id, p);
+  if(row && row.note === 'lock') return periodLabel(p) + ' ปิดยอดแล้ว';
+  return '';
+}
+/* งวด p บันทึก 💵 ไม่ได้ → งวดที่บันทึกได้ (งวดก่อน/ถัดไป) · วันจ่ายออฟฟิศ (สิ้นเดือน) = บันทึกได้พรุ่งนี้ที่งวดถัดไป (ผลตรวจ 💵 รอบ 1) */
+function depPoWhere(e, p){
+  for(const q of [prevPeriod(p), nextPeriod(p)]) if(!depPoBlock(e, q)) return 'เบิกคืน → บันทึกที่' + periodLabel(q);
+  const t = bizToday();
+  return periodRangeE(e, periodOfE(e, t)).pay <= t ? 'เบิกคืน: วันนี้วันจ่ายเงินเดือน — บันทึกได้พรุ่งนี้ (' + periodLabel(periodOfE(e, nextDayS(t))) + ')' : '';
+}
+/* ยอดที่เบิกได้ในงวด p (exceptId = รายการที่กำลังแก้ ไม่นับ) · d = depositCalc ที่ไม่นับรายการนั้น */
+function depPoMax(e, p, exceptId){
+  const keep = depPayouts;
+  if(exceptId != null) depPayouts = depPayouts.filter(x => x.id !== exceptId);
+  try{
+    return depScope(() => { const d = depositCalc(e, p);
+      return { d, max: Math.max(0, Math.floor(Math.min(d.before - d.refund - d.xfer - d.po, depFloorAfter(e, p, true)) + 1e-9)) }; });
+  } finally { depPayouts = keep; }
+}
+function depPoCheck(e, st, amt, date){
+  const blk = st.editId ? depPoEditBlock(e, st.period) : depPoBlock(e, st.period);
+  if(blk) return blk;
+  if(!(amt > 0) || !Number.isInteger(amt)) return 'ใส่จำนวนเงินเป็นบาทเต็ม มากกว่า 0';
+  const mx = depPoMax(e, st.period, st.editId).max;
+  if(amt > mx) return 'เกินยอดที่เบิกได้ ' + THB(mx) + ' บาท (สะสมในระบบก่อนงวดนี้ หักคืน/เบิกที่บันทึกแล้ว)';
+  const dmin = periodRangeE(e, prevPeriod(st.period)).from;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || date > bizToday() || date < dmin) return 'วันที่จ่ายต้องไม่เกินวันนี้ และไม่ก่อน ' + dayLabel(dmin);
+  return '';
+}
+/* ช่อง "สะสม / เป้า" ในตาราง 🛡️: รายการเบิกคืนงวดนี้ + ปุ่ม 💵 (ยังไม่รัน SQL = ว่าง) */
+function depPoCell(e, period, d, can){
+  if(!depPoReady) return '';
+  const xs = depPoOf(e.id).filter(x => x.period === period);
+  const chips = xs.map(x => `<div style="margin-top:4px"><span class="chip chip-gray" style="white-space:normal" title="เบิกเงินประกันคืนนอกสลิป — ไม่อยู่ในสลิป/ยอดสุทธิ">${audEsc(depPoTxt(x))}</span></div>`).join('');
+  const blk = xs.length ? '' : depPoBlock(e, period);
+  const show = can && (xs.length ? !depPoEditBlock(e, period) : (!blk && depPoMax(e, period).max > 0));   // เบิกได้ 0 = ไม่มีปุ่ม (ผลตรวจ 💵 รอบ 1)
+  // บันทึกงวดนี้ไม่ได้ (ช่วง 26 → 5 · วันจ่ายออฟฟิศ) แต่มีสะสม → บอกว่าบันทึกที่งวดไหน แทนปุ่มที่หายเฉย ๆ
+  const where = can && blk && e.active && d.before - d.refund - d.xfer - d.po > 0 ? depPoWhere(e, period) : '';
+  return chips + (show ? `<div style="margin-top:4px"><button class="btn btn-light btn-sm" data-emp="${e.id}" data-p="${period}" onclick="depPoOpen(this)" title="พนักงานขอเบิกเงินประกันคืน (จ่ายนอกสลิป)">💵 ${xs.length ? 'เบิกคืน/แก้' : 'เบิกคืน'}</button></div>`
+    : where ? `<div class="muted" style="margin-top:4px;font-size:11.5px;white-space:normal">💵 ${audEsc(where)}</div>` : '');
+}
+async function depPoOpen(el){
+  const e = employees.find(x => x.id === +el.dataset.emp), p = el.dataset.p;
+  if(!e || !p) return;
+  if(!depPoReady) return toast(DEP_PO_SQL);
+  if(!depPoCan()) return toast('🔒 บันทึกเบิกเงินประกันคืนได้เฉพาะเจ้าของ/แอดมิน หรือผู้มีสิทธิ์แก้หน้า 🛡️');
+  if(moneyBlocked()) return;
+  if(!(await moneyFresh())) return;   // ยอดสะสม = ข้อมูลเงินชุดเดียวกับสลิป (เครื่องอื่นอาจเพิ่งบันทึก)
+  if(!depPoReady) return toast(DEP_PO_SQL);
+  depPoSt = { empId: e.id, period: p, editId: null };
+  depPoForm(null);
+  depPoRender();
+  document.getElementById('depPoBg').classList.add('show');
+}
+/* ใส่ค่าลงฟอร์ม: x = รายการที่จะแก้ · null = รายการใหม่ */
+function depPoForm(x){
+  document.getElementById('depPoAmt').value = x ? x.amount : '';
+  document.getElementById('depPoDate').value = x ? (x.payDate || bizToday()) : bizToday();
+  document.getElementById('depPoDate').max = bizToday();
+  document.getElementById('depPoVia').value = x ? x.via : 'cash';
+  document.getElementById('depPoNote').value = x ? x.note : '';
+}
+function depPoRender(){
+  const st = depPoSt; if(!st) return;
+  const e = employees.find(x => x.id === st.empId);
+  if(!e){ closeModal('depPoBg'); depPoSt = null; return; }
+  const p = st.period, m = depPoMax(e, p, st.editId), d = m.d, R = depRule(e, p);
+  const xs = depPoOf(e.id).filter(x => x.period === p);
+  if(st.editId && !xs.some(x => x.id === st.editId)){ st.editId = null; depPoForm(null); }   // ถูกยกเลิกจากเครื่องอื่น
+  const blk = st.editId ? depPoEditBlock(e, p) : depPoBlock(e, p);
+  const edBlk = depPoEditBlock(e, p), can = depPoCan();
+  const st0 = settings.depStart ? shortP(settings.depStart) : '';
+  document.getElementById('depPoTitle').textContent = '💵 เบิกเงินประกันคืน — ' + e.nick + ' · ' + periodLabel(p);
+  document.getElementById('depPoDate').min = periodRangeE(e, prevPeriod(p)).from;
+  document.getElementById('depPoInfo').innerHTML =
+    `สะสมในระบบก่อน${periodLabel(p)} <b>${THB(d.before)}</b> บาท / เป้า ${THB(d.target)}${(Number(e.depOpen)||0) ? ' (รวมเก็บมาก่อน ' + THB(e.depOpen) + ')' : ''}` +
+    `${d.refund || d.xfer ? ' · คืนงวดนี้แล้ว ' + THB(d.refund || d.xfer) : ''}${d.po ? ' · เบิกคืนงวดนี้แล้ว ' + THB(d.po) : ''} → <b>เบิกได้ไม่เกิน ${THB(m.max)} บาท</b>` +
+    `<div class="warn-note" style="margin:8px 0 0">⚠️ <b>ยอดที่เก็บก่อนเข้าระบบ${st0 ? ' (ก่อน ' + st0 + ')' : ''} ไม่อยู่ในแอป</b>${(Number(e.depOpen)||0) ? ' (ยกเว้น "เก็บมาก่อน" ' + THB(e.depOpen) + ' ที่รวมในยอดสะสมแล้ว)' : ''} — บันทึกที่นี่เฉพาะส่วนที่อยู่ในระบบ (ไม่เกิน ${THB(m.max)} บาท) · ส่วนที่เหลือของยอดที่จ่ายจริง เป็นเงินเก็บก่อนเข้าระบบ ไม่ต้องบันทึก</div>` +
+    `<div style="margin-top:8px;font-size:12.5px">จ่ายนอกสลิปเท่านั้น (เงินสด/โอน — ไม่เข้าสลิป/ยอดสุทธิ/ไฟล์ K BIZ) · ยอดหัก${periodLabel(p)} ไม่เปลี่ยน (${THB(d.ded)}) · งวดถัดไปหักต่อ ${THB(R.monthly)}/งวด จนครบเป้า (ถ้าสุทธิพอ)</div>`;
+  document.getElementById('depPoList').innerHTML = xs.length
+    ? `<div class="section-title" style="margin:10px 0 4px">รายการเบิกคืน${periodLabel(p)}</div><div class="tbl-wrap"><table class="mcard"><thead><tr><th>วันที่จ่าย</th><th class="num">จำนวน</th><th>วิธีจ่าย</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>` +
+      xs.map(x => `<tr${x.id === st.editId ? ' style="background:var(--ember-soft)"' : ''}><td data-l="วันที่จ่าย" class="mc-name">${x.payDate ? dayLabel(x.payDate) : '–'}</td>
+        <td data-l="จำนวน" class="num"><b>${THB(x.amount)}</b></td><td data-l="วิธีจ่าย">${DEP_PO_VIA[x.via] || x.via}</td><td data-l="หมายเหตุ" style="white-space:normal">${audEsc(x.note || '')}</td>
+        <td data-l="แก้">${can && !edBlk ? `<button class="btn btn-light btn-sm" data-id="${x.id}" onclick="depPoEditBtn(this)">✎ แก้</button> <button class="btn btn-light btn-sm" data-id="${x.id}" onclick="depPoDelBtn(this)">🗑 ยกเลิก</button>` : '<span class="muted" style="font-size:12px">' + audEsc(edBlk || 'ไม่มีสิทธิ์แก้') + '</span>'}</td></tr>`).join('') + '</tbody></table></div>'
+    : '';
+  document.getElementById('depPoFormHead').textContent = st.editId ? '✎ แก้รายการเบิกคืน' : '＋ บันทึกเบิกคืนรายการใหม่';
+  document.getElementById('depPoNew').style.display = st.editId ? '' : 'none';   // .hidden แพ้ CSS .btn{display:inline-flex} (ผลตรวจ 💵 รอบ 1)
+  document.getElementById('depPoAll').textContent = 'เบิกทั้งหมด (' + THB(m.max) + ')';
+  for(const id of ['depPoAmt', 'depPoDate', 'depPoVia', 'depPoNote', 'depPoAll']) document.getElementById(id).disabled = !!blk || !can;
+  document.getElementById('depPoGo').textContent = st.editId ? '💾 บันทึกการแก้ไข' : '💵 บันทึกเบิกคืน';
+  depPoHint(blk);
+}
+function depPoHint(blk){
+  const st = depPoSt; if(!st) return;
+  const e = employees.find(x => x.id === st.empId); if(!e) return;
+  if(blk === undefined) blk = st.editId ? depPoEditBlock(e, st.period) : depPoBlock(e, st.period);
+  const amt = Number(document.getElementById('depPoAmt').value), date = document.getElementById('depPoDate').value;
+  const m = depPoMax(e, st.period, st.editId), d = m.d, R = depRule(e, st.period);
+  const err = blk || (String(document.getElementById('depPoAmt').value).trim() === '' ? '' : depPoCheck(e, st, amt, date));
+  let pre = '';
+  if(!blk && amt > 0 && amt <= m.max){
+    const after = d.collected - amt, next = R.target > 0 && e.depOn !== false ? Math.min(R.monthly, Math.max(0, R.target - after)) : 0;
+    pre = `หลังเบิก: สะสมหลัง${periodLabel(st.period)} = ${THB(d.before)} + หักงวดนี้ ${THB(d.ded)}${d.refund || d.xfer ? ' − คืน ' + THB(d.refund || d.xfer) : ''}${d.po ? ' − เบิกแล้ว ' + THB(d.po) : ''} − เบิก ${THB(amt)} = <b>${THB(after)}</b> / เป้า ${THB(R.target)}` +
+      (next ? ` → งวดถัดไปหักต่อ ${THB(next)} บาท (ถ้าสุทธิพอ)` : e.depOn === false ? ' · ปิดหักอยู่ (งวดถัดไปไม่หัก)' : '');
+  }
+  document.getElementById('depPoHint').innerHTML = (err ? `<b style="color:var(--red)">⛔ ${audEsc(err)}</b>` : '') + (err && pre ? '<br>' : '') + pre;
+  document.getElementById('depPoGo').disabled = !!blk || !depPoCan() || depPoBusy;
+}
+function depPoFill(){
+  const st = depPoSt; if(!st) return;
+  const e = employees.find(x => x.id === st.empId); if(!e) return;
+  document.getElementById('depPoAmt').value = depPoMax(e, st.period, st.editId).max || '';
+  depPoHint();
+}
+function depPoEditBtn(el){
+  const st = depPoSt; if(!st) return;
+  const x = depPayouts.find(y => y.id === +el.dataset.id); if(!x) return depPoRender();
+  st.editId = x.id; depPoForm(x); depPoRender();
+}
+function depPoNewBtn(){ const st = depPoSt; if(!st) return; st.editId = null; depPoForm(null); depPoRender(); }
+/* หลังเขียน: อ่านใหม่แล้วเช็คว่าไม่มีงวดไหนเบิกเกิน (สองเครื่องบันทึกพร้อมกัน — ฐานข้อมูลไม่กันยอดรวม) */
+function depPoOverdrawn(e, p){
+  return depScope(() => { const d = depositCalc(e, p);
+    return d.before - d.refund - d.xfer - d.po < -1e-9 || depFloorAfter(e, p, true) < -1e-9; });
+}
+/* หลังแก้ยอดหัก/🔒/ค่าตั้งที่ลดยอดหักงวดที่จ่ายแล้ว: งวดที่มี 💵 ติดลบ (เบิกเกินยอดที่หักจริง) → เตือน · ตาราง 🛡️ มีชิปแดงด้วย (ผลตรวจ 💵 รอบ 1) */
+function depPoNegWarn(e){
+  if(!e || !depPoOf(e.id).length) return;
+  const bad = [...new Set(depPoOf(e.id).map(x => x.period))].sort().filter(p => depPoOverdrawn(e, p));
+  if(bad.length) alert('⚠️ ' + e.nick + ': หลังแก้ ยอดเบิกคืน 💵 ' + bad.map(shortP).join(', ') + ' เกินยอดสะสมที่หักจริง (สะสมติดลบ)\n' +
+    'ตรวจยอดหัก/🔒 ที่เพิ่งแก้ว่าตรงสลิปจริง · ถ้ายังไม่ถึงวันจ่ายของงวดที่เบิก แก้รายการ 💵 ที่หน้า 🛡️');
+}
+async function depPoSave(){
+  const st = depPoSt; if(!st || depPoBusy) return;
+  if(!depPoReady) return toast(DEP_PO_SQL);
+  if(!depPoCan()) return toast('🔒 บันทึกเบิกเงินประกันคืนได้เฉพาะเจ้าของ/แอดมิน หรือผู้มีสิทธิ์แก้หน้า 🛡️');
+  if(moneyBlocked()) return;
+  const e = employees.find(x => x.id === st.empId); if(!e) return;
+  const amt = Number(document.getElementById('depPoAmt').value);
+  const date = String(document.getElementById('depPoDate').value || '').trim();
+  const via = document.getElementById('depPoVia').value === 'transfer' ? 'transfer' : 'cash';
+  const note = String(document.getElementById('depPoNote').value || '').trim().slice(0, 300);
+  const err = depPoCheck(e, st, amt, date);
+  if(err) return toast('❌ ' + err);
+  depPoBusy = true;
+  const btn = document.getElementById('depPoGo'); if(btn) btn.disabled = true;
+  try{
+    if(!(await moneyFresh())) return;
+    const e2 = employees.find(x => x.id === st.empId) || e;
+    const old = st.editId ? depPayouts.find(x => x.id === st.editId) : null;
+    if(st.editId && !old){ depPoRender(); renderDeposit(); return toast('⚠️ รายการนี้ถูกยกเลิกจากเครื่องอื่นแล้ว'); }
+    const err2 = depPoCheck(e2, st, amt, date);
+    if(err2){ depPoRender(); return toast('❌ ' + err2); }
+    const d = depPoMax(e2, st.period, st.editId).d, after = d.collected - amt;
+    if(!confirm((old ? '✎ แก้รายการเบิกเงินประกันคืน' : '💵 บันทึกเบิกเงินประกันคืน') + ' — ' + e2.nick + ' · ' + periodLabel(st.period) + '\n' +
+        (old ? 'เดิม ' + THB(old.amount) + ' บาท (' + (DEP_PO_VIA[old.via] || old.via) + (old.payDate ? ' · ' + dayLabel(old.payDate) : '') + ') → ' : '') +
+        THB(amt) + ' บาท · ' + DEP_PO_VIA[via] + ' · จ่ายวันที่ ' + dayLabel(date) + '\n' +
+        'สะสมก่อนงวดนี้ ' + THB(d.before) + ' → หลังหักงวดนี้ (' + THB(d.ded) + ') และเบิก = ' + THB(after) + ' / เป้า ' + THB(d.target) + ' · งวดถัดไปหักต่อจนครบเป้า\n' +
+        'จ่ายนอกสลิป — ไม่เข้าสลิป/ยอดสุทธิ/ไฟล์ K BIZ · บันทึกเมื่อจ่ายเงินจริงแล้วเท่านั้น\n' +
+        '⚠️ ทุกเครื่องต้องเป็นรุ่น "' + APP_VER + '" (ลากหน้าลงจนเห็นป้ายรุ่นท้ายเมนู) — รุ่นเก่าไม่เห็นการเบิก: สลิป/ไฟล์ K BIZ งวดถัดไปหักเงินประกันน้อยไป\n\nยืนยัน?')) return;
+    // ระหว่างรอยืนยัน เครื่องอื่นอาจบันทึก/แก้ไปแล้ว → อ่านใหม่แล้วเช็คอีกครั้ง (แบบ savePvdPayout)
+    if(!(await depRefresh())) return;
+    const old2 = st.editId ? depPayouts.find(x => x.id === st.editId) : null;
+    if(old && (!old2 || old2.amount !== old.amount)){ depPoRender(); renderDeposit(); return toast('⚠️ รายการนี้ถูกแก้/ยกเลิกจากเครื่องอื่นระหว่างยืนยัน — ตรวจแล้วบันทึกใหม่'); }
+    const err3 = depPoCheck(e2, st, amt, date);
+    if(err3){ depPoRender(); renderDeposit(); return toast('❌ ' + err3 + ' (ข้อมูลเปลี่ยนระหว่างยืนยัน)'); }
+    let row = null;
+    if(old){
+      const r = await asPerm('dep', 'e', () => db.from('deposit_payouts').update({ amount:amt, pay_date:date, via, note })
+        .eq('id', old.id).eq('employee_id', e2.id).eq('period', st.period).eq('amount', old.amount).select());
+      if(r.error) return dbErr(r.error, 'แก้รายการเบิกเงินประกันคืน');
+      if(!(r.data || []).length){ await depRefresh(); depPoRender(); renderDeposit(); return toast('⚠️ รายการนี้ถูกแก้/ยกเลิกจากเครื่องอื่นแล้ว — โหลดใหม่แล้ว'); }
+      row = fromDbDepPo(r.data[0]);
+      const i = depPayouts.findIndex(x => x.id === row.id); if(i >= 0) depPayouts[i] = row; else depPayouts.push(row);
+    } else {
+      const r = await asPerm('dep', 'e', () => db.from('deposit_payouts').insert({ employee_id:e2.id, period:st.period, amount:amt, pay_date:date, via, note }).select().single());
+      if(r.error) return dbErr(r.error, 'บันทึกเบิกเงินประกันคืน');
+      row = fromDbDepPo(r.data); depPayouts.push(row);
+    }
+    // สองเครื่องบันทึกพร้อมกัน (เช็คก่อนเขียนผ่านทั้งคู่) → อ่านใหม่หลังเขียน: เบิกเกินยอดสะสม = ถอยรายการของเครื่องนี้ (แบบ depRefundSave)
+    if(await depRefresh() && depPoOverdrawn(e2, st.period)){
+      const r = old
+        ? await asPerm('dep', 'e', () => db.from('deposit_payouts').update({ amount:old.amount, pay_date:old.payDate || date, via:old.via, note:old.note }).eq('id', row.id).eq('employee_id', e2.id).eq('period', st.period).eq('amount', amt).select())
+        : await asPerm('dep', 'e', () => db.from('deposit_payouts').delete().eq('id', row.id).eq('employee_id', e2.id).eq('period', st.period).select());
+      await depRefresh(); depPoRender(); renderDeposit(); renderPayroll(); renderDetail();
+      return alert(r.error || !(r.data || []).length
+        ? '⚠️ มีการเบิกคืนจากเครื่องอื่นพร้อมกัน ยอดรวมเกินยอดสะสม — ถอยรายการที่เพิ่งบันทึกไม่สำเร็จ ตรวจที่หน้าต่าง 💵 แล้วแก้/ยกเลิกเอง'
+        : '⚠️ มีการเบิกคืนจากเครื่องอื่นพร้อมกัน ยอดรวมเกินยอดสะสม — ' + (old ? 'คืนค่าเดิมแล้ว' : 'ยกเลิกรายการที่เพิ่งบันทึกแล้ว') + ' ตรวจยอดแล้วบันทึกใหม่');
+    }
+    closeModal('depPoBg'); depPoSt = null;
+    renderDeposit(); renderPayroll(); renderDetail();
+    toast((old ? '💾 แก้รายการเบิกคืนแล้ว' : '💵 บันทึกเบิกคืนแล้ว') + ' · สะสมหลัง' + periodLabel(st.period) + ' ' + THB(depositCalc(e2, st.period).collected) + ' บาท');
+  } finally { depPoBusy = false; if(btn) btn.disabled = false; }
+}
+async function depPoDelBtn(el){
+  const st = depPoSt, id = +el.dataset.id;
+  if(!depPoReady) return toast(DEP_PO_SQL);
+  if(!depPoCan()) return toast('🔒 ยกเลิกรายการเบิกคืนได้เฉพาะเจ้าของ/แอดมิน หรือผู้มีสิทธิ์แก้หน้า 🛡️');
+  if(moneyBlocked() || depPoBusy) return;
+  depPoBusy = true;
+  try{
+    if(!(await depRefresh())) return;
+    const x = depPayouts.find(y => y.id === id);
+    if(!x){ depPoRender(); renderDeposit(); return toast('⚠️ รายการนี้ถูกยกเลิกจากเครื่องอื่นแล้ว'); }
+    const e = employees.find(y => y.id === x.empId) || {};
+    const blk = e.id ? depPoEditBlock(e, x.period) : 'ไม่พบพนักงาน';
+    if(blk) return toast('❌ ' + blk);
+    if(!confirm('🗑 ยกเลิกรายการเบิกเงินประกันคืนของ ' + (e.nick || '?') + ' ' + THB(x.amount) + ' บาท (' + (DEP_PO_VIA[x.via] || x.via) + (x.payDate ? ' · ' + dayLabel(x.payDate) : '') + ') ' + periodLabel(x.period) + '?\n' +
+        'ยกเลิก = ยังไม่ได้จ่ายเงินจริง (บันทึกผิด) — ยอดสะสมกลับไปเท่าเดิม · ถ้าจ่ายไปแล้ว ห้ามยกเลิก')) return;
+    const r = await asPerm('dep', 'e', () => db.from('deposit_payouts').delete().eq('id', x.id).eq('employee_id', x.empId).eq('period', x.period).eq('amount', x.amount).select());
+    if(r.error) return dbErr(r.error, 'ยกเลิกรายการเบิกเงินประกันคืน');
+    if(!(r.data || []).length){ await depRefresh(); depPoRender(); renderDeposit(); return toast('⚠️ รายการนี้ถูกแก้/ยกเลิกจากเครื่องอื่นแล้ว — โหลดใหม่แล้ว'); }
+    depPayouts = depPayouts.filter(y => y.id !== x.id);
+    if(st && st.editId === x.id){ st.editId = null; depPoForm(null); }
+    depPoRender(); renderDeposit(); renderPayroll(); renderDetail();
+    toast('↺ ยกเลิกรายการเบิกคืนแล้ว');
+  } finally { depPoBusy = false; }
 }
 
 /* ================= 🐷 เงินสำรองเลี้ยงชีพ (เจ้าของสั่ง 2026-10-20: "พนักงานบางคนอยากให้หักเงินเพื่อให้เราเก็บเงินสะสมให้") =================
@@ -7899,6 +8265,8 @@ async function delEmp(id){
   const depRows = depReady && depositEntries.some(x=>x.empId===id && !zeroLock(x));
   const depAmt = depReady ? depositCalc(e, '').collected : 0;                                      // รวมยอดที่ระบบหักอัตโนมัติจากสแกน
   const pvdHas = pvdReady && (pvdMembers.some(x=>x.empId===id) || pvdEntries.some(x=>x.empId===id) || pvdPayouts.some(x=>x.empId===id));
+  if(depPoOf(id).length)   // 💵 เบิกคืนที่จ่ายจริงแล้ว = ประวัติเงิน (FK RESTRICT — ลบไม่ได้อยู่แล้ว)
+    return alert('❌ ลบ "'+e.nick+'" ไม่ได้ — มีประวัติ 💵 เบิกเงินประกันคืน\nใช้ "พ้นสภาพ" แทน (ประวัติเงินยังอยู่ครบ)');
   if(fixed || pvdHas || ((depRows || depAmt > 0) && !isBoss(AUTH)))
     return alert('❌ ลบ "'+e.nick+'" ไม่ได้ — มี'+[fixed||depRows||depAmt>0?'ยอด/ประวัติเงินประกัน'+(depAmt?' (สะสม '+THB(depAmt)+' บาท)':''):'', pvdHas?'เงินสำรองเลี้ยงชีพ':''].filter(Boolean).join(' และ ')+
       'ที่ร้านต้องคืนพนักงาน\nใช้ "พ้นสภาพ" แทน (ประวัติเงินยังอยู่ครบ)'+(!fixed && !pvdHas ? '\n(ถ้าเป็นแถวซ้ำ/สร้างผิด ให้เจ้าของ/แอดมินลบ)' : ''));
@@ -8115,7 +8483,7 @@ function dtBalances(e, p, period){
   if(p.dep && (p.dep.target || p.dep.collected))   // ไม่ซ่อนเมื่อปิดหัก (เดิมซ่อน = "ไปดูในประวัติ ไม่มีเลย")
     out.push(box('🛡️','เงินประกัน', THB(p.dep.collected)+' / '+THB(p.dep.target), p.dep.target ? p.dep.collected/p.dep.target : null,
       (e.depOn === false ? 'ปิดหักอยู่ · สะสม '+THB(p.dep.collected) : p.dep.refund ? DEP_REFUND_LABEL+' '+THB(p.dep.refund) : p.dep.xfer ? depXferTxt(p.dep) : p.dep.over ? 'เกินเป้า '+THB(p.dep.over)+' · ยังไม่คืน' : !p.dep.target ? 'เป้า 0 — ไม่หัก · สะสม '+THB(p.dep.collected) : p.dep.cap ? (p.dep.cap==='neg' ? '' : 'งวดนี้')+depCapTxt(p.dep)+' · เหลืออีก '+THB(p.dep.remain) : p.dep.done ? 'ครบแล้ว หยุดหัก' : 'งวดนี้หัก '+THB(p.dep.ded)+' · เหลืออีก '+THB(p.dep.remain))
-        + (p.dep.src==='lock' ? ' · 🔒 ปิดยอดแล้ว' : ''),
+        + (p.dep.src==='lock' ? ' · 🔒 ปิดยอดแล้ว' : '') + (p.dep.po ? ' · 💵 เบิกคืน '+THB(p.dep.po)+' (นอกสลิป)' : ''),
       DEP_FIXED(p.dep.src) ? '' : `editDeposit(${e.id},'${period}')`, 'dep'));
   if(p.pvd && p.pvd.on)
     out.push(box('🐷','เงินสำรองเลี้ยงชีพ', 'คงเหลือ '+THB(p.pvd.balance), null,
@@ -8163,8 +8531,12 @@ function dtDepHistoryIn(e, period){
   const rows = depReady ? depositEntries.filter(x=>x.empId===e.id) : [];
   const first = [settings.depStart, ...rows.map(r=>r.period)].filter(Boolean).sort()[0] || '';
   const work = new Set((shifts[e.code]||[]).map(x=>periodOfE(e, x.day)));
-  const pds = [...new Set([...depPeriods(), ...work, ...rows.map(r=>r.period)])].filter(p=>(!first || p >= first) && p <= period).sort();
-  const list = pds.map(p=>({ p, d:depositCalc(e, p) })).filter(x=>x.d.ded || x.d.refund || x.d.xfer || x.d.cap || x.d.override || work.has(x.p));
+  const pos = depReady ? depPoOf(e.id) : [];   // 💵 เบิกคืนนอกสลิป — มีรายการ = เพิ่มคอลัมน์ "เบิกคืน" (ไม่มี = การ์ดแบบเดิม)
+  const pds = [...new Set([...depPeriods(), ...work, ...rows.map(r=>r.period), ...pos.map(x=>x.period)])].filter(p=>(!first || p >= first) && p <= period).sort();
+  const list = pds.map(p=>({ p, d:depositCalc(e, p) })).filter(x=>x.d.ded || x.d.refund || x.d.xfer || x.d.cap || x.d.override || x.d.po || work.has(x.p));
+  const poCol = pos.length > 0;
+  const poTd = p => { const xs = pos.filter(x => x.period === p), sum = xs.reduce((a, x) => a + x.amount, 0);
+    return `<td data-l="เบิกคืน" class="num" style="color:${sum?'var(--ember-deep)':'inherit'}">${sum ? '-'+THB(sum)+'<br><span class="muted" style="font-size:11.5px">'+xs.map(x => (x.payDate ? dayLabel(x.payDate)+' · ' : '')+(DEP_PO_VIA[x.via]||x.via)).join('<br>')+'</span>' : '–'}</td>`; };
   if(!list.length && !(Number(e.depOpen)||0) && !why) return '';
   const SRC = { auto:'อัตโนมัติ', manual:'✎ แก้เอง', lock:'🔒 ปิดยอด', refund:'💸 คืนในสลิป', xfer:'🏦 โอนคืนนอกสลิป' };
   const today = bizToday(), live = p => pdPaid(e, p, today)
@@ -8176,14 +8548,15 @@ function dtDepHistoryIn(e, period){
       <span class="muted" style="font-weight:400;font-size:13px">— เป้า ${THB(depositCalc(e, period).target)} · เก็บมาก่อน ${THB(Number(e.depOpen)||0)}${e.depOn===false?' · <b>ปิดหักอยู่</b>':''}</span>
       <span style="flex:1"></span>${canSee('dep')?`<button class="btn btn-light btn-sm" onclick="go('dep')">เปิดหน้าเงินประกัน →</button>`:''}</div>
     ${why ? `<div class="warn-note" style="margin:0 0 10px">⚠️ ${audEsc(why)}</div>` : ''}
-    <div class="tbl-wrap"><table class="mcard"><thead><tr><th>งวด</th><th class="num">หัก</th><th class="num">คืน</th><th class="num">สะสมหลังงวด / เป้า</th><th>ที่มา</th></tr></thead><tbody>
+    ${poCol || settings.depStart ? `<div class="muted" style="margin:-4px 0 8px;font-size:12.5px">${poCol ? '💵 เบิกคืน = เบิกเงินประกันคืนนอกสลิป (เงินสด/โอน) ระหว่างทำงาน — ยอดสะสมหลังงวดนั้นลดลง แล้วงวดถัดไปหักต่อจนครบเป้า · ' : ''}ยอดที่เก็บก่อนเข้าระบบ${settings.depStart ? ' (ก่อน' + periodLabel(settings.depStart) + ')' : ''}ไม่อยู่ในแอป${(Number(e.depOpen)||0) ? ' — ยกเว้น "เก็บมาก่อน"' : ''}</div>` : ''}
+    <div class="tbl-wrap"><table class="mcard"><thead><tr><th>งวด</th><th class="num">หัก</th><th class="num">คืน</th>${poCol?'<th class="num">เบิกคืน</th>':''}<th class="num">สะสมหลังงวด / เป้า</th><th>ที่มา</th></tr></thead><tbody>
     ${list.length ? list.slice().reverse().map(({p,d})=>`<tr${p===period?' style="background:var(--ember-soft)"':''}>
       <td data-l="งวด" class="mc-name"><b>${periodLabel(p)}</b>${p===period?' <span class="chip chip-amber">กำลังดู</span>':''}${d.v1?' <span class="chip chip-gray">กติกาเดิม</span>':''}</td>
       <td data-l="หัก" class="num" style="color:${d.ded?'var(--red)':'inherit'}">${d.ded?'-'+THB(d.ded):'–'}${d.cap?`<br><span class="chip chip-red" style="white-space:normal">${d.cap==='neg'?'ไม่ได้หักงวดนี้':'หักได้บางส่วน'}</span>`:''}</td>
-      <td data-l="คืน" class="num" style="color:${d.refund||d.xfer?'var(--green)':'inherit'}">${d.refund?'+'+THB(d.refund):d.xfer?'+'+THB(d.xfer)+'<br><span class="muted" style="font-size:11.5px">โอน'+(d.xferDate?' '+dayLabel(d.xferDate):'')+'</span>':'–'}</td>
+      <td data-l="คืน" class="num" style="color:${d.refund||d.xfer?'var(--green)':'inherit'}">${d.refund?'+'+THB(d.refund):d.xfer?'+'+THB(d.xfer)+'<br><span class="muted" style="font-size:11.5px">โอน'+(d.xferDate?' '+dayLabel(d.xferDate):'')+'</span>':'–'}</td>${poCol ? poTd(p) : ''}
       <td data-l="สะสมหลังงวด" class="num"><b>${THB(d.collected)}</b> <span class="muted">/ ${THB(d.target)}</span></td>
       <td data-l="ที่มา">${audEsc(SRC[d.src]||d.src)}${DEP_FIXED(d.src)?'':live(p)}${d.cap?'<br><span style="color:var(--red);font-size:12px">'+audEsc(depCapTxt(d))+'</span>':''}${d.soloV1?' <span class="chip chip-amber" title="งวดก่อน '+shortP(DEP_V2_START)+' ที่ไม่มีวันทำงาน — นับเป็นยอดหักของงวดนี้ แต่ไม่เข้ายอดสะสมงวดถัดไป (แบบแอปเดิม) · ตรวจแล้ว 🔒 ด้วยยอดจริง">ไม่มีวันทำงาน · ไม่เข้ายอดสะสม</span>':''}</td></tr>`).join('')
-      : '<tr><td colspan="5"><div class="empty" style="padding:16px">ยังไม่มีงวดที่หัก</div></td></tr>'}
+      : '<tr><td colspan="'+(poCol?6:5)+'"><div class="empty" style="padding:16px">ยังไม่มีงวดที่หัก</div></td></tr>'}
     </tbody></table></div></div>`;
 }
 /* 🐷 ประวัติเงินสำรองเลี้ยงชีพรายงวด + รายการถอน */
@@ -8503,7 +8876,7 @@ function buildPayHistoryIn(e, curPeriod){
           <td data-l="รายรับ" class="num" style="color:var(--green)">${THB2(x.p.base + x.p.addSum)}</td>
           <td data-l="หักรวม" class="num" style="color:${x.p.deduSum?'var(--red)':'inherit'}">${x.p.deduSum? '-'+THB2(x.p.deduSum) : '–'}</td>
           <td data-l="เงินประกันงวดนี้" class="num">${x.p.dep.refund? '<span style="color:var(--green)">+'+THB(x.p.dep.refund)+' คืน</span>' : x.p.dep.ded? (anyRef?'-':'')+THB(x.p.dep.ded) : x.p.dep.xfer? '<span class="muted" title="'+audEsc(depXferTxt(x.p.dep))+'">โอนคืน '+THB(x.p.dep.xfer)+'</span>' : '–'}${x.p.dep.src==='lock'?' 🔒':''}${x.p.dep.cap?' <span class="chip chip-red" title="'+audEsc(depCapTxt(x.p.dep))+'">'+depCapChip(x.p.dep)+'</span>':''}</td>
-          <td data-l="ประกันสะสม" class="num"><span class="muted">${x.p.dep.target||x.p.dep.collected? THB(x.p.dep.collected)+' / '+THB(x.p.dep.target) : '–'}</span></td>
+          <td data-l="ประกันสะสม" class="num"><span class="muted">${x.p.dep.target||x.p.dep.collected? THB(x.p.dep.collected)+' / '+THB(x.p.dep.target) : '–'}</span>${x.p.dep.po?'<br><span style="font-size:11.5px">💵 เบิกคืน '+THB(x.p.dep.po)+'</span>':''}</td>
           ${pv?`<td data-l="สำรองฯ งวดนี้" class="num">${x.p.pvd&&x.p.pvd.ded?'-'+THB(x.p.pvd.ded):'–'}${x.p.pvd&&x.p.pvd.paySlip?' <span style="color:var(--green)">+'+THB(x.p.pvd.paySlip)+'</span>':''}</td><td data-l="สำรองฯ คงเหลือ" class="num"><span class="muted">${x.p.pvd&&x.p.pvd.on?THB(x.p.pvd.balance):'–'}</span></td>`:''}
           <td data-l="MOU งวดนี้" class="num">${x.p.mou.ded? THB(x.p.mou.ded) : '–'}</td>
           <td data-l="MOU คงเหลือ" class="num"><span class="muted">${x.p.mou.loan? (x.p.mou.remain? THB(x.p.mou.remain) : '✓ ครบ') : '–'}</span></td>
@@ -8683,7 +9056,7 @@ function renderDetailIn(force){
             const btn = fx ? ' <span class="muted" style="font-size:11.5px">(แก้ที่หน้า 🛡️)</span>' : ` <button class="btn btn-light btn-sm" style="padding:1px 7px" onclick="editDeposit(${e.id},'${period}')">✎</button>`;
             // ≥ DEP_V2_START หักไม่เกินสุทธิก่อนหักเงินประกัน (เจ้าของสั่ง 2026-10-20) — บอกเหตุผลในบรรทัดเดียวกัน
             const cap = d && d.cap ? ` · <b>${audEsc(depCapTxt(d))}</b>` : '';
-            return d && d.xfer ? `<tr><td class="muted" style="white-space:normal">${audEsc(depXferTxt(d))} — ไม่รวมในยอดสุทธิ · สะสม ${THB(d.before)} → ${THB(d.collected)} / เป้า ${THB(d.target)}${btn}</td><td class="num muted">–</td></tr>`
+            return d && d.xfer ? `<tr><td class="muted" style="white-space:normal">${audEsc(depXferTxt(d))} — ไม่รวมในยอดสุทธิ · สะสม ${THB(d.before)} → ${THB(d.collected)} / เป้า ${THB(d.target)}${depPoSuf(d)}${btn}</td><td class="num muted">–</td></tr>`
               : d && d.ded ? `<tr><td style="color:var(--red)${cap?';white-space:normal':''}">－ เงินประกัน${tag}${cap} · สะสม ${THB(d.collected)}/${THB(d.target)}${d.done?' ✓ ครบ':''}${btn}</td><td class="num" style="color:var(--red)">-${THB2(d.ded)}</td></tr>`
               : d && d.cap ? `<tr><td style="color:var(--red);white-space:normal">เงินประกัน${tag}${cap} · สะสม ${THB(d.collected)}/${THB(d.target)}${btn}</td><td class="num muted">–</td></tr>`
               : d && d.target && !d.done && !d.refund ? `<tr><td class="muted">เงินประกัน — ไม่หักงวดนี้${tag}${d.on?'':' (ปิดหักอยู่)'} · สะสม ${THB(d.collected)}/${THB(d.target)}${btn}</td><td class="num muted">–</td></tr>` : ''; })()}
@@ -8695,7 +9068,7 @@ function renderDetailIn(force){
           ${p.noOffBonus? `<tr><td style="color:var(--green)">＋ เบี้ยไม่หยุด (${p.noOffDays} วัน × ${THB(Math.round(p.dRate))})</td><td class="num" style="color:var(--green)">${THB2(p.noOffBonus)}</td></tr>`:''}
           ${p.holiBonus? `<tr><td style="color:var(--green)">＋ เบี้ยวันหยุดพิเศษ (${p.holiDays.filter(h=>h.ok).length} วัน)</td><td class="num" style="color:var(--green)">${THB2(p.holiBonus)}</td></tr>`:''}
           ${p.tip && p.tip.share? `<tr><td style="color:var(--green)">＋ ทิปประจำเดือน (กองกลาง ${p.tip.pool%1?THB2(p.tip.pool):THB(p.tip.pool)} ÷ ${p.tip.n} คน)</td><td class="num" style="color:var(--green)">${THB2(p.tip.share)}</td></tr>`:''}
-          ${p.dep && p.dep.refund? `<tr><td style="color:var(--green)">＋ ${DEP_REFUND_LABEL} · สะสม ${THB(p.dep.before)} → ${THB(p.dep.collected)} / เป้า ${THB(p.dep.target)} <span class="muted" style="font-size:11.5px">(แก้ที่หน้า 🛡️)</span></td><td class="num" style="color:var(--green)">${THB2(p.dep.refund)}</td></tr>`:''}
+          ${p.dep && p.dep.refund? `<tr><td style="color:var(--green)">＋ ${DEP_REFUND_LABEL} · สะสม ${THB(p.dep.before)} → ${THB(p.dep.collected)} / เป้า ${THB(p.dep.target)}${depPoSuf(p.dep)} <span class="muted" style="font-size:11.5px">(แก้ที่หน้า 🛡️)</span></td><td class="num" style="color:var(--green)">${THB2(p.dep.refund)}</td></tr>`:''}
           ${p.pvd && p.pvd.paySlip? `<tr><td style="color:var(--green)">＋ รับคืนเงินสำรองเลี้ยงชีพ (คงเหลือ ${THB(p.pvd.balance)})</td><td class="num" style="color:var(--green)">${THB2(p.pvd.paySlip)}</td></tr>`:''}
           ${p.adds.map(a=>`<tr><td style="color:var(--green)">＋ ${a.reason} <button class="btn btn-red btn-sm" style="padding:1px 7px" onclick="delAdj(${a.id})">✕</button></td><td class="num" style="color:var(--green)">${THB2(+a.amount)}</td></tr>`).join('')}
           ${(p.missFine||p.fineOvs.miss)? `<tr><td style="color:var(--red)">－ หัก${isH?'ชั่วโมงไม่ครบ':'สาย/ออกก่อน'} (${p.missMin} น. × ${settings.minFine})${p.fineOvs.miss?' <span class="chip chip-amber" title="อัตโนมัติ '+THB(p.missFine0)+' บาท">แก้เอง</span>':''} <button class="btn btn-light btn-sm" style="padding:1px 7px" title="แก้ยอดหัก (หักผิดแก้ได้)" onclick="editFine(${e.id},'${period}','miss')">✎</button></td><td class="num" style="color:var(--red)">-${THB2(p.missFine)}</td></tr>`:''}
@@ -9236,7 +9609,7 @@ function buildSlip(e, period, compact){
   p.dedu.forEach(a=>dedRows.push([a.reason, +a.amount]));
   // งวด ≥ DEP_V2_START: เงินประกัน → สำรองฯ คิดหลังรายการหักอื่นครบ (หักไม่เกินสุทธิที่เหลือ) — วางท้ายสุดตามลำดับที่คิดจริง (ผลตรวจรอบ 2)
   const depRows = [];
-  if(p.dep && p.dep.ded) depRows.push([`เงินประกัน (${p.dep.cap ? 'หักได้ '+THB(p.dep.ded)+' จาก '+THB(p.dep.want)+' · สุทธิไม่พอ · ' : ''}สะสม ${THB(p.dep.collected)} / ${THB(p.dep.target)}${p.dep.done?' — ครบแล้ว':''})`, p.dep.ded]);
+  if(p.dep && p.dep.ded) depRows.push([`เงินประกัน (${p.dep.cap ? 'หักได้ '+THB(p.dep.ded)+' จาก '+THB(p.dep.want)+' · สุทธิไม่พอ · ' : ''}สะสม ${THB(p.dep.collected)} / ${THB(p.dep.target)}${depPoSuf(p.dep)}${p.dep.done?' — ครบแล้ว':''})`, p.dep.ded]);
   else if(p.dep && p.dep.cap) depRows.push([`เงินประกัน — ไม่ได้หักงวดนี้ (${depNetWord(p.dep.net)} · สะสม ${THB(p.dep.collected)} / ${THB(p.dep.target)})`, 0]);   // เจ้าของสั่ง 2026-10-20: บอกว่าไม่ได้หัก
   if(p.pvd && p.pvd.ded) depRows.push([`เงินสำรองเลี้ยงชีพ (${p.pvd.short ? 'หักได้ '+THB(p.pvd.ded)+' จาก '+THB(p.pvd.want)+' · สุทธิไม่พอ' : pvdRuleTxt(p.pvd.member).replace(/ · ร้านสมทบ .*$/,'')}${p.pvd.er?' · ร้านสมทบ '+THB(p.pvd.er):''} · ยอดสะสม ${THB(p.pvd.balance)})`, p.pvd.ded]);
   if(period < DEP_V2_START) dedRows.splice(depAt, 0, ...depRows); else dedRows.push(...depRows);
@@ -9324,7 +9697,7 @@ function buildSlip(e, period, compact){
           ${p.noOffBonus? `<tr><td>เบี้ยไม่หยุด (${p.noOffDays} วัน × ${THB(Math.round(p.dRate))})<br><span style="font-size:10px;color:#6b625b">สิทธิ์หยุด ${p.offDue} วัน · ใช้ไป ${p.offUsed} วัน</span></td><td class="num">${THB2(p.noOffBonus)}</td></tr>`:''}
           ${p.holiDays.filter(h=>h.ok).map(h=>`<tr><td>🎌 ${h.name} ${dayLabel(h.day)} (×${h.mult})</td><td class="num">${THB2(h.bonus)}</td></tr>`).join('')}
           ${p.tip && p.tip.share? `<tr><td>ทิปประจำเดือน (กองกลาง ${p.tip.pool%1?THB2(p.tip.pool):THB(p.tip.pool)} ÷ ${p.tip.n} คน)</td><td class="num">${THB2(p.tip.share)}</td></tr>`:''}
-          ${p.dep && p.dep.refund? `<tr><td>${DEP_REFUND_LABEL} (สะสม ${THB(p.dep.before)} → ${THB(p.dep.collected)} / เป้า ${THB(p.dep.target)})</td><td class="num">${THB2(p.dep.refund)}</td></tr>`:''}
+          ${p.dep && p.dep.refund? `<tr><td>${DEP_REFUND_LABEL} (สะสม ${THB(p.dep.before)} → ${THB(p.dep.collected)} / เป้า ${THB(p.dep.target)}${depPoSuf(p.dep)})</td><td class="num">${THB2(p.dep.refund)}</td></tr>`:''}
           ${p.pvd && p.pvd.paySlip? `<tr><td>รับคืนเงินสำรองเลี้ยงชีพ (คงเหลือ ${THB(p.pvd.balance)})</td><td class="num">${THB2(p.pvd.paySlip)}</td></tr>`:''}
           ${(()=>{
             // OT รายวันยุบเป็นบรรทัดเดียว (สรุปรวมชั่วโมง) — สลิปจะได้ไม่ล้นครึ่งหน้า
@@ -10607,7 +10980,7 @@ async function saveJSON(){
     // สมุดบัญชีเงินที่ร้านต้องคืนพนักงาน — สำรองด้วย (แบ่งหน้า) · ยังไม่มีตาราง = ข้ามเงียบ ๆ
     // อ่านไม่ได้ด้วยเหตุอื่น (ไม่มีสิทธิ์/เน็ตสะดุด) = ข้ามตารางนั้นพร้อมบอก ไม่ล้มทั้งไฟล์ (ข้อมูลเดิม punches/employees ยังได้ไฟล์สำรอง)
     const book = {}, skipped = [];
-    for(const t of ['deposit_entries','pvd_members','pvd_entries','pvd_payouts']){
+    for(const t of ['deposit_entries','deposit_payouts','pvd_members','pvd_entries','pvd_payouts']){
       try{ book[t] = await fetchAllRows(t); }catch(e){ if(!isNoTable(e)) skipped.push(t + ' (' + errTxt(e) + ')'); }
     }
     const dump = { backup_at:new Date().toISOString(), employees:em.data, shifts:sh.data,
@@ -10952,18 +11325,7 @@ function startRealtime(){
       const { data } = await pageAll('advances');   // อ่านครบทุกแถว (รอบ 9 — เดิมแทนด้วย 1,000 แถวแรก) · ไม่ครบ = คงของเดิม
       if(data){ advances = data.map(fromDbAdv); rtQueue++; scheduleRtRefresh(); }
     })
-    .on('postgres_changes', { event:'*', schema:'public', table:'deposit_entries' }, ()=>{
-      /* ล็อกทั้งงวด = หลายร้อยเหตุการณ์ → หน่วง 800ms แล้วโหลดครั้งเดียว (แบ่งหน้า) · คำตอบที่เก่ากว่าคำขอล่าสุดทิ้ง */
-      clearTimeout(depRtTimer);
-      depRtTimer = setTimeout(async ()=>{
-        const seq = ++depReqSeq;
-        try{ const rows = await fetchAllRows('deposit_entries');
-             if(seq !== depReqSeq) return;
-             depositEntries = rows.map(fromDbDep); depReady = true; depLoadErr = ''; }
-        catch(e){ if(seq !== depReqSeq) return; if(!isNoTable(e)) depLoadErr = 'โหลดเงินประกันไม่ครบ: ' + errTxt(e); }
-        rtQueue++; scheduleRtRefresh();
-      }, 800);
-    })
+    .on('postgres_changes', { event:'*', schema:'public', table:'deposit_entries' }, depRtKick)
     .on('postgres_changes', { event:'*', schema:'public', table:'fine_entries' }, async ()=>{
       try{ const { data } = await pageAll('fine_entries');
         if(data){ fineEntries = data.map(fromDbFine); rtQueue++; scheduleRtRefresh(); } }catch(_){}
@@ -11056,7 +11418,7 @@ function updPeriodHint(){
 
 /* ================= ประวัติการทำรายการ (หน้า #audit) ================= */
 const AUD_TBL_TH = { cal_special_days:'วันพิเศษจากปฏิทิน', employees:'ข้อมูลพนักงาน', punches:'เวลาสแกน', adjustments:'เพิ่ม/หักเงิน', advances:'เบิกกลางเดือน',
-  holidays:'วันหยุดพิเศษ', payroll_settings:'ตั้งค่า', deposit_entries:'เงินประกัน', mou_loans:'เงินยืม MOU',
+  holidays:'วันหยุดพิเศษ', payroll_settings:'ตั้งค่า', deposit_entries:'เงินประกัน', deposit_payouts:'💵 เบิกเงินประกันคืน', mou_loans:'เงินยืม MOU',
   mou_entries:'หัก MOU รายงวด', doc_borrows:'สมุดยืมเอกสาร', fine_entries:'แก้รายการหักอัตโนมัติ', loans:'พนักงานยืมเงิน',
   loan_entries:'ผ่อนเงินยืมรายงวด', sso_entries:'ประกันสังคม', tips:'ทิปประจำงวด', shifts:'กะการทำงาน',
   devices:'เครื่องสแกน', org_positions:'แผนก/ตำแหน่ง',
