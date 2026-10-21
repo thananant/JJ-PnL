@@ -998,6 +998,31 @@ window.JJGate=(function(){
 <!-- JJBR-END -->
 <style>/* โทรศัพท์: ช่องกรอก/เลือกต้อง ≥16px ไม่งั้น iPhone ซูมจอเองตอนแตะ (ตรวจด้วย tests/mobile/mobile-check.mjs · 2026-10-17) */
 @media (max-width:700px){#monthPick{font-size:16px!important}}</style>
+<!-- JJ-DRAGCLICK-BEGIN กันหน้าต่าง/ฟอร์มเด้งปิดเอง (เจ้าของสั่ง 2026-10-21) · บล็อกนี้ต้องเหมือนกันทุกไฟล์ทุกตัวอักษร (precheck ตรวจ) -->
+<script>
+/* ลากคลุมข้อความในช่องกรอก (หรือไฮไลต์ข้อความ) แล้วปล่อยเมาส์นอกกรอบ → เบราว์เซอร์ส่ง click ให้ "พื้นหลัง" (ตัวแม่ที่ครอบทั้งคู่)
+   → โค้ดที่ปิดหน้าต่างเมื่อกดพื้นหลังทำงาน ฟอร์มหายทั้งที่ไม่ได้กด
+   กันที่ตัวเดียวทุกแอป: click ที่เริ่มกดคนละที่กับที่ปล่อย + เริ่มในช่องกรอก/มีข้อความถูกไฮไลต์ = ไม่ใช่การกดจริง → ทิ้ง
+   กดปุ่ม/พื้นหลังตามปกติ (กดและปล่อยที่เดียวกัน) ไม่โดนกัน · click ที่โค้ดสั่งเอง (el.click()) ไม่โดนกัน */
+(function(){
+  if(window.__jjDragClick)return;window.__jjDragClick=1;
+  var down=null;
+  function field(n){   // ช่องพิมพ์ข้อความเท่านั้น (ติ๊ก/ปุ่มเลือก ไม่นับ — กดเยื้องไปโดนป้ายชื่อยังติ๊กได้ตามเดิม)
+    if(!n||n.nodeType!==1)return false;
+    if(n.tagName==='TEXTAREA'||n.isContentEditable===true)return true;
+    return n.tagName==='INPUT'&&!/^(checkbox|radio|button|submit|reset|image|file|color|range)$/i.test(n.type||'');
+  }
+  window.addEventListener('pointerdown',function(e){down=e.target},true);
+  window.addEventListener('pointercancel',function(){down=null},true);
+  window.addEventListener('click',function(e){
+    var d=down,t=e.target;down=null;
+    if(!e.isTrusted||!d||d===t||!t||!t.contains||!t.contains(d))return;
+    var s='';try{s=String(window.getSelection?window.getSelection():'')}catch(x){}
+    if(field(d)||s){e.stopImmediatePropagation();e.preventDefault()}
+  },true);
+})();
+</script>
+<!-- JJ-DRAGCLICK-END -->
 </head>
 <body>
 

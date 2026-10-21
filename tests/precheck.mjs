@@ -118,6 +118,13 @@ sec('3. ทะเบียนสาขากลาง (JJBR) — 16 ไฟล์
   same('บล็อก JJBR', blocks);
 }
 
+sec('3b. กันฟอร์มเด้งปิดตอนลากไฮไลต์ (JJ-DRAGCLICK) — ทุกหน้าแอป เหมือนกันทุกไบต์');
+{
+  const blocks = {};
+  for (const f of ALL_HTML.filter(f => f !== 'privacy.html')) blocks[f] = cut(rd(f), '<!-- JJ-DRAGCLICK-BEGIN', '<!-- JJ-DRAGCLICK-END -->');
+  same('บล็อก JJ-DRAGCLICK', blocks);
+}
+
 sec('4. วันขายดีจากปฏิทิน (SPD) — ทุกไฟล์ที่มีบล็อกต้องเหมือนกันทุกไบต์');
 {
   // ครัวกลาง v2 (2026-10-17) ไม่คิดสูตรสั่งของเองแล้ว (อ่านออเดอร์ที่แอปนับสต๊อกเขียนลง stock_receipts) → บล็อก SPD/STK_BR เหลือเฉพาะแอปนับ
