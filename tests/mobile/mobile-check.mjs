@@ -52,7 +52,8 @@ const APPS = [
   { id: 'owner', file: 'jjmk-owner.html', login: 1 },
   { id: 'admin', file: 'jjmk-admin.html', login: 1 },
   { id: 'payroll', file: 'jjmk-payroll.html', login: 1 },
-  { id: 'payroll-org', file: 'jjmk-payroll.html#org', login: 1, fx: payrollOrgFixture },   // 🧑‍🤝‍🧑 แผนผังพนักงาน + ข้อมูลจำลองที่สมจริง (~130 คน)
+  { id: 'payroll-org', file: 'jjmk-payroll.html#org', login: 1, fx: payrollOrgFixture, steps: [
+    { label: 'ดูย้อนหลัง (◀ เมื่อวาน)', js: "document.querySelector('.og-day [data-dd=\"-1\"]').click()" } ] },   // 🧑‍🤝‍🧑 แผนผังพนักงาน + ข้อมูลจำลองที่สมจริง (~130 คน)
   // 🛡️ เงินประกัน / 🐷 เงินสำรองเลี้ยงชีพ (2026-10-20) — ข้อมูลจำลอง + เปิดหน้าต่างพรีวิว 🔒 / 💸 / เพิ่มสมาชิก / ถอน ระหว่างตรวจ (steps)
   { id: 'payroll-dep', file: 'jjmk-payroll.html#dep', login: 1, fx: payrollMoneyFixture, steps: [
     { label: 'หน้าต่าง 🔒 ปิดยอดงวดก่อน', js: "(async()=>{ const s=document.getElementById('depPeriodSel'); s.value=s.options[Math.min(1,s.options.length-1)].value; await depLockOpen(); })()", close: 'depLockBg' },

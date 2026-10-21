@@ -456,6 +456,13 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
 .og-root .og-flt button[aria-pressed=true]{background:var(--brand-grad);color:#fff}
 .og-root .og-flt i{width:8px;height:8px;border-radius:50%;display:inline-block}
 .og-root .og-flt b{font-weight:600}
+.og-root .og-day{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.og-root .og-day button{font:inherit;font-family:'Prompt',sans-serif;font-size:14px;min-width:40px;min-height:40px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);cursor:pointer;box-shadow:var(--shadow)}
+.og-root .og-day button:disabled{opacity:.4;cursor:default;box-shadow:none}
+.og-root .og-day .og-today{background:var(--brand-grad);color:#fff;border-color:transparent}
+.og-root .og-date{font:inherit;font-size:16px;min-height:40px;padding:4px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+.og-root.og-past .og-date{border-color:var(--amber);background:#fff8e6;outline:2px solid #f6d58c;outline-offset:-1px}
+.og-root .og-day button:focus-visible,.og-root .og-date:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 .og-root .og-br:focus-visible,.og-root .og-p:focus-visible,.og-root .og-boss:focus-visible,.og-root .og-flt button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 .og-root .og-tree{display:flex;flex-direction:column;align-items:center}
 .og-root .og-node{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px 16px;text-align:center}
@@ -518,12 +525,20 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
   .og-root .og-brs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(104px,100%),1fr));width:100%}
   .og-root .og-br{padding:6px 10px;min-width:0}
   .og-root .og-br b{overflow-wrap:anywhere}
+  .og-root .og-day{display:flex;width:100%;flex-wrap:nowrap}
+  .og-root .og-day button{min-height:44px;min-width:44px;flex:none}
+  .og-root .og-date{flex:1 1 auto;min-width:0;min-height:44px}
   .og-root .og-flt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;border-radius:16px}
   .og-root .og-flt button{flex-direction:column;justify-content:center;gap:0;min-height:48px;padding:4px;border-radius:12px;white-space:normal;text-align:center;line-height:1.25;font-size:13px}
   .og-root .og-flt i{display:none}
   .og-root .og-p{min-height:44px}
   .og-root .og-boss{width:100%}
   .og-root .og-row{width:100%}
+}
+@container (max-width:360px){   /* จอแคบ (Fold/SE): ช่องวันที่เต็มแถว แล้วปุ่ม ◀ ▶ วันนี้ แถวล่าง — วันที่ไม่ถูกตัด */
+  .og-root .og-day{flex-wrap:wrap}
+  .og-root .og-date{order:-1;flex:1 1 100%}
+  .og-root .og-day button{flex:1 1 0}
 }
 </style>
 <style>
@@ -9672,10 +9687,10 @@ function ocColKey(sh){
    แล้วจับกะด้วย detectShift ตัวเดียวกับเอนจินคิดเงิน (detectShift ไม่ดู shiftId) · punches อาจมีของเก่าต่อท้าย
    (realtime/แก้เวลามือ push โดยไม่เรียง) → กรองทั้งก้อน ห้ามวนแล้ว break ตามวันที่
    คืน { รหัสสแกน: { last:กะล่าสุด, lastDay, lastWork:วันทำงานล่าสุด, nDays:กี่วันที่มา, cnt:{คอลัมน์:กี่วัน} } } */
-function ocScanShifts(today){
+function ocScanShifts(today, list){
   today = today || bizToday();
   const from = addDaysYMD(today, -(OC_DAYS-1));
-  const emp = {}; employees.forEach(e => { if(e && e.active) emp[e.code] = e; });
+  const emp = {}; (list || employees.filter(e => e && e.active)).forEach(e => { if(e) emp[e.code] = e; });
   const by = {};
   for(const p of punches){
     if(!p || !p.date || p.date < from || !emp[p.code]) continue;
@@ -9704,9 +9719,22 @@ function ocScanShifts(today){
 function ocDayTxt(d, today){
   if(!d) return '';
   const lab = dayLabel(d) + ' (' + WD_TH[wdOf(d)] + ')';
+  if(today !== bizToday()) return d === today ? 'วันที่ดู ' + lab : lab;   // ดูย้อนหลัง = ไม่ใช้คำว่า วันนี้/เมื่อวาน
   if(d === today) return 'วันนี้ ' + lab;
   if(d === addDaysYMD(today, -1)) return 'เมื่อวาน ' + lab;
   return lab;
+}
+/* คนในผังของวันที่ดู (เจ้าของขอ 2026-10-21 "เลือกวันที่ดูได้"): วันนี้ = active เหมือนเดิม ·
+   ย้อนหลัง = มีสแกนวันนั้น (รวมคนที่ลาออกแล้ว) หรือจ้างงานอยู่วันนั้น (วันเริ่ม ≤ วันนั้น ≤ วันสิ้นสุดงาน · ลาออกแต่ไม่ได้ใส่วันสิ้นสุด = ไม่นับ ถ้าไม่มีสแกน) */
+function ocInView(day, isToday){
+  return employees.filter(e => {
+    if(!e) return false;
+    if(isToday) return !!e.active;
+    if((shifts[e.code]||[]).some(r => r.day === day)) return true;
+    if(e.startDate && e.startDate > day) return false;
+    if(e.endDate && e.endDate < day) return false;
+    return !!e.active || !!(e.endDate && e.endDate >= day);
+  });
 }
 const ocHex = c => { const s = String(c||'').trim();
   if(/^#[0-9a-f]{6}$/i.test(s)) return s;
@@ -9715,8 +9743,12 @@ const ocHex = c => { const s = String(c||'').trim();
   return ''; };
 /* ข้อมูลจริง → ข้อมูลที่หน้าผังใช้ (ส่งเฉพาะที่ผังโชว์ — ไม่มีเงินเดือน/เบอร์/วันเกิด/บัญชี) · employees ถูกกรองตามสิทธิ์ _br แล้วตอนโหลด */
 function ocBuild(today){
-  today = today || bizToday();
-  const scan = ocScanShifts(today);
+  const now0 = bizToday();
+  const minDay = punchSince && punchSince < now0 ? punchSince : addDaysYMD(now0, -180);   // ก่อนช่วงที่โหลดสแกนไว้ = ไม่มีข้อมูล
+  today = /^\d{4}-\d{2}-\d{2}$/.test(today || '') && today < now0 ? (today < minDay ? minDay : today) : now0;   // วันที่ดู · ว่าง/อนาคต = วันนี้
+  const isToday = today === now0;
+  const inView = ocInView(today, isToday);
+  const scan = ocScanShifts(today, inView);
   const SH = {}, order = [];
   const tm = s => (s && s.start && s.end) ? s.start + '–' + s.end : '';
   [['morning','กะเช้า','🌅'],['mid','กะกลาง','🌤'],['night','กะเย็น','🌙']].forEach(([k,n,ico]) => {
@@ -9729,8 +9761,7 @@ function ocBuild(today){
   SH.hours = { key:'hours', name:'นับชั่วโมง', ico:'⏱', time:'ไม่ยึดเวลากะ' };
   order.push('part', 'hours', null);
   const short = k => OC_SHORT[k] || (SH[k] ? SH[k].name : k);
-  const day0 = bizToday();
-  const emps = employees.filter(e => e && e.active).map(e => {
+  const emps = inView.map(e => {
     const role = ocRole(e.position), sc = scan[e.code] || null;
     const set = (e.shiftId != null && e.shiftId !== '') ? shiftDefs.find(s => String(s.id) === String(e.shiftId)) : null;
     const byMode = e.mode === 'hourly' ? 'part' : e.mode === 'hours' ? 'hours' : null;
@@ -9751,9 +9782,15 @@ function ocBuild(today){
       note.push(OC_DAYS + ' วันล่าสุด: ' + ks.map(k => short(k) + ' ' + sc.cnt[k]).join(' · '));
     } else if(sc && sc.lastWork) note.push('เข้างานล่าสุด ' + ocDayTxt(sc.lastWork, today) + ' · ' + OC_DAYS + ' วันมา ' + sc.nDays + ' วัน');
     else if(src === 'mode') note.push('ยังไม่มีสแกน ' + OC_DAYS + ' วัน');
-    const now = dtToday(e), rec = (shifts[e.code]||[]).find(r => r.day === day0);
+    const rec = (shifts[e.code]||[]).find(r => r.day === today);
+    /* วันนี้ = สถานะตอนนี้ (dtToday) · ย้อนหลัง = จากสแกนจริงวันนั้น (สแกนแรก–สุดท้าย · ไม่ดู rec.single ที่เอนจินตั้งเมื่อสแกนไม่ตรงกะที่ล็อกไว้)
+       สแกนครั้งเดียว = 'one' (ไม่มีสแกนออก) · ไม่มีสแกน = หยุดประจำ/ไม่มา */
+    const two = !!(rec && rec.in && rec.out && rec.out > rec.in);
+    const now = isToday ? dtToday(e)
+      : rec ? (two ? { k:'out', s:fmtT(rec.in) + '–' + fmtT(rec.out) } : { k:'one', s:'เข้า ' + fmtT(rec.in) + ' · ไม่มีสแกนออก' })
+      : isOffWd(e, today) ? { k:'off', s:'' } : { k:'abs', s:'' };
     let duty = '';
-    if(now.k === 'in'){
+    if(now.k === 'in' || (!isToday && rec)){
       duty = now.s || '';
       if(rec && rec.workBranch && e.branch && rec.workBranch !== e.branch){
         const wn = (BR[rec.workBranch]||{}).t || rec.workBranch;
@@ -9762,8 +9799,8 @@ function ocBuild(today){
     }
     return { id:e.id, code:e.code||'', nick:e.nick||'', full:e.full||'', branch:e.branch||'_none', dept:e.dept||'',
       position:String(e.position||'').trim(), photo:e.photo||'', role, shift, shiftName, shiftSrc:src, mode:e.mode||'shift',
-      onDuty:now.k === 'in', dutyTxt:duty, note,
-      tk:now.k, tin:rec && rec.in ? fmtT(rec.in) : '', tout:rec && rec.out && !rec.single ? fmtT(rec.out) : '' };
+      onDuty:now.k === 'in', on:isToday ? now.k === 'in' : !!rec, dutyTxt:duty, note,
+      tk:now.k, tin:rec && rec.in ? fmtT(rec.in) : '', tout:rec && rec.out && (isToday ? !rec.single : two) ? fmtT(rec.out) : '' };
   });
   const known = myBranches();
   const codes = [...new Set(emps.map(x => x.branch))];
@@ -9773,6 +9810,7 @@ function ocBuild(today){
   });
   if(codes.includes('_none')) brs.push({ code:'_none', name:'ไม่ระบุสาขา', chip:'gray', col:'', none:true });
   return { company:OC_CO, shop:OC_SHOP, asOf:fmtT(new Date()) + ' น.', today, days:OC_DAYS,
+    view:today, isToday, minDay, maxDay:now0, viewTxt:dayLabel(today) + ' (' + WD_TH[wdOf(today)] + ')',
     branches:brs, shifts:order.filter(k => k != null).map(k => SH[k]), order,
     depts:orgDepts().map(d => ({ name:d, positions:orgPositions(d) })), employees:emps,
     canDetail:canSee('detail'), canFixPos:canSee('emp') && canDo('emp','e') };
@@ -9781,7 +9819,7 @@ let ocDay = '', ocTimer = 0;
 function renderOrgChart(){
   const box = document.getElementById('orgChartBox'); if(!box) return;
   ocDay = bizToday();
-  try{ OrgChart.update(box, ocBuild(ocDay)); }
+  try{ OrgChart.update(box, ocBuild(OrgChart.state.d || ocDay), renderOrgChart); }
   catch(e){ console.error('org chart', e); box.innerHTML = '<div class="card"><div class="empty">วาดแผนผังไม่สำเร็จ: ' + OrgChart.esc(e && e.message) + '</div></div>'; }
 }
 /* ข้ามวันของร้าน (ตี 6) ขณะเปิดหน้าค้างไว้ = วาดใหม่เอง · มือถือพักแท็บแล้วตัวจับเวลาหยุด → เช็คอีกทีตอนกลับมาเปิด */
@@ -9796,31 +9834,40 @@ function ocStartTicker(){
 /* ---- หน้าตาแผนผัง (เจ้าของสั่ง 2026-10-20 รุ่น 3 — "แยกแผนกเสร็จ แล้วแยกตำแหน่ง แล้วค่อยเป็นรายชื่อ" + เลือกได้ว่าทำงานอยู่หรือไม่)
    สาขา → ผจก. → รองผจก. → การ์ดกะ (เช้า/กลาง/เย็น + กะอื่น/พาร์ทไทม์/นับชั่วโมง/ยังไม่รู้กะ ถ้ามีคน) → แผนก → ตำแหน่ง → รายชื่อ (ชื่อ + เวลาเข้างานวันนี้)
    ตัวกรอง: ทุกคน / ทำงานอยู่ (สแกนเข้าวันนี้ยังไม่ออก tk='in') / ไม่ได้ทำงาน (อื่น ๆ) — กรองทุกชั้น · กรองแล้วกะไหนไม่มีคน = ไม่โชว์การ์ดกะนั้น
-   คลาส og-* ใต้ .og-root · วาดใหม่ทั้งก้อนทุกครั้งที่ข้อมูลเปลี่ยน (ไม่มีช่องกรอกให้หาย) · จำสาขา+ตัวกรองใน localStorage 'jjpay_org' ({b,f}) */
+   คลาส og-* ใต้ .og-root · วาดใหม่ทั้งก้อนทุกครั้งที่ข้อมูลเปลี่ยน (ไม่มีช่องกรอกให้หาย) · จำสาขา+ตัวกรองใน localStorage 'jjpay_org' ({b,f})
+   เลือกวันที่ดูย้อนหลัง (เจ้าของขอ 2026-10-21): st.d (null = วันนี้ · ไม่จำข้ามการเปิดหน้าใหม่) → renderOrgChart → ocBuild(วันที่)
+   · ย้อนหลัง: ตัวกรองเป็น มาทำงาน (มีสแกนวันนั้น) / ไม่ได้มา · กะ = กะจริงล่าสุดใน 14 วันก่อนถึงวันนั้น · เลือกได้ตั้งแต่วันแรกที่โหลดสแกนไว้ถึงวันนี้ */
 const OrgChart = (function(){
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const LS = 'jjpay_org';
   const FLT = ['all', 'in', 'out'];
-  const st = { b:null, f:'all' };
+  const st = { b:null, f:'all', d:null };
   try{ const v = JSON.parse(localStorage.getItem(LS) || 'null');
     if(v && typeof v.b === 'string') st.b = v.b;
     if(v && FLT.includes(v.f)) st.f = v.f; }catch(_){}
   const save = () => { try{ localStorage.setItem(LS, JSON.stringify({ b:st.b, f:st.f })); }catch(_){} };
   const BASE = ['morning', 'mid', 'night'];
   const SHORT = { morning:'กะเช้า', mid:'กะกลาง', night:'กะเย็น', part:'พาร์ทไทม์', hours:'นับชั่วโมง', none:'ยังไม่รู้กะ' };
-  let root = null, data = null;
+  let root = null, data = null, redo = null;
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  const addD = (s, n) => { const [y, m, dd] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd + n)).toISOString().slice(0, 10); };
+  /* คำของวันนี้ / ย้อนหลัง */
+  const W = () => data && !data.isToday
+    ? { on:'มาทำงาน', off:'ไม่ได้มา', sh:'มา', node:'มาทำงาน', inT:'ที่มาทำงานวันนั้น', outT:'ที่ไม่ได้มาวันนั้น' }
+    : { on:'ทำงานอยู่', off:'ไม่ได้ทำงาน', sh:'อยู่', node:'เข้างานอยู่', inT:'ที่ทำงานอยู่ตอนนี้', outT:'ที่ไม่ได้ทำงานตอนนี้' };
 
   const nameOf = e => e.nick || e.full || e.code || '?';
   const byName = (a, b) => nameOf(a).localeCompare(nameOf(b), 'th');
-  const isIn = e => e.tk === 'in';
+  const isIn = e => !!e.on;
   const pass = e => st.f === 'all' || (st.f === 'in') === isIn(e);
-  /* เวลาเข้างานวันนี้ (วันของร้าน) — ไม่มีสแกนวันนี้ = ยังไม่เข้า / หยุด */
+  /* เวลาเข้างานของวันที่ดู (วันของร้าน) — ไม่มีสแกน = ยังไม่เข้า (วันนี้) / ไม่มา (ย้อนหลัง) / หยุด */
   function tHtml(e){
     if(e.tk === 'in')  return '<span class="og-t og-in">เข้า ' + esc(e.tin) + '</span>';
+    if(e.tk === 'one') return '<span class="og-t og-out" title="ไม่มีสแกนออก">' + esc(e.tin) + '–?</span>';
     if(e.tk === 'out') return '<span class="og-t og-out">' + esc(e.tin) + '–' + esc(e.tout) + '</span>';
     if(e.tk === 'off') return '<span class="og-t">หยุด</span>';
-    return '<span class="og-t">ยังไม่เข้า</span>';
+    return '<span class="og-t">' + (data && !data.isToday ? 'ไม่มา' : 'ยังไม่เข้า') + '</span>';
   }
   const tip = e => esc([e.position, e.shiftName, ...(e.note || []), e.dutyTxt].filter(Boolean).join(' · '));
   /* รูปพนักงาน (เจ้าของขอ 2026-10-20) — รับเฉพาะ https/data:image · ไม่มีรูป/โหลดไม่ขึ้น = ตัวอักษรแรกของชื่อ (ข้ามสระหน้า เ แ โ ใ ไ)
@@ -9832,7 +9879,7 @@ const OrgChart = (function(){
 
   /* แถวรายชื่อ: รูป (+ จุดสถานะที่มุมรูป) · ชื่อ (ยาวเกิน = ตัด … ไม่ขึ้นบรรทัดใหม่) · เวลา — ตำแหน่งอยู่หัวกลุ่มแล้ว ไม่ซ้ำในแถว */
   function person(e, d){
-    const cls = 'og-p' + (d.canDetail ? ' og-go' : '') + (isIn(e) ? ' og-on' : e.tk === 'out' ? ' og-done' : ' og-idle');
+    const cls = 'og-p' + (d.canDetail ? ' og-go' : '') + (isIn(e) ? ' og-on' : e.tk === 'out' || e.tk === 'one' ? ' og-done' : ' og-idle');
     const inner = av(e) + '<b class="og-nm">' + esc(nameOf(e)) + '</b>'
       + (e.shiftSrc === 'set' ? '<small class="og-set">กะที่ตั้งไว้</small>' : '') + tHtml(e);
     return d.canDetail
@@ -9863,7 +9910,7 @@ const OrgChart = (function(){
     const pos = groupBy(list, e => e.position, def ? def.positions || [] : []);
     const nIn = list.filter(isIn).length;
     return '<section class="og-dept"><div class="og-dh">' + esc(name || 'ไม่ระบุแผนก')
-      + '<span>' + list.length + ' คน' + (st.f === 'all' && nIn ? ' · อยู่ ' + nIn : '') + '</span></div>'
+      + '<span>' + list.length + ' คน' + (st.f === 'all' && nIn ? ' · ' + W().sh + ' ' + nIn : '') + '</span></div>'
       + pos.map(([p, ps]) => '<div class="og-pos"><div class="og-ph' + (p ? '' : ' og-nopos') + '">' + (p ? esc(p) : '⚠️ ไม่มีตำแหน่ง')
           + '<span>' + ps.length + '</span></div>' + ps.slice().sort(byTime).map(e => person(e, d)).join('') + '</div>').join('')
       + '</section>';
@@ -9876,14 +9923,14 @@ const OrgChart = (function(){
       : '<div class="og-empty">ไม่มีพนักงานในกะนี้</div>';
     return '<div class="og-sh og-col" data-k="' + esc(k) + '"><div class="og-shh"><b>' + esc(sh.ico) + ' ' + esc(sh.name) + '</b>'
       + (sh.time ? '<small>' + esc(sh.time) + '</small>' : '')
-      + '<span class="og-n">' + list.length + ' คน' + (st.f === 'all' && nIn ? ' · อยู่ ' + nIn : '') + '</span></div>'
+      + '<span class="og-n">' + list.length + ' คน' + (st.f === 'all' && nIn ? ' · ' + W().sh + ' ' + nIn : '') + '</span></div>'
       + '<div class="og-shb">' + body + '</div></div>';
   }
 
   function tree(d, all){
     const b = d.branches.find(x => x.code === st.b);
     const list = all.filter(pass);
-    const fTxt = st.f === 'in' ? 'ที่ทำงานอยู่ตอนนี้' : 'ที่ไม่ได้ทำงานตอนนี้';
+    const fTxt = st.f === 'in' ? W().inT : W().outT;
     const allMgr = all.filter(e => e.role === 'manager'), allAst = all.filter(e => e.role === 'assistant');
     const mgr = list.filter(e => e.role === 'manager')
       .sort((a, c) => (/ผู้จัดการ|manager/i.test(c.position) ? 1 : 0) - (/ผู้จัดการ|manager/i.test(a.position) ? 1 : 0) || byName(a, c));
@@ -9900,7 +9947,7 @@ const OrgChart = (function(){
     const nIn = all.filter(isIn).length;
     const none = (lst, label, rule) => '<div class="og-none">' + (st.f !== 'all' && lst.length ? 'ไม่มี' + label + fTxt : 'ยังไม่มี' + label + rule) + '</div>';
     let h = '<div class="og-tree"><div class="og-node og-branch"><b>' + esc(b ? b.name : '') + '</b><small>' + all.length + ' คน'
-      + (nIn ? ' · เข้างานอยู่ ' + nIn + ' คน' : '') + '</small></div><div class="og-v"></div>';
+      + (nIn ? ' · ' + W().node + ' ' + nIn + ' คน' : '') + '</small></div><div class="og-v"></div>';
     h += '<div class="og-lvl"><span class="og-lab">ผู้จัดการ</span><div class="og-row">'
       + (mgr.length ? mgr.map(e => boss(e, d, 'og-mgr', '')).join('') : none(allMgr, ' ผจก. ', '(ตำแหน่งที่มีคำว่า ผู้จัดการ/หัวหน้า)'))
       + '</div></div><div class="og-v"></div>';
@@ -9925,23 +9972,42 @@ const OrgChart = (function(){
     const chips = d.branches.map(x => {
       const list = d.employees.filter(e => e.branch === x.code), nIn = list.filter(isIn).length;
       return '<button type="button" class="og-br" data-b="' + esc(x.code) + '" aria-pressed="' + (x.code === st.b) + '"'
-        + (x.col ? ' style="--og-c:' + esc(x.col) + '"' : '') + '><b>' + esc(x.name) + '</b><small>' + list.length + ' คน' + (nIn ? ' · อยู่ ' + nIn : '') + '</small></button>';
+        + (x.col ? ' style="--og-c:' + esc(x.col) + '"' : '') + '><b>' + esc(x.name) + '</b><small>' + list.length + ' คน' + (nIn ? ' · ' + W().sh + ' ' + nIn : '') + '</small></button>';
     }).join('');
     const all = d.employees.filter(e => e.branch === st.b), nIn = all.filter(isIn).length;
     const fb = (f, txt, n, dot) => '<button type="button" data-f="' + f + '" aria-pressed="' + (st.f === f) + '">'
       + (dot ? '<i style="background:' + dot + '"></i>' : '') + txt + ' <b>' + n + '</b></button>';
-    root.innerHTML = '<div class="og-top"><h2>🧑‍🤝‍🧑 แผนผังพนักงาน</h2><span class="muted">' + esc(d.shop) + ' · ' + d.employees.length + ' คน · อัปเดต ' + esc(d.asOf) + '</span></div>'
-      + '<div class="og-bar"><div class="og-brs">' + chips + '</div>'
-      + '<div class="og-flt" role="group" aria-label="กรองตามการทำงานตอนนี้">' + fb('all', 'ทุกคน', all.length) + fb('in', 'ทำงานอยู่', nIn, 'var(--green)')
-      + fb('out', 'ไม่ได้ทำงาน', all.length - nIn, '#c9c0b5') + '</div></div>'
+    const w = W();
+    root.classList.toggle('og-past', !d.isToday);
+    const day = '<div class="og-day" role="group" aria-label="เลือกวันที่ดู">'
+      + '<button type="button" data-dd="-1" aria-label="วันก่อนหน้า"' + (d.view <= d.minDay ? ' disabled' : '') + '>◀</button>'
+      + '<input type="date" class="og-date" value="' + esc(d.view) + '" min="' + esc(d.minDay) + '" max="' + esc(d.maxDay) + '" aria-label="วันที่ดู">'
+      + '<button type="button" data-dd="1" aria-label="วันถัดไป"' + (d.isToday ? ' disabled' : '') + '>▶</button>'
+      + (d.isToday ? '' : '<button type="button" data-dd="0" class="og-today">วันนี้</button>') + '</div>';
+    root.innerHTML = '<div class="og-top"><h2>🧑‍🤝‍🧑 แผนผังพนักงาน</h2><span class="muted">' + esc(d.shop) + ' · '
+      + (d.isToday ? d.employees.length + ' คน · อัปเดต ' + esc(d.asOf) : '📅 ดูย้อนหลัง ' + esc(d.viewTxt) + ' · ' + d.employees.length + ' คน') + '</span></div>'
+      + '<div class="og-bar"><div class="og-brs">' + chips + '</div>' + day
+      + '<div class="og-flt" role="group" aria-label="กรองตามการทำงาน">' + fb('all', 'ทุกคน', all.length) + fb('in', w.on, nIn, 'var(--green)')
+      + fb('out', w.off, all.length - nIn, '#c9c0b5') + '</div></div>'
       + tree(d, all)
-      + '<div class="og-legend">ทำงานอยู่ = สแกนเข้างานวันนี้แล้วยังไม่สแกนออก (วันของร้าน ตัดตี 6) · เวลา = สแกนเข้า (–ออก) วันนี้ · กะ = กะที่เข้างานจริงล่าสุดใน ' + esc(d.days)
-      + ' วัน (ยังไม่มีสแกน = <span class="og-set">กะที่ตั้งไว้</span>)' + (d.canDetail ? ' · แตะชื่อเพื่อดูข้อมูลพนักงาน' : '') + '</div>';
+      + '<div class="og-legend">' + (d.isToday
+          ? 'ทำงานอยู่ = สแกนเข้างานวันนี้แล้วยังไม่สแกนออก (วันของร้าน ตัดตี 6) · เวลา = สแกนเข้า (–ออก) วันนี้'
+          : 'มาทำงาน = มีสแกนวันนั้น (วันของร้าน ตัดตี 6) · เวลา = สแกนเข้า–ออกวันนั้น (–? = ไม่มีสแกนออก) · รายชื่อ = คนที่จ้างงานอยู่หรือมาทำงานวันนั้น')
+      + ' · กะ = กะที่เข้างานจริงล่าสุดใน ' + esc(d.days) + ' วัน' + (d.isToday ? '' : 'ก่อนถึงวันนั้น')
+      + ' (ยังไม่มีสแกน = <span class="og-set">กะที่ตั้งไว้</span>)' + (d.canDetail ? ' · แตะชื่อเพื่อดูข้อมูลพนักงาน' : '') + '</div>';
   }
 
+  /* เปลี่ยนวันที่ดู → คิดผังใหม่ทั้งชุด (renderOrgChart) · อนาคต/วันนี้ = null · ก่อนวันแรกที่มีข้อมูล = วันแรก */
+  function setDay(v){
+    if(!data || !DAY.test(v || '')) return;
+    if(v < data.minDay) v = data.minDay;
+    st.d = v >= data.maxDay ? null : v;
+    if(redo) redo(); else draw();
+  }
   function onClick(ev){
-    const t = ev.target.closest('[data-b],[data-f],[data-id]');
+    const t = ev.target.closest('[data-b],[data-f],[data-dd],[data-id]');
     if(!t || !root.contains(t)) return;
+    if(t.dataset.dd != null){ if(!data || t.disabled) return; const n = +t.dataset.dd; setDay(n ? addD(data.view, n) : data.maxDay); return; }
     if(t.dataset.b != null){ st.b = t.dataset.b; save(); draw(); return; }
     if(t.dataset.f != null){ if(FLT.includes(t.dataset.f)){ st.f = t.dataset.f; save(); draw(); } return; }
     if(data && data.canDetail && t.dataset.id != null && typeof openDetail === 'function'){
@@ -9949,12 +10015,14 @@ const OrgChart = (function(){
     }
   }
 
-  function update(box, d){
-    data = d;
+  function update(box, d, re){
+    data = d; redo = re || null;
+    st.d = d.isToday ? null : d.view;   // วันที่ที่ใช้จริงหลัง ocBuild ปรับให้อยู่ในช่วง
     if(!root || !box.contains(root)){
       box.innerHTML = '<div class="og-root"></div>';
       root = box.firstChild;
       root.addEventListener('click', onClick);
+      root.addEventListener('change', ev => { if(ev.target.classList && ev.target.classList.contains('og-date')) setDay(ev.target.value); });
       root.addEventListener('error', ev => { const t = ev.target; if(t && t.tagName === 'IMG' && t.closest('.og-av')) t.remove(); }, true);
     }
     draw();
