@@ -15,6 +15,10 @@
 -- 0) ช่อง note ของ deposit_entries (แอปเขียน ✎ '' / 🔒 'lock' / 💸 'refund') — jj_deposit.sql สร้างไว้แล้ว · กันกรณีตารางถูกสร้างทางอื่น · รันซ้ำได้
 ALTER TABLE deposit_entries ADD COLUMN IF NOT EXISTS note text NOT NULL DEFAULT '';
 
+-- 0b) สิทธิ์อ่าน/เขียนสมุดเงินประกันของแอป (รอบ 10 — ตารางที่สร้างหลังเปลี่ยนค่าตั้งต้นของ Supabase ไม่ได้สิทธิ์ให้ anon/authenticated อัตโนมัติ
+--     ถ้าไม่มีสิทธิ์ แอปอ่านสมุดไม่ได้ → การ์ด 🛡️ ประวัติเงินประกันขึ้นเตือน + ออกสลิป/K BIZ ไม่ได้) · มีสิทธิ์อยู่แล้ว = ไม่เปลี่ยนอะไร · รันซ้ำได้
+GRANT SELECT, INSERT, UPDATE, DELETE ON deposit_entries TO anon, authenticated;
+
 -- 1) ช่องเก็บ "เป้า/หักต่อเดือน" แบบเดิม (ใช้กับงวดก่อน 2026-10 เท่านั้น · แอปอ่านอย่างเดียว ไม่เคยเขียน)
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS deposit_target_v1  numeric;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS deposit_monthly_v1 numeric;
@@ -56,7 +60,7 @@ ALTER TABLE employees ALTER COLUMN deposit_monthly SET DEFAULT 300;
 
 -- 4) ความหมายช่อง note ของ deposit_entries (ไม่เปลี่ยนโครงตาราง)
 COMMENT ON COLUMN deposit_entries.note IS
-  ''''' = แก้เอง (✎) · ''lock'' = ปิดยอดงวดที่จ่ายแล้ว (🔒) · ''refund'' = คืนเงินประกันส่วนเกิน (amount ติดลบ)';
+  ''''' = แก้เอง (✎) · ''lock'' = ปิดยอดงวดที่จ่ายแล้ว (🔒) · ''lock:neg|short:<ยอดปกติ>:<สุทธิก่อนหักเงินประกัน>'' = 🔒 ที่หักไม่ได้/ได้บางส่วนเพราะสุทธิไม่พอ · ''refund'' = คืนเงินประกันส่วนเกินในสลิป (💸 amount ติดลบ) · ''xfer:<YYYY-MM-DD>'' = โอนคืนนอกสลิป คนพ้นสภาพ (🏦 amount ติดลบ · ไม่เข้าสลิป)';
 
 -- 5) ตรวจผล (อ่านอย่างเดียว · ซ้ำกับ jj_deposit_check.sql ก้อน 10) — คนที่ไม่ใช่ 3,000/300 หลังรัน
 --    "ข้อตกลงพิเศษ" = SQL คงค่าเดิมไว้ (เป้าต่ำกว่า 3,000 / หัก 0 หรือต่ำกว่า 300) — ดูว่าตั้งใจจริง ไม่ใช่ = แก้รายคนที่หน้า 🛡️
