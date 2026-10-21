@@ -298,6 +298,42 @@ if (REMOTE) {
   }
 }
 
+// ---------- SQL: ตารางใหม่ต้องมีสิทธิ์ Data API เขียนไว้เอง (Supabase เลิกเปิดให้อัตโนมัติ 2026-10-30) ----------
+// ตรวจไฟล์ใน sql/ ของเครื่อง (ที่เพิ่งเขียน) เสมอ + ทุกไฟล์บน branch sql ตอน --remote
+function sqlGrantGaps(src) {
+  const gaps = [];
+  if (/JJ-GRANTS/.test(src) || /grant[^;]*on\s+all\s+tables/i.test(src)) return gaps;
+  const re = /create\s+(?:table\s+(?:if\s+not\s+exists\s+)?|(?:or\s+replace\s+)?view\s+)([\w."]+)/gi;
+  let m;
+  while ((m = re.exec(src))) {
+    const n = m[1].replace(/"/g, ''), i = n.lastIndexOf('.'), sch = i < 0 ? '' : n.slice(0, i), t = n.slice(i + 1);
+    if (sch && sch !== 'public') continue;
+    const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const g = new RegExp('grant[^;]*\\bon\\s+(?:table\\s+)?(?:public\\.)?"?' + esc + '\\b[^;]*\\bto\\b[^;]*\\banon\\b', 'is');
+    if (!g.test(src) && !gaps.includes(t)) gaps.push(t);
+  }
+  return gaps;
+}
+{
+  sec(REMOTE ? '11. SQL — ตารางใหม่ต้องมี grant (sql/ ในเครื่อง + branch sql)' : '11. SQL — ตารางใหม่ต้องมี grant (sql/ ในเครื่อง · --remote = ตรวจ branch sql ด้วย)');
+  const files = [];
+  const local = path.join(ROOT, 'sql');
+  if (fs.existsSync(local)) for (const f of fs.readdirSync(local)) if (f.endsWith('.sql')) files.push(['sql/' + f, fs.readFileSync(path.join(local, f), 'utf8')]);
+  if (REMOTE) {
+    try {
+      execSync('git fetch -q origin sql', { cwd: ROOT, stdio: 'ignore' });
+      const list = execSync('git ls-tree -r --name-only FETCH_HEAD', { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(f => f.endsWith('.sql'));
+      for (const f of list) files.push(['sql:' + f, execSync(`git show FETCH_HEAD:"${f}"`, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 })]);
+    } catch { warn('อ่าน branch sql ไม่ได้ — ข้ามการตรวจไฟล์บน branch นั้น'); }
+  }
+  let bad = 0;
+  for (const [f, src] of files) {
+    const g = sqlGrantGaps(src);
+    if (g.length) { bad++; fail(`${f}: สร้าง ${g.join(', ')} แต่ไม่มี grant — ตั้งแต่ 2026-10-30 แอปจะเจอ permission denied · ใส่บล็อก JJ-GRANTS (ดู skill jj-precheck)`); }
+  }
+  if (!bad) pass(files.length ? `ไฟล์ SQL ${files.length} ไฟล์ ตารางใหม่มี grant ครบ` : 'ไม่มีไฟล์ SQL ให้ตรวจ');
+}
+
 console.log('jj-precheck · ' + ROOT + out.join('\n'));
 console.log(`\n${nFail ? '✗ ' + nFail + ' FAILED' : 'ALL PASSED'}${nWarn ? ' · ⚠ ' + nWarn + ' warning' : ''}`);
 process.exit(nFail ? 1 : 0);
