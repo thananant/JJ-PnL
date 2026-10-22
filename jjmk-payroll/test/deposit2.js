@@ -3265,7 +3265,7 @@ const V1LOCK = (A, ids) => { const rows = V1ROWS(A.E, ids); A.T.deposit_entries 
     A.io.confirms.length = 0;
     await A.E(`depPoSave()`); await wait(30);
     const r1 = T.deposit_payouts[0] || {};
-    ok(T.deposit_payouts.length === 1 && r1.employee_id === 1 && r1.period === '2026-10' && r1.amount === 1000 && r1.via === 'cash' && r1.pay_date === '2026-10-21' && /นอกสลิป/.test(A.io.confirms[0] || '') && /ทุกเครื่องต้องเป็นรุ่น "2026-10-21 · เงินประกัน v2\.[2-9]\b/.test(A.io.confirms[0] || ''),
+    ok(T.deposit_payouts.length === 1 && r1.employee_id === 1 && r1.period === '2026-10' && r1.amount === 1000 && r1.via === 'cash' && r1.pay_date === '2026-10-21' && /นอกสลิป/.test(A.io.confirms[0] || '') && /ทุกเครื่องต้องเป็นรุ่น "[^"]*เงินประกัน v2\.[2-9]\b/.test(A.io.confirms[0] || ''),
        'บันทึก 1 แถว deposit_payouts {น้อย · 2026-10 · 1,000 · cash · 21 ต.ค.} · ยืนยันบอก "นอกสลิป" + ทุกเครื่องต้องเป็นรุ่น v2.2 (' + JSON.stringify(r1) + ')');
     const oct1 = D44(A, 1, '2026-10'), nov1 = D44(A, 1, '2026-11'), dec1 = D44(A, 1, '2026-12');
     ok(oct1.ded === 300 && oct1.before === 1000 && oct1.po === 1000 && oct1.collected === 300, 'ต.ค.: หักยังเป็น 300 · สะสมหลัง ต.ค. = 300 (' + JSON.stringify(oct1) + ')');

@@ -2,7 +2,7 @@
 // บัญชีที่ยังไม่เคยตั้งสิทธิ์หน้านี้ = เห็นตามหน้า emp/detail (ต้องตรงกับ applyUser ใน jjmk-payroll.html) · เอาติ๊กออก = เขียน org:'' ไว้ชัด ๆ
 import { load, suite } from './lib.mjs';
 
-const A = load('jjmk-admin.html', { vars: ['APPS', 'FLAGS', 'PERM_FOLLOW', 'isBoss'], fns: ['scrFlags', 'permOf', 'countScreens', 'appsLine', 'syncDraft'],
+const A = load('jjmk-admin.html', { vars: ['APPS', 'FLAGS', 'PERM_FOLLOW', 'APP_XF', 'xfOn', 'isBoss'], fns: ['scrFlags', 'permOf', 'countScreens', 'appsLine', 'syncDraft'],
   prelude: 'var BR_SCOPED={payroll:{br:["JJLP","JJRD","JJCK","OFFICE"],t:"สาขา"}}; var S={draft:{}}; var BOX=null; function $(s){ return s.startsWith("#box_")?BOX:null; } function brLbl(c){ return c; }' });
 const t = suite('JJ Access · สิทธิ์หน้าแผนผังพนักงาน (payroll.org)');
 const u = apps => ({ role: 'manager', apps });
@@ -32,5 +32,21 @@ A.S.draft = {}; A.BOX = box({ emp: 'v', org: 'v' }); A.syncDraft('payroll');
 t.eq(A.S.draft.payroll, { emp: 'v', org: 'v' }, 'ติ๊กดูแผนผัง → org:"v"');
 A.S.draft = { payroll: { emp: 'v' } }; A.BOX = box({}); A.syncDraft('payroll');
 t.ok(!('payroll' in A.S.draft), 'ปิดแอปทั้งกล่อง → ไม่เก็บอะไร (เหมือนเดิม)');
+
+// 🔒 ปิดงวดเงินเดือน (2026-10-21): สิทธิ์พิเศษที่ไม่ใช่หน้าจอ apps.payroll._close = '1' (ต้องตรงกับ applyUser ใน jjmk-payroll.html)
+t.ok(A.APP_XF.payroll && A.APP_XF.payroll._close, 'มีช่องติ๊ก "🔒 ปิดงวดได้" ในกล่อง JJ Payroll (คีย์ _close — ขึ้นต้น _ = ไม่ใช่หน้าจอ)');
+function boxX(checked, xf) {
+  const b = box(checked), q = b.querySelector;
+  return { querySelector: sel => { const m = sel.match(/data-xf="([^"]+)"/); return m ? { checked: !!(xf && xf[m[1]]) } : q(sel); }, querySelectorAll: () => [] };
+}
+A.S.draft = {}; A.BOX = boxX({ payroll: 'v' }, { _close: true }); A.syncDraft('payroll');
+t.eq(A.S.draft.payroll, { payroll: 'v', org: '', _close: '1' }, 'ติ๊กปิดงวด → บันทึก _close:"1"');
+A.S.draft = {}; A.BOX = boxX({ payroll: 'v' }, {}); A.syncDraft('payroll');
+t.ok(!('_close' in A.S.draft.payroll), 'ไม่ติ๊ก → ไม่มีคีย์ _close (แอปเงินเดือน = ปิดงวดไม่ได้ · fail closed)');
+A.S.draft = {}; A.BOX = boxX({}, { _close: true }); A.syncDraft('payroll');
+t.ok(!('payroll' in A.S.draft), 'ปิดแอปทั้งกล่อง → ไม่เก็บ _close');
+t.eq(A.countScreens(u({ payroll: { payroll: 'v', _close: '1' } }), 'payroll'), 1, '_close ไม่นับเป็นหน้าจอ');
+t.ok(/🔒 ปิดงวด/.test(A.appsLine({ payroll: { payroll: 'v', _close: '1' } }, 'payroll')), 'สรุปในประวัติบอก "🔒 ปิดงวด"');
+t.ok(!/ปิดงวด/.test(A.appsLine({ payroll: { payroll: 'v' } }, 'payroll')), 'ไม่มีสิทธิ์ = ไม่ขึ้น');
 
 process.exitCode = t.done() ? 1 : 0;
