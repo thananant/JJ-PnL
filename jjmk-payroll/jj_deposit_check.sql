@@ -7,9 +7,11 @@
 
 -- ก้อน 1) ใครแก้ค่าเงินประกัน/สำรองฯ เมื่อไร (ไม่รวมการบันทึกฟอร์มพนักงาน ซึ่งส่ง deposit_* ไปด้วยทุกครั้ง
 --         — การเปลี่ยนรหัสสแกนผ่านฟอร์มดูที่ก้อน 6 · ดูทุกบรรทัดของคนเดียวที่ก้อน 9)
+--         + งวดเริ่มหักรายคน (jj_emp_start.sql · 2026-10-21): deposit_start / sso_start + บรรทัด "งวดเริ่มหัก…" (ชื่อ · เดิม → ใหม่ · ข้อยกเว้น/เหตุผล)
 SELECT id, at, username, tbl, action, left(detail, 300) AS detail
   FROM payroll_audit
- WHERE (tbl = 'employees' AND detail ~ 'deposit_(target|monthly|opening|on)' AND detail !~ '"nick"')
+ WHERE (tbl = 'employees' AND detail ~ 'deposit_(target|monthly|opening|on|start)|sso_start' AND detail !~ '"nick"')
+    OR (tbl = 'employees' AND detail ~ 'งวดเริ่มหัก')
     OR (tbl = 'payroll_settings' AND detail ~ 'dep_start')
     OR tbl IN ('deposit_entries', 'pvd_members', 'pvd_entries', 'pvd_payouts')
  ORDER BY id;
