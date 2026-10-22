@@ -600,6 +600,95 @@ function algClassify(it,codes,words){
 }
 /* ALG-CORE-END */
 
+/* ALG-CSV-BEGIN — ส่งออก/นำเข้าไฟล์ CSV (แก้ใน Google Sheet แล้วนำกลับ) · ฟังก์ชันล้วน เทส tests/unit/allergy.test.mjs */
+const CSV_BASE=[['id','id (ห้ามแก้ · ว่าง = รายการใหม่)'],['name','ชื่อ'],['kind','ประเภท'],['cat','หมวด'],['ingredients','ส่วนผสม']];
+const CSV_TAIL=[['note','หมายเหตุ'],['checked','ยืนยันแล้ว (ใช่/ว่าง)'],['active','ขายอยู่ (ใช่/ไม่)'],['updated_at','แก้ล่าสุด (ห้ามแก้)']];
+function csvEsc(v){const s=v==null?'':String(v);return /[",\r\n]|^\s|\s$/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function csvParse(text){   // CSV มาตรฐาน: "..." ครอบได้ · "" = เครื่องหมายคำพูด · ขึ้นบรรทัดในช่องได้
+  const t=String(text||'').replace(/^\uFEFF/,''),rows=[];let row=[],cell='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){cell+='"';i++}else q=false}else cell+=c;continue}
+    if(c==='"')q=true;else if(c===',')row.push(cell),cell='';
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(cell);rows.push(row);row=[];cell=''}
+    else cell+=c;
+  }
+  if(cell!==''||row.length){row.push(cell);rows.push(row)}
+  return rows;
+}
+/* ช่องสิ่งที่แพ้: มี → 'has' · อาจปน → 'may' · ว่าง/ไม่ → '' · อ่านไม่ออก → null (ฟ้องให้แก้ ไม่เดา) */
+function algCell(v){const s=String(v==null?'':v).trim();
+  if(/^(ไม่|ไม่มี|no|n|0|-|–|—)?$/i.test(s))return '';
+  if(/^(อาจ|may|⚠|ปน)/i.test(s))return 'may';
+  if(/^(มี|x|✓|✔|❌|1|yes|y|true)$/i.test(s)||/^มี/.test(s))return 'has';
+  return null}
+const csvYes=v=>/^(ใช่|yes|y|true|1|x|✓|✔|✅)$/i.test(String(v==null?'':v).trim());
+const csvNo=v=>/^(ไม่|no|n|false|0|เลิก)/i.test(String(v==null?'':v).trim());
+function algCsvHeader(algs){return [...CSV_BASE.map(x=>x[1]),...algs.map(a=>a.n+' ['+a.k+']'),...CSV_TAIL.map(x=>x[1])]}
+const kindTxt=(k,kinds)=>{const x=kinds.find(y=>y[0]===k)||kinds[kinds.length-1];return x[1].replace(/^\S+\s/,'')};   // '🍲 อาหาร' → 'อาหาร'
+function algCsvLine(it,algs,kinds){
+  const has=it.contains||[],may=it.may||[];
+  return [it.id,it.name,kindTxt(it.kind||'menu',kinds),it.cat||'',it.ingredients||'',
+    ...algs.map(a=>has.includes(a.k)?'มี':may.includes(a.k)?'อาจปน':''),
+    it.note||'',it.checked?'ใช่':'',it.active===false?'ไม่':'ใช่',it.updated_at||''].map(csvEsc).join(',');
+}
+/* แถวในไฟล์ → {rows:[{line,id,updated_at,d}], errors:[], unknown:[]}
+   d = เฉพาะช่องที่มีในไฟล์ (ไม่มีคอลัมน์ = คงค่าเดิม) · d.alg = {รหัส:'has'|'may'|''} ของคอลัมน์สิ่งที่แพ้ที่มีในไฟล์ */
+function algCsvRows(table,algs,kinds){
+  const out={rows:[],errors:[],unknown:[]};
+  if(!table.length){out.errors.push('ไฟล์ว่าง');return out}
+  const strip=s=>String(s||'').replace(/\(.*?\)/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+  const head=table[0],col={},ac=[];
+  head.forEach((h,i)=>{
+    const b=[...CSV_BASE,...CSV_TAIL].find(x=>strip(h)===strip(x[1])||strip(h)===x[0]);
+    if(b){if(col[b[0]]==null)col[b[0]]=i;return}
+    const m=String(h).match(/\[([A-Za-z0-9_]+)\]\s*$/);
+    const a=m?algs.find(x=>x.k===m[1]):algs.find(x=>strip(x.n)===strip(h));
+    if(a)ac.push([a.k,i]);else if(String(h).trim())out.unknown.push(String(h).trim());
+  });
+  if(col.name==null){out.errors.push('ไม่เจอคอลัมน์ "ชื่อ" ในแถวแรก — ใช้ไฟล์ที่ส่งออกจากแอปเป็นแม่แบบ');return out}
+  const kindOf=v=>{const s=String(v||'').trim();if(!s)return undefined;
+    const k=kinds.find(x=>x[0]===s.toLowerCase()||strip(x[1].replace(/^\S+\s/,''))===strip(s)||strip(x[1])===strip(s));return k?k[0]:null};
+  const get=(r,k)=>col[k]==null?undefined:String(r[col[k]]==null?'':r[col[k]]).trim();
+  for(let n=1;n<table.length;n++){
+    const r=table[n],line=n+1;
+    if(!r.some(c=>String(c).trim()))continue;   // แถวว่าง
+    const name=get(r,'name');
+    if(!name){out.errors.push(`แถว ${line}: ไม่มีชื่อ`);continue}
+    const d={name},bad=[];
+    for(const k of ['cat','ingredients','note']){const v=get(r,k);if(v!==undefined)d[k]=v||null}
+    const kv=get(r,'kind');if(kv!==undefined){const k=kindOf(kv);if(k===null)bad.push(`ประเภท "${kv}" ไม่รู้จัก`);else if(k)d.kind=k}
+    const cv=get(r,'checked');if(cv!==undefined)d.checked=csvYes(cv);
+    const av=get(r,'active');if(av!==undefined)d.active=!csvNo(av);
+    d.alg={};
+    for(const [k,i] of ac){const v=algCell(r[i]);if(v===null)bad.push(`"${head[i]}" = "${String(r[i]).trim()}" (ใส่ มี / อาจปน / ว่าง)`);else d.alg[k]=v}
+    if(bad.length){out.errors.push(`แถว ${line} (${name}): `+bad.join(' · '));continue}
+    const idv=get(r,'id');let id=null;
+    if(idv){id=Number(idv);if(!Number.isInteger(id)||id<=0){out.errors.push(`แถว ${line} (${name}): id "${idv}" ไม่ถูกต้อง`);continue}}
+    out.rows.push({line,id,updated_at:get(r,'updated_at')||null,d});
+  }
+  return out;
+}
+/* รวมแถวในไฟล์เข้ากับรายการเดิม (old=null = รายการใหม่) → ค่าใหม่ทั้งแถว + ช่องที่เปลี่ยน */
+function algMerge(old,d){
+  const base=old||{name:'',kind:'menu',cat:null,ingredients:null,note:null,contains:[],may:[],checked:false,active:true};
+  const nw={name:d.name,kind:d.kind!==undefined?d.kind:base.kind||'menu',
+    cat:d.cat!==undefined?d.cat:base.cat||null,ingredients:d.ingredients!==undefined?d.ingredients:base.ingredients||null,
+    note:d.note!==undefined?d.note:base.note||null,checked:d.checked!==undefined?d.checked:!!base.checked,
+    active:d.active!==undefined?d.active:base.active!==false};
+  const ks=Object.keys(d.alg||{});
+  nw.contains=(base.contains||[]).filter(k=>!ks.includes(k)).concat(ks.filter(k=>d.alg[k]==='has'));
+  nw.may=(base.may||[]).filter(k=>!ks.includes(k)).concat(ks.filter(k=>d.alg[k]==='may'));
+  const same=(a,b)=>JSON.stringify([...(a||[])].sort())===JSON.stringify([...(b||[])].sort());
+  const ch=[];
+  for(const k of ['name','kind','cat','ingredients','note'])if((nw[k]||null)!==(base[k]||null))ch.push(k);
+  if(!same(nw.contains,base.contains))ch.push('contains');
+  if(!same(nw.may,base.may))ch.push('may');
+  if(nw.checked!==!!base.checked)ch.push('checked');
+  if(nw.active!==(base.active!==false))ch.push('active');
+  return {nw,ch};
+}
+/* ALG-CSV-END */
+
 /* ---------- ผู้ใช้ + สิทธิ์ (กติกาเดียวกับหน้าศูนย์รวมแอพ) ---------- */
 let ME=null;
 const isBoss=u=>!!u&&(u.role==='admin'||u.role==='owner');
@@ -727,7 +816,8 @@ function rItems(){
     &&(!q||algNorm(it.name+' '+(it.cat||'')+' '+(it.ingredients||'')).includes(q)));
   const nUnk=S.items.filter(it=>!it.checked&&it.active!==false).length;
   v.innerHTML=errBox()+`<div class="row" style="margin-bottom:8px">
-      ${can('items','a')?'<button class="btn" onclick="openForm()">＋ เพิ่มสินค้า/อาหาร</button><button class="btn o" onclick="openImport()">📥 นำเข้าจากเมนู</button>':''}</div>
+      ${can('items','a')?'<button class="btn" onclick="openForm()">＋ เพิ่มสินค้า/อาหาร</button><button class="btn o" onclick="openImport()">📥 นำเข้าจากเมนู</button>':''}
+      <button class="btn o" onclick="exportCsv()">📤 ส่งออก CSV</button>${can('items','a')||can('items','e')?'<button class="btn o" onclick="openCsvImport()">📄 นำเข้าไฟล์ CSV</button>':''}</div>
     ${nUnk?`<div class="note">❔ ยังไม่ยืนยันข้อมูล <b>${nUnk}</b> รายการ — รายการเหล่านี้จะไม่ขึ้นว่า "ทานได้" ตอนค้นหา จนกว่าจะแก้แล้วติ๊ก ✅ ยืนยันข้อมูล</div>`:''}
     <div class="box"><input id="itQ" type="search" placeholder="ค้นชื่อ / หมวด / ส่วนผสม" value="${esc(S.iq)}" autocomplete="off">
     <div class="seg" style="margin-top:8px">${[['','ทุกประเภท']].concat(KINDS).map(k=>`<button data-ik="${k[0]}" class="${S.ik===k[0]?'on':''}">${k[1]}</button>`).join('')}</div>
@@ -862,6 +952,96 @@ async function doImport(){
   }catch(e){btn.disabled=false;toast('นำเข้าไม่สำเร็จ — '+String(e.message||e).slice(0,90),true)}
 }
 
+/* ---------- 📤 ส่งออก / 📄 นำเข้าไฟล์ CSV (ใส่รายละเอียดใน Google Sheet แล้วนำกลับ) ----------
+   · ส่งออกทุกรายการ (รวมเลิกขาย) · id + แก้ล่าสุด ใช้จับคู่ตอนนำกลับ (ห้ามแก้ 2 ช่องนี้)
+   · นำกลับ: id ตรง = แก้รายการเดิม · id ว่าง = เพิ่มใหม่ · แถวที่ไม่มีในไฟล์ = ไม่แตะ (ไม่ลบ)
+   · มีคนแก้ในแอปหลังส่งออก (แก้ล่าสุดไม่ตรง) = ข้ามแถวนั้น ไม่ทับ · ค่าที่อ่านไม่ออก = ข้ามแถว + บอกให้แก้ (ไม่เดา)
+   · ติ๊ก "ยืนยันแล้ว = ใช่" ในไฟล์ = คนนำเข้าเป็นผู้ยืนยัน */
+function exportCsv(){
+  const algs=ALGS(),lines=[algCsvHeader(algs).map(csvEsc).join(',')];
+  S.items.forEach(it=>lines.push(algCsvLine(it,algs,KINDS)));
+  const d=new Date(Date.now()+7*36e5).toISOString().slice(0,10);
+  const blob=new Blob(['\uFEFF'+lines.join('\r\n')+'\r\n'],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='jj-allergy-'+d+'.csv';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
+  toast('📤 ส่งออก '+S.items.length+' รายการแล้ว — เปิดใน Google Sheet: ไฟล์ → นำเข้า → อัปโหลด');
+}
+let CSVP=null;   // แผนนำเข้าที่ดูตัวอย่างอยู่
+function openCsvImport(){
+  if(!can('items','a')&&!can('items','e'))return toast('ไม่มีสิทธิ์',true);
+  CSVP=null;
+  openSheet(`<h3>📄 นำเข้าไฟล์ CSV<button class="ed" onclick="closeSheet()" title="ปิด">✕</button></h3>
+    <div class="note" style="line-height:1.7">1) กด <b>📤 ส่งออก CSV</b> → เปิดใน Google Sheet (ไฟล์ → นำเข้า → อัปโหลด)<br>
+      2) กรอกในชีต: ช่องสิ่งที่แพ้ใส่ <b>มี</b> / <b>อาจปน</b> / เว้นว่าง · ยืนยันแล้ว = <b>ใช่</b> · เพิ่มแถวใหม่ได้ (เว้นช่อง id ว่าง)<br>
+      3) Google Sheet: ไฟล์ → ดาวน์โหลด → <b>.csv</b> แล้วเลือกไฟล์ด้านล่าง<br>
+      ⚠️ ห้ามแก้ช่อง <b>id</b> กับ <b>แก้ล่าสุด</b> · แถวที่ลบออกจากชีตจะไม่ถูกลบในแอป</div>
+    <label class="btn o" style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px">📂 เลือกไฟล์ .csv
+      <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none"></label>
+    <div id="csvOut"></div>`);
+  $('csvFile').onchange=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
+    try{planCsv(await f.text(),f.name)}catch(x){$('csvOut').innerHTML=`<div class="note bad">อ่านไฟล์ไม่ได้ — ${esc(x.message||x)}</div>`}};
+}
+function planCsv(text,fname){
+  if(!S.loaded||S.err){$('csvOut').innerHTML='<div class="note bad">ข้อมูลในแอปยังโหลดไม่ครบ — โหลดใหม่ก่อนนำเข้า</div>';return}
+  const P=algCsvRows(csvParse(text),ALGS(),KINDS),plan={add:[],upd:[],same:0,skip:P.errors.slice(),conf:[]};
+  const seen=new Set(),names=new Set(S.items.map(x=>algNorm(x.name)));
+  for(const r of P.rows){
+    if(r.id){
+      if(seen.has(r.id)){plan.skip.push(`แถว ${r.line} (${r.d.name}): id ${r.id} ซ้ำกับแถวก่อนหน้า`);continue}seen.add(r.id);
+      const old=S.items.find(x=>x.id===r.id);
+      if(!old){plan.skip.push(`แถว ${r.line} (${r.d.name}): ไม่พบ id ${r.id} ในแอป (ถูกลบไปแล้ว?) — ถ้าจะเพิ่มใหม่ให้ลบเลข id ออก`);continue}
+      const m=algMerge(old,r.d);if(!m.ch.length){plan.same++;continue}
+      if(r.updated_at&&old.updated_at&&r.updated_at!==old.updated_at){plan.conf.push(`${old.name} — มีคนแก้ในแอปหลังส่งออก (${esc(old.updated_by||'-')} ${bkk(old.updated_at)}) · ส่งออกใหม่แล้วแก้อีกรอบ`);continue}
+      if(!can('items','e')){plan.skip.push(`แถว ${r.line} (${r.d.name}): ไม่มีสิทธิ์แก้รายการเดิม`);continue}
+      plan.upd.push({old,cas:old.updated_at,...m});
+    }else{
+      const k=algNorm(r.d.name);
+      if(names.has(k)){plan.skip.push(`แถว ${r.line} (${r.d.name}): มีชื่อนี้ในแอปแล้ว — ใส่ id ของรายการเดิม หรือเปลี่ยนชื่อ`);continue}
+      if(!can('items','a')){plan.skip.push(`แถว ${r.line} (${r.d.name}): ไม่มีสิทธิ์เพิ่มรายการใหม่`);continue}
+      names.add(k);plan.add.push(algMerge(null,r.d));
+    }
+  }
+  CSVP=plan;
+  const CH={name:'ชื่อ',kind:'ประเภท',cat:'หมวด',ingredients:'ส่วนผสม',note:'หมายเหตุ',contains:'สิ่งที่แพ้ (มี)',may:'อาจปนเปื้อน',checked:'ยืนยัน',active:'ขายอยู่'};
+  const nOk=[...plan.add,...plan.upd].filter(x=>x.nw.checked).length,n=plan.add.length+plan.upd.length;
+  $('csvOut').innerHTML=`<h2>${esc(fname||'ไฟล์')}</h2>
+    <div class="sum"><div class="s-ok"><b>${plan.add.length}</b>＋ เพิ่มใหม่</div><div class="s-may"><b>${plan.upd.length}</b>✏️ แก้</div>
+      <div class="s-unk"><b>${plan.same}</b>เหมือนเดิม</div><div class="s-no"><b>${plan.skip.length+plan.conf.length}</b>ข้าม</div></div>
+    ${P.unknown.length?`<div class="note">คอลัมน์ที่ไม่รู้จัก (ไม่นำเข้า): ${P.unknown.map(esc).join(' · ')}</div>`:''}
+    ${plan.conf.length?`<div class="note bad"><b>ข้าม — มีคนแก้ในแอปหลังส่งออก (ไม่ทับให้):</b><br>${plan.conf.join('<br>')}</div>`:''}
+    ${plan.skip.length?`<div class="note bad"><b>ข้าม — ต้องแก้ในไฟล์:</b><br>${plan.skip.map(esc).join('<br>')}</div>`:''}
+    ${n?`${nOk?`<div class="note">✅ จะถูกบันทึกว่า "ยืนยันข้อมูลแล้ว" โดย <b>${esc(ME.display_name)}</b> ${nOk} รายการ — ตรวจในชีตให้แน่ใจก่อนกด</div>`:''}
+      ${plan.add.map(x=>`<div class="lg"><b>＋ ${esc(x.nw.name)}</b> <span>${kindName(x.nw.kind)}${x.nw.checked?' · ✅':' · ❔'}</span></div>`).join('')}
+      ${plan.upd.map(x=>`<div class="lg"><b>✏️ ${esc(x.old.name)}</b> <span>เปลี่ยน: ${x.ch.map(k=>CH[k]||k).join(', ')}</span></div>`).join('')}
+      <div class="foot"><button class="btn o" onclick="closeSheet()">ยกเลิก</button><button class="btn g" id="csvGo" onclick="applyCsv()">💾 บันทึก ${n} รายการ</button></div>`
+      :'<div class="msg"><b>ไม่มีอะไรต้องบันทึก</b>ทุกแถวเหมือนในแอปแล้ว หรือถูกข้าม</div>'}`;
+}
+async function applyCsv(){
+  const P=CSVP;if(!P)return;const btn=$('csvGo');btn.disabled=true;btn.textContent='กำลังบันทึก…';
+  const now=new Date().toISOString(),me=ME.username,stamp=x=>x.nw.checked?{checked_by:me,checked_at:now}:{checked_by:null,checked_at:null};
+  let nAdd=0,nUpd=0;const fail=[];
+  try{
+    if(P.add.length){
+      const r=await api('POST','alg_items',P.add.map(x=>({...x.nw,...stamp(x),created_by:me,updated_by:me,updated_at:now})),'return=representation');
+      (r||[]).forEach(it=>S.items.push(it));nAdd=(r||[]).length;
+    }
+  }catch(e){fail.push('เพิ่มใหม่ไม่สำเร็จ — '+String(e.message||e).slice(0,90))}
+  for(const x of P.upd){
+    const body={...x.nw,updated_at:now,updated_by:me};
+    const reCheck=x.nw.checked&&(!x.old.checked||x.ch.some(k=>['contains','may','ingredients','name'].includes(k)));
+    if(reCheck)Object.assign(body,stamp(x));else if(!x.nw.checked)Object.assign(body,stamp(x));
+    try{
+      /* CAS: แก้ล่าสุดต้องตรงกับตอนดูตัวอย่าง — มีคนแก้ระหว่างนั้น = ข้าม ไม่ทับ */
+      const r=await api('PATCH','alg_items?id=eq.'+x.old.id+'&updated_at=eq.'+enc(x.cas),body,'return=representation');
+      if(r&&r.length){Object.assign(x.old,r[0]);nUpd++}else fail.push(x.old.name+' — มีคนแก้ระหว่างนำเข้า (ข้าม)');
+    }catch(e){fail.push(x.old.name+' — '+String(e.message||e).slice(0,80))}
+  }
+  logAct(null,'import',{csv:1,add:nAdd,upd:nUpd,fail:fail.length});
+  CSVP=null;render();
+  if(fail.length){$('csvOut').innerHTML=`<div class="note bad"><b>บันทึกแล้ว ${nAdd+nUpd} รายการ · ไม่สำเร็จ ${fail.length}:</b><br>${fail.map(esc).join('<br>')}</div>`;toast('บางรายการไม่สำเร็จ — ดูรายละเอียดในหน้าต่าง',true)}
+  else{closeSheet();toast('✅ นำเข้าแล้ว — เพิ่ม '+nAdd+' · แก้ '+nUpd+' รายการ')}
+}
+
 /* ---------- 🏷️ รายการสิ่งที่แพ้ (มาตรฐาน + เพิ่มเอง) ---------- */
 function rAlgs(){
   const v=$('v-algs'),ed=can('items','e');
@@ -906,7 +1086,7 @@ async function rLog(){
     try{S.log=await sel('alg_log','select=*&order=created_at.desc&limit=300')}catch(e){v.innerHTML=`<div class="note bad">โหลดประวัติไม่ได้ — ${esc(e.message)}</div>`;return}}
   const tx=d=>{if(!d)return '';const p=[];if(d.contains&&d.contains.length)p.push('มี: '+d.contains.map(k=>algOf(k).n).join(', '));
     if(d.may&&d.may.length)p.push('อาจปน: '+d.may.map(k=>algOf(k).n).join(', '));if('checked' in d)p.push(d.checked?'✅ ยืนยัน':'❔ ยังไม่ยืนยัน');
-    if(d.active===false)p.push('เลิกขาย');if(d.n)p.push(d.n+' รายการ');if(d.add)p.push('เพิ่ม '+d.add);if(d.del)p.push('ลบ '+d.del);return p.join(' · ')};
+    if(d.active===false)p.push('เลิกขาย');if(d.n)p.push(d.n+' รายการ');if(d.csv)p.push('ไฟล์ CSV');if(d.upd!=null)p.push('แก้ '+d.upd);if(d.fail)p.push('ไม่สำเร็จ '+d.fail);if(d.add)p.push('เพิ่ม '+d.add);if(d.del)p.push('ลบ '+d.del);return p.join(' · ')};
   v.innerHTML=`<h2>ประวัติการแก้ไข <small>300 รายการล่าสุด</small></h2>`+(S.log.length?S.log.map(l=>`<div class="lg"><b>${ACT[l.action]||esc(l.action)}</b> ${esc(l.item_name||'')}
     <span>· ${esc(l.by_user||'-')} · ${bkk(l.created_at)}</span><div style="color:var(--mut);font-size:12.5px">${esc(tx(l.detail))}</div></div>`).join(''):'<div class="msg"><b>ยังไม่มีประวัติ</b></div>');
 }
