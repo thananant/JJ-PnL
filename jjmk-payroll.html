@@ -409,11 +409,15 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
 .pvd-ctl select{width:100%}
 .pvd-act{align-items:center;flex-wrap:wrap;justify-content:flex-end;max-width:176px;row-gap:4px}   /* จอคอม: ยินยอม + ปุ่ม ขึ้น 2 บรรทัด ตาราง 🐷 พอดีกรอบ (คอลัมน์คงเหลือไม่ถูกคอลัมน์ติดขวาบัง) */
 .pvd-ctl input{width:100%;text-align:right}
+.emp-st{width:auto;max-width:150px}   /* เลือก "เริ่มหักงวด" รายคน (🛡️ เงินประกัน / 🧾 สปส. · 2026-10-21) */
+.emp-st-w{margin-top:4px;font-size:11.5px;color:var(--ink-soft);font-weight:400}.emp-st-w>span{display:block}.emp-st-h{font-weight:400;color:var(--ink-soft)}   /* ช่องเลือกอยู่ใต้ชื่อพนักงาน ไม่เพิ่มคอลัมน์ (ตาราง 🛡️/🧾 พอดีกรอบจอคอมเท่าเดิม · ผลตรวจ R3) */
+@media screen and (max-width:700px){.emp-st{font-size:16px;min-height:44px}}   /* มือถือ: ช่อง ≥16px แตะง่าย ≥44px */
+@media screen and (max-width:560px){table.mcard select.emp-st{max-width:100%}}   /* การ์ด: ไม่ตัดป้าย "ตามระบบ (ส.ค. 69)" ที่จอแคบ (Fold 280px · ผลตรวจ R1) */
 @media screen and (max-width:860px){#appVer{display:none}}   /* มือถือ: แถวท้ายเมนูแน่นแล้ว — ป้ายรุ่นดูที่หัวหน้า 🛡️ */
 .pvd-76{background:var(--amber-soft);color:var(--amber);border-radius:6px;padding:1px 6px;font-size:11.5px;font-weight:600;white-space:nowrap}
 @media screen and (max-width:700px){
-  .dep-modal input,.dep-modal select,#page-dep input,#page-dep select,#page-pvd input,#page-pvd select{font-size:16px}
-  .dep-modal .btn,#page-dep .toolbar .btn,#page-pvd .toolbar .btn,#page-dep td .btn,#page-pvd td .btn{min-height:44px}
+  .dep-modal input,.dep-modal select,#page-dep input,#page-dep select,#page-pvd input,#page-pvd select,#page-sso input,#page-sso select{font-size:16px}   /* + หน้า 🧾 สปส. (2026-10-21) */
+  .dep-modal .btn,#page-dep .toolbar .btn,#page-pvd .toolbar .btn,#page-dep td .btn,#page-pvd td .btn,#page-sso .toolbar .btn{min-height:44px}
 }
 @media screen and (max-width:560px){
   table.mcard thead{display:none}
@@ -428,6 +432,7 @@ tr.grp-dept td{background:#faf7f1;font-size:11.5px;font-weight:600;color:var(--i
   table.mcard tfoot{display:block}   /* แถวรวมของ 📚 ประวัติเงินเดือน (รอบ 10) */
   table.mcard tfoot tr{background:var(--ember-soft)}
   table.mcard td:empty{display:none}
+  table.mcard td.mc-na{display:none}   /* หน้า 🧾: คนไม่เข้า สปส. — ช่อง '–' ไม่ขึ้นในการ์ด (ผลตรวจ R4) */
   table.mcard input[type=number],table.mcard select{min-height:44px;max-width:60%}
   table.mcard .btn{min-height:44px}
   table.mcard .dep-sw input,.dep-modal .dep-sw input{width:22px;height:22px}
@@ -2838,7 +2843,7 @@ let loadSeq = 0;           // รุ่นการโหลด (loadAll เพ�
    ยังไม่รัน SQL (_v1 = null) = ทุกงวดใช้ค่าปัจจุบัน = ตัวเลขเท่าเดิมทุกบาท */
 const DEP_DEF = { target:3000, monthly:300 };          // ค่าเริ่มต้นคนใหม่ (เดิม 5,000/500)
 const DEP_V2_START = '2026-10';                         // งวดแรกของกติกาใหม่ (หน้าร้าน 26 ก.ย.–25 ต.ค. · ออฟฟิศ 1–31 ต.ค.)
-const APP_VER = '2026-10-21 · เงินประกัน v2.2';         // ป้ายรุ่นท้ายเมนู + หัวหน้า 🛡️ — เช็คว่าทุกเครื่องได้โค้ดใหม่แล้วก่อนรัน jj_deposit_v2.sql · v2.2 = 💵 เบิกคืน (deposit_payouts)
+const APP_VER = '2026-10-21 · เงินประกัน v2.3 · เริ่มหักรายคน';   // ป้ายรุ่นท้ายเมนู + หัวหน้า 🛡️ — เช็คว่าทุกเครื่องได้โค้ดใหม่แล้วก่อนรัน jj_deposit_v2.sql / jj_emp_start.sql และก่อนตั้ง "เริ่มหักงวด" รายคน · v2.2 = 💵 เบิกคืน (deposit_payouts) · v2.3 = งวดเริ่มหักรายคน
                                                         // v2.1 = 🏦 โอนคืนนอกสลิป + หักไม่เกินสุทธิ — เครื่องรุ่นเก่าอ่านแถว 'xfer:…' เป็น ✎ ติดลบ (= คืนในสลิป) → ให้ทุกเครื่องลากหน้าลงก่อนบันทึกโอนคืน
 const DEP_REFUND_LABEL = 'คืนเงินประกันส่วนเกิน';       // ชื่อบรรทัดในสลิป (เจ้าของสั่งให้ใส่รายละเอียดนี้)
 const DEP_XFER_LABEL = 'โอนคืนเงินประกันส่วนเกิน (นอกสลิป)';   // คนพ้นสภาพ (เจ้าของสั่ง 2026-10-20: "โอนคืน") — ไม่เข้ารายรับ/ยอดสุทธิ
@@ -2862,6 +2867,8 @@ const depCapChip = d => d.cap === 'neg' ? 'ไม่หัก · '+depNetWord(d.
 const depLaterTxt = d => d && d.laterRef ? (d.laterRef.note === 'xfer' ? '🏦 โอนคืน ' : '💸 คืน ')+THB(d.laterRef.amount)+' แล้วใน'+periodLabel(d.laterRef.period) : '';
 /* แถวที่เครื่องรุ่นก่อน v2.1 อ่านผิด (🏦 'xfer:…' · 🔒 'lock:neg|short:…' = ✎) → เตือนก่อนบันทึก */
 const DEP_VER_ASK = '⚠️ ทุกเครื่องต้องเป็นรุ่น "'+APP_VER+'" ก่อน (ลากหน้าลงจนเห็นป้ายรุ่นท้ายเมนู) — เครื่องรุ่นเก่าอ่านแถวนี้เป็น ✎: สลิป/ไฟล์ K BIZ ไม่ตรง และลบพนักงานได้ (ประวัติเงินประกันหาย)';
+// งวดเริ่มหักรายคน (ผลตรวจ R1): แท็บรุ่นก่อนที่เปิดค้างไม่รู้จัก deposit_start/sso_start → สลิป/K BIZ/🔒 อัตโนมัติวันจ่ายจากแท็บนั้นหักตามระบบ (🔒 ยอดที่ไม่ได้หักจริงถาวร)
+const EMP_START_VER = '⚠️ ทุกเครื่องต้องเห็นป้ายรุ่น "'+APP_VER+'" ก่อน (ท้ายเมนู/หัวหน้า 🛡️ · ลากหน้าลง) — เครื่องรุ่นเก่าไม่รู้จัก "เริ่มหักงวด" รายคน: สลิป/ไฟล์ K BIZ/🔒 อัตโนมัติจากเครื่องนั้นจะหักตามระบบ';
 /* note ของแถว 🔒 ที่จะเขียน — หักไม่ได้/ได้บางส่วนเพราะสุทธิไม่พอ = จำเหตุผล + ยอดปกติ + สุทธิก่อนหักเงินประกัน (ล็อกแล้วประวัติยังบอกได้) */
 const depLockNote = d => d && d.cap && d.src !== 'lock' ? 'lock:'+d.cap+':'+d.want+':'+(d.net == null ? '' : depNet2(d.net)) : 'lock';
 function depRule(emp, pd){
@@ -2894,6 +2901,7 @@ let empInfoReady = false;  // true เมื่อรัน jj_employee_info.sql
 let workDateReady = false; // true เมื่อรัน jj_work_dates.sql แล้ว (วันเริ่มงาน/วันสิ้นสุด)
 let kbizReady = false;     // true เมื่อรัน jj_kbiz_added.sql แล้ว (จำว่าใครถูกแอดบัญชี K BIZ แล้ว)
 let hrReady = false;       // true เมื่อรัน jj_employee_hr.sql แล้ว (เพศ/สัญชาติ/ที่อยู่/เอกสาร/กลุ่ม/การทำเอกสาร)
+let startReady = false;    // true เมื่อรัน jj_emp_start.sql แล้ว (งวดเริ่มหักรายคน employees.deposit_start / sso_start) · ยังไม่รัน = ซ่อนช่อง + toDbEmp ไม่ส่ง
 let fineEntries = [];      // แก้ไขรายการหักอัตโนมัติรายงวด {id, empId, period, kind, amount}
 let fineReady = false;     // true เมื่อรัน jj_work_dates.sql แล้ว (ตาราง fine_entries)
 let holidays = {};   // holiKey(วัน, scope) -> {day, name, mult, id, scope, calId} · ทุกคน = 'YYYY-MM-DD' · หน้าร้าน/ออฟฟิศ = 'YYYY-MM-DD|store' / '|office'
@@ -2912,6 +2920,7 @@ let shifts = {};      // code -> [{day,in,out,hours,single,shiftName,lateMin,ear
 let adjustments = [];
 
 /* ---- แปลงชื่อฟิลด์ ฐานข้อมูล <-> ในแอป ---- */
+const empPerOk = v => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(v == null ? '' : v)) ? String(v) : '';   // งวด YYYY-MM · อย่างอื่น = ''
 const fromDbEmp = r => ({ id:r.id, code:r.code, nick:r.nick, full:r.full_name||'', dept:r.dept||'',
   branch:r.branch||'', position:r.position||'', photo:r.photo_url||'',
   offCount:+(r.off_count||0), offWd:r.off_weekdays||'', holidayPay:r.holiday_pay!==false,
@@ -2927,6 +2936,8 @@ const fromDbEmp = r => ({ id:r.id, code:r.code, nick:r.nick, full:r.full_name||'
   bankAcc:r.bank_account||'', bankAccName:r.bank_account_name||'',
   startDate:r.start_date||'', endDate:r.end_date||'', kbizAdded:r.kbiz_added===true,
   ssoOn:r.sso_on===true, ssoId:r.sso_id||'',
+  // งวดเริ่มหักรายคน (jj_emp_start.sql · เจ้าของสั่ง 2026-10-21) — '' = ตามระบบ (เงินประกัน = dep_start · สปส. = ทุกงวด) · รูปแบบอื่น = '' (ไม่เดา)
+  depositStart:empPerOk(r.deposit_start), ssoStart:empPerOk(r.sso_start),
   gender:r.gender||'', nat:r.nationality||'', address:r.address||'',
   emgName:r.emergency_name||'', emgRel:r.emergency_relation||'', emgPhone:r.emergency_phone||'',
   passExp:r.passport_exp||'', permitExp:r.work_permit_exp||'', pinkExp:r.pink_card_exp||'',
@@ -2946,6 +2957,7 @@ const toDbEmp = e => ({ code:e.code, nick:e.nick, full_name:e.full||'', dept:e.d
   ...(workDateReady ? { start_date:e.startDate||null, end_date:e.endDate||null } : {}),
   ...(kbizReady ? { kbiz_added:!!e.kbizAdded } : {}),
   ...(ssoReady ? { sso_on:!!e.ssoOn, sso_id:e.ssoId||'' } : {}),
+  ...(startReady ? { deposit_start:e.depositStart||'', sso_start:e.ssoStart||'' } : {}),   // ฟอร์ม ✎ ตอนแก้ไขลบออก (EMP_DEP_COLS) — แก้ที่หน้า 🛡️/🧾 เท่านั้น
   ...(hrReady ? { gender:e.gender||'', nationality:e.nat||'', address:e.address||'',
       emergency_name:e.emgName||'', emergency_relation:e.emgRel||'', emergency_phone:e.emgPhone||'',
       passport_exp:e.passExp||null, work_permit_exp:e.permitExp||null, pink_card_exp:e.pinkExp||null,
@@ -3175,6 +3187,7 @@ async function loadAll(opts){
     workDateReady = !!((em.data||[])[0] && 'start_date' in em.data[0]);
     kbizReady = !!((em.data||[])[0] && 'kbiz_added' in em.data[0]);
     hrReady = !!((em.data||[])[0] && 'nationality' in em.data[0]);
+    startReady = !!((em.data||[])[0] && 'deposit_start' in em.data[0] && 'sso_start' in em.data[0]);   // jj_emp_start.sql
     mergeRows(adjustments, (ad.data||[]).map(fromDbAdj));
     mergeRows(advances, (av.data||[]).map(fromDbAdv));
     /* 🎂 แจ้งวันเกิดเข้ากลุ่มไลน์ — ไม่มีช่อง bday_line = ยังไม่รัน jj_birthday_line.sql */
@@ -3342,7 +3355,7 @@ function punchSinceDate(src, list){
     if(!src){
       const inJob = e => (e.active || (e.endDate && e.endDate >= r.from)) && !(e.endDate && e.endDate < r.from) && !(e.startDate && e.startDate > lastDayOf(p));
       depOpen = depReady && emps.some(e => { const row = depRowOf(e.id, p);
-        return !(row && DEP_FIXED(row.note)) && (row ? true : inJob(e) && e.depOn !== false && depRule(e, p).target > 0); });
+        return depStartOk(e, p) && !(row && DEP_FIXED(row.note)) && (row ? true : inJob(e) && e.depOn !== false && depRule(e, p).target > 0); });
       pvdOpenP = pvdReady && pvdMembers.some(m => { const e = byId.get(m.empId); const row = pvdRowOf(m.empId, p);
         return !!e && !(row && row.note === 'lock') && (row ? true : inJob(e) && pvdOn(m, p)); });
     } else if(src.since && src.since <= r.from){
@@ -3351,7 +3364,7 @@ function punchSinceDate(src, list){
         const row = pvdRowOf(m.empId, p);
         return !(row && row.note === 'lock') && (row ? true : pvdOn(m, p) && workOf(e).has(p)); });
     } else {
-      depOpen = depReady && emps.some(e => { const row = depRowOf(e.id, p); return !!row && !DEP_FIXED(row.note) && periodRangeE(e, p).pay <= today; });
+      depOpen = depReady && emps.some(e => { const row = depRowOf(e.id, p); return depStartOk(e, p) && !!row && !DEP_FIXED(row.note) && periodRangeE(e, p).pay <= today; });
       pvdOpenP = pvdReady && pvdMembers.some(m => { const row = pvdRowOf(m.empId, p); return byId.has(m.empId) && !!row && row.note !== 'lock'; });
     }
     if(depOpen || pvdOpenP){
@@ -4105,7 +4118,7 @@ function depositCalcIn(emp, period, workSet, netPre){
     if(period && pd > period) break;
     const ov = rows.find(r=>r.period===pd) || null;
     const R = depRule(emp, pd);
-    const live = (!settings.depStart || pd >= settings.depStart) && emp.depOn !== false && R.target > 0;
+    const live = depStartOk(emp, pd) && emp.depOn !== false && R.target > 0;   // ≥ งวดเริ่มหัก (ระบบ/รายคน — depStartOf)
     const fixed = !!ov && DEP_FIXED(ov.note);
     let amt = 0, use = null;
     if(fixed || (ov && live && (!oldOv(pd) || work.has(pd) || pd === period))){ amt = Number(ov.amount)||0; use = ov; }
@@ -4162,6 +4175,16 @@ function depNetOf(emp, pd){
   return v;
 }
 const depV2On = () => depV2Col || employees.some(e=>e.depTargetV1 != null);
+/* ---- งวดเริ่มหักเงินประกันรายคน (เจ้าของสั่ง 2026-10-21: "เพิ่มเงื่อนไข การหักเงินประกัน กับ ประกันสังคม ว่าเริ่มเดือนไหน เพราะมีพนักงานบางคนที่เพิ่งเริ่มหัก และหักมานานแล้ว") ----
+   คนนี้หักตั้งแต่งวด = งวดหลังสุดของ { dep_start ระบบ · deposit_start รายคน } · ทั้งคู่ '' = ทุกงวด (แบบเดิม) · รายคน '' = ตามระบบ (เท่าเดิมทุกบาท)
+   ใช้แทน settings.depStart ทุกจุดที่รู้ว่าเป็นใคร (depositCalc live · depLockDue · punchSinceDate · payLockRange · payLockV1Gap · depPaidGuard · depEffFrom · 🔒 · 💸 · ประวัติ)
+   แถว 🔒/💸/🏦 นับเสมอแม้ก่อนงวดเริ่ม · คิดตามค่าที่มีในเครื่องเสมอ (startReady คุมแค่หน้าจอ/การส่งค่า — เครื่องที่ยังไม่รู้ว่ารัน SQL ได้ค่าจาก realtime ก็คิดตรงกับเครื่องอื่น) */
+const depStartOf = e => { const a = settings.depStart || '', b = (e && e.depositStart) || ''; return b > a ? b : a; };
+const depStartOk = (e, p) => { const s = depStartOf(e); return !s || p >= s; };
+// งวดนี้ไม่หักเพราะงวดเริ่มรายคนเท่านั้น (≥ งวดเริ่มของระบบ) — ป้ายบนจอ/พรีวิว
+const depPreOwn = (e, p) => !!(e && e.depositStart) && !!p && p < e.depositStart && (!settings.depStart || p >= settings.depStart);
+const depPreOwnTxt = (e, p) => '⏸ ' + periodLabel(p) + ' อยู่ก่อนงวดเริ่มหักของ ' + e.nick + ' (' + shortP(e.depositStart) + ') — ระบบไม่หัก · ✎ งวดนี้ไม่ถูกนับ (ไม่ได้บันทึก)\n' +
+  'สลิปจริงหักงวดนี้ = เปลี่ยน "เริ่มหักงวด" หรือ 🔒 ปิดยอดตามสลิปที่หน้า 🛡️';
 const depRowOf = (empId, pd) => depositEntries.find(x=>x.empId===empId && x.period===pd) || null;
 /* 💸 คืนในสลิปของคนที่ไม่อยู่ในสลิป/ไฟล์ K BIZ งวดนั้น (บันทึกตอนยังทำงาน แล้วตั้งพ้นสภาพทีหลัง + ไม่มีวันทำงานงวดนั้น) — ผลตรวจรอบ 3
    รายชื่อเงินเดือน/K BIZ = ทำงานอยู่ หรือมีวันทำงานในงวด → คนกลุ่มนี้หายจากสลิป ทั้งที่สมุดบอกว่าคืนแล้ว = เงินไม่ถูกจ่าย
@@ -4404,13 +4427,26 @@ const DEP_EMP_COLS = 'id,deposit_target,deposit_monthly,deposit_opening,deposit_
 const EMP_MONEY = { code:'code', nick:'nick', full:'full_name', dept:'dept', branch:'branch', position:'position', offCount:'off_count', offWd:'off_weekdays',
   holidayPay:'holiday_pay', hourlyWindow:'hourly_window', mustWorkExempt:'must_work_exempt', type:'wage_type', rate:'rate', mode:'work_mode', shiftId:'shift_id',
   target:'target_hours', active:'active', startDate:'start_date', endDate:'end_date', ssoOn:'sso_on', bankName:'bank_name', bankAcc:'bank_account',
-  bankAccName:'bank_account_name', kbizAdded:'kbiz_added' };
+  bankAccName:'bank_account_name', kbizAdded:'kbiz_added', depositStart:'deposit_start', ssoStart:'sso_start' };   // + งวดเริ่มหักรายคน (อ่านเฉพาะช่องที่มีจริง — empCols)
 const EMP_SHAPE = new Set(['code', 'branch', 'mode', 'shiftId', 'target', 'hourlyWindow', 'dept', 'position']);   // เปลี่ยน = จับกะใหม่ (recomputeAll) ก่อนคิดเงิน · dept/position = กะเฉพาะแผนก/ตำแหน่ง (shiftsFor · รอบ 8)
 let empCols = null;   // ช่องของ employees ที่มีจริง (loadAll) · null = ยังไม่รู้ → อ่านแค่ช่องเงินประกันแบบเดิม
 const isNoCol = e => !!e && (e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist/i.test(String(e.message||'')));
+let empStartProbe = 0;   // ขอช่องงวดเริ่มรายคนแล้วไม่มี (ยังไม่รัน jj_emp_start.sql) — เว้น 10 นาทีก่อนลองใหม่
 async function depEmpFetch(base){   // base = ช่องตั้งต้นที่มีแน่ ๆ เมื่อยังไม่รู้ช่องจริง (empCols null — depScopeOpen ต้องใช้รหัส/สาขา)
   const more = empCols ? Object.values(EMP_MONEY).filter(c => empCols.has(c)) : (base || []);
   const cols = DEP_EMP_COLS + (more.length ? ',' + more.join(',') : '');
+  // งวดเริ่มหักรายคน (ผลตรวจ R1): เครื่องที่เปิดค้างตั้งแต่ก่อนรัน jj_emp_start.sql (empCols ชุดเก่า) ต้องอ่าน deposit_start/sso_start ด้วย
+  //   — เดิมขอเฉพาะช่องที่มีตอน loadAll → พลาด realtime = สลิป/K BIZ/🔒 หักตามระบบ · ไม่มีช่อง (42703) = ขอแบบเดิม
+  if(empCols && !(empCols.has('deposit_start') && empCols.has('sso_start')) && Date.now() - empStartProbe > 600000){
+    const s = await db.from('employees').select(cols + ',deposit_start,sso_start,deposit_target_v1,deposit_monthly_v1');
+    if(!s.error){
+      const d = s.data || [];
+      if(d[0] && 'deposit_start' in d[0] && 'sso_start' in d[0]){ empCols.add('deposit_start'); empCols.add('sso_start'); startReady = true; }
+      return { rows: d, col: true };
+    }
+    if(!isNoCol(s.error)) throw s.error;
+    empStartProbe = Date.now();
+  }
   let r = await db.from('employees').select(cols + ',deposit_target_v1,deposit_monthly_v1');
   if(r.error && isNoCol(r.error)){
     r = await db.from('employees').select(cols);
@@ -4566,7 +4602,7 @@ function depLockDueIn(e, opts){
   opts = opts || {};
   const today = bizToday(), out = [], work = opts.work || empPeriodSet(e);
   for(const p of (opts.ps || depPeriodsAsc())){
-    if(settings.depStart && p < settings.depStart) continue;
+    if(!depStartOk(e, p) && !(opts.pre && opts.pre(e, p))) continue;   // ก่อนงวดเริ่มหัก (ระบบ/รายคน) · opts.pre = 🔒 ยอดก่อนแก้ก่อนเลื่อนงวดเริ่มรายคนย้อน (empStartSet)
     if(opts.before && p >= opts.before) continue;
     if(opts.auto && p < DEP_V2_START) continue;
     if(!pdPaid(e, p, today)) continue;
@@ -4698,7 +4734,7 @@ function payLockRange(due){
     //   งวดที่ไม่มีวันทำงานและไม่มีแถว (เช่น ก่อนเริ่มงาน) ไม่มีผลกับยอด = ข้าม
     const w = empPeriodSet(x.e);
     // รอบ 10: คนที่ล็อกได้ = งวดก่อน DEP_V2_START 🔒 ครบแล้ว (depV1Hold) → ไล่เฉพาะงวด ≥ DEP_V2_START · งวดก่อนที่ไม่มีแถว/ไม่มีวันทำงาน = payLockV1Gap
-    const q = ps.find(q => q >= DEP_V2_START && q < x.p && (!settings.depStart || q >= settings.depStart) && ((r => r ? !DEP_FIXED(r.note) : w.has(q))(depRowOf(x.e.id, q))));
+    const q = ps.find(q => q >= DEP_V2_START && q < x.p && depStartOk(x.e, q) && ((r => r ? !DEP_FIXED(r.note) : w.has(q))(depRowOf(x.e.id, q))));
     if(q) add(x.e, q);
   }
   for(const x of due.pv) add(x.e, x.p);
@@ -4724,7 +4760,7 @@ function payLockV1Gap(due, done){
     const w = empPeriodSet(e);
     for(const p of ps){
       const r = depRowOf(e.id, p);
-      if((r && DEP_FIXED(r.note)) || w.has(p)) continue;
+      if((r && DEP_FIXED(r.note)) || w.has(p) || !depStartOk(e, p)) continue;   // ก่อนงวดเริ่มรายคน = ไม่นับในยอดสะสม
       const g = periodRangeE(e, p);
       codes.add(String(e.code)); (gap.get(e.id) || gap.set(e.id, new Set()).get(e.id)).add(p);
       if(!from || g.from < from) from = g.from; if(!to || g.to > to) to = g.to;
@@ -4889,6 +4925,7 @@ function payLockStart(){
      · สำรองฯ ที่ต้องล็อกแต่บัญชีไม่มีสิทธิ์ 🐷 = ไม่บันทึก (เดิมข้ามแล้วบันทึกต่อ → สำรองฯ งวดที่จ่ายแล้วถูกหักย้อนหลัง ผิดกฎ)
    opts.pvdStrict = เฉพาะข้อสำรองฯ (ฟอร์มพนักงาน: ฐานเงินเดือน/รหัสสแกนเปลี่ยนสุทธิ/ฐาน % ของสำรองฯ งวดที่จ่ายแล้ว)
    opts.v1Ids = Set ของคนที่ต้องเตือนงวดก่อน DEP_V2_START (ฟอร์มพนักงาน: เฉพาะคนที่แก้ ไม่ใช่เพื่อนร่วมสาขาที่ล็อกเพราะทิป)
+   opts.depPre(e, p) = true → 🔒 งวดนั้นด้วยยอดก่อนแก้แม้อยู่ก่อนงวดเริ่มหัก (เลื่อนงวดเริ่มรายคนย้อน — empStartSet)
    opts.depSkip(x) = true → ไม่ล็อกเงินประกันแถวนั้น (✎/🔒 งวดที่กำลังแก้เอง — ล็อกเฉพาะงวดหลังจากนั้น + สำรองฯ)
    เขียนไม่ได้บางแถว (เครื่องอื่นเขียนงวดนั้นก่อนระหว่างถาม) = อ่านใหม่ · งวดไหนยังไม่ 🔒 = ไม่บันทึก (ผลตรวจรอบ 4) */
 /* ทางที่ง่ายกว่าหลังรอบ 6: งวด ≥ DEP_V2_START ระบบปิดยอดให้เองเมื่อผู้มีสิทธิ์เปิดแอป (ผลตรวจรอบ 7 — toast ตอนบล็อกเดิมบอกแค่ให้ไปกด 🔒) */
@@ -4918,7 +4955,10 @@ async function depLockBefore(emps, ask, opts){
   // opts.addWork(e) = Set ของงวดที่การแก้นี้จะทำให้ "มีวันทำงาน" (เพิ่มสแกน/นำเข้า/เปลี่ยนรหัส) → งวดที่จ่ายแล้วซึ่งตอนนี้ไม่มีวันทำงาน = 🔒 0 ก่อน (ผลตรวจรอบ 5)
   const addOf = e => opts.addWork ? opts.addWork(e) || null : null;
   // 🔒 0 ของงวดที่ไม่มีวันทำงาน (zero) ล็อกได้ทุกงวด รวมก่อน DEP_V2_START (ไม่ได้หักแน่นอน — รอบ 6) · ยอดอื่นของงวดก่อนนั้น = เตือนอย่างเดียว (M1)
-  if(useDep){ const ps = depPeriodsAsc(); for(const e of emps) for(const x of depLockDue(e, { ps, add: addOf(e) })) if(!(opts.depSkip && opts.depSkip(x))) (x.p < DEP_V2_START && !x.zero ? v1 : due).push(x); }
+  // opts.v1Drop(x) = งวดก่อน DEP_V2_START ที่หลังแก้ไม่ต้อง 🔒 แล้ว (กลายเป็นงวดก่อนงวดเริ่มรายคน — empStartSet) → ไม่เตือน v1/held (ผลตรวจ R1)
+  if(useDep){ const ps = depPeriodsAsc(); for(const e of emps) for(const x of depLockDue(e, { ps, add: addOf(e), pre: opts.depPre })) if(!(opts.depSkip && opts.depSkip(x))){
+    const isV1 = x.p < DEP_V2_START && !x.zero;
+    if(!(isV1 && opts.v1Drop && opts.v1Drop(x))) (isV1 ? v1 : due).push(x); } }
   // opts.v1Of(x) = เตือนเฉพาะงวดก่อน DEP_V2_START ที่ค่าที่แก้กระทบจริง (แก้สแกน ก.ย. = ก.ย. ขึ้นไปของคนนั้น · รอบ 6) — มาก่อน opts.v1 (depPaidGuard ส่ง v1:false เป็นค่าตั้งต้น)
   const v1w = opts.v1Of ? v1.filter(opts.v1Of) : opts.v1 === false ? [] : opts.v1Ids ? v1.filter(x => opts.v1Ids.has(x.e.id)) : v1;
   const after = {};
@@ -4995,7 +5035,7 @@ async function depPaidGuard(emps, period, what, opts){
   const pdsOf = e => typeof period === 'function' ? period(e) : [period || DEP_V2_START];
   // opts.v1Pds(e) = งวดก่อน DEP_V2_START ที่ค่าที่แก้กระทบตรง ๆ (แก้/ลบ/นำเข้าสแกน — รอบ 6): จ่ายแล้ว = ต้องผ่านตัวกัน (🔒 0 งวดที่ไม่มีวันทำงาน + เตือนงวดที่ยังไม่ 🔒)
   //   แม้ DEP_V2_START ยังไม่จ่าย (เช่น 20 ต.ค.: ก.ย. จ่ายแล้ว 5 ต.ค.) — เดิมผ่านเงียบ ๆ แล้วเงินประกัน ก.ย. เปลี่ยนย้อนหลัง
-  const v1Paid = e => !!(opts && opts.v1Pds) && opts.v1Pds(e).some(p => p && p < DEP_V2_START && (!settings.depStart || p >= settings.depStart) && pdPaid(e, p, today));
+  const v1Paid = e => !!(opts && opts.v1Pds) && opts.v1Pds(e).some(p => p && p < DEP_V2_START && depStartOk(e, p) && pdPaid(e, p, today));
   const paid = e => pdsOf(e).some(p => p && p >= DEP_V2_START && pdPaid(e, p, today)) || v1Paid(e);
   const list = [...new Set((Array.isArray(emps) ? emps : [emps]).filter(Boolean))];
   if(!depReady && !pvdReady) return true;
@@ -5083,7 +5123,7 @@ function depEffFrom(e, field, due){
   const willLock = new Set((due||[]).filter(x=>x.e.id===e.id).map(x=>x.p)), today = bizToday();
   // เป้า/หักของคนที่มี _v1 ไม่กระทบงวดก่อน DEP_V2_START → เริ่มหาที่ DEP_V2_START (รอบ 8: เดิมเลื่อนเป็น DEP_V2_START ตรง ๆ แม้ ต.ค. 🔒/จ่ายแล้ว)
   const min = (field === 'deposit_target' || field === 'deposit_monthly') && e.depTargetV1 != null ? DEP_V2_START : '';
-  return depPeriods().slice().sort().find(x => x >= min && (!settings.depStart || x >= settings.depStart) && !willLock.has(x) && !(depRowOf(e.id, x) && DEP_FIXED(depRowOf(e.id, x).note)) &&
+  return depPeriods().slice().sort().find(x => x >= min && depStartOk(e, x) && !willLock.has(x) && !(depRowOf(e.id, x) && DEP_FIXED(depRowOf(e.id, x).note)) &&
                                                !(x >= DEP_V2_START && pdPaid(e, x, today)))
          || periodOfE(e, today);
 }
@@ -5116,6 +5156,292 @@ function depFieldChg(el){
   const f = el.dataset.f, v = f === 'deposit_on' ? el.checked : el.value;
   updDepField(+el.dataset.emp, f, v);
 }
+/* ---- งวดเริ่มหักรายคน: เปลี่ยนค่า (หน้า 🛡️ = deposit_start · หน้า 🧾 = sso_start) — เจ้าของสั่ง 2026-10-21 ----
+   กติกา "ห้ามหักย้อนงวดที่จ่ายแล้ว": คิดยอดทุกงวดของคนนี้ ก่อน/หลังเปลี่ยน (empStartDiff — คิดในเครื่อง ไม่เขียน) แล้ว
+   · เงินประกันงวด ≥ DEP_V2_START ที่จ่ายแล้วแต่ยอดจะเปลี่ยน → depLockBefore 🔒 ด้วยยอด "ก่อนแก้" ก่อน (แบบแก้เป้า/หัก · depPre = งวดก่อนงวดเริ่มเดิม 🔒 0)
+   · เงินประกันงวดก่อน DEP_V2_START ที่ยังไม่ 🔒 (ห้ามล็อกให้อัตโนมัติ — M1) / สปส. งวดที่จ่ายแล้ว (ไม่มี ✎) ที่ยอดจะเปลี่ยน → บล็อก + บอกทาง
+     (สลิปจริงหักตามยอดเดิม: 🔒 ปิดยอดด้วยยอดตามสลิป / ✎ สปส. ตามสลิป ก่อน แล้วค่อยเปลี่ยน)
+     ยกเว้น: ยอดลดลงทุกงวด + เจ้าของ/แอดมินยืนยันว่า "สลิปจริงไม่ได้หัก" ในหน้าต่างที่บอกงวด · ยอดเดิม → ยอดใหม่ + ใส่เหตุผล → จดใน 🕘
+       (เคสหลักของเจ้าของ: คืนค่า dep_start ส.ค. แล้วแอปคิด ส.ค./ก.ย. ให้คนที่เพิ่งเริ่มหัก ต.ค.)
+   · สปส. ที่เปลี่ยน → depPaidGuard (งวดที่จ่ายแล้ว ≥ DEP_V2_START: 🔒 เงินประกัน/สำรองฯ ก่อน · ไฟล์ K BIZ ที่สร้างแล้วของงวดที่กำลังจ่าย: เตือน)
+   หลังล็อก/ถามเสร็จ คิดใหม่จากข้อมูลล่าสุดอีกรอบ — งวดที่จ่ายแล้วที่จะเปลี่ยนต้องตรงกับที่ยืนยัน ไม่งั้นไม่บันทึก (อีกเครื่องแก้ระหว่างถาม) */
+const EMP_START = { dep:{ key:'depositStart', col:'deposit_start', t:'งวดเริ่มหักเงินประกัน', of:'งวดเริ่มหักเงินประกันของ ' },
+                    sso:{ key:'ssoStart', col:'sso_start', t:'งวดเริ่มหัก สปส.', of:'งวดเริ่มหัก สปส. ของ ' } };
+const empStartLbl = (kind, v) => v ? shortP(v) : kind === 'dep' ? 'ตามระบบ' + (settings.depStart ? ' (' + shortP(settings.depStart) + ')' : '') : 'ทุกงวด';
+/* ตัวเลือกงวด = งวดที่มีข้อมูล ∪ งวดปัจจุบัน + 2 งวดถัดไป · เงินประกันตัดงวดที่ ≤ dep_start ระบบ (= "ตามระบบ") · ใหม่ → เก่า */
+function empStartPs(kind){
+  const cur = periodOf(bizToday()), n1 = nextPeriod(cur), st = kind === 'dep' ? (settings.depStart || '') : '';
+  return [...new Set([...(kind === 'dep' ? depPeriods() : allPeriods()), cur, n1, nextPeriod(n1)])].filter(p => PERIOD_RE.test(p) && (!st || p > st)).sort().reverse();
+}
+function empStartSel(kind, e, ps, dis){
+  const v = (kind === 'dep' ? e.depositStart : e.ssoStart) || '', today = bizToday();
+  const list = v && !ps.includes(v) ? [...ps, v].sort().reverse() : ps;
+  const tip = kind === 'dep'
+    ? 'งวดแรกที่หักเงินประกันของคนนี้ (ตามระบบ = เริ่มหักตั้งแต่งวดบนแถบ) · งวดที่จ่ายแล้วที่ยอดจะเปลี่ยน: ≥ ' + shortP(DEP_V2_START) + ' ระบบ 🔒 ยอดเดิมให้ก่อน · ' +
+      'ก่อนนั้น: สลิปไม่ได้หัก (เพิ่งเริ่มหัก) = เลือกได้เลย เจ้าของ/แอดมินยืนยัน (ระบบ 🔒 ยอดใหม่ให้) · สลิปหักแล้ว = 🔒 ตามสลิปก่อน'
+    : 'งวดแรกที่หัก สปส. อัตโนมัติ (ทุกงวด = แบบเดิม) · งวดก่อนหน้าไม่หัก (✎ รายงวดยังนับ) · งวดที่จ่ายแล้วที่ยอดจะเปลี่ยน: ' +
+      'สลิปไม่ได้หัก (เพิ่งเริ่มหัก) = เลือกได้เลย เจ้าของ/แอดมินยืนยัน · สลิปหักแล้ว = ✎ ตามสลิปก่อน';
+  // ค่ารายคน ≤ dep_start ระบบ (ระบบเลื่อนไปทีหลัง) = ไม่มีผล — ป้ายบอก "= ตามระบบ" (ผลตรวจ R1: เดิมโชว์งวดดิบเหมือนมีผล)
+  const sys = kind === 'dep' && v && settings.depStart && v <= settings.depStart;
+  return `<select class="emp-st" data-emp="${e.id}" data-k="${kind}" onchange="empStartChg(this)" title="${tip}"${dis ? ' disabled' : ''}>` +
+    `<option value=""${v ? '' : ' selected'}>${empStartLbl(kind, '')}</option>` +
+    list.map(p => `<option value="${p}"${p === v ? ' selected' : ''}>${shortP(p)}${p === v && sys ? ' (= ตามระบบ)' : pdPaid(e, p, today) ? ' · จ่ายแล้ว' : ''}</option>`).join('') + '</select>';
+}
+/* จอคอม: ช่องเลือกอยู่ใต้ชื่อพนักงาน ไม่เพิ่มคอลัมน์ (ผลตรวจ R3: คอลัมน์ใหม่ทำตาราง 🛡️/🧾 เกินกรอบที่ 1366/1440 — สถานะ/สมทบนายจ้างถูกบัง)
+   คลิกช่องเลือกไม่เปิดหน้าพนักงาน (stopPropagation) · การ์ด ≤560px อยู่ใต้ชื่อบนหัวการ์ด */
+const EMP_ST_TH = '<span class="emp-st-h"> · เริ่มหักงวด</span>';
+const empStartBox = (kind, e, ps, dis) => `<div class="emp-st-w" onclick="event.stopPropagation()"><span>เริ่มหักงวด</span>${empStartSel(kind, e, ps, dis)}</div>`;
+/* งวดเริ่มหักเงินประกันรายคนที่มีผลจริง (หลังกว่า dep_start ระบบ) · '' = ตามระบบ — ป้ายบนจอ (ประวัติ/แท็บข้อมูล) */
+const depOwnStart = e => e && e.depositStart && e.depositStart > (settings.depStart || '') ? e.depositStart : '';
+/* งวดแรกที่ยังไม่ถึงวันจ่ายของคนนี้ (หน้าร้าน 26→5 · ออฟฟิศสิ้นเดือน) — ค่าเสนอ "เริ่มหักงวด" ตอนติ๊กเข้า สปส.
+   นับวันจ่ายเป็นจ่ายแล้ว (ออฟฟิศวันสิ้นเดือน = งวดนี้กำลังจ่าย → เสนองวดถัดไป · เกณฑ์เดียวกับ depStartFwd #175 · ผลตรวจ R2) */
+const empFirstOpen = e => { const today = bizToday(), due = p => periodRangeE(e, p).pay <= today; let p = periodOfE(e, today);
+  if(due(p)) p = nextPeriod(p);
+  for(let i = 0; i < 3 && !due(prevPeriod(p)); i++) p = prevPeriod(p);
+  return p; };
+/* งวดที่คิดยอดก่อน/หลังเปลี่ยนในเครื่องนี้ไม่ได้ (ผลตรวจ R1 — high): งวดที่จ่ายแล้วในช่วงที่เปลี่ยน [งวดเริ่มเก่า, ใหม่) ที่ยอดยังไม่ตายตัว
+   (เงินประกัน: ไม่มี 🔒/💸/🏦 · สปส.: ไม่มี ✎) แต่สแกนในเครื่องนี้ไม่ครบงวด ขณะที่เครื่องที่เปิดใหม่ (punchSinceDate(null) — ก่อนหรือหลังเปลี่ยน) โหลดถึง
+   เหตุ: งวดก่อนงวดเริ่มรายคนไม่ "เปิด" (depLockDue/punchSinceDate ข้าม) → หลุดหน้าต่างสแกน → เครื่องนี้เห็น 0 → 0 แล้วบันทึก
+   → เลื่อนเริ่มย้อน: เครื่องใหม่โหลดสแกนย้อนถึงงวดนั้น แล้วหักย้อนงวดที่จ่ายแล้ว (แต่ละเครื่องคิดไม่เท่ากัน) · สปส. ฐานค่าจ้าง 0 เพราะไม่มีสแกน แบบเดียวกัน
+   คืน [งวด] เก่า → ใหม่ · [] = เครื่องนี้มีสแกนอย่างน้อยเท่าเครื่องที่เปิดใหม่ (คิดในเครื่องได้) */
+function empStartGap(e, kind, old, v){
+  const K = EMP_START[kind].key, keep = e[K], cap0 = punchCapNote, today = bizToday();
+  let need, eo, en;
+  try{ eo = kind === 'dep' ? depStartOf(e) : old; const a = punchSinceDate(null);
+       e[K] = v; en = kind === 'dep' ? depStartOf(e) : v; const b = punchSinceDate(null); need = a < b ? a : b; }
+  finally{ e[K] = keep; punchCapNote = cap0; }
+  if(eo === en || (punchLoaded && punchSince && need >= punchSince)) return [];
+  const lo = eo < en ? eo : en, hi = eo < en ? en : eo, out = [];
+  for(let p = lo && lo > periodOfE(e, need) ? lo : periodOfE(e, need), i = 0; p < hi && i < 240; p = nextPeriod(p), i++){
+    const r = periodRangeE(e, p);
+    if(!pdPaid(e, p, today) || r.to < need || (punchLoaded && punchSince && r.from >= punchSince)) continue;
+    const row = kind === 'dep' ? depRowOf(e.id, p) : ssoEntries.find(x => x.empId === e.id && x.period === p);
+    if(kind === 'dep' ? !(row && DEP_FIXED(row.note)) : !row) out.push(p);
+  }
+  return out;
+}
+/* เงินประกัน: ยอดทุกงวดของ e ก่อน/หลังตั้งค่า v — ไม่ใช่แค่ยอดหัก (ผลตรวจ R2 high: เดิมเทียบแค่ ded → 💸/🏦/💵 ที่คิดจากยอดสะสมเดิมหลุด)
+   ps = depPeriodsAsc() ∪ งวดที่มี 💵 (depPeriods ไม่รวม deposit_payouts) · คิดในเครื่อง ไม่เขียน
+   lockP = งวด ≥ DEP_V2_START ที่จ่ายแล้วซึ่ง depLockBefore จะ 🔒 ยอดเดิมก่อนบันทึก → "หลัง" คิดแบบล็อกแล้ว (= ผลจริงหลังบันทึก · ตรงกับที่คิดใหม่หลังล็อก) */
+function empStartDepRun(e, v, lockP){
+  const keep = e.depositStart, keepE = depositEntries, ps = [...new Set([...depPeriodsAsc(), ...depPoOf(e.id).map(x => x.period)])].filter(p => PERIOD_RE.test(p)).sort();
+  const run = () => depScope(() => ps.map(p => { const d = depositCalc(e, p);
+    return { ded:d.ded, before:d.before, collected:d.collected, ret:d.refund + d.xfer, xfer:d.xfer, xferDate:d.xferDate, po:d.po, target:d.target, over:d.over }; }));
+  const b = run(); let a;
+  try{
+    e.depositStart = v;
+    if(lockP && lockP.size) depositEntries = depositEntries.filter(r => !(r.empId === e.id && lockP.has(r.period)))
+      .concat(ps.map((p, i) => lockP.has(p) ? { id: -1 - i, empId: e.id, period: p, amount: b[i].ded, note: 'lock' } : null).filter(Boolean));
+    a = run();
+  } finally { e.depositStart = keep; depositEntries = keepE; }
+  return { ps, b, a };
+}
+/* ยอดหักของ e ก่อน/หลังตั้งค่า v — คืนเฉพาะงวดที่ต่าง [{ p, from, to, paid, payDay }] · dep: empStartDepRun (C ส่งมาได้ — ไม่คิดซ้ำ) · sso: งวดที่มีสแกน ∪ ✎ ∪ งวดปัจจุบัน
+   payDay = วันนี้วันจ่ายงวดนั้นแต่ pdPaid ยังไม่นับ (ออฟฟิศวันสิ้นเดือน — ไฟล์ K BIZ/โอนวันนี้ · เกณฑ์เดียวกับ depStartFwd #175) */
+function empStartDiff(e, kind, v, C){
+  const today = bizToday(), pd = p => { const r = periodRangeE(e, p); return { paid: r.pay <= today && r.to < today, payDay: r.pay <= today && !(r.to < today) }; };
+  if(kind === 'dep'){
+    C = C || empStartDepRun(e, v);
+    return C.ps.map((p, i) => ({ p, from:C.b[i].ded, to:C.a[i].ded, ...pd(p) })).filter(x => x.from !== x.to);
+  }
+  const K = EMP_START[kind].key;
+  const ps = [...new Set([...allPeriods(), ...ssoEntries.filter(x => x.empId === e.id).map(x => x.period), periodOfE(e, today)])].filter(p => PERIOD_RE.test(p)).sort();
+  const tmp = Object.assign({}, e, { [K]: v });
+  return ps.map(p => { const P = calcPay(e, p); return { p, from:P.sso.ded, to:ssoCalc(tmp, p, P.base).ded, ...pd(p) }; }).filter(x => x.from !== x.to);
+}
+/* 💸/🏦/💵 ที่บันทึกไว้แล้ว คิดจากยอดสะสมเดิม — หลังเปลี่ยน สะสมก่อนงวดนั้นลด → คืน/โอน/เบิกเกินยอดที่มี (ผลตรวจ R2 high)
+   💸/🏦 ส่วนเกิน: เกิน (สะสมก่อนงวด − เป้า) หลังเปลี่ยน · คืนทั้งหมด (ลาออก = เกินส่วนเกินตั้งแต่ก่อนเปลี่ยน): เกินสะสมก่อนงวด · 💵: เกินสะสมก่อนงวด − คืน/โอนงวดนั้น
+   out = เงินออกไปแล้ว (ถึงวันจ่ายงวดนั้น · 🏦 ถึงวันโอน · 💵 จ่ายแล้วเสมอ) · ไม่ใช่ = 💸 ในสลิป/🏦 ที่ยังไม่ออก → ต้องแก้รายการนั้นก่อน
+   neg = สะสมหลังงวดติดลบหลังเปลี่ยน (ไม่ติดลบมาก่อน) */
+function empStartOut(e, C){
+  const today = bizToday(), out = [];
+  C.ps.forEach((p, i) => {
+    const b = C.b[i], a = C.a[i];
+    if(a.before < b.before - 1e-9){
+      const payd = periodRangeE(e, p).pay <= today;
+      if(b.ret > 0){
+        const full = b.ret > b.before - b.target + 1e-9, room = Math.max(0, full ? a.before : a.before - a.target);
+        if(b.ret > room + 1e-9) out.push({ p, k: b.xfer ? 'xfer' : 'refund', amt:b.ret, room, out: b.xfer ? (!b.xferDate || b.xferDate <= today) : payd });
+      }
+      if(b.po > 0){ const room = Math.max(0, a.before - a.ret); if(b.po > room + 1e-9) out.push({ p, k:'po', amt:b.po, room, out:true }); }
+    }
+    if(a.collected < -1e-9 && a.collected < b.collected - 1e-9) out.push({ p, k:'neg', amt:a.collected, room:0, out:true });   // ติดลบ = ห้ามเสมอ (แม้เงินออกไปแล้ว)
+  });
+  return out;
+}
+const EMP_OUT_T = { refund:'💸 คืนส่วนเกิน', xfer:'🏦 โอนคืน', po:'💵 เบิกคืน' };
+const empOutTxt = x => x.k === 'neg' ? '⛔ ' + shortP(x.p) + ' สะสมหลังงวดติดลบ ' + THB(x.amt)
+  : EMP_OUT_T[x.k] + ' ' + shortP(x.p) + ' ' + THB(x.amt) + (x.out ? ' (เงินออกไปแล้ว)' : x.k === 'refund' ? ' (ในสลิปที่ยังไม่จ่าย)' : ' (ยังไม่โอน)') +
+    ' คิดจากยอดสะสมเดิม — หลังเปลี่ยน' + (x.k === 'po' ? 'เบิกได้' : 'คืนได้') + 'ไม่เกิน ' + THB(x.room);
+function empStartChg(el){ empStartSet(+el.dataset.emp, el.dataset.k, el.value); }
+let empStartBusy = false, empStartWhy = { dep:'', sso:'' };   // เหตุผลข้อยกเว้นล่าสุด แยกเงินประกัน/สปส. → ค่าเริ่มของคนถัดไป (ตั้งหลายคนติดกัน · ผลตรวจ R1/R2)
+async function empStartSet(empId, kind, v){
+  const S = EMP_START[kind]; if(!S) return;
+  const redraw = () => { if(kind === 'dep') renderDeposit(); else renderSso(); renderDetail(); };
+  if(empStartBusy){ toast('⏳ รอบันทึกของคนก่อนหน้าให้เสร็จก่อน แล้วค่อยเลือกใหม่'); return redraw(); }   // เดิมเด้งกลับเงียบ ๆ (ผลตรวจ R1)
+  v = empPerOk(v);
+  if(!startReady){ toast('❌ ต้องรัน jj_emp_start.sql ใน Supabase ก่อน'); return redraw(); }
+  if(kind === 'dep' ? !depReady : !ssoReady){ toast('❌ ต้องรัน ' + (kind === 'dep' ? 'jj_deposit.sql' : 'jj_sso.sql') + ' ใน Supabase ก่อน'); return redraw(); }
+  if(permDenied('update')){ toast('🔒 ไม่มีสิทธิ์แก้ไขในหน้านี้ — ติดต่อผู้ดูแลระบบ'); return redraw(); }
+  let e = employees.find(x => x.id === empId); if(!e) return redraw();
+  if((e[S.key] || '') === v) return;
+  empStartBusy = true;
+  try{
+    if(!(await moneyFresh())) return;   // คิดก่อน/หลังจากข้อมูลเงินชุดเดียวกับสลิป · อ่านไม่ได้ = ไม่บันทึก
+    e = employees.find(x => x.id === empId); if(!e) return;
+    const old = e[S.key] || '';
+    if(old === v) return;
+    const what = S.of + e.nick + ': ' + empStartLbl(kind, old) + ' → ' + empStartLbl(kind, v);
+    // ① สแกนในเครื่องนี้ไม่ครบงวดที่จ่ายแล้วในช่วงที่เปลี่ยน = คิดยอดก่อน/หลังไม่ได้ → บล็อก (ผลตรวจ R1 — high · ไม่พึ่ง 0 → 0 จากข้อมูลที่ไม่มี)
+    const gap = empStartGap(e, kind, old, v);
+    if(gap.length){
+      // เลื่อนเริ่มย้อน (งวดเริ่มจริงใหม่ก่อนเดิม / '' = ทุกงวด) → งวดในช่องว่างจะกลายเป็นหัก · ไปข้างหน้า → งวดในช่องว่างเลิกหัก
+      const [a, b] = kind === 'dep' ? (() => { const k = e[S.key], x = depStartOf(e); e[S.key] = v; const y = depStartOf(e); e[S.key] = k; return [x, y]; })() : [old, v];
+      const back = !!a && (!b || b < a);
+      const alt = back ? 'เลือกงวดเริ่มตั้งแต่ ' + shortP(nextPeriod(gap[gap.length - 1])) + ' ขึ้นไป (งวดที่จ่ายแล้วคงยอดเดิม)' : 'เลือกงวดเริ่มไม่หลังกว่า ' + shortP(gap[0]);
+      alert('❌ ยังไม่ได้บันทึก — ' + what + '\nงวดที่จ่ายแล้วของ ' + e.nick + ' ที่' + (kind === 'dep' ? 'ยังไม่ 🔒 ปิดยอด' : 'ไม่มี ✎') + ': ' + gap.map(shortP).join(', ') + '\n' +
+        'สแกนของงวดนี้ไม่อยู่ในเครื่องนี้ครบ (เก่ากว่าช่วงที่โหลด) แต่เครื่องที่เปิดใหม่จะโหลดมาคิด → เครื่องนี้คิดยอดก่อน/หลังเปลี่ยนไม่ได้ (ห้ามหักย้อน/แก้ย้อนงวดที่จ่ายแล้ว)\n' +
+        '→ กด 🔄 (ล้างแคช) แล้วลองใหม่ · ยังติด = ' + alt +
+        (kind === 'dep' ? '\n→ ต้องนับงวดนั้นตามสลิปจริง = 🔒 ปิดยอดงวดนั้นตามสลิปก่อน (เครื่องที่มีสแกนงวดนั้น)' : '\n→ ใส่ ✎ สปส. งวดนั้นตามสลิปก่อน'));
+      return;
+    }
+    // ①b เงินประกันปิดหัก/เป้า 0 (ผลตรวจ R3): ยอดตอนนี้ 0 ทั้งก่อน/หลัง → ตัวกันข้างล่างไม่เห็นงวดที่จ่ายแล้วก่อน DEP_V2_START (ยังไม่ 🔒 · ห้ามล็อกให้ — M1)
+    //   ที่ยอดจะเปลี่ยนตอนเปิดหักกลับ (ปิดหัก → เปลี่ยนงวดเริ่ม → เปิดหัก = ย้อนข้อยกเว้นของเจ้าของ / ใช้ข้อยกเว้นแทนเจ้าของ) → มีงวดแบบนั้น = บล็อกทุกบัญชี
+    //   งวด ≥ DEP_V2_START ไม่ต้อง: เปิดหัก/แก้เป้า (updDepField → depLockBefore) 🔒 ยอดตอนนี้ของงวดที่จ่ายแล้วก่อนเสมอ
+    if(kind === 'dep' && (e.depOn === false || (e.depTargetV1 == null && !(Number(e.depTarget) > 0 && Number(e.depMonthly) > 0)))){
+      const eo = depStartOf(e), k0 = e[S.key]; let en; try{ e[S.key] = v; en = depStartOf(e); } finally { e[S.key] = k0; }
+      const ok = (s, p) => !s || p >= s, w = empPeriodSet(e), today = bizToday();
+      const sw = depPeriodsAsc().filter(p => p < DEP_V2_START && ok(eo, p) !== ok(en, p) && pdPaid(e, p, today) &&
+        (e.depTargetV1 == null || (depRule(e, p).target > 0 && depRule(e, p).monthly > 0)) && (r => r ? !DEP_FIXED(r.note) : w.has(p))(depRowOf(e.id, p)));
+      if(sw.length){
+        alert('❌ ยังไม่ได้บันทึก — ' + what + '\n' + e.nick + (e.depOn === false ? ' ปิดหักอยู่' : ' เป้า/หัก = 0') + ' — ยอดตอนนี้เป็น 0 ทั้งก่อนและหลังเปลี่ยน ระบบบอกไม่ได้ว่ายอดจริงจะเปลี่ยนเท่าไร\n' +
+          'งวดที่จ่ายแล้วที่ยังไม่ 🔒: ' + sw.map(shortP).join(', ') + ' — ยอดจะเปลี่ยนตอนเปิดหักกลับ (ห้ามหักย้อน/แก้ย้อนงวดที่จ่ายแล้ว)\n' +
+          '→ ' + (e.depOn === false ? 'เปิดสวิตช์หัก' : 'ตั้งเป้า/หัก') + 'ก่อน แล้วค่อยเลือกงวดเริ่ม (หน้าต่างจะบอกยอดทุกงวดที่เปลี่ยน) · หรือ 🔒 ปิดยอดงวดนั้นตามสลิปก่อน');
+        return;
+      }
+    }
+    const C0 = kind === 'dep' ? empStartDepRun(e, v) : null, D0 = empStartDiff(e, kind, v, C0);
+    // เงินประกัน: งวดก่อน DEP_V2_START = ยืนยัน/บล็อก · งวดหลังจากนั้น = 🔒 ยอดเดิมก่อน · สปส.: งวดที่จ่ายแล้วทุกงวด = ยืนยัน/บล็อก
+    const hard = D0.filter(x => x.paid && (kind === 'sso' || x.p < DEP_V2_START));
+    const lockP = new Set(kind === 'dep' ? D0.filter(x => x.paid && x.p >= DEP_V2_START).map(x => x.p) : []);
+    const Cs = C0 && lockP.size ? empStartDepRun(e, v, lockP) : C0;   // หลัง 🔒 ยอดเดิมของ lockP = ผลจริงหลังบันทึก
+    // ①c เงินประกัน (ผลตรวจ R4 · ทางอ้อมผ่าน "เก็บมาก่อน"): งวดที่จ่ายแล้วก่อน DEP_V2_START (ยังไม่ 🔒 · ไม่มี ✎ > 0) ที่นับ/ไม่นับสลับเพราะงวดเริ่มเปลี่ยน
+    //   แต่ยอดตอนนี้เท่าเดิม (เก็บมาก่อนครบเป้า/สุทธิไม่พอ = 0 ทั้งก่อน/หลัง) → แก้ค่าอื่นทีหลัง ยอดงวดที่จ่ายแล้วเปลี่ยนเองโดยไม่มีใครยืนยัน
+    //   กลับมานับ (เลื่อนเริ่มย้อน) = บล็อก (🔒 ตามสลิปก่อน) · เลิกนับ = รวมในข้อยกเว้นเจ้าของ/แอดมินด้านล่าง (→ 🔒 ยอดที่ยืนยัน)
+    let swF = [];
+    if(kind === 'dep'){
+      const eo = depStartOf(e), en = depStartOf({ depositStart: v }), ok = (s, p) => !s || p >= s, w = empPeriodSet(e), today = bizToday(), hp = new Set(hard.map(x => x.p));
+      const sw = depPeriodsAsc().filter(p => p < DEP_V2_START && !hp.has(p) && ok(eo, p) !== ok(en, p) && pdPaid(e, p, today) && depRule(e, p).target > 0 && depRule(e, p).monthly > 0 &&
+        (r => r ? !DEP_FIXED(r.note) && (Number(r.amount)||0) > 0 : w.has(p))(depRowOf(e.id, p)));
+      const back = sw.filter(p => ok(en, p));
+      if(back.length){
+        alert('❌ ยังไม่ได้บันทึก — ' + what + '\nงวดที่จ่ายแล้วที่ยังไม่ 🔒: ' + back.map(shortP).join(', ') + ' — หลังเปลี่ยนจะกลับมานับ (ตอนนี้คิดได้ 0 เพราะเก็บมาก่อน/สุทธิไม่พอ ' +
+          'แต่แก้ค่าอื่นทีหลังยอดจะเปลี่ยนเอง — ห้ามหักย้อน/แก้ย้อนงวดที่จ่ายแล้ว)\n→ หน้า 🛡️ เลือกงวดนั้น → 🔒 ปิดยอดตามสลิปก่อน (เจ้าของ/แอดมิน) แล้วค่อยเลือกงวดเริ่ม');
+        return;
+      }
+      swF = sw.map(p => { const i = C0.ps.indexOf(p), d = i < 0 ? 0 : C0.b[i].ded; return { p, from: d, to: d, paid: true, sw: true }; });
+    }
+    const ask = hard.concat(swF).sort((a, b) => a.p < b.p ? -1 : 1);   // งวดที่จ่ายแล้วที่ต้องยืนยัน (= hard ถ้าไม่มี ①c)
+    // ② วันนี้วันจ่ายงวดที่ยอดจะเปลี่ยน (ออฟฟิศสิ้นเดือน — pdPaid ยังไม่นับ แต่ไฟล์ K BIZ/โอนวันนี้) = ห้าม (ผลตรวจ R2 low · เกณฑ์เดียวกับ depStartFwd #175)
+    const payDay = D0.filter(x => x.payDay);
+    if(payDay.length){
+      alert('❌ ยังไม่ได้บันทึก — ' + what + '\nวันนี้วันจ่ายเงินเดือน' + payDay.map(x => periodLabel(x.p) + ' (หัก ' + THB(x.from) + ' → ' + THB(x.to) + ')').join(', ') +
+        ' — ไฟล์ K BIZ/โอนวันนี้ใช้ยอดเดิม (ห้ามเปลี่ยนยอดงวดที่กำลังจ่าย)\n→ ' + (kind === 'dep' ? 'วันถัดจากวันจ่าย 🔒 ปิดยอดงวดนั้นที่หน้า 🛡️ (ออฟฟิศ 🔒 ได้วันถัดไป) แล้วค่อยเปลี่ยน' : 'เปลี่ยนวันถัดจากวันจ่าย (ใส่ ✎ สปส. งวดนั้นตามสลิปก่อน)'));
+      return;
+    }
+    // ③ 💸/🏦/💵 ที่บันทึกแล้วคิดจากยอดสะสมเดิม (ผลตรวจ R2 high) — ยังไม่ออก = แก้รายการนั้นก่อน · ออกไปแล้ว = เจ้าของ/แอดมินยืนยัน (บอกในหน้าต่าง) · ติดลบ = ห้าม
+    const OUT = Cs ? empStartOut(e, Cs) : [], outPaid = OUT.filter(x => x.out && x.k !== 'neg');
+    if(OUT.some(x => !x.out || x.k === 'neg') || (outPaid.length && !isBoss(AUTH))){
+      alert('❌ ยังไม่ได้บันทึก — ' + what + '\nยอดสะสมก่อนงวดลด แต่มีรายการที่คิดจากยอดสะสมเดิม:\n' + OUT.map(empOutTxt).join('\n') +
+        (OUT.some(x => !x.out) ? '\n→ หน้า 🛡️ เลือกงวดนั้น → ✎ แก้/ยกเลิกรายการ 💸/🏦 ของ ' + e.nick + ' ก่อน (เจ้าของ/แอดมิน) แล้วค่อยเปลี่ยน' : '') +
+        (OUT.some(x => x.k === 'neg') ? '\n→ ยอดสะสมจะติดลบ (คืน/เบิกไปมากกว่าที่มี) — เช็ค "เก็บมาก่อน" และรายการ 💸/🏦/💵 ของ ' + e.nick + ' ก่อน' : '') +
+        (outPaid.length && !isBoss(AUTH) ? '\n→ เงินออกไปแล้วตามยอดเดิม: ให้เจ้าของ/แอดมินเป็นคนเปลี่ยน (ยอดสะสมหลังงวดนั้นลด แล้วงวดถัดไปหักต่อจนครบเป้า)' : ''));
+      return;
+    }
+    const outTxt = outPaid.length ? '\n⚠️ ' + outPaid.map(empOutTxt).join('\n⚠️ ') + '\n→ เงินที่ออกไปแล้วไม่เปลี่ยน — ยอดสะสมหลังงวดนั้นลด แล้วงวดถัดไปหักต่อจนครบเป้า' : '';
+    const L = a => a.map(x => periodLabel(x.p) + ': หัก ' + THB(x.from) + ' → ' + THB(x.to) + (x.sw ? ' (ตอนนี้ 0 เพราะเก็บมาก่อน/สุทธิไม่พอ — หลังเปลี่ยนไม่นับงวดนี้)' : '')).join('\n');
+    const how = kind === 'dep'
+      ? 'หน้า 🛡️ เลือกงวดนั้น → 🔒 ปิดยอดงวดนี้ ด้วยยอดตามสลิปก่อน แล้วค่อยเปลี่ยน'
+      : 'หน้า 🧾 เลือกงวดนั้น → ใส่ยอดตามสลิปในช่อง "สมทบพนักงาน" (✎) ก่อน แล้วค่อยเปลี่ยน';
+    // ✎ เงินประกัน = ยอดที่หักในสลิปจริง (เจ้าของยืนยัน 2026-10-21 — ไม่ใช่เงินสด) → งวดที่มี ✎ > 0 ไม่ใช่ "สลิปจริงไม่ได้หัก" = ข้อยกเว้นไม่ได้ (ผลตรวจ R1)
+    const ovEv = kind === 'dep' ? ask.map(x => ({ p: x.p, r: depRowOf(e.id, x.p) })).filter(o => o.r && !DEP_FIXED(o.r.note) && (Number(o.r.amount)||0) > 0) : [];
+    const ovTxt = ovEv.length ? '\n✎ บันทึกว่าสลิปหัก: ' + ovEv.map(o => shortP(o.p) + ' ' + THB(Number(o.r.amount)||0)).join(' · ') + ' (✎ = ยอดตามสลิปจริง) → 🔒 ปิดยอดงวดนั้นด้วยยอดนั้นก่อน แล้วค่อยเปลี่ยน' : '';
+    const later = (Cs ? empStartDiff(e, kind, v, Cs) : D0).filter(x => !x.paid);   // งวดที่ยังไม่จ่าย (หลัง 🔒 ยอดเดิมของงวดที่จ่ายแล้ว)
+    // 🔒 ที่จะกลายเป็นงวดก่อนงวดเริ่มรายคน = ยังนับในยอดสะสม (แถวตายตัว) — บอกให้ชัด (ผลตรวจ R1: เดิมบอก "มีผลกับงวดถัดไป" ทั้งที่ไม่มีผลอะไร)
+    const enew = kind === 'dep' ? (() => { const k = e[S.key]; e[S.key] = v; const b = depStartOf(e); e[S.key] = k; return b; })() : '';
+    const preLk = kind === 'dep' && enew ? depositEntries.filter(r => r.empId === e.id && DEP_FIXED(r.note) && (Number(r.amount)||0) > 0 && r.period < enew && (!settings.depStart || r.period >= settings.depStart))
+      .sort((a, b) => a.period < b.period ? -1 : 1) : [];
+    // สปส.: ✎ > 0 ในงวดที่จะอยู่ก่อนงวดเริ่มใหม่ = ยังนับ (ยอดตามสลิป) — บอกแทน "ยอดไม่เปลี่ยน" (ผลตรวจ R4: เดิมเจ้าของเข้าใจว่าแก้แล้ว แต่ ✎ ยังหัก)
+    const preOv = kind === 'sso' && v && e.ssoOn ? ssoEntries.filter(x => x.empId === e.id && x.amount > 0 && x.period < v).sort((a, b) => a.period < b.period ? -1 : 1) : [];
+    const lkTxt = (preLk.length ? '\nℹ️ ' + preLk.map(r => shortP(r.period) + ' 🔒 ' + THB(Number(r.amount)||0)).join(' · ') +
+      ' ปิดยอดแล้ว — ยังนับในยอดสะสมแม้อยู่ก่อนงวดเริ่ม · สลิปจริงไม่ได้หัก = แก้ 🔒 เป็น 0 ที่หน้า 🛡️ (เจ้าของ/แอดมิน)' : '') +
+      (preOv.length ? '\nℹ️ ✎ ' + preOv.map(x => shortP(x.period) + ' ' + THB(x.amount)).join(' · ') +
+      ' (ยอดตามสลิป) ยังนับแม้อยู่ก่อนงวดเริ่ม — ยอดงวดนั้นไม่เปลี่ยน · สลิปไม่ได้หัก = แก้ ✎ เป็น 0 ที่หน้า 🧾 (เลือกงวดนั้น → ช่อง "สมทบพนักงาน")' : '');
+    // สะสมก่อน/หลังของงวดปัจจุบัน (งวดสุดท้ายที่มีข้อมูล ≤ งวดของวันนี้) — ยอดลด/เพิ่มจากงวดก่อนหน้าที่เปลี่ยน + 💸/🏦/💵
+    const pNow = periodOfE(e, bizToday()), cN = Cs ? Cs.ps.reduce((m, p, i) => p <= pNow ? i : m, -1) : -1, colTxt = cN >= 0 && Cs.a[cN].collected !== Cs.b[cN].collected
+      ? '\nสะสมหลัง' + periodLabel(Cs.ps[cN]) + ': ' + THB(Cs.b[cN].collected) + ' → ' + THB(Cs.a[cN].collected) + ' / เป้า ' + THB(Cs.a[cN].target) : '';
+    const eff = ((later.length ? 'งวดที่ยังไม่จ่าย: ' + later.slice(0, 4).map(x => shortP(x.p) + ' หัก ' + THB(x.from) + ' → ' + THB(x.to)).join(' · ') + (later.length > 4 ? ' …' : '')
+                              : ask.length || lockP.size || colTxt || outTxt || lkTxt ? '' : 'ยอดของงวดที่มีข้อมูลตอนนี้ไม่เปลี่ยน') + colTxt + outTxt + lkTxt).replace(/^\n/, '') + '\n' + EMP_START_VER;   // ไม่มีบรรทัดแรก = ไม่เว้นบรรทัดว่าง
+    let why = '';
+    if(ask.length){
+      const down = ask.every(x => x.to < x.from || x.sw);
+      if(ovEv.length || !down || !isBoss(AUTH)){
+        alert('❌ ยังไม่ได้บันทึก — ' + what + '\nยอดของงวดที่จ่ายแล้วจะเปลี่ยน (ห้ามหักย้อน/แก้ย้อนงวดที่จ่ายแล้ว):\n' + L(ask) + ovTxt +
+          // ยอดเพิ่ม (เลื่อนเริ่มย้อน) = ยอดเดิมในแอปคือ 0 → ไม่ใช่ "ตามยอดเดิม" (ผลตรวจ R3)
+          (down ? '\n→ สลิปจริงหักตามยอดเดิม: ' + how : '\n→ สลิปจริงหักงวดนั้น (ยอดใหม่): ' + how + '\n→ สลิปจริงไม่ได้หัก = เลือกงวดเริ่มที่ยังไม่จ่าย (งวดที่จ่ายแล้วคงยอดเดิม)') +
+          (down && !ovEv.length ? '\n→ สลิปจริงไม่ได้หักงวดเหล่านี้: ให้เจ้าของ/แอดมินเป็นคนเปลี่ยน (ยืนยันทีละคน — หน้าต่างบอกยอดทุกงวด + ใส่เหตุผล)' : ''));
+        return;
+      }
+      if(!confirm('⚠️ ' + what + '\nยอดของงวดที่จ่ายแล้ว' + (kind === 'dep' ? ' (ยังไม่ปิดยอด)' : ' (ไม่มี ✎)') + ' จะเปลี่ยน:\n' + L(ask) + '\n\n' +
+        'ทำได้เฉพาะเมื่อ "สลิปที่จ่ายจริงไม่ได้หัก" ตามยอดเดิม (เช่น คนที่เพิ่งเริ่มหัก) — ' +
+        (kind === 'dep' ? 'ยอดสะสมเงินประกันลดตาม · ระบบ 🔒 ปิดยอดงวดเหล่านี้ตามยอดใหม่ให้ (ยอดตายตัว — แก้เก็บมาก่อน/สวิตช์/เป้า/งวดเริ่มทีหลังไม่ย้อน)'
+                        : 'ยอด สปส. งวดนั้นในแอปลดตาม (ไฟล์ สปส. 1-10 ที่ยื่นไปแล้วไม่เปลี่ยน)') + '\n' +
+        'สลิปหักไปแล้ว = กดยกเลิก แล้ว' + how + '\n' + eff + '\n\nยืนยันว่าสลิปจริงไม่ได้หักงวดเหล่านี้?')) return;
+      const w = prompt('เหตุผล (จดในหน้า 🕘 ประวัติการทำรายการ) เช่น "เพิ่งเริ่มหัก ต.ค. — สลิป ส.ค./ก.ย. ไม่ได้หัก"', empStartWhy[kind] || '');
+      if(w == null) return;
+      why = String(w).trim();
+      if(!why){ toast('ยังไม่ได้บันทึก — ต้องใส่เหตุผล'); return; }
+      empStartWhy[kind] = why;
+    }
+    if(kind === 'dep'){
+      // งวดก่อน DEP_V2_START ที่หลังแก้อยู่ก่อนงวดเริ่มใหม่ ไม่ต้อง 🔒 → ไม่เตือน v1/held (ผลตรวจ R1: เดิมเตือน "🔒 ส.ค./ก.ย. ก่อน" หลังเพิ่งยืนยันว่าสลิปไม่ได้หัก)
+      // ผ่านหน้าต่างข้อยกเว้นแล้ว (มี eff ในนั้น) = ถามซ้ำเฉพาะเมื่อมีงวดต้อง 🔒 (ไม่ต่อ eff ซ้ำ)
+      const R = await depLockBefore([e], due => !ask.length ? what + '\n' + eff + '\nบันทึกไหม?' : due.length ? what + '\nบันทึกไหม?' : null,
+        { what, v1:false, depPre: (x, p) => x.id === empId && lockP.has(p), v1Drop: x => x.e.id === empId && !!enew && x.p < enew });
+      if(!R.ok) return;
+    } else {
+      const chg = D0.map(x => x.p);
+      if(chg.length && !(await depPaidGuard(e, () => chg, what))) return;
+      if(!ask.length && !confirm(what + '\n' + eff + '\nบันทึกไหม?')) return;
+    }
+    // คิดใหม่จากข้อมูลล่าสุด (ล็อก/อ่านสมุดใหม่แล้ว) — งวดที่จ่ายแล้วที่จะเปลี่ยน ต้องเหลือแค่ชุดที่ยืนยัน (ไม่มี = ไม่มีอะไรเปลี่ยนย้อนหลัง)
+    e = employees.find(x => x.id === empId);
+    if(!e || (e[S.key] || '') !== old){ toast('⚠️ ค่านี้ถูกแก้จากเครื่องอื่นระหว่างถาม — ยังไม่ได้บันทึก ลองใหม่'); return; }
+    const sig = a => a.map(x => x.p + ':' + x.from + '>' + x.to).join();
+    const C1 = kind === 'dep' ? empStartDepRun(e, v) : null, sigO = a => a.map(x => x.p + ':' + x.k + ':' + x.amt + '>' + x.room).join();
+    if(sig(empStartDiff(e, kind, v, C1).filter(x => x.paid || x.payDay)) !== sig(hard) || (C1 && sigO(empStartOut(e, C1)) !== sigO(OUT))){
+      toast('⚠️ ยอดงวดที่จ่ายแล้ว/รายการคืน-เบิกเปลี่ยนระหว่างถาม (ยังไม่ 🔒 ครบ/อีกเครื่องแก้) — ยังไม่ได้บันทึก ลองใหม่'); return; }
+    // ข้อยกเว้น "สลิปจริงไม่ได้หัก" ของเงินประกัน = 🔒 งวดที่ยืนยันด้วยยอดใหม่ก่อน (ผลตรวจ R4) — ยอดตายตัว: แก้เก็บมาก่อน/สวิตช์/เป้า/งวดเริ่มทีหลังย้อนไม่ได้
+    //   insert แบบไม่ทับ (ignoreDuplicates — ห้ามทับแถว 🔒/💸/🏦/✎ เดิม) · เขียนไม่ครบ = อีกเครื่องเขียนงวดนั้นระหว่างถาม → ไม่บันทึกงวดเริ่ม
+    if(kind === 'dep' && why){
+      const lk = ask.map(x => ({ employee_id: e.id, period: x.p, amount: x.to, note: 'lock' }));
+      const r = await db.from('deposit_entries').upsert(lk, { onConflict:'employee_id,period', ignoreDuplicates:true }).select();
+      if(r.error){ toast('❌ 🔒 ปิดยอดงวดที่สลิปไม่ได้หักไม่สำเร็จ — ยังไม่ได้บันทึกงวดเริ่ม ลากหน้าลงแล้วลองใหม่\n' + (r.error.message || '')); return; }
+      for(const g of (r.data || []).map(fromDbDep)) if(!depositEntries.some(x => x.id === g.id)) depositEntries.push(g);
+      if((r.data || []).length < lk.length){ toast('⚠️ อีกเครื่องบันทึกเงินประกันงวดนั้นระหว่างถาม — ยังไม่ได้บันทึกงวดเริ่ม ลากหน้าลงแล้วลองใหม่'); await depRefresh(); return; }
+    }
+    const { error } = await db.from('employees').update({ [S.col]: v }).eq('id', empId);
+    if(error){ dbErr(error, 'บันทึก' + S.t); return; }
+    e[S.key] = v;
+    // จดทุกครั้ง (ชื่อ + ค่าเดิม → ใหม่ · ผลตรวจ R1: เดิมจดเฉพาะข้อยกเว้น — ตัวดัก db.from จดแค่ {"deposit_start":…}) · ข้อยกเว้น = ต่อท้ายงวด/ยอด/เหตุผล
+    auditWrite('update', 'employees', what + (why ? ' · ข้อยกเว้น สลิปจริงไม่ได้หัก: ' + ask.map(x => shortP(x.p) + ' ' + THB(x.from) + '→' + THB(x.to)).join(', ') +
+      (kind === 'dep' ? ' (🔒 แล้ว)' : '') + ' · เหตุผล: ' + why : '') +
+      (outPaid.length ? ' · คืน/เบิกที่ออกไปแล้วตามยอดเดิม: ' + outPaid.map(x => shortP(x.p) + ' ' + (EMP_OUT_T[x.k] || x.k) + ' ' + THB(x.amt) + ' (หลังเปลี่ยนมี ' + THB(x.room) + ')').join(', ') : ''));
+    tipMemo = {}; pvdMemo = {};
+    renderPayroll();
+    toast('บันทึกแล้ว · ' + S.of + e.nick + ' = ' + empStartLbl(kind, v) + (ask.length ? ' · ' + ask.length + ' งวดที่จ่ายแล้วเปลี่ยนตามที่ยืนยัน' + (kind === 'dep' ? ' (🔒 แล้ว)' : '') : ''));
+  } finally { empStartBusy = false; redraw(); }
+}
 /* ✎ แก้เฉพาะงวด (ใช้กับแถว ✎ เท่านั้น) — แถว 🔒/💸 แก้ผ่าน editDeposit (เจ้าของ/แอดมิน ที่หน้า 🛡️) · เขียนแบบมีเงื่อนไข ไม่ทับแถวของคนอื่น */
 async function setDepOverride(empId, period, val){
   if(!depReady) return toast('❌ ต้องรัน jj_deposit.sql ใน Supabase ก่อน');
@@ -5123,6 +5449,9 @@ async function setDepOverride(empId, period, val){
   let cur = depRowOf(empId, period);
   if(cur && DEP_FIXED(cur.note)){ toast('🔒 งวดนี้ปิดยอดแล้ว — แก้ได้ที่หน้า 🛡️ (เจ้าของ/แอดมิน)'); renderDeposit(); return; }
   const v = String(val).trim();
+  // ✎ ใหม่ในงวดก่อน "เริ่มหักงวด" รายคน = ไม่ถูกนับ (depositCalc live=false) → เดิมบันทึกแล้ว toast "หักงวดนี้ 300" แต่สลิปหัก 0 (ผลตรวจ R1) · ✎ เดิมแก้/ลบได้
+  // ✎ เดิม (ตั้งไว้ก่อนเลือกงวดเริ่ม) แก้เป็นยอด > 0 = ไม่ถูกนับเหมือนกัน + กลายเป็น "หลักฐานว่าสลิปหัก" ค้าง → แก้เป็น 0 หรือลบได้เท่านั้น (ผลตรวจ R2)
+  { const e0 = employees.find(x=>x.id===empId); if(e0 && v !== '' && depPreOwn(e0, period) && (!cur || (Math.floor(+v)||0) > 0)){ toast(depPreOwnTxt(e0, period) + (cur ? '\n✎ เดิมของงวดนี้: แก้เป็น 0 หรือลบ (เว้นว่าง) ได้เท่านั้น' : '')); renderDeposit(); renderDetail(); return; } }
   const reload = async m => { toast(m); await depRefresh(); renderDeposit(); renderPayroll(); renderDetail(); };
   // ✎ งวดที่จ่ายแล้ว (ผลตรวจรอบ 4): สำรองฯ งวดนี้ (หักไม่เกินสุทธิหลังเงินประกัน) และเงินประกันงวดหลังที่จ่ายแล้ว (หักต่อจากยอดสะสม) เปลี่ยนตาม
   // → 🔒 สำรองฯ งวดที่จ่ายแล้ว + เงินประกันงวดหลังงวดนี้ก่อน (งวดนี้เองไม่ล็อก — กำลังแก้) · ยกเลิก/ล็อกไม่ได้ = ไม่บันทึก
@@ -5182,15 +5511,22 @@ async function editDeposit(empId, period){
       // งวดก่อน "เริ่มหักตั้งแต่งวด" (เลื่อนข้ามได้เพราะ 🔒 แล้ว — depStartFwd) = แถว 🔒 คือสิ่งเดียวที่ทำให้ยอดนี้ยังนับ
       // ปลดแล้วเป็น 0 ถาวร (🔒 ใหม่ไม่ได้ — depLockOpen · เลื่อน dep_start กลับไม่ได้ — depStartBack) → แก้ยอดได้ ปลดไม่ได้
       const pre = !!settings.depStart && period < settings.depStart;
+      // งวดก่อน "เริ่มหักงวด" รายคน (2026-10-21) = แบบเดียวกัน: 🔒 คือสิ่งเดียวที่ทำให้ยอดนี้ยังนับ → ปลดไม่ได้ · แก้ยอดได้ (สลิปไม่ได้หัก = 0)
+      const preOwn = !pre && depPreOwn(e, period);
       const v = prompt('🔒 '+e.nick+' · '+periodLabel(period)+' ปิดยอดแล้ว (หัก '+THB(d.ded)+' · สะสมก่อนงวด '+THB(d.before)+' / เป้า '+THB(d.target)+')'+
         (d.cap ? '\n'+depCapTxt(d) : '')+
         '\nแก้ให้ตรงยอดที่หักจริงในสลิป/ไฟล์ K BIZ วันจ่ายเท่านั้น\n\n'+
-        (pre ? 'ใส่จำนวนบาท · งวดนี้อยู่ก่อน "เริ่มหักตั้งแต่งวด" ('+periodLabel(settings.depStart)+') — ปลดล็อกไม่ได้' : 'ใส่จำนวนบาท · เว้นว่างแล้วตกลง = ปลดล็อก กลับไปคิดอัตโนมัติ'), String(d.ded));
+        (pre ? 'ใส่จำนวนบาท · งวดนี้อยู่ก่อน "เริ่มหักตั้งแต่งวด" ('+periodLabel(settings.depStart)+') — ปลดล็อกไม่ได้'
+             : preOwn ? 'ใส่จำนวนบาท (สลิปจริงไม่ได้หัก = 0) · งวดนี้อยู่ก่อน "เริ่มหักงวด" ของ '+e.nick+' ('+periodLabel(e.depositStart)+') — ปลดล็อกไม่ได้'
+             : 'ใส่จำนวนบาท · เว้นว่างแล้วตกลง = ปลดล็อก กลับไปคิดอัตโนมัติ'), String(d.ded));
       if(v === null) return;
       if(pre && String(v).trim() === '')
         return alert('❌ ปลดล็อก '+periodLabel(period)+' ของ '+e.nick+' ไม่ได้ — งวดนี้อยู่ก่อน "เริ่มหักตั้งแต่งวด" ('+periodLabel(settings.depStart)+')\n'+
           'ยอดนี้ยังนับเพราะ 🔒 อย่างเดียว: ปลดแล้วยอดเป็น 0 ถาวร (ยอดสะสมงวดหลังลดลง) · ปิดยอดใหม่ไม่ได้ · เลื่อน "เริ่มหักตั้งแต่งวด" กลับก็ไม่ได้\n'+
           'ยอดผิด = ✎ ใส่ยอดที่หักจริงในสลิป (ไม่ได้หัก = 0)');
+      if(preOwn && String(v).trim() === '')
+        return alert('❌ ปลดล็อก '+periodLabel(period)+' ของ '+e.nick+' ไม่ได้ — งวดนี้อยู่ก่อน "เริ่มหักงวด" ของ '+e.nick+' ('+periodLabel(e.depositStart)+')\n'+
+          'ยอดนี้ยังนับเพราะ 🔒 อย่างเดียว: ปลดแล้วไม่ถูกนับ (ยอดสะสมงวดหลังลดลง)\nสลิปจริงไม่ได้หัก = ✎ ใส่ 0 · ยอดผิด = ใส่ยอดที่หักจริงในสลิป');
       // แก้/ปลด 🔒 = ยอดสะสม → เงินประกันงวดหลังที่จ่ายแล้ว + สำรองฯ เปลี่ยนตาม → 🔒 งวดพวกนั้นก่อน (ผลตรวจรอบ 4 · งวดนี้เองไม่แตะ)
       if(!(String(v).trim() !== '' && Math.max(0, Math.floor(Number(v)||0)) === d.ded) &&
          !(await depPaidGuard(e, depPdFrom(period), 'แก้ยอด 🔒 เงินประกัน '+periodLabel(period)+' ของ '+e.nick, { depSkip: x => x.p <= period }))) return;
@@ -5281,6 +5617,7 @@ async function editDeposit(empId, period){
     depPoNegWarn(e);
     return;
   }
+  if(depPreOwn(e, period) && !d.override) return toast(depPreOwnTxt(e, period));   // ทางหน้า 🪪 (กล่อง 🛡️) — กติกาเดียวกับตาราง 🛡️ (ผลตรวจ R1)
   const v = prompt('🛡️ หักเงินประกันงวดนี้ — '+e.nick+
     '\nปกติหัก '+THB(d.monthly)+'/เดือน · สะสมก่อนงวดนี้ '+THB(d.before)+' / เป้า '+THB(d.target)+
     (period >= DEP_V2_START ? '\nหักได้ไม่เกินสุทธิก่อนหักเงินประกัน'+(d.net != null ? ' ('+THB2(depNet2(d.net))+')' : '')+(d.cap ? ' — ตอนนี้'+depCapTxt(d) : '') : '')+
@@ -5406,7 +5743,8 @@ function renderDepositIn(){
     ? `${!settings.depStart? '<b style="color:var(--red)">⚠️ ยังไม่ได้ตั้ง "เริ่มหักตั้งแต่งวด" — ระบบกำลังคิดย้อนหลังทุกงวดเก่า</b><br>':''}
        <b>กติกาใหม่ (เจ้าของสั่ง 20 ต.ค. 69): เป้า 3,000 หักเดือนละ 300 ตั้งแต่${periodLabel(DEP_V2_START)}</b>${v2?' (งวดก่อนหน้าใช้กติกาเดิมของแต่ละคน เช่น 5,000/500)':' <span class="chip chip-amber">ยังไม่ได้รัน jj_deposit_v2.sql — ตอนนี้ทุกงวดใช้ค่าในช่องเป้าหมาย/หัก</span>'}
        · หักต่อจากยอดสะสมจนครบเป้าแล้วหยุดเอง · ปรับเป้า/หักรายคนได้ · คนสะสมเกินเป้า = กด 💸 คืนส่วนเกินในสลิป (พ้นสภาพ = 🏦 โอนคืนนอกสลิป แล้วบันทึกวันที่โอน)
-       · หักได้ไม่เกินสุทธิก่อนหักเงินประกัน (สุทธิติดลบ = ไม่หักงวดนั้น · ไม่พอ = หักเท่าที่เหลือ — ประวัติบอกเหตุผล)
+       · หักได้ไม่เกินสุทธิก่อนหักเงินประกัน (สุทธิติดลบ = ไม่หักงวดนั้น · ไม่พอ = หักเท่าที่เหลือ — ประวัติบอกเหตุผล)${startReady ? `
+       · <b>เริ่มหักงวด</b> รายคน = คนที่เพิ่งเริ่มหัก (ตามระบบ = เริ่มหักตั้งแต่งวดบนแถบ) — <b>สลิปจริงไม่ได้หักงวดก่อนหน้า = เลือกงวดเริ่มได้เลย</b> (งวดที่จ่ายแล้วที่ยอดลด เจ้าของ/แอดมินยืนยันทีละคน — หน้าต่างบอกยอดทุกงวด + ใส่เหตุผล · ระบบ 🔒 ยอดใหม่ให้ ยอดตายตัว) · สลิปหักไปแล้ว = 🔒 ปิดยอดตามสลิปก่อน แล้วค่อยเลือก` : ''}
        · งวดที่จ่ายแล้วต้อง <b>🔒 ปิดยอด</b> (ประวัติจะไม่เปลี่ยน/ไม่หาย) — ตั้งแต่${periodLabel(DEP_V2_START).replace('งวด','')} <b>พนักงานหน้าร้านที่ปิดยอดงวดก่อนนั้นครบแล้ว</b> ระบบปิดยอดให้เองในวันจ่าย (ตอนเปิดแอปด้วยบัญชีที่มีสิทธิ์หน้า 🛡️/🐷) ·
          <b>ออฟฟิศ</b> กด 🔒 เองหลังสิ้นเดือน หรือยืนยันตอนสร้างไฟล์ K BIZ งวดถัดไป (ยังไม่ปิด = บัญชีสาขา/ไม่มีสิทธิ์ 🛡️ แก้กะ/ตั้งค่าเงินไม่ได้) ·
          <b>งวดก่อนนั้นตรวจแล้วกด 🔒 เอง</b> (ยอดผิด = แก้ค่าที่ผิดก่อน แล้วค่อย 🔒) · "เก็บมาก่อน" = เงินที่เก็บก่อนเริ่มใช้ระบบเท่านั้น
@@ -5459,9 +5797,10 @@ function renderDepositIn(){
 
   const canEd = depReady && !depLoadErr;
   const poCan = canEd && depPoReady && depPoCan();
+  const stPs = startReady ? empStartPs('dep') : null;   // ตัวเลือก "เริ่มหักงวด" รายคน (คิดครั้งเดียวต่อการวาด · ห้ามคิดในลูปต่อคน)
   tbl.className = 'mcard';
   tbl.innerHTML = `<thead><tr>
-      <th>พนักงาน</th><th>หัก</th>
+      <th>พนักงาน${stPs ? EMP_ST_TH : ''}</th><th>หัก</th>
       <th class="num">เป้าหมาย</th><th class="num">หัก/เดือน</th><th class="num">เก็บมาก่อน</th>
       <th class="num">สะสมก่อนงวด</th><th class="num">หักงวดนี้</th><th class="num">สะสม / เป้า</th><th>สถานะ</th>
     </tr></thead><tbody>` +
@@ -5482,15 +5821,19 @@ function renderDepositIn(){
         : `<input type="number" value="${d.src==='manual' ? depManualAmt(d) : d.ded}" min="0" step="100" data-emp="${e.id}" data-p="${period}"
             style="width:74px;text-align:right;font-weight:700${d.src==='manual'?';border-color:var(--ember)':''}"
             title="${d.src==='manual'?'แก้เองงวดนี้ — ลบค่าแล้ว Enter = กลับอัตโนมัติ':'หักอัตโนมัติ — พิมพ์เพื่อแก้เฉพาะงวดนี้'}"
-            onchange="depOvChg(this)"${canEd?'':' disabled'}>${d.src==='manual'?' <span class="chip chip-amber" title="แก้เองงวดนี้">✎</span>':''}${capChip}`;
-      const status = !d.on && d.target ? '<span class="chip chip-gray">ปิดหักอยู่</span>'
+            onchange="depOvChg(this)"${canEd && !(depPreOwn(e, period) && !depRowOf(e.id, period))?'':' disabled'}>${d.src==='manual'?' <span class="chip chip-amber" title="แก้เองงวดนี้">✎</span>':''}${capChip}${(r => r && d.src !== 'manual' && depPreOwn(e, period) ? ` <span class="chip chip-gray" style="white-space:normal" title="✎ ที่ใส่ไว้ก่อนตั้งงวดเริ่ม — ไม่ถูกนับ (ไม่หัก) · เลื่อนงวดเริ่มกลับมา = กลับมานับ · ไม่ใช้แล้ว = ลบ (เว้นว่าง)">✎ ${THB(Number(r.amount)||0)} ไม่ถูกนับ (ก่อนงวดเริ่ม)</span>` : '')(depRowOf(e.id, period))}`;
+      // 🔒 ในงวดก่อน "เริ่มหักงวด" รายคน = ยังนับในยอดสะสม (แถวตายตัว) — ป้ายบอก (ผลตรวจ R1: เดิมขึ้น "เหลืออีก 8 งวด" เหมือนไม่มีอะไรเกิดขึ้น)
+      const preLk = depPreOwn(e, period) && d.src === 'lock'
+        ? '<span class="chip chip-gray" style="white-space:normal" title="ปิดยอดแล้ว — ยอดนี้ยังนับในยอดสะสมแม้อยู่ก่อนงวดเริ่มหักของคนนี้ · สลิปจริงไม่ได้หัก = ✎ แก้ 🔒 เป็น 0 (เจ้าของ/แอดมิน)">🔒 ก่อนงวดเริ่ม '+shortP(e.depositStart)+' · ยังนับ</span><br>' : '';
+      const status = depPreOwn(e, period) && !fixedCell ? '<span class="chip chip-gray">ยังไม่เริ่มหัก · เริ่ม '+shortP(e.depositStart)+'</span>'
+        : preLk + (!d.on && d.target ? '<span class="chip chip-gray">ปิดหักอยู่</span>'
         : d.over > 0 ? `<span class="chip chip-amber">เกินเป้า ${THB(d.over)}${d.refund?' (หลังคืน)':d.xfer?' (หลังโอน)':'<br>ยังไม่คืน'}</span>`
         : d.laterRef && d.target > 0 && d.collected > d.target ? `<span class="chip chip-green" style="white-space:normal">${audEsc(depLaterTxt(d))}</span>`
         : d.done ? '<span class="chip chip-green">✓ ครบแล้ว</span>'
-        : '<span class="chip chip-amber">เหลืออีก '+Math.ceil(d.remain/Math.max(1, d.monthly||DEP_DEF.monthly))+' งวด</span>';
+        : '<span class="chip chip-amber">เหลืออีก '+Math.ceil(d.remain/Math.max(1, d.monthly||DEP_DEF.monthly))+' งวด</span>');
       return `<tr${d.done && !d.over?' style="background:#f3fbf5"':''}>
       <td data-l="พนักงาน" class="clickable mc-name" onclick="openDetail(${e.id})"><b style="color:var(--ember-deep)">${audEsc(e.nick)}</b> <span class="muted">${audEsc(e.full||'')}</span>${e.active?'':' <span class="chip chip-gray">พ้นสภาพ</span>'}
-        <div style="margin-top:3px">${branchChip(e)} <span class="dept-chip">${audEsc(e.dept||'–')}</span></div></td>
+        <div style="margin-top:3px">${branchChip(e)} <span class="dept-chip">${audEsc(e.dept||'–')}</span></div>${stPs ? empStartBox('dep', e, stPs, !canEd) : ''}</td>
       <td data-l="หัก"><label class="dep-sw" title="ปิด = หยุดหักอัตโนมัติตั้งแต่งวดแรกที่ยังไม่ปิดยอด (งวดที่จ่ายแล้วตั้งแต่ ${shortP(DEP_V2_START)} ถูก 🔒 ให้ก่อน · งวดก่อนนั้นที่ยังไม่ 🔒 จะคิดใหม่ — ยอดถูกแล้วให้ 🔒 เองก่อน)">
         <input type="checkbox" ${e.depOn!==false?'checked':''} data-emp="${e.id}" data-f="deposit_on" onchange="depFieldChg(this)"${canEd?'':' disabled'}>
         <span>${e.depOn!==false?'เปิด':'ปิด'}</span></label></td>
@@ -5608,16 +5951,17 @@ async function depLockOpen(){
     const d = depositCalc(e, period);
     if(!row && !depRule(e, period).target && !d.before) continue;
     if(!pdPaid(e, period, today)){ notYet++; continue; }   // ตัวเดียวกับ depLockDue (ออฟฟิศ: วันจ่าย = วันสุดท้ายของงวด ล็อกได้วันถัดไป)
-    const live = (!settings.depStart || period >= settings.depStart) && e.depOn !== false && depRule(e, period).target > 0;
+    const live = depStartOk(e, period) && e.depOn !== false && depRule(e, period).target > 0;
     const flags = [];
     // ≥ DEP_V2_START หักไม่เกินสุทธิ (เจ้าของสั่ง 2026-10-20) — ล็อกด้วยยอดที่ระบบคิด = จำเหตุผลไว้ในแถว 🔒 (ประวัติยังบอกว่าไม่ได้หัก/หักได้บางส่วน)
     if(d.cap) flags.push('ℹ️ ' + depCapTxt(d) + ' — ล็อกพร้อมเหตุผล');
+    else if(depPreOwn(e, period)) flags.push('ℹ️ ก่อนงวดเริ่มหักรายคน (' + shortP(e.depositStart) + ') — ระบบคิด 0 · สลิปจริงหัก = แก้ยอดที่จะล็อกตามสลิป');
     else if(hasWork && !d.ded && !d.done) flags.push('⚠️ มีวันทำงานแต่หัก 0');
     if(e.depOn === false) flags.push('⚠️ ปิดหักอยู่');
     if((Number(e.depOpen)||0) > 0) flags.push('⚠️ เก็บมาก่อน '+THB(e.depOpen));
     if(e.full && fulls[String(e.full).trim()] > 1) flags.push('⚠️ ชื่อจริงซ้ำกับอีกแถว');
     if(row) flags.push('✎ มีแก้เอง');
-    if(row && !live) flags.push('⚠️ ✎ ไม่ถูกนับตอนนี้ (ปิดหัก/เป้า 0) — เทียบสลิป');
+    if(row && !live) flags.push('⚠️ ✎ ไม่ถูกนับตอนนี้ (' + (depPreOwn(e, period) ? 'ก่อนงวดเริ่มหักรายคน' : 'ปิดหัก/เป้า 0') + ') — เทียบสลิป');
     // ✎ ในงวดที่ไม่มีวันทำงาน (≥ ต.ค. 69 หลังรัน v2 นับเข้ายอดสะสม · แบบแอปเดิม = นับแค่งวดนั้น d.soloV1) แต่งวดแบบนี้มักสุทธิติดลบ (K BIZ ไม่โอน)
     // หรือเป็นคนพ้นสภาพที่ไม่มีสลิป → อาจไม่เคยหักจริง · ล็อกแล้ว = นับเข้ายอดสะสมเสมอ
     if(row && live && !hasWork) flags.push('⚠️ ✎ ในงวดที่ไม่มีวันทำงาน — เช็คว่าหักจริงในสลิป/ไฟล์โอน (ไม่ได้หัก = ล็อก 0)' +
@@ -5738,7 +6082,7 @@ async function depRefundOpen(){
   // → ยอดสะสม/ยอดคืนอาจไม่ตรงกับที่หักจริง ให้เช็คสลิป/ไฟล์โอนแล้ว 🔒 งวดนั้นด้วยยอดจริงก่อนคืน
   const nwRows = e => { const w = empPeriodSet(e);
     return depositEntries.filter(r=>r.empId===e.id && r.note==='' && (Number(r.amount)||0) > 0 && r.period < period &&
-      (!settings.depStart || r.period >= settings.depStart) && !w.has(r.period)).sort((a,b)=>a.period<b.period?-1:1); };
+      depStartOk(e, r.period) && !w.has(r.period)).sort((a,b)=>a.period<b.period?-1:1); };
   // ≥ DEP_V2_START (รัน v2 แล้ว) ✎ หักได้ไม่เกินสุทธิ — งวดไม่มีวันทำงานมักได้ 0 → โชว์ยอดที่นับจริง ไม่ใช่ยอด ✎ ดิบ (ผลตรวจรอบ 2)
   const nwTxt = (e, rs) => rs.map(r=>{ const a = Number(r.amount)||0, t = shortP(r.period)+' '+THB(a);
     if(r.period < DEP_V2_START || !depV2On()) return t+' (ไม่นับเข้ายอดสะสม)';
@@ -5763,7 +6107,7 @@ async function depRefundOpen(){
     //   โอนไปแล้วตอนพ้นสภาพแล้วกลับมาทำงานก่อนบันทึก/ยกเลิก 🏦 ไปแล้ว = เดิมบันทึก 🏦 ไม่ได้ และหน้าต่างนี้ติ๊กคืนในสลิปให้เอง = จ่ายซ้ำ)
     const act = !!e.active, xf = !act;
     const prior = depLockDue(e, { before: period });                         // งวดก่อนหน้าที่จ่ายแล้วแต่ยังไม่ล็อก → ล็อกพร้อมกัน
-    const hist = depPeriods().slice().sort().filter(p=>p < period && (!settings.depStart || p >= settings.depStart)).map(p=>depHistTxt(e, p)).filter(Boolean);
+    const hist = depPeriods().slice().sort().filter(p=>p < period && depStartOk(e, p)).map(p=>depHistTxt(e, p)).filter(Boolean);
     const warn = [];
     if(nw.length) warn.push('✎ ในงวดที่ไม่มีวันทำงาน: ' + nwTxt(e, nw) + ' — เช็คสลิป/ไฟล์โอนว่าหักจริงไหม แล้ว 🔒 งวดนั้นด้วยยอดจริงก่อนคืน');
     if((Number(e.depOpen)||0) > 0) warn.push('เก็บมาก่อน '+THB(e.depOpen)+' — ตรวจว่าเก็บจริง');
@@ -5967,7 +6311,8 @@ async function depRefundSave(){
    พนักงานที่ยังทำงานอยู่ขอเบิกเงินประกันคืนก่อนครบเป้า → จ่ายนอกสลิป (เงินสด/โอน) แล้วบันทึกที่นี่ = แถว deposit_payouts (ไม่เข้าสลิป/สุทธิ/K BIZ)
    ยอดเบิกของงวด p ลดยอดสะสม "หลังหัก" ของงวด p (depositCalc) → งวดถัดไปหักต่อตามสูตรเดิมจนครบเป้า · ยอดหักของงวด p และงวดก่อนไม่เปลี่ยน
    บันทึก/แก้/ยกเลิก = เจ้าของ/แอดมิน หรือสิทธิ์ dep:e (asPerm) · เฉพาะงวดที่ยังไม่ถึงวันจ่าย (ห้ามเปลี่ยนยอดสะสมของงวดที่จ่ายแล้วย้อนหลัง)
-   เบิกได้ไม่เกิน สะสมก่อนงวด − คืน/เบิกที่บันทึกแล้วงวดนี้ (และไม่ทำให้สะสมงวดหลังที่มีการเบิก/คืนติดลบ) · ยอดที่เก็บก่อนเข้าระบบ (ก่อน depStart) ไม่อยู่ในแอป */
+   เบิกได้ไม่เกิน สะสมก่อนงวด − คืน/เบิกที่บันทึกแล้วงวดนี้ (และไม่ทำให้สะสมงวดหลังที่มีการเบิก/คืนติดลบ) · ยอดที่เก็บก่อนเข้าระบบ (ก่อน depStart) ไม่อยู่ในแอป
+   งวดเริ่มหักรายคน (deposit_start · 2026-10-21): ทุกจุดที่รู้ตัวคนใช้ depStartOk/depStartOf ไม่ใช่ settings.depStart ตรง ๆ ('' = เท่าเดิม) */
 let depPoSt = null, depPoBusy = false;
 const DEP_PO_VIA = { cash:'💵 เงินสด', transfer:'🏦 โอน' };
 const DEP_PO_SQL = '❌ ต้องรัน jj_deposit_payouts.sql ใน Supabase ก่อน';
@@ -5984,13 +6329,14 @@ function depPoEditBlock(e, p){
 function depPoBlock(e, p){
   if(!depPoReady) return 'ยังไม่ได้รัน jj_deposit_payouts.sql';
   if(!p || p < DEP_V2_START) return 'บันทึกได้ตั้งแต่' + periodLabel(DEP_V2_START);
-  if(settings.depStart && p < settings.depStart) return 'งวดก่อน "เริ่มหักตั้งแต่งวด"';
+  if(!depStartOk(e, p)) return depOwnStart(e) && !(settings.depStart && p < settings.depStart) ? 'งวดก่อน "เริ่มหักงวด" ของ ' + e.nick + ' (' + shortP(depOwnStart(e)) + ')' : 'งวดก่อน "เริ่มหักตั้งแต่งวด"';
   const eb = depPoEditBlock(e, p); if(eb) return eb + ' — เลือกงวดปัจจุบัน';
   if(periodRangeE(e, p).from > bizToday()) return periodLabel(p) + ' ยังไม่เริ่ม';
   // ช่วง 26 → 5 (เปิดอยู่ 2 งวด): สะสมก่อนงวดใหม่ยังรวมยอดหักงวดก่อนที่ยังไม่ได้หักจริง (เปลี่ยนได้ — สุทธิไม่พอ/✎/ปิดหัก)
   // → บันทึกที่งวดก่อนจนถึงวันจ่ายงวดนั้น (ผลตรวจ 💵 รอบ 1: เดิมเบิกยอดที่ยังเก็บไม่ได้ออกไปได้ → สะสมติดลบ)
+  //   งวดก่อนอยู่ก่อนงวดเริ่มหัก (ระบบ/รายคน) = ไม่มียอดหักค้าง → บันทึกงวดนี้ได้เลย (เดิมเช็คแค่ dep_start ระบบ — คนเริ่ม พ.ย. ถูกส่งไปงวด ต.ค. ที่บันทึกไม่ได้)
   const pp = prevPeriod(p), rp = periodRangeE(e, pp);
-  if(rp.pay > bizToday() && !(settings.depStart && pp < settings.depStart))
+  if(rp.pay > bizToday() && depStartOk(e, pp))
     return periodLabel(pp) + ' ยังไม่ถึงวันจ่าย (' + dayLabel(rp.pay) + ') — บันทึกเบิกคืนที่' + periodLabel(pp) + ' (สะสมก่อน' + periodLabel(p) + ' ยังรวมยอดหักที่ยังไม่ได้หักจริง)';
   if(!e.active) return 'พ้นสภาพแล้ว — คืนทั้งหมดใช้ 💸 คืนส่วนเกิน ติ๊ก "คืนเกินส่วนเกิน (ลาออก)"';
   const row = depRowOf(e.id, p);
@@ -6064,13 +6410,14 @@ function depPoRender(){
   if(st.editId && !xs.some(x => x.id === st.editId)){ st.editId = null; depPoForm(null); }   // ถูกยกเลิกจากเครื่องอื่น
   const blk = st.editId ? depPoEditBlock(e, p) : depPoBlock(e, p);
   const edBlk = depPoEditBlock(e, p), can = depPoCan();
-  const st0 = settings.depStart ? shortP(settings.depStart) : '';
+  const st0 = settings.depStart ? shortP(settings.depStart) : '', own = depOwnStart(e);   // ก่อนเข้าระบบ = dep_start ระบบ · งวดเริ่มรายคน = บรรทัดแยก (ผลตรวจ R4)
   document.getElementById('depPoTitle').textContent = '💵 เบิกเงินประกันคืน — ' + e.nick + ' · ' + periodLabel(p);
   document.getElementById('depPoDate').min = periodRangeE(e, prevPeriod(p)).from;
   document.getElementById('depPoInfo').innerHTML =
     `สะสมในระบบก่อน${periodLabel(p)} <b>${THB(d.before)}</b> บาท / เป้า ${THB(d.target)}${(Number(e.depOpen)||0) ? ' (รวมเก็บมาก่อน ' + THB(e.depOpen) + ')' : ''}` +
     `${d.refund || d.xfer ? ' · คืนงวดนี้แล้ว ' + THB(d.refund || d.xfer) : ''}${d.po ? ' · เบิกคืนงวดนี้แล้ว ' + THB(d.po) : ''} → <b>เบิกได้ไม่เกิน ${THB(m.max)} บาท</b>` +
     `<div class="warn-note" style="margin:8px 0 0">⚠️ <b>ยอดที่เก็บก่อนเข้าระบบ${st0 ? ' (ก่อน ' + st0 + ')' : ''} ไม่อยู่ในแอป</b>${(Number(e.depOpen)||0) ? ' (ยกเว้น "เก็บมาก่อน" ' + THB(e.depOpen) + ' ที่รวมในยอดสะสมแล้ว)' : ''} — บันทึกที่นี่เฉพาะส่วนที่อยู่ในระบบ (ไม่เกิน ${THB(m.max)} บาท) · ส่วนที่เหลือของยอดที่จ่ายจริง เป็นเงินเก็บก่อนเข้าระบบ ไม่ต้องบันทึก</div>` +
+    (own ? `<div style="margin-top:8px;font-size:12.5px">เริ่มหักงวด ${shortP(own)} (รายคน) — งวดก่อนนั้นไม่หัก · 🔒 ที่มีอยู่ยังนับในยอดสะสม</div>` : '') +
     `<div style="margin-top:8px;font-size:12.5px">จ่ายนอกสลิปเท่านั้น (เงินสด/โอน — ไม่เข้าสลิป/ยอดสุทธิ/ไฟล์ K BIZ) · ยอดหัก${periodLabel(p)} ไม่เปลี่ยน (${THB(d.ded)}) · งวดถัดไปหักต่อ ${THB(R.monthly)}/งวด จนครบเป้า (ถ้าสุทธิพอ)</div>`;
   document.getElementById('depPoList').innerHTML = xs.length
     ? `<div class="section-title" style="margin:10px 0 4px">รายการเบิกคืน${periodLabel(p)}</div><div class="tbl-wrap"><table class="mcard"><thead><tr><th>วันที่จ่าย</th><th class="num">จำนวน</th><th>วิธีจ่าย</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>` +
@@ -7266,7 +7613,9 @@ async function saveTips(){
    หักเฉพาะคนที่ติ๊ก "เข้าประกันสังคม" (employees.sso_on)
    ฐานค่าจ้าง = ค่าแรงงวดนั้น ประกบเข้าช่วง sso_min–sso_max (1,650–15,000)
    เงินสมทบ = ฐาน × sso_rate% ปัดเศษสตางค์ ≥ 50 ขึ้นเป็นบาท (กติกา สปส.)
-   นายจ้างสมทบเท่ากัน · override รายงวดในตาราง sso_entries (0 = งดหัก) */
+   นายจ้างสมทบเท่ากัน · override รายงวดในตาราง sso_entries (0 = งดหัก)
+   งวดเริ่มหักรายคน employees.sso_start (เจ้าของสั่ง 2026-10-21): งวดก่อนนั้นไม่หักอัตโนมัติ (pre · formula = ยอดตามสูตร) · ✎ รายงวดยังมีผลเสมอ (ใส่ตามสลิปที่จ่ายจริง)
+     '' = หักทุกงวดที่ติ๊กเข้า สปส. แบบเดิม (ผลเท่าเดิมทุกบาท — ไม่มีช่อง pre/formula) */
 function ssoCalc(emp, period, base){
   const zero = { on: !!emp.ssoOn, ded:0, auto:0, employer:0, wageBase:0, override:null };
   if(!ssoReady || !emp.ssoOn || !(base > 0)) return zero;
@@ -7274,19 +7623,109 @@ function ssoCalc(emp, period, base){
   const wageBase = Math.min(+(settings.ssoMax||15000), Math.max(+(settings.ssoMin||1650), base));
   const raw = wageBase * (+(settings.ssoRate||5)) / 100;
   const auto = Math.floor(raw) + ((raw - Math.floor(raw)) >= 0.5 ? 1 : 0);
+  const pre = !!emp.ssoStart && !!period && period < emp.ssoStart;
+  if(pre){ const d0 = ov ? Math.max(0, +ov.amount) : 0; return { on:true, ded:d0, auto:0, employer:d0, wageBase, override: ov, pre: emp.ssoStart, formula: auto }; }
   const ded = ov ? Math.max(0, +ov.amount) : auto;
   return { on:true, ded, auto, employer: ded, wageBase, override: ov };
 }
+/* ติ๊กเข้า สปส. (งานประจำวัน "เพิ่มคนเข้า สปส.") — ฟังก์ชันกลางของหน้า 🧾 (updSsoField) และแท็บ 🪪 (saveInfo) · ผลตรวจ R1/R2
+   เดิมคิด สปส. ย้อนในงวดที่จ่ายแล้วทุกงวดเงียบ ๆ → งวดที่จ่ายแล้ว (ถึงวันจ่าย) จะกลายเป็นหัก = เสนอ "เริ่มหักงวด" = งวดแรกที่ยังไม่จ่าย (empFirstOpen) ไปใน update เดียวกัน
+   ไม่เอา = คิดย้อนแบบเดิม — เจ้าของ/แอดมินเท่านั้น (ยืนยันว่าสลิปงวดนั้นหักจริง) + จด 🕘 งวด/ยอด · บัญชีอื่นยกเลิก = ไม่บันทึก
+   คืน null = ยกเลิก (ไม่บันทึก) · { start } = sso_start ที่ส่งไปพร้อมกัน (undefined = ไม่ส่ง) · old · back = งวดที่คิดย้อน · chg = งวดที่ยอด สปส. เปลี่ยนจริง (ตัวกัน depPaidGuard)
+   ยังไม่รัน jj_emp_start.sql = แบบเดิม ({ chg:null } → depPaidGuard null เหมือน main) */
+async function ssoTickAsk(e0){
+  if(!startReady) return { start: undefined, old: '', chg: null };
+  const today = bizToday(), cur = e0.ssoStart || '';
+  const ps = [...new Set([...allPeriods(), ...ssoEntries.filter(x => x.empId === e0.id).map(x => x.period), periodOfE(e0, today)])].filter(p => PERIOD_RE.test(p)).sort();
+  const diff = st => { const tmp = Object.assign({}, e0, { ssoOn:true, ssoStart: st });
+    return ps.map(p => { const P = calcPay(e0, p), r = periodRangeE(e0, p); return { p, from: P.sso.ded, to: ssoCalc(tmp, p, P.base).ded, paid: r.pay <= today }; }).filter(x => x.from !== x.to); };
+  // งวดที่มี ✎ = ยอดตามสลิป มีผลทุกงวดเริ่ม (✎ ตอนเอาติ๊กออก = ผู้ใช้ยืนยันว่าสลิปหักจริง — ssoUntickAsk) → ไม่ใช่ "หักย้อน" แต่บอกในหน้าต่าง + จด 🕘 (ผลตรวจ R4)
+  // งวดที่สแกนในเครื่องไม่ครบงวด (เก่ากว่า punchSince) = เกณฑ์เดียวกับ ssoUntickAsk: ไม่นับเป็นหักย้อน (ผลตรวจ R4 — เดิมคนที่หักมานานเอาติ๊กออกแล้วติ๊กกลับเองไม่ได้)
+  const ovP = new Set(ssoEntries.filter(x => x.empId === e0.id).map(x => x.period));
+  const d0 = diff(cur), hit = d0.filter(x => x.paid && !ovP.has(x.p) && ssoFullP(e0, x.p)), st = empFirstOpen(e0);
+  if(!hit.length || (cur && cur >= st)) return { start: undefined, old: cur, chg: d0 };   // ไม่มีงวดที่จ่ายแล้วเปลี่ยน / ตั้งงวดเริ่มไว้แล้ว (ที่เหลือ = ✎ ตามสลิป)
+  const L = hit.slice(0, 6).map(x => shortP(x.p) + ' ' + THB(x.from) + ' → ' + THB(x.to)).join(' · ') + (hit.length > 6 ? ' …' : '');
+  const ovB = d0.filter(x => x.paid && ovP.has(x.p));   // ✎ ของงวดที่จ่ายแล้วที่จะกลับมานับ (ทั้งสองทางเลือก)
+  const ovTxt = ovB.length ? '\n✎ ที่จดไว้ (ยอดตามสลิป) จะกลับมานับ: ' + ovB.slice(0, 6).map(x => shortP(x.p) + ' ' + THB(x.from) + ' → ' + THB(x.to)).join(' · ') + (ovB.length > 6 ? ' …' : '') +
+    ' (สลิปไม่ได้หัก = แก้ ✎ เป็น 0 ที่หน้า 🧾 ทีหลัง)' : '';
+  const boss = isBoss(AUTH);
+  if(confirm('ติ๊กเข้า สปส. ให้ ' + e0.nick + ' — งวดที่จ่ายแล้ว (ไม่มี ✎) จะกลายเป็นหัก สปส. ย้อนหลัง: ' + L + ovTxt + '\n\n' +
+             'ตกลง = ตั้ง "เริ่มหักงวด" ' + shortP(st) + ' ไปพร้อมกัน (คนที่เพิ่งเริ่มหัก — สลิปงวดที่จ่ายแล้วไม่ได้หัก สปส.)\n' +
+             (boss ? 'ยกเลิก = ถามต่อ: คิดย้อนแบบเดิม (สลิปงวดนั้นหัก สปส. จริง เช่น หักมาตลอดแต่เคยเอาติ๊กออก)'
+                   : 'ยกเลิก = ไม่บันทึก · คนนี้หัก สปส. มาตลอด (เคยเอาติ๊กออก) = กดยกเลิก แล้วให้เจ้าของ/แอดมินติ๊กแบบคิดย้อน') + '\n' + EMP_START_VER))
+    return { start: st, old: cur, chg: diff(st) };
+  if(!boss) return null;
+  if(!confirm('ติ๊กเข้า สปส. ให้ ' + e0.nick + ' แบบคิดย้อนในงวดที่จ่ายแล้วด้วย (' + L + ')?\nทำเฉพาะเมื่อสลิปงวดนั้นหัก สปส. จริง (จดในหน้า 🕘 ประวัติการทำรายการ) · ไม่แน่ใจ = ยกเลิก')) return null;
+  return { start: undefined, old: cur, chg: d0, back: hit };
+}
+/* งวดที่สแกนในเครื่องครบงวด (ฐานค่าจ้างครบ) — เกณฑ์เดียวของ ssoUntickAsk (จด ✎) และ ssoTickAsk (นับเป็นหักย้อน) · ผลตรวจ R4 */
+const ssoFullP = (e, p) => !punchSince || periodRangeE(e, p).from >= punchSince;
+/* เอาติ๊ก สปส. ออก (รัน jj_emp_start.sql แล้ว · ผลตรวจ R3 → R4): งวดที่จ่ายแล้ว (ถึงวันจ่าย · ssoFullP) ที่หัก สปส. > 0 และยังไม่มี ✎
+   = ยอดที่แอปคิด ไม่ใช่หลักฐานว่าสลิปหัก (เคสจริง: 9 คนที่ถูกติ๊ก 9/19 ต.ค. — แอปคิด ส.ค./ก.ย. ย้อนทั้งที่สลิปไม่ได้หัก) → ถามก่อน ห้ามจด ✎ เอง
+     ① "สลิปงวดเหล่านี้หัก สปส. จริงไหม" ตกลง = จด ✎ ยอดนั้น (ติ๊กกลับทีหลังยอดเดิมไม่หาย — main: ติ๊กกลับ = ยอดเดิม) แล้วเอาติ๊กออก
+     ② ยกเลิก → "เอาติ๊กออกโดยไม่จด ✎?" ตกลง = ไม่จด (สลิปไม่ได้หัก/ติ๊กผิดคน — ติ๊กกลับทีหลัง ssoTickAsk เสนองวดเริ่ม) · ยกเลิก = ไม่บันทึกอะไร
+   อ่าน sso_entries ของคนนี้ใหม่ก่อนคิด (✎ จากเครื่องอื่นที่ realtime หลุด — ผลตรวจ R3 low) · คืน null = ยกเลิก/อ่านไม่ได้ · { rows: ✎ ที่จะจด, drop: งวดที่ไม่จด }
+   ใช้ร่วมกัน: หน้า 🧾 (updSsoField) · แท็บ 🪪 (saveInfo) — ถามก่อนตัวกัน depPaidGuard แล้วเขียนด้วย ssoUntickKeep หลังผ่านตัวกัน */
+async function ssoUntickAsk(e){
+  if(!startReady || !e || !e.ssoOn) return { rows: [], drop: [] };
+  const fr = await db.from('sso_entries').select('*').eq('employee_id', e.id);
+  if(fr.error){ toast('❌ อ่าน ✎ สปส. ของ ' + e.nick + ' ไม่ได้ — ลากหน้าลงแล้วลองใหม่ (ยังไม่ได้เอาติ๊กออก)'); return null; }
+  ssoEntries = ssoEntries.filter(x => x.empId !== e.id).concat((fr.data || []).map(fromDbSsoE));
+  const today = bizToday();
+  const rows = allPeriods().filter(p => periodRangeE(e, p).pay <= today && ssoFullP(e, p))
+    .map(p => { const s = calcPay(e, p).sso; return s && s.ded > 0 && !s.override ? { employee_id:e.id, period:p, amount:s.ded } : null; }).filter(Boolean).sort((a, b) => a.period < b.period ? -1 : 1);
+  if(!rows.length) return { rows: [], drop: [] };
+  const L = rows.map(r => shortP(r.period) + ' ' + THB(r.amount)).join(' · ');
+  if(confirm('เอาติ๊ก สปส. ออก — ' + e.nick + '\nงวดที่จ่ายแล้วที่แอปคิดหัก สปส. (ยังไม่มี ✎): ' + L + '\n\nสลิปงวดเหล่านี้หัก สปส. จริงไหม?\n' +
+             'ตกลง = หักจริง → จด ✎ ยอดนี้ไว้ (ติ๊กกลับทีหลังยอดเดิมไม่หาย) แล้วเอาติ๊กออก\n' +
+             'ยกเลิก = ไม่ได้หัก / ติ๊กผิดคน / ไม่แน่ใจ → ถามต่อ (ยังไม่บันทึก)')) return { rows, drop: [] };
+  if(confirm('เอาติ๊ก สปส. ออกจาก ' + e.nick + ' โดยไม่จด ✎?\nงวดที่จ่ายแล้ว ' + L + ' → ในแอปเป็น 0 (ตรงสลิปที่ไม่ได้หัก) · ติ๊กกลับทีหลัง ระบบจะถาม "เริ่มหักงวด"\n\n' +
+             'ตกลง = เอาติ๊กออก ไม่จด ✎ (สลิปไม่ได้หัก / ติ๊กผิดคน)\nยกเลิก = ไม่บันทึกอะไร (ยังติ๊กอยู่)')) return { rows: [], drop: rows };
+  return null;
+}
+/* จด ✎ ที่ผู้ใช้ยืนยันใน ssoUntickAsk — insert แบบไม่ทับ (onConflict ignoreDuplicates: ✎ ที่อีกเครื่องเพิ่งใส่ = ใช้ของเดิม) แล้วอ่านของคนนี้ใหม่
+   สิทธิ์ = สิทธิ์ "แก้" ของหน้าที่เอาติ๊กออก (เท่าการแก้ sso_on) · คืน u · null = เขียนไม่ได้ (ไม่บันทึก) */
+async function ssoUntickKeep(e, u){
+  if(!u || !u.rows.length) return u;
+  const { error } = await asPerm('', 'e', () => db.from('sso_entries').upsert(u.rows, { onConflict:'employee_id,period', ignoreDuplicates:true }).select());
+  if(error){ toast('❌ จด ✎ สปส. ของงวดที่จ่ายแล้วไม่ได้ — ลากหน้าลงแล้วลองใหม่ (ยังไม่ได้เอาติ๊กออก)\n' + (error.message || '')); return null; }
+  const fr = await db.from('sso_entries').select('*').eq('employee_id', e.id);
+  if(!fr.error) ssoEntries = ssoEntries.filter(x => x.empId !== e.id).concat((fr.data || []).map(fromDbSsoE));
+  return u;
+}
+const ssoKeepTxt = u => !u ? '' : u.rows.length ? ' · ✎ ยอด สปส. ตามสลิปของงวดที่จ่ายแล้ว ' + u.rows.map(r => shortP(r.period) + ' ' + THB(r.amount)).join(', ') + ' (ติ๊กกลับแล้วยอดเดิมไม่หาย)'
+  : u.drop.length ? ' · ไม่จด ✎ — งวดที่จ่ายแล้ว ' + u.drop.map(r => shortP(r.period)).join(', ') + ' เป็น 0 (ติ๊กกลับทีหลังระบบถามงวดเริ่ม)' : '';
+/* หลังบันทึกสำเร็จ: จด 🕘 — ติ๊กเข้า: งวดที่จ่ายแล้วที่ยอดเปลี่ยนตามจริง (✎ กลับมานับ / คิดย้อน · ผลตรวจ R4: เดิมเขียน "ไม่หักย้อน" ทั้งที่ ✎ กลับมานับ)
+   เอาติ๊กออก: ยืนยันว่าสลิปหักจริง (จด ✎) / ไม่ได้หัก (ไม่จด) */
+function ssoTickAudit(e, t, u){
+  if(!e) return;
+  const today = bizToday(), ov = new Set(ssoEntries.filter(x => x.empId === e.id).map(x => x.period));
+  const pc = (t && t.chg || []).filter(x => periodRangeE(e, x.p).pay <= today), pcTxt = pc.map(x => shortP(x.p) + ' ' + THB(x.from) + '→' + THB(x.to) + (ov.has(x.p) ? ' (✎)' : '')).join(', ');
+  if(t && t.start !== undefined) auditWrite('update', 'employees', 'เข้า สปส. + ' + EMP_START.sso.of + e.nick + ': ' + empStartLbl('sso', t.old) + ' → ' + shortP(t.start) +
+    (pc.length ? ' · งวดที่จ่ายแล้วที่ยอดเปลี่ยน: ' + pcTxt : ' (งวดที่จ่ายแล้วไม่หักย้อน)'));
+  else if(t && t.back) auditWrite('update', 'employees', 'เข้า สปส. ของ ' + e.nick + ' แบบคิดย้อนงวดที่จ่ายแล้ว (เจ้าของ/แอดมินยืนยันว่าสลิปหักจริง): ' + pcTxt);
+  else if(pc.length) auditWrite('update', 'employees', 'เข้า สปส. ของ ' + e.nick + ' · งวดที่จ่ายแล้วที่ยอดเปลี่ยน: ' + pcTxt);
+  if(u && u.rows.length) auditWrite('update', 'employees', 'เอาติ๊ก สปส. ออก ' + e.nick + ' · ยืนยันว่าสลิปงวดที่จ่ายแล้วหักจริง → ✎ ' + u.rows.map(r => shortP(r.period) + ' ' + THB(r.amount)).join(', '));
+  else if(u && u.drop.length) auditWrite('update', 'employees', 'เอาติ๊ก สปส. ออก ' + e.nick + ' · สลิปไม่ได้หัก/ติ๊กผิดคน — ไม่จด ✎: ' + u.drop.map(r => shortP(r.period) + ' ' + THB(r.amount) + '→0').join(', '));
+}
+/* ตัวกันงวดที่จ่ายแล้วของการเปิด/ปิด สปส.: ติ๊กเข้า (startReady) = งวดที่ยอดเปลี่ยนจริง (ตั้งงวดเริ่มแล้ว = ไม่มีงวดที่จ่ายแล้ว → ไม่บล็อก · ผลตรวจ R2 low) · อื่น ๆ = null แบบเดิม */
+const ssoTickPds = t => t && t.chg ? (() => t.chg.map(x => x.p)) : null;
 async function updSsoField(empId, field, val){
   if(!ssoReady) return toast('❌ ต้องรัน jj_sso.sql ใน Supabase ก่อน');
-  // เปิด/ปิด สปส. มีผลทุกงวด (ssoCalc ไม่มีงวดเริ่ม) → สุทธิงวดที่จ่ายแล้วเปลี่ยน → 🔒 เงินประกัน/สำรองฯ ก่อน (ผลตรวจรอบ 4)
+  // เปิด/ปิด สปส. มีผลทุกงวดตั้งแต่ "เริ่มหักงวด" รายคน (sso_start · ว่าง = ทุกงวด) → สุทธิงวดที่จ่ายแล้วเปลี่ยน → 🔒 เงินประกัน/สำรองฯ ก่อน (ผลตรวจรอบ 4)
   const e0 = employees.find(x=>x.id===empId);
-  if(field === 'sso_on' && e0 && !!val !== !!e0.ssoOn && !(await depPaidGuard(e0, null, (val ? 'เปิด' : 'ปิด') + 'หัก สปส. ของ ' + e0.nick))){ renderSso(); return; }
-  const { error } = await db.from('employees').update({ [field]: val }).eq('id', empId);
+  let tick = null, un = null;
+  if(field === 'sso_on' && val && e0 && !e0.ssoOn){ tick = await ssoTickAsk(e0); if(!tick){ renderSso(); return; } }
+  if(field === 'sso_on' && !val && e0 && e0.ssoOn){ un = await ssoUntickAsk(e0); if(!un){ renderSso(); return; } }   // เอาติ๊กออก: ถามว่าสลิปงวดที่จ่ายแล้วหักจริงไหม (ผลตรวจ R4)
+  const st = tick && tick.start !== undefined ? tick.start : undefined;
+  if(field === 'sso_on' && e0 && !!val !== !!e0.ssoOn && !(await depPaidGuard(e0, ssoTickPds(tick), (val ? 'เปิด' : 'ปิด') + 'หัก สปส. ของ ' + e0.nick + (st !== undefined ? ' (เริ่มหักงวด ' + shortP(st) + ')' : '')))){ renderSso(); return; }
+  if(un && !(await ssoUntickKeep(e0, un))){ renderSso(); return; }   // จด ✎ ตามที่ยืนยัน (เขียนไม่ได้ = ไม่เอาติ๊กออก)
+  const { error } = await db.from('employees').update({ [field]: val, ...(st !== undefined ? { sso_start: st } : {}) }).eq('id', empId);
   if(error) return dbErr(error,'บันทึกประกันสังคม');
   const e = employees.find(x=>x.id===empId);
-  if(e){ if(field==='sso_on') e.ssoOn = !!val; if(field==='sso_id') e.ssoId = val; }
-  renderSso(); renderPayroll(); renderDetail(); toast('บันทึกแล้ว');
+  if(e){ if(field==='sso_on') e.ssoOn = !!val; if(field==='sso_id') e.ssoId = val; if(st !== undefined) e.ssoStart = st; }
+  ssoTickAudit(e, tick, un);
+  renderSso(); renderPayroll(); renderDetail(); toast((st !== undefined ? 'บันทึกแล้ว · เข้า สปส. เริ่มหักงวด ' + shortP(st) : 'บันทึกแล้ว') + ssoKeepTxt(un));
 }
 async function setSsoOverride(empId, period, val){
   if(!ssoReady) return toast('❌ ต้องรัน jj_sso.sql ใน Supabase ก่อน');
@@ -7316,7 +7755,8 @@ function editSso(empId, period){
   const p = calcPay(e, period);
   if(!p.sso || !p.sso.on) return toast('❌ คนนี้ไม่ได้เข้าประกันสังคม');
   const v = prompt('🏥 หักประกันสังคมงวดนี้ — '+e.nick+
-    '\nอัตโนมัติ '+THB(p.sso.auto)+' บาท (ฐาน '+THB(p.sso.wageBase)+' × '+(settings.ssoRate||5)+'%)'+
+    (p.sso.pre ? '\nก่อนงวดเริ่มหักของคนนี้ ('+shortP(p.sso.pre)+') — อัตโนมัติไม่หัก · ตามสูตร '+THB(p.sso.formula)+' บาท (ใส่ยอดตามสลิปที่จ่ายจริงได้)'
+               : '\nอัตโนมัติ '+THB(p.sso.auto)+' บาท (ฐาน '+THB(p.sso.wageBase)+' × '+(settings.ssoRate||5)+'%)')+
     '\n\nใส่จำนวนบาท · 0 = งดหักงวดนี้ · เว้นว่างแล้วตกลง = กลับเป็นอัตโนมัติ',
     p.sso.override ? p.sso.ded : '');
   if(v === null) return;
@@ -7331,7 +7771,7 @@ function renderSso(){
   document.getElementById('ssoInfo').innerHTML = ssoReady
     ? `ติ๊กรายคนว่า<b>เข้าประกันสังคม</b>หรือไม่ · เงินสมทบ = ฐานค่าจ้าง (${THB(settings.ssoMin)}–${THB(settings.ssoMax)}) × <b>${settings.ssoRate}%</b>
        หักจากเงินเดือนอัตโนมัติ นายจ้างสมทบเท่ากัน · แก้/งดหักเฉพาะงวดได้ที่ช่อง "สมทบพนักงาน" ·
-       ปุ่ม 📤 สร้างไฟล์รายชื่อสำหรับยื่น สปส. 1-10`
+       ปุ่ม 📤 สร้างไฟล์รายชื่อสำหรับยื่น สปส. 1-10${startReady ? ' · <b>เริ่มหักงวด</b> รายคน = คนที่เพิ่งเริ่มหัก (งวดก่อนนั้นไม่หักอัตโนมัติ · ทุกงวด = แบบเดิม)' : ''}`
     : '<b style="color:var(--red)">⚠️ ยังไม่ได้รัน jj_sso.sql ใน Supabase SQL Editor — รันก่อนถึงจะใช้งานได้</b>';
 
   const rows = employees.filter(e=>e.active && (!bf||e.branch===bf) && empMatch(e,q))
@@ -7339,22 +7779,28 @@ function renderSso(){
     .filter(({e})=> !sf || (sf==='in' && e.ssoOn) || (sf==='out' && !e.ssoOn))
     .sort((a,b)=> (b.e.ssoOn?1:0)-(a.e.ssoOn?1:0) || (a.e.branch||'').localeCompare(b.e.branch||'') || a.e.nick.localeCompare(b.e.nick,'th'));
 
-  const inN = rows.filter(x=>x.e.ssoOn).length;
-  const sumBase = rows.reduce((a,x)=>a+(x.sso.on? x.sso.wageBase:0),0);
+  // ก่อน "เริ่มหักงวด" รายคน (ไม่มี ✎) = ไม่หัก · ไม่อยู่ในไฟล์ สปส. 1-10 → ไม่นับใน "เข้า"/ฐานรวม แยกสถิติ (ผลตรวจ R3 · ไม่มีคนแบบนี้ = เท่าเดิม)
+  const preOf = x => x.e.ssoOn && x.sso.pre && !x.sso.override, preN = rows.filter(preOf).length;
+  const inN = rows.filter(x=>x.e.ssoOn && !preOf(x)).length;
+  const sumBase = rows.reduce((a,x)=>a+(x.sso.on && !preOf(x)? x.sso.wageBase:0),0);
   const sumDed = rows.reduce((a,x)=>a+x.sso.ded,0);
   const noId = rows.filter(x=>x.e.ssoOn && String(x.e.ssoId||'').replace(/\D/g,'').length!==13).length;
   document.getElementById('ssoStats').innerHTML = `
     <div class="stat"><div class="v">${inN}</div><div class="l">เข้าประกันสังคม</div></div>
-    <div class="stat"><div class="v">${rows.length-inN}</div><div class="l">ไม่เข้า</div></div>
+    <div class="stat"><div class="v">${rows.length-inN-preN}</div><div class="l">ไม่เข้า</div></div>${preN ? `<div class="stat"><div class="v">${preN}</div><div class="l">ยังไม่เริ่มหัก (งวดนี้)</div></div>` : ''}
     <div class="stat"><div class="v">${THB(sumBase)} ฿</div><div class="l">ฐานค่าจ้างรวม</div></div>
     <div class="stat"><div class="v" style="color:var(--red)">${THB(sumDed)} ฿</div><div class="l">สมทบพนักงาน (หักงวดนี้)</div></div>
     <div class="stat"><div class="v" style="color:var(--red)">${THB(sumDed)} ฿</div><div class="l">สมทบนายจ้าง</div></div>
     <div class="stat"><div class="v">${THB(sumDed*2)} ฿</div><div class="l">รวมนำส่ง สปส.</div></div>
     <div class="stat"><div class="v" style="color:${noId?'var(--red)':'var(--green)'}">${noId}</div><div class="l">เข้า สปส. แต่เลขบัตรไม่ครบ</div></div>`;
 
-  tbl.className = 'sticky-act';
+  const stPs = startReady ? empStartPs('sso') : null;   // ตัวเลือก "เริ่มหักงวด" (คิดครั้งเดียวต่อการวาด)
+  // รันแล้ว (มีช่อง "เริ่มหักงวด"): มือถือ ≤560px เป็นการ์ด (ผลตรวจ R1: เดิมเลื่อนข้างในกรอบ ชื่อหายตอนเลื่อนถึงช่องเลือก) · ยังไม่รัน = ตารางเดิมทุกตัวอักษร
+  const dl = l => stPs ? ` data-l="${l}"` : '';
+  const na = on => stPs && !on ? ' mc-na' : '';
+  tbl.className = stPs ? 'sticky-act mcard' : 'sticky-act';
   tbl.innerHTML = `<thead><tr>
-      <th>พนักงาน</th><th>สาขา</th><th>เข้า สปส.</th><th>เลขบัตรประชาชน (13 หลัก)</th>
+      <th>พนักงาน${stPs ? EMP_ST_TH : ''}</th><th>สาขา</th><th>เข้า สปส.</th><th>เลขบัตรประชาชน (13 หลัก)</th>
       <th class="num">ค่าแรงงวดนี้</th><th class="num">ฐานคำนวณ</th>
       <th class="num">สมทบพนักงาน</th><th class="num">สมทบนายจ้าง</th><th class="num">รวมนำส่ง</th>
     </tr></thead><tbody>` +
@@ -7362,23 +7808,23 @@ function renderSso(){
       const idClean = String(e.ssoId||'').replace(/\D/g,'');
       const idBad = e.ssoOn && idClean.length !== 13;
       return `<tr${e.ssoOn?'':' style="opacity:.55"'}>
-      <td class="clickable" onclick="openDetail(${e.id})"><b style="color:var(--ember-deep)">${e.nick}</b> <span class="muted">${e.full||''}</span></td>
-      <td>${branchChip(e)}</td>
-      <td><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:400;margin:0">
+      <td class="clickable${stPs ? ' mc-name' : ''}" onclick="openDetail(${e.id})"><b style="color:var(--ember-deep)">${e.nick}</b> <span class="muted">${e.full||''}</span>${stPs ? empStartBox('sso', e, stPs, !ssoReady) : ''}</td>
+      <td${dl('สาขา')}>${branchChip(e)}</td>
+      <td${dl('เข้า สปส.')}><label${stPs ? ' class="dep-sw"' : ''} style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:400;margin:0">
         <input type="checkbox" style="width:auto" ${e.ssoOn?'checked':''} onchange="updSsoField(${e.id},'sso_on',this.checked)">
         <span class="chip ${e.ssoOn?'chip-green':'chip-gray'}">${e.ssoOn?'เข้า':'ไม่เข้า'}</span></label></td>
-      <td><input value="${e.ssoId||''}" inputmode="numeric" maxlength="17" placeholder="เลข 13 หลัก"
+      <td${dl('เลขบัตรประชาชน')}><input value="${e.ssoId||''}" inputmode="numeric" maxlength="17" placeholder="เลข 13 หลัก"
         style="width:170px${idBad?';border-color:var(--red)':''}"
         onchange="updSsoField(${e.id},'sso_id',this.value.trim())">
         ${idBad?'<span class="chip chip-red">เลขไม่ครบ</span>':''}</td>
-      <td class="num">${THB(base)}</td>
-      <td class="num">${sso.on? THB(sso.wageBase):'–'}</td>
-      <td class="num">${sso.on? `<input type="number" value="${sso.ded}" min="0"
+      <td class="num"${dl('ค่าแรงงวดนี้')}>${THB(base)}</td>
+      <td class="num${na(sso.on)}"${dl('ฐานคำนวณ')}>${sso.on? THB(sso.wageBase):'–'}</td>
+      <td class="num${na(sso.on)}"${dl('สมทบพนักงาน')}>${sso.on? `<input type="number" value="${sso.ded}" min="0"
         style="width:90px;text-align:right;font-weight:700${sso.override?';border-color:var(--ember)':''}"
         title="${sso.override?'แก้เองงวดนี้ — ลบค่าแล้ว Enter = กลับอัตโนมัติ (อัตโนมัติ '+THB(sso.auto)+')':'หักอัตโนมัติ — พิมพ์เพื่อแก้เฉพาะงวดนี้'}"
-        onchange="setSsoOverride(${e.id},'${period}',this.value)">${sso.override?' <span class="chip chip-amber">✎</span>':''}` : '–'}</td>
-      <td class="num">${sso.on? THB(sso.employer):'–'}</td>
-      <td class="num" style="font-weight:700">${sso.on? THB(sso.ded + sso.employer):'–'}</td>
+        onchange="setSsoOverride(${e.id},'${period}',this.value)">${sso.override?' <span class="chip chip-amber">✎</span>':''}${sso.pre && !sso.override?' <span class="chip chip-gray" title="ก่อนงวดเริ่มหักของคนนี้ — ไม่หักอัตโนมัติ (ตามสูตร '+THB(sso.formula)+') · ใส่ยอดตามสลิปได้">ยังไม่เริ่มหัก · เริ่ม '+shortP(sso.pre)+'</span>':''}` : '–'}</td>
+      <td class="num${na(sso.on)}"${dl('สมทบนายจ้าง')}>${sso.on? THB(sso.employer):'–'}</td>
+      <td class="num${na(sso.on)}" style="font-weight:700"${dl('รวมนำส่ง')}>${sso.on? THB(sso.ded + sso.employer):'–'}</td>
     </tr>`;}).join('')
     : '<tr><td colspan="9"><div class="empty">ไม่มีพนักงานตามตัวกรอง</div></td></tr>') + '</tbody>';
 }
@@ -8249,8 +8695,8 @@ function empNetChgPds(e0, data, ps){
   }catch(e){ console.warn('empNetChgPds', e); return ps; }
   finally{ if(had) shifts[tmp.code] = keep; else delete shifts[tmp.code]; tipMemo = {}; pvdMemo = {}; }
 }
-const EMP_DEP_COLS = ['deposit_target','deposit_monthly','deposit_opening','deposit_on'];
-const EMP_DEP_KEYS = ['depTarget','depMonthly','depOpen','depOn'];
+const EMP_DEP_COLS = ['deposit_target','deposit_monthly','deposit_opening','deposit_on','deposit_start','sso_start'];   // + งวดเริ่มหักรายคน (แก้ที่หน้า 🛡️/🧾 — empStartSet)
+const EMP_DEP_KEYS = ['depTarget','depMonthly','depOpen','depOn','depositStart','ssoStart'];
 async function delEmp(id){
   const e = employees.find(x=>x.id===id); if(!e) return;
   /* deposit_entries เป็น CASCADE (ลบพนักงาน = ประวัติเงินที่ต้องคืนหายถาวร) · pvd_* เป็น RESTRICT
@@ -8482,9 +8928,11 @@ function dtBalances(e, p, period){
   const out = [];
   if(p.dep && (p.dep.target || p.dep.collected))   // ไม่ซ่อนเมื่อปิดหัก (เดิมซ่อน = "ไปดูในประวัติ ไม่มีเลย")
     out.push(box('🛡️','เงินประกัน', THB(p.dep.collected)+' / '+THB(p.dep.target), p.dep.target ? p.dep.collected/p.dep.target : null,
+      (depPreOwn(e, period) && !DEP_FIXED(p.dep.src) ? 'ยังไม่เริ่มหัก — เริ่ม'+periodLabel(e.depositStart)+' · ' : '') +
       (e.depOn === false ? 'ปิดหักอยู่ · สะสม '+THB(p.dep.collected) : p.dep.refund ? DEP_REFUND_LABEL+' '+THB(p.dep.refund) : p.dep.xfer ? depXferTxt(p.dep) : p.dep.over ? 'เกินเป้า '+THB(p.dep.over)+' · ยังไม่คืน' : !p.dep.target ? 'เป้า 0 — ไม่หัก · สะสม '+THB(p.dep.collected) : p.dep.cap ? (p.dep.cap==='neg' ? '' : 'งวดนี้')+depCapTxt(p.dep)+' · เหลืออีก '+THB(p.dep.remain) : p.dep.done ? 'ครบแล้ว หยุดหัก' : 'งวดนี้หัก '+THB(p.dep.ded)+' · เหลืออีก '+THB(p.dep.remain))
-        + (p.dep.src==='lock' ? ' · 🔒 ปิดยอดแล้ว' : '') + (p.dep.po ? ' · 💵 เบิกคืน '+THB(p.dep.po)+' (นอกสลิป)' : ''),
-      DEP_FIXED(p.dep.src) ? '' : `editDeposit(${e.id},'${period}')`, 'dep'));
+        + (p.dep.src==='lock' ? ' · 🔒 ปิดยอดแล้ว' + (depPreOwn(e, period) ? ' (ก่อนงวดเริ่ม · ยังนับ)' : '') : '') + (p.dep.po ? ' · 💵 เบิกคืน '+THB(p.dep.po)+' (นอกสลิป)' : ''),
+      // งวดก่อน "เริ่มหักงวด" รายคนที่ยังไม่มี ✎ = ไม่มีปุ่ม ✎ (✎ ใหม่ไม่ถูกนับ — กติกาเดียวกับตาราง 🛡️ · ผลตรวจ R1) → "เปิดหน้ารวม"
+      DEP_FIXED(p.dep.src) || (depPreOwn(e, period) && !p.dep.override) ? '' : `editDeposit(${e.id},'${period}')`, 'dep'));
   if(p.pvd && p.pvd.on)
     out.push(box('🐷','เงินสำรองเลี้ยงชีพ', 'คงเหลือ '+THB(p.pvd.balance), null,
       'พนักงาน '+THB(p.pvd.empSum)+' · ร้าน '+THB(p.pvd.erSum)+(p.pvd.paidSum?' · ถอน '+THB(p.pvd.paidSum):'')+' · งวดนี้หัก '+THB(p.pvd.ded)+(p.pvd.er?' (ร้าน +'+THB(p.pvd.er)+')':'')
@@ -8499,8 +8947,8 @@ function dtBalances(e, p, period){
       'ผ่อนแล้ว '+THB(p.eloan.collected)+' / '+THB(p.eloan.target)+(p.eloan.ded?' · งวดนี้หัก '+THB(p.eloan.ded):''),
       `editLoan(${e.id},'${period}')`, 'loan'));
   if(p.sso && p.sso.on)
-    out.push(box('🏥','ประกันสังคม', p.sso.ded ? 'หัก '+THB(p.sso.ded) : 'ไม่หักงวดนี้', null,
-      'ฐานค่าจ้าง '+THB(p.sso.wageBase)+(e.ssoId?' · เลขที่ '+e.ssoId:''), `editSso(${e.id},'${period}')`, 'sso'));
+    out.push(box('🏥','ประกันสังคม', p.sso.ded ? 'หัก '+THB(p.sso.ded) : p.sso.pre ? 'ยังไม่เริ่มหัก' : 'ไม่หักงวดนี้', null,
+      'ฐานค่าจ้าง '+THB(p.sso.wageBase)+(e.ssoId?' · เลขที่ '+e.ssoId:'')+(e.ssoStart?' · เริ่มหัก'+periodLabel(e.ssoStart):''), `editSso(${e.id},'${period}')`, 'sso'));
   return out.length ? `<div class="dt-bals">${out.join('')}</div>` : '';
 }
 function dtDebt(e, p, period){
@@ -8529,9 +8977,12 @@ function dtDepHistoryIn(e, period){
   const why = depLoadErr ? '⛔ ' + depLoadErr + ' — ลากหน้าลง/กด 🔄 ก่อน (ยอดด้านล่างอาจไม่ครบ)'
             : !depReady ? 'ยังอ่านสมุดเงินประกัน (ตาราง deposit_entries) ไม่ได้ — ยังไม่ได้รัน jj_deposit.sql หรือยังโหลดไม่เสร็จ · ยอดด้านล่างคิดจากเวลาสแกนอย่างเดียว (ยังไม่มีประวัติ ✎/🔒/💸)' : '';
   const rows = depReady ? depositEntries.filter(x=>x.empId===e.id) : [];
-  const first = [settings.depStart, ...rows.map(r=>r.period)].filter(Boolean).sort()[0] || '';
-  const work = new Set((shifts[e.code]||[]).map(x=>periodOfE(e, x.day)));
   const pos = depReady ? depPoOf(e.id) : [];   // 💵 เบิกคืนนอกสลิป — มีรายการ = เพิ่มคอลัมน์ "เบิกคืน" (ไม่มี = การ์ดแบบเดิม)
+  // งวดเริ่มหัก (ระบบ/รายคน) หรือแถวแรก · + งวดของ 💵 ที่อยู่ก่อน "เริ่มหักงวด" รายคน (ผลตรวจ R3: 💵 นั้นยังลดยอดสะสม — เดิมไม่มีแถวงวดนั้น อธิบายยอดไม่ได้)
+  //   เฉพาะเมื่อตั้งงวดเริ่มรายคน (ค่าเริ่ม '' = เท่า main ทุกตัวอักษร)
+  const own = depOwnStart(e), poPre = own ? pos.map(x=>x.period).filter(p => p < own && (!settings.depStart || p >= settings.depStart)) : [];
+  const first = [depStartOf(e), ...rows.map(r=>r.period), ...poPre].filter(Boolean).sort()[0] || '';
+  const work = new Set((shifts[e.code]||[]).map(x=>periodOfE(e, x.day)));
   const pds = [...new Set([...depPeriods(), ...work, ...rows.map(r=>r.period), ...pos.map(x=>x.period)])].filter(p=>(!first || p >= first) && p <= period).sort();
   const list = pds.map(p=>({ p, d:depositCalc(e, p) })).filter(x=>x.d.ded || x.d.refund || x.d.xfer || x.d.cap || x.d.override || x.d.po || work.has(x.p));
   const poCol = pos.length > 0;
@@ -8545,17 +8996,17 @@ function dtDepHistoryIn(e, period){
     : ' <span class="muted" style="font-size:11.5px">คิดสด — อาจเปลี่ยน</span>';
   return `<div class="card">
     <div class="section-title" style="margin-top:0">🛡️ ประวัติเงินประกัน
-      <span class="muted" style="font-weight:400;font-size:13px">— เป้า ${THB(depositCalc(e, period).target)} · เก็บมาก่อน ${THB(Number(e.depOpen)||0)}${e.depOn===false?' · <b>ปิดหักอยู่</b>':''}</span>
+      <span class="muted" style="font-weight:400;font-size:13px">— เป้า ${THB(depositCalc(e, period).target)} · เก็บมาก่อน ${THB(Number(e.depOpen)||0)}${depOwnStart(e)?' · เริ่มหัก'+periodLabel(depOwnStart(e))+' (รายคน)':''}${e.depOn===false?' · <b>ปิดหักอยู่</b>':''}</span>
       <span style="flex:1"></span>${canSee('dep')?`<button class="btn btn-light btn-sm" onclick="go('dep')">เปิดหน้าเงินประกัน →</button>`:''}</div>
     ${why ? `<div class="warn-note" style="margin:0 0 10px">⚠️ ${audEsc(why)}</div>` : ''}
-    ${poCol || settings.depStart ? `<div class="muted" style="margin:-4px 0 8px;font-size:12.5px">${poCol ? '💵 เบิกคืน = เบิกเงินประกันคืนนอกสลิป (เงินสด/โอน) ระหว่างทำงาน — ยอดสะสมหลังงวดนั้นลดลง แล้วงวดถัดไปหักต่อจนครบเป้า · ' : ''}ยอดที่เก็บก่อนเข้าระบบ${settings.depStart ? ' (ก่อน' + periodLabel(settings.depStart) + ')' : ''}ไม่อยู่ในแอป${(Number(e.depOpen)||0) ? ' — ยกเว้น "เก็บมาก่อน"' : ''}</div>` : ''}
+    ${poCol || settings.depStart ? `<div class="muted" style="margin:-4px 0 8px;font-size:12.5px">${poCol ? '💵 เบิกคืน = เบิกเงินประกันคืนนอกสลิป (เงินสด/โอน) ระหว่างทำงาน — ยอดสะสมหลังงวดนั้นลดลง แล้วงวดถัดไปหักต่อจนครบเป้า · ' : ''}ยอดที่เก็บก่อนเข้าระบบ${settings.depStart ? ' (ก่อน' + periodLabel(settings.depStart) + ')' : ''}ไม่อยู่ในแอป${(Number(e.depOpen)||0) ? ' — ยกเว้น "เก็บมาก่อน"' : ''}</div>` : ''}${own ? `<div class="muted" style="margin:-4px 0 8px;font-size:12.5px">เริ่มหักงวด ${shortP(own)} (รายคน) — งวดก่อนนั้นไม่หัก · 🔒 ที่มีอยู่ยังนับ</div>` : ''}
     <div class="tbl-wrap"><table class="mcard"><thead><tr><th>งวด</th><th class="num">หัก</th><th class="num">คืน</th>${poCol?'<th class="num">เบิกคืน</th>':''}<th class="num">สะสมหลังงวด / เป้า</th><th>ที่มา</th></tr></thead><tbody>
     ${list.length ? list.slice().reverse().map(({p,d})=>`<tr${p===period?' style="background:var(--ember-soft)"':''}>
       <td data-l="งวด" class="mc-name"><b>${periodLabel(p)}</b>${p===period?' <span class="chip chip-amber">กำลังดู</span>':''}${d.v1?' <span class="chip chip-gray">กติกาเดิม</span>':''}</td>
       <td data-l="หัก" class="num" style="color:${d.ded?'var(--red)':'inherit'}">${d.ded?'-'+THB(d.ded):'–'}${d.cap?`<br><span class="chip chip-red" style="white-space:normal">${d.cap==='neg'?'ไม่ได้หักงวดนี้':'หักได้บางส่วน'}</span>`:''}</td>
       <td data-l="คืน" class="num" style="color:${d.refund||d.xfer?'var(--green)':'inherit'}">${d.refund?'+'+THB(d.refund):d.xfer?'+'+THB(d.xfer)+'<br><span class="muted" style="font-size:11.5px">โอน'+(d.xferDate?' '+dayLabel(d.xferDate):'')+'</span>':'–'}</td>${poCol ? poTd(p) : ''}
       <td data-l="สะสมหลังงวด" class="num"><b>${THB(d.collected)}</b> <span class="muted">/ ${THB(d.target)}</span></td>
-      <td data-l="ที่มา">${audEsc(SRC[d.src]||d.src)}${DEP_FIXED(d.src)?'':live(p)}${d.cap?'<br><span style="color:var(--red);font-size:12px">'+audEsc(depCapTxt(d))+'</span>':''}${d.soloV1?' <span class="chip chip-amber" title="งวดก่อน '+shortP(DEP_V2_START)+' ที่ไม่มีวันทำงาน — นับเป็นยอดหักของงวดนี้ แต่ไม่เข้ายอดสะสมงวดถัดไป (แบบแอปเดิม) · ตรวจแล้ว 🔒 ด้วยยอดจริง">ไม่มีวันทำงาน · ไม่เข้ายอดสะสม</span>':''}</td></tr>`).join('')
+      <td data-l="ที่มา">${audEsc(SRC[d.src]||d.src)}${d.src==='lock' && depPreOwn(e, p)?' <span class="chip chip-gray" title="ปิดยอดแล้ว — ยังนับในยอดสะสมแม้อยู่ก่อนงวดเริ่มหักของคนนี้">ก่อนงวดเริ่มรายคน · ยังนับ</span>':''}${DEP_FIXED(d.src)?'':live(p)}${d.cap?'<br><span style="color:var(--red);font-size:12px">'+audEsc(depCapTxt(d))+'</span>':''}${d.soloV1?' <span class="chip chip-amber" title="งวดก่อน '+shortP(DEP_V2_START)+' ที่ไม่มีวันทำงาน — นับเป็นยอดหักของงวดนี้ แต่ไม่เข้ายอดสะสมงวดถัดไป (แบบแอปเดิม) · ตรวจแล้ว 🔒 ด้วยยอดจริง">ไม่มีวันทำงาน · ไม่เข้ายอดสะสม</span>':''}</td></tr>`).join('')
       : '<tr><td colspan="'+(poCol?6:5)+'"><div class="empty" style="padding:16px">ยังไม่มีงวดที่หัก</div></td></tr>'}
     </tbody></table></div></div>`;
 }
@@ -8741,14 +9192,23 @@ async function saveInfo(){
     patch[f.col] = f.ty === 'chk' ? !!v[k] : f.nul ? (v[k] || null) : v[k];
   }
   if(!Object.keys(patch).length){ piClear(); renderDetail(true); return toast('ไม่มีอะไรเปลี่ยน'); }
+  // ติ๊กเข้า สปส. ทางแท็บนี้ = ถามงวดเริ่มแบบเดียวกับหน้า 🧾 (ssoTickAsk · ผลตรวจ R2: เดิมหักย้อนงวดที่จ่ายแล้วเงียบ ๆ) · ยกเลิก = ไม่บันทึก ร่างยังอยู่
+  let tick = null, un = null;
+  if('sso_on' in patch && patch.sso_on && !e.ssoOn && ssoReady){ tick = await ssoTickAsk(e); if(!tick) return; if(tick.start !== undefined) patch.sso_start = tick.start; }
+  // เอาติ๊กออก = ถามแบบหน้า 🧾 ว่าสลิปงวดที่จ่ายแล้วหักจริงไหม (ssoUntickAsk · ผลตรวจ R4) · ยกเลิก = ไม่บันทึก ร่างยังอยู่
+  if('sso_on' in patch && !patch.sso_on && e.ssoOn && ssoReady){ un = await ssoUntickAsk(e); if(!un) return; }
   // เปิด/ปิด สปส. = สุทธิทุกงวดเปลี่ยน → 🔒 งวดที่จ่ายแล้วก่อน (ผลตรวจรอบ 4 · ยกเลิก/ล็อกไม่ได้ = ไม่บันทึก ร่างยังอยู่)
-  if('sso_on' in patch && !!patch.sso_on !== !!e.ssoOn && !(await depPaidGuard(e, null, (patch.sso_on ? 'เปิด' : 'ปิด') + 'หัก สปส. ของ ' + e.nick))) return;
+  if('sso_on' in patch && !!patch.sso_on !== !!e.ssoOn && !(await depPaidGuard(e, ssoTickPds(tick), (patch.sso_on ? 'เปิด' : 'ปิด') + 'หัก สปส. ของ ' + e.nick + (tick && tick.start !== undefined ? ' (เริ่มหักงวด ' + shortP(tick.start) + ')' : '')))) return;
+  // จด ✎ ตามที่ยืนยัน · เขียนไม่ได้ = ไม่บันทึก ร่างยังอยู่
+  if(un && !(await ssoUntickKeep(e, un))) return;
   busy(true,'กำลังบันทึก…');
   try{
     const { error } = await db.from('employees').update(patch).eq('id', e.id);
     if(error) throw error;
     Object.assign(e, local);
-    piClear(); recomputeAll(); renderAll(); toast('บันทึกแล้ว');
+    if(tick && tick.start !== undefined) e.ssoStart = tick.start;
+    ssoTickAudit(e, tick, un);
+    piClear(); recomputeAll(); renderAll(); toast((tick && tick.start !== undefined ? 'บันทึกแล้ว · เข้า สปส. เริ่มหักงวด ' + shortP(tick.start) : 'บันทึกแล้ว') + ssoKeepTxt(un));
   }catch(err){ dbErr(err,'บันทึกข้อมูลส่วนตัว'); }
   busy(false);
 }
@@ -8787,6 +9247,7 @@ function dtInfo(e){
         ? '<b style="color:var(--red)">ยังไม่มี — จำเป็น (อายุไม่ถึง 18)</b>' : '<span class="muted">ยังไม่มี</span>'] ]],
     ['sso', [
       ['ทำ / ไม่ทำ', e.ssoOn ? '<span class="chip chip-green">ทำ (หักเงินสมทบ)</span>' : '<span class="muted">ไม่ทำ</span>'],
+      ...((startReady && e.ssoOn) || e.ssoStart ? [['เริ่มหักเงินสมทบ', e.ssoStart ? periodLabel(e.ssoStart) + ' <span class="muted">(ก่อนนั้นไม่หักอัตโนมัติ · แก้ที่หน้า 🧾 สปส.)</span>' : 'ทุกงวด']] : []),
       ['เลขประกันสังคม', tx(e.ssoId)], ['โรงพยาบาลที่เลือก', tx(e.ssoHosp)] ]],
     ['bank', [
       ['บัญชีธนาคาร หรือ เงินสด', e.bankName==='เงินสด' ? '💵 เงินสด' : e.bankName ? '🏦 '+e.bankName : need('')],
@@ -8794,6 +9255,7 @@ function dtInfo(e){
       ['ฐานเงินเดือน', e.mode==='hourly' ? THB(e.rate)+' บาท/ชม.' : e.type==='monthly' ? 'รายเดือน '+THB(e.rate)+' บาท' : 'รายวัน '+THB(e.rate)+' บาท'],
       ['รอบจ่ายเงิน', isOfficeCycle(e) ? '1 – สิ้นเดือน · จ่ายสิ้นเดือน (ออฟฟิศ)' : '26 – 25 · จ่ายวันที่ 5'],
       ['เงินประกัน', (e.depOn === false ? 'ปิดหัก · สะสม '+THB(depositCalc(e, '').collected) : THB(e.depTarget)+' บาท · หักงวดละ '+THB(e.depMonthly)+(e.depOpen?' · ยอดยกมา '+THB(e.depOpen):''))
+        + (depOwnStart(e) ? ' · เริ่มหัก'+periodLabel(depOwnStart(e)) : '')   // ค่ารายคน ≤ ระบบ = ไม่มีผล ไม่โชว์ (ผลตรวจ R1)
         + (e.depTargetV1 != null ? ' <span class="muted">(ก่อน'+periodLabel(DEP_V2_START).replace('งวด ','')+': เป้า '+THB(e.depTargetV1)+' · หัก '+THB(e.depMonthlyV1)+')</span>' : '')],
       ...(pvdMemberOf(e) ? [['เงินสำรองเลี้ยงชีพ', audEsc(pvdRuleTxt(pvdMemberOf(e)))+(pvdMemberOf(e).consent?'':' · <b style="color:var(--amber)">ยังไม่เซ็นยินยอม</b>')]] : []) ]],
     ['scan', [
