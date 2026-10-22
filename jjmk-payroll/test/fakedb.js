@@ -10,13 +10,16 @@ const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
 
 function makeDB(){
-  const T = {}, log = [], fail = {}, countLie = {}, chans = {}, cols = {}, rangeCut = {};
-  const UNIQ = { deposit_entries:['employee_id','period'], pvd_entries:['employee_id','period'], pvd_members:['employee_id'], sso_entries:['employee_id','period'] };   // sso_entries: UNIQUE ใน jj_sso.sql
+  const T = {}, log = [], fail = {}, countLie = {}, chans = {}, chanSt = {}, cols = {}, rangeCut = {};
+  const UNIQ = { deposit_entries:['employee_id','period'], pvd_entries:['employee_id','period'], pvd_members:['employee_id'], pay_slips:['employee_id','period','ver'], sso_entries:['employee_id','period'] };   // sso_entries: UNIQUE ใน jj_sso.sql
   const DEF = { deposit_entries:{ note:'', amount:0 }, pvd_entries:{ note:'', emp_amount:null, er_amount:null },
                 pvd_members:{ emp_mode:'fixed', emp_value:0, er_mode:'none', er_value:0, start_period:'', stop_period:'', opening_emp:0, opening_er:0, consent:false, note:'' },
                 pvd_payouts:{ via:'cash', note:'' } };
   let nextId = 100000;
-  const db = { T, log, fail, countLie, chans, cols, rangeCut, latency:null };
+  // 🔒 ปิดงวด (jj_pay_close.sql): เทสเดิม = ยังไม่รัน SQL (ไม่มีตาราง) · เทส close.js ลบสองบรรทัดนี้ออก (delete db.fail.pay_slips/pay_batches)
+  fail.pay_slips = { code:'PGRST205', message:"Could not find the table 'public.pay_slips' in the schema cache" };
+  fail.pay_batches = { code:'PGRST205', message:"Could not find the table 'public.pay_batches' in the schema cache" };
+  const db = { T, log, fail, countLie, chans, chanSt, cols, rangeCut, latency:null };
   const same = (a, b) => String(a) === String(b);
   function exec(st){
     const rows = T[st.table] = T[st.table] || [];
@@ -100,7 +103,7 @@ function makeDB(){
     return b;
   }
   function channel(name){
-    const c = { name, on:(ev, f, fn) => { (chans[name] = chans[name] || {})[f.table] = fn; return c; }, subscribe:() => c };
+    const c = { name, on:(ev, f, fn) => { (chans[name] = chans[name] || {})[f.table] = fn; return c; }, subscribe:cb => { if(cb) chanSt[name] = cb; return c; } };   // chanSt[ช่อง]('CHANNEL_ERROR'|'SUBSCRIBED') = จำลองช่องหลุด/ต่อใหม่
     chans[name] = chans[name] || {};
     return c;
   }

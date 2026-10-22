@@ -55,9 +55,20 @@ export function payrollMoneyFixture(nowMs = Date.now()) {
   ];
   const pvdE = [{ id: 1, employee_id: 1, period: prev2, emp_amount: 600, er_amount: 300, note: 'lock' }, { id: 2, employee_id: 3, period: cur, emp_amount: 300, er_amount: null, note: '' }];
   const pvdP = [{ id: 1, employee_id: 9, pay_date: ymd(biz), period: cur, amount: 1500, via: 'cash', note: 'ลาออก — ถอนบางส่วน' }];
+  // 🔒 ปิดงวด (2026-10-21): ต้นงวด prev2 ปิดแล้ว 1 คน (ต้น) + ไฟล์ K BIZ ที่จดไว้ (แพร/ฝน ยอดไม่ตรงระบบ) — หน้าต่างปิดงวด/เปิดงวดใหม่ + หน้ารายคนงวดที่ปิด
+  const at = new Date(nowMs - 3 * 864e5).toISOString();
+  const pay = { days: 22, hours: 198, base: 12500, addSum: 0, deduSum: 500, net: 12000, dep: { target: 5000, monthly: 500, ded: 500, collected: 3000, before: 2500, src: 'lock', on: true } };
+  const paySlips = [{ id: 1, employee_id: 2, period: prev2, ver: 1, kind: 'close', batch_id: 1, cycle: 'store', branch: 'JJLP', src: 'calc', net: 12000, base: 12500, add_sum: 0, dedu_sum: 500,
+    paid: null, carry: { v: 1, dep: { ded: 500, refund: 0, xfer: 0, collected: 3000, target: 5000 } }, pay, note: '', sha: '', app_ver: '', created_at: at }];
+  const payBatches = [
+    { id: 1, kind: 'close', period: prev2, cycle: 'all', branch: '', src: 'manual', reason: '', n: 1, total: 12000, meta: {}, app_ver: '', username: 'jjtest', display_name: 'ผู้ทดสอบ', at },
+    { id: 2, kind: 'kbiz', period: prev2, cycle: 'all', branch: '', src: 'kbiz', n: 2, total: 2233.5, app_ver: '', username: 'jjtest', display_name: 'ผู้ทดสอบ', at,
+      meta: { name: 'KBIZ_Payroll_ALL_' + prev2 + '.xlsx', eff: '05/01/2027', rows: [{ emp_id: 1, nick: 'แพร', acc: '1000000000', name: 'สมใจ ใจดี', amount: 1234.5 }, { emp_id: 3, nick: 'ฝน', acc: '1022222222', name: 'นภา แก้วตา', amount: 999 }] } },
+  ];
   // 💵 เบิกเงินประกันคืนนอกสลิป (deposit_payouts · 2026-10-21) — บี ยังทำงานอยู่ เบิกคืนบางส่วนงวดนี้
   const depPo = [{ id: 1, employee_id: 4, period: cur, amount: 500, pay_date: ymd(biz), via: 'cash', note: 'ขอเบิกคืนบางส่วน', created_at: '' }];
   return {
+    pay_slips: paySlips, pay_batches: payBatches,
     shifts: [{ id: 1, name: 'กะเช้า', start_time: '09:00', end_time: '18:00', in_grace: 5, out_grace: 0, sort_order: 1, dept_only: '' }],
     employees: emps, punches, deposit_entries: dep, deposit_payouts: depPo, pvd_members: pvdM, pvd_entries: pvdE, pvd_payouts: pvdP, advances: adv,
     payroll_settings: [{ id: 1, cutoff_hour: 6, default_wage: 400, min_fine: 0, late_fine: 0, cut_day: 25, pay_day: 5, adv_day: 15, dep_start: prev2, month_divisor: 30 }],
