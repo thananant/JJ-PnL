@@ -41,13 +41,13 @@ setTimeout(async()=>{
   out.push('matrix exists: '+!!d.querySelector('table.mx'));
   // 2) สีสถานะ 3 ระดับ
   const c1=d.querySelector('[data-mx="2026-08-05|1"]'), c2=d.querySelector('[data-mx="2026-08-06|1"]'), c3=d.querySelector('[data-mx="2026-08-07|2"]');
-  out.push('ขาว 11,885.00: '+(c1.className==='cw'&&c1.textContent==='11,885.00'));
+  out.push('ขาว 12 (พันบาท): '+(c1.className==='cw'&&c1.textContent==='12'));
   out.push('เหลือง (ตรวจแล้ว): '+(c2.className==='cy'));
-  out.push('เขียว 9,451.00: '+(c3.className==='cg'&&c3.textContent==='9,451.00'));
+  out.push('เขียว 9.5 (พันบาท): '+(c3.className==='cg'&&c3.textContent==='9.5'));
   out.push('ช่องว่าง ce: '+(d.querySelector('[data-mx="2026-08-05|2"]').className==='ce'));
   // 3) รวม/วัน + รวม/ซัพ
   const t=d.querySelector('table.mx').textContent;
-  out.push('รวมซัพ1 16,885.00: '+t.includes('16,885.00')+' | grand 26,336.00: '+t.includes('26,336.00'));
+  out.push('รวมซัพ1 17k: '+t.includes('17k')+' | grand 26k: '+t.includes('26k'));
   // 4) กดช่อง -> เปิดฟอร์มวันนั้น
   w.expCell(5,1);
   await new Promise(r=>setTimeout(r,450));

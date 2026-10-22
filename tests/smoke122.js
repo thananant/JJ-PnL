@@ -57,10 +57,10 @@ setTimeout(async()=>{
   ok('row2 = Smilemeat',r2.querySelector('th.mxd').textContent.includes('Smilemeat'));
   const c1=[...r1.querySelectorAll('td[data-mx]')];
   ok('row1 has 31 day cells in order',c1.length===31&&c1[0].dataset.mx==='2026-08-01|1'&&c1[30].dataset.mx==='2026-08-31|1');
-  ok('row1 total 16,885.00',r1.querySelector('td.mxt').textContent==='16,885.00');
-  ok('row2 total 9,451.00',r2.querySelector('td.mxt').textContent==='9,451.00');
+  ok('row1 total 17k (พันบาท · title เต็ม)',r1.querySelector('td.mxt').textContent==='17k'&&r1.querySelector('td.mxt').title.startsWith('16,885.00'));
+  ok('row2 total 9.5k',r2.querySelector('td.mxt').textContent==='9.5k');
   // 4) สี 3 ระดับ + ช่องว่าง + ช่องอาทิตย์
-  ok('cell 5 ส.ค. ซัพ1 = cw 11,885.00',c1[4].className==='cw'&&c1[4].textContent==='11,885.00');
+  ok('cell 5 ส.ค. ซัพ1 = cw 12 (พันบาท · title ยอดเต็ม)',c1[4].className==='cw'&&c1[4].textContent==='12'&&c1[4].title.includes('11,885.00 บาท'));
   ok('cell 6 ส.ค. ซัพ1 = cy',c1[5].className==='cy');
   ok('cell 7 ส.ค. ซัพ2 = cg',r2.querySelectorAll('td[data-mx]')[6].className==='cg');
   ok('empty = ce',c1[0].className==='ce');
@@ -70,16 +70,31 @@ setTimeout(async()=>{
   const ft=trs[3]; ok('foot label',ft.classList.contains('mxfoot')&&ft.querySelector('th.mxd').textContent==='รวม/วัน');
   const fts=[...ft.querySelectorAll('td')];
   ok('foot 32 cells',fts.length===32);
-  ok('foot day5 11,885.00 · day6 5,000.00 · day7 9,451.00 · day1 ว่าง',fts[4].textContent==='11,885.00'&&fts[5].textContent==='5,000.00'&&fts[6].textContent==='9,451.00'&&fts[0].textContent==='');
-  ok('grand 26,336.00',fts[31].textContent==='26,336.00');
+  ok('foot day5 12k · day6 5.0k · day7 9.5k · day1 ว่าง',fts[4].textContent==='12k'&&fts[5].textContent==='5.0k'&&fts[6].textContent==='9.5k'&&fts[0].textContent==='');
+  ok('grand 26k',fts[31].textContent==='26k');
   // 6) กดหัววัน → เปิดฟอร์มวันนั้น
-  hs[4].click(); await new Promise(r=>setTimeout(r,450));
+  ok('เดือนที่ไม่ใช่เดือนนี้ = ยังไม่มีวันยอดเต็ม',!d.querySelector('table.mx .sel'));
+  hs[4].click(); await new Promise(r=>setTimeout(r,100));
+  { const t2=d.querySelector('table.mx'), r1b=t2.querySelectorAll('tr')[1], c5=r1b.querySelectorAll('td[data-mx]')[4], f5=t2.querySelector('tr.mxfoot').querySelectorAll('td')[4];
+    ok('กดหัววัน 5 ครั้งแรก = วันนั้นยอดเต็ม (ไม่เปิดฟอร์ม): ช่อง 11,885.00 · รวม/วัน 11,885.00 · วันอื่นยังพันบาท',
+      w.eval('S.mxD===5&&!S.expOpen')&&c5.classList.contains('sel')&&c5.textContent==='11,885.00'&&f5.textContent==='11,885.00'&&r1b.querySelectorAll('td[data-mx]')[5].textContent!=='5,000.00'); }
+  w.mxToggle('mxFull');
+  { const t3=d.querySelector('table.mx'), r1c=t3.querySelectorAll('tr')[1];
+    ok('ปุ่มตัวเลขเต็ม = ทุกช่องเป็นบาท (วันเลือกยังมีสตางค์): 6 ส.ค. 5,000 · รวมซัพ 16,885',t3.classList.contains('mxfull')&&r1c.querySelectorAll('td[data-mx]')[5].textContent==='5,000'&&r1c.querySelector('td.mxt').textContent==='16,885'&&r1c.querySelectorAll('td[data-mx]')[4].textContent==='11,885.00'); }
+  w.mxToggle('mxFull');
+  { const mm=w.matchMedia; w.matchMedia=()=>({matches:true}); w.eval('S.mxSeg=null'); w.mxRedraw();
+    const rr=d.querySelector('table.mx').querySelectorAll('tr')[1].querySelectorAll('td[data-mx]');
+    ok('มือถือ: ทีละ 10 วัน (ช่วงที่มีวันเลือก 5 = 1–10) + ปุ่มช่วง 3 อัน',rr.length===10&&rr[0].dataset.mx==='2026-08-01|1'&&d.querySelectorAll('.mxseg button').length===3);
+    w.mxSegGo(2); const r3=d.querySelector('table.mx').querySelectorAll('tr')[1].querySelectorAll('td[data-mx]');
+    ok('มือถือ ช่วง 21–31 = 11 วัน',r3.length===11&&r3[0].dataset.mx==='2026-08-21|1');
+    w.matchMedia=mm; w.mxRedraw(); }
+  d.querySelector('table.mx tr').querySelectorAll('th.mxs')[4].click(); await new Promise(r=>setTimeout(r,450));
   ok('click day header → expDay 5 + form open',w.eval('S.expDay===5&&S.expOpen===true')&&d.getElementById('expDayWrap').style.display!=='none');
   // 7) updMatrixCell คง .sun ไว้ (ช่องวันอาทิตย์ที่เพิ่งมีบิล)
   w.eval(`S.cache[mkey(S.br,S.m)].exp['2026-08-09|1']={branch:'JJRD',d:'2026-08-09',supplier_id:1,amount:1200,checked:false,slip_url:null}`);
   w.updMatrixCell('2026-08-09',1);
   const sc=d.querySelector('[data-mx="2026-08-09|1"]');
-  ok('updMatrixCell sunday → cw sun 1,200.00',sc.className==='cw sun'&&sc.textContent==='1,200.00');
+  ok('updMatrixCell sunday → cw sun 1.2',sc.className==='cw sun'&&sc.textContent==='1.2');
   w.eval(`S.cache[mkey(S.br,S.m)].exp['2026-08-09|1'].checked=true`); w.updMatrixCell('2026-08-09',1);
   ok('→ cy sun',sc.className==='cy sun');
   w.eval(`delete S.cache[mkey(S.br,S.m)].exp['2026-08-09|1']`); w.updMatrixCell('2026-08-09',1);
