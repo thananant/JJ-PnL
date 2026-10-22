@@ -11,7 +11,7 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 
 function makeDB(){
   const T = {}, log = [], fail = {}, countLie = {}, chans = {}, cols = {}, rangeCut = {};
-  const UNIQ = { deposit_entries:['employee_id','period'], pvd_entries:['employee_id','period'], pvd_members:['employee_id'] };
+  const UNIQ = { deposit_entries:['employee_id','period'], pvd_entries:['employee_id','period'], pvd_members:['employee_id'], sso_entries:['employee_id','period'] };   // sso_entries: UNIQUE ใน jj_sso.sql
   const DEF = { deposit_entries:{ note:'', amount:0 }, pvd_entries:{ note:'', emp_amount:null, er_amount:null },
                 pvd_members:{ emp_mode:'fixed', emp_value:0, er_mode:'none', er_value:0, start_period:'', stop_period:'', opening_emp:0, opening_er:0, consent:false, note:'' },
                 pvd_payouts:{ via:'cash', note:'' } };

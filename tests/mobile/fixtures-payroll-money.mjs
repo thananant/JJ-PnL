@@ -23,6 +23,8 @@ export function payrollMoneyFixture(nowMs = Date.now()) {
     off_weekdays: '', off_count: 0, holiday_pay: branch !== 'OFFICE', must_work_exempt: true,
     deposit_target: i === 4 ? 4000 : 3000, deposit_monthly: i === 4 ? 500 : 300, deposit_opening: OPEN[i], deposit_on: i !== 6,
     deposit_target_v1: 5000, deposit_monthly_v1: 500, bank_name: 'กสิกรไทย', bank_account: String(1000000000 + i * 1111111).slice(0, 10),
+    // งวดเริ่มหักรายคน (jj_emp_start.sql · 2026-10-21): ฝนเพิ่งเริ่มหักเงินประกันงวดนี้ · แพรเริ่มหัก สปส. งวดนี้ · ครึ่งหนึ่งเข้า สปส.
+    deposit_start: i === 2 ? cur : '', sso_start: i === 0 ? cur : '', sso_on: i % 2 === 0, sso_id: String(1100000000000 + i),
   }));
   const punches = [];
   for (const e of emps) {

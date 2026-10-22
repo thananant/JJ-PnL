@@ -63,7 +63,10 @@ const APPS = [
     // รอบ 10: 📚 ประวัติเงินเดือน (การ์ดที่ ≤560px) · 🛡️ ประวัติเงินประกันรายคน · 🕘 ค้น "ประกัน"
     { label: '🪪 แท็บเงินเดือน (📚 ประวัติเงินเดือน)', js: "(()=>{ if(!document.querySelector('#detailContent')) throw new Error('no detail'); detailEmpId = employees[0].id; detailTab = 'money'; go('detail'); renderDetail(true); if(!/ประวัติเงินเดือนย้อนหลัง/.test(document.getElementById('detailContent').textContent)) throw new Error('ไม่มีตาราง 📚'); })()" },
     { label: '🪪 แท็บ เบิก·ยืม·ประกัน (🛡️ ประวัติเงินประกัน)', js: "(()=>{ detailTab = 'debt'; renderDetail(true); if(!/ประวัติเงินประกัน/.test(document.getElementById('detailContent').textContent)) throw new Error('ไม่มีการ์ด 🛡️'); })()" },
-    { label: '🕘 ค้น "ประกัน"', js: "(async()=>{ go('audit'); document.getElementById('audQ').value='ประกัน'; await renderAudit(); })()" } ] },
+    { label: '🕘 ค้น "ประกัน"', js: "(async()=>{ go('audit'); document.getElementById('audQ').value='ประกัน'; await renderAudit(); })()" },
+    // งวดเริ่มหักรายคน (2026-10-21): ช่อง "เริ่มหักงวด" ในตาราง 🛡️ (การ์ด ≤560px) + หน้า 🧾 สปส.
+    { label: '🛡️ ช่องเริ่มหักงวด (งวดก่อน)', js: "(()=>{ go('dep'); const s=document.getElementById('depPeriodSel'); s.value=s.options[Math.min(1,s.options.length-1)].value; renderDeposit(); const x=document.querySelector('#depTable select.emp-st'); if(!x) throw new Error('ไม่มีช่องเริ่มหักงวด'); x.scrollIntoView({block:'center'}); })()" },
+    { label: '🧾 สปส. ช่องเริ่มหักงวด', js: "(()=>{ go('sso'); renderSso(); const x=document.querySelector('#ssoTable select.emp-st'); if(!x) throw new Error('ไม่มีช่องเริ่มหักงวด'); x.scrollIntoView({block:'center',inline:'center'}); })()" } ] },
   { id: 'payroll-pvd', file: 'jjmk-payroll.html#pvd', login: 1, fx: payrollMoneyFixture, steps: [
     { label: 'หน้าต่าง ＋ เพิ่มสมาชิก', js: "openPvdForm()", close: 'pvdBg' },
     { label: 'หน้าต่าง 💸 ถอน/จ่ายคืน', js: "openPvdOut()", close: 'pvdOutBg' },
