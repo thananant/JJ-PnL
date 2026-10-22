@@ -661,7 +661,7 @@ function processImage(file,cb){const reader=new FileReader();
       แอพนี้กินใบผ่าน แล้วเอาไปตรวจกับ pnl_users จริงอีกชั้น ก่อนพาเข้าตามสิทธิ์ apps.maint
    2) เปิด URL ของแอพนี้ตรง ๆ → ต้องกรอก user/pass ใหม่เสมอ (กันคนที่ได้ลิงก์ไปเข้าเอง)
       - รหัสที่ใช้คือบัญชีกลาง pnl_users ชุดเดียวกับหน้าศูนย์รวมแอพ
-      - บัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (app_users) ยังใช้ได้ (ระบบลองให้อัตโนมัติ)
+      - บัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (app_users) เลิกใช้แล้ว — ใช้ JJ Access อย่างเดียว (เจ้าของสั่ง 2026-10-22)
    3) ติ๊ก "จำไว้ในเครื่องนี้ 12 ชม." = ไม่ต้องกรอกซ้ำในเครื่องตัวเองจนกว่าจะหมดอายุ
    เซสชันปกติเก็บใน sessionStorage → รีเฟรช/ลากลงยังอยู่หน้าเดิม แต่ปิดแท็บแล้วต้องล็อกอินใหม่ */
 const SESS_KEY='jjmt_sess',        // sessionStorage — ใบอนุญาตของแท็บนี้ (ดึงหน้าลง/รีเฟรชยังอยู่)
@@ -731,17 +731,6 @@ function centralProf(u){return{kind:'central',username:u.username,name:u.display
   role:u.role||'staff',unit:u.unit||'',apps:u.apps||{},hash:u.pass_hash};}
 /* ---- บัญชีเดิมของระบบนับสต๊อก/ครัวกลาง (app_users + Supabase Auth) ---- */
 const CLOCK_SKEW=e=>{const c=(e&&e.code)||'',m=(e&&e.message)||String(e||'');return c==='PGRST303'||/issued at future/i.test(m);};
-async function getProfile(onWait){
-  const g=await sb.auth.getUser();const user=g&&g.data&&g.data.user;
-  if(!user)return null;
-  for(let i=0;i<8;i++){
-    const {data,error}=await sb.from('app_users').select('*').eq('auth_uid',user.id).maybeSingle();
-    if(!error)return data||null;
-    if(CLOCK_SKEW(error)&&i<7){if(onWait)onWait(i+1,8);await new Promise(r=>setTimeout(r,3000));continue;}
-    console.error('getProfile',error);return null;}
-  return null;}
-function appProf(p){return{kind:'app',username:p.username,name:p.name||p.username,
-  role:p.role||'staff',branch_ids:p.branch_ids||[],apps:null};}
 function loginErr(m){$('#lMsg').style.color='#c62127';$('#lMsg').textContent=m;$('#login').classList.add('err');setTimeout(()=>$('#login').classList.remove('err'),450)}
 function authMsg(e){const s=((e&&e.message)||String(e)).toLowerCase();
   if(s.indexOf('invalid login')>-1)return'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
@@ -753,7 +742,7 @@ async function doLogin(){
   const btn=$('#lBtn');btn.disabled=true;btn.textContent='⏳ เข้าสู่ระบบ...';
   try{
     let usr=null;
-    try{usr=await centralUser(u);}catch(e){console.warn('pnl_users',e);}
+    try{usr=await centralUser(u);}catch(e){console.warn('pnl_users',e);loginErr('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่');return;}
     if(usr){                                   // บัญชีกลาง
       if(usr.pass_hash!==pwHash(u,p)){loginErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');return;}
       if(usr.active===false){loginErr('บัญชีนี้ถูกปิดการใช้งาน');return;}
@@ -761,13 +750,8 @@ async function doLogin(){
       if(!profCanEnter(prof)){loginErr('บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าระบบซ่อมบำรุง — แจ้งผู้ดูแลเปิดให้ที่หน้า JJ Access');return;}
       saveSession(prof,keep);await enterApp(prof);return;
     }
-    // ไม่มีในบัญชีกลาง → ลองบัญชีเดิมของระบบนับสต๊อก/ครัวกลาง
-    const {error}=await sb.auth.signInWithPassword({email:u.toLowerCase()+EMAIL_DOMAIN,password:p});
-    if(error)throw error;
-    const ap=await getProfile((n,t)=>{btn.textContent='⏳ รอเซิร์ฟเวอร์... ('+n+'/'+t+')'});
-    if(!ap){await sb.auth.signOut();loginErr('ไม่พบโปรไฟล์ในระบบ');return;}
-    if(ap.status!=='active'){await sb.auth.signOut();loginErr('บัญชีนี้รอผู้ดูแลอนุมัติก่อนใช้งาน');return;}
-    const prof=appProf(ap);saveSession(prof,false);await enterApp(prof);
+    // ไม่มีในบัญชีกลาง = เข้าไม่ได้ (บัญชีเดิม app_users เลิกใช้ 2026-10-22 — ใช้ JJ Access อย่างเดียว)
+    loginErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
   }catch(e){loginErr(authMsg(e));}
   finally{btn.disabled=false;btn.textContent='เข้าสู่ระบบ';}
 }
@@ -908,7 +892,11 @@ async function boot(){
   //    (admin แก้สิทธิ์/สาขาที่เห็น หรือปิดบัญชีใน JJ Access แล้วมีผลตอนรีเฟรช · เน็ตสะดุด = ใช้ของเดิมในแท็บไปก่อน)
   const s=SS.get(SESS_KEY);
   if(s&&s.username){
-    if(s.kind!=='central'){await enterApp(s);return;}
+    if(s.kind!=='central'){   // เซสชันบัญชีเดิม app_users ค้างในแท็บ → ให้เข้าใหม่ด้วยบัญชีกลาง
+      SS.del(SESS_KEY);try{await sb.auth.signOut()}catch(e){}
+      $('#lMsg').style.color='#c62127';$('#lMsg').textContent='บัญชีเดิมเลิกใช้แล้ว — เข้าด้วยบัญชี JJ Access ครับ';
+      $('#login').classList.add('on');return;
+    }
     let u;
     try{u=await centralUser(s.username);}
     catch(e){console.warn('refresh',e);await enterApp(s);return;}
