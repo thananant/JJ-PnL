@@ -40,6 +40,7 @@ h2 small{font-family:'Sarabun';font-weight:500;color:var(--mut);font-size:13px}
 .ach.on{background:var(--red);border-color:var(--red);color:#fff}
 .ach.may{background:var(--abg);border-color:#E5B54A;color:#6B4600}
 .ach.has{background:var(--rbg);border-color:var(--red);color:var(--wine)}
+.ach.nok{background:var(--gbg);border-color:#7DBB92;color:var(--green)}
 .ach small{font-weight:500;font-size:11.5px;opacity:.8}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 input,select,textarea{font-size:16px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;color:var(--ink);min-height:44px;width:100%}
@@ -570,9 +571,10 @@ const ALG_BUILTIN=[
   {k:'pork',ic:'🐷',n:'หมู',kw:['หมู','pork']},
   {k:'beef',ic:'🐄',n:'เนื้อวัว',kw:['เนื้อวัว','วัว','beef']},
   {k:'alcohol',ic:'🍺',n:'แอลกอฮอล์',kw:['แอลกอฮอล์','เหล้า','เบียร์','ไวน์','alcohol']},
-  {k:'chili',ic:'🌶️',n:'พริก/เผ็ด',kw:['พริก','chili']}
+  {k:'chili',ic:'🌶️',n:'พริก/เผ็ด',kw:['พริก','chili']},
+  {k:'lupin',ic:'🌱',n:'ลูพิน',kw:['ลูพิน','แป้งลูพิน','lupin']}
 ];
-const algNorm=s=>String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').trim();
+const algNorm=s=>String(s==null?'':s).normalize('NFC').replace(/\u0E4D([\u0E48-\u0E4B]?)\u0E32/g,'$1\u0E33').toLowerCase().replace(/\s+/g,' ').trim();   // นํ้า (นิคหิต+ไม้โท+า จาก Excel/PDF) = น้ำ
 /* คำที่พิมพ์ → รายการคำ (คั่นด้วย , ، / ช่องว่าง ขึ้นบรรทัด) · สั้นกว่า 2 ตัวอักษรไม่นับ (กันเจอทุกเมนู) */
 function algWords(q){return [...new Set(String(q||'').split(/[,،/\n\r\t ]+|และ/).map(algNorm).filter(w=>w.length>=2))]}
 /* คำ → สิ่งที่แพ้ในรายการ (ชื่อ/คำพ้อง ครอบกันทางใดทางหนึ่ง = นับ — เผื่อไว้ก่อน) */
@@ -585,18 +587,22 @@ function algResolve(words,list){
   return out;
 }
 /* ตัดสินอาหาร 1 อย่าง: codes = สิ่งที่แพ้ที่เลือก · words = คำที่พิมพ์
-   → {st:'no'|'may'|'unk'|'ok'|'none', has:[รหัส], may:[รหัส], words:[คำที่เจอ]} */
+   → {st:'no'|'may'|'unk'|'ok'|'none', has:[รหัส], may:[รหัส], unk:[รหัสที่ยังไม่รู้], words:[คำที่เจอ]}
+   ✅ ได้ก็ต่อเมื่อ: ทุกสิ่งที่เลือก "ยืนยันว่าไม่มี" (it.none) หรือทั้งรายการติ๊กยืนยันแล้ว (it.checked)
+   · คำที่พิมพ์เองแล้วไม่เจอ = ✅ เฉพาะรายการที่ติ๊กยืนยันทั้งรายการ (ยืนยันรายสิ่งไม่ครอบคลุมคำอิสระ) */
 function algClassify(it,codes,words){
   codes=codes||[];words=words||[];
   const has=(it.contains||[]).filter(c=>codes.includes(c));
   const txt=algNorm([it.name,it.ingredients,it.note].join(' '));
   const wh=words.filter(w=>txt.includes(w));
   const may=(it.may||[]).filter(c=>codes.includes(c)&&!has.includes(c));
-  if(!codes.length&&!words.length)return {st:'none',has:[],may:[],words:[]};
-  if(has.length||wh.length)return {st:'no',has,may,words:wh};
-  if(may.length)return {st:'may',has,may,words:wh};
-  if(!it.checked)return {st:'unk',has,may,words:wh};
-  return {st:'ok',has,may,words:wh};
+  const no=it.none||[];
+  const unk=it.checked?[]:codes.filter(c=>!has.includes(c)&&!may.includes(c)&&!no.includes(c));
+  if(!codes.length&&!words.length)return {st:'none',has:[],may:[],unk:[],words:[]};
+  if(has.length||wh.length)return {st:'no',has,may,unk,words:wh};
+  if(may.length)return {st:'may',has,may,unk,words:wh};
+  if(unk.length||(words.length&&!it.checked))return {st:'unk',has,may,unk,words:wh};
+  return {st:'ok',has,may,unk,words:wh};
 }
 /* ALG-CORE-END */
 
@@ -615,24 +621,26 @@ function csvParse(text){   // CSV มาตรฐาน: "..." ครอบไ�
   if(cell!==''||row.length){row.push(cell);rows.push(row)}
   return rows;
 }
-/* ช่องสิ่งที่แพ้: มี → 'has' · อาจปน → 'may' · ว่าง/ไม่ → '' · อ่านไม่ออก → null (ฟ้องให้แก้ ไม่เดา) */
+/* ช่องสิ่งที่แพ้ (แบบเดียวกับตารางของร้าน h/m/-/?):
+   มี/h → 'has' · อาจปน/m → 'may' · ไม่มี/- → 'no' (ยืนยันว่าไม่มี) · ว่าง/? → '' (ไม่ชัวร์) · อ่านไม่ออก → null (ฟ้องให้แก้ ไม่เดา) */
 function algCell(v){const s=String(v==null?'':v).trim();
-  if(/^(ไม่|ไม่มี|no|n|0|-|–|—)?$/i.test(s))return '';
-  if(/^(อาจ|may|⚠|ปน)/i.test(s))return 'may';
-  if(/^(มี|x|✓|✔|❌|1|yes|y|true)$/i.test(s)||/^มี/.test(s))return 'has';
+  if(/^(\?|？|ไม่ชัวร์|ไม่ชัว|ไม่แน่ใจ|ไม่รู้)?$/i.test(s))return '';
+  if(/^(ไม่|ไม่มี|no|n|0|-|–|—)$/i.test(s))return 'no';
+  if(/^(อาจ|may|m$|⚠|ปน)/i.test(s))return 'may';
+  if(/^(มี|h|x|✓|✔|❌|1|yes|y|true)$/i.test(s)||/^มี/.test(s))return 'has';
   return null}
 const csvYes=v=>/^(ใช่|yes|y|true|1|x|✓|✔|✅)$/i.test(String(v==null?'':v).trim());
 const csvNo=v=>/^(ไม่|no|n|false|0|เลิก)/i.test(String(v==null?'':v).trim());
 function algCsvHeader(algs){return [...CSV_BASE.map(x=>x[1]),...algs.map(a=>a.n+' ['+a.k+']'),...CSV_TAIL.map(x=>x[1])]}
 const kindTxt=(k,kinds)=>{const x=kinds.find(y=>y[0]===k)||kinds[kinds.length-1];return x[1].replace(/^\S+\s/,'')};   // '🍲 อาหาร' → 'อาหาร'
 function algCsvLine(it,algs,kinds){
-  const has=it.contains||[],may=it.may||[];
+  const has=it.contains||[],may=it.may||[],no=it.none||[];
   return [it.id,it.name,kindTxt(it.kind||'menu',kinds),it.cat||'',it.ingredients||'',
-    ...algs.map(a=>has.includes(a.k)?'มี':may.includes(a.k)?'อาจปน':''),
+    ...algs.map(a=>has.includes(a.k)?'มี':may.includes(a.k)?'อาจปน':no.includes(a.k)?'ไม่มี':''),
     it.note||'',it.checked?'ใช่':'',it.active===false?'ไม่':'ใช่',it.updated_at||''].map(csvEsc).join(',');
 }
 /* แถวในไฟล์ → {rows:[{line,id,updated_at,d}], errors:[], unknown:[]}
-   d = เฉพาะช่องที่มีในไฟล์ (ไม่มีคอลัมน์ = คงค่าเดิม) · d.alg = {รหัส:'has'|'may'|''} ของคอลัมน์สิ่งที่แพ้ที่มีในไฟล์ */
+   d = เฉพาะช่องที่มีในไฟล์ (ไม่มีคอลัมน์ = คงค่าเดิม) · d.alg = {รหัส:'has'|'may'|'no'|''} ของคอลัมน์สิ่งที่แพ้ที่มีในไฟล์ */
 function algCsvRows(table,algs,kinds){
   const out={rows:[],errors:[],unknown:[]};
   if(!table.length){out.errors.push('ไฟล์ว่าง');return out}
@@ -660,7 +668,7 @@ function algCsvRows(table,algs,kinds){
     const cv=get(r,'checked');if(cv!==undefined)d.checked=csvYes(cv);
     const av=get(r,'active');if(av!==undefined)d.active=!csvNo(av);
     d.alg={};
-    for(const [k,i] of ac){const v=algCell(r[i]);if(v===null)bad.push(`"${head[i]}" = "${String(r[i]).trim()}" (ใส่ มี / อาจปน / ว่าง)`);else d.alg[k]=v}
+    for(const [k,i] of ac){const v=algCell(r[i]);if(v===null)bad.push(`"${head[i]}" = "${String(r[i]).trim()}" (ใส่ มี / อาจปน / ไม่มี / ว่าง)`);else d.alg[k]=v}
     if(bad.length){out.errors.push(`แถว ${line} (${name}): `+bad.join(' · '));continue}
     const idv=get(r,'id');let id=null;
     if(idv){id=Number(idv);if(!Number.isInteger(id)||id<=0){out.errors.push(`แถว ${line} (${name}): id "${idv}" ไม่ถูกต้อง`);continue}}
@@ -670,7 +678,7 @@ function algCsvRows(table,algs,kinds){
 }
 /* รวมแถวในไฟล์เข้ากับรายการเดิม (old=null = รายการใหม่) → ค่าใหม่ทั้งแถว + ช่องที่เปลี่ยน */
 function algMerge(old,d){
-  const base=old||{name:'',kind:'menu',cat:null,ingredients:null,note:null,contains:[],may:[],checked:false,active:true};
+  const base=old||{name:'',kind:'menu',cat:null,ingredients:null,note:null,contains:[],may:[],none:[],checked:false,active:true};
   const nw={name:d.name,kind:d.kind!==undefined?d.kind:base.kind||'menu',
     cat:d.cat!==undefined?d.cat:base.cat||null,ingredients:d.ingredients!==undefined?d.ingredients:base.ingredients||null,
     note:d.note!==undefined?d.note:base.note||null,checked:d.checked!==undefined?d.checked:!!base.checked,
@@ -678,11 +686,13 @@ function algMerge(old,d){
   const ks=Object.keys(d.alg||{});
   nw.contains=(base.contains||[]).filter(k=>!ks.includes(k)).concat(ks.filter(k=>d.alg[k]==='has'));
   nw.may=(base.may||[]).filter(k=>!ks.includes(k)).concat(ks.filter(k=>d.alg[k]==='may'));
+  nw.none=(base.none||[]).filter(k=>!ks.includes(k)).concat(ks.filter(k=>d.alg[k]==='no'));
   const same=(a,b)=>JSON.stringify([...(a||[])].sort())===JSON.stringify([...(b||[])].sort());
   const ch=[];
   for(const k of ['name','kind','cat','ingredients','note'])if((nw[k]||null)!==(base[k]||null))ch.push(k);
   if(!same(nw.contains,base.contains))ch.push('contains');
   if(!same(nw.may,base.may))ch.push('may');
+  if(!same(nw.none,base.none))ch.push('none');
   if(nw.checked!==!!base.checked)ch.push('checked');
   if(nw.active!==(base.active!==false))ch.push('active');
   return {nw,ch};
@@ -789,10 +799,12 @@ function card(it,r,words){
   if(r){
     if(st==='no')why='❌ '+[...r.has.map(k=>algOf(k).ic+' '+algOf(k).n),...r.words.map(w=>'“'+w+'”')].map(esc).join(' · ');
     else if(st==='may')why='⚠️ อาจปนเปื้อน: '+r.may.map(k=>algOf(k).ic+' '+algOf(k).n).map(esc).join(' · ');
-    else if(st==='unk')why='❔ ยังไม่ยืนยันข้อมูล — ถามครัวก่อนเสิร์ฟ';
+    else if(st==='unk')why='❔ '+(r.unk&&r.unk.length?'ยังไม่รู้ว่ามี '+r.unk.map(k=>algOf(k).ic+' '+algOf(k).n).map(esc).join(' · ')+' ไหม':'ยังไม่ยืนยันข้อมูล')+' — ถามครัวก่อนเสิร์ฟ';
     else why='✅ ไม่มีสิ่งที่ลูกค้าแพ้';
   }
-  const bds=(it.contains||[]).map(k=>badge(k,'has')).join('')+(it.may||[]).map(k=>badge(k,'may')).join('');
+  const nNo=(it.none||[]).length;
+  const bds=(it.contains||[]).map(k=>badge(k,'has')).join('')+(it.may||[]).map(k=>badge(k,'may')).join('')
+    +(nNo&&!it.checked?`<span class="bd ok" title="${esc((it.none||[]).map(k=>algOf(k).n).join(', '))}">✓ ยืนยันไม่มี ${nNo} อย่าง</span>`:'');
   return `<div class="it ${st}"><div class="h"><div class="nm">${esc(it.name)}<small>${kindName(it.kind)}${it.cat?' · '+esc(it.cat):''}</small></div>
     ${can('items','e')?`<button class="ed" title="แก้ไข" onclick="openForm(${it.id})">✏️</button>`:''}</div>
     ${why?`<div class="why">${why}</div>`:''}
@@ -838,14 +850,14 @@ function openForm(id){
   if(id&&!it)return toast('ไม่พบรายการนี้แล้ว — โหลดใหม่',true);
   if(!(it?can('items','e'):can('items','a')))return toast('ไม่มีสิทธิ์',true);
   const d=LS.get('jjalg_draft',null),dr=d&&d.id===(id||0)&&(!it||d.orig===it.updated_at)?d:null;
-  const src=dr||it||{name:'',kind:'menu',cat:'',ingredients:'',contains:[],may:[],note:'',checked:false,active:true};
-  F={id:id||0,orig:it?it.updated_at:null,contains:[...(src.contains||[])],may:[...(src.may||[])]};
+  const src=dr||it||{name:'',kind:'menu',cat:'',ingredients:'',contains:[],may:[],none:[],note:'',checked:false,active:true};
+  F={id:id||0,orig:it?it.updated_at:null,contains:[...(src.contains||[])],may:[...(src.may||[])],none:[...(src.none||[])]};
   openSheet(`<h3>${it?'✏️ แก้ไขข้อมูล':'＋ เพิ่มสินค้า/อาหาร'}<button class="ed" onclick="closeSheet()" title="ปิด">✕</button></h3>
     ${dr?'<div class="note">📝 กู้ร่างที่กรอกค้างไว้ให้แล้ว <button class="btn sm o" onclick="dropDraft()">ทิ้งร่าง</button></div>':''}
     <label class="f" for="fName">ชื่อสินค้า/อาหาร *</label><input id="fName" value="${esc(src.name)}" maxlength="120">
     <div class="row"><div style="flex:1;min-width:150px"><label class="f" for="fKind">ประเภท</label><select id="fKind">${KINDS.map(k=>`<option value="${k[0]}"${src.kind===k[0]?' selected':''}>${k[1]}</option>`).join('')}</select></div>
       <div style="flex:1;min-width:150px"><label class="f" for="fCat">หมวด (ไม่บังคับ)</label><input id="fCat" value="${esc(src.cat||'')}" maxlength="60" placeholder="เช่น ชุดหมู, ทะเล"></div></div>
-    <label class="f">สิ่งที่แพ้ในอาหารนี้ <small style="color:var(--mut);font-weight:500">แตะ 1 ครั้ง = ❌ มี · 2 ครั้ง = ⚠️ อาจปนเปื้อน · 3 ครั้ง = ไม่มี</small></label>
+    <label class="f">สิ่งที่แพ้ในอาหารนี้ <small style="color:var(--mut);font-weight:500">แตะวน: ❌ มี → ⚠️ อาจปน → ✓ ไม่มี (ยืนยัน) → ว่าง (ไม่ชัวร์)</small></label>
     <div class="chips" id="fAlg"></div>
     <label class="f" for="fIng">ส่วนผสม (ใส่ให้ละเอียด — ใช้ค้นหาคำที่ลูกค้าพิมพ์)</label><textarea id="fIng" placeholder="เช่น หมูสามชั้น, ซีอิ๊วขาว, น้ำมันหอย, กระเทียม">${esc(src.ingredients||'')}</textarea>
     <label class="f" for="fNote">หมายเหตุ</label><textarea id="fNote" style="min-height:56px" placeholder="เช่น ทอดในน้ำมันเดียวกับกุ้ง · ขอไม่ใส่งาได้">${esc(src.note||'')}</textarea>
@@ -858,17 +870,18 @@ function openForm(id){
   $('sheet').oninput=saveDraft;$('sheet').onchange=saveDraft;
 }
 function paintAlgPick(){
-  $('fAlg').innerHTML=ALGS().map(a=>{const c=F.contains.includes(a.k)?'has':F.may.includes(a.k)?'may':'';
-    return `<button type="button" class="ach ${c}" data-p="${esc(a.k)}">${a.ic} ${esc(a.n)}${c==='has'?' <small>มี</small>':c==='may'?' <small>อาจปน</small>':''}</button>`}).join('')
-    +[...F.contains,...F.may].filter(k=>!ALGS().some(a=>a.k===k)).map(k=>`<button type="button" class="ach has" data-p="${esc(k)}">❔ ${esc(k)} <small>ไม่อยู่ในรายการแล้ว</small></button>`).join('');
+  $('fAlg').innerHTML=ALGS().map(a=>{const c=F.contains.includes(a.k)?'has':F.may.includes(a.k)?'may':F.none.includes(a.k)?'nok':'';
+    return `<button type="button" class="ach ${c}" data-p="${esc(a.k)}">${a.ic} ${esc(a.n)}${c==='has'?' <small>มี</small>':c==='may'?' <small>อาจปน</small>':c==='nok'?' <small>✓ ไม่มี</small>':''}</button>`}).join('')
+    +[...F.contains,...F.may,...F.none].filter(k=>!ALGS().some(a=>a.k===k)).map(k=>`<button type="button" class="ach has" data-p="${esc(k)}">❔ ${esc(k)} <small>ไม่อยู่ในรายการแล้ว</small></button>`).join('');
   $('fAlg').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{const k=b.dataset.p;
     if(F.contains.includes(k)){F.contains=F.contains.filter(x=>x!==k);F.may.push(k)}
-    else if(F.may.includes(k))F.may=F.may.filter(x=>x!==k);
+    else if(F.may.includes(k)){F.may=F.may.filter(x=>x!==k);F.none.push(k)}
+    else if(F.none.includes(k))F.none=F.none.filter(x=>x!==k);
     else F.contains.push(k);
     paintAlgPick();saveDraft()});
 }
 function formVals(){return {name:$('fName').value.trim(),kind:$('fKind').value,cat:$('fCat').value.trim()||null,
-  ingredients:$('fIng').value.trim()||null,note:$('fNote').value.trim()||null,contains:F.contains.slice(),may:F.may.slice(),
+  ingredients:$('fIng').value.trim()||null,note:$('fNote').value.trim()||null,contains:F.contains.slice(),may:F.may.slice(),none:F.none.slice(),
   checked:$('fChk').checked,active:$('fAct')?$('fAct').checked:true}}
 function saveDraft(){if(!F||!$('fName'))return;LS.set('jjalg_draft',{id:F.id,orig:F.orig,...formVals()})}
 function dropDraft(){const id=F&&F.id;LS.del('jjalg_draft');closeSheet();openForm(id||undefined)}
@@ -880,7 +893,7 @@ async function saveItem(){
   const btn=$('fSave');btn.disabled=true;
   const now=new Date().toISOString(),old=F.id?S.items.find(x=>x.id===F.id):null;
   const body={...v,updated_at:now,updated_by:ME.username};
-  if(v.checked&&(!old||!old.checked||JSON.stringify([old.contains,old.may,old.ingredients])!==JSON.stringify([v.contains,v.may,v.ingredients]))){body.checked_by=ME.username;body.checked_at=now}
+  if(v.checked&&(!old||!old.checked||JSON.stringify([old.contains,old.may,old.none||[],old.ingredients])!==JSON.stringify([v.contains,v.may,v.none,v.ingredients]))){body.checked_by=ME.username;body.checked_at=now}
   if(!v.checked){body.checked_by=null;body.checked_at=null}
   try{
     if(old){
@@ -888,14 +901,16 @@ async function saveItem(){
       const r=await api('PATCH','alg_items?id=eq.'+old.id+'&updated_at=eq.'+enc(F.orig),body,'return=representation');
       if(!r||!r.length){btn.disabled=false;toast('มีคนแก้รายการนี้ก่อนหน้า — โหลดข้อมูลล่าสุดแล้ว ลองแก้อีกครั้ง',true);await loadAll();return}
       Object.assign(old,r[0]);
-      logAct(old,'edit',{contains:v.contains,may:v.may,checked:v.checked,active:v.active});
+      logAct(old,'edit',{contains:v.contains,may:v.may,none:v.none,checked:v.checked,active:v.active});
     }else{
       const r=await api('POST','alg_items',{...body,created_by:ME.username},'return=representation');
-      const it=r&&r[0];if(it)S.items.push(it);logAct(it,'add',{contains:v.contains,may:v.may,checked:v.checked});
+      const it=r&&r[0];if(it)S.items.push(it);logAct(it,'add',{contains:v.contains,may:v.may,none:v.none,checked:v.checked});
     }
     LS.del('jjalg_draft');closeSheet();toast('✅ บันทึกแล้ว');render();
-  }catch(e){btn.disabled=false;toast('บันทึกไม่สำเร็จ — '+String(e.message||e).slice(0,90),true)}
+  }catch(e){btn.disabled=false;toast('บันทึกไม่สำเร็จ — '+colHint(e),true)}
 }
+/* ยังไม่ได้รัน SQL เพิ่มคอลัมน์ none = บอกให้รัน (ไม่ใช่ error ลึกลับ) */
+function colHint(e){const m=String(e&&e.message||e);return /none/.test(m)&&/column|schema/i.test(m)?'ต้องรัน SQL เพิ่มช่อง "ยืนยันว่าไม่มี" (jjmk-allergy.sql) ก่อน':m.slice(0,90)}
 async function delItem(){
   const it=F&&S.items.find(x=>x.id===F.id);if(!it||!can('items','d'))return;
   if(!confirm('ลบ "'+it.name+'" ถาวร?\n(ถ้าแค่เลิกขาย ให้เอาติ๊ก "ยังขายอยู่" ออกแทน)'))return;
@@ -909,9 +924,10 @@ let IMP=[];
 /* อ่านทีละ 1000 แถว (Supabase ตัดที่ 1000 ต่อครั้ง) */
 async function selAll(t,q){let out=[];for(let o=0;o<50000;o+=1000){const r=await sel(t,q+'&limit=1000&offset='+o);out=out.concat(r||[]);if(!r||r.length<1000)break}return out}
 /* หมวดของแอปนับสต๊อก → ประเภทในแอปนี้ (เดาให้ก่อน แก้ได้ในฟอร์ม) */
-function kindGuess(cat){const c=String(cat||'');
-  return /เครื่องดื่ม|น้ำดื่ม|น้ำอัดลม|เบียร์|โซดา|น้ำแข็ง/.test(c)?'drink':/น้ำจิ้ม|ซอส|เครื่องปรุง/.test(c)?'sauce':/หวาน|ไอติม|ไอศกรีม|ขนม/.test(c)?'dessert'
-    :/หมู|เนื้อ|ไก่|ทะเล|กุ้ง|ปลา|ของสด|เนื้อสัตว์/.test(c)?'meat':/ผัก|เส้น|ลูกชิ้น|อาหาร/.test(c)?'menu':'product'}
+function kindGuess(cat){
+  const c=algNorm(cat);
+  return /เครื่องดื่ม|น้ำดื่ม|น้ำอัดลม|เบียร์|โซดา|น้ำแข็ง|บาร์น้ำ/.test(c)?'drink':/น้ำจิ้ม|ซอส|เครื่องปรุง|น้ำยำ|น้ำพริก/.test(c)?'sauce':/หวาน|ไอติม|ไอศกรีม|ขนม/.test(c)?'dessert'
+    :/หมู|เนื้อ|ไก่|ทะเล|กุ้ง|ปลา|ของสด|เนื้อสัตว์|สไลด์|ไขมันสัตว์/.test(c)?'meat':/ผัก|เส้น|ลูกชิ้น|อาหาร|ครัว|ของทอด|น้ำซุป|ข้าว|โต๊ะเตรียม/.test(c)?'menu':'product'}
 const IMP_SRC=[['sc','📦 สินค้าในร้าน (นับสต๊อก)'],['ck','🍳 สินค้าครัวกลาง'],['qr','🍽️ เมนู QR']];
 async function openImport(){
   if(!can('items','a'))return;
@@ -972,7 +988,7 @@ function openCsvImport(){
   CSVP=null;
   openSheet(`<h3>📄 นำเข้าไฟล์ CSV<button class="ed" onclick="closeSheet()" title="ปิด">✕</button></h3>
     <div class="note" style="line-height:1.7">1) กด <b>📤 ส่งออก CSV</b> → เปิดใน Google Sheet (ไฟล์ → นำเข้า → อัปโหลด)<br>
-      2) กรอกในชีต: ช่องสิ่งที่แพ้ใส่ <b>มี</b> / <b>อาจปน</b> / เว้นว่าง · ยืนยันแล้ว = <b>ใช่</b> · เพิ่มแถวใหม่ได้ (เว้นช่อง id ว่าง)<br>
+      2) กรอกในชีต: ช่องสิ่งที่แพ้ใส่ <b>มี</b> / <b>อาจปน</b> / <b>ไม่มี</b> (ยืนยันแล้ว) / เว้นว่าง = ไม่ชัวร์ (ใช้ h / m / - / ? ก็ได้) · ยืนยันทั้งรายการ = <b>ใช่</b> · เพิ่มแถวใหม่ได้ (เว้นช่อง id ว่าง · ชื่อตรงรายการเดิม = แก้รายการนั้น)<br>
       3) Google Sheet: ไฟล์ → ดาวน์โหลด → <b>.csv</b> แล้วเลือกไฟล์ด้านล่าง<br>
       ⚠️ ห้ามแก้ช่อง <b>id</b> กับ <b>แก้ล่าสุด</b> · แถวที่ลบออกจากชีตจะไม่ถูกลบในแอป</div>
     <label class="btn o" style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px">📂 เลือกไฟล์ .csv
@@ -995,24 +1011,38 @@ function planCsv(text,fname){
       if(!can('items','e')){plan.skip.push(`แถว ${r.line} (${r.d.name}): ไม่มีสิทธิ์แก้รายการเดิม`);continue}
       plan.upd.push({old,cas:old.updated_at,...m});
     }else{
-      const k=algNorm(r.d.name);
-      if(names.has(k)){plan.skip.push(`แถว ${r.line} (${r.d.name}): มีชื่อนี้ในแอปแล้ว — ใส่ id ของรายการเดิม หรือเปลี่ยนชื่อ`);continue}
+      /* ไม่มี id (เช่น ตารางที่ร้านทำเอง) → ชื่อตรงรายการเดิม 1 รายการ = แก้รายการนั้น · ตรงหลายรายการ = ข้าม (ไม่เดา) */
+      const k=algNorm(r.d.name),hit=S.items.filter(x=>algNorm(x.name)===k);
+      if(hit.length>1){plan.skip.push(`แถว ${r.line} (${r.d.name}): ชื่อนี้มี ${hit.length} รายการในแอป — ใส่ id ให้ชัด`);continue}
+      if(hit.length===1){
+        const old=hit[0];
+        if(seen.has(old.id)){plan.skip.push(`แถว ${r.line} (${r.d.name}): ชื่อซ้ำกับแถวก่อนหน้า`);continue}seen.add(old.id);
+        const m=algMerge(old,{...r.d,name:old.name});if(!m.ch.length){plan.same++;continue}
+        if(!can('items','e')){plan.skip.push(`แถว ${r.line} (${r.d.name}): ไม่มีสิทธิ์แก้รายการเดิม`);continue}
+        plan.upd.push({old,cas:old.updated_at,byName:1,...m});continue;
+      }
+      if(names.has(k)){plan.skip.push(`แถว ${r.line} (${r.d.name}): ชื่อซ้ำกับแถวก่อนหน้า`);continue}
       if(!can('items','a')){plan.skip.push(`แถว ${r.line} (${r.d.name}): ไม่มีสิทธิ์เพิ่มรายการใหม่`);continue}
-      names.add(k);plan.add.push(algMerge(null,r.d));
+      names.add(k);plan.add.push(algMerge(null,{...r.d,kind:r.d.kind!==undefined?r.d.kind:kindGuess(r.d.cat)}));
     }
   }
   CSVP=plan;
-  const CH={name:'ชื่อ',kind:'ประเภท',cat:'หมวด',ingredients:'ส่วนผสม',note:'หมายเหตุ',contains:'สิ่งที่แพ้ (มี)',may:'อาจปนเปื้อน',checked:'ยืนยัน',active:'ขายอยู่'};
+  /* ลด "มี/อาจปน" ที่เคยใส่ไว้ = ความปลอดภัยลดลง → เตือนแดงให้เห็นก่อนกด (เช่น ช่องในชีตเป็น ? ทับของที่ใส่ในแอปแล้ว) */
+  const drops=plan.upd.map(x=>{const lost=[...(x.old.contains||[]).filter(k=>!x.nw.contains.includes(k)),
+      ...(x.old.may||[]).filter(k=>!x.nw.may.includes(k)&&!x.nw.contains.includes(k))];
+    return lost.length?esc(x.old.name)+' — เอาออก: '+lost.map(k=>esc(algOf(k).n)).join(', '):''}).filter(Boolean);
+  const CH={name:'ชื่อ',kind:'ประเภท',cat:'หมวด',ingredients:'ส่วนผสม',note:'หมายเหตุ',contains:'สิ่งที่แพ้ (มี)',may:'อาจปนเปื้อน',none:'ยืนยันไม่มี',checked:'ยืนยัน',active:'ขายอยู่'};
   const nOk=[...plan.add,...plan.upd].filter(x=>x.nw.checked).length,n=plan.add.length+plan.upd.length;
   $('csvOut').innerHTML=`<h2>${esc(fname||'ไฟล์')}</h2>
     <div class="sum"><div class="s-ok"><b>${plan.add.length}</b>＋ เพิ่มใหม่</div><div class="s-may"><b>${plan.upd.length}</b>✏️ แก้</div>
       <div class="s-unk"><b>${plan.same}</b>เหมือนเดิม</div><div class="s-no"><b>${plan.skip.length+plan.conf.length}</b>ข้าม</div></div>
     ${P.unknown.length?`<div class="note">คอลัมน์ที่ไม่รู้จัก (ไม่นำเข้า): ${P.unknown.map(esc).join(' · ')}</div>`:''}
+    ${drops.length?`<div class="note bad"><b>⚠️ ${drops.length} รายการจะถูกเอา "มี/อาจปน" ที่ใส่ไว้ออก (ช่องในไฟล์ว่าง/ไม่มี) — ตรวจให้แน่ใจ:</b><br>${drops.join('<br>')}</div>`:''}
     ${plan.conf.length?`<div class="note bad"><b>ข้าม — มีคนแก้ในแอปหลังส่งออก (ไม่ทับให้):</b><br>${plan.conf.join('<br>')}</div>`:''}
     ${plan.skip.length?`<div class="note bad"><b>ข้าม — ต้องแก้ในไฟล์:</b><br>${plan.skip.map(esc).join('<br>')}</div>`:''}
     ${n?`${nOk?`<div class="note">✅ จะถูกบันทึกว่า "ยืนยันข้อมูลแล้ว" โดย <b>${esc(ME.display_name)}</b> ${nOk} รายการ — ตรวจในชีตให้แน่ใจก่อนกด</div>`:''}
       ${plan.add.map(x=>`<div class="lg"><b>＋ ${esc(x.nw.name)}</b> <span>${kindName(x.nw.kind)}${x.nw.checked?' · ✅':' · ❔'}</span></div>`).join('')}
-      ${plan.upd.map(x=>`<div class="lg"><b>✏️ ${esc(x.old.name)}</b> <span>เปลี่ยน: ${x.ch.map(k=>CH[k]||k).join(', ')}</span></div>`).join('')}
+      ${plan.upd.map(x=>`<div class="lg"><b>✏️ ${esc(x.old.name)}</b> <span>${x.byName?'(จับคู่ด้วยชื่อ) ':''}เปลี่ยน: ${x.ch.map(k=>CH[k]||k).join(', ')}</span></div>`).join('')}
       <div class="foot"><button class="btn o" onclick="closeSheet()">ยกเลิก</button><button class="btn g" id="csvGo" onclick="applyCsv()">💾 บันทึก ${n} รายการ</button></div>`
       :'<div class="msg"><b>ไม่มีอะไรต้องบันทึก</b>ทุกแถวเหมือนในแอปแล้ว หรือถูกข้าม</div>'}`;
 }
@@ -1025,16 +1055,16 @@ async function applyCsv(){
       const r=await api('POST','alg_items',P.add.map(x=>({...x.nw,...stamp(x),created_by:me,updated_by:me,updated_at:now})),'return=representation');
       (r||[]).forEach(it=>S.items.push(it));nAdd=(r||[]).length;
     }
-  }catch(e){fail.push('เพิ่มใหม่ไม่สำเร็จ — '+String(e.message||e).slice(0,90))}
+  }catch(e){fail.push('เพิ่มใหม่ไม่สำเร็จ — '+colHint(e))}
   for(const x of P.upd){
     const body={...x.nw,updated_at:now,updated_by:me};
-    const reCheck=x.nw.checked&&(!x.old.checked||x.ch.some(k=>['contains','may','ingredients','name'].includes(k)));
+    const reCheck=x.nw.checked&&(!x.old.checked||x.ch.some(k=>['contains','may','none','ingredients','name'].includes(k)));
     if(reCheck)Object.assign(body,stamp(x));else if(!x.nw.checked)Object.assign(body,stamp(x));
     try{
       /* CAS: แก้ล่าสุดต้องตรงกับตอนดูตัวอย่าง — มีคนแก้ระหว่างนั้น = ข้าม ไม่ทับ */
       const r=await api('PATCH','alg_items?id=eq.'+x.old.id+'&updated_at=eq.'+enc(x.cas),body,'return=representation');
       if(r&&r.length){Object.assign(x.old,r[0]);nUpd++}else fail.push(x.old.name+' — มีคนแก้ระหว่างนำเข้า (ข้าม)');
-    }catch(e){fail.push(x.old.name+' — '+String(e.message||e).slice(0,80))}
+    }catch(e){fail.push(x.old.name+' — '+colHint(e))}
   }
   logAct(null,'import',{csv:1,add:nAdd,upd:nUpd,fail:fail.length});
   CSVP=null;render();
@@ -1085,7 +1115,7 @@ async function rLog(){
   if(!S.log){v.innerHTML='<div class="spin"></div>';
     try{S.log=await sel('alg_log','select=*&order=created_at.desc&limit=300')}catch(e){v.innerHTML=`<div class="note bad">โหลดประวัติไม่ได้ — ${esc(e.message)}</div>`;return}}
   const tx=d=>{if(!d)return '';const p=[];if(d.contains&&d.contains.length)p.push('มี: '+d.contains.map(k=>algOf(k).n).join(', '));
-    if(d.may&&d.may.length)p.push('อาจปน: '+d.may.map(k=>algOf(k).n).join(', '));if('checked' in d)p.push(d.checked?'✅ ยืนยัน':'❔ ยังไม่ยืนยัน');
+    if(d.may&&d.may.length)p.push('อาจปน: '+d.may.map(k=>algOf(k).n).join(', '));if(d.none&&d.none.length)p.push('ยืนยันไม่มี: '+d.none.map(k=>algOf(k).n).join(', '));if('checked' in d)p.push(d.checked?'✅ ยืนยัน':'❔ ยังไม่ยืนยัน');
     if(d.active===false)p.push('เลิกขาย');if(d.n)p.push(d.n+' รายการ');if(d.csv)p.push('ไฟล์ CSV');if(d.upd!=null)p.push('แก้ '+d.upd);if(d.fail)p.push('ไม่สำเร็จ '+d.fail);if(d.add)p.push('เพิ่ม '+d.add);if(d.del)p.push('ลบ '+d.del);return p.join(' · ')};
   v.innerHTML=`<h2>ประวัติการแก้ไข <small>300 รายการล่าสุด</small></h2>`+(S.log.length?S.log.map(l=>`<div class="lg"><b>${ACT[l.action]||esc(l.action)}</b> ${esc(l.item_name||'')}
     <span>· ${esc(l.by_user||'-')} · ${bkk(l.created_at)}</span><div style="color:var(--mut);font-size:12.5px">${esc(tx(l.detail))}</div></div>`).join(''):'<div class="msg"><b>ยังไม่มีประวัติ</b></div>');
