@@ -75,7 +75,7 @@ u.ok(m.nw.contains.includes('x_cor') && !m.ch.includes('contains'), 'สิ่�
 u.ok(C.algCsvHeader(extra).includes('ผักชี [x_cor]'), 'สิ่งที่แพ้ที่เพิ่มเองมีคอลัมน์ตอนส่งออก');
 
 // ค่าที่อ่านไม่ออก = ฟ้อง ไม่เดา
-for (const [v, want] of [['มี', 'has'], ['✓', 'has'], ['x', 'has'], ['อาจปน', 'may'], ['อาจปนเปื้อน', 'may'], ['', ''], ['ไม่', ''], ['ไม่มี', ''], ['-', '']]) u.eq(C.algCell(v), want, `ช่อง "${v}" = ${want || 'ไม่มี'}`);
+for (const [v, want] of [['มี', 'has'], ['h', 'has'], ['✓', 'has'], ['x', 'has'], ['อาจปน', 'may'], ['m', 'may'], ['อาจปนเปื้อน', 'may'], ['ไม่', 'no'], ['ไม่มี', 'no'], ['-', 'no'], ['', ''], ['?', ''], ['ไม่ชัวร์', '']]) u.eq(C.algCell(v), want, `ช่อง "${v}" = ${want || 'ไม่ชัวร์'}`);
 u.eq(C.algCell('นิดหน่อย'), null, 'ค่าแปลก ๆ = อ่านไม่ออก (null)');
 const r3 = [...tab[1]]; r3[ci('egg')] = 'นิดหน่อย';
 P = C.algCsvRows([head, r3], algs, C.KINDS);
@@ -85,4 +85,24 @@ u.ok(/ประเภท/.test(C.algCsvRows([head, r4], algs, C.KINDS).errors[0]
 u.ok(/ชื่อ/.test(C.algCsvRows([['a', 'b'], ['1', '2']], algs, C.KINDS).errors[0] || ''), 'ไฟล์ที่ไม่ใช่แม่แบบ (ไม่มีคอลัมน์ชื่อ) = ไม่นำเข้า');
 u.eq(C.csvYes('ใช่') && C.csvYes('✅') && !C.csvYes(''), true, 'ยืนยันแล้ว = ใช่/✅ · ว่าง = ไม่ยืนยัน');
 
-process.exitCode = (f1 || u.done()) ? 1 : 0;
+const f2 = u.done();
+
+// ---------- ยืนยันว่าไม่มี รายสิ่ง (ตารางของร้าน h/m/-/?) ----------
+const w = suite('JJ Allergy · ยืนยันว่าไม่มี รายสิ่ง (-)');
+const sauce = { name: 'น้ำจิ้มหม่าล่า', kind: 'sauce', contains: ['wheat', 'soy'], may: ['peanut'], none: ['crust', 'fish'], checked: false };
+w.eq(st(sauce, ['crust']), 'ok', 'กุ้ง = "-" ยืนยันไม่มี → ✅ แม้ทั้งรายการยังไม่ยืนยัน');
+w.eq(st(sauce, ['crust', 'fish']), 'ok', 'เลือกหลายอย่าง ยืนยันไม่มีครบทุกอย่าง → ✅');
+w.eq(st(sauce, ['crust', 'egg']), 'unk', 'มีอย่างหนึ่งเป็น "?" (ไข่) → ❔ ห้ามบอกทานได้');
+w.eq(A.algClassify(sauce, ['crust', 'egg']).unk, ['egg'], 'บอกว่ายังไม่รู้เรื่องไข่');
+w.eq(st(sauce, ['soy']), 'no', 'มี → ❌');
+w.eq(st(sauce, ['peanut', 'crust']), 'may', 'อาจมี → ⚠️');
+w.eq(st(sauce, ['crust'], A.algWords('ผักชี')), 'unk', 'พิมพ์คำเอง + ยังไม่ยืนยันทั้งรายการ → ❔ (ยืนยันรายสิ่งไม่ครอบคลุมคำอิสระ)');
+w.eq(st({ ...sauce, checked: true }, ['egg']), 'ok', 'ยืนยันทั้งรายการ → ✅ ทุกสิ่งที่ไม่ได้ใส่ว่ามี');
+let mm = C.algMerge({ ...sauce, id: 1 }, { name: sauce.name, alg: { crust: '', egg: 'no' } });
+w.eq([mm.nw.none.sort(), mm.ch], [['egg', 'fish'], ['none']], 'นำเข้า: "-" = ยืนยันไม่มี · ช่องว่าง/? = ลบการยืนยันเดิม (ไม่ชัวร์)');
+w.ok(C.algCsvLine({ ...sauce, id: 1 }, algs, C.KINDS).includes('ไม่มี'), 'ส่งออก: ยืนยันไม่มี = "ไม่มี"');
+w.ok(A.ALG_BUILTIN.some(a => a.k === 'lupin'), 'มีลูพิน (ครบ 14 สารก่อภูมิแพ้หลักตามตารางร้าน)');
+w.eq(A.algNorm('นํ้าจิ้มหม่าล่า'), A.algNorm('น้ำจิ้มหม่าล่า'), 'นํ้า (จาก Excel/PDF) = น้ำ — ชื่อจับคู่กันได้');
+w.eq(A.algNorm('ยํา'), A.algNorm('ยำ'), 'ยํา = ยำ');
+
+process.exitCode = (f1 || f2 || w.done()) ? 1 : 0;
