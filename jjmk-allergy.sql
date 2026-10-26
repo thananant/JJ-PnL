@@ -14,6 +14,7 @@ create table if not exists public.alg_items (
   ingredients text,                               -- ส่วนผสม (ค้นหาด้วยคำได้)
   contains    text[] not null default '{}',       -- มีแน่นอน
   may         text[] not null default '{}',       -- อาจปนเปื้อน (ใช้อุปกรณ์/น้ำมันร่วม)
+  none        text[] not null default '{}',       -- ยืนยันว่าไม่มี รายสิ่ง (ตารางร้าน "-") · ไม่อยู่ในช่องไหน = ไม่ชัวร์ ("?")
   note        text,
   checked     boolean not null default false,     -- ยืนยันข้อมูลแล้ว (ยังไม่ยืนยัน = แอปไม่บอกว่า "ทานได้")
   checked_by  text,
@@ -26,6 +27,8 @@ create table if not exists public.alg_items (
   updated_at  timestamptz not null default now(),
   updated_by  text
 );
+-- 2026-10-26: ยืนยันว่าไม่มี รายสิ่ง (สำหรับตารางที่สร้างไปแล้ว)
+alter table public.alg_items add column if not exists none text[] not null default '{}';
 create unique index if not exists alg_items_src_uq on public.alg_items(src) where src is not null;
 create index if not exists alg_items_contains_gin on public.alg_items using gin(contains);
 create index if not exists alg_items_may_gin on public.alg_items using gin(may);
