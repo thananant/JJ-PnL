@@ -521,7 +521,8 @@ window.JJGate=(function(){
     calendar:{ic:'📅',n:'JJ Calendar',d:'ปฏิทินนัดหมายองค์กร',g:'#B08BE0,#4A2E85'},
     admin:{ic:'🔑',n:'JJ Access',d:'จัดการผู้ใช้และสิทธิ์',g:'#8E7F70,#3A2E27'},
     order:{ic:'🍽️',n:'สั่งอาหาร',d:'รับออเดอร์ผ่าน QR',g:'#C7843A,#6E4410'},
-    office:{ic:'🏢',n:'ออฟฟิศ AI',d:'agent AI ประจำทุกระบบ',g:'#C9962B,#6E4410'}
+    office:{ic:'🏢',n:'ออฟฟิศ AI',d:'agent AI ประจำทุกระบบ',g:'#C9962B,#6E4410'},
+    allergy:{ic:'🥜',n:'JJ Allergy',d:'ข้อมูลแพ้อาหาร',g:'#5FA84A,#22521A'}
   };
   var CSS=''
   +'.jjlg-in{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;'
@@ -767,6 +768,31 @@ window.JJGate=(function(){
 })();
 </script>
 <!-- JJBR-END -->
+<!-- JJ-DRAGCLICK-BEGIN กันหน้าต่าง/ฟอร์มเด้งปิดเอง (เจ้าของสั่ง 2026-10-21) · บล็อกนี้ต้องเหมือนกันทุกไฟล์ทุกตัวอักษร (precheck ตรวจ) -->
+<script>
+/* ลากคลุมข้อความในช่องกรอก (หรือไฮไลต์ข้อความ) แล้วปล่อยเมาส์นอกกรอบ → เบราว์เซอร์ส่ง click ให้ "พื้นหลัง" (ตัวแม่ที่ครอบทั้งคู่)
+   → โค้ดที่ปิดหน้าต่างเมื่อกดพื้นหลังทำงาน ฟอร์มหายทั้งที่ไม่ได้กด
+   กันที่ตัวเดียวทุกแอป: click ที่เริ่มกดคนละที่กับที่ปล่อย + เริ่มในช่องกรอก/มีข้อความถูกไฮไลต์ = ไม่ใช่การกดจริง → ทิ้ง
+   กดปุ่ม/พื้นหลังตามปกติ (กดและปล่อยที่เดียวกัน) ไม่โดนกัน · click ที่โค้ดสั่งเอง (el.click()) ไม่โดนกัน */
+(function(){
+  if(window.__jjDragClick)return;window.__jjDragClick=1;
+  var down=null;
+  function field(n){   // ช่องพิมพ์ข้อความเท่านั้น (ติ๊ก/ปุ่มเลือก ไม่นับ — กดเยื้องไปโดนป้ายชื่อยังติ๊กได้ตามเดิม)
+    if(!n||n.nodeType!==1)return false;
+    if(n.tagName==='TEXTAREA'||n.isContentEditable===true)return true;
+    return n.tagName==='INPUT'&&!/^(checkbox|radio|button|submit|reset|image|file|color|range)$/i.test(n.type||'');
+  }
+  window.addEventListener('pointerdown',function(e){down=e.target},true);
+  window.addEventListener('pointercancel',function(){down=null},true);
+  window.addEventListener('click',function(e){
+    var d=down,t=e.target;down=null;
+    if(!e.isTrusted||!d||d===t||!t||!t.contains||!t.contains(d))return;
+    var s='';try{s=String(window.getSelection?window.getSelection():'')}catch(x){}
+    if(field(d)||s){e.stopImmediatePropagation();e.preventDefault()}
+  },true);
+})();
+</script>
+<!-- JJ-DRAGCLICK-END -->
 </head>
 <body>
 
@@ -814,8 +840,8 @@ const APPS={
   owner:{n:'JJ Owner',ic:'👑',f:'jjmk-owner.html',d:'สรุปผู้บริหาร (ปกติเปิดให้เฉพาะ admin)',s:{
     overview:'ภาพรวมทั้งปี',pl:'งบกำไรขาดทุน',manual:'ใส่ยอดขาย/กำไรเอง',inst:'ผ่อนชำระ'}},
   payroll:{n:'JJ Payroll',ic:'💰',f:'jjmk-payroll.html',d:'เงินเดือนพนักงาน',s:{
-    today:'วันนี้',emp:'พนักงาน',payroll:'คำนวณเงินเดือน',detail:'รายละเอียด',shift:'กะ/ตารางงาน',
-    cal:'ปฏิทินสแกน',holi:'วันหยุด',adv:'เบิกล่วงหน้า',loan:'เงินกู้',dep:'เงินประกัน',
+    today:'วันนี้',emp:'พนักงาน',payroll:'คำนวณเงินเดือน',detail:'รายละเอียด',org:'แผนผังพนักงาน',shift:'กะ/ตารางงาน',
+    cal:'ปฏิทินสแกน',holi:'วันหยุด',adv:'เบิกล่วงหน้า',loan:'เงินกู้',dep:'เงินประกัน',pvd:'เงินสำรองเลี้ยงชีพ',
     sso:'ประกันสังคม',mou:'MOU',audit:'ประวัติทำรายการ',settings:'ตั้งค่า'}},
   stock:{n:'นับสต๊อก',ic:'📦',f:'jjmk-stockcheck.html',d:'เช็คสต็อกคงเหลือรายสาขา',s:{
     dash:'แดชบอร์ด',count:'นับสต๊อก',order:'สั่งของ',link:'ผูกชื่อสินค้า',set:'Safety stock',
@@ -835,6 +861,8 @@ const APPS={
     month:'ปฏิทินเดือน',agenda:'รายการนัด',sync:'ซิงก์ลงมือถือ'}},
   office:{n:'ออฟฟิศ AI',ic:'🏢',f:'jjmk-office.html',d:'agent AI สรุปงานค้างทุกระบบ (ห้องที่เห็น = ตามสิทธิ์ของแต่ละแอพ)',s:{
     map:'ผังออฟฟิศ + รายงาน agent',brief:'ประชุมเช้า (เพิ่ม = ส่งสรุปเข้าไลน์)'}},
+  allergy:{n:'JJ Allergy',ic:'🥜',f:'jjmk-allergy.html',d:'ข้อมูลแพ้อาหาร — ค้นเมนูจากสิ่งที่ลูกค้าแพ้',s:{
+    search:'ค้นหาตามสิ่งที่แพ้',items:'ข้อมูลสินค้า/อาหาร (เพิ่ม/แก้/ลบ · แก้ = แก้รายการสิ่งที่แพ้ด้วย)',log:'ประวัติการแก้ไข'}},
   kpi:{n:'JJ KPI',ic:'📊',f:'jjmk-kpi.html',d:'ความพึงพอใจลูกค้า',s:{
     dash:'แดชบอร์ดเจ้าของ',kiosk:'หน้าจอลูกค้า (แท็บเล็ต)'}},
   admin:{n:'JJ Access',ic:'🔑',f:'jjmk-admin.html',d:'หน้านี้ — จัดการผู้ใช้และสิทธิ์',s:{
@@ -871,6 +899,21 @@ function unitKeys(keep){
   return ks;
 }
 const FLAGS=[['v','ดู'],['a','เพิ่ม'],['e','แก้'],['d','ลบ']];
+/* หน้าจอใหม่ที่ "ยังไม่เคยตั้งสิทธิ์" = เห็นตามหน้าอื่น (ไม่ต้องไล่ติ๊กทุกคนใหม่) — ต้องตรงกับแอปนั้น
+   payroll.org 🧑‍🤝‍🧑 แผนผังพนักงาน (2026-10-20): ไม่มีคีย์ org = เห็นถ้าดูหน้า emp หรือ detail ได้ (applyUser ใน jjmk-payroll.html)
+   เอาติ๊กออก = เขียน org:'' ไว้ชัด ๆ (syncDraft) ไม่งั้นแอปจะถือว่ายังไม่เคยตั้ง แล้วกลับมาเห็นเอง */
+const PERM_FOLLOW={payroll:{org:['emp','detail']}};
+/* สิทธิ์พิเศษรายแอพที่ไม่ใช่หน้าจอ — เก็บเป็น apps.<แอพ>.<คีย์ขึ้นต้น _> = '1' (ไม่นับเป็นหน้าจอ/ไม่ทำให้เห็นแอพ) · ต้องตรงกับแอปนั้น
+   payroll._close 🔒 ปิดงวดเงินเดือน (2026-10-21 · applyUser/closeCan ใน jjmk-payroll.html): ติ๊ก = กดปิดงวดได้ · ตั้งสิทธิ์แล้วแต่ไม่มีคีย์ = ปิดไม่ได้
+   · apps ว่าง (ยังไม่เคยตั้งสิทธิ์ = ไม่จำกัด) ปิดได้ตามกติกาสิทธิ์เดิม · ผู้ดูแลระบบ/เจ้าของปิดได้เสมอ · เปิดงวดใหม่เฉพาะผู้ดูแลระบบ/เจ้าของ */
+const APP_XF={payroll:{_close:{t:'🔒 ปิดงวดเงินเดือนได้ — กดปิดงวดหลังโอนเงินแล้ว (ยอดงวดนั้นจะไม่เปลี่ยนอีก · เปิดงวดใหม่ได้เฉพาะผู้ดูแลระบบ/เจ้าของ)',s:'🔒 ปิดงวด'}}};
+const xfOn=(a,x)=>!!a&&(a[x]==='1'||a[x]===true);
+function scrFlags(a,app,sc){   // สิทธิ์ของหน้าจอเดียวจาก apps[app] (รวมค่าตามหน้าอื่นของ PERM_FOLLOW)
+  if(!a)return '';
+  const fw=PERM_FOLLOW[app]&&PERM_FOLLOW[app][sc];
+  if(fw&&typeof a[sc]!=='string')return fw.some(x=>String(a[x]||'').includes('v'))?'v':'';
+  return a[sc]||'';
+}
 /* จำกัด "เห็นเฉพาะสาขา" รายแอพ (เจ้าของสั่ง 2026-09-29 · ขยายทุกแอพ 2026-10-02) — เก็บเป็น apps.<แอพ>._br = 'JJLP,JJRD'
    ไม่ติ๊กเลย/ติ๊กครบทุกสาขาของแอพนั้น = ไม่จำกัด · ผู้ดูแลระบบ/เจ้าของ = ทุกสาขาเสมอ
    แอพที่อยู่ใน BR_SCOPED = ตัวแอพกรองข้อมูลตาม _br แล้ว · br = สาขาที่มีข้อมูลในแอพนั้นจริง (ใบกำกับภาษี/KPI/สต๊อก มีแค่หน้าร้าน)
@@ -995,7 +1038,7 @@ function permOf(u,app,screen){ // คืนสตริงแฟล็ก เช
   if(!u)return '';
   if(isBoss(u))return 'vaed';   // ผู้ดูแลระบบ + เจ้าของ = ทุกสิทธิ์
   const a=(u.apps||{})[app]; if(!a)return '';
-  return a[screen]||'';
+  return scrFlags(a,app,screen);
 }
 function appOn(u,app){ // เข้าแอพนี้ได้ไหม (มีอย่างน้อย 1 หน้าจอที่เห็นได้)
   if(!u)return false;
@@ -1007,7 +1050,7 @@ function countScreens(u,app){
   if(!u)return 0;
   if(isBoss(u))return Object.keys(APPS[app].s).length;
   const a=(u.apps||{})[app]||{};
-  return Object.keys(APPS[app].s).filter(k=>String(a[k]||'').includes('v')).length;
+  return Object.keys(APPS[app].s).filter(k=>scrFlags(a,app,k).includes('v')).length;
 }
 
 /* ============ Render หลัก ============ */
@@ -1734,7 +1777,7 @@ function permSummary(u){   // สรุปว่าเปิดแอพไห�
 }
 function fullApps(){       // สิทธิ์เต็มทุกแอพทุกหน้า (ใช้ตอนคัดลอกจากผู้ดูแล/เจ้าของ)
   const out={};
-  APPKEYS.forEach(k=>{const a={};Object.keys(APPS[k].s).forEach(sc=>a[sc]='vaed');out[k]=a;});
+  APPKEYS.forEach(k=>{const a={};Object.keys(APPS[k].s).forEach(sc=>a[sc]='vaed');if(APP_XF[k])Object.keys(APP_XF[k]).forEach(x=>a[x]='1');out[k]=a;});
   return out;
 }
 function copyFromPick(){
@@ -1795,8 +1838,14 @@ function appBox(k,u){
         ' onchange="syncDraft(\''+k+'\')"> '+esc(brLbl(c))+(BS.br.includes(c)?'':' <span class="bx">(ไม่อยู่ในรายการ)</span>')+'</label>').join('')+
       '<div class="bhint">ติ๊กครบทุกสาขา = เห็นสาขาที่เปิดใหม่ในอนาคตด้วย</div></div>';
   }
+  let xfRow='';   // สิทธิ์พิเศษที่ไม่ใช่หน้าจอ (APP_XF) เช่น 🔒 ปิดงวดเงินเดือน
+  if(APP_XF[k]){
+    const a=(u&&u.apps&&u.apps[k])||null;
+    xfRow='<div class="brscope">'+Object.keys(APP_XF[k]).map(x=>'<label><input type="checkbox" data-xf="'+esc(x)+'"'+(isBoss(u)||xfOn(a,x)?' checked':'')+
+      ' onchange="syncDraft(\''+k+'\')"> '+esc(APP_XF[k][x].t)+'</label>').join('')+'</div>';
+  }
   return '<div class="appbox'+(on?' open':'')+'" id="box_'+k+'">'+head+
-    '<div class="appbody"><p class="sub" style="margin:8px 0 2px">'+esc(A.d)+'</p>'+quick+hd+body+brRow+'</div></div>';
+    '<div class="appbody"><p class="sub" style="margin:8px 0 2px">'+esc(A.d)+'</p>'+quick+hd+body+brRow+xfRow+'</div></div>';
 }
 function flagChg(el){
   const k=el.dataset.k, sc=el.dataset.s, f=el.dataset.f;
@@ -1826,11 +1875,13 @@ function syncDraft(k){
     if(fl)out[sc]=fl;
     const rd=box.querySelector('input[type=radio][data-s="'+sc+'"]'); if(rd)rd.checked=(fl==='');
   });
+  if(Object.keys(out).length&&PERM_FOLLOW[k])Object.keys(PERM_FOLLOW[k]).forEach(sc=>{ if(!(sc in out))out[sc]=''; });   // ซ่อนไว้ชัด ๆ
   if(BR_SCOPED[k] && Object.keys(out).length){
     const br=[...box.querySelectorAll('input[data-br]')].filter(c=>c.checked).map(c=>c.dataset.br);
     const BS=BR_SCOPED[k].br;   // ติ๊กครบทุกสาขาของแอพ "พอดี" = ไม่เก็บ _br (เห็นทุกสาขา รวมสาขาที่เปิดใหม่) · มีรหัสนอกรายการติ๊กอยู่ด้วย = เก็บไว้ (ห้ามกลายเป็นเห็นทุกสาขา)
     if(br.length && !(BS.every(c=>br.includes(c)) && br.every(c=>BS.includes(c)))) out._br=br.join(',');
   }
+  if(APP_XF[k] && Object.keys(out).length) Object.keys(APP_XF[k]).forEach(x=>{ const c=box.querySelector('input[data-xf="'+x+'"]'); if(c&&c.checked)out[x]='1'; });   // ปิดแอพทั้งกล่อง = ไม่เก็บ
   if(Object.keys(out).length)S.draft[k]=out; else delete S.draft[k];
   const n=Object.values(out).filter(v=>v.includes('v')).length;
   const c=$('#cnt_'+k); if(c)c.textContent=n?(n+'/'+Object.keys(A.s).length+' หน้า'):'ปิด';
@@ -2050,10 +2101,11 @@ function stableJ(v){   // JSON ที่เรียงคีย์ — เท�
 const sameVal=(a,b)=>stableJ(a)===stableJ(b);
 function appsLine(apps,k){   // สรุปสิทธิ์ของแอพเดียว เช่น "5/12 หน้า · 🏪 ลาดพร้าว"
   const a=(apps&&apps[k])||null, tot=Object.keys(APPS[k].s).length;
-  const n=a?Object.keys(APPS[k].s).filter(sc=>String(a[sc]||'').includes('v')).length:0;
+  const n=a?Object.keys(APPS[k].s).filter(sc=>scrFlags(a,k,sc).includes('v')).length:0;
   if(!n)return 'ปิด';
   const br=a._br?String(a._br).split(',').map(brLbl).join('/'):'';
-  return n+'/'+tot+' หน้า'+(br?' · 🏪 '+br:'');
+  const xf=APP_XF[k]?Object.keys(APP_XF[k]).filter(x=>xfOn(a,x)).map(x=>APP_XF[k][x].s).join(' · '):'';
+  return n+'/'+tot+' หน้า'+(br?' · 🏪 '+br:'')+(xf?' · '+xf:'');
 }
 function fieldVal(f,v){      // ค่าของช่องแบบที่คนอ่านเข้าใจ (ไม่รวม apps — ใช้ appsDiff)
   if(f==='role')return v&&ROLES[v]?ROLES[v].ic+' '+ROLES[v].n:'—';
@@ -2814,6 +2866,7 @@ function wzDoneHtml(){
   L.push('🔑 ตั้ง "ประจำที่" / สิทธิ์สาขาให้พนักงาน — <a href="javascript:" onclick="wzClose(1);go(\'users\')">ไปแท็บ 👥 ผู้ใช้ &amp; สิทธิ์</a>');
   L.push('📊 เปิดแท็บเล็ตหน้าร้าน (ให้ลูกค้ากดคะแนน) ที่ <code>'+esc(url)+'</code> <button class="btn" onclick="brCopy('+jsArg(url)+')">📋 คัดลอก</button>');
   if(!kpiOk)L.push('💬 เชิญบอทไลน์เข้ากลุ่มของสาขา แล้วตั้งกลุ่มรับสรุปคะแนนใน '+a('jjmk-kpi.html','kpi','JJ KPI')+' → ตั้งค่า');
+  L.push('🍳 เลือกกลุ่มไลน์ของสาขาที่รับบิลส่งของจากครัวกลาง ใน '+a('jjmk-kitchen.html','kitchen','JJ Kitchen')+' → ⚙️ ตั้งค่า → 💬 (ไม่เลือก = ครัวต้องคัดลอกบิลไปส่งเอง)');
   L.push('📍 เพิ่มสาขาในบัญชี Google Business แล้วกด "เชื่อม Google ใหม่" ใน '+a('jjmk-social.html','social','JJ Social')+' (หน้าเชื่อมต่อช่องทาง)');
   L.push(W.tax==='br'&&W.tax_branch
     ?'🧾 แจ้งสรรพากร (ภ.พ.09) ว่าเปิดสาขาที่ '+esc(W.tax_branch)+' — ใบกำกับภาษีของสาขานี้จะพิมพ์ "สาขาที่ '+esc(W.tax_branch)+'"'

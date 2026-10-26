@@ -254,6 +254,25 @@ table.mx td.mxt{background:#FBF7EE;font-weight:700;border-left:2px solid var(--l
 table.mx tr.mxfoot th,table.mx tr.mxfoot td{position:sticky;bottom:0;background:#F3EAD3;border-top:2px solid var(--line);font-weight:800;font-size:11.5px;z-index:4}
 table.mx tr.mxfoot .mxd{background:#F3EAD3;z-index:5}
 table.mx td:hover{outline:2px solid #C9A227;outline-offset:-2px;border-radius:4px}
+/* แบบ 3 + ยอดเงิน (22 ต.ค. 2569): โหมดพันบาท (.mxk) ทั้งเดือนในจอเดียว · วันที่เลือก (.sel) ยอดเต็ม · โหมดเต็ม (.mxfull) เลื่อนข้าง */
+.mxbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}
+.mxtg{display:inline-flex;align-items:center;gap:5px;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:#fff;cursor:pointer;user-select:none}
+.mxtg input{margin:0;accent-color:var(--red)}
+.mxtg.on{background:var(--gold-t);border-color:#EADFC6}
+.mxseg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+.mxseg button{border:0;background:transparent;font:inherit;font-size:13.5px;padding:6px 12px;cursor:pointer}
+.mxseg button.on{background:var(--ink);color:#fff}
+table.mx.mxk{width:100%}
+table.mx.mxk .mxs{min-width:0;padding:5px 1px 4px}
+table.mx.mxk td{text-align:center;padding:6px 1px;font-size:11.5px;font-weight:700;letter-spacing:-.02em}
+table.mx.mxk td.mxt{text-align:right;padding:6px 6px}
+table.mx.mxk tr.mxfoot td{font-size:10.5px;padding:6px 1px;text-align:center}
+table.mx .mxs.sel{min-width:84px;background:linear-gradient(#FFF1D6,#FFE4B0)}
+table.mx .mxs em{display:block;font-style:normal;font-size:9px;color:var(--gold);line-height:1.1}
+table.mx td.sel{min-width:84px;font-size:12px;text-align:right;padding-right:6px}
+table.mx td.ce.sel{background:#FFF7E6}
+table.mx.mxfull .mxs{min-width:58px}
+.mxpend td.cg{opacity:.22}
 #loginOv{position:fixed;inset:0;background:linear-gradient(150deg,#2E1414,#5A1E20);display:none;align-items:center;justify-content:center;z-index:999;padding:18px}
 .logincard{background:#FFFDF8;border-radius:20px;padding:26px 24px;width:100%;max-width:360px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
 .pgrid{display:grid;grid-template-columns:1fr 64px 64px 64px;gap:4px;align-items:center;font-size:12.5px}
@@ -749,7 +768,8 @@ window.JJGate=(function(){
     calendar:{ic:'📅',n:'JJ Calendar',d:'ปฏิทินนัดหมายองค์กร',g:'#B08BE0,#4A2E85'},
     admin:{ic:'🔑',n:'JJ Access',d:'จัดการผู้ใช้และสิทธิ์',g:'#8E7F70,#3A2E27'},
     order:{ic:'🍽️',n:'สั่งอาหาร',d:'รับออเดอร์ผ่าน QR',g:'#C7843A,#6E4410'},
-    office:{ic:'🏢',n:'ออฟฟิศ AI',d:'agent AI ประจำทุกระบบ',g:'#C9962B,#6E4410'}
+    office:{ic:'🏢',n:'ออฟฟิศ AI',d:'agent AI ประจำทุกระบบ',g:'#C9962B,#6E4410'},
+    allergy:{ic:'🥜',n:'JJ Allergy',d:'ข้อมูลแพ้อาหาร',g:'#5FA84A,#22521A'}
   };
   var CSS=''
   +'.jjlg-in{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;'
@@ -995,6 +1015,33 @@ window.JJGate=(function(){
 })();
 </script>
 <!-- JJBR-END -->
+<style>/* โทรศัพท์: ช่องกรอก/เลือกต้อง ≥16px ไม่งั้น iPhone ซูมจอเองตอนแตะ (ตรวจด้วย tests/mobile/mobile-check.mjs · 2026-10-17) */
+@media (max-width:700px){#monthPick{font-size:16px!important}}</style>
+<!-- JJ-DRAGCLICK-BEGIN กันหน้าต่าง/ฟอร์มเด้งปิดเอง (เจ้าของสั่ง 2026-10-21) · บล็อกนี้ต้องเหมือนกันทุกไฟล์ทุกตัวอักษร (precheck ตรวจ) -->
+<script>
+/* ลากคลุมข้อความในช่องกรอก (หรือไฮไลต์ข้อความ) แล้วปล่อยเมาส์นอกกรอบ → เบราว์เซอร์ส่ง click ให้ "พื้นหลัง" (ตัวแม่ที่ครอบทั้งคู่)
+   → โค้ดที่ปิดหน้าต่างเมื่อกดพื้นหลังทำงาน ฟอร์มหายทั้งที่ไม่ได้กด
+   กันที่ตัวเดียวทุกแอป: click ที่เริ่มกดคนละที่กับที่ปล่อย + เริ่มในช่องกรอก/มีข้อความถูกไฮไลต์ = ไม่ใช่การกดจริง → ทิ้ง
+   กดปุ่ม/พื้นหลังตามปกติ (กดและปล่อยที่เดียวกัน) ไม่โดนกัน · click ที่โค้ดสั่งเอง (el.click()) ไม่โดนกัน */
+(function(){
+  if(window.__jjDragClick)return;window.__jjDragClick=1;
+  var down=null;
+  function field(n){   // ช่องพิมพ์ข้อความเท่านั้น (ติ๊ก/ปุ่มเลือก ไม่นับ — กดเยื้องไปโดนป้ายชื่อยังติ๊กได้ตามเดิม)
+    if(!n||n.nodeType!==1)return false;
+    if(n.tagName==='TEXTAREA'||n.isContentEditable===true)return true;
+    return n.tagName==='INPUT'&&!/^(checkbox|radio|button|submit|reset|image|file|color|range)$/i.test(n.type||'');
+  }
+  window.addEventListener('pointerdown',function(e){down=e.target},true);
+  window.addEventListener('pointercancel',function(){down=null},true);
+  window.addEventListener('click',function(e){
+    var d=down,t=e.target;down=null;
+    if(!e.isTrusted||!d||d===t||!t||!t.contains||!t.contains(d))return;
+    var s='';try{s=String(window.getSelection?window.getSelection():'')}catch(x){}
+    if(field(d)||s){e.stopImmediatePropagation();e.preventDefault()}
+  },true);
+})();
+</script>
+<!-- JJ-DRAGCLICK-END -->
 </head>
 <body>
 
@@ -2499,23 +2546,58 @@ RENDER.ck = async (el)=>{
   const pmm=prevMonth(S.m), PF=pmm+'-01', PT=dstr(pmm,monthDays(pmm));
   const brQ = S.br!=='ALL' ? '&branch=eq.'+S.br : brIn();
   let ords=[],pords=[],recipes=[],openOrds=[],items=[];
-  try{
-    [ords,pords,recipes,openOrds]=await Promise.all([
+  /* ครัวกลางรุ่นใหม่ (v2 · 2026-10-16) เขียนบิลสาขาลง kc_deliveries/kc_delivery_lines แทน ck_orders/ck_order_items (ตารางเดิมหยุดนิ่ง — เดือนเก่ายังอ่านได้)
+     → อ่านทั้ง 2 ชุดแล้วแปลงเป็นรูปเดียวกัน (order {id,d,branch,branch_name,total,bill_no,paid_at,v2} · line {order_id,recipe_id,name,unit,qty,amount})
+     · ตาราง kc_* ยังไม่มี (ยังไม่รัน jjmk_kitchen2.sql)/อ่านไม่ได้ = ถือว่าว่าง ข้อมูลเดิมยังโชว์ · ชุดเดิมอ่านไม่ได้ก็ยังโชว์ชุดใหม่ · พังทั้ง 2 ชุดค่อยขึ้นการ์ดผิดพลาด */
+  let legErr=null,v2Err=null,dues=[];
+  const v2ords=[],v2pords=[],v2items=[];
+  const loadLegacy=async()=>{
+    [ords,pords,openOrds]=await Promise.all([
       selAllQ('ck_orders',`select=*&status=in.(sent,done)&d=gte.${F}&d=lte.${T}${brQ}&order=d,id`),
       selAllQ('ck_orders',`select=id,total&status=in.(sent,done)&d=gte.${PF}&d=lte.${PT}${brQ}&order=id`),
-      selAllQ('ck_recipes',`select=id,name,cat,yield_unit,unit_cost,image_url,qty&deleted_at=is.null&order=sort,name`),
       selAllQ('ck_orders',`select=*&status=in.(new,prep)${brQ}&order=d,id`)
     ]);
     const ids=ords.map(o=>o.id);
     for(let i=0;i<ids.length;i+=80){
       items.push(...await selAllQ('ck_order_items',`select=*&order_id=in.(${ids.slice(i,i+80).join(',')})&order=id`));
     }
-  }catch(e){
-    el.innerHTML='<div class="card"><div class="empty">🍳 อ่านข้อมูลครัวกลางไม่ได้ — '+esc(e.message)+
-      '<br>ถ้ายังไม่ได้ติดตั้งระบบครัวกลาง ให้รัน <b>jjmk_kitchen_setup.sql</b> ใน Supabase SQL Editor ครั้งเดียว แล้วเปิดหน้านี้ใหม่ครับ</div>'+
+  };
+  const loadV2=async()=>{
+    const [dels,pdels,due]=await Promise.all([
+      selAllQ('kc_deliveries',`select=id,bill_no,d,branch,branch_name,total,paid_at&status=neq.void&d=gte.${F}&d=lte.${T}${brQ}&order=d,id`),
+      selAllQ('kc_deliveries',`select=id,total&status=neq.void&d=gte.${PF}&d=lte.${PT}${brQ}&order=id`),
+      selAllQ('kc_deliveries',`select=id,total&status=neq.void&paid_at=is.null${brQ}&order=d,id`)   // บิลที่สาขายังไม่จ่าย — ทุกเดือน ไม่ใช่แค่เดือนที่ดู
+    ]);
+    dels.forEach(x=>v2ords.push({id:x.id,d:x.d,branch:x.branch,branch_name:x.branch_name,total:x.total,bill_no:x.bill_no,paid_at:x.paid_at,v2:true}));
+    pdels.forEach(x=>v2pords.push({id:x.id,total:x.total}));
+    dues=due;
+    const ids=dels.map(o=>o.id);
+    for(let i=0;i<ids.length;i+=80){
+      (await selAllQ('kc_delivery_lines',`select=id,delivery_id,recipe_id,name,unit,sent,amount&delivery_id=in.(${ids.slice(i,i+80).map(encodeURIComponent).join(',')})&order=delivery_id,sort,id`))
+        .forEach(l=>v2items.push({order_id:l.delivery_id,recipe_id:l.recipe_id,name:l.name,unit:l.unit,qty:l.sent,amount:l.amount}));
+    }
+  };
+  const loadRecipes=async()=>{
+    try{ recipes=await selAllQ('ck_recipes',`select=id,name,cat,yield_unit,unit_cost,image_url,qty,avg_cost,active&deleted_at=is.null&order=sort,name`); }
+    catch(e){ recipes=await selAllQ('ck_recipes',`select=id,name,cat,yield_unit,unit_cost,image_url,qty&deleted_at=is.null&order=sort,name`); } // ยังไม่รัน jjmk_kitchen2.sql (ไม่มีช่อง avg_cost) = อ่านแบบเดิม
+  };
+  await Promise.all([loadLegacy().catch(e=>{legErr=e;}),loadV2().catch(e=>{v2Err=e;}),loadRecipes().catch(()=>{recipes=[];})]);
+  if(legErr&&v2Err){
+    el.innerHTML='<div class="card"><div class="empty">🍳 อ่านข้อมูลครัวกลางไม่ได้ — '+esc(v2Err.message)+
+      '<br>ถ้ายังไม่ได้ติดตั้งระบบครัวกลาง ให้รัน <b>jjmk_kitchen2.sql</b> (ครัวกลางรุ่นใหม่ · branch sql) ใน Supabase SQL Editor ครั้งเดียว แล้วเปิดหน้านี้ใหม่ครับ</div>'+
       '<div style="text-align:center"><a class="btn dk sm2" style="text-decoration:none" href="jjmk-kitchen.html" target="_blank">🍳 เปิดระบบครัวกลาง</a></div></div>';
     return;
   }
+  // รวมชุดเดิม + ชุดใหม่ (กันซ้ำด้วย id) เรียงวันที่แล้ว id
+  const idCmp=(a,b)=>(typeof a==='number'&&typeof b==='number')?a-b:String(a).localeCompare(String(b));
+  const uniq=a=>{const s={};return a.filter(o=>{const k=String(o.id);if(s[k])return false;s[k]=1;return true;});};
+  ords=uniq(ords.concat(v2ords)).sort((a,b)=>String(a.d||'').localeCompare(String(b.d||''))||idCmp(a.id,b.id));
+  pords=uniq(pords.concat(v2pords));
+  items=items.concat(v2items);
+  const recAct=recipes.filter(r=>r.active!==false);                 // เมนูที่ตั้ง 🗄️ ไม่ใช้แล้ว ไม่โชว์ (รายการเต็มยังใช้หาชื่อ/รูปของที่เคยส่ง)
+  const hasAvg=recAct.some(r=>r.avg_cost!=null);                    // รุ่นใหม่: ต้นทุนถัวเฉลี่ยจากล็อตที่ผลิตจริง (avg_cost) · ไม่มี = unit_cost เดิม
+  const costOf=r=>r.avg_cost!=null?r.avg_cost:r.unit_cost;
+  const dueAmt=dues.reduce((s,o)=>s+num(o.total),0);
   const oMap={};ords.forEach(o=>oMap[o.id]=o);
   const val=ords.reduce((s,o)=>s+num(o.total),0);
   const pval=pords.reduce((s,o)=>s+num(o.total),0);
@@ -2536,13 +2618,16 @@ RENDER.ck = async (el)=>{
 
   let h='<div class="card"><h3>🍳 ครัวกลาง — ต้นทุนของที่ส่งให้สาขา<span class="sp">'+monthLabel(S.m)+' · '+(S.br==='ALL'?'ทุกสาขา':esc(BRNAME[S.br]||S.br))+'</span></h3>'+
     '<div class="sm mut">ดึงสดจากระบบครัวกลาง (JJ Kitchen) — เป็นต้นทุนโอนภายใน ไม่ถูกนับซ้ำเป็นรายจ่ายในกำไร/ขาดทุน</div>'+
+    (v2Err?'<div class="sm" style="color:var(--bad);margin-top:6px">⚠ อ่านบิลสาขาของครัวกลางรุ่นใหม่ (kc_deliveries) ไม่ได้ — '+esc(v2Err.message)+
+      '<br>ถ้ายังไม่ได้รัน <b>jjmk_kitchen2.sql</b> (branch sql) ใน Supabase SQL Editor ให้รันครั้งเดียว · ตอนนี้แสดงเฉพาะข้อมูลของระบบเดิม</div>':'')+
     '<a class="btn dk sm2" style="margin-top:10px;text-decoration:none" href="jjmk-kitchen.html" target="_blank">🍳 เปิดระบบครัวกลาง →</a></div>';
   const dpc=pval>0?((val-pval)/pval*100):null;
   h+='<div class="kpis">'+
     '<div class="kpi hero"><div class="t">รับจากครัวกลางเดือนนี้</div><div class="kpi-v">฿'+fmt(val,2)+'</div><div class="s">'+ords.length+' ครั้ง</div></div>'+
     '<div class="kpi"><div class="t">เดือนก่อน ('+monthLabel(pmm)+')</div><div class="kpi-v">฿'+fmt(pval,2)+'</div><div class="s '+(dpc==null?'mut':(dpc>0?'drn':'drp'))+'">'+(dpc==null?'–':(dpc>0?'▲ +':'▼ ')+fmt(Math.abs(dpc),1)+'%')+'</div></div>'+
-    '<div class="kpi"><div class="t">ออเดอร์ค้างส่ง</div><div class="kpi-v">'+openOrds.length+'</div><div class="s mut">รายการ</div></div>'+
-    '<div class="kpi"><div class="t">เมนูครัวกลาง</div><div class="kpi-v">'+recipes.length+'</div><div class="s mut">เมนู</div></div></div>';
+    '<div class="kpi"><div class="t">บิลครัวกลางค้างจ่าย</div><div class="kpi-v">'+(v2Err?'–':dues.length)+'</div><div class="s '+(dues.length?'drn':'mut')+'">'+
+      (v2Err?'อ่านไม่ได้':'฿'+fmt(dueAmt,2)+' · ทุกเดือน')+(openOrds.length?'<span class="xs mut"> · ค้างส่ง (ระบบเดิม) '+openOrds.length+' รายการ</span>':'')+'</div></div>'+
+    '<div class="kpi"><div class="t">เมนูครัวกลาง</div><div class="kpi-v">'+recAct.length+'</div><div class="s mut">เมนู</div></div></div>';
   // ตามเมนู
   h+='<div class="card"><h3>🍲 รับตามเมนู <span class="sp">จำนวน · ต้นทุน/หน่วยเฉลี่ย · มูลค่า</span></h3>';
   const mks=Object.keys(byMenu).sort((a,b)=>byMenu[b].amt-byMenu[a].amt);
@@ -2563,23 +2648,24 @@ RENDER.ck = async (el)=>{
       h+='<tr><td>'+esc(v.name)+'</td><td class="n">'+v.n+'</td><td class="n">'+fmt(v.amt,2)+'</td></tr>';});
     h+='</table></div></div>';
   }
-  // รายวัน
+  // รายวัน (บิลรุ่นใหม่โชว์เลขบิล + จ่ายแล้ว/ค้างจ่าย)
   if(ords.length){
     h+='<div class="card"><h3>📅 รายวัน</h3><div class="twrap"><table><tr><th>วันที่</th>'+(S.br==='ALL'?'<th>สาขา</th>':'')+'<th class="right">รายการ</th><th class="right">มูลค่า ฿</th></tr>';
-    ords.forEach(o=>{const n=items.filter(l=>l.order_id===o.id).length;
-      h+='<tr><td>'+thDate(o.d)+'</td>'+(S.br==='ALL'?'<td>'+esc(o.branch_name||BRNAME[o.branch]||o.branch||'')+'</td>':'')+
+    ords.forEach(o=>{const n=items.filter(l=>String(l.order_id)===String(o.id)).length;
+      h+='<tr><td>'+thDate(o.d)+(o.v2?(o.bill_no?' <span class="xs mut">'+esc(o.bill_no)+'</span>':'')+' <span class="chip '+(o.paid_at?'ok':'bad')+'">'+(o.paid_at?'✓ จ่ายแล้ว':'ค้างจ่าย')+'</span>':'')+'</td>'+
+        (S.br==='ALL'?'<td>'+esc(o.branch_name||BRNAME[o.branch]||o.branch||'')+'</td>':'')+
         '<td class="n">'+n+'</td><td class="n">'+fmt(o.total,2)+'</td></tr>';});
     h+='</table></div></div>';
   }
-  // ต้นทุนต่อหน่วยปัจจุบันของทุกเมนู
-  h+='<div class="card"><h3>💰 ต้นทุนต่อหน่วยปัจจุบัน (จากการผลิตล่าสุด)</h3>';
-  if(!recipes.length) h+='<div class="empty">ยังไม่มีเมนูในระบบครัวกลาง</div>';
+  // ต้นทุนต่อหน่วยปัจจุบันของทุกเมนู (รุ่นใหม่ = avg_cost ถัวเฉลี่ยจากล็อตจริง · ไม่มี = unit_cost จากการผลิตล่าสุดแบบเดิม)
+  h+='<div class="card"><h3>💰 ต้นทุนต่อหน่วยปัจจุบัน ('+(hasAvg?'ถัวเฉลี่ยจากล็อตที่ผลิตจริง':'จากการผลิตล่าสุด')+')</h3>';
+  if(!recAct.length) h+='<div class="empty">ยังไม่มีเมนูในระบบครัวกลาง</div>';
   else{
-    h+='<div class="twrap"><table><tr><th>เมนู</th><th>หมวด</th><th class="right">คงเหลือที่ครัว</th><th class="right">ต้นทุน/หน่วย</th></tr>';
-    recipes.forEach(r=>{
+    h+='<div class="twrap"><table><tr><th>เมนู</th><th>หมวด</th><th class="right">คงเหลือที่ครัว</th><th class="right">'+(hasAvg?'ต้นทุน/หน่วย (ล็อตจริงถัวเฉลี่ย)':'ต้นทุน/หน่วย')+'</th></tr>';
+    recAct.forEach(r=>{const c=costOf(r);
       h+='<tr><td>'+ckThumb(r)+esc(r.name)+'</td><td class="sm mut">'+esc(r.cat||'')+'</td>'+
         '<td class="n">'+fmtI(r.qty)+' '+esc(r.yield_unit||'')+'</td>'+
-        '<td class="n">'+(r.unit_cost!=null?'<b>฿'+fmt(r.unit_cost,2)+'</b> / '+esc(r.yield_unit||''):'<span class="chip mid">ยังไม่เคยผลิต</span>')+'</td></tr>';});
+        '<td class="n">'+(c!=null?'<b>฿'+fmt(c,2)+'</b> / '+esc(r.yield_unit||''):'<span class="chip mid">ยังไม่เคยผลิต</span>')+'</td></tr>';});
     h+='</table></div>';
   }
   h+='</div>';
@@ -2967,42 +3053,65 @@ function expCell(d,sid){
     if(inp){ inp.scrollIntoView&&inp.scrollIntoView({block:'center',behavior:'smooth'}); inp.focus(); }
   },150); });
 }
+/* 📊 บิลทั้งเดือน (22 ต.ค. 2569 เจ้าของเลือก "แบบ 3 + ยอดเงิน"): ทั้งเดือนในจอเดียว · ในช่อง = พันบาท (สีตามสถานะ)
+   · กดหัววัน = วันนั้นยอดเต็มถึงสตางค์ (กดซ้ำ = เปิดฟอร์มคีย์บิลวันนั้น) · ค่าตั้งต้น = วันนี้ · ปุ่ม "ตัวเลขเต็ม" = ทุกช่องเป็นบาท (เลื่อนข้าง ชื่อซัพตรึง)
+   · "เน้นที่ค้าง" = ช่องจ่ายแล้วจาง · มือถือ (<900px) ดูทีละ 10 วัน */
+const mxK=a=>a>=9950?String(Math.round(a/1000)):(a/1000).toFixed(1);          // พันบาท ในช่อง
+const mxKK=a=>a<=0?'':a>=9950?Math.round(a/1000)+'k':(a/1000).toFixed(1)+'k'; // รวม/วัน · รวม/ซัพ
+const mxMob=()=>!!(window.matchMedia&&window.matchMedia('(max-width:899px)').matches);
+function mxDefDay(days){ const t=todayStr(); return t.slice(0,7)===S.m?Math.min(+t.slice(8,10),days):null; }
+function mxSelDay(days){ if(S.mxDM!==S.m){S.mxDM=S.m;S.mxD=mxDefDay(days);S.mxSeg=null;} return S.mxD; }
+function mxTxt(a,d,sd){ return d===sd?fmt(a,2):S.mxFull?fmt(a,0):mxK(a); }
 function expMatrixHTML(c,days){
-  // 10 ต.ค. 2569 สลับแกนตามที่ user ขอ: แถว = ซัพพลายเออร์ · คอลัมน์ = วันที่ 1..N (กดหัววัน = เปิดฟอร์มวันนั้น) · คอลัมน์ท้าย = รวม/ซัพ · แถวท้าย = รวม/วัน
   const sups=S.core.sup.filter(x=>x.active);
   if(!sups.length) return '<div class="xs mut">ยังไม่มีซัพพลายเออร์</div>';
-  const DS=[]; for(let d2=1;d2<=days;d2++){ const ds=dstr(S.m,d2); DS.push({d:d2,ds,wd:new Date(ds).getDay()}); }
+  if(S._mxLs==null){ S._mxLs=1; try{ S.mxFull=localStorage.getItem('jj_mxFull')==='1'; S.mxPend=localStorage.getItem('jj_mxPend')==='1'; }catch(e){} }
+  S._mxDays=days; const sd=mxSelDay(days);
+  const SEGS=[[1,10],[11,20],[21,days]], mob=mxMob();
+  if(S.mxSeg==null){ const k=sd||1; S.mxSeg=SEGS.findIndex(([x,y])=>k>=x&&k<=y); }
+  const [lo,hi]=mob?SEGS[S.mxSeg]:[1,days];
+  const DS=[]; for(let d2=lo;d2<=hi;d2++){ const ds=dstr(S.m,d2); DS.push({d:d2,ds,wd:new Date(ds).getDay()}); }
   const cell=(x,sid,nm)=>{
     const r=c.exp[x.ds+'|'+sid], a=r?num(r.amount):0;
     let cls='ce', txt='', st='';
-    if(a>0){ txt=fmt(a,2); cls = r.slip_url?'cg' : (r.checked?'cy':'cw');
+    if(a>0){ txt=mxTxt(a,x.d,sd); cls = r.slip_url?'cg' : (r.checked?'cy':'cw');
       st = r.slip_url?'แนบสลิปแล้ว ✅':(r.checked?'ตรวจสอบบิลแล้ว 🔍':'ยังไม่ตรวจ'); }
-    return `<td class="${cls}${x.wd===0?' sun':''}" data-mx="${x.ds}|${sid}" title="${esc(nm)} · ${thDate(x.ds)}${st?' · '+st:''}" onclick="expCell(${x.d},${sid})">${txt}</td>`;
+    return `<td class="${cls}${x.wd===0?' sun':''}${x.d===sd?' sel':''}" data-mx="${x.ds}|${sid}" title="${esc(nm)} · ${thDate(x.ds)}${a>0?' · '+fmt(a,2)+' บาท':''}${st?' · '+st:''}" onclick="expCell(${x.d},${sid})">${txt}</td>`;
   };
   const dayTot={}; let grand=0;
   const rows=sups.map(sp=>{
-    let supT=0;
+    let supT=0; for(let d2=1;d2<=days;d2++){ const r=c.exp[dstr(S.m,d2)+'|'+sp.id]; supT+=r?num(r.amount):0; }
     const tds=DS.map(x=>{ const r=c.exp[x.ds+'|'+sp.id]; const a=r?num(r.amount):0;
-      supT+=a; dayTot[x.d]=(dayTot[x.d]||0)+a; return cell(x,sp.id,sp.name); }).join('');
+      dayTot[x.d]=(dayTot[x.d]||0)+a; return cell(x,sp.id,sp.name); }).join('');
     grand+=supT;
     return `<tr><th class="mxd" title="${esc(sp.name)} · ${esc(sp.category)}"><i style="background:${catColor(sp.category)}"></i>${esc(sp.name)}</th>${tds}
-      <td class="mxt">${supT?fmt(supT,2):''}</td></tr>`;
+      <td class="mxt" title="${supT?fmt(supT,2)+' บาท':''}">${supT?(S.mxFull?fmt(supT,0):mxKK(supT)):''}</td></tr>`;
   });
-  return `<div class="twrap mxwrap"><table class="mx">
+  const tg=(k,lb)=>`<label class="mxtg${S[k]?' on':''}"><input type="checkbox"${S[k]?' checked':''} onchange="mxToggle('${k}')"> ${lb}</label>`;
+  return `<div class="mxbar">
+      ${mob?`<span class="mxseg">${SEGS.map(([x,y],i)=>`<button class="${i===S.mxSeg?'on':''}" onclick="mxSegGo(${i})">${x}–${y}</button>`).join('')}</span>`:''}
+      ${tg('mxPend','เน้นที่ค้าง')}${tg('mxFull','ตัวเลขเต็ม')}
+      <span class="xs mut">ในช่อง = ${S.mxFull?'บาท':'พันบาท'} · <b>กดหัววัน = ยอดเต็มของวันนั้น</b> (กดซ้ำ = คีย์บิล)</span></div>
+    <div class="twrap mxwrap${S.mxPend?' mxpend':''}"><table class="mx${S.mxFull?' mxfull':' mxk'}">
     <tr><th class="mxd mxc" style="z-index:6">ซัพ ↓ · วัน →</th>
-      ${DS.map(x=>`<th class="mxs${x.wd===0?' sun':''}" title="${thDate(x.ds)} · กดเพื่อเปิดฟอร์มคีย์บิลของวันนั้น" onclick="expPick(${x.d})">${x.d}<span>${TH_D[x.wd]}</span></th>`).join('')}
+      ${DS.map(x=>`<th class="mxs${x.wd===0?' sun':''}${x.d===sd?' sel':''}" title="${thDate(x.ds)} · ${x.d===sd?'กดอีกครั้งเพื่อเปิดฟอร์มคีย์บิลของวันนั้น':'กดเพื่อดูยอดเต็มของวันนั้น'}" onclick="mxDay(${x.d})">${x.d===sd?'<em>ยอดเต็ม</em>':''}${x.d}<span>${TH_D[x.wd]}</span></th>`).join('')}
       <th class="mxs mxtc">รวม/ซัพ</th></tr>
     ${rows.join('')}
     <tr class="mxfoot"><th class="mxd">รวม/วัน</th>
-      ${DS.map(x=>`<td>${dayTot[x.d]?fmt(dayTot[x.d],2):''}</td>`).join('')}
-      <td style="color:var(--red)">${fmt(grand,2)}</td></tr>
+      ${DS.map(x=>`<td class="${x.d===sd?'sel':''}" title="${dayTot[x.d]?fmt(dayTot[x.d],2)+' บาท':''}">${dayTot[x.d]?(x.d===sd?fmt(dayTot[x.d],2):S.mxFull?fmt(dayTot[x.d],0):mxKK(dayTot[x.d])):''}</td>`).join('')}
+      <td style="color:var(--red)" title="${fmt(grand,2)} บาท">${S.mxFull?fmt(grand,0):mxKK(grand)}</td></tr>
   </table></div>`;
 }
+function mxRedraw(){ const box=document.getElementById('mxBox'), c=S.cache[mkey(S.br,S.m)]; if(box&&c&&S._mxDays)box.innerHTML=expMatrixHTML(c,S._mxDays); }
+function mxDay(d){ if(S.mxD===d){ expPick(d); return; } S.mxD=d; mxRedraw(); }
+function mxToggle(k){ S[k]=!S[k]; try{localStorage.setItem('jj_'+k,S[k]?'1':'');}catch(e){} mxRedraw(); }
+function mxSegGo(i){ S.mxSeg=i; mxRedraw(); }
 function updMatrixCell(ds,sid){
   const td=document.querySelector(`[data-mx="${ds}|${sid}"]`); if(!td)return;
   const c=S.cache[mkey(S.br,S.m)]; const r=c&&c.exp[ds+'|'+sid]; const a=r?num(r.amount):0;
-  td.textContent=a>0?fmt(a,2):'';
-  td.className = (a>0 ? (r.slip_url?'cg':(r.checked?'cy':'cw')) : 'ce') + (td.classList.contains('sun')?' sun':''); // คง .sun (คอลัมน์อาทิตย์) ไว้
+  const d=+ds.slice(8,10), sd=S.mxD;
+  td.textContent=a>0?mxTxt(a,d,sd):'';
+  td.className = (a>0 ? (r.slip_url?'cg':(r.checked?'cy':'cw')) : 'ce') + (td.classList.contains('sun')?' sun':'') + (td.classList.contains('sel')?' sel':''); // คง .sun/.sel ไว้
 }
 function openSrc(c,day,sh){
   // แหล่งเก๊ะเปิด: เย็น ← เก๊ะเช้าวันเดียวกัน · เช้า ← เก๊ะเย็นเมื่อวาน (วันที่ 1 ← เก๊ะเย็นวันสุดท้ายเดือนก่อน)
@@ -3340,7 +3449,7 @@ RENDER.exp = async (el)=>{
         <span class="mxlg cw">ขาว = มีบิล ยังไม่ตรวจ</span>
         <span class="mxlg cy">เหลือง = ตรวจสอบบิลแล้ว</span>
         <span class="mxlg cg">เขียว = แนบสลิปโอนแล้ว</span></span></h3>
-    ${expMatrixHTML(c,days)}
+    <div id="mxBox">${expMatrixHTML(c,days)}</div>
   </div>
   <div id="expDayWrap" style="display:${S.expOpen?'':'none'}">
     <div class="card" style="display:flex;align-items:center;gap:10px;padding:12px 16px">
